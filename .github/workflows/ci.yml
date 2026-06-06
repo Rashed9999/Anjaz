@@ -1,0 +1,120 @@
+name: CI
+
+# يشغّل تحليل الكود + الأمن + الاختبارات عند كل push/PR.
+# ملاحظة: وظيفة backend تتطلّب دمج الحزمة فوق قاعدة Cash6 أولاً (انظر FIXES.md)
+# لأن composer install يعتمد على ملفات القاعدة غير المُرفقة.
+
+on:
+  push:
+    branches: [ main, develop, 'claude/**' ]
+  pull_request:
+
+jobs:
+  # ---------------------------------------------------------------
+  # كشف الأسرار المسرّبة (يعمل دائماً — لا يحتاج dependencies)
+  # ---------------------------------------------------------------
+  secrets-scan:
+    name: Gitleaks (secrets)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  # ---------------------------------------------------------------
+  # Backend — تحليل ساكن + ثغرات التبعيات + اختبارات
+  # ---------------------------------------------------------------
+  backend:
+    name: Backend (PHP)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 01_backend
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: amial_pay_test
+          MYSQL_ROOT_PASSWORD: root
+        ports: [ '3306:3306' ]
+        options: >-
+          --health-cmd="mysqladmin ping" --health-interval=10s
+          --health-timeout=5s --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: curl, gd, json, openssl, zip, pdo_mysql, bcmath
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      # إرشادية (لا تُسقط CI) — كود قاعدة 6cash القديم قد يحوي ملاحظات أسلوب/تحليل
+      - name: Code style (Pint)
+        run: vendor/bin/pint --test
+        continue-on-error: true
+
+      - name: Static analysis (Larastan)
+        run: vendor/bin/phpstan analyse --no-progress
+        continue-on-error: true
+
+      - name: Dependency vulnerabilities (composer audit)
+        run: composer audit --no-interaction
+        continue-on-error: true
+
+      - name: Prepare env + keys
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+          php artisan passport:keys --force
+          # مفاتيح تشفير PII (إلزامية في الإقلاع)
+          echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
+          echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
+
+      - name: Migrate + test database
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: amial_pay_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan migrate --force
+
+      - name: Run tests (PHPUnit)
+        env:
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: amial_pay_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+        run: php artisan test
+
+  # ---------------------------------------------------------------
+  # Flutter — تحليل + اختبارات
+  # ---------------------------------------------------------------
+  flutter:
+    name: Flutter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 02_flutter_app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - name: Analyze
+        run: flutter analyze
+      - name: Test
+        run: flutter test

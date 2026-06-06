@@ -1,0 +1,1 @@
+enum NavBarPageEnum {home, history, notification, profile}

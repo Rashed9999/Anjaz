@@ -1,0 +1,198 @@
+<?php
+
+use App\Http\Controllers\Admin\AccountRecoveryController;
+use App\Http\Controllers\Admin\AdminAmlController;
+use App\Http\Controllers\Admin\AdminCharityController;
+use App\Http\Controllers\Admin\AdminSafePaymentController;
+use App\Http\Controllers\Admin\AuditDecisionsController;
+use App\Http\Controllers\Admin\LegalTermsController;
+use App\Http\Controllers\Admin\SecurityEventsController;
+use App\Http\Controllers\Admin\ZoneManagementController;
+use Illuminate\Support\Facades\Route;
+
+/**
+ * AMIAL-ADMIN-001 (v0.8)
+ *
+ * Admin routes لـ Amial features. تُدرج في bootstrap/app.php عبر:
+ *
+ *   Route::middleware(['web', 'admin'])
+ *       ->prefix('admin/amial')
+ *       ->name('admin.amial.')
+ *       ->group(base_path('routes/admin/amial.php'));
+ *
+ * أو يدوياً في routes/web.php (داخل group admin الموجود):
+ *
+ *   Route::prefix('amial')->name('amial.')->group(base_path('routes/admin/amial.php'));
+ */
+
+// ============ Zone Management ============
+Route::prefix('zones')->name('zones.')->group(function () {
+    Route::get('/', [ZoneManagementController::class, 'index'])->name('index');
+    Route::post('/update', [ZoneManagementController::class, 'update'])->name('update');
+});
+
+// ============ Legal Terms ============
+Route::prefix('legal')->name('legal.')->group(function () {
+    Route::get('/', [LegalTermsController::class, 'webIndex'])->name('index');
+    Route::get('/create', [LegalTermsController::class, 'webCreate'])->name('create');
+    Route::post('/', [LegalTermsController::class, 'webStore'])->name('store');
+    Route::get('/{id}', [LegalTermsController::class, 'webShow'])
+        ->where('id', '[0-9]+')
+        ->name('show');
+});
+
+// ============ Account Recovery ============
+Route::prefix('recovery')->name('recovery.')->group(function () {
+    Route::get('/', [AccountRecoveryController::class, 'webIndex'])->name('index');
+    Route::get('/{ulid}', [AccountRecoveryController::class, 'webShow'])
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->name('show');
+    Route::post('/{ulid}/approve', [AccountRecoveryController::class, 'webApprove'])
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->name('approve');
+    Route::post('/{ulid}/reject', [AccountRecoveryController::class, 'webReject'])
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->name('reject');
+});
+
+// ============ Audit Decisions ============
+Route::get('/audit', [AuditDecisionsController::class, 'index'])->name('audit.index');
+
+// ============ Security Events ============
+Route::get('/security-events', [SecurityEventsController::class, 'index'])->name('security-events.index');
+
+// ============ AMIAL-SAFE-PAYMENT-001 (v1.1) — Disputes resolution ============
+Route::prefix('safe-payments')->name('safe-payments.')->group(function () {
+    Route::get('/', [AdminSafePaymentController::class, 'index'])->name('index');
+    Route::get('/{ulid}', [AdminSafePaymentController::class, 'show'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('show');
+    Route::post('/{ulid}/release', [AdminSafePaymentController::class, 'resolveRelease'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('release');
+    Route::post('/{ulid}/refund', [AdminSafePaymentController::class, 'resolveRefund'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('refund');
+    Route::post('/{ulid}/partial', [AdminSafePaymentController::class, 'resolvePartial'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('partial');
+});
+
+// ============ AMIAL-DONATIONS-001 (v1.2) ============
+Route::prefix('charity')->name('charity.')->group(function () {
+    // Organizations
+    Route::get('/organizations', [AdminCharityController::class, 'indexOrgs'])->name('orgs.index');
+    Route::post('/organizations', [AdminCharityController::class, 'createOrg'])->name('orgs.create');
+    Route::get('/organizations/{ulid}', [AdminCharityController::class, 'showOrg'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('orgs.show');
+    Route::post('/organizations/{ulid}/verify', [AdminCharityController::class, 'verifyOrg'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('orgs.verify');
+    Route::post('/organizations/{ulid}/reject', [AdminCharityController::class, 'rejectOrg'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('orgs.reject');
+    Route::post('/organizations/{ulid}/suspend', [AdminCharityController::class, 'suspendOrg'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('orgs.suspend');
+
+    // Campaigns
+    Route::get('/campaigns', [AdminCharityController::class, 'indexCampaigns'])->name('campaigns.index');
+    Route::post('/organizations/{orgUlid}/campaigns', [AdminCharityController::class, 'createCampaign'])
+        ->where('orgUlid', '[A-Z0-9]{26}')->name('campaigns.create');
+    Route::post('/campaigns/{ulid}/approve', [AdminCharityController::class, 'approveCampaign'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('campaigns.approve');
+    Route::post('/campaigns/{ulid}/pause', [AdminCharityController::class, 'pauseCampaign'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('campaigns.pause');
+
+    // Settlements
+    Route::get('/settlements', [AdminCharityController::class, 'indexSettlements'])->name('settlements.index');
+    Route::post('/settlements/generate', [AdminCharityController::class, 'generateSettlement'])->name('settlements.generate');
+    Route::post('/settlements/{ulid}/transferred', [AdminCharityController::class, 'markTransferred'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('settlements.transferred');
+});
+
+// ============ AMIAL-AML-001 (v1.4) ============
+Route::prefix('aml')->name('aml.')->group(function () {
+    // Rules
+    Route::get('/rules', [AdminAmlController::class, 'indexRules'])->name('rules.index');
+    Route::get('/rules/{id}', [AdminAmlController::class, 'showRule'])->name('rules.show');
+    Route::post('/rules/{id}/toggle', [AdminAmlController::class, 'toggleRule'])->name('rules.toggle');
+    Route::patch('/rules/{id}', [AdminAmlController::class, 'updateRule'])->name('rules.update');
+
+    // Flagged transactions
+    Route::get('/flagged', [AdminAmlController::class, 'indexFlagged'])->name('flagged.index');
+    Route::get('/flagged/{ulid}', [AdminAmlController::class, 'showFlagged'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('flagged.show');
+    Route::post('/flagged/{ulid}/approve', [AdminAmlController::class, 'approveFlagged'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('flagged.approve');
+    Route::post('/flagged/{ulid}/reject', [AdminAmlController::class, 'rejectFlagged'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('flagged.reject');
+
+    // Alerts
+    Route::get('/alerts', [AdminAmlController::class, 'indexAlerts'])->name('alerts.index');
+    Route::post('/alerts/{ulid}/resolve', [AdminAmlController::class, 'resolveAlert'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('alerts.resolve');
+
+    // User risk profiles
+    Route::get('/users/{userId}/profile', [AdminAmlController::class, 'showUserProfile'])
+        ->where('userId', '[0-9]+')->name('users.profile');
+    Route::post('/users/{userId}/override', [AdminAmlController::class, 'setUserOverride'])
+        ->where('userId', '[0-9]+')->name('users.override');
+});
+
+// ============ AMIAL-2FA-001 (v1.8) ============
+Route::prefix('2fa')->name('2fa.')->group(function () {
+    Route::get('/status', [App\Http\Controllers\Admin\Admin2FAController::class, 'status'])->name('status');
+    Route::post('/setup', [App\Http\Controllers\Admin\Admin2FAController::class, 'setup'])->name('setup');
+    Route::post('/confirm', [App\Http\Controllers\Admin\Admin2FAController::class, 'confirm'])->name('confirm');
+    Route::post('/disable', [App\Http\Controllers\Admin\Admin2FAController::class, 'disable'])->name('disable');
+    Route::post('/regenerate-recovery-codes', [App\Http\Controllers\Admin\Admin2FAController::class, 'regenerateRecoveryCodes'])->name('regenerate');
+});
+
+// ============ AMIAL-ZONE-ASSIGN-001 (v2.0) ============
+Route::prefix('zone')->name('zone.')->group(function () {
+    Route::post('/assign', [App\Http\Controllers\Admin\AdminZoneController::class, 'assign'])->name('assign');
+    Route::post('/assign-from-kyc', [App\Http\Controllers\Admin\AdminZoneController::class, 'assignFromKyc'])->name('assign-kyc');
+    Route::get('/logs/{userId}', [App\Http\Controllers\Admin\AdminZoneController::class, 'logs'])->name('logs');
+    Route::get('/stats', [App\Http\Controllers\Admin\AdminZoneController::class, 'stats'])->name('stats');
+});
+
+// ============ AMIAL-AGENT-NETWORK-001 (v2.4) ============
+Route::prefix('agents')->name('agents.')->group(function () {
+    Route::get('/', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'index'])->name('index');
+    Route::get('/network-stats', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'networkStats'])->name('network-stats');
+    Route::post('/{userId}/approve', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'approve'])->name('approve');
+    Route::post('/{userId}/suspend', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'suspend'])->name('suspend');
+    Route::put('/{userId}/limits', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'updateLimits'])->name('limits');
+});
+Route::prefix('settlements')->name('settlements.')->group(function () {
+    Route::get('/pending', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'pendingSettlements'])->name('pending');
+    Route::post('/{ulid}/approve', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'approveSettlement'])->name('approve');
+});
+
+// ============ AMIAL-MERCHANT-RISK-001 (v2.10) ============
+Route::prefix('merchants')->name('merchants.')->group(function () {
+    Route::get('/high-risk', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'highRisk'])->name('high-risk');
+    Route::get('/risk-stats', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'riskStats'])->name('risk-stats');
+    Route::get('/{userId}/risk', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'riskDashboard'])->name('risk');
+    Route::put('/{userId}/tier', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'setTier'])->name('tier');
+    Route::post('/{userId}/verify', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'verify'])->name('verify');
+});
+
+// ============ AMIAL-FEE-ENGINE-001 (v2.12) ============
+// لوحة تحكم نسب الأرباح/الرسوم
+Route::prefix('fees')->name('fees.')->group(function () {
+    Route::get('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webIndex'])->name('index');
+    Route::get('/create', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webCreate'])->name('create');
+    Route::get('/profit', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webProfit'])->name('profit');
+    Route::post('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webStore'])->name('store');
+    Route::post('/simulate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'simulate'])->name('simulate');
+    Route::get('/history/{code}', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webHistory'])->name('history');
+    Route::post('/{id}/deactivate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webDeactivate'])->name('deactivate');
+});
+
+// ============ AMIAL-SENTINEL-001 — Security Sentinel Dashboard ============
+Route::prefix('sentinel')->name('sentinel.')->group(function () {
+    Route::get('/', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'index'])->name('index');
+    Route::post('/block', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'block'])->name('block');
+    Route::post('/unblock', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'unblock'])->name('unblock');
+});
+
+// ============ AMIAL-EXEC-DASHBOARD-001 — Executive Dashboard ============
+Route::prefix('executive')->name('executive.')->group(function () {
+    Route::get('/', [App\Http\Controllers\Admin\ExecutiveDashboardController::class, 'index'])->name('index');
+    Route::get('/summary', [App\Http\Controllers\Admin\ExecutiveDashboardController::class, 'summary'])->name('summary');
+});

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AMYAL-BRANDING-001
+  ألوان البراند المُستخدمة من Android native side (notifications, splash, themes).
+-->
+<resources>
+    <!-- Brand colors (from logo, pixel-sampled) -->
+    <color name="amyal_primary">#053391</color>
+    <color name="amyal_yellow">#FECA1E</color>
+    <color name="amyal_red">#DC0A0B</color>
+    <color name="amyal_background">#FFF8E1</color>
+
+    <!-- Notification color (used by FirebaseMessaging) -->
+    <color name="notification_color">#053391</color>
+</resources>

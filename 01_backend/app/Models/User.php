@@ -1,0 +1,241 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Builder;
+use Laravel\Passport\HasApiTokens;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use App\Traits\HasRoles;
+
+/**
+ * AMIAL-PIN-SECURITY-001 — MERGE (تعديل محدّد)
+ *
+ * التغييرات عن الأصلي:
+ *  - $hidden: إضافة transaction_pin و fcm_token (لا تظهران في API responses)
+ *  - $casts: إضافة الحقول الجديدة (transaction_pin, *_at, attempts, locked_until)
+ *  - relation security_events جديد
+ *  - الـ getImageFullPathAttribute و أمثاله: بدون تغيير (نسخ من الأصلي)
+ *
+ * بقية الكود مطابق للأصلي 100% — يُعتبر MERGE وليس REPLACE.
+ */
+class User extends Authenticatable
+{
+    // AMIAL-RBAC-001 (fix): ربط نظام الصلاحيات المركزي — يوفّر hasPermission/
+    // hasAnyPermission/hasAllPermissions/assignRole التي يعتمد عليها middleware `rbac`.
+    use HasApiTokens, HasFactory, Notifiable, SoftDeletes, HasRoles;
+
+    // AMIAL-PIN-SECURITY-001: إضافة transaction_pin و fcm_token للـ hidden
+    protected $hidden = [
+        'password',
+        'transaction_pin',          // ← جديد: لا يجب أن يخرج من API
+        'fcm_token',                // ← جديد: token الجهاز خاص بالـ backend
+        'remember_token',
+    ];
+
+    protected $fillable = [
+        'last_active_at',
+        // AMIAL-PIN-SECURITY-001: إضافة الحقول الجديدة
+        'transaction_pin',
+        'transaction_pin_set_at',
+        'pin_failed_attempts',
+        'pin_locked_until',
+        'requires_pin_setup',
+        // AMIAL-ZONE-001 + AMIAL-RECOVERY-001 (v0.7-A)
+        'zone_code',
+        'security_hold_until',
+        'security_hold_reason',
+        // CRITICAL-001 — الأدوار + مستوى التوثيق
+        'role',
+        'verification_level',
+        // phone يدخل fillable للسماح بـ AccountRecoveryService::applyApprovedChange
+        'phone',
+        'fcm_token',
+        // AMIAL-ACCOUNT-NUMBER-001 — رقم الحساب العام (8 أرقام + Luhn)
+        'account_number',
+    ];
+
+    protected $casts = [
+        'f_name' => 'string',
+        'l_name' => 'string',
+        'dial_country_code' => 'string',
+        'phone' => 'string',
+        'email' => 'string',
+        'image' => 'string',
+        'type' => 'integer',
+        'role' => 'string',
+        'verification_level' => 'string',
+        'password' => 'string',
+        'is_phone_verified' => 'integer',
+        'is_email_verified' => 'integer',
+        'last_active_at' => 'datetime',
+        'unique_id' => 'string',
+        'referral_id' => 'string',
+        // AMIAL-PIN-SECURITY-001
+        'transaction_pin' => 'hashed',  // ← Laravel يطبع Hash::make تلقائياً عند set
+        'transaction_pin_set_at' => 'datetime',
+        'pin_failed_attempts' => 'integer',
+        'pin_locked_until' => 'datetime',
+        'requires_pin_setup' => 'boolean',
+        'two_factor' => 'boolean',
+        'two_factor_enabled' => 'boolean',
+        'two_factor_confirmed_at' => 'datetime',
+        // AMIAL-ZONE-001 + AMIAL-RECOVERY-001 (v0.7-A)
+        'zone_code' => 'string',
+        'security_hold_until' => 'datetime',
+        'security_hold_reason' => 'string',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    protected $appends = ['image_fullpath', 'identification_image_fullpath', 'merchant_identification_image_fullpath'];
+
+    public function getImageFullPathAttribute(): ?string
+    {
+        $image = $this->image ?? null;
+        $path = dynamicAsset(path: 'public/assets/admin/img/160x160/img1.jpg');
+
+        if ($image == null) {
+            if (request()->is('api/*')) {
+                $path = null;
+            }
+            return $path;
+        }
+
+        $folderNames = [0 => 'admin', 1 => 'agent', 2 => 'customer'];
+        $folder = $folderNames[$this->type] ?? 'merchant';
+        if (!is_null($image) && Storage::disk('public')->exists($folder . '/' . $image)) {
+            $path = dynamicStorage(path: 'storage/app/public/' . $folder . '/' . $image);
+        }
+
+        return $path;
+    }
+
+    public function getIdentificationImageFullPathAttribute(): array
+    {
+        $value = $this->identification_image ?? [];
+        $folder = $this->type == 3 ? 'merchant' : 'identity';
+        $imageUrlArray = is_array($value) ? $value : json_decode($value, true);
+        if (is_array($imageUrlArray)) {
+            foreach ($imageUrlArray as $key => $item) {
+                if (Storage::disk('public')->exists('user/identity/' . $item)) {
+                    $imageUrlArray[$key] = dynamicStorage(path: 'storage/app/public/user/identity/' . $item);
+                } else {
+                    $imageUrlArray[$key] = dynamicAsset(path: 'public/assets/admin/img/900x400/img1.jpg');
+                }
+            }
+        }
+        return $imageUrlArray;
+    }
+
+    public function getMerchantIdentificationImageFullPathAttribute(): array
+    {
+        $value = $this->identification_image ?? [];
+        $imageUrlArray = is_array($value) ? $value : json_decode($value, true);
+        if (is_array($imageUrlArray)) {
+            foreach ($imageUrlArray as $key => $item) {
+                if (Storage::disk('public')->exists('merchant/' . $item)) {
+                    $imageUrlArray[$key] = dynamicStorage(path: 'storage/app/public/merchant/' . $item);
+                } else {
+                    $imageUrlArray[$key] = dynamicAsset(path: 'public/assets/admin/img/160x160/img1.jpg');
+                }
+            }
+        }
+        return $imageUrlArray;
+    }
+
+    public function AauthAcessToken(): HasMany
+    {
+        return $this->hasMany(OauthAccessToken::class);
+    }
+
+    public function scopeAgent(Builder $query): Builder
+    {
+        return $query->where('type', '=', 1);
+    }
+
+    public function scopeCustomer(Builder $query): Builder
+    {
+        return $query->where('type', '=', 2);
+    }
+
+    public function scopeMerchantUser(Builder $query): Builder
+    {
+        return $query->where('type', '=', 3);
+    }
+
+    public function scopeOfType(Builder $query, int $user_type): Builder
+    {
+        return $query->where('type', '=', $user_type);
+    }
+
+    public function emoney(): HasOne
+    {
+        return $this->hasOne(EMoney::class, 'user_id', 'id');
+    }
+
+    public function user_log_histories(): HasMany
+    {
+        return $this->hasMany(UserLogHistory::class, 'user_id', 'id');
+    }
+
+    public function merchant(): HasOne
+    {
+        return $this->hasOne(Merchant::class, 'user_id', 'id');
+    }
+
+    /**
+     * AMIAL-PIN-SECURITY-001: relation للأحداث الأمنية
+     */
+    public function securityEvents(): HasMany
+    {
+        return $this->hasMany(AccountSecurityEvent::class, 'user_id', 'id');
+    }
+
+    public static function boot(): void
+    {
+        parent::boot();
+
+        // AMIAL-ACCOUNT-NUMBER-001 — توليد رقم حساب فريد لكل مستخدم جديد
+        self::creating(function ($model) {
+            if (empty($model->account_number)) {
+                try {
+                    $model->account_number = app(\App\Services\AccountNumberService::class)->generateUnique();
+                } catch (\Throwable $e) {
+                    // لا نمنع التسجيل عند تعذّر التوليد؛ يُعالَج لاحقاً بأمر backfill
+                    \Log::warning('account_number generation failed on create: ' . $e->getMessage());
+                }
+            }
+        });
+
+        self::updated(function ($model) {
+            if ($model->isDirty('is_active')) {
+                if ($model->is_active == 0) {
+                    $model->tokens->each(function ($token, $key) {
+                        $token->revoke();
+                    });
+                }
+            }
+
+            // AMIAL-PIN-SECURITY-001: عند تغيير transaction_pin، نُبطل كل tokens
+            // (سياسة قسم 9 من الوثيقة: "بعد PIN Reset يتم إبطال كل tokens access")
+            if ($model->isDirty('transaction_pin') && !$model->wasRecentlyCreated) {
+                $oldPin = $model->getOriginal('transaction_pin');
+                $newPin = $model->transaction_pin;
+                // فقط إذا تغير فعلاً (ليس null → null)
+                if ($oldPin !== null && $oldPin !== $newPin) {
+                    $model->tokens->each(function ($token) {
+                        $token->revoke();
+                    });
+                    // نمسح fcm_token حتى لا تذهب إشعارات لجهاز قديم
+                    \DB::table('users')->where('id', $model->id)->update(['fcm_token' => null]);
+                }
+            }
+        });
+    }
+}

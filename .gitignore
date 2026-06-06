@@ -1,0 +1,28 @@
+# Dependencies
+/01_backend/vendor/
+/02_flutter_app/.dart_tool/
+/02_flutter_app/build/
+node_modules/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+*.key
+storage/*.key
+
+# Laravel runtime
+/01_backend/storage/*.log
+/01_backend/storage/framework/cache/*
+/01_backend/storage/framework/sessions/*
+/01_backend/storage/framework/views/*
+/01_backend/bootstrap/cache/*
+
+# Load-test artifacts
+01_backend/loadtests/**/res_*.json
+01_backend/loadtests/**/cres_*.json
+01_backend/loadtests/**/pool*.json
+01_backend/loadtests/**/reports/
+
+# OS
+.DS_Store

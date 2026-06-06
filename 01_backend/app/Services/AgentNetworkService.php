@@ -1,0 +1,323 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\AgentFloatLog;
+use App\Models\AgentProfile;
+use App\Models\AgentSettlement;
+use App\Models\User;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use RuntimeException;
+
+/**
+ * AMIAL-AGENT-NETWORK-001 (v2.3)
+ *
+ * AgentNetworkService — إدارة شبكة الوكلاء (الصرّافين).
+ *
+ * **الوظائف:**
+ *   1. assertCashInAllowed: فحص حدود الوكيل قبل cash-in
+ *   2. recordFloatMovement: تتبع السيولة اليومية
+ *   3. requestTopup: الوكيل يطلب شراء رصيد (settlement)
+ *   4. approveSettlement: الإدارة/الموزّع تؤكد التسوية + قيد ledger
+ *   5. getFloatDashboard: لوحة سيولة الوكيل
+ *
+ * **نموذج السيولة (M-Pesa-style):**
+ *   الوكيل يملك "float" = رصيد رقمي يبيعه كاش-إن.
+ *   عند نفاده → topup من الموزّع/الإدارة (يدفع كاش، يأخذ رصيد).
+ */
+class AgentNetworkService
+{
+    use \App\Traits\PostsToLedger;
+
+    public function __construct(
+        private readonly LedgerService $ledger,
+        private readonly FinancialGuardService $guard,
+        private readonly AuditService $audit,
+    ) {}
+
+    // ============================================================
+    // 1. فحص الحدود قبل cash-in
+    // ============================================================
+
+    /**
+     * يتحقق أن الوكيل لم يتجاوز حدوده اليومية.
+     *
+     * @throws RuntimeException
+     */
+    public function assertCashInAllowed(int $agentUserId, string $amount): void
+    {
+        $profile = AgentProfile::where('user_id', $agentUserId)->first();
+        if (!$profile) {
+            // SECURITY (AUDIT): سابقاً كانت تُرجِع بلا حدود (fail-open) — ثغرة إيداع
+            // غير محدود لأي وكيل بلا profile. الآن fail-safe: نفرض سقفاً افتراضياً
+            // من config (للتوافق مع الوكلاء القدامى ضمن حدّ آمن لا "بلا حدود").
+            $defaultSingle = (string) config('amial.agent.default_single_transaction_limit', '100000');
+            if (bccomp($amount, $defaultSingle, 4) > 0) {
+                throw new RuntimeException(
+                    "المبلغ يتجاوز الحد الافتراضي للعملية ({$defaultSingle} ر.ي). يلزم تفعيل ملف الوكيل."
+                );
+            }
+            return;
+        }
+
+        if (!$profile->isActive()) {
+            throw new RuntimeException('حساب الوكيل غير نشط');
+        }
+
+        // حد العملية الواحدة
+        if (bccomp($amount, (string)$profile->single_transaction_limit, 4) > 0) {
+            throw new RuntimeException(
+                "المبلغ يتجاوز حد العملية الواحدة ({$profile->single_transaction_limit} ر.ي)"
+            );
+        }
+
+        // الحد اليومي
+        $todayLog = $this->getTodayFloatLog($agentUserId);
+        $newDailyTotal = bcadd((string)$todayLog->cash_in_total, $amount, 4);
+        if (bccomp($newDailyTotal, (string)$profile->daily_cash_in_limit, 4) > 0) {
+            throw new RuntimeException(
+                "هذه العملية ستتجاوز حدك اليومي للإيداع ({$profile->daily_cash_in_limit} ر.ي)"
+            );
+        }
+    }
+
+    // ============================================================
+    // 2. تتبع السيولة
+    // ============================================================
+
+    /**
+     * تسجيل حركة في سجل السيولة اليومي.
+     * يُستدعى بعد كل cash-in/cash-out/topup.
+     */
+    public function recordFloatMovement(
+        int $agentUserId,
+        string $type, // cash_in, cash_out, topup
+        string $amount,
+        string $commission = '0',
+    ): void {
+        $log = $this->getTodayFloatLog($agentUserId);
+
+        switch ($type) {
+            case 'cash_in':
+                $log->cash_in_total = bcadd((string)$log->cash_in_total, $amount, 4);
+                break;
+            case 'cash_out':
+                $log->cash_out_total = bcadd((string)$log->cash_out_total, $amount, 4);
+                break;
+            case 'topup':
+                $log->topup_total = bcadd((string)$log->topup_total, $amount, 4);
+                break;
+        }
+
+        $log->commission_earned = bcadd((string)$log->commission_earned, $commission, 4);
+        $log->transaction_count += 1;
+
+        // closing float = الرصيد الحالي الفعلي
+        $wallet = $this->guard->getWallet($agentUserId);
+        $log->closing_float = (string)($wallet?->current_balance ?? '0');
+
+        $log->save();
+    }
+
+    private function getTodayFloatLog(int $agentUserId): AgentFloatLog
+    {
+        $today = Carbon::today()->toDateString();
+
+        $log = AgentFloatLog::firstOrNew([
+            'agent_user_id' => $agentUserId,
+            'log_date' => $today,
+        ]);
+
+        if (!$log->exists) {
+            // opening = الرصيد الحالي
+            $wallet = $this->guard->getWallet($agentUserId);
+            $log->opening_float = (string)($wallet?->current_balance ?? '0');
+            $log->closing_float = $log->opening_float;
+            $log->save();
+            $log->refresh(); // MERGE-FIX: حمّل defaults الأعمدة العشرية (تفادي null في bcmath)
+        }
+
+        return $log;
+    }
+
+    // ============================================================
+    // 3. طلب topup (شراء رصيد)
+    // ============================================================
+
+    /**
+     * الوكيل يطلب شراء رصيد رقمي (يدفع كاش للموزّع/الإدارة).
+     */
+    public function requestTopup(
+        User $agent,
+        string $amount,
+        ?int $settledWithId = null,
+        ?string $paymentMethod = 'cash',
+        ?string $paymentReference = null,
+    ): AgentSettlement {
+        $normalized = MoneyService::normalize($amount);
+        if (bccomp($normalized, '0', 4) <= 0) {
+            throw new RuntimeException('المبلغ يجب أن يكون موجباً');
+        }
+
+        $profile = AgentProfile::where('user_id', $agent->id)->first();
+        $settledWith = $settledWithId ?? ($profile?->parent_agent_id);
+
+        return DB::transaction(function () use ($agent, $normalized, $settledWith, $paymentMethod, $paymentReference) {
+            $settlement = AgentSettlement::create([
+                'settlement_ulid' => (string) Str::ulid(),
+                'agent_user_id' => $agent->id,
+                'settled_with_id' => $settledWith ?? 0, // 0 = الإدارة
+                'settlement_type' => 'topup',
+                'amount' => $normalized,
+                'status' => 'pending',
+                'payment_method' => $paymentMethod,
+                'payment_reference' => $paymentReference,
+                'zone_code' => 'SOUTH',
+            ]);
+
+            $this->audit->record([
+                'actor_type' => 'agent',
+                'actor_user_id' => $agent->id,
+                'subject_type' => 'agent_settlement',
+                'subject_id' => $settlement->settlement_ulid,
+                'action' => 'TOPUP_REQUESTED',
+                'decision_code' => 'PENDING',
+                'severity' => 'info',
+                'context' => ['amount' => $normalized],
+            ]);
+
+            return $settlement;
+        });
+    }
+
+    // ============================================================
+    // 4. الموافقة على التسوية + إضافة الرصيد
+    // ============================================================
+
+    /**
+     * الإدارة/الموزّع يؤكد topup → يُضاف الرصيد للوكيل + قيد ledger.
+     */
+    public function approveSettlement(AgentSettlement $settlement, User $approver): AgentSettlement
+    {
+        if ($settlement->status !== 'pending') {
+            throw new RuntimeException('التسوية ليست قيد الانتظار');
+        }
+
+        $amount = (string)$settlement->amount;
+
+        DB::transaction(function () use ($settlement, $approver, $amount) {
+            if ($settlement->settlement_type === 'topup') {
+                // الوكيل يستلم رصيد رقمي
+                $this->guard->credit($settlement->agent_user_id, $amount,
+                    "agent_topup:{$settlement->settlement_ulid}");
+
+                // قيد ledger: CASH_RESERVE → agent wallet
+                $reserve = $this->ledger->getOrCreateSystemAccount(
+                    'CASH_RESERVE', 'asset', 'احتياطي النقد', 'debit'
+                );
+                $agentWallet = $this->ledger->getOrCreateUserWallet($settlement->agent_user_id);
+
+                $journal = $this->ledger->post(
+                    sourceType: 'agent_topup',
+                    sourceId: $settlement->settlement_ulid,
+                    description: 'شراء رصيد رقمي للوكيل',
+                    lines: [
+                        ['account' => $reserve->account_code, 'direction' => 'debit', 'amount' => $amount],
+                        ['account' => $agentWallet->account_code, 'direction' => 'credit', 'amount' => $amount],
+                    ],
+                    idempotencyKey: "agent_topup_{$settlement->settlement_ulid}",
+                    createdByUserId: $approver->id,
+                    allowNegative: true,
+                );
+
+                $settlement->ledger_entry_ulid = $journal->entry_ulid;
+                $this->recordFloatMovement($settlement->agent_user_id, 'topup', $amount);
+            }
+
+            $settlement->status = 'completed';
+            $settlement->approved_by_id = $approver->id;
+            $settlement->completed_at = now();
+            $settlement->save();
+
+            $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $approver->id,
+                'subject_type' => 'agent_settlement',
+                'subject_id' => $settlement->settlement_ulid,
+                'action' => 'SETTLEMENT_APPROVED',
+                'decision_code' => 'OK',
+                'severity' => 'info',
+                'context' => ['amount' => $amount, 'type' => $settlement->settlement_type],
+            ]);
+        });
+
+        return $settlement->fresh();
+    }
+
+    // ============================================================
+    // 5. لوحة السيولة
+    // ============================================================
+
+    public function getFloatDashboard(int $agentUserId): array
+    {
+        $profile = AgentProfile::where('user_id', $agentUserId)->first();
+        $todayLog = $this->getTodayFloatLog($agentUserId);
+        $wallet = $this->guard->getWallet($agentUserId);
+        $currentFloat = (string)($wallet?->current_balance ?? '0');
+
+        // تنبيه السيولة المنخفضة
+        $lowFloat = $profile && bccomp($currentFloat, (string)$profile->min_float_balance, 4) <= 0;
+
+        return [
+            'current_float' => $currentFloat,
+            'today' => [
+                'opening_float' => (string)$todayLog->opening_float,
+                'cash_in_total' => (string)$todayLog->cash_in_total,
+                'cash_out_total' => (string)$todayLog->cash_out_total,
+                'topup_total' => (string)$todayLog->topup_total,
+                'commission_earned' => (string)$todayLog->commission_earned,
+                'transaction_count' => $todayLog->transaction_count,
+            ],
+            'limits' => $profile ? [
+                'daily_cash_in_limit' => (string)$profile->daily_cash_in_limit,
+                'daily_cash_in_remaining' => bcsub(
+                    (string)$profile->daily_cash_in_limit,
+                    (string)$todayLog->cash_in_total, 4
+                ),
+                'single_transaction_limit' => (string)$profile->single_transaction_limit,
+            ] : null,
+            'low_float_warning' => $lowFloat,
+            'agent_level' => $profile?->agent_level,
+        ];
+    }
+
+    /**
+     * إحصاءات شبكة الموزّع (الصرّافون تحته).
+     */
+    public function getDistributorNetwork(int $distributorUserId): array
+    {
+        $distributor = AgentProfile::where('user_id', $distributorUserId)->first();
+        if (!$distributor || !$distributor->isDistributor()) {
+            throw new RuntimeException('ليس موزّعاً');
+        }
+
+        $subAgents = AgentProfile::where('parent_agent_id', $distributor->id)
+            ->with('user:id,f_name,l_name,phone')
+            ->get()
+            ->map(fn($sub) => [
+                'user_id' => $sub->user_id,
+                'business_name' => $sub->business_name,
+                'city' => $sub->location_city,
+                'status' => $sub->status,
+                'float' => (string)($this->guard->getWallet($sub->user_id)?->current_balance ?? '0'),
+            ]);
+
+        return [
+            'distributor_id' => $distributorUserId,
+            'sub_agents_count' => $subAgents->count(),
+            'sub_agents' => $subAgents,
+        ];
+    }
+}

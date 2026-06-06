@@ -1,0 +1,170 @@
+import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
+import 'package:amyal_pay/features/access/controllers/access_controller.dart';
+import 'package:amyal_pay/data/api/api_client.dart';
+import 'package:amyal_pay/features/auth/screens/role_router.dart';
+import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amyal_pay/util/secure_storage_helper.dart';
+
+/// AMIAL-UNIFIED-AUTH-001 (v1.5)
+class UnifiedAuthRepo {
+  final ApiClient apiClient;
+  UnifiedAuthRepo({required this.apiClient});
+
+  Future<Response> login(Map<String, dynamic> body) {
+    return apiClient.postData('/api/v1/auth/login', body);
+  }
+
+  Future<Response> verifyOtp(String otpToken, String otpCode) {
+    return apiClient.postData('/api/v1/auth/agent/verify-otp', {
+      'otp_token': otpToken,
+      'otp_code': otpCode,
+    });
+  }
+}
+
+class UnifiedAuthController extends GetxController implements GetxService {
+  final UnifiedAuthRepo repo;
+  UnifiedAuthController({required this.repo});
+
+  final RxBool isSubmitting = false.obs;
+  final RxString lastError = ''.obs;
+  final RxString currentRole = ''.obs;
+  String? _pendingOtpToken;
+
+  // ===== Customer =====
+  Future<bool> loginCustomer({
+    required String nationalId,
+    required String phone,
+    required String password,
+  }) async {
+    return _execute({
+      'role': 'customer',
+      'national_id': nationalId,
+      'phone': phone,
+      'password': password,
+    });
+  }
+
+  // ===== Merchant =====
+  Future<bool> loginMerchant({
+    required String merchantNumber,
+    required String phone,
+    required String password,
+    String? posNumber,
+  }) async {
+    return _execute({
+      'role': 'merchant',
+      'merchant_number': merchantNumber,
+      'phone': phone,
+      'password': password,
+      if (posNumber != null && posNumber.isNotEmpty) 'pos_number': posNumber,
+    });
+  }
+
+  // ===== Agent Step 1 (returns masked_phone if OTP sent) =====
+  Future<String?> loginAgentStep1({
+    required String agentNumber,
+    required String password,
+  }) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.login({
+        'role': 'agent',
+        'agent_number': agentNumber,
+        'password': password,
+      });
+      if (r.statusCode == 200 && r.body is Map && r.body['code'] == 'OTP_SENT') {
+        final meta = r.body['meta'] ?? {};
+        _pendingOtpToken = meta['otp_token'];
+        return (meta['masked_phone'] ?? '').toString();
+      }
+      lastError.value = _msg(r) ?? 'فشل تسجيل الدخول';
+      return null;
+    } catch (e) {
+      if (kDebugMode) debugPrint('agent step1: $e');
+      lastError.value = 'خطأ في الشبكة';
+      return null;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  // ===== Agent Step 2 =====
+  Future<bool> loginAgentStep2(String otpCode) async {
+    if (_pendingOtpToken == null) {
+      lastError.value = 'انتهت صلاحية الجلسة، أعد الإرسال';
+      return false;
+    }
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.verifyOtp(_pendingOtpToken!, otpCode);
+      if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        final meta = r.body['meta'] ?? {};
+        await _saveAuth(meta);
+        currentRole.value = (meta['role'] ?? 'agent').toString();
+        _pendingOtpToken = null;
+        // CRITICAL-001 — حمّل access بعد تسجيل الدخول الناجح
+        try { await Get.find<AccessController>().load(); } catch (_) {}
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'رمز غير صحيح';
+      return false;
+    } catch (e) {
+      lastError.value = 'خطأ في الشبكة';
+      return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  // ===== Common execute =====
+  Future<bool> _execute(Map<String, dynamic> body) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.login(body);
+      if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        final meta = r.body['meta'] ?? {};
+        await _saveAuth(meta);
+        currentRole.value = (meta['role'] ?? '').toString();
+        // CRITICAL-001 — حمّل access بعد تسجيل الدخول الناجح
+        try { await Get.find<AccessController>().load(); } catch (_) {}
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'فشل تسجيل الدخول';
+      return false;
+    } catch (e) {
+      if (kDebugMode) debugPrint('login: $e');
+      lastError.value = 'خطأ في الشبكة';
+      return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  Future<void> _saveAuth(Map meta) async {
+    final token = meta['token']?.toString();
+    if (token != null && token.isNotEmpty) {
+      try {
+        await SecureStorageHelper.saveToken(token);
+      } catch (_) {}
+    }
+  }
+
+  /// توجيه للشاشة الرئيسية حسب الدور الحالي.
+  void navigateToHomeForRole() {
+    if (currentRole.value.isNotEmpty) {
+      RoleRouter.navigateToHome(currentRole.value);
+    }
+  }
+
+  String? _msg(Response r) {
+    try {
+      if (r.body is Map) return r.body['message']?.toString();
+    } catch (_) {}
+    return null;
+  }
+}

@@ -1,0 +1,149 @@
+import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
+import 'package:amyal_pay/features/donations/domain/models/donation_models.dart';
+import 'package:amyal_pay/features/donations/domain/repositories/donations_repo.dart';
+
+/// AMIAL-DONATIONS-001 (v1.2)
+class DonationsController extends GetxController implements GetxService {
+  final DonationsRepo repo;
+  DonationsController({required this.repo});
+
+  final RxList<AmyalCharityCategory> categories = <AmyalCharityCategory>[].obs;
+  final RxList<AmyalCharityCampaign> campaigns = <AmyalCharityCampaign>[].obs;
+  final RxList<AmyalCharityCampaign> featuredCampaigns = <AmyalCharityCampaign>[].obs;
+  final Rx<AmyalCharityCampaign?> selectedCampaign = Rx<AmyalCharityCampaign?>(null);
+  final RxList<AmyalDonation> myDonations = <AmyalDonation>[].obs;
+  final RxString selectedCategoryCode = ''.obs;
+
+  final RxBool isLoading = false.obs;
+  final RxBool isSubmitting = false.obs;
+  final RxString lastError = ''.obs;
+
+  Future<void> loadCategories() async {
+    try {
+      isLoading.value = true;
+      final r = await repo.categories();
+      if (r.statusCode == 200 && r.body is Map) {
+        final items = ((r.body['meta'] ?? {})['categories'] as List? ?? []);
+        categories.value = items
+            .map((j) => AmyalCharityCategory.fromJson(Map<String, dynamic>.from(j)))
+            .toList();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('loadCategories: $e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> loadCampaigns({String? categoryCode}) async {
+    try {
+      isLoading.value = true;
+      selectedCategoryCode.value = categoryCode ?? '';
+      final r = await repo.campaigns(categoryCode: categoryCode);
+      if (r.statusCode == 200 && r.body is Map) {
+        final items = ((r.body['meta'] ?? {})['items'] as List? ?? []);
+        campaigns.value = items
+            .map((j) => AmyalCharityCampaign.fromJson(Map<String, dynamic>.from(j)))
+            .toList();
+        lastError.value = '';
+      } else {
+        lastError.value = _msg(r) ?? 'فشل التحميل';
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('loadCampaigns: $e');
+      lastError.value = 'خطأ في الشبكة';
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> loadFeatured() async {
+    try {
+      final r = await repo.campaigns(featured: true);
+      if (r.statusCode == 200 && r.body is Map) {
+        final items = ((r.body['meta'] ?? {})['items'] as List? ?? []);
+        featuredCampaigns.value = items
+            .map((j) => AmyalCharityCampaign.fromJson(Map<String, dynamic>.from(j)))
+            .toList();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('loadFeatured: $e');
+    }
+  }
+
+  Future<bool> loadCampaign(String ulid) async {
+    try {
+      isLoading.value = true;
+      final r = await repo.campaignShow(ulid);
+      if (r.statusCode == 200 && r.body is Map) {
+        final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
+        selectedCampaign.value = AmyalCharityCampaign.fromJson(
+            Map<String, dynamic>.from(meta['campaign'] ?? {}));
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'لم يتم العثور على الحملة';
+      return false;
+    } catch (e) {
+      lastError.value = 'خطأ في الشبكة';
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<bool> donate({
+    required String campaignUlid,
+    required String amount,
+    bool isAnonymous = false,
+    String? message,
+  }) async {
+    try {
+      isSubmitting.value = true;
+      final r = await repo.donate(
+        campaignUlid: campaignUlid,
+        amount: amount,
+        isAnonymous: isAnonymous,
+        message: message,
+      );
+      if ((r.statusCode == 200 || r.statusCode == 201) &&
+          r.body is Map &&
+          r.body['success'] == true) {
+        // refresh campaign details
+        await loadCampaign(campaignUlid);
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'فشلت المساهمة';
+      return false;
+    } catch (e) {
+      lastError.value = 'خطأ في الشبكة';
+      return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  Future<void> loadMyDonations() async {
+    try {
+      isLoading.value = true;
+      final r = await repo.myDonations();
+      if (r.statusCode == 200 && r.body is Map) {
+        final items = ((r.body['meta'] ?? {})['items'] as List? ?? []);
+        myDonations.value = items
+            .map((j) => AmyalDonation.fromJson(Map<String, dynamic>.from(j)))
+            .toList();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('loadMyDonations: $e');
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  String? _msg(Response r) {
+    try {
+      if (r.body is Map) return r.body['message'] as String?;
+    } catch (_) {}
+    return null;
+  }
+}

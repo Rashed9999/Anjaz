@@ -1,0 +1,129 @@
+{
+    "name": "amyalpay/backend",
+    "type": "project",
+    "description": "Amyal Pay - Yemeni fintech wallet (refactored from Cash6). AMIAL-* features layered on top.",
+    "keywords": [
+        "fintech",
+        "wallet",
+        "laravel",
+        "amyal-pay"
+    ],
+    "license": "proprietary",
+    "require": {
+        "php": "^8.2",
+        "ext-curl": "*",
+        "ext-gd": "*",
+        "ext-json": "*",
+        "ext-openssl": "*",
+        "ext-zip": "*",
+        "ext-bcmath": "*",
+        "barryvdh/laravel-dompdf": "^3.1",
+        "brian2694/laravel-toastr": "^5.56",
+        "devrabiul/laravel-paystack": "^1.0",
+        "doctrine/dbal": "^3.0",
+        "gregwar/captcha": "^1.1",
+        "guzzlehttp/guzzle": "^7.0.1",
+        "iyzico/iyzipay-php": "^2.0",
+        "laravel/framework": "^12.0",
+        "laravel/passport": "^12.0",
+        "laravel/sanctum": "^4.0",
+        "laravel/tinker": "^2.5",
+        "laravel/vonage-notification-channel": "^3.0",
+        "laravelpkg/laravelchk": "dev-master",
+        "madnest/madzipper": "*",
+        "mercadopago/dx-php": "2.4.4",
+        "nwidart/laravel-modules": "9.*",
+        "ramsey/uuid": "^4.2",
+        "rap2hpoutre/fast-excel": "*",
+        "razorpay/razorpay": "^2.8",
+        "sentry/sentry-laravel": "^4.6",
+        "simplesoftwareio/simple-qrcode": "^4.2",
+        "stevebauman/location": "v7.6.0",
+        "stripe/stripe-php": "^7.103",
+        "twilio/sdk": "^6.31",
+        "xendit/xendit-php": "^2.19"
+    },
+    "require-dev": {
+        "barryvdh/laravel-debugbar": "^3.16",
+        "fakerphp/faker": "^1.9.1",
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.18",
+        "laravel/sail": "^1.0.1",
+        "mockery/mockery": "^1.4.4",
+        "nunomaduro/collision": "v8.8.2",
+        "phpunit/phpunit": "^11.5",
+        "spatie/laravel-ignition": "^2.0"
+    },
+    "autoload": {
+        "files": [
+            "app/CentralLogics/FilePath.php",
+            "app/CentralLogics/FileUploader.php",
+            "app/Lib/Helper.php",
+            "app/Lib/Transaction.php",
+            "app/Lib/Responses.php",
+            "app/Lib/Constant.php",
+            "app/Lib/PaymentResponse.php",
+            "app/Lib/PaymentSuccess.php",
+            "app/CentralLogics/Helpers.php",
+            "app/CentralLogics/SmsModule.php",
+            "app/CentralLogics/Translation.php",
+            "vendor/laravelpkg/laravelchk/src/Http/Controllers/LaravelchkController.php"
+        ],
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\Factories\\": "database/factories/",
+            "Database\\Seeders\\": "database/seeders/",
+            "Modules\\": "Modules/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "post-update-cmd": [
+            "@php artisan vendor:publish --tag=laravel-assets --ansi"
+        ],
+        "post-root-package-install": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+        ],
+        "post-create-project-cmd": [
+            "@php artisan key:generate --ansi"
+        ]
+    },
+    "extra": {
+        "laravel": {
+            "dont-discover": []
+        }
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "package",
+            "package": [
+                {
+                    "dist": {
+                        "type": "zip",
+                        "url": "https://phonepe.mycloudrepo.io/public/repositories/phonepe-pg-php-sdk/phonepe-pg-php-sdk.zip"
+                    },
+                    "name": "phonepe/phonepe-pg-php-sdk",
+                    "version": "1.0.0",
+                    "autoload": {
+                        "classmap": ["/"]
+                    }
+                }
+            ]
+        }
+    ]
+}

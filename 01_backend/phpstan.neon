@@ -1,0 +1,18 @@
+# AMIAL — Larastan (PHPStan لـ Laravel)
+# تشغيل: vendor/bin/phpstan analyse
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5            # ابدأ بـ 5 وارفعه تدريجياً نحو 8
+    paths:
+        - app
+        - database
+        - routes
+    excludePaths:
+        # ملفات patch/دمج تعتمد على قاعدة Cash6 غير المُرفقة
+        - app/CentralLogics/Concerns/AmialHelperPatchTrait.php
+    ignoreErrors:
+        # ثوابت القاعدة (Constant.php) تُعرَّف وقت التشغيل بعد الدمج
+        - '#Constant (ADMIN_CHARGE|APPLICATION_IMAGE_FORMAT) not found#'
+    checkMissingIterableValueType: false
