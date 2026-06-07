@@ -147,7 +147,7 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
         return ListView.separated(
           padding: const EdgeInsets.all(12),
           itemCount: c.products.length,
-          separatorBuilder: (_, __) => const Divider(height: 1),
+          separatorBuilder: (_, _) => const Divider(height: 1),
           itemBuilder: (_, i) {
             final p = c.products[i];
             final expiry = p['expiry_date']?.toString();

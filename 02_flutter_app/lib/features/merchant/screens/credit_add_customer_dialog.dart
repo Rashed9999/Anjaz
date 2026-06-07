@@ -92,7 +92,7 @@ class _CreditAddCustomerDialogState extends State<CreditAddCustomerDialog> {
   Future<void> _submit() async {
     if (_nameCtrl.text.trim().isEmpty || _phoneCtrl.text.trim().isEmpty) {
       Get.snackbar('تنبيه', 'الاسم ورقم الهاتف مطلوبان',
-          backgroundColor: AmyalColors.red.withOpacity(0.1));
+          backgroundColor: AmyalColors.red.withValues(alpha: 0.1));
       return;
     }
     final data = <String, dynamic>{

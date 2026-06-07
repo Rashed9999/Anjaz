@@ -21,7 +21,7 @@ class BranchesRepo extends GetxService {
     final params = <String, String>{};
     if (from != null) params['from'] = from;
     if (to != null) params['to'] = to;
-    final qs = params.isEmpty ? '' : '?' + params.entries.map((e) => '${e.key}=${e.value}').join('&');
+    final qs = params.isEmpty ? '' : '?${params.entries.map((e) => '${e.key}=${e.value}').join('&')}';
     return apiClient.getData('$_base/$id/report$qs');
   }
 }

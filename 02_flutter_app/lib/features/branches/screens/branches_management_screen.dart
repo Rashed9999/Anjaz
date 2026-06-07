@@ -47,7 +47,7 @@ class _BMSState extends State<BranchesManagementScreen> {
           return ListView.separated(
             padding: const EdgeInsets.all(12),
             itemCount: c.branches.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (_, i) => _branchCard(c.branches[i]),
           );
         }),
@@ -93,7 +93,7 @@ class _BMSState extends State<BranchesManagementScreen> {
           color: isCurrent ? AmyalColors.yellow : Colors.transparent,
           width: 2,
         ),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -105,7 +105,7 @@ class _BMSState extends State<BranchesManagementScreen> {
             Container(width: 50, height: 50,
               decoration: BoxDecoration(
                 color: isActive
-                  ? AmyalColors.primary.withOpacity(0.1)
+                  ? AmyalColors.primary.withValues(alpha: 0.1)
                   : Colors.grey.shade200,
                 borderRadius: BorderRadius.circular(12),
               ),
@@ -151,7 +151,7 @@ class _BMSState extends State<BranchesManagementScreen> {
   Widget _badge(String text, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: color.withOpacity(0.15),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(12)),
       child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
     );
@@ -171,10 +171,12 @@ class _BMSState extends State<BranchesManagementScreen> {
           onTap: () async {
             Navigator.pop(ctx);
             final ok = await c.setDefault(b['id'] as int);
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(ok ? '✓ تم' : 'فشل'),
               backgroundColor: ok ? Colors.green : Colors.red,
             ));
+            }
           },
         ),
         ListTile(
@@ -232,10 +234,12 @@ class _BMSState extends State<BranchesManagementScreen> {
               if (phoneCtrl.text.isNotEmpty) 'phone': phoneCtrl.text.trim(),
             };
             final ok = isNew ? await c.create(data) : await c.updateBranch(b['id'] as int, data);
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(ok ? (isNew ? '✓ تمّ الإنشاء' : '✓ تمّ التحديث') : 'فشل'),
               backgroundColor: ok ? Colors.green : Colors.red,
             ));
+            }
           },
           child: Text(isNew ? 'إنشاء' : 'حفظ'),
         ),
@@ -254,10 +258,12 @@ class _BMSState extends State<BranchesManagementScreen> {
           onPressed: () async {
             Navigator.pop(ctx);
             final ok = await c.delete(b['id'] as int);
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(ok ? '✓ تمّ الحذف' : c.lastError.value),
               backgroundColor: ok ? Colors.green : Colors.red,
             ));
+            }
           },
           child: const Text('حذف'),
         ),

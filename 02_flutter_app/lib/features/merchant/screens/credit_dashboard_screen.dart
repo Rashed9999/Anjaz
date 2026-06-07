@@ -94,7 +94,7 @@ class _CreditDashboardScreenState extends State<CreditDashboardScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(16)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Text(title, style: TextStyle(color: textColor.withOpacity(0.85), fontSize: 14)),
+        Text(title, style: TextStyle(color: textColor.withValues(alpha: 0.85), fontSize: 14)),
         const SizedBox(height: 8),
         Text(value, style: TextStyle(color: textColor, fontSize: 30, fontWeight: FontWeight.bold)),
       ]),
@@ -106,7 +106,7 @@ class _CreditDashboardScreenState extends State<CreditDashboardScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Text(title, style: TextStyle(color: textColor.withOpacity(0.85), fontSize: 12)),
+        Text(title, style: TextStyle(color: textColor.withValues(alpha: 0.85), fontSize: 12)),
         const SizedBox(height: 6),
         Text(value, style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.bold)),
       ]),

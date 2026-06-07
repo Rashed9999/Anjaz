@@ -92,7 +92,7 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AmyalColors.yellow.withOpacity(0.18),
+                color: AmyalColors.yellow.withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AmyalColors.yellow, width: 1),
               ),
@@ -149,7 +149,7 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
               children: _quickAmounts.map((a) => ActionChip(
                 label: Text('${_formatNum(a)} ر.ي', style: const TextStyle(fontWeight: FontWeight.bold)),
                 backgroundColor: Colors.white,
-                side: BorderSide(color: AmyalColors.primary.withOpacity(0.3)),
+                side: BorderSide(color: AmyalColors.primary.withValues(alpha: 0.3)),
                 onPressed: () => _setQuick(a),
               )).toList(),
             ),

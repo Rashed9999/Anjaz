@@ -175,7 +175,7 @@ class FuelStationController extends GetxController implements GetxService {
 
   Future<bool> openShift({String? openingCash, String? notes}) async {
     return _doAndReload(() => repo.openShift({
-      if (openingCash != null) 'opening_cash': openingCash,
+      'opening_cash': ?openingCash,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
     }), loadCurrentShift);
   }

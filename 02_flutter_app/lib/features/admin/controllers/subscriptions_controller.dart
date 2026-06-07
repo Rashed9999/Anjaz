@@ -28,8 +28,11 @@ class SubscriptionsController extends GetxController implements GetxService {
       isLoading.value = true;
       lastError.value = '';
       final r = await repo.summary();
-      if (_ok(r)) summary.value = Map<String, dynamic>.from(r.body['meta'] as Map);
-      else lastError.value = _msg(r) ?? 'فشل تحميل الملخّص';
+      if (_ok(r)) {
+        summary.value = Map<String, dynamic>.from(r.body['meta'] as Map);
+      } else {
+        lastError.value = _msg(r) ?? 'فشل تحميل الملخّص';
+      }
     } catch (_) { lastError.value = 'خطأ في الشبكة'; }
     finally { isLoading.value = false; }
   }
@@ -59,8 +62,11 @@ class SubscriptionsController extends GetxController implements GetxService {
       if (_ok(r)) {
         final items = ((r.body['meta']?['items'] ?? []) as List)
             .map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        if (reset || logPage.value == 1) logItems.assignAll(items);
-        else logItems.addAll(items);
+        if (reset || logPage.value == 1) {
+          logItems.assignAll(items);
+        } else {
+          logItems.addAll(items);
+        }
         logPagination.value = Map<String, dynamic>.from(
             (r.body['meta']?['pagination'] ?? {}) as Map);
       }
@@ -72,8 +78,10 @@ class SubscriptionsController extends GetxController implements GetxService {
     try {
       isLoading.value = true;
       final r = await repo.merchantHistory(merchantId);
-      if (_ok(r)) merchantHistory.value =
+      if (_ok(r)) {
+        merchantHistory.value =
           Map<String, dynamic>.from(r.body['meta'] as Map);
+      }
     } catch (_) { lastError.value = 'خطأ في تحميل التاريخ'; }
     finally { isLoading.value = false; }
   }
@@ -85,10 +93,10 @@ class SubscriptionsController extends GetxController implements GetxService {
     String? paymentReference, String? notes,
   }) async {
     return _action(() => repo.renew(merchantId, {
-      if (pricePaidSar != null) 'price_paid_sar': pricePaidSar,
-      if (paymentMethod != null) 'payment_method': paymentMethod,
-      if (paymentReference != null) 'payment_reference': paymentReference,
-      if (notes != null) 'notes': notes,
+      'price_paid_sar': ?pricePaidSar,
+      'payment_method': ?paymentMethod,
+      'payment_reference': ?paymentReference,
+      'notes': ?notes,
     }));
   }
 
@@ -98,10 +106,10 @@ class SubscriptionsController extends GetxController implements GetxService {
   }) async {
     return _action(() => repo.extend(merchantId, {
       'days': days,
-      if (pricePaidSar != null) 'price_paid_sar': pricePaidSar,
-      if (paymentMethod != null) 'payment_method': paymentMethod,
-      if (paymentReference != null) 'payment_reference': paymentReference,
-      if (notes != null) 'notes': notes,
+      'price_paid_sar': ?pricePaidSar,
+      'payment_method': ?paymentMethod,
+      'payment_reference': ?paymentReference,
+      'notes': ?notes,
     }));
   }
 

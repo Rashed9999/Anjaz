@@ -178,7 +178,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AmyalColors.red.withOpacity(0.1),
+                  color: AmyalColors.red.withValues(alpha: 0.1),
                   border: Border.all(color: AmyalColors.red),
                   borderRadius: BorderRadius.circular(8),
                 ),

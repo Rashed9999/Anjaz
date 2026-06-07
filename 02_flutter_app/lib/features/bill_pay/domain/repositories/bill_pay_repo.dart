@@ -27,10 +27,10 @@ class BillPayRepo extends GetxService {
       AppConstants.amyalBillPay,
       {
         'service_id': serviceId,
-        if (productId != null) 'product_id': productId,
+        'product_id': ?productId,
         'subscriber_account': subscriberAccount,
         'amount': amount,
-        if (subscriberExtra != null) 'subscriber_extra': subscriberExtra,
+        'subscriber_extra': ?subscriberExtra,
       },
       idempotencyKey: idempotencyKey,
     );

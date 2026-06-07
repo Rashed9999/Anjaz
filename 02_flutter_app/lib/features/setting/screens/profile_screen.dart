@@ -123,7 +123,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     leading: Container(
                       width: 36, height: 36,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF053391).withOpacity(0.1),
+                        color: const Color(0xFF053391).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(Icons.apps, color: Color(0xFF053391)),

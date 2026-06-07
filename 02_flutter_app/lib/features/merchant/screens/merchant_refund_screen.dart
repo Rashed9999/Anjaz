@@ -111,7 +111,7 @@ class _MerchantRefundScreenState extends State<MerchantRefundScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow.withOpacity(0.2),
+                  color: AmyalColors.yellow.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Row(

@@ -1,21 +1,21 @@
-// اختبارات واجهة (widget) خفيفة وحتمية — لا تعتمد على إضافات native.
+// اختبارات حتمية خفيفة — لا تعتمد على إضافات native ولا على بناء شاشات تحتاج DI.
 //
 // لماذا لا نُقلع التطبيق كاملاً هنا؟
 //   إقلاع `MyApp` يمرّ بـ `di.init()` الذي يستدعي إضافات native
-//   (device_info_plus، unique_identifier). هذه غير متاحة في بيئة
-//   `flutter test` الـ headless فتعلّق/تفشل — وهذا قيد معروف في Flutter.
-//   لذلك يُغطّى الإقلاع الكامل في `integration_test/app_test.dart` (على جهاز/محاكي)،
-//   بينما نتحقّق هنا من **بناء الشاشات وأزرارها** بمعزل عن native.
+//   (device_info_plus، unique_identifier) غير المتاحة في بيئة `flutter test`
+//   الـ headless فتعلّق — وهذا قيد معروف في Flutter. لذلك يُغطّى الإقلاع الكامل
+//   والتدفّقات في `integration_test/app_test.dart` (على جهاز/محاكي)، بينما نتحقّق
+//   هنا من **منطق التوجيه والتهيئة** بمعزل وحتمياً.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get/get.dart';
 
 import 'package:amyal_pay/util/app_constants.dart';
 import 'package:amyal_pay/features/auth/screens/role_router.dart';
+import 'package:amyal_pay/features/home/screens/nav_bar_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_dashboard_screen.dart';
+import 'package:amyal_pay/features/agent/screens/agent_dashboard_screen.dart';
 
 void main() {
-  // حدّ زمني صارم: لا نسمح بأي تعليق طويل في CI.
   const fast = Timeout(Duration(seconds: 30));
 
   group('التهيئة (config)', () {
@@ -28,31 +28,21 @@ void main() {
     }, timeout: fast);
   });
 
-  group('شاشة العميل الرئيسية — البناء والأزرار', () {
-    testWidgets('تُبنى وتعرض أزرار الإجراءات الستة وكلّها قابلة للنقر',
-        (WidgetTester tester) async {
-      // homeForRole('customer') يُرجع شاشة العميل دون الحاجة لأي controller للبناء.
-      await tester.pumpWidget(
-        GetMaterialApp(home: RoleRouter.homeForRole('customer')),
-      );
-      await tester.pump(const Duration(milliseconds: 300));
+  group('توجيه الأدوار (RoleRouter)', () {
+    test('العميل → شاشة Cash6 الكاملة (NavBarScreen)، لا placeholder', () {
+      // الإصلاح الأساسي: العميل يصل لشاشته الحقيقية (تحويل/QR/رصيد…) لا شاشة مؤقتة.
+      expect(RoleRouter.homeForRole('customer'), isA<NavBarScreen>());
+      // أي دور غير معروف يقع افتراضياً على شاشة العميل أيضاً.
+      expect(RoleRouter.homeForRole('unknown'), isA<NavBarScreen>());
+    }, timeout: fast);
 
-      // لا انهيار في البناء.
-      expect(find.byType(ErrorWidget), findsNothing);
+    test('التاجر/الـ POS → لوحة التاجر', () {
+      expect(RoleRouter.homeForRole('merchant'), isA<MerchantDashboardScreen>());
+      expect(RoleRouter.homeForRole('pos'), isA<MerchantDashboardScreen>());
+    }, timeout: fast);
 
-      // عناوين أزرار الإجراءات كلّها ظاهرة.
-      for (final label in const [
-        'تحويل', 'دفع QR', 'فواتير', 'تبرعات', 'صندوق عائلي', 'دفع آمن',
-      ]) {
-        expect(find.text(label), findsOneWidget, reason: 'الزر "$label" يجب أن يظهر');
-      }
-
-      // كل عناصر الشبكة أزرار InkWell فعّالة (onTap != null) — لا أزرار ميتة.
-      final inkWells = tester.widgetList<InkWell>(find.byType(InkWell)).toList();
-      expect(inkWells.length, greaterThanOrEqualTo(6));
-      for (final w in inkWells) {
-        expect(w.onTap, isNotNull, reason: 'كل زر يجب أن يملك onTap غير فارغ');
-      }
+    test('الوكيل → لوحة الوكيل', () {
+      expect(RoleRouter.homeForRole('agent'), isA<AgentDashboardScreen>());
     }, timeout: fast);
   });
 }

@@ -114,7 +114,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                     Text(
                       isCredit ? 'مضاف لحسابك' : 'مخصوم من حسابك',
                       style: TextStyle(
-                        color: AmyalColors.primary.withOpacity(0.7),
+                        color: AmyalColors.primary.withValues(alpha: 0.7),
                         fontSize: 12,
                       ),
                     ),
@@ -187,7 +187,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AmyalColors.yellow.withOpacity(0.3),
+                    color: AmyalColors.yellow.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -209,7 +209,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AmyalColors.red.withOpacity(0.1),
+                    color: AmyalColors.red.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AmyalColors.red),
                   ),

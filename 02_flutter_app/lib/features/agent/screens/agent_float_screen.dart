@@ -89,7 +89,7 @@ class _AgentFloatScreenState extends State<AgentFloatScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -111,9 +111,9 @@ class _AgentFloatScreenState extends State<AgentFloatScreen> {
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AmyalColors.red.withOpacity(0.1),
+        color: AmyalColors.red.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AmyalColors.red.withOpacity(0.4)),
+        border: Border.all(color: AmyalColors.red.withValues(alpha: 0.4)),
       ),
       child: const Row(
         children: [
@@ -166,7 +166,7 @@ class _AgentFloatScreenState extends State<AgentFloatScreen> {
     return Row(
       children: [
         CircleAvatar(
-          radius: 16, backgroundColor: color.withOpacity(0.15),
+          radius: 16, backgroundColor: color.withValues(alpha: 0.15),
           child: Icon(icon, color: color, size: 16),
         ),
         const SizedBox(width: 12),

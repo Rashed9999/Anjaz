@@ -33,8 +33,8 @@ class SafePaymentRepo extends GetxService {
         'title': title,
         'description': description,
         'amount': amount,
-        if (deliveryTerms != null) 'delivery_terms': deliveryTerms,
-        if (attachments != null) 'attachments': attachments,
+        'delivery_terms': ?deliveryTerms,
+        'attachments': ?attachments,
       },
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('safe_pay_create'),
     );
@@ -42,16 +42,16 @@ class SafePaymentRepo extends GetxService {
 
   // Seller actions
   Future<Response> sellerAccept(String ulid, {String? note}) =>
-      _action(ulid, 'seller-accept', {if (note != null) 'note': note}, 'sp_accept');
+      _action(ulid, 'seller-accept', {'note': ?note}, 'sp_accept');
 
   Future<Response> sellerReject(String ulid, String reason) =>
       _action(ulid, 'seller-reject', {'reason': reason}, 'sp_reject');
 
   Future<Response> sellerMarkInDelivery(String ulid, {String? note}) =>
-      _action(ulid, 'seller-mark-in-delivery', {if (note != null) 'note': note}, 'sp_in_delivery');
+      _action(ulid, 'seller-mark-in-delivery', {'note': ?note}, 'sp_in_delivery');
 
   Future<Response> sellerMarkDelivered(String ulid, {String? note}) =>
-      _action(ulid, 'seller-mark-delivered', {if (note != null) 'note': note}, 'sp_delivered');
+      _action(ulid, 'seller-mark-delivered', {'note': ?note}, 'sp_delivered');
 
   // Buyer actions
   Future<Response> buyerConfirm(String ulid) =>
@@ -63,7 +63,7 @@ class SafePaymentRepo extends GetxService {
   Future<Response> buyerDispute(String ulid, String reason, {List<String>? attachments}) =>
       _action(ulid, 'buyer-dispute', {
         'reason': reason,
-        if (attachments != null) 'attachments': attachments,
+        'attachments': ?attachments,
       }, 'sp_dispute');
 
   Future<Response> _action(String ulid, String path, Map<String, dynamic> body, String idemPrefix) {

@@ -41,7 +41,7 @@ class AmyalRepo extends GetxService {
       {
         'version': version,
         'locale': locale,
-        if (deviceId != null) 'device_id': deviceId,
+        'device_id': ?deviceId,
       },
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('terms_accept'),
     );
@@ -70,7 +70,7 @@ class AmyalRepo extends GetxService {
       {
         'new_phone': newPhone,
         'identification_documents': identificationDocuments,
-        if (userNotes != null) 'user_notes': userNotes,
+        'user_notes': ?userNotes,
       },
       idempotencyKey:
           IdempotencyKeyGenerator.forFinancialAction('recovery_initiate_lost'),

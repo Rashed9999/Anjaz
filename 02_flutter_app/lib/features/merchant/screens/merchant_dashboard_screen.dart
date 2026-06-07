@@ -114,7 +114,7 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -156,7 +156,7 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AmyalColors.yellow.withOpacity(0.2),
+                        color: AmyalColors.yellow.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: AmyalColors.yellowDark),
                       ),
@@ -288,10 +288,10 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                   margin: const EdgeInsets.all(16),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AmyalColors.yellow.withOpacity(0.2),
+                    color: AmyalColors.yellow.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color: AmyalColors.yellow.withOpacity(0.5)),
+                        color: AmyalColors.yellow.withValues(alpha: 0.5)),
                   ),
                   child: const Row(
                     children: [
@@ -379,7 +379,7 @@ class _ActionCard extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 24,
-              backgroundColor: color.withOpacity(0.15),
+              backgroundColor: color.withValues(alpha: 0.15),
               child: Icon(icon, color: color, size: 24),
             ),
             const SizedBox(height: 8),
@@ -406,7 +406,7 @@ class _StatRow extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 16,
-          backgroundColor: color.withOpacity(0.15),
+          backgroundColor: color.withValues(alpha: 0.15),
           child: Icon(icon, color: color, size: 16),
         ),
         const SizedBox(width: 12),

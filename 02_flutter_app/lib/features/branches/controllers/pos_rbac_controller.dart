@@ -15,12 +15,12 @@ class PosRbacRepo extends GetxService {
   Future<Response> assignRole(int posUserId, int roleId, {int? branchScopeId}) =>
       apiClient.postData('$_base/pos-users/$posUserId/assign-role', {
         'role_id': roleId,
-        if (branchScopeId != null) 'branch_scope_id': branchScopeId,
+        'branch_scope_id': ?branchScopeId,
       });
   Future<Response> revokeRole(int posUserId, int roleId, {int? branchScopeId}) =>
       apiClient.postData('$_base/pos-users/$posUserId/revoke-role', {
         'role_id': roleId,
-        if (branchScopeId != null) 'branch_scope_id': branchScopeId,
+        'branch_scope_id': ?branchScopeId,
       });
 }
 

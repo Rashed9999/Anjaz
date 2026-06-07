@@ -1,6 +1,7 @@
 /// AMYAL-LEGAL-001 + AMYAL-ZONE-001 + AMYAL-RECOVERY-001 (v0.7-D)
 ///
 /// Domain models لـ Amyal API endpoints.
+library;
 
 class AmyalSessionPolicy {
   final String accountZone;

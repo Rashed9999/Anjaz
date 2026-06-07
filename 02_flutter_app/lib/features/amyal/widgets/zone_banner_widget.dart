@@ -47,7 +47,7 @@ class ZoneBannerWidget extends StatelessWidget {
         margin: margin,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: AmyalColors.yellow.withOpacity(0.95),
+          color: AmyalColors.yellow.withValues(alpha: 0.95),
           border: Border(
             bottom: BorderSide(color: AmyalColors.yellowDark, width: 1),
           ),
@@ -88,7 +88,7 @@ class ZoneBannerWidget extends StatelessWidget {
                         message,
                         style: TextStyle(
                           fontSize: 12,
-                          color: AmyalColors.primary.withOpacity(0.85),
+                          color: AmyalColors.primary.withValues(alpha: 0.85),
                         ),
                       ),
                     ],

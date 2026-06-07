@@ -146,10 +146,10 @@ class WholesaleController extends GetxController implements GetxService {
       'items': items,
       'customer_id': selectedCustomer.value!['id'],
       'payment_type': paymentType,
-      if (dueDate != null) 'due_date': dueDate,
+      'due_date': ?dueDate,
       if (discountAmount != null && discountAmount.isNotEmpty) 'discount_amount': discountAmount,
       if (taxRate != null && taxRate.isNotEmpty) 'tax_rate': taxRate,
-      if (salesRepId != null) 'sales_rep_id': salesRepId,
+      'sales_rep_id': ?salesRepId,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
     };
 

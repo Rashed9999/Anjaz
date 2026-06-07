@@ -1,4 +1,5 @@
 /// AMIAL-FUND-FAMILY-001 (v0.9-D Flutter)
+library;
 
 class AmyalFund {
   final int id;

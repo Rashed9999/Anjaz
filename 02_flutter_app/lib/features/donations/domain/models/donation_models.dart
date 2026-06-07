@@ -1,4 +1,5 @@
 /// AMIAL-DONATIONS-001 (v1.2) — Flutter models
+library;
 
 class AmyalCharityCategory {
   final int id;

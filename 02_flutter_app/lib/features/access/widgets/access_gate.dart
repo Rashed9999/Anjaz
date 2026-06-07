@@ -100,7 +100,7 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AmyalColors.yellow.withOpacity(0.2),
+                color: AmyalColors.yellow.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AmyalColors.yellow),
               ),
@@ -146,7 +146,7 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: selected ? o.color.withOpacity(0.1) : Colors.white,
+          color: selected ? o.color.withValues(alpha: 0.1) : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: selected ? o.color : Colors.grey.shade300,

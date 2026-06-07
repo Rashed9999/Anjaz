@@ -29,11 +29,11 @@ class MerchantPayRepo extends GetxService {
     return apiClient.postData(
       '/api/v1/amial/merchant/pay',
       {
-        if (merchantUserId != null) 'merchant_user_id': merchantUserId,
+        'merchant_user_id': ?merchantUserId,
         if (merchantPhone != null && merchantPhone.isNotEmpty) 'merchant_phone': merchantPhone,
         'amount': amount,
         'channel': channel,
-        if (posUserId != null) 'pos_user_id': posUserId,
+        'pos_user_id': ?posUserId,
         if (note != null && note.isNotEmpty) 'note': note,
       },
       idempotencyKey: idempotencyKey,

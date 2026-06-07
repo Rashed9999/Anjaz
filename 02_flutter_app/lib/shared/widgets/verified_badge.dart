@@ -56,7 +56,7 @@ class VerifiedBadge extends StatelessWidget {
           color: config.background,
           shape: BoxShape.circle,
           boxShadow: tier == 'gold'
-              ? [BoxShadow(color: config.background.withOpacity(0.4), blurRadius: 6, spreadRadius: 1)]
+              ? [BoxShadow(color: config.background.withValues(alpha: 0.4), blurRadius: 6, spreadRadius: 1)]
               : null,
         ),
         child: Icon(config.icon, color: config.iconColor, size: iconSize),
@@ -69,7 +69,7 @@ class VerifiedBadge extends StatelessWidget {
         color: config.background,
         borderRadius: BorderRadius.circular(12),
         boxShadow: tier == 'gold'
-            ? [BoxShadow(color: config.background.withOpacity(0.4), blurRadius: 4)]
+            ? [BoxShadow(color: config.background.withValues(alpha: 0.4), blurRadius: 4)]
             : null,
       ),
       child: Row(

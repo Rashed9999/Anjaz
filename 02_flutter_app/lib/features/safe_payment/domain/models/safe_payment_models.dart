@@ -1,4 +1,5 @@
 /// AMIAL-SAFE-PAYMENT-001 (v1.1) — Flutter models
+library;
 
 class AmyalSafePayment {
   final int id;

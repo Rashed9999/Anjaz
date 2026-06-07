@@ -81,7 +81,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
-                            color: AmyalColors.yellow.withOpacity(0.2),
+                            color: AmyalColors.yellow.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: AmyalColors.yellow),
                           ),
@@ -222,7 +222,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                       height: 200,
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _placeholderBanner(),
+                      errorBuilder: (_, _, _) => _placeholderBanner(),
                     )
                   else
                     _placeholderBanner(),
@@ -344,7 +344,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: AmyalColors.yellow.withOpacity(0.2),
+                              color: AmyalColors.yellow.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
@@ -426,7 +426,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
   Widget _placeholderBanner() {
     return Container(
       height: 200,
-      color: AmyalColors.yellow.withOpacity(0.25),
+      color: AmyalColors.yellow.withValues(alpha: 0.25),
       child: const Center(
         child: Icon(Icons.volunteer_activism,
             size: 64, color: AmyalColors.primary),

@@ -185,9 +185,13 @@ class _MyUsageScreenState extends State<MyUsageScreen> {
         : (current / max).clamp(0.0, 1.0);
 
       // تلوين حسب النسبة
-      if (pct >= 0.9) barColor = Colors.red;
-      else if (pct >= 0.7) barColor = Colors.orange;
-      else barColor = color;
+      if (pct >= 0.9) {
+        barColor = Colors.red;
+      } else if (pct >= 0.7) {
+        barColor = Colors.orange;
+      } else {
+        barColor = color;
+      }
     }
 
     return Container(
@@ -351,7 +355,7 @@ class UsageLimitDialog {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AmyalColors.yellow.withOpacity(0.2),
+                color: AmyalColors.yellow.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: AmyalColors.yellowDark, width: 1.5),
               ),

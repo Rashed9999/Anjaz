@@ -7,7 +7,7 @@ import 'package:amyal_pay/features/access/domain/repositories/access_repo.dart';
 /// يُحمَّل عند تسجيل الدخول + يُعاد تحميله عند تغيير business_type/plan.
 ///
 /// الاستخدام:
-///   final access = Get.find<AccessController>();
+///   final access = `Get.find<AccessController>()`;
 ///   if (access.has('inventory')) ... ;
 ///   if (access.role == 'merchant' && access.businessType == 'retail') ... ;
 class AccessController extends GetxController implements GetxService {

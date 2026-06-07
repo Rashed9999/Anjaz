@@ -100,7 +100,7 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
         Container(
           width: 50, height: 50,
           decoration: BoxDecoration(
-            color: isActive ? AmyalColors.primary.withOpacity(0.1) : Colors.grey.shade200,
+            color: isActive ? AmyalColors.primary.withValues(alpha: 0.1) : Colors.grey.shade200,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(Icons.local_gas_station,
@@ -116,8 +116,8 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: isMechanical
-                    ? AmyalColors.yellow.withOpacity(0.3)
-                    : Colors.blue.withOpacity(0.15),
+                    ? AmyalColors.yellow.withValues(alpha: 0.3)
+                    : Colors.blue.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(isMechanical ? 'يدوية' : 'إلكترونية',
@@ -135,7 +135,7 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
         ])),
         Switch(
           value: isActive,
-          activeColor: Colors.green,
+          activeThumbColor: Colors.green,
           onChanged: (v) => c.updatePump(pump['id'], {'is_active': v}),
         ),
       ]),
@@ -209,10 +209,13 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
               };
               final ok = await c.addPump(data);
               if (!mounted) return;
-              if (ok) Navigator.pop(ctx);
-              else ScaffoldMessenger.of(context).showSnackBar(
+              if (ok) {
+                Navigator.pop(ctx);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
               );
+              }
             },
             child: const Text('إضافة'),
           )),
@@ -263,7 +266,7 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
           Container(
             width: 50, height: 50,
             decoration: BoxDecoration(
-              color: AmyalColors.yellow.withOpacity(0.2),
+              color: AmyalColors.yellow.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.local_gas_station, color: AmyalColors.yellowDark, size: 24),
@@ -317,10 +320,13 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
               'price_per_liter': priceCtrl.text.trim(),
             });
             if (!mounted) return;
-            if (ok) Navigator.pop(ctx);
-            else ScaffoldMessenger.of(context).showSnackBar(
+            if (ok) {
+              Navigator.pop(ctx);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
             );
+            }
           },
           child: const Text('إضافة'),
         )),
@@ -346,10 +352,13 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
             if (priceCtrl.text.isEmpty) return;
             final ok = await c.updateProductPrice(product['id'], priceCtrl.text.trim());
             if (!mounted) return;
-            if (ok) Navigator.pop(ctx);
-            else ScaffoldMessenger.of(context).showSnackBar(
+            if (ok) {
+              Navigator.pop(ctx);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
             );
+            }
           },
           child: const Text('حفظ'),
         )),

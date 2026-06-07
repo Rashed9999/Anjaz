@@ -104,7 +104,7 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
                 const SizedBox(height: 16),
 
                 Card(
-                  color: AmyalColors.yellow.withOpacity(0.15),
+                  color: AmyalColors.yellow.withValues(alpha: 0.15),
                   child: SwitchListTile(
                     title: const Text('موافقة المالك للصرف'),
                     subtitle: const Text(
@@ -112,7 +112,7 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
                       style: TextStyle(fontSize: 11),
                     ),
                     value: _requireApproval,
-                    activeColor: AmyalColors.primary,
+                    activeThumbColor: AmyalColors.primary,
                     onChanged: (v) => setState(() => _requireApproval = v),
                   ),
                 ),

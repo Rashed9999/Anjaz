@@ -177,10 +177,13 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
               notes: notesCtrl.text,
             );
             if (!mounted) return;
-            if (ok) Navigator.pop(ctx);
-            else ScaffoldMessenger.of(context).showSnackBar(
+            if (ok) {
+              Navigator.pop(ctx);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
             );
+            }
           },
           child: const Text('فتح'),
         )),
@@ -216,7 +219,7 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow.withOpacity(0.15),
+                  color: AmyalColors.yellow.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: AmyalColors.yellow),
                 ),
@@ -411,8 +414,7 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
           Text(varText, style: TextStyle(color: varColor, fontWeight: FontWeight.bold)),
           const SizedBox(height: 2),
           if (openedAt != null)
-            Text('فتح: ${DateFormat('MM-dd HH:mm').format(openedAt)}'
-                + (closedAt != null ? ' → ${DateFormat('MM-dd HH:mm').format(closedAt)}' : ''),
+            Text('فتح: ${DateFormat('MM-dd HH:mm').format(openedAt)}${closedAt != null ? ' → ${DateFormat('MM-dd HH:mm').format(closedAt)}' : ''}',
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
           if (status != 'open')
             Text('مبيعات: ${s['total_sales_count']} • لترات: ${s['total_liters']}',

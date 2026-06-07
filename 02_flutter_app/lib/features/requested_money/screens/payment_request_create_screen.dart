@@ -177,7 +177,7 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
             onChanged: (v) => setState(() => _isRecurring = v),
             title: const Text('تكرار هذا الطلب', textAlign: TextAlign.right),
             subtitle: const Text('فواتير دورية', textAlign: TextAlign.right, style: TextStyle(fontSize: 12)),
-            activeColor: AmyalColors.primary,
+            activeThumbColor: AmyalColors.primary,
           ),
           if (_isRecurring) ...[
             const SizedBox(height: 8),

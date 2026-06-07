@@ -69,7 +69,7 @@ class _MyFundsScreenState extends State<MyFundsScreen> {
             return ListView(
               children: [
                 SizedBox(height: MediaQuery.of(context).size.height * 0.15),
-                Icon(Icons.diversity_3, size: 80, color: AmyalColors.textMuted.withOpacity(0.5)),
+                Icon(Icons.diversity_3, size: 80, color: AmyalColors.textMuted.withValues(alpha: 0.5)),
                 const SizedBox(height: 16),
                 const Center(child: Text('لا توجد صناديق بعد', style: TextStyle(fontSize: 14))),
                 const SizedBox(height: 8),
@@ -141,7 +141,7 @@ class _InviteCard extends StatelessWidget {
     final fund = membership.fund;
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
-      color: AmyalColors.yellow.withOpacity(0.15),
+      color: AmyalColors.yellow.withValues(alpha: 0.15),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -221,7 +221,7 @@ class _FundCard extends StatelessWidget {
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: AmyalColors.yellow.withOpacity(0.25),
+                backgroundColor: AmyalColors.yellow.withValues(alpha: 0.25),
                 child: const Icon(Icons.diversity_3, color: AmyalColors.primary),
               ),
               const SizedBox(width: 12),

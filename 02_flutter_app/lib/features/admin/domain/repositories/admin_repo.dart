@@ -40,7 +40,7 @@ class AdminRepo extends GetxService {
   Future<Response> updateMerchantPlan(int id, String plan, {String? expiresAt, String? notes}) =>
       apiClient.postData('$_base/merchants/$id/plan', {
         'plan': plan,
-        if (expiresAt != null) 'expires_at': expiresAt,
-        if (notes != null) 'notes': notes,
+        'expires_at': ?expiresAt,
+        'notes': ?notes,
       });
 }

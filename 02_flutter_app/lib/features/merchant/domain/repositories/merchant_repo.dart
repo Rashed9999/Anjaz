@@ -27,8 +27,8 @@ class MerchantRepo extends GetxService {
       '$_customerBase/request-money',
       {
         'amount': amount,
-        if (note != null) 'description': note,
-        if (customerPhone != null) 'phone': customerPhone,
+        'description': ?note,
+        'phone': ?customerPhone,
       },
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('merchant_request_payment'),
     );
@@ -49,7 +49,7 @@ class MerchantRepo extends GetxService {
       {
         'original_transaction_id': originalTransactionId,
         'amount': amount,
-        if (reason != null) 'reason': reason,
+        'reason': ?reason,
       },
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('merchant_refund'),
     );
@@ -70,7 +70,7 @@ class MerchantRepo extends GetxService {
       {
         'amount': amount,
         'withdrawal_method_id': withdrawalMethodId,
-        if (methodFields != null) ...methodFields,
+        ...?methodFields,
       },
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('merchant_withdraw'),
     );

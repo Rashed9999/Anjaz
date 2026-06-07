@@ -170,7 +170,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                         fund.description!,
                         style: TextStyle(
                           fontSize: 12,
-                          color: AmyalColors.primary.withOpacity(0.7),
+                          color: AmyalColors.primary.withValues(alpha: 0.7),
                         ),
                       ),
                     ),
@@ -218,7 +218,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                   : ListView.separated(
                       padding: const EdgeInsets.all(12),
                       itemCount: ctrl.selectedFundTransactions.length,
-                      separatorBuilder: (_, __) =>
+                      separatorBuilder: (_, _) =>
                           const Divider(height: 1, color: AmyalColors.border),
                       itemBuilder: (context, i) =>
                           _TxTile(tx: ctrl.selectedFundTransactions[i]),
@@ -243,7 +243,7 @@ class _TxTile extends StatelessWidget {
     return ListTile(
       tileColor: Colors.white,
       leading: CircleAvatar(
-        backgroundColor: color.withOpacity(0.15),
+        backgroundColor: color.withValues(alpha: 0.15),
         child: Icon(isContribute ? Icons.arrow_downward : Icons.arrow_upward, color: color, size: 18),
       ),
       title: Text(

@@ -134,7 +134,7 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
           Container(
             width: 44, height: 44,
             decoration: BoxDecoration(
-              color: methodColor.withOpacity(0.1),
+              color: methodColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(methodIcon, color: methodColor, size: 22),
@@ -148,7 +148,7 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                 decoration: BoxDecoration(
-                  color: methodColor.withOpacity(0.15),
+                  color: methodColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(methodLabel,
@@ -208,7 +208,7 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
                 final url = c.receiptUrl(sale['sale_ulid']);
                 Clipboard.setData(ClipboardData(text: url));
                 Get.snackbar('الرابط نُسخ', 'افتح المتصفّح لتنزيل الإيصال',
-                    backgroundColor: AmyalColors.yellow.withOpacity(0.3));
+                    backgroundColor: AmyalColors.yellow.withValues(alpha: 0.3));
               },
               icon: const Icon(Icons.picture_as_pdf, color: AmyalColors.red),
               label: const Text('تنزيل إيصال PDF'),

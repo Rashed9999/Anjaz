@@ -1,4 +1,5 @@
 /// AMIAL-BILL-PAY-001 (v0.9-D Flutter)
+library;
 
 class AmyalBillProvider {
   final int id;

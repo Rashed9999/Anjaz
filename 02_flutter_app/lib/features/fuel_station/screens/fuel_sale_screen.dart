@@ -255,7 +255,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
             SizedBox(height: 90, child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: c.pumps.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (_, i) => _pumpTile(c.pumps[i]),
             )),
 
@@ -478,7 +478,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AmyalColors.yellow.withOpacity(0.15),
+        color: AmyalColors.yellow.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AmyalColors.yellow),
       ),
@@ -548,7 +548,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
   Widget _companySelector() {
     return Column(children: [
       DropdownButtonFormField<Map<String, dynamic>>(
-        value: _selectedCompany,
+        initialValue: _selectedCompany,
         decoration: InputDecoration(
           labelText: 'اختر الشركة',
           filled: true, fillColor: Colors.white,

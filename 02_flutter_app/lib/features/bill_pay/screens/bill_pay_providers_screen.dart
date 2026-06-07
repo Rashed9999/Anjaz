@@ -42,7 +42,7 @@ class _BillPayProvidersScreenState extends State<BillPayProvidersScreen> {
           return ListView(
             children: [
               SizedBox(height: MediaQuery.of(context).size.height * 0.2),
-              Icon(Icons.receipt_long, size: 80, color: AmyalColors.textMuted.withOpacity(0.5)),
+              Icon(Icons.receipt_long, size: 80, color: AmyalColors.textMuted.withValues(alpha: 0.5)),
               const SizedBox(height: 16),
               const Center(child: Text('لا توجد خدمات متاحة حالياً')),
             ],
@@ -91,7 +91,7 @@ class _ServiceCard extends StatelessWidget {
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: AmyalColors.yellow.withOpacity(0.25),
+                backgroundColor: AmyalColors.yellow.withValues(alpha: 0.25),
                 child: Icon(_iconForType(service.serviceType),
                     color: AmyalColors.primary, size: 20),
               ),

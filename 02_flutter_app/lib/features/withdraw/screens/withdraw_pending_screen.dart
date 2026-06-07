@@ -181,7 +181,7 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: expired ? AmyalColors.red.withOpacity(0.1) : AmyalColors.yellow.withOpacity(0.2),
+                color: expired ? AmyalColors.red.withValues(alpha: 0.1) : AmyalColors.yellow.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: expired ? AmyalColors.red : AmyalColors.yellowDark),
               ),

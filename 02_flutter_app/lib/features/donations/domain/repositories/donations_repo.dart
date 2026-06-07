@@ -34,7 +34,7 @@ class DonationsRepo extends GetxService {
         'campaign_ulid': campaignUlid,
         'amount': amount,
         'is_anonymous': isAnonymous,
-        if (message != null) 'message': message,
+        'message': ?message,
       },
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('donate'),
     );

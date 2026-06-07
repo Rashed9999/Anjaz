@@ -145,7 +145,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
 
   Widget _statBox(String value, String label, Color color, IconData icon) => Container(
     padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+    decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
     child: Column(children: [
       Icon(icon, color: color, size: 20),
       const SizedBox(height: 4),
@@ -164,7 +164,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
         decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(14)),
         child: Row(children: [
           Container(width: 46, height: 46,
-            decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
             child: Icon(icon, color: Colors.white, size: 26)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -269,7 +269,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
         child: Row(children: [
           Container(width: 40, height: 40,
-            decoration: BoxDecoration(color: AmyalColors.yellow.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: AmyalColors.yellow.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
             child: const Icon(Icons.medication, color: AmyalColors.yellowDark)),
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -343,8 +343,11 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
     final isExhausted = status == 'exhausted';
 
     Color cardColor = Colors.white;
-    if (isExpired) cardColor = Colors.red.shade50;
-    else if (isExhausted) cardColor = Colors.grey.shade100;
+    if (isExpired) {
+      cardColor = Colors.red.shade50;
+    } else if (isExhausted) {
+      cardColor = Colors.grey.shade100;
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -415,9 +418,12 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
               if (cost.text.isNotEmpty) 'cost_per_unit': cost.text,
             });
             if (!mounted) return;
-            if (ok) Navigator.pop(ctx);
-            else ScaffoldMessenger.of(context).showSnackBar(
+            if (ok) {
+              Navigator.pop(ctx);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red));
+            }
           },
           child: const Text('إضافة'),
         )),
@@ -464,9 +470,12 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
               'requires_prescription': requiresPrescription,
             });
             if (!mounted) return;
-            if (ok) Navigator.pop(ctx);
-            else ScaffoldMessenger.of(context).showSnackBar(
+            if (ok) {
+              Navigator.pop(ctx);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red));
+            }
           },
           child: const Text('إضافة'),
         )),
@@ -634,9 +643,12 @@ class _PharmacyCustomersScreenState extends State<PharmacyCustomersScreen> {
                 ? await c.addCustomer(data)
                 : await c.updateCustomer(existing['id'], data);
             if (!mounted) return;
-            if (ok) Navigator.pop(ctx);
-            else ScaffoldMessenger.of(context).showSnackBar(
+            if (ok) {
+              Navigator.pop(ctx);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red));
+            }
           },
           child: Text(existing == null ? 'إضافة' : 'حفظ'),
         )),
@@ -832,7 +844,7 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
         Row(children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(color: methodColor.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+            decoration: BoxDecoration(color: methodColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
             child: Text(methodLabel, style: TextStyle(color: methodColor, fontSize: 11, fontWeight: FontWeight.bold)),
           ),
           const SizedBox(width: 8),

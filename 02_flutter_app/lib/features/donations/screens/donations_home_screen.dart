@@ -199,7 +199,7 @@ class _CategoryChip extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: AmyalColors.yellow.withOpacity(0.25),
+                backgroundColor: AmyalColors.yellow.withValues(alpha: 0.25),
                 child: const Icon(Icons.favorite,
                     color: AmyalColors.primary, size: 22),
               ),
@@ -251,7 +251,7 @@ class _FeaturedCard extends StatelessWidget {
                           fit: BoxFit.cover,
                         )
                       : null,
-                  color: AmyalColors.yellow.withOpacity(0.25),
+                  color: AmyalColors.yellow.withValues(alpha: 0.25),
                 ),
                 child: campaign.coverImageUrl == null
                     ? const Center(
@@ -314,7 +314,7 @@ class _CampaignListItem extends StatelessWidget {
                 child: campaign.coverImageUrl != null
                     ? Image.network(campaign.coverImageUrl!,
                         width: 70, height: 70, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _placeholder())
+                        errorBuilder: (_, _, _) => _placeholder())
                     : _placeholder(),
               ),
               const SizedBox(width: 12),
@@ -364,7 +364,7 @@ class _CampaignListItem extends StatelessWidget {
 
   Widget _placeholder() => Container(
         width: 70, height: 70,
-        color: AmyalColors.yellow.withOpacity(0.2),
+        color: AmyalColors.yellow.withValues(alpha: 0.2),
         child: const Icon(Icons.volunteer_activism, color: AmyalColors.primary),
       );
 }

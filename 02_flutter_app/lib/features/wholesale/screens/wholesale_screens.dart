@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/wholesale/controllers/wholesale_controller.dart';
@@ -150,7 +149,7 @@ class _WholesaleDashboardScreenState extends State<WholesaleDashboardScreen> {
 
   Widget _statBox(String value, String label, Color color, IconData icon) => Container(
     padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+    decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
     child: Column(children: [
       Icon(icon, color: color, size: 20),
       const SizedBox(height: 4),
@@ -169,7 +168,7 @@ class _WholesaleDashboardScreenState extends State<WholesaleDashboardScreen> {
         decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(14)),
         child: Row(children: [
           Container(width: 46, height: 46,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
               child: Icon(icon, color: Colors.white, size: 26)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -259,7 +258,7 @@ class _WholesaleProductsScreenState extends State<WholesaleProductsScreen> {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
       child: Row(children: [
         Container(width: 40, height: 40,
-            decoration: BoxDecoration(color: AmyalColors.yellow.withOpacity(0.2), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: AmyalColors.yellow.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
             child: const Icon(Icons.inventory_2, color: AmyalColors.yellowDark)),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -307,9 +306,12 @@ class _WholesaleProductsScreenState extends State<WholesaleProductsScreen> {
               'initial_stock': stock.text.isEmpty ? '0' : stock.text,
             });
             if (!mounted) return;
-            if (ok) Navigator.pop(ctx);
-            else ScaffoldMessenger.of(context).showSnackBar(
+            if (ok) {
+              Navigator.pop(ctx);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red));
+            }
           },
           child: const Text('إضافة'),
         )),
@@ -395,14 +397,14 @@ class _WholesaleCustomersScreenState extends State<WholesaleCustomersScreen> {
           Row(children: [
             if (balance > 0) Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: AmyalColors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(color: AmyalColors.red.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
               child: Text('عليه: ${balance.toStringAsFixed(0)} ر.ي',
                   style: const TextStyle(color: AmyalColors.red, fontSize: 11, fontWeight: FontWeight.bold)),
             ),
             const SizedBox(width: 6),
             if (limit > 0) Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: AmyalColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(color: AmyalColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
               child: Text('حدّ: ${limit.toStringAsFixed(0)}',
                   style: const TextStyle(color: AmyalColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
             ),
@@ -448,9 +450,12 @@ class _WholesaleCustomersScreenState extends State<WholesaleCustomersScreen> {
               'payment_terms_days': int.tryParse(terms.text) ?? 30,
             });
             if (!mounted) return;
-            if (ok) Navigator.pop(ctx);
-            else ScaffoldMessenger.of(context).showSnackBar(
+            if (ok) {
+              Navigator.pop(ctx);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red));
+            }
           },
           child: const Text('إضافة'),
         )),
@@ -564,7 +569,7 @@ class _WholesaleInvoiceCreateScreenState extends State<WholesaleInvoiceCreateScr
               child: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: cust != null ? AmyalColors.primary.withOpacity(0.08) : Colors.grey.shade100,
+                  color: cust != null ? AmyalColors.primary.withValues(alpha: 0.08) : Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(children: [

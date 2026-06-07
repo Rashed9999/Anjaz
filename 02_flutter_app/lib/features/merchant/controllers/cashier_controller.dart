@@ -96,8 +96,8 @@ class CashierController extends GetxController implements GetxService {
         'total': total.toString(),
         'payment_method': method,
         if (cart.isNotEmpty) 'items': cart.map((l) => l.toJson()).toList(),
-        if (customer != null) 'customer': customer,
-        if (paidTransactionId != null) 'paid_transaction_id': paidTransactionId,
+        'customer': ?customer,
+        'paid_transaction_id': ?paidTransactionId,
         if (creditDueDate != null && creditDueDate.isNotEmpty) 'credit_due_date': creditDueDate,
       };
       final r = await repo.recordSale(data);

@@ -116,5 +116,19 @@ jobs:
       - run: flutter pub get
       - name: Analyze
         run: flutter analyze
-      - name: Test
+      - name: Test (headless widget/unit)
         run: flutter test
+
+      # اختبار E2E على جهاز حقيقي (Linux desktop) بلا شاشة عبر Xvfb.
+      # يثبت أن التطبيق الكامل يُقلع (DI + كل الإضافات) ويبني الواجهة دون انهيار.
+      - name: Enable Linux desktop + deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libgtk-3-dev libsecret-1-dev xvfb
+          flutter config --enable-linux-desktop
+          flutter create --platforms=linux --project-name=amyal_pay .
+      - name: E2E (integration_test on Linux desktop, headless)
+        run: |
+          xvfb-run -a -s "-screen 0 1280x800x24" \
+            flutter test integration_test/app_test.dart -d linux \
+            --dart-define=BASE_URL=https://api.amialpay.com

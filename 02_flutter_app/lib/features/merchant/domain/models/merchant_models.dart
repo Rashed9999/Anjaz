@@ -1,4 +1,5 @@
 /// AMIAL-MERCHANT-APP-001 (v1.6) — Merchant models
+library;
 
 class AmyalMerchant {
   final int id;

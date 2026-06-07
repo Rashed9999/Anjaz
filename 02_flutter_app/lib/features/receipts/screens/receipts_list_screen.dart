@@ -71,7 +71,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
               children: [
                 SizedBox(height: MediaQuery.of(context).size.height * 0.2),
                 Icon(Icons.receipt_long_outlined,
-                    size: 80, color: AmyalColors.textMuted.withOpacity(0.5)),
+                    size: 80, color: AmyalColors.textMuted.withValues(alpha: 0.5)),
                 const SizedBox(height: 16),
                 Text(
                   ctrl.lastError.value.isNotEmpty
@@ -95,7 +95,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
             controller: _scrollController,
             padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: ctrl.receipts.length + (ctrl.hasMore.value ? 1 : 0),
-            separatorBuilder: (_, __) => const Divider(height: 1, color: AmyalColors.border),
+            separatorBuilder: (_, _) => const Divider(height: 1, color: AmyalColors.border),
             itemBuilder: (context, index) {
               if (index >= ctrl.receipts.length) {
                 return const Padding(
@@ -127,7 +127,7 @@ class _ReceiptListTile extends StatelessWidget {
       tileColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: CircleAvatar(
-        backgroundColor: AmyalColors.yellow.withOpacity(0.25),
+        backgroundColor: AmyalColors.yellow.withValues(alpha: 0.25),
         child: Icon(iconData, color: AmyalColors.primary, size: 20),
       ),
       title: Text(
@@ -169,7 +169,7 @@ class _ReceiptListTile extends StatelessWidget {
               margin: const EdgeInsets.only(top: 2),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: AmyalColors.yellow.withOpacity(0.3),
+                color: AmyalColors.yellow.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: const Text('جارٍ التحضير', style: TextStyle(fontSize: 9)),
@@ -179,7 +179,7 @@ class _ReceiptListTile extends StatelessWidget {
               margin: const EdgeInsets.only(top: 2),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: AmyalColors.red.withOpacity(0.15),
+                color: AmyalColors.red.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: const Text('فشل', style: TextStyle(fontSize: 9, color: AmyalColors.red)),

@@ -141,7 +141,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _chip(String label, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-    decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+    decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
     child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
   );
 
@@ -253,7 +253,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       onRefresh: c.loadPendingVariances,
       child: FutureBuilder(
         future: c.loadPendingVariances(),
-        builder: (_, __) => Obx(() {
+        builder: (_, _) => Obx(() {
           if (c.isLoading.value && c.variances.isEmpty) return const Center(child: CircularProgressIndicator());
           if (c.variances.isEmpty) {
             return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [

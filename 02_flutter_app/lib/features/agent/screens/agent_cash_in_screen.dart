@@ -184,7 +184,7 @@ class _AgentCashInScreenState extends State<AgentCashInScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow.withOpacity(0.2),
+                  color: AmyalColors.yellow.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Row(
@@ -254,7 +254,7 @@ class _AgentCashInScreenState extends State<AgentCashInScreen> {
                 Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981).withOpacity(0.1),
+                    color: const Color(0xFF10B981).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(

@@ -146,7 +146,7 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: _statusColor(profileStatus).withOpacity(0.1),
+                color: _statusColor(profileStatus).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: _statusColor(profileStatus)),
               ),

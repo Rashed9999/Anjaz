@@ -87,7 +87,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(30),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6)],
+              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6)],
             ),
             child: Row(children: [
               _toggleBtn('شهري', !_annual, () => setState(() => _annual = false)),
@@ -151,7 +151,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: isExpired ? Colors.red.shade50 : AmyalColors.yellow.withOpacity(0.2),
+        color: isExpired ? Colors.red.shade50 : AmyalColors.yellow.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: isExpired ? Colors.red : AmyalColors.yellowDark, width: 1),
       ),
@@ -199,7 +199,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
           color: isCurrent ? AmyalColors.yellow : (isSuggested ? color : Colors.transparent),
           width: isCurrent ? 3 : (isSuggested ? 2 : 0),
         ),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.15), blurRadius: 16)],
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.15), blurRadius: 16)],
       ),
       child: Column(children: [
         // Header ملوّن
@@ -376,7 +376,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AmyalColors.primary.withOpacity(0.08),
+              color: AmyalColors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(children: [
@@ -527,9 +527,9 @@ class _ContactBtn extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withOpacity(0.2)),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
         child: Row(children: [
           Container(width: 44, height: 44,

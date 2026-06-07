@@ -41,7 +41,7 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
             return ListView(
               children: [
                 SizedBox(height: MediaQuery.of(context).size.height * 0.15),
-                Icon(Icons.volunteer_activism, size: 80, color: AmyalColors.textMuted.withOpacity(0.5)),
+                Icon(Icons.volunteer_activism, size: 80, color: AmyalColors.textMuted.withValues(alpha: 0.5)),
                 const SizedBox(height: 16),
                 const Center(child: Text('لم تتبرع بعد')),
                 const SizedBox(height: 8),
@@ -64,7 +64,7 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow.withOpacity(0.2),
+                  color: AmyalColors.yellow.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(

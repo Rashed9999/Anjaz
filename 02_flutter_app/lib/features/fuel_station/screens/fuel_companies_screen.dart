@@ -81,7 +81,7 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
           Container(
             width: 44, height: 44,
             decoration: BoxDecoration(
-              color: AmyalColors.primary.withOpacity(0.1),
+              color: AmyalColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(Icons.business, color: AmyalColors.primary),
@@ -180,10 +180,13 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
               if (monthlyLimit.text.isNotEmpty) 'monthly_limit': monthlyLimit.text,
             });
             if (!mounted) return;
-            if (ok) Navigator.pop(ctx);
-            else ScaffoldMessenger.of(context).showSnackBar(
+            if (ok) {
+              Navigator.pop(ctx);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
             );
+            }
           },
           child: const Text('إضافة'),
         )),
@@ -359,10 +362,13 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
               if (monthly.text.isNotEmpty) 'monthly_limit': monthly.text,
             });
             if (!mounted) return;
-            if (ok) Navigator.pop(ctx);
-            else ScaffoldMessenger.of(context).showSnackBar(
+            if (ok) {
+              Navigator.pop(ctx);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
             );
+            }
           },
           child: const Text('إضافة'),
         ),

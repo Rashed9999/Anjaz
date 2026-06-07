@@ -224,7 +224,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
     Get.snackbar(
       'الرابط جاهز',
       'افتح الرابط في المتصفّح لتحميل PDF (تم نسخه)',
-      backgroundColor: AmyalColors.yellow.withOpacity(0.2),
+      backgroundColor: AmyalColors.yellow.withValues(alpha: 0.2),
       duration: const Duration(seconds: 4),
       snackPosition: SnackPosition.BOTTOM,
     );
@@ -306,13 +306,16 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
             } else {
               if (noteCtrl.text.isEmpty) {
                 Get.snackbar('تنبيه', 'التعديل اليدوي يحتاج سبباً',
-                    backgroundColor: AmyalColors.red.withOpacity(0.1));
+                    backgroundColor: AmyalColors.red.withValues(alpha: 0.1));
                 return;
               }
               ok = await c.recordAdjustment(cid, amountCtrl.text, noteCtrl.text);
             }
-            if (ok) Get.back(result: true);
-            else Get.snackbar('فشل', c.lastError.value, backgroundColor: AmyalColors.red.withOpacity(0.1));
+            if (ok) {
+              Get.back(result: true);
+            } else {
+              Get.snackbar('فشل', c.lastError.value, backgroundColor: AmyalColors.red.withValues(alpha: 0.1));
+            }
           },
           child: c.isSubmitting.value
               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))

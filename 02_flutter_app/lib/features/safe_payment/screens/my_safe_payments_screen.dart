@@ -78,7 +78,7 @@ class _MySafePaymentsScreenState extends State<MySafePaymentsScreen>
               children: [
                 SizedBox(height: MediaQuery.of(context).size.height * 0.15),
                 Icon(Icons.shield_outlined,
-                    size: 80, color: AmyalColors.textMuted.withOpacity(0.5)),
+                    size: 80, color: AmyalColors.textMuted.withValues(alpha: 0.5)),
                 const SizedBox(height: 16),
                 const Center(
                   child: Text('لا توجد عمليات دفع آمن',
@@ -101,7 +101,7 @@ class _MySafePaymentsScreenState extends State<MySafePaymentsScreen>
           return ListView.separated(
             padding: const EdgeInsets.only(top: 8, bottom: 80),
             itemCount: ctrl.payments.length,
-            separatorBuilder: (_, __) =>
+            separatorBuilder: (_, _) =>
                 const Divider(height: 1, color: AmyalColors.border),
             itemBuilder: (context, i) => _PaymentTile(payment: ctrl.payments[i]),
           );
@@ -128,7 +128,7 @@ class _PaymentTile extends StatelessWidget {
       tileColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       leading: CircleAvatar(
-        backgroundColor: statusInfo.color.withOpacity(0.15),
+        backgroundColor: statusInfo.color.withValues(alpha: 0.15),
         child: Icon(statusInfo.icon, color: statusInfo.color, size: 20),
       ),
       title: Text(

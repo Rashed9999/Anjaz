@@ -136,7 +136,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow.withOpacity(0.2),
+                  color: AmyalColors.yellow.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -187,7 +187,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AmyalColors.yellow.withOpacity(0.3),
+                          color: AmyalColors.yellow.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text('محجوز: ${payment.heldAmount} ر.س',

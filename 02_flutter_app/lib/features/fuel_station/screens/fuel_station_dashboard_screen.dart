@@ -110,7 +110,7 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
                     )),
                     const SizedBox(width: 8),
                     Expanded(child: _statBox(
-                      'اللترات', '${_fmt(d?['total_liters'])}',
+                      'اللترات', _fmt(d?['total_liters']),
                       AmyalColors.yellowDark, Icons.local_gas_station,
                     )),
                     const SizedBox(width: 8),
@@ -192,7 +192,7 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(children: [
@@ -220,7 +220,7 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
           Container(
             width: 48, height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: Colors.white, size: 28),

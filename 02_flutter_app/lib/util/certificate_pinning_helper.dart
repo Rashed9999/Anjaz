@@ -13,9 +13,9 @@ import 'dart:io';
 /// **التحديث:**
 ///   عند تجديد الـ SSL certificate (مهم!):
 ///   1. احسب SHA256 الجديد
-///   2. حدّث الثابت `_PRIMARY_CERT_FINGERPRINT_SHA256`
+///   2. حدّث الثابت `_primaryCertFingerprintSha256`
 ///   3. أصدر تحديث للتطبيق
-///   4. **مهم:** احتفظ بـ fallback certificate (`_BACKUP_CERT_FINGERPRINT_SHA256`)
+///   4. **مهم:** احتفظ بـ fallback certificate (`_backupCertFingerprintSha256`)
 ///      للسماح بـ rolling cert renewal بدون إجبار update فوري.
 ///
 /// **حساب SHA256 من certificate:**
@@ -28,11 +28,11 @@ import 'dart:io';
 /// implementation اليدوي. هذا الكود اختيرَ للوضوح والـ control الكامل.
 class CertificatePinningHelper {
   // ✏️ ضع SHA256 fingerprints الفعلية هنا قبل production build
-  static const String _PRIMARY_CERT_FINGERPRINT_SHA256 =
+  static const String _primaryCertFingerprintSha256 =
       'PLACEHOLDER:REPLACE_WITH_ACTUAL_FINGERPRINT';
 
   // Fallback (للـ rotation الآمن)
-  static const String _BACKUP_CERT_FINGERPRINT_SHA256 =
+  static const String _backupCertFingerprintSha256 =
       'PLACEHOLDER:OPTIONAL_BACKUP_FINGERPRINT';
 
   // Domains التي نطبق عليها pinning
@@ -50,7 +50,7 @@ class CertificatePinningHelper {
       return;
     }
 
-    if (_PRIMARY_CERT_FINGERPRINT_SHA256.startsWith('PLACEHOLDER')) {
+    if (_primaryCertFingerprintSha256.startsWith('PLACEHOLDER')) {
       if (kDebugMode) {
         debugPrint('[CertPinning] WARNING: No real fingerprint configured');
       }
@@ -69,8 +69,8 @@ class CertificatePinningHelper {
 
     final fingerprint = _calculateSha256(cert.der);
     final normalized = fingerprint.replaceAll(':', '').toUpperCase();
-    final expected1 = _PRIMARY_CERT_FINGERPRINT_SHA256.replaceAll(':', '').toUpperCase();
-    final expected2 = _BACKUP_CERT_FINGERPRINT_SHA256.replaceAll(':', '').toUpperCase();
+    final expected1 = _primaryCertFingerprintSha256.replaceAll(':', '').toUpperCase();
+    final expected2 = _backupCertFingerprintSha256.replaceAll(':', '').toUpperCase();
 
     final isMatch = normalized == expected1 ||
         (!expected2.startsWith('PLACEHOLDER') && normalized == expected2);

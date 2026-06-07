@@ -80,7 +80,7 @@ class _SplitBillMySharesScreenState extends State<SplitBillMySharesScreen> {
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: ctrl.myShares.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (context, i) {
               final share = ctrl.myShares[i];
               final bill = (share['split_bill'] ?? {}) as Map;

@@ -147,7 +147,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                color: AmyalColors.yellow.withOpacity(0.3),
+                color: AmyalColors.yellow.withValues(alpha: 0.3),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -184,7 +184,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                           margin: const EdgeInsets.only(bottom: 16),
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: AmyalColors.yellow.withOpacity(0.15),
+                            color: AmyalColors.yellow.withValues(alpha: 0.15),
                             border: Border.all(color: AmyalColors.yellow),
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -253,7 +253,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                   color: Colors.white,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 8,
                       offset: const Offset(0, -2),
                     ),

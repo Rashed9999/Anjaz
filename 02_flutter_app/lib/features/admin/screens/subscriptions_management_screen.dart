@@ -235,9 +235,9 @@ class _OverviewTab extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(children: [
         Icon(icon, color: color),
@@ -338,7 +338,7 @@ class _ExpiringTab extends StatelessWidget {
           return ListView.separated(
             padding: const EdgeInsets.all(12),
             itemCount: c.expiring.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (_, i) => _expiringCard(context, c.expiring[i]),
           );
         }),
@@ -350,9 +350,13 @@ class _ExpiringTab extends StatelessWidget {
     final daysLeft = m['days_left'];
     Color urgencyColor = Colors.green;
     if (daysLeft is num) {
-      if (daysLeft <= 1) urgencyColor = Colors.red;
-      else if (daysLeft <= 3) urgencyColor = Colors.orange;
-      else if (daysLeft <= 7) urgencyColor = Colors.amber;
+      if (daysLeft <= 1) {
+        urgencyColor = Colors.red;
+      } else if (daysLeft <= 3) {
+        urgencyColor = Colors.orange;
+      } else if (daysLeft <= 7) {
+        urgencyColor = Colors.amber;
+      }
     }
 
     return Container(
@@ -371,7 +375,7 @@ class _ExpiringTab extends StatelessWidget {
           ])),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: urgencyColor.withOpacity(0.15),
+            decoration: BoxDecoration(color: urgencyColor.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(20)),
             child: Text(
               daysLeft == 0 ? 'اليوم' : daysLeft == 1 ? 'غداً' : '$daysLeft أيام',
@@ -383,7 +387,7 @@ class _ExpiringTab extends StatelessWidget {
         Row(children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(color: AmyalColors.primary.withOpacity(0.1),
+            decoration: BoxDecoration(color: AmyalColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(6)),
             child: Text(m['current_plan_label']?.toString() ?? '',
                 style: const TextStyle(color: AmyalColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
@@ -428,7 +432,7 @@ class _ExpiringTab extends StatelessWidget {
         const SizedBox(height: 8),
         StatefulBuilder(builder: (_, setSt) => DropdownButtonFormField<String>(
           decoration: const InputDecoration(labelText: 'طريقة الدفع', isDense: true),
-          value: payment,
+          initialValue: payment,
           items: const [
             DropdownMenuItem(value: 'cash', child: Text('نقد')),
             DropdownMenuItem(value: 'bank', child: Text('تحويل بنكي')),
@@ -549,7 +553,7 @@ class _LogTab extends StatelessWidget {
         return ListView.separated(
           padding: const EdgeInsets.all(8),
           itemCount: c.logItems.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 6),
+          separatorBuilder: (_, _) => const SizedBox(height: 6),
           itemBuilder: (_, i) => _logCard(c.logItems[i]),
         );
       })),
@@ -568,7 +572,7 @@ class _LogTab extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(width: 36, height: 36,
-              decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
               child: Icon(_actionIcon(action), color: color, size: 18)),
           const SizedBox(width: 8),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

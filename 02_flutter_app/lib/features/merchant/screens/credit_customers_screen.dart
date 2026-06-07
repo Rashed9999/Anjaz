@@ -100,7 +100,7 @@ class _CreditCustomersScreenState extends State<CreditCustomersScreen> {
               child: ListView.separated(
                 padding: const EdgeInsets.all(12),
                 itemCount: c.customers.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (_, i) => _customerCard(c.customers[i]),
               ),
             );
@@ -143,14 +143,14 @@ class _CreditCustomersScreenState extends State<CreditCustomersScreen> {
         decoration: BoxDecoration(
           color: AmyalColors.cardSurface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: overLimit ? AmyalColors.red.withOpacity(0.4) : Colors.transparent),
+          border: Border.all(color: overLimit ? AmyalColors.red.withValues(alpha: 0.4) : Colors.transparent),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Row(children: [
             // التصنيف
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(color: clsColor.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: clsColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
               child: Text(cls == 'gold' ? '⭐ ذهبي' : cls == 'silver' ? 'فضّي' : 'برونزي',
                   style: TextStyle(color: clsColor, fontSize: 11, fontWeight: FontWeight.bold)),
             ),

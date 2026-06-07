@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:app_settings/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -141,9 +142,17 @@ class AuthController extends GetxController implements GetxService {
 
 
   void _checkBiometricSupport() async {
-    final LocalAuthentication bioAuth = LocalAuthentication();
-    _bioList = await bioAuth.getAvailableBiometrics();
-    _isBiometricSupported = await bioAuth.canCheckBiometrics || await bioAuth.isDeviceSupported();
+    // فحص توفّر القياسات الحيوية قد يرمي على أجهزة/منصّات بلا دعم — لا يجب أن
+    // يُسقط الإقلاع؛ نسقط بأمان إلى "غير مدعوم".
+    try {
+      final LocalAuthentication bioAuth = LocalAuthentication();
+      _bioList = await bioAuth.getAvailableBiometrics();
+      _isBiometricSupported = await bioAuth.canCheckBiometrics || await bioAuth.isDeviceSupported();
+    } catch (e) {
+      _bioList = const [];
+      _isBiometricSupported = false;
+      if (kDebugMode) debugPrint('[Auth] biometric check unavailable: $e');
+    }
   }
 
   Future<Response> checkPhone(String phone) async{

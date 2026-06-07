@@ -1,4 +1,5 @@
 /// AMIAL-AGENT-APP-001 (v1.6) — Agent models
+library;
 
 class AmyalAgent {
   final int id;

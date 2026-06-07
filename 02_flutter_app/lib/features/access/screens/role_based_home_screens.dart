@@ -297,7 +297,7 @@ class _GreetingCard extends StatelessWidget {
           if (access.subscriptionPlanLabel.value != null && !access.isFreePlan) Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(access.subscriptionPlanLabel.value ?? '',
@@ -333,7 +333,7 @@ class _BigActionButton extends StatelessWidget {
           Container(
             width: 54, height: 54,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(icon, color: Colors.white, size: 30),
@@ -381,7 +381,7 @@ class _UpgradeBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [AmyalColors.yellow, AmyalColors.yellow.withOpacity(0.7)]),
+        gradient: LinearGradient(colors: [AmyalColors.yellow, AmyalColors.yellow.withValues(alpha: 0.7)]),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(children: [

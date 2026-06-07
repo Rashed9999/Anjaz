@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
@@ -27,15 +28,25 @@ class _SplashScreenState extends State<SplashScreen> with WidgetsBindingObserver
 
     bool isFirstTime = true;
 
-     subscription = Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> result) async {
-      if(await ApiChecker.isVpnActive()) {
-        showCustomSnackBarHelper('you are using vpn', isVpn: true, duration: const Duration(minutes: 10));
-      }
-      if(isFirstTime) {
-        isFirstTime = false;
-        await _route();
-      }
-    });
+     // فحص الاتصال/الـ VPN يعتمد على connectivity_plus، وهو موجّه للموبايل
+     // (الهدف الفعلي). على غيره قد تغيب البنية (NetworkManager/D-Bus) فيرمي خطأً.
+     // نقصره على الموبايل؛ والتوجيه يتمّ بكل الأحوال عبر _route() أدناه.
+     // صلابة إضافية: نتعامل مع أخطاء الـ stream بأمان دون إسقاط الشاشة.
+     if (GetPlatform.isMobile) {
+       subscription = Connectivity().onConnectivityChanged.listen((List<ConnectivityResult> result) async {
+        if(await ApiChecker.isVpnActive()) {
+          showCustomSnackBarHelper('you are using vpn', isVpn: true, duration: const Duration(minutes: 10));
+        }
+        if(isFirstTime) {
+          isFirstTime = false;
+          await _route();
+        }
+      }, onError: (Object e) {
+        if (kDebugMode) debugPrint('[Splash] connectivity stream error: $e');
+      });
+     } else {
+       subscription = const Stream<List<ConnectivityResult>>.empty().listen((_) {});
+     }
 
      _route();
 
@@ -47,6 +58,7 @@ class _SplashScreenState extends State<SplashScreen> with WidgetsBindingObserver
 
   @override
   void dispose() {
+    subscription.cancel();
     super.dispose();
   }
 

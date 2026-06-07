@@ -84,7 +84,7 @@ class _State extends State<WholesaleInvoicesListScreenImpl> {
             const Spacer(),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
               child: Text(label, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
             ),
           ]),
@@ -495,7 +495,7 @@ class _StatementState extends State<WholesaleCustomerStatementScreenImpl> {
 
   Widget _summaryBox(String label, String value, Color color) => Container(
     padding: const EdgeInsets.all(8),
-    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+    decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
     child: Column(children: [
       Text(value, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 12),
           textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),

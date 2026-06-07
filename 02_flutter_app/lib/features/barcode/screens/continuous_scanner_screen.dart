@@ -16,7 +16,7 @@ import 'package:amyal_pay/features/barcode/domain/repositories/barcode_repo.dart
 ///   - زر "إنهاء" يُرجع السلّة لـ caller.
 ///
 /// نتيجة الإرجاع عبر Navigator.pop:
-///   List<ScannedItem> — الأصناف الممسوحة بكمياتها.
+///   `List<ScannedItem>` — الأصناف الممسوحة بكمياتها.
 class ContinuousScannerScreen extends StatefulWidget {
   /// 'wholesale' | 'pharmacy' | 'auto'
   final String context;
@@ -223,7 +223,7 @@ class _ContinuousScannerScreenState extends State<ContinuousScannerScreen>
           builder: (_, child) => Positioned.fill(
             child: IgnorePointer(
               child: Container(
-                color: Colors.green.withOpacity(_flashAnim.value * 0.3),
+                color: Colors.green.withValues(alpha: _flashAnim.value * 0.3),
               ),
             ),
           ),
@@ -295,7 +295,7 @@ class _ContinuousScannerScreenState extends State<ContinuousScannerScreen>
       decoration: BoxDecoration(
         color: fb.color,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 8)],
       ),
       child: Row(children: [
         Icon(fb.icon, color: Colors.white, size: 28),
@@ -389,7 +389,7 @@ class _ContinuousScannerScreenState extends State<ContinuousScannerScreen>
           margin: const EdgeInsets.symmetric(horizontal: 6),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: AmyalColors.primary.withOpacity(0.1),
+            color: AmyalColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Text('${item.quantity}',

@@ -26,7 +26,7 @@ class CashierRepo extends GetxService {
   }
 
   Future<Response> settleCredit(int saleId, {String? paidTransactionId}) {    return apiClient.postData('$_base/sales/$saleId/settle',
-        {if (paidTransactionId != null) 'paid_transaction_id': paidTransactionId});
+        {'paid_transaction_id': ?paidTransactionId});
   }
 
   Future<Response> report({String? date}) {

@@ -64,7 +64,7 @@ class CustomDialogWidget extends StatelessWidget {
 
               Text(description, textAlign: TextAlign.center, style: rubikRegular),
 
-              if(descriptionWidget != null) descriptionWidget!,
+              ?descriptionWidget,
 
 
               const SizedBox(height: Dimensions.paddingSizeLarge),

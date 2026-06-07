@@ -100,6 +100,7 @@ import 'package:amyal_pay/features/splash/domain/reposotories/splash_repo.dart';
 import 'package:amyal_pay/features/requested_money/domain/reposotories/requested_money_repo.dart';
 import 'package:amyal_pay/util/app_constants.dart';
 import 'package:amyal_pay/common/models/language_model.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get/get.dart';
@@ -111,8 +112,17 @@ import '../features/kyc_verification/domain/reposotories/kyc_verify_repo.dart';
 Future<Map<String, Map<String, String>>> init() async {
   // Core
   final sharedPreferences = await SharedPreferences.getInstance();
-  final BaseDeviceInfo deviceInfo =  await DeviceInfoPlugin().deviceInfo;
-  String? uniqueId = await  UniqueIdentifier.serial ?? '';
+
+  final BaseDeviceInfo deviceInfo = await DeviceInfoPlugin().deviceInfo;
+
+  // صلابة الإقلاع: غياب/فشل إضافة unique-identifier (منصّة غير مدعومة أو خطأ
+  // keystore) يجب ألّا يُسقط التطبيق كاملاً — نسقط لمعرّف فارغ بأمان.
+  String uniqueId = '';
+  try {
+    uniqueId = await UniqueIdentifier.serial ?? '';
+  } catch (e) {
+    if (kDebugMode) debugPrint('[DI] unique_identifier unavailable: $e');
+  }
 
   Get.lazyPut(() => uniqueId);
   Get.lazyPut(() => sharedPreferences);

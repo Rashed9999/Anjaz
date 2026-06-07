@@ -60,7 +60,7 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
             Switch(
               value: c.unreadOnly.value,
               onChanged: (_) => c.toggleUnreadOnly(),
-              activeColor: AmyalColors.primary,
+              activeThumbColor: AmyalColors.primary,
             ),
             const SizedBox(width: 8),
             const Text('غير المقروءة فقط'),
@@ -103,7 +103,7 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
               controller: _scroll,
               padding: const EdgeInsets.symmetric(vertical: 8),
               itemCount: c.items.length + (c.currentPage.value < c.lastPage.value ? 1 : 0),
-              separatorBuilder: (_, __) => const SizedBox(height: 4),
+              separatorBuilder: (_, _) => const SizedBox(height: 4),
               itemBuilder: (_, i) {
                 if (i >= c.items.length) {
                   return const Padding(
@@ -134,15 +134,15 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: unread ? Colors.white : Colors.white.withOpacity(0.6),
+          color: unread ? Colors.white : Colors.white.withValues(alpha: 0.6),
           borderRadius: BorderRadius.circular(12),
-          border: unread ? Border.all(color: color.withOpacity(0.4), width: 1) : null,
+          border: unread ? Border.all(color: color.withValues(alpha: 0.4), width: 1) : null,
         ),
         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // أيقونة دائرية
           Container(
             width: 44, height: 44,
-            decoration: BoxDecoration(color: color.withOpacity(0.15), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
             child: Icon(_resolveIcon(iconKey), color: color, size: 22),
           ),
           const SizedBox(width: 12),

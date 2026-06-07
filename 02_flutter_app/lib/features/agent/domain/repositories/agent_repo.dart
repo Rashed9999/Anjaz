@@ -25,7 +25,7 @@ class AgentRepo extends GetxService {
     return apiClient.postData('/api/v1/amial/agent/topup-request', {
       'amount': amount,
       'payment_method': paymentMethod,
-      if (paymentReference != null) 'payment_reference': paymentReference,
+      'payment_reference': ?paymentReference,
     });
   }
 
@@ -48,7 +48,7 @@ class AgentRepo extends GetxService {
         'phone': customerPhone,
         'amount': amount,
         'pin': pin,
-        if (note != null) 'note': note,
+        'note': ?note,
       },
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('agent_cash_in'),
     );
@@ -65,7 +65,7 @@ class AgentRepo extends GetxService {
       {
         'phone': customerPhone,
         'amount': amount,
-        if (note != null) 'note': note,
+        'note': ?note,
       },
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('agent_cash_out_request'),
     );
@@ -82,7 +82,7 @@ class AgentRepo extends GetxService {
       {
         'amount': amount,
         'withdrawal_method_id': withdrawalMethodId,
-        if (methodFields != null) ...methodFields,
+        ...?methodFields,
       },
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('agent_add_money'),
     );
@@ -99,7 +99,7 @@ class AgentRepo extends GetxService {
       {
         'amount': amount,
         'withdrawal_method_id': withdrawalMethodId,
-        if (methodFields != null) ...methodFields,
+        ...?methodFields,
       },
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('agent_withdraw'),
     );

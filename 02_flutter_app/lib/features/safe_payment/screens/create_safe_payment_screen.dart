@@ -49,7 +49,7 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AmyalColors.yellow.withOpacity(0.2),
+                color: AmyalColors.yellow.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: const Text(
@@ -124,7 +124,7 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AmyalColors.yellow.withOpacity(0.2),
+                    color: AmyalColors.yellow.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: AmyalColors.yellow),
                   ),

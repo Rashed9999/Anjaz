@@ -92,8 +92,11 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
       acknowledgedWarnings: ackList,
     );
     if (!mounted) return;
-    if (ok) _showSuccessDialog();
-    else _showSnack(c.lastError.value, AmyalColors.red);
+    if (ok) {
+      _showSuccessDialog();
+    } else {
+      _showSnack(c.lastError.value, AmyalColors.red);
+    }
   }
 
   Future<bool> _showAllergyDialog(List<Map<String, dynamic>> conflicts) async {
@@ -235,7 +238,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
               return Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AmyalColors.primary.withOpacity(0.08),
+                  color: AmyalColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(children: [
@@ -339,7 +342,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
           Container(
             width: 40, height: 40,
             decoration: BoxDecoration(
-              color: AmyalColors.yellow.withOpacity(0.2),
+              color: AmyalColors.yellow.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(Icons.medication, color: AmyalColors.yellowDark, size: 20),
@@ -415,7 +418,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2))],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8, offset: const Offset(0, -2))],
       ),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         // عناصر السلّة
@@ -482,7 +485,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
           ),
         // الإجمالي + الدفع
         Row(children: [
-          Text('${c.cartTotal.toStringAsFixed(0)}',
+          Text(c.cartTotal.toStringAsFixed(0),
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
           const SizedBox(width: 4),
           const Text('ر.ي', style: TextStyle(fontSize: 12)),

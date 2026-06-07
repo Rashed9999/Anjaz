@@ -181,7 +181,7 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AmyalColors.yellow.withOpacity(0.3),
+                      color: AmyalColors.yellow.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Text('قابل للمرتجع',

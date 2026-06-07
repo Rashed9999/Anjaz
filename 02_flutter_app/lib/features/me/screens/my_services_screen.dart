@@ -140,7 +140,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AmyalColors.yellow.withOpacity(0.2),
+                    color: AmyalColors.yellow.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: AmyalColors.yellow),
                   ),
@@ -311,7 +311,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
             Container(
               width: 48, height: 48,
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
+                color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: color, size: 24),
@@ -346,7 +346,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
               Container(
                 width: 48, height: 48,
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow.withOpacity(0.15),
+                  color: AmyalColors.yellow.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.notifications_outlined, color: AmyalColors.yellowDark, size: 24),
@@ -388,7 +388,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
 
   void _comingSoon(String name) {
     Get.snackbar('قريباً', '$name سيتاح قريباً',
-        backgroundColor: AmyalColors.yellow.withOpacity(0.2),
+        backgroundColor: AmyalColors.yellow.withValues(alpha: 0.2),
         snackPosition: SnackPosition.BOTTOM);
   }
 }

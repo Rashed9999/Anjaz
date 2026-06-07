@@ -19,7 +19,7 @@ class FundsRepo extends GetxService {
       AppConstants.amyalFundsCreate,
       {
         'name': name,
-        if (description != null) 'description': description,
+        'description': ?description,
         'require_owner_approval_for_disbursement': requireOwnerApproval,
       },
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('fund_create'),
@@ -49,7 +49,7 @@ class FundsRepo extends GetxService {
   }) async {
     return apiClient.postData(
       '${AppConstants.amyalFundContribute}$fundUlid/contribute',
-      {'amount': amount, if (note != null) 'note': note},
+      {'amount': amount, 'note': ?note},
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('fund_contribute'),
     );
   }
@@ -65,7 +65,7 @@ class FundsRepo extends GetxService {
       {
         'beneficiary_user_id': beneficiaryUserId,
         'amount': amount,
-        if (note != null) 'note': note,
+        'note': ?note,
       },
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('fund_disburse'),
     );
