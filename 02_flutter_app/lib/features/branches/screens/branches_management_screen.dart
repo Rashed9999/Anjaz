@@ -231,7 +231,7 @@ class _BMSState extends State<BranchesManagementScreen> {
               if (addressCtrl.text.isNotEmpty) 'address': addressCtrl.text.trim(),
               if (phoneCtrl.text.isNotEmpty) 'phone': phoneCtrl.text.trim(),
             };
-            final ok = isNew ? await c.create(data) : await c.update(b['id'] as int, data);
+            final ok = isNew ? await c.create(data) : await c.updateBranch(b['id'] as int, data);
             if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(ok ? (isNew ? '✓ تمّ الإنشاء' : '✓ تمّ التحديث') : 'فشل'),
               backgroundColor: ok ? Colors.green : Colors.red,

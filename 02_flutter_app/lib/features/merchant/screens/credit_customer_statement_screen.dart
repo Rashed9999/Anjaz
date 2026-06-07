@@ -128,7 +128,6 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
   }
 
   Widget _dateFilter() {
-    final fmt = DateFormat('yyyy-MM-dd');
     return Row(children: [
       Expanded(child: _dateBtn('من', _from, (d) { setState(() => _from = d); _refresh(); })),
       const SizedBox(width: 8),

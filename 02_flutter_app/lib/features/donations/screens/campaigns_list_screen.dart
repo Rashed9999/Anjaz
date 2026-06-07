@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/donations/controllers/donations_controller.dart';
-import 'package:amyal_pay/features/donations/domain/models/donation_models.dart';
 import 'package:amyal_pay/features/donations/screens/campaign_detail_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 

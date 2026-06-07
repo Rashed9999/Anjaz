@@ -138,7 +138,7 @@ class ApiClient extends GetxService {
          }
          http.MultipartRequest request = http.MultipartRequest('POST', Uri.parse(appBaseUrl+uri));
          request.headers.addAll(headers ?? _mainHeaders!);
-         for(MultipartBody multipart in multipartBody) {
+         for(MultipartBody multipart in multipartBody!) {
            if(multipart.file != null) {
              if(kIsWeb) {
                Uint8List list = await multipart.file!.readAsBytes();

@@ -1,6 +1,5 @@
 import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/data/api/idempotency_key_generator.dart';
 import 'package:amyal_pay/util/app_constants.dart';
 
 /// AMIAL-BILL-PAY-001 (v0.9-D)

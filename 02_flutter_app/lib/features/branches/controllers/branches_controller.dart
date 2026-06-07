@@ -37,7 +37,7 @@ class BranchesController extends GetxController implements GetxService {
     return _action(() => repo.create(data));
   }
 
-  Future<bool> update(int id, Map<String, dynamic> data) async {
+  Future<bool> updateBranch(int id, Map<String, dynamic> data) async {
     return _action(() => repo.update(id, data));
   }
 

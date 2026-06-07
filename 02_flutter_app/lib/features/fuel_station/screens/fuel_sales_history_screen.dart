@@ -24,10 +24,10 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => c.loadSales());
   }
 
-  void _applyFilter() {
+  Future<void> _applyFilter() async {
     final filters = <String, dynamic>{};
     if (_filterMethod != 'all') filters['payment_method'] = _filterMethod;
-    c.loadSales(filters: filters);
+    await c.loadSales(filters: filters);
   }
 
   @override

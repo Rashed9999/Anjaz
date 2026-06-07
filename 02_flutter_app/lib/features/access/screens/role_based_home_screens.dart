@@ -396,9 +396,3 @@ class _UpgradeBanner extends StatelessWidget {
     );
   }
 }
-
-void _showComingSoon(BuildContext context, String label) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('$label — قيد التطوير'), duration: const Duration(seconds: 2)),
-  );
-}

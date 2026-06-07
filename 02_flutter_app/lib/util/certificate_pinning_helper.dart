@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:get/get.dart';
 import 'dart:io';
 
 /// AMIAL-CERT-PIN-001 (v1.0-F)

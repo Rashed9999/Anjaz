@@ -3,6 +3,9 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/features/agent/screens/agent_dashboard_screen.dart';
 import 'package:amyal_pay/features/donations/screens/donations_home_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_dashboard_screen.dart';
+import 'package:amyal_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
+import 'package:amyal_pay/features/family_fund/screens/my_funds_screen.dart';
+import 'package:amyal_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-UNIFIED-AUTH-001 (v1.6)
@@ -39,6 +42,16 @@ class RoleRouter {
       _ => const _CustomerHomePlaceholder(),
     };
   }
+}
+
+/// إشعار لميزة توفّرها شاشة العميل الأصلية في Cash6 (التحويل/الدفع QR).
+void _baseFeatureNotice(BuildContext context, String feature) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('$feature متاح في شاشة العميل الأصلية (Cash6) — اربط هذا الزر بها عند الدمج'),
+      duration: const Duration(seconds: 3),
+    ),
+  );
 }
 
 /// Placeholder — استبدله بـ Customer home الموجودة في Cash6 الأصلي.
@@ -90,16 +103,37 @@ class _CustomerHomePlaceholder extends StatelessWidget {
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
             children: [
-              _GridItem(icon: Icons.send, label: 'تحويل', onTap: () {}),
-              _GridItem(icon: Icons.qr_code_scanner, label: 'دفع QR', onTap: () {}),
-              _GridItem(icon: Icons.receipt, label: 'فواتير', onTap: () {}),
+              // تحويل/دفع QR من ميزات شاشة العميل الأصلية في Cash6 (تُستبدل هذه الشاشة بها).
+              _GridItem(
+                icon: Icons.send,
+                label: 'تحويل',
+                onTap: () => _baseFeatureNotice(context, 'التحويل'),
+              ),
+              _GridItem(
+                icon: Icons.qr_code_scanner,
+                label: 'دفع QR',
+                onTap: () => _baseFeatureNotice(context, 'الدفع عبر QR'),
+              ),
+              _GridItem(
+                icon: Icons.receipt,
+                label: 'فواتير',
+                onTap: () => Get.to(() => const BillPayProvidersScreen()),
+              ),
               _GridItem(
                 icon: Icons.volunteer_activism,
                 label: 'تبرعات',
                 onTap: () => Get.to(() => const DonationsHomeScreen()),
               ),
-              _GridItem(icon: Icons.group, label: 'صندوق عائلي', onTap: () {}),
-              _GridItem(icon: Icons.shield, label: 'دفع آمن', onTap: () {}),
+              _GridItem(
+                icon: Icons.group,
+                label: 'صندوق عائلي',
+                onTap: () => Get.to(() => const MyFundsScreen()),
+              ),
+              _GridItem(
+                icon: Icons.shield,
+                label: 'دفع آمن',
+                onTap: () => Get.to(() => const MySafePaymentsScreen()),
+              ),
             ],
           ),
           const SizedBox(height: 16),

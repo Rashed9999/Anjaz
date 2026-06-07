@@ -3,8 +3,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/features/auth/screens/role_router.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/util/secure_storage_helper.dart';
+import 'package:amyal_pay/data/api/secure_storage_helper.dart';
 
 /// AMIAL-UNIFIED-AUTH-001 (v1.5)
 class UnifiedAuthRepo {
@@ -149,7 +148,7 @@ class UnifiedAuthController extends GetxController implements GetxService {
     final token = meta['token']?.toString();
     if (token != null && token.isNotEmpty) {
       try {
-        await SecureStorageHelper.saveToken(token);
+        await SecureStorageHelper.instance.setToken(token);
       } catch (_) {}
     }
   }

@@ -37,6 +37,9 @@ class AmyalColors {
   /// خلفية البطاقات على background
   static const Color cardSurface = Color(0xFFFFFFFF);
 
+  /// النص الأساسي الداكن — للعناوين والنصوص على الخلفيات الفاتحة.
+  static const Color textPrimary = Color(0xFF1A2433);
+
   /// نصوص ثانوية (رمادي يحترم الـ contrast)
   static const Color textSecondary = Color(0xFF5F6B7C);
   static const Color textMuted = Color(0xFF8B97A8);
