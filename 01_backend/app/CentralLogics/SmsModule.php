@@ -28,10 +28,22 @@ class SmsModule
     private const HTTP_TIMEOUT = 10;
 
     /**
-     * يختار المزود المُفعّل ويرسل OTP.
-     * يعيد 'success' | 'error' | 'not_found' للحفاظ على التوافق مع المتصلين القدامى.
+     * نقطة الدخول التاريخية لإرسال OTP (يستدعيها ~14 موضعاً).
+     *
+     * AMIAL-WHATSAPP-OTP-001: صارت تفويضاً شفّافاً إلى OtpDispatcher الذي يُجرّب
+     * **واتساب أولاً ثم SMS** (حسب التفضيل). كل المتصلين القدامى يكتسبون واتساب
+     * تلقائياً دون أي تغيير. مسار الـ SMS الفعلي في sendViaSmsProviders() أدناه.
      */
     public static function send(string $receiver, string $otp): string
+    {
+        return OtpDispatcher::send($receiver, $otp);
+    }
+
+    /**
+     * مسار SMS الخالص (يُجرّب مزوّدي الـ SMS بالترتيب). يستدعيه OtpDispatcher.
+     * يعيد 'success' | 'error' | 'not_found'.
+     */
+    public static function sendViaSmsProviders(string $receiver, string $otp): string
     {
         $providers = ['twilio', 'nexmo', '2factor', 'msg91'];
 

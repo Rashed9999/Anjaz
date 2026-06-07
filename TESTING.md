@@ -16,6 +16,12 @@
 
 > **الإجمالي:** ~615 اختبار خلفي + 10 اختبارات Flutter (UI + تدفّق E2E) + إقلاع E2E على جهاز.
 
+### قناة OTP عبر WhatsApp (AMIAL-WHATSAPP-OTP-001)
+- `WhatsappModule` (5 مزوّدين) + `OtpDispatcher` (واتساب أولاً → SMS) + جعل
+  `SmsModule::send` تفويضاً شفّافاً (كل المتصلين يكتسبون واتساب بلا تغيير).
+- اختبار: `tests/Feature/WhatsappOtpTest.php` (6 — Http مُزيّف): إرسال، fallback،
+  تفضيل القناة، قالب Meta. التوافق الخلفي مؤكّد (24 اختبار auth يمرّ).
+
 ### آخر إضافات (إغلاق فجوات الهرم)
 - **توسيع طبقة الوحدة:** `FeeServiceTest` (15) + `ZonePolicyUnitTest` (15) +
   `MoneyServiceOperatorsTest` (6) — منطق مالي نقي بلا قاعدة بيانات.

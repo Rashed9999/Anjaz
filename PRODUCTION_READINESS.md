@@ -12,7 +12,7 @@
 | مفاتيح Passport (OAuth) | ⚠️ | `php artisan passport:keys --force` ثم أنشئ عميل: `passport:client --personal` |
 | `AMIAL_PII_ENCRYPTION_KEY` + `AMIAL_PII_BLIND_INDEX_KEY` | ⛔ | إلزاميان للإقلاع — ولّدهما `base64(random_bytes(32))` واحفظهما في خزنة أسرار (ليس Git) |
 | مفاتيح بوّابات الدفع (Stripe/Razorpay/Paystack/…) | ⚠️ | استبدل القيم الفارغة في `.env` بمفاتيح **الإنتاج** الحيّة |
-| Twilio/Vonage (SMS/OTP) | ⚠️ | مفاتيح حيّة + رقم مُرسِل مُوثّق |
+| OTP عبر SMS و/أو **WhatsApp** | ⚠️ | قناة واتساب متعدّدة المزوّدين جاهزة (Meta/Twilio/360dialog/WATI/UltraMsg) مع fallback إلى SMS — انظر `01_backend/docs/WHATSAPP_OTP_SETUP.md`. فعّل مزوّداً واحداً على الأقل بمفاتيح حيّة. واتساب غالباً أرخص لليمن |
 | `.env` خارج Git | ✅ | مُستبعَد؛ النسخة المُسلَّمة تحوي `.env.example` فقط (لا أسرار) |
 | تدوير المفاتيح | ⚠️ | خطّة تدوير ربع سنوية لمفاتيح PII والـ payment |
 
