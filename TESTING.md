@@ -1,13 +1,28 @@
 # دليل الاختبارات — أميال باي
 
-## نظرة عامة
+## هرم الاختبارات — التغطية الفعلية
 
-| الطبقة | الموقع | العدد | الأداة |
+كل طبقات هرم الاختبارات مُغطّاة فعلياً (من القاعدة إلى القمّة):
+
+| طبقة الهرم | الموقع | العدد | الأداة |
 |---|---|---|---|
-| Backend Unit/Feature | `01_backend/tests/` | 66 ملف موجود + جديد | PHPUnit |
-| Backend E2E | `01_backend/tests/Feature/E2E/` | 2 (جديد) | PHPUnit |
-| Flutter Widget | `02_flutter_app/test/` | 1 (أُصلح) | flutter_test |
-| Flutter E2E (Integration) | `02_flutter_app/integration_test/` | 1 (جديد) | integration_test |
+| **Unit** (وحدة) | `01_backend/tests/Unit/` | 48 اختبار (MoneyService، **FeeService**، **ZonePolicy**…) | PHPUnit |
+| **Component/Integration** | `01_backend/tests/Feature/` | ~590 اختبار (خدمات + قاعدة بيانات + Ledger) | PHPUnit |
+| **API** | `01_backend/tests/Feature/` (HTTP) | ~15 ملف يضرب نقاط HTTP فعلية | PHPUnit |
+| **UI (Widget)** | `02_flutter_app/test/` | 10 اختبارات (لغات + توجيه + **كل شاشة Home + اللوحات**) | flutter_test |
+| **E2E تدفّق** | `02_flutter_app/test/customer_flow_test.dart` | **دخول → تحويل → إيصال** (backend مزيّف) | flutter_test |
+| **E2E جهاز** | `02_flutter_app/integration_test/` | إقلاع كامل على جهاز Linux desktop (أخضر) | integration_test |
+| **حمل/تزامن** | `01_backend/loadtests/` | k6 + harness تزامن (تحويلات/كاشير) | k6 + PHP |
+
+> **الإجمالي:** ~615 اختبار خلفي + 10 اختبارات Flutter (UI + تدفّق E2E) + إقلاع E2E على جهاز.
+
+### آخر إضافات (إغلاق فجوات الهرم)
+- **توسيع طبقة الوحدة:** `FeeServiceTest` (15) + `ZonePolicyUnitTest` (15) +
+  `MoneyServiceOperatorsTest` (6) — منطق مالي نقي بلا قاعدة بيانات.
+- **اختبار UI لكل شاشة:** `screens_widget_test.dart` — شاشات Home (بيع سريع/تجزئة/وكيل)
+  تُبنى وأزرارها فعّالة (onTap != null)، واللوحات تُبنى دون انهيار.
+- **تدفّق E2E كامل:** `customer_flow_test.dart` — دخول العميل ثم تحويل ثم جلب الإيصال،
+  مع التحقّق من تسلسل نداءات الـ API الفعلي.
 
 ---
 
