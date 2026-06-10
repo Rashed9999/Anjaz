@@ -16,11 +16,15 @@
 
 > **الإجمالي:** ~615 اختبار خلفي + 10 اختبارات Flutter (UI + تدفّق E2E) + إقلاع E2E على جهاز.
 
-### قناة OTP عبر WhatsApp (AMIAL-WHATSAPP-OTP-001)
-- `WhatsappModule` (5 مزوّدين) + `OtpDispatcher` (واتساب أولاً → SMS) + جعل
-  `SmsModule::send` تفويضاً شفّافاً (كل المتصلين يكتسبون واتساب بلا تغيير).
-- اختبار: `tests/Feature/WhatsappOtpTest.php` (6 — Http مُزيّف): إرسال، fallback،
-  تفضيل القناة، قالب Meta. التوافق الخلفي مؤكّد (24 اختبار auth يمرّ).
+### قناة OTP/إشعارات عبر WhatsApp (AMIAL-WHATSAPP-OTP-001)
+- `WhatsappModule` (5 مزوّدين، OTP + نصّ حرّ) + `OtpDispatcher` (واتساب أولاً → SMS)
+  + جعل `SmsModule::send` تفويضاً شفّافاً (كل المتصلين يكتسبون واتساب بلا تغيير).
+- **إدارة من لوحة الأدمن:** `WhatsappAdminController` (API محمي: config/provider/channel/test)
+  + شاشة Flutter `whatsapp_settings_screen.dart` + تقنيع الأسرار.
+- **إشعارات واتساب:** `NotificationService` يرسل نسخة واتساب اختيارية (لا تكسر الإشعار).
+- اختبارات: `WhatsappOtpTest.php` (8 — Http مُزيّف: OTP/fallback/تفضيل/قالب/نصّ حرّ)
+  + `WhatsappAdminTest.php` (9 — Passport: صلاحية/حفظ/تقنيع/قناة/تجريبي/إشعارات).
+  التوافق الخلفي مؤكّد (24 اختبار auth) + شاشة Flutter ضمن `screens_widget_test`.
 
 ### آخر إضافات (إغلاق فجوات الهرم)
 - **توسيع طبقة الوحدة:** `FeeServiceTest` (15) + `ZonePolicyUnitTest` (15) +

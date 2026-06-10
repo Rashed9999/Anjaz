@@ -43,4 +43,23 @@ class AdminRepo extends GetxService {
         'expires_at': ?expiresAt,
         'notes': ?notes,
       });
+
+  // AMIAL-WHATSAPP-OTP-001 — إعدادات قناة واتساب
+  Future<Response> whatsappConfig() => apiClient.getData('$_base/whatsapp/config');
+
+  Future<Response> saveWhatsappProvider(String provider, bool status, Map<String, dynamic> config) =>
+      apiClient.postData('$_base/whatsapp/provider', {
+        'provider': provider,
+        'status': status,
+        'config': config,
+      });
+
+  Future<Response> setWhatsappChannel(String value) =>
+      apiClient.postData('$_base/whatsapp/channel', {'value': value});
+
+  Future<Response> whatsappTest(String phone, {String? message}) =>
+      apiClient.postData('$_base/whatsapp/test', {
+        'phone': phone,
+        if (message != null && message.isNotEmpty) 'message': message,
+      });
 }

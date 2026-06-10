@@ -18,10 +18,14 @@ import 'package:amyal_pay/features/merchant/screens/merchant_dashboard_screen.da
 import 'package:amyal_pay/features/agent/controllers/agent_controller.dart';
 import 'package:amyal_pay/features/agent/domain/repositories/agent_repo.dart';
 import 'package:amyal_pay/features/agent/screens/agent_dashboard_screen.dart';
+import 'package:amyal_pay/features/admin/controllers/whatsapp_settings_controller.dart';
+import 'package:amyal_pay/features/admin/domain/repositories/admin_repo.dart';
+import 'package:amyal_pay/features/admin/screens/whatsapp_settings_screen.dart';
 
 class _MockAccessRepo extends Mock implements AccessRepo {}
 class _MockMerchantRepo extends Mock implements MerchantRepo {}
 class _MockAgentRepo extends Mock implements AgentRepo {}
+class _MockAdminRepo extends Mock implements AdminRepo {}
 
 void main() {
   const fast = Timeout(Duration(seconds: 30));
@@ -115,6 +119,36 @@ void main() {
       await t.pump();
       await t.pump(const Duration(milliseconds: 300));
       expect(find.byType(ErrorWidget), findsNothing);
+    }, timeout: fast);
+  });
+
+  group('شاشة إعدادات واتساب (أدمن)', () {
+    testWidgets('تُبنى وتعرض المزوّدين وأزرارها', (t) async {
+      final repo = _MockAdminRepo();
+      when(() => repo.whatsappConfig()).thenAnswer((_) async => Response(
+            statusCode: 200,
+            body: {
+              'success': true,
+              'meta': {
+                'providers': [
+                  {'provider': 'ultramsg', 'enabled': true, 'config': {'instance_id': 'i', 'token': '••••t123'}},
+                  {'provider': 'meta_cloud', 'enabled': false, 'config': {}},
+                ],
+                'channel_preference': 'whatsapp_first',
+                'channels': ['whatsapp_first', 'sms_first', 'whatsapp_only', 'sms_only'],
+              },
+            },
+          ));
+      Get.put<WhatsappSettingsController>(WhatsappSettingsController(repo: repo));
+
+      await t.pumpWidget(GetMaterialApp(home: const WhatsappSettingsScreen()));
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 300)); // postFrame load
+
+      expect(find.byType(ErrorWidget), findsNothing);
+      expect(find.text('ترتيب القناة'), findsOneWidget);
+      expect(find.text('ultramsg'), findsOneWidget);
+      expect(find.text('إرسال تجريبي'), findsWidgets);
     }, timeout: fast);
   });
 }

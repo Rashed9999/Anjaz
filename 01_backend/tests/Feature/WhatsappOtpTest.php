@@ -142,4 +142,32 @@ class WhatsappOtpTest extends TestCase
     {
         $this->assertSame('whatsapp_first', OtpDispatcher::channelPreference());
     }
+
+    // ===== إشعارات نصّية حرّة (لا OTP) =====
+
+    public function test_send_text_notification_via_ultramsg(): void
+    {
+        $this->enableUltramsg();
+        Http::fake(['api.ultramsg.com/*' => Http::response(['sent' => 'true', 'id' => 'm9'], 200)]);
+
+        $result = WhatsappModule::sendText('+967777123456', 'تم استلام تحويلك بقيمة 100 ر.ي ✅');
+
+        $this->assertSame('success', $result);
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'api.ultramsg.com')
+            && str_contains((string) $req['body'], 'تحويلك'));
+    }
+
+    public function test_send_text_via_meta_cloud_uses_text_type(): void
+    {
+        $this->configure('meta_cloud', 'whatsapp_config', [
+            'status' => 1, 'access_token' => 'EAA', 'phone_number_id' => '100200300',
+        ]);
+        Http::fake(['graph.facebook.com/*' => Http::response(['messages' => [['id' => 'wamid.Y']]], 200)]);
+
+        $result = WhatsappModule::sendText('+967777123456', 'إشعار: فاتورتك جاهزة');
+
+        $this->assertSame('success', $result);
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'graph.facebook.com')
+            && $req['type'] === 'text');
+    }
 }

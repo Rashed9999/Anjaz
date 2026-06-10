@@ -47,6 +47,7 @@ import 'package:amyal_pay/features/pharmacy/domain/repositories/pharmacy_repo.da
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/access/domain/repositories/access_repo.dart';
 import 'package:amyal_pay/features/admin/controllers/admin_controller.dart';
+import 'package:amyal_pay/features/admin/controllers/whatsapp_settings_controller.dart';
 import 'package:amyal_pay/features/admin/domain/repositories/admin_repo.dart';
 import 'package:amyal_pay/features/barcode/domain/repositories/barcode_repo.dart';
 import 'package:amyal_pay/features/wholesale/controllers/wholesale_controller.dart';
@@ -261,6 +262,9 @@ Future<Map<String, Map<String, String>>> init() async {
   // CRITICAL-001-ADMIN — لوحة الإدارة
   Get.lazyPut(() => AdminRepo(apiClient: Get.find()));
   Get.lazyPut(() => AdminController(repo: Get.find()), fenix: true);
+
+  // AMIAL-WHATSAPP-OTP-001 — إعدادات قناة واتساب (لوحة الأدمن)
+  Get.lazyPut(() => WhatsappSettingsController(repo: Get.find()), fenix: true);
 
   // AMIAL-BARCODE-001 — Continuous Scanner (موحّد لكل القطاعات)
   Get.lazyPut(() => BarcodeRepo(apiClient: Get.find()));

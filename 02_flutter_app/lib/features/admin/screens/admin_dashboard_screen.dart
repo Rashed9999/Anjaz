@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/admin/controllers/admin_controller.dart';
 import 'package:amyal_pay/features/admin/screens/subscriptions_management_screen.dart';
+import 'package:amyal_pay/features/admin/screens/whatsapp_settings_screen.dart';
 
 /// CRITICAL-001-ADMIN — لوحة الإدارة الموحّدة.
 ///
@@ -50,6 +51,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               icon: const Icon(Icons.workspace_premium),
               tooltip: 'الاشتراكات',
               onPressed: () => Get.to(() => const SubscriptionsManagementScreen()),
+            ),
+            // AMIAL-WHATSAPP-OTP-001 — اختصار إعدادات واتساب
+            IconButton(
+              icon: const Icon(Icons.chat),
+              tooltip: 'إعدادات واتساب',
+              onPressed: () => Get.to(() => const WhatsappSettingsScreen()),
             ),
           ],
           bottom: const TabBar(

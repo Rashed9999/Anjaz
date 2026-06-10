@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\Notification;
+use App\Models\AmialNotification;
 use App\Models\User;
 use Illuminate\Pagination\LengthAwarePaginator;
 use InvalidArgumentException;
@@ -43,7 +43,7 @@ class NotificationService
             throw new InvalidArgumentException('نوع الإشعار مطلوب');
         }
 
-        return AmialNotification::create([
+        $notification = AmialNotification::create([
             'user_id' => $user->id,
             'type' => $type,
             'title' => $title,
@@ -52,6 +52,42 @@ class NotificationService
             'action_url' => $actionUrl,
             'data' => $data,
         ]);
+
+        // AMIAL-WHATSAPP-OTP-001: نسخة واتساب اختيارية من الإشعار (لا تكسر الإرسال أبداً)
+        $this->echoToWhatsapp($user, $type, $title, $body);
+
+        return $notification;
+    }
+
+    /**
+     * إرسال نسخة من الإشعار عبر واتساب إن كان مُفعّلاً لهذا النوع.
+     *
+     * التفعيل عبر addon_settings:
+     *   key_name='whatsapp_notifications', settings_type='whatsapp_config',
+     *   live_values = {"status":1, "types":"all"}            ← كل الأنواع
+     *                أو {"status":1, "types":["transfer_received","receipt_issued"]}
+     *
+     * أي فشل (لا إعداد/لا هاتف/خطأ مزوّد) يُتجاهل بصمت — الإشعار الداخلي هو الأصل.
+     */
+    private function echoToWhatsapp(User $user, string $type, string $title, string $body): void
+    {
+        try {
+            $cfg = \App\CentralLogics\WhatsappModule::get_settings('whatsapp_notifications');
+            if (!$cfg || (int)($cfg['status'] ?? 0) !== 1) {
+                return;
+            }
+            $types = $cfg['types'] ?? 'all';
+            if ($types !== 'all' && !in_array($type, (array) $types, true)) {
+                return;
+            }
+            $phone = (string) ($user->phone ?? '');
+            if ($phone === '') {
+                return;
+            }
+            \App\CentralLogics\WhatsappModule::sendText($phone, "{$title}\n{$body}");
+        } catch (\Throwable $e) {
+            // قناة ثانوية — لا تُفشل الإشعار الأساسي إطلاقاً
+        }
     }
 
     public function listForUser(

@@ -56,6 +56,27 @@ SmsModule::send()  →  OtpDispatcher::send()  →  واتساب أولاً (Wha
 ```
 الافتراضي عند غياب الإعداد: `whatsapp_first`.
 
+## الإدارة من لوحة الأدمن (بدل تعديل قاعدة البيانات يدوياً)
+API محمي (auth:api + صلاحية أدمن) تحت `/api/v1/amial/admin/whatsapp`:
+| الطريقة | المسار | الوظيفة |
+|---|---|---|
+| GET | `/config` | كل المزوّدين (الأسرار **مُقنّعة**) + تفضيل القناة |
+| POST | `/provider` | حفظ/تحديث مزوّد + تفعيله — `{provider,status,config:{...}}` |
+| POST | `/channel` | ضبط الترتيب — `{value: whatsapp_first\|sms_first\|whatsapp_only\|sms_only}` |
+| POST | `/test` | إرسال تجريبي — `{phone, message?}` (فارغ = OTP تجريبي) |
+- الأسرار تُعرض مُقنّعة (`••••1234`)، وإرسالها مُقنّعةً **لا يكتب فوق** القيمة الحقيقية.
+- **شاشة Flutter:** `lib/features/admin/screens/whatsapp_settings_screen.dart`
+  (اختصار «إعدادات واتساب» في لوحة الأدمن).
+
+## إشعارات واتساب (لا OTP فقط)
+`NotificationService::dispatch` يرسل **نسخة واتساب** من الإشعار تلقائياً عند تفعيلها:
+- صفّ `addon_settings`: `key_name='whatsapp_notifications'`, `settings_type='whatsapp_config'`:
+  ```jsonc
+  {"status":1,"types":"all"}                              // كل الأنواع
+  {"status":1,"types":["transfer_received","refund_received"]}  // أنواع محدّدة
+  ```
+- قناة ثانوية: أي فشل (لا هاتف/خطأ مزوّد) **لا يكسر** الإشعار الأساسي إطلاقاً.
+
 ## ملاحظات تشغيلية
 - **القوالب:** قوالب المصادقة في Meta/360dialog تتطلّب اعتماد قالب مسبق + زر «نسخ
   الرمز» (`otp_button` مُفعّل افتراضياً). UltraMsg/Twilio يرسلان نصّاً حرّاً (`#OTP#`).

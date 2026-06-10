@@ -68,6 +68,99 @@ class WhatsappModule
     }
 
     // ============================================================
+    // إشعارات نصّية حرّة (إيصالات/تنبيهات — لا OTP)
+    // ============================================================
+
+    /**
+     * يرسل رسالة نصّية حرّة (إشعار) عبر أوّل مزوّد مُفعّل.
+     * ملاحظة: قوالب Meta/360dialog للنصّ الحرّ تتطلّب نافذة جلسة 24 ساعة؛ خارجها
+     * قد تفشل وفق سياسة واتساب (يتكفّل المتصل بالـ fallback إن لزم).
+     */
+    public static function sendText(string $receiver, string $message): string
+    {
+        foreach (self::PROVIDERS as $name) {
+            $config = self::get_settings($name);
+            if ($config && (int)($config['status'] ?? 0) === 1) {
+                return self::dispatchText($name, $config, $receiver, $message);
+            }
+        }
+        Log::warning('WhatsappModule.sendText: no enabled provider found');
+        return 'not_found';
+    }
+
+    private static function dispatchText(string $name, array $config, string $receiver, string $message): string
+    {
+        try {
+            switch ($name) {
+                case 'twilio':
+                    $client = new TwilioClient($config['sid'] ?? '', $config['token'] ?? '');
+                    $client->messages->create('whatsapp:' . self::normalize($receiver, true), [
+                        'from' => 'whatsapp:' . self::normalize($config['from'] ?? '', true),
+                        'body' => $message,
+                    ]);
+                    break;
+
+                case 'ultramsg':
+                    $r = Http::asForm()->timeout(self::HTTP_TIMEOUT)
+                        ->post("https://api.ultramsg.com/{$config['instance_id']}/messages/chat", [
+                            'token' => $config['token'] ?? '',
+                            'to' => self::normalize($receiver, true),
+                            'body' => $message,
+                        ]);
+                    if (!($r->successful() && (($r->json()['sent'] ?? null) === 'true' || ($r->json()['sent'] ?? null) === true))) {
+                        throw new \RuntimeException('ultramsg HTTP ' . $r->status());
+                    }
+                    break;
+
+                case 'meta_cloud':
+                    $r = Http::withToken($config['access_token'] ?? '')->timeout(self::HTTP_TIMEOUT)
+                        ->post("https://graph.facebook.com/v19.0/{$config['phone_number_id']}/messages", [
+                            'messaging_product' => 'whatsapp',
+                            'to' => self::normalize($receiver, false),
+                            'type' => 'text',
+                            'text' => ['body' => $message],
+                        ]);
+                    if (!($r->successful() && isset($r->json()['messages'][0]['id']))) {
+                        throw new \RuntimeException('meta HTTP ' . $r->status());
+                    }
+                    break;
+
+                case '360dialog':
+                    $r = Http::withHeaders(['D360-API-KEY' => $config['api_key'] ?? ''])->timeout(self::HTTP_TIMEOUT)
+                        ->post('https://waba-v2.360dialog.io/messages', [
+                            'messaging_product' => 'whatsapp',
+                            'to' => self::normalize($receiver, false),
+                            'type' => 'text',
+                            'text' => ['body' => $message],
+                        ]);
+                    if (!($r->successful() && isset($r->json()['messages'][0]['id']))) {
+                        throw new \RuntimeException('360dialog HTTP ' . $r->status());
+                    }
+                    break;
+
+                case 'wati':
+                    $endpoint = rtrim($config['api_endpoint'] ?? '', '/');
+                    $to = self::normalize($receiver, false);
+                    $r = Http::withToken($config['access_token'] ?? '')->timeout(self::HTTP_TIMEOUT)
+                        ->post("{$endpoint}/api/v1/sendSessionMessage/{$to}?messageText=" . rawurlencode($message));
+                    if (!$r->successful()) {
+                        throw new \RuntimeException('wati HTTP ' . $r->status());
+                    }
+                    break;
+
+                default:
+                    return 'error';
+            }
+
+            self::logSent($name, $receiver);
+            return 'success';
+        } catch (\Throwable $e) {
+            self::logFailure($name, $receiver, $e->getMessage());
+            return 'error';
+        }
+    }
+
+    // ============================================================
     // 1) Meta WhatsApp Cloud API
     // ============================================================
     public static function meta_cloud(string $receiver, string $otp): string

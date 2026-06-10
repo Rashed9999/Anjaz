@@ -132,6 +132,14 @@ Route::middleware(['auth:api'])->group(function () {
             ->where('id', '[0-9]+')->name('variances.resolve');
         Route::post('/merchants/{id}/verify', [\App\Http\Controllers\Api\V1\Amial\AdminPanelController::class, 'verifyMerchant'])
             ->where('id', '[0-9]+')->name('merchants.verify');
+
+        // AMIAL-WHATSAPP-OTP-001 — إدارة قناة واتساب (مزوّدون + تفضيل + إرسال تجريبي)
+        Route::prefix('whatsapp')->name('whatsapp.')->group(function () {
+            Route::get('/config', [\App\Http\Controllers\Api\V1\Amial\WhatsappAdminController::class, 'getConfig'])->name('config');
+            Route::post('/provider', [\App\Http\Controllers\Api\V1\Amial\WhatsappAdminController::class, 'saveProvider'])->name('provider');
+            Route::post('/channel', [\App\Http\Controllers\Api\V1\Amial\WhatsappAdminController::class, 'setChannel'])->name('channel');
+            Route::post('/test', [\App\Http\Controllers\Api\V1\Amial\WhatsappAdminController::class, 'testSend'])->name('test');
+        });
     });
 
     // -------- Payment Requests (AMIAL-PAYMENT-REQUESTS-001) --------
