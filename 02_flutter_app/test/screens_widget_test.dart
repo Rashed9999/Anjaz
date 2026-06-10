@@ -19,8 +19,10 @@ import 'package:amyal_pay/features/agent/controllers/agent_controller.dart';
 import 'package:amyal_pay/features/agent/domain/repositories/agent_repo.dart';
 import 'package:amyal_pay/features/agent/screens/agent_dashboard_screen.dart';
 import 'package:amyal_pay/features/admin/controllers/whatsapp_settings_controller.dart';
+import 'package:amyal_pay/features/admin/controllers/settings_center_controller.dart';
 import 'package:amyal_pay/features/admin/domain/repositories/admin_repo.dart';
 import 'package:amyal_pay/features/admin/screens/whatsapp_settings_screen.dart';
+import 'package:amyal_pay/features/admin/screens/settings_center_screen.dart';
 
 class _MockAccessRepo extends Mock implements AccessRepo {}
 class _MockMerchantRepo extends Mock implements MerchantRepo {}
@@ -149,6 +151,61 @@ void main() {
       expect(find.text('ترتيب القناة'), findsOneWidget);
       expect(find.text('ultramsg'), findsOneWidget);
       expect(find.text('إرسال تجريبي'), findsWidgets);
+    }, timeout: fast);
+  });
+
+  group('مركز الإعدادات (أدمن)', () {
+    testWidgets('يُبنى ويعرض كل الأقسام وأزرارها', (t) async {
+      final repo = _MockAdminRepo();
+      when(() => repo.smsConfig()).thenAnswer((_) async => Response(statusCode: 200, body: {
+            'success': true,
+            'meta': {
+              'providers': [
+                {'provider': 'twilio', 'enabled': false,
+                 'fields': ['sid', 'token'], 'config': {}},
+              ],
+            },
+          }));
+      when(() => repo.notificationsConfig()).thenAnswer((_) async => Response(statusCode: 200, body: {
+            'success': true,
+            'meta': {'enabled': true, 'types': 'all', 'known_types': ['transfer_received']},
+          }));
+      when(() => repo.contactConfig()).thenAnswer((_) async => Response(statusCode: 200, body: {
+            'success': true,
+            'meta': {'contact': {'whatsapp_number': '967777000000',
+                                 'phone_number': '+967777000000',
+                                 'support_email': 'support@amyalpay.com'}},
+          }));
+      when(() => repo.feesList()).thenAnswer((_) async => Response(statusCode: 200, body: {
+            'success': true,
+            'meta': {
+              'schemes': [
+                {'id': 1, 'code': 'SEND_MONEY', 'fee_type': 'percent',
+                 'percent_rate': '2.5', 'fixed_amount': '0', 'bearer': 'sender', 'version': 1},
+              ],
+              'codes': ['SEND_MONEY'], 'fee_types': ['percent'], 'bearers': ['sender'],
+            },
+          }));
+      Get.put<SettingsCenterController>(SettingsCenterController(repo: repo));
+
+      await t.pumpWidget(GetMaterialApp(home: const SettingsCenterScreen()));
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(ErrorWidget), findsNothing);
+      // الـ ListView يبني العناصر الظاهرة فقط — نمرّر إلى كل قسم قبل التحقق.
+      final list = find.byType(ListView);
+      for (final s in ['إعدادات واتساب', 'مزوّدو رسائل SMS', 'إشعارات واتساب',
+                       'بيانات التواصل والدعم', 'الرسوم ونسب الأرباح']) {
+        await t.scrollUntilVisible(find.text(s), 200, scrollable: find.descendant(
+            of: list, matching: find.byType(Scrollable)).first);
+        expect(find.text(s), findsOneWidget, reason: 'القسم "$s" يجب أن يظهر');
+      }
+      // الرسم المعروض + زرّ الإنشاء (في أسفل القائمة بعد التمرير)
+      await t.scrollUntilVisible(find.text('رسم جديد / تعديل نسبة'), 200,
+          scrollable: find.descendant(of: list, matching: find.byType(Scrollable)).first);
+      expect(find.textContaining('تحويل أموال'), findsOneWidget);
+      expect(find.text('رسم جديد / تعديل نسبة'), findsOneWidget);
     }, timeout: fast);
   });
 }

@@ -45,6 +45,10 @@ use Illuminate\Support\Facades\Route;
 Route::get('/ping', [\App\Http\Controllers\Api\V1\Amial\HealthController::class, 'ping'])
     ->name('amial.ping');
 
+// AMIAL-SETTINGS-CENTER-001 — بيانات التواصل/الدعم (عام، يقرأه التطبيق)
+Route::get('/support-contact', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'publicContact'])
+    ->name('amial.support-contact');
+
 // P0-LEGAL — Markdown docs للموقع العام (بدون auth)
 Route::prefix('legal-docs')->name('amial.legal-docs.')->group(function () {
     Route::get('/', [\App\Http\Controllers\Api\V1\Amial\PublicLegalController::class, 'index'])->name('index');
@@ -139,6 +143,21 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/provider', [\App\Http\Controllers\Api\V1\Amial\WhatsappAdminController::class, 'saveProvider'])->name('provider');
             Route::post('/channel', [\App\Http\Controllers\Api\V1\Amial\WhatsappAdminController::class, 'setChannel'])->name('channel');
             Route::post('/test', [\App\Http\Controllers\Api\V1\Amial\WhatsappAdminController::class, 'testSend'])->name('test');
+        });
+
+        // AMIAL-SETTINGS-CENTER-001 — مركز الإعدادات الموحّد (SMS/إشعارات/تواصل/رسوم)
+        Route::prefix('settings')->name('settings.')->group(function () {
+            Route::get('/sms', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'getSms'])->name('sms');
+            Route::post('/sms/provider', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'saveSmsProvider'])->name('sms.provider');
+            Route::get('/notifications', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'getNotifications'])->name('notifications');
+            Route::post('/notifications', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'saveNotifications'])->name('notifications.save');
+            Route::get('/contact', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'getContact'])->name('contact');
+            Route::post('/contact', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'saveContact'])->name('contact.save');
+            Route::get('/fees', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'getFees'])->name('fees');
+            Route::post('/fees', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'createFee'])->name('fees.create');
+            Route::post('/fees/simulate', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'simulateFee'])->name('fees.simulate');
+            Route::post('/fees/{id}/deactivate', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'deactivateFee'])
+                ->where('id', '[0-9]+')->name('fees.deactivate');
         });
     });
 

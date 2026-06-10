@@ -62,4 +62,32 @@ class AdminRepo extends GetxService {
         'phone': phone,
         if (message != null && message.isNotEmpty) 'message': message,
       });
+
+  // AMIAL-SETTINGS-CENTER-001 — مركز الإعدادات الموحّد
+  Future<Response> smsConfig() => apiClient.getData('$_base/settings/sms');
+
+  Future<Response> saveSmsProvider(String provider, bool status, Map<String, dynamic> config) =>
+      apiClient.postData('$_base/settings/sms/provider',
+          {'provider': provider, 'status': status, 'config': config});
+
+  Future<Response> notificationsConfig() => apiClient.getData('$_base/settings/notifications');
+
+  Future<Response> saveNotificationsConfig(bool enabled, dynamic types) =>
+      apiClient.postData('$_base/settings/notifications', {'enabled': enabled, 'types': types});
+
+  Future<Response> contactConfig() => apiClient.getData('$_base/settings/contact');
+
+  Future<Response> saveContactConfig(Map<String, dynamic> contact) =>
+      apiClient.postData('$_base/settings/contact', contact);
+
+  Future<Response> feesList() => apiClient.getData('$_base/settings/fees');
+
+  Future<Response> createFee(Map<String, dynamic> scheme) =>
+      apiClient.postData('$_base/settings/fees', scheme);
+
+  Future<Response> simulateFee(Map<String, dynamic> scheme, String amount) =>
+      apiClient.postData('$_base/settings/fees/simulate', {'scheme': scheme, 'amount': amount});
+
+  Future<Response> deactivateFee(int id) =>
+      apiClient.postData('$_base/settings/fees/$id/deactivate', {});
 }
