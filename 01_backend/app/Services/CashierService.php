@@ -76,6 +76,23 @@ class CashierService
             ->get();
     }
 
+    /**
+     * AMIAL-CASHIER-BARCODE-001 — بحث منتج الكاشير بالباركود (لمسح الكاشير).
+     * يعيد المنتج الفعّال المطابق (id/الاسم/السعر/المخزون) أو null إن لم يوجد.
+     */
+    public function findByBarcode(User $merchant, string $barcode): ?MerchantProduct
+    {
+        $barcode = trim($barcode);
+        if ($barcode === '') {
+            return null;
+        }
+
+        return MerchantProduct::where('merchant_user_id', $merchant->id)
+            ->where('is_active', true)
+            ->where('barcode', $barcode)
+            ->first();
+    }
+
     // ============ البيع ============
 
     /**

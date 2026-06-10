@@ -13,6 +13,11 @@ class CashierRepo extends GetxService {
         query: search != null && search.isNotEmpty ? {'search': search} : null);
   }
 
+  // AMIAL-CASHIER-BARCODE-001 — بحث منتج بالباركود
+  Future<Response> lookupBarcode(String barcode) {
+    return apiClient.getData('$_base/products/lookup', query: {'barcode': barcode});
+  }
+
   Future<Response> addProduct(Map<String, dynamic> data) {
     return apiClient.postData('$_base/products', data);
   }

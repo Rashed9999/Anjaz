@@ -37,6 +37,27 @@ class CashierController extends Controller
         return $this->ok(['products' => $this->cashier->listProducts($merchant, $request->query('search'))]);
     }
 
+    /**
+     * AMIAL-CASHIER-BARCODE-001 — بحث منتج الكاشير بالباركود (لمسح الكاشير).
+     * يعيد المنتج لإضافته للسلّة، أو 404 ليعرض التطبيق خيار «إنشاء منتج بهذا الباركود».
+     */
+    public function lookupBarcode(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), ['barcode' => 'required|string|max:64']);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $product = $this->cashier->findByBarcode($merchant, (string) $request->query('barcode', $request->input('barcode')));
+        if (!$product) {
+            return $this->error('NOT_FOUND', 'لا يوجد منتج بهذا الباركود', 404);
+        }
+
+        return $this->ok(['product' => $product]);
+    }
+
     public function addProduct(Request $request): JsonResponse
     {
         $v = Validator::make($request->all(), [

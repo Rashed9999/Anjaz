@@ -367,6 +367,7 @@ Route::middleware(['auth:api'])->group(function () {
         // AMIAL-CASHIER-001 — كاشير التاجر (منتجات + بيع + تقرير)
         Route::prefix('cashier')->name('cashier.')->group(function () {
             Route::get('/products', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'products'])->name('products');
+            Route::get('/products/lookup', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'lookupBarcode'])->name('products.lookup');
             Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'addProduct'])->name('products.add');
             Route::put('/products/{id}', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'updateProduct'])->name('products.update');
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'recordSale'])

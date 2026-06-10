@@ -21,13 +21,14 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => c.loadProducts());
   }
 
-  Future<void> _addDialog() async {
+  Future<void> _addDialog({String? prefillBarcode}) async {
     final name = TextEditingController();
     final price = TextEditingController();      // سعر البيع
     final cost = TextEditingController();        // التكلفة
     final offer = TextEditingController();        // العرض
     final qty = TextEditingController();          // الكمية
     final category = TextEditingController();
+    final barcode = TextEditingController(text: prefillBarcode ?? ''); // AMIAL-CASHIER-BARCODE-001
     DateTime? production;
     DateTime? expiry;
 
@@ -53,6 +54,14 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
                 TextField(controller: offer, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'سعر العرض (اختياري)')),
                 TextField(controller: qty, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'الكمية (المخزون)')),
                 TextField(controller: category, decoration: const InputDecoration(labelText: 'التصنيف (اختياري)')),
+                TextField(
+                  controller: barcode,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'الباركود (اختياري)',
+                    hintText: 'امسحه من شاشة البيع أو أدخله يدوياً',
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Row(children: [
                   Expanded(
@@ -102,6 +111,7 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
         if (offer.text.trim().isNotEmpty) 'offer_price': offer.text.trim(),
         if (qty.text.trim().isNotEmpty) 'quantity': qty.text.trim(),
         if (category.text.trim().isNotEmpty) 'category': category.text.trim(),
+        if (barcode.text.trim().isNotEmpty) 'barcode': barcode.text.trim(),
         if (fmt(production) != null) 'production_date': fmt(production),
         if (fmt(expiry) != null) 'expiry_date': fmt(expiry),
       });

@@ -7,10 +7,17 @@ class CartLine {
   final String name;
   final double price;
   int qty;
-  CartLine({required this.name, required this.price, this.qty = 1});
+  // AMIAL-CASHIER-BARCODE-001 — معرّف المنتج (إن وُجد) ليُخصم المخزون عند البيع.
+  final int? productId;
+  CartLine({required this.name, required this.price, this.qty = 1, this.productId});
 
   double get lineTotal => price * qty;
-  Map<String, dynamic> toJson() => {'name': name, 'qty': qty, 'price': price.toString()};
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'qty': qty,
+        'price': price.toString(),
+        if (productId != null) 'product_id': productId,
+      };
 }
 
 /// AMIAL-CASHIER-001 — متحكّم الكاشير.
@@ -49,28 +56,66 @@ class CashierController extends GetxController implements GetxService {
   }
 
   Future<bool> addProduct(Map<String, dynamic> data) async {
+    return (await addProductReturning(data)) != null;
+  }
+
+  /// كـ [addProduct] لكن يعيد المنتج المُنشأ (بـ id) — يلزم لإضافته للسلّة بعد المسح.
+  Future<Map<String, dynamic>?> addProductReturning(Map<String, dynamic> data) async {
     try {
       final r = await repo.addProduct(data);
       if (_ok(r)) {
+        final product = Map<String, dynamic>.from((r.body['meta']?['product'] ?? {}) as Map);
         await loadProducts();
-        return true;
+        return product;
       }
       lastError.value = _msg(r) ?? 'فشل إضافة المنتج';
-      return false;
+      return null;
     } catch (_) {
       lastError.value = 'خطأ في الشبكة';
-      return false;
+      return null;
     }
   }
 
   // ---- السلة ----
-  void addToCart(String name, double price) {
-    final existing = cart.firstWhereOrNull((l) => l.name == name && l.price == price);
+  void addToCart(String name, double price, {int? productId}) {
+    final existing = cart.firstWhereOrNull(
+        (l) => l.productId != null ? l.productId == productId : (l.name == name && l.price == price));
     if (existing != null) {
       existing.qty++;
       cart.refresh();
     } else {
-      cart.add(CartLine(name: name, price: price));
+      cart.add(CartLine(name: name, price: price, productId: productId));
+    }
+  }
+
+  /// AMIAL-CASHIER-BARCODE-001 — يضيف منتجاً (من المسح أو القائمة) للسلّة بـ product_id.
+  void addProductToCart(Map<String, dynamic> product) {
+    final price = double.tryParse(
+            (product['offer_price'] ?? product['price'] ?? '0').toString()) ??
+        0;
+    addToCart(
+      (product['name'] ?? '').toString(),
+      price,
+      productId: product['id'] is int ? product['id'] as int : int.tryParse('${product['id']}'),
+    );
+  }
+
+  /// يبحث عن منتج بالباركود ويضيفه للسلّة.
+  /// يعيد: 'added' (نجح) | 'not_found' (باركود مجهول → اعرض إنشاء) | 'error'.
+  Future<String> lookupAndAddByBarcode(String barcode) async {
+    try {
+      final r = await repo.lookupBarcode(barcode);
+      if (_ok(r)) {
+        final p = Map<String, dynamic>.from((r.body['meta']?['product'] ?? {}) as Map);
+        addProductToCart(p);
+        return 'added';
+      }
+      if (r.statusCode == 404) return 'not_found';
+      lastError.value = _msg(r) ?? 'فشل البحث';
+      return 'error';
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return 'error';
     }
   }
 

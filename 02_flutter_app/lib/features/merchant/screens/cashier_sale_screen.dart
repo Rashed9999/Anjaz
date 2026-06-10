@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_products_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/cashier_scan_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_report_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
@@ -204,6 +205,12 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
         foregroundColor: Colors.white,
         title: const Text('الكاشير'),
         actions: [
+          // AMIAL-CASHIER-BARCODE-001 — مسح باركود لإضافة المنتجات للسلّة
+          IconButton(
+            tooltip: 'مسح باركود',
+            icon: const Icon(Icons.qr_code_scanner),
+            onPressed: () => Get.to(() => const CashierScanScreen()),
+          ),
           IconButton(
             tooltip: 'المنتجات',
             icon: const Icon(Icons.inventory_2_outlined),
@@ -248,8 +255,8 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
                 itemBuilder: (_, i) {
                   final p = c.products[i];
                   return InkWell(
-                    onTap: () => c.addToCart((p['name'] ?? '').toString(),
-                        double.tryParse((p['price'] ?? '0').toString()) ?? 0),
+                    // يضيف بـ product_id ليُخصم المخزون عند البيع
+                    onTap: () => c.addProductToCart(p),
                     child: Container(
                       width: 110,
                       padding: const EdgeInsets.all(8),
