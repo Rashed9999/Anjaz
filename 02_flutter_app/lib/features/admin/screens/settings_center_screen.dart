@@ -64,6 +64,9 @@ class _SettingsCenterScreenState extends State<SettingsCenterScreen> {
               const SizedBox(height: 16),
               _sectionTitle('الرسوم ونسب الأرباح'),
               _feesCard(),
+              const SizedBox(height: 16),
+              _sectionTitle('التشغيل'),
+              _opsCard(),
               const SizedBox(height: 24),
             ],
           ),
@@ -393,6 +396,150 @@ class _SettingsCenterScreenState extends State<SettingsCenterScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ---------------- التشغيل (AMIAL-OPS-001) ----------------
+
+  Widget _opsCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Obx(() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // وضع الصيانة
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('وضع الصيانة'),
+                subtitle: Text(
+                  c.maintenanceEnabled.value
+                      ? 'مُفعّل — المستخدمون محجوبون (الأدمن يمرّ)'
+                      : 'معطّل — النظام يعمل طبيعياً',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: c.maintenanceEnabled.value ? AmyalColors.red : Colors.green),
+                ),
+                value: c.maintenanceEnabled.value,
+                onChanged: c.isSubmitting.value
+                    ? null
+                    : (v) async {
+                        final ok = await c.setMaintenance(v,
+                            message: c.maintenanceMessage.value.isEmpty ? null : c.maintenanceMessage.value);
+                        _snack(ok ? c.lastMessage.value : c.lastError.value, ok);
+                      },
+              ),
+              TextField(
+                controller: TextEditingController(text: c.maintenanceMessage.value),
+                onChanged: (v) => c.maintenanceMessage.value = v,
+                decoration: const InputDecoration(
+                    labelText: 'رسالة الصيانة المعروضة للمستخدمين', border: OutlineInputBorder()),
+              ),
+              const Divider(height: 24),
+              // إصدار التطبيق
+              const Text('فرض تحديث التطبيق', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              _appVersionFields(),
+              const Divider(height: 24),
+              // صحّة النظام + الكاش
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.monitor_heart),
+                    label: const Text('فحص صحّة النظام'),
+                    onPressed: () async {
+                      await c.loadHealth();
+                      if (mounted && c.health.value != null) _showHealthDialog();
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.cleaning_services),
+                    label: const Text('تنظيف الكاش'),
+                    onPressed: c.isSubmitting.value
+                        ? null
+                        : () async {
+                            final ok = await c.clearCache();
+                            _snack(ok ? 'تم تنظيف الكاش' : c.lastError.value, ok);
+                          },
+                  ),
+                ),
+              ]),
+            ])),
+      ),
+    );
+  }
+
+  Widget _appVersionFields() {
+    final minV = TextEditingController(text: c.appVersion['min_version'] ?? '');
+    final latestV = TextEditingController(text: c.appVersion['latest_version'] ?? '');
+    final msg = TextEditingController(text: c.appVersion['message'] ?? '');
+    return Column(children: [
+      Row(children: [
+        Expanded(
+            child: TextField(controller: minV,
+                decoration: const InputDecoration(labelText: 'أدنى إصدار (مثل 1.2.0)', border: OutlineInputBorder()))),
+        const SizedBox(width: 8),
+        Expanded(
+            child: TextField(controller: latestV,
+                decoration: const InputDecoration(labelText: 'أحدث إصدار', border: OutlineInputBorder()))),
+      ]),
+      const SizedBox(height: 8),
+      TextField(controller: msg,
+          decoration: const InputDecoration(labelText: 'رسالة التحديث', border: OutlineInputBorder())),
+      const SizedBox(height: 8),
+      SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary),
+          icon: const Icon(Icons.save),
+          label: const Text('حفظ إعداد الإصدار'),
+          onPressed: () async {
+            if (minV.text.trim().isEmpty) {
+              _snack('أدخل الإصدار الأدنى', false);
+              return;
+            }
+            final ok = await c.saveAppVersion(minV.text.trim(),
+                latestV: latestV.text.trim(), message: msg.text.trim());
+            _snack(ok ? 'تم الحفظ' : c.lastError.value, ok);
+          },
+        ),
+      ),
+    ]);
+  }
+
+  void _showHealthDialog() {
+    final h = c.health.value!;
+    final checks = Map<String, dynamic>.from((h['checks'] ?? {}) as Map);
+    Color statusColor(String s) =>
+        s == 'healthy' ? Colors.green : (s == 'degraded' || s == 'warning' ? Colors.orange : AmyalColors.red);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(children: [
+          Icon(Icons.monitor_heart, color: statusColor((h['status'] ?? '').toString())),
+          const SizedBox(width: 8),
+          Text('صحّة النظام: ${h['status'] ?? ''}'),
+        ]),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: checks.entries.map((e) {
+              final v = Map<String, dynamic>.from(e.value as Map);
+              final s = (v['status'] ?? '').toString();
+              return ListTile(
+                dense: true,
+                leading: Icon(
+                    s == 'healthy' ? Icons.check_circle : Icons.error,
+                    color: statusColor(s), size: 20),
+                title: Text(e.key),
+                subtitle: Text((v['message'] ?? '').toString(), style: const TextStyle(fontSize: 11)),
+              );
+            }).toList(),
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق'))],
       ),
     );
   }

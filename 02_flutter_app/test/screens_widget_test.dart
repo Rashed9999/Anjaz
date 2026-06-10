@@ -189,6 +189,13 @@ void main() {
               'codes': ['SEND_MONEY'], 'fee_types': ['percent'], 'bearers': ['sender'],
             },
           }));
+      when(() => repo.opsStatus()).thenAnswer((_) async => Response(statusCode: 200, body: {
+            'success': true,
+            'meta': {
+              'maintenance': {'enabled': false, 'message': 'صيانة'},
+              'app_version': {'min_version': '1.0.0', 'latest_version': '1.1.0', 'message': ''},
+            },
+          }));
       Get.put<SettingsCenterController>(SettingsCenterController(repo: repo));
 
       await t.pumpWidget(GetMaterialApp(home: const SettingsCenterScreen()));
@@ -199,7 +206,8 @@ void main() {
       // الـ ListView يبني العناصر الظاهرة فقط — نمرّر إلى كل قسم قبل التحقق.
       final list = find.byType(ListView);
       for (final s in ['إعدادات واتساب', 'مزوّدو رسائل SMS', 'إشعارات واتساب',
-                       'بيانات التواصل والدعم', 'الرسوم ونسب الأرباح']) {
+                       'بيانات التواصل والدعم', 'الرسوم ونسب الأرباح', 'التشغيل',
+                       'وضع الصيانة', 'فحص صحّة النظام', 'تنظيف الكاش']) {
         await t.scrollUntilVisible(find.text(s), 200, scrollable: find.descendant(
             of: list, matching: find.byType(Scrollable)).first);
         expect(find.text(s), findsOneWidget, reason: 'القسم "$s" يجب أن يظهر');

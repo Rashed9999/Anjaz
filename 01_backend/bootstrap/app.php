@@ -58,8 +58,8 @@ use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 $app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
-        web: __DIR__.'/../routes/web.php',
-        api: __DIR__.'/../routes/api.php',
+        // ملاحظة الدمج: راوتات 6cash الأساسية (web/api/v1/admin/merchant) تُحمّل عبر
+        // App\Providers\RouteServiceProvider. هنا نسجّل راوتات أميال فقط + الأوامر.
         commands: __DIR__.'/../routes/console.php',
         then: function () {
             \Illuminate\Support\Facades\Route::prefix('api/v1/amial')
@@ -107,6 +107,9 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // AMIAL-SENTINEL-001 — الحارس المخفي يراقب كل طلب web/api (وضع monitor افتراضياً)
         $middleware->prependToGroup('web', SecuritySentinel::class);
         $middleware->prependToGroup('api', SecuritySentinel::class);
+
+        // AMIAL-OPS-001 — وضع الصيانة المُدار من لوحة الأدمن (يمرّ الأدمن/الدخول/ping)
+        $middleware->appendToGroup('api', \App\Http\Middleware\AmialMaintenanceMode::class);
 
         $middleware->alias([
             'auth' => Authenticate::class,

@@ -49,6 +49,10 @@ Route::get('/ping', [\App\Http\Controllers\Api\V1\Amial\HealthController::class,
 Route::get('/support-contact', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'publicContact'])
     ->name('amial.support-contact');
 
+// AMIAL-OPS-001 — إصدار التطبيق (عام؛ لفرض التحديث عند الإقلاع)
+Route::get('/app-version', [\App\Http\Controllers\Api\V1\Amial\AdminOpsController::class, 'publicAppVersion'])
+    ->name('amial.app-version');
+
 // P0-LEGAL — Markdown docs للموقع العام (بدون auth)
 Route::prefix('legal-docs')->name('amial.legal-docs.')->group(function () {
     Route::get('/', [\App\Http\Controllers\Api\V1\Amial\PublicLegalController::class, 'index'])->name('index');
@@ -158,6 +162,14 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/fees/simulate', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'simulateFee'])->name('fees.simulate');
             Route::post('/fees/{id}/deactivate', [\App\Http\Controllers\Api\V1\Amial\AdminSettingsController::class, 'deactivateFee'])
                 ->where('id', '[0-9]+')->name('fees.deactivate');
+        });
+
+        // AMIAL-OPS-001 — التشغيل (صيانة/كاش/إصدار)
+        Route::prefix('ops')->name('ops.')->group(function () {
+            Route::get('/status', [\App\Http\Controllers\Api\V1\Amial\AdminOpsController::class, 'status'])->name('status');
+            Route::post('/maintenance', [\App\Http\Controllers\Api\V1\Amial\AdminOpsController::class, 'setMaintenance'])->name('maintenance');
+            Route::post('/clear-cache', [\App\Http\Controllers\Api\V1\Amial\AdminOpsController::class, 'clearCache'])->name('clear-cache');
+            Route::post('/app-version', [\App\Http\Controllers\Api\V1\Amial\AdminOpsController::class, 'setAppVersion'])->name('app-version');
         });
     });
 

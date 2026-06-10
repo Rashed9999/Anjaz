@@ -19,6 +19,11 @@ class SettingsCenterController extends GetxController implements GetxService {
   final RxList<String> feeCodes = <String>[].obs;
   final RxList<String> feeTypes = <String>[].obs;
   final RxList<String> feeBearers = <String>[].obs;
+  // التشغيل (AMIAL-OPS-001)
+  final RxBool maintenanceEnabled = false.obs;
+  final RxString maintenanceMessage = ''.obs;
+  final RxMap<String, String> appVersion = <String, String>{}.obs;
+  final Rx<Map<String, dynamic>?> health = Rx<Map<String, dynamic>?>(null);
 
   final RxBool isLoading = false.obs;
   final RxBool isSubmitting = false.obs;
@@ -31,7 +36,7 @@ class SettingsCenterController extends GetxController implements GetxService {
     isLoading.value = true;
     lastError.value = '';
     try {
-      await Future.wait([_loadSms(), _loadNotifications(), _loadContact(), _loadFees()]);
+      await Future.wait([_loadSms(), _loadNotifications(), _loadContact(), _loadFees(), _loadOps()]);
     } catch (_) {
       lastError.value = 'خطأ في الشبكة';
     } finally {
@@ -75,6 +80,39 @@ class SettingsCenterController extends GetxController implements GetxService {
       feeCodes.assignAll(((meta['codes'] ?? []) as List).map((e) => e.toString()));
       feeTypes.assignAll(((meta['fee_types'] ?? []) as List).map((e) => e.toString()));
       feeBearers.assignAll(((meta['bearers'] ?? []) as List).map((e) => e.toString()));
+    }
+  }
+
+  Future<void> _loadOps() async {
+    final r = await repo.opsStatus();
+    if (_ok(r)) {
+      final meta = r.body['meta'] as Map;
+      final m = Map<String, dynamic>.from((meta['maintenance'] ?? {}) as Map);
+      maintenanceEnabled.value = m['enabled'] == true;
+      maintenanceMessage.value = (m['message'] ?? '').toString();
+      appVersion.assignAll(Map<String, String>.from(
+          ((meta['app_version'] ?? {}) as Map).map((k, v) => MapEntry(k.toString(), v.toString()))));
+    }
+  }
+
+  Future<bool> setMaintenance(bool enabled, {String? message}) =>
+      _submit(() => repo.setMaintenance(enabled, message: message), after: _loadOps);
+
+  Future<bool> clearCache() => _submit(() => repo.clearCache());
+
+  Future<bool> saveAppVersion(String minV, {String? latestV, String? message}) =>
+      _submit(() => repo.setAppVersion(minV, latestVersion: latestV, message: message), after: _loadOps);
+
+  Future<void> loadHealth() async {
+    try {
+      final r = await repo.health();
+      if (r.statusCode == 200 && r.body is Map) {
+        health.value = Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      } else {
+        lastError.value = 'تعذّر فحص الصحّة';
+      }
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
     }
   }
 

@@ -90,4 +90,24 @@ class AdminRepo extends GetxService {
 
   Future<Response> deactivateFee(int id) =>
       apiClient.postData('$_base/settings/fees/$id/deactivate', {});
+
+  // AMIAL-OPS-001 — التشغيل (صيانة/كاش/إصدار/صحّة النظام)
+  Future<Response> opsStatus() => apiClient.getData('$_base/ops/status');
+
+  Future<Response> setMaintenance(bool enabled, {String? message}) =>
+      apiClient.postData('$_base/ops/maintenance', {
+        'enabled': enabled,
+        if (message != null && message.isNotEmpty) 'message': message,
+      });
+
+  Future<Response> clearCache() => apiClient.postData('$_base/ops/clear-cache', {});
+
+  Future<Response> setAppVersion(String minVersion, {String? latestVersion, String? message}) =>
+      apiClient.postData('$_base/ops/app-version', {
+        'min_version': minVersion,
+        if (latestVersion != null && latestVersion.isNotEmpty) 'latest_version': latestVersion,
+        if (message != null && message.isNotEmpty) 'message': message,
+      });
+
+  Future<Response> health() => apiClient.getData('$_base/health');
 }
