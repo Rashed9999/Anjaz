@@ -12,6 +12,7 @@ import 'package:amyal_pay/features/receipts/domain/repositories/receipts_repo.da
 import 'package:amyal_pay/features/family_fund/controllers/funds_controller.dart';
 import 'package:amyal_pay/features/family_fund/domain/repositories/funds_repo.dart';
 import 'package:amyal_pay/features/agent/controllers/agent_controller.dart';
+import 'package:amyal_pay/features/agent/controllers/agent_portal_controller.dart';
 import 'package:amyal_pay/features/agent/domain/repositories/agent_repo.dart';
 import 'package:amyal_pay/features/auth/controllers/unified_auth_controller.dart';
 import 'package:amyal_pay/features/bill_pay/controllers/bill_pay_controller.dart';
@@ -218,6 +219,8 @@ Future<Map<String, Map<String, String>>> init() async {
   // ====== AMYAL v1.6: Agent App ======
   Get.lazyPut(() => AgentRepo(apiClient: Get.find()));
   Get.lazyPut(() => AgentController(repo: Get.find()), fenix: true);
+  // AMIAL-AGENT-PORTAL-001 — لوحة الوكيل
+  Get.lazyPut(() => AgentPortalController(repo: Get.find()), fenix: true);
 
   // ====== AMYAL v1.6: Merchant App ======
   Get.lazyPut(() => MerchantRepo(apiClient: Get.find()));

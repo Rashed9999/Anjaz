@@ -16,8 +16,10 @@ import 'package:amyal_pay/features/merchant/controllers/merchant_controller.dart
 import 'package:amyal_pay/features/merchant/domain/repositories/merchant_repo.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_dashboard_screen.dart';
 import 'package:amyal_pay/features/agent/controllers/agent_controller.dart';
+import 'package:amyal_pay/features/agent/controllers/agent_portal_controller.dart';
 import 'package:amyal_pay/features/agent/domain/repositories/agent_repo.dart';
 import 'package:amyal_pay/features/agent/screens/agent_dashboard_screen.dart';
+import 'package:amyal_pay/features/agent/screens/agent_portal_screen.dart';
 import 'package:amyal_pay/features/admin/controllers/whatsapp_settings_controller.dart';
 import 'package:amyal_pay/features/admin/controllers/settings_center_controller.dart';
 import 'package:amyal_pay/features/admin/domain/repositories/admin_repo.dart';
@@ -28,6 +30,7 @@ class _MockAccessRepo extends Mock implements AccessRepo {}
 class _MockMerchantRepo extends Mock implements MerchantRepo {}
 class _MockAgentRepo extends Mock implements AgentRepo {}
 class _MockAdminRepo extends Mock implements AdminRepo {}
+class _MockAgentPortalRepo extends Mock implements AgentRepo {}
 
 void main() {
   const fast = Timeout(Duration(seconds: 30));
@@ -206,6 +209,60 @@ void main() {
           scrollable: find.descendant(of: list, matching: find.byType(Scrollable)).first);
       expect(find.textContaining('تحويل أموال'), findsOneWidget);
       expect(find.text('رسم جديد / تعديل نسبة'), findsOneWidget);
+    }, timeout: fast);
+  });
+
+  group('لوحة ويب الوكيل (Agent Portal)', () {
+    testWidgets('تُبنى وتعرض KPIs + إدارة السيولة + كشف الحركة', (t) async {
+      final repo = _MockAgentPortalRepo();
+      when(() => repo.floatDashboard()).thenAnswer((_) async => Response(statusCode: 200, body: {
+            'success': true,
+            'meta': {
+              'current_float': '30000',
+              'today': {
+                'cash_in_total': '2000', 'cash_out_total': '1500', 'topup_total': '5000',
+                'commission_earned': '50', 'transaction_count': 12,
+              },
+              'limits': {'daily_cash_in_remaining': '98000'},
+              'low_float_warning': true,
+              'agent_level': 'independent',
+            },
+          }));
+      when(() => repo.floatStatement(from: any(named: 'from'), to: any(named: 'to')))
+          .thenAnswer((_) async => Response(statusCode: 200, body: {
+                'success': true,
+                'meta': {
+                  'from': '2026-05-01', 'to': '2026-06-01',
+                  'rows': [
+                    {'date': '2026-06-01', 'opening_float': '10000', 'cash_in_total': '2000',
+                     'cash_out_total': '1500', 'topup_total': '5000', 'commission_earned': '50',
+                     'closing_float': '13550', 'transaction_count': 7},
+                  ],
+                  'totals': {'cash_in_total': '2000', 'cash_out_total': '1500', 'topup_total': '5000',
+                             'commission_earned': '50', 'transaction_count': 7},
+                },
+              }));
+      when(() => repo.settlements()).thenAnswer((_) async => Response(statusCode: 200, body: {
+            'success': true,
+            'meta': {'settlements': [
+              {'settlement_ulid': 'x', 'settlement_type': 'topup', 'amount': '5000',
+               'status': 'pending', 'created_at': '2026-06-01T10:00:00Z'},
+            ]},
+          }));
+      Get.put<AgentPortalController>(AgentPortalController(repo: repo));
+
+      await t.pumpWidget(GetMaterialApp(home: const AgentPortalScreen()));
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 300));
+
+      expect(find.byType(ErrorWidget), findsNothing);
+      final scrollable = find.byType(Scrollable).first;
+      // الأقسام والعناصر (نمرّر إليها لأن ListView يبني الظاهر فقط)
+      for (final s in ['لوحة التحكم', 'سيولتك منخفضة', 'عدد العمليات', 'إدارة السيولة',
+                       'طلب زيادة الرصيد من الإدارة', 'سجل الشحن والتسويات', 'كشف حركة الرصيد']) {
+        await t.scrollUntilVisible(find.textContaining(s), 150, scrollable: scrollable);
+        expect(find.textContaining(s), findsWidgets, reason: 'العنصر "$s" يجب أن يظهر');
+      }
     }, timeout: fast);
   });
 }

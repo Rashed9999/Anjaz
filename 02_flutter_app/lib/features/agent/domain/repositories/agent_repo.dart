@@ -17,6 +17,13 @@ class AgentRepo extends GetxService {
   Future<Response> floatDashboard() =>
       apiClient.getData('/api/v1/amial/agent/float-dashboard');
 
+  // AMIAL-AGENT-PORTAL-001 — كشف حركة الرصيد
+  Future<Response> floatStatement({String? from, String? to}) =>
+      apiClient.getData('/api/v1/amial/agent/float-statement', query: {
+        if (from != null && from.isNotEmpty) 'from': from,
+        if (to != null && to.isNotEmpty) 'to': to,
+      });
+
   Future<Response> requestTopup({
     required String amount,
     String paymentMethod = 'cash',

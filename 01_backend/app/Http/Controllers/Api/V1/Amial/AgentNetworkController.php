@@ -25,6 +25,17 @@ class AgentNetworkController extends Controller
         return $this->ok($dashboard);
     }
 
+    /** GET /api/v1/amial/agent/float-statement?from=&to= — كشف حركة الرصيد */
+    public function floatStatement(Request $request): JsonResponse
+    {
+        $statement = $this->network->getFloatStatement(
+            $request->user()->id,
+            $request->query('from'),
+            $request->query('to'),
+        );
+        return $this->ok($statement);
+    }
+
     /** POST /api/v1/amial/agent/topup-request */
     public function requestTopup(Request $request): JsonResponse
     {

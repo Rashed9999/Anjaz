@@ -609,6 +609,7 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/daily-stats', [AgentStatsController::class, 'dailyStats'])->name('daily-stats');
         // -------- AMIAL-AGENT-NETWORK-001 (v2.4) --------
         Route::get('/float-dashboard', [AgentNetworkController::class, 'floatDashboard'])->name('float-dashboard');
+        Route::get('/float-statement', [AgentNetworkController::class, 'floatStatement'])->name('float-statement');
         Route::post('/topup-request', [AgentNetworkController::class, 'requestTopup'])
             ->middleware('amial.rate-limit:agent_topup,10,60')->name('topup-request');
         Route::get('/settlements', [AgentNetworkController::class, 'settlements'])->name('settlements');

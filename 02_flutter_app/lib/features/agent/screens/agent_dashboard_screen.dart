@@ -4,6 +4,7 @@ import 'package:amyal_pay/features/agent/controllers/agent_controller.dart';
 import 'package:amyal_pay/features/agent/screens/agent_cash_in_screen.dart';
 import 'package:amyal_pay/features/agent/screens/agent_cash_out_screen.dart';
 import 'package:amyal_pay/features/agent/screens/agent_float_screen.dart';
+import 'package:amyal_pay/features/agent/screens/agent_portal_screen.dart';
 import 'package:amyal_pay/features/agent/screens/agent_transactions_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
@@ -225,6 +226,11 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
                   children: [
+                    _LinkTile(
+                      icon: Icons.dashboard_customize,
+                      label: 'لوحة الوكيل (سيولة وتقارير)',
+                      onTap: () => Get.to(() => const AgentPortalScreen()),
+                    ),
                     _LinkTile(
                       icon: Icons.account_balance_wallet,
                       label: 'سيولتي وشراء رصيد',

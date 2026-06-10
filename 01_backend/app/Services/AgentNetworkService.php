@@ -260,6 +260,51 @@ class AgentNetworkService
     // 5. لوحة السيولة
     // ============================================================
 
+    /**
+     * AMIAL-AGENT-PORTAL-001 — كشف حركة الرصيد (السيولة) عبر فترة.
+     *
+     * يعيد صفوف agent_float_logs اليومية (افتتاحي/إيداعات/سحوبات/شحن/عمولة/ختامي/عدد)
+     * + إجماليات الفترة. يصلح لجدول «كشف حركة الرصيد» في لوحة الوكيل.
+     */
+    public function getFloatStatement(int $agentUserId, ?string $from = null, ?string $to = null): array
+    {
+        $fromDate = $from ? Carbon::parse($from)->startOfDay() : Carbon::now()->subDays(30)->startOfDay();
+        $toDate = $to ? Carbon::parse($to)->endOfDay() : Carbon::now()->endOfDay();
+
+        $logs = AgentFloatLog::where('agent_user_id', $agentUserId)
+            ->whereBetween('log_date', [$fromDate->toDateString(), $toDate->toDateString()])
+            ->orderByDesc('log_date')
+            ->get();
+
+        $rows = $logs->map(fn ($l) => [
+            'date' => Carbon::parse($l->log_date)->toDateString(),
+            'opening_float' => (string) $l->opening_float,
+            'cash_in_total' => (string) $l->cash_in_total,       // إيداعات للعملاء (خصم سيولة)
+            'cash_out_total' => (string) $l->cash_out_total,     // سحوبات من العملاء (إضافة سيولة)
+            'topup_total' => (string) $l->topup_total,           // شحن رصيد
+            'commission_earned' => (string) $l->commission_earned,
+            'closing_float' => (string) $l->closing_float,
+            'transaction_count' => (int) $l->transaction_count,
+        ])->values()->all();
+
+        $sum = fn (string $col) => (string) $logs->reduce(
+            fn ($carry, $l) => bcadd($carry, (string) $l->{$col}, 4), '0'
+        );
+
+        return [
+            'from' => $fromDate->toDateString(),
+            'to' => $toDate->toDateString(),
+            'rows' => $rows,
+            'totals' => [
+                'cash_in_total' => $sum('cash_in_total'),
+                'cash_out_total' => $sum('cash_out_total'),
+                'topup_total' => $sum('topup_total'),
+                'commission_earned' => $sum('commission_earned'),
+                'transaction_count' => (int) $logs->sum('transaction_count'),
+            ],
+        ];
+    }
+
     public function getFloatDashboard(int $agentUserId): array
     {
         $profile = AgentProfile::where('user_id', $agentUserId)->first();
