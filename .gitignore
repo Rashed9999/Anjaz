@@ -76,3 +76,6 @@ Thumbs.db
 *.bak
 *.orig
 *.rej
+
+# ملفّات Flutter iOS المُولّدة (مسارات خاصّة بجهاز البناء — لا تُرفع)
+02_flutter_app/ios/Flutter/ephemeral/*.env
