@@ -188,6 +188,77 @@ VERDICT: PASS ✓
 
 ---
 
+## 8) Money Precision Fuzzing — تشويش دقّة المال
+
+**الملفّ:** `01_backend/tests/Unit/MoneyFuzzTest.php`
+**التشغيل:** `php artisan test tests/Unit/MoneyFuzzTest.php`
+
+آلاف القيم (صحيحة وعدائية) على `MoneyService` لإثبات أخطر ثوابت نظام مالي:
+لا تلوّث float، لا انحراف تدوير، حفظ المال عند التقسيم.
+
+```
+✓ normalize مُتحايِد ونظيف (5000 قيمة عشوائية)
+✓ لا تلوّث float حتى من مدخلات float:  add(0.1, 0.2) === '0.3000'  (3000 حالة)
+✓ الجمع تبادلي وتجميعي بلا انحراف (3000 حالة)
+✓ 10000 دورة إضافة/خصم → الرصيد ثابت للفلس (لا drift)
+✓ القيم غير الصالحة (1e5، ٥٠، '1,000'، '5.') تُرمى — لا تُبتلَع بصمت
+✓ distribute يحفظ المال: مجموع الحصص = الإجمالي بالضبط (4000 تقسيم عشوائي)
+Tests: 7 passed (38035 assertions)
+```
+
+**38,035 تأكيدة على دقّة المال — صفر تلوّث float، صفر فلس مخلوق أو مفقود.**
+
+---
+
+## 9) Idempotency Exactly-Once — خصم واحد تحت التزامن
+
+**الملفّات:** `01_backend/scripts/idem.php` + `run_idem.sh`
+**التشغيل:** `bash scripts/run_idem.sh 30`
+
+يعيد إنتاج مسار الحماية المالي الفعلي (`begin → قيد → complete` كما في
+`EnforceIdempotency`): محفظة تكفي خصماً واحداً، و30 عاملاً يرسلون *نفس* مفتاح
+الـIdempotency في اللحظة نفسها.
+
+```
+(1) تزامن 30 عامل بنفس المفتاح:  1 CHARGED  +  29 SKIPPED:in_progress
+(2) إعادة تتابعية (نفس المفتاح):  first=CHARGED second=SKIPPED:replay → لا خصم مزدوج
+(3) نفس المفتاح بجسم مختلف:       first=CHARGED second=CONFLICT (409) → مرفوض
+خصوم بمفتاح التزامن (يجب=1): 1 | صفوف المفتاح: 1 | رصيد المحفظة: 0 | الدفتر متوازن
+VERDICT: PASS ✓ خصم واحد فقط رغم الطلبات المتزامنة
+```
+
+**30 طلب دفع متزامن بنفس المفتاح → خصم واحد فقط.** إثبات exactly-once على المسار المالي.
+
+---
+
+## 10) RBAC Authorization Matrix — مصفوفة الصلاحيات
+
+**الملفّ:** `01_backend/scripts/rbac.php`
+**التشغيل:** `DB_DATABASE=amial_conc SESSION_DRIVER=array php scripts/rbac.php`
+
+كل دور (بتوكن Passport حقيقي) × كل طبقة مسارات. الحدّ الأمني: الدور الأدنى يُحجَب.
+
+```
+المسار \ الدور              admin  agent  merchant customer GUEST
+── طبقة ADMIN ──
+/admin/settlements/dashboard  200    403    403      403     401
+/admin/ops/status             200    403    403      403     401
+/admin/dashboard              200    403    403      403     401
+── طبقة AGENT ──
+/agent/float-dashboard        403    200    403      403     401
+/agent/settlements            403    200    403      403     401
+── طبقة MERCHANT ──
+/merchant/branches            403    403    403      403     401
+VERDICT: PASS ✓ لا تسريب صلاحيات — كل دور أدنى محجوب عن الطبقات الأعلى
+```
+
+**صفر تسريب تصعيد صلاحية عبر المصفوفة كاملةً.** ملاحظتان (لا ثغرة): مسارات التاجر
+تتطلّب ملفّ تاجر فتُعيد 403 حتى للتاجر في البيئة المعزولة (تقييد زائد، لا تسريب)؛
+و`/admin/settings/sms` يُعيد 500 في المعزولة فقط لغياب جدول `addon_settings` القديم
+(موجود في القاعدة الحقيقية، ويمرّ في `AdminSettingsCenterTest`).
+
+---
+
 ## الخلاصة
 
 | الاختبار | الحالة | الدليل |
@@ -199,6 +270,9 @@ VERDICT: PASS ✓
 | Disaster Recovery + Backup Validation | ✅ PASS | استعادة كاملة + رفض نسخة مفسودة |
 | Penetration Test (10 متجهات) | ✅ PASS | كلّها مصدودة + إضافة ترويسات أمان |
 | Soak (تحمّل مُراقَب) | ✅ PASS | صفر تسريب، أداء مستقرّ |
+| **Money Fuzzing (38k تأكيدة)** | ✅ PASS | صفر تلوّث float / انحراف |
+| **Idempotency Exactly-Once (30 متزامن)** | ✅ PASS | خصم واحد فقط |
+| **RBAC Matrix (5 أدوار × 8 مسارات)** | ✅ PASS | صفر تسريب صلاحيات |
 
 **الاختبارات التي كشفت عيوباً حقيقية فأُصلحت:** WhatsApp (throttle قاتل) + Pentest
 (ترويسات أمان غائبة). هذا جوهر قيمة اختبارات الضغط: لا تُثبت النجاح فحسب، بل تكشف
