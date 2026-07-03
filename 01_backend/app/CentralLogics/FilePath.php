@@ -1,5 +1,13 @@
 <?php
 
+// AMIAL-FIX(JOURNEY): DOMAIN_POINTED_DIRECTORY كان يُعرَّف في public/index.php فقط
+// (أُزيل أثناء إعادة الهيكلة)، فأيّ مسار يستدعي dynamicAsset/dynamicStorage خارج
+// الويب (تسلسل نموذج، console، طلب API) كان ينهار بـ«undefined constant» → 500.
+// نضمن تعريفه هنا (الملفّ مُحمَّل عبر autoload.files) بقيمة افتراضية آمنة.
+if (!defined('DOMAIN_POINTED_DIRECTORY')) {
+    define('DOMAIN_POINTED_DIRECTORY', env('DOMAIN_POINTED_DIRECTORY', 'public'));
+}
+
 if (!function_exists('dynamicAsset')) {
     function dynamicAsset(string $path): string
     {
