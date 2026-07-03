@@ -22,7 +22,7 @@ use Illuminate\Http\Request;
  *
  * ملاحظة: هذه مختلفة عن LegalController الذي يدير acceptance/versions في DB.
  */
-class PublicLegalController extends Controller
+class PublicLegalController extends AmialApiController // AMIAL-FIX-007
 {
     private const DOCS = [
         'terms' => [

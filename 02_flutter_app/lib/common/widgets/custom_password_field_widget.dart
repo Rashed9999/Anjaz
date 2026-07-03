@@ -117,6 +117,7 @@ class _CustomPasswordFieldWidgetState extends State<CustomPasswordFieldWidget> {
   }
 
   void _toggle() {
+    if (!mounted) return; // AMIAL-FIX-006
     setState(() {
       _obscureText = !_obscureText;
     });

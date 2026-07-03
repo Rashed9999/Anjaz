@@ -119,6 +119,22 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/health', [\App\Http\Controllers\Api\V1\Amial\HealthController::class, 'full'])->name('health');
 
         // CRITICAL-001-SUBS — إدارة الاشتراكات + Audit Log
+        // USE-001 — Revenue Settlement Center
+        Route::prefix('settlements')->name('settlements.')->group(function () {
+            Route::get('/dashboard',  [\App\Http\Controllers\Api\V1\Amial\SettlementController::class, 'dashboard'])->name('dashboard');
+            Route::get('/partners',   [\App\Http\Controllers\Api\V1\Amial\SettlementController::class, 'partners'])->name('partners');
+            Route::get('/wallet',     [\App\Http\Controllers\Api\V1\Amial\SettlementController::class, 'revenueWallet'])->name('wallet');
+            Route::get('/',           [\App\Http\Controllers\Api\V1\Amial\SettlementController::class, 'index'])->name('index');
+            Route::post('/',          [\App\Http\Controllers\Api\V1\Amial\SettlementController::class, 'store'])->name('store');
+            Route::get('/{id}',       [\App\Http\Controllers\Api\V1\Amial\SettlementController::class, 'show'])->where('id','[0-9]+')->name('show');
+            Route::post('/{id}/submit',   [\App\Http\Controllers\Api\V1\Amial\SettlementController::class, 'submit'])->where('id','[0-9]+')->name('submit');
+            Route::post('/{id}/approve',  [\App\Http\Controllers\Api\V1\Amial\SettlementController::class, 'approve'])->where('id','[0-9]+')->name('approve');
+            Route::post('/{id}/reject',   [\App\Http\Controllers\Api\V1\Amial\SettlementController::class, 'reject'])->where('id','[0-9]+')->name('reject');
+            Route::post('/{id}/process',  [\App\Http\Controllers\Api\V1\Amial\SettlementController::class, 'process'])->where('id','[0-9]+')->name('process');
+            Route::post('/{id}/complete', [\App\Http\Controllers\Api\V1\Amial\SettlementController::class, 'complete'])->where('id','[0-9]+')->name('complete');
+            Route::post('/{id}/cancel',   [\App\Http\Controllers\Api\V1\Amial\SettlementController::class, 'cancel'])->where('id','[0-9]+')->name('cancel');
+        });
+
         Route::prefix('subscriptions')->name('subscriptions.')->group(function () {
             Route::get('/summary', [\App\Http\Controllers\Api\V1\Amial\SubscriptionController::class, 'summary'])->name('summary');
             Route::get('/expiring', [\App\Http\Controllers\Api\V1\Amial\SubscriptionController::class, 'expiring'])->name('expiring');
@@ -617,7 +633,9 @@ Route::middleware(['auth:api'])->group(function () {
     });
 
     // -------- AMIAL-AGENT-STATS-001 (v1.7) --------
-    Route::prefix('agent')->name('amial.agent.')->group(function () {
+    Route::prefix('agent')->name('amial.agent.')
+        ->middleware('amial.agent') // AMIAL-FIX-004 — فرض دور الوكيل
+        ->group(function () {
         Route::get('/daily-stats', [AgentStatsController::class, 'dailyStats'])->name('daily-stats');
         // -------- AMIAL-AGENT-NETWORK-001 (v2.4) --------
         Route::get('/float-dashboard', [AgentNetworkController::class, 'floatDashboard'])->name('float-dashboard');

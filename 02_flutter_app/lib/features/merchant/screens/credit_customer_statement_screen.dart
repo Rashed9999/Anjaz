@@ -135,6 +135,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
       if (_from != null || _to != null)
         IconButton(
           icon: const Icon(Icons.clear),
+          if (!mounted) return; // AMIAL-FIX-006
           onPressed: () { setState(() { _from = null; _to = null; }); _refresh(); },
         ),
     ]);

@@ -14,7 +14,7 @@ use Illuminate\Http\Request;
  * /ping     — عام، لخدمات المراقبة الخارجية (UptimeRobot)
  * /health   — Admin only، تفاصيل كاملة
  */
-class HealthController extends Controller
+class HealthController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(private readonly SystemHealthService $svc) {}
 

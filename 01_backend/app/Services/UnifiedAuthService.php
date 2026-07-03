@@ -412,12 +412,24 @@ class UnifiedAuthService
 
     private function sendOtpSms(User $agent, string $otp): void
     {
-        // TODO: استدعاء SmsService الحقيقي. لـ pilot نسجل في log.
-        // في production: app(\App\Services\SmsService::class)->send($agent->phone, "رمز التحقق: {$otp}");
-        Log::info('OTP would be sent', [
+        // AMIAL-FIX-001 — يرسل OTP فعلاً (WhatsApp أوّلاً ← SMS fallback)
+        $phone = $agent->phone ?? '';
+        if (empty($phone)) {
+            Log::warning('sendOtpSms: agent has no phone', ['agent_id' => $agent->id]);
+            return;
+        }
+        $result = \App\CentralLogics\SmsModule::send($phone, $otp);
+        Log::info('OTP dispatch result', [
             'agent_id' => $agent->id,
             'masked_phone' => $this->maskPhoneForDisplay($agent),
+            'result' => $result,
         ]);
+        if ($result !== 'success') {
+            Log::warning('OTP send failed — check WhatsApp/SMS provider config', [
+                'agent_id' => $agent->id,
+                'result' => $result,
+            ]);
+        }
     }
 
     private function verify2FA(User $admin, string $code): bool

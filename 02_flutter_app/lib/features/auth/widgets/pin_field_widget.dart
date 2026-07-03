@@ -135,6 +135,7 @@ class _PinFieldWidgetState extends State<PinFieldWidget> {
     );
   }
   void _setPinValue () {
+    if (!mounted) return; // AMIAL-FIX-006
     setState(() {
       _pin = widget.pinController.text;
       _confirmPin = widget.confirmPinController.text;

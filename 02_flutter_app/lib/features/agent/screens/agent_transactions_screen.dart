@@ -24,6 +24,7 @@ class _AgentTransactionsScreenState extends State<AgentTransactionsScreen> {
   }
 
   void _setFilter(String f) {
+    if (!mounted) return; // AMIAL-FIX-006
     setState(() => _filter = f);
     Get.find<AgentController>().loadTransactions(type: f == 'all' ? null : f);
   }

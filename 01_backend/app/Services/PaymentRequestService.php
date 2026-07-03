@@ -111,6 +111,14 @@ class PaymentRequestService
         $requesterId = $request->requester_user_id;
 
         return DB::transaction(function () use ($payer, $request, $amount, $requesterId) {
+            // AMIAL-FIX (double-spend TOCTOU): أعِد فحص حالة الطلب تحت قفل الصفّ داخل
+            // المعاملة. فحص isActive() أعلاه خارج المعاملة لا يكفي: نداءان متزامنان قد
+            // يمرّان معاً. هنا نقفل صفّ الطلب ونتحقّق أنه ما زال pending قبل أي خصم.
+            $locked = PaymentRequest::whereKey($request->getKey())->lockForUpdate()->first();
+            if (!$locked || !$locked->isActive()) {
+                throw new RuntimeException('هذا الطلب مدفوع أو غير صالح');
+            }
+
             // قفل المحفظتين بترتيب ثابت
             $this->guard()->lockWalletsOrdered([$payer->id, $requesterId]);
 

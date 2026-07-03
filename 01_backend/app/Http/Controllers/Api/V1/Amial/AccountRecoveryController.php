@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Validator;
  *
  * (admin endpoints في AdminAccountRecoveryController)
  */
-class AccountRecoveryController extends Controller
+class AccountRecoveryController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(
         private readonly AccountRecoveryService $service,
@@ -224,16 +224,5 @@ class AccountRecoveryController extends Controller
                     : null,
             ],
         ]);
-    }
-
-    private function error(string $code, string $message, $errors, int $status): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false,
-            'code' => $code,
-            'message' => $message,
-            'errors' => is_object($errors) ? $errors : ((array)$errors ?: (object)[]),
-            'meta' => (object)[],
-        ], $status);
     }
 }

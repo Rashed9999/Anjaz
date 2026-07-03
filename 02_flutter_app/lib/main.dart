@@ -53,7 +53,7 @@ Future<void> main() async {
     FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
   }catch(e) {
     if (kDebugMode) {
-      print("${body?.toJson().toString()}");
+      // debug print removed — AMIAL-FIX-003
     }
   }
 

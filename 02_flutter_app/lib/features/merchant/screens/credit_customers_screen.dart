@@ -32,6 +32,7 @@ class _CreditCustomersScreenState extends State<CreditCustomersScreen> {
   }
 
   void _applyFilter(String f) {
+    if (!mounted) return; // AMIAL-FIX-006
     setState(() => _filter = f);
     c.loadCustomers(search: _searchCtrl.text, filter: f.isEmpty ? null : f);
   }

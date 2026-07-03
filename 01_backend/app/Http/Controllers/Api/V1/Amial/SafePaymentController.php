@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Validator;
 /**
  * AMIAL-SAFE-PAYMENT-001 (v1.1) — customer endpoints
  */
-class SafePaymentController extends Controller
+class SafePaymentController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(
         private readonly SafePaymentService $service,
@@ -220,38 +220,5 @@ class SafePaymentController extends Controller
             'buyer_cancel' => $isBuyer && $payment->canBuyerCancel(),
             'buyer_dispute' => $isBuyer && $payment->canBuyerDispute(),
         ];
-    }
-
-    private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => true,
-            'code' => $code,
-            'message' => $message,
-            'errors' => (object)[],
-            'meta' => $meta,
-        ], $status);
-    }
-
-    private function error(string $code, string $message, int $status): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false,
-            'code' => $code,
-            'message' => $message,
-            'errors' => (object)[],
-            'meta' => (object)[],
-        ], $status);
-    }
-
-    private function validationError($v): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false,
-            'code' => 'VALIDATION_FAILED',
-            'message' => 'بيانات غير صحيحة',
-            'errors' => $v->errors(),
-            'meta' => (object)[],
-        ], 422);
     }
 }

@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Validator;
 /**
  * AMIAL-MERCHANT-001 (v1.7) — merchant endpoints
  */
-class MerchantController extends Controller
+class MerchantController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(
         private readonly MerchantService $service,
@@ -33,7 +33,7 @@ class MerchantController extends Controller
 
         try {
             $result = $this->service->processRefund(
-                merchant: $this->resolveMerchant($request),
+                merchant: $this->resolveMerchantPos($request),
                 originalTransactionId: $request->input('original_transaction_id'),
                 refundAmount: (string) $request->input('amount'),
                 reason: $request->input('reason'),
@@ -53,19 +53,19 @@ class MerchantController extends Controller
     public function ledger(Request $request): JsonResponse
     {
         $page = max(1, (int) $request->query('page', 1));
-        $data = $this->service->getLedger($this->resolveMerchant($request), $page);
+        $data = $this->service->getLedger($this->resolveMerchantPos($request), $page);
         return $this->ok($data);
     }
 
     /** GET /api/v1/amial/merchant/daily-stats */
     public function dailyStats(Request $request): JsonResponse
     {
-        $stats = $this->service->getDailyStats($this->resolveMerchant($request));
+        $stats = $this->service->getDailyStats($this->resolveMerchantPos($request));
         return $this->ok($stats);
     }
 
     // ============================================================
-    private function resolveMerchant(Request $request)
+    private function resolveMerchantPos(Request $request)
     {
         // لو POS user، التاجر الرئيسي هو merchant_user_id
         $user = $request->user();
@@ -80,29 +80,5 @@ class MerchantController extends Controller
     {
         $posUser = PosUser::where('user_id', $request->user()->id)->first();
         return $posUser?->id;
-    }
-
-    private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => true, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => $meta,
-        ], $status);
-    }
-
-    private function error(string $code, string $message, int $status): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => (object)[],
-        ], $status);
-    }
-
-    private function validationError($v): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => 'VALIDATION_FAILED',
-            'message' => 'بيانات غير صحيحة', 'errors' => $v->errors(), 'meta' => (object)[],
-        ], 422);
     }
 }

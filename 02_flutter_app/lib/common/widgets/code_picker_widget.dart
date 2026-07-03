@@ -192,6 +192,7 @@ class _CodePickerWidgetState extends State<CodePickerWidget> {
         ),
       ).then((e) {
         if (e != null) {
+          if (!mounted) return; // AMIAL-FIX-006
           setState(() {
             selectedItem = e;
           });
@@ -232,6 +233,7 @@ class _CodePickerWidgetState extends State<CodePickerWidget> {
         ),
       ).then((e) {
         if (e != null) {
+          if (!mounted) return; // AMIAL-FIX-006
           setState(() {
             selectedItem = e;
           });

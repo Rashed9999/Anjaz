@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Validator;
  *   POST /admin/subscriptions/merchant/{id}/renew   — تجديد 30 يوم
  *   POST /admin/subscriptions/merchant/{id}/extend  — تمديد بأيام
  */
-class SubscriptionController extends Controller
+class SubscriptionController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(
         private readonly SubscriptionService $svc,
@@ -220,34 +220,4 @@ class SubscriptionController extends Controller
     }
 
     // ============ Private Helpers ============
-
-    private function isAdmin(?User $user): bool
-    {
-        if (!$user) return false;
-        return ($user->type ?? null) === 1 || ($user->is_admin ?? false);
-    }
-
-    private function ok(array $meta = [], string $code = 'OK', string $message = ''): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => true, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => $meta,
-        ]);
-    }
-
-    private function error(string $code, string $message, int $status = 400): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => (object)[],
-        ], $status);
-    }
-
-    private function validationError($v): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => 'VALIDATION', 'message' => 'بيانات غير صالحة',
-            'errors' => $v->errors(), 'meta' => (object)[],
-        ], 422);
-    }
 }

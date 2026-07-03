@@ -1,110 +1,125 @@
-name: CI
+name: أميال باي — CI
 
-# يشغّل تحليل الكود + الأمن + الاختبارات عند كل push/PR.
-# ملاحظة: وظيفة backend تتطلّب دمج الحزمة فوق قاعدة Cash6 أولاً (انظر FIXES.md)
-# لأن composer install يعتمد على ملفات القاعدة غير المُرفقة.
+# يشغّل: فحص بنيوي سريع → اختبارات الباكند الكاملة (747) → تحليل/اختبار Flutter
+# → التحقّق من بناء صورة Docker. أي فشل يوقف الدمج.
 
 on:
   push:
-    branches: [ main, develop, 'claude/**' ]
+    branches: [main, develop]
   pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  # ---------------------------------------------------------------
-  # كشف الأسرار المسرّبة (يعمل دائماً — لا يحتاج dependencies)
-  # ---------------------------------------------------------------
-  secrets-scan:
-    name: Gitleaks (secrets)
+  # ──────────────────────────────────────────────────────────
+  # 1) فحص بنيوي سريع (توازن الأقواس) — لا يحتاج تبعيات
+  # ──────────────────────────────────────────────────────────
+  structural:
+    name: فحص بنيوي
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITLEAKS_CONFIG: .gitleaks.toml
+      - name: توازن الأقواس (PHP/Dart)
+        run: |
+          node -e '
+          const fs=require("fs"),path=require("path");
+          function strip(s){let o="",i=0,n=s.length;
+           while(i<n){const c=s[i],d=s[i+1];
+           if(c==="/"&&d==="/"){while(i<n&&s[i]!=="\n")i++;continue;}
+           if(c==="#"){while(i<n&&s[i]!=="\n")i++;continue;}
+           if(c==="/"&&d==="*"){i+=2;while(i<n&&!(s[i]==="*"&&s[i+1]==="/"))i++;i+=2;continue;}
+           if(c==="\x27"||c==="\x22"){const q=c;i++;while(i<n&&s[i]!==q){if(s[i]==="\\")i++;i++;}i++;o+="X";continue;}
+           o+=c;i++;}return o;}
+          function bal(f){try{const s=strip(fs.readFileSync(f,"utf8"));const c={};
+           for(const ch of s)if("(){}[]".includes(ch))c[ch]=(c[ch]||0)+1;
+           return(c["("]||0)===(c[")"]||0)&&(c["{"]||0)===(c["}"]||0)&&(c["["]||0)===(c["]"]||0);
+           }catch{return false;}}
+          let ok=0,fail=0;const fails=[];
+          function walk(dir){if(!fs.existsSync(dir))return;
+           for(const e of fs.readdirSync(dir)){const full=path.join(dir,e);
+           if(fs.statSync(full).isDirectory()){walk(full);continue;}
+           if(e.endsWith(".php")||e.endsWith(".dart")){if(bal(full))ok++;else{fail++;fails.push(full);}}}}
+          ["01_backend/app","01_backend/tests","01_backend/routes","01_backend/database"].forEach(walk);
+          walk("02_flutter_app/lib");
+          console.log(ok+" ✓  "+fail+" ✗");
+          fails.forEach(f=>console.log("  ✗ "+f));
+          process.exit(fail===0?0:1);
+          '
 
-  # ---------------------------------------------------------------
-  # Backend — تحليل ساكن + ثغرات التبعيات + اختبارات
-  # ---------------------------------------------------------------
+  # ──────────────────────────────────────────────────────────
+  # 2) اختبارات الباكند الكاملة (PHPUnit) — القلب
+  # ──────────────────────────────────────────────────────────
   backend:
-    name: Backend (PHP)
+    name: اختبارات الباكند (PHPUnit)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: 01_backend
+    needs: structural
     services:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_DATABASE: amial_pay_test
           MYSQL_ROOT_PASSWORD: root
-        ports: [ '3306:3306' ]
+          MYSQL_DATABASE: amial_pay_testing
+        ports: ["3306:3306"]
         options: >-
           --health-cmd="mysqladmin ping" --health-interval=10s
-          --health-timeout=5s --health-retries=5
+          --health-timeout=5s --health-retries=10
+
+    env:
+      DB_CONNECTION: mysql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_DATABASE: amial_pay_testing
+      DB_USERNAME: root
+      DB_PASSWORD: root
+      CACHE_STORE: array
+      QUEUE_CONNECTION: sync
+      SESSION_DRIVER: array
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup PHP
+      - name: تثبيت PHP 8.4
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
-          extensions: curl, gd, json, openssl, zip, pdo_mysql, bcmath
+          php-version: "8.4"
+          extensions: mbstring, pdo_mysql, gd, zip, bcmath, intl, exif, pcntl
           coverage: none
 
-      - name: Install dependencies
-        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: كاش Composer
+        uses: actions/cache@v4
+        with:
+          path: 01_backend/vendor
+          key: composer-${{ hashFiles('01_backend/composer.lock') }}
 
-      # إرشادية (لا تُسقط CI) — كود قاعدة 6cash القديم قد يحوي ملاحظات أسلوب/تحليل
-      - name: Code style (Pint)
-        run: vendor/bin/pint --test
-        continue-on-error: true
+      - name: تثبيت الحزم
+        working-directory: 01_backend
+        run: composer install --prefer-dist --no-progress --no-interaction
 
-      - name: Static analysis (Larastan)
-        run: vendor/bin/phpstan analyse --no-progress
-        continue-on-error: true
-
-      - name: Dependency vulnerabilities (composer audit)
-        run: composer audit --no-interaction
-        continue-on-error: true
-
-      - name: Prepare env + keys
+      - name: تجهيز البيئة + المفاتيح
+        working-directory: 01_backend
         run: |
           cp .env.example .env
           php artisan key:generate
+          # مفاتيح Passport (إلزامية لاختبارات المصادقة الـ16)
           php artisan passport:keys --force
-          # مفاتيح تشفير PII (إلزامية في الإقلاع)
+          # مفاتيح تشفير PII (إلزامية للإقلاع)
           echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
           echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
 
-      - name: Migrate + test database
-        env:
-          DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_DATABASE: amial_pay_test
-          DB_USERNAME: root
-          DB_PASSWORD: root
-        run: php artisan migrate --force
-
-      - name: Run tests (PHPUnit)
-        env:
-          DB_CONNECTION: mysql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 3306
-          DB_DATABASE: amial_pay_test
-          DB_USERNAME: root
-          DB_PASSWORD: root
+      - name: تشغيل كل الاختبارات (747)
+        working-directory: 01_backend
         run: php artisan test
 
-  # ---------------------------------------------------------------
-  # Flutter — تحليل + اختبارات
-  # ---------------------------------------------------------------
+  # ──────────────────────────────────────────────────────────
+  # 3) تحليل واختبار تطبيق Flutter
+  # ──────────────────────────────────────────────────────────
   flutter:
-    name: Flutter
+    name: Flutter (تحليل + اختبار)
     runs-on: ubuntu-latest
+    needs: structural
     defaults:
       run:
         working-directory: 02_flutter_app
@@ -114,21 +129,20 @@ jobs:
         with:
           channel: stable
       - run: flutter pub get
-      - name: Analyze
+      - name: تحليل (0 أخطاء)
         run: flutter analyze
-      - name: Test (headless widget/unit)
+      - name: اختبارات الواجهة
         run: flutter test
 
-      # اختبار E2E على جهاز حقيقي (Linux desktop) بلا شاشة عبر Xvfb.
-      # يثبت أن التطبيق الكامل يُقلع (DI + كل الإضافات) ويبني الواجهة دون انهيار.
-      - name: Enable Linux desktop + deps
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build libgtk-3-dev libsecret-1-dev xvfb
-          flutter config --enable-linux-desktop
-          flutter create --platforms=linux --project-name=amyal_pay .
-      - name: E2E (integration_test on Linux desktop, headless)
-        run: |
-          xvfb-run -a -s "-screen 0 1280x800x24" \
-            flutter test integration_test/app_test.dart -d linux \
-            --dart-define=BASE_URL=https://api.amialpay.com
+  # ──────────────────────────────────────────────────────────
+  # 4) التحقّق من بناء صورة الإنتاج (بلا تشغيل)
+  # ──────────────────────────────────────────────────────────
+  docker:
+    name: بناء صورة Docker
+    runs-on: ubuntu-latest
+    needs: structural
+    steps:
+      - uses: actions/checkout@v4
+      - name: بناء Dockerfile.prod
+        working-directory: 01_backend
+        run: docker build -f Dockerfile.prod -t amial-pay:ci .

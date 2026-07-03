@@ -195,6 +195,7 @@ class CustomTextFieldState extends State<CustomTextFieldWidget> {
   }
 
   void _toggle() {
+    if (!mounted) return; // AMIAL-FIX-006
     setState(() {
       _obscureText = !_obscureText;
     });

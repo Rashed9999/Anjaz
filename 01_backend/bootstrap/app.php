@@ -50,6 +50,7 @@ use Illuminate\Foundation\Http\Middleware\ValidatePostSize;
 use Illuminate\Http\Middleware\HandleCors;
 use Illuminate\Http\Middleware\SetCacheHeaders;
 use Illuminate\Http\Middleware\TrustProxies;
+use Illuminate\Http\Request;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Routing\Middleware\ValidateSignature;
@@ -83,6 +84,25 @@ $app = Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // AMIAL-DEVOPS-001 — حرج: بلا هذا، PerUserRateLimit و
+        // SecuritySentinelService (يعتمدان على $request->ip() في عدّة
+        // مواضع) سيريان كل الطلبات قادمة من IP واحد (عنوان الـ reverse
+        // proxy: Nginx الداخلي، Docker، أو طبقة Cloudways) — فتنهار
+        // حماية Rate Limiting وكشف الاحتيال بالـ IP بصمت تام.
+        //
+        // نثق بكل الوكلاء ('*') لأنّ التطبيق لا يُفتَح مباشرة للإنترنت
+        // في أيّ بيئة نشر (Docker demo أو استضافة Cloudways) — المنفذ
+        // الوحيد المكشوف هو عبر طبقة reverse proxy لا نتحكّم بعنوانها
+        // الثابت. هذا نمط معتمد قياسياً للتطبيقات خلف PaaS/CDN غير
+        // معروفة الـ IP سلفاً (نفس توصية Laravel الرسمية لبيئات كهذه).
+        $middleware->trustProxies(
+            at: '*',
+            headers: Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PORT
+                | Request::HEADER_X_FORWARDED_PROTO,
+        );
+
         $middleware->use([
             TrustProxies::class,
             HandleCors::class,
@@ -148,6 +168,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'amial.rate-limit' => PerUserRateLimit::class,
             'amial.usage' => EnforceUsageLimit::class,
             'amial.pos-permission' => \App\Http\Middleware\PosPermission::class,
+            'amial.agent' => \App\Http\Middleware\EnsureAgent::class,  // AMIAL-FIX-004
 
             // Amial Pay — الحارس المخفي (Application-level IDS)
             'amial.sentinel' => SecuritySentinel::class,

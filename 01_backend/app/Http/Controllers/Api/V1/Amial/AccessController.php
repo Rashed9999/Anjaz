@@ -132,22 +132,23 @@ class AccessController extends Controller
      */
     public function plansCatalog(Request $request): JsonResponse
     {
-        $plans = [];
-        foreach (A::ALL_PLANS as $code) {
-            $features = AccessPresets::planFeatures($code);
-            $limits = AccessPresets::planLimits($code);
-
-            $plans[] = [
-                'code' => $code,
-                'label' => A::PLAN_LABELS[$code] ?? $code,
-                'price_monthly_sar' => A::PLAN_PRICES_SAR[$code] ?? 0,
-                'price_annual_sar' => A::PLAN_PRICES_SAR_ANNUAL[$code] ?? 0,
-                'duration_days' => $code === A::PLAN_FREE ? null : 30, // FREE دائم
-                'features' => $features,
-                'limits' => $limits,
-                'is_free' => $code === A::PLAN_FREE,
-            ];
-        }
+        // AMIAL-FIX-008 — cache الـ catalog الثابت (يتغيّر نادراً)
+        $plans = \Cache::remember('amial_plans_catalog', now()->addHours(6), function () {
+            $result = [];
+            foreach (A::ALL_PLANS as $code) {
+                $result[] = [
+                    'code' => $code,
+                    'label' => A::PLAN_LABELS[$code] ?? $code,
+                    'price_monthly_sar' => A::PLAN_PRICES_SAR[$code] ?? 0,
+                    'price_annual_sar' => A::PLAN_PRICES_SAR_ANNUAL[$code] ?? 0,
+                    'duration_days' => $code === A::PLAN_FREE ? null : 30,
+                    'features' => AccessPresets::planFeatures($code),
+                    'limits' => AccessPresets::planLimits($code),
+                    'is_free' => $code === A::PLAN_FREE,
+                ];
+            }
+            return $result;
+        });
 
         // خطّة المستخدم الحالية (إن كان تاجراً)
         $currentPlan = null;

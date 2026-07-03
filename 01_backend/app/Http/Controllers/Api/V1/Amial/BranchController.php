@@ -24,13 +24,13 @@ use Illuminate\Support\Facades\Validator;
  *   DELETE /merchant/branches/{id}         — حذف (soft)
  *   POST   /merchant/branches/{id}/default — جعله الافتراضي
  */
-class BranchController extends Controller
+class BranchController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(private readonly BranchService $svc) {}
 
     public function index(Request $request): JsonResponse
     {
-        $merchant = $this->resolveMerchant($request);
+        $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
         $activeOnly = $request->boolean('active_only', false);
@@ -44,7 +44,7 @@ class BranchController extends Controller
 
     public function show(Request $request, int $id): JsonResponse
     {
-        $merchant = $this->resolveMerchant($request);
+        $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
         $branch = Branch::with('manager')
@@ -58,7 +58,7 @@ class BranchController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $merchant = $this->resolveMerchant($request);
+        $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
         $v = Validator::make($request->all(), [
@@ -95,7 +95,7 @@ class BranchController extends Controller
 
     public function update(Request $request, int $id): JsonResponse
     {
-        $merchant = $this->resolveMerchant($request);
+        $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
         $branch = Branch::where('id', $id)
@@ -131,7 +131,7 @@ class BranchController extends Controller
 
     public function destroy(Request $request, int $id): JsonResponse
     {
-        $merchant = $this->resolveMerchant($request);
+        $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
         $branch = Branch::where('id', $id)
@@ -148,7 +148,7 @@ class BranchController extends Controller
 
     public function setDefault(Request $request, int $id): JsonResponse
     {
-        $merchant = $this->resolveMerchant($request);
+        $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
         $branch = Branch::where('id', $id)
@@ -169,7 +169,7 @@ class BranchController extends Controller
      */
     public function report(Request $request, int $id): JsonResponse
     {
-        $merchant = $this->resolveMerchant($request);
+        $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
         $branch = Branch::where('id', $id)
@@ -221,7 +221,7 @@ class BranchController extends Controller
     /**
      * يُعيد التاجر المالك (إن كان user مباشرة) أو merchant_user_id (إن كان POS user).
      */
-    private function resolveMerchant(Request $request)
+    private function resolveMerchantPos(Request $request)
     {
         $authUser = $request->user();
         if (!$authUser) return $this->error('UNAUTHENTICATED', 'يجب تسجيل الدخول', 401);
@@ -232,29 +232,5 @@ class BranchController extends Controller
         $hasProfile = MerchantProfile::where('user_id', $authUser->id)->exists();
         if (!$hasProfile) return $this->error('NOT_A_MERCHANT', 'متاح للتجار فقط', 403);
         return $authUser;
-    }
-
-    private function ok(array $meta = [], string $code = 'OK', string $message = ''): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => true, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => $meta,
-        ]);
-    }
-
-    private function error(string $code, string $message, int $status = 400): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => (object)[],
-        ], $status);
-    }
-
-    private function validationError($v): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => 'VALIDATION', 'message' => 'بيانات غير صالحة',
-            'errors' => $v->errors(), 'meta' => (object)[],
-        ], 422);
     }
 }

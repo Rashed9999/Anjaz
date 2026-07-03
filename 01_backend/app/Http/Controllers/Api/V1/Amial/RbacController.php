@@ -23,11 +23,11 @@ use Illuminate\Support\Facades\Validator;
  * /merchant/rbac/pos-users/{id}/assign-role — تعيين دور
  * /merchant/rbac/pos-users/{id}/revoke-role — إزالة دور
  */
-class RbacController extends Controller
+class RbacController extends AmialApiController // AMIAL-FIX-007
 {
     public function permissions(Request $request): JsonResponse
     {
-        $merchant = $this->resolveMerchant($request);
+        $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
         // تجميع حسب category لسهولة العرض
@@ -43,7 +43,7 @@ class RbacController extends Controller
 
     public function roles(Request $request): JsonResponse
     {
-        $merchant = $this->resolveMerchant($request);
+        $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
         // الأدوار النظامية + الأدوار الخاصّة بهذا التاجر
@@ -60,7 +60,7 @@ class RbacController extends Controller
 
     public function posUserRoles(Request $request, int $posUserId): JsonResponse
     {
-        $merchant = $this->resolveMerchant($request);
+        $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
         $pos = PosUser::where('id', $posUserId)
@@ -89,7 +89,7 @@ class RbacController extends Controller
 
     public function assignRole(Request $request, int $posUserId): JsonResponse
     {
-        $merchant = $this->resolveMerchant($request);
+        $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
         $v = Validator::make($request->all(), [
@@ -141,7 +141,7 @@ class RbacController extends Controller
 
     public function revokeRole(Request $request, int $posUserId): JsonResponse
     {
-        $merchant = $this->resolveMerchant($request);
+        $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
         $v = Validator::make($request->all(), [
@@ -165,7 +165,7 @@ class RbacController extends Controller
 
     // ============ Helpers ============
 
-    private function resolveMerchant(Request $request)
+    private function resolveMerchantPos(Request $request)
     {
         $authUser = $request->user();
         if (!$authUser) return $this->error('UNAUTHENTICATED', 'يجب تسجيل الدخول', 401);
@@ -176,29 +176,5 @@ class RbacController extends Controller
         $hasProfile = MerchantProfile::where('user_id', $authUser->id)->exists();
         if (!$hasProfile) return $this->error('NOT_A_MERCHANT', 'متاح للتجار فقط', 403);
         return $authUser;
-    }
-
-    private function ok(array $meta = [], string $code = 'OK', string $message = ''): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => true, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => $meta,
-        ]);
-    }
-
-    private function error(string $code, string $message, int $status = 400): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => (object)[],
-        ], $status);
-    }
-
-    private function validationError($v): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => 'VALIDATION', 'message' => 'بيانات غير صالحة',
-            'errors' => $v->errors(), 'meta' => (object)[],
-        ], 422);
     }
 }

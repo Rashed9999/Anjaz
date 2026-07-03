@@ -25,10 +25,12 @@ class _CustomSwitchButtonState extends State<CustomSwitchButton> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () {
+        if (!mounted) return; // AMIAL-FIX-006
         setState(() => isToggled = !widget.isToggled);
         widget.onToggled(widget.isToggled);
       },
       onPanEnd: (b) {
+        if (!mounted) return; // AMIAL-FIX-006
         setState(() => isToggled = !widget.isToggled);
         widget.onToggled(widget.isToggled);
       },

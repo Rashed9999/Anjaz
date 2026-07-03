@@ -332,4 +332,13 @@ class BillPayService
         $percentFee = bcmul($amount, bcdiv((string)($product->fee_percent ?? '0'), '100', 6), 4);
         return MoneyService::normalize(MoneyService::add($fixed, $percentFee));
     }
+
+    /**
+     * AMIAL-WA-003 — معاينة الرسوم قبل التأكيد (للقنوات المحادثية مثل
+     * واتساب) دون تكرار منطق الحساب. wrapper عام فقط حول calculateFee().
+     */
+    public function previewFee(?BillServiceProduct $product, string $amount): string
+    {
+        return $this->calculateFee($product, $amount);
+    }
 }

@@ -52,9 +52,20 @@ class HealthCheckController
         $checks['database'] = $this->checkDatabase();
         if (!$checks['database']['healthy']) $allHealthy = false;
 
-        // 2. Redis (queue + cache)
-        $checks['redis'] = $this->checkRedis();
-        if (!$checks['redis']['healthy']) $allHealthy = false;
+        // 2. Redis (فقط لو كانت البيئة تعتمده فعلاً لـ cache/queue/session —
+        //    AMIAL-DEVOPS-002: بيئة الديمو تستخدم 'database' driver عمداً
+        //    (بلا Redis)، وهو إعداد صالح تماماً في Laravel؛ فرض فشل
+        //    readiness هنا كان يُسقط الفحص دائماً بلا سبب حقيقي)
+        $usesRedis = in_array('redis', [
+            config('cache.default'), config('queue.default'), config('session.driver'),
+        ], true);
+
+        if ($usesRedis) {
+            $checks['redis'] = $this->checkRedis();
+            if (!$checks['redis']['healthy']) $allHealthy = false;
+        } else {
+            $checks['redis'] = ['healthy' => true, 'skipped' => true, 'reason' => 'not_configured'];
+        }
 
         // 3. Storage writable
         $checks['storage'] = $this->checkStorage();

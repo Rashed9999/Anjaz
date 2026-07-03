@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/common/models/config_model.dart';
-import 'package:amyal_pay/features/add_money/controllers/add_money_controller.dart';
 import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amyal_pay/features/transaction_money/controllers/contact_controller.dart';
@@ -19,7 +18,6 @@ import 'package:amyal_pay/util/styles.dart';
 import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_loader_widget.dart';
 import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/features/add_money/widgets/digital_payment_widget.dart';
 import 'package:amyal_pay/features/transaction_money/screens/transaction_confirmation_screen.dart';
 import 'package:amyal_pay/features/transaction_money/widgets/input_box_widget.dart';
 import 'package:amyal_pay/features/transaction_money/widgets/purpose_widget.dart';
@@ -59,9 +57,8 @@ class _TransactionBalanceInputScreenState extends State<TransactionBalanceInputS
     if(widget.transactionType == TransactionType.withdrawRequest) {
       Get.find<TransactionMoneyController>().getWithdrawMethods();
     }
-    Get.find<AddMoneyController>().setPaymentMethod(null, isUpdate: false);
-
     _inputAmountController.addListener(() {
+      if (!mounted) return; // AMIAL-FIX-006
       setState(() {
       });
     });
@@ -282,12 +279,6 @@ class _TransactionBalanceInputScreenState extends State<TransactionBalanceInputS
 
                       ): const PurposeWidget() : const SizedBox(),
 
-                      if(widget.transactionType == TransactionType.addMoney)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: Dimensions.paddingSizeDefault),
-                          child: DigitalPaymentWidget(),
-                        ),
-
                     ],
                   ),
                 );
@@ -308,8 +299,6 @@ class _TransactionBalanceInputScreenState extends State<TransactionBalanceInputS
                         showCustomSnackBarHelper('transaction_amount_must_be'.tr,isError: true);
                       }else {
                         bool inSufficientBalance = false;
-                        bool isPaymentSelect = Get.find<AddMoneyController>().paymentMethod != null;
-
 
 
                         final bool isCheck = widget.transactionType != TransactionType.requestMoney
@@ -335,8 +324,6 @@ class _TransactionBalanceInputScreenState extends State<TransactionBalanceInputS
 
                         if(inSufficientBalance) {
                           showCustomSnackBarHelper('insufficient_balance'.tr, isError: true);
-                        }else if(widget.transactionType == TransactionType.addMoney && !isPaymentSelect){
-                          showCustomSnackBarHelper('please_select_a_payment'.tr, isError: true);
                         } else {
                          _confirmationRoute(amount);
                         }
@@ -345,12 +332,9 @@ class _TransactionBalanceInputScreenState extends State<TransactionBalanceInputS
                     }
                   },
                   backgroundColor: Theme.of(context).colorScheme.secondary,
-                  child: GetBuilder<AddMoneyController>(builder: (addMoneyController) {
-                    return addMoneyController.isLoading ||
-                        transactionMoneyController.isLoading
-                        ? const CircularProgressIndicator()
-                        : const NextButtonWidget(isSubmittable: true);
-                  }),
+                  child: transactionMoneyController.isLoading
+                      ? const CircularProgressIndicator()
+                      : const NextButtonWidget(isSubmittable: true),
                 );
               }
           )
@@ -408,10 +392,7 @@ class _TransactionBalanceInputScreenState extends State<TransactionBalanceInputS
 
   void _confirmationRoute(double amount) {
     final transactionMoneyController = Get.find<TransactionMoneyController>();
-    if(widget.transactionType == TransactionType.addMoney){
-      Get.find<AddMoneyController>().addMoney(amount);
-    }
-    else if(widget.transactionType == TransactionType.withdrawRequest) {
+    if(widget.transactionType == TransactionType.withdrawRequest) {
       String? message;
       WithdrawalMethod? withdrawMethod = transactionMoneyController.withdrawModel!.withdrawalMethods.
       firstWhereOrNull((method) => _selectedMethodId == method.id.toString());

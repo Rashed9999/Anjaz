@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Validator;
  *   POST /api/v1/amial/payment-requests/code/{code}/pay  (دفع الطلب)
  *   POST /api/v1/amial/payment-requests/{id}/cancel  (إلغاء)
  */
-class PaymentRequestController extends Controller
+class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(
         private readonly PaymentRequestService $service,
@@ -134,29 +134,5 @@ class PaymentRequestController extends Controller
         }
 
         return $this->ok(['request' => $cancelled], 'CANCELLED', 'تم الإلغاء');
-    }
-
-    private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => true, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => $meta,
-        ], $status);
-    }
-
-    private function error(string $code, string $message, int $status): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => (object)[],
-        ], $status);
-    }
-
-    private function validationError($v): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => 'VALIDATION_FAILED',
-            'message' => 'بيانات غير صحيحة', 'errors' => $v->errors(), 'meta' => (object)[],
-        ], 422);
     }
 }

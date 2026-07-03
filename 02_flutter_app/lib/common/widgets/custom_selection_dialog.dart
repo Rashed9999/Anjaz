@@ -182,6 +182,7 @@ class _CustomSelectionDialogState extends State<CustomSelectionDialog> {
 
   void _filterElements(String s) {
     s = s.toUpperCase();
+    if (!mounted) return; // AMIAL-FIX-006
     setState(() {
       filteredElements = widget.elements
           .where((e) =>

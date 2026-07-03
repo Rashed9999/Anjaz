@@ -33,6 +33,7 @@ class _CustomLoaderWidgetState extends State<CustomLoaderWidget> with SingleTick
     super.initState();
 
     controller = (widget.controller ?? AnimationController(vsync: this, duration: widget.duration))
+      if (!mounted) return; // AMIAL-FIX-006
       ..addListener(() => setState(() {}))
       ..repeat(reverse: true);
     final animation = CurvedAnimation(parent: controller, curve: Curves.easeInOutCubic);

@@ -47,7 +47,7 @@ use Illuminate\Support\Facades\Validator;
  *   POST /api/v1/amial/merchant/fuel/companies
  *   POST /api/v1/amial/merchant/fuel/companies/{id}/payment
  */
-class FuelStationController extends Controller
+class FuelStationController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(
         private readonly FuelStationService $svc,
@@ -59,7 +59,7 @@ class FuelStationController extends Controller
 
     public function downloadReceipt(Request $request, string $ulid)
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -82,7 +82,7 @@ class FuelStationController extends Controller
 
     public function listCards(Request $request, int $companyId): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -108,7 +108,7 @@ class FuelStationController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -126,7 +126,7 @@ class FuelStationController extends Controller
 
     public function updateCard(Request $request, int $companyId, int $cardId): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -142,7 +142,7 @@ class FuelStationController extends Controller
 
     public function currentShift(Request $request): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -159,7 +159,7 @@ class FuelStationController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -187,7 +187,7 @@ class FuelStationController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -212,7 +212,7 @@ class FuelStationController extends Controller
 
     public function listShifts(Request $request): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -223,7 +223,7 @@ class FuelStationController extends Controller
 
     public function showShift(Request $request, int $id): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -241,7 +241,7 @@ class FuelStationController extends Controller
 
     public function listVarianceRecords(Request $request): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -258,7 +258,7 @@ class FuelStationController extends Controller
 
     public function getStation(Request $request): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -278,7 +278,7 @@ class FuelStationController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -290,7 +290,7 @@ class FuelStationController extends Controller
 
     public function listPumps(Request $request): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -313,7 +313,7 @@ class FuelStationController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -329,7 +329,7 @@ class FuelStationController extends Controller
 
     public function updatePump(Request $request, int $id): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -355,7 +355,7 @@ class FuelStationController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -372,7 +372,7 @@ class FuelStationController extends Controller
 
     public function listProducts(Request $request): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -394,7 +394,7 @@ class FuelStationController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -415,7 +415,7 @@ class FuelStationController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -456,7 +456,7 @@ class FuelStationController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant, $posUserId] = $ctx;
 
@@ -473,7 +473,7 @@ class FuelStationController extends Controller
 
     public function listSales(Request $request): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -499,7 +499,7 @@ class FuelStationController extends Controller
 
     public function showSale(Request $request, string $ulid): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -514,7 +514,7 @@ class FuelStationController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -553,7 +553,7 @@ class FuelStationController extends Controller
 
     public function listCompanies(Request $request): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -576,7 +576,7 @@ class FuelStationController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -596,7 +596,7 @@ class FuelStationController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -619,7 +619,7 @@ class FuelStationController extends Controller
 
     // ============ Helpers ============
 
-    private function resolveMerchant(Request $request): array|JsonResponse
+    private function resolveMerchantPos(Request $request): array|JsonResponse
     {
         $authUser = $request->user();
         $pos = PosUser::where('user_id', $authUser->id)->where('is_active', true)->first();
@@ -633,29 +633,5 @@ class FuelStationController extends Controller
             return $this->error('NOT_A_MERCHANT', 'متاح للتجار وموظفي المحطة فقط', 403);
         }
         return [$authUser, null];
-    }
-
-    private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => true, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => $meta,
-        ], $status);
-    }
-
-    private function error(string $code, string $message, int $status): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => (object)[],
-        ], $status);
-    }
-
-    private function validationError($v): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => 'VALIDATION_FAILED',
-            'message' => 'بيانات غير صحيحة', 'errors' => $v->errors(), 'meta' => (object)[],
-        ], 422);
     }
 }

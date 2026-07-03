@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Validator;
  *   POST /api/v1/amial/merchant/cashier/sales/{id}/settle  (تسوية أجل)
  *   GET  /api/v1/amial/merchant/cashier/report             (تقرير يومي)
  */
-class CashierController extends Controller
+class CashierController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(
         private readonly CashierService $cashier,
@@ -30,7 +30,7 @@ class CashierController extends Controller
 
     public function products(Request $request): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -46,7 +46,7 @@ class CashierController extends Controller
         $v = Validator::make($request->all(), ['barcode' => 'required|string|max:64']);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -73,7 +73,7 @@ class CashierController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -97,7 +97,7 @@ class CashierController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -126,7 +126,7 @@ class CashierController extends Controller
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant, $posUserId] = $ctx;
 
@@ -150,7 +150,7 @@ class CashierController extends Controller
 
     public function settleCredit(Request $request, int $id): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -167,7 +167,7 @@ class CashierController extends Controller
 
     public function report(Request $request): JsonResponse
     {
-        $ctx = $this->resolveMerchant($request);
+        $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
@@ -177,7 +177,7 @@ class CashierController extends Controller
     // ---- helpers ----
 
     /** يرجّع [merchant(User), posUserId(?int)] أو JsonResponse عند الخطأ. */
-    private function resolveMerchant(Request $request): array|JsonResponse
+    private function resolveMerchantPos(Request $request): array|JsonResponse
     {
         $authUser = $request->user();
         $pos = PosUser::where('user_id', $authUser->id)->where('is_active', true)->first();
@@ -192,29 +192,5 @@ class CashierController extends Controller
             return $this->error('NOT_A_MERCHANT', 'الكاشير متاح للتجار وموظفي نقاط البيع فقط', 403);
         }
         return [$authUser, null];
-    }
-
-    private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => true, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => $meta,
-        ], $status);
-    }
-
-    private function error(string $code, string $message, int $status): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => (object)[],
-        ], $status);
-    }
-
-    private function validationError($v): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => 'VALIDATION_FAILED',
-            'message' => 'بيانات غير صحيحة', 'errors' => $v->errors(), 'meta' => (object)[],
-        ], 422);
     }
 }

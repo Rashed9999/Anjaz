@@ -1,0 +1,49 @@
+# أميال باي — .dockerignore
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# أدوات التطوير
+.idea
+.vscode
+*.md
+*.txt
+
+# vendor (يُعاد تثبيته داخل Docker)
+vendor/
+
+# Node modules
+node_modules/
+
+# تطبيق Flutter (ليس جزء من الـ Backend)
+../02_flutter_app/
+
+# ملفّات بيئية حسّاسة (نستخدم .env.demo)
+.env
+.env.local
+.env.production
+
+# Logs وملفّات مؤقّتة
+storage/logs/*.log
+storage/framework/cache/data/
+storage/framework/sessions/
+storage/framework/views/
+bootstrap/cache/*.php
+
+# ملفّات الاختبار
+tests/
+phpunit.xml
+
+# ملفّات النسخ الاحتياطي
+*.bak
+*.swp
+*.sql.gz
+
+# AMIAL-FIX: لا تُخبز مفاتيح Passport أو env التجريبي في الصورة
+storage/oauth-private.key
+storage/oauth-public.key
+storage/*.key
+.env.demo
+.env.*.local

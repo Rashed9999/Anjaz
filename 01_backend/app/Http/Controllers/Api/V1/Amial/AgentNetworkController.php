@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Validator;
 /**
  * AMIAL-AGENT-NETWORK-001 (v2.4) — agent network API.
  */
-class AgentNetworkController extends Controller
+class AgentNetworkController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(
         private readonly AgentNetworkService $network,
@@ -88,27 +88,4 @@ class AgentNetworkController extends Controller
     }
 
     // ============================================================
-    private function ok(array $meta, string $code = 'OK', string $message = 'OK'): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => true, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => $meta,
-        ]);
-    }
-
-    private function error(string $code, string $message, int $status): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => (object)[],
-        ], $status);
-    }
-
-    private function validationError($v): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => 'VALIDATION_FAILED',
-            'message' => 'بيانات غير صحيحة', 'errors' => $v->errors(), 'meta' => (object)[],
-        ], 422);
-    }
 }

@@ -25,6 +25,7 @@ class _DisputeSubmitVerifyDialogState extends State<DisputeSubmitVerifyDialog> {
     super.initState();
 
     _passwordTextController.addListener((){
+      if (!mounted) return; // AMIAL-FIX-006
       setState(() {
 
       });

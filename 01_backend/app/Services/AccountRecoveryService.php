@@ -96,9 +96,16 @@ class AccountRecoveryService
                 ],
             ]);
 
-            // TODO: dispatch SmsModule::send($user->phone, $request->otp_old_phone)
-            //                  SmsModule::send($newPhone, $request->otp_new_phone)
-            // (نتركها هنا للمتصل — كي الخدمة testable بدون SMS provider live)
+            // AMIAL-FIX-002 — إرسال OTP للرقمين القديم والجديد
+            try {
+                \App\CentralLogics\SmsModule::send($user->phone, $request->otp_old_phone);
+                \App\CentralLogics\SmsModule::send($newPhone, $request->otp_new_phone);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('AccountRecovery: OTP send failed', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             return $request;
         });

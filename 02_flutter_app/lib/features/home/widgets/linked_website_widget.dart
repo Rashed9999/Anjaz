@@ -8,7 +8,7 @@ import 'package:amyal_pay/util/images.dart';
 import 'package:amyal_pay/util/styles.dart';
 import 'package:amyal_pay/common/widgets/custom_image_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_ink_well_widget.dart';
-import 'package:amyal_pay/features/add_money/screens/web_screen.dart';
+import 'package:amyal_pay/common/screens/web_screen.dart';
 import 'package:amyal_pay/features/home/widgets/web_site_shimmer_widget.dart';
 
 class LinkedWebsiteWidget extends StatelessWidget {

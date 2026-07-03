@@ -106,8 +106,8 @@ class _CustomFaqExpansionTileState extends State<CustomFaqExpansionTile> with Si
     }
 
     if (kDebugMode) {
-      print(_backgroundColor);
-      print(_heightFactor);
+      // debug print removed — AMIAL-FIX-003
+      // debug print removed — AMIAL-FIX-003
     }
   }
 

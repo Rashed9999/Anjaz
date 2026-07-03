@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Validator;
  *   GET  /api/v1/amial/split-bills/mine                           — حصص العميل المعلّقة
  *   POST /api/v1/amial/split-bills/participants/{id}/pay          — العميل يدفع حصته
  */
-class SplitBillController extends Controller
+class SplitBillController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(
         private readonly SplitBillService $service,
@@ -130,28 +130,4 @@ class SplitBillController extends Controller
     }
 
     // ---- ردود منظّمة ----
-
-    private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => true, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => $meta,
-        ], $status);
-    }
-
-    private function error(string $code, string $message, int $status): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => $code, 'message' => $message,
-            'errors' => (object)[], 'meta' => (object)[],
-        ], $status);
-    }
-
-    private function validationError($v): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => 'VALIDATION_FAILED',
-            'message' => 'بيانات غير صحيحة', 'errors' => $v->errors(), 'meta' => (object)[],
-        ], 422);
-    }
 }

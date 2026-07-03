@@ -6,7 +6,7 @@ import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amyal_pay/util/dimensions.dart';
 import 'package:amyal_pay/util/images.dart';
 import 'package:amyal_pay/common/widgets/custom_image_widget.dart';
-import 'package:amyal_pay/features/add_money/screens/web_screen.dart';
+import 'package:amyal_pay/common/screens/web_screen.dart';
 import 'package:amyal_pay/features/home/widgets/banner_shimmer_widget.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 

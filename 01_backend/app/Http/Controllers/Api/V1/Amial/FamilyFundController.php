@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Validator;
 /**
  * AMIAL-FUND-FAMILY-001 (v0.9-B)
  */
-class FamilyFundController extends Controller
+class FamilyFundController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(
         private readonly FamilyFundService $service,
@@ -252,36 +252,4 @@ class FamilyFundController extends Controller
     }
 
     // Helpers
-    private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => true,
-            'code' => $code,
-            'message' => $message,
-            'errors' => (object)[],
-            'meta' => $meta,
-        ], $status);
-    }
-
-    private function error(string $code, string $message, int $status): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false,
-            'code' => $code,
-            'message' => $message,
-            'errors' => (object)[],
-            'meta' => (object)[],
-        ], $status);
-    }
-
-    private function validationError($v): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false,
-            'code' => 'VALIDATION_FAILED',
-            'message' => 'Invalid input',
-            'errors' => $v->errors(),
-            'meta' => (object)[],
-        ], 422);
-    }
 }

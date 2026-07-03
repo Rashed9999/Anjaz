@@ -197,6 +197,7 @@ class _AddFavNumberScreenState extends State<AddFavNumberScreen> {
       final String? phoneNumber = selectedContact.contact?.phones.first.number.replaceAll(' ', '').replaceAll('-', '');
       final String? countryCode = PhoneNumberHelper.getCountryCode(phoneNumber);
 
+      if (!mounted) return; // AMIAL-FIX-006
       setState(() {
         _countryCode = countryCode ?? _countryCode;
 

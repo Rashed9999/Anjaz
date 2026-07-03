@@ -93,7 +93,7 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
     final defaultColor = color ?? AmyalColors.primary;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () { setState(() => _filterMethod = value); _applyFilter(); },
+      onTap: () { if (mounted) { setState(() => _filterMethod = value); _applyFilter(); } }, // AMIAL-FIX-006
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(

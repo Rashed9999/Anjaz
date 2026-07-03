@@ -1,0 +1,115 @@
+version: "3.9"
+
+# ══════════════════════════════════════════════════════════
+# أميال باي — Production Compose
+#
+# الفرق عن docker-compose.yml (الديمو):
+#   • Redis مُضاف (cache/queue/session — يطابق توقّع HealthCheckController)
+#   • بلا RUN_SEEDERS — لا بيانات تجريبية في الإنتاج أبداً
+#   • MySQL غير مكشوف للشبكة الخارجية (أمان)
+#   • حدود موارد (CPU/Memory) لكل خدمة
+#   • سياسة إعادة تشغيل + حدّ حجم السجلّات (docker log driver)
+#
+# الاستخدام:
+#   cp .env.production.example .env.production
+#   # عدِّل القيم الحقيقية (DB password, APP_KEY, WhatsApp tokens...)
+#   docker compose -f docker-compose.prod.yml up -d --build
+# ══════════════════════════════════════════════════════════
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+
+  amial-mysql:
+    image: mysql:8.0
+    container_name: amial-mysql-prod
+    restart: always
+    env_file: .env.production
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE:      ${DB_DATABASE}
+      MYSQL_USER:          ${DB_USERNAME}
+      MYSQL_PASSWORD:      ${DB_PASSWORD}
+    volumes:
+      - amial_mysql_data_prod:/var/lib/mysql
+      - ./docker/mysql-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # ⚠️ بلا "ports:" هنا عمداً — MySQL لا يُكشَف للشبكة الخارجية.
+    # الوصول للتصحيح: docker exec -it amial-mysql-prod mysql -u root -p
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 1G }
+    logging: *default-logging
+    networks:
+      - amial-net-prod
+
+  amial-redis:
+    image: redis:7-alpine
+    container_name: amial-redis-prod
+    restart: always
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - amial_redis_data_prod:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256M }
+    logging: *default-logging
+    networks:
+      - amial-net-prod
+
+  amial-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    container_name: amial-app-prod
+    restart: always
+    entrypoint: ["/bin/sh", "/var/www/html/docker/entrypoint.prod.sh"]
+    env_file: .env.production
+    environment:
+      DB_HOST: amial-mysql
+      REDIS_HOST: amial-redis
+    volumes:
+      - amial_storage_prod:/var/www/html/storage/app
+      - amial_logs_prod:/var/www/html/storage/logs
+    ports:
+      - "8000:80"   # ضع Nginx/Cloudways reverse proxy أمام هذا المنفذ + SSL
+    depends_on:
+      amial-mysql:
+        condition: service_healthy
+      amial-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health/liveness"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 1.5G }
+    logging: *default-logging
+    networks:
+      - amial-net-prod
+
+networks:
+  amial-net-prod:
+    driver: bridge
+
+volumes:
+  amial_mysql_data_prod:
+  amial_redis_data_prod:
+  amial_storage_prod:
+  amial_logs_prod:

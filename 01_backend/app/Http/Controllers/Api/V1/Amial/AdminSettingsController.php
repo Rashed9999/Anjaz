@@ -32,7 +32,7 @@ use Illuminate\Support\Facades\Validator;
  *   POST /fees/simulate       ← محاكاة رسم قبل الحفظ
  *   POST /fees/{id}/deactivate← تعطيل نسخة
  */
-class AdminSettingsController extends Controller
+class AdminSettingsController extends AmialApiController // AMIAL-FIX-007
 {
     private const SMS_PROVIDERS = ['twilio', 'nexmo', '2factor', 'msg91'];
     private const SMS_FIELDS = [
@@ -279,35 +279,5 @@ class AdminSettingsController extends Controller
             }
         }
         return $incoming;
-    }
-
-    private function isAdmin(?User $user): bool
-    {
-        if (!$user) return false;
-        return $user->role === A::ROLE_ADMIN || $user->type === 1;
-    }
-
-    private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => true, 'code' => $code, 'message' => $message,
-            'errors' => (object) [], 'meta' => $meta,
-        ], $status);
-    }
-
-    private function error(string $code, string $message, int $status): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => $code, 'message' => $message,
-            'errors' => (object) [], 'meta' => (object) [],
-        ], $status);
-    }
-
-    private function validationError($v): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false, 'code' => 'VALIDATION_FAILED',
-            'message' => 'بيانات غير صحيحة', 'errors' => $v->errors(), 'meta' => (object) [],
-        ], 422);
     }
 }

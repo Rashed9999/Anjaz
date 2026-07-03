@@ -1,28 +1,78 @@
-# Dependencies
-/01_backend/vendor/
-/02_flutter_app/.dart_tool/
-/02_flutter_app/build/
-node_modules/
+# ══════════════════════════════════════════════════════════
+# أميال باي — .gitignore (Backend + Flutter monorepo)
+# AMIAL-DEVOPS-003 — لم يكن هذا الملف موجوداً إطلاقاً قبل هذه الجولة
+# ══════════════════════════════════════════════════════════
 
-# Env & secrets
-.env
-.env.*
-!.env.example
-*.key
-storage/*.key
+# ── أسرار البيئة (لا تُرفَع أبداً) ─────────────────────────
+01_backend/.env
+01_backend/.env.production
+01_backend/.env.backup
+01_backend/.env.*.local
+# ملاحظة: .env.example و .env.demo آمنان للرفع عمداً —
+# يحويان قوالب/قيماً تجريبية فقط، بلا أسرار حقيقية.
 
-# Laravel runtime
-/01_backend/storage/*.log
-/01_backend/storage/framework/cache/*
-/01_backend/storage/framework/sessions/*
-/01_backend/storage/framework/views/*
-/01_backend/bootstrap/cache/*
+# ── Laravel Backend ────────────────────────────────────────
+01_backend/vendor/
+01_backend/node_modules/
+01_backend/public/build/
+01_backend/public/hot
+01_backend/storage/*.key
+01_backend/storage/app/*
+!01_backend/storage/app/.gitkeep
+01_backend/storage/framework/cache/data/*
+01_backend/storage/framework/sessions/*
+01_backend/storage/framework/views/*
+01_backend/storage/framework/testing/*
+01_backend/storage/logs/*.log
+!01_backend/storage/logs/.gitkeep
+01_backend/bootstrap/cache/*.php
+!01_backend/bootstrap/cache/.gitkeep
+01_backend/.phpunit.result.cache
+01_backend/Homestead.json
+01_backend/Homestead.yaml
+01_backend/auth.json
+01_backend/oauth-*.key
 
-# Load-test artifacts
-01_backend/loadtests/**/res_*.json
-01_backend/loadtests/**/cres_*.json
-01_backend/loadtests/**/pool*.json
-01_backend/loadtests/**/reports/
+# ── Flutter ─────────────────────────────────────────────────
+02_flutter_app/build/
+02_flutter_app/.dart_tool/
+02_flutter_app/.flutter-plugins
+02_flutter_app/.flutter-plugins-dependencies
+02_flutter_app/.packages
+02_flutter_app/.pub-cache/
+02_flutter_app/.pub/
+02_flutter_app/**/generated_plugin_registrant.dart
+02_flutter_app/android/**/gradle-wrapper.jar
+02_flutter_app/android/.gradle
+02_flutter_app/android/key.properties
+02_flutter_app/android/**/*.keystore
+02_flutter_app/android/**/*.jks
+02_flutter_app/ios/Pods/
+02_flutter_app/ios/.symlinks/
+02_flutter_app/ios/Flutter/Flutter.framework
+02_flutter_app/ios/Flutter/Flutter.podspec
+02_flutter_app/*.iml
 
-# OS
+# ── Docker / أسرار النشر ──────────────────────────────────
+01_backend/docker/*.pem
+01_backend/docker/*.key
+**/docker-compose.override.yml
+
+# ── قواعد بيانات محلّية ────────────────────────────────────
+*.sqlite
+*.sqlite-journal
+00_database/*.sql.gz
+00_database/backups/
+
+# ── IDE / نظام التشغيل ────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
 .DS_Store
+Thumbs.db
+
+# ── نسخ احتياطية عامّة ─────────────────────────────────────
+*.bak
+*.orig
+*.rej

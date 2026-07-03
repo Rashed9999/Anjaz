@@ -55,10 +55,11 @@ class _HomeScreenState extends State<HomeScreen> {
           child:  WelcomeBottomSheet(keys: _getVisibleGlobalKeys(), showCaseContext: context),
         );
 
+        if (!mounted) return; // AMIAL-FIX-006
         setState(() {
           lastGlobalKey = _getVisibleGlobalKeys().last;
           if (kDebugMode) {
-            print("Last Global Key : $lastGlobalKey");
+            // debug print removed — AMIAL-FIX-003
           }
         });
       });
@@ -66,10 +67,11 @@ class _HomeScreenState extends State<HomeScreen> {
     } else if (Get.find<AuthController>().getTourWidgetStatus()){
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ShowCaseWidget.of(context).startShowCase(_getVisibleGlobalKeys());
+        if (!mounted) return; // AMIAL-FIX-006
         setState(() {
           lastGlobalKey = _getVisibleGlobalKeys().last;
           if (kDebugMode) {
-            print("Last Global Key : $lastGlobalKey");
+            // debug print removed — AMIAL-FIX-003
           }
         });
       });

@@ -1,0 +1,97 @@
+# ══════════════════════════════════════════════════════════
+# أميال باي — Production Dockerfile (Multi-stage)
+#
+# الفرق عن Dockerfile الديمو:
+#   • composer install --no-dev --optimize-autoloader (أخفّ، أسرع)
+#   • opcache.validate_timestamps=0 (الكود لا يتغيّر أثناء التشغيل)
+#   • Nginx/Supervisor بإعدادات production hardened منفصلة
+#   • بلا Node/npm (لا حاجة لبناء أصول Mix هنا لو بُنيت مسبقاً في CI)
+# ══════════════════════════════════════════════════════════
+
+# ── Stage 1: بناء الحزم ───────────────────────────────────
+FROM composer:2.7 AS vendor
+
+WORKDIR /app
+COPY composer.json composer.lock ./
+RUN composer install \
+        --no-dev \
+        --no-scripts \
+        --no-autoloader \
+        --ignore-platform-reqs
+
+COPY . .
+RUN composer dump-autoload --optimize --no-dev
+
+# ── Stage 2: صورة التشغيل النهائية ───────────────────────
+FROM php:8.2-fpm-alpine AS production
+
+RUN apk add --no-cache \
+    nginx \
+    supervisor \
+    mysql-client \
+    curl \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    libzip-dev \
+    freetype-dev \
+    oniguruma-dev \
+    icu-dev \
+ && docker-php-ext-configure gd --with-freetype --with-jpeg \
+ && docker-php-ext-install -j$(nproc) \
+        pdo_mysql mbstring exif pcntl bcmath gd zip opcache intl \
+ # AMIAL-FIX: امتداد Redis إلزامي (CACHE/QUEUE/SESSION=redis في الإنتاج)
+ && apk add --no-cache --virtual .redis-build $PHPIZE_DEPS \
+ && pecl install redis \
+ && docker-php-ext-enable redis \
+ && apk del .redis-build \
+ # إزالة أدوات البناء بعد التصريف — يُصغِّر الصورة بشكل ملحوظ
+ && apk del --no-cache libpng-dev libjpeg-turbo-dev libzip-dev \
+        freetype-dev oniguruma-dev icu-dev
+
+# ── PHP config: إنتاجي ───────────────────────────────────
+RUN { \
+    echo "upload_max_filesize=50M"; \
+    echo "post_max_size=50M"; \
+    echo "memory_limit=256M"; \
+    echo "max_execution_time=120"; \
+    echo "expose_php=Off"; \
+    echo "opcache.enable=1"; \
+    echo "opcache.memory_consumption=256"; \
+    echo "opcache.interned_strings_buffer=16"; \
+    echo "opcache.max_accelerated_files=20000"; \
+    # الكود ثابت في صورة الإنتاج — تعطيل فحص التوقيت الزمني للملفّات
+    # يرفع الأداء ملحوظاً (يتطلّب rebuild الصورة عند أيّ تحديث كود،
+    # وهو المتوقّع أصلاً في نشر الحاويات).
+    echo "opcache.validate_timestamps=0"; \
+    } >> /usr/local/etc/php/conf.d/amial-prod.ini
+
+# ── PHP-FPM pool tuning (إنتاجي، بدل الافتراضي) ──────────
+RUN { \
+    echo "[www]"; \
+    echo "pm = dynamic"; \
+    echo "pm.max_children = 20"; \
+    echo "pm.start_servers = 4"; \
+    echo "pm.min_spare_servers = 2"; \
+    echo "pm.max_spare_servers = 8"; \
+    echo "pm.max_requests = 500"; \
+    # AMIAL-FIX: أبقِ متغيّرات البيئة للـ workers — بلا هذا يُفرَّغ env تحت FPM
+    # فتضيع اعتمادات واتساب/الدفع بعد config:cache.
+    echo "clear_env = no"; \
+    } >> /usr/local/etc/php-fpm.d/zz-amial-pool.conf
+
+COPY docker/nginx.prod.conf /etc/nginx/nginx.conf
+COPY docker/supervisord.prod.conf /etc/supervisord.conf
+
+WORKDIR /var/www/html
+COPY --from=vendor /app .
+
+RUN mkdir -p storage/logs storage/framework/{cache/data,sessions,views} \
+             storage/app/public bootstrap/cache \
+ && chmod -R 775 storage bootstrap/cache \
+ && chown -R www-data:www-data storage bootstrap/cache
+
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost/health/liveness || exit 1
+
+CMD ["/bin/sh", "/var/www/html/docker/entrypoint.prod.sh"]

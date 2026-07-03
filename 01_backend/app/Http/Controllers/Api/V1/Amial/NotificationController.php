@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
-use App\Models\Notification;
+use App\Models\AmialNotification;
 use App\Services\NotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
