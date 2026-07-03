@@ -72,7 +72,10 @@ Route::get('/wa/webhook',
 Route::post('/wa/webhook',
     [\App\Http\Controllers\Api\V1\Amial\WhatsappWebhookController::class, 'receive']
 )->name('wa.webhook.receive')
- ->middleware('throttle:120,1') // AMIAL-FIX: سقف لمنع إغراق الويبهوك
+ // AMIAL-WA-STRESS-001: كان 120/د فأسقط 4949 من 5000 رسالة في اختبار الضغط —
+ // Meta تعيد المحاولة ثم تُسقط الرسائل نهائياً وقت الذروة. الحارس الفعلي هو توقيع
+ // HMAC (fail-closed)؛ الـ throttle سقف إغراق ثانوي فقط: 6000/د = 100/ث.
+ ->middleware('throttle:6000,1')
  ->withoutMiddleware([\App\Http\Middleware\VerifyCsrfToken::class]);
 
 // صفحة PIN الآمنة — throttle لمنع تخمين PIN عبر الرابط
