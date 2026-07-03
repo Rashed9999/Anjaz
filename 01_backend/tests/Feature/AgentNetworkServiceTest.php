@@ -142,6 +142,29 @@ class AgentNetworkServiceTest extends TestCase
         $this->assertEquals('50000.0000', (string)$agentLedger->current_balance);
     }
 
+    /** @test AMIAL-FIX(H1): مستخدم عادي/وكيل لا يعتمد تسوية شحن */
+    public function non_admin_cannot_approve_topup()
+    {
+        $agent = $this->makeAgent();
+        $intruder = User::factory()->create(['type' => 2]); // عميل عادي
+        \App\Models\EMoney::create(['user_id' => $agent->id, 'current_balance' => '0']);
+
+        $settlement = $this->service->requestTopup($agent, '10000');
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('لا تملك صلاحية اعتماد');
+        $this->service->approveSettlement($settlement, $intruder);
+    }
+
+    /** @test AMIAL-FIX(H2): مبلغ شحن يتجاوز الحدّ الأقصى يُرفَض */
+    public function topup_above_max_is_rejected()
+    {
+        $agent = $this->makeAgent();
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('الحدّ الأقصى');
+        $this->service->requestTopup($agent, '999999999');
+    }
+
     /** @test */
     public function cannot_approve_already_completed_settlement()
     {

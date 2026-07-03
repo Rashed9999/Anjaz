@@ -47,7 +47,10 @@ class AmialMaintenanceMode
         // الأدمن المصادَق يمرّ دائماً
         try {
             $user = $request->user('api') ?? $request->user();
-            if ($user && ($user->role === 'admin' || (int) ($user->type ?? -1) === 1)) {
+            // AMIAL-FIX(C1): الأدمن = النوع 0 (ADMIN_TYPE) أو دور admin/super_admin —
+            // وليس النوع 1 (الوكيل). الخطأ السابق كان يعفي كل وكيل من الصيانة.
+            if ($user && ((int) ($user->type ?? -1) === 0
+                || in_array($user->role ?? null, ['admin', 'super_admin'], true))) {
                 return $next($request);
             }
         } catch (\Throwable $e) {

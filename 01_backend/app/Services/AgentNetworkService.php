@@ -160,6 +160,12 @@ class AgentNetworkService
         if (bccomp($normalized, '0', 4) <= 0) {
             throw new RuntimeException('المبلغ يجب أن يكون موجباً');
         }
+        // AMIAL-FIX(H2): سقف عقلاني لمبلغ الشحن — يمنع الأخطاء الجسيمة/الإساءة
+        // (خلق رصيد ضخم بضغطة). قابل للضبط عبر الإعداد.
+        $maxTopup = (string) config('amial.agent.max_topup', '100000000');
+        if (bccomp($normalized, $maxTopup, 4) > 0) {
+            throw new RuntimeException("مبلغ الشحن يتجاوز الحدّ الأقصى المسموح ({$maxTopup})");
+        }
 
         $profile = AgentProfile::where('user_id', $agent->id)->first();
         $settledWith = $settledWithId ?? ($profile?->parent_agent_id);
@@ -201,13 +207,21 @@ class AgentNetworkService
      */
     public function approveSettlement(AgentSettlement $settlement, User $approver): AgentSettlement
     {
-        if ($settlement->status !== 'pending') {
-            throw new RuntimeException('التسوية ليست قيد الانتظار');
-        }
+        // AMIAL-FIX(H1): من يعتمد؟ الأدمن، أو الموزّع المُسوّى معه فقط — لا أيّ مستخدم.
+        $this->assertCanApprove($settlement, $approver);
 
-        $amount = (string)$settlement->amount;
+        return DB::transaction(function () use ($settlement, $approver) {
+            // AMIAL-FIX(C4): أعد تحميل التسوية بقفل صفّي ثم افحص الحالة *داخل*
+            // المعاملة — يمنع سباق الاعتماد المزدوج (طلبان يضيفان الرصيد مرّتين).
+            $settlement = AgentSettlement::whereKey($settlement->getKey())
+                ->lockForUpdate()->firstOrFail();
 
-        DB::transaction(function () use ($settlement, $approver, $amount) {
+            if ($settlement->status !== 'pending') {
+                throw new RuntimeException('التسوية ليست قيد الانتظار');
+            }
+
+            $amount = (string) $settlement->amount;
+
             if ($settlement->settlement_type === 'topup') {
                 // الوكيل يستلم رصيد رقمي
                 $this->guard->credit($settlement->agent_user_id, $amount,
@@ -229,7 +243,8 @@ class AgentNetworkService
                     ],
                     idempotencyKey: "agent_topup_{$settlement->settlement_ulid}",
                     createdByUserId: $approver->id,
-                    allowNegative: true,
+                    // AMIAL-FIX(H2): أُزيل allowNegative — قيد الشحن يزيد الاحتياطي
+                    // (مدين لأصل) فلا يصير سالباً؛ إبقاؤه كان يسمح بخلق رصيد بلا غطاء.
                 );
 
                 $settlement->ledger_entry_ulid = $journal->entry_ulid;
@@ -251,9 +266,28 @@ class AgentNetworkService
                 'severity' => 'info',
                 'context' => ['amount' => $amount, 'type' => $settlement->settlement_type],
             ]);
-        });
 
-        return $settlement->fresh();
+            return $settlement->fresh();
+        });
+    }
+
+    /**
+     * AMIAL-FIX(H1): من يحقّ له اعتماد تسوية وكيل؟
+     *   - الأدمن (النوع 0 أو دور admin/super_admin)، أو
+     *   - الموزّع المُسوّى معه تحديداً (settled_with_id === المعتمِد).
+     * أيّ مستخدم آخر (وكيل عادي، عميل) يُرفَض.
+     */
+    private function assertCanApprove(AgentSettlement $settlement, User $approver): void
+    {
+        $isAdmin = (int) ($approver->type ?? -1) === 0
+            || in_array($approver->role ?? null, ['admin', 'super_admin'], true);
+
+        $isSettledDistributor = (int) ($settlement->settled_with_id ?? 0) !== 0
+            && (int) $settlement->settled_with_id === (int) $approver->id;
+
+        if (!$isAdmin && !$isSettledDistributor) {
+            throw new RuntimeException('لا تملك صلاحية اعتماد هذه التسوية');
+        }
     }
 
     // ============================================================

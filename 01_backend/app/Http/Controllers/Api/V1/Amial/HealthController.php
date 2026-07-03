@@ -37,7 +37,11 @@ class HealthController extends AmialApiController // AMIAL-FIX-007
     public function full(Request $request): JsonResponse
     {
         $user = $request->user();
-        if (!$user || (($user->type ?? null) !== 1 && !($user->is_admin ?? false))) {
+        // AMIAL-FIX(C1): الأدمن = النوع 0 أو دور admin/super_admin (كان يفحص النوع 1 = الوكيل)
+        $isAdmin = $user && ((int) ($user->type ?? -1) === 0
+            || in_array($user->role ?? null, ['admin', 'super_admin'], true)
+            || ($user->is_admin ?? false));
+        if (!$isAdmin) {
             return new JsonResponse(['error' => 'forbidden'], 403);
         }
 

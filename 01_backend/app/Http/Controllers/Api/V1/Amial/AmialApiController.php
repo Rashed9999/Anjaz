@@ -103,6 +103,9 @@ abstract class AmialApiController extends Controller
     protected function isAdmin(?User $user): bool
     {
         if (!$user) return false;
-        return (int)($user->type ?? -1) === 1 || (bool)($user->is_admin ?? false);
+        // AMIAL-FIX(C1): الأدمن = النوع 0 (ADMIN_TYPE) أو دور admin/super_admin — وليس
+        // النوع 1 (وهو الوكيل!). الخطأ السابق كان يمنح كل وكيل صلاحية أدمن.
+        return (int) ($user->type ?? -1) === 0
+            || in_array($user->role ?? null, ['admin', 'super_admin'], true);
     }
 }

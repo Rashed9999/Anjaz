@@ -81,7 +81,7 @@ class SubscriptionNotificationTest extends TestCase
     /** @test */
     public function admin_receives_daily_digest(): void
     {
-        $admin = User::factory()->create(['type' => 1]);
+        $admin = User::factory()->create(['type' => 0, 'role' => 'super_admin']);
 
         $job = new CheckExpiringSubscriptionsJob();
         $job->handle(app(\App\Services\SubscriptionService::class));

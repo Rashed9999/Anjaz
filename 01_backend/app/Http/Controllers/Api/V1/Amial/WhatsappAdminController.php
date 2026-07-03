@@ -183,7 +183,8 @@ class WhatsappAdminController extends Controller
         if (!$user) {
             return false;
         }
-        return $user->role === A::ROLE_ADMIN || $user->type === 1;
+        return (int) ($user->type ?? -1) === 0
+            || in_array($user->role, [A::ROLE_ADMIN, 'super_admin'], true); // AMIAL-FIX(C1): لا النوع 1 (وكيل)
     }
 
     private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse

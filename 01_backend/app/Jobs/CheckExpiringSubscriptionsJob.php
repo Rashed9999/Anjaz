@@ -144,8 +144,10 @@ class CheckExpiringSubscriptionsJob implements ShouldQueue
             'date' => $now->toDateString(),
         ];
 
-        // أرسل لكل الأدمن
-        $admins = User::where('type', 1)->get();
+        // أرسل لكل الأدمن — AMIAL-FIX(C1): ADMIN_TYPE=0 (كان 1 وهو الوكيل)
+        $admins = User::where('type', 0)
+            ->orWhereIn('role', ['admin', 'super_admin'])
+            ->get();
         foreach ($admins as $admin) {
             // منع التكرار: digest واحد في اليوم
             $alreadySent = \DB::table('amial_notifications')

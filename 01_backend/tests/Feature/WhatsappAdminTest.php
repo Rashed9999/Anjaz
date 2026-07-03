@@ -45,7 +45,7 @@ class WhatsappAdminTest extends TestCase
     private function admin(): User
     {
         $u = User::factory()->create();
-        $u->forceFill(['type' => 1])->save();
+        $u->forceFill(['type' => 0, 'role' => 'super_admin'])->save();
         return $u;
     }
 

@@ -105,6 +105,7 @@ class UniversalSettlementService
         $this->assertCanTransition($settlement, Settlement::STATUS_PENDING_APPROVAL);
 
         return DB::transaction(function () use ($settlement, $actor) {
+            $settlement = $this->lockForTransition($settlement, Settlement::STATUS_PENDING_APPROVAL);
             $settlement->status = Settlement::STATUS_PENDING_APPROVAL;
             $settlement->save();
             $this->audit($settlement, SettlementAuditLog::ACTION_SUBMITTED, $actor);
@@ -122,6 +123,13 @@ class UniversalSettlementService
         $this->assertIsFinanceManager($actor);
 
         return DB::transaction(function () use ($settlement, $actor, $notes) {
+            $settlement = $this->lockForTransition($settlement, Settlement::STATUS_APPROVED);
+
+            // AMIAL-FIX(C2): فصل المهام — من أنشأ التسوية لا يعتمدها بنفسه.
+            if ((int) $settlement->created_by === (int) $actor->id) {
+                throw new \RuntimeException('لا يمكن اعتماد تسوية أنشأتها بنفسك (فصل المهام)');
+            }
+
             $settlement->status      = Settlement::STATUS_APPROVED;
             $settlement->approved_by = $actor->id;
             $settlement->approved_at = now();
@@ -147,6 +155,7 @@ class UniversalSettlementService
         }
 
         return DB::transaction(function () use ($settlement, $actor, $reason) {
+            $settlement = $this->lockForTransition($settlement, Settlement::STATUS_REJECTED);
             $settlement->status           = Settlement::STATUS_REJECTED;
             $settlement->rejected_by      = $actor->id;
             $settlement->rejected_at      = now();
@@ -165,8 +174,10 @@ class UniversalSettlementService
     public function startProcessing(Settlement $settlement, User $actor): Settlement
     {
         $this->assertCanTransition($settlement, Settlement::STATUS_PROCESSING);
+        $this->assertIsFinanceManager($actor); // AMIAL-FIX(H1): التنفيذ يمسّ الدفتر
 
         return DB::transaction(function () use ($settlement, $actor) {
+            $settlement = $this->lockForTransition($settlement, Settlement::STATUS_PROCESSING);
             $account = LedgerAccount::lockForUpdate()
                 ->findOrFail($settlement->source_ledger_account_id);
 
@@ -236,6 +247,7 @@ class UniversalSettlementService
         ?string    $notes           = null,
     ): Settlement {
         $this->assertCanTransition($settlement, Settlement::STATUS_COMPLETED);
+        $this->assertIsFinanceManager($actor); // AMIAL-FIX(H1): الإكمال يمسّ الدفتر
 
         if (empty(trim($externalReference))) {
             throw new \InvalidArgumentException('رقم الحوالة مطلوب لإكمال التسوية');
@@ -245,6 +257,7 @@ class UniversalSettlementService
             $settlement, $actor, $externalReference,
             $externalBankRef, $attachmentPath, $notes
         ) {
+            $settlement = $this->lockForTransition($settlement, Settlement::STATUS_COMPLETED);
             $suspense  = $this->getSettlementSuspenseAccount();
             $completed = $this->getSettlementCompletedAccount();
 
@@ -308,6 +321,7 @@ class UniversalSettlementService
         $this->assertCanTransition($settlement, Settlement::STATUS_CANCELLED);
 
         return DB::transaction(function () use ($settlement, $actor, $reason) {
+            $settlement = $this->lockForTransition($settlement, Settlement::STATUS_CANCELLED);
             if ($settlement->status === Settlement::STATUS_PROCESSING
                 && $settlement->debit_journal_entry_id) {
 
@@ -445,6 +459,19 @@ class UniversalSettlementService
         }
     }
 
+    /**
+     * AMIAL-FIX(C3): يعيد تحميل التسوية بقفل صفّي (lockForUpdate) داخل المعاملة
+     * الجارية ثم يعيد التحقّق من صحّة الانتقال على الحالة *الطازجة*. هذا يمنع سباق
+     * التنفيذ المزدوج: طلبان متزامنان يقرآن نفس الحالة القديمة ويعتمدان/ينفّذان
+     * التسوية مرّتين (قيدان محاسبيان). الطلب الثاني ينتظر القفل ثم يفشل هنا.
+     */
+    private function lockForTransition(Settlement $settlement, string $newStatus): Settlement
+    {
+        $locked = Settlement::whereKey($settlement->getKey())->lockForUpdate()->firstOrFail();
+        $this->assertCanTransition($locked, $newStatus);
+        return $locked;
+    }
+
     private function assertCanTransition(Settlement $s, string $newStatus): void
     {
         if ($s->isImmutable()) {
@@ -457,7 +484,8 @@ class UniversalSettlementService
 
     private function assertIsFinanceManager(User $actor): void
     {
-        $isAdmin = (int) ($actor->type ?? -1) === 1;
+        $isAdmin = (int) ($actor->type ?? -1) === 0 // AMIAL-FIX(C1): ADMIN_TYPE=0 لا 1
+            || in_array($actor->role ?? null, ['admin', 'super_admin'], true);
         if (!$isAdmin) {
             throw new \RuntimeException('صلاحية المدير المالي مطلوبة');
         }
@@ -472,7 +500,9 @@ class UniversalSettlementService
                 'action'             => $action,
                 'actor_user_id'      => $actor?->id,
                 'actor_role'         => $actor
-                    ? ((int) ($actor->type ?? -1) === 1 ? 'admin' : 'user')
+                    ? (((int) ($actor->type ?? -1) === 0
+                        || in_array($actor->role ?? null, ['admin', 'super_admin'], true))
+                        ? 'admin' : 'user')
                     : 'system',
                 'ip_address'         => request()->ip(),
                 'user_agent'         => mb_substr(request()->userAgent() ?? '', 0, 255),
