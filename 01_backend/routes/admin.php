@@ -89,8 +89,7 @@ Route::group(['as' => 'admin.'], function () {
             Route::get('business-setup', [BusinessSettingsController::class, 'businessIndex'])->name('business-setup');
             Route::post('update-setup', [BusinessSettingsController::class, 'businessSetup'])->name('update-setup');
 
-            Route::get('payment-method', [BusinessSettingsController::class, 'paymentIndex'])->name('payment-method');
-            Route::post('payment-method-update', [BusinessSettingsController::class, 'paymentConfigUpdate'])->name('payment-method-update');
+            // AMIAL-CLEANUP: أُزيلت مسارات بوّابات الدفع الخارجية (صفحتها محذوفة أصلاً)
 
             Route::get('sms-module', [SMSModuleController::class, 'smsIndex'])->name('sms-module');
             Route::post('sms-module-update', [SMSModuleController::class, 'smsConfigUpdate'])->name('sms-module-update');

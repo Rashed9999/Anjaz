@@ -37,7 +37,7 @@ class UpdateController extends Controller
         Helpers::setEnvironmentValue('PURCHASE_CODE', $request['purchase_key']);
         Helpers::setEnvironmentValue('APP_MODE', 'live');
         Helpers::setEnvironmentValue('SOFTWARE_VERSION', '4.8');
-        Helpers::setEnvironmentValue('APP_NAME', '6cash' . time());
+        Helpers::setEnvironmentValue('APP_NAME', 'amial_pay');
 
         $data = $this->actch();
         try {
@@ -424,8 +424,7 @@ class UpdateController extends Controller
             ]);
         }
 
-        //version 4.4
-        $this->insertNewAddonData();
+        // AMIAL-CLEANUP: أُزيل بذر بوّابات الدفع (instamojo/phonepe/cashfree) من التحديث
 
         //version 4.5
         $this->updatedV4_5();
@@ -433,96 +432,6 @@ class UpdateController extends Controller
         return redirect(env('APP_URL'));
     }
 
-    private function insertNewAddonData(): void
-    {
-        $gatewayKeys = ['instamojo', 'phonepe', 'cashfree'];
-        $existingGateways = Setting::whereIn('key_name', $gatewayKeys)->pluck('key_name')->toArray();
-
-        $newGateways = [
-            [
-                'id' => '42a8cad7-6736-11ee-909d-0c7a158e4469',
-                'key_name' => 'instamojo',
-                'live_values' => json_encode([
-                    'gateway' => 'instamojo',
-                    'mode' => 'live',
-                    'status' => 0,
-                    'client_id' => '',
-                    'client_secret' => ''
-                ]),
-                'test_values' => json_encode([
-                    'gateway' => 'instamojo',
-                    'mode' => 'test',
-                    'status' => 0,
-                    'client_id' => '',
-                    'client_secret' => ''
-                ]),
-                'settings_type' => 'payment_config',
-                'mode' => 'test',
-                'is_active' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-                'additional_data' => null,
-            ],
-            [
-                'id' => 'a40991e4-6735-11ee-909d-0c7a158e4469',
-                'key_name' => 'phonepe',
-                'live_values' => json_encode([
-                    'gateway' => 'phonepe',
-                    'mode' => 'live',
-                    'status' => 0,
-                    'merchant_id' => '',
-                    'salt_Key' => '',
-                    'salt_index' => ''
-                ]),
-                'test_values' => json_encode([
-                    'gateway' => 'phonepe',
-                    'mode' => 'test',
-                    'status' => 0,
-                    'merchant_id' => '',
-                    'salt_Key' => '',
-                    'salt_index' => ''
-                ]),
-                'settings_type' => 'payment_config',
-                'mode' => 'test',
-                'is_active' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-                'additional_data' => null,
-            ],
-            [
-                'id' => 'cc90e5f2-6735-11ee-909d-0c7a158e4469',
-                'key_name' => 'cashfree',
-                'live_values' => json_encode([
-                    'gateway' => 'cashfree',
-                    'mode' => 'live',
-                    'status' => 0,
-                    'client_id' => '',
-                    'client_secret' => ''
-                ]),
-                'test_values' => json_encode([
-                    'gateway' => 'cashfree',
-                    'mode' => 'test',
-                    'status' => 0,
-                    'client_id' => '',
-                    'client_secret' => ''
-                ]),
-                'settings_type' => 'payment_config',
-                'mode' => 'test',
-                'is_active' => 0,
-                'created_at' => now(),
-                'updated_at' => now(),
-                'additional_data' => null,
-            ],
-        ];
-
-        $newGateways = array_filter($newGateways, function ($gateway) use ($existingGateways) {
-            return !in_array($gateway['key_name'], $existingGateways);
-        });
-
-        if (!empty($newGateways)) {
-            Setting::insert($newGateways);
-        }
-    }
 
     private function updatedV4_5(): void
     {

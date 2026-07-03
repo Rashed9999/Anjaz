@@ -11,17 +11,8 @@ class VerifyCsrfToken extends Middleware
      *
      * @var array
      */
-    protected $except = [
-        'get-token',
-        'create-payment',
-        'execute-payment',
-        'query-payment',
-        'success',
-        'fail',
-        'success',
-        'pay-paypal',
-        'paypal-status',
-        'paywithrazorpay',
-        'payment-razor'
-    ];
+    // AMIAL-CLEANUP: أُزيلت استثناءات CSRF لعناوين بوّابات الدفع الميتة (6cash):
+    // paypal/razorpay/create-payment… لا وجود لهذه المسارات في أميال باي.
+    // ويبهوك واتساب يستثني CSRF على مستوى المسار نفسه (withoutMiddleware).
+    protected $except = [];
 }

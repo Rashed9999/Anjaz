@@ -23,18 +23,10 @@ class ConfigController extends Controller
             }
         }
 
-        $digitalPaymentMethods = ['ssl_commerz', 'paypal', 'stripe', 'razor_pay', 'senang_pay', 'paystack', 'paymob_accept', 'flutterwave', 'bkash', 'mercadopago', 'phonepe', 'instamojo', 'cashfree'];
-
-        $isPublished = addon_published_status('Gateways');
-        $paymentGateways = collect($this->getPaymentMethods())
-                            ->filter(function ($query) use ($isPublished, $digitalPaymentMethods) {
-                                if (!$isPublished) {
-                                    return in_array($query['gateway'], $digitalPaymentMethods);
-                                } else return $query;
-                            })->map(function ($query) {
-                                $query['label'] = ucwords(str_replace('_', ' ', $query['gateway']));
-                                return $query;
-                            })->values();
+        // AMIAL-CLEANUP: بوّابات الدفع الخارجية (paypal/stripe/paystack…) حُذفت —
+        // أميال باي نظام محفظة داخلي + شبكة وكلاء. القائمة تبقى فارغة (التطبيق
+        // يتوقّع المفتاح) ويمكن ملؤها لاحقاً إن رُبطت بوّابة محلّية.
+        $paymentGateways = [];
 
         return response()->json([
             'company_name' => Helpers::get_business_settings('business_name'),
@@ -109,28 +101,6 @@ class ConfigController extends Controller
         ]);
     }
 
-    private function getPaymentMethods(): array
-    {
-        if (!Schema::hasTable('addon_settings')) {
-            return [];
-        }
-
-        $methods = DB::table('addon_settings')->where('settings_type', 'payment_config')->get();
-        $env = env('APP_ENV') == 'live' ? 'live' : 'test';
-        $credentials = $env . '_values';
-
-        $data = [];
-        foreach ($methods as $method) {
-            $credentialsData = json_decode($method->$credentials);
-            $additionalData = json_decode($method->additional_data);
-            if ($credentialsData?->status == 1) {
-                $data[] = [
-                    'gateway' => $method->key_name,
-                    'gateway_title' => $additionalData?->gateway_title,
-                    'gateway_image' => $additionalData?->gateway_image
-                ];
-            }
-        }
-        return $data;
-    }
+    // AMIAL-CLEANUP: أُزيلت getPaymentMethods() — كانت تقرأ إعدادات بوّابات الدفع
+    // (payment_config) من addon_settings؛ لا بوّابات خارجية في أميال باي.
 }

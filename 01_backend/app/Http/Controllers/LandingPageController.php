@@ -138,7 +138,7 @@ class LandingPageController extends Controller
         $contactMessage->subject = $request->subject;
         $contactMessage->message = $request->message;
         $contactMessage->save();
-        $businessName = Helpers::get_business_settings('business_name') ?? '6Cash';
+        $businessName = Helpers::get_business_settings('business_name') ?? 'Amial Pay';
         $subject = 'Enquiry from ' . $businessName;
 
         try {

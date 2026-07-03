@@ -153,7 +153,7 @@ class InstallController extends Controller
         if (self::checkDatabaseConnection($request->DB_HOST, $request->DB_DATABASE, $request->DB_USERNAME, $request->DB_PASSWORD)) {
             $key = base64_encode(random_bytes(32));
             $lines = [
-                'APP_NAME=6cash' . time(),
+                'APP_NAME=amial_pay',
                 'APP_ENV=live',
                 'APP_KEY=base64:' . $key,
                 'APP_DEBUG=false',
