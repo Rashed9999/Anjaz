@@ -24,9 +24,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(dirname "$SCRIPT_DIR")"
 ENV_FILE="$APP_DIR/.env"
 
-# اقرأ متغيرات من .env
+# اقرأ متغيرات من .env — لكن متغيّرات البيئة المضبوطة مسبقاً لها الأولوية
+# (سلوك 12-factor: ENV > .env؛ يسمح أيضاً بالاختبار المعزول على قاعدة أخرى)
 if [ -f "$ENV_FILE" ]; then
-    export $(grep -v '^#' "$ENV_FILE" | grep -E '^(DB_|BACKUP_|APP_)' | xargs)
+    while IFS='=' read -r k v; do
+        [[ "$k" =~ ^(DB_|BACKUP_|APP_) ]] || continue
+        [[ -z "${!k+x}" ]] && export "$k=$v"
+    done < <(grep -v '^#' "$ENV_FILE" | grep -E '^(DB_|BACKUP_|APP_)')
 fi
 
 # ============================================================

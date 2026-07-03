@@ -28,8 +28,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$(dirname "$SCRIPT_DIR")"
 ENV_FILE="$APP_DIR/.env"
 
+# ENV > .env (متغيّرات البيئة المضبوطة مسبقاً لها الأولوية)
 if [ -f "$ENV_FILE" ]; then
-    export $(grep -v '^#' "$ENV_FILE" | grep -E '^DB_' | xargs)
+    while IFS='=' read -r k v; do
+        [[ "$k" =~ ^DB_ ]] || continue
+        [[ -z "${!k+x}" ]] && export "$k=$v"
+    done < <(grep -v '^#' "$ENV_FILE" | grep -E '^DB_')
 fi
 
 : "${DB_HOST:=127.0.0.1}"
@@ -61,11 +65,15 @@ echo "⚠️  RESTORE WILL REPLACE DATABASE: $DB_DATABASE"
 echo "    Source: $BACKUP_FILE"
 echo "    Host:   $DB_HOST:$DB_PORT"
 echo "============================================================"
-read -p "Type 'CONFIRM RESTORE' to proceed: " confirmation
-
-if [ "$confirmation" != "CONFIRM RESTORE" ]; then
-    echo "Aborted."
-    exit 1
+# RESTORE_ASSUME_YES=1 يتخطّى السؤال (لأتمتة اختبار التعافي/CI فقط)
+if [ "${RESTORE_ASSUME_YES:-0}" = "1" ]; then
+    echo "RESTORE_ASSUME_YES=1 → متابعة بلا سؤال (وضع مؤتمت)"
+else
+    read -p "Type 'CONFIRM RESTORE' to proceed: " confirmation
+    if [ "$confirmation" != "CONFIRM RESTORE" ]; then
+        echo "Aborted."
+        exit 1
+    fi
 fi
 
 # ============================================================

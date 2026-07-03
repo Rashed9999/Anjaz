@@ -131,6 +131,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // AMIAL-OPS-001 — وضع الصيانة المُدار من لوحة الأدمن (يمرّ الأدمن/الدخول/ping)
         $middleware->appendToGroup('api', \App\Http\Middleware\AmialMaintenanceMode::class);
 
+        // AMIAL-SEC-HEADERS-001 — ترويسات أمان لكل استجابة (كشف غيابها اختبار الاختراق)
+        $middleware->appendToGroup('web', \App\Http\Middleware\SecurityHeaders::class);
+        $middleware->appendToGroup('api', \App\Http\Middleware\SecurityHeaders::class);
+
         $middleware->alias([
             'auth' => Authenticate::class,
             'auth.basic' => AuthenticateWithBasicAuth::class,
