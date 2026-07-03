@@ -2,9 +2,6 @@
 
 namespace App\Providers;
 
-use App\Traits\ActivationClass;
-use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
 use App\Traits\AddonHelper;
@@ -12,7 +9,7 @@ use Illuminate\Support\Facades\Config;
 
 class AppServiceProvider extends ServiceProvider
 {
-    use ActivationClass, AddonHelper;
+    use AddonHelper;
 
     /**
      * Register any application services.
@@ -38,20 +35,13 @@ class AppServiceProvider extends ServiceProvider
     /**
      * Bootstrap any application services.
      */
-    public function boot(): RedirectResponse|int
+    public function boot(): void
     {
         Paginator::useBootstrap();
 
-        if (request()->is('admin/auth/login')) {
-            $response = $this->actch();
-            $data = json_decode($response->getContent(), true);
-            if (!$data['active']) {
-                return Redirect::away(base64_decode('aHR0cHM6Ly82YW10ZWNoLmNvbS9zb2Z0d2FyZS1hY3RpdmF0aW9u'))->send();
-            }
-        }
+        // AMIAL-CLEANUP: أُزيلت بوّابة تفعيل 6amtech (كانت تحجب دخول الأدمن وتُحوّله
+        // لـ 6amtech.com/software-activation إن لم يكن «مُفعَّلاً») — إرث ترخيص 6cash.
 
-        Config::set('addon_admin_routes',$this->get_addon_admin_routes());
-
-        return 0;
+        Config::set('addon_admin_routes', $this->get_addon_admin_routes());
     }
 }

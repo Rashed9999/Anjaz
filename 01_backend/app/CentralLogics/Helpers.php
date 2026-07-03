@@ -771,12 +771,8 @@ class Helpers
         return $envValue;
     }
 
-    public static function requestSender(): ?array
-    {
-        $class = new LaravelchkController();
-        $response = $class->actch();
-        return json_decode($response->getContent(),true);
-    }
+    // AMIAL-CLEANUP: أُزيلت requestSender() — كانت تستدعي LaravelchkController (غير
+    // موجود أصلاً، بلا مستدعين) للتحقّق من تفعيل 6amtech. كود ميت/مكسور.
 
     public static function check_customer_transaction_limit(object $user, float $amount, string $type, array $transaction_limits_config): array
     {

@@ -39,9 +39,7 @@ class RouteServiceProvider extends ServiceProvider
                 ->namespace($this->namespace)
                 ->group(base_path('routes/merchant.php'));
 
-            Route::middleware('web')
-                ->namespace($this->namespace)
-                ->group(base_path('routes/install.php'));
+            // AMIAL-CLEANUP: أُزيل تسجيل routes/install.php (معالج تثبيت 6cash)
 
             Route::middleware('web')
                 ->namespace($this->namespace)

@@ -695,17 +695,7 @@ Route::get('/v/{code}', [ReceiptController::class, 'verifyPublic'])
  * });
  */
 
-// ============================================================
-// تعليمات لـ routes/install.php و routes/update.php
-// ============================================================
-/*
- * في routes/web.php أو حيث تُدرج install.php / update.php، التف بـ middleware:
- *
- * Route::middleware(['amial.block-in-production'])->group(function () {
- *     require __DIR__.'/install.php';
- *     require __DIR__.'/update.php';
- * });
- */
+// AMIAL-CLEANUP: أُزيلت تعليمات install.php/update.php (النظام محذوف)
 
 // ============================================================
 // تطبيق middleware على routes المالية القائمة

@@ -21,8 +21,7 @@ use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use App\Http\Middleware\{ActivationCheckMiddleware,
-    AdminMiddleware,
+use App\Http\Middleware\{AdminMiddleware,
     AgentMiddleware,
     Authenticate,
     BlockInProduction,
@@ -33,7 +32,6 @@ use App\Http\Middleware\{ActivationCheckMiddleware,
     EnforceIdempotency,
     EnforceZonePolicy,
     InactiveAuthCheck,
-    InstallationMiddleware,
     EnforceUsageLimit,
     MerchantMiddleware,
     PerUserRateLimit,
@@ -151,8 +149,6 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'agentAuth' => AgentMiddleware::class,
             'trackLastActiveAt' => TrackLastActiveAt::class,
             'inactiveAuthCheck' => InactiveAuthCheck::class,
-            'installation-check' => InstallationMiddleware::class,
-            'actch' => ActivationCheckMiddleware::class,
             'deviceVerify' => DeviceVerifyMiddleware::class,
             'checkDeviceId' => CheckDeviceId::class,
             'merchant' => MerchantMiddleware::class,
