@@ -17,11 +17,9 @@ use App\Http\Controllers\Admin\TransferController;
 use App\Http\Controllers\Admin\WithdrawController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\HelpTopicController;
-use App\Http\Controllers\Admin\SMSModuleController;
 use App\Http\Controllers\Admin\Auth\LoginController;
 use App\Http\Controllers\Admin\WithdrawalController;
 use App\Http\Controllers\Admin\SocialMediaController;
-use App\Http\Controllers\Admin\SystemAddonController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\NotificationController;
 use App\Http\Controllers\Admin\ContactMessageController;
@@ -91,8 +89,8 @@ Route::group(['as' => 'admin.'], function () {
 
             // AMIAL-CLEANUP: أُزيلت مسارات بوّابات الدفع الخارجية (صفحتها محذوفة أصلاً)
 
-            Route::get('sms-module', [SMSModuleController::class, 'smsIndex'])->name('sms-module');
-            Route::post('sms-module-update', [SMSModuleController::class, 'smsConfigUpdate'])->name('sms-module-update');
+            // AMIAL-CLEANUP: أُزيلت مسارات SMS القديمة (6cash) — إعدادات SMS الآن
+            // عبر /api/v1/amial/admin/settings/sms (AdminSettingsController)
 
             Route::get('mail-config', [BusinessSettingsController::class, 'mailConfigIndex'])->name('mail_config');
             Route::get('send-mail-index', [BusinessSettingsController::class, 'testMailIndex'])->name('send_mail_index');
@@ -144,13 +142,7 @@ Route::group(['as' => 'admin.'], function () {
             Route::post('transaction-limits/{transaction_type}', [BusinessSettingsController::class, 'transactionLimitsUpdate'])->name('transaction_limits_update');
         });
 
-        Route::group(['prefix' => 'addon', 'as' => 'addon.'], function () {
-            Route::get('/', [SystemAddonController::class, 'index'])->name('index');
-            Route::post('publish', [SystemAddonController::class, 'publish'])->name('publish');
-            Route::post('activation', [SystemAddonController::class, 'activation'])->name('activation');
-            Route::post('upload', [SystemAddonController::class, 'upload'])->name('upload');
-            Route::post('delete', [SystemAddonController::class, 'deleteAddon'])->name('delete');
-        });
+        // AMIAL-CLEANUP: أُزيلت مجموعة مسارات addon (نظام إضافات 6cash — بلا وحدات)
 
         Route::group(['prefix' => 'merchant-config', 'as' => 'merchant-config.'], function () {
             Route::get('/', [BusinessSettingsController::class, 'merchantConfigIndex'])->name('index');

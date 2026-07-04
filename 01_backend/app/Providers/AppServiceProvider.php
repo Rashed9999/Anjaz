@@ -4,13 +4,9 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
-use App\Traits\AddonHelper;
-use Illuminate\Support\Facades\Config;
 
 class AppServiceProvider extends ServiceProvider
 {
-    use AddonHelper;
-
     /**
      * Register any application services.
      */
@@ -39,9 +35,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Paginator::useBootstrap();
 
-        // AMIAL-CLEANUP: أُزيلت بوّابة تفعيل 6amtech (كانت تحجب دخول الأدمن وتُحوّله
-        // لـ 6amtech.com/software-activation إن لم يكن «مُفعَّلاً») — إرث ترخيص 6cash.
-
-        Config::set('addon_admin_routes', $this->get_addon_admin_routes());
+        // AMIAL-CLEANUP: أُزيلت بوّابة تفعيل 6amtech + إعداد addon_admin_routes
+        // (نظام إضافات 6cash — بلا وحدات، ومستهلِكوه محذوفون).
     }
 }
