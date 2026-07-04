@@ -82,15 +82,15 @@ class UnifiedAuthController extends Controller
 
     private function customerLogin(Request $request): JsonResponse
     {
+        // AMIAL-FIX: دخول العميل بالهاتف + كلمة السرّ (كأغلب المحافظ) — national_id
+        // يخصّ توثيق KYC لا بوّابة الدخول، والتسجيل يجمع الهاتف+كلمة السرّ فقط.
         $v = Validator::make($request->all(), [
-            'national_id' => 'required|string|min:5|max:30',
             'phone' => 'required|string|min:6|max:30',
-            'password' => 'required|string|min:6|max:200',
+            'password' => 'required|string|min:4|max:200',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
         $result = $this->auth->loginCustomer(
-            $request->input('national_id'),
             $request->input('phone'),
             $request->input('password'),
             $request,

@@ -51,13 +51,12 @@ class UnifiedAuthService
      * @return array{user: User, token: string}
      * @throws \RuntimeException
      */
-    public function loginCustomer(string $nationalId, string $phone, string $password, Request $request): array
+    public function loginCustomer(string $phone, string $password, Request $request): array
     {
         $this->guardRateLimit('customer', $phone, $request);
 
-        // البحث عن user بـ national_id + phone (عبر blind_index لو الـ encryption مفعل)
+        // AMIAL-FIX: البحث بالهاتف فقط (national_id يخصّ KYC لا بوّابة الدخول)
         $user = $this->findUserByMultipleCredentials([
-            'national_id' => $nationalId,
             'phone' => $phone,
         ], CUSTOMER_TYPE);
 

@@ -33,9 +33,10 @@ class UnifiedAuthTest extends TestCase
     /** @test */
     public function customer_login_validates_fields()
     {
+        // AMIAL-FIX: الدخول بالهاتف + كلمة السرّ فقط (national_id يخصّ KYC)
         $response = $this->postJson('/api/v1/auth/login', ['role' => 'customer']);
         $response->assertStatus(422)->assertJsonPath('code', 'VALIDATION_FAILED');
-        $response->assertJsonStructure(['errors' => ['national_id', 'phone', 'password']]);
+        $response->assertJsonStructure(['errors' => ['phone', 'password']]);
     }
 
     /** @test */
@@ -43,11 +44,29 @@ class UnifiedAuthTest extends TestCase
     {
         $response = $this->postJson('/api/v1/auth/login', [
             'role' => 'customer',
-            'national_id' => '12345678',
             'phone' => '+967700000099',
             'password' => 'wrong-password',
         ]);
         $response->assertStatus(401)->assertJsonPath('code', 'AUTH_FAILED');
+    }
+
+    /** @test AMIAL-FIX: المسار السعيد — عميل مُسجَّل يدخل بالهاتف + كلمة السرّ */
+    public function customer_can_login_with_phone_and_password()
+    {
+        // إصدار التوكن يستخدم Passport createToken → نحتاج عميل وصول شخصي
+        \Illuminate\Support\Facades\Artisan::call('passport:install', ['--no-interaction' => true]);
+
+        \App\Models\User::factory()->create([
+            'type' => 2, 'role' => 'customer', 'zone_code' => 'SOUTH',
+            'phone' => '967771230001', 'password' => \Illuminate\Support\Facades\Hash::make('1234'),
+            'is_active' => 1,
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'role' => 'customer', 'phone' => '967771230001', 'password' => '1234',
+        ]);
+        $response->assertStatus(200)->assertJsonPath('code', 'LOGIN_OK');
+        $this->assertNotEmpty($response->json('meta.token'));
     }
 
     /** @test */

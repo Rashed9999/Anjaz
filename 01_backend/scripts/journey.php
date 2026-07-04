@@ -103,27 +103,17 @@ foreach ([[$senderId, '1234'], [$recipientId, '5678']] as [$uid, $pin]) {
     EMoney::where('user_id', $uid)->update(['zone_code' => 'SOUTH']);
 }
 
-// ── 2) تسجيل الدخول ──
+// ── 2) تسجيل الدخول (بالهاتف + كلمة السرّ — بعد إصلاح التوحيد) ──
 echo "\n2) تسجيل الدخول\n";
-// اكتشاف: unified login للعميل يطلب national_id، لكن (أ) التسجيل لا يجمعه،
-// (ب) لا يوجد عمود national_id صريح (فقط PII مشفّر)، (ج) سمة HasEncryptedPII غير
-// مفعّلة على User → لا يُملأ national_id_blind_index. النتيجة: العميل المُسجَّل
-// حديثاً لا يستطيع الدخول عبر unified login. نوثّق ذلك، ونتابع بتوكن حقيقي.
 [$lc, $ld] = http($kernel, $app, 'POST', '/api/v1/auth/login', [
-    'role' => 'customer', 'national_id' => 'ANY', 'phone' => '+967771000001', 'password' => 'secret123',
+    'role' => 'customer', 'phone' => '771000001', 'password' => 'secret123',
 ]);
-$loginWorks = $lc < 300 && !empty($ld['data']['token'] ?? $ld['token'] ?? null);
-if (!$loginWorks) {
-    $findings[] = 'unified customer login لا يعمل لعميل مُسجَّل حديثاً: يطلب national_id '
-        . 'لكن لا عمود صريح له وسمة HasEncryptedPII غير مفعّلة (login code=' . $lc . '). '
-        . 'يلزم توحيد التسجيل/الدخول + تفعيل PII قبل الإطلاق.';
+$token = $ld['meta']['token'] ?? $ld['data']['token'] ?? ($ld['token'] ?? null);
+step('unified login بالهاتف + كلمة السرّ يُصدر توكناً', $lc < 300 && !empty($token),
+    'code=' . $lc . ' msg=' . ($ld['message'] ?? ''));
+if (empty($token)) { // احتياط لإكمال الرحلة لو تعذّر
+    $token = User::find($senderId)->createToken('journey')->accessToken;
 }
-step('محاولة unified login (متوقّع فشلها — فجوة تكامل موثّقة)', true,
-    'code=' . $lc . ' (تُعامَل كاكتشاف لا فشل اختبار)');
-
-// توكن Passport حقيقي (كما يحمله التطبيق بعد الدخول) لمتابعة الرحلة
-$token = User::find($senderId)->createToken('journey')->accessToken;
-step('إصدار توكن للمتابعة', !empty($token));
 
 // ── 3) عرض الملفّ الشخصي ──
 echo "\n3) عرض الملفّ الشخصي\n";
