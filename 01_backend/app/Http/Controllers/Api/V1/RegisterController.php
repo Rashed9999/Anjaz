@@ -47,7 +47,10 @@ class RegisterController extends Controller
                 'max:20',
             ],
             'email' => 'nullable|email',
-            'password' => 'required|min:4|max:4'
+            'password' => 'required|min:4|max:4',
+            // AMIAL-SIGNATURE-001: التوقيع الإلكتروني (base64 PNG مرسوم على الشاشة) —
+            // اختياري للتوافق الخلفي، ويُحفَظ مشفّراً كسجلّ قانوني لفتح الحساب.
+            'signature' => 'nullable|string|max:3000000',
         ]);
 
 
@@ -80,7 +83,11 @@ class RegisterController extends Controller
             }
         }
 
-        DB::transaction(function () use ($request, $verify, $phone) {
+        // AMIAL-SIGNATURE-001: التقاط التوقيع الإلكتروني وتخزينه مشفّراً (خارج المعاملة
+        // لأنّه IO ملفّات) — نمرّر المسار للحفظ داخل المعاملة.
+        $signaturePath = $this->storeSignature($request->input('signature'));
+
+        DB::transaction(function () use ($request, $verify, $phone, $signaturePath) {
             $verify?->delete();
 
             $user = $this->user;
@@ -96,6 +103,10 @@ class RegisterController extends Controller
             $user->password = bcrypt($request->password);
             $user->type = CUSTOMER_TYPE;
             $user->referral_id = $request->referral_id ?? null;
+            if ($signaturePath) {
+                $user->signature_encrypted_path = $signaturePath;
+                $user->signature_captured_at = now();
+            }
             $user->save();
 
             $user->find($user->id);
@@ -115,6 +126,48 @@ class RegisterController extends Controller
         }
 
         return response()->json(['message' => 'Registration Successful'], 200);
+    }
+
+    /**
+     * AMIAL-SIGNATURE-001 — يفكّ توقيعاً إلكترونياً (base64 PNG/JPEG، data-URI أو خام)،
+     * يتحقّق أنّه صورة صالحة ضمن حدّ الحجم، ثمّ يخزّنه *مشفّراً* عبر EncryptedFileStorage.
+     *
+     * @return string|null المسار المشفّر، أو null لو غاب/غير صالح.
+     */
+    private function storeSignature(?string $base64): ?string
+    {
+        if (empty($base64)) {
+            return null;
+        }
+
+        // اقبل data-URI (data:image/png;base64,xxxx) أو base64 خام
+        if (preg_match('#^data:image/(png|jpeg|jpg);base64,#i', $base64)) {
+            $base64 = preg_replace('#^data:image/[^;]+;base64,#i', '', $base64);
+        }
+        $binary = base64_decode(strtr(trim($base64), ' ', '+'), true);
+        if ($binary === false || strlen($binary) < 64) {
+            return null; // ليس base64 صالحاً
+        }
+        if (strlen($binary) > 2_097_152) {
+            return null; // > 2MB — توقيع لا يحتاج أكثر
+        }
+        // تأكّد أنّه صورة فعلية (لا ملفّ ضارّ)
+        $info = @getimagesizefromstring($binary);
+        if ($info === false || !in_array($info[2] ?? 0, [IMAGETYPE_PNG, IMAGETYPE_JPEG], true)) {
+            return null;
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'amial_sig_');
+        try {
+            file_put_contents($tmp, $binary);
+            return app(\App\Services\EncryptedFileStorage::class)
+                ->encryptAndStore($tmp, 'signatures');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[Signature] store failed', ['error' => $e->getMessage()]);
+            return null;
+        } finally {
+            @unlink($tmp);
+        }
     }
 
     public function agentRegistration(Request $request): JsonResponse
