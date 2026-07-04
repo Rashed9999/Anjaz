@@ -15,11 +15,13 @@ class ConfigController extends Controller
     {
         $currencySymbol = Currency::where(['currency_code' => Helpers::currency_code()])->first();
 
+        // AMIAL-FIX(DEPLOY): تحصين ضدّ غياب إعداد اللغة (كان foreach على null يُسقط
+        // /api/v1/config بـ500 على تثبيت جديد بلا بذر لغة).
         $languageCode = null;
         $languages = Helpers::get_business_settings('language');
-        foreach($languages as $language) {
-            if($language['default']) {
-                $languageCode = $language['code'];
+        foreach ((is_array($languages) ? $languages : []) as $language) {
+            if (!empty($language['default'])) {
+                $languageCode = $language['code'] ?? null;
             }
         }
 
