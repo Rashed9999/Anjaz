@@ -15,6 +15,9 @@ return [
         'max_topup' => env('AMIAL_AGENT_MAX_TOPUP', '100000000'),
     ],
 
+    // تخطّي كابتشا دخول الأدمن — للعرض/الاختبار فقط (الإنتاج: false)
+    'disable_admin_captcha' => env('AMIAL_DISABLE_ADMIN_CAPTCHA', false),
+
     // ============================================================
     // AMIAL-SAFE-PAYMENT-001 (v1.1)
     // ============================================================

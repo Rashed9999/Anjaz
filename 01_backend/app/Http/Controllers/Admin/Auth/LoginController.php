@@ -65,8 +65,14 @@ class LoginController extends Controller
             'password' => 'required|min:8',
         ]);
 
+        // AMIAL-UI-001: تخطّي الكابتشا في وضع العرض/الاختبار فقط (افتراضياً معطّل —
+        // الإنتاج يُبقي الكابتشا). يُفعَّل عبر AMIAL_DISABLE_ADMIN_CAPTCHA=true.
+        $captchaDisabled = (bool) config('amial.disable_admin_captcha', false);
+
         $recaptcha = Helpers::get_business_settings('recaptcha');
-        if (isset($recaptcha) && $recaptcha['status'] == 1 && !$request?->set_default_captcha) {
+        if ($captchaDisabled) {
+            // لا فحص كابتشا في وضع العرض/الاختبار
+        } elseif (isset($recaptcha) && $recaptcha['status'] == 1 && !$request?->set_default_captcha) {
             $request->validate([
                 'g-recaptcha-response' => [
                     function ($attribute, $value, $fail) {
