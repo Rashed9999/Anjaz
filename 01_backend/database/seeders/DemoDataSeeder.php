@@ -48,27 +48,27 @@ class DemoDataSeeder extends Seeder
         // ── عملاء ────────────────────────────────────────
         $customer1 = $this->createUser([
             'f_name' => 'أحمد',      'l_name' => 'سالم',
-            'phone'  => '967777100001', 'type'  => 3,
+            'phone'  => '967777100001', 'type'  => 2,  // عميل
             'zone_code' => 'SOUTH',
         ], 50000);
 
         $customer2 = $this->createUser([
             'f_name' => 'فاطمة',    'l_name' => 'علي',
-            'phone'  => '967777100002', 'type' => 3,
+            'phone'  => '967777100002', 'type' => 2,  // عميل
             'zone_code' => 'SOUTH',
         ], 25000);
 
         // ── تاجر ────────────────────────────────────────
         $merchant = $this->createUser([
             'f_name' => 'محمّد',    'l_name' => 'الحضرمي',
-            'phone'  => '967777200001', 'type' => 4,
+            'phone'  => '967777200001', 'type' => 3,  // تاجر
             'zone_code' => 'SOUTH',
         ], 200000);
 
         // ── وكيل ────────────────────────────────────────
         $agent = $this->createUser([
             'f_name' => 'عبدالله', 'l_name' => 'العمقي',
-            'phone'  => '967777300001', 'type' => 2,
+            'phone'  => '967777300001', 'type' => 1, 'role' => 'agent',  // وكيل
             'zone_code' => 'SOUTH',
         ], 500000);
 
@@ -93,7 +93,8 @@ class DemoDataSeeder extends Seeder
                 'l_name'   => 'النظام',
                 'phone'    => '967700000000',
                 'password' => Hash::make('Admin@2026'),
-                'type'     => 1,
+                'type'     => 0,            // AMIAL-FIX: ADMIN_TYPE=0 (كان 1 = وكيل)
+                'role'     => 'super_admin',
                 'is_active'=> 1,
             ]
         );
@@ -107,7 +108,6 @@ class DemoDataSeeder extends Seeder
                 'password'         => Hash::make('Pass@2026'),
                 'transaction_pin'  => '1234',   // cast 'hashed' يُطبّق Hash تلقائياً
                 'is_active'        => 1,
-                'referral_code'    => strtoupper(Str::random(8)),
             ])
         );
 
