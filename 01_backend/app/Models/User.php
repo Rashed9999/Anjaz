@@ -28,7 +28,26 @@ class User extends Authenticatable
 {
     // AMIAL-RBAC-001 (fix): ربط نظام الصلاحيات المركزي — يوفّر hasPermission/
     // hasAnyPermission/hasAllPermissions/assignRole التي يعتمد عليها middleware `rbac`.
-    use HasApiTokens, HasFactory, Notifiable, SoftDeletes, HasRoles;
+    use HasApiTokens, HasFactory, Notifiable, SoftDeletes, HasRoles, \App\Traits\HasEncryptedPII;
+
+    // AMIAL-PII-ENCRYPTION-001: تفعيل تشفير البيانات الحساسة (للتجربة المغلقة/الإنتاج).
+    // على الحفظ: يُملأ *_encrypted + *_blind_index + *_masked مع إبقاء العمود الصريح
+    // (v1.3، للتراجع الآمن). على القراءة: يفكّ التشفير أو يرجع للصريح. الأعمدة الصريحة
+    // تبقى فيعمل البحث whereIn(phone/variants) وunified login كما هو.
+    protected $piiFields = [
+        'phone' => [
+            'encrypted' => 'phone_encrypted', 'blind_index' => 'phone_blind_index',
+            'masked' => 'phone_masked', 'normalizer' => 'phone',
+        ],
+        'email' => [
+            'encrypted' => 'email_encrypted', 'blind_index' => 'email_blind_index',
+            'masked' => 'email_masked', 'normalizer' => 'email',
+        ],
+        'national_id' => [
+            'encrypted' => 'national_id_encrypted', 'blind_index' => 'national_id_blind_index',
+            'masked' => 'national_id_masked', 'normalizer' => 'national_id',
+        ],
+    ];
 
     // AMIAL-PIN-SECURITY-001: إضافة transaction_pin و fcm_token للـ hidden
     protected $hidden = [
