@@ -72,7 +72,7 @@ echo "1) تسجيل حساب عميل\n";
     'f_name' => 'أحمد', 'l_name' => 'المخلافي', 'gender' => 'male',
     'dial_country_code' => '+967', 'phone' => '771000001', 'password' => '1234',
 ]);
-$senderId = User::where('phone', '+967771000001')->value('id');
+$senderId = User::whereIn('phone', \App\Support\Phone::variants('771000001'))->value('id');
 step('تسجيل المرسِل ينشئ حساباً + محفظة', $code < 300 && $senderId && EMoney::where('user_id', $senderId)->exists(), "code={$code}");
 
 // المستلِم يُنشأ مباشرةً (طرف مقابل) — لأنّ إعادة استخدام الـkernel في عملية واحدة
@@ -84,21 +84,14 @@ EMoney::create(['user_id' => $recip->id, 'current_balance' => '0', 'charge_earne
 $recipientId = $recip->id;
 step('تجهيز المستلِم', (bool) $recipientId);
 
-// ── إكمال الملفّ للتحويل (PIN + zone) ──
-// اكتشاف: التسجيل يخزّن الهاتف كاملاً (+967771000002) بينما خدمة التحقّق من المستلم
-// تُزيل رمز الدولة قبل البحث (771000002) → لا تجد المستخدم المُسجَّل. نوثّقه ونوحّد
-// الصيغة (بلا رمز دولة) لإتمام الرحلة.
-$findings[] = 'عدم اتّساق صيغة الهاتف: التسجيل يخزّن +967xxxxxxxxx، لكن '
-    . 'RecipientVerificationService يزيل رمز الدولة قبل البحث → لا يجد المستلم. '
-    . 'يلزم توحيد تخزين/بحث الهاتف (صيغة قانونية واحدة).';
+// ── إكمال الملفّ للتحويل (PIN + zone + KYC) — صيغة الهاتف موحّدة الآن (Phone helper) ──
 foreach ([[$senderId, '1234'], [$recipientId, '5678']] as [$uid, $pin]) {
     DB::table('users')->where('id', $uid)->update([
         'zone_code' => 'SOUTH',
         'password' => Hash::make('secret123'),
         'transaction_pin' => Hash::make($pin),
         'verification_level' => 'verified',
-        'kyc_tier' => 2, // مستوى KYC يسمح بالتحويل (التحويل يتطلّب توثيقاً)
-        'phone' => preg_replace('/^\+?967/', '', (string) DB::table('users')->where('id', $uid)->value('phone')),
+        'kyc_tier' => 2, // مستوى KYC يسمح بالتحويل
     ]);
     EMoney::where('user_id', $uid)->update(['zone_code' => 'SOUTH']);
 }

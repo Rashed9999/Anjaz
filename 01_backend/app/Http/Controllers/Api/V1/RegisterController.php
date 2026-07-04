@@ -55,8 +55,8 @@ class RegisterController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $phone = $request->dial_country_code . $request->phone;
-        $customerPhone = $this->user->where(['phone' => $phone])->first();
+        $phone = \App\Support\Phone::canonical($request->dial_country_code . $request->phone);
+        $customerPhone = $this->user->whereIn('phone', \App\Support\Phone::variants($phone))->first();
         if (isset($customerPhone)){
             return response()->json(['errors' => [
                 ['code' => 'phone', 'message' => 'This phone number is already taken.']
@@ -147,8 +147,8 @@ class RegisterController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $phone = $request->dial_country_code . $request->phone;
-        $agentPhone = $this->user->where(['phone' => $phone])->first();
+        $phone = \App\Support\Phone::canonical($request->dial_country_code . $request->phone);
+        $agentPhone = $this->user->whereIn('phone', \App\Support\Phone::variants($phone))->first();
         if (isset($agentPhone)){
             return response()->json(['errors' => [
                 ['code' => 'phone', 'message' => 'This phone number is already taken.']

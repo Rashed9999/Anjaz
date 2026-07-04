@@ -286,11 +286,14 @@ class UnifiedAuthService
             $normalizer = $field === 'phone' ? 'phone' : ($field === 'national_id' ? 'national_id' : null);
             $blindIndex = $this->encryption->blindIndex($value, $normalizer);
 
+            // AMIAL-PHONE-001: للهاتف نطابق كل الصيغ المكافئة (مهما كانت صيغة التخزين)
+            $plainValues = $field === 'phone' ? \App\Support\Phone::variants($value) : [$value];
+
             // ابحث في الـ blind_index column إذا موجود، وإلا fallback للـ plaintext
             $blindCol = "{$field}_blind_index";
-            $query->where(function ($q) use ($field, $value, $blindCol, $blindIndex) {
+            $query->where(function ($q) use ($blindCol, $blindIndex, $field, $plainValues) {
                 $q->where($blindCol, $blindIndex)
-                  ->orWhere($field, $value); // legacy fallback
+                  ->orWhereIn($field, $plainValues); // legacy fallback (كل الصيغ)
             });
         }
 

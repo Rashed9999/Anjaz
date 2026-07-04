@@ -36,13 +36,13 @@ class RecipientVerificationService
      */
     public function verifyRecipient(string $phone, int $senderId): array
     {
-        $phone = $this->normalizePhone($phone);
-
-        $recipient = User::where('phone', $phone)->first();
+        // AMIAL-PHONE-001: نبحث بكل الصيغ المكافئة (مهما كانت صيغة التخزين)
+        $recipient = User::whereIn('phone', \App\Support\Phone::variants($phone))->first();
 
         if (!$recipient) {
             throw new RuntimeException('لا يوجد مستخدم بهذا الرقم');
         }
+        $phone = $recipient->phone; // استخدم الصيغة المخزّنة الفعلية للكاش/العرض
 
         if ($recipient->id === $senderId) {
             throw new RuntimeException('لا يمكنك التحويل لنفسك');
