@@ -33,6 +33,16 @@
                     </a>
                 </li>
                 @includeIf('admin-views.amial.partials._sidebar')
+                <li class="nav-item {{ Request::is('admin/support-center') ? 'active' : '' }}">
+                    <a class="nav-link" href="{{ url('admin/support-center') }}" data-testid="nav-support-center">
+                        <i class="tio-headset nav-icon"></i>{{ translate('Operations Console') }}
+                    </a>
+                </li>
+                <li class="nav-item {{ Request::is('admin/maintenance') ? 'active' : '' }}">
+                    <a class="nav-link" href="{{ url('admin/maintenance') }}" data-testid="nav-maintenance">
+                        <i class="tio-settings nav-icon"></i>{{ translate('Initial Maintenance') }}
+                    </a>
+                </li>
                 <li class="nav-item mt-3">
                     <a class="nav-link" href="{{ route('admin.auth.logout') }}" data-testid="nav-logout">
                         <i class="tio-logout nav-icon"></i>{{ translate('Logout') }}

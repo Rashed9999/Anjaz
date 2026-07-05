@@ -32,6 +32,7 @@ class DatabaseSeeder extends Seeder
             AmlDefaultRulesSeeder::class,
             CharityCategoriesSeeder::class,
             BillProvidersStubSeeder::class,
+            FeatureFlagsSeeder::class,
         ]);
     }
 }

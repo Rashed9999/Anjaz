@@ -145,6 +145,14 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/insider/alerts/{id}/ack', [$c, 'acknowledgeAlert'])->where('id', '[0-9]+')->name('insider.alerts.ack');
         });
 
+        // AMIAL-MAINT-001 — لوحة «الصيانة الأولية» (تشغيل/إيقاف الميزات)
+        Route::prefix('maintenance')->name('maintenance.')->group(function () {
+            $mc = \App\Http\Controllers\Api\V1\Amial\MaintenanceController::class;
+            Route::get('/list', [$mc, 'index'])->name('list');
+            Route::post('/{key}/enable', [$mc, 'enable'])->name('enable');
+            Route::post('/{key}/disable', [$mc, 'disable'])->name('disable');
+        });
+
         // CRITICAL-001-SUBS — إدارة الاشتراكات + Audit Log
         // USE-001 — Revenue Settlement Center
         Route::prefix('settlements')->name('settlements.')->group(function () {
@@ -326,7 +334,8 @@ Route::middleware(['auth:api'])->group(function () {
     });
 
     // -------- AMIAL-SAFE-PAYMENT-001 (v1.1) --------
-    Route::prefix('safe-payments')->name('amial.safe-pay.')->group(function () {
+    // AMIAL-MAINT-001: مثال حيّ — الدفع الآمن يُغلق من لوحة الصيانة (بحارس مالي)
+    Route::prefix('safe-payments')->name('amial.safe-pay.')->middleware('feature:safe_payment')->group(function () {
         Route::get('/', [SafePaymentController::class, 'index'])->name('index');
         Route::post('/', [SafePaymentController::class, 'create'])
             ->middleware(['amial.zone:safe_payment_create', 'amial.rate-limit:safe_pay_create,5,1'])

@@ -69,6 +69,15 @@ Route::group(['as' => 'admin.'], function () {
             Route::get('insider/overview', [$sc, 'insiderOverview'])->name('insider.overview');
             Route::post('insider/alerts/{id}/ack', [$sc, 'acknowledgeAlert'])->where('id', '[0-9]+')->name('insider.alerts.ack');
         });
+
+        // AMIAL-MAINT-001 — لوحة «الصيانة الأولية» (تشغيل/إيقاف الميزات)
+        Route::group(['prefix' => 'maintenance', 'as' => 'maintenance.'], function () {
+            $mc = \App\Http\Controllers\Api\V1\Amial\MaintenanceController::class;
+            Route::get('/', fn () => view('admin-views.maintenance.index'))->name('index');
+            Route::get('list', [$mc, 'index'])->name('list');
+            Route::post('{key}/enable', [$mc, 'enable'])->name('enable');
+            Route::post('{key}/disable', [$mc, 'disable'])->name('disable');
+        });
         Route::get('settings', [DashboardController::class, 'settings'])->name('settings');
         Route::post('settings', [DashboardController::class, 'settingsUpdate'])->name('settings.update');
         Route::post('settings-password', [DashboardController::class, 'settingsPasswordUpdate'])->name('settings-password');

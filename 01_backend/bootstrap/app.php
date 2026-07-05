@@ -172,6 +172,9 @@ $app = Application::configure(basePath: dirname(__DIR__))
 
             // Amial Pay — الحارس المخفي (Application-level IDS)
             'amial.sentinel' => SecuritySentinel::class,
+
+            // AMIAL-MAINT-001 — حارس الميزات (لوحة الصيانة الأولية)
+            'feature' => \App\Http\Middleware\RequireFeatureEnabled::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

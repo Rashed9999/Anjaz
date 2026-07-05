@@ -1,0 +1,33 @@
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { chromium } = require('playwright');
+const BASE = process.env.BASE_URL || 'http://127.0.0.1:8199';
+const SHOTS = process.env.SHOTS_DIR || '/tmp/maint_shots';
+let pass=0, fail=0;
+const step=(n,ok,d='')=>{ok?(pass++,console.log('  ✓ '+n)):(fail++,console.log('  ✗ '+n+' — '+d));};
+const b = await chromium.launch({args:['--no-sandbox']});
+const page = await (await b.newContext({viewport:{width:1400,height:1000}})).newPage();
+console.log('\n=== لوحة الصيانة الأولية — متصفّح حقيقي ===\n');
+await page.goto(BASE+'/admin/auth/login',{waitUntil:'domcontentloaded'});
+await page.fill('[data-testid=login-phone]','967700000000');
+await page.fill('[data-testid=login-password]','Admin@2026');
+await page.fill('[data-testid=login-captcha]','demo');
+await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}).catch(()=>{}),page.click('[data-testid=login-submit]')]);
+step('دخول الأدمن', !page.url().includes('/auth/login'));
+// sidebar link
+const navLink = await page.locator('[data-testid=nav-maintenance]').count();
+step('رابط «الصيانة الأولية» في القائمة الجانبية', navLink>0);
+const r = await page.goto(BASE+'/admin/maintenance',{waitUntil:'domcontentloaded'});
+step('صفحة الصيانة تُصيّر (200)', r&&r.status()===200,'status='+(r&&r.status()));
+await page.waitForSelector('[data-testid^=feature-]',{timeout:8000}).catch(()=>{});
+const cards = await page.locator('[data-testid^=feature-]').count();
+step('بطاقات الميزات تظهر', cards>=10, 'cards='+cards);
+const disableBtns = await page.locator('[data-testid^=disable-]').count();
+step('أزرار الإيقاف موجودة', disableBtns>0, 'btns='+disableBtns);
+// safe_payment card present
+const safe = await page.locator('[data-testid=feature-safe_payment]').count();
+step('بطاقة الدفع الآمن موجودة', safe>0);
+await page.screenshot({path:SHOTS+'/maintenance_panel.png',fullPage:true});
+await b.close();
+console.log(`\n=== النتيجة: ${pass} نجح / ${fail} فشل ===`);
+process.exit(fail?1:0);
