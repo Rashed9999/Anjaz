@@ -45,14 +45,16 @@ class BarcodeLookupController extends Controller
             $context = match ($profile?->business_type) {
                 'wholesale' => 'wholesale',
                 'pharmacy' => 'pharmacy',
-                default => 'wholesale', // fallback
+                // كل قطاعات التجزئة (retail/general/restaurant/…) تستخدم كتالوج الكاشير
+                default => 'retail',
             };
         }
 
         $product = match ($context) {
             'wholesale' => $this->lookupWholesale($merchant->id, $barcode),
             'pharmacy' => $this->lookupPharmacy($merchant->id, $barcode),
-            default => null,
+            'retail' => $this->lookupRetail($merchant, $barcode),
+            default => $this->lookupRetail($merchant, $barcode),
         };
 
         if (!$product) {
@@ -101,6 +103,23 @@ class BarcodeLookupController extends Controller
         return $product ? array_merge($product->toArray(), [
             '_type' => 'pharmacy',
             'available_stock' => (float)$product->current_stock,
+        ]) : null;
+    }
+
+    /**
+     * قطاع التجزئة العام (بقالة/سوبرماركت/مطعم/متجر) — كتالوج الكاشير (MerchantProduct).
+     * نفس مصدر بحث الكاشير (CashierService::findByBarcode) لتوحيد النتيجة.
+     */
+    private function lookupRetail(User $merchant, string $barcode): ?array
+    {
+        $product = \App\Models\MerchantProduct::where('merchant_user_id', $merchant->id)
+            ->where('barcode', $barcode)
+            ->where('is_active', true)
+            ->first();
+
+        return $product ? array_merge($product->toArray(), [
+            '_type' => 'retail',
+            'available_stock' => $product->quantity !== null ? (float)$product->quantity : null,
         ]) : null;
     }
 

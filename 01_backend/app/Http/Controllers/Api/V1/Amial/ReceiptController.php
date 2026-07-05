@@ -161,6 +161,159 @@ class ReceiptController extends Controller
     }
 
     /**
+     * AMIAL-INVOICE-A4-001 — GET /api/v1/amial/receipts/{id}/invoice
+     * يُصيّر فاتورة رسمية بمقاس A4 (وثيقة رسمية: ترويسة، بنود، إجماليات،
+     * مبلغ كتابةً، ختم/توقيع، QR). متزامن.
+     */
+    public function invoice(Request $request, int $id): JsonResponse|StreamedResponse
+    {
+        $receipt = Receipt::where('id', $id)
+            ->where('user_id', $request->user()->id)
+            ->first();
+        if (!$receipt) {
+            return $this->error('RECEIPT_NOT_FOUND', 'Receipt not found', 404);
+        }
+
+        // QR للتحقّق (SVG data-URI — بلا imagick)
+        $qrUrl = null;
+        try {
+            $verifyUrl = rtrim((string) config('app.url'), '/') . '/v/' . $receipt->verification_code;
+            $svg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(120)->margin(0)->generate($verifyUrl);
+            $qrUrl = 'data:image/svg+xml;base64,' . base64_encode($svg);
+        } catch (\Throwable $e) { /* بلا QR — نعرض الرمز نصّاً فقط */ }
+
+        // اسم النشاط
+        $businessName = 'أميال باي';
+        try {
+            $bn = \App\CentralLogics\Helpers::get_business_settings('business_name');
+            if (is_string($bn) && $bn !== '') {
+                $businessName = $bn;
+            }
+        } catch (\Throwable $e) { /* افتراضي */ }
+
+        // بنود الفاتورة إن وُجدت في metadata.items
+        $items = [];
+        $md = $receipt->metadata;
+        if (is_array($md) && !empty($md['items']) && is_array($md['items'])) {
+            $items = $md['items'];
+        }
+
+        if (!class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            return $this->error('PDF_UNAVAILABLE', 'PDF engine not installed', 500);
+        }
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('receipts.a4-invoice', [
+            'receipt' => $receipt,
+            'user' => $receipt->user,
+            'counterparty' => $receipt->counterparty,
+            'qrUrl' => $qrUrl,
+            'businessName' => $businessName,
+            'amountWords' => $this->amountInArabicWords((float) $receipt->net_amount),
+            'items' => $items,
+        ])->setPaper('a4', 'portrait');
+
+        $receipt->incrementDownloadCount();
+
+        return new StreamedResponse(function () use ($pdf) {
+            echo $pdf->output();
+        }, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "inline; filename=\"INV-{$receipt->receipt_number}.pdf\"",
+        ]);
+    }
+
+    /**
+     * يحوّل مبلغاً رقمياً إلى نص عربي (ريال يمني + فلوس).
+     * تغطية عملية حتى المليارات؛ الكسر يُقرّب لخانتين.
+     */
+    private function amountInArabicWords(float $amount): string
+    {
+        $whole = (int) floor($amount);
+        $fraction = (int) round(($amount - $whole) * 100);
+
+        $words = $this->intToArabicWords($whole) . ' ريال يمني';
+        if ($fraction > 0) {
+            $words .= ' و' . $this->intToArabicWords($fraction) . ' فلساً';
+        }
+
+        return 'فقط ' . $words . ' لا غير.';
+    }
+
+    /** تحويل عدد صحيح إلى كلمات عربية. */
+    private function intToArabicWords(int $n): string
+    {
+        if ($n === 0) {
+            return 'صفر';
+        }
+
+        $ones = ['', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة',
+            'عشرة', 'أحد عشر', 'اثنا عشر', 'ثلاثة عشر', 'أربعة عشر', 'خمسة عشر',
+            'ستة عشر', 'سبعة عشر', 'ثمانية عشر', 'تسعة عشر'];
+        $tens = ['', '', 'عشرون', 'ثلاثون', 'أربعون', 'خمسون', 'ستون', 'سبعون', 'ثمانون', 'تسعون'];
+        $hundreds = ['', 'مئة', 'مئتان', 'ثلاثمئة', 'أربعمئة', 'خمسمئة', 'ستمئة', 'سبعمئة', 'ثمانمئة', 'تسعمئة'];
+        $scales = ['', 'ألف', 'مليون', 'مليار', 'تريليون'];
+
+        // معالجة كل مجموعة من 3 خانات
+        $groups = [];
+        while ($n > 0) {
+            $groups[] = $n % 1000;
+            $n = intdiv($n, 1000);
+        }
+
+        $parts = [];
+        for ($g = count($groups) - 1; $g >= 0; $g--) {
+            $val = $groups[$g];
+            if ($val === 0) {
+                continue;
+            }
+
+            $chunk = [];
+            $h = intdiv($val, 100);
+            $rem = $val % 100;
+            if ($h > 0) {
+                $chunk[] = $hundreds[$h];
+            }
+            if ($rem > 0) {
+                if ($rem < 20) {
+                    $chunk[] = $ones[$rem];
+                } else {
+                    $t = intdiv($rem, 10);
+                    $o = $rem % 10;
+                    if ($o > 0) {
+                        $chunk[] = $ones[$o] . ' و' . $tens[$t];
+                    } else {
+                        $chunk[] = $tens[$t];
+                    }
+                }
+            }
+
+            $chunkStr = implode(' و', $chunk);
+
+            // أسماء المقاييس (ألف/مليون...) — تبسيط عملي دون تصريف كامل
+            if ($g > 0) {
+                if ($g === 1) {
+                    // ألف/ألفان/آلاف
+                    if ($val === 1) {
+                        $chunkStr = 'ألف';
+                    } elseif ($val === 2) {
+                        $chunkStr = 'ألفان';
+                    } elseif ($val >= 3 && $val <= 10) {
+                        $chunkStr .= ' آلاف';
+                    } else {
+                        $chunkStr .= ' ألف';
+                    }
+                } else {
+                    $chunkStr .= ' ' . $scales[$g];
+                }
+            }
+
+            $parts[] = $chunkStr;
+        }
+
+        return implode(' و', $parts);
+    }
+
+    /**
      * GET /v/{code}  (public, no auth)
      * تحقق من صحة إيصال عبر QR scan.
      */

@@ -246,6 +246,9 @@ Route::middleware(['auth:api'])->group(function () {
         // AMIAL-THERMAL-001: إيصال حراري 58/80مم لطابعات POS
         Route::get('/{id}/thermal', [ReceiptController::class, 'thermal'])
             ->where('id', '[0-9]+')->name('thermal');
+        // AMIAL-INVOICE-A4-001: فاتورة رسمية A4
+        Route::get('/{id}/invoice', [ReceiptController::class, 'invoice'])
+            ->where('id', '[0-9]+')->name('invoice');
     });
 
     // -------- AMIAL-FUND-FAMILY-001 (v0.9-B) --------
