@@ -43,6 +43,26 @@ Route::group(['as' => 'admin.'], function () {
 
     Route::group(['middleware' => ['admin']], function () {
         Route::get('/', [DashboardController::class, 'dashboard'])->name('dashboard');
+
+        // AMIAL-OPS-CONSOLE-001 — منصة عمليات الموظفين (واجهة ويب + JSON بجلسة الأدمن)
+        Route::group(['prefix' => 'support-center', 'as' => 'support-center.'], function () {
+            $sc = \App\Http\Controllers\Api\V1\Amial\SupportConsoleController::class;
+            Route::get('/', fn () => view('admin-views.support.console'))->name('index');
+            Route::get('search', [$sc, 'search'])->name('search');
+            Route::get('ops-dashboard', [$sc, 'opsDashboard'])->name('ops-dashboard');
+            Route::get('customers/{id}', [$sc, 'customer'])->where('id', '[0-9]+')->name('customers.show');
+            Route::get('customers/{id}/transactions', [$sc, 'customerTransactions'])->where('id', '[0-9]+')->name('customers.transactions');
+            Route::get('transactions/{ref}', [$sc, 'transaction'])->name('transactions.show');
+            Route::post('customers/{id}/freeze', [$sc, 'freeze'])->where('id', '[0-9]+')->name('customers.freeze');
+            Route::post('customers/{id}/reset-pin', [$sc, 'resetPin'])->where('id', '[0-9]+')->name('customers.reset-pin');
+            Route::post('customers/{id}/revoke-sessions', [$sc, 'revokeSessions'])->where('id', '[0-9]+')->name('customers.revoke-sessions');
+            Route::post('customers/{id}/require-kyc', [$sc, 'requireKyc'])->where('id', '[0-9]+')->name('customers.require-kyc');
+            Route::get('tickets', [$sc, 'tickets'])->name('tickets.index');
+            Route::post('tickets', [$sc, 'createTicket'])->name('tickets.create');
+            Route::get('tickets/{id}', [$sc, 'showTicket'])->where('id', '[0-9]+')->name('tickets.show');
+            Route::post('tickets/{id}/update', [$sc, 'updateTicket'])->where('id', '[0-9]+')->name('tickets.update');
+            Route::post('tickets/{id}/note', [$sc, 'addTicketNote'])->where('id', '[0-9]+')->name('tickets.note');
+        });
         Route::get('settings', [DashboardController::class, 'settings'])->name('settings');
         Route::post('settings', [DashboardController::class, 'settingsUpdate'])->name('settings.update');
         Route::post('settings-password', [DashboardController::class, 'settingsPasswordUpdate'])->name('settings-password');

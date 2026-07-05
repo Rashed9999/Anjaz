@@ -20,15 +20,29 @@ class SecurityHeaders
 {
     public function handle(Request $request, Closure $next): Response
     {
+        // AMIAL-OPS-CONSOLE-001: nonce لكل طلب — يسمح فقط بالسكربتات المضمّنة
+        // الموقّعة به (صفحات لوحة الإدارة)، ويبقى منع أي سكربت محقون قائماً.
+        $nonce = base64_encode(random_bytes(16));
+        $request->attributes->set('csp_nonce', $nonce);
+
         $response = $next($request);
+
+        // السكربتات: ذاتية أو موقّعة بالـnonce أو Bootstrap من CDN محدّد فقط.
+        // الأنماط: نسمح بالمضمّنة (خطر منخفض) + CDN. الخطوط/الصور: data: للأيقونات وQR.
+        $csp = "default-src 'self'; "
+            . "script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net; "
+            . "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            . "font-src 'self' data: https://cdn.jsdelivr.net; "
+            . "img-src 'self' data:; "
+            . "connect-src 'self'; "
+            . "frame-ancestors 'none'; base-uri 'self'; object-src 'none'";
 
         $headers = [
             'X-Content-Type-Options' => 'nosniff',
             'X-Frame-Options'        => 'DENY',
             'Referrer-Policy'        => 'strict-origin-when-cross-origin',
             'X-XSS-Protection'       => '0', // معطّل عمداً (المعيار الحديث: CSP لا هذا)
-            'Content-Security-Policy' => "default-src 'self'; frame-ancestors 'none'; "
-                . "base-uri 'self'; object-src 'none'",
+            'Content-Security-Policy' => $csp,
             'Permissions-Policy'     => 'geolocation=(), microphone=(), camera=()',
         ];
 

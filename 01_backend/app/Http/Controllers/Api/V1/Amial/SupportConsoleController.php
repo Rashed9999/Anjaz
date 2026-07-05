@@ -1,0 +1,708 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1\Amial;
+
+use App\Http\Controllers\Controller;
+use App\Support\Access\AccessConstants as A;
+use App\Models\AuditDecision;
+use App\Models\Dispute;
+use App\Models\EMoney;
+use App\Models\Receipt;
+use App\Models\SupportTicket;
+use App\Models\SupportTicketEvent;
+use App\Models\Transaction;
+use App\Models\User;
+use App\Services\AuditService;
+use App\Support\Phone;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * AMIAL-OPS-CONSOLE-001 — منصة عمليات الموظفين (Customer Operations Console).
+ *
+ * ما يحتاجه موظف خدمة العملاء في بنك عند اتصال العميل:
+ *   1. بحث موحّد: هاتف / رقم حساب / رقم عملية / رقم إيصال / اسم.
+ *   2. ملف العميل 360°: رصيد، آخر عمليات، KYC، حالة PIN، جلسات، آخر نشاط.
+ *   3. فحص عملية: حالتها، أطرافها، خطّها الزمني (إيصال/نزاع/قرارات تدقيق).
+ *   4. إجراءات تحقّق: تجميد مؤقت، إعادة تعيين PIN، إلغاء الجلسات، طلب KYC.
+ *      كل إجراء يتطلب سبباً ويُسجَّل في سجل التدقيق.
+ *   5. تذاكر النزاعات: كل بلاغ = تذكرة برقم + مسؤول + خط زمني.
+ *   6. لوحة مراقبة النظام: عمليات الآن، الفاشلة، الطوابير، POS النشطة.
+ */
+class SupportConsoleController extends Controller
+{
+    public function __construct(
+        private readonly AuditService $audit,
+    ) {}
+
+    // ==================== 1) البحث الموحّد ====================
+
+    /**
+     * GET /admin/support/search?q=
+     * يبحث في: هواتف (بكل الصيغ)، معرّف مستخدم، أسماء، رقم عملية، رقم إيصال.
+     */
+    public function search(Request $request): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $q = trim((string) $request->query('q', ''));
+        if (mb_strlen($q) < 2) {
+            return $this->error('QUERY_TOO_SHORT', 'أدخل حرفين على الأقل للبحث', 422);
+        }
+
+        $users = collect();
+        $transactions = collect();
+        $receipts = collect();
+
+        // — رقم عملية (ULID/ref) أو رقم إيصال
+        if (preg_match('/^[A-Za-z0-9\-_]{6,40}$/', $q)) {
+            $transactions = Transaction::where('transaction_id', $q)
+                ->orWhere('ref_trans_id', $q)
+                ->limit(5)->get();
+
+            $receipts = Receipt::where('receipt_number', $q)
+                ->orWhere('verification_code', strtoupper($q))
+                ->limit(5)->get();
+        }
+
+        // — هاتف بكل الصيغ المكافئة
+        $phoneDigits = preg_replace('/\D+/', '', $q);
+        if (strlen($phoneDigits) >= 7) {
+            $users = User::whereIn('phone', Phone::variants($phoneDigits))->limit(10)->get();
+        }
+
+        // — معرّف مستخدم رقمي
+        if ($users->isEmpty() && ctype_digit($q)) {
+            $users = User::where('id', (int) $q)->get();
+        }
+
+        // — اسم (جزئي)
+        if ($users->isEmpty() && $transactions->isEmpty() && $receipts->isEmpty()) {
+            $users = User::where('f_name', 'like', "%{$q}%")
+                ->orWhere('l_name', 'like', "%{$q}%")
+                ->limit(10)->get();
+        }
+
+        return $this->ok([
+            'query' => $q,
+            'users' => $users->map(fn($u) => $this->userSummary($u))->values(),
+            'transactions' => $transactions->map(fn($t) => $this->txSummary($t))->values(),
+            'receipts' => $receipts->map(fn($r) => [
+                'id' => $r->id,
+                'receipt_number' => $r->receipt_number,
+                'receipt_type' => $r->receipt_type,
+                'amount' => $r->amount,
+                'user_id' => $r->user_id,
+                'status' => $r->status,
+                'issued_at' => $r->issued_at,
+            ])->values(),
+        ]);
+    }
+
+    // ==================== 2) ملف العميل 360° ====================
+
+    /** GET /admin/support/customers/{id} */
+    public function customer(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $user = User::find($id);
+        if (!$user) {
+            return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
+        }
+
+        $wallet = EMoney::where('user_id', $user->id)->first();
+
+        $activeSessions = (int) DB::table('oauth_access_tokens')
+            ->where('user_id', $user->id)
+            ->where('revoked', false)
+            ->where(function ($q) {
+                $q->whereNull('expires_at')->orWhere('expires_at', '>', now());
+            })
+            ->count();
+
+        $lastLogin = DB::table('oauth_access_tokens')
+            ->where('user_id', $user->id)
+            ->orderByDesc('created_at')
+            ->value('created_at');
+
+        $recentTx = Transaction::where('user_id', $user->id)
+            ->orderByDesc('id')->limit(10)->get()
+            ->map(fn($t) => $this->txSummary($t))->values();
+
+        $openTickets = SupportTicket::where('user_id', $user->id)
+            ->whereNotIn('status', ['resolved', 'closed'])->count();
+
+        // آخر قرارات التدقيق المتعلقة به (لموظف الدعم رؤية القرارات الأمنية)
+        $recentAudit = AuditDecision::where('subject_id', (string) $user->id)
+            ->orderByDesc('id')->limit(5)
+            ->get(['action', 'decision_code', 'reason', 'severity', 'created_at']);
+
+        return $this->ok([
+            'profile' => $this->userSummary($user) + [
+                'email' => $user->email,
+                'zone_code' => $user->zone_code,
+                'created_at' => $user->created_at,
+                'last_active_at' => $user->last_active_at,
+            ],
+            'wallet' => [
+                'current_balance' => $wallet?->current_balance,
+                'pending_balance' => $wallet?->pending_balance,
+                'held_balance' => $wallet?->held_balance,
+                'exists' => (bool) $wallet,
+            ],
+            'kyc' => [
+                'is_verified' => (bool) $user->is_kyc_verified,
+                'tier' => $user->kyc_tier,
+                'tier_updated_at' => $user->kyc_tier_updated_at,
+            ],
+            'pin' => [
+                'is_set' => !empty($user->transaction_pin),
+                'requires_setup' => (bool) ($user->requires_pin_setup ?? false),
+                'failed_attempts' => (int) ($user->pin_failed_attempts ?? 0),
+                'locked_until' => $user->pin_locked_until,
+            ],
+            'security' => [
+                'is_active' => (bool) $user->is_active,
+                'is_temp_blocked' => (bool) ($user->is_temp_blocked ?? false),
+                'temp_block_time' => $user->temp_block_time,
+                'active_sessions' => $activeSessions,
+                'last_token_issued_at' => $lastLogin,
+            ],
+            'recent_transactions' => $recentTx,
+            'open_tickets' => $openTickets,
+            'recent_audit' => $recentAudit,
+        ]);
+    }
+
+    /** GET /admin/support/customers/{id}/transactions */
+    public function customerTransactions(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        if (!User::where('id', $id)->exists()) {
+            return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
+        }
+
+        $q = Transaction::where('user_id', $id)->orderByDesc('id');
+        if ($request->filled('type')) {
+            $q->where('transaction_type', $request->query('type'));
+        }
+
+        $page = $q->paginate(min(50, (int) $request->query('per_page', 20)));
+
+        return $this->ok([
+            'transactions' => collect($page->items())->map(fn($t) => $this->txSummary($t))->values(),
+            'pagination' => [
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'total' => $page->total(),
+            ],
+        ]);
+    }
+
+    // ==================== 3) فحص عملية + الخط الزمني ====================
+
+    /** GET /admin/support/transactions/{ref} */
+    public function transaction(Request $request, string $ref): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $tx = Transaction::where('transaction_id', $ref)
+            ->orWhere('ref_trans_id', $ref)
+            ->first();
+        if (!$tx && ctype_digit($ref)) {
+            $tx = Transaction::find((int) $ref);
+        }
+        if (!$tx) {
+            return $this->error('TX_NOT_FOUND', 'العملية غير موجودة', 404);
+        }
+
+        // الخط الزمني: إنشاء + إيصال + نزاعات + قرارات تدقيق
+        $timeline = [];
+        $timeline[] = [
+            'at' => $tx->created_at,
+            'event' => 'transaction_created',
+            'detail' => "نوع: {$tx->transaction_type} — مدين: {$tx->debit} / دائن: {$tx->credit}",
+        ];
+
+        $receipt = Receipt::where('reference_transaction_id', $tx->transaction_id ?? '')->first();
+        if ($receipt) {
+            $timeline[] = [
+                'at' => $receipt->created_at,
+                'event' => 'receipt_issued',
+                'detail' => "إيصال {$receipt->receipt_number} — حالة: {$receipt->status}",
+            ];
+        }
+
+        $disputes = Dispute::where('transaction_id', $tx->id)
+            ->orWhere('trx_id', (string) ($tx->transaction_id ?? ''))
+            ->get();
+        foreach ($disputes as $d) {
+            $timeline[] = [
+                'at' => $d->created_at,
+                'event' => 'dispute_filed',
+                'detail' => "نزاع #{$d->id} — حالة: {$d->status}",
+            ];
+        }
+
+        $audits = AuditDecision::where('transaction_id', (string) ($tx->transaction_id ?? ''))
+            ->orderBy('id')->limit(20)
+            ->get(['action', 'decision_code', 'reason', 'severity', 'created_at']);
+        foreach ($audits as $a) {
+            $timeline[] = [
+                'at' => $a->created_at,
+                'event' => 'audit_decision',
+                'detail' => "{$a->action} → {$a->decision_code}" . ($a->reason ? " ({$a->reason})" : ''),
+            ];
+        }
+
+        $tickets = SupportTicket::where('transaction_ref', (string) ($tx->transaction_id ?? '—'))->get();
+        foreach ($tickets as $t) {
+            $timeline[] = [
+                'at' => $t->created_at,
+                'event' => 'ticket_opened',
+                'detail' => "تذكرة {$t->ticket_number} — حالة: {$t->status}",
+            ];
+        }
+
+        usort($timeline, fn($x, $y) => strcmp((string) $x['at'], (string) $y['at']));
+
+        return $this->ok([
+            'transaction' => $this->txSummary($tx) + [
+                'from_user_id' => $tx->from_user_id,
+                'to_user_id' => $tx->to_user_id,
+                'charge' => $tx->charge,
+                'balance_after' => $tx->balance,
+                'zone_code' => $tx->zone_code,
+                'decision_code' => $tx->decision_code,
+                'decision_reason' => $tx->decision_reason,
+                'note' => $tx->note,
+                'idempotency_key' => $tx->idempotency_key,
+            ],
+            'receipt' => $receipt ? [
+                'id' => $receipt->id,
+                'receipt_number' => $receipt->receipt_number,
+                'status' => $receipt->status,
+            ] : null,
+            'disputes' => $disputes->map(fn($d) => [
+                'id' => $d->id, 'status' => $d->status, 'created_at' => $d->created_at,
+            ])->values(),
+            'timeline' => $timeline,
+        ]);
+    }
+
+    // ==================== 4) إجراءات التحقّق (مُدقَّقة) ====================
+
+    /** POST /admin/support/customers/{id}/freeze  {reason, unfreeze?} */
+    public function freeze(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+        if ($resp = $this->requireReason($request)) return $resp;
+
+        $user = User::find($id);
+        if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
+
+        $unfreeze = (bool) $request->input('unfreeze', false);
+        $user->is_temp_blocked = !$unfreeze;
+        $user->temp_block_time = $unfreeze ? null : now();
+        $user->save();
+
+        $this->auditAction($request, $user, $unfreeze ? 'SUPPORT_UNFREEZE_WALLET' : 'SUPPORT_FREEZE_WALLET');
+
+        return $this->ok([
+            'user_id' => $user->id,
+            'is_temp_blocked' => (bool) $user->is_temp_blocked,
+        ], 'OK', $unfreeze ? 'تم فك التجميد' : 'تم تجميد الحساب مؤقتاً');
+    }
+
+    /** POST /admin/support/customers/{id}/reset-pin  {reason} */
+    public function resetPin(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+        if ($resp = $this->requireReason($request)) return $resp;
+
+        $user = User::find($id);
+        if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
+
+        $user->transaction_pin = null;
+        $user->requires_pin_setup = true;
+        $user->pin_failed_attempts = 0;
+        $user->pin_locked_until = null;
+        $user->save();
+
+        $this->auditAction($request, $user, 'SUPPORT_RESET_PIN');
+
+        return $this->ok(['user_id' => $user->id], 'OK', 'تمت إعادة تعيين PIN — سيُطلب من العميل تعيين رمز جديد');
+    }
+
+    /** POST /admin/support/customers/{id}/revoke-sessions  {reason} */
+    public function revokeSessions(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+        if ($resp = $this->requireReason($request)) return $resp;
+
+        $user = User::find($id);
+        if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
+
+        $tokenIds = DB::table('oauth_access_tokens')
+            ->where('user_id', $user->id)->where('revoked', false)
+            ->pluck('id');
+
+        DB::table('oauth_access_tokens')->whereIn('id', $tokenIds)->update(['revoked' => true]);
+        DB::table('oauth_refresh_tokens')->whereIn('access_token_id', $tokenIds)->update(['revoked' => true]);
+
+        $this->auditAction($request, $user, 'SUPPORT_REVOKE_SESSIONS', ['revoked_tokens' => count($tokenIds)]);
+
+        return $this->ok([
+            'user_id' => $user->id,
+            'revoked_sessions' => count($tokenIds),
+        ], 'OK', 'تم إنهاء كل الجلسات');
+    }
+
+    /** POST /admin/support/customers/{id}/require-kyc  {reason} */
+    public function requireKyc(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+        if ($resp = $this->requireReason($request)) return $resp;
+
+        $user = User::find($id);
+        if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
+
+        $user->is_kyc_verified = false;
+        $user->save();
+
+        $this->auditAction($request, $user, 'SUPPORT_REQUIRE_KYC');
+
+        return $this->ok(['user_id' => $user->id], 'OK', 'سيُطلب من العميل رفع وثائق الهوية مجدداً');
+    }
+
+    // ==================== 5) تذاكر النزاعات ====================
+
+    /** GET /admin/support/tickets?status=&assigned_to=&q= */
+    public function tickets(Request $request): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $q = SupportTicket::with('user:id,f_name,l_name,phone')->orderByDesc('id');
+
+        if ($request->filled('status')) $q->where('status', $request->query('status'));
+        if ($request->filled('assigned_to')) $q->where('assigned_admin_id', (int) $request->query('assigned_to'));
+        if ($request->filled('category')) $q->where('category', $request->query('category'));
+        if ($request->filled('q')) {
+            $s = $request->query('q');
+            $q->where(fn($w) => $w->where('ticket_number', 'like', "%{$s}%")
+                ->orWhere('subject', 'like', "%{$s}%")
+                ->orWhere('transaction_ref', 'like', "%{$s}%"));
+        }
+
+        $page = $q->paginate(min(50, (int) $request->query('per_page', 20)));
+
+        return $this->ok([
+            'tickets' => $page->items(),
+            'pagination' => [
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'total' => $page->total(),
+            ],
+        ]);
+    }
+
+    /** POST /admin/support/tickets  {user_id, subject, category?, priority?, transaction_ref?, description?} */
+    public function createTicket(Request $request): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $data = $request->validate([
+            'user_id' => 'required|integer|exists:users,id',
+            'subject' => 'required|string|max:200',
+            'category' => 'nullable|string|in:' . implode(',', SupportTicket::CATEGORIES),
+            'priority' => 'nullable|string|in:' . implode(',', SupportTicket::PRIORITIES),
+            'transaction_ref' => 'nullable|string|max:40',
+            'description' => 'nullable|string|max:5000',
+        ]);
+
+        $admin = $request->user();
+
+        $ticket = DB::transaction(function () use ($data, $admin) {
+            $ticket = SupportTicket::create([
+                'ticket_number' => SupportTicket::nextTicketNumber(),
+                'user_id' => $data['user_id'],
+                'opened_by_admin_id' => $admin->id,
+                'transaction_ref' => $data['transaction_ref'] ?? null,
+                'category' => $data['category'] ?? 'other',
+                'priority' => $data['priority'] ?? 'normal',
+                'status' => 'open',
+                'subject' => $data['subject'],
+                'description' => $data['description'] ?? null,
+            ]);
+
+            SupportTicketEvent::create([
+                'ticket_id' => $ticket->id,
+                'admin_id' => $admin->id,
+                'event_type' => 'created',
+                'new_value' => 'open',
+                'note' => $ticket->subject,
+            ]);
+
+            return $ticket;
+        });
+
+        $this->audit->record([
+            'actor_type' => 'admin',
+            'actor_user_id' => $admin->id,
+            'subject_type' => 'support_ticket',
+            'subject_id' => (string) $ticket->id,
+            'action' => 'SUPPORT_TICKET_CREATED',
+            'decision_code' => 'OK',
+            'reason' => $ticket->subject,
+        ]);
+
+        return $this->ok(['ticket' => $ticket->fresh()], 'OK', 'تم فتح التذكرة', 201);
+    }
+
+    /** GET /admin/support/tickets/{id} — مع الخط الزمني الكامل */
+    public function showTicket(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $ticket = SupportTicket::with([
+            'user:id,f_name,l_name,phone',
+            'assignee:id,f_name,l_name',
+            'events.admin:id,f_name,l_name',
+        ])->find($id);
+
+        if (!$ticket) return $this->error('TICKET_NOT_FOUND', 'التذكرة غير موجودة', 404);
+
+        return $this->ok(['ticket' => $ticket]);
+    }
+
+    /** POST /admin/support/tickets/{id}/update  {status?, assigned_admin_id?, priority?, resolution_note?} */
+    public function updateTicket(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $ticket = SupportTicket::find($id);
+        if (!$ticket) return $this->error('TICKET_NOT_FOUND', 'التذكرة غير موجودة', 404);
+
+        $data = $request->validate([
+            'status' => 'nullable|string|in:' . implode(',', SupportTicket::STATUSES),
+            'assigned_admin_id' => 'nullable|integer|exists:users,id',
+            'priority' => 'nullable|string|in:' . implode(',', SupportTicket::PRIORITIES),
+            'resolution_note' => 'nullable|string|max:5000',
+        ]);
+
+        $admin = $request->user();
+
+        DB::transaction(function () use ($ticket, $data, $admin) {
+            if (isset($data['assigned_admin_id']) && (int) $data['assigned_admin_id'] !== (int) $ticket->assigned_admin_id) {
+                SupportTicketEvent::create([
+                    'ticket_id' => $ticket->id,
+                    'admin_id' => $admin->id,
+                    'event_type' => 'assigned',
+                    'old_value' => (string) ($ticket->assigned_admin_id ?? ''),
+                    'new_value' => (string) $data['assigned_admin_id'],
+                ]);
+                $ticket->assigned_admin_id = $data['assigned_admin_id'];
+            }
+
+            if (isset($data['priority']) && $data['priority'] !== $ticket->priority) {
+                SupportTicketEvent::create([
+                    'ticket_id' => $ticket->id,
+                    'admin_id' => $admin->id,
+                    'event_type' => 'priority_changed',
+                    'old_value' => $ticket->priority,
+                    'new_value' => $data['priority'],
+                ]);
+                $ticket->priority = $data['priority'];
+            }
+
+            if (isset($data['status']) && $data['status'] !== $ticket->status) {
+                SupportTicketEvent::create([
+                    'ticket_id' => $ticket->id,
+                    'admin_id' => $admin->id,
+                    'event_type' => 'status_changed',
+                    'old_value' => $ticket->status,
+                    'new_value' => $data['status'],
+                    'note' => $data['resolution_note'] ?? null,
+                ]);
+                $ticket->status = $data['status'];
+                if ($data['status'] === 'resolved') $ticket->resolved_at = now();
+                if ($data['status'] === 'closed') $ticket->closed_at = now();
+            }
+
+            if (isset($data['resolution_note'])) {
+                $ticket->resolution_note = $data['resolution_note'];
+            }
+
+            $ticket->save();
+        });
+
+        return $this->ok(['ticket' => $ticket->fresh(['events'])], 'OK', 'تم تحديث التذكرة');
+    }
+
+    /** POST /admin/support/tickets/{id}/note  {note} */
+    public function addTicketNote(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $ticket = SupportTicket::find($id);
+        if (!$ticket) return $this->error('TICKET_NOT_FOUND', 'التذكرة غير موجودة', 404);
+
+        $data = $request->validate(['note' => 'required|string|max:5000']);
+
+        $event = SupportTicketEvent::create([
+            'ticket_id' => $ticket->id,
+            'admin_id' => $request->user()->id,
+            'event_type' => 'note',
+            'note' => $data['note'],
+        ]);
+
+        return $this->ok(['event' => $event], 'OK', 'أُضيفت الملاحظة');
+    }
+
+    // ==================== 6) لوحة مراقبة النظام ====================
+
+    /** GET /admin/support/ops-dashboard */
+    public function opsDashboard(Request $request): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $now = now();
+
+        $txToday = Transaction::where('created_at', '>=', $now->copy()->startOfDay())->count();
+        $txLastHour = Transaction::where('created_at', '>=', $now->copy()->subHour())->count();
+        $txLast5Min = Transaction::where('created_at', '>=', $now->copy()->subMinutes(5))->count();
+
+        $failedToday = Transaction::where('created_at', '>=', $now->copy()->startOfDay())
+            ->whereNotNull('decision_code')
+            ->where('decision_code', 'NOT LIKE', 'OK%')
+            ->where('decision_code', '!=', 'ALLOW')
+            ->count();
+
+        $queueDepth = (int) DB::table('jobs')->count();
+        $failedJobs = (int) DB::table('failed_jobs')->count();
+
+        $activeUsers15m = User::where('last_active_at', '>=', $now->copy()->subMinutes(15))->count();
+        $activePosUsers = (int) DB::table('pos_users')->where('is_active', true)->count();
+
+        $ticketsByStatus = SupportTicket::selectRaw('status, COUNT(*) AS c')
+            ->groupBy('status')->pluck('c', 'status');
+
+        $openDisputes = Dispute::whereNotIn('status', ['resolved', 'closed', 'denied'])->count();
+
+        $dbOk = true;
+        try { DB::select('SELECT 1'); } catch (\Throwable $e) { $dbOk = false; }
+
+        return $this->ok([
+            'transactions' => [
+                'today' => $txToday,
+                'last_hour' => $txLastHour,
+                'last_5_minutes' => $txLast5Min,
+                'failed_today' => $failedToday,
+            ],
+            'queues' => [
+                'pending_jobs' => $queueDepth,
+                'failed_jobs' => $failedJobs,
+            ],
+            'activity' => [
+                'active_users_15m' => $activeUsers15m,
+                'active_pos_terminals' => $activePosUsers,
+            ],
+            'support' => [
+                'tickets_by_status' => $ticketsByStatus,
+                'open_disputes' => $openDisputes,
+            ],
+            'health' => [
+                'database' => $dbOk ? 'up' : 'down',
+                'time' => $now->toIso8601String(),
+            ],
+        ]);
+    }
+
+    // ==================== Helpers ====================
+
+    private function userSummary(User $u): array
+    {
+        return [
+            'id' => $u->id,
+            'name' => trim("{$u->f_name} {$u->l_name}"),
+            'phone' => $u->phone,
+            'type' => (int) $u->type,
+            'type_label' => match ((int) $u->type) {
+                0 => 'إداري', 1 => 'وكيل', 2 => 'عميل', 3 => 'تاجر', default => 'غير معروف',
+            },
+            'is_active' => (bool) $u->is_active,
+            'is_temp_blocked' => (bool) ($u->is_temp_blocked ?? false),
+            'is_kyc_verified' => (bool) $u->is_kyc_verified,
+        ];
+    }
+
+    private function txSummary(Transaction $t): array
+    {
+        return [
+            'id' => $t->id,
+            'transaction_id' => $t->transaction_id,
+            'ref_trans_id' => $t->ref_trans_id,
+            'type' => $t->transaction_type,
+            'debit' => $t->debit,
+            'credit' => $t->credit,
+            'amount' => $t->amount,
+            'user_id' => $t->user_id,
+            'decision_code' => $t->decision_code,
+            'created_at' => $t->created_at,
+        ];
+    }
+
+    private function requireAdmin(Request $request): ?JsonResponse
+    {
+        $user = $request->user();
+        $isAdmin = $user && ((int) ($user->type ?? -1) === 0
+            || in_array($user->role ?? null, [A::ROLE_ADMIN, 'super_admin'], true));
+
+        return $isAdmin ? null : $this->error('FORBIDDEN', 'صلاحية إدارية مطلوبة', 403);
+    }
+
+    /** كل إجراء أمني يتطلب سبباً موثَّقاً. */
+    private function requireReason(Request $request): ?JsonResponse
+    {
+        $reason = trim((string) $request->input('reason', ''));
+        if (mb_strlen($reason) < 5) {
+            return $this->error('REASON_REQUIRED', 'يجب توثيق سبب الإجراء (5 أحرف على الأقل)', 422);
+        }
+        return null;
+    }
+
+    private function auditAction(Request $request, User $subject, string $action, array $context = []): void
+    {
+        $this->audit->record([
+            'actor_type' => 'admin',
+            'actor_user_id' => $request->user()->id,
+            'subject_type' => 'user',
+            'subject_id' => (string) $subject->id,
+            'action' => $action,
+            'decision_code' => 'OK',
+            'reason' => trim((string) $request->input('reason', '')),
+            'severity' => 'warning',
+            'context' => $context,
+            'zone_code' => $subject->zone_code,
+        ]);
+    }
+
+    private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse
+    {
+        return new JsonResponse([
+            'success' => true, 'code' => $code, 'message' => $message,
+            'errors' => (object)[], 'meta' => $meta,
+        ], $status);
+    }
+
+    private function error(string $code, string $message, int $status): JsonResponse
+    {
+        return new JsonResponse([
+            'success' => false, 'code' => $code, 'message' => $message,
+            'errors' => (object)[], 'meta' => (object)[],
+        ], $status);
+    }
+}

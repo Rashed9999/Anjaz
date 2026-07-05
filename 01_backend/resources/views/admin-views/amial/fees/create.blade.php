@@ -149,7 +149,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     const btn = document.getElementById('sim_btn');
     const errBox = document.getElementById('sim_error');
