@@ -112,6 +112,55 @@ class ReceiptController extends Controller
     }
 
     /**
+     * AMIAL-THERMAL-001 — GET /api/v1/amial/receipts/{id}/thermal?size=58|80
+     * يُصيّر إيصالاً حرارياً (58مم/80مم) عند الطلب لطابعات POS. متزامن (سريع).
+     */
+    public function thermal(Request $request, int $id): JsonResponse|StreamedResponse
+    {
+        $receipt = Receipt::where('id', $id)
+            ->where('user_id', $request->user()->id)
+            ->first();
+        if (!$receipt) {
+            return $this->error('RECEIPT_NOT_FOUND', 'Receipt not found', 404);
+        }
+
+        // العرض: 58مم≈164pt، 80مم≈226pt (72pt/بوصة، 25.4مم/بوصة)
+        $sizeMm = (int) $request->query('size', 58);
+        $widthMm = in_array($sizeMm, [58, 80], true) ? $sizeMm : 58;
+        $width = (int) round($widthMm / 25.4 * 72);
+
+        // QR للتحقّق (SVG data-URI — بلا imagick)
+        $qrUrl = null;
+        try {
+            $verifyUrl = rtrim((string) config('app.url'), '/') . '/v/' . $receipt->verification_code;
+            $svg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(120)->margin(0)->generate($verifyUrl);
+            $qrUrl = 'data:image/svg+xml;base64,' . base64_encode($svg);
+        } catch (\Throwable $e) { /* بلا QR — نعرض الرمز نصّاً فقط */ }
+
+        if (!class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            return $this->error('PDF_UNAVAILABLE', 'PDF engine not installed', 500);
+        }
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('receipts.thermal', [
+            'receipt' => $receipt,
+            'user' => $receipt->user,
+            'counterparty' => $receipt->counterparty,
+            'qrUrl' => $qrUrl,
+            'width' => $width,
+            'widthMm' => $widthMm,
+        ])->setPaper([0, 0, $width, 900]); // ارتفاع سخيّ (رول حراري يُقصّ)
+
+        $receipt->incrementDownloadCount();
+
+        return new StreamedResponse(function () use ($pdf) {
+            echo $pdf->output();
+        }, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "inline; filename=\"{$receipt->receipt_number}_{$widthMm}mm.pdf\"",
+        ]);
+    }
+
+    /**
      * GET /v/{code}  (public, no auth)
      * تحقق من صحة إيصال عبر QR scan.
      */
