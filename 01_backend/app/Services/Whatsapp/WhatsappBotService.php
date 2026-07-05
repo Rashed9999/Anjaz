@@ -297,7 +297,7 @@ class WhatsappBotService
             $result = $this->recipientSvc->verifyRecipient($toPhone, $user->id);
         } catch (\Throwable $e) {
             $this->bumpRiskOnFailure($phone, 'invalid_recipient');
-            $this->send($phone, "❌ " . $e->getMessage());
+            $this->send($phone, "❌ " . $this->safeErr($e));
             return;
         }
 
@@ -410,14 +410,15 @@ class WhatsappBotService
 
         } catch (\Throwable $e) {
             $this->session->clear($phone);
-            $msg = $e->getMessage();
+            $raw  = $e->getMessage();          // للتدقيق/السجل (داخلي)
+            $safe = $this->safeErr($e);        // للعرض للمستخدم (بلا تسريب)
 
             $this->auditTransfer($phone, $user->id, WhatsappAuditLog::EVENT_TRANSFER_FAILED,
-                WhatsappAuditLog::OUTCOME_FAILED, $amount, $msg);
+                WhatsappAuditLog::OUTCOME_FAILED, $amount, $raw);
             $this->bumpRiskOnFailure($phone, 'transfer_failed_after_pin');
 
-            $this->send($phone, $this->fmt->transferFailed($msg));
-            return ['success' => false, 'message' => $msg];
+            $this->send($phone, $this->fmt->transferFailed($safe));
+            return ['success' => false, 'message' => $safe];
         }
     }
 
@@ -731,9 +732,9 @@ class WhatsappBotService
 
         } catch (\Throwable $e) {
             $this->session->clear($phone);
-            $msg = $e->getMessage();
-            $this->send($phone, $this->fmt->paymentRequestPayFailed($msg));
-            return ['success' => false, 'message' => $msg];
+            $safe = $this->safeErr($e);
+            $this->send($phone, $this->fmt->paymentRequestPayFailed($safe));
+            return ['success' => false, 'message' => $safe];
         }
     }
 
@@ -832,8 +833,30 @@ class WhatsappBotService
     // ══════════════════════════════════════════════════════════════
 
     /** Section 9 — بحث بسيط بالاسم، يستثني المستخدم نفسه. */
+    /**
+     * رسالة خطأ آمنة للمستخدم: تُظهر رسائل النطاق (InvalidArgument/Runtime) فقط
+     * — وهي عربية موجّهة أصلاً — وتُخفي تفاصيل داخلية (SQL/أنواع) وتُسجّلها فقط.
+     */
+    private function safeErr(\Throwable $e): string
+    {
+        if ($e instanceof \InvalidArgumentException || $e instanceof \RuntimeException) {
+            return $e->getMessage();
+        }
+        Log::error('[WA Bot] internal error', [
+            'type'  => get_class($e),
+            'error' => mb_substr($e->getMessage(), 0, 200),
+        ]);
+        return 'حدث خطأ غير متوقّع. حاول لاحقاً.';
+    }
+
     private function searchUsersByName(string $name, int $excludeUserId)
     {
+        // AMIAL-FIX (enumeration): حدّ أدنى لطول الاسم يمنع تعداد الحسابات بحرف واحد.
+        $name = trim($name);
+        if (mb_strlen($name) < 3) {
+            return collect();
+        }
+
         return User::query()
             ->whereRaw("CONCAT(f_name, ' ', l_name) LIKE ?", ['%' . $name . '%'])
             ->where('id', '!=', $excludeUserId)

@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Log;
  */
 class WhatsappApiClient
 {
-    private const META_API = 'https://graph.facebook.com/v18.0';
+    private const META_API = 'https://graph.facebook.com/v19.0';
     private const TIMEOUT  = 10;
 
     /** يُرسِل رسالة نصّية عادية. */

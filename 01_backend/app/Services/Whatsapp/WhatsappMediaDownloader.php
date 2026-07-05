@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Log;
  */
 class WhatsappMediaDownloader
 {
-    private const META_API  = 'https://graph.facebook.com/v18.0';
+    private const META_API  = 'https://graph.facebook.com/v19.0';
     private const TIMEOUT   = 15;
     // AMIAL-FIX (DoS): حدّ أقصى لحجم الوسائط المُحمَّلة (صورة QR لا تحتاج أكثر).
     private const MAX_BYTES = 3_145_728; // 3 MB

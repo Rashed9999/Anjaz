@@ -1,0 +1,18 @@
+# أسرار وبيئة — لا تُرفع أبداً
+.env
+.env.*
+!.env.example
+storage/oauth-private.key
+storage/oauth-public.key
+storage/logs/
+storage/framework/
+storage/debugbar/
+storage/app/
+!storage/app/public/.gitkeep
+
+# تبعيات ومخلفات بناء
+/vendor/
+/node_modules/
+/bootstrap/cache/*.php
+.phpunit.cache
+.phpunit.result.cache
