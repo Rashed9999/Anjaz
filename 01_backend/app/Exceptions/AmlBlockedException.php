@@ -34,27 +34,4 @@ class AmlBlockedException extends RuntimeException
     }
 }
 
-class AmlHeldException extends RuntimeException
-{
-    public function __construct(
-        public readonly AmlDecision $decision,
-        public readonly ?int $flaggedId = null,
-        ?string $message = null,
-    ) {
-        parent::__construct($message ?? 'Transaction held for review');
-    }
-
-    public function toApiArray(): array
-    {
-        return [
-            'success' => false,
-            'code' => 'AML_HELD',
-            'message' => 'تم تعليق العملية للمراجعة. سيتم إشعارك خلال 24 ساعة.',
-            'errors' => (object)[],
-            'meta' => [
-                'flag_id' => $this->flaggedId,
-                'expected_review_hours' => 24,
-            ],
-        ];
-    }
-}
+// AMIAL-AUDIT-FIX-001: AmlHeldException نُقلت إلى App\Exceptions\AmlHeldException (PSR-4).

@@ -119,6 +119,66 @@ trait TransactionTrait
     }
 
     /**
+     * AMIAL-AML-001 (وُصِّل في AMIAL-AUDIT-FIX-001) — فحص مكافحة غسل الأموال.
+     *
+     * يُستدعى قبل فتح معاملة المال (pre-flight) لا داخلها: هكذا لو صدر
+     * block/hold نرمي قبل أي خصم، وتبقى سجلات الفحص (flagged/alert) محفوظة
+     * بدل أن تُلغى مع rollback. allow/flag → نُكمل التنفيذ (flag مُسجَّل للمراجعة).
+     *
+     * آمن للإنتاج المتدرّج: عند غياب القواعد أو كونها shadow، النتيجة allow دائماً.
+     *
+     * @throws \App\Exceptions\AmlBlockedException عند block
+     * @throws \App\Exceptions\AmlHeldException عند hold
+     */
+    protected function screenAml(
+        int $actorUserId,
+        ?int $counterpartyUserId,
+        string $transactionType,
+        string $amount,
+        ?string $transactionUlid = null,
+        array $metadata = [],
+    ): void {
+        if (!config('amial.aml.enabled', false)) {
+            return;
+        }
+        if (!in_array($transactionType, (array) config('amial.aml.screened_types', []), true)) {
+            return;
+        }
+
+        try {
+            $context = new \App\Aml\TransactionContext(
+                actorUserId: $actorUserId,
+                counterpartyUserId: $counterpartyUserId,
+                transactionType: $transactionType,
+                amount: $amount,
+                timestamp: now(),
+                transactionUlid: $transactionUlid,
+                ipAddress: request()?->ip(),
+                metadata: $metadata,
+            );
+            $decision = app(\App\Services\AmlScreeningService::class)->screen($context);
+        } catch (\App\Exceptions\AmlBlockedException|\App\Exceptions\AmlHeldException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            // فشل المحرّك نفسه لا يجب أن يوقف المال (fail-open مُسجَّل) — القرار
+            // الأمني الافتراضي هنا "اسمح" لأن الأعطال التقنية ليست احتيالاً.
+            \Illuminate\Support\Facades\Log::error('AML screening error (fail-open)', [
+                'error' => $e->getMessage(), 'type' => $transactionType,
+            ]);
+            return;
+        }
+
+        if ($decision->shouldExecuteTransaction()) {
+            return; // allow أو flag — flag مُسجَّل للمراجعة، المال يمرّ
+        }
+
+        if ($decision->isBlocked()) {
+            throw new \App\Exceptions\AmlBlockedException($decision);
+        }
+        throw new \App\Exceptions\AmlHeldException($decision);
+    }
+
+    /**
      * يولد ULID آمن للمعرف العام (transaction_id).
      * 26 حرف، monotonic داخل ms، UNIQUE INDEX يصد أي تصادم.
      */
@@ -177,6 +237,9 @@ trait TransactionTrait
         // هذا defense-in-depth — الـ middleware amial.zone يجب أن يلتقطها أولاً،
         // لكن لو الـ controller استدعى الـ method مباشرة (مثل من admin panel)، فحص هنا يحميها.
         $this->assertFinancialEligibility($from_user_id);
+
+        // AMIAL-AML-001: فحص مكافحة غسل الأموال قبل تحريك أي مال (pre-flight).
+        $this->screenAml($from_user_id, $to_user_id, SEND_MONEY, $amount);
 
         $txId = DB::transaction(function () use ($from_user_id, $to_user_id, $amount, $charge, $total, $note, $idempotencyKey, $feeMeta) {
             // AMIAL-SCALE-DEADLOCK-001 — قفل بترتيب ثابت قبل أي خصم/إضافة

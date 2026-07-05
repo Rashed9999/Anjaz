@@ -38,26 +38,5 @@ class RuleEvaluationResult
     }
 }
 
-/**
- * Final decision = aggregation of all rule results
- */
-class AmlDecision
-{
-    public function __construct(
-        public readonly string $finalAction, // allow | flag | hold | block
-        public readonly float $totalRiskScore,
-        public readonly array $triggeredRules, // [{code, score, action, context}, ...]
-        public readonly ?string $reasonSummary = null,
-    ) {}
-
-    public function isAllowed(): bool { return $this->finalAction === 'allow'; }
-    public function isFlagged(): bool { return $this->finalAction === 'flag'; }
-    public function isHeld(): bool { return $this->finalAction === 'hold'; }
-    public function isBlocked(): bool { return $this->finalAction === 'block'; }
-
-    public function shouldExecuteTransaction(): bool
-    {
-        // allow و flag → ينفذ. hold و block → لا.
-        return in_array($this->finalAction, ['allow', 'flag'], true);
-    }
-}
+// AMIAL-AUDIT-FIX-001: AmlDecision نُقل إلى ملفه الخاص App\Aml\AmlDecision
+// (كان معرَّفاً هنا مخالفاً لـ PSR-4، فلا يُحمَّل تلقائياً — أحد أسباب تعطّل المحرّك).

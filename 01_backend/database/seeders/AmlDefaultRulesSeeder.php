@@ -175,15 +175,19 @@ class AmlDefaultRulesSeeder extends Seeder
             ],
         ];
 
+        // AMIAL-AUDIT-FIX-001: إطلاق مصرفي آمن (observe ← enforce).
+        // كل القواعد تبدأ في shadow_mode=true: المحرّك يراقب ويسجّل في
+        // aml_shadow_decisions دون إيقاف أي معاملة. بعد مراجعة أسابيع من
+        // البيانات، يُفعّل الأدمن الإنفاذ لكل قاعدة بإيقاف shadow_mode.
         foreach ($rules as $r) {
             AmlRule::updateOrCreate(
                 ['code' => $r['code']],
-                array_merge(['shadow_mode' => false], $r, ['is_active' => true]),
+                array_merge(['shadow_mode' => true], $r, ['is_active' => true, 'shadow_mode' => true]),
             );
         }
 
-        $this->command->info('✓ Seeded ' . count($rules) . ' AML rules');
-        $this->command->info('  ملاحظة: القواعد الجديدة (circular/agent_velocity) في shadow_mode.');
-        $this->command->info('  راجع aml_shadow_decisions لأسابيع ثم فعّلها بإيقاف shadow_mode.');
+        $this->command->info('✓ Seeded ' . count($rules) . ' AML rules (كلها shadow_mode — مراقبة فقط)');
+        $this->command->info('  المحرّك يراقب ويسجّل في aml_shadow_decisions دون إيقاف أي معاملة.');
+        $this->command->info('  بعد مراجعة البيانات، فعّل الإنفاذ لكل قاعدة بإيقاف shadow_mode.');
     }
 }
