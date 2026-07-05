@@ -22,17 +22,17 @@ services:
     container_name: amial-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: amial_root_2026
+      MYSQL_ROOT_PASSWORD: demo_local_only_root
       MYSQL_DATABASE:      amial_pay
       MYSQL_USER:          amial_user
-      MYSQL_PASSWORD:      amial_pass_2026
+      MYSQL_PASSWORD:      demo_local_only_pw
     volumes:
       - amial_mysql_data:/var/lib/mysql
       - ./docker/mysql-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       - "3306:3306"
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "amial_user", "-pamial_pass_2026"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "amial_user", "-pdemo_local_only_pw"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -54,7 +54,7 @@ services:
       DB_PORT:     3306
       DB_DATABASE: amial_pay
       DB_USERNAME: amial_user
-      DB_PASSWORD: amial_pass_2026
+      DB_PASSWORD: demo_local_only_pw
       RUN_SEEDERS: "true"   # ← يُشغِّل البيانات التجريبية عند أوّل تشغيل
     volumes:
       - amial_storage:/var/www/html/storage/app

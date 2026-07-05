@@ -6,6 +6,8 @@ import 'package:amyal_pay/features/merchant/screens/merchant_refund_screen.dart'
 import 'package:amyal_pay/features/merchant/screens/merchant_transactions_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_sale_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/split_bill_create_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
 import 'package:amyal_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
 import 'package:amyal_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amyal_pay/features/notification/controllers/notifications_center_controller.dart';
@@ -321,6 +323,17 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       icon: Icons.point_of_sale,
                       label: 'الكاشير',
                       onTap: () => Get.to(() => const CashierSaleScreen()),
+                    ),
+                    // AMIAL-AUDIT-FIX-001: وصل شاشتَي تقسيم الفاتورة (كانتا غير موصولتين)
+                    _LinkTile(
+                      icon: Icons.call_split,
+                      label: 'تقسيم فاتورة',
+                      onTap: () => Get.to(() => const SplitBillCreateScreen()),
+                    ),
+                    _LinkTile(
+                      icon: Icons.groups,
+                      label: 'حصصي في الفواتير المقسّمة',
+                      onTap: () => Get.to(() => const SplitBillMySharesScreen()),
                     ),
                     _LinkTile(
                       icon: Icons.account_balance,

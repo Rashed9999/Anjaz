@@ -71,7 +71,12 @@ lib/features/merchant/screens/merchant_pay_screen.dart     (MerchantPayScreen)
 lib/features/merchant/screens/split_bill_create_screen.dart(SplitBillCreateScreen)
 lib/features/merchant/screens/split_bill_my_shares_screen.dart (SplitBillMySharesScreen)
 ```
-**التفسير:** ميزات لها باكند واختبارات (المرتجعات، الدفع، تقسيم الفاتورة، التبرعات) لكن **واجهتها لا يمكن للمستخدم الوصول إليها**. إمّا ربطها بالتنقّل أو إزالتها.
+**التفسير:** ميزات لها باكند واختبارات (المرتجعات، الدفع، تقسيم الفاتورة، التبرعات) لكن **واجهتها لا يمكن للمستخدم الوصول إليها**.
+
+**✅ حالة الإصلاح (AMIAL-AUDIT-FIX-001):**
+- `SplitBillCreateScreen` + `SplitBillMySharesScreen` → **وُصِلتا** بلوحة التاجر (روابط "تقسيم فاتورة" و"حصصي")، مُتحقَّق بـ `flutter analyze` (No issues found).
+- `UnifiedLoginScreen` → **ليست ميتة**: لها باكند كامل (`unified-auth.php` + `unified_auth_controller`) — ميزة تسجيل دخول موحّد **غير مكتملة الربط**، لا تُحذف. قرار المنتج: اعتمادها بدل شاشة الدخول الحالية أم تأجيلها.
+- `DonationsHomeScreen` + `MerchantPayScreen` (جانب العميل) + `CashierRefundScreen` (تحتاج `saleUlid` من شاشة تفاصيل بيع غير موجودة بعد) → **مؤجّلة**: تحتاج قراراً حول موضع الدخول في شبكة خدمات العميل، ولا يمكن التحقّق منها إلا على جهاز فعلي. لم تُربط عشوائياً تفادياً لتنقّل معطوب.
 
 ---
 
