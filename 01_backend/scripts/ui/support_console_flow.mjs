@@ -78,6 +78,25 @@ await page.waitForTimeout(1200);
 step('قائمة التذاكر تُحمَّل', (await page.locator('#tickets-list table, #tickets-list .alert, #tickets-list ul').count()) > 0);
 await page.screenshot({ path: SHOTS + '/console_tickets.png', fullPage: true });
 
+// 4-ب) تبويب الموافقات (Maker-Checker)
+await page.click('[data-testid=tab-approvals]');
+await page.click('[data-testid=btn-approvals]');
+await page.waitForTimeout(1200);
+step('قائمة الموافقات تُحمَّل', (await page.locator('#approvals-list table, #approvals-list .alert').count()) > 0);
+await page.screenshot({ path: SHOTS + '/console_approvals.png', fullPage: true });
+
+// 4-ج) تبويب الأمن الداخلي
+await page.click('[data-testid=tab-insider]');
+await page.click('[data-testid=btn-insider]');
+await page.waitForTimeout(1500);
+const chainBadge = await page.locator('#insider-chain .alert').count();
+const activityTable = await page.locator('#insider-activity table').count();
+step('الأمن الداخلي: حالة السلسلة + نشاط الموظفين يظهران', chainBadge > 0 && activityTable > 0,
+  `chain=${chainBadge} activity=${activityTable}`);
+const chainOk = await page.locator('#insider-chain .alert-success').count();
+step('سلسلة سجل التدقيق سليمة (لا عبث)', chainOk > 0);
+await page.screenshot({ path: SHOTS + '/console_insider.png', fullPage: true });
+
 // 5) تبويب المراقبة
 await page.click('[data-testid=tab-ops]');
 await page.click('[data-testid=btn-ops]');

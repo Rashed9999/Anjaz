@@ -137,6 +137,12 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/tickets/{id}', [$c, 'showTicket'])->where('id', '[0-9]+')->name('tickets.show');
             Route::post('/tickets/{id}/update', [$c, 'updateTicket'])->where('id', '[0-9]+')->name('tickets.update');
             Route::post('/tickets/{id}/note', [$c, 'addTicketNote'])->where('id', '[0-9]+')->name('tickets.note');
+            // AMIAL-INSIDER-001: Maker-Checker + مراقبة الموظفين
+            Route::get('/approvals', [$c, 'approvalsList'])->name('approvals.index');
+            Route::post('/approvals/{id}/approve', [$c, 'approveRequest'])->where('id', '[0-9]+')->name('approvals.approve');
+            Route::post('/approvals/{id}/reject', [$c, 'rejectRequest'])->where('id', '[0-9]+')->name('approvals.reject');
+            Route::get('/insider/overview', [$c, 'insiderOverview'])->name('insider.overview');
+            Route::post('/insider/alerts/{id}/ack', [$c, 'acknowledgeAlert'])->where('id', '[0-9]+')->name('insider.alerts.ack');
         });
 
         // CRITICAL-001-SUBS — إدارة الاشتراكات + Audit Log

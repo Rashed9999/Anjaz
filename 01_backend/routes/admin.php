@@ -62,6 +62,12 @@ Route::group(['as' => 'admin.'], function () {
             Route::get('tickets/{id}', [$sc, 'showTicket'])->where('id', '[0-9]+')->name('tickets.show');
             Route::post('tickets/{id}/update', [$sc, 'updateTicket'])->where('id', '[0-9]+')->name('tickets.update');
             Route::post('tickets/{id}/note', [$sc, 'addTicketNote'])->where('id', '[0-9]+')->name('tickets.note');
+            // AMIAL-INSIDER-001: Maker-Checker + مراقبة الموظفين
+            Route::get('approvals', [$sc, 'approvalsList'])->name('approvals.index');
+            Route::post('approvals/{id}/approve', [$sc, 'approveRequest'])->where('id', '[0-9]+')->name('approvals.approve');
+            Route::post('approvals/{id}/reject', [$sc, 'rejectRequest'])->where('id', '[0-9]+')->name('approvals.reject');
+            Route::get('insider/overview', [$sc, 'insiderOverview'])->name('insider.overview');
+            Route::post('insider/alerts/{id}/ack', [$sc, 'acknowledgeAlert'])->where('id', '[0-9]+')->name('insider.alerts.ack');
         });
         Route::get('settings', [DashboardController::class, 'settings'])->name('settings');
         Route::post('settings', [DashboardController::class, 'settingsUpdate'])->name('settings.update');

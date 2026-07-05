@@ -4,15 +4,19 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
 use App\Support\Access\AccessConstants as A;
+use App\Models\ApprovalRequest;
 use App\Models\AuditDecision;
 use App\Models\Dispute;
 use App\Models\EMoney;
 use App\Models\Receipt;
+use App\Models\SecurityAlert;
 use App\Models\SupportTicket;
 use App\Models\SupportTicketEvent;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\ApprovalService;
 use App\Services\AuditService;
+use App\Services\InsiderWatchService;
 use App\Support\Phone;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,6 +38,8 @@ class SupportConsoleController extends Controller
 {
     public function __construct(
         private readonly AuditService $audit,
+        private readonly ApprovalService $approvals,
+        private readonly InsiderWatchService $watch,
     ) {}
 
     // ==================== 1) البحث الموحّد ====================
@@ -83,6 +89,9 @@ class SupportConsoleController extends Controller
                 ->orWhere('l_name', 'like', "%{$q}%")
                 ->limit(10)->get();
         }
+
+        // AMIAL-INSIDER-001: كل بحث مسجَّل باسم الموظف + تقييم شذوذ
+        $this->watch->logSearch($request->user()->id, $q, $users->count() + $transactions->count() + $receipts->count());
 
         return $this->ok([
             'query' => $q,
@@ -139,6 +148,9 @@ class SupportConsoleController extends Controller
             ->orderByDesc('id')->limit(5)
             ->get(['action', 'decision_code', 'reason', 'severity', 'created_at']);
 
+        // AMIAL-INSIDER-001: فتح ملف 360° = اطّلاع مسجَّل باسم الموظف
+        $this->watch->logView($request->user()->id, $user->id, 'profile_360');
+
         return $this->ok([
             'profile' => $this->userSummary($user) + [
                 'email' => $user->email,
@@ -191,6 +203,8 @@ class SupportConsoleController extends Controller
         }
 
         $page = $q->paginate(min(50, (int) $request->query('per_page', 20)));
+
+        $this->watch->logView($request->user()->id, $id, 'transactions');
 
         return $this->ok([
             'transactions' => collect($page->items())->map(fn($t) => $this->txSummary($t))->values(),
@@ -295,7 +309,13 @@ class SupportConsoleController extends Controller
 
     // ==================== 4) إجراءات التحقّق (مُدقَّقة) ====================
 
-    /** POST /admin/support/customers/{id}/freeze  {reason, unfreeze?} */
+    /**
+     * POST /admin/support/customers/{id}/freeze  {reason, unfreeze?}
+     *
+     * AMIAL-INSIDER-001 — سياسة أربع عيون:
+     *   التجميد (يقيّد) = فوري — إيقاف احتيال لا ينتظر.
+     *   فكّ التجميد (يعيد وصولاً) = طلب موافقة يعتمده مشرف مختلف.
+     */
     public function freeze(Request $request, int $id): JsonResponse
     {
         if ($resp = $this->requireAdmin($request)) return $resp;
@@ -305,19 +325,35 @@ class SupportConsoleController extends Controller
         if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
 
         $unfreeze = (bool) $request->input('unfreeze', false);
-        $user->is_temp_blocked = !$unfreeze;
-        $user->temp_block_time = $unfreeze ? null : now();
+
+        if ($unfreeze) {
+            $req = $this->approvals->submit(
+                $request->user(), 'unfreeze_wallet', $user->id,
+                trim((string) $request->input('reason')),
+            );
+            return $this->ok([
+                'approval_required' => true,
+                'request_number' => $req->request_number,
+                'request_id' => $req->id,
+            ], 'APPROVAL_PENDING', 'فكّ التجميد يتطلب اعتماد مشرف آخر — أُنشئ طلب ' . $req->request_number, 202);
+        }
+
+        $user->is_temp_blocked = true;
+        $user->temp_block_time = now();
         $user->save();
 
-        $this->auditAction($request, $user, $unfreeze ? 'SUPPORT_UNFREEZE_WALLET' : 'SUPPORT_FREEZE_WALLET');
+        $this->auditAction($request, $user, 'SUPPORT_FREEZE_WALLET');
 
         return $this->ok([
             'user_id' => $user->id,
-            'is_temp_blocked' => (bool) $user->is_temp_blocked,
-        ], 'OK', $unfreeze ? 'تم فك التجميد' : 'تم تجميد الحساب مؤقتاً');
+            'is_temp_blocked' => true,
+        ], 'OK', 'تم تجميد الحساب مؤقتاً');
     }
 
-    /** POST /admin/support/customers/{id}/reset-pin  {reason} */
+    /**
+     * POST /admin/support/customers/{id}/reset-pin  {reason}
+     * يعيد وصولاً للحساب → موافقة ثنائية إلزامية (أخطر ناقل استيلاء).
+     */
     public function resetPin(Request $request, int $id): JsonResponse
     {
         if ($resp = $this->requireAdmin($request)) return $resp;
@@ -326,15 +362,129 @@ class SupportConsoleController extends Controller
         $user = User::find($id);
         if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
 
-        $user->transaction_pin = null;
-        $user->requires_pin_setup = true;
-        $user->pin_failed_attempts = 0;
-        $user->pin_locked_until = null;
-        $user->save();
+        $req = $this->approvals->submit(
+            $request->user(), 'reset_pin', $user->id,
+            trim((string) $request->input('reason')),
+        );
 
-        $this->auditAction($request, $user, 'SUPPORT_RESET_PIN');
+        return $this->ok([
+            'approval_required' => true,
+            'request_number' => $req->request_number,
+            'request_id' => $req->id,
+        ], 'APPROVAL_PENDING', 'إعادة تعيين PIN تتطلب اعتماد مشرف آخر — أُنشئ طلب ' . $req->request_number, 202);
+    }
 
-        return $this->ok(['user_id' => $user->id], 'OK', 'تمت إعادة تعيين PIN — سيُطلب من العميل تعيين رمز جديد');
+    // ==================== الموافقات (Maker-Checker) ====================
+
+    /** GET /admin/support/approvals?status= */
+    public function approvalsList(Request $request): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $q = ApprovalRequest::with([
+            'subject:id,f_name,l_name,phone',
+            'maker:id,f_name,l_name',
+            'checker:id,f_name,l_name',
+        ])->orderByDesc('id');
+
+        $q->where('status', $request->query('status', 'pending'));
+
+        $page = $q->paginate(min(50, (int) $request->query('per_page', 20)));
+
+        return $this->ok([
+            'approvals' => $page->items(),
+            'pagination' => [
+                'current_page' => $page->currentPage(),
+                'last_page' => $page->lastPage(),
+                'total' => $page->total(),
+            ],
+        ]);
+    }
+
+    /** POST /admin/support/approvals/{id}/approve  {note?} */
+    public function approveRequest(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        try {
+            $req = $this->approvals->approve($request->user(), $id, $request->input('note'));
+        } catch (\DomainException $e) {
+            return match ($e->getMessage()) {
+                'SELF_APPROVAL_FORBIDDEN' => $this->error('SELF_APPROVAL_FORBIDDEN',
+                    'لا يمكنك اعتماد طلبك أنت — يلزم مشرف آخر (قاعدة أربع عيون)', 403),
+                'NOT_PENDING' => $this->error('NOT_PENDING', 'الطلب ليس قيد الانتظار', 409),
+                'EXPIRED' => $this->error('EXPIRED', 'انتهت صلاحية الطلب (24 ساعة) — أعد تقديمه', 410),
+                default => $this->error('APPROVAL_ERROR', $e->getMessage(), 422),
+            };
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return $this->error('REQUEST_NOT_FOUND', 'طلب الموافقة غير موجود', 404);
+        }
+
+        return $this->ok(['approval' => $req], 'OK', "اعتُمد الطلب {$req->request_number} ونُفِّذ الإجراء");
+    }
+
+    /** POST /admin/support/approvals/{id}/reject  {note} */
+    public function rejectRequest(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $data = $request->validate(['note' => 'required|string|min:5|max:500']);
+
+        try {
+            $req = $this->approvals->reject($request->user(), $id, $data['note']);
+        } catch (\DomainException $e) {
+            return match ($e->getMessage()) {
+                'SELF_APPROVAL_FORBIDDEN' => $this->error('SELF_APPROVAL_FORBIDDEN',
+                    'لا يمكنك البتّ في طلبك أنت — يلزم مشرف آخر', 403),
+                'NOT_PENDING' => $this->error('NOT_PENDING', 'الطلب ليس قيد الانتظار', 409),
+                default => $this->error('APPROVAL_ERROR', $e->getMessage(), 422),
+            };
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+            return $this->error('REQUEST_NOT_FOUND', 'طلب الموافقة غير موجود', 404);
+        }
+
+        return $this->ok(['approval' => $req], 'OK', "رُفض الطلب {$req->request_number}");
+    }
+
+    // ==================== المراقبة الداخلية (مسؤول الأمن) ====================
+
+    /** GET /admin/support/insider/overview */
+    public function insiderOverview(Request $request): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $data = $this->watch->overview();
+
+        // حالة سلسلة التدقيق (فحص سريع لآخر 200 سجل)
+        $chainOk = null;
+        try {
+            \Illuminate\Support\Facades\Artisan::call('amial:audit-verify', ['--last' => 200]);
+            $chainOk = \Illuminate\Support\Facades\Artisan::output();
+            $chainOk = str_contains($chainOk, '✓');
+        } catch (\Throwable $e) { /* غير حاسم */ }
+
+        return $this->ok([
+            'activity_today' => $data['activity_today'],
+            'open_alerts' => $data['open_alerts'],
+            'audit_chain_ok' => $chainOk,
+        ]);
+    }
+
+    /** POST /admin/support/insider/alerts/{id}/ack */
+    public function acknowledgeAlert(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $alert = SecurityAlert::find($id);
+        if (!$alert) return $this->error('ALERT_NOT_FOUND', 'التنبيه غير موجود', 404);
+
+        $alert->update([
+            'status' => 'acknowledged',
+            'acknowledged_by' => $request->user()->id,
+            'acknowledged_at' => now(),
+        ]);
+
+        return $this->ok(['alert' => $alert->fresh()], 'OK', 'تمت مراجعة التنبيه');
     }
 
     /** POST /admin/support/customers/{id}/revoke-sessions  {reason} */

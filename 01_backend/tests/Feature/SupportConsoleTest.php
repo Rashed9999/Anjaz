@@ -161,10 +161,11 @@ class SupportConsoleTest extends TestCase
             ->assertStatus(422)->assertJsonPath('code', 'REASON_REQUIRED');
     }
 
-    public function test_freeze_and_unfreeze_wallet_with_audit(): void
+    public function test_freeze_is_immediate_and_audited(): void
     {
         $this->actAsAdmin();
 
+        // التجميد (يقيّد) فوري — إيقاف احتيال لا ينتظر موافقة
         $this->postJson("/api/v1/amial/admin/support/customers/{$this->customer->id}/freeze",
             ['reason' => 'اشتباه احتيال — بلاغ عميل'])
             ->assertOk()->assertJsonPath('meta.is_temp_blocked', true);
@@ -175,32 +176,40 @@ class SupportConsoleTest extends TestCase
             'actor_user_id' => $this->admin->id,
             'subject_id' => (string) $this->customer->id,
         ]);
-
-        $this->postJson("/api/v1/amial/admin/support/customers/{$this->customer->id}/freeze",
-            ['reason' => 'انتهى التحقيق — سليم', 'unfreeze' => true])
-            ->assertOk()->assertJsonPath('meta.is_temp_blocked', false);
-
-        $this->assertFalse((bool) $this->customer->fresh()->is_temp_blocked);
     }
 
-    public function test_reset_pin_clears_pin_state(): void
+    public function test_unfreeze_requires_second_approver(): void
+    {
+        $this->customer->forceFill(['is_temp_blocked' => 1, 'temp_block_time' => now()])->save();
+        $this->actAsAdmin();
+
+        // AMIAL-INSIDER-001: فكّ التجميد (يعيد وصولاً) → طلب موافقة، لا تنفيذ فوري
+        $r = $this->postJson("/api/v1/amial/admin/support/customers/{$this->customer->id}/freeze",
+            ['reason' => 'انتهى التحقيق — سليم', 'unfreeze' => true])
+            ->assertStatus(202)
+            ->assertJsonPath('code', 'APPROVAL_PENDING')
+            ->assertJsonPath('meta.approval_required', true);
+
+        // العميل ما زال مجمَّداً حتى يعتمد مشرف آخر
+        $this->assertTrue((bool) $this->customer->fresh()->is_temp_blocked);
+        $this->assertMatchesRegularExpression('/^APR-\d{6}$/', $r->json('meta.request_number'));
+    }
+
+    public function test_reset_pin_requires_second_approver(): void
     {
         $this->customer->forceFill([
             'transaction_pin' => bcrypt('1234'),
             'pin_failed_attempts' => 3,
-            'pin_locked_until' => now()->addHour(),
         ])->save();
         $this->actAsAdmin();
 
         $this->postJson("/api/v1/amial/admin/support/customers/{$this->customer->id}/reset-pin",
             ['reason' => 'العميل نسي الرمز — تحقق هاتفي'])
-            ->assertOk();
+            ->assertStatus(202)
+            ->assertJsonPath('code', 'APPROVAL_PENDING');
 
-        $fresh = $this->customer->fresh();
-        $this->assertNull($fresh->transaction_pin);
-        $this->assertSame(0, (int) $fresh->pin_failed_attempts);
-        $this->assertNull($fresh->pin_locked_until);
-        $this->assertDatabaseHas('audit_decisions', ['action' => 'SUPPORT_RESET_PIN']);
+        // PIN لم يُمَس حتى الاعتماد
+        $this->assertNotNull($this->customer->fresh()->transaction_pin);
     }
 
     public function test_revoke_sessions_kills_all_tokens(): void

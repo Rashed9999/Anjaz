@@ -9,6 +9,8 @@
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-search" data-testid="tab-search">🔍 خدمة العملاء</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-tx" data-testid="tab-tx">💳 فحص عملية</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-tickets" data-testid="tab-tickets">🎫 التذاكر</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-approvals" data-testid="tab-approvals">✅ الموافقات</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-insider" data-testid="tab-insider">🛡 أمن داخلي</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-ops" data-testid="tab-ops">📊 المراقبة</button></li>
     </ul>
 
@@ -53,6 +55,34 @@
                     <button class="btn btn-outline-primary" id="btn-tickets" data-testid="btn-tickets">تحديث</button>
                 </div>
                 <div id="tickets-list"></div>
+            </div>
+        </div>
+
+        {{-- ============ الموافقات (Maker-Checker) ============ --}}
+        <div class="tab-pane fade" id="tab-approvals">
+            <div class="card p-3 mb-3">
+                <div class="d-flex gap-2 mb-3 align-items-center">
+                    <span class="text-muted small">الإجراءات الحساسة (فكّ تجميد / إعادة PIN) تتطلب اعتماد مشرف آخر — لا اعتماد ذاتي.</span>
+                    <button class="btn btn-outline-primary btn-sm ms-auto" id="btn-approvals" data-testid="btn-approvals">تحديث</button>
+                </div>
+                <div id="approvals-list"></div>
+            </div>
+        </div>
+
+        {{-- ============ أمن داخلي (مراقبة الموظفين) ============ --}}
+        <div class="tab-pane fade" id="tab-insider">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="text-muted small">كل اطّلاع موظف على ملف عميل مسجَّل — وأي تعديل في سجل التدقيق يُكشف (سلسلة تجزئة).</span>
+                <button class="btn btn-sm btn-outline-primary" id="btn-insider" data-testid="btn-insider">تحديث</button>
+            </div>
+            <div id="insider-chain" class="mb-2"></div>
+            <div class="card p-3 mb-3">
+                <h6>نشاط الموظفين اليوم</h6>
+                <div id="insider-activity"></div>
+            </div>
+            <div class="card p-3">
+                <h6>تنبيهات مفتوحة</h6>
+                <div id="insider-alerts"></div>
             </div>
         </div>
 
@@ -244,6 +274,89 @@
             <thead><tr><th>الرقم</th><th>العميل</th><th>الموضوع</th><th>الحالة</th><th>الأولوية</th><th>آخر تحديث</th></tr></thead>
             <tbody>${rows || '<tr><td colspan="6" class="text-muted">لا تذاكر</td></tr>'}</tbody></table></div>`;
     }
+
+    // ---------- الموافقات (Maker-Checker) ----------
+    document.getElementById('btn-approvals').onclick = loadApprovals;
+    async function loadApprovals() {
+        const box = document.getElementById('approvals-list');
+        box.innerHTML = '<div class="text-muted">جارٍ التحميل…</div>';
+        const j = await get('/approvals?status=pending');
+        if (!j.success) { box.innerHTML = `<div class="alert alert-warning">${esc(j.message)}</div>`; return; }
+        const labels = {unfreeze_wallet: 'فكّ تجميد حساب', reset_pin: 'إعادة تعيين PIN'};
+        const rows = j.meta.approvals.map(a => `
+            <tr>
+                <td class="font-monospace">${esc(a.request_number)}</td>
+                <td>${esc(labels[a.action_type] || a.action_type)}</td>
+                <td>${esc(a.subject ? (a.subject.f_name + ' ' + (a.subject.l_name || '')) : a.subject_user_id)}</td>
+                <td>${esc(a.maker ? (a.maker.f_name + ' ' + (a.maker.l_name || '')) : a.maker_admin_id)}</td>
+                <td class="small">${esc(a.reason)}</td>
+                <td class="small">${esc(a.created_at)}</td>
+                <td class="text-nowrap">
+                    <button class="btn btn-sm btn-success js-apr" data-apr="approve" data-id="${a.id}">اعتماد</button>
+                    <button class="btn btn-sm btn-outline-danger js-apr" data-apr="reject" data-id="${a.id}">رفض</button>
+                </td>
+            </tr>`).join('');
+        box.innerHTML = `<div class="table-responsive"><table class="table table-sm table-hover">
+            <thead><tr><th>الطلب</th><th>الإجراء</th><th>العميل</th><th>المُقدِّم</th><th>السبب</th><th>التاريخ</th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="7" class="text-muted">لا طلبات معلّقة</td></tr>'}</tbody></table></div>`;
+    }
+
+    document.addEventListener('click', async function (e) {
+        const b = e.target.closest('.js-apr');
+        if (!b) return;
+        const id = b.dataset.id;
+        if (b.dataset.apr === 'approve') {
+            const note = prompt('ملاحظة الاعتماد (اختياري):') || null;
+            const j = await post(`/approvals/${id}/approve`, {note});
+            alert(j.message || (j.success ? 'اعتُمد' : 'فشل'));
+        } else {
+            const note = prompt('سبب الرفض (إلزامي):');
+            if (!note || note.trim().length < 5) { alert('سبب الرفض إلزامي (5 أحرف)'); return; }
+            const j = await post(`/approvals/${id}/reject`, {note: note.trim()});
+            alert(j.message || (j.success ? 'رُفض' : 'فشل'));
+        }
+        loadApprovals();
+    });
+
+    // ---------- أمن داخلي ----------
+    document.getElementById('btn-insider').onclick = loadInsider;
+    async function loadInsider() {
+        const j = await get('/insider/overview');
+        if (!j.success) return;
+        const m = j.meta;
+
+        document.getElementById('insider-chain').innerHTML = m.audit_chain_ok === null ? '' : (m.audit_chain_ok
+            ? '<div class="alert alert-success py-2">✓ سلسلة سجل التدقيق سليمة — لا عبث (فحص آخر 200 سجل)</div>'
+            : '<div class="alert alert-danger py-2">✗ تحذير: سلسلة سجل التدقيق مكسورة — عبث محتمل! شغّل amial:audit-verify فوراً</div>');
+
+        const act = (m.activity_today || []).map(a => `
+            <tr><td>${esc(a.admin_name)}</td><td>${a.profile_views}</td><td>${a.distinct_customers}</td>
+            <td>${a.searches}</td><td class="small">${esc(a.last_activity_at)}</td></tr>`).join('');
+        document.getElementById('insider-activity').innerHTML =
+            `<div class="table-responsive"><table class="table table-sm">
+            <thead><tr><th>الموظف</th><th>اطّلاعات</th><th>عملاء مختلفون</th><th>بحث</th><th>آخر نشاط</th></tr></thead>
+            <tbody>${act || '<tr><td colspan="5" class="text-muted">لا نشاط اليوم</td></tr>'}</tbody></table></div>`;
+
+        const typeLabels = {excessive_profile_views: 'إفراط اطّلاع على ملفات', excessive_searches: 'إفراط بحث',
+                            after_hours_access: 'وصول خارج الدوام', rapid_sequential_access: 'وصول متسلسل سريع'};
+        const alerts = (m.open_alerts || []).map(a => `
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span><span class="badge bg-${a.severity === 'critical' ? 'danger' : 'warning text-dark'}">${esc(a.severity)}</span>
+                ${esc(typeLabels[a.alert_type] || a.alert_type)} — ${esc(a.admin ? (a.admin.f_name + ' ' + (a.admin.l_name || '')) : a.admin_id)}
+                <small class="text-muted">${esc(a.created_at)}</small></span>
+                <button class="btn btn-sm btn-outline-secondary js-ack" data-id="${a.id}">مراجعة ✓</button>
+            </li>`).join('');
+        document.getElementById('insider-alerts').innerHTML = alerts
+            ? `<ul class="list-group">${alerts}</ul>`
+            : '<div class="text-muted">لا تنبيهات مفتوحة</div>';
+    }
+
+    document.addEventListener('click', async function (e) {
+        const b = e.target.closest('.js-ack');
+        if (!b) return;
+        await post(`/insider/alerts/${b.dataset.id}/ack`, {});
+        loadInsider();
+    });
 
     // ---------- المراقبة ----------
     document.getElementById('btn-ops').onclick = loadOps;

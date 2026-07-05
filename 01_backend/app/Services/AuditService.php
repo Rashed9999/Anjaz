@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AuditDecision;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -45,7 +46,7 @@ class AuditService
 
             $decisionId = (string) Str::ulid();
 
-            AuditDecision::create([
+            $attributes = [
                 'decision_id' => $decisionId,
                 'actor_type' => $payload['actor_type'] ?? 'system',
                 'actor_user_id' => $payload['actor_user_id'] ?? null,
@@ -59,7 +60,29 @@ class AuditService
                 'idempotency_key' => $payload['idempotency_key'] ?? null,
                 'zone_code' => $payload['zone_code'] ?? null,
                 'severity' => $payload['severity'] ?? 'info',
-            ]);
+            ];
+
+            // AMIAL-INSIDER-001: سلسلة تجزئة — كل سجل يحمل بصمة سابقه.
+            // أي حذف/تعديل لاحق يكسر السلسلة ويُكشف بـ amial:audit-verify.
+            DB::transaction(function () use ($attributes) {
+                $head = DB::table('audit_chain_head')->where('id', 1)->lockForUpdate()->first();
+
+                $prevHash = $head?->last_hash ?? hash('sha256', 'AMIAL-AUDIT-CHAIN-GENESIS');
+                $entryHash = self::computeEntryHash($prevHash, $attributes);
+
+                $row = AuditDecision::create($attributes + [
+                    'prev_hash' => $prevHash,
+                    'entry_hash' => $entryHash,
+                ]);
+
+                if ($head) {
+                    DB::table('audit_chain_head')->where('id', 1)->update([
+                        'last_hash' => $entryHash,
+                        'last_audit_id' => $row->id,
+                        'updated_at' => now(),
+                    ]);
+                }
+            });
 
             return $decisionId;
 
@@ -73,6 +96,31 @@ class AuditService
             ]);
             return null;
         }
+    }
+
+    /**
+     * بصمة السجل: SHA-256(بصمة السابق + الحقول الجوهرية بترتيب ثابت).
+     * تُستخدم عند الكتابة وعند التحقق (amial:audit-verify) — يجب أن تبقى متطابقة.
+     */
+    public static function computeEntryHash(string $prevHash, array $a): string
+    {
+        $canonical = implode('|', [
+            $prevHash,
+            (string) ($a['decision_id'] ?? ''),
+            (string) ($a['actor_type'] ?? ''),
+            (string) ($a['actor_user_id'] ?? ''),
+            (string) ($a['subject_type'] ?? ''),
+            (string) ($a['subject_id'] ?? ''),
+            (string) ($a['action'] ?? ''),
+            (string) ($a['decision_code'] ?? ''),
+            (string) ($a['reason'] ?? ''),
+            (string) ($a['context'] ?? ''),
+            (string) ($a['transaction_id'] ?? ''),
+            (string) ($a['zone_code'] ?? ''),
+            (string) ($a['severity'] ?? ''),
+        ]);
+
+        return hash('sha256', $canonical);
     }
 
     /**

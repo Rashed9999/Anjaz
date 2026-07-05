@@ -31,6 +31,8 @@ class AuditDecision extends Model
         'zone_code',
         'severity',
         'created_at',
+        'prev_hash',
+        'entry_hash',
     ];
 
     protected $casts = [

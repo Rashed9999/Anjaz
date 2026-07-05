@@ -85,4 +85,19 @@ return [
         // الحد الأقصى للتبرع الواحد
         'max_amount' => env('AMIAL_DONATIONS_MAX_AMOUNT', '50000.0000'),
     ],
+
+    // ============================================================
+    // AMIAL-INSIDER-001 — مراقبة سلوك الموظفين (التهديد الداخلي)
+    // ============================================================
+    'insider_watch' => [
+        // أقصى اطّلاعات على ملفات عملاء لموظف/يوم قبل تنبيه حرج
+        'max_profile_views_per_day' => env('AMIAL_IW_MAX_VIEWS', 150),
+        // أقصى عمليات بحث لموظف/يوم
+        'max_searches_per_day' => env('AMIAL_IW_MAX_SEARCHES', 200),
+        // أي وصول خارج الدوام يُنبَّه عليه (0 = أول وصول ليلي يُنبِّه)
+        'max_after_hours' => env('AMIAL_IW_MAX_AFTER_HOURS', 0),
+        // ساعات الليل: من night_start إلى night_end
+        'night_start' => env('AMIAL_IW_NIGHT_START', 22),
+        'night_end' => env('AMIAL_IW_NIGHT_END', 6),
+    ],
 ];
