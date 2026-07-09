@@ -62,5 +62,9 @@ RUN mkdir -p storage/logs storage/framework/{cache/data,sessions,views} \
 # تثبيت الحزم (بلا dev packages لبيئة الإنتاج/الديمو)
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
+# تهيئة الإقلاع قابلة للتنفيذ
+RUN chmod +x docker/entrypoint.sh
+
 EXPOSE 80
-CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisord.conf"]
+# entrypoint يُهيّئ (منفذ Railway الديناميكي $PORT + migrations + cache) ثم يُشغّل supervisord
+ENTRYPOINT ["/bin/sh", "/var/www/html/docker/entrypoint.sh"]
