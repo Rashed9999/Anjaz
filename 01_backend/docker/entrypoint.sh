@@ -49,12 +49,19 @@ fi
 # سجلّ الأخطاء إلى stderr ليظهر في سجلّات Railway (تشخيص أسهل)
 export LOG_CHANNEL="${LOG_CHANNEL:-stderr}"
 
+# ── ضمان وجود مجلّدات storage وقابليّتها للكتابة (www-data) ──────────
+# سبب 500: throttle يكتب كاش ملفّات في storage/framework/cache/data لكن
+# المجلّد غير قابل للكتابة → fopen يفشل. نُنشئها ونمنحها صلاحية الكتابة.
+mkdir -p storage/framework/cache/data storage/framework/sessions \
+         storage/framework/views storage/logs bootstrap/cache
+chmod -R 777 storage bootstrap/cache 2>/dev/null || true
+chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
+
 # ── تنظيف أي كاش قديم من بناء الصورة (يقرأ Laravel المفاتيح المُصدَّرة
 #    مباشرةً من البيئة بدل كاش قديم بُني قبل توليد APP_KEY — يمنع 500) ──
 php artisan config:clear 2>/dev/null || true
 php artisan route:clear 2>/dev/null || true
 php artisan view:clear 2>/dev/null || true
-php artisan cache:clear 2>/dev/null || true
 
 # ── تهيئة قاعدة البيانات في الخلفية (لا تُؤخّر بدء nginx) ──────────
 # مهم: Railway يفحص الصحّة على /health/liveness فور الإقلاع. لذلك نبدأ
