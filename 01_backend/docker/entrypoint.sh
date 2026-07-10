@@ -14,9 +14,18 @@ echo "🔌 nginx سيستمع على المنفذ: ${PORT}"
 sed -i "s/listen 80;/listen ${PORT};/" /etc/nginx/nginx.conf || true
 
 # ── إنشاء APP_KEY إن لم يوجد ──────────────────────────
+# مهم على Railway: لا يوجد ملف .env، لذا key:generate --force يفشل ويترك
+# المفتاح فارغاً فيُرجع التطبيق 500 (ويفشل الفحص الصحّي). الحل: --show
+# يطبع المفتاح دون ملف، ونُصدّره للبيئة فيرثه php-fpm عبر supervisord.
 if [ -z "$APP_KEY" ] || [ "$APP_KEY" = "base64:" ]; then
-    echo "🔑 إنشاء APP_KEY مؤقّت (اضبطه كمتغيّر بيئة للثبات)..."
-    php artisan key:generate --force 2>/dev/null || true
+    echo "🔑 توليد APP_KEY مؤقّت (اضبطه كمتغيّر بيئة ثابت للإنتاج)..."
+    GEN_KEY=$(php artisan key:generate --show 2>/dev/null || echo "")
+    if [ -n "$GEN_KEY" ]; then
+        export APP_KEY="$GEN_KEY"
+        echo "✓ APP_KEY جاهز في البيئة"
+    else
+        echo "⚠️  تعذّر توليد APP_KEY — اضبطه يدوياً كمتغيّر بيئة."
+    fi
 fi
 
 # ── Cache سريع (لا يتّصل بقاعدة البيانات) ─────────────────────────
