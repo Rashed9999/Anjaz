@@ -87,13 +87,13 @@ php artisan view:clear 2>/dev/null || true
         # AMIAL-FIX: مفاتيح Passport (RSA) مطلوبة لإصدار رموز الدخول — بدونها
         # createToken يفشل بـ "Invalid key supplied". نولّدها كل إقلاع.
         if [ "$DB_OK" -eq 1 ]; then
-            echo "🔑 [خلفية] توليد مفاتيح Passport..."
+            echo "🔑 [خلفية] توليد مفاتيح Passport (RSA)..."
             php artisan passport:keys --force 2>&1 | head -1 || true
-            # عميل الوصول الشخصي (مطلوب لـ createToken) — إن لم يوجد
-            HAS_PAC=$(php artisan tinker --execute="echo (int) \DB::table('oauth_clients')->where('personal_access_client',1)->count();" 2>/dev/null | tail -1 | tr -dc '0-9')
+            # Passport 12: عميل الوصول الشخصي في جدول oauth_personal_access_clients.
+            HAS_PAC=$(php artisan tinker --execute="try { echo (int) \DB::table('oauth_personal_access_clients')->count(); } catch (\Throwable \$e) { echo 0; }" 2>/dev/null | tail -1 | tr -dc '0-9')
             if [ "${HAS_PAC:-0}" = "0" ]; then
                 echo "🔑 [خلفية] إنشاء عميل الوصول الشخصي لـ Passport..."
-                php artisan passport:install --force 2>&1 | tail -1 || true
+                php artisan passport:client --personal --no-interaction --name="Amial Personal Access" 2>&1 | tail -2 || true
             fi
         fi
 
