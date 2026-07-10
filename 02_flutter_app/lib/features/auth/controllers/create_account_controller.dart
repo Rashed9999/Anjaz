@@ -5,7 +5,18 @@ import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
 import 'package:get/get.dart';
 
 class CreateAccountController extends GetxController implements GetxService{
-  String _countryCode = CountryCode.fromCountryCode(Get.find<SplashController>().configModel!.country!).dialCode!;
+  // AMIAL-FIX: كان يفشل (شاشة رمادية) إن لم تُحمّل الإعدادات من الخادم
+  // (configModel = null) لأنه يفكّ null بالقوّة. الآن آمن مع افتراضي اليمن.
+  String _countryCode = _resolveInitialCountryCode();
+
+  static String _resolveInitialCountryCode() {
+    try {
+      final country = Get.find<SplashController>().configModel?.country ?? 'YE';
+      return CountryCode.fromCountryCode(country).dialCode ?? '+967';
+    } catch (_) {
+      return '+967'; // اليمن افتراضياً
+    }
+  }
   String? _phoneNumber;
   String get countryCode => _countryCode;
   String? get phoneNumber => _phoneNumber;
