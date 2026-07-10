@@ -344,6 +344,11 @@ class UnifiedAuthService
         $tokenName = "amyal-{$role}";
         $token = $user->createToken($tokenName);
 
+        // AMIAL-FIX(POST-LOGIN): تسجيل الجهاز (UserLogHistory) — بدونه يرفض
+        // middleware «checkDeviceId» كلّ طلبات الشاشة الرئيسية بـ 403 فتظهر
+        // فارغة. نُكرّر منطق 6cash: تعطيل الأجهزة القديمة ثمّ تفعيل الحالي.
+        $this->registerDevice($user, $request);
+
         // تسجيل الـ login الناجح
         $this->recordSuccess($role, $user->id, $request);
 
@@ -354,6 +359,36 @@ class UnifiedAuthService
             'role' => $role,
             'meta' => $extraMeta,
         ];
+    }
+
+    /**
+     * AMIAL-FIX(POST-LOGIN): يُسجّل جهاز المستخدم ليمرّ من checkDeviceId.
+     * يُطابق منطق LoginController::logUserHistory (6cash): يُعطّل الأجهزة
+     * السابقة ويُنشئ سجلّاً نشطاً للجهاز الحالي. آمن: أي خطأ لا يكسر الدخول.
+     */
+    private function registerDevice(User $user, Request $request): void
+    {
+        try {
+            $deviceId = (string) $request->header('device-id', '');
+            if ($deviceId === '') {
+                // لا ترويسة جهاز (محاكي/ويب) — لا نُسجّل؛ checkDeviceId يمرّر ::1
+                // محلياً، وفي الإنتاج بلا device-id سيُرجع 400 (سلوك 6cash نفسه).
+                return;
+            }
+            \App\Models\UserLogHistory::where('user_id', $user->id)->update(['is_active' => 0]);
+            \App\Models\UserLogHistory::updateOrCreate(
+                ['user_id' => $user->id, 'device_id' => $deviceId],
+                [
+                    'ip_address' => $request->ip(),
+                    'browser' => (string) $request->header('browser', ''),
+                    'os' => (string) $request->header('os', ''),
+                    'device_model' => (string) $request->header('device-model', ''),
+                    'is_active' => 1,
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::warning('registerDevice failed', ['user_id' => $user->id, 'err' => $e->getMessage()]);
+        }
     }
 
     private function guardRateLimit(string $role, string $identifier, Request $request): void

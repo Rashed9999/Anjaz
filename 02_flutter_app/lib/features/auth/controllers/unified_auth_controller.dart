@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
+import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/features/auth/screens/role_router.dart';
 import 'package:amyal_pay/data/api/secure_storage_helper.dart';
@@ -148,8 +149,16 @@ class UnifiedAuthController extends GetxController implements GetxService {
     final token = meta['token']?.toString();
     if (token != null && token.isNotEmpty) {
       try {
-        await SecureStorageHelper.instance.setToken(token);
-      } catch (_) {}
+        // AMIAL-FIX(POST-LOGIN): حرج — لا يكفي حفظ الرمز في المخزن الآمن؛ يجب
+        // ضبطه في ترويسة ApiClient أيضاً، وإلّا خرجت كلّ طلبات الشاشة الرئيسية
+        // بلا Authorization → 401 → ApiChecker يحوّل لشاشة PIN القديمة (6cash).
+        // saveUserToken يفعل الأمرين معاً (updateHeader + المخزن الآمن).
+        await Get.find<AuthController>().authRepo.saveUserToken(token);
+      } catch (_) {
+        // احتياط: لو تعذّر حلّ AuthController، اضبط الترويسة والمخزن مباشرةً.
+        try { repo.apiClient.updateHeader(token); } catch (_) {}
+        try { await SecureStorageHelper.instance.setToken(token); } catch (_) {}
+      }
     }
   }
 
