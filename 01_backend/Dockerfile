@@ -45,6 +45,11 @@ RUN echo "upload_max_filesize=50M"  >> /usr/local/etc/php/conf.d/amial.ini \
  && echo "opcache.enable=1"         >> /usr/local/etc/php/conf.d/amial.ini \
  && echo "opcache.memory_consumption=128" >> /usr/local/etc/php/conf.d/amial.ini
 
+# ── php-fpm على المنفذ 9001 (يترك 9000 لخادم الويب على Railway) ──
+# مهم: منفذ Railway الديناميكي قد يكون 9000؛ لو ظلّ php-fpm عليه يتعارض
+# مع nginx فيفشل الوصول العام (502). ننقله إلى 9001.
+RUN printf "[www]\nlisten = 127.0.0.1:9001\n" > /usr/local/etc/php-fpm.d/zz-amial-port.conf
+
 # ── Nginx config ────────────────────────────────────────
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 
