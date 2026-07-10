@@ -83,15 +83,18 @@ class ConfigController extends Controller
                 'banner_status' => Helpers::get_business_settings('banner_status') ?? 1,
                 'faq_section_status' => Helpers::get_business_settings('faq_section_status') ?? 0,
             ],
-            'customer_add_money_limit' => Helpers::get_business_settings('customer_add_money_limit'),
-            'customer_send_money_limit' => Helpers::get_business_settings('customer_send_money_limit'),
-            'customer_send_money_request_limit' => Helpers::get_business_settings('customer_send_money_request_limit'),
-            'customer_cash_out_limit' => Helpers::get_business_settings('customer_cash_out_limit'),
-            'customer_withdraw_request_limit' => Helpers::get_business_settings('customer_withdraw_request_limit'),
-            'agent_add_money_limit' => Helpers::get_business_settings('agent_add_money_limit'),
-            'agent_send_money_limit' => Helpers::get_business_settings('agent_send_money_limit'),
-            'agent_send_money_request_limit' => Helpers::get_business_settings('agent_send_money_request_limit'),
-            'agent_withdraw_request_limit' => Helpers::get_business_settings('agent_withdraw_request_limit'),
+            // AMIAL-FIX: كانت تُرجع null إن لم تُضبط → تُفشِل تحليل التطبيق
+            // (CustomerLimit.fromJson(null)) → configModel=null → شاشات رمادية.
+            // الآن تُرجع بنية كاملة دائماً.
+            'customer_add_money_limit' => $this->limitOrDefault('customer_add_money_limit'),
+            'customer_send_money_limit' => $this->limitOrDefault('customer_send_money_limit'),
+            'customer_send_money_request_limit' => $this->limitOrDefault('customer_send_money_request_limit'),
+            'customer_cash_out_limit' => $this->limitOrDefault('customer_cash_out_limit'),
+            'customer_withdraw_request_limit' => $this->limitOrDefault('customer_withdraw_request_limit'),
+            'agent_add_money_limit' => $this->limitOrDefault('agent_add_money_limit'),
+            'agent_send_money_limit' => $this->limitOrDefault('agent_send_money_limit'),
+            'agent_send_money_request_limit' => $this->limitOrDefault('agent_send_money_request_limit'),
+            'agent_withdraw_request_limit' => $this->limitOrDefault('agent_withdraw_request_limit'),
             'favorite_number_status' =>  Helpers::get_business_settings('favorite_number_status') ?? 0,
             'favorite_number_limit' =>  Helpers::get_business_settings('favorite_number_limit') ?? 0,
             'favorite_number_cash_out_charge_discount' =>  Helpers::get_business_settings('favorite_number_cash_out_charge_discount') ?? 0,
@@ -105,4 +108,33 @@ class ConfigController extends Controller
 
     // AMIAL-CLEANUP: أُزيلت getPaymentMethods() — كانت تقرأ إعدادات بوّابات الدفع
     // (payment_config) من addon_settings؛ لا بوّابات خارجية في أميال باي.
+
+    /**
+     * AMIAL-FIX: يُرجع بنية حدّ معاملات كاملة دائماً (لا null أبداً) بالحقول
+     * التي يتوقّعها التطبيق (CustomerLimit.fromJson) — status + الحدود الرقمية.
+     * إن كان الإعداد مضبوطاً وصالحاً يُستخدم، وإلا يُرجَع افتراضي سخيّ.
+     */
+    private function limitOrDefault(string $key): array
+    {
+        $default = [
+            'status' => 1,
+            'transaction_limit_per_day' => 100,
+            'max_amount_per_transaction' => 1000000,
+            'total_transaction_amount_per_day' => 10000000,
+            'transaction_limit_per_month' => 3000,
+            'total_transaction_amount_per_month' => 300000000,
+        ];
+
+        $value = Helpers::get_business_settings($key);
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            $value = is_array($decoded) ? $decoded : null;
+        }
+        if (!is_array($value)) {
+            return $default;
+        }
+
+        // نضمن وجود كل مفتاح متوقّع (نملأ الناقص من الافتراضي)
+        return array_merge($default, $value);
+    }
 }
