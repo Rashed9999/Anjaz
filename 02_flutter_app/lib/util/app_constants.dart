@@ -10,7 +10,7 @@ class AppConstants {
   //   flutter run --dart-define=BASE_URL=https://api.your-domain.com
   // أو عدّل القيمة الافتراضية أدناه قبل الإطلاق.
   static const String baseUrl =
-      String.fromEnvironment('BASE_URL', defaultValue: 'https://api.your-domain.com');
+      String.fromEnvironment('BASE_URL', defaultValue: 'https://anjaz-production.up.railway.app');
   static const bool demo = false;
   static const double appVersion = 0.7; //flutter version 3.38.5
   static const String customerPhoneCheckUri = '/api/v1/customer/auth/check-phone';
