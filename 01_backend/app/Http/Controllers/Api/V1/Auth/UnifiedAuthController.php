@@ -36,19 +36,29 @@ class UnifiedAuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $role = $request->input('role');
+        // AMIAL-DIAG: تسجيل واضح لكل طلب دخول (يظهر في سجلّ Railway لتشخيص التطبيق)
+        \Log::info('🔐 LOGIN REQUEST', [
+            'role' => $role,
+            'phone' => $request->input('phone'),
+            'has_password' => $request->filled('password'),
+        ]);
+
         if (!$role) {
             return $this->error('ROLE_REQUIRED', 'يجب تحديد الدور (role)', 422);
         }
 
         try {
-            return match ($role) {
+            $resp = match ($role) {
                 'customer' => $this->customerLogin($request),
                 'merchant' => $this->merchantLogin($request),
                 'agent' => $this->agentLoginStep1($request),
                 'admin' => $this->adminLogin($request),
                 default => $this->error('INVALID_ROLE', 'دور غير معروف', 422),
             };
+            \Log::info('🔐 LOGIN RESULT', ['role' => $role, 'status' => $resp->getStatusCode()]);
+            return $resp;
         } catch (\RuntimeException $e) {
+            \Log::warning('🔐 LOGIN FAILED', ['role' => $role, 'reason' => $e->getMessage()]);
             return $this->error('AUTH_FAILED', $e->getMessage(), 401);
         }
     }

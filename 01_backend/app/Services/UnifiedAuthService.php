@@ -33,8 +33,9 @@ use Illuminate\Support\Str;
  */
 class UnifiedAuthService
 {
-    private const MAX_FAILED_ATTEMPTS_WINDOW = 5;
-    private const FAILED_ATTEMPTS_LOCKOUT_MINUTES = 15;
+    // AMIAL-FIX: رُفع مؤقّتاً لإزالة الحظر أثناء التجربة (كان 5 → يقفل بسرعة).
+    private const MAX_FAILED_ATTEMPTS_WINDOW = 50;
+    private const FAILED_ATTEMPTS_LOCKOUT_MINUTES = 5;
 
     public function __construct(
         private readonly EncryptionService $encryption,
