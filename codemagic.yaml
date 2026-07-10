@@ -1,0 +1,26 @@
+# AMIAL — إعداد بناء Codemagic لتطبيق أميال باي (Flutter)
+# يبني نسخة release مقسّمة حسب معالج الهاتف → حجم أصغر بكثير من debug.
+# التطبيق داخل مجلّد 02_flutter_app (مستودع متعدّد المجلّدات).
+
+workflows:
+  amyal-android-release:
+    name: أميال باي — Android Release (حجم صغير)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      flutter: stable
+      java: 17
+    scripts:
+      - name: جلب الحزم
+        script: |
+          cd 02_flutter_app
+          flutter pub get
+      - name: بناء APK release مقسّم حسب المعالج
+        script: |
+          cd 02_flutter_app
+          # --split-per-abi ينتج APK منفصلاً لكل معالج (arm64 للهواتف الحديثة)
+          # فبدل حزمة عملاقة تحوي كل المعماريات، حجم كل ملف ~الثلث.
+          flutter build apk --release --split-per-abi
+    artifacts:
+      # ستجد عدّة ملفات؛ نزّل «arm64-v8a» للهواتف الحديثة (الأصغر والأنسب).
+      - 02_flutter_app/build/app/outputs/flutter-apk/*.apk
