@@ -10,8 +10,10 @@ cd /var/www/html
 # ── ربط منفذ Railway الديناميكي ($PORT) — nginx يستمع عليه ─────────
 # محلياً لا يُضبط PORT فيبقى 80 (متوافق مع docker-compose).
 PORT="${PORT:-80}"
-echo "🔌 nginx سيستمع على المنفذ: ${PORT}"
+echo "🔌 nginx سيستمع على المنفذ: ${PORT} (IPv4 + IPv6)"
+# مهم لـ Railway: يوجّه الطلبات العامة عبر IPv6، لذا نُصغي على IPv4 و IPv6 معاً.
 sed -i "s/listen 80;/listen ${PORT};/" /etc/nginx/nginx.conf || true
+sed -i "s/listen \[::\]:80;/listen [::]:${PORT};/" /etc/nginx/nginx.conf || true
 
 # ── إنشاء APP_KEY إن لم يوجد ──────────────────────────
 # مهم على Railway: لا يوجد ملف .env، لذا key:generate --force يفشل ويترك
