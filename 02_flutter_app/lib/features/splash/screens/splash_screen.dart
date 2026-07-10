@@ -63,30 +63,38 @@ class _SplashScreenState extends State<SplashScreen> with WidgetsBindingObserver
   }
 
   Future<void> _route() async {
-    Get.find<SplashController>().getConfigData().then((value) {
-      if(value.isOk) {
-        Timer(const Duration(seconds: 1), () async {
-          Get.find<SplashController>().initSharedData().then((value) async {
-            UserShortDataModel? userData = Get.find<AuthController>().getUserData();
+    // AMIAL-FIX: التطبيق كان يعلق على شاشة البداية للأبد إذا كان الخادم غير
+    // متاح (getConfigData بلا مهلة). الآن: نحاول جلب الإعدادات بمهلة قصيرة،
+    // وسواء نجح أو فشل نُكمل التوجيه ليبقى التطبيق قابلاً للاستخدام.
+    try {
+      await Get.find<SplashController>()
+          .getConfigData()
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // الخادم غير متاح أو بطيء — نُكمل بدل التعليق.
+    }
 
+    await Future.delayed(const Duration(seconds: 1));
 
-            if(userData != null && (Get.find<SplashController>().configModel!.companyName != null)){
-              if(GetPlatform.isAndroid){
-                await  FirebaseMessaging.instance.requestPermission();
+    try {
+      await Get.find<SplashController>().initSharedData();
+    } catch (_) {/* تجاهل — بيانات محلية */}
 
-              }
-              Get.offNamed(RouteHelper.getLoginRoute(
-                countryCode: userData.countryCode, phoneNumber: userData.phone,
-                userName: userData.name ?? ''
-              ));
-            }else{
-              Get.offNamed(RouteHelper.getChoseLanguageRoute());
-            }
-          });
+    UserShortDataModel? userData = Get.find<AuthController>().getUserData();
+    final config = Get.find<SplashController>().configModel;
 
-        });
+    if (userData != null && config?.companyName != null) {
+      if (GetPlatform.isAndroid) {
+        try { await FirebaseMessaging.instance.requestPermission(); } catch (_) {}
       }
-    });
+      Get.offNamed(RouteHelper.getLoginRoute(
+        countryCode: userData.countryCode,
+        phoneNumber: userData.phone,
+        userName: userData.name ?? '',
+      ));
+    } else {
+      Get.offNamed(RouteHelper.getChoseLanguageRoute());
+    }
   }
 
   @override
