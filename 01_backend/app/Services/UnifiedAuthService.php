@@ -283,18 +283,29 @@ class UnifiedAuthService
         $query = User::where('type', $userType);
 
         foreach ($credentials as $field => $value) {
-            $normalizer = $field === 'phone' ? 'phone' : ($field === 'national_id' ? 'national_id' : null);
-            $blindIndex = $this->encryption->blindIndex($value, $normalizer);
-
-            // AMIAL-PHONE-001: للهاتف نطابق كل الصيغ المكافئة (مهما كانت صيغة التخزين)
-            $plainValues = $field === 'phone' ? \App\Support\Phone::variants($value) : [$value];
-
-            // ابحث في الـ blind_index column إذا موجود، وإلا fallback للـ plaintext
             $blindCol = "{$field}_blind_index";
-            $query->where(function ($q) use ($blindCol, $blindIndex, $field, $plainValues) {
-                $q->where($blindCol, $blindIndex)
-                  ->orWhereIn($field, $plainValues); // legacy fallback (كل الصيغ)
-            });
+
+            if ($field === 'phone') {
+                // AMIAL-FIX: كانت البصمة المُعمّاة تُحسب للرقم المُدخَل فقط (777...)
+                // بينما التخزين بصيغة أخرى (967777...) → لا تطابق → فشل الدخول.
+                // الآن نحسب البصمة لكل صيغة مكافئة ونطابق أيّها.
+                $variants = \App\Support\Phone::variants($value);
+                $blindIndexes = array_values(array_filter(array_map(
+                    fn ($v) => $this->encryption->blindIndex($v, 'phone'),
+                    $variants
+                )));
+                $query->where(function ($q) use ($blindCol, $blindIndexes, $field, $variants) {
+                    $q->whereIn($blindCol, $blindIndexes)
+                      ->orWhereIn($field, $variants); // fallback لبيانات غير مشفّرة
+                });
+            } else {
+                $normalizer = $field === 'national_id' ? 'national_id' : null;
+                $blindIndex = $this->encryption->blindIndex($value, $normalizer);
+                $query->where(function ($q) use ($blindCol, $blindIndex, $field, $value) {
+                    $q->where($blindCol, $blindIndex)
+                      ->orWhere($field, $value);
+                });
+            }
         }
 
         return $query->first();
@@ -302,10 +313,16 @@ class UnifiedAuthService
 
     private function phoneMatches(User $user, string $phone): bool
     {
-        $bidx = $this->encryption->blindIndex($phone, 'phone');
-        if ($user->phone_blind_index === $bidx) return true;
-        // legacy fallback
-        return $user->phone === $phone || $user->phone === ltrim($phone, '+');
+        // AMIAL-FIX: نطابق بصمة كل صيغة مكافئة (كان يطابق صيغة الإدخال فقط
+        // فيفشل التاجر/الوكيل إن اختلفت صيغة الإدخال عن التخزين).
+        $variants = \App\Support\Phone::variants($phone);
+        foreach ($variants as $v) {
+            if ($user->phone_blind_index === $this->encryption->blindIndex($v, 'phone')) {
+                return true;
+            }
+        }
+        // legacy fallback (بيانات غير مشفّرة)
+        return in_array($user->phone, $variants, true);
     }
 
     private function assertUserActive(User $user): void

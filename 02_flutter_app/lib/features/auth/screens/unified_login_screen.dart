@@ -134,7 +134,7 @@ class _CustomerLoginTabState extends State<_CustomerLoginTab> {
     if (!_formKey.currentState!.validate()) return;
     final ctrl = Get.find<UnifiedAuthController>();
     final success = await ctrl.loginCustomer(
-      nationalId: _nationalIdCtrl.text.trim(),
+      nationalId: '', // AMIAL: الدخول بالهاتف + كلمة المرور فقط (الهوية تخصّ KYC)
       phone: _phoneCtrl.text.trim(),
       password: _passwordCtrl.text,
     );
@@ -162,17 +162,6 @@ class _CustomerLoginTabState extends State<_CustomerLoginTab> {
               child: Text('تسجيل دخول العميل',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
-            TextFormField(
-              controller: _nationalIdCtrl,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'رقم الهوية *',
-                prefixIcon: Icon(Icons.badge_outlined),
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) => (v == null || v.length < 5) ? 'رقم هوية غير صحيح' : null,
-            ),
-            const SizedBox(height: 12),
             TextFormField(
               controller: _phoneCtrl,
               keyboardType: TextInputType.phone,
