@@ -23,7 +23,7 @@ COPY . .
 RUN composer dump-autoload --optimize --no-dev
 
 # ── Stage 2: صورة التشغيل النهائية ───────────────────────
-FROM php:8.2-fpm-alpine AS production
+FROM php:8.4-fpm-alpine AS production
 
 RUN apk add --no-cache \
     nginx \

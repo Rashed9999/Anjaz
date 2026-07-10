@@ -1,4 +1,4 @@
-FROM php:8.2-fpm-alpine
+FROM php:8.4-fpm-alpine
 
 # ── System deps ─────────────────────────────────────────
 RUN apk add --no-cache \
@@ -34,6 +34,8 @@ RUN docker-php-ext-configure gd \
 
 # ── Composer ────────────────────────────────────────────
 COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
+# السماح لـ composer بالعمل كـ root داخل بناء Docker (يمنع تعطيل الإضافات)
+ENV COMPOSER_ALLOW_SUPERUSER=1
 
 # ── PHP config ──────────────────────────────────────────
 RUN echo "upload_max_filesize=50M"  >> /usr/local/etc/php/conf.d/amial.ini \
