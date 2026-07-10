@@ -41,20 +41,23 @@ php artisan view:cache 2>/dev/null || true
 # يفشل الفحص الصحّي إن كانت القاعدة غير جاهزة بعد.
 (
     if [ -n "$DB_HOST" ]; then
-        echo "⏳ [خلفية] انتظار قاعدة البيانات على ${DB_HOST}..."
+        # نستخدم اتصال Laravel نفسه (PDO) لا أداة mysql الطرفية — أوثق مع
+        # شبكة Railway الداخلية (IPv6). نُعيد المحاولة حتى تجهز القاعدة.
+        echo "⏳ [خلفية] تهيئة قاعدة البيانات عبر PDO (${DB_HOST})..."
+        DB_OK=0
         i=0
-        until mysql -h"$DB_HOST" -P"${DB_PORT:-3306}" -u"$DB_USERNAME" -p"$DB_PASSWORD" -e "SELECT 1" >/dev/null 2>&1; do
+        while [ "$i" -lt 40 ]; do
             i=$((i+1))
-            if [ "$i" -ge 60 ]; then
-                echo "⚠️  [خلفية] تعذّر الاتصال بقاعدة البيانات بعد دقيقتين — تحقّق من متغيّرات DB."
-                exit 0
+            if php artisan migrate --force 2>&1; then
+                DB_OK=1
+                echo "✓ [خلفية] الجداول طُبّقت (migrations) — المحاولة $i"
+                break
             fi
-            sleep 2
+            echo "… [خلفية] القاعدة غير جاهزة بعد (محاولة $i) — إعادة خلال 4 ثوانٍ"
+            sleep 4
         done
-        echo "✓ [خلفية] قاعدة البيانات جاهزة — تطبيق الـ migrations..."
-        php artisan migrate --force 2>&1 || echo "⚠️  [خلفية] فشلت الـ migrations."
 
-        if [ "${RUN_SEEDERS:-false}" = "true" ]; then
+        if [ "$DB_OK" -eq 1 ] && [ "${RUN_SEEDERS:-false}" = "true" ]; then
             echo "🌱 [خلفية] تشغيل الـ seeders..."
             php artisan db:seed --class=DemoDataSeeder --force 2>/dev/null || true
             php artisan db:seed --class=FeatureFlagsSeeder --force 2>/dev/null || true
@@ -63,7 +66,11 @@ php artisan view:cache 2>/dev/null || true
             php artisan db:seed --class=BillProvidersStubSeeder --force 2>/dev/null || true
         fi
         php artisan storage:link --force 2>/dev/null || true
-        echo "✅ [خلفية] تهيئة قاعدة البيانات اكتملت."
+        if [ "$DB_OK" -eq 1 ]; then
+            echo "✅ [خلفية] تهيئة قاعدة البيانات اكتملت."
+        else
+            echo "⚠️  [خلفية] تعذّر الاتصال بقاعدة البيانات بعد كل المحاولات — تحقّق أن خدمة MySQL تعمل وأن المتغيّرات مربوطة."
+        fi
     else
         echo "⚠️  [خلفية] DB_HOST غير مضبوط — تخطّي قاعدة البيانات (أضِف MySQL واربط المتغيّرات)."
     fi
