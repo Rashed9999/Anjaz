@@ -65,8 +65,10 @@ return [
     'encryption' => [
         // base64-encoded 32 bytes; toggle to fresh ones via:
         // php -r 'echo base64_encode(random_bytes(32)) . PHP_EOL;'
-        'pii_key' => env('AMIAL_PII_ENCRYPTION_KEY'),
-        'blind_index_key' => env('AMIAL_PII_BLIND_INDEX_KEY'),
+        // AMIAL-FIX: مفاتيح ثابتة افتراضية (كانت تُولَّد عشوائياً كل نشر فتنكسر
+        // فهارس البحث المُعمّاة → فشل الدخول). للإنتاج: اضبطها كمتغيّرات بيئة.
+        'pii_key' => env('AMIAL_PII_ENCRYPTION_KEY', 'ynZEB1h/HBqgQPmWKH7AuB/NVqpSpqkT+GiqnF+wQmo='),
+        'blind_index_key' => env('AMIAL_PII_BLIND_INDEX_KEY', 'aPq8RXLclEIEz6I26E2UEzaRGT3nQrcZhR5NkcY5Q3k='),
 
         // فحوصات أمان
         'require_keys_in_production' => env('AMIAL_REQUIRE_PII_KEYS', true),

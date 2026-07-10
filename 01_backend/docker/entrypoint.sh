@@ -34,17 +34,9 @@ if [ -z "$APP_KEY" ] || [ "$APP_KEY" = "base64:" ]; then
     fi
 fi
 
-# ── مفاتيح تشفير PII (مطلوبة للتسجيل/الدخول — تشفّر الهاتف/الهوية) ──
-# توليد مؤقّت إن لم تُضبط. للإنتاج: اضبطها كمتغيّرات بيئة ثابتة حتى تبقى
-# البيانات المشفّرة قابلة للقراءة عبر عمليات النشر.
-if [ -z "$AMIAL_PII_ENCRYPTION_KEY" ]; then
-    export AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));' 2>/dev/null || echo "")
-    echo "🔐 توليد AMIAL_PII_ENCRYPTION_KEY مؤقّت (اضبطه ثابتاً للإنتاج)"
-fi
-if [ -z "$AMIAL_PII_BLIND_INDEX_KEY" ]; then
-    export AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));' 2>/dev/null || echo "")
-    echo "🔐 توليد AMIAL_PII_BLIND_INDEX_KEY مؤقّت (اضبطه ثابتاً للإنتاج)"
-fi
+# ── مفاتيح تشفير PII ──────────────────────────────────
+# AMIAL-FIX: أُزيل التوليد العشوائي (كان يكسر فهارس البحث المُعمّاة كل نشر
+# فيفشل الدخول). المفاتيح الآن ثابتة من config/amial.php (أو متغيّرات بيئة).
 
 # سجلّ الأخطاء إلى stderr ليظهر في سجلّات Railway (تشخيص أسهل)
 export LOG_CHANNEL="${LOG_CHANNEL:-stderr}"
