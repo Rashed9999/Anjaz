@@ -92,6 +92,12 @@ php artisan view:clear 2>/dev/null || true
             php artisan db:seed --class=SettlementPartnerSeeder --force 2>/dev/null || true
             php artisan db:seed --class=BillProvidersStubSeeder --force 2>/dev/null || true
         fi
+        # AMIAL-DEMO-001: يضمن عميلاً تجريبياً صحيحاً ويختبر الدخول (النتيجة
+        # ✅/❌ تظهر في سجلّ Railway مباشرةً — تشخيص قاطع).
+        if [ "$DB_OK" -eq 1 ]; then
+            echo "🔎 [خلفية] ضمان واختبار الحساب التجريبي..."
+            php artisan amial:ensure-demo 2>&1 || true
+        fi
         php artisan storage:link --force 2>/dev/null || true
         if [ "$DB_OK" -eq 1 ]; then
             echo "✅ [خلفية] تهيئة قاعدة البيانات اكتملت."
