@@ -7,13 +7,17 @@ echo "╚═══════════════════════�
 
 cd /var/www/html
 
-# ── ربط منفذ Railway الديناميكي ($PORT) — nginx يستمع عليه ─────────
-# محلياً لا يُضبط PORT فيبقى 80 (متوافق مع docker-compose).
-PORT="${PORT:-80}"
-echo "🔌 nginx سيستمع على المنفذ: ${PORT} (IPv4 + IPv6)"
-# مهم لـ Railway: يوجّه الطلبات العامة عبر IPv6، لذا نُصغي على IPv4 و IPv6 معاً.
-sed -i "s/listen 80;/listen ${PORT};/" /etc/nginx/nginx.conf || true
-sed -i "s/listen \[::\]:80;/listen [::]:${PORT};/" /etc/nginx/nginx.conf || true
+# ── منافذ إصغاء nginx: منفذ Railway ($PORT) + الدومين (9000) + 8080 ──
+# نستمع على كل المنافذ المحتملة (IPv4 و IPv6) فينتهي أي لبس بين منفذ
+# الفحص الصحّي ومنفذ الدومين. php-fpm على 9001 فلا تعارض.
+PORT="${PORT:-8080}"
+echo "🔌 nginx يستمع على المنافذ المحتملة: ${PORT} + 9000 + 8080 (IPv4/IPv6)"
+: > /etc/nginx/listen.conf
+for p in "$PORT" 9000 8080; do
+    if ! grep -q "listen ${p};" /etc/nginx/listen.conf 2>/dev/null; then
+        printf '        listen %s;\n        listen [::]:%s;\n' "$p" "$p" >> /etc/nginx/listen.conf
+    fi
+done
 
 # ── إنشاء APP_KEY إن لم يوجد ──────────────────────────
 # مهم على Railway: لا يوجد ملف .env، لذا key:generate --force يفشل ويترك
