@@ -64,13 +64,20 @@ php artisan view:clear 2>/dev/null || true
         # نستخدم اتصال Laravel نفسه (PDO) لا أداة mysql الطرفية — أوثق مع
         # شبكة Railway الداخلية (IPv6). نُعيد المحاولة حتى تجهز القاعدة.
         echo "⏳ [خلفية] تهيئة قاعدة البيانات عبر PDO (${DB_HOST})..."
+        # RESET_DB=true: مسح القاعدة وإعادة بنائها (لمرّة واحدة) — يحلّ فشل
+        # الدخول الناتج عن بيانات تجريبية بُذرت بمفاتيح قديمة. أزِله بعدها.
+        MIGRATE_CMD="migrate --force"
+        if [ "${RESET_DB:-false}" = "true" ]; then
+            MIGRATE_CMD="migrate:fresh --force"
+            echo "♻️  [خلفية] RESET_DB=true → مسح وإعادة بناء القاعدة بالكامل"
+        fi
         DB_OK=0
         i=0
         while [ "$i" -lt 40 ]; do
             i=$((i+1))
-            if php artisan migrate --force 2>&1; then
+            if php artisan $MIGRATE_CMD 2>&1; then
                 DB_OK=1
-                echo "✓ [خلفية] الجداول طُبّقت (migrations) — المحاولة $i"
+                echo "✓ [خلفية] الجداول جاهزة — المحاولة $i"
                 break
             fi
             echo "… [خلفية] القاعدة غير جاهزة بعد (محاولة $i) — إعادة خلال 4 ثوانٍ"
