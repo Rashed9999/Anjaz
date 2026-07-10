@@ -79,7 +79,7 @@ class UnifiedAuthController extends GetxController implements GetxService {
         _pendingOtpToken = meta['otp_token'];
         return (meta['masked_phone'] ?? '').toString();
       }
-      lastError.value = _msg(r) ?? 'فشل تسجيل الدخول';
+      lastError.value = _failureMessage(r, 'فشل تسجيل الدخول');
       return null;
     } catch (e) {
       if (kDebugMode) debugPrint('agent step1: $e');
@@ -109,7 +109,7 @@ class UnifiedAuthController extends GetxController implements GetxService {
         try { await Get.find<AccessController>().load(); } catch (_) {}
         return true;
       }
-      lastError.value = _msg(r) ?? 'رمز غير صحيح';
+      lastError.value = _failureMessage(r, 'رمز غير صحيح');
       return false;
     } catch (e) {
       lastError.value = 'خطأ في الشبكة';
@@ -133,7 +133,7 @@ class UnifiedAuthController extends GetxController implements GetxService {
         try { await Get.find<AccessController>().load(); } catch (_) {}
         return true;
       }
-      lastError.value = _msg(r) ?? 'فشل تسجيل الدخول';
+      lastError.value = _failureMessage(r, 'فشل تسجيل الدخول');
       return false;
     } catch (e) {
       if (kDebugMode) debugPrint('login: $e');
@@ -160,10 +160,34 @@ class UnifiedAuthController extends GetxController implements GetxService {
     }
   }
 
-  String? _msg(Response r) {
+  /// AMIAL-FIX(LOGIN): رسالة خطأ دقيقة بدل «فشل تسجيل الدخول» العامّة.
+  /// تميّز بين: انقطاع الشبكة، VPN، تجاوز المحاولات، خطأ الخادم، ورسالة الخادم.
+  String _failureMessage(Response r, String fallback) {
+    // رسالة الخادم إن وُجدت (JSON فيه message) — الأدقّ دائماً
     try {
-      if (r.body is Map) return r.body['message']?.toString();
+      if (r.body is Map && r.body['message'] != null) {
+        final m = r.body['message'].toString();
+        if (m.isNotEmpty) return m;
+      }
     } catch (_) {}
-    return null;
+
+    switch (r.statusCode) {
+      case -1:
+        return 'أوقف VPN ثم حاول مجدداً';
+      case 1:
+      case 0:
+      case null:
+        return 'تعذّر الاتصال بالخادم — تحقّق من اتصال الإنترنت';
+      case 429:
+        return 'محاولات كثيرة — انتظر قليلاً ثم أعد المحاولة';
+      case 401:
+        return 'بيانات الدخول غير صحيحة';
+      case 422:
+        return 'تحقّق من صحّة البيانات المُدخلة';
+    }
+    if (r.statusCode != null && r.statusCode! >= 500) {
+      return 'خطأ مؤقّت في الخادم — أعد المحاولة بعد لحظات';
+    }
+    return fallback;
   }
 }

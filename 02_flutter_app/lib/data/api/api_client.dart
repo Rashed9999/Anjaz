@@ -31,6 +31,10 @@ class ApiClient extends GetxService {
 
     _mainHeaders = {
       'Content-Type': 'application/json; charset=UTF-8',
+      // AMIAL-FIX(LOGIN): بلا Accept: application/json يُرجع Laravel أخطاء 500
+      // كصفحة HTML بدل JSON، فيفشل jsonDecode ويرى المستخدم «فشل تسجيل الدخول»
+      // العامّة بدل السبب الحقيقي. هذا يضمن ردّاً JSON قابلاً للعرض دائماً.
+      'Accept': 'application/json',
       'Authorization': 'Bearer $token',
     };
 
@@ -46,6 +50,7 @@ class ApiClient extends GetxService {
    void updateHeader(String token) {
      _mainHeaders = {
        'Content-Type': 'application/json; charset=UTF-8',
+       'Accept': 'application/json',
        'Authorization': 'Bearer $token',
      };
 

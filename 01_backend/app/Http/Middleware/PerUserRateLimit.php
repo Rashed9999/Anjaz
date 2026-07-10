@@ -84,8 +84,19 @@ class PerUserRateLimit
 
     private function resolveKey(Request $request, string $action, bool $useIp): string
     {
-        $userId = \Illuminate\Support\Facades\Auth::id() ?? optional($request->user())->id ?? optional($request->user('api'))->id ?? optional(auth('api')->user())->id;
-        if ($useIp || !$userId) {
+        // AMIAL-FIX(LOGIN-500): المسارات العامّة (الدخول/التسجيل) تُمرَّر بـ use_ip=true.
+        // في هذه الحالة يجب ألّا نحلّ حارس Passport («api») إطلاقاً — فحلّه يبني
+        // ResourceServer ويحمّل مفاتيح OAuth + APP_KEY، فإن نقص أيّها انفجر الطلب بـ
+        // 500 (صفحة HTML) على مسار دخول عامّ لا يحتاج مصادقة أصلاً. نكتفي بالـ IP.
+        if ($useIp) {
+            return "amial_rl:{$action}:ip:" . $request->ip();
+        }
+
+        // مسار محمي: حلّ المستخدم آمن هنا (المصادقة تمّت في middleware سابق).
+        $userId = \Illuminate\Support\Facades\Auth::id()
+            ?? optional($request->user())->id
+            ?? optional($request->user('api'))->id;
+        if (!$userId) {
             return "amial_rl:{$action}:ip:" . $request->ip();
         }
         return "amial_rl:{$action}:user:" . $userId;

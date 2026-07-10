@@ -48,7 +48,10 @@ RUN echo "upload_max_filesize=50M"  >> /usr/local/etc/php/conf.d/amial.ini \
 # ── php-fpm على المنفذ 9001 (يترك 9000 لخادم الويب على Railway) ──
 # مهم: منفذ Railway الديناميكي قد يكون 9000؛ لو ظلّ php-fpm عليه يتعارض
 # مع nginx فيفشل الوصول العام (502). ننقله إلى 9001.
-RUN printf "[www]\nlisten = 127.0.0.1:9001\ncatch_workers_output = yes\ndecorate_workers_output = no\n" > /usr/local/etc/php-fpm.d/zz-amial-port.conf
+# clear_env=no: العمّال يرثون بيئة الحاوية (متغيّرات Railway: DB_*، APP_KEY المُصدَّر…).
+# افتراضياً clear_env=yes يُفرّغ بيئة العامل فلا يرى env('APP_KEY') → 500 على الدخول.
+# (نكتب أيضاً APP_KEY في .env كضمان مزدوج — انظر entrypoint.sh).
+RUN printf "[www]\nlisten = 127.0.0.1:9001\ncatch_workers_output = yes\ndecorate_workers_output = no\nclear_env = no\n" > /usr/local/etc/php-fpm.d/zz-amial-port.conf
 
 # ── Nginx config ────────────────────────────────────────
 COPY docker/nginx.conf /etc/nginx/nginx.conf

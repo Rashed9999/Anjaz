@@ -19,20 +19,55 @@ for p in "$PORT" 9000 8080; do
     fi
 done
 
-# ── إنشاء APP_KEY إن لم يوجد ──────────────────────────
-# مهم على Railway: لا يوجد ملف .env، لذا key:generate --force يفشل ويترك
-# المفتاح فارغاً فيُرجع التطبيق 500 (ويفشل الفحص الصحّي). الحل: --show
-# يطبع المفتاح دون ملف، ونُصدّره للبيئة فيرثه php-fpm عبر supervisord.
+# ── APP_KEY: يجب أن يصل لعمّال php-fpm (لا للبيئة فقط) ──────────────
+# جذر مشكلة فشل الدخول: طلب الدخول يحلّ حارس Passport ويُصدر رمزاً، وكلاهما
+# يحتاج APP_KEY (المُعمّي). عمّال php-fpm يعملون بـ clear_env=yes افتراضياً
+# فلا يرثون متغيّراً «مُصدَّراً» من هذا السكربت → env('APP_KEY') = null →
+# «No application encryption key» → 500 (صفحة HTML) → التطبيق يُظهر «فشل الدخول».
+#
+# الحلّ الحاسم: نكتب APP_KEY في ملفّ .env فعلي. Laravel/Dotenv يُحمّله في كلّ
+# عامل مهما كان clear_env، ولا يطمس متغيّرات Railway (DB_*) لأنّها ليست فيه.
+ENV_FILE="/var/www/html/.env"
 if [ -z "$APP_KEY" ] || [ "$APP_KEY" = "base64:" ]; then
-    echo "🔑 توليد APP_KEY مؤقّت (اضبطه كمتغيّر بيئة ثابت للإنتاج)..."
-    GEN_KEY=$(php artisan key:generate --show 2>/dev/null || echo "")
-    if [ -n "$GEN_KEY" ]; then
-        export APP_KEY="$GEN_KEY"
-        echo "✓ APP_KEY جاهز في البيئة"
-    else
-        echo "⚠️  تعذّر توليد APP_KEY — اضبطه يدوياً كمتغيّر بيئة."
-    fi
+    echo "🔑 توليد APP_KEY (اضبط APP_KEY كمتغيّر بيئة ثابت لإبقاء الرموز صالحة عبر النشر)..."
+    APP_KEY=$(php artisan key:generate --show 2>/dev/null || echo "")
 fi
+if [ -n "$APP_KEY" ] && [ "$APP_KEY" != "base64:" ]; then
+    export APP_KEY
+    # اكتب/حدّث السطر في .env (يقرؤه كلّ عامل php-fpm عبر Dotenv)
+    touch "$ENV_FILE"
+    if grep -q '^APP_KEY=' "$ENV_FILE" 2>/dev/null; then
+        sed -i "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" "$ENV_FILE"
+    else
+        printf 'APP_KEY=%s\n' "$APP_KEY" >> "$ENV_FILE"
+    fi
+    # مفاتيح PII كذلك في .env (احتياط لو لم تُضبط كمتغيّرات Railway) —
+    # ثابتة من config/amial.php افتراضياً، لكن تثبيتها هنا يمنع أيّ التباس.
+    for pair in "AMIAL_PII_ENCRYPTION_KEY=${AMIAL_PII_ENCRYPTION_KEY:-}" \
+                "AMIAL_PII_BLIND_INDEX_KEY=${AMIAL_PII_BLIND_INDEX_KEY:-}"; do
+        k="${pair%%=*}"; v="${pair#*=}"
+        [ -z "$v" ] && continue
+        if grep -q "^${k}=" "$ENV_FILE" 2>/dev/null; then
+            sed -i "s|^${k}=.*|${k}=${v}|" "$ENV_FILE"
+        else
+            printf '%s=%s\n' "$k" "$v" >> "$ENV_FILE"
+        fi
+    done
+    echo "✓ APP_KEY مكتوب في .env — سيقرؤه كلّ عامل php-fpm"
+else
+    echo "⚠️  تعذّر توليد APP_KEY — اضبطه يدوياً كمتغيّر بيئة Railway."
+fi
+
+# ── مفاتيح Passport (RSA) — ملفّات لا تحتاج قاعدة بيانات ──────────────
+# نولّدها هنا (قبل بدء الخدمة) لا في خلفية مربوطة بالـ DB، فتكون جاهزة قبل
+# أوّل طلب دخول (حلّ حارس api يحمّل المفتاح العامّ؛ غيابه = 500). إن وُجدت
+# (مضبوطة كمتغيّرات بيئة) لا تُلمَس.
+if [ ! -f storage/oauth-private.key ] || [ ! -f storage/oauth-public.key ]; then
+    echo "🔑 توليد مفاتيح Passport (RSA) قبل بدء الخدمة..."
+    php artisan passport:keys --force 2>&1 | tail -1 || true
+fi
+chmod 600 storage/oauth-private.key storage/oauth-public.key 2>/dev/null || true
+chown www-data:www-data storage/oauth-*.key 2>/dev/null || true
 
 # ── مفاتيح تشفير PII ──────────────────────────────────
 # AMIAL-FIX: أُزيل التوليد العشوائي (كان يكسر فهارس البحث المُعمّاة كل نشر
@@ -84,12 +119,10 @@ php artisan view:clear 2>/dev/null || true
             sleep 4
         done
 
-        # AMIAL-FIX: مفاتيح Passport (RSA) مطلوبة لإصدار رموز الدخول — بدونها
-        # createToken يفشل بـ "Invalid key supplied". نولّدها كل إقلاع.
+        # AMIAL-FIX: مفاتيح Passport (RSA) تُولَّد الآن في المقدّمة قبل بدء الخدمة
+        # (أعلى). هنا نُنشئ فقط «عميل الوصول الشخصي» لأنّه يحتاج قاعدة البيانات.
+        # Passport 12: عميل الوصول الشخصي في جدول oauth_personal_access_clients.
         if [ "$DB_OK" -eq 1 ]; then
-            echo "🔑 [خلفية] توليد مفاتيح Passport (RSA)..."
-            php artisan passport:keys --force 2>&1 | head -1 || true
-            # Passport 12: عميل الوصول الشخصي في جدول oauth_personal_access_clients.
             HAS_PAC=$(php artisan tinker --execute="try { echo (int) \DB::table('oauth_personal_access_clients')->count(); } catch (\Throwable \$e) { echo 0; }" 2>/dev/null | tail -1 | tr -dc '0-9')
             if [ "${HAS_PAC:-0}" = "0" ]; then
                 echo "🔑 [خلفية] إنشاء عميل الوصول الشخصي لـ Passport..."
