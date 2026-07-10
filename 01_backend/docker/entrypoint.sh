@@ -46,10 +46,15 @@ if [ -z "$AMIAL_PII_BLIND_INDEX_KEY" ]; then
     echo "🔐 توليد AMIAL_PII_BLIND_INDEX_KEY مؤقّت (اضبطه ثابتاً للإنتاج)"
 fi
 
-# ── Cache سريع (لا يتّصل بقاعدة البيانات) ─────────────────────────
-php artisan config:cache 2>/dev/null || true
-php artisan route:cache 2>/dev/null || true
-php artisan view:cache 2>/dev/null || true
+# سجلّ الأخطاء إلى stderr ليظهر في سجلّات Railway (تشخيص أسهل)
+export LOG_CHANNEL="${LOG_CHANNEL:-stderr}"
+
+# ── تنظيف أي كاش قديم من بناء الصورة (يقرأ Laravel المفاتيح المُصدَّرة
+#    مباشرةً من البيئة بدل كاش قديم بُني قبل توليد APP_KEY — يمنع 500) ──
+php artisan config:clear 2>/dev/null || true
+php artisan route:clear 2>/dev/null || true
+php artisan view:clear 2>/dev/null || true
+php artisan cache:clear 2>/dev/null || true
 
 # ── تهيئة قاعدة البيانات في الخلفية (لا تُؤخّر بدء nginx) ──────────
 # مهم: Railway يفحص الصحّة على /health/liveness فور الإقلاع. لذلك نبدأ
