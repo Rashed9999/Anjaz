@@ -123,7 +123,9 @@ class _ChooseLanguageScreenState extends State<ChooseLanguageScreen> {
                               .countryCode,
                         ));
                         if(!Navigator.canPop(Get.context!)){
-                          Get.offNamed(RouteHelper.getChoseLoginRegRoute());
+                          // AMIAL: بعد اللغة ← دخول أميال باي الموحّد (عميل/تاجر/وكيل)
+                          // بدل تدفّق 6cash القديم (إنشاء حساب + قائمة الدول).
+                          Get.offNamed(RouteHelper.getUnifiedLoginRoute());
                         }else{
                           Get.back();
                         }

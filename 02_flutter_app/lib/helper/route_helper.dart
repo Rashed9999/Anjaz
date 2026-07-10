@@ -4,6 +4,7 @@ import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amyal_pay/common/models/signup_body_model.dart';
 import 'package:amyal_pay/common/models/contact_model.dart';
 import 'package:amyal_pay/features/auth/screens/create_account_screen.dart';
+import 'package:amyal_pay/features/auth/screens/unified_login_screen.dart';
 import 'package:amyal_pay/features/auth/screens/login_screen.dart';
 import 'package:amyal_pay/features/auth/screens/sign_up_information_screen.dart';
 import 'package:amyal_pay/features/auth/screens/pin_set_screen.dart';
@@ -85,6 +86,7 @@ class RouteHelper {
   static const String shareStatement = '/share_statement';
   static const String support = '/support';
   static const String choseLanguageScreen = '/chose_language_screen';
+  static const String unifiedLoginScreen = '/unified_login';  // AMIAL: دخول أميال باي الموحّد
   static const String qrCodeDownloadOrShare = '/qr_code_download_or_share';
 
   static String getSplashRoute() => splash;
@@ -116,6 +118,7 @@ class RouteHelper {
   static String  getSendMoneyInputRoute({required String transactionType}) => '$sendMoneyBalanceInput?transaction-type=$transactionType';
   static String  getSendMoneyConfirmationRoute({required String inputBalanceText,required String transactionType}) => '$sendMoneyConfirmation?input-balance=$inputBalanceText&transaction-type=$transactionType';
   static String  getChoseLanguageRoute() => choseLanguageScreen;
+  static String  getUnifiedLoginRoute() => unifiedLoginScreen;  // AMIAL
   static String  getCashOutScreenRoute({String? phoneNumber,required bool fromEdit}) => '$cashOut?phone-number=$phoneNumber&from-edit=${fromEdit?'edit-number':'home'}';
   static String  getCashOutBalanceInputRoute() => cashOutBalanceInput;
   static String  getFResetPassRoute({String? phoneNumber, String? otp}) => '$resetPassScreen?phone-number=$phoneNumber&otp=$otp';
@@ -158,6 +161,7 @@ class RouteHelper {
     GetPage(name: sendMoneyConfirmation, page: () => TransactionConfirmationScreen(inputBalance:double.tryParse(Get.parameters['input-balance']!),transactionType: Get.parameters['transaction-type'])),
 
     GetPage(name: choseLoginOrRegScreen, page: () => const OnBoardingScreen()),
+    GetPage(name: unifiedLoginScreen, page: () => const UnifiedLoginScreen()),  // AMIAL
     GetPage(name: createAccountScreen, page: () => const CreateAccountScreen()),
     GetPage(name: verifyScreen, page: () {
       final String? phoneNumber = Uri.decodeComponent(Get.parameters['phone_number']!)
