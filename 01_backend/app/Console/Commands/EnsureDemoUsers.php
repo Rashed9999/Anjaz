@@ -59,15 +59,20 @@ class EnsureDemoUsers extends Command
             );
 
             $this->info("✓ حساب العميل التجريبي جاهز id={$user->id} phone={$phone}");
+        } catch (\Throwable $e) {
+            $this->error('❌ فشل إنشاء العميل التجريبي: ' . $e->getMessage());
+            // لا نُرجِع FAILURE — نُكمل باقي التهيئة (العملة/الميزات) بأمان.
+        }
 
-            // AMIAL-DEMO: مستلِم تجريبي (لتجربة إرسال الأموال) — 967777100002
+        // AMIAL-FIX(RESILIENCE): كل قسم في try مستقلّ — فشل أحدها لا يُسقط الباقي
+        // (كان كلّ شيء في try واحد؛ فشل المستلِم يُلغي ضبط العملة والميزات).
+
+        // 1b) مستلِم تجريبي (لتجربة إرسال الأموال) — 967777100002
+        try {
             $rxPhone = '967777100002';
             $recipient = User::where('type', 2)->get()->first(function ($u) use ($rxPhone) {
                 return in_array($u->phone, [$rxPhone, '777100002'], true);
-            });
-            if (!$recipient) {
-                $recipient = new User();
-            }
+            }) ?? new User();
             $recipient->f_name = 'محمد';
             $recipient->l_name = 'علي';
             $recipient->phone = $rxPhone;
@@ -87,10 +92,12 @@ class EnsureDemoUsers extends Command
                 ]
             );
             $this->info("✓ المستلِم التجريبي جاهز id={$recipient->id} phone={$rxPhone} (محمد علي)");
+        } catch (\Throwable $e) {
+            $this->error('❌ فشل إنشاء المستلِم: ' . $e->getMessage());
+        }
 
-            // AMIAL-FIX(FEATURES): تفعيل مفاتيح الميزات في business_settings —
-            // على قاعدة أميال الجديدة تكون مفقودة فتُرجع كل الخدمات
-            // «feature is not activate» (403). نُفعّلها ليعمل العميل فعلاً.
+        // 1c) تفعيل مفاتيح الميزات (بدونها كل الخدمات «feature is not activate»)
+        try {
             $featureKeys = [
                 'send_money_status', 'cash_out_status', 'add_money_status',
                 'withdraw_request_status', 'send_money_request_status',
@@ -98,13 +105,16 @@ class EnsureDemoUsers extends Command
                 'linked_website_status', 'report_disputes_status',
             ];
             foreach ($featureKeys as $k) {
-                // نستخدم query builder (الموديل بلا fillable لـ mass assignment)
                 \Illuminate\Support\Facades\DB::table('business_settings')
                     ->updateOrInsert(['key' => $k], ['value' => '1']);
             }
             $this->info('✓ مفاتيح الميزات مُفعّلة (' . count($featureKeys) . ' مفتاح)');
+        } catch (\Throwable $e) {
+            $this->error('❌ فشل تفعيل الميزات: ' . $e->getMessage());
+        }
 
-            // AMIAL-FIX(CURRENCY): العملة ريال يمني فقط (كانت ر.س/SAR على الشاشات).
+        // 1d) العملة ريال يمني فقط (كانت ر.س/SAR على الشاشات)
+        try {
             \Illuminate\Support\Facades\DB::table('business_settings')
                 ->updateOrInsert(['key' => 'currency'], ['value' => 'YER']);
             \Illuminate\Support\Facades\DB::table('business_settings')
@@ -115,8 +125,7 @@ class EnsureDemoUsers extends Command
             );
             $this->info('✓ العملة مضبوطة: ريال يمني (YER / ر.ي)');
         } catch (\Throwable $e) {
-            $this->error('❌❌❌ فشل إنشاء العميل التجريبي: ' . $e->getMessage());
-            return self::FAILURE;
+            $this->error('❌ فشل ضبط العملة: ' . $e->getMessage());
         }
 
         // 2) اختبار الدخول الفعلي عبر نفس مسار التطبيق

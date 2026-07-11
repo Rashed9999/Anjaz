@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:amyal_pay/features/receipts/controllers/receipts_controller.dart';
+import 'package:amyal_pay/data/api/secure_storage_helper.dart';
+import 'package:amyal_pay/helper/pdf_downloader_helper.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-RECEIPTS-001 (v0.9-D)
@@ -24,14 +26,44 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
   }
 
   Future<void> _downloadPdf() async {
-    final url = Get.find<ReceiptsController>().getDownloadUrl(widget.receiptId);
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('فشل فتح ملف PDF')),
+    // AMIAL-FIX(PDF): كان يفتح الرابط في المتصفّح الخارجي بلا رمز الدخول →
+    // يُرفض (401). الآن نُنزّل الـ PDF داخل التطبيق مع ترويسة المصادقة، نحفظه
+    // مؤقّتاً، ثمّ نفتحه بعارض النظام.
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('جارٍ تحضير الإيصال...')),
+    );
+    try {
+      final url = Get.find<ReceiptsController>().getDownloadUrl(widget.receiptId);
+      String? token;
+      try {
+        token = await SecureStorageHelper.instance.getToken();
+      } catch (_) {}
+      final resp = await http.get(
+        Uri.parse(url),
+        headers: {
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          'Accept': 'application/pdf',
+        },
+      ).timeout(const Duration(seconds: 30));
+
+      final contentType = resp.headers['content-type'] ?? '';
+      if (resp.statusCode != 200 || contentType.contains('json')) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('تعذّر تحميل الإيصال (${resp.statusCode})')),
+        );
+        return;
+      }
+
+      // نُسلّم البايتات للمساعد القويّ (يحفظ + يفتح مع بدائل حسب المنصّة).
+      await PdfDownloaderHelper.downloadAndOpenPdf(
+        pdfData: resp.bodyBytes,
+        baseFileName: 'receipt_${widget.receiptId}',
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('فشل تحميل PDF: $e')),
       );
     }
   }
