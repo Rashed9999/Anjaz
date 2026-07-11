@@ -1,3 +1,4 @@
+import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
@@ -76,7 +77,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
 إيصال Amyal Pay
 الرقم: ${receipt.receiptNumber}
 النوع: ${receipt.arabicTypeLabel}
-المبلغ: ${receipt.amount} ر.ي
+المبلغ: ${AmialMoney.fmt(receipt.amount)} ر.ي
 التاريخ: ${receipt.issuedAt}
 
 للتحقق:
@@ -135,7 +136,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '${isCredit ? '+' : '-'}${r.amount} ر.ي',
+                      (isCredit ? '+' : '-')+AmialMoney.yer(r.amount),
                       style: TextStyle(
                         color: AmyalColors.primary,
                         fontSize: 32,
@@ -159,9 +160,9 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
               _detailRow('رقم الإيصال', r.receiptNumber, monospace: true),
               _detailRow('المعاملة', r.referenceTransactionId, monospace: true),
               if (double.tryParse(r.fee) != null && double.parse(r.fee) > 0)
-                _detailRow('الرسوم', '${r.fee} ر.ي'),
+                _detailRow('الرسوم', AmialMoney.yer(r.fee)),
               if (double.tryParse(r.fee) != null && double.parse(r.fee) > 0)
-                _detailRow('الإجمالي', '${r.netAmount} ر.ي'),
+                _detailRow('الإجمالي', AmialMoney.yer(r.netAmount)),
               if (r.issuedAt != null)
                 _detailRow('التاريخ', _fmtDate(r.issuedAt!)),
               _detailRow('المنطقة', r.zoneCode),

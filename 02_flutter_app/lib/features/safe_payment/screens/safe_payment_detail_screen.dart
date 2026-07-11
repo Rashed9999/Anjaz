@@ -1,3 +1,4 @@
+import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/safe_payment/controllers/safe_payment_controller.dart';
@@ -176,7 +177,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
                         style: TextStyle(
                             fontSize: 12, color: AmyalColors.textSecondary)),
                     Text(
-                      '${payment.amount} ر.ي',
+                      AmialMoney.yer(payment.amount),
                       style: const TextStyle(
                           fontSize: 28, fontWeight: FontWeight.bold,
                           color: AmyalColors.primary),
@@ -190,13 +191,13 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
                           color: AmyalColors.yellow.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Text('محجوز: ${payment.heldAmount} ر.ي',
+                        child: Text('محجوز: '+AmialMoney.yer(payment.heldAmount),
                             style: const TextStyle(fontSize: 11)),
                       ),
                     ],
                     if (double.parse(payment.platformFee) > 0) ...[
                       const SizedBox(height: 4),
-                      Text('رسوم الخدمة: ${payment.platformFee} ر.ي',
+                      Text('رسوم الخدمة: '+AmialMoney.yer(payment.platformFee),
                           style: const TextStyle(
                               fontSize: 10, color: AmyalColors.textMuted)),
                     ],
