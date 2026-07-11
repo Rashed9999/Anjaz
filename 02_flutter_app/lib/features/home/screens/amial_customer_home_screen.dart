@@ -13,6 +13,7 @@ import 'package:amyal_pay/features/notification/screens/notifications_center_scr
 import 'package:amyal_pay/features/setting/screens/profile_screen.dart';
 import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amyal_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
+import 'package:amyal_pay/features/setting/screens/qr_code_download_or_share_screen.dart';
 
 /// AMIAL-CUSTOMER-HOME-001
 ///
@@ -31,6 +32,8 @@ class AmialCustomerHomeScreen extends StatefulWidget {
 class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   String _name = '';
   String _balance = '0';
+  String _qrCode = ''; // SVG رمز العميل لاستقبال المال
+  String _phone = '';
   bool _hideBalance = false;
   bool _loading = true;
   List<Map<String, dynamic>> _recent = [];
@@ -52,6 +55,8 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         final ln = (b['l_name'] ?? '').toString();
         _name = ('$fn $ln').trim();
         _balance = (b['balance'] ?? '0').toString();
+        _qrCode = (b['qr_code'] ?? '').toString();
+        _phone = (b['phone'] ?? '').toString();
       }
     } catch (_) {/* دفاعي: نُبقي الواجهة نظيفة */}
 
@@ -74,6 +79,19 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
     } catch (_) {/* دفاعي */}
 
     if (mounted) setState(() => _loading = false);
+  }
+
+  // AMIAL: باركود استقبال المال — يعرض رمز العميل (SVG من get-customer)
+  // ليمسحه المرسِل ويحوّل إليك. إن لم يُحمّل بعد، نُبلّغ ونعيد المحاولة.
+  void _openReceiveQr() {
+    if (_qrCode.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('جارٍ تجهيز رمز الاستلام...')),
+      );
+      _load();
+      return;
+    }
+    Get.to(() => QrCodeDownloadOrShareScreen(qrCode: _qrCode, phoneNumber: _phone));
   }
 
   String get _balanceText {
@@ -266,7 +284,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
     final items = [
       // مهم: TransactionMoneyScreen يتطلّب transactionType (وإلّا widget.transactionType!.tr تنهار)
       _Qa('إرسال', Icons.send_rounded, () => Get.to(() => const TransactionMoneyScreen(fromEdit: false, transactionType: 'send_money'))),
-      _Qa('سحب نقدي', Icons.account_balance_wallet_outlined, () => Get.to(() => const TransactionMoneyScreen(fromEdit: false, transactionType: 'cash_out'))),
+      _Qa('استلام', Icons.qr_code_2_rounded, _openReceiveQr),
       _Qa('الفواتير', Icons.receipt_long_rounded, () => Get.to(() => const BillPayProvidersScreen())),
       _Qa('السجل', Icons.history_rounded, () => Get.to(() => const ReceiptsListScreen())),
     ];
