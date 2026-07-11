@@ -44,20 +44,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           TransactionTableModel(
             'send_money'.tr, Images.sendMoneyImage, splashController.configModel!.customerSendMoneyLimit!,
             Transaction(
-              userInfo.transactionLimits!.dailySendMoneyCount ?? 0,
-              userInfo.transactionLimits!.monthlySendMoneyCount ?? 0,
-              userInfo.transactionLimits!.dailySendMoneyAmount ?? 0,
-              userInfo.transactionLimits!.monthlySendMoneyAmount ?? 0,
+              userInfo.transactionLimits?.dailySendMoneyCount ?? 0,
+              userInfo.transactionLimits?.monthlySendMoneyCount ?? 0,
+              userInfo.transactionLimits?.dailySendMoneyAmount ?? 0,
+              userInfo.transactionLimits?.monthlySendMoneyAmount ?? 0,
             ),
           ),
 
         if(splashController.configModel!.systemFeature!.cashOutStatus! && splashController.configModel!.customerCashOutLimit!.status )
           TransactionTableModel('cash_out'.tr, Images.cashOutLogo, splashController.configModel!.customerCashOutLimit!,
             Transaction(
-              userInfo.transactionLimits!.dailyCashOutCount ?? 0,
-              userInfo.transactionLimits!.monthlyCashOutCount ?? 0,
-              userInfo.transactionLimits!.dailyCashOutAmount ?? 0,
-              userInfo.transactionLimits!.monthlyCashOutAmount ?? 0,
+              userInfo.transactionLimits?.dailyCashOutCount ?? 0,
+              userInfo.transactionLimits?.monthlyCashOutCount ?? 0,
+              userInfo.transactionLimits?.dailyCashOutAmount ?? 0,
+              userInfo.transactionLimits?.monthlyCashOutAmount ?? 0,
             ),
           ),
 
@@ -65,10 +65,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if(splashController.configModel!.systemFeature!.sendMoneyRequestStatus! && splashController.configModel!.customerRequestMoneyLimit!.status)
           TransactionTableModel('send_money_request'.tr, Images.requestMoney, splashController.configModel!.customerRequestMoneyLimit!,
             Transaction(
-              userInfo.transactionLimits!.dailySendMoneyRequestCount ?? 0,
-              userInfo.transactionLimits!.monthlySendMoneyRequestCount ?? 0,
-              userInfo.transactionLimits!.dailySendMoneyRequestAmount ?? 0,
-              userInfo.transactionLimits!.monthlySendMoneyRequestAmount ?? 0,
+              userInfo.transactionLimits?.dailySendMoneyRequestCount ?? 0,
+              userInfo.transactionLimits?.monthlySendMoneyRequestCount ?? 0,
+              userInfo.transactionLimits?.dailySendMoneyRequestAmount ?? 0,
+              userInfo.transactionLimits?.monthlySendMoneyRequestAmount ?? 0,
             ),),
 
         if(splashController.configModel!.systemFeature!.addMoneyStatus! && splashController.configModel!.customerAddMoneyLimit!.status )
