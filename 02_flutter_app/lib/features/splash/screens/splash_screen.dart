@@ -83,15 +83,14 @@ class _SplashScreenState extends State<SplashScreen> with WidgetsBindingObserver
     UserShortDataModel? userData = Get.find<AuthController>().getUserData();
     final config = Get.find<SplashController>().configModel;
 
+    // AMIAL: كل المسارات تؤدّي لدخول أميال باي الموحّد — لا لشاشة PIN القديمة
+    // (6cash). المستخدم العائد (userData موجود) يذهب مباشرةً للدخول الموحّد؛
+    // الجديد يمرّ باختيار اللغة ثمّ الدخول الموحّد.
     if (userData != null && config?.companyName != null) {
       if (GetPlatform.isAndroid) {
         try { await FirebaseMessaging.instance.requestPermission(); } catch (_) {}
       }
-      Get.offNamed(RouteHelper.getLoginRoute(
-        countryCode: userData.countryCode,
-        phoneNumber: userData.phone,
-        userName: userData.name ?? '',
-      ));
+      Get.offNamed(RouteHelper.getUnifiedLoginRoute());
     } else {
       Get.offNamed(RouteHelper.getChoseLanguageRoute());
     }

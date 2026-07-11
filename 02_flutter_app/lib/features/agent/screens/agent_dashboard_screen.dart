@@ -43,7 +43,7 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AmyalColors.primary, Color(0xFF1A56C2)],
+                    colors: [AmyalColors.primary, Color(0xFF1E5A44)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),

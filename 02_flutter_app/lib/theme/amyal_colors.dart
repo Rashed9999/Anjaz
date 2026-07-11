@@ -12,13 +12,13 @@ import 'package:flutter/material.dart';
 class AmyalColors {
   AmyalColors._(); // private constructor — لا instantiation
 
-  /// الأزرق الرئيسي — للنصوص الكبيرة، الأزرار، الـ AppBar.
-  /// مستخرج من حرف "أميال" في الشعار.
-  static const Color primary = Color(0xFF053391);
+  /// الأخضر الغابيّ الرئيسي — للأزرار، الـ AppBar، بطاقة الرصيد.
+  /// AMIAL-BRANDING-002: مطابق لتصاميم المشروع (كان أزرق #053391).
+  static const Color primary = Color(0xFF14342A);
 
-  /// تدرّجات الأزرق
-  static const Color primaryDark = Color(0xFF021F60);
-  static const Color primaryLight = Color(0xFF3B66C0);
+  /// تدرّجات الأخضر
+  static const Color primaryDark = Color(0xFF0E241C);
+  static const Color primaryLight = Color(0xFF1E5A44);
 
   /// الذهبي الساطع — الخلفية الرئيسية للبراند، Splash، أزرار التأكيد.
   static const Color yellow = Color(0xFFFECA1E);

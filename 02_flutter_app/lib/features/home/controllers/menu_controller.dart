@@ -1,5 +1,5 @@
 import 'package:amyal_pay/features/history/screens/history_screen.dart';
-import 'package:amyal_pay/features/home/screens/home_screen.dart';
+import 'package:amyal_pay/features/home/screens/amial_customer_home_screen.dart';
 import 'package:amyal_pay/features/notification/screens/notification_screen.dart';
 import 'package:amyal_pay/features/setting/screens/profile_screen.dart';
 
@@ -14,8 +14,10 @@ class MenuItemController extends GetxController implements GetxService{
   double get homePageScrollPosition => _homePageScrollPosition;
 
 
+  // AMIAL-CUSTOMER-HOME-001: تبويب «البيت» صار الشاشة الرئيسية بهوية أميال باي
+  // (كان HomeScreen من 6cash). باقي التبويبات كما هي داخل نفس الغلاف السفلي.
   final List<Widget> screen = [
-    const HomeScreen(),
+    const AmialCustomerHomeScreen(),
     const HistoryScreen(),
     const NotificationScreen(),
     const ProfileScreen()

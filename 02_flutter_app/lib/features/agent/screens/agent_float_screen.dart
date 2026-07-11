@@ -72,7 +72,7 @@ class _AgentFloatScreenState extends State<AgentFloatScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AmyalColors.primary, Color(0xFF1A56C2)],
+          colors: [AmyalColors.primary, Color(0xFF1E5A44)],
         ),
         borderRadius: BorderRadius.circular(16),
       ),
