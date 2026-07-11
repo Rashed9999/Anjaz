@@ -24,6 +24,8 @@ class AuthServiceProvider extends ServiceProvider
     {
         $this->registerPolicies();
 
-        Passport::personalAccessTokensExpireIn(Carbon::now()->addMinute(40));
+        // AMIAL-PILOT: رُفعت من 40 دقيقة إلى 30 يوماً حتى لا تنتهي الجلسة أثناء
+        // التجربة («Token Expired»). قلّلها للإنتاج حسب سياسة الأمان.
+        Passport::personalAccessTokensExpireIn(Carbon::now()->addDays(30));
     }
 }

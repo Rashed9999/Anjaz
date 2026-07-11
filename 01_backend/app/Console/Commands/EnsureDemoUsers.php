@@ -112,6 +112,10 @@ class EnsureDemoUsers extends Command
             // لاحقاً بعد ضبط مزوّد الرسائل. المعالج يعرض خطوة الرمز دائماً.
             \Illuminate\Support\Facades\DB::table('business_settings')
                 ->updateOrInsert(['key' => 'phone_verification'], ['value' => '0']);
+            // AMIAL-PILOT: إطالة مهلة الخمول (كانت 20 دقيقة → تُخرج المستخدم أثناء
+            // التجربة برسالة «Token Expired»). 7 أيام للتجربة؛ اضبطها لاحقاً للإنتاج.
+            \Illuminate\Support\Facades\DB::table('business_settings')
+                ->updateOrInsert(['key' => 'inactive_auth_minute'], ['value' => '10080']);
             $this->info('✓ مفاتيح الميزات مُفعّلة (' . count($featureKeys) . ' مفتاح)');
         } catch (\Throwable $e) {
             $this->error('❌ فشل تفعيل الميزات: ' . $e->getMessage());
