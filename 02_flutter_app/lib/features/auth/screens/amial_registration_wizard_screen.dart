@@ -31,8 +31,12 @@ class _AmialRegistrationWizardScreenState
   static const int _successStep = 9;
 
   // ── الحقول ──────────────────────────────────────────────
-  final _fName = TextEditingController();
-  final _lName = TextEditingController();
+  // الاسم الرباعي
+  final _name1 = TextEditingController(); // الأول
+  final _name2 = TextEditingController(); // الأب
+  final _name3 = TextEditingController(); // الجد
+  final _name4 = TextEditingController(); // العائلة
+  final _dob = TextEditingController();    // تاريخ الميلاد (yyyy-MM-dd)
   final _email = TextEditingController();
   final _occupation = TextEditingController();
   String _gender = 'male';
@@ -41,8 +45,15 @@ class _AmialRegistrationWizardScreenState
 
   final _idNumber = TextEditingController();
   String _idType = 'nid';
+  final _idIssue = TextEditingController();  // تاريخ الإصدار
+  final _idExpiry = TextEditingController(); // تاريخ الانتهاء
 
-  final _address = TextEditingController();
+  // العنوان بالتفصيل
+  final _addrGov = TextEditingController();      // المحافظة
+  final _addrDir = TextEditingController();      // المديرية
+  final _addrArea = TextEditingController();     // الحي/العزلة
+  final _addrStreet = TextEditingController();   // الشارع
+  final _addrLandmark = TextEditingController(); // أقرب معلم
 
   final List<XFile> _idImages = [];
 
@@ -50,7 +61,10 @@ class _AmialRegistrationWizardScreenState
   final _kinPhone = TextEditingController();
   final _kinRelation = TextEditingController();
 
-  final GlobalKey<SignaturePadState> _sigKey = GlobalKey<SignaturePadState>();
+  // ثلاث خانات توقيع
+  final GlobalKey<SignaturePadState> _sigKey1 = GlobalKey<SignaturePadState>();
+  final GlobalKey<SignaturePadState> _sigKey2 = GlobalKey<SignaturePadState>();
+  final GlobalKey<SignaturePadState> _sigKey3 = GlobalKey<SignaturePadState>();
 
   bool _agreeTerms = false;
   bool _agreePolicy = false;
@@ -64,7 +78,9 @@ class _AmialRegistrationWizardScreenState
   void dispose() {
     _page.dispose();
     for (final c in [
-      _fName, _lName, _email, _occupation, _phone, _idNumber, _address,
+      _name1, _name2, _name3, _name4, _dob, _email, _occupation, _phone,
+      _idNumber, _idIssue, _idExpiry,
+      _addrGov, _addrDir, _addrArea, _addrStreet, _addrLandmark,
       _kinName, _kinPhone, _kinRelation, _pin, _pinConfirm, _otp,
     ]) {
       c.dispose();
@@ -78,12 +94,36 @@ class _AmialRegistrationWizardScreenState
         .showSnackBar(SnackBar(content: Text(msg), backgroundColor: AmyalColors.red));
   }
 
+  // منتقي تاريخ بسيط (بلا حزمة) — يكتب النتيجة yyyy-MM-dd في الحقل
+  Future<void> _pickDate(TextEditingController c, {bool future = false}) async {
+    final now = DateTime(2026, 7, 12);
+    final first = future ? now : DateTime(1930);
+    final last = future ? DateTime(2060) : now;
+    final initial = future ? now : DateTime(2000);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: first,
+      lastDate: last,
+    );
+    if (picked != null) {
+      final m = picked.month.toString().padLeft(2, '0');
+      final d = picked.day.toString().padLeft(2, '0');
+      setState(() => c.text = '${picked.year}-$m-$d');
+    }
+  }
+
   // ── التحقّق لكل خطوة ─────────────────────────────────────
   bool _validateStep(int s) {
     switch (s) {
       case 0:
-        if (_fName.text.trim().isEmpty || _lName.text.trim().isEmpty) {
-          _snack('أدخل الاسم الأول واسم العائلة');
+        if (_name1.text.trim().isEmpty || _name2.text.trim().isEmpty ||
+            _name3.text.trim().isEmpty || _name4.text.trim().isEmpty) {
+          _snack('أدخل الاسم الرباعي كاملاً');
+          return false;
+        }
+        if (_dob.text.trim().isEmpty) {
+          _snack('اختر تاريخ الميلاد');
           return false;
         }
         if (_phone.text.trim().length < 6) {
@@ -98,8 +138,9 @@ class _AmialRegistrationWizardScreenState
         }
         return true;
       case 2:
-        if (_address.text.trim().isEmpty) {
-          _snack('أدخل العنوان');
+        if (_addrGov.text.trim().isEmpty || _addrDir.text.trim().isEmpty ||
+            _addrArea.text.trim().isEmpty) {
+          _snack('أدخل المحافظة والمديرية والحي على الأقل');
           return false;
         }
         return true;
@@ -116,8 +157,10 @@ class _AmialRegistrationWizardScreenState
         }
         return true;
       case 5:
-        if (_sigKey.currentState?.isEmpty ?? true) {
-          _snack('الرجاء التوقيع في المربّع');
+        if ((_sigKey1.currentState?.isEmpty ?? true) ||
+            (_sigKey2.currentState?.isEmpty ?? true) ||
+            (_sigKey3.currentState?.isEmpty ?? true)) {
+          _snack('الرجاء التوقيع في المربّعات الثلاثة');
           return false;
         }
         return true;
@@ -199,10 +242,20 @@ class _AmialRegistrationWizardScreenState
   Future<void> _submit() async {
     setState(() => _submitting = true);
     try {
-      final signature = await _sigKey.currentState?.exportBase64Png();
+      final signature = await _sigKey1.currentState?.exportBase64Png();
+      // الاسم الرباعي: الأول = f_name، والبقية تُجمع في l_name
+      final lastName = [_name2.text, _name3.text, _name4.text]
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .join(' ');
+      // العنوان المفصّل يُجمع في نصّ واحد
+      final address = [
+        _addrGov.text, _addrDir.text, _addrArea.text,
+        _addrStreet.text, _addrLandmark.text,
+      ].map((s) => s.trim()).where((s) => s.isNotEmpty).join('، ');
       final fields = <String, String>{
-        'f_name': _fName.text.trim(),
-        'l_name': _lName.text.trim(),
+        'f_name': _name1.text.trim(),
+        'l_name': lastName,
         'gender': _gender,
         'occupation': _occupation.text.trim(),
         'dial_country_code': _dialCode,
@@ -210,9 +263,12 @@ class _AmialRegistrationWizardScreenState
         'email': _email.text.trim(),
         'password': _pin.text,
         'otp': _otp.text.trim(),
+        'date_of_birth': _dob.text.trim(),
         'identification_number': _idNumber.text.trim(),
         'identification_type': _idType,
-        'address': _address.text.trim(),
+        'identification_issue_date': _idIssue.text.trim(),
+        'identification_expiry_date': _idExpiry.text.trim(),
+        'address': address,
         'kin_name': _kinName.text.trim(),
         'kin_phone': _kinPhone.text.trim(),
         'kin_relation': _kinRelation.text.trim(),
@@ -372,10 +428,30 @@ class _AmialRegistrationWizardScreenState
         child: Text(t, style: const TextStyle(color: Color(0xFF5F6B62), fontSize: 13)),
       );
 
+  // حقل تاريخ للقراءة فقط يفتح المنتقي عند الضغط
+  Widget _dateField(TextEditingController c, String label, {bool future = false}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: TextField(
+        controller: c,
+        readOnly: true,
+        onTap: () => _pickDate(c, future: future),
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          suffixIcon: const Icon(Icons.calendar_today, size: 18),
+        ),
+      ),
+    );
+  }
+
   Widget _stepPersonal() => _wrap([
-        _sectionNote('أدخل معلوماتك الشخصية كما في وثيقة الهوية.'),
-        _field(_fName, 'الاسم الأول *'),
-        _field(_lName, 'اسم العائلة *'),
+        _sectionNote('أدخل اسمك الرباعي كما في وثيقة الهوية.'),
+        _field(_name1, 'الاسم الأول *'),
+        _field(_name2, 'اسم الأب *'),
+        _field(_name3, 'اسم الجد *'),
+        _field(_name4, 'اسم العائلة *'),
+        _dateField(_dob, 'تاريخ الميلاد *'),
         DropdownButtonFormField<String>(
           value: _gender,
           decoration: const InputDecoration(labelText: 'الجنس', border: OutlineInputBorder()),
@@ -409,15 +485,23 @@ class _AmialRegistrationWizardScreenState
         ),
         const SizedBox(height: 14),
         _field(_idNumber, 'رقم الهوية *'),
+        _dateField(_idIssue, 'تاريخ الإصدار'),
+        _dateField(_idExpiry, 'تاريخ الانتهاء', future: true),
       ]);
 
   Widget _stepAddress() => _wrap([
-        _sectionNote('أدخل عنوان سكنك بالتفصيل.'),
-        _field(_address, 'المدينة، الحي، الشارع *', maxLines: 3),
+        _sectionNote('أدخل عنوان سكنك بالتفصيل لتسهيل التحقّق.'),
+        _field(_addrGov, 'المحافظة *'),
+        _field(_addrDir, 'المديرية *'),
+        _field(_addrArea, 'الحي / العزلة *'),
+        _field(_addrStreet, 'الشارع'),
+        _field(_addrLandmark, 'أقرب معلم بارز'),
       ]);
 
   Widget _stepDocuments() => _wrap([
-        _sectionNote('أرفق صوراً واضحة لوثيقة الهوية (الوجه والظهر) وإثبات العنوان.'),
+        _sectionNote('أرفق صوراً واضحة (يمكن اختيار عدّة صور):\n'
+            '١) الهوية — الوجه   ٢) الهوية — الظهر\n'
+            '٣) إثبات العنوان   ٤) صورة شخصية حديثة'),
         OutlinedButton.icon(
           onPressed: _pickIdImages,
           icon: const Icon(Icons.upload_file),
@@ -456,8 +540,18 @@ class _AmialRegistrationWizardScreenState
       ]);
 
   Widget _stepSignature() => _wrap([
-        _sectionNote('وقّع بإصبعك داخل المربّع أدناه — يُعتمد توقيعاً إلكترونياً.'),
-        SignaturePadWidget(key: _sigKey, height: 180),
+        _sectionNote('وقّع بإصبعك داخل المربّعات الثلاثة — تُعتمد توقيعاً إلكترونياً.'),
+        const Text('التوقيع الأول', style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        SignaturePadWidget(key: _sigKey1, height: 150),
+        const SizedBox(height: 12),
+        const Text('التوقيع الثاني', style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        SignaturePadWidget(key: _sigKey2, height: 150),
+        const SizedBox(height: 12),
+        const Text('التوقيع الثالث', style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        SignaturePadWidget(key: _sigKey3, height: 150),
       ]);
 
   Widget _stepDeclarations() => _wrap([

@@ -60,6 +60,9 @@ class RegisterController extends Controller
             'kin_phone' => 'sometimes|nullable|string|max:30',
             'kin_relation' => 'sometimes|nullable|string|max:60',
             'declaration_accepted' => 'sometimes',
+            'date_of_birth' => 'sometimes|nullable|date',
+            'identification_issue_date' => 'sometimes|nullable|date',
+            'identification_expiry_date' => 'sometimes|nullable|date',
         ]);
 
 
@@ -147,6 +150,14 @@ class RegisterController extends Controller
                 && in_array((string) $request->declaration_accepted, ['1', 'true'], true)) {
                 $user->kyc_declaration_accepted = true;
                 $user->kyc_declared_at = now();
+            }
+            // AMIAL-KYC-003: تواريخ (ميلاد + إصدار/انتهاء الهوية)
+            foreach ([
+                'date_of_birth', 'identification_issue_date', 'identification_expiry_date',
+            ] as $dc) {
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', $dc) && $request->filled($dc)) {
+                    $user->{$dc} = $request->input($dc);
+                }
             }
             $user->is_kyc_verified = 0; // بانتظار مراجعة الإدارة
 
