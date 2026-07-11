@@ -20,12 +20,24 @@ class KycVerifyScreen extends StatefulWidget {
 
 class _KycVerifyScreenState extends State<KycVerifyScreen> {
   final TextEditingController _identityNumberController = TextEditingController();
+  // AMIAL-KYC: العنوان + التوقيع الإلكتروني + الإقرار
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _signatureController = TextEditingController();
+  bool _declared = false;
 
   @override
   void initState() {
     Get.find<KycVerifyController>().initialSelect();
 
     super.initState();
+  }
+
+  @override
+  void dispose() {
+    _identityNumberController.dispose();
+    _addressController.dispose();
+    _signatureController.dispose();
+    super.dispose();
   }
 
   @override
@@ -96,7 +108,51 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
 
                     },),
                 ),
-                const SizedBox(height: Dimensions.paddingSizeExtraLarge),
+                const SizedBox(height: Dimensions.fontSizeDefault),
+
+                // ── العنوان ──────────────────────────────────
+                Text('العنوان (المدينة، الحي، الشارع)', style: rubikRegular),
+                const SizedBox(height: Dimensions.paddingSizeExtraSmall),
+                CustomTextFieldWidget(
+                  controller: _addressController,
+                  isShowBorder: true,
+                  maxLines: 2,
+                  hintText: 'مثال: عدن، المنصورة، شارع الأربعين',
+                ),
+                const SizedBox(height: Dimensions.fontSizeDefault),
+
+                // ── التوقيع الإلكتروني ────────────────────────
+                Text('التوقيع الإلكتروني (اكتب اسمك الكامل)', style: rubikRegular),
+                const SizedBox(height: Dimensions.paddingSizeExtraSmall),
+                CustomTextFieldWidget(
+                  controller: _signatureController,
+                  isShowBorder: true,
+                  maxLines: 1,
+                  hintText: 'اسمك الكامل كتوقيع',
+                ),
+                const SizedBox(height: Dimensions.fontSizeDefault),
+
+                // ── الإقرار بصحة المعلومات ────────────────────
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Checkbox(
+                      value: _declared,
+                      activeColor: Theme.of(context).primaryColor,
+                      onChanged: (v) => setState(() => _declared = v ?? false),
+                    ),
+                    const Expanded(
+                      child: Padding(
+                        padding: EdgeInsets.only(top: 12),
+                        child: Text(
+                          'أقرّ بأن جميع المعلومات والوثائق المقدّمة صحيحة، وأتحمّل المسؤولية القانونية عن صحّتها.',
+                          style: TextStyle(fontSize: 12.5, height: 1.4),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: Dimensions.paddingSizeLarge),
 
                 Center(child: kycVerifyController.isLoading ? const CircularProgressIndicator() :  SizedBox(
                   width: 200, height: 50,
@@ -107,8 +163,19 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                       showCustomSnackBarHelper('please_upload_identity_image'.tr);
                     }else if(kycVerifyController.dropDownSelectedValue == kycVerifyController.dropList[0]) {
                       showCustomSnackBarHelper('select_identity_type'.tr);
+                    }else if(_addressController.text.trim().isEmpty) {
+                      showCustomSnackBarHelper('الرجاء إدخال العنوان');
+                    }else if(_signatureController.text.trim().isEmpty) {
+                      showCustomSnackBarHelper('الرجاء كتابة التوقيع الإلكتروني');
+                    }else if(!_declared) {
+                      showCustomSnackBarHelper('الرجاء الإقرار بصحة المعلومات');
                     }else{
-                      kycVerifyController.kycVerify(_identityNumberController.text).then((value)
+                      kycVerifyController.kycVerify(
+                        _identityNumberController.text,
+                        address: _addressController.text.trim(),
+                        signature: _signatureController.text.trim(),
+                        declared: _declared,
+                      ).then((value)
                       => Get.find<ProfileController>().getProfileData(isUpdate: true, reload: true));
                     }
                   }, color: Theme.of(context).primaryColor),

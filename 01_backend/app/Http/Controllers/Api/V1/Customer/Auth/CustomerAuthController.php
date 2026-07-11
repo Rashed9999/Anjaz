@@ -535,6 +535,11 @@ class CustomerAuthController extends Controller
             'identification_number' => 'required',
             'identification_type' => 'required|in:passport,driving_licence,nid,trade_license',
             'identification_image' => 'required|array',
+            // AMIAL-KYC: العنوان + التوقيع الإلكتروني + الإقرار (اختيارية توافقاً
+            // مع أي عميل قديم؛ التطبيق الجديد يرسلها ويشترطها في الواجهة).
+            'address' => 'sometimes|nullable|string|max:500',
+            'signature' => 'sometimes|nullable|string|max:255',
+            'declaration_accepted' => 'sometimes',
         ]);
 
         if ($validator->fails()) {
@@ -553,6 +558,20 @@ class CustomerAuthController extends Controller
         $user->identification_number = $request->identification_number;
         $user->identification_type = $request->identification_type;
         $user->identification_image = $identityImages;
+
+        // AMIAL-KYC: حفظ العنوان + التوقيع + الإقرار (فقط إن أُرسلت وإن وُجدت الأعمدة)
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'address') && $request->filled('address')) {
+            $user->address = $request->address;
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_signature') && $request->filled('signature')) {
+            $user->kyc_signature = $request->signature;
+        }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_declaration_accepted')
+            && in_array((string) $request->declaration_accepted, ['1', 'true'], true)) {
+            $user->kyc_declaration_accepted = true;
+            $user->kyc_declared_at = now();
+        }
+
         $user->is_kyc_verified = 0;
         $user->save();
 

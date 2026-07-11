@@ -57,10 +57,19 @@ class KycVerifyController extends GetxController implements GetxService{
   }
   List<MultipartBody>? _multipartBody;
 
-  Future<void> kycVerify(String idNumber) async{
+  Future<void> kycVerify(
+    String idNumber, {
+    String address = '',
+    String signature = '',
+    bool declared = false,
+  }) async{
     Map<String, String> field = {
       'identification_number': idNumber,
       'identification_type': _dropDownSelectedValue,
+      // AMIAL-KYC: العنوان + التوقيع الإلكتروني + الإقرار بصحة المعلومات
+      'address': address,
+      'signature': signature,
+      'declaration_accepted': declared ? '1' : '0',
       '_method': 'put'
     };
     _multipartBody = _identityImage.map((image) => MultipartBody('identification_image[]', File(image.path))).toList();
