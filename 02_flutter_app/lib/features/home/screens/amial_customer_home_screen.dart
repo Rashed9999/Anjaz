@@ -5,7 +5,6 @@ import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/transaction_money/screens/transaction_money_screen.dart';
 import 'package:amyal_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
 import 'package:amyal_pay/features/withdraw/screens/withdraw_request_screen.dart';
-import 'package:amyal_pay/features/history/screens/history_screen.dart';
 import 'package:amyal_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
 import 'package:amyal_pay/features/family_fund/screens/my_funds_screen.dart';
 import 'package:amyal_pay/features/donations/screens/donations_home_screen.dart';
@@ -57,15 +56,18 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
     } catch (_) {/* دفاعي: نُبقي الواجهة نظيفة */}
 
     try {
+      // AMIAL-UNIFY: «الإيصالات» هي السجلّ الموحّد لكل النشاط (تحويلات 6cash
+      // + خدمات أميال: مساهمات/دفع آمن/تبرعات…) لأنّ كلّها تُصدر Receipt.
       final api = Get.find<ApiClient>();
-      final r = await api.getData('/api/v1/customer/transaction-history');
+      final r = await api.getData('/api/v1/amial/receipts');
       if (r.statusCode == 200 && r.body is Map) {
-        final list = (r.body as Map)['transactions'];
+        final meta = (r.body as Map)['meta'];
+        final list = meta is Map ? meta['items'] : null;
         if (list is List) {
           _recent = list
               .whereType<Map>()
               .map((e) => Map<String, dynamic>.from(e))
-              .take(4)
+              .take(5)
               .toList();
         }
       }
@@ -266,7 +268,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       _Qa('إرسال', Icons.send_rounded, () => Get.to(() => const TransactionMoneyScreen(fromEdit: false, transactionType: 'send_money'))),
       _Qa('سحب نقدي', Icons.account_balance_wallet_outlined, () => Get.to(() => const TransactionMoneyScreen(fromEdit: false, transactionType: 'cash_out'))),
       _Qa('الفواتير', Icons.receipt_long_rounded, () => Get.to(() => const BillPayProvidersScreen())),
-      _Qa('السجل', Icons.history_rounded, () => Get.to(() => const HistoryScreen())),
+      _Qa('السجل', Icons.history_rounded, () => Get.to(() => const ReceiptsListScreen())),
     ];
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -373,7 +375,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         Row(
           children: [
             InkWell(
-              onTap: () => Get.to(() => const HistoryScreen()),
+              onTap: () => Get.to(() => const ReceiptsListScreen()),
               child: const Text('عرض الكل',
                   style: TextStyle(
                       color: AmyalColors.primary,
@@ -407,14 +409,38 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
     );
   }
 
+  // AMIAL-UNIFY: تسمية عربية لأنواع الإيصالات (كل النشاط الموحّد)
+  static const Map<String, String> _receiptLabels = {
+    'send_money': 'تحويل أموال',
+    'received_money': 'مبلغ مستلَم',
+    'cash_out': 'سحب نقدي',
+    'cash_in': 'إيداع نقدي',
+    'add_money': 'إضافة رصيد',
+    'withdraw': 'طلب سحب',
+    'pay_merchant': 'دفع لتاجر',
+    'pos_payment': 'دفع نقطة بيع',
+    'qr_payment': 'دفع QR',
+    'refund': 'استرجاع',
+    'safe_payment_funded': 'دفع آمن (حجز)',
+    'safe_payment_released': 'دفع آمن (تحرير)',
+    'safe_payment_refunded': 'دفع آمن (استرجاع)',
+    'family_fund_contribute': 'مساهمة عائلية',
+    'donation': 'تبرع',
+    'bill_payment': 'دفع فاتورة',
+  };
+
   Widget _recentTile(Map<String, dynamic> t) {
-    final title = (t['transaction_type'] ??
-            t['type'] ??
-            t['title'] ??
-            'عملية')
-        .toString();
-    final amount = (t['amount'] ?? t['transaction_amount'] ?? '').toString();
-    final date = (t['created_at'] ?? t['date'] ?? '').toString();
+    final type = (t['receipt_type'] ?? '').toString();
+    final title = _receiptLabels[type] ?? (type.isEmpty ? 'عملية' : type);
+    final amountRaw = (t['amount'] ?? '').toString();
+    final amount = amountRaw.contains('.')
+        ? amountRaw.replaceAll(RegExp(r'\.?0+$'), '')
+        : amountRaw;
+    final direction = (t['direction'] ?? '').toString(); // debit / credit
+    final isDebit = direction == 'debit';
+    final date = (t['issued_at'] ?? t['created_at'] ?? '').toString();
+    // نعرض التاريخ فقط (بدون الوقت) إن كان طويلاً
+    final shortDate = date.length >= 10 ? date.substring(0, 10) : date;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
@@ -428,11 +454,15 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
             height: 42,
             width: 42,
             decoration: BoxDecoration(
-              color: AmyalColors.primary.withValues(alpha: 0.08),
+              color: (isDebit ? const Color(0xFFDC0A0B) : AmyalColors.primary)
+                  .withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.swap_horiz_rounded,
-                color: AmyalColors.primary),
+            child: Icon(
+              isDebit ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              color: isDebit ? const Color(0xFFDC0A0B) : AmyalColors.primary,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -442,17 +472,21 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                 Text(title,
                     style: const TextStyle(
                         fontWeight: FontWeight.w600, fontSize: 14)),
-                if (date.isNotEmpty)
-                  Text(date,
+                if (shortDate.isNotEmpty)
+                  Text(shortDate,
                       style: const TextStyle(
                           color: Color(0xFF8B97A8), fontSize: 11)),
               ],
             ),
           ),
           if (amount.isNotEmpty)
-            Text('$amount YER',
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 13)),
+            Text('${isDebit ? '-' : '+'}$amount ر.ي',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: isDebit
+                        ? const Color(0xFFDC0A0B)
+                        : const Color(0xFF12694E))),
         ],
       ),
     );

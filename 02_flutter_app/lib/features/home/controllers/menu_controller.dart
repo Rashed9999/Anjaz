@@ -1,4 +1,4 @@
-import 'package:amyal_pay/features/history/screens/history_screen.dart';
+import 'package:amyal_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amyal_pay/features/home/screens/amial_customer_home_screen.dart';
 import 'package:amyal_pay/features/notification/screens/notification_screen.dart';
 import 'package:amyal_pay/features/setting/screens/profile_screen.dart';
@@ -14,11 +14,12 @@ class MenuItemController extends GetxController implements GetxService{
   double get homePageScrollPosition => _homePageScrollPosition;
 
 
-  // AMIAL-CUSTOMER-HOME-001: تبويب «البيت» صار الشاشة الرئيسية بهوية أميال باي
-  // (كان HomeScreen من 6cash). باقي التبويبات كما هي داخل نفس الغلاف السفلي.
+  // AMIAL-CUSTOMER-HOME-001: تبويب «البيت» = شاشة أميال باي.
+  // AMIAL-UNIFY: تبويب «تاريخ» = الإيصالات (السجلّ الموحّد لكل النشاط: تحويلات
+  // 6cash + خدمات أميال) بدل HistoryScreen الذي يعرض معاملات 6cash فقط.
   final List<Widget> screen = [
     const AmialCustomerHomeScreen(),
-    const HistoryScreen(),
+    const ReceiptsListScreen(),
     const NotificationScreen(),
     const ProfileScreen()
   ];
