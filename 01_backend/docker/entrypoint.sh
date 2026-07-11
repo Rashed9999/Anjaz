@@ -53,7 +53,23 @@ if [ -n "$APP_KEY" ] && [ "$APP_KEY" != "base64:" ]; then
             printf '%s=%s\n' "$k" "$v" >> "$ENV_FILE"
         fi
     done
-    echo "✓ APP_KEY مكتوب في .env — سيقرؤه كلّ عامل php-fpm"
+
+    # ── الكاش إلى قاعدة البيانات (لا ملفّات) ──────────────────────────
+    # سبب «fopen(storage/framework/cache/data/…): No such file or directory»:
+    # مُشغّل الكاش الافتراضي = file، وعلى Railway لا يستطيع إنشاء المجلّدات
+    # الفرعية للكاش، فينهار throttle (يحرس كل طلب مصادَق) → تفشل كل الخدمات.
+    # الحلّ الجذري: كاش قاعدة البيانات (جدول cache موجود عبر migration).
+    for pair in "CACHE_DRIVER=${CACHE_DRIVER:-database}" \
+                "CACHE_STORE=${CACHE_STORE:-database}"; do
+        k="${pair%%=*}"; v="${pair#*=}"
+        if grep -q "^${k}=" "$ENV_FILE" 2>/dev/null; then
+            sed -i "s|^${k}=.*|${k}=${v}|" "$ENV_FILE"
+        else
+            printf '%s=%s\n' "$k" "$v" >> "$ENV_FILE"
+        fi
+    done
+
+    echo "✓ APP_KEY + كاش قاعدة البيانات مكتوبة في .env — يقرؤها كلّ عامل php-fpm"
 else
     echo "⚠️  تعذّر توليد APP_KEY — اضبطه يدوياً كمتغيّر بيئة Railway."
 fi
