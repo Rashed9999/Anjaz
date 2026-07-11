@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/auth/controllers/unified_auth_controller.dart';
-import 'package:amyal_pay/features/auth/screens/create_account_screen.dart';
+import 'package:amyal_pay/features/auth/screens/amial_registration_wizard_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-UNIFIED-AUTH-001 (v1.5)
@@ -210,7 +210,7 @@ class _CustomerLoginTabState extends State<_CustomerLoginTab> {
             const SizedBox(height: 8),
             // AMIAL: رابط إنشاء حساب جديد (بالبيانات والوثائق)
             TextButton(
-              onPressed: () => Get.to(() => const CreateAccountScreen()),
+              onPressed: () => Get.to(() => const AmialRegistrationWizardScreen()),
               child: const Text('ليس لديك حساب؟ أنشئ حساباً الآن',
                   style: TextStyle(
                       color: AmyalColors.primary, fontWeight: FontWeight.w600)),

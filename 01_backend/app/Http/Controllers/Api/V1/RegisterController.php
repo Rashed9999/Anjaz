@@ -51,6 +51,15 @@ class RegisterController extends Controller
             // AMIAL-SIGNATURE-001: التوقيع الإلكتروني (base64 PNG مرسوم على الشاشة) —
             // اختياري للتوافق الخلفي، ويُحفَظ مشفّراً كسجلّ قانوني لفتح الحساب.
             'signature' => 'nullable|string|max:3000000',
+            // AMIAL-REG-WIZARD: حقول التسجيل متعدّد الخطوات (اختيارية توافقاً)
+            'identification_number' => 'sometimes|nullable|string|max:50',
+            'identification_type' => 'sometimes|nullable|in:passport,driving_licence,nid,trade_license',
+            'identification_image' => 'sometimes|nullable|array',
+            'address' => 'sometimes|nullable|string|max:500',
+            'kin_name' => 'sometimes|nullable|string|max:150',
+            'kin_phone' => 'sometimes|nullable|string|max:30',
+            'kin_relation' => 'sometimes|nullable|string|max:60',
+            'declaration_accepted' => 'sometimes',
         ]);
 
 
@@ -107,6 +116,40 @@ class RegisterController extends Controller
                 $user->signature_encrypted_path = $signaturePath;
                 $user->signature_captured_at = now();
             }
+
+            // AMIAL-REG-WIZARD: حقول التسجيل متعدّد الخطوات (هوية/عنوان/قريب/إقرار)
+            if ($request->filled('identification_number')) {
+                $user->identification_number = $request->identification_number;
+            }
+            if ($request->filled('identification_type')) {
+                $user->identification_type = $request->identification_type;
+            }
+            if (is_array($request->identification_image) && !empty($request->identification_image)) {
+                $imgs = [];
+                foreach ($request->identification_image as $img) {
+                    try {
+                        $imgs[] = Helpers::file_uploader('user/identity/', 'png', $img);
+                    } catch (\Throwable $e) { /* تجاهل صورة تالفة */ }
+                }
+                if (!empty($imgs)) {
+                    $user->identification_image = json_encode($imgs);
+                }
+            }
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'address') && $request->filled('address')) {
+                $user->address = $request->address;
+            }
+            foreach (['kin_name', 'kin_phone', 'kin_relation'] as $kc) {
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', $kc) && $request->filled($kc)) {
+                    $user->{$kc} = $request->input($kc);
+                }
+            }
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_declaration_accepted')
+                && in_array((string) $request->declaration_accepted, ['1', 'true'], true)) {
+                $user->kyc_declaration_accepted = true;
+                $user->kyc_declared_at = now();
+            }
+            $user->is_kyc_verified = 0; // بانتظار مراجعة الإدارة
+
             $user->save();
 
             $user->find($user->id);

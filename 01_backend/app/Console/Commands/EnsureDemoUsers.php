@@ -108,6 +108,10 @@ class EnsureDemoUsers extends Command
                 \Illuminate\Support\Facades\DB::table('business_settings')
                     ->updateOrInsert(['key' => $k], ['value' => '1']);
             }
+            // AMIAL-PILOT: تعطيل اشتراط OTP في التسجيل (لا SMS مُهيّأ بعد) — فعّله
+            // لاحقاً بعد ضبط مزوّد الرسائل. المعالج يعرض خطوة الرمز دائماً.
+            \Illuminate\Support\Facades\DB::table('business_settings')
+                ->updateOrInsert(['key' => 'phone_verification'], ['value' => '0']);
             $this->info('✓ مفاتيح الميزات مُفعّلة (' . count($featureKeys) . ' مفتاح)');
         } catch (\Throwable $e) {
             $this->error('❌ فشل تفعيل الميزات: ' . $e->getMessage());
