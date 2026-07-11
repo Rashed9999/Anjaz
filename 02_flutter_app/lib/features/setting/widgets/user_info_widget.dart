@@ -95,10 +95,15 @@ class UserInfoWidget extends StatelessWidget {
                     builder: (context) => const ProfileQRCodeBottomSheetWidget(),
                   ),
                   child: GetBuilder<ProfileController>(builder: (controller) {
+                    // AMIAL-FIX(GRAY): كان userInfo!.qrCode! خارج حارس null فينهار
+                    // (شاشة حسابي رمادية) قبل تحميل الملف أو إن غاب الرمز.
+                    final qr = controller.userInfo?.qrCode;
                     return Container(
                       decoration: BoxDecoration(shape: BoxShape.circle, color: Theme.of(context).colorScheme.secondary),
                       padding: const EdgeInsets.all(10.0),
-                      child: SvgPicture.string(controller.userInfo!.qrCode!, height: 24, width: 24,),
+                      child: (qr != null && qr.isNotEmpty)
+                          ? SvgPicture.string(qr, height: 24, width: 24)
+                          : const Icon(Icons.qr_code_2, size: 24),
                     );
                   }),
                 ),

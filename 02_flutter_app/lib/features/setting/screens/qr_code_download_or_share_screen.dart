@@ -42,7 +42,7 @@ class QrCodeDownloadOrShareScreen extends StatelessWidget {
                         const SizedBox(width: Dimensions.paddingSizeDefault),
 
                         Text(
-                          Get.find<SplashController>().configModel!.companyName!,
+                          Get.find<SplashController>().configModel?.companyName ?? 'أميال باي',
                           style: rubikMedium.copyWith(color: Theme.of(context).primaryColor,
                               fontSize: Dimensions.fontSizeOverOverLarge),
                           textAlign: TextAlign.center,
