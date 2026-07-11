@@ -82,7 +82,7 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                order.isSuccess ? 'تم خصم ${order.totalDebited} ر.س من حسابك. ستجد الإيصال في قائمة الإيصالات.' :
+                order.isSuccess ? 'تم خصم ${order.totalDebited} ر.ي من حسابك. ستجد الإيصال في قائمة الإيصالات.' :
                 order.isPending ? 'العملية أُرسلت للمزود. ستحصل على تأكيد قريباً.' :
                 'لم تنجح العملية. المبلغ أعيد لحسابك.',
                 textAlign: TextAlign.center,
@@ -226,7 +226,7 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   enabled: _selectedProduct == null || _selectedProduct!.isVariable,
                   decoration: InputDecoration(
-                    labelText: 'المبلغ (ر.س) *',
+                    labelText: 'المبلغ (ر.ي) *',
                     border: const OutlineInputBorder(),
                     helperText: _selectedProduct?.isVariable == true &&
                             (_selectedProduct?.minAmount != null || _selectedProduct?.maxAmount != null)
@@ -248,7 +248,7 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
                 if (_selectedProduct != null) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'الرسوم: ${_selectedProduct!.feeAmount} ر.س',
+                    'الرسوم: ${_selectedProduct!.feeAmount} ر.ي',
                     style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary),
                   ),
                 ],

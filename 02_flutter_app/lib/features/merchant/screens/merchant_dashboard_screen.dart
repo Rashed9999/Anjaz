@@ -132,7 +132,7 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                                       color: Colors.white70, fontSize: 12)),
                               const SizedBox(height: 2),
                               Text(
-                                '${ctrl.stats.value.balance} ر.س',
+                                '${ctrl.stats.value.balance} ر.ي',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 22,
@@ -236,21 +236,21 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       const SizedBox(height: 16),
                       _StatRow(
                         label: 'المبيعات',
-                        value: '${ctrl.stats.value.todaySales} ر.س',
+                        value: '${ctrl.stats.value.todaySales} ر.ي',
                         icon: Icons.trending_up,
                         color: const Color(0xFF10B981),
                       ),
                       const Divider(height: 24),
                       _StatRow(
                         label: 'الاسترجاعات',
-                        value: '${ctrl.stats.value.todayRefunds} ر.س',
+                        value: '${ctrl.stats.value.todayRefunds} ر.ي',
                         icon: Icons.undo,
                         color: const Color(0xFFEF4444),
                       ),
                       const Divider(height: 24),
                       _StatRow(
                         label: 'الصافي',
-                        value: '${ctrl.stats.value.todayNet} ر.س',
+                        value: '${ctrl.stats.value.todayNet} ر.ي',
                         icon: Icons.account_balance_wallet,
                         color: AmyalColors.primary,
                       ),

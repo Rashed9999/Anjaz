@@ -365,7 +365,7 @@ class UsageLimitDialog {
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('ترقية إلى $suggestedLabel',
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text('$suggestedPrice ر.س / شهرياً',
+                  Text('$suggestedPrice ر.ي / شهرياً',
                       style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
                 ])),
               ]),

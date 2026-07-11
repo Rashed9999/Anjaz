@@ -42,7 +42,7 @@ class _AgentCashOutScreenState extends State<AgentCashOutScreen> {
           children: [
             Text('للعميل: ${_phoneCtrl.text}'),
             const SizedBox(height: 4),
-            Text('المبلغ: ${_amountCtrl.text} ر.س',
+            Text('المبلغ: ${_amountCtrl.text} ر.ي',
                 style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: AmyalColors.primary,
@@ -165,7 +165,7 @@ class _AgentCashOutScreenState extends State<AgentCashOutScreen> {
                   FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
                 ],
                 decoration: const InputDecoration(
-                  labelText: 'المبلغ المطلوب (ر.س) *',
+                  labelText: 'المبلغ المطلوب (ر.ي) *',
                   prefixIcon: Icon(Icons.attach_money),
                   border: OutlineInputBorder(),
                 ),

@@ -280,7 +280,7 @@ class _FeaturedCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${campaign.progressPercentage.toStringAsFixed(1)}% — ${campaign.currentAmount} / ${campaign.targetAmount} ر.س',
+                      '${campaign.progressPercentage.toStringAsFixed(1)}% — ${campaign.currentAmount} / ${campaign.targetAmount} ر.ي',
                       style: const TextStyle(fontSize: 10, color: AmyalColors.textSecondary),
                     ),
                   ],
@@ -343,7 +343,7 @@ class _CampaignListItem extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('${campaign.currentAmount} ر.س',
+                        Text('${campaign.currentAmount} ر.ي',
                             style: const TextStyle(
                                 fontSize: 11, fontWeight: FontWeight.bold)),
                         Text(

@@ -203,11 +203,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   void _showPlanDialog(Map<String, dynamic> m) {
     String selected = m['subscription_plan']?.toString() ?? 'free';
     const plans = [
-      ('free', 'مجاني', '0 ر.س'),
-      ('starter', 'البداية', '15 ر.س'),
-      ('business', 'الأعمال', '35 ر.س'),
-      ('merchant_pro', 'تاجر محترف', '65 ر.س'),
-      ('enterprise', 'مؤسسة', '150 ر.س'),
+      ('free', 'مجاني', '0 ر.ي'),
+      ('starter', 'البداية', '15 ر.ي'),
+      ('business', 'الأعمال', '35 ر.ي'),
+      ('merchant_pro', 'تاجر محترف', '65 ر.ي'),
+      ('enterprise', 'مؤسسة', '150 ر.ي'),
     ];
     final notes = TextEditingController();
 

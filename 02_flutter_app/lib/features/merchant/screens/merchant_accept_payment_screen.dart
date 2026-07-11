@@ -73,7 +73,7 @@ class _MerchantAcceptPaymentScreenState
             const Text('تم إنشاء طلب الدفع',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Text('المبلغ: ${ctrl.lastPaymentAmount.value} ر.س',
+            Text('المبلغ: ${ctrl.lastPaymentAmount.value} ر.ي',
                 style: const TextStyle(
                     fontSize: 16, color: AmyalColors.primary)),
             const SizedBox(height: 16),
@@ -161,7 +161,7 @@ class _MerchantAcceptPaymentScreenState
                 style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
                 decoration: const InputDecoration(
-                  labelText: 'المبلغ المطلوب (ر.س) *',
+                  labelText: 'المبلغ المطلوب (ر.ي) *',
                   border: OutlineInputBorder(),
                 ),
                 validator: (v) {

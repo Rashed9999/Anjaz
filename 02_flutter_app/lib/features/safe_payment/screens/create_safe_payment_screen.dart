@@ -42,7 +42,7 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'سيتم خصم ${_amountCtrl.text} ر.س من حسابك وحجزه حتى تأكيد الاستلام.',
+              'سيتم خصم ${_amountCtrl.text} ر.ي من حسابك وحجزه حتى تأكيد الاستلام.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),
@@ -204,14 +204,14 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
                   keyboardType:
                       const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(
-                    labelText: 'المبلغ (ر.س) *',
+                    labelText: 'المبلغ (ر.ي) *',
                     prefixIcon: Icon(Icons.payments),
                     border: OutlineInputBorder(),
                   ),
                   validator: (v) {
                     final n = double.tryParse(v ?? '');
-                    if (n == null || n < 1) return 'الحد الأدنى 1 ر.س';
-                    if (n > 100000) return 'الحد الأقصى 100,000 ر.س';
+                    if (n == null || n < 1) return 'الحد الأدنى 1 ر.ي';
+                    if (n > 100000) return 'الحد الأقصى 100,000 ر.ي';
                     return null;
                   },
                 ),

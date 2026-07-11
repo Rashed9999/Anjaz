@@ -233,7 +233,7 @@ class _FundCard extends StatelessWidget {
                         style: const TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 15)),
                     Text(
-                      'الرصيد: ${fund.balance} ر.س',
+                      'الرصيد: ${fund.balance} ر.ي',
                       style: const TextStyle(
                           color: AmyalColors.primary, fontSize: 13),
                     ),

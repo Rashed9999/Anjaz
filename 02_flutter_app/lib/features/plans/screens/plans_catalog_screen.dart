@@ -224,7 +224,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
                   textBaseline: TextBaseline.alphabetic, children: [
                 Text('$price', style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
                 const SizedBox(width: 4),
-                const Text('ر.س', style: TextStyle(color: Colors.white, fontSize: 14)),
+                const Text('ر.ي', style: TextStyle(color: Colors.white, fontSize: 14)),
               ]),
               Text(priceLabel, style: const TextStyle(color: Colors.white70, fontSize: 12)),
             ],
@@ -380,7 +380,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(children: [
-              Text('$price ر.س', style: const TextStyle(
+              Text('$price ر.ي', style: const TextStyle(
                   fontSize: 24, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
               Text(_annual ? 'سنوياً' : 'شهرياً',
                   style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
@@ -474,7 +474,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
               onTap: () async {
                 Navigator.pop(sheetCtx);
                 await _tryLaunch(ContactConstants.mailUrl(
-                  'ترقية إلى $planLabel — $priceSar ر.س',
+                  'ترقية إلى $planLabel — $priceSar ر.ي',
                 ));
               },
             ),

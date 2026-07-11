@@ -78,37 +78,12 @@ class ReceiptController extends Controller
      */
     public function download(Request $request, int $id): JsonResponse|StreamedResponse
     {
-        $receipt = Receipt::where('id', $id)
-            ->where('user_id', $request->user()->id)
-            ->first();
-
-        if (!$receipt) {
-            return $this->error('RECEIPT_NOT_FOUND', 'Receipt not found', 404);
-        }
-
-        if (!$receipt->isReady()) {
-            return $this->error(
-                'RECEIPT_NOT_READY',
-                'Receipt PDF is still being generated. Try again in a few seconds.',
-                202, // Accepted but not ready
-            );
-        }
-
-        if (!Storage::disk('local')->exists($receipt->pdf_storage_path)) {
-            return $this->error('RECEIPT_FILE_MISSING', 'PDF file is missing from storage', 500);
-        }
-
-        // تتبع التحميل
-        $receipt->incrementDownloadCount();
-
-        return Storage::disk('local')->download(
-            $receipt->pdf_storage_path,
-            "{$receipt->receipt_number}.pdf",
-            [
-                'Content-Type' => 'application/pdf',
-                'Content-Disposition' => "attachment; filename=\"{$receipt->receipt_number}.pdf\"",
-            ],
-        );
+        // AMIAL-FIX(PDF): كان يبثّ ملفّاً مُولّداً مسبقاً على القرص، لكن تخزين
+        // Railway مؤقّت (ephemeral) — يختفي الملفّ بعد إعادة النشر (أو لم تُشغَّل
+        // مهمّة التوليد أصلاً) فينقطع الاتصال أثناء الاستلام
+        // (Connection closed while receiving data). الحلّ: نولّد الـ PDF عند
+        // الطلب مباشرةً (نفس مسار invoice، بلا اعتماد على ملفّ مُخزَّن).
+        return $this->invoice($request, $id);
     }
 
     /**

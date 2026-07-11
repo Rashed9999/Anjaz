@@ -101,7 +101,7 @@ class _AgentCashInScreenState extends State<AgentCashInScreen> {
             const SizedBox(height: 4),
             Text('رقم الجوال: ${_phoneCtrl.text}'),
             const SizedBox(height: 4),
-            Text('المبلغ: ${_amountCtrl.text} ر.س',
+            Text('المبلغ: ${_amountCtrl.text} ر.ي',
                 style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: AmyalColors.primary,
@@ -140,7 +140,7 @@ class _AgentCashInScreenState extends State<AgentCashInScreen> {
           icon: const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 56),
           title: const Text('تمت العملية'),
           content: Text(
-            'تم إيداع ${_amountCtrl.text} ر.س للعميل $_customerName',
+            'تم إيداع ${_amountCtrl.text} ر.ي للعميل $_customerName',
             textAlign: TextAlign.center,
           ),
           actions: [
@@ -282,7 +282,7 @@ class _AgentCashInScreenState extends State<AgentCashInScreen> {
                   FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
                 ],
                 decoration: const InputDecoration(
-                  labelText: 'المبلغ (ر.س) *',
+                  labelText: 'المبلغ (ر.ي) *',
                   prefixIcon: Icon(Icons.attach_money),
                   border: OutlineInputBorder(),
                 ),

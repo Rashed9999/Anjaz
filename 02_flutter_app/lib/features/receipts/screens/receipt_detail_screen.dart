@@ -76,7 +76,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
 إيصال Amyal Pay
 الرقم: ${receipt.receiptNumber}
 النوع: ${receipt.arabicTypeLabel}
-المبلغ: ${receipt.amount} ر.س
+المبلغ: ${receipt.amount} ر.ي
 التاريخ: ${receipt.issuedAt}
 
 للتحقق:
@@ -135,7 +135,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '${isCredit ? '+' : '-'}${r.amount} ر.س',
+                      '${isCredit ? '+' : '-'}${r.amount} ر.ي',
                       style: TextStyle(
                         color: AmyalColors.primary,
                         fontSize: 32,
@@ -159,9 +159,9 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
               _detailRow('رقم الإيصال', r.receiptNumber, monospace: true),
               _detailRow('المعاملة', r.referenceTransactionId, monospace: true),
               if (double.tryParse(r.fee) != null && double.parse(r.fee) > 0)
-                _detailRow('الرسوم', '${r.fee} ر.س'),
+                _detailRow('الرسوم', '${r.fee} ر.ي'),
               if (double.tryParse(r.fee) != null && double.parse(r.fee) > 0)
-                _detailRow('الإجمالي', '${r.netAmount} ر.س'),
+                _detailRow('الإجمالي', '${r.netAmount} ر.ي'),
               if (r.issuedAt != null)
                 _detailRow('التاريخ', _fmtDate(r.issuedAt!)),
               _detailRow('المنطقة', r.zoneCode),
@@ -203,53 +203,18 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
               ),
               const SizedBox(height: 24),
 
-              // Action: download PDF
-              if (r.isReady)
-                ElevatedButton.icon(
-                  onPressed: _downloadPdf,
-                  icon: const Icon(Icons.download),
-                  label: const Text('تحميل PDF'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                )
-              else if (r.isPending)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AmyalColors.yellow.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: const [
-                      SizedBox(width: 18, height: 18,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: AmyalColors.primary)),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'PDF قيد التحضير… أعد المحاولة بعد ثوانٍ.',
-                          style: TextStyle(fontSize: 13, color: AmyalColors.primary),
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              else if (r.isFailed)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AmyalColors.red.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AmyalColors.red),
-                  ),
-                  child: const Text(
-                    'فشل توليد PDF — تواصل مع الدعم لإعادة المحاولة',
-                    style: TextStyle(color: AmyalColors.red),
-                  ),
+              // Action: download PDF — يُولَّد عند الطلب على الخادم دائماً،
+              // فلا حاجة لحالة «قيد التحضير» (الزرّ متاح دوماً).
+              ElevatedButton.icon(
+                onPressed: _downloadPdf,
+                icon: const Icon(Icons.download),
+                label: const Text('تحميل PDF'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AmyalColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
+              ),
             ],
           ),
         );

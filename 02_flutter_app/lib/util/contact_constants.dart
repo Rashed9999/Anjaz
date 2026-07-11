@@ -25,7 +25,7 @@ class ContactConstants {
       'مرحباً 👋\n\n'
       'أرغب في ترقية اشتراكي في أميال باي إلى:\n'
       '🎯 الخطّة: $planLabel\n'
-      '💰 السعر: $priceSar ر.س / شهرياً\n\n'
+      '💰 السعر: $priceSar ر.ي / شهرياً\n\n'
       'يرجى تزويدي بطرق الدفع المتاحة.'
     );
     return 'https://wa.me/$whatsappNumber?text=$msg';

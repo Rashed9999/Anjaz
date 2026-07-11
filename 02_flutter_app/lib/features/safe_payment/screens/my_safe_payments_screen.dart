@@ -156,7 +156,7 @@ class _PaymentTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(
-            '${payment.amount} ر.س',
+            '${payment.amount} ر.ي',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
           if (payment.isDisputed)

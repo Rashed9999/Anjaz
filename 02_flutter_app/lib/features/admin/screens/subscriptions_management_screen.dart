@@ -101,7 +101,7 @@ class _OverviewTab extends StatelessWidget {
               Expanded(child: _kpiCard(
                 icon: Icons.payments,
                 label: 'الإيراد الشهري (MRR)',
-                value: '${_fmt(s['mrr_sar'])} ر.س',
+                value: '${_fmt(s['mrr_sar'])} ر.ي',
                 color: const Color(0xFF059669),
                 large: true,
               )),
@@ -109,7 +109,7 @@ class _OverviewTab extends StatelessWidget {
               Expanded(child: _kpiCard(
                 icon: Icons.calendar_month,
                 label: 'الإيراد السنوي (ARR)',
-                value: '${_fmt(s['arr_sar'])} ر.س',
+                value: '${_fmt(s['arr_sar'])} ر.ي',
                 color: AmyalColors.primary,
                 large: true,
               )),
@@ -176,7 +176,7 @@ class _OverviewTab extends StatelessWidget {
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                 const Divider(),
                 _activityRow('💰 الإيرادات المُحصَّلة',
-                    '${_fmt(s['last_30_days']?['revenue_collected_sar'])} ر.س', Colors.green),
+                    '${_fmt(s['last_30_days']?['revenue_collected_sar'])} ر.ي', Colors.green),
                 _activityRow('⬆️ ترقيات',
                     '${s['last_30_days']?['upgrades'] ?? 0}', Colors.blue),
                 _activityRow('⬇️ تخفيضات',
@@ -263,7 +263,7 @@ class _OverviewTab extends StatelessWidget {
         Expanded(child: Text(p['label']?.toString() ?? code)),
         Text('$count مشترك', style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
         const SizedBox(width: 10),
-        Text('${_fmt(revenue)} ر.س',
+        Text('${_fmt(revenue)} ر.ي',
             style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF059669))),
       ]),
     );
@@ -428,7 +428,7 @@ class _ExpiringTab extends StatelessWidget {
             style: TextStyle(color: Colors.grey, fontSize: 12)),
         const SizedBox(height: 16),
         TextField(controller: priceCtrl, keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'المبلغ المدفوع (ر.س)', isDense: true)),
+            decoration: const InputDecoration(labelText: 'المبلغ المدفوع (ر.ي)', isDense: true)),
         const SizedBox(height: 8),
         StatefulBuilder(builder: (_, setSt) => DropdownButtonFormField<String>(
           decoration: const InputDecoration(labelText: 'طريقة الدفع', isDense: true),
@@ -590,7 +590,7 @@ class _LogTab extends StatelessWidget {
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
           const Spacer(),
           if (log['price_paid_sar'] != null)
-            Text('${log['price_paid_sar']} ر.س',
+            Text('${log['price_paid_sar']} ر.ي',
                 style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
         ]),
         if (actor != null && actor['id'] != null) Padding(

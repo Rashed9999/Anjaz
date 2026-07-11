@@ -121,7 +121,7 @@ class _TransactionTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${isIn ? "+" : "-"}${transaction.amount} ر.س',
+                  '${isIn ? "+" : "-"}${transaction.amount} ر.ي',
                   style: TextStyle(fontWeight: FontWeight.bold, color: color),
                 ),
                 Container(

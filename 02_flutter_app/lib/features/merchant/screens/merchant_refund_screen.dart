@@ -37,7 +37,7 @@ class _MerchantRefundScreenState extends State<MerchantRefundScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('تأكيد الاسترجاع'),
         content: Text(
-          'سيتم استرجاع ${_amountCtrl.text} ر.س للعميل من العملية ${_txIdCtrl.text}.\n\n'
+          'سيتم استرجاع ${_amountCtrl.text} ر.ي للعميل من العملية ${_txIdCtrl.text}.\n\n'
           'هذا الإجراء لا يمكن التراجع عنه.',
         ),
         actions: [
@@ -70,7 +70,7 @@ class _MerchantRefundScreenState extends State<MerchantRefundScreen> {
           icon: const Icon(Icons.check_circle,
               color: Color(0xFF10B981), size: 56),
           title: const Text('تم الاسترجاع'),
-          content: Text('تم استرجاع ${_amountCtrl.text} ر.س للعميل',
+          content: Text('تم استرجاع ${_amountCtrl.text} ر.ي للعميل',
               textAlign: TextAlign.center),
           actions: [
             TextButton(
@@ -149,7 +149,7 @@ class _MerchantRefundScreenState extends State<MerchantRefundScreen> {
                   FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
                 ],
                 decoration: const InputDecoration(
-                  labelText: 'مبلغ الاسترجاع (ر.س) *',
+                  labelText: 'مبلغ الاسترجاع (ر.ي) *',
                   prefixIcon: Icon(Icons.attach_money),
                   border: OutlineInputBorder(),
                 ),

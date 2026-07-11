@@ -85,7 +85,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(color: AmyalColors.yellow),
                           ),
-                          child: Text('$amt ر.س',
+                          child: Text('$amt ر.ي',
                               style: const TextStyle(
                                   color: AmyalColors.primary,
                                   fontWeight: FontWeight.w600)),
@@ -98,12 +98,12 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                       controller: amountCtrl,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
-                        labelText: 'المبلغ (ر.س) *',
+                        labelText: 'المبلغ (ر.ي) *',
                         border: OutlineInputBorder(),
                       ),
                       validator: (v) {
                         final n = double.tryParse(v ?? '');
-                        if (n == null || n < 1) return 'الحد الأدنى 1 ر.س';
+                        if (n == null || n < 1) return 'الحد الأدنى 1 ر.ي';
                         return null;
                       },
                     ),
@@ -274,13 +274,13 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '${campaign.currentAmount} ر.س',
+                                        '${campaign.currentAmount} ر.ي',
                                         style: const TextStyle(
                                             fontSize: 20,
                                             fontWeight: FontWeight.bold,
                                             color: AmyalColors.primary),
                                       ),
-                                      Text('من ${campaign.targetAmount} ر.س',
+                                      Text('من ${campaign.targetAmount} ر.ي',
                                           style: const TextStyle(
                                               fontSize: 11,
                                               color: AmyalColors.textMuted)),
@@ -471,7 +471,7 @@ class _DonorTile extends StatelessWidget {
               ],
             ),
           ),
-          Text('${donation.amount} ر.س',
+          Text('${donation.amount} ر.ي',
               style: const TextStyle(
                   fontSize: 12, color: AmyalColors.primary, fontWeight: FontWeight.bold)),
         ],

@@ -75,7 +75,7 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('${totalAmount.toStringAsFixed(2)} ر.س',
+                          Text('${totalAmount.toStringAsFixed(2)} ر.ي',
                               style: const TextStyle(
                                   fontSize: 20, fontWeight: FontWeight.bold,
                                   color: AmyalColors.primary)),
@@ -122,7 +122,7 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text('${d.amount} ر.س',
+                          Text('${d.amount} ر.ي',
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: AmyalColors.primary)),

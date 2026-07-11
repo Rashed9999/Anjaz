@@ -74,7 +74,7 @@ class _CampaignsListScreenState extends State<CampaignsListScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text('${c.currentAmount} / ${c.targetAmount} ر.س',
+                          Text('${c.currentAmount} / ${c.targetAmount} ر.ي',
                               style: const TextStyle(fontSize: 11)),
                           Text('${c.donorCount} متبرع',
                               style: const TextStyle(

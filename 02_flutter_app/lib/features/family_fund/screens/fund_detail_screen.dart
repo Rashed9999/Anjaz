@@ -51,7 +51,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                 controller: amountCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
-                  labelText: 'المبلغ (ر.س) *',
+                  labelText: 'المبلغ (ر.ي) *',
                   border: OutlineInputBorder(),
                 ),
                 validator: (v) {
@@ -156,7 +156,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                   const Text('الرصيد',
                       style: TextStyle(fontSize: 12, color: AmyalColors.primary)),
                   Text(
-                    '${fund.balance} ر.س',
+                    '${fund.balance} ر.ي',
                     style: const TextStyle(
                       color: AmyalColors.primary,
                       fontSize: 28,
