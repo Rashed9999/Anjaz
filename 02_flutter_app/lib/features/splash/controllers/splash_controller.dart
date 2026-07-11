@@ -16,12 +16,19 @@ class SplashController extends GetxController implements GetxService{
   bool _firstTimeConnectionCheck = true;
   bool get firstTimeConnectionCheck => _firstTimeConnectionCheck;
 
-  ConfigModel? get configModel => _configModel;
+  // AMIAL-FIX(GRAY-SCREENS): كثير من شاشات 6cash تفكّ configModel! و
+  // configModel!.systemFeature! مباشرةً؛ فإن فشل جلب الإعداد (أو تأخّر) يكون
+  // _configModel = null فتنهار الشاشة إلى رمادي كامل. نُعيد إعداداً افتراضياً
+  // غير فارغ (قيمه محايدة) بدل null فلا تنهار أيّ شاشة، ويظلّ النوع ?‎ فلا يتغيّر
+  // شيء عند المستدعين. fromJson({}) آمن تماماً (كل الحقول لها افتراضيات).
+  ConfigModel? _defaultConfig;
+  ConfigModel? get configModel =>
+      _configModel ?? (_defaultConfig ??= ConfigModel.fromJson(<String, dynamic>{}));
 
   Future<Response> getConfigData() async {
     Response response = await splashRepo.getConfigData();
-    if(response.statusCode == 200){
-      _configModel =  ConfigModel.fromJson(response.body);
+    if(response.statusCode == 200 && response.body is Map){
+      _configModel = ConfigModel.fromJson(Map<String, dynamic>.from(response.body));
     }
    else {
      ApiChecker.checkApi(response);

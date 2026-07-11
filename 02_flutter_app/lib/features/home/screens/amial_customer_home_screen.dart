@@ -260,9 +260,10 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   // ============ Quick actions ============
   Widget _quickActions() {
     final items = [
-      _Qa('إرسال', Icons.send_rounded, () => Get.to(() => const TransactionMoneyScreen())),
+      // مهم: TransactionMoneyScreen يتطلّب transactionType (وإلّا widget.transactionType!.tr تنهار)
+      _Qa('إرسال', Icons.send_rounded, () => Get.to(() => const TransactionMoneyScreen(fromEdit: false, transactionType: 'send_money'))),
+      _Qa('سحب نقدي', Icons.account_balance_wallet_outlined, () => Get.to(() => const TransactionMoneyScreen(fromEdit: false, transactionType: 'cash_out'))),
       _Qa('الفواتير', Icons.receipt_long_rounded, () => Get.to(() => const BillPayProvidersScreen())),
-      _Qa('سحب نقدي', Icons.account_balance_wallet_outlined, () => Get.to(() => const WithdrawRequestScreen())),
       _Qa('السجل', Icons.history_rounded, () => Get.to(() => const HistoryScreen())),
     ];
     return Row(
@@ -308,8 +309,8 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       _Svc('الدفع الآمن', Icons.shield_outlined, () => Get.to(() => const MySafePaymentsScreen())),
       _Svc('صندوق العائلة', Icons.groups_outlined, () => Get.to(() => const MyFundsScreen())),
       _Svc('التبرعات', Icons.volunteer_activism_outlined, () => Get.to(() => const DonationsHomeScreen())),
+      _Svc('طلب سحب', Icons.account_balance_outlined, () => Get.to(() => const WithdrawRequestScreen())),
       _Svc('الإيصالات', Icons.description_outlined, () => Get.to(() => const ReceiptsListScreen())),
-      _Svc('الإشعارات', Icons.notifications_none_rounded, () => Get.to(() => const NotificationsCenterScreen())),
       _Svc('حسابي', Icons.person_outline_rounded, () => Get.to(() => const ProfileScreen())),
     ];
     return GridView.count(
