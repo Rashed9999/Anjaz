@@ -96,7 +96,10 @@ class GeneralController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $user = $this->user->where('phone', $request->phone)->where('type', 2)->first();
+        // AMIAL-FIX: مطابقة صيغ الهاتف المكافئة (777… ↔ 967777…) — كان البحث
+        // بالصيغة الحرفية فقط فيُرجع «الرقم غير مسجل» عند اختلاف الصيغة.
+        $user = $this->user->whereIn('phone', \App\Support\Phone::variants($request->phone))
+            ->where('type', 2)->first();
 
         if (!isset($user)) {
             return response()->json(['message' => 'Customer is not available'], 404);
@@ -126,7 +129,9 @@ class GeneralController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $user = $this->user->where('phone', $request->phone)->where('type', 1)->first();
+        // AMIAL-FIX: مطابقة صيغ الهاتف المكافئة (وكيل) — كان البحث حرفياً
+        $user = $this->user->whereIn('phone', \App\Support\Phone::variants($request->phone))
+            ->where('type', 1)->first();
 
         if (!isset($user)) {
             return response()->json(['message' => 'Agent is not available'], 404);
