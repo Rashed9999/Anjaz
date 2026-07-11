@@ -55,7 +55,7 @@ class TransactionController extends Controller
             return response()->json(['message' => translate('send money feature is not activate')], 403);
 
         $receiverPhone = Helpers::filter_phone($request->phone);
-        $user = $this->user->where('phone', $receiverPhone)->first();
+        $user = $this->user->whereIn('phone', \App\Support\Phone::variants($receiverPhone))->first(); // AMIAL-FIX: مطابقة صيغ الهاتف
 
         if (!isset($user))
             return response()->json(['message' => translate('Receiver not found')], 403); //Receiver Check
@@ -144,7 +144,7 @@ class TransactionController extends Controller
             return response()->json(['message' => translate('cash out feature is not activate')], 403);
 
         $receiverPhone = Helpers::filter_phone($request->phone);
-        $user = $this->user->where('phone', $receiverPhone)->first();
+        $user = $this->user->whereIn('phone', \App\Support\Phone::variants($receiverPhone))->first(); // AMIAL-FIX: مطابقة صيغ الهاتف
 
         if (!isset($user))
             return response()->json(['message' => translate('Receiver not found')], 403); //Receiver Check
@@ -231,7 +231,7 @@ class TransactionController extends Controller
             return response()->json(['message' => translate('request money feature is not activate')], 403);
 
         $receiverPhone = Helpers::filter_phone($request->phone);
-        $user = $this->user->where('phone', $receiverPhone)->first();
+        $user = $this->user->whereIn('phone', \App\Support\Phone::variants($receiverPhone))->first(); // AMIAL-FIX: مطابقة صيغ الهاتف
 
         if (!isset($user))
             return response()->json(['message' => translate('Receiver not found')], 403); //Receiver Check

@@ -407,12 +407,27 @@ class Helpers
     public static function pin_check(int $user_id, string $pin): bool
     {
         $user = User::find($user_id);
-
-        if (Hash::check($pin, $user->password)) {
-            return true;
-        }else{
+        if (!$user) {
             return false;
         }
+
+        // AMIAL-FIX(PIN): أميال باي يفصل كلمة سرّ الدخول عن رمز المعاملات (4 أرقام).
+        // نتحقّق أولاً من transaction_pin المخصّص (مُعمّى أو نصّاً)، ثم نُبقي
+        // توافق 6cash (الرمز = كلمة السرّ) كخيار احتياطي حتى لا نكسر حسابات قائمة.
+        if (!empty($user->transaction_pin)) {
+            try {
+                if (Hash::check($pin, $user->transaction_pin)) {
+                    return true;
+                }
+            } catch (\Throwable $e) {
+                // transaction_pin غير مُعمّى (نصّي) — نقارن نصّاً أدناه
+            }
+            if (hash_equals((string) $user->transaction_pin, (string) $pin)) {
+                return true;
+            }
+        }
+
+        return Hash::check($pin, $user->password);
     }
 
     public static function get_qrcode(array $data): string
@@ -584,7 +599,10 @@ class Helpers
 
     public static function get_user_id(string $phone): int
     {
-        return User::where('phone', $phone)->first()->id;
+        // AMIAL-FIX: مطابقة صيغ الهاتف المكافئة (777… ↔ 967777…) وتفادي الانهيار
+        // على null (كان ->first()->id يرمي إن اختلفت الصيغة أو غاب المستخدم).
+        $user = User::whereIn('phone', \App\Support\Phone::variants($phone))->first();
+        return (int) ($user?->id ?? 0);
     }
 
     public static function get_currency_symbol(): ?string

@@ -44,6 +44,8 @@ class EnsureDemoUsers extends Command
             $user->password = Hash::make($password);
             $user->transaction_pin = '1234';
             $user->is_active = 1;
+            // AMIAL-DEMO: موثّق KYC (=1) ليعمل إرسال الأموال (يشترط التوثيق)
+            $user->is_kyc_verified = 1;
             $user->zone_code = 'SOUTH';
             $user->save();
 
@@ -57,6 +59,50 @@ class EnsureDemoUsers extends Command
             );
 
             $this->info("✓ حساب العميل التجريبي جاهز id={$user->id} phone={$phone}");
+
+            // AMIAL-DEMO: مستلِم تجريبي (لتجربة إرسال الأموال) — 967777100002
+            $rxPhone = '967777100002';
+            $recipient = User::where('type', 2)->get()->first(function ($u) use ($rxPhone) {
+                return in_array($u->phone, [$rxPhone, '777100002'], true);
+            });
+            if (!$recipient) {
+                $recipient = new User();
+            }
+            $recipient->f_name = 'محمد';
+            $recipient->l_name = 'علي';
+            $recipient->phone = $rxPhone;
+            $recipient->type = 2;
+            $recipient->password = Hash::make($password);
+            $recipient->transaction_pin = '1234';
+            $recipient->is_active = 1;
+            $recipient->is_kyc_verified = 1;
+            $recipient->zone_code = 'SOUTH';
+            $recipient->save();
+            EMoney::updateOrCreate(
+                ['user_id' => $recipient->id],
+                [
+                    'current_balance' => '10000.0000',
+                    'charge_earned' => '0', 'pending_balance' => '0',
+                    'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
+                ]
+            );
+            $this->info("✓ المستلِم التجريبي جاهز id={$recipient->id} phone={$rxPhone} (محمد علي)");
+
+            // AMIAL-FIX(FEATURES): تفعيل مفاتيح الميزات في business_settings —
+            // على قاعدة أميال الجديدة تكون مفقودة فتُرجع كل الخدمات
+            // «feature is not activate» (403). نُفعّلها ليعمل العميل فعلاً.
+            $featureKeys = [
+                'send_money_status', 'cash_out_status', 'add_money_status',
+                'withdraw_request_status', 'send_money_request_status',
+                'favorite_number_status', 'banner_status', 'faq_section_status',
+                'linked_website_status', 'report_disputes_status',
+            ];
+            foreach ($featureKeys as $k) {
+                // نستخدم query builder (الموديل بلا fillable لـ mass assignment)
+                \Illuminate\Support\Facades\DB::table('business_settings')
+                    ->updateOrInsert(['key' => $k], ['value' => '1']);
+            }
+            $this->info('✓ مفاتيح الميزات مُفعّلة (' . count($featureKeys) . ' مفتاح)');
         } catch (\Throwable $e) {
             $this->error('❌❌❌ فشل إنشاء العميل التجريبي: ' . $e->getMessage());
             return self::FAILURE;

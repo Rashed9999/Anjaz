@@ -201,6 +201,49 @@ $app = Application::configure(basePath: dirname(__DIR__))
                 ], 403);
             }
         });
+
+        // AMIAL-FIX(VISIBILITY): كل خطأ على مسار API يُصيَّر JSON صريحاً — حتى لو
+        // لم يرسل التطبيق ترويسة Accept. بدون هذا يُرجع Laravel صفحة HTML على
+        // أخطاء 500 فيفشل jsonDecode ويُظهر التطبيق «Server Error» عامّة تُخفي
+        // السبب. الآن يظهر السبب الحقيقي (وفي وضع debug: الصنف والملفّ/السطر).
+        $exceptions->render(function (\Throwable $e, $request) {
+            if (!($request->expectsJson() || $request->is('api/*'))) {
+                return null; // غير API — دع Laravel يعرض صفحته المعتادة
+            }
+            // استثناءات تُصيّر نفسها أو لها معالج مخصّص أعلاه — لا نلمسها
+            if (method_exists($e, 'render')) {
+                return null;
+            }
+            if ($e instanceof \Illuminate\Validation\ValidationException) {
+                return new \Illuminate\Http\JsonResponse([
+                    'success' => false, 'code' => 'VALIDATION_FAILED',
+                    'message' => 'بيانات غير صحيحة',
+                    'errors' => $e->errors(), 'meta' => (object)[],
+                ], 422);
+            }
+            if ($e instanceof \Illuminate\Auth\AuthenticationException) {
+                return new \Illuminate\Http\JsonResponse([
+                    'success' => false, 'code' => 'UNAUTHENTICATED',
+                    'message' => 'انتهت الجلسة، سجّل الدخول من جديد',
+                    'errors' => (object)[], 'meta' => (object)[],
+                ], 401);
+            }
+            $status = ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface)
+                ? $e->getStatusCode() : 500;
+            $payload = [
+                'success' => false,
+                'code' => $status >= 500 ? 'SERVER_ERROR' : 'REQUEST_ERROR',
+                'message' => $e->getMessage() !== '' ? $e->getMessage() : 'حدث خطأ في الخادم',
+                'errors' => (object)[], 'meta' => (object)[],
+            ];
+            if (config('app.debug')) {
+                $payload['debug'] = [
+                    'exception' => get_class($e),
+                    'at' => $e->getFile() . ':' . $e->getLine(),
+                ];
+            }
+            return new \Illuminate\Http\JsonResponse($payload, $status);
+        });
     })
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
         // CRITICAL-001-SUBS — فحص الاشتراكات يومياً 8 صباحاً
