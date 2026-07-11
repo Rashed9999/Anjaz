@@ -88,7 +88,8 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        $seller = User::where('phone', $request->input('seller_phone'))->first();
+        // AMIAL-FIX: مطابقة صيغ الهاتف المكافئة (777… ↔ 967777…) كي يُقبل أي صيغة
+        $seller = User::whereIn('phone', \App\Support\Phone::variants($request->input('seller_phone')))->first();
         if (!$seller) return $this->error('SELLER_NOT_FOUND', 'البائع غير مسجل في النظام', 422);
 
         try {
