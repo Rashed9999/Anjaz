@@ -43,6 +43,13 @@ class ZonePolicyService
         'pay_bill',
         'safe_payment_fund',
         'safe_payment_release',
+        // AMIAL-FIX: أسماء إجراءات مستعملة في الراوتات كانت مفقودة فتُرفض بـ
+        // «Action not in known list» (الدفع الآمن/التبرع/الاسترجاع).
+        'safe_payment_create',
+        'donate',
+        'refund',
+        'withdraw_request',
+        'withdraw_execute',
         'merchant_payment',
         'qr_payment',
         'split_bill',

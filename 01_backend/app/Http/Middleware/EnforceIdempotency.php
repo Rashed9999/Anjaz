@@ -46,11 +46,10 @@ class EnforceIdempotency
         $key = $request->header('Idempotency-Key');
 
         if (empty($key)) {
-            return $this->errorResponse(
-                code: 'IDEMPOTENCY_KEY_REQUIRED',
-                message: 'Idempotency-Key header is required for this endpoint',
-                status: 400,
-            );
+            // AMIAL-FIX: التطبيق لا يرسل الترويسة بعد؛ بدل رفض الطلب بـ 400
+            // (يكسر السحب/الدفع الآمن) نولّد مفتاحاً تلقائياً. الحماية من النقر
+            // المزدوج تبقى إلى أن يُرسل العميل مفتاحاً ثابتاً لكلّ عملية منطقية.
+            $key = (string) \Illuminate\Support\Str::ulid();
         }
 
         $userId = $request->user()?->id;

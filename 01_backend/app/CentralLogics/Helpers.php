@@ -347,7 +347,9 @@ class Helpers
 
     public static function currency_code(): string
     {
-        return BusinessSetting::where(['key' => 'currency'])->first()->value ?? 'USD';
+        // AMIAL-FIX: افتراضي «ريال يمني» (كان USD/SAR)، وآمن ضدّ null (كان
+        // ->first()->value ينهار إن غاب الإعداد).
+        return optional(BusinessSetting::where(['key' => 'currency'])->first())->value ?: 'YER';
     }
 
     public static function currency_symbol(): string

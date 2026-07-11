@@ -103,6 +103,17 @@ class EnsureDemoUsers extends Command
                     ->updateOrInsert(['key' => $k], ['value' => '1']);
             }
             $this->info('✓ مفاتيح الميزات مُفعّلة (' . count($featureKeys) . ' مفتاح)');
+
+            // AMIAL-FIX(CURRENCY): العملة ريال يمني فقط (كانت ر.س/SAR على الشاشات).
+            \Illuminate\Support\Facades\DB::table('business_settings')
+                ->updateOrInsert(['key' => 'currency'], ['value' => 'YER']);
+            \Illuminate\Support\Facades\DB::table('business_settings')
+                ->updateOrInsert(['key' => 'currency_symbol_position'], ['value' => 'right']);
+            \Illuminate\Support\Facades\DB::table('currencies')->updateOrInsert(
+                ['currency_code' => 'YER'],
+                ['country' => 'Yemen', 'currency_symbol' => 'ر.ي']
+            );
+            $this->info('✓ العملة مضبوطة: ريال يمني (YER / ر.ي)');
         } catch (\Throwable $e) {
             $this->error('❌❌❌ فشل إنشاء العميل التجريبي: ' . $e->getMessage());
             return self::FAILURE;
