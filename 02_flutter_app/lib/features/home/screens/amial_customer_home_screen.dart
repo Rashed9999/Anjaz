@@ -12,6 +12,8 @@ import 'package:amyal_pay/features/donations/screens/donations_home_screen.dart'
 import 'package:amyal_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amyal_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amyal_pay/features/setting/screens/profile_screen.dart';
+import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
+import 'package:amyal_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
 
 /// AMIAL-CUSTOMER-HOME-001
 ///
@@ -311,6 +313,8 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       _Svc('التبرعات', Icons.volunteer_activism_outlined, () => Get.to(() => const DonationsHomeScreen())),
       _Svc('طلب سحب', Icons.account_balance_outlined, () => Get.to(() => const WithdrawRequestScreen())),
       _Svc('الإيصالات', Icons.description_outlined, () => Get.to(() => const ReceiptsListScreen())),
+      _Svc('توثيق الحساب', Icons.verified_user_outlined, () => Get.to(() => const KycVerifyScreen())),
+      _Svc('الباقات', Icons.workspace_premium_outlined, () => Get.to(() => const PlansCatalogScreen())),
       _Svc('حسابي', Icons.person_outline_rounded, () => Get.to(() => const ProfileScreen())),
     ];
     return GridView.count(
