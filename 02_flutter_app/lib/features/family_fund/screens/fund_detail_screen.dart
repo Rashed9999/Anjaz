@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/family_fund/controllers/funds_controller.dart';
 import 'package:amyal_pay/features/family_fund/domain/models/fund_models.dart';
+import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-FUND-FAMILY-001 (v0.9-D)
@@ -77,6 +78,8 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                       ? null
                       : () async {
                           if (!formKey.currentState!.validate()) return;
+                          // AMIAL-PIN-GATE-001: رمز PIN قبل خصم المساهمة
+                          if (!await askAmialPin(title: 'تأكيد المساهمة')) return;
                           final success = await ctrl.contribute(
                             fundUlid: widget.fundUlid,
                             amount: amountCtrl.text.trim(),

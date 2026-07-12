@@ -4,6 +4,7 @@ import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/features/auth/screens/role_router.dart';
+import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amyal_pay/data/api/secure_storage_helper.dart';
 
 /// AMIAL-UNIFIED-AUTH-001 (v1.5)
@@ -163,10 +164,12 @@ class UnifiedAuthController extends GetxController implements GetxService {
   }
 
   /// توجيه للشاشة الرئيسية حسب الدور الحالي.
-  void navigateToHomeForRole() {
-    if (currentRole.value.isNotEmpty) {
-      RoleRouter.navigateToHome(currentRole.value);
-    }
+  /// AMIAL-PIN-GATE-001: بعد الدخول تظهر بوّابة رمز PIN قبل فتح الرئيسية.
+  Future<void> navigateToHomeForRole() async {
+    if (currentRole.value.isEmpty) return;
+    final ok = await askAmialPin(title: 'رمز الدخول للتطبيق');
+    if (!ok) return; // بقي على شاشة الدخول
+    RoleRouter.navigateToHome(currentRole.value);
   }
 
   /// AMIAL-FIX(LOGIN): رسالة خطأ دقيقة بدل «فشل تسجيل الدخول» العامّة.

@@ -1,0 +1,167 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:get/get.dart';
+import 'package:amyal_pay/data/api/api_client.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
+
+/// AMIAL-PIN-GATE-001
+///
+/// بوّابة رمز المعاملات (PIN) الموحّدة — تُعرض بعد الدخول وقبل كل عملية مالية
+/// (تحويل/سحب/صندوق عائلي/دفع آمن…). تتحقّق من الرمز عبر الخادم
+/// (POST /api/v1/amial/verify-pin) وتُرجع true عند النجاح.
+///
+/// الاستخدام:
+///   final ok = await askAmialPin(title: 'تأكيد السحب');
+///   if (!ok) return;
+Future<bool> askAmialPin({String title = 'أدخل رمز PIN'}) async {
+  final result = await Get.to<bool>(
+    () => _AmialPinGateScreen(title: title),
+    fullscreenDialog: true,
+  );
+  return result == true;
+}
+
+class _AmialPinGateScreen extends StatefulWidget {
+  const _AmialPinGateScreen({required this.title});
+
+  final String title;
+
+  @override
+  State<_AmialPinGateScreen> createState() => _AmialPinGateScreenState();
+}
+
+class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
+  final TextEditingController _pin = TextEditingController();
+  bool _checking = false;
+  String _error = '';
+
+  @override
+  void dispose() {
+    _pin.dispose();
+    super.dispose();
+  }
+
+  Future<void> _verify() async {
+    if (_pin.text.length < 4) {
+      setState(() => _error = 'أدخل رمز PIN المكوّن من 4 أرقام');
+      return;
+    }
+    setState(() {
+      _checking = true;
+      _error = '';
+    });
+    try {
+      final api = Get.find<ApiClient>();
+      final r = await api.postData('/api/v1/amial/verify-pin', {'pin': _pin.text});
+      final ok = r.statusCode == 200 &&
+          r.body is Map &&
+          r.body['success'] == true;
+      if (ok) {
+        Get.back(result: true);
+        return;
+      }
+      String msg = 'رمز PIN غير صحيح';
+      try {
+        if (r.body is Map && r.body['message'] != null) {
+          msg = '${r.body['message']}';
+        }
+      } catch (_) {}
+      setState(() {
+        _checking = false;
+        _error = msg;
+        _pin.clear();
+      });
+    } catch (_) {
+      setState(() {
+        _checking = false;
+        _error = 'تعذّر الاتصال بالخادم — حاول مجدداً';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F4EF),
+      appBar: AppBar(
+        backgroundColor: AmyalColors.primary,
+        foregroundColor: Colors.white,
+        title: Text(widget.title),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Get.back(result: false),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 24),
+            Container(
+              height: 84,
+              width: 84,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AmyalColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.lock_outline_rounded,
+                  color: AmyalColors.primary, size: 40),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'أدخل رمز المعاملات (PIN) للمتابعة',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15, color: Color(0xFF5F6B62)),
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _pin,
+              autofocus: true,
+              obscureText: true,
+              maxLength: 4,
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              style: const TextStyle(
+                  fontSize: 28, letterSpacing: 18, fontWeight: FontWeight.bold),
+              decoration: InputDecoration(
+                counterText: '',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              onSubmitted: (_) => _verify(),
+            ),
+            if (_error.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(_error,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AmyalColors.red, fontSize: 13)),
+            ],
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _checking ? null : _verify,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AmyalColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+              ),
+              child: _checking
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : const Text('تأكيد',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

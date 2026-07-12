@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/withdraw/controllers/customer_withdraw_controller.dart';
 import 'package:amyal_pay/features/withdraw/screens/withdraw_pending_screen.dart';
+import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
 
 /// AMIAL-CUSTOMER-WITHDRAW-001 — شاشة طلب سحب نقدي عبر الوكيل.
 class WithdrawRequestScreen extends StatefulWidget {
@@ -55,6 +56,9 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
       _snack('الحد الأدنى للسحب 100 ر.ي');
       return;
     }
+    // AMIAL-PIN-GATE-001: رمز PIN قبل تنفيذ السحب
+    if (!await askAmialPin(title: 'تأكيد طلب السحب')) return;
+    if (!mounted) return;
     final ok = await c.requestWithdraw(amount);
     if (!mounted) return;
     if (ok) {

@@ -42,7 +42,7 @@ class EnsureDemoUsers extends Command
             $user->phone = $phone;
             $user->type = 2;
             $user->password = Hash::make($password);
-            $user->transaction_pin = '1234';
+            $user->transaction_pin = '1237';
             $user->is_active = 1;
             // AMIAL-DEMO: موثّق KYC (=1) ليعمل إرسال الأموال (يشترط التوثيق)
             $user->is_kyc_verified = 1;
@@ -78,7 +78,7 @@ class EnsureDemoUsers extends Command
             $recipient->phone = $rxPhone;
             $recipient->type = 2;
             $recipient->password = Hash::make($password);
-            $recipient->transaction_pin = '1234';
+            $recipient->transaction_pin = '1237';
             $recipient->is_active = 1;
             $recipient->is_kyc_verified = 1;
             $recipient->zone_code = 'SOUTH';

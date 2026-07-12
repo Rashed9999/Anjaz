@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/safe_payment/controllers/safe_payment_controller.dart';
+import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
@@ -78,6 +79,10 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
     );
 
     if (confirmed != true) return;
+
+    // AMIAL-PIN-GATE-001: رمز PIN قبل حجز المبلغ
+    if (!await askAmialPin(title: 'تأكيد الدفع الآمن')) return;
+    if (!mounted) return;
 
     final ok = await Get.find<SafePaymentController>().create(
       sellerPhone: _sellerPhoneCtrl.text.trim(),

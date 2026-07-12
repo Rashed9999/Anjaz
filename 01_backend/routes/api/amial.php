@@ -66,6 +66,20 @@ Route::prefix('legal-docs')->name('amial.legal-docs.')->group(function () {
 
 Route::middleware(['auth:api'])->group(function () {
 
+    // -------- AMIAL-PIN-GATE-001: تحقّق رمز المعاملات (بوّابة بعد الدخول
+    // وقبل العمليات المالية في التطبيق) --------
+    Route::post('/verify-pin', function (\Illuminate\Http\Request $request) {
+        $request->validate(['pin' => 'required|string|min:4|max:10']);
+        $ok = \App\CentralLogics\Helpers::pin_check($request->user()->id, (string) $request->pin);
+        return new \Illuminate\Http\JsonResponse([
+            'success' => $ok,
+            'code' => $ok ? 'PIN_OK' : 'PIN_INVALID',
+            'message' => $ok ? 'تم التحقق' : 'رمز PIN غير صحيح',
+            'errors' => (object) [],
+            'meta' => (object) [],
+        ], $ok ? 200 : 403);
+    })->middleware('amial.rate-limit:verify_pin,10,1')->name('amial.verify-pin');
+
     // -------- Zone Policy --------
     Route::get('/policy/session', [PolicyController::class, 'session'])
         ->name('amial.policy.session');
