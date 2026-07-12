@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/models/contact_model.dart';
 import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amyal_pay/features/transaction_money/controllers/contact_controller.dart';
-import 'package:amyal_pay/features/transaction_money/screens/transaction_confirmation_screen.dart';
+import 'package:amyal_pay/features/transaction_money/domain/amial_transfer_api.dart';
+import 'package:amyal_pay/features/transaction_money/screens/amial_transfer_holding_screen.dart';
+import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
 import 'package:amyal_pay/helper/phone_cheker_helper.dart';
@@ -48,6 +50,8 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
     super.dispose();
   }
 
+  /// AMIAL-TRANSFER-V2 — المسار الجديد:
+  /// 1) التحقق من المستلم (اسم مقنَّع) 2) تأكيد 3) PIN 4) initiate بنافذة تراجع.
   Future<void> _confirm() async {
     final rawPhone = _phoneCtrl.text.trim();
     if (rawPhone.length < 6) {
@@ -66,33 +70,87 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
         countryCode: '+967',
         phoneNumber: rawPhone,
       );
-      final ctrl = Get.find<ContactController>();
-      final value = await ctrl.checkCustomerNumber(phoneNumber: phoneNumber);
+
+      // ── 1) التحقق من المستلم ──
+      final vr = await AmialTransferApi.verifyRecipient(phoneNumber);
       if (!mounted) return;
       setState(() => _checking = false);
-      if (value == null) return; // «رقمك نفسه» — الرسالة ظهرت
-      if (value.isOk && value.body is Map && value.body['data'] != null) {
-        final name = value.body['data']['name']?.toString();
-        final image = value.body['data']['image']?.toString();
-        final isFav = value.body['data']['is_favourite'] == true;
-        Get.to(() => TransactionConfirmationScreen(
-              inputBalance: amount,
-              transactionType: 'send_money',
-              purpose: _noteCtrl.text.trim().isNotEmpty
-                  ? _noteCtrl.text.trim()
-                  : null,
-              contactModel: ContactModel(
-                phoneNumber: phoneNumber,
-                name: name,
-                avatarImage: image,
-                isFavourite: isFav,
-              ),
-            ));
-      } else {
+
+      if (vr.statusCode != 200 || vr.body is! Map || vr.body['success'] != true) {
         String msg = 'الرقم غير مسجل في النظام';
         try {
-          if (value.body is Map && value.body['message'] != null) {
-            msg = '${value.body['message']}';
+          if (vr.body is Map && vr.body['message'] != null) {
+            msg = '${vr.body['message']}';
+          }
+        } catch (_) {}
+        showCustomSnackBarHelper(msg, isError: true);
+        return;
+      }
+
+      final meta = Map<String, dynamic>.from(vr.body['meta'] as Map);
+      final token = '${meta['verification_token']}';
+      final recipientId = meta['recipient_id'] as int;
+      final maskedName = '${meta['masked_name'] ?? 'مستلِم'}';
+      final maskedPhone = '${meta['masked_phone'] ?? phoneNumber}';
+
+      // الرسوم (ثابتة من إعدادات الخادم — نفس منطق 6cash)
+      double fee = 0;
+      try {
+        fee = Get.find<SplashController>()
+                .configModel
+                ?.sendMoneyChargeFlat ??
+            0;
+      } catch (_) {}
+
+      // ── 2) ورقة «تأكد من المستلم» ──
+      final proceed = await _showRecipientConfirmSheet(
+        maskedName: maskedName,
+        maskedPhone: maskedPhone,
+        amount: amount,
+        fee: fee,
+      );
+      if (proceed != true || !mounted) return;
+
+      // ── 3) رمز PIN ──
+      final pin = await askAmialPinInput(title: 'تأكيد التحويل');
+      if (pin == null || pin.length < 4 || !mounted) return;
+
+      // ── 4) initiate ──
+      setState(() => _checking = true);
+      final r = await AmialTransferApi.initiate(
+        recipientId: recipientId,
+        verificationToken: token,
+        amount: amount.toStringAsFixed(0),
+        pin: pin,
+        fee: fee.toStringAsFixed(0),
+        note: _noteCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      setState(() => _checking = false);
+
+      if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        final m = Map<String, dynamic>.from(r.body['meta'] as Map);
+        // حدّث الرصيد في الخلفية
+        try {
+          Get.find<ProfileController>().getProfileData(reload: true);
+        } catch (_) {}
+        Get.off(() => AmialTransferHoldingScreen(
+              transferUlid: '${m['transfer_ulid']}',
+              amount: '${m['amount'] ?? amount}',
+              fee: fee.toStringAsFixed(0),
+              secondsRemaining:
+                  int.tryParse('${m['seconds_remaining'] ?? 60}') ?? 60,
+              recipientName: maskedName,
+              recipientPhone: maskedPhone,
+              note: _noteCtrl.text.trim().isNotEmpty
+                  ? _noteCtrl.text.trim()
+                  : null,
+            ));
+      } else {
+        String msg = 'فشل التحويل';
+        try {
+          if (r.body is Map && r.body['message'] != null) {
+            msg = '${r.body['message']}';
           }
         } catch (_) {}
         showCustomSnackBarHelper(msg, isError: true);
@@ -101,6 +159,110 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
       if (mounted) setState(() => _checking = false);
       showCustomSnackBarHelper('تعذّر الاتصال — حاول مجدداً', isError: true);
     }
+  }
+
+  /// ورقة «تأكد من المستلم» — الاسم المقنَّع من الخادم يمنع التحويل بالغلط.
+  Future<bool?> _showRecipientConfirmSheet({
+    required String maskedName,
+    required String maskedPhone,
+    required double amount,
+    required double fee,
+  }) {
+    return showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.white,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 44,
+            height: 4,
+            decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 20),
+          CircleAvatar(
+            radius: 32,
+            backgroundColor: AmyalColors.primary.withValues(alpha: 0.1),
+            child: Text(maskedName.isNotEmpty ? maskedName[0] : '؟',
+                style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: AmyalColors.primary)),
+          ),
+          const SizedBox(height: 12),
+          const Text('تأكد من المستلم قبل الإرسال',
+              style: TextStyle(fontSize: 13, color: AmyalColors.textSecondary)),
+          const SizedBox(height: 4),
+          Text(maskedName,
+              style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AmyalColors.primary)),
+          Text(maskedPhone,
+              textDirection: TextDirection.ltr,
+              style: const TextStyle(
+                  fontSize: 13, color: AmyalColors.textSecondary)),
+          const SizedBox(height: 18),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AmyalColors.background,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(children: [
+              _sheetRow('مبلغ التحويل', AmialMoney.yer(amount)),
+              const SizedBox(height: 6),
+              _sheetRow('رسوم التحويل', AmialMoney.yer(fee)),
+              const Divider(height: 18),
+              _sheetRow('الإجمالي', AmialMoney.yer(amount + fee), bold: true),
+            ]),
+          ),
+          const SizedBox(height: 12),
+          Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
+            Icon(Icons.replay_rounded, size: 14, color: AmyalColors.textMuted),
+            SizedBox(width: 6),
+            Flexible(
+              child: Text('يمكنك التراجع عن التحويل خلال دقيقة بعد التنفيذ',
+                  style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+            ),
+          ]),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AmyalColors.primary,
+              minimumSize: const Size.fromHeight(52),
+            ),
+            child: const Text('تأكيد التحويل',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء',
+                style: TextStyle(color: AmyalColors.textSecondary)),
+          ),
+          SizedBox(height: MediaQuery.of(ctx).viewInsets.bottom),
+        ]),
+      ),
+    );
+  }
+
+  Widget _sheetRow(String label, String value, {bool bold = false}) {
+    return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+      Text(value,
+          style: TextStyle(
+              fontSize: bold ? 16 : 14,
+              fontWeight: bold ? FontWeight.bold : FontWeight.w600,
+              color: bold ? AmyalColors.primary : Colors.black87)),
+      Text(label,
+          style: const TextStyle(fontSize: 13, color: AmyalColors.textSecondary)),
+    ]);
   }
 
   @override

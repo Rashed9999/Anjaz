@@ -42,11 +42,15 @@ class EnsureDemoUsers extends Command
             $user->phone = $phone;
             $user->type = 2;
             $user->password = Hash::make($password);
-            $user->transaction_pin = '1237';
+            $user->transaction_pin = Hash::make('1237');
             $user->is_active = 1;
             // AMIAL-DEMO: موثّق KYC (=1) ليعمل إرسال الأموال (يشترط التوثيق)
             $user->is_kyc_verified = 1;
             $user->zone_code = 'SOUTH';
+            // AMIAL-TRANSFER-V2: مسار التحويل الجديد يفرض مستويات KYC — «كامل»
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {
+                $user->kyc_tier = 3;
+            }
             $user->save();
 
             EMoney::updateOrCreate(
@@ -78,10 +82,13 @@ class EnsureDemoUsers extends Command
             $recipient->phone = $rxPhone;
             $recipient->type = 2;
             $recipient->password = Hash::make($password);
-            $recipient->transaction_pin = '1237';
+            $recipient->transaction_pin = Hash::make('1237');
             $recipient->is_active = 1;
             $recipient->is_kyc_verified = 1;
             $recipient->zone_code = 'SOUTH';
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {
+                $recipient->kyc_tier = 3;
+            }
             $recipient->save();
             EMoney::updateOrCreate(
                 ['user_id' => $recipient->id],

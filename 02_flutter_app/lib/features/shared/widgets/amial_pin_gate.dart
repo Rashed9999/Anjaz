@@ -22,6 +22,103 @@ Future<bool> askAmialPin({String title = 'أدخل رمز PIN'}) async {
   return result == true;
 }
 
+/// AMIAL-TRANSFER-V2: جمع رمز PIN فقط (بلا تحقق من الخادم) — يُستخدم عندما
+/// تكون نقطة النهاية نفسها هي من يتحقّق من الرمز (مثل transfer/initiate).
+/// يرجع الرمز المكوَّن من 4 أرقام، أو null إن أغلق المستخدم الشاشة.
+Future<String?> askAmialPinInput({String title = 'أدخل رمز PIN'}) {
+  return Get.to<String>(
+    () => _AmialPinInputScreen(title: title),
+    fullscreenDialog: true,
+  );
+}
+
+class _AmialPinInputScreen extends StatefulWidget {
+  const _AmialPinInputScreen({required this.title});
+  final String title;
+
+  @override
+  State<_AmialPinInputScreen> createState() => _AmialPinInputScreenState();
+}
+
+class _AmialPinInputScreenState extends State<_AmialPinInputScreen> {
+  final TextEditingController _pin = TextEditingController();
+
+  @override
+  void dispose() {
+    _pin.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F4EF),
+      appBar: AppBar(
+        backgroundColor: AmyalColors.primary,
+        foregroundColor: Colors.white,
+        title: Text(widget.title),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Get.back(),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 24),
+            Container(
+              height: 84,
+              width: 84,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AmyalColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.lock_outline_rounded,
+                  color: AmyalColors.primary, size: 40),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'أدخل رمز المعاملات (PIN) لتأكيد التحويل',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15, color: Color(0xFF5F6B62)),
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: _pin,
+              readOnly: true,
+              obscureText: true,
+              maxLength: 4,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 28, letterSpacing: 18, fontWeight: FontWeight.bold),
+              decoration: InputDecoration(
+                counterText: '',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            AmialNumpad(
+              controller: _pin,
+              maxLength: 4,
+              onChanged: (v) {
+                setState(() {});
+                if (v.length == 4) Get.back(result: v);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AmialPinGateScreen extends StatefulWidget {
   const _AmialPinGateScreen({required this.title});
 
