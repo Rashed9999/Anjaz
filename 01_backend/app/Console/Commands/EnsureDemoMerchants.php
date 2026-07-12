@@ -43,7 +43,7 @@ class EnsureDemoMerchants extends Command
         [
             'phone' => '967777200001', 'f' => 'صالح', 'l' => 'النور',
             'store' => 'بقالة النور', 'number' => 'AM-GROC-001',
-            'type' => 'grocery', 'plan' => 'starter',
+            'type' => 'retail', 'plan' => 'starter',
             'products' => [
                 ['مياه شملان 750 مل', 'مشروبات', '6291000101', 180, 250, null, 120],
                 ['خبز توست أبيض', 'مواد غذائية', '6291000102', 900, 1200, null, 25],
@@ -76,7 +76,7 @@ class EnsureDemoMerchants extends Command
         [
             'phone' => '967777200004', 'f' => 'ماجد', 'l' => 'الأمل',
             'store' => 'محطة الأمل للوقود', 'number' => 'AM-FUEL-004',
-            'type' => 'fuel_station', 'plan' => 'enterprise',
+            'type' => 'fuel', 'plan' => 'enterprise',
             'products' => [
                 ['زيت محرك 4 لتر', 'زيوت', '9291000401', 14000, 19000, null, 30],
                 ['ماء رديتر 1 لتر', 'سوائل', '9291000402', 900, 1500, null, 50],
@@ -103,7 +103,7 @@ class EnsureDemoMerchants extends Command
                 $this->ensureProfile($user, $m);
                 $this->ensureWallet($user);
                 $this->ensureProducts($user, $m['products']);
-                if ($m['type'] === 'fuel_station') {
+                if ($m['type'] === 'fuel') {
                     $this->ensureFuelStation($user, $m);
                 }
                 $this->info("✓ تاجر {$m['store']} جاهز — {$m['number']} / {$m['phone']} (باقة {$m['plan']})");
