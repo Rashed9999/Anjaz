@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/withdraw/controllers/customer_withdraw_controller.dart';
 
@@ -172,6 +173,27 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
                   'أعطِ هذا الرقم للوكيل',
                   style: TextStyle(color: Colors.white70, fontSize: 12),
                 ),
+                // AMIAL-DESIGN-23: رمز QR للعملية — يمسحه الوكيل بدل كتابة الرقم
+                if (opCode.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: QrImageView(
+                      data: 'AMIAL-WD:$opCode',
+                      size: 150,
+                      backgroundColor: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'أو يمسح الوكيل هذا الرمز',
+                    style: TextStyle(color: Colors.white70, fontSize: 11),
+                  ),
+                ],
               ]),
             ),
             const SizedBox(height: 16),
