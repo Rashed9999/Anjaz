@@ -87,6 +87,25 @@ class CustomerWithdrawController extends GetxController implements GetxService {
 
   void clearCurrent() => currentRequest.value = null;
 
+  /// AMIAL-WD-HISTORY-001: سجلّ طلبات السحب (كل الحالات).
+  final RxList<Map<String, dynamic>> historyRequests = <Map<String, dynamic>>[].obs;
+  final RxBool isLoadingHistory = false.obs;
+
+  Future<void> loadHistory({String status = 'all'}) async {
+    try {
+      isLoadingHistory.value = true;
+      final r = await repo.history(status: status);
+      if (_ok(r)) {
+        final list = (r.body['meta']?['requests'] ?? []) as List;
+        historyRequests.assignAll(
+          list.map((e) => Map<String, dynamic>.from(e as Map)).toList(),
+        );
+      }
+    } catch (_) {} finally {
+      isLoadingHistory.value = false;
+    }
+  }
+
   bool _ok(Response r) =>
       (r.statusCode == 200 || r.statusCode == 201) &&
       r.body is Map &&

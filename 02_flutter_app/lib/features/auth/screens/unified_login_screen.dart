@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/auth/controllers/unified_auth_controller.dart';
 import 'package:amyal_pay/features/auth/screens/amial_registration_wizard_screen.dart';
+import 'package:amyal_pay/features/auth/screens/amial_biometric_setup_screen.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:amyal_pay/features/forget_pin/screens/forget_pin_screen.dart';
 import 'package:amyal_pay/features/amyal/screens/account_recovery_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
@@ -142,12 +144,60 @@ class _CustomerLoginTabState extends State<_CustomerLoginTab> {
       password: _passwordCtrl.text,
     );
     if (success && mounted) {
+      // AMIAL-BIO-001: اعرض «تفعيل الدخول السريع» مرة واحدة بعد أول دخول ناجح
+      try {
+        if (!await AmialBiometricSetupScreen.isEnabled()) {
+          await Get.to(() => AmialBiometricSetupScreen(
+                phone: _phoneCtrl.text.trim(),
+                password: _passwordCtrl.text,
+              ));
+        }
+      } catch (_) {}
       ctrl.navigateToHomeForRole();
     } else if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(ctrl.lastError.value),
             backgroundColor: AmyalColors.red),
       );
+    }
+  }
+
+  /// AMIAL-BIO-001: دخول ببصمة الإصبع — تحقق حيوي ثم دخول بالبيانات المحفوظة.
+  Future<void> _bioLogin() async {
+    try {
+      if (!await AmialBiometricSetupScreen.isEnabled()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('فعّل الدخول السريع أولاً بالدخول بكلمة المرور'),
+              backgroundColor: AmyalColors.red));
+        }
+        return;
+      }
+      final auth = LocalAuthentication();
+      final ok = await auth.authenticate(
+        localizedReason: 'الدخول إلى أميال باي',
+        biometricOnly: true,
+        persistAcrossBackgrounding: true,
+      );
+      if (!ok || !mounted) return;
+      final creds = await AmialBiometricSetupScreen.savedCredentials();
+      if (creds == null) return;
+      final ctrl = Get.find<UnifiedAuthController>();
+      final success = await ctrl.loginCustomer(
+          nationalId: '', phone: creds.$1, password: creds.$2);
+      if (success && mounted) {
+        ctrl.navigateToHomeForRole();
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(ctrl.lastError.value),
+            backgroundColor: AmyalColors.red));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('تعذّر التحقق الحيوي'),
+            backgroundColor: AmyalColors.red));
+      }
     }
   }
 
@@ -209,6 +259,18 @@ class _CustomerLoginTabState extends State<_CustomerLoginTab> {
                     : const Text('دخول', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               );
             }),
+            const SizedBox(height: 12),
+            // AMIAL-BIO-001: دخول سريع ببصمة الإصبع
+            OutlinedButton.icon(
+              onPressed: _bioLogin,
+              icon: const Icon(Icons.fingerprint, size: 22),
+              label: const Text('الدخول ببصمة الإصبع'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AmyalColors.primary,
+                side: const BorderSide(color: AmyalColors.primary),
+                padding: const EdgeInsets.symmetric(vertical: 13),
+              ),
+            ),
             const SizedBox(height: 8),
             // AMIAL: رابط إنشاء حساب جديد (بالبيانات والوثائق)
             TextButton(

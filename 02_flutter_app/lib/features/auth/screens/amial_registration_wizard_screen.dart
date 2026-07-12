@@ -598,42 +598,138 @@ class _AmialRegistrationWizardScreenState
         ),
       ]);
 
-  Widget _stepSuccess() => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                height: 96, width: 96,
-                decoration: const BoxDecoration(
-                    color: AmyalColors.primary, shape: BoxShape.circle),
-                child: const Icon(Icons.check_rounded, color: Colors.white, size: 56),
+  // AMIAL-DESIGN: «طلبك قيد المراجعة» — درع + مسار 3 خطوات (رُفعت الوثائق →
+  // جاري المراجعة → تفعيل المحفظة) + العودة للدخول.
+  Widget _stepSuccess() => SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              height: 110, width: 110,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 18),
+                ],
               ),
-              const SizedBox(height: 24),
-              const Text('تم إنشاء حسابك بنجاح',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
-              const Text(
-                'حسابك الآن قيد مراجعة الإدارة. سنُعلمك فور الموافقة، وبعدها يمكنك الدخول واستخدام أميال باي.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFF5F6B62), height: 1.5),
+              child: const Icon(Icons.verified_user_outlined,
+                  color: AmyalColors.primary, size: 56),
+            ),
+            const SizedBox(height: 24),
+            const Text('طلبك قيد المراجعة',
+                style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AmyalColors.primary)),
+            const SizedBox(height: 12),
+            const Text(
+              'نحن حالياً نتحقق من الوثائق التي قمت برفعها لضمان أمان حسابك. '
+              'تستغرق هذه العملية عادةً ما بين 24 إلى 48 ساعة عمل.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFF5F6B62), height: 1.6),
+            ),
+            const SizedBox(height: 24),
+
+            // ====== مسار المراجعة ======
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
               ),
-              const SizedBox(height: 28),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Get.offAll(() => const UnifiedLoginScreen()),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: const Text('العودة لتسجيل الدخول'),
+              child: Column(children: [
+                _reviewStep(
+                  icon: Icons.check,
+                  iconBg: AmyalColors.primary,
+                  iconColor: Colors.white,
+                  title: 'تم رفع الوثائق بنجاح',
+                  subtitle: 'اكتملت الخطوة',
+                  done: true,
+                  showLine: true,
                 ),
+                _reviewStep(
+                  icon: Icons.hourglass_bottom_rounded,
+                  iconBg: AmyalColors.yellow,
+                  iconColor: AmyalColors.primary,
+                  title: 'جاري مراجعة البيانات',
+                  subtitle: 'بانتظار الموافقة',
+                  done: false,
+                  showLine: true,
+                ),
+                _reviewStep(
+                  icon: Icons.account_balance_wallet_outlined,
+                  iconBg: const Color(0xFFF0F1F3),
+                  iconColor: AmyalColors.textMuted,
+                  title: 'تفعيل المحفظة بالكامل',
+                  subtitle: 'الخطوة النهائية',
+                  done: false,
+                  dimmed: true,
+                  showLine: false,
+                ),
+              ]),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Get.offAll(() => const UnifiedLoginScreen()),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AmyalColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('العودة لتسجيل الدخول'),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       );
+
+  Widget _reviewStep({
+    required IconData icon,
+    required Color iconBg,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required bool done,
+    required bool showLine,
+    bool dimmed = false,
+  }) {
+    return IntrinsicHeight(
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(title,
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: dimmed ? AmyalColors.textMuted : Colors.black87)),
+            Text(subtitle,
+                style: const TextStyle(
+                    fontSize: 11, color: AmyalColors.textMuted)),
+            const SizedBox(height: 18),
+          ]),
+        ),
+        const SizedBox(width: 12),
+        Column(children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: iconBg,
+            child: Icon(icon, size: 20, color: iconColor),
+          ),
+          if (showLine)
+            Expanded(
+              child: Container(width: 2, color: const Color(0xFFE5E7EB)),
+            ),
+        ]),
+      ]),
+    );
+  }
 }

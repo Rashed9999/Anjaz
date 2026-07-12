@@ -66,21 +66,86 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
   }
 
   Future<void> _confirmCancel() async {
-    final ok = await Get.dialog<bool>(AlertDialog(
-      title: const Text('إلغاء الطلب؟'),
-      content: const Text(
-        'سيُلغى رقم العملية ولن يستطيع الوكيل استخدامه. سيُفكّ الحجز من رصيدك فوراً.',
-        textAlign: TextAlign.right,
+    // AMIAL-DESIGN: ورقة تأكيد الإلغاء (مثلث تحذير + تراجع/نعم إلغاء العملية)
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            width: 44, height: 4,
+            decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            height: 76, width: 76,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 14),
+              ],
+            ),
+            child: const Icon(Icons.warning_amber_rounded,
+                color: AmyalColors.red, size: 40),
+          ),
+          const SizedBox(height: 16),
+          const Text('هل أنت متأكد من إلغاء العملية؟',
+              style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: AmyalColors.primary)),
+          const SizedBox(height: 10),
+          const Text(
+            'بمجرد الإلغاء، لن يتمكن الوكيل من إتمام عملية السحب '
+            'باستخدام هذا الرمز. سيعود المبلغ فوراً إلى محفظتك.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 13, color: AmyalColors.textSecondary, height: 1.6),
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            style: FilledButton.styleFrom(
+              backgroundColor: AmyalColors.primary,
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+            ),
+            child: const Text('تراجع'),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.close, size: 18),
+            label: const Text('نعم، إلغاء العملية'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AmyalColors.red,
+              side: BorderSide(color: AmyalColors.red.withValues(alpha: 0.4)),
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14)),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(Icons.verified_user_outlined,
+                size: 14, color: AmyalColors.textMuted),
+            SizedBox(width: 6),
+            Text('عملية آمنة ومحمية من قبل أميال باي',
+                style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+          ]),
+        ]),
       ),
-      actions: [
-        TextButton(onPressed: () => Get.back(result: false), child: const Text('تراجع')),
-        FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: AmyalColors.red),
-          onPressed: () => Get.back(result: true),
-          child: const Text('نعم، إلغاء'),
-        ),
-      ],
-    ));
+    );
     if (ok != true) return;
 
     final req = c.currentRequest.value;

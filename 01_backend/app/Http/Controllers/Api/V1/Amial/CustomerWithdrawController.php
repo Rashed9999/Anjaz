@@ -56,10 +56,21 @@ class CustomerWithdrawController extends Controller
 
     public function mine(Request $request): JsonResponse
     {
-        $list = WithdrawalRequest::where('customer_user_id', $request->user()->id)
-            ->whereIn('status', ['pending'])
-            ->orderByDesc('id')
-            ->get(['id', 'op_code', 'amount', 'fee', 'total_debit', 'status', 'expires_at']);
+        // AMIAL-WD-HISTORY-001: ?status=all|pending|completed|cancelled|expired
+        // (الافتراضي pending — كما تتوقّع شاشة الطلب المعلّق)
+        $status = (string) $request->query('status', 'pending');
+        $allowed = ['pending', 'completed', 'cancelled', 'expired'];
+
+        $q = WithdrawalRequest::where('customer_user_id', $request->user()->id)
+            ->orderByDesc('id');
+        if ($status !== 'all') {
+            $q->whereIn('status', in_array($status, $allowed, true) ? [$status] : ['pending']);
+        }
+
+        $list = $q->limit(100)->get([
+            'id', 'op_code', 'amount', 'fee', 'total_debit', 'status',
+            'expires_at', 'created_at', 'updated_at',
+        ]);
 
         return $this->ok(['requests' => $list]);
     }

@@ -206,6 +206,10 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
               ),
               const SizedBox(height: 16),
 
+              // AMIAL-DESIGN: «مراحل الضمان» — دفع المبلغ → استلام السلعة → تحرير الأموال
+              _StagesStrip(status: payment.status),
+              const SizedBox(height: 16),
+
               // ====== Parties ======
               _Section(
                 title: 'الأطراف',
@@ -343,6 +347,107 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
           minimumSize: const Size(double.infinity, 48),
         ),
       ),
+    );
+  }
+}
+
+/// AMIAL-DESIGN: شريط «مراحل الضمان» الأفقي (3 محطات) حسب حالة العملية.
+class _StagesStrip extends StatelessWidget {
+  final String status;
+  const _StagesStrip({required this.status});
+
+  /// 0 = دفع المبلغ، 1 = استلام السلعة، 2 = تحرير الأموال
+  int get _stage {
+    switch (status) {
+      case 'pending_seller_acceptance':
+      case 'funded':
+      case 'in_delivery':
+        return 0;
+      case 'delivered':
+      case 'disputed':
+        return 1;
+      case 'buyer_confirmed':
+      case 'released_to_seller':
+        return 2;
+      default:
+        return 0; // ملغي/مسترد — تبقى المحطة الأولى
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['دفع المبلغ', 'استلام السلعة', 'تحرير الأموال'];
+    const icons = [
+      Icons.payments_outlined,
+      Icons.inventory_2_outlined,
+      Icons.check_circle_outline,
+    ];
+    final current = _stage;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AmyalColors.border),
+      ),
+      child: Column(children: [
+        const Align(
+          alignment: Alignment.centerRight,
+          child: Padding(
+            padding: EdgeInsets.only(right: 8, bottom: 12),
+            child: Text('مراحل الضمان',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          ),
+        ),
+        Row(children: [
+          for (var i = 0; i < 3; i++) ...[
+            if (i > 0)
+              Expanded(
+                child: Container(
+                  height: 3,
+                  color: i <= current
+                      ? AmyalColors.primary
+                      : const Color(0xFFE5E7EB),
+                ),
+              ),
+            Column(children: [
+              Container(
+                height: 46,
+                width: 46,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: i < current
+                      ? const Color(0xFFE3EAE6)
+                      : i == current
+                          ? (current == 2
+                              ? AmyalColors.primary
+                              : AmyalColors.yellow)
+                          : const Color(0xFFF0F1F3),
+                ),
+                child: Icon(
+                  i < current ? Icons.check : icons[i],
+                  size: 20,
+                  color: i < current
+                      ? AmyalColors.primary
+                      : i == current
+                          ? (current == 2 ? Colors.white : AmyalColors.primary)
+                          : AmyalColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(labels[i],
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight:
+                          i == current ? FontWeight.bold : FontWeight.normal,
+                      color: i <= current
+                          ? AmyalColors.primary
+                          : AmyalColors.textMuted)),
+            ]),
+          ],
+        ]),
+      ]),
     );
   }
 }

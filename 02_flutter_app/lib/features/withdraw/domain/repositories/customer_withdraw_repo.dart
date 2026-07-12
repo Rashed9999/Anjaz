@@ -16,6 +16,11 @@ class CustomerWithdrawRepo extends GetxService {
   /// طلبات السحب المعلّقة للعميل الحالي.
   Future<Response> mine() => apiClient.getData('$_base/mine');
 
+  /// AMIAL-WD-HISTORY-001: سجلّ طلبات السحب بكل الحالات
+  /// (all|pending|completed|cancelled|expired).
+  Future<Response> history({String status = 'all'}) =>
+      apiClient.getData('$_base/mine?status=$status');
+
   /// إلغاء طلب وفكّ الحجز.
   Future<Response> cancel(int requestId) =>
       apiClient.postData('$_base/$requestId/cancel', {});
