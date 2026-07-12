@@ -159,6 +159,51 @@ class _BottomSheetWithSliderState extends State<BottomSheetWithSlider> {
                       Text(PriceConverterHelper.balanceWithSymbol(balance: widget.amount), style: rubikMedium.copyWith(fontSize: 34.0)),
                       const SizedBox(height: Dimensions.paddingSizeLarge),
 
+                      // AMIAL-DESIGN-33: الرسوم + الإجمالي في إيصال النجاح
+                      if (transactionMoneyController.isNextBottomSheet &&
+                          widget.transactionType != TransactionType.requestMoney)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: Dimensions.paddingSizeLarge),
+                          child: Column(children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  PriceConverterHelper.balanceWithSymbol(
+                                      balance: widget.transactionType == TransactionType.sendMoney
+                                          ? sendMoneyCharge.toString()
+                                          : cashOutCharge.toStringAsFixed(2)),
+                                  style: rubikRegular.copyWith(fontSize: Dimensions.fontSizeDefault),
+                                ),
+                                Text('رسوم التحويل',
+                                    style: rubikRegular.copyWith(
+                                        fontSize: Dimensions.fontSizeDefault)),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  PriceConverterHelper.balanceWithSymbol(
+                                      balance: (double.parse(widget.amount) +
+                                              (widget.transactionType == TransactionType.sendMoney
+                                                  ? double.parse(sendMoneyCharge.toString())
+                                                  : cashOutCharge))
+                                          .toStringAsFixed(0)),
+                                  style: rubikSemiBold.copyWith(
+                                      fontSize: Dimensions.fontSizeLarge),
+                                ),
+                                Text('المبلغ الإجمالي',
+                                    style: rubikSemiBold.copyWith(
+                                        fontSize: Dimensions.fontSizeDefault)),
+                              ],
+                            ),
+                            const SizedBox(height: Dimensions.paddingSizeSmall),
+                          ]),
+                        ),
+
                       if(!transactionMoneyController.isNextBottomSheet && widget.transactionType != TransactionType.requestMoney)
                         GetBuilder<ProfileController>(builder: (profileController) {
                           return profileController.isLoading ? const SizedBox() : Text(

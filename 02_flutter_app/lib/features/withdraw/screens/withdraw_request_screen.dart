@@ -5,6 +5,7 @@ import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/withdraw/controllers/customer_withdraw_controller.dart';
 import 'package:amyal_pay/features/withdraw/screens/withdraw_pending_screen.dart';
 import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
+import 'package:amyal_pay/features/shared/widgets/amial_numpad.dart';
 
 /// AMIAL-CUSTOMER-WITHDRAW-001 — شاشة طلب سحب نقدي عبر الوكيل.
 class WithdrawRequestScreen extends StatefulWidget {
@@ -129,7 +130,9 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
                 Expanded(
                   child: TextField(
                     controller: _amountCtrl,
-                    keyboardType: TextInputType.number,
+                    // AMIAL-DESIGN-26: الإدخال عبر لوحة الأرقام أدناه (بلا كيبورد)
+                    readOnly: true,
+                    showCursor: true,
                     textAlign: TextAlign.right,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                     style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AmyalColors.primary),
@@ -157,7 +160,15 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
                 onPressed: () => _setQuick(a),
               )).toList(),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 16),
+
+            // AMIAL-DESIGN-26: لوحة أرقام بنمط أميال بدل كيبورد النظام
+            AmialNumpad(
+              controller: _amountCtrl,
+              maxLength: 9,
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 16),
 
             // ====== ملاحظة الصلاحية ======
             Container(

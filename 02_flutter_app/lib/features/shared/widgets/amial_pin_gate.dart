@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
+import 'package:amyal_pay/features/shared/widgets/amial_numpad.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-PIN-GATE-001
@@ -118,7 +119,8 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
             const SizedBox(height: 24),
             TextField(
               controller: _pin,
-              autofocus: true,
+              // AMIAL-DESIGN-29/30: الإدخال عبر لوحة الأرقام (بلا كيبورد نظام)
+              readOnly: true,
               obscureText: true,
               maxLength: 4,
               textAlign: TextAlign.center,
@@ -135,6 +137,15 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
                 ),
               ),
               onSubmitted: (_) => _verify(),
+            ),
+            const SizedBox(height: 16),
+            AmialNumpad(
+              controller: _pin,
+              maxLength: 4,
+              onChanged: (v) {
+                setState(() {});
+                if (v.length == 4) _verify();
+              },
             ),
             if (_error.isNotEmpty) ...[
               const SizedBox(height: 12),

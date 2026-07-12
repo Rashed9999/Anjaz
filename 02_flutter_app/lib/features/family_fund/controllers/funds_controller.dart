@@ -12,6 +12,8 @@ class FundsController extends GetxController implements GetxService {
   final Rx<AmyalFund?> selectedFund = Rx<AmyalFund?>(null);
   final RxString selectedFundRole = ''.obs;
   final RxList<AmyalFundTransaction> selectedFundTransactions = <AmyalFundTransaction>[].obs;
+  // AMIAL-DESIGN-16: أعضاء الصندوق مع مساهماتهم (يرجعها show أصلاً)
+  final RxList<Map<String, dynamic>> selectedFundMembers = <Map<String, dynamic>>[].obs;
 
   final RxBool isLoading = false.obs;
   final RxBool isSubmitting = false.obs;
@@ -97,6 +99,11 @@ class FundsController extends GetxController implements GetxService {
         final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
         selectedFund.value = AmyalFund.fromJson(Map<String, dynamic>.from(meta['fund'] ?? {}));
         selectedFundRole.value = (meta['role'] ?? '').toString();
+        final mem = meta['members'] as List? ?? [];
+        selectedFundMembers.value = mem
+            .whereType<Map>()
+            .map((m) => Map<String, dynamic>.from(m))
+            .toList();
         final txs = meta['recent_transactions'] as List? ?? [];
         selectedFundTransactions.value = txs
             .map((j) => AmyalFundTransaction.fromJson(Map<String, dynamic>.from(j)))

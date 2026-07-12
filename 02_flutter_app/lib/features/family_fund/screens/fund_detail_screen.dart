@@ -312,6 +312,114 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                 ]),
               ),
 
+            // AMIAL-DESIGN-16: أفراد الصندوق + نسب المساهمة
+            if (ctrl.selectedFundMembers.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(children: const [
+                  Icon(Icons.groups_outlined, size: 18, color: AmyalColors.textSecondary),
+                  SizedBox(width: 8),
+                  Text('أفراد الصندوق',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: AmyalColors.textSecondary)),
+                ]),
+              ),
+              const SizedBox(height: 8),
+              Builder(builder: (_) {
+                final members = ctrl.selectedFundMembers;
+                double total = 0;
+                for (final m in members) {
+                  total += double.tryParse('${m['total_contributed'] ?? 0}') ?? 0;
+                }
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: members.take(6).map((m) {
+                      final u = m['user'] is Map ? m['user'] as Map : {};
+                      final name = ('${u['f_name'] ?? ''} ${u['l_name'] ?? ''}').trim();
+                      final contributed =
+                          double.tryParse('${m['total_contributed'] ?? 0}') ?? 0;
+                      final ratio = total > 0 ? (contributed / total) : 0.0;
+                      final isOwner = '${m['role']}' == 'owner';
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Row(children: [
+                          Text('${(ratio * 100).toStringAsFixed(0)}%',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                  color: Color(0xFFB8860B))),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    if (isOwner)
+                                      Container(
+                                        margin: const EdgeInsets.only(left: 6),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: AmyalColors.primary
+                                              .withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: const Text('مسؤول',
+                                            style: TextStyle(
+                                                fontSize: 9,
+                                                color: AmyalColors.primary)),
+                                      ),
+                                    Text(name.isEmpty ? 'عضو' : name,
+                                        style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: LinearProgressIndicator(
+                                    value: ratio.clamp(0.0, 1.0),
+                                    minHeight: 6,
+                                    backgroundColor: const Color(0xFFF0EFEA),
+                                    color: isOwner
+                                        ? AmyalColors.primary
+                                        : const Color(0xFFE6B84C),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor:
+                                AmyalColors.primary.withValues(alpha: 0.12),
+                            child: Text(name.isNotEmpty ? name[0] : '؟',
+                                style: const TextStyle(
+                                    color: AmyalColors.primary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13)),
+                          ),
+                        ]),
+                      );
+                    }).toList(),
+                  ),
+                );
+              }),
+            ],
+
             const SizedBox(height: 16),
 
             Padding(
