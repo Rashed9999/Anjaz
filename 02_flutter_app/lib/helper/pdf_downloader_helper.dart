@@ -62,6 +62,14 @@ class PdfDownloaderHelper {
   static Future<void> _openFileWithFallback(String filePath) async {
 
     if(Platform.isAndroid) {
+      // AMIAL-FIX(PDF): افتح الملف مباشرة (كان يكتفي بإشعار قد لا يظهر إن
+      // مُنع إذن الإشعارات على أندرويد 13+ فيبدو التحميل «لا يعمل»).
+      try {
+        final result = await OpenFile.open(filePath, type: 'application/pdf');
+        if (result.type == ResultType.done) return;
+      } catch (_) {}
+
+      // احتياط: إشعار «اضغط للفتح»
       final NotificationBody payload = NotificationBody(
         title: 'Download Complete',
         body: 'Tap to open transaction_statement.pdf',
@@ -138,14 +146,15 @@ class PdfDownloaderHelper {
   }
 
   static Future<Directory?> _getAndroidDownloadDirectory() async {
-    // Try standard Download directory first
-
-    if(await _requestAndroidStoragePermission() == PermissionStatus.granted) {
-      const downloadsPath = '/storage/emulated/0/Download';
-      return Directory(downloadsPath);
-
-    }
-    return null;
+    // AMIAL-FIX(PDF): الكتابة في /storage/emulated/0/Download محظورة على
+    // أندرويد 10+ (scoped storage) → FileSystemException → «فشل معالجة PDF».
+    // نستخدم مجلّد التطبيق الخارجي (لا يحتاج أي أذونات على كل الإصدارات)،
+    // و open_file يفتح منه عبر FileProvider الخاص به.
+    try {
+      final d = await getExternalStorageDirectory();
+      if (d != null) return d;
+    } catch (_) {}
+    return getApplicationDocumentsDirectory();
   }
 
   static Future<PermissionStatus> _requestAndroidStoragePermission() async {

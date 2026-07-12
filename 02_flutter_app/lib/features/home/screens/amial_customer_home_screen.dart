@@ -14,6 +14,7 @@ import 'package:amyal_pay/features/setting/screens/profile_screen.dart';
 import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amyal_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
 import 'package:amyal_pay/features/setting/screens/qr_code_download_or_share_screen.dart';
+import 'package:amyal_pay/features/requested_money/screens/requested_money_list_screen.dart';
 
 /// AMIAL-CUSTOMER-HOME-001
 ///
@@ -328,6 +329,9 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   // ============ Services grid ============
   Widget _servicesGrid() {
     final services = [
+      // AMIAL: طلب المال — يُرسَل طلب لشخص، وبموافقته يتمّ التحويل تلقائياً
+      _Svc('طلب المال', Icons.request_page_outlined, () => Get.to(() => const TransactionMoneyScreen(fromEdit: false, transactionType: 'request_money'))),
+      _Svc('الطلبات الواردة', Icons.mark_email_unread_outlined, () => Get.to(() => const RequestedMoneyListScreen(requestType: RequestType.request))),
       _Svc('الدفع الآمن', Icons.shield_outlined, () => Get.to(() => const MySafePaymentsScreen())),
       _Svc('صندوق العائلة', Icons.groups_outlined, () => Get.to(() => const MyFundsScreen())),
       _Svc('التبرعات', Icons.volunteer_activism_outlined, () => Get.to(() => const DonationsHomeScreen())),
