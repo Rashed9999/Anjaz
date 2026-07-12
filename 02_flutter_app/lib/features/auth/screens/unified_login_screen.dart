@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/auth/controllers/unified_auth_controller.dart';
 import 'package:amyal_pay/features/auth/screens/amial_registration_wizard_screen.dart';
+import 'package:amyal_pay/features/forget_pin/screens/forget_pin_screen.dart';
+import 'package:amyal_pay/features/amyal/screens/account_recovery_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-UNIFIED-AUTH-001 (v1.5)
@@ -214,6 +216,23 @@ class _CustomerLoginTabState extends State<_CustomerLoginTab> {
               child: const Text('ليس لديك حساب؟ أنشئ حساباً الآن',
                   style: TextStyle(
                       color: AmyalColors.primary, fontWeight: FontWeight.w600)),
+            ),
+            // AMIAL-AUDIT: مساران كانا غير موصولين من الدخول الموحّد
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton(
+                  onPressed: () => Get.to(() => const ForgetPinScreen()),
+                  child: const Text('نسيت كلمة المرور؟',
+                      style: TextStyle(color: Color(0xFF5F6B62), fontSize: 13)),
+                ),
+                const Text('|', style: TextStyle(color: Color(0xFFCBD5D1))),
+                TextButton(
+                  onPressed: () => Get.to(() => const AccountRecoveryScreen()),
+                  child: const Text('استعادة الحساب (رقم جديد)',
+                      style: TextStyle(color: Color(0xFF5F6B62), fontSize: 13)),
+                ),
+              ],
             ),
           ],
         ),

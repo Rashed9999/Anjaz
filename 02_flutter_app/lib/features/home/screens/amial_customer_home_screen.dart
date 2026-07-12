@@ -15,6 +15,7 @@ import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amyal_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
 import 'package:amyal_pay/features/setting/screens/qr_code_download_or_share_screen.dart';
 import 'package:amyal_pay/features/requested_money/screens/requested_money_list_screen.dart';
+import 'package:amyal_pay/features/me/screens/my_services_screen.dart';
 
 /// AMIAL-CUSTOMER-HOME-001
 ///
@@ -339,6 +340,9 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       _Svc('الإيصالات', Icons.description_outlined, () => Get.to(() => const ReceiptsListScreen())),
       _Svc('توثيق الحساب', Icons.verified_user_outlined, () => Get.to(() => const KycVerifyScreen())),
       _Svc('الباقات', Icons.workspace_premium_outlined, () => Get.to(() => const PlansCatalogScreen())),
+      // AMIAL-AUDIT: مركز «خدماتي» (رقم حسابي، طلب أموال بـ QR/رابط…) كان
+      // مدفوناً داخل «حسابي» فقط
+      _Svc('خدماتي', Icons.apps_rounded, () => Get.to(() => const MyServicesScreen())),
       _Svc('حسابي', Icons.person_outline_rounded, () => Get.to(() => const ProfileScreen())),
     ];
     return GridView.count(
