@@ -60,33 +60,38 @@ class AmialNumpad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(children: [
-          _key(context, '1'),
-          _key(context, '2'),
-          _key(context, '3'),
-        ]),
-        Row(children: [
-          _key(context, '4'),
-          _key(context, '5'),
-          _key(context, '6'),
-        ]),
-        Row(children: [
-          _key(context, '7'),
-          _key(context, '8'),
-          _key(context, '9'),
-        ]),
-        Row(children: [
-          _key(context, '000'),
-          _key(context, '0'),
-          _key(context, '',
-              onTap: _backspace,
-              child: const Icon(Icons.backspace_outlined,
-                  color: Color(0xFFDC0A0B), size: 22)),
-        ]),
-      ],
+    // AMIAL-FIX(RTL): داخل واجهة عربية تنعكس الصفوف فتظهر "3 2 1" —
+    // نفرض اتجاه LTR حتى تبقى الأرقام بالترتيب الطبيعي للوحات الهواتف.
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(children: [
+            _key(context, '1'),
+            _key(context, '2'),
+            _key(context, '3'),
+          ]),
+          Row(children: [
+            _key(context, '4'),
+            _key(context, '5'),
+            _key(context, '6'),
+          ]),
+          Row(children: [
+            _key(context, '7'),
+            _key(context, '8'),
+            _key(context, '9'),
+          ]),
+          Row(children: [
+            _key(context, '000'),
+            _key(context, '0'),
+            _key(context, '',
+                onTap: _backspace,
+                child: const Icon(Icons.backspace_outlined,
+                    color: Color(0xFFDC0A0B), size: 22)),
+          ]),
+        ],
+      ),
     );
   }
 }

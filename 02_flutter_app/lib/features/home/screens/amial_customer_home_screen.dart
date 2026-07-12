@@ -17,6 +17,7 @@ import 'package:amyal_pay/features/setting/screens/qr_code_download_or_share_scr
 import 'package:amyal_pay/features/requested_money/screens/requested_money_list_screen.dart';
 import 'package:amyal_pay/features/me/screens/my_services_screen.dart';
 import 'package:amyal_pay/features/transaction_money/screens/amial_send_money_screen.dart';
+import 'package:amyal_pay/features/reports/screens/amial_reports_screen.dart';
 
 /// AMIAL-CUSTOMER-HOME-001
 ///
@@ -339,6 +340,8 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       _Svc('التبرعات', Icons.volunteer_activism_outlined, () => Get.to(() => const DonationsHomeScreen())),
       _Svc('طلب سحب', Icons.account_balance_outlined, () => Get.to(() => const WithdrawRequestScreen())),
       _Svc('الإيصالات', Icons.description_outlined, () => Get.to(() => const ReceiptsListScreen())),
+      // AMIAL-REPORTS-001: المصروفات/الإيرادات/كشف الحساب
+      _Svc('التقارير', Icons.bar_chart_rounded, () => Get.to(() => const AmialReportsScreen())),
       _Svc('توثيق الحساب', Icons.verified_user_outlined, () => Get.to(() => const KycVerifyScreen())),
       _Svc('الباقات', Icons.workspace_premium_outlined, () => Get.to(() => const PlansCatalogScreen())),
       // AMIAL-AUDIT: مركز «خدماتي» (رقم حسابي، طلب أموال بـ QR/رابط…) كان

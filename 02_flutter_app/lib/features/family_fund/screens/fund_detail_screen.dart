@@ -352,11 +352,22 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 6),
                         child: Row(children: [
-                          Text('${(ratio * 100).toStringAsFixed(0)}%',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                  color: Color(0xFFB8860B))),
+                          // AMIAL-FUND-004: إجمالي مساهمة العضو + نسبته
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(AmialMoney.yer(contributed),
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      color: AmyalColors.primary)),
+                              Text('${(ratio * 100).toStringAsFixed(0)}%',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11,
+                                      color: Color(0xFFB8860B))),
+                            ],
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Column(
@@ -496,7 +507,8 @@ class _TxTile extends StatelessWidget {
         ],
       ),
       trailing: Text(
-        '${isContribute ? '+' : '-'}${tx.amount}',
+        // AMIAL-MONEY-001: "49000.0000" → "+49,000 ر.ي"
+        '${isContribute ? '+' : '-'}${AmialMoney.yer(tx.amount)}',
         style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14),
       ),
     );

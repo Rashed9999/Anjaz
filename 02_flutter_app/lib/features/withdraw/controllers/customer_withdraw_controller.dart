@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/withdraw/domain/repositories/customer_withdraw_repo.dart';
+import 'package:amyal_pay/helper/amial_errors.dart';
 
 /// AMIAL-CUSTOMER-WITHDRAW-001 — متحكّم السحب من جهة العميل.
 class CustomerWithdrawController extends GetxController implements GetxService {
@@ -93,7 +94,13 @@ class CustomerWithdrawController extends GetxController implements GetxService {
 
   String? _msg(Response r) {
     try {
-      if (r.body is Map) return r.body['message']?.toString();
+      if (r.body is Map) {
+        // AMIAL-ERRORS-001: تعريب رسائل الخادم الإنجليزية
+        return AmialErrors.arabize(
+          r.body['message']?.toString(),
+          code: r.body['code']?.toString(),
+        );
+      }
     } catch (_) {}
     return null;
   }

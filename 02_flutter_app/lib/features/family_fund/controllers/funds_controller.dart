@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/family_fund/domain/models/fund_models.dart';
 import 'package:amyal_pay/features/family_fund/domain/repositories/funds_repo.dart';
+import 'package:amyal_pay/helper/amial_errors.dart';
 
 /// AMIAL-FUND-FAMILY-001 (v0.9-D)
 class FundsController extends GetxController implements GetxService {
@@ -192,7 +193,13 @@ class FundsController extends GetxController implements GetxService {
 
   String? _msg(Response r) {
     try {
-      if (r.body is Map) return r.body['message'] as String?;
+      if (r.body is Map) {
+        // AMIAL-ERRORS-001: تعريب رسائل الخادم الإنجليزية
+        return AmialErrors.arabize(
+          r.body['message']?.toString(),
+          code: r.body['code']?.toString(),
+        );
+      }
     } catch (_) {}
     return null;
   }

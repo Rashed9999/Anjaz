@@ -6,6 +6,7 @@ import 'package:amyal_pay/features/withdraw/controllers/customer_withdraw_contro
 import 'package:amyal_pay/features/withdraw/screens/withdraw_pending_screen.dart';
 import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amyal_pay/features/shared/widgets/amial_numpad.dart';
+import 'package:amyal_pay/helper/amial_errors.dart';
 
 /// AMIAL-CUSTOMER-WITHDRAW-001 — شاشة طلب سحب نقدي عبر الوكيل.
 class WithdrawRequestScreen extends StatefulWidget {
@@ -65,13 +66,10 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
     if (ok) {
       Get.off(() => const WithdrawPendingScreen());
     } else {
-      // عرض الخطأ بناءً على code
-      final code = c.lastErrorCode.value;
-      if (code == 'INSUFFICIENT_BALANCE') {
-        _snack('الرصيد غير كافٍ');
-      } else {
-        _snack(c.lastError.value.isEmpty ? 'فشل الطلب' : c.lastError.value);
-      }
+      // AMIAL-ERRORS-001: تعريب رسالة الخادم (كان الكود TX_INSUFFICIENT_BALANCE
+      // لا يطابق INSUFFICIENT_BALANCE فتظهر "Insufficient balance" إنجليزية)
+      _snack(AmialErrors.arabize(c.lastError.value,
+          code: c.lastErrorCode.value, fallback: 'فشل الطلب'));
     }
   }
 

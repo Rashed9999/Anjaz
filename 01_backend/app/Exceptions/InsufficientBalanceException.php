@@ -27,7 +27,7 @@ class InsufficientBalanceException extends Exception
         public readonly string $required,    // decimal string (لا float!)
         public readonly string $available,   // decimal string
         public readonly string $currency = 'YER',
-        string $message = 'Insufficient balance',
+        string $message = 'الرصيد غير كافٍ',
         ?Throwable $previous = null,
     ) {
         parent::__construct($message, 0, $previous);
@@ -54,7 +54,7 @@ class InsufficientBalanceException extends Exception
     {
         return [
             'success' => false,
-            'message' => 'Insufficient balance',
+            'message' => 'الرصيد غير كافٍ',
             'code' => $this->decisionCode,
             'errors' => (object)[],
             'meta' => [
