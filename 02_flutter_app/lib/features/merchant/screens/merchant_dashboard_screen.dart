@@ -7,6 +7,7 @@ import 'package:amyal_pay/features/merchant/screens/merchant_transactions_screen
 import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/inventory_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/profit_report_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/split_bill_create_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
 import 'package:amyal_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
@@ -331,6 +332,12 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       icon: Icons.inventory_2_outlined,
                       label: 'إدارة المخزون',
                       onTap: () => Get.to(() => const InventoryScreen()),
+                    ),
+                    // AMIAL-PROFIT-001 (التصميم 48): تقارير الربحية
+                    _LinkTile(
+                      icon: Icons.trending_up_rounded,
+                      label: 'تقارير الربحية',
+                      onTap: () => Get.to(() => const ProfitReportScreen()),
                     ),
                     // AMIAL-AUDIT-FIX-001: وصل شاشتَي تقسيم الفاتورة (كانتا غير موصولتين)
                     _LinkTile(

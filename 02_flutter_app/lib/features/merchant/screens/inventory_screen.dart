@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amyal_pay/features/merchant/screens/product_editor_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/stock_alerts_screen.dart';
 import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
@@ -126,9 +127,15 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     ),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: _statCard('تنبيهات النقص', '$lowCount',
-                          const Color(0xFFDC0A0B),
-                          Icons.warning_amber_rounded),
+                      child: InkWell(
+                        // AMIAL-STOCK-ALERTS-001: يفتح شاشة التنبيهات والحدود
+                        onTap: () =>
+                            Get.to(() => const StockAlertsScreen()),
+                        borderRadius: BorderRadius.circular(14),
+                        child: _statCard('تنبيهات النقص', '$lowCount',
+                            const Color(0xFFDC0A0B),
+                            Icons.warning_amber_rounded),
+                      ),
                     ),
                   ]),
                   const SizedBox(height: 14),

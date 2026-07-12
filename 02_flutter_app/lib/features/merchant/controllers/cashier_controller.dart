@@ -76,6 +76,27 @@ class CashierController extends GetxController implements GetxService {
     }
   }
 
+  /// AMIAL-PROFIT-001: تقرير الربحية.
+  final Rx<Map<String, dynamic>?> profitReport = Rx<Map<String, dynamic>?>(null);
+  final RxBool isLoadingProfit = false.obs;
+
+  Future<void> loadProfitReport({int days = 7}) async {
+    try {
+      isLoadingProfit.value = true;
+      final r = await repo.profitReport(days: days);
+      if (_ok(r)) {
+        profitReport.value =
+            Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      } else {
+        lastError.value = _msg(r) ?? 'تعذّر تحميل التقرير';
+      }
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    } finally {
+      isLoadingProfit.value = false;
+    }
+  }
+
   /// AMIAL-INVENTORY-001: تعديل منتج (سعر/كمية/تفعيل...).
   Future<bool> updateProduct(int id, Map<String, dynamic> data) async {
     try {

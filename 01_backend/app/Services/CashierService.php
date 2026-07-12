@@ -251,6 +251,98 @@ class CashierService
         });
     }
 
+    // ============ تقرير الربحية (AMIAL-PROFIT-001) ============
+
+    /**
+     * تقرير ربحية لمدى أيام: الإجماليات (إيراد/تكلفة/ربح/هامش) +
+     * اتجاه يومي + تفصيل حسب المنتج (التكلفة من cost_price الحالي للمنتج).
+     */
+    public function profitReport(User $merchant, int $days = 7): array
+    {
+        $days = max(1, min(90, $days));
+        $from = now()->subDays($days - 1)->startOfDay();
+
+        $sales = MerchantSale::where('merchant_user_id', $merchant->id)
+            ->whereIn('status', ['completed', 'credit_unpaid', 'credit_paid'])
+            ->where('created_at', '>=', $from)
+            ->get(['id', 'total_amount', 'items', 'created_at']);
+
+        // خريطة تكلفة المنتجات الحالية
+        $costs = MerchantProduct::where('merchant_user_id', $merchant->id)
+            ->pluck('cost_price', 'id');
+        $names = MerchantProduct::where('merchant_user_id', $merchant->id)
+            ->pluck('name', 'id');
+
+        $totalRevenue = '0';
+        $totalCost = '0';
+        $daily = [];   // date => [revenue, cost]
+        $byProduct = []; // pid => [qty, revenue, cost, name]
+
+        foreach ($sales as $sale) {
+            $rev = (string) $sale->total_amount;
+            $totalRevenue = bcadd($totalRevenue, $rev, 4);
+            $day = $sale->created_at->format('Y-m-d');
+            $daily[$day]['revenue'] = bcadd($daily[$day]['revenue'] ?? '0', $rev, 4);
+
+            foreach ((array) $sale->items as $item) {
+                $pid = $item['product_id'] ?? null;
+                $qty = (string) ($item['quantity'] ?? $item['qty'] ?? 1);
+                $price = (string) ($item['price'] ?? 0);
+                $lineRev = bcmul($qty, $price, 4);
+                $cost = $pid !== null ? (string) ($costs[$pid] ?? '0') : '0';
+                $lineCost = bcmul($qty, $cost, 4);
+
+                $totalCost = bcadd($totalCost, $lineCost, 4);
+                $daily[$day]['cost'] = bcadd($daily[$day]['cost'] ?? '0', $lineCost, 4);
+
+                $key = $pid !== null ? (string) $pid : ('~' . ($item['name'] ?? '?'));
+                $byProduct[$key]['name'] = $pid !== null
+                    ? ($names[$pid] ?? ($item['name'] ?? '؟'))
+                    : ($item['name'] ?? '؟');
+                $byProduct[$key]['qty'] = bcadd($byProduct[$key]['qty'] ?? '0', $qty, 3);
+                $byProduct[$key]['revenue'] = bcadd($byProduct[$key]['revenue'] ?? '0', $lineRev, 4);
+                $byProduct[$key]['cost'] = bcadd($byProduct[$key]['cost'] ?? '0', $lineCost, 4);
+            }
+        }
+
+        $profit = bcsub($totalRevenue, $totalCost, 4);
+        $margin = bccomp($totalRevenue, '0', 4) > 0
+            ? bcmul(bcdiv($profit, $totalRevenue, 6), '100', 2)
+            : '0';
+
+        // سلسلة يومية كاملة (تشمل أيام الصفر) للأشرطة
+        $series = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $d = now()->subDays($i)->format('Y-m-d');
+            $rev = $daily[$d]['revenue'] ?? '0';
+            $cst = $daily[$d]['cost'] ?? '0';
+            $series[] = [
+                'date' => $d,
+                'revenue' => $rev,
+                'profit' => bcsub($rev, $cst, 4),
+            ];
+        }
+
+        // أعلى المنتجات ربحاً
+        $products = collect($byProduct)->map(function ($p) {
+            $p['profit'] = bcsub($p['revenue'], $p['cost'], 4);
+            return $p;
+        })->sortByDesc(fn ($p) => (float) $p['profit'])->take(10)->values()->all();
+
+        return [
+            'range' => ['from' => $from->format('Y-m-d'), 'days' => $days],
+            'totals' => [
+                'revenue' => $totalRevenue,
+                'cost' => $totalCost,
+                'profit' => $profit,
+                'margin_percent' => $margin,
+                'sales_count' => $sales->count(),
+            ],
+            'daily' => $series,
+            'products' => $products,
+        ];
+    }
+
     // ============ التقرير اليومي ============
 
     public function dailyReport(User $merchant, ?string $date = null): array

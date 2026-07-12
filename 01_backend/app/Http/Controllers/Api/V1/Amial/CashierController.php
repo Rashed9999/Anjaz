@@ -174,6 +174,17 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         return $this->ok($this->cashier->dailyReport($merchant, $request->query('date')));
     }
 
+    /** AMIAL-PROFIT-001 — GET /profit-report?days=7|30|90 */
+    public function profitReport(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $days = (int) $request->query('days', 7);
+        return $this->ok($this->cashier->profitReport($merchant, $days));
+    }
+
     // ---- helpers ----
 
     /** يرجّع [merchant(User), posUserId(?int)] أو JsonResponse عند الخطأ. */

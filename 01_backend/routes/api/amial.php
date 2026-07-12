@@ -458,6 +458,8 @@ Route::middleware(['auth:api'])->group(function () {
                 ->middleware('amial.rate-limit:cashier_sale,120,1')->name('sales');
             Route::post('/sales/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'settleCredit'])->name('sales.settle');
             Route::get('/report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'report'])->name('report');
+            // AMIAL-PROFIT-001 — تقرير الربحية (إيراد/تكلفة/ربح/هامش + اتجاه + منتجات)
+            Route::get('/profit-report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'profitReport'])->name('profit-report');
         });
 
         // AMIAL-CUSTOMER-CREDIT-001 — نظام ديون العملاء
