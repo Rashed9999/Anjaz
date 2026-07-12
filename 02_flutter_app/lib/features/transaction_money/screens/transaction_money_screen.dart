@@ -64,7 +64,9 @@ class _TransactionMoneyScreenState extends State<TransactionMoneyScreen> {
     contactController.onSearchContact(searchTerm: '');
 
     userData = Get.find<AuthController>().getUserData();
-    _countryCode = userData?.countryCode;
+    // AMIAL-FIX: الدخول الموحّد قد لا يملأ userData → countryCode = null فيُرسَل
+    // «null» قبل الرقم فيفشل التطابق. نُثبّت رمز اليمن الافتراضي.
+    _countryCode = userData?.countryCode ?? '+967';
 
   }
 
