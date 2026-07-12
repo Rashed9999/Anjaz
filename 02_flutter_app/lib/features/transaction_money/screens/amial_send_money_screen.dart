@@ -1,0 +1,348 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:get/get.dart';
+import 'package:amyal_pay/common/models/contact_model.dart';
+import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amyal_pay/features/transaction_money/controllers/contact_controller.dart';
+import 'package:amyal_pay/features/transaction_money/screens/transaction_confirmation_screen.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
+import 'package:amyal_pay/helper/phone_cheker_helper.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/util/app_constants.dart';
+
+/// AMIAL-SEND-V2 — شاشة تحويل الأموال بتصميم أميال (التصميم 15 من ملف
+/// الشاشات): بطاقة الرصيد + رقم المستلِم + المبلغ + ملاحظة + «المحوَّل لهم
+/// مؤخراً» في صفحة واحدة، ثم تصبّ في شاشة التأكيد/PIN المجرَّبة نفسها.
+class AmialSendMoneyScreen extends StatefulWidget {
+  const AmialSendMoneyScreen({super.key});
+
+  @override
+  State<AmialSendMoneyScreen> createState() => _AmialSendMoneyScreenState();
+}
+
+class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
+  final _phoneCtrl = TextEditingController();
+  final _amountCtrl = TextEditingController();
+  final _noteCtrl = TextEditingController();
+  bool _checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // الرصيد + «المحوَّل لهم مؤخراً»
+    try {
+      final p = Get.find<ProfileController>();
+      if (p.userInfo == null) p.getProfileData(reload: false);
+    } catch (_) {}
+    try {
+      Get.find<ContactController>().getSuggestList(type: AppConstants.sendMoney);
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _phoneCtrl.dispose();
+    _amountCtrl.dispose();
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _confirm() async {
+    final rawPhone = _phoneCtrl.text.trim();
+    if (rawPhone.length < 6) {
+      showCustomSnackBarHelper('أدخل رقم المستلِم', isError: true);
+      return;
+    }
+    final amount = double.tryParse(_amountCtrl.text.trim()) ?? 0;
+    if (amount <= 0) {
+      showCustomSnackBarHelper('أدخل مبلغاً صحيحاً', isError: true);
+      return;
+    }
+
+    setState(() => _checking = true);
+    try {
+      final phoneNumber = PhoneNumberHelper.getValidatePhoneNumberWithPhoneParser(
+        countryCode: '+967',
+        phoneNumber: rawPhone,
+      );
+      final ctrl = Get.find<ContactController>();
+      final value = await ctrl.checkCustomerNumber(phoneNumber: phoneNumber);
+      if (!mounted) return;
+      setState(() => _checking = false);
+      if (value == null) return; // «رقمك نفسه» — الرسالة ظهرت
+      if (value.isOk && value.body is Map && value.body['data'] != null) {
+        final name = value.body['data']['name']?.toString();
+        final image = value.body['data']['image']?.toString();
+        final isFav = value.body['data']['is_favourite'] == true;
+        Get.to(() => TransactionConfirmationScreen(
+              inputBalance: amount,
+              transactionType: 'send_money',
+              purpose: _noteCtrl.text.trim().isNotEmpty
+                  ? _noteCtrl.text.trim()
+                  : null,
+              contactModel: ContactModel(
+                phoneNumber: phoneNumber,
+                name: name,
+                avatarImage: image,
+                isFavourite: isFav,
+              ),
+            ));
+      } else {
+        String msg = 'الرقم غير مسجل في النظام';
+        try {
+          if (value.body is Map && value.body['message'] != null) {
+            msg = '${value.body['message']}';
+          }
+        } catch (_) {}
+        showCustomSnackBarHelper(msg, isError: true);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _checking = false);
+      showCustomSnackBarHelper('تعذّر الاتصال — حاول مجدداً', isError: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F4EF),
+      appBar: AppBar(
+        backgroundColor: AmyalColors.primary,
+        foregroundColor: Colors.white,
+        title: const Text('تحويل الأموال'),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── بطاقة الرصيد المتاح ──────────────────────────
+            GetBuilder<ProfileController>(builder: (p) {
+              final bal = p.userInfo?.balance;
+              return Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3)),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      height: 48,
+                      width: 48,
+                      decoration: BoxDecoration(
+                        color: AmyalColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.account_balance_wallet_outlined,
+                          color: AmyalColors.primary),
+                    ),
+                    const Spacer(),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text('الرصيد المتاح',
+                            style: TextStyle(
+                                fontSize: 12, color: Color(0xFF8B97A8))),
+                        Text(
+                          bal == null ? '...' : AmialMoney.yer(bal),
+                          style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: AmyalColors.primary),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 20),
+
+            // ── إرسال إلى ────────────────────────────────────
+            _label('إرسال إلى'),
+            TextField(
+              controller: _phoneCtrl,
+              keyboardType: TextInputType.phone,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(
+                hintText: 'أدخل رقم الهاتف',
+                prefixIcon: const Icon(Icons.smartphone_rounded, size: 20),
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none),
+              ),
+            ),
+
+            // ── المحوَّل لهم مؤخراً ───────────────────────────
+            GetBuilder<ContactController>(builder: (c) {
+              final recent = c.sendMoneySuggestList;
+              if (recent.isEmpty) return const SizedBox(height: 8);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 16),
+                  _label('المحوَّل لهم مؤخراً'),
+                  SizedBox(
+                    height: 88,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: recent.length > 8 ? 8 : recent.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 14),
+                      itemBuilder: (_, i) {
+                        final m = recent[i];
+                        final name = (m.name ?? '').trim();
+                        final initial = name.isNotEmpty ? name[0] : '؟';
+                        return InkWell(
+                          onTap: () => setState(() {
+                            // نملأ الرقم الوطني (بلا 967+) ليمرّ بنفس مسار التحقّق
+                            var ph = (m.phoneNumber ?? '').replaceAll('+', '');
+                            if (ph.startsWith('967')) ph = ph.substring(3);
+                            _phoneCtrl.text = ph;
+                          }),
+                          child: Column(
+                            children: [
+                              CircleAvatar(
+                                radius: 26,
+                                backgroundColor:
+                                    AmyalColors.primary.withValues(alpha: 0.12),
+                                child: Text(initial,
+                                    style: const TextStyle(
+                                        color: AmyalColors.primary,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18)),
+                              ),
+                              const SizedBox(height: 6),
+                              SizedBox(
+                                width: 60,
+                                child: Text(
+                                  name.isEmpty ? 'مستلِم' : name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            }),
+            const SizedBox(height: 16),
+
+            // ── المبلغ ───────────────────────────────────────
+            _label('المبلغ'),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Text('YER',
+                          style: TextStyle(
+                              color: Color(0xFFB8860B),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16)),
+                      const SizedBox(width: 12),
+                      IntrinsicWidth(
+                        child: TextField(
+                          controller: _amountCtrl,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly
+                          ],
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                              fontSize: 36,
+                              fontWeight: FontWeight.bold,
+                              color: AmyalColors.primary),
+                          decoration: const InputDecoration(
+                            hintText: '0',
+                            border: InputBorder.none,
+                            isDense: true,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text('الرسوم تُعرض في شاشة التأكيد',
+                      style:
+                          TextStyle(fontSize: 11, color: Color(0xFF8B97A8))),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── ملاحظة ───────────────────────────────────────
+            _label('ملاحظة (اختياري)'),
+            TextField(
+              controller: _noteCtrl,
+              maxLines: 2,
+              maxLength: 100,
+              decoration: InputDecoration(
+                hintText: 'ما هو سبب هذا التحويل؟',
+                counterText: '',
+                filled: true,
+                fillColor: Colors.white,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // ── تأكيد وإرسال ─────────────────────────────────
+            ElevatedButton.icon(
+              onPressed: _checking ? null : _confirm,
+              icon: _checking
+                  ? const SizedBox(
+                      height: 18,
+                      width: 18,
+                      child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.send_rounded),
+              label: const Text('تأكيد وإرسال',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AmyalColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(28)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _label(String t) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(t,
+            style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: Color(0xFF1A2433))),
+      );
+}

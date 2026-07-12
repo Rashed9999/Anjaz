@@ -16,6 +16,7 @@ import 'package:amyal_pay/features/kyc_verification/screens/kyc_verify_screen.da
 import 'package:amyal_pay/features/setting/screens/qr_code_download_or_share_screen.dart';
 import 'package:amyal_pay/features/requested_money/screens/requested_money_list_screen.dart';
 import 'package:amyal_pay/features/me/screens/my_services_screen.dart';
+import 'package:amyal_pay/features/transaction_money/screens/amial_send_money_screen.dart';
 
 /// AMIAL-CUSTOMER-HOME-001
 ///
@@ -284,8 +285,8 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   // ============ Quick actions ============
   Widget _quickActions() {
     final items = [
-      // مهم: TransactionMoneyScreen يتطلّب transactionType (وإلّا widget.transactionType!.tr تنهار)
-      _Qa('إرسال', Icons.send_rounded, () => Get.to(() => const TransactionMoneyScreen(fromEdit: false, transactionType: 'send_money'))),
+      // AMIAL-SEND-V2: شاشة التحويل بتصميم أميال (رصيد + مستلِم + مبلغ + مؤخراً)
+      _Qa('إرسال', Icons.send_rounded, () => Get.to(() => const AmialSendMoneyScreen())),
       _Qa('استلام', Icons.qr_code_2_rounded, _openReceiveQr),
       _Qa('الفواتير', Icons.receipt_long_rounded, () => Get.to(() => const BillPayProvidersScreen())),
       _Qa('السجل', Icons.history_rounded, () => Get.to(() => const ReceiptsListScreen())),
