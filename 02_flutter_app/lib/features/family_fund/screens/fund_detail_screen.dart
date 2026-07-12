@@ -184,6 +184,102 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
     ));
   }
 
+  /// AMIAL-FUND-005: صرف مبلغ من الصندوق لعضو (اختيار العضو + المبلغ + بيان).
+  Future<void> _openDisburseDialog() async {
+    final ctrl = Get.find<FundsController>();
+    final members = ctrl.selectedFundMembers
+        .where((m) => m['user'] is Map && (m['user'] as Map)['id'] != null)
+        .toList();
+    if (members.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('لا يوجد أعضاء للصرف لهم'),
+          backgroundColor: AmyalColors.red));
+      return;
+    }
+    int? beneficiaryId = (members.first['user'] as Map)['id'] as int?;
+    final amountCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('صرف من الصندوق'),
+        content: Form(
+          key: formKey,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            DropdownButtonFormField<int>(
+              initialValue: beneficiaryId,
+              decoration: const InputDecoration(
+                  labelText: 'المستفيد', border: OutlineInputBorder()),
+              items: members.map((m) {
+                final u = m['user'] as Map;
+                final name =
+                    ('${u['f_name'] ?? ''} ${u['l_name'] ?? ''}').trim();
+                return DropdownMenuItem<int>(
+                  value: u['id'] as int,
+                  child: Text(name.isEmpty ? 'عضو' : name,
+                      style: const TextStyle(fontSize: 14)),
+                );
+              }).toList(),
+              onChanged: (v) => beneficiaryId = v,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: amountCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                  labelText: 'المبلغ (ر.ي) *', border: OutlineInputBorder()),
+              validator: (v) {
+                final n = double.tryParse(v ?? '');
+                if (n == null || n <= 0) return 'مبلغ غير صحيح';
+                return null;
+              },
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: noteCtrl,
+              decoration: const InputDecoration(
+                  labelText: 'بيان (اختياري)', border: OutlineInputBorder()),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () {
+              if (!formKey.currentState!.validate()) return;
+              Navigator.pop(ctx, true);
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AmyalColors.primary,
+                foregroundColor: Colors.white),
+            child: const Text('صرف'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || beneficiaryId == null) return;
+    // AMIAL-PIN-GATE-001: رمز PIN قبل الصرف
+    if (!await askAmialPin(title: 'تأكيد الصرف من الصندوق')) return;
+    final success = await ctrl.proposeDisbursement(
+      fundUlid: widget.fundUlid,
+      beneficiaryUserId: beneficiaryId!,
+      amount: amountCtrl.text.trim(),
+      note: noteCtrl.text.trim().isNotEmpty ? noteCtrl.text.trim() : null,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(success
+          ? 'تم الصرف من الصندوق بنجاح'
+          : (ctrl.lastError.value.isEmpty ? 'فشل الصرف' : ctrl.lastError.value)),
+      backgroundColor: success ? const Color(0xFF2E7D32) : AmyalColors.red,
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -304,6 +400,20 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AmyalColors.primary,
                           side: const BorderSide(color: AmyalColors.primary),
+                          minimumSize: const Size(0, 48),
+                        ),
+                      ),
+                    ),
+                    // AMIAL-FUND-005: صرف من الصندوق لعضو (كان في الخادم بلا زر)
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _openDisburseDialog,
+                        icon: const Icon(Icons.outbox_outlined, size: 18),
+                        label: const Text('صرف'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AmyalColors.yellowDark,
+                          side: const BorderSide(color: AmyalColors.yellowDark),
                           minimumSize: const Size(0, 48),
                         ),
                       ),
