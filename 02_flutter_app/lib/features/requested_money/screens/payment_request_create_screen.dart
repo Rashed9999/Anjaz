@@ -4,6 +4,8 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
 import 'package:amyal_pay/features/requested_money/screens/payment_request_show_screen.dart';
+import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// AMIAL-PAYMENT-REQUESTS-001 — شاشة إنشاء طلب أموال.
 class PaymentRequestCreateScreen extends StatefulWidget {
@@ -98,6 +100,7 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AmyalColors.primary),
                 decoration: const InputDecoration(border: InputBorder.none, hintText: '0'),
+                onChanged: (_) => setState(() {}), // تحديث معاينة الطلب
               )),
             ]),
           ),
@@ -155,6 +158,7 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
               fillColor: Colors.white,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
             ),
+            onChanged: (_) => setState(() {}), // تحديث معاينة الطلب
           ),
           const SizedBox(height: 20),
 
@@ -191,6 +195,13 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
           ],
           const SizedBox(height: 24),
 
+          // AMIAL-DESIGN: «معاينة الطلب» — بطاقة حيّة تتحدّث مع الكتابة
+          const Text('معاينة الطلب', textAlign: TextAlign.right,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          _previewCard(),
+          const SizedBox(height: 24),
+
           // زر الإنشاء
           Obx(() => FilledButton.icon(
             onPressed: c.isSubmitting.value ? null : _submit,
@@ -205,6 +216,114 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
           )),
         ]),
       ),
+    );
+  }
+
+  /// بطاقة معاينة الطلب (تدرّج أخضر داكن + الاسم + المبلغ + الملاحظة + الرابط).
+  Widget _previewCard() {
+    String requester = 'أنا';
+    try {
+      final u = Get.find<ProfileController>().userInfo;
+      final n = ('${u?.fName ?? ''} ${u?.lName ?? ''}').trim();
+      if (n.isNotEmpty) requester = n;
+    } catch (_) {}
+    final amount = _amount.text.trim();
+    final note = _note.text.trim();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [Color(0xFF14342A), Color(0xFF2A5C4A)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFE6B84C)),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Text('AMYAL PAY',
+                style: TextStyle(
+                    color: Color(0xFFE6B84C),
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1)),
+          ),
+          const Spacer(),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            const Text('طلب دفع من',
+                style: TextStyle(color: Colors.white70, fontSize: 10)),
+            Text(requester,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold)),
+          ]),
+          const SizedBox(width: 10),
+          const CircleAvatar(
+            radius: 18,
+            backgroundColor: Colors.white24,
+            child: Icon(Icons.payments_outlined, color: Colors.white, size: 18),
+          ),
+        ]),
+        const SizedBox(height: 18),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 6),
+              child: Text(' YER',
+                  style: TextStyle(color: Colors.white70, fontSize: 14)),
+            ),
+            Text(amount.isEmpty ? '0' : AmialMoney.fmt(amount),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 40,
+                    fontWeight: FontWeight.bold)),
+          ],
+        ),
+        if (note.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(note,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white70, fontSize: 13)),
+        ],
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(children: [
+            Icon(_shareMethod == 'qr' ? Icons.qr_code_2 : Icons.link,
+                color: const Color(0xFFE6B84C), size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _shareMethod == 'qr'
+                    ? 'سيظهر رمز QR بعد الإنشاء'
+                    : '...amyal.pay/req/xxxxx — يظهر الرابط بعد الإنشاء',
+                textDirection: TextDirection.ltr,
+                textAlign: TextAlign.left,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Colors.white, fontSize: 12, fontFamily: 'monospace'),
+              ),
+            ),
+          ]),
+        ),
+      ]),
     );
   }
 

@@ -340,8 +340,9 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       _Svc('التبرعات', Icons.volunteer_activism_outlined, () => Get.to(() => const DonationsHomeScreen())),
       _Svc('طلب سحب', Icons.account_balance_outlined, () => Get.to(() => const WithdrawRequestScreen())),
       _Svc('الإيصالات', Icons.description_outlined, () => Get.to(() => const ReceiptsListScreen())),
-      // AMIAL-REPORTS-001: المصروفات/الإيرادات/كشف الحساب
-      _Svc('التقارير', Icons.bar_chart_rounded, () => Get.to(() => const AmialReportsScreen())),
+      // AMIAL-REPORTS-001: المصروفات/الإيرادات/كشف الحساب (أيقونة حمراء بطلب العميل)
+      _Svc('التقارير', Icons.bar_chart_rounded, () => Get.to(() => const AmialReportsScreen()),
+          color: AmyalColors.red),
       _Svc('توثيق الحساب', Icons.verified_user_outlined, () => Get.to(() => const KycVerifyScreen())),
       _Svc('الباقات', Icons.workspace_premium_outlined, () => Get.to(() => const PlansCatalogScreen())),
       // AMIAL-AUDIT: مركز «خدماتي» (رقم حسابي، طلب أموال بـ QR/رابط…) كان
@@ -379,10 +380,10 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                   height: 46,
                   width: 46,
                   decoration: BoxDecoration(
-                    color: AmyalColors.primary.withValues(alpha: 0.08),
+                    color: (s.color ?? AmyalColors.primary).withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(s.icon, color: AmyalColors.primary, size: 24),
+                  child: Icon(s.icon, color: s.color ?? AmyalColors.primary, size: 24),
                 ),
                 const SizedBox(height: 10),
                 Text(s.label,
@@ -543,5 +544,6 @@ class _Svc {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
-  _Svc(this.label, this.icon, this.onTap);
+  final Color? color; // لون مخصّص للأيقونة (الافتراضي أخضر أميال)
+  _Svc(this.label, this.icon, this.onTap, {this.color});
 }
