@@ -139,6 +139,23 @@ class CashierController extends GetxController implements GetxService {
     if (i >= 0 && i < cart.length) cart.removeAt(i);
   }
 
+  /// AMIAL-POS-001: زيادة/إنقاص كمية سطر في السلة (الإنقاص لصفر يحذفه).
+  void incLine(int i) {
+    if (i < 0 || i >= cart.length) return;
+    cart[i].qty++;
+    cart.refresh();
+  }
+
+  void decLine(int i) {
+    if (i < 0 || i >= cart.length) return;
+    if (cart[i].qty <= 1) {
+      cart.removeAt(i);
+    } else {
+      cart[i].qty--;
+      cart.refresh();
+    }
+  }
+
   void clearCart() => cart.clear();
 
   // ---- تسجيل البيع ----

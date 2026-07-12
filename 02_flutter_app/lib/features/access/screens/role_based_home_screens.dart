@@ -5,7 +5,7 @@ import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/access/widgets/access_gate.dart';
 import 'package:amyal_pay/features/me/screens/my_services_screen.dart';
 // الشاشات الفعلية للربط
-import 'package:amyal_pay/features/merchant/screens/cashier_sale_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_products_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_report_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
@@ -59,7 +59,7 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
             label: 'بيع جديد',
             subtitle: 'سجّل عملية بيع',
             color: AmyalColors.primary,
-            onTap: () => Get.to(() => const CashierSaleScreen()),
+            onTap: () => Get.to(() => const CashierPosScreen()),
           ),
           const SizedBox(height: 14),
           AccessGate(feature: 'debts', child: _BigActionButton(
@@ -116,7 +116,7 @@ class MerchantRetailHomeScreen extends StatelessWidget {
             label: 'الكاشير',
             subtitle: 'بيع جديد + سلّة',
             color: AmyalColors.primary,
-            onTap: () => Get.to(() => const CashierSaleScreen()),
+            onTap: () => Get.to(() => const CashierPosScreen()),
           ),
           const SizedBox(height: 14),
 

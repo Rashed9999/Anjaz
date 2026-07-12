@@ -1,0 +1,370 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amyal_pay/features/merchant/screens/cashier_receipt_screen.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
+
+/// AMIAL-POS-002 — «تأكيد الدفع» (التصميم 37):
+/// بطاقة الإجمالي المطلوب سداده + اختيار وسيلة واحدة:
+/// نقدي / أميال باي (موصى به) / آجل (قيد على حساب العميل) / مختلط (قريباً)
+/// ثم «تأكيد ومعالجة الدفع».
+class CashierPaymentScreen extends StatefulWidget {
+  const CashierPaymentScreen({
+    super.key,
+    required this.total,
+    this.freeAmount = false,
+  });
+
+  final double total;
+
+  /// بيع بمبلغ حرّ (بلا أسطر سلة).
+  final bool freeAmount;
+
+  @override
+  State<CashierPaymentScreen> createState() => _CashierPaymentScreenState();
+}
+
+class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
+  CashierController get c => Get.find<CashierController>();
+  String _method = 'amial_pay';
+  bool _busy = false;
+
+  Future<void> _confirm() async {
+    switch (_method) {
+      case 'cash':
+        await _recordAndShowReceipt('cash');
+      case 'amial_pay':
+        await _amialPay();
+      case 'credit':
+        await _credit();
+    }
+  }
+
+  Future<void> _recordAndShowReceipt(String method,
+      {Map<String, String>? customer, String? creditDueDate}) async {
+    setState(() => _busy = true);
+    final sale = await c.recordSale(
+      total: widget.total,
+      method: method,
+      customer: customer,
+      creditDueDate: creditDueDate,
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (sale == null) {
+      if (c.lastError.value.isNotEmpty) _snack(c.lastError.value);
+      return;
+    }
+    Get.off(() => CashierReceiptScreen(
+          sale: sale,
+          total: widget.total,
+          method: method,
+          customerName: customer?['name'],
+        ));
+  }
+
+  /// أميال باي: بيع معلّق يُربط تلقائياً عند دفع العميل عبر QR التاجر.
+  Future<void> _amialPay() async {
+    setState(() => _busy = true);
+    final sale = await c.recordSale(total: widget.total, method: 'amial_pay');
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (sale == null) {
+      if (c.lastError.value.isNotEmpty) _snack(c.lastError.value);
+      return;
+    }
+    Get.off(() => CashierReceiptScreen(
+          sale: sale,
+          total: widget.total,
+          method: 'amial_pay',
+          pendingPayment: true,
+        ));
+  }
+
+  /// آجل: بيانات العميل (اسم + رقم) وتاريخ استحقاق اختياري.
+  Future<void> _credit() async {
+    final name = TextEditingController();
+    final phone = TextEditingController();
+    DateTime? due;
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => Padding(
+          padding: EdgeInsets.fromLTRB(
+              20, 16, 20, 20 + MediaQuery.of(ctx).viewInsets.bottom),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+            const SizedBox(height: 16),
+            const Text('بيع آجل — بيانات العميل',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            Text('سيُقيَّد ${AmialMoney.yer(widget.total)} على حساب العميل في دفتر الديون',
+                style: const TextStyle(
+                    fontSize: 12, color: AmyalColors.textSecondary)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: name,
+              textAlign: TextAlign.right,
+              decoration: const InputDecoration(
+                  labelText: 'اسم العميل *', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: phone,
+              keyboardType: TextInputType.phone,
+              textAlign: TextAlign.right,
+              decoration: const InputDecoration(
+                  labelText: 'رقم العميل *',
+                  hintText: '77XXXXXXX',
+                  border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.calendar_month_outlined, size: 18),
+              label: Text(due == null
+                  ? 'تاريخ الاستحقاق (اختياري)'
+                  : 'الاستحقاق: ${due!.year}/${due!.month}/${due!.day}'),
+              style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(46)),
+              onPressed: () async {
+                final d = await showDatePicker(
+                  context: ctx,
+                  initialDate: DateTime.now().add(const Duration(days: 30)),
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (d != null) setLocal(() => due = d);
+              },
+            ),
+            const SizedBox(height: 16),
+            FilledButton(
+              onPressed: () {
+                if (name.text.trim().isEmpty || phone.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                      content: Text('اسم العميل ورقمه مطلوبان'),
+                      backgroundColor: AmyalColors.red));
+                  return;
+                }
+                Navigator.pop(ctx, true);
+              },
+              style: FilledButton.styleFrom(
+                  backgroundColor: AmyalColors.primary,
+                  minimumSize: const Size.fromHeight(52)),
+              child: const Text('تسجيل البيع الآجل'),
+            ),
+          ]),
+        ),
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await _recordAndShowReceipt(
+      'credit',
+      customer: {'name': name.text.trim(), 'phone': phone.text.trim()},
+      creditDueDate: due == null
+          ? null
+          : '${due!.year}-${due!.month.toString().padLeft(2, '0')}-${due!.day.toString().padLeft(2, '0')}',
+    );
+  }
+
+  void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AmyalColors.background,
+      appBar: AppBar(
+        backgroundColor: AmyalColors.primary,
+        foregroundColor: Colors.white,
+        title: const Text('تأكيد الدفع'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          // ====== الإجمالي ======
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  AmyalColors.yellow.withValues(alpha: 0.25),
+                  Colors.white,
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              border:
+                  Border.all(color: AmyalColors.yellow.withValues(alpha: 0.6)),
+            ),
+            child: Column(children: [
+              const Text('إجمالي المطلوب سداده',
+                  style: TextStyle(
+                      fontSize: 13, color: AmyalColors.textSecondary)),
+              const SizedBox(height: 8),
+              Text(AmialMoney.yer(widget.total),
+                  style: const TextStyle(
+                      fontSize: 34,
+                      fontWeight: FontWeight.bold,
+                      color: AmyalColors.primary)),
+            ]),
+          ),
+          const SizedBox(height: 22),
+
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: const [
+            Text('الرجاء تحديد خيار واحد',
+                style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+            Text('اختر وسيلة الدفع',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          ]),
+          const SizedBox(height: 12),
+
+          _methodCard(
+            value: 'cash',
+            icon: Icons.payments_outlined,
+            title: 'نقدي',
+            subtitle: 'الدفع بالعملة المحلية يدوياً',
+          ),
+          _methodCard(
+            value: 'amial_pay',
+            icon: Icons.qr_code_2,
+            title: 'أميال باي',
+            subtitle: 'العميل يدفع من تطبيقه عبر QR فوراً',
+            recommended: true,
+          ),
+          _methodCard(
+            value: 'credit',
+            icon: Icons.calendar_today_outlined,
+            title: 'آجل',
+            subtitle: 'قيد العملية على حساب العميل',
+          ),
+          _methodCard(
+            value: 'mixed',
+            icon: Icons.layers_outlined,
+            title: 'مختلط',
+            subtitle: 'توزيع المبلغ بين نقدي ومحفظة — قريباً',
+            disabled: true,
+          ),
+          const SizedBox(height: 20),
+
+          FilledButton.icon(
+            onPressed: _busy ? null : _confirm,
+            icon: _busy
+                ? const SizedBox(
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.keyboard_double_arrow_left),
+            label: const Text('تأكيد ومعالجة الدفع',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            style: FilledButton.styleFrom(
+              backgroundColor: AmyalColors.primary,
+              minimumSize: const Size.fromHeight(56),
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('إلغاء العملية',
+                style: TextStyle(color: AmyalColors.textSecondary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _methodCard({
+    required String value,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    bool recommended = false,
+    bool disabled = false,
+  }) {
+    final selected = _method == value;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        onTap: disabled
+            ? () => _snack('الدفع المختلط سيتوفّر قريباً')
+            : () => setState(() => _method = value),
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: disabled
+                ? Colors.white.withValues(alpha: 0.6)
+                : selected
+                    ? const Color(0xFFEDF3EF)
+                    : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: selected && !disabled
+                  ? AmyalColors.primary
+                  : AmyalColors.border,
+              width: selected && !disabled ? 1.6 : 1,
+            ),
+          ),
+          child: Row(children: [
+            if (recommended)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AmyalColors.yellow,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('موصى به',
+                    style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF14342A))),
+              ),
+            const Spacer(),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(title,
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: disabled ? AmyalColors.textMuted : Colors.black87)),
+              Text(subtitle,
+                  style: const TextStyle(
+                      fontSize: 11, color: AmyalColors.textMuted)),
+            ]),
+            const SizedBox(width: 12),
+            Container(
+              height: 46,
+              width: 46,
+              decoration: BoxDecoration(
+                color: selected && !disabled
+                    ? AmyalColors.primary
+                    : const Color(0xFFE9EEF6),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon,
+                  size: 22,
+                  color: selected && !disabled
+                      ? Colors.white
+                      : AmyalColors.primary),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}

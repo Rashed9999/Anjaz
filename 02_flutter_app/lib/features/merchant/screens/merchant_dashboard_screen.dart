@@ -5,8 +5,8 @@ import 'package:amyal_pay/features/merchant/screens/merchant_accept_payment_scre
 import 'package:amyal_pay/features/merchant/screens/merchant_refund_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_transactions_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_sale_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/inventory_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/split_bill_create_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
 import 'package:amyal_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
@@ -320,10 +320,11 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       label: 'دفتر العملاء والديون',
                       onTap: () => Get.to(() => const CreditDashboardScreen()),
                     ),
+                    // AMIAL-POS-001 (التصميم 36): كاشير بشبكة منتجات وسلة ووسائل دفع
                     _LinkTile(
                       icon: Icons.point_of_sale,
                       label: 'الكاشير',
-                      onTap: () => Get.to(() => const CashierSaleScreen()),
+                      onTap: () => Get.to(() => const CashierPosScreen()),
                     ),
                     // AMIAL-INVENTORY-001 (التصميم 42): إدارة المخزون
                     _LinkTile(
