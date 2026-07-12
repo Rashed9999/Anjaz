@@ -164,6 +164,14 @@ class EnsureDemoUsers extends Command
             $this->error('❌ فشل ضبط العملة: ' . $e->getMessage());
         }
 
+        // AMIAL-DEMO-MERCHANTS-001: تجّار تجريبيون لكل قطاع (يبقى مستقلاً بفشله)
+        try {
+            \Illuminate\Support\Facades\Artisan::call('amial:ensure-demo-merchants');
+            $this->line(trim(\Illuminate\Support\Facades\Artisan::output()));
+        } catch (\Throwable $e) {
+            $this->error('❌ فشل تهيئة تجّار التجربة: ' . $e->getMessage());
+        }
+
         // 2) اختبار الدخول الفعلي عبر نفس مسار التطبيق
         try {
             $svc = app(UnifiedAuthService::class);

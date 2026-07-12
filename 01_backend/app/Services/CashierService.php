@@ -186,7 +186,8 @@ class CashierService
         foreach ($items as $item) {
             $pid = $item['product_id'] ?? null;
             if (!$pid) continue;
-            $qty = (string)($item['qty'] ?? 1);
+            // AMIAL-FIX: التطبيق يرسل quantity — كان يُقرأ qty فقط فيخصم 1 دائماً
+            $qty = (string)($item['quantity'] ?? $item['qty'] ?? 1);
             $product = MerchantProduct::where('id', $pid)
                 ->where('merchant_user_id', $merchantId)
                 ->lockForUpdate()
