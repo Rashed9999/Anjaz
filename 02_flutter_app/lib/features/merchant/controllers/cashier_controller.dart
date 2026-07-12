@@ -76,6 +76,22 @@ class CashierController extends GetxController implements GetxService {
     }
   }
 
+  /// AMIAL-INVENTORY-001: تعديل منتج (سعر/كمية/تفعيل...).
+  Future<bool> updateProduct(int id, Map<String, dynamic> data) async {
+    try {
+      final r = await repo.updateProduct(id, data);
+      if (_ok(r)) {
+        await loadProducts();
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'فشل تعديل المنتج';
+      return false;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return false;
+    }
+  }
+
   // ---- السلة ----
   void addToCart(String name, double price, {int? productId}) {
     final existing = cart.firstWhereOrNull(
