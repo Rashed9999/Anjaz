@@ -121,6 +121,27 @@ class EnsureDemoUsers extends Command
             $this->error('❌ فشل تفعيل الميزات: ' . $e->getMessage());
         }
 
+        // 1c-2) كتالوجات الخدمات — الـ seeders مشروطة بـ RUN_SEEDERS في entrypoint
+        // فلم تعمل غالباً → «الفواتير» و«التبرعات» تفتح فارغة. كلّها idempotent
+        // (updateOrCreate) فنشغّلها هنا كل إقلاع بأمان.
+        foreach ([
+            \Database\Seeders\BillProvidersStubSeeder::class,
+            \Database\Seeders\CharityCategoriesSeeder::class,
+            \Database\Seeders\FeeSchemeSeeder::class,
+            \Database\Seeders\FeatureFlagsSeeder::class,
+            \Database\Seeders\KycTierLimitsSeeder::class,
+        ] as $seeder) {
+            try {
+                // عبر db:seed ليتوفّر سياق command (بعض الـ seeders تستدعي info())
+                \Illuminate\Support\Facades\Artisan::call('db:seed', [
+                    '--class' => $seeder, '--force' => true,
+                ]);
+                $this->info('✓ seeder: ' . class_basename($seeder));
+            } catch (\Throwable $e) {
+                $this->error('❌ seeder ' . class_basename($seeder) . ': ' . $e->getMessage());
+            }
+        }
+
         // 1d) العملة ريال يمني فقط (كانت ر.س/SAR على الشاشات)
         try {
             \Illuminate\Support\Facades\DB::table('business_settings')
