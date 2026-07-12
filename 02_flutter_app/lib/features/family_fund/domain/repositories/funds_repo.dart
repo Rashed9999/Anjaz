@@ -14,6 +14,7 @@ class FundsRepo extends GetxService {
     required String name,
     String? description,
     bool requireOwnerApproval = true,
+    String? targetAmount, // AMIAL-FUND-002
   }) async {
     return apiClient.postData(
       AppConstants.amyalFundsCreate,
@@ -21,6 +22,7 @@ class FundsRepo extends GetxService {
         'name': name,
         'description': ?description,
         'require_owner_approval_for_disbursement': requireOwnerApproval,
+        if (targetAmount != null && targetAmount.isNotEmpty) 'target_amount': targetAmount,
       },
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('fund_create'),
     );

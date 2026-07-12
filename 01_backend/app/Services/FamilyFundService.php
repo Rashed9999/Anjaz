@@ -38,12 +38,13 @@ class FamilyFundService
         string $name,
         ?string $description = null,
         bool $requireOwnerApproval = true,
+        ?string $targetAmount = null, // AMIAL-FUND-002: المبلغ المستهدف
     ): FamilyFund {
         if ($owner->zone_code !== 'SOUTH') {
             throw new \RuntimeException('Only SOUTH users can create funds');
         }
 
-        return DB::transaction(function () use ($owner, $name, $description, $requireOwnerApproval) {
+        return DB::transaction(function () use ($owner, $name, $description, $requireOwnerApproval, $targetAmount) {
             $fund = FamilyFund::create([
                 'fund_ulid' => (string) Str::ulid(),
                 'name' => mb_substr($name, 0, 100),
@@ -54,6 +55,7 @@ class FamilyFundService
                 'zone_code' => 'SOUTH',
                 'status' => 'active',
                 'require_owner_approval_for_disbursement' => $requireOwnerApproval,
+                'target_amount' => $targetAmount, // AMIAL-FUND-002
             ]);
 
             // الـ owner عضو نشط تلقائياً
@@ -100,7 +102,8 @@ class FamilyFundService
             throw new \RuntimeException('Only owner or admin can invite members');
         }
 
-        $invitee = User::where('phone', $inviteePhone)->first();
+        // AMIAL-FIX: مطابقة صيغ الهاتف المكافئة (777… ↔ 967777…)
+        $invitee = User::whereIn('phone', \App\Support\Phone::variants($inviteePhone))->first();
         if (!$invitee) {
             throw new \RuntimeException('User with this phone is not registered');
         }

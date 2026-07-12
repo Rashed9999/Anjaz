@@ -78,6 +78,7 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
             'name' => 'required|string|max:100',
             'description' => 'sometimes|string|max:500',
             'require_owner_approval_for_disbursement' => 'sometimes|boolean',
+            'target_amount' => 'sometimes|nullable|numeric|min:1', // AMIAL-FUND-002
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -87,6 +88,7 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
                 name: $request->input('name'),
                 description: $request->input('description'),
                 requireOwnerApproval: $request->boolean('require_owner_approval_for_disbursement', true),
+                targetAmount: $request->filled('target_amount') ? (string) $request->input('target_amount') : null,
             );
         } catch (\RuntimeException $e) {
             return $this->error('FUND_CREATE_FAILED', $e->getMessage(), 422);

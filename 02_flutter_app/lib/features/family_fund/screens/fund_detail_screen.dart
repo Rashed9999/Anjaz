@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/features/family_fund/controllers/funds_controller.dart';
 import 'package:amyal_pay/features/family_fund/domain/models/fund_models.dart';
 import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-FUND-FAMILY-001 (v0.9-D)
@@ -119,6 +120,70 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
     }
   }
 
+  /// AMIAL-FUND-003: نافذة دعوة عضو برقم هاتفه (مثل 777100002)
+  Future<void> _openInviteDialog() async {
+    final phoneCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('دعوة عضو للصندوق'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('أدخل رقم جوال العضو المسجّل في أميال باي.',
+                style: TextStyle(fontSize: 13, color: AmyalColors.textSecondary)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: phoneCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'رقم الجوال',
+                hintText: '777xxxxxx',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AmyalColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('إرسال الدعوة'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final phone = phoneCtrl.text.trim();
+    if (phone.length < 6) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('أدخل رقم جوال صحيحاً'),
+            backgroundColor: AmyalColors.red));
+      }
+      return;
+    }
+    final ctrl = Get.find<FundsController>();
+    final success = await ctrl.inviteMember(
+      fundUlid: widget.fundUlid,
+      phone: phone,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(success
+          ? 'أُرسلت الدعوة — سيظهر الصندوق لدى العضو ليقبلها'
+          : ctrl.lastError.value),
+      backgroundColor: success ? const Color(0xFF2E7D32) : AmyalColors.red,
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -159,13 +224,43 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                   const Text('الرصيد',
                       style: TextStyle(fontSize: 12, color: AmyalColors.primary)),
                   Text(
-                    '${fund.balance} ر.ي',
+                    AmialMoney.yer(fund.balance),
                     style: const TextStyle(
                       color: AmyalColors.primary,
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+
+                  // AMIAL-FUND-002: شريط تقدّم نحو المبلغ المستهدف
+                  if (fund.targetAmount != null &&
+                      (double.tryParse(fund.targetAmount!) ?? 0) > 0) ...[
+                    const SizedBox(height: 12),
+                    Builder(builder: (_) {
+                      final target = double.tryParse(fund.targetAmount!) ?? 1;
+                      final current = double.tryParse(fund.balance) ?? 0;
+                      final ratio = (current / target).clamp(0.0, 1.0);
+                      return Column(children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: ratio,
+                            minHeight: 10,
+                            backgroundColor: Colors.white,
+                            color: AmyalColors.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'الهدف: ${AmialMoney.yer(fund.targetAmount!)} — ${(ratio * 100).toStringAsFixed(0)}%',
+                          style: const TextStyle(
+                              fontSize: 12,
+                              color: AmyalColors.primary,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ]);
+                    }),
+                  ],
                   if (fund.description != null && fund.description!.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 6),
@@ -184,16 +279,37 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
             if (canContribute)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: ElevatedButton.icon(
-                  onPressed: _openContributeSheet,
-                  icon: const Icon(Icons.add_circle_outline),
-                  label: const Text('مساهمة في الصندوق'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(double.infinity, 48),
+                child: Row(children: [
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: _openContributeSheet,
+                      icon: const Icon(Icons.add_circle_outline),
+                      label: const Text('مساهمة'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AmyalColors.primary,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(0, 48),
+                      ),
+                    ),
                   ),
-                ),
+                  // AMIAL-FUND-003: دعوة عضو (المالك/الأدمن)
+                  if (['owner', 'admin'].contains(ctrl.selectedFundRole.value)) ...[
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _openInviteDialog,
+                        icon: const Icon(Icons.person_add_alt, size: 18),
+                        label: const Text('دعوة'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AmyalColors.primary,
+                          side: const BorderSide(color: AmyalColors.primary),
+                          minimumSize: const Size(0, 48),
+                        ),
+                      ),
+                    ),
+                  ],
+                ]),
               ),
 
             const SizedBox(height: 16),

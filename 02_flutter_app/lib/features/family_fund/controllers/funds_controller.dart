@@ -42,6 +42,7 @@ class FundsController extends GetxController implements GetxService {
     required String name,
     String? description,
     bool requireOwnerApproval = true,
+    String? targetAmount, // AMIAL-FUND-002
   }) async {
     try {
       isSubmitting.value = true;
@@ -49,6 +50,7 @@ class FundsController extends GetxController implements GetxService {
         name: name,
         description: description,
         requireOwnerApproval: requireOwnerApproval,
+        targetAmount: targetAmount,
       );
       if ((r.statusCode == 200 || r.statusCode == 201) && r.body is Map && r.body['success'] == true) {
         await loadMyFunds();
@@ -58,6 +60,29 @@ class FundsController extends GetxController implements GetxService {
       return false;
     } catch (e) {
       lastError.value = 'Network error';
+      return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  /// AMIAL-FUND-003: دعوة عضو للصندوق برقم هاتفه.
+  Future<bool> inviteMember({
+    required String fundUlid,
+    required String phone,
+  }) async {
+    try {
+      isSubmitting.value = true;
+      final r = await repo.invite(fundUlid: fundUlid, phone: phone);
+      if ((r.statusCode == 200 || r.statusCode == 201) &&
+          r.body is Map && r.body['success'] == true) {
+        lastError.value = '';
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'تعذّرت الدعوة';
+      return false;
+    } catch (e) {
+      lastError.value = 'خطأ في الشبكة';
       return false;
     } finally {
       isSubmitting.value = false;

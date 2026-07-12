@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/family_fund/controllers/funds_controller.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
@@ -15,12 +16,14 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
+  final _targetCtrl = TextEditingController(); // AMIAL-FUND-002: المبلغ المستهدف
   bool _requireApproval = true;
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _descCtrl.dispose();
+    _targetCtrl.dispose();
     super.dispose();
   }
 
@@ -30,6 +33,7 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
       name: _nameCtrl.text.trim(),
       description: _descCtrl.text.trim().isNotEmpty ? _descCtrl.text.trim() : null,
       requireOwnerApproval: _requireApproval,
+      targetAmount: _targetCtrl.text.trim().isNotEmpty ? _targetCtrl.text.trim() : null,
     );
     if (!mounted) return;
     if (ok) {
@@ -100,6 +104,24 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
                     border: OutlineInputBorder(),
                     alignLabelWithHint: true,
                   ),
+                ),
+                const SizedBox(height: 4),
+
+                // AMIAL-FUND-002: هدف الادّخار — شريط تقدّم في التفاصيل
+                TextFormField(
+                  controller: _targetCtrl,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    labelText: 'المبلغ المستهدف (ر.ي) *',
+                    hintText: 'مثال: 500000',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (v) {
+                    final n = double.tryParse((v ?? '').trim()) ?? 0;
+                    if (n < 1) return 'حدّد مبلغاً مستهدفاً للصندوق';
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 16),
 

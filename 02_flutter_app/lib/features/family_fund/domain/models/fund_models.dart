@@ -12,6 +12,7 @@ class AmyalFund {
   final String zoneCode;
   final String status;
   final bool requireOwnerApprovalForDisbursement;
+  final String? targetAmount; // AMIAL-FUND-002: المبلغ المستهدف
 
   AmyalFund({
     required this.id,
@@ -24,6 +25,7 @@ class AmyalFund {
     required this.zoneCode,
     required this.status,
     required this.requireOwnerApprovalForDisbursement,
+    this.targetAmount,
   });
 
   factory AmyalFund.fromJson(Map<String, dynamic> j) => AmyalFund(
@@ -37,6 +39,7 @@ class AmyalFund {
     zoneCode: j['zone_code'] ?? 'SOUTH',
     status: j['status'] ?? 'active',
     requireOwnerApprovalForDisbursement: j['require_owner_approval_for_disbursement'] == true || j['require_owner_approval_for_disbursement'] == 1,
+    targetAmount: j['target_amount']?.toString(),
   );
 
   bool get isActive => status == 'active';

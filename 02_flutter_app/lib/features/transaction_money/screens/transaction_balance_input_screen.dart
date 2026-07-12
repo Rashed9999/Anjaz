@@ -54,6 +54,14 @@ class _TransactionBalanceInputScreenState extends State<TransactionBalanceInputS
 
     Get.find<SplashController>().getConfigData();
 
+    // AMIAL-FIX(GRAY): حمّل الملف الشخصي إن لم يكن مُحمَّلاً (الدخول الموحّد)
+    // ليظهر الرصيد المتاح ويُفحص الرصيد قبل الإرسال.
+    try {
+      if (Get.find<ProfileController>().userInfo == null) {
+        Get.find<ProfileController>().getProfileData(reload: false);
+      }
+    } catch (_) {}
+
     if(widget.transactionType == TransactionType.withdrawRequest) {
       Get.find<TransactionMoneyController>().getWithdrawMethods();
     }
@@ -307,18 +315,18 @@ class _TransactionBalanceInputScreenState extends State<TransactionBalanceInputS
                         if(isCheck && widget.transactionType == TransactionType.sendMoney) {
                           final double transactionCharge = _getSendMoneyCharge(amount);
 
-                          inSufficientBalance = PriceConverterHelper.balanceWithCharge(amount: amount, charge: transactionCharge) > profileController.userInfo!.balance!;
+                          inSufficientBalance = PriceConverterHelper.balanceWithCharge(amount: amount, charge: transactionCharge) > (profileController.userInfo?.balance ?? double.maxFinite);
 
                         }else if(isCheck && widget.transactionType == TransactionType.cashOut) {
                           final double cashOutCharge = _getCashOutCharge(amount);
 
-                          inSufficientBalance = PriceConverterHelper.balanceWithCharge(amount: amount, charge: cashOutCharge) > profileController.userInfo!.balance!;
+                          inSufficientBalance = PriceConverterHelper.balanceWithCharge(amount: amount, charge: cashOutCharge) > (profileController.userInfo?.balance ?? double.maxFinite);
 
                         }else if(isCheck && widget.transactionType == TransactionType.withdrawRequest) {
-                          inSufficientBalance = PriceConverterHelper.balanceWithCharge(amount: amount, charge: PriceConverterHelper.convertCharge(amount: amount, charge: splashController.configModel!.withdrawChargePercent)) > profileController.userInfo!.balance!;
+                          inSufficientBalance = PriceConverterHelper.balanceWithCharge(amount: amount, charge: PriceConverterHelper.convertCharge(amount: amount, charge: splashController.configModel!.withdrawChargePercent)) > (profileController.userInfo?.balance ?? double.maxFinite);
 
                         }else if(isCheck){
-                          inSufficientBalance = amount > profileController.userInfo!.balance!;
+                          inSufficientBalance = amount > (profileController.userInfo?.balance ?? double.maxFinite);
                         }
 
 

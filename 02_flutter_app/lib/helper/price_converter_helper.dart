@@ -50,22 +50,24 @@ class PriceConverterHelper {
   static double balanceWithCharge({required double? amount, required double? charge})=> (amount ?? 0) + (charge ?? 0);
 
   static String availableBalance(){
-    String? currencySymbol = Get.find<SplashController>().configModel!.currencySymbol;
-    final double balance = Get.find<ProfileController>().userInfo!.balance ?? 0.0;
+    // AMIAL-FIX(GRAY): كان userInfo!.balance ينهار أثناء البناء قبل تحميل
+    // الملف الشخصي (الدخول الموحّد) → شاشة إدخال المبلغ رمادية بالكامل.
+    String? currencySymbol = Get.find<SplashController>().configModel?.currencySymbol ?? 'ر.ي';
+    final double balance = Get.find<ProfileController>().userInfo?.balance ?? 0.0;
     final String currentBalance = (balance > 0 ? balance : 0).toStringAsFixed(AppConstants.dynamicDecimalPoint);
     return (Get.find<SplashController>().configModel!.isCurrencyPositionOnLeft ?? false) ?  '$currencySymbol$currentBalance' : '$currentBalance$currencySymbol';
 
   }
   static String newBalanceWithDebit({required double inputBalance, required double charge}){
     String? currencySymbol = Get.find<SplashController>().configModel!.currencySymbol;
-    String currentBalance = (Get.find<ProfileController>().userInfo!.balance!  - (inputBalance+charge)).toStringAsFixed(AppConstants.dynamicDecimalPoint);
+    String currentBalance = ((Get.find<ProfileController>().userInfo?.balance ?? 0.0)  - (inputBalance+charge)).toStringAsFixed(AppConstants.dynamicDecimalPoint);
     return (Get.find<SplashController>().configModel!.isCurrencyPositionOnLeft ?? false) ?  '$currencySymbol$currentBalance' : '$currentBalance$currencySymbol';
 
   }
 
   static String newBalanceWithCredit({required double inputBalance}){
     String? currencySymbol = Get.find<SplashController>().configModel!.currencySymbol;
-    String currentBalance = (Get.find<ProfileController>().userInfo!.balance! + inputBalance).toStringAsFixed(AppConstants.dynamicDecimalPoint);
+    String currentBalance = ((Get.find<ProfileController>().userInfo?.balance ?? 0.0) + inputBalance).toStringAsFixed(AppConstants.dynamicDecimalPoint);
     return (Get.find<SplashController>().configModel!.isCurrencyPositionOnLeft ?? false) ?  '$currencySymbol$currentBalance' : '$currentBalance$currencySymbol';
 
   }

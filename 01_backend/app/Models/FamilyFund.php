@@ -25,6 +25,7 @@ class FamilyFund extends Model
         'status',
         'require_owner_approval_for_disbursement',
         'max_member_contribution_per_day',
+        'target_amount', // AMIAL-FUND-002: المبلغ المستهدف
     ];
 
     protected $casts = [
