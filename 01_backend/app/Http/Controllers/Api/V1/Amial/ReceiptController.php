@@ -128,6 +128,9 @@ class ReceiptController extends Controller
         $receipt->incrementDownloadCount();
 
         return new StreamedResponse(function () use ($pdf) {
+            // AMIAL-FIX(PDF): تفريغ أي مُخرَجات عالقة (تحذيرات PHP…) قبل بثّ الـ PDF
+            // حتى لا تُفسد بايتات الترويسة %PDF فيتعذّر فتح الملفّ.
+            while (ob_get_level() > 0) { ob_end_clean(); }
             echo $pdf->output();
         }, 200, [
             'Content-Type' => 'application/pdf',
@@ -190,6 +193,8 @@ class ReceiptController extends Controller
         $receipt->incrementDownloadCount();
 
         return new StreamedResponse(function () use ($pdf) {
+            // AMIAL-FIX(PDF): تفريغ أي مُخرَجات عالقة قبل بثّ الـ PDF (انظر thermal).
+            while (ob_get_level() > 0) { ob_end_clean(); }
             echo $pdf->output();
         }, 200, [
             'Content-Type' => 'application/pdf',

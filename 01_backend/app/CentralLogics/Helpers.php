@@ -920,13 +920,26 @@ function translate(string $key): string
 {
     $local = session()->has('local') ? session('local') : 'en';
     App::setLocale($local);
-    $lang_array = include(base_path('resources/lang/' . $local . '/messages.php'));
+    $path = base_path('resources/lang/' . $local . '/messages.php');
+    $lang_array = file_exists($path) ? include($path) : [];
+    if (!is_array($lang_array)) {
+        $lang_array = [];
+    }
     $processed_key = ucfirst(str_replace('_', ' ', Helpers::remove_invalid_charcaters($key)));
 
     if (!array_key_exists($key, $lang_array)) {
-        $lang_array[$key] = $processed_key;
-        $str = "<?php return " . var_export($lang_array, true) . ";";
-        file_put_contents(base_path('resources/lang/' . $local . '/messages.php'), $str);
+        // AMIAL-FIX: على تخزين الخادم (Railway) ملفات اللغة للقراءة فقط،
+        // فمحاولة كتابة مفتاح مفقود كانت تُسقط الطلب بـ "Permission denied".
+        // نكتب فقط إن أمكن، ونرجع النصّ المُعالَج دائماً بدل الانهيار.
+        try {
+            if (@is_writable($path)) {
+                $lang_array[$key] = $processed_key;
+                $str = "<?php return " . var_export($lang_array, true) . ";";
+                @file_put_contents($path, $str);
+            }
+        } catch (\Throwable $e) {
+            // نتجاهل أي فشل كتابة — الترجمة اختيارية للحفظ
+        }
         $result = $processed_key;
     } else {
         $result = __('messages.' . $key);
