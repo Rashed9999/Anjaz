@@ -54,9 +54,20 @@ class PhoneNumberHelper {
   }
 
   static String getValidatePhoneNumberWithPhoneParser({required String? countryCode, required String phoneNumber}) {
-    PhoneNumber phone = PhoneNumber.parse('$countryCode${phoneNumber.trim()}');
-
-    return '$countryCode${phone.nsn}';
+    // AMIAL-FIX(DEAD-BUTTON): كان countryCode قد يكون null فيُبنى «null777…»
+    // وترمي PhoneNumber.parse استثناءً يقتل معالج زرّ «التالي» بصمت (لا يحدث
+    // شيء عند الضغط). نُثبّت +967 افتراضياً ونحمي بـ try — وعند الفشل نُعيد
+    // الرقم كما هو (الخادم يطابق كل الصيغ المكافئة).
+    final code = (countryCode == null || countryCode == 'null' || countryCode.isEmpty)
+        ? '+967'
+        : countryCode;
+    final raw = phoneNumber.trim();
+    try {
+      PhoneNumber phone = PhoneNumber.parse('$code$raw');
+      return '$code${phone.nsn}';
+    } catch (_) {
+      return '$code$raw';
+    }
   }
 
 

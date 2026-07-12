@@ -328,21 +328,34 @@ class _TransactionMoneyScreenState extends State<TransactionMoneyScreen> {
 
                   if (widget.transactionType == "cash_out") {
                     contactController.checkAgentNumber(phoneNumber: phoneNumber).then((value) {
-                      if (value.isOk) {
+                      if (value.isOk && value.body is Map && value.body['data'] != null) {
                         String? agentName = value.body['data']['name'];
                         String? agentImage = value.body['data']['image'];
                         bool isFavorite = value.body['data']['is_favourite'] ?? false;
                         Get.to(() => TransactionBalanceInputScreen(transactionType: widget.transactionType, contactModel: ContactModel(
-                          phoneNumber: '$_countryCode${searchController.text.trim()}',
+                          phoneNumber: phoneNumber,
                           name: agentName,
                           avatarImage: agentImage,
                           isFavourite: isFavorite,
                         )));
+                      } else {
+                        // AMIAL-FIX(DEAD-BUTTON): رسالة بدل الصمت عند فشل التحقّق
+                        String msg = 'الوكيل غير مسجل في النظام';
+                        try {
+                          if (value.body is Map && value.body['message'] != null) {
+                            msg = '${value.body['message']}';
+                          }
+                        } catch (_) {}
+                        showCustomSnackBarHelper(msg, isError: true);
                       }
                     });
                   } else {
                     contactController.checkCustomerNumber(phoneNumber: phoneNumber).then((value) {
-                      if (value!.isOk) {
+                      // AMIAL-FIX(DEAD-BUTTON): كان value!.isOk ينهار على null،
+                      // وعند فشل التحقّق لا تظهر أي رسالة (زرّ «ميت»). نعالج
+                      // الحالتين برسالة واضحة.
+                      if (value == null) return; // رسالة «رقمك نفسه» ظهرت أصلاً
+                      if (value.isOk && value.body is Map && value.body['data'] != null) {
                         String? customerName = value.body['data']['name'];
                         String? customerImage = value.body['data']['image'];
                         bool isFavorite = value.body['data']['is_favourite'] ?? false;
@@ -356,6 +369,14 @@ class _TransactionMoneyScreenState extends State<TransactionMoneyScreen> {
                             isFavourite: isFavorite,
                           ),
                         ));
+                      } else {
+                        String msg = 'الرقم غير مسجل في النظام';
+                        try {
+                          if (value.body is Map && value.body['message'] != null) {
+                            msg = '${value.body['message']}';
+                          }
+                        } catch (_) {}
+                        showCustomSnackBarHelper(msg, isError: true);
                       }
                     });
                   }

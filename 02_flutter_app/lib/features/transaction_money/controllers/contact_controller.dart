@@ -328,7 +328,10 @@ class ContactController extends GetxController implements GetxService {
 
   Future<Response?> checkCustomerNumber({required String phoneNumber}) async {
     Response? response0;
-    if(phoneNumber == Get.find<ProfileController>().userInfo!.phone) {
+    // AMIAL-FIX(DEAD-BUTTON): كان userInfo!.phone ينهار إن لم يُحمَّل الملف بعد
+    // (الدخول الموحّد) فيموت زرّ «التالي» بصمت. مقارنة null-آمنة.
+    final ownPhone = Get.find<ProfileController>().userInfo?.phone;
+    if(ownPhone != null && phoneNumber == ownPhone) {
       showCustomSnackBarHelper('Please_enter_a_different_customer_number'.tr);
     } else {
       _isContactListLoading = true;
