@@ -8,6 +8,8 @@ import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart
 import 'package:amyal_pay/features/merchant/screens/inventory_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/profit_report_screen.dart';
+import 'package:amyal_pay/features/suppliers/screens/suppliers_screen.dart';
+import 'package:amyal_pay/features/access/widgets/access_gate.dart';
 import 'package:amyal_pay/features/merchant/screens/split_bill_create_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
 import 'package:amyal_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
@@ -338,6 +340,15 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       icon: Icons.trending_up_rounded,
                       label: 'تقارير الربحية',
                       onTap: () => Get.to(() => const ProfitReportScreen()),
+                    ),
+                    // AMIAL-SUPPLIERS-001 (68): الموردون — لباقات Business فأعلى
+                    AccessGate(
+                      feature: 'suppliers',
+                      child: _LinkTile(
+                        icon: Icons.local_shipping_outlined,
+                        label: 'الموردون وأوامر الشراء',
+                        onTap: () => Get.to(() => const SuppliersScreen()),
+                      ),
                     ),
                     // AMIAL-AUDIT-FIX-001: وصل شاشتَي تقسيم الفاتورة (كانتا غير موصولتين)
                     _LinkTile(

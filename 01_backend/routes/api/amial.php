@@ -462,6 +462,29 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/profit-report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'profitReport'])->name('profit-report');
         });
 
+        // AMIAL-SUPPLIERS-001 — الموردون وأوامر الشراء (تصاميم 53/57/67/68)
+        Route::prefix('suppliers')->name('suppliers.')->group(function () {
+            $sc = \App\Http\Controllers\Api\V1\Amial\SupplierController::class;
+            Route::get('/', [$sc, 'index'])->name('index');
+            Route::post('/', [$sc, 'store'])->name('store');
+            Route::get('/{id}', [$sc, 'show'])->where('id', '[0-9]+')->name('show');
+            Route::post('/{id}/payment', [$sc, 'payment'])
+                ->where('id', '[0-9]+')
+                ->middleware('amial.rate-limit:supplier_payment,30,1')->name('payment');
+        });
+        Route::prefix('purchase-orders')->name('purchase-orders.')->group(function () {
+            $sc = \App\Http\Controllers\Api\V1\Amial\SupplierController::class;
+            Route::get('/', [$sc, 'poIndex'])->name('index');
+            Route::post('/', [$sc, 'poStore'])
+                ->middleware('amial.rate-limit:po_create,30,1')->name('store');
+            Route::get('/{id}', [$sc, 'poShow'])->where('id', '[0-9]+')->name('show');
+            Route::post('/{id}/approve', [$sc, 'poApprove'])->where('id', '[0-9]+')->name('approve');
+            Route::post('/{id}/receive', [$sc, 'poReceive'])
+                ->where('id', '[0-9]+')
+                ->middleware('amial.rate-limit:po_receive,30,1')->name('receive');
+            Route::post('/{id}/cancel', [$sc, 'poCancel'])->where('id', '[0-9]+')->name('cancel');
+        });
+
         // AMIAL-CUSTOMER-CREDIT-001 — نظام ديون العملاء
         Route::prefix('credit')->name('credit.')->group(function () {
             Route::get('/dashboard', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'dashboard'])->name('dashboard');

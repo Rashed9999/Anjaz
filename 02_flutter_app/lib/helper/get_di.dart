@@ -27,6 +27,8 @@ import 'package:amyal_pay/features/merchant/controllers/split_bill_controller.da
 import 'package:amyal_pay/features/merchant/domain/repositories/split_bill_repo.dart';
 import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amyal_pay/features/merchant/domain/repositories/cashier_repo.dart';
+import 'package:amyal_pay/features/suppliers/controllers/suppliers_controller.dart';
+import 'package:amyal_pay/features/suppliers/domain/repositories/suppliers_repo.dart';
 import 'package:amyal_pay/features/merchant/controllers/customer_credit_controller.dart';
 import 'package:amyal_pay/features/merchant/domain/repositories/customer_credit_repo.dart';
 import 'package:amyal_pay/features/merchant/controllers/cashier_refund_controller.dart';
@@ -307,6 +309,10 @@ Future<Map<String, Map<String, String>>> init() async {
   // AMIAL-CASHIER-001 — كاشير التاجر
   Get.lazyPut(() => CashierRepo(apiClient: Get.find()));
   Get.lazyPut(() => CashierController(repo: Get.find()), fenix: true);
+
+  // AMIAL-SUPPLIERS-001 — الموردون وأوامر الشراء
+  Get.lazyPut(() => SuppliersRepo(apiClient: Get.find()));
+  Get.lazyPut(() => SuppliersController(repo: Get.find()), fenix: true);
 
 
 
