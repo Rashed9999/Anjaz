@@ -1,17 +1,33 @@
-# نشر أميال باي على Contabo + Coolify — دليل جاهز للّصق
+# نشر أميال باي على Coolify — دليل جاهز للّصق (من الهاتف)
 
-## 0) ما تحتاج شراءه
-- خادم **Contabo VPS 10** (8GB) أو **Hetzner CPX21** — Ubuntu 24.04.
-  (Hetzner سنغافورة أقرب لليمن = أسرع.)
+## 0) ما تحتاجه
+- خادم سحابي Ubuntu 24.04 (Hetzner موصى به لمستخدم الهاتف — انظر أدناه).
 - **دومين رخيص** (Namecheap / Porkbun / Cloudflare) — .com ~$10/سنة، أو
   .site/.xyz ~$2 للتجربة. (يمكنك التجربة أولاً بلا دومين عبر عنوان IP
   التلقائي من Coolify sslip.io، لكن الدومين أفضل لـ SSL والعرض على البنك.)
 
-## 1) تثبيت Coolify (مرة واحدة على الخادم)
-```
-curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
-```
-ثم افتح `http://SERVER_IP:8000` وأنشئ حساب المدير.
+## ★ المسار الأسهل من الهاتف: Hetzner + تثبيت تلقائي (بلا SSH)
+1. أنشئ حساباً على **console.hetzner.cloud** (من متصفّح الهاتف).
+2. **New Project** → **Add Server**.
+3. **Location**: Singapore (أقرب لليمن).
+4. **Image**: Ubuntu 24.04.
+5. **Type**: **CX22** (2 vCPU / 4GB — كافٍ ورخيص) أو CPX21.
+6. انزل إلى **Cloud config** والصق هذا (يثبّت Coolify وحده عند الإقلاع):
+   ```
+   #cloud-config
+   runcmd:
+     - curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+   ```
+7. سمِّ الخادم → **Create & Buy now**.
+8. انتظر ~2 دقيقة للإقلاع ثم ~5 دقائق ليكتمل تثبيت Coolify.
+9. افتح من متصفّح الهاتف: `http://SERVER_IP:8000` وأنشئ حساب المدير.
+   (الـ IP تجده في صفحة الخادم داخل Hetzner.)
+
+> بديل Contabo: اطلب VPS بـ Ubuntu، ثم من تطبيق **Termius** (SSH على الهاتف)
+> اتصل بالخادم والصق أمر التثبيت:
+> `curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash`
+
+## 1) بعد فتح Coolify — كل ما يلي بالنقر من متصفّح الهاتف
 
 ## 2) الدومين
 - وجّه سجل A من دومينك إلى IP الخادم:
