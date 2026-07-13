@@ -176,7 +176,12 @@ class UnifiedAuthService
         $this->assertUserActive($agent);
 
         // توليد OTP + token مؤقت
-        $otpCode = (string)random_int(100000, 999999);
+        // AMIAL-DEMO-OTP: في التجربة (AMIAL_DEMO_OTP مضبوط) نستخدم رمزاً ثابتاً
+        // ليتمكّن الوكيل من الدخول بلا بوابة SMS. الإنتاج: يبقى عشوائياً.
+        $demoOtp = config('app.amial_demo_otp');
+        $otpCode = (is_string($demoOtp) && $demoOtp !== '')
+            ? $demoOtp
+            : (string) random_int(100000, 999999);
         $otpToken = (string) Str::ulid();
 
         Cache::put(

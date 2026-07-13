@@ -172,6 +172,14 @@ class EnsureDemoUsers extends Command
             $this->error('❌ فشل تهيئة تجّار التجربة: ' . $e->getMessage());
         }
 
+        // AMIAL-DEMO-STAFF-001: أدمن ووكيل تجريبيان (لتجربة لوحة الإدارة والوكيل)
+        try {
+            \Illuminate\Support\Facades\Artisan::call('amial:ensure-demo-staff');
+            $this->line(trim(\Illuminate\Support\Facades\Artisan::output()));
+        } catch (\Throwable $e) {
+            $this->error('❌ فشل تهيئة أدمن/وكيل التجربة: ' . $e->getMessage());
+        }
+
         // 2) اختبار الدخول الفعلي عبر نفس مسار التطبيق
         try {
             $svc = app(UnifiedAuthService::class);

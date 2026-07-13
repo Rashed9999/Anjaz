@@ -123,4 +123,8 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    // AMIAL-DEMO-OTP: رمز OTP ثابت للوكيل في بيئة التجربة (بلا بوابة SMS).
+    // يبقى فارغاً في الإنتاج الحقيقي → يعود التوليد العشوائي الطبيعي.
+    'amial_demo_otp' => env('AMIAL_DEMO_OTP'),
+
 ];
