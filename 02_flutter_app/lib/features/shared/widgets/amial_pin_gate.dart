@@ -25,8 +25,10 @@ Future<bool> askAmialPin({String title = 'أدخل رمز PIN'}) async {
 /// AMIAL-TRANSFER-V2: جمع رمز PIN فقط (بلا تحقق من الخادم) — يُستخدم عندما
 /// تكون نقطة النهاية نفسها هي من يتحقّق من الرمز (مثل transfer/initiate).
 /// يرجع الرمز المكوَّن من 4 أرقام، أو null إن أغلق المستخدم الشاشة.
-Future<String?> askAmialPinInput({String title = 'أدخل رمز PIN'}) {
-  return Get.to<String>(
+Future<String?> askAmialPinInput({String title = 'أدخل رمز PIN'}) async {
+  // Get.to يُرجع Future<String?>? (قابلاً للـ null) — نجعلها async وننتظرها
+  // حتى يتطابق نوع الإرجاع Future<String?>.
+  return await Get.to<String>(
     () => _AmialPinInputScreen(title: title),
     fullscreenDialog: true,
   );
