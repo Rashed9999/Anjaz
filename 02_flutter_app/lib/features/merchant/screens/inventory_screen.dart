@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amyal_pay/features/merchant/screens/product_editor_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/stock_alerts_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/inventory_audit_screen.dart';
 import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
@@ -82,6 +83,17 @@ class _InventoryScreenState extends State<InventoryScreen> {
         backgroundColor: AmyalColors.primary,
         foregroundColor: Colors.white,
         title: const Text('إدارة المخزون'),
+        actions: [
+          // AMIAL-AUDIT-001: جرد المخزون
+          IconButton(
+            tooltip: 'تدقيق المخزون (جرد)',
+            icon: const Icon(Icons.checklist_rounded),
+            onPressed: () async {
+              await Get.to(() => const InventoryAuditScreen());
+              c.loadProducts();
+            },
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'inv-add',
