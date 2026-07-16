@@ -11,19 +11,18 @@
   أضف الـ domain هنا فقط للـ debug builds.
 -->
 <network-security-config>
-    <!-- Defaults: HTTPS فقط -->
-    <base-config cleartextTrafficPermitted="false">
+    <!--
+        AMIAL-PILOT-HTTP-001 — وضع التجربة: السماح بـ http (cleartext) بالكامل.
+        سبب: خادم Contabo/Coolify عبر sslip.io بلا شهادة SSL بعد، وإعداد
+        النطاق المحدّد لم يُطبَّق على بعض الأجهزة — فنسمح مؤقّتاً بالكامل ليعمل
+        الاختبار بضمان.
+        ⚠️⚠️ للتجربة فقط — قبل الإطلاق/عرض البنك: انتقل إلى دومين + https،
+        أعِد base-config إلى cleartextTrafficPermitted="false"،
+        وأعِد usesCleartextTraffic="false" في AndroidManifest.
+    -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-
-    <!--
-        AMIAL-PILOT-HTTP-001 — استثناء http مؤقّت لخادم التجربة فقط
-        (Contabo + Coolify عبر sslip.io بلا شهادة SSL بعد).
-        ⚠️ للتجربة فقط — يجب حذفه والانتقال إلى دومين + https قبل الإطلاق/عرض البنك.
-    -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">g14f0wej37nlkvqyb1ugm11w.169.58.24.224.sslip.io</domain>
-    </domain-config>
 </network-security-config>
