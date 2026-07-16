@@ -19,8 +19,11 @@
     </base-config>
 
     <!--
-        Development override — للـ debug build فقط.
-        لإضافة domain محلي، fork هذا الملف داخل debug variant:
-        android/app/src/debug/res/xml/network_security_config.xml
+        AMIAL-PILOT-HTTP-001 — استثناء http مؤقّت لخادم التجربة فقط
+        (Contabo + Coolify عبر sslip.io بلا شهادة SSL بعد).
+        ⚠️ للتجربة فقط — يجب حذفه والانتقال إلى دومين + https قبل الإطلاق/عرض البنك.
     -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">g14f0wej37nlkvqyb1ugm11w.169.58.24.224.sslip.io</domain>
+    </domain-config>
 </network-security-config>
