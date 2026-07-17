@@ -91,6 +91,9 @@ class AmyalFundTransaction {
   final String? note;
   final String status;
   final DateTime? createdAt;
+  // AMIAL-FUND-UI: أسماء المنفّذ والمستفيد (يرجعها الخادم في show)
+  final String? actorName;
+  final String? beneficiaryName;
 
   AmyalFundTransaction({
     required this.id,
@@ -105,6 +108,8 @@ class AmyalFundTransaction {
     this.note,
     required this.status,
     this.createdAt,
+    this.actorName,
+    this.beneficiaryName,
   });
 
   factory AmyalFundTransaction.fromJson(Map<String, dynamic> j) => AmyalFundTransaction(
@@ -120,6 +125,12 @@ class AmyalFundTransaction {
     note: j['note'],
     status: j['status'] ?? 'completed',
     createdAt: j['created_at'] != null ? DateTime.tryParse(j['created_at']) : null,
+    actorName: j['user'] is Map
+        ? ('${j['user']['f_name'] ?? ''} ${j['user']['l_name'] ?? ''}').trim()
+        : null,
+    beneficiaryName: j['beneficiary'] is Map
+        ? ('${j['beneficiary']['f_name'] ?? ''} ${j['beneficiary']['l_name'] ?? ''}').trim()
+        : null,
   );
 
   bool get isPending => status == 'pending_approval';

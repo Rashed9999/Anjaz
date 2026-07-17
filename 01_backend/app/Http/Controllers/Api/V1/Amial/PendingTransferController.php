@@ -98,6 +98,10 @@ class PendingTransferController extends Controller
             ->first();
         if (!$pending) return $this->error('NOT_FOUND', 'التحويل غير موجود', 404);
 
+        // AMIAL-SPEED: تسليم كسول إن انتهت النافذة — المستخدم يرى «مكتمل»
+        // لحظة انتهاء العدّاد دون انتظار دورة المجدول.
+        $pending = $this->service->releaseIfDue($pending);
+
         return $this->ok([
             'transfer_ulid' => $pending->transfer_ulid,
             'status' => $pending->status,

@@ -53,7 +53,7 @@ class EnsureDemoUsers extends Command
             }
             $user->save();
 
-            EMoney::updateOrCreate(
+            EMoney::firstOrCreate(
                 ['user_id' => $user->id],
                 [
                     'current_balance' => '50000.0000',
@@ -90,7 +90,7 @@ class EnsureDemoUsers extends Command
                 $recipient->kyc_tier = 3;
             }
             $recipient->save();
-            EMoney::updateOrCreate(
+            EMoney::firstOrCreate(
                 ['user_id' => $recipient->id],
                 [
                     'current_balance' => '10000.0000',

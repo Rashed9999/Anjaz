@@ -602,6 +602,15 @@ class _TxTile extends StatelessWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // AMIAL-FUND-UI: تفاصيل الصرف — بواسطة مَن وإلى مَن
+          if (!isContribute && (tx.beneficiaryName ?? '').isNotEmpty)
+            Text('إلى: ${tx.beneficiaryName}',
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.w600)),
+          if ((tx.actorName ?? '').isNotEmpty)
+            Text('${isContribute ? 'ساهم' : 'صرفها'}: ${tx.actorName}',
+                style: const TextStyle(
+                    fontSize: 11, color: AmyalColors.textMuted)),
           if (tx.note != null && tx.note!.isNotEmpty)
             Text(tx.note!, style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
           if (tx.isPending)

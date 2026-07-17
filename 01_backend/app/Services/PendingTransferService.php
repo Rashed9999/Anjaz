@@ -55,7 +55,10 @@ class PendingTransferService
         $amount = MoneyService::normalize($amount);
         $fee = MoneyService::normalize($fee);
         $total = MoneyService::add($amount, $fee);
-        $cooldown = $cooldownSeconds ?? self::DEFAULT_COOLDOWN_SECONDS;
+        // AMIAL-SPEED: النافذة قابلة للضبط من البيئة (AMIAL_TRANSFER_COOLDOWN)
+        $cooldown = $cooldownSeconds
+            ?? (int) config('app.amial_transfer_cooldown', self::DEFAULT_COOLDOWN_SECONDS);
+        $cooldown = max(5, $cooldown);
 
         // 1) فحوصات أساسية
         if ($sender->id === $recipient->id) {
@@ -107,8 +110,36 @@ class PendingTransferService
                 'context' => ['recipient' => $recipient->id, 'amount' => $amount, 'cooldown' => $cooldown],
             ]);
 
+            // AMIAL-SPEED: مهمة مؤجّلة تسلّم في لحظة انتهاء النافذة بالضبط —
+            // كان الاعتماد على المجدول الدوري فقط (كل 60 ثانية) فيتأخر التسليم
+            // حتى دقيقتين. المجدول يبقى شبكة أمان لو تعطل الطابور.
+            DB::afterCommit(function () use ($cooldown) {
+                \App\Jobs\ReleasePendingTransfersJob::dispatch()
+                    ->delay(now()->addSeconds($cooldown + 1));
+            });
+
             return $pending;
         });
+    }
+
+    /**
+     * AMIAL-SPEED: تسليم كسول — إن استُعلم عن تحويل انتهت نافذته وما زال
+     * معلّقاً (الطابور متأخر مثلاً)، نسلّمه فوراً في نفس الطلب حتى يرى
+     * المستخدم «مكتمل» لحظة انتهاء العدّاد.
+     */
+    public function releaseIfDue(PendingTransfer $pending): PendingTransfer
+    {
+        if ($pending->status === 'holding' && !$pending->releasable_at->isFuture()) {
+            try {
+                return $this->release($pending);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Lazy release failed', [
+                    'ulid' => $pending->transfer_ulid,
+                    'error' => mb_substr($e->getMessage(), 0, 200),
+                ]);
+            }
+        }
+        return $pending->fresh();
     }
 
     /**

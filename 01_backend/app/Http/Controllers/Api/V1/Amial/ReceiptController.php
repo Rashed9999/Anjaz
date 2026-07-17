@@ -76,7 +76,7 @@ class ReceiptController extends Controller
      * GET /api/v1/amial/receipts/{id}/download
      * يعيد PDF stream.
      */
-    public function download(Request $request, int $id): JsonResponse|StreamedResponse
+    public function download(Request $request, int $id): \Symfony\Component\HttpFoundation\Response
     {
         // AMIAL-FIX(PDF): كان يبثّ ملفّاً مُولّداً مسبقاً على القرص، لكن تخزين
         // Railway مؤقّت (ephemeral) — يختفي الملفّ بعد إعادة النشر (أو لم تُشغَّل
@@ -90,7 +90,7 @@ class ReceiptController extends Controller
      * AMIAL-THERMAL-001 — GET /api/v1/amial/receipts/{id}/thermal?size=58|80
      * يُصيّر إيصالاً حرارياً (58مم/80مم) عند الطلب لطابعات POS. متزامن (سريع).
      */
-    public function thermal(Request $request, int $id): JsonResponse|StreamedResponse
+    public function thermal(Request $request, int $id): \Symfony\Component\HttpFoundation\Response
     {
         $receipt = Receipt::where('id', $id)
             ->where('user_id', $request->user()->id)
@@ -127,13 +127,14 @@ class ReceiptController extends Controller
 
         $receipt->incrementDownloadCount();
 
-        return new StreamedResponse(function () use ($pdf) {
-            // AMIAL-FIX(PDF): تفريغ أي مُخرَجات عالقة (تحذيرات PHP…) قبل بثّ الـ PDF
-            // حتى لا تُفسد بايتات الترويسة %PDF فيتعذّر فتح الملفّ.
-            while (ob_get_level() > 0) { ob_end_clean(); }
-            echo $pdf->output();
-        }, 200, [
+        // AMIAL-FIX(PDF-2): ردّ كامل بطول معلوم بدل البثّ (انظر invoice).
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(120);
+        $content = $pdf->output();
+
+        return response($content, 200, [
             'Content-Type' => 'application/pdf',
+            'Content-Length' => (string) strlen($content),
             'Content-Disposition' => "inline; filename=\"{$receipt->receipt_number}_{$widthMm}mm.pdf\"",
         ]);
     }
@@ -143,7 +144,7 @@ class ReceiptController extends Controller
      * يُصيّر فاتورة رسمية بمقاس A4 (وثيقة رسمية: ترويسة، بنود، إجماليات،
      * مبلغ كتابةً، ختم/توقيع، QR). متزامن.
      */
-    public function invoice(Request $request, int $id): JsonResponse|StreamedResponse
+    public function invoice(Request $request, int $id): \Symfony\Component\HttpFoundation\Response
     {
         $receipt = Receipt::where('id', $id)
             ->where('user_id', $request->user()->id)
@@ -192,12 +193,17 @@ class ReceiptController extends Controller
 
         $receipt->incrementDownloadCount();
 
-        return new StreamedResponse(function () use ($pdf) {
-            // AMIAL-FIX(PDF): تفريغ أي مُخرَجات عالقة قبل بثّ الـ PDF (انظر thermal).
-            while (ob_get_level() > 0) { ob_end_clean(); }
-            echo $pdf->output();
-        }, 200, [
+        // AMIAL-FIX(PDF-2): كان البثّ (StreamedResponse) ينقطع منتصف التنزيل
+        // على الخادم («Connection closed while receiving data») — غالباً بسبب
+        // انتهاء ذاكرة/وقت عامل PHP أثناء توليد خطوط عربية ~1MB بلا
+        // Content-Length. الحل: توليد كامل ثم ردّ عادي بطول معلوم.
+        @ini_set('memory_limit', '512M');
+        @set_time_limit(120);
+        $content = $pdf->output();
+
+        return response($content, 200, [
             'Content-Type' => 'application/pdf',
+            'Content-Length' => (string) strlen($content),
             'Content-Disposition' => "inline; filename=\"INV-{$receipt->receipt_number}.pdf\"",
         ]);
     }

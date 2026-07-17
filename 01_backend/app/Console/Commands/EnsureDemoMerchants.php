@@ -177,7 +177,7 @@ class EnsureDemoMerchants extends Command
 
     private function ensureWallet(User $user): void
     {
-        EMoney::updateOrCreate(
+        EMoney::firstOrCreate(
             ['user_id' => $user->id],
             [
                 'current_balance' => '100000.0000',
@@ -187,11 +187,13 @@ class EnsureDemoMerchants extends Command
         );
     }
 
-    /** منتجات عيّنة: [name, category, barcode, cost, price, offer|null, qty] */
+    /** منتجات عيّنة: [name, category, barcode, cost, price, offer|null, qty]
+     *  AMIAL-PERSIST: firstOrCreate — تُنشأ مرة واحدة فقط، فلا يُعاد ضبط الكمية
+     *  (المخزون) مع كل نشر بعد بيع/جرد. تبقى كتطبيق حقيقي. */
     private function ensureProducts(User $user, array $products): void
     {
         foreach ($products as $p) {
-            MerchantProduct::updateOrCreate(
+            MerchantProduct::firstOrCreate(
                 ['merchant_user_id' => $user->id, 'barcode' => $p[2]],
                 [
                     'name' => $p[0],

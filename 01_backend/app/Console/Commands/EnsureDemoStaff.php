@@ -96,7 +96,7 @@ class EnsureDemoStaff extends Command
             $agent->save();
 
             // محفظة الوكيل (سيولة لصرف عمليات السحب للعملاء)
-            EMoney::updateOrCreate(
+            EMoney::firstOrCreate(
                 ['user_id' => $agent->id],
                 [
                     'current_balance' => '500000.0000',

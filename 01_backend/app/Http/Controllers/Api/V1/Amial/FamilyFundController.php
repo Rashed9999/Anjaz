@@ -59,7 +59,10 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
         }
 
         $members = $fund->activeMembers()->with('user:id,f_name,l_name,phone')->get();
+        // AMIAL-FUND-UI: أسماء منفّذ الحركة والمستفيد — حتى يعرض التطبيق
+        // «بواسطة فلان» و«إلى فلان» في صرف/مساهمات الصندوق.
         $recentTx = FamilyFundTransaction::where('fund_id', $fund->id)
+            ->with(['user:id,f_name,l_name', 'beneficiary:id,f_name,l_name'])
             ->orderByDesc('id')
             ->limit(20)
             ->get();
