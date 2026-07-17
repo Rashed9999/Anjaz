@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
@@ -94,6 +95,38 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     Get.back(result: value);
   }
 
+  /// AMIAL-QR-GALLERY: قراءة رمز QR من صورة في معرض الهاتف —
+  /// كان الماسح يفتح الكاميرا فقط بينما الرمز قد يكون لقطة محفوظة.
+  Future<void> _pickFromGallery() async {
+    try {
+      final picked =
+          await ImagePicker().pickImage(source: ImageSource.gallery);
+      if (picked == null || _handled) return;
+
+      final capture = await _controller.analyzeImage(picked.path);
+      final value = capture?.barcodes.isNotEmpty == true
+          ? capture!.barcodes.first.rawValue
+          : null;
+
+      if (value != null && value.isNotEmpty) {
+        _handled = true;
+        Get.back(result: value);
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('لم يُعثر على رمز QR في هذه الصورة'),
+          backgroundColor: AmyalColors.red,
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('تعذّرت قراءة الصورة — جرّب صورة أوضح'),
+          backgroundColor: AmyalColors.red,
+        ));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -131,7 +164,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             ),
           ),
           Positioned(
-            bottom: 60,
+            bottom: 110,
             left: 0,
             right: 0,
             child: Center(
@@ -145,6 +178,27 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                 child: const Text(
                   'وجّه الكاميرا نحو رمز QR',
                   style: TextStyle(color: Colors.white, fontSize: 13),
+                ),
+              ),
+            ),
+          ),
+          // AMIAL-QR-GALLERY: زر «من المعرض» — لصور الرموز المحفوظة
+          Positioned(
+            bottom: 36,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: FilledButton.icon(
+                onPressed: _pickFromGallery,
+                icon: const Icon(Icons.photo_library_outlined, size: 20),
+                label: const Text('اختر رمزاً من معرض الصور'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AmyalColors.yellow,
+                  foregroundColor: const Color(0xFF14342A),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24)),
                 ),
               ),
             ),

@@ -83,6 +83,17 @@ class EnsureDemoMerchants extends Command
             ],
         ],
         [
+            // AMIAL: التاجر الحرّ (بيع سريع — بسطات/سمك/خضار) على الباقة المجانية
+            'phone' => '967777200006', 'f' => 'أبو أحمد', 'l' => 'السمّاك',
+            'store' => 'بسطة أبو أحمد للأسماك', 'number' => 'AM-FISH-006',
+            'type' => 'quick_sale', 'plan' => 'free',
+            'products' => [
+                ['سمك ثمد طازج (كيلو)', 'أسماك', '9491000601', 2500, 3500, null, 40],
+                ['جمبري كبير (كيلو)', 'أسماك', '9491000602', 6000, 8500, null, 15],
+                ['سمك شعري (كيلو)', 'أسماك', '9491000603', 1800, 2500, null, 30],
+            ],
+        ],
+        [
             'phone' => '967777200005', 'f' => 'وليد', 'l' => 'النخبة',
             'store' => 'النخبة للتجارة بالجملة', 'number' => 'AM-WHOL-005',
             'type' => 'wholesale', 'plan' => 'merchant_pro',
@@ -119,10 +130,16 @@ class EnsureDemoMerchants extends Command
     {
         $shortPhone = substr($m['phone'], 3); // 777200001
 
-        $user = User::where('type', MERCHANT_TYPE)->get()->first(function ($u) use ($m, $shortPhone) {
+        $existing = User::where('type', MERCHANT_TYPE)->get()->first(function ($u) use ($m, $shortPhone) {
             return in_array($u->phone, [$m['phone'], $shortPhone], true);
-        }) ?? new User();
+        });
+        // AMIAL-REAL-DATA: لا نعيد ضبط حساب موجود (كلمة سر/رمز/رصيد) —
+        // النشرات المتكررة كانت «تمسح» نشاط التجربة وكأن البيانات ليست حقيقية.
+        if ($existing) {
+            return $existing;
+        }
 
+        $user = new User();
         $user->f_name = $m['f'];
         $user->l_name = $m['l'];
         $user->phone = $m['phone'];
@@ -157,7 +174,7 @@ class EnsureDemoMerchants extends Command
 
     private function ensureProfile(User $user, array $m): void
     {
-        MerchantProfile::updateOrCreate(
+        MerchantProfile::firstOrCreate(
             ['user_id' => $user->id],
             [
                 'business_type' => $m['type'],
@@ -211,7 +228,7 @@ class EnsureDemoMerchants extends Command
     /** محطة كاملة: منتجات وقود بأسعار اللتر + 4 مضخات مرتبطة. */
     private function ensureFuelStation(User $user, array $m): void
     {
-        $station = FuelStation::updateOrCreate(
+        $station = FuelStation::firstOrCreate(
             ['merchant_user_id' => $user->id],
             [
                 'station_name' => $m['store'],
@@ -229,7 +246,7 @@ class EnsureDemoMerchants extends Command
             ['كيروسين', 'KRS', '1100.0000', '#5F6B62'],
         ];
         foreach ($fuels as $f) {
-            FuelProduct::updateOrCreate(
+            FuelProduct::firstOrCreate(
                 ['station_id' => $station->id, 'product_code' => $f[1]],
                 [
                     'name' => $f[0],
@@ -241,7 +258,7 @@ class EnsureDemoMerchants extends Command
         }
 
         for ($i = 1; $i <= 4; $i++) {
-            FuelPump::updateOrCreate(
+            FuelPump::firstOrCreate(
                 ['station_id' => $station->id, 'pump_number' => $i],
                 [
                     'pump_name' => "مضخة $i",

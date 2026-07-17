@@ -37,8 +37,9 @@ class EnsureDemoStaff extends Command
     {
         try {
             $email = 'admin@amyalpay.com';
-            $admin = User::where('type', ADMIN_TYPE)->where('email', $email)->first()
-                ?? new User();
+            $admin = User::where(chr(39)."type".chr(39), ADMIN_TYPE)->where(chr(39)."email".chr(39), $email)->first();
+            if ($admin) { $this->info("✓ أدمن تجريبي موجود مسبقاً — لم يُمسّ"); return; }
+            $admin = new User();
 
             $admin->f_name = 'مدير';
             $admin->l_name = 'النظام';
@@ -70,7 +71,13 @@ class EnsureDemoStaff extends Command
             $agent = User::where('type', AGENT_TYPE)->get()->first(function ($u) use ($agentNumber, $phone) {
                 return $u->agent_number === $agentNumber
                     || in_array($u->phone, [$phone, '777900001'], true);
-            }) ?? new User();
+            });
+            if ($agent) {
+                EMoney::firstOrCreate([chr(39)."user_id".chr(39) => $agent->id], [chr(39)."current_balance".chr(39) => chr(39)."500000.0000".chr(39), chr(39)."charge_earned".chr(39) => chr(39)."0".chr(39), chr(39)."pending_balance".chr(39) => chr(39)."0".chr(39), chr(39)."held_balance".chr(39) => chr(39)."0".chr(39), chr(39)."zone_code".chr(39) => chr(39)."SOUTH".chr(39), chr(39)."version".chr(39) => 1]);
+                $this->info("✓ وكيل تجريبي موجود مسبقاً — لم يُمسّ");
+                return;
+            }
+            $agent = new User();
 
             $agent->f_name = 'خالد';
             $agent->l_name = 'الوكيل';

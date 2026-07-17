@@ -34,9 +34,21 @@ class EnsureDemoUsers extends Command
                     || $u->phone_blind_index === app(\App\Services\EncryptionService::class)->blindIndex($phone, 'phone');
             });
 
-            if (!$user) {
-                $user = new User();
+            // AMIAL-REAL-DATA: حساب موجود لا يُعاد ضبطه (سر/رمز/رصيد) —
+            // النشرات كانت «تمسح» النشاط وتُبطل الجلسات.
+            if ($user) {
+                EMoney::firstOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'current_balance' => '50000.0000',
+                        'charge_earned' => '0', 'pending_balance' => '0',
+                        'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
+                    ]
+                );
+                $this->info("✓ حساب العميل التجريبي موجود مسبقاً id={$user->id} — لم يُمسّ");
+                goto demo_recipient;
             }
+            $user = new User();
             $user->f_name = 'أحمد';
             $user->l_name = 'سالم';
             $user->phone = $phone;
@@ -72,11 +84,26 @@ class EnsureDemoUsers extends Command
         // (كان كلّ شيء في try واحد؛ فشل المستلِم يُلغي ضبط العملة والميزات).
 
         // 1b) مستلِم تجريبي (لتجربة إرسال الأموال) — 967777100002
+        demo_recipient:
         try {
             $rxPhone = '967777100002';
-            $recipient = User::where('type', 2)->get()->first(function ($u) use ($rxPhone) {
+            $existingRx = User::where('type', 2)->get()->first(function ($u) use ($rxPhone) {
                 return in_array($u->phone, [$rxPhone, '777100002'], true);
-            }) ?? new User();
+            });
+            if ($existingRx) {
+                // AMIAL-REAL-DATA: لا نمسّ حساباً موجوداً
+                EMoney::firstOrCreate(
+                    ['user_id' => $existingRx->id],
+                    [
+                        'current_balance' => '10000.0000',
+                        'charge_earned' => '0', 'pending_balance' => '0',
+                        'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
+                    ]
+                );
+                $this->info("✓ المستلِم التجريبي موجود مسبقاً id={$existingRx->id} — لم يُمسّ");
+                goto after_recipient;
+            }
+            $recipient = new User();
             $recipient->f_name = 'محمد';
             $recipient->l_name = 'علي';
             $recipient->phone = $rxPhone;
@@ -102,6 +129,7 @@ class EnsureDemoUsers extends Command
         } catch (\Throwable $e) {
             $this->error('❌ فشل إنشاء المستلِم: ' . $e->getMessage());
         }
+        after_recipient:
 
         // 1c) تفعيل مفاتيح الميزات (بدونها كل الخدمات «feature is not activate»)
         try {
