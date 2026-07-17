@@ -192,8 +192,66 @@ class PendingTransferService
 
             // تسليم المبلغ للمستلم (الرسوم تذهب للمنصة، تبقى محجوزة)
             $releaseTxId = (string) Str::ulid();
-            $this->guard->credit($locked->recipient_user_id, (string)$locked->amount,
+            $receiverWallet = $this->guard->credit($locked->recipient_user_id, (string)$locked->amount,
                 "pending_transfer_release:{$locked->transfer_ulid}");
+
+            // AMIAL-FIX(HISTORY): كان التسليم يحرّك المال بلا صفوف في جدول
+            // transactions — فلا يظهر التحويل في سجل العمليات ولا التقارير.
+            // نكتب نفس صفوف 6cash (مرسِل send_money / مستلِم received_money /
+            // رسوم admin_charge) حتى تتغذى كل الشاشات القائمة عليها.
+            $senderWallet = \App\Models\EMoney::where('user_id', $locked->sender_user_id)->first();
+            \App\Models\Transaction::create([
+                'user_id' => $locked->sender_user_id,
+                'transaction_id' => $releaseTxId,
+                'ref_trans_id' => null,
+                'transaction_type' => SEND_MONEY,
+                'debit' => (string) $locked->amount,
+                'credit' => '0',
+                'charge' => (string) $locked->fee,
+                'amount' => (string) $locked->amount,
+                'balance' => (string) ($senderWallet->current_balance ?? '0'),
+                'from_user_id' => $locked->sender_user_id,
+                'to_user_id' => $locked->recipient_user_id,
+                'note' => null,
+                'decision_code' => 'TX_OK',
+                'zone_code' => $senderWallet->zone_code ?? 'SOUTH',
+            ]);
+            \App\Models\Transaction::create([
+                'user_id' => $locked->recipient_user_id,
+                'transaction_id' => (string) Str::ulid(),
+                'ref_trans_id' => $releaseTxId,
+                'transaction_type' => RECEIVED_MONEY,
+                'debit' => '0',
+                'credit' => (string) $locked->amount,
+                'charge' => '0',
+                'amount' => (string) $locked->amount,
+                'balance' => (string) $receiverWallet->current_balance,
+                'from_user_id' => $locked->sender_user_id,
+                'to_user_id' => $locked->recipient_user_id,
+                'note' => $locked->note,
+                'decision_code' => 'TX_OK',
+                'zone_code' => $receiverWallet->zone_code ?? 'SOUTH',
+            ]);
+            if (bccomp((string) $locked->fee, '0', 4) > 0) {
+                $adminId = \App\CentralLogics\Helpers::get_admin_id();
+                $adminWallet = $this->guard->creditAdminCharge($adminId, (string) $locked->fee);
+                \App\Models\Transaction::create([
+                    'user_id' => $adminId,
+                    'transaction_id' => (string) Str::ulid(),
+                    'ref_trans_id' => $releaseTxId,
+                    'transaction_type' => ADMIN_CHARGE,
+                    'debit' => '0',
+                    'credit' => (string) $locked->fee,
+                    'charge' => '0',
+                    'amount' => (string) $locked->fee,
+                    'balance' => (string) $adminWallet->charge_earned,
+                    'from_user_id' => $locked->sender_user_id,
+                    'to_user_id' => $adminId,
+                    'note' => null,
+                    'decision_code' => 'TX_OK',
+                    'zone_code' => 'SOUTH',
+                ]);
+            }
 
             $locked->update([
                 'status' => 'completed',
@@ -216,6 +274,25 @@ class PendingTransferService
                 sourceId: $t->transfer_ulid,
                 description: 'تحويل (بعد نافذة الإلغاء)',
             ));
+
+            // AMIAL-FIX(RECEIPTS): إصدار إيصالَي التحويل (مدين للمرسل/دائن
+            // للمستلم) — كانا مفقودين فلا يظهر التحويل في «الإيصالات» ولا PDF.
+            try {
+                $this->receipts->issueDualForTransfer([
+                    'from_user_id' => $t->sender_user_id,
+                    'to_user_id' => $t->recipient_user_id,
+                    'reference_transaction_id' => $t->release_transaction_id,
+                    'receipt_type' => 'send_money',
+                    'amount' => (string) $t->amount,
+                    'fee' => (string) $t->fee,
+                    'zone_code' => 'SOUTH',
+                ]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Pending transfer receipt failed (non-fatal)', [
+                    'ulid' => $t->transfer_ulid,
+                    'error' => mb_substr($e->getMessage(), 0, 200),
+                ]);
+            }
         }
 
         return $result['transfer'];
