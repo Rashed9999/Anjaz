@@ -81,12 +81,19 @@ class RegisterController extends Controller
         $verify = null;
         if(Helpers::get_business_settings('phone_verification') == 1) {
             if($request->has('otp')) {
-                $verify = $this->phoneVerification->where(['phone' => $phone, 'otp' => $request['otp']])->first();
+                $demoOtp = config("app.amial_demo_otp");
+                // AMIAL-DEMO-OTP: رمز تجريبي موحّد للتسجيل (بلا بوابة SMS بعد) —
+                // يعمل فقط عند ضبط AMIAL_DEMO_OTP؛ الإنتاج يربط بوابة حقيقية.
+                if (is_string($demoOtp) && $demoOtp !== "" && hash_equals($demoOtp, (string) $request["otp"])) {
+                    $verify = null; // مقبول تجريبياً — لا صفّ للحذف
+                } else {
+                $verify = $this->phoneVerification->where(["phone" => $phone, "otp" => $request["otp"]])->first();
                 if (!isset($verify)) {
                     return response()->json(['errors' => [
-                        ['code' => 'otp', 'message' => 'OTP is not found!']
+                        ["code" => "otp", "message" => "OTP is not found!"]
                     ]], 404);
 
+                }
                 }
             }else{
                 return response()->json(['errors' => [
@@ -265,12 +272,19 @@ class RegisterController extends Controller
         $verify = null;
         if(Helpers::get_business_settings('phone_verification') == 1) {
             if($request->has('otp')) {
-                $verify = $this->phoneVerification->where(['phone' => $phone, 'otp' => $request['otp']])->first();
+                $demoOtp = config("app.amial_demo_otp");
+                // AMIAL-DEMO-OTP: رمز تجريبي موحّد للتسجيل (بلا بوابة SMS بعد) —
+                // يعمل فقط عند ضبط AMIAL_DEMO_OTP؛ الإنتاج يربط بوابة حقيقية.
+                if (is_string($demoOtp) && $demoOtp !== "" && hash_equals($demoOtp, (string) $request["otp"])) {
+                    $verify = null; // مقبول تجريبياً — لا صفّ للحذف
+                } else {
+                $verify = $this->phoneVerification->where(["phone" => $phone, "otp" => $request["otp"]])->first();
                 if (!isset($verify)) {
                     return response()->json(['errors' => [
-                        ['code' => 'otp', 'message' => 'OTP is not found!']
+                        ["code" => "otp", "message" => "OTP is not found!"]
                     ]], 404);
 
+                }
                 }
             }else{
                 return response()->json(['errors' => [

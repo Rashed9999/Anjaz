@@ -3,14 +3,14 @@ import 'package:amyal_pay/theme/custom_theme_colors.dart';
 
 // AMIAL-BRANDING-002: ألوان هوية أميال باي من تصاميم المشروع — أخضر غابيّ عميق
 // + ذهبي، وخلفية كريميّة دافئة. (كانت سماويّ #003E47 + ليموني #E0EC53 من 6cash).
-const Color _primaryColor = Color(0xFF14342A);   // أخضر غابيّ (بطاقة الرصيد/الأزرار)
+const Color _primaryColor = Color(0xFF053391);   // أخضر غابيّ (بطاقة الرصيد/الأزرار)
 const Color _secondaryColor = Color(0xFFE6B84C); // ذهبي (إبرازات/أزرار ثانوية)
 
 ThemeData light = ThemeData(
   brightness: Brightness.light,
   fontFamily: 'Rubik',
   primaryColor:  _primaryColor,
-  primaryColorLight: const Color(0xFF1E5A44),
+  primaryColorLight: const Color(0xFF1D4FB8),
   scaffoldBackgroundColor: const Color(0xFFF5F4EF),
   // highlightColor: const Color(0xFF003E47),
   cardColor: const Color(0xFFFAFAFA),
@@ -23,7 +23,7 @@ ThemeData light = ThemeData(
   colorScheme: ColorScheme(
     brightness: Brightness.light,
     primary: _primaryColor,
-    onPrimary: const Color(0xFF14684E),
+    onPrimary: Colors.white,
     secondary: _secondaryColor,
     onSecondary: _secondaryColor,
     error: const Color(0xFFFF4040),

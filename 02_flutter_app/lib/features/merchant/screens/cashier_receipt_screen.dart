@@ -73,7 +73,7 @@ ${customerName != null ? 'العميل: $customerName\n' : ''}المرجع: $_re
               ),
               child: Icon(
                   waiting ? Icons.qr_code_2 : Icons.check_rounded,
-                  color: waiting ? const Color(0xFF14342A) : Colors.white,
+                  color: waiting ? const Color(0xFF053391) : Colors.white,
                   size: 56),
             ),
           ),

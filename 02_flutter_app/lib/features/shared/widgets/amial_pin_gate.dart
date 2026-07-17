@@ -85,7 +85,7 @@ class _AmialPinInputScreenState extends State<_AmialPinInputScreen> {
             const Text(
               'أدخل رمز المعاملات (PIN) لتأكيد التحويل',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15, color: Color(0xFF5F6B62)),
+              style: TextStyle(fontSize: 15, color: Color(0xFF5F6B7C)),
             ),
             const SizedBox(height: 24),
             TextField(
@@ -213,7 +213,7 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
             const Text(
               'أدخل رمز المعاملات (PIN) للمتابعة',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15, color: Color(0xFF5F6B62)),
+              style: TextStyle(fontSize: 15, color: Color(0xFF5F6B7C)),
             ),
             const SizedBox(height: 24),
             TextField(

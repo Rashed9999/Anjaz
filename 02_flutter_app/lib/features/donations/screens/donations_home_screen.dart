@@ -66,7 +66,7 @@ class _DonationsHomeScreenState extends State<DonationsHomeScreen> {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [AmyalColors.primary, Color(0xFF1E5A44)],
+                    colors: [AmyalColors.primary, Color(0xFF1D4FB8)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),

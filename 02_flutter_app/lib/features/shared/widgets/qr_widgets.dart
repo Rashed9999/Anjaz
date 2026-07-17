@@ -194,7 +194,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                 label: const Text('اختر رمزاً من معرض الصور'),
                 style: FilledButton.styleFrom(
                   backgroundColor: AmyalColors.yellow,
-                  foregroundColor: const Color(0xFF14342A),
+                  foregroundColor: const Color(0xFF053391),
                   padding: const EdgeInsets.symmetric(
                       horizontal: 20, vertical: 12),
                   shape: RoundedRectangleBorder(

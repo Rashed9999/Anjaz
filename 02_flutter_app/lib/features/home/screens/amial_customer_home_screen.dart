@@ -163,7 +163,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
               Text(
                 _name.isEmpty ? 'أهلاً بك' : 'أهلاً، $_name',
                 style: const TextStyle(
-                    fontSize: 13, color: Color(0xFF5F6B62)),
+                    fontSize: 13, color: Color(0xFF5F6B7C)),
               ),
               const Text(
                 'أميال باي',
@@ -194,7 +194,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF1B4A38), Color(0xFF0E241C)],
+          colors: [Color(0xFF053391), Color(0xFF021F5C)],
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
         ),

@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'custom_theme_colors.dart';
 
 
-const Color _primaryColor = Color(0xFF4b8793);
-const Color _secondaryColor = Color(0xFFaaa818);
+const Color _primaryColor = Color(0xFF5B8DEF);
+const Color _secondaryColor = Color(0xFFFECA1E);
 
 ThemeData dark = ThemeData(
   fontFamily: 'Roboto',

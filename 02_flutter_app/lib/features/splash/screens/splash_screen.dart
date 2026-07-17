@@ -98,7 +98,10 @@ class _SplashScreenState extends State<SplashScreen> with WidgetsBindingObserver
 
   @override
   Widget build(BuildContext context) {
+    // AMIAL-SPLASH: نفس أصفر الشعار في سبلاش النظام (#FECA1E) — كانت الخلفية
+    // بيضاء افتراضياً فتظهر «شاشة بيضاء» بين سبلاش النظام وشاشة الدخول.
     return Scaffold(
+      backgroundColor: const Color(0xFFFECA1E),
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

@@ -236,7 +236,7 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
         gradient: const LinearGradient(
           begin: Alignment.topRight,
           end: Alignment.bottomLeft,
-          colors: [Color(0xFF14342A), Color(0xFF2A5C4A)],
+          colors: [Color(0xFF053391), Color(0xFF1D4FB8)],
         ),
         borderRadius: BorderRadius.circular(20),
       ),

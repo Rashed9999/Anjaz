@@ -49,7 +49,7 @@ class AmialNumpad extends StatelessWidget {
                         style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w600,
-                            color: Color(0xFF14342A))),
+                            color: Color(0xFF053391))),
               ),
             ),
           ),

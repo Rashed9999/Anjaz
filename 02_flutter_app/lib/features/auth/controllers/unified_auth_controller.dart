@@ -63,6 +63,18 @@ class UnifiedAuthController extends GetxController implements GetxService {
     });
   }
 
+  // ===== Admin (بريد + كلمة مرور) =====
+  Future<bool> loginAdmin({
+    required String email,
+    required String password,
+  }) async {
+    return _execute({
+      'role': 'admin',
+      'email': email,
+      'password': password,
+    });
+  }
+
   // ===== Agent Step 1 (returns masked_phone if OTP sent) =====
   Future<String?> loginAgentStep1({
     required String agentNumber,
@@ -167,8 +179,12 @@ class UnifiedAuthController extends GetxController implements GetxService {
   /// AMIAL-PIN-GATE-001: بعد الدخول تظهر بوّابة رمز PIN قبل فتح الرئيسية.
   Future<void> navigateToHomeForRole() async {
     if (currentRole.value.isEmpty) return;
-    final ok = await askAmialPin(title: 'رمز الدخول للتطبيق');
-    if (!ok) return; // بقي على شاشة الدخول
+    // AMIAL-ADMIN: مدير النظام يدخل بالبريد وكلمة المرور فقط — بوابة PIN
+    // الرقمية (4 أرقام) للمعاملات المالية للعملاء/التجار/الوكلاء.
+    if (currentRole.value != 'admin') {
+      final ok = await askAmialPin(title: 'رمز الدخول للتطبيق');
+      if (!ok) return; // بقي على شاشة الدخول
+    }
     RoleRouter.navigateToHome(currentRole.value);
   }
 

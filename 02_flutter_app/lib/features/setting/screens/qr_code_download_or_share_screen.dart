@@ -142,7 +142,7 @@ class _QrCodeDownloadOrShareScreenState
                   padding: const EdgeInsets.symmetric(vertical: 18),
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [AmyalColors.primary, Color(0xFF1E5A44)],
+                      colors: [AmyalColors.primary, Color(0xFF1D4FB8)],
                       begin: Alignment.topRight,
                       end: Alignment.bottomLeft,
                     ),

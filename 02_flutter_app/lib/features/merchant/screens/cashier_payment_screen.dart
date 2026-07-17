@@ -333,7 +333,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                     style: TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF14342A))),
+                        color: Color(0xFF053391))),
               ),
             const Spacer(),
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [

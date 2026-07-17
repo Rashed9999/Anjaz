@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/agent/screens/agent_dashboard_screen.dart';
+import 'package:amyal_pay/features/admin/screens/admin_dashboard_screen.dart';
 import 'package:amyal_pay/features/access/screens/home_dispatcher_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_dashboard_screen.dart';
 import 'package:amyal_pay/features/home/screens/nav_bar_screen.dart';
@@ -26,6 +27,9 @@ class RoleRouter {
       case 'agent':
         Get.offAll(() => const AgentDashboardScreen());
         break;
+      case 'admin':
+        Get.offAll(() => const AdminDashboardScreen());
+        break;
       case 'customer':
       default:
         // الشاشة الرئيسية للعميل الكاملة من Cash6 (تحويل/QR/رصيد/سجل…).
@@ -40,6 +44,7 @@ class RoleRouter {
           userHomeFallback: MerchantDashboardScreen(),
         ),
       'agent' => const AgentDashboardScreen(),
+      'admin' => const AdminDashboardScreen(),
       _ => const NavBarScreen(),
     };
   }

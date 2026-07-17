@@ -425,7 +425,7 @@ class _AmialRegistrationWizardScreenState
 
   Widget _sectionNote(String t) => Padding(
         padding: const EdgeInsets.only(bottom: 16),
-        child: Text(t, style: const TextStyle(color: Color(0xFF5F6B62), fontSize: 13)),
+        child: Text(t, style: const TextStyle(color: Color(0xFF5F6B7C), fontSize: 13)),
       );
 
   // حقل تاريخ للقراءة فقط يفتح المنتقي عند الضغط
@@ -631,7 +631,7 @@ class _AmialRegistrationWizardScreenState
               'نحن حالياً نتحقق من الوثائق التي قمت برفعها لضمان أمان حسابك. '
               'تستغرق هذه العملية عادةً ما بين 24 إلى 48 ساعة عمل.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF5F6B62), height: 1.6),
+              style: TextStyle(color: Color(0xFF5F6B7C), height: 1.6),
             ),
             const SizedBox(height: 24),
 

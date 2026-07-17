@@ -28,7 +28,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
   }
 
   @override
@@ -49,7 +49,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
               padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [AmyalColors.primary, Color(0xFF1E5A44)],
+                  colors: [AmyalColors.primary, Color(0xFF1D4FB8)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -88,6 +88,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
                   Tab(icon: Icon(Icons.person), text: 'عميل'),
                   Tab(icon: Icon(Icons.store), text: 'تاجر'),
                   Tab(icon: Icon(Icons.business_center), text: 'وكيل'),
+                  Tab(icon: Icon(Icons.admin_panel_settings_outlined), text: 'أدمن'),
                 ],
               ),
             ),
@@ -100,6 +101,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
                   _CustomerLoginTab(),
                   _MerchantLoginTab(),
                   _AgentLoginTab(),
+                  _AdminLoginTab(),
                 ],
               ),
             ),
@@ -286,13 +288,13 @@ class _CustomerLoginTabState extends State<_CustomerLoginTab> {
                 TextButton(
                   onPressed: () => Get.to(() => const ForgetPinScreen()),
                   child: const Text('نسيت كلمة المرور؟',
-                      style: TextStyle(color: Color(0xFF5F6B62), fontSize: 13)),
+                      style: TextStyle(color: Color(0xFF5F6B7C), fontSize: 13)),
                 ),
                 const Text('|', style: TextStyle(color: Color(0xFFCBD5D1))),
                 TextButton(
                   onPressed: () => Get.to(() => const AccountRecoveryScreen()),
                   child: const Text('استعادة الحساب (رقم جديد)',
-                      style: TextStyle(color: Color(0xFF5F6B62), fontSize: 13)),
+                      style: TextStyle(color: Color(0xFF5F6B7C), fontSize: 13)),
                 ),
               ],
             ),
@@ -636,6 +638,124 @@ class _AgentLoginTabState extends State<_AgentLoginTab> {
                 child: const Text('رجوع'),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Admin Login Tab — بريد + كلمة مرور (لوحة الإدارة داخل التطبيق)
+// ============================================================
+class _AdminLoginTab extends StatefulWidget {
+  const _AdminLoginTab();
+
+  @override
+  State<_AdminLoginTab> createState() => _AdminLoginTabState();
+}
+
+class _AdminLoginTabState extends State<_AdminLoginTab> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  bool _obscure = true;
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    final ctrl = Get.find<UnifiedAuthController>();
+    final ok = await ctrl.loginAdmin(
+      email: _emailCtrl.text.trim(),
+      password: _passwordCtrl.text,
+    );
+    if (ok && mounted) {
+      ctrl.navigateToHomeForRole();
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(ctrl.lastError.value),
+          backgroundColor: AmyalColors.red));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Text('دخول مدير النظام',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            ),
+            TextFormField(
+              controller: _emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              textDirection: TextDirection.ltr,
+              decoration: const InputDecoration(
+                labelText: 'البريد الإلكتروني *',
+                hintText: 'admin@amyalpay.com',
+                prefixIcon: Icon(Icons.alternate_email),
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) =>
+                  (v == null || !v.contains('@')) ? 'بريد غير صحيح' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _passwordCtrl,
+              obscureText: _obscure,
+              decoration: InputDecoration(
+                labelText: 'كلمة المرور *',
+                prefixIcon: const Icon(Icons.lock_outline),
+                suffixIcon: IconButton(
+                  icon:
+                      Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
+                border: const OutlineInputBorder(),
+              ),
+              validator: (v) =>
+                  (v == null || v.length < 6) ? '6 أحرف على الأقل' : null,
+            ),
+            const SizedBox(height: 20),
+            Obx(() {
+              final ctrl = Get.find<UnifiedAuthController>();
+              return ElevatedButton.icon(
+                onPressed: ctrl.isSubmitting.value ? null : _submit,
+                icon: ctrl.isSubmitting.value
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.admin_panel_settings_outlined),
+                label: const Text('دخول لوحة الإدارة',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AmyalColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              );
+            }),
+            const SizedBox(height: 16),
+            const Text(
+              'لوحة الإدارة الكاملة متاحة أيضاً عبر المتصفح على مسار /admin في خادمك.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 11, color: AmyalColors.textMuted),
+            ),
           ],
         ),
       ),

@@ -123,10 +123,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     leading: Container(
                       width: 36, height: 36,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF14342A).withValues(alpha: 0.1),
+                        color: const Color(0xFF053391).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.apps, color: Color(0xFF14342A)),
+                      child: const Icon(Icons.apps, color: Color(0xFF053391)),
                     ),
                     title: const Text('خدمات أميال باي',
                         style: TextStyle(fontWeight: FontWeight.w600)),
