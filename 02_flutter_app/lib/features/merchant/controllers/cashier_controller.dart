@@ -41,6 +41,10 @@ class CashierController extends GetxController implements GetxService {
   final Rx<Map<String, dynamic>?> report = Rx<Map<String, dynamic>?>(null);
   final RxBool isLoadingReport = false.obs;
 
+  // AMIAL-CASHIER-REFUND-001 — مبيعات اليوم بمعرّفاتها (مدخل الاسترجاع)
+  final RxList<Map<String, dynamic>> sales = <Map<String, dynamic>>[].obs;
+  final RxBool isLoadingSales = false.obs;
+
   // ---- المنتجات ----
   Future<void> loadProducts({String? search}) async {
     try {
@@ -224,6 +228,20 @@ class CashierController extends GetxController implements GetxService {
       if (_ok(r)) report.value = Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
     } catch (_) {} finally {
       isLoadingReport.value = false;
+    }
+  }
+
+  /// AMIAL-CASHIER-REFUND-001 — تحميل قائمة مبيعات اليوم.
+  Future<void> loadSales({String? date}) async {
+    try {
+      isLoadingSales.value = true;
+      final r = await repo.sales(date: date);
+      if (_ok(r)) {
+        final list = (r.body['meta']?['sales'] ?? []) as List;
+        sales.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+      }
+    } catch (_) {} finally {
+      isLoadingSales.value = false;
     }
   }
 

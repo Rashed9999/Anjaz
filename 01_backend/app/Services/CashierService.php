@@ -343,6 +343,51 @@ class CashierService
         ];
     }
 
+    // ============ قائمة المبيعات ============
+
+    /**
+     * AMIAL-CASHIER-REFUND-001 — قائمة مبيعات يوم واحد بمعرّفاتها.
+     * المدخل الطبيعي لشاشة الاسترجاع: كل صف يحمل sale_ulid يُفتح به
+     * تدفّق «refundable → refund». يُرفَق بكل بيع إجمالي ما استُرجع منه.
+     */
+    public function listSales(User $merchant, ?string $date = null, int $limit = 100): array
+    {
+        $day = $date ? Carbon::parse($date) : now();
+
+        $sales = MerchantSale::where('merchant_user_id', $merchant->id)
+            ->whereBetween('created_at', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
+            ->orderByDesc('id')
+            ->limit(max(1, min($limit, 200)))
+            ->get();
+
+        $refunded = \App\Models\MerchantRefund::whereIn('original_sale_ulid', $sales->pluck('sale_ulid'))
+            ->where('status', '!=', 'rejected')
+            ->selectRaw('original_sale_ulid, SUM(refund_amount) as refunded_total')
+            ->groupBy('original_sale_ulid')
+            ->pluck('refunded_total', 'original_sale_ulid');
+
+        return [
+            'date' => $day->format('Y-m-d'),
+            'sales' => $sales->map(function (MerchantSale $s) use ($refunded) {
+                $refundedTotal = (string) ($refunded[$s->sale_ulid] ?? '0');
+                return [
+                    'sale_ulid' => $s->sale_ulid,
+                    'id' => $s->id,
+                    'total_amount' => MoneyService::normalize((string) $s->total_amount),
+                    'payment_method' => $s->payment_method,
+                    'status' => $s->status,
+                    'items_count' => count($s->items ?? []),
+                    'customer_name' => $s->customer_name,
+                    'refunded_total' => MoneyService::normalize($refundedTotal),
+                    'fully_refunded' => MoneyService::compare(
+                        MoneyService::sub((string) $s->total_amount, $refundedTotal), '0'
+                    ) <= 0,
+                    'created_at' => $s->created_at?->toIso8601String(),
+                ];
+            })->values()->all(),
+        ];
+    }
+
     // ============ التقرير اليومي ============
 
     public function dailyReport(User $merchant, ?string $date = null): array

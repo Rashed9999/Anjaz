@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/merchant/controllers/merchant_pay_controller.dart';
+import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-MERCHANT-PAY-001 — شاشة دفع العميل للتاجر (QR / POS).
@@ -49,6 +51,35 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
     _amountCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
+  }
+
+  /// AMIAL-MERCHANT-PAY-001 — تعبئة رقم التاجر بمسح رمز QR الخاص به.
+  /// رموز أميال باي JSON فيها حقل phone؛ ويُقبل أيضاً رمز نصّه رقم هاتف مباشرةً.
+  Future<void> _scanMerchantQr() async {
+    final raw = await Get.to<String>(() => const QrScannerScreen(title: 'مسح رمز التاجر'));
+    if (raw == null || raw.isEmpty || !mounted) return;
+
+    String? phone;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map && decoded['phone'] != null) {
+        phone = decoded['phone'].toString();
+      }
+    } catch (_) {
+      final cleaned = raw.replaceAll(RegExp(r'[\s\-]'), '');
+      if (RegExp(r'^\+?[0-9]{6,15}$').hasMatch(cleaned)) phone = cleaned;
+    }
+
+    if (phone == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('هذا الرمز ليس رمز تاجر في أميال باي'),
+        backgroundColor: AmyalColors.red,
+      ));
+      return;
+    }
+
+    setState(() => _phoneCtrl.text = phone!);
+    _refreshQuote();
   }
 
   void _refreshQuote() {
@@ -148,10 +179,17 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
                 TextFormField(
                   controller: _phoneCtrl,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'رقم هاتف التاجر',
-                    prefixIcon: Icon(Icons.store),
-                    border: OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.store),
+                    border: const OutlineInputBorder(),
+                    // مسح QR التاجر بدل الإدخال اليدوي
+                    suffixIcon: IconButton(
+                      tooltip: 'مسح رمز التاجر',
+                      icon: const Icon(Icons.qr_code_scanner_rounded,
+                          color: AmyalColors.primary),
+                      onPressed: _scanMerchantQr,
+                    ),
                   ),
                   validator: (v) =>
                       (v == null || v.trim().length < 6) ? 'أدخل رقم تاجر صحيح' : null,

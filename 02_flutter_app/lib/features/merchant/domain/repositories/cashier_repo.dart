@@ -39,6 +39,12 @@ class CashierRepo extends GetxService {
         query: date != null ? {'date': date} : null);
   }
 
+  /// AMIAL-CASHIER-REFUND-001 — قائمة مبيعات اليوم بمعرّفاتها (مدخل الاسترجاع).
+  Future<Response> sales({String? date}) {
+    return apiClient.getData('$_base/sales',
+        query: date != null ? {'date': date} : null);
+  }
+
   /// AMIAL-PROFIT-001 — تقرير الربحية (إجماليات + اتجاه يومي + منتجات).
   Future<Response> profitReport({int days = 7}) =>
       apiClient.getData('$_base/profit-report?days=$days');

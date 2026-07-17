@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amyal_pay/features/merchant/screens/cashier_refund_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-CASHIER-001 — تقرير المبيعات اليومي.
@@ -17,7 +18,66 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => c.loadReport());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      c.loadReport();
+      c.loadSales(); // AMIAL-CASHIER-REFUND-001 — مبيعات اليوم (مدخل الاسترجاع)
+    });
+  }
+
+  // AMIAL-CASHIER-REFUND-001 — فتح شاشة الاسترجاع من صفّ بيع، وتحديث القوائم بعده
+  Future<void> _openRefund(String saleUlid) async {
+    final result = await Get.to(() => CashierRefundScreen(saleUlid: saleUlid));
+    if (result == true) {
+      c.loadReport();
+      c.loadSales();
+    }
+  }
+
+  String _methodLabel(String? m) => switch (m) {
+        'cash' => 'نقد',
+        'credit' => 'أجل',
+        'amial_pay' => 'أميال باي',
+        _ => m ?? '',
+      };
+
+  String _timeOf(String? iso) {
+    final d = DateTime.tryParse(iso ?? '')?.toLocal();
+    if (d == null) return '';
+    return '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _saleRow(Map<String, dynamic> s) {
+    final fullyRefunded = s['fully_refunded'] == true;
+    final refunded = double.tryParse((s['refunded_total'] ?? '0').toString()) ?? 0;
+    return Card(
+      color: AmyalColors.cardSurface,
+      child: ListTile(
+        dense: true,
+        leading: Icon(
+          fullyRefunded ? Icons.replay_circle_filled : Icons.receipt_long_outlined,
+          color: fullyRefunded ? AmyalColors.red : AmyalColors.primary,
+        ),
+        title: Text('${_n(s['total_amount'])} ر.ي — ${_methodLabel(s['payment_method']?.toString())}',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        subtitle: Text(
+          [
+            _timeOf(s['created_at']?.toString()),
+            if ((s['customer_name'] ?? '').toString().isNotEmpty) s['customer_name'].toString(),
+            if (refunded > 0) 'مسترجَع: ${_n(s['refunded_total'])} ر.ي',
+          ].join(' · '),
+          style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary),
+        ),
+        trailing: fullyRefunded
+            ? const Text('مسترجَع كاملاً',
+                style: TextStyle(fontSize: 11, color: AmyalColors.red))
+            : TextButton.icon(
+                onPressed: () => _openRefund((s['sale_ulid'] ?? '').toString()),
+                icon: const Icon(Icons.replay_rounded, size: 16),
+                label: const Text('استرجاع', style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(foregroundColor: AmyalColors.red),
+              ),
+      ),
+    );
   }
 
   Widget _card(String label, String value, Color color) {
@@ -54,7 +114,10 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
         title: const Text('تقرير اليوم'),
       ),
       body: RefreshIndicator(
-        onRefresh: () => c.loadReport(),
+        onRefresh: () async {
+          await c.loadReport();
+          await c.loadSales();
+        },
         child: Obx(() {
           if (c.isLoadingReport.value && c.report.value == null) {
             return const Center(child: CircularProgressIndicator());
@@ -97,6 +160,27 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
                       ),
                     )),
               ],
+
+              // AMIAL-CASHIER-REFUND-001 — قائمة مبيعات اليوم مع مدخل الاسترجاع
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('مبيعات اليوم', style: TextStyle(fontWeight: FontWeight.bold)),
+                  if (c.isLoadingSales.value)
+                    const SizedBox(
+                        width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (c.sales.isEmpty && !c.isLoadingSales.value)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text('لا مبيعات مسجّلة لهذا اليوم',
+                      style: TextStyle(color: AmyalColors.textSecondary, fontSize: 13)),
+                )
+              else
+                ...c.sales.map(_saleRow),
             ],
           );
         }),

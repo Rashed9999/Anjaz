@@ -19,6 +19,7 @@ import 'package:amyal_pay/features/me/screens/my_services_screen.dart';
 import 'package:amyal_pay/features/transaction_money/screens/amial_send_money_screen.dart';
 import 'package:amyal_pay/features/reports/screens/amial_reports_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_pay_screen.dart';
 
 /// AMIAL-CUSTOMER-HOME-001
 ///
@@ -336,6 +337,8 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       // AMIAL: طلب المال — يُرسَل طلب لشخص، وبموافقته يتمّ التحويل تلقائياً
       _Svc('طلب المال', Icons.request_page_outlined, () => Get.to(() => const TransactionMoneyScreen(fromEdit: false, transactionType: 'request_money'))),
       _Svc('الطلبات الواردة', Icons.mark_email_unread_outlined, () => Get.to(() => const RequestedMoneyListScreen(requestType: RequestType.request))),
+      // AMIAL-MERCHANT-PAY-001: دفع العميل لتاجر (يدوي أو بمسح QR داخل الشاشة)
+      _Svc('ادفع لتاجر', Icons.storefront_outlined, () => Get.to(() => const MerchantPayScreen())),
       _Svc('الدفع الآمن', Icons.shield_outlined, () => Get.to(() => const MySafePaymentsScreen())),
       _Svc('صندوق العائلة', Icons.groups_outlined, () => Get.to(() => const MyFundsScreen())),
       _Svc('التبرعات', Icons.volunteer_activism_outlined, () => Get.to(() => const DonationsHomeScreen())),

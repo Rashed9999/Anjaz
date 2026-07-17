@@ -165,6 +165,26 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         return $this->ok(['sale' => $sale], 'CREDIT_SETTLED', 'تمت تسوية الأجل');
     }
 
+    /** AMIAL-CASHIER-REFUND-001 — GET /sales?date=Y-m-d — قائمة مبيعات اليوم بمعرّفاتها (مدخل الاسترجاع). */
+    public function listSales(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->query(), [
+            'date' => 'sometimes|date_format:Y-m-d',
+            'limit' => 'sometimes|integer|min:1|max:200',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        return $this->ok($this->cashier->listSales(
+            $merchant,
+            $request->query('date'),
+            (int) $request->query('limit', 100)
+        ));
+    }
+
     public function report(Request $request): JsonResponse
     {
         $ctx = $this->resolveMerchantPos($request);

@@ -468,6 +468,8 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'recordSale'])
                 ->middleware('amial.rate-limit:cashier_sale,120,1')->name('sales');
             Route::post('/sales/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'settleCredit'])->name('sales.settle');
+            // AMIAL-CASHIER-REFUND-001 — قائمة مبيعات اليوم (مدخل شاشة الاسترجاع)
+            Route::get('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'listSales'])->name('sales.list');
             Route::get('/report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'report'])->name('report');
             // AMIAL-PROFIT-001 — تقرير الربحية (إيراد/تكلفة/ربح/هامش + اتجاه + منتجات)
             Route::get('/profit-report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'profitReport'])->name('profit-report');
