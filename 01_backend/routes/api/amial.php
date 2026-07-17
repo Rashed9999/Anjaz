@@ -236,6 +236,17 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/clear-cache', [\App\Http\Controllers\Api\V1\Amial\AdminOpsController::class, 'clearCache'])->name('clear-cache');
             Route::post('/app-version', [\App\Http\Controllers\Api\V1\Amial\AdminOpsController::class, 'setAppVersion'])->name('app-version');
         });
+
+        // AMIAL-ADMIN-AGENT-CREDIT-001 — الإدارة تُموّل الوكلاء وتعتمد تسوياتهم
+        Route::prefix('agent-settlements')->name('agent-settlements.')->group(function () {
+            Route::get('/', [AgentNetworkController::class, 'adminSettlements'])->name('index');
+            Route::post('/{ulid}/approve', [AgentNetworkController::class, 'adminApproveSettlement'])
+                ->where('ulid', '[0-9A-Za-z]{26}')->name('approve');
+            Route::post('/{ulid}/reject', [AgentNetworkController::class, 'adminRejectSettlement'])
+                ->where('ulid', '[0-9A-Za-z]{26}')->name('reject');
+        });
+        Route::post('/agents/{id}/credit', [AgentNetworkController::class, 'adminCreditAgent'])
+            ->where('id', '[0-9]+')->name('agents.credit');
     });
 
     // -------- Payment Requests (AMIAL-PAYMENT-REQUESTS-001) --------

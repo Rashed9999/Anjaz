@@ -38,7 +38,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         backgroundColor: AmyalColors.background,
         appBar: AppBar(
@@ -65,6 +65,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             unselectedLabelColor: Colors.white70,
             tabs: [
               Tab(icon: Icon(Icons.store), text: 'التجار'),
+              Tab(icon: Icon(Icons.account_balance_wallet), text: 'الوكلاء'),
               Tab(icon: Icon(Icons.warning_amber), text: 'العجز/الفائض'),
               Tab(icon: Icon(Icons.bar_chart), text: 'إحصائيات'),
             ],
@@ -72,6 +73,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
         body: TabBarView(children: [
           _merchantsTab(),
+          _agentsTab(),
           _variancesTab(),
           _statsTab(),
         ]),
@@ -251,6 +253,178 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(ok ? 'تم' : c.lastError.value),
       backgroundColor: ok ? Colors.green : AmyalColors.red,
+    ));
+  }
+
+  // ============ Tab: الوكلاء (شحن الرصيد + اعتماد التسويات) ============
+  Widget _agentsTab() {
+    return RefreshIndicator(
+      onRefresh: () => c.loadAgentSettlements(),
+      child: FutureBuilder(
+        future: c.loadAgentSettlements(),
+        builder: (_, _) => Obx(() {
+          if (c.isLoading.value && c.agentSettlements.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return ListView(
+            padding: const EdgeInsets.all(12),
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              // زر التحويل المباشر للوكيل
+              InkWell(
+                onTap: _showCreditAgentDialog,
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AmyalColors.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(children: const [
+                    Icon(Icons.add_card, color: Colors.white),
+                    SizedBox(width: 10),
+                    Expanded(child: Text('تحويل رصيد مباشر إلى وكيل',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15))),
+                    Icon(Icons.chevron_left, color: Colors.white70),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('طلبات شحن الرصيد قيد الانتظار',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              if (c.agentSettlements.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  child: Column(children: [
+                    const Icon(Icons.check_circle, size: 56, color: Colors.green),
+                    const SizedBox(height: 10),
+                    Text('لا طلبات قيد الانتظار', style: TextStyle(color: Colors.grey.shade600)),
+                  ]),
+                )
+              else
+                ...c.agentSettlements.map(_agentSettlementCard),
+            ],
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _agentSettlementCard(Map<String, dynamic> s) {
+    final agent = (s['agent'] ?? {}) as Map;
+    final name = '${agent['f_name'] ?? ''} ${agent['l_name'] ?? ''}'.trim();
+    final ulid = s['settlement_ulid']?.toString() ?? '';
+    final method = s['payment_method']?.toString() ?? '';
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: const Border(right: BorderSide(color: AmyalColors.yellowDark, width: 4)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const CircleAvatar(radius: 16, backgroundColor: AmyalColors.primary,
+              child: Icon(Icons.person, color: Colors.white, size: 16)),
+          const SizedBox(width: 8),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(name.isEmpty ? 'وكيل' : name, style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text(agent['phone']?.toString() ?? '',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+          ])),
+          Text('${s['amount']} ر.ي',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+        ]),
+        if (method.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text('طريقة الدفع: $method  •  ${s['payment_reference'] ?? ''}',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+        ],
+        const SizedBox(height: 10),
+        Row(children: [
+          Expanded(child: OutlinedButton.icon(
+            onPressed: () => _rejectSettlement(ulid),
+            icon: const Icon(Icons.close, size: 18, color: Colors.red),
+            label: const Text('رفض', style: TextStyle(color: Colors.red)),
+            style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+          )),
+          const SizedBox(width: 8),
+          Expanded(child: FilledButton.icon(
+            onPressed: () => _approveSettlement(ulid),
+            icon: const Icon(Icons.check, size: 18),
+            label: const Text('اعتماد'),
+            style: FilledButton.styleFrom(backgroundColor: Colors.green),
+          )),
+        ]),
+      ]),
+    );
+  }
+
+  Future<void> _approveSettlement(String ulid) async {
+    final ok = await c.approveAgentSettlement(ulid);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? 'تم اعتماد الطلب وإضافة الرصيد' : c.lastError.value),
+      backgroundColor: ok ? Colors.green : AmyalColors.red,
+    ));
+  }
+
+  Future<void> _rejectSettlement(String ulid) async {
+    final reason = TextEditingController();
+    final confirm = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('رفض الطلب'),
+      content: TextField(controller: reason, maxLines: 2,
+          decoration: const InputDecoration(labelText: 'سبب الرفض (اختياري)')),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red), child: const Text('رفض')),
+      ],
+    ));
+    if (confirm != true) return;
+    final ok = await c.rejectAgentSettlement(ulid, reason: reason.text.trim());
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? 'تم رفض الطلب' : c.lastError.value),
+      backgroundColor: ok ? Colors.green : AmyalColors.red,
+    ));
+  }
+
+  void _showCreditAgentDialog() {
+    final idCtrl = TextEditingController();
+    final amountCtrl = TextEditingController();
+    final refCtrl = TextEditingController();
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('تحويل رصيد إلى وكيل'),
+      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: idCtrl, keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'رقم مُعرّف الوكيل (User ID)')),
+        const SizedBox(height: 8),
+        TextField(controller: amountCtrl, keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'المبلغ (ر.ي)')),
+        const SizedBox(height: 8),
+        TextField(controller: refCtrl,
+            decoration: const InputDecoration(labelText: 'مرجع (اختياري)')),
+      ])),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+        Obx(() => FilledButton(
+          onPressed: c.isSubmitting.value ? null : () async {
+            final id = int.tryParse(idCtrl.text.trim());
+            final amount = amountCtrl.text.trim();
+            if (id == null || amount.isEmpty) return;
+            final ok = await c.creditAgent(id, amount, reference: refCtrl.text.trim());
+            if (!mounted) return;
+            if (ok) Navigator.pop(ctx);
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(ok ? 'تم تحويل الرصيد للوكيل' : c.lastError.value),
+              backgroundColor: ok ? Colors.green : AmyalColors.red,
+            ));
+          },
+          child: const Text('تحويل'),
+        )),
+      ],
     ));
   }
 

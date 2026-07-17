@@ -24,6 +24,24 @@ class AdminRepo extends GetxService {
 
   Future<Response> pendingVariances() => apiClient.getData('$_base/variances/pending');
 
+  // AMIAL-ADMIN-AGENT-CREDIT-001 — تسويات الوكلاء (شحن الرصيد)
+  Future<Response> agentSettlements({String status = 'pending'}) =>
+      apiClient.getData('$_base/agent-settlements', query: {'status': status, 'per_page': '50'});
+
+  Future<Response> approveAgentSettlement(String ulid) =>
+      apiClient.postData('$_base/agent-settlements/$ulid/approve', {});
+
+  Future<Response> rejectAgentSettlement(String ulid, {String? reason}) =>
+      apiClient.postData('$_base/agent-settlements/$ulid/reject', {
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+      });
+
+  Future<Response> creditAgent(int agentUserId, String amount, {String? reference}) =>
+      apiClient.postData('$_base/agents/$agentUserId/credit', {
+        'amount': amount,
+        if (reference != null && reference.isNotEmpty) 'reference': reference,
+      });
+
   Future<Response> resolveVariance(int id, String resolution, String? note) =>
       apiClient.postData('$_base/variances/$id/resolve', {
         'resolution': resolution,

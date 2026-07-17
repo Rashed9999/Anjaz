@@ -10,6 +10,7 @@ class AdminController extends GetxController implements GetxService {
   final Rx<Map<String, dynamic>?> dashboardData = Rx<Map<String, dynamic>?>(null);
   final RxList<Map<String, dynamic>> merchants = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> variances = <Map<String, dynamic>>[].obs;
+  final RxList<Map<String, dynamic>> agentSettlements = <Map<String, dynamic>>[].obs;
 
   final RxBool isLoading = false.obs;
   final RxBool isSubmitting = false.obs;
@@ -70,6 +71,28 @@ class AdminController extends GetxController implements GetxService {
 
   Future<bool> resolveVariance(int id, String resolution, {String? note}) async =>
       _doAndReload(() => repo.resolveVariance(id, resolution, note), loadPendingVariances);
+
+  // ============ Agent settlements (شحن رصيد الوكلاء) ============
+
+  Future<void> loadAgentSettlements({String status = 'pending'}) async {
+    try {
+      isLoading.value = true;
+      final r = await repo.agentSettlements(status: status);
+      if (_ok(r)) {
+        final list = (r.body['meta']?['settlements'] ?? []) as List;
+        agentSettlements.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+      }
+    } catch (_) {} finally { isLoading.value = false; }
+  }
+
+  Future<bool> approveAgentSettlement(String ulid) async =>
+      _doAndReload(() => repo.approveAgentSettlement(ulid), loadAgentSettlements);
+
+  Future<bool> rejectAgentSettlement(String ulid, {String? reason}) async =>
+      _doAndReload(() => repo.rejectAgentSettlement(ulid, reason: reason), loadAgentSettlements);
+
+  Future<bool> creditAgent(int agentUserId, String amount, {String? reference}) async =>
+      _doAndReload(() => repo.creditAgent(agentUserId, amount, reference: reference), loadAgentSettlements);
 
   // ============ Helpers ============
 

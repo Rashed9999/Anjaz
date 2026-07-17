@@ -290,6 +290,53 @@ class AgentNetworkService
         }
     }
 
+    /**
+     * AMIAL-ADMIN-AGENT-CREDIT-001 — رفض تسوية وكيل قيد الانتظار.
+     * لا يُحرَّك أيّ رصيد؛ يُغلَق الطلب فقط مع سبب.
+     */
+    public function rejectSettlement(AgentSettlement $settlement, User $approver, ?string $reason = null): AgentSettlement
+    {
+        $this->assertCanApprove($settlement, $approver);
+
+        return DB::transaction(function () use ($settlement, $approver, $reason) {
+            $settlement = AgentSettlement::whereKey($settlement->getKey())
+                ->lockForUpdate()->firstOrFail();
+
+            if ($settlement->status !== 'pending') {
+                throw new RuntimeException('التسوية ليست قيد الانتظار');
+            }
+
+            $settlement->status = 'rejected';
+            $settlement->approved_by_id = $approver->id;
+            $settlement->completed_at = now();
+            $settlement->save();
+
+            $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $approver->id,
+                'subject_type' => 'agent_settlement',
+                'subject_id' => $settlement->settlement_ulid,
+                'action' => 'SETTLEMENT_REJECTED',
+                'decision_code' => 'REJECTED',
+                'severity' => 'warning',
+                'context' => ['amount' => (string) $settlement->amount, 'reason' => $reason],
+            ]);
+
+            return $settlement->fresh();
+        });
+    }
+
+    /**
+     * AMIAL-ADMIN-AGENT-CREDIT-001 — تحويل رصيد مباشر من الإدارة إلى الوكيل.
+     * يُنشئ تسوية topup داخلية ويعتمدها فوراً (خطوة واحدة) → يُضاف الرصيد للوكيل
+     * مع قيد ledger كامل. تُستخدم عندما تُموّل الإدارة الوكيل مباشرةً.
+     */
+    public function adminCreditAgent(User $agent, string $amount, User $admin, ?string $reference = null): AgentSettlement
+    {
+        $settlement = $this->requestTopup($agent, $amount, 0, 'internal', $reference);
+        return $this->approveSettlement($settlement, $admin);
+    }
+
     // ============================================================
     // 5. لوحة السيولة
     // ============================================================
