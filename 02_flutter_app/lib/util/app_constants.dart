@@ -9,8 +9,11 @@ class AppConstants {
   // عنوان الـ backend. مرّره وقت البناء دون تعديل الكود:
   //   flutter run --dart-define=BASE_URL=https://api.your-domain.com
   // أو عدّل القيمة الافتراضية أدناه قبل الإطلاق.
+  // AMIAL-PILOT: اتصال مباشر بـ IP الخادم (يتجاوز DNS كلياً — بعض شبكات
+  // الجوال تفشل في ترجمة sslip.io بينما كروم ينجح عبر DNS الآمن الخاص به).
+  // يتطلب في Coolify: Ports Mappings = 8081:80 على تطبيق anjaz.
   static const String baseUrl =
-      String.fromEnvironment('BASE_URL', defaultValue: 'http://g14f0wej37nlkvqyb1ugm11w.169.58.24.224.sslip.io');
+      String.fromEnvironment('BASE_URL', defaultValue: 'http://169.58.24.224:8081');
   static const bool demo = false;
   static const double appVersion = 0.7; //flutter version 3.38.5
   static const String customerPhoneCheckUri = '/api/v1/customer/auth/check-phone';
