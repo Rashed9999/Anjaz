@@ -7,6 +7,7 @@ import 'package:amyal_pay/features/fuel_station/screens/fuel_settings_screen.dar
 import 'package:amyal_pay/features/fuel_station/screens/fuel_companies_screen.dart';
 import 'package:amyal_pay/features/fuel_station/screens/fuel_shifts_screen.dart';
 import 'package:amyal_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
+import 'package:amyal_pay/features/fuel_station/screens/fuel_cashier_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
 
 /// AMIAL-FUEL-001 — لوحة محطة الوقود.
@@ -151,10 +152,15 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
             // ====== الأزرار الكبيرة ======
             _bigAction(
               icon: Icons.point_of_sale,
-              label: 'بيع وقود جديد',
-              subtitle: 'تسجيل عملية بيع وقود من المضخّة',
+              label: 'كاشير الوقود',
+              subtitle: 'بيع سريع باللوحة الرقمية — بالريال أو باللتر',
               color: AmyalColors.primary,
-              onTap: () => Get.to(() => const FuelSaleScreen()),
+              onTap: () => Get.to(() => const FuelCashierScreen()),
+            ),
+            const SizedBox(height: 10),
+            _miniAction(
+              Icons.receipt_long, 'بيع وقود (نموذج مفصّل)',
+              () => Get.to(() => const FuelSaleScreen()),
             ),
             const SizedBox(height: 10),
             // AMIAL-FUEL-CASHIER: كاشير متجر المحطة (زيوت/سلع/وجبات) — كان موجوداً
