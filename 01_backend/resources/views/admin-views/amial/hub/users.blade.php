@@ -217,9 +217,9 @@
             return;
         }
         tbody.innerHTML = j.data.map(u => `
-            <tr>
+            <tr style="cursor:pointer" data-act="open" data-id="${u.id}">
                 <td>${u.id}</td>
-                <td>${esc(u.name)}</td>
+                <td class="text-primary fw-bold">${esc(u.name)}</td>
                 <td dir="ltr">${esc(u.phone)}</td>
                 <td>${fmt(u.balance)} ر.ي</td>
                 <td>${u.kyc === 1 ? '<span class="badge bg-success">موثّق</span>'
@@ -228,9 +228,9 @@
                     : '<span class="badge bg-secondary">بلا وثائق</span>'))}</td>
                 <td>${u.is_active ? '<span class="badge bg-success">نشِط</span>' : '<span class="badge bg-danger">مجمَّد</span>'}</td>
                 <td class="text-nowrap">
+                    <button class="btn btn-sm btn-primary" data-act="open" data-id="${u.id}">التفاصيل</button>
                     <button class="btn btn-sm btn-outline-primary" data-act="transfer" data-id="${u.id}" data-name="${esc(u.name)}">
                         ${isAgents ? 'تحويل رصيد' : 'إعادة مبلغ'}</button>
-                    <button class="btn btn-sm btn-outline-secondary" data-act="tx" data-id="${u.id}" data-name="${esc(u.name)}">العمليات</button>
                     <button class="btn btn-sm ${u.is_active ? 'btn-outline-danger' : 'btn-outline-success'}"
                             data-act="toggle" data-id="${u.id}">${u.is_active ? 'تجميد' : 'فكّ التجميد'}</button>
                 </td>
@@ -238,6 +238,12 @@
     }
 
     document.getElementById('users-tbody').addEventListener('click', async (e) => {
+        // فتح صفحة التفاصيل: الضغط على الصفّ أو زر «التفاصيل»
+        const openEl = e.target.closest('[data-act="open"]');
+        if (openEl) {
+            window.location.href = `${base}/account/${openEl.dataset.id}`;
+            return;
+        }
         const btn = e.target.closest('button[data-act]');
         if (!btn) return;
         const id = btn.dataset.id;

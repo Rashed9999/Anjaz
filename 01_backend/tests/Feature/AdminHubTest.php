@@ -294,6 +294,66 @@ class AdminHubTest extends TestCase
             ->assertOk();
     }
 
+    // ==================== صفحة تفاصيل الحساب + المخاطر ====================
+
+    /** @test */
+    public function account_detail_page_and_json_render_for_customer(): void
+    {
+        $customer = User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => '967771009060']);
+        $this->wallet($customer->id, '7500.0000');
+
+        $this->actingAs($this->admin, 'user')
+            ->get("/admin/amial/hub/account/{$customer->id}")->assertOk();
+
+        $this->actingAs($this->admin, 'user')
+            ->getJson("/admin/amial/hub/users/{$customer->id}/detail.json")
+            ->assertOk()
+            ->assertJsonPath('id', $customer->id)
+            ->assertJsonPath('wallet.current', '7500.0000')
+            ->assertJsonPath('risk.label', 'سليم') // لا ملف مخاطر = منخفض = سليم
+            ->assertJsonStructure(['name', 'phone', 'documents', 'risk' => ['level', 'label', 'score', 'is_dangerous'], 'transactions']);
+    }
+
+    /** @test AMIAL — حالة المخاطر تعكس ملف AML (خطر جداً = critical). */
+    public function account_detail_reflects_aml_risk_level(): void
+    {
+        $customer = User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => '967771009061']);
+        \App\Models\Aml\AmlUserRiskProfile::create([
+            'user_id' => $customer->id,
+            'current_risk_score' => 85,
+            'risk_level' => 'critical',
+        ]);
+
+        $this->actingAs($this->admin, 'user')
+            ->getJson("/admin/amial/hub/users/{$customer->id}/detail.json")
+            ->assertOk()
+            ->assertJsonPath('risk.label', 'خطر جداً')
+            ->assertJsonPath('risk.is_dangerous', true);
+    }
+
+    /** @test AMIAL — تفاصيل التاجر تشمل موظفيه وفروعه ومبيعاته. */
+    public function merchant_account_detail_includes_staff_and_sales(): void
+    {
+        $merchant = User::factory()->create(['type' => MERCHANT_TYPE, 'phone' => '967771009062']);
+        \App\Models\MerchantProfile::create(['user_id' => $merchant->id, 'verification_status' => 'verified', 'business_type' => 'retail']);
+
+        $this->actingAs($this->admin, 'user')
+            ->getJson("/admin/amial/hub/users/{$merchant->id}/detail.json")
+            ->assertOk()
+            ->assertJsonStructure(['merchant' => ['business_type', 'staff', 'branches', 'sales_total', 'sales_count']]);
+    }
+
+    /** @test AMIAL — تفاصيل الوكيل تشمل التسويات وبياناته. */
+    public function agent_account_detail_includes_settlements(): void
+    {
+        $agent = User::factory()->create(['type' => AGENT_TYPE, 'phone' => '967771009063']);
+
+        $this->actingAs($this->admin, 'user')
+            ->getJson("/admin/amial/hub/users/{$agent->id}/detail.json")
+            ->assertOk()
+            ->assertJsonStructure(['agent' => ['status', 'commission_rate', 'settlements']]);
+    }
+
     /** @test */
     public function finance_stats_and_feed_respond(): void
     {

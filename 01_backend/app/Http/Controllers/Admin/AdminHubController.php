@@ -159,6 +159,148 @@ class AdminHubController extends Controller
         ]);
     }
 
+    // ==================== صفحة تفاصيل الحساب ====================
+
+    public function account(int $id): View|\Illuminate\Http\RedirectResponse
+    {
+        $user = User::find($id);
+        if (!$user) return redirect()->route('admin.amial.hub.customers');
+        return view('admin-views.amial.hub.account', [
+            'accountId' => $id,
+            'roleLabel' => match ((int) $user->type) {
+                AGENT_TYPE => 'وكيل', MERCHANT_TYPE => 'تاجر', ADMIN_TYPE => 'أدمن', default => 'عميل',
+            },
+        ]);
+    }
+
+    /**
+     * GET hub/users/{id}/detail.json — الملفّ الكامل للحساب:
+     * بيانات شخصية + وثائق + محفظة + حالة المخاطر (AML) + سجل عمليات،
+     * وإضافات حسب الدور: التاجر (موظفون/مبيعات/اشتراك) والوكيل (تسويات/فروع).
+     */
+    public function accountDetailJson(int $id): JsonResponse
+    {
+        $user = User::find($id);
+        if (!$user) return response()->json(['message' => 'الحساب غير موجود'], 404);
+
+        $type = (int) $user->type;
+        $wallet = EMoney::where('user_id', $user->id)->first();
+
+        // ===== حالة المخاطر (AML) =====
+        $riskProfile = \App\Models\Aml\AmlUserRiskProfile::where('user_id', $user->id)->first();
+        $merchantRisk = $type === MERCHANT_TYPE
+            ? \App\Models\MerchantRiskProfile::where('merchant_user_id', $user->id)->first() : null;
+        $level = $merchantRisk->risk_level ?? $riskProfile->risk_level ?? 'low';
+        $score = (string) ($merchantRisk->current_risk_score ?? $riskProfile->current_risk_score ?? '0');
+        $riskLabel = match ($level) {
+            'critical' => 'خطر جداً',
+            'high' => 'خطر',
+            'medium' => 'مشبوه',
+            default => 'سليم',
+        };
+
+        // ===== سجل العمليات =====
+        $transactions = DB::table('transactions')->where('user_id', $user->id)
+            ->orderByDesc('id')->limit(25)
+            ->get(['transaction_id', 'transaction_type', 'debit', 'credit', 'balance', 'created_at'])
+            ->map(fn ($t) => (array) $t)->all();
+
+        $payload = [
+            'id' => $user->id,
+            'role' => $type,
+            'role_label' => match ($type) {
+                AGENT_TYPE => 'وكيل', MERCHANT_TYPE => 'تاجر', ADMIN_TYPE => 'أدمن', default => 'عميل',
+            },
+            'name' => trim(($user->f_name ?? '') . ' ' . ($user->l_name ?? '')) ?: '—',
+            'phone' => $user->phone,
+            'email' => $user->email,
+            'gender' => $user->gender,
+            'occupation' => $user->occupation,
+            'address' => $user->address ?? null,
+            'national_id' => $user->identification_number,
+            'id_type' => $user->identification_type,
+            'agent_number' => $user->agent_number ?? null,
+            'is_active' => (int) $user->is_active === 1,
+            'kyc' => (int) ($user->is_kyc_verified ?? 0),
+            'documents' => $user->identification_image_fullpath ?? [],
+            'kin' => trim(implode(' — ', array_filter([
+                $user->kin_name ?? null, $user->kin_phone ?? null, $user->kin_relation ?? null,
+            ]))) ?: null,
+            'created_at' => optional($user->created_at)->format('Y-m-d H:i'),
+            'wallet' => [
+                'current' => (string) ($wallet->current_balance ?? '0'),
+                'held' => (string) ($wallet->held_balance ?? '0'),
+                'pending' => (string) ($wallet->pending_balance ?? '0'),
+                'charge_earned' => (string) ($wallet->charge_earned ?? '0'),
+            ],
+            'risk' => [
+                'level' => $level,
+                'label' => $riskLabel,
+                'score' => $score,
+                'is_dangerous' => in_array($level, ['high', 'critical'], true),
+            ],
+            'transactions' => $transactions,
+        ];
+
+        // ===== إضافات التاجر =====
+        if ($type === MERCHANT_TYPE) {
+            $profile = MerchantProfile::where('user_id', $user->id)->first();
+            $store = \App\Models\Merchant::where('user_id', $user->id)->first();
+            $staff = \App\Models\PosUser::where('merchant_user_id', $user->id)
+                ->with('branch:id,name')->get()
+                ->map(fn ($p) => [
+                    'display_name' => $p->display_name,
+                    'pos_number' => $p->pos_number,
+                    'branch' => $p->branch->name ?? null,
+                    'is_active' => (bool) $p->is_active,
+                ])->all();
+            $branches = \App\Models\Branch::where('merchant_user_id', $user->id)
+                ->get(['name', 'code', 'city', 'is_active'])->map(fn ($b) => (array) $b->toArray())->all();
+            $salesTotal = (string) \App\Models\MerchantSale::where('merchant_user_id', $user->id)->sum('total_amount');
+            $salesCount = \App\Models\MerchantSale::where('merchant_user_id', $user->id)->count();
+
+            $payload['merchant'] = [
+                'store_name' => $store->store_name ?? null,
+                'merchant_number' => $store->merchant_number ?? null,
+                'business_type' => $profile->business_type ?? null,
+                'plan' => $profile->subscription_plan ?? null,
+                'verification' => $profile->verification_status ?? null,
+                'subscription_expires' => optional($profile->subscription_expires_at ?? null)->format('Y-m-d'),
+                'staff' => $staff,
+                'branches' => $branches,
+                'sales_total' => $salesTotal,
+                'sales_count' => $salesCount,
+            ];
+        }
+
+        // ===== إضافات الوكيل =====
+        if ($type === AGENT_TYPE) {
+            $ap = \App\Models\AgentProfile::where('user_id', $user->id)->first();
+            $settlements = \App\Models\AgentSettlement::where('agent_user_id', $user->id)
+                ->orderByDesc('id')->limit(10)->get()
+                ->map(fn ($s) => [
+                    'ulid' => $s->settlement_ulid,
+                    'type' => $s->settlement_type,
+                    'amount' => (string) $s->amount,
+                    'status' => $s->status,
+                    'created_at' => optional($s->created_at)->format('Y-m-d H:i'),
+                ])->all();
+            $subCount = $ap ? \App\Models\AgentProfile::where('parent_agent_id', $ap->id)->count() : 0;
+
+            $payload['agent'] = [
+                'agent_level' => $ap->agent_level ?? null,
+                'status' => $ap->status ?? null,
+                'commission_rate' => (string) ($ap->commission_rate ?? '0'),
+                'daily_cash_in_limit' => (string) ($ap->daily_cash_in_limit ?? '0'),
+                'daily_cash_out_limit' => (string) ($ap->daily_cash_out_limit ?? '0'),
+                'sub_agents_count' => $subCount,
+                'settlements' => $settlements,
+            ];
+        }
+
+        return response()->json($payload);
+    }
+
     // ==================== الإجراءات ====================
 
     /** POST hub/users/{id}/toggle-active — تجميد/فكّ تجميد */

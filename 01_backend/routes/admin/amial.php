@@ -215,6 +215,11 @@ Route::prefix('hub')->name('hub.')->group(function () {
     Route::get('/users/{id}/transactions.json', [$hc, 'userTransactionsJson'])
         ->where('id', '[0-9]+')->name('users.transactions');
 
+    // صفحة تفاصيل الحساب الكاملة (بيانات + وثائق + مخاطر AML + سجل + إضافات الدور)
+    Route::get('/account/{id}', [$hc, 'account'])->where('id', '[0-9]+')->name('account');
+    Route::get('/users/{id}/detail.json', [$hc, 'accountDetailJson'])
+        ->where('id', '[0-9]+')->name('users.detail');
+
     // إجراءات
     Route::post('/{slug}/users', [$hc, 'storeUser'])
         ->where('slug', 'customers|agents|merchants')->name('users.store');
