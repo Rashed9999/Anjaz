@@ -10,6 +10,9 @@ import 'package:amyal_pay/features/fuel_station/screens/fuel_shifts_screen.dart'
 import 'package:amyal_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
 import 'package:amyal_pay/features/fuel_station/screens/fuel_cashier_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
+import 'package:amyal_pay/features/access/controllers/access_controller.dart';
+import 'package:amyal_pay/features/access/widgets/access_gate.dart';
+import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
 
 /// AMIAL-FUEL-001 — لوحة محطة الوقود.
 /// نقطة الدخول الرئيسية: تعرض إحصائيات اليوم + 4 أزرار رئيسية.
@@ -42,6 +45,8 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
       await c.loadStation();
       await c.loadDashboard();
       await c.loadCurrentShift();
+      // AMIAL-SUB-GATING: أعِد تحميل الصلاحيات كي تنعكس أي ترقية خطة فوراً
+      try { await Get.find<AccessController>().load(); } catch (_) {}
     });
   }
 
@@ -66,6 +71,7 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
           await c.loadStation();
           await c.loadDashboard();
           await c.loadCurrentShift();
+          try { await Get.find<AccessController>().load(); } catch (_) {}
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -99,6 +105,9 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
                     if (station?['city'] != null)
                       Text('${station!['city']}',
                           style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                    // AMIAL-SUB-GATING: شارة الخطّة الحالية + ترقية
+                    const SizedBox(height: 6),
+                    _planBadge(),
                   ])),
                 ]),
               );
@@ -180,14 +189,23 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
               () => Get.to(() => const FuelSaleScreen()),
             ),
             const SizedBox(height: 10),
-            // AMIAL-FUEL-CASHIER: كاشير متجر المحطة (زيوت/سلع/وجبات) — كان موجوداً
-            // في التطبيق لكن غير موصول بلوحة المحطة. المحطة تبيع وقوداً وسلعاً معاً.
-            _bigAction(
-              icon: Icons.storefront,
-              label: 'كاشير المتجر',
-              subtitle: 'بيع سلع المحطة (زيوت، إضافات، مقتنيات)',
-              color: AmyalColors.yellowDark,
-              onTap: () => Get.to(() => const CashierPosScreen()),
+            // AMIAL-SUB-GATING: كاشير متجر المحطة يتطلّب ميزة «المنتجات» (باقة
+            // البداية فأعلى). على المجاني يظهر مقفلاً مع دعوة للترقية — وبمجرد
+            // ترقية الأدمن للخطة يُفتح تلقائياً (يقرأ الميزات من /me/access).
+            AccessGate(
+              feature: 'products',
+              fallback: _lockedAction(
+                icon: Icons.storefront,
+                label: 'كاشير المتجر',
+                subtitle: 'يتطلّب ترقية الباقة (البداية فأعلى)',
+              ),
+              child: _bigAction(
+                icon: Icons.storefront,
+                label: 'كاشير المتجر',
+                subtitle: 'بيع سلع المحطة (زيوت، إضافات، مقتنيات)',
+                color: AmyalColors.yellowDark,
+                onTap: () => Get.to(() => const CashierPosScreen()),
+              ),
             ),
             const SizedBox(height: 10),
             // 4 اختصارات في صفّين
@@ -355,6 +373,72 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
         const SizedBox(height: 2),
         Text(label, style: TextStyle(color: Colors.grey.shade700, fontSize: 10)),
       ]),
+    );
+  }
+
+  // AMIAL-SUB-GATING: شارة الخطّة الحالية — تفتح كتالوج الباقات للترقية
+  Widget _planBadge() {
+    final access = Get.find<AccessController>();
+    return Obx(() {
+      final label = access.subscriptionPlanLabel.value ?? 'مجاني';
+      final isFree = access.subscriptionPlan.value == 'free';
+      return InkWell(
+        onTap: () => Get.to(() => const PlansCatalogScreen()),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: isFree ? Colors.white.withValues(alpha: 0.15) : AmyalColors.yellow,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(isFree ? Icons.lock_open_outlined : Icons.workspace_premium,
+                size: 13, color: isFree ? Colors.white : Colors.black87),
+            const SizedBox(width: 4),
+            Text('باقتك: $label${isFree ? ' • ترقية' : ''}',
+                style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.bold,
+                    color: isFree ? Colors.white : Colors.black87)),
+          ]),
+        ),
+      );
+    });
+  }
+
+  // AMIAL-SUB-GATING: إجراء مقفل (خطّة أعلى) — يدعو للترقية بدل الفتح
+  Widget _lockedAction({
+    required IconData icon, required String label, required String subtitle,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: () => Get.to(() => const PlansCatalogScreen()),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEDEFF3),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AmyalColors.border),
+        ),
+        child: Row(children: [
+          Container(
+            width: 48, height: 48,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300, borderRadius: BorderRadius.circular(12)),
+            child: Icon(icon, color: Colors.grey.shade600, size: 26),
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Text(label, style: TextStyle(
+                  color: Colors.grey.shade800, fontSize: 16, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 6),
+              const Icon(Icons.lock, size: 15, color: AmyalColors.textMuted),
+            ]),
+            Text(subtitle, style: const TextStyle(color: AmyalColors.textMuted, fontSize: 12)),
+          ])),
+          const Icon(Icons.workspace_premium, color: AmyalColors.yellowDark),
+        ]),
+      ),
     );
   }
 
