@@ -69,6 +69,36 @@ class AmyalReceipt {
   bool get isReady => status == 'pdf_generated';
   bool get isPending => status == 'pending_pdf';
   bool get isFailed => status == 'pdf_failed';
+  bool get isVoided => status == 'voided';
+
+  /// AMIAL-FIX(RECEIPT-STATUS): حالة «العملية» المعروضة للمستخدم.
+  /// status في القاعدة يخصّ توليد ملف PDF (pending_pdf/pdf_generated/pdf_failed)
+  /// لا العملية نفسها — وبعد تحويل التوليد إلى «عند الطلب» بقيت الإيصالات
+  /// pending_pdf فظهر «جارٍ التحضير» على كل العمليات (و«فشل» لعمليات ناجحة!).
+  /// الإيصال لا يصدر إلا لعملية منفَّذة فعلاً، فالحالة الصادقة «مكتملة»،
+  /// بصياغة تناسب نوع كل عملية، و«ملغى» إن أُبطل الإيصال.
+  String get operationStatusLabel {
+    if (isVoided) return 'ملغى';
+    switch (receiptType) {
+      case 'send_money': return 'تم التحويل';
+      case 'cash_in': return 'تم الإيداع';
+      case 'cash_out':
+      case 'withdraw': return 'تم السحب';
+      case 'add_money': return 'تمت الإضافة';
+      case 'pay_merchant':
+      case 'pos_payment':
+      case 'qr_payment':
+      case 'split_bill_payment': return 'تم الدفع';
+      case 'refund': return 'تم الاسترجاع';
+      case 'safe_payment_funded': return 'مجمّد بأمان';
+      case 'safe_payment_released': return 'تم الإفراج';
+      case 'safe_payment_refunded': return 'أُعيد المبلغ';
+      case 'family_fund_contribute': return 'تمت المساهمة';
+      case 'family_fund_disburse': return 'تم الصرف';
+      case 'bank_settlement': return 'تمت التسوية';
+      default: return 'مكتملة';
+    }
+  }
 
   String get arabicTypeLabel {
     switch (receiptType) {

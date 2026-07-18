@@ -164,26 +164,26 @@ class _ReceiptListTile extends StatelessWidget {
               fontSize: 14,
             ),
           ),
-          if (receipt.isPending)
-            Container(
-              margin: const EdgeInsets.only(top: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: AmyalColors.yellow.withValues(alpha: 0.3),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Text('جارٍ التحضير', style: TextStyle(fontSize: 9)),
-            )
-          else if (receipt.isFailed)
-            Container(
-              margin: const EdgeInsets.only(top: 2),
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: AmyalColors.red.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: const Text('فشل', style: TextStyle(fontSize: 9, color: AmyalColors.red)),
+          // AMIAL-FIX(RECEIPT-STATUS): كانت الشارة تعرض حالة توليد PDF الداخلية
+          // («جارٍ التحضير» لكل العمليات، و«فشل» لعمليات ناجحة). الآن تعرض
+          // حالة العملية نفسها بصياغة تناسب نوعها (تم التحويل/تم الدفع/…).
+          Container(
+            margin: const EdgeInsets.only(top: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: receipt.isVoided
+                  ? AmyalColors.red.withValues(alpha: 0.15)
+                  : Colors.green.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(4),
             ),
+            child: Text(
+              receipt.operationStatusLabel,
+              style: TextStyle(
+                fontSize: 9,
+                color: receipt.isVoided ? AmyalColors.red : Colors.green.shade700,
+              ),
+            ),
+          ),
         ],
       ),
       onTap: () {
