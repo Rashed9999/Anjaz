@@ -553,6 +553,7 @@ Route::middleware(['auth:api'])->group(function () {
             // Products + Prices
             Route::get('/products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listProducts'])->name('products.index');
             Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addProduct'])->name('products.add');
+            Route::get('/price-history', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'priceHistory'])->name('price-history');
             Route::put('/products/{id}/price', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'updateProductPrice'])
                 ->where('id', '[0-9]+')->name('products.price');
 

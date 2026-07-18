@@ -26,8 +26,13 @@ class FuelStationRepo extends GetxService {
   Future<Response> listProducts() => apiClient.getData('$_base/products');
   Future<Response> addProduct(Map<String, dynamic> data) =>
       apiClient.postData('$_base/products', data);
-  Future<Response> updateProductPrice(int id, String newPrice) =>
-      apiClient.putData('$_base/products/$id/price', {'price_per_liter': newPrice});
+  Future<Response> updateProductPrice(int id, String newPrice, {String? note}) =>
+      apiClient.putData('$_base/products/$id/price',
+          {'price_per_liter': newPrice, if (note != null && note.isNotEmpty) 'note': note});
+
+  // AMIAL-FUEL-PRICE-HISTORY-001 — سجلّ تغيّر الأسعار
+  Future<Response> priceHistory({int limit = 30}) =>
+      apiClient.getData('$_base/price-history?limit=$limit');
 
   // Sales (الجوهر)
   Future<Response> recordSale(Map<String, dynamic> data) =>

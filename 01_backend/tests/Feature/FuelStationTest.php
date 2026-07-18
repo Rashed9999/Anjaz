@@ -75,6 +75,48 @@ class FuelStationTest extends TestCase
         $this->assertSame(MoneyService::normalize('375'), (string)$updated->price_per_liter);
     }
 
+    /** @test AMIAL-FUEL-PRICE-HISTORY-001 — كل تغيير سعر يُسجَّل بالفرق ومن غيّره. */
+    public function price_change_is_recorded_in_history(): void
+    {
+        $p = $this->svc->addProduct($this->station, ['name' => 'بنزين 95', 'price_per_liter' => '1200']);
+
+        $this->svc->updateProductPrice($p, '1150', $this->merchant, 'خفض رسمي');
+
+        $this->assertDatabaseHas('fuel_price_history', [
+            'fuel_product_id' => $p->id,
+            'station_id' => $this->station->id,
+            'changed_by_user_id' => $this->merchant->id,
+            'note' => 'خفض رسمي',
+        ]);
+
+        $history = $this->svc->priceHistory($this->station);
+        $this->assertCount(1, $history);
+        $this->assertSame('down', $history[0]['direction']);
+        $this->assertSame(MoneyService::normalize('-50'), MoneyService::normalize($history[0]['delta']));
+        $this->assertSame('بنزين 95', $history[0]['product']);
+    }
+
+    /** @test AMIAL-FUEL-PRICE-HISTORY-001 — لا سجل عند «تغيير» لنفس السعر. */
+    public function unchanged_price_is_not_recorded(): void
+    {
+        $p = $this->svc->addProduct($this->station, ['name' => 'سوبر', 'price_per_liter' => '1450']);
+        $this->svc->updateProductPrice($p->fresh(), '1450', $this->merchant);
+        $this->assertCount(0, $this->svc->priceHistory($this->station));
+    }
+
+    /** @test AMIAL-FUEL-PRICE-HISTORY-001 — نقطة API لسجل الأسعار تعمل للتاجر. */
+    public function price_history_endpoint_returns_records(): void
+    {
+        $p = $this->svc->addProduct($this->station, ['name' => 'ديزل', 'price_per_liter' => '900']);
+        $this->svc->updateProductPrice($p, '950', $this->merchant);
+
+        \Laravel\Passport\Passport::actingAs($this->merchant, [], 'api');
+        $this->getJson('/api/v1/amial/merchant/fuel/price-history')
+            ->assertOk()
+            ->assertJsonPath('meta.history.0.product', 'ديزل')
+            ->assertJsonPath('meta.history.0.direction', 'up');
+    }
+
     /** @test */
     public function sale_by_liters_computes_total(): void
     {

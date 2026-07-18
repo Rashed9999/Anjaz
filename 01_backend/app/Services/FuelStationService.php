@@ -133,14 +133,55 @@ class FuelStationService
     }
 
     /** تحديث السعر — يُستخدم بكثرة (الأسعار تتغيّر يومياً). */
-    public function updateProductPrice(FuelProduct $product, string $newPrice): FuelProduct
+    public function updateProductPrice(FuelProduct $product, string $newPrice, ?User $actor = null, ?string $note = null): FuelProduct
     {
         $price = MoneyService::normalize($newPrice);
         if (!MoneyService::isPositive($price)) {
             throw new InvalidArgumentException('السعر يجب أن يكون موجباً');
         }
-        $product->update(['price_per_liter' => $price]);
-        return $product->fresh();
+
+        // AMIAL-FUEL-PRICE-HISTORY-001: سجّل التغيّر (قديم/جديد/فرق/من غيّر)
+        // قبل الكتابة — يغذّي «سجل تغيّر الأسعار» وملخّص آخر تحديث في التطبيق.
+        $oldPrice = MoneyService::normalize((string) $product->price_per_liter);
+        return DB::transaction(function () use ($product, $price, $oldPrice, $actor, $note) {
+            $product->update(['price_per_liter' => $price]);
+
+            if (MoneyService::compare($oldPrice, $price) !== 0) {
+                \App\Models\FuelPriceHistory::create([
+                    'fuel_product_id' => $product->id,
+                    'station_id' => $product->station_id,
+                    'changed_by_user_id' => $actor?->id,
+                    'old_price' => $oldPrice,
+                    'new_price' => $price,
+                    'delta' => MoneyService::sub($price, $oldPrice),
+                    'note' => $note,
+                    'created_at' => now(),
+                ]);
+            }
+            return $product->fresh();
+        });
+    }
+
+    /**
+     * AMIAL-FUEL-PRICE-HISTORY-001 — سجلّ تغيّرات أسعار محطة (آخر N قيداً).
+     */
+    public function priceHistory(FuelStation $station, int $limit = 30): array
+    {
+        return \App\Models\FuelPriceHistory::where('station_id', $station->id)
+            ->with(['product:id,name', 'changedBy:id,f_name,l_name'])
+            ->orderByDesc('id')->limit(max(1, min($limit, 100)))->get()
+            ->map(fn ($h) => [
+                'id' => $h->id,
+                'product' => $h->product->name ?? '—',
+                'old_price' => (string) $h->old_price,
+                'new_price' => (string) $h->new_price,
+                'delta' => (string) $h->delta,
+                'direction' => MoneyService::compare((string) $h->delta, '0') > 0 ? 'up'
+                    : (MoneyService::compare((string) $h->delta, '0') < 0 ? 'down' : 'same'),
+                'changed_by' => trim(($h->changedBy->f_name ?? '') . ' ' . ($h->changedBy->l_name ?? '')) ?: null,
+                'note' => $h->note,
+                'created_at' => optional($h->created_at)->toIso8601String(),
+            ])->all();
     }
 
     // ============ تسجيل البيع (الجوهر) ============

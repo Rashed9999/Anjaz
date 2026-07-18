@@ -428,11 +428,32 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
         }
 
         try {
-            $updated = $this->svc->updateProductPrice($product, (string)$request->input('price_per_liter'));
+            $updated = $this->svc->updateProductPrice(
+                $product,
+                (string)$request->input('price_per_liter'),
+                $request->user(),
+                $request->input('note'),
+            );
         } catch (\InvalidArgumentException $e) {
             return $this->error('INVALID', $e->getMessage(), 422);
         }
         return $this->ok(['product' => $updated], 'PRICE_UPDATED', 'تم تحديث السعر');
+    }
+
+    /**
+     * AMIAL-FUEL-PRICE-HISTORY-001 — GET /fuel/price-history?limit=30
+     * سجلّ تغيّر أسعار الوقود (من غيّر، متى، الفرق) لشاشة إعدادات التسعير.
+     */
+    public function priceHistory(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $station = $this->svc->getOrCreateStation($merchant);
+        return $this->ok([
+            'history' => $this->svc->priceHistory($station, (int) $request->query('limit', 30)),
+        ]);
     }
 
     // ============ Sales (الجوهر) ============

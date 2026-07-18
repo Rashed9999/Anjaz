@@ -21,14 +21,16 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
     super.initState();
     c = Get.find<FuelStationController>();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await Future.wait([c.loadStation(), c.loadPumps(), c.loadProducts()]);
+      await Future.wait([
+        c.loadStation(), c.loadPumps(), c.loadProducts(), c.loadPriceHistory(),
+      ]);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         backgroundColor: AmyalColors.background,
         appBar: AppBar(
@@ -36,12 +38,14 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
           backgroundColor: AmyalColors.primary,
           foregroundColor: Colors.white,
           bottom: const TabBar(
+            isScrollable: true,
             indicatorColor: AmyalColors.yellow,
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
             tabs: [
               Tab(text: 'المضخّات', icon: Icon(Icons.local_gas_station, size: 18)),
               Tab(text: 'الأنواع والأسعار', icon: Icon(Icons.attach_money, size: 18)),
+              Tab(text: 'سجل الأسعار', icon: Icon(Icons.history, size: 18)),
               Tab(text: 'بيانات المحطة', icon: Icon(Icons.info, size: 18)),
             ],
           ),
@@ -49,8 +53,97 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
         body: TabBarView(children: [
           _pumpsTab(),
           _productsTab(),
+          _priceHistoryTab(),
           _stationTab(),
         ]),
+      ),
+    );
+  }
+
+  // ==================== Tab: سجل تغيّر الأسعار ====================
+  Widget _priceHistoryTab() {
+    return Obx(() {
+      if (c.isLoadingHistory.value && c.priceHistory.isEmpty) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      if (c.priceHistory.isEmpty) {
+        return _emptyState(
+          Icons.history,
+          'لا تغييرات على الأسعار بعد',
+          'كل تحديث لسعر لتر سيظهر هنا: من غيّره ومتى والفرق',
+        );
+      }
+      return RefreshIndicator(
+        onRefresh: c.loadPriceHistory,
+        child: ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: c.priceHistory.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (_, i) => _historyCard(c.priceHistory[i]),
+        ),
+      );
+    });
+  }
+
+  Widget _historyCard(Map<String, dynamic> h) {
+    final dir = (h['direction'] ?? 'same').toString();
+    final delta = double.tryParse('${h['delta']}') ?? 0;
+    final Color color = dir == 'up'
+        ? AmyalColors.red
+        : (dir == 'down' ? Colors.green.shade700 : AmyalColors.textMuted);
+    final IconData icon = dir == 'up'
+        ? Icons.arrow_upward
+        : (dir == 'down' ? Icons.arrow_downward : Icons.remove);
+    final when = DateTime.tryParse('${h['created_at']}')?.toLocal();
+    final whenStr = when == null
+        ? ''
+        : '${when.year}-${when.month.toString().padLeft(2, '0')}-${when.day.toString().padLeft(2, '0')} '
+            '${when.hour.toString().padLeft(2, '0')}:${when.minute.toString().padLeft(2, '0')}';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AmyalColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            height: 42, width: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${h['product'] ?? '—'}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 2),
+                Text('${h['old_price']} ← ${h['new_price']} ر.ي/لتر',
+                    style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+                if ((h['changed_by'] ?? '').toString().isNotEmpty || whenStr.isNotEmpty)
+                  Text(
+                    [
+                      if ((h['changed_by'] ?? '').toString().isNotEmpty) 'بواسطة ${h['changed_by']}',
+                      if (whenStr.isNotEmpty) whenStr,
+                    ].join(' · '),
+                    style: const TextStyle(fontSize: 11, color: AmyalColors.textMuted),
+                  ),
+              ],
+            ),
+          ),
+          Text(
+            '${delta > 0 ? '+' : ''}${delta.toStringAsFixed(0)} ر.ي',
+            style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 14),
+          ),
+        ],
       ),
     );
   }
@@ -336,21 +429,37 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
 
   void _updatePriceDialog(Map<String, dynamic> product) {
     final priceCtrl = TextEditingController(text: '${product['price_per_liter']}');
+    final noteCtrl = TextEditingController();
 
     showDialog(context: context, builder: (ctx) => AlertDialog(
       title: Text('تعديل سعر ${product['name']}'),
-      content: TextField(
-        controller: priceCtrl,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        autofocus: true,
-        decoration: const InputDecoration(labelText: 'السعر الجديد للّتر', suffixText: 'ر.ي'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: priceCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'السعر الجديد للّتر', suffixText: 'ر.ي'),
+          ),
+          const SizedBox(height: 10),
+          // AMIAL-FUEL-PRICE-HISTORY-001 — سبب اختياري يُحفظ في السجل
+          TextField(
+            controller: noteCtrl,
+            decoration: const InputDecoration(
+              labelText: 'سبب التغيير (اختياري)',
+              hintText: 'مثال: تحديث سعر رسمي',
+            ),
+          ),
+        ],
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
         Obx(() => FilledButton(
           onPressed: c.isSubmitting.value ? null : () async {
             if (priceCtrl.text.isEmpty) return;
-            final ok = await c.updateProductPrice(product['id'], priceCtrl.text.trim());
+            final ok = await c.updateProductPrice(
+                product['id'], priceCtrl.text.trim(), note: noteCtrl.text.trim());
             if (!mounted) return;
             if (ok) {
               Navigator.pop(ctx);

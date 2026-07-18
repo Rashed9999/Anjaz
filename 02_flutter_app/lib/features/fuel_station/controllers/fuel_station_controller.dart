@@ -95,8 +95,26 @@ class FuelStationController extends GetxController implements GetxService {
     return _doAndReload(() => repo.addProduct(data), loadProducts);
   }
 
-  Future<bool> updateProductPrice(int id, String newPrice) async {
-    return _doAndReload(() => repo.updateProductPrice(id, newPrice), loadProducts);
+  Future<bool> updateProductPrice(int id, String newPrice, {String? note}) async {
+    final ok = await _doAndReload(
+        () => repo.updateProductPrice(id, newPrice, note: note), loadProducts);
+    if (ok) loadPriceHistory(); // AMIAL-FUEL-PRICE-HISTORY-001 — حدّث السجل
+    return ok;
+  }
+
+  // AMIAL-FUEL-PRICE-HISTORY-001 — سجلّ تغيّر الأسعار
+  final RxList<Map<String, dynamic>> priceHistory = <Map<String, dynamic>>[].obs;
+  final RxBool isLoadingHistory = false.obs;
+
+  Future<void> loadPriceHistory() async {
+    try {
+      isLoadingHistory.value = true;
+      final r = await repo.priceHistory();
+      if (_ok(r)) {
+        final list = (r.body['meta']?['history'] ?? []) as List;
+        priceHistory.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+      }
+    } catch (_) {} finally { isLoadingHistory.value = false; }
   }
 
   // ============ Sales (الجوهر) ============
