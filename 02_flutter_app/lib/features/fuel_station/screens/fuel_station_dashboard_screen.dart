@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
@@ -21,14 +22,26 @@ class FuelStationDashboardScreen extends StatefulWidget {
 
 class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen> {
   late final FuelStationController c;
+  Timer? _ticker; // مؤقّت مدّة المناوبة الحيّة
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
     c = Get.find<FuelStationController>();
+    // تحديث عدّاد مدّة المناوبة كل ثانية
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && c.currentShift.value != null) setState(() {});
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await c.loadStation();
       await c.loadDashboard();
+      await c.loadCurrentShift();
     });
   }
 
@@ -52,6 +65,7 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
         onRefresh: () async {
           await c.loadStation();
           await c.loadDashboard();
+          await c.loadCurrentShift();
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -91,6 +105,9 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
             }),
 
             const SizedBox(height: 16),
+
+            // ====== المناوبة الحالية (حيّة) ======
+            Obx(() => _currentShiftCard()),
 
             // ====== إحصائيات اليوم ======
             Obx(() {
@@ -203,6 +220,124 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
     if (value == null) return '0';
     final n = double.tryParse(value.toString()) ?? 0;
     return n.toStringAsFixed(n == n.roundToDouble() ? 0 : 2);
+  }
+
+  // ====== المناوبة الحالية (تصميم #105/#106) ======
+  Widget _currentShiftCard() {
+    final shift = c.currentShift.value;
+    final today = c.dashboardData.value?['today'] as Map?;
+
+    // لا مناوبة مفتوحة → دعوة لفتح مناوبة
+    if (shift == null) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => Get.to(() => const FuelShiftsScreen()),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AmyalColors.border),
+            ),
+            child: Row(children: [
+              const Icon(Icons.play_circle_outline, color: AmyalColors.primary, size: 28),
+              const SizedBox(width: 12),
+              const Expanded(child: Text('لا توجد مناوبة مفتوحة — افتح مناوبة لبدء العمل',
+                  style: TextStyle(fontWeight: FontWeight.w600))),
+              const Icon(Icons.chevron_left, color: AmyalColors.textMuted),
+            ]),
+          ),
+        ),
+      );
+    }
+
+    // مناوبة مفتوحة → بطاقة حيّة
+    final openedAt = DateTime.tryParse('${shift['opened_at'] ?? ''}')?.toLocal();
+    final dur = openedAt == null ? Duration.zero : DateTime.now().difference(openedAt);
+    final durStr = _fmtDuration(dur);
+    final openingCash = double.tryParse('${shift['opening_cash'] ?? 0}') ?? 0;
+    final todayCash = double.tryParse('${(today?['by_payment'] as List?)?.firstWhere(
+        (m) => (m as Map)['payment_method'] == 'cash', orElse: () => {'total': 0})['total'] ?? 0}') ?? 0;
+    final expectedCash = openingCash + todayCash;
+    final liters = _fmt(today?['total_liters']);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                Container(width: 7, height: 7, decoration: const BoxDecoration(
+                    color: Colors.green, shape: BoxShape.circle)),
+                const SizedBox(width: 5),
+                const Text('مباشر الآن', style: TextStyle(fontSize: 11, color: Colors.green, fontWeight: FontWeight.bold)),
+              ]),
+            ),
+            const Spacer(),
+            const Text('المناوبة الحالية', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          ]),
+          const SizedBox(height: 14),
+          // العدّاد الحيّ
+          Center(child: Column(children: [
+            Text(durStr, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold,
+                color: AmyalColors.primary, fontFeatures: [FontFeature.tabularFigures()])),
+            const Text('مدّة المناوبة (ساعة : دقيقة : ثانية)',
+                style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+          ])),
+          const SizedBox(height: 14),
+          Row(children: [
+            Expanded(child: _shiftStat('النقد المتوقّع', '${_fmt(expectedCash)} ر.ي', Colors.green.shade700)),
+            const SizedBox(width: 8),
+            Expanded(child: _shiftStat('مبيعات العدّادات', '$liters لتر', AmyalColors.primary)),
+          ]),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: () => Get.to(() => const FuelShiftsScreen()),
+            icon: const Icon(Icons.lock_outline, size: 18),
+            label: const Text('إغلاق وتسوية المناوبة'),
+            style: FilledButton.styleFrom(
+              backgroundColor: AmyalColors.yellowDark,
+              foregroundColor: Colors.black87,
+              minimumSize: const Size.fromHeight(46),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _shiftStat(String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(fontSize: 11, color: AmyalColors.textSecondary)),
+        const SizedBox(height: 4),
+        Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: color)),
+      ]),
+    );
+  }
+
+  String _fmtDuration(Duration d) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(d.inHours)}:${two(d.inMinutes % 60)}:${two(d.inSeconds % 60)}';
   }
 
   Widget _statBox(String label, String value, Color color, IconData icon) {
