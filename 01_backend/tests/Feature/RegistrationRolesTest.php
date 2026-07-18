@@ -137,6 +137,50 @@ class RegistrationRolesTest extends TestCase
         $this->getJson('/api/v1/amial/merchant/cashier/products')->assertOk();
     }
 
+    /** @test AMIAL-VERIFY-GATE — استجابة الدخول تحمل حالة التوثيق لتوجيه التطبيق. */
+    public function login_response_exposes_verification_state(): void
+    {
+        Artisan::call('passport:install', ['--no-interaction' => true]);
+
+        // عميل مسجَّل ذاتياً = قيد المراجعة
+        $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500007'))
+            ->assertOk();
+        $pending = User::where('phone', '967771500007')->first();
+
+        $this->postJson('/api/v1/auth/login', [
+            'role' => 'customer', 'phone' => '967771500007', 'password' => '1234',
+        ])->assertOk()->assertJsonPath('meta.user.verification_state', 'pending_review')
+          ->assertJsonPath('meta.user.is_kyc_verified', 0);
+
+        // بعد اعتماده من الأدمن = موثّق
+        $admin = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770009200']);
+        $this->actingAs($admin, 'user')
+            ->postJson("/admin/amial/hub/users/{$pending->id}/kyc", ['status' => 1])
+            ->assertOk();
+
+        $this->postJson('/api/v1/auth/login', [
+            'role' => 'customer', 'phone' => '967771500007', 'password' => '1234',
+        ])->assertOk()->assertJsonPath('meta.user.verification_state', 'verified');
+    }
+
+    /** @test AMIAL-VERIFY-GATE — اعتماد الحساب يُنشئ إشعاراً داخل التطبيق. */
+    public function approval_creates_in_app_notification(): void
+    {
+        $this->postJson('/api/v1/customer/auth/register', $this->registerPayload('771500008'))
+            ->assertOk();
+        $user = User::where('phone', '967771500008')->first();
+
+        $admin = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770009201']);
+        $this->actingAs($admin, 'user')
+            ->postJson("/admin/amial/hub/users/{$user->id}/kyc", ['status' => 1])
+            ->assertOk();
+
+        $this->assertDatabaseHas('amial_notifications', [
+            'user_id' => $user->id,
+            'type' => 'kyc_verification',
+        ]);
+    }
+
     /** @test */
     public function check_phone_returns_demo_otp_hint_when_not_live(): void
     {

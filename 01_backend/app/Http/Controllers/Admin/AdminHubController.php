@@ -216,6 +216,19 @@ class AdminHubController extends Controller
             'severity' => 'info',
         ]);
 
+        // AMIAL-VERIFY-GATE: إشعار داخل التطبيق (مركز الإشعارات) — يعرف صاحب
+        // الحساب فور القرار دون انتظار محاولة دخول. آمن: لا يكسر القرار أبداً.
+        try {
+            $title = $status === 1 ? 'تم اعتماد حسابك ✅' : 'تعذّر اعتماد حسابك';
+            $body = $status === 1
+                ? 'وثّقنا حسابك بنجاح. يمكنك الآن استخدام كل الخدمات.'
+                : 'راجعنا وثائقك ولم نتمكّن من اعتمادها. يرجى إعادة رفع وثائق واضحة أو مراجعة الدعم.';
+            app(\App\Services\NotificationService::class)->dispatch(
+                $user, 'kyc_verification', $title, $body,
+                data: ['is_kyc_verified' => $status],
+            );
+        } catch (\Throwable $e) { /* الإشعار تحسيني */ }
+
         try {
             if ($user->fcm_token) {
                 Helpers::send_push_notif_to_device($user->fcm_token, [

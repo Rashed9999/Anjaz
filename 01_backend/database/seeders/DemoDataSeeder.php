@@ -108,6 +108,9 @@ class DemoDataSeeder extends Seeder
                 'password'         => Hash::make('Pass@2026'),
                 'transaction_pin'  => '1234',   // cast 'hashed' يُطبّق Hash تلقائياً
                 'is_active'        => 1,
+                // AMIAL-VERIFY-GATE: حسابات العرض موثّقة — وإلّا حجبتها بوّابة
+                // «قيد المراجعة» الجديدة عن الشاشة الرئيسية أثناء التجربة.
+                'is_kyc_verified'  => 1,
             ])
         );
 

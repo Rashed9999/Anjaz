@@ -205,6 +205,14 @@ class UnifiedAuthController extends Controller
                     'id' => $result['user']->id,
                     'role' => $result['role'],
                     'name' => $this->getUserDisplayName($result['user']),
+                    // AMIAL-VERIFY-GATE: حالة التوثيق ليقرّر التطبيق أي شاشة يفتح.
+                    // 0 = قيد المراجعة (لوحة التحقق لم تعتمده بعد) / 1 = موثّق / 2 = مرفوض
+                    'is_kyc_verified' => (int) ($result['user']->is_kyc_verified ?? 0),
+                    'verification_state' => match ((int) ($result['user']->is_kyc_verified ?? 0)) {
+                        1 => 'verified',
+                        2 => 'rejected',
+                        default => 'pending_review',
+                    },
                 ],
                 'token' => $result['token'],
                 'token_type' => $result['token_type'],

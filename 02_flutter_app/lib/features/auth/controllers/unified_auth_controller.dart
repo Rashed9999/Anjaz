@@ -4,6 +4,7 @@ import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/features/auth/screens/role_router.dart';
+import 'package:amyal_pay/features/auth/screens/account_review_screen.dart';
 import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amyal_pay/data/api/secure_storage_helper.dart';
 
@@ -32,6 +33,13 @@ class UnifiedAuthController extends GetxController implements GetxService {
   final RxString lastError = ''.obs;
   final RxString currentRole = ''.obs;
   String? _pendingOtpToken;
+
+  // AMIAL-VERIFY-GATE: حالة توثيق آخر دخول ناجح (يقرؤها التوجيه لفتح شاشة
+  // «قيد المراجعة»/«مرفوض» بدل الرئيسية للحساب غير المعتمد).
+  // pending_review | verified | rejected
+  final RxString verificationState = 'verified'.obs;
+  String _displayName = '';
+  String get displayName => _displayName;
 
   // ===== Customer =====
   Future<bool> loginCustomer({
@@ -143,6 +151,11 @@ class UnifiedAuthController extends GetxController implements GetxService {
         final meta = r.body['meta'] ?? {};
         await _saveAuth(meta);
         currentRole.value = (meta['role'] ?? '').toString();
+        // AMIAL-VERIFY-GATE: التقط حالة التوثيق واسم المستخدم من الاستجابة
+        final user = (meta['user'] is Map) ? meta['user'] as Map : const {};
+        verificationState.value =
+            (user['verification_state'] ?? 'verified').toString();
+        _displayName = (user['name'] ?? '').toString();
         // CRITICAL-001 — حمّل access بعد تسجيل الدخول الناجح
         try { await Get.find<AccessController>().load(); } catch (_) {}
         return true;
@@ -179,6 +192,19 @@ class UnifiedAuthController extends GetxController implements GetxService {
   /// AMIAL-PIN-GATE-001: بعد الدخول تظهر بوّابة رمز PIN قبل فتح الرئيسية.
   Future<void> navigateToHomeForRole() async {
     if (currentRole.value.isEmpty) return;
+
+    // AMIAL-VERIFY-GATE: الحساب غير المعتمد (قيد المراجعة/مرفوض) لا يفتح
+    // الرئيسية — يذهب لشاشة الحالة الصريحة بدل تجربة ناقصة صامتة. الأدمن
+    // مستثنى (لا يخضع لتوثيق KYC).
+    if (currentRole.value != 'admin' &&
+        verificationState.value != 'verified') {
+      Get.offAll(() => AccountReviewScreen(
+            state: verificationState.value,
+            userName: _displayName,
+          ));
+      return;
+    }
+
     // AMIAL-ADMIN: مدير النظام يدخل بالبريد وكلمة المرور فقط — بوابة PIN
     // الرقمية (4 أرقام) للمعاملات المالية للعملاء/التجار/الوكلاء.
     if (currentRole.value != 'admin') {
