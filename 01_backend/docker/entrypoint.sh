@@ -124,12 +124,31 @@ php artisan view:clear 2>/dev/null || true
         # نستخدم اتصال Laravel نفسه (PDO) لا أداة mysql الطرفية — أوثق مع
         # شبكة Railway الداخلية (IPv6). نُعيد المحاولة حتى تجهز القاعدة.
         echo "⏳ [خلفية] تهيئة قاعدة البيانات عبر PDO (${DB_HOST})..."
-        # RESET_DB=true: مسح القاعدة وإعادة بنائها (لمرّة واحدة) — يحلّ فشل
-        # الدخول الناتج عن بيانات تجريبية بُذرت بمفاتيح قديمة. أزِله بعدها.
+        # ── هجرة القاعدة مع حاجز أمان ضد فقدان البيانات ─────────────
+        # الافتراضي دائماً: migrate الآمن (يضيف الجداول الجديدة، لا يمسح شيئاً).
+        #
+        # المسح الكامل (migrate:fresh) لا يحدث إلا في حالتين واضحتين:
+        #   1) RESET_DB_FORCE=true  → مسح متعمّد مفروض (حتى لو كانت هناك بيانات).
+        #   2) RESET_DB=true        → يمسح فقط إذا كانت القاعدة فارغة تماماً
+        #      (بناء أوّلي). إن وُجد أيّ حساب — يُتجاهل المسح تلقائياً لحماية
+        #      الحسابات التي أنشأها الأدمن وتعديلاتها. هذا يمنع ضياع البيانات
+        #      عند نسيان RESET_DB=true مضبوطاً في Coolify.
         MIGRATE_CMD="migrate --force"
-        if [ "${RESET_DB:-false}" = "true" ]; then
+        if [ "${RESET_DB_FORCE:-false}" = "true" ]; then
             MIGRATE_CMD="migrate:fresh --force"
-            echo "♻️  [خلفية] RESET_DB=true → مسح وإعادة بناء القاعدة بالكامل"
+            echo "♻️  [خلفية] RESET_DB_FORCE=true → مسح كامل مفروض ومتعمّد للقاعدة"
+        elif [ "${RESET_DB:-false}" = "true" ]; then
+            # هل القاعدة فارغة؟ (EMPTY=لا جدول users أو صفر حسابات، HASDATA=فيها
+            # حسابات، UNKNOWN=تعذّر الاتصال). عند الشكّ لا نمسح إطلاقاً.
+            DB_STATE=$(php artisan tinker --execute="try { echo \Illuminate\Support\Facades\Schema::hasTable('users') ? ((int)\DB::table('users')->count() > 0 ? 'HASDATA' : 'EMPTY') : 'EMPTY'; } catch (\Throwable \$e) { echo 'UNKNOWN'; }" 2>/dev/null | tail -1 | tr -dc 'A-Z')
+            if [ "$DB_STATE" = "EMPTY" ]; then
+                MIGRATE_CMD="migrate:fresh --force"
+                echo "♻️  [خلفية] RESET_DB=true وقاعدة فارغة → بناء أوّلي كامل"
+            else
+                echo "🛡️  [خلفية] RESET_DB=true لكن القاعدة تحتوي بيانات (${DB_STATE:-UNKNOWN}) —"
+                echo "    تمّ تجاهُل المسح تلقائياً لحماية حساباتك وتعديلاتك."
+                echo "    للمسح الكامل المتعمّد فقط: اضبط RESET_DB_FORCE=true ثم أزِله بعدها."
+            fi
         fi
         DB_OK=0
         i=0
