@@ -1,7 +1,7 @@
 name: amyal_pay
 description: Amyal Pay - دفع سريع وآمن
 publish_to: 'none'
-version: 0.8.0+80
+version: 0.8.1+81
 
 environment:
   sdk: ^3.8.1

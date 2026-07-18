@@ -76,7 +76,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
                   // المثبَّت هو أحدث بناء. إن رأيت هذا السطر فالبناء حديث.
                   SizedBox(height: 10),
                   Text(
-                    '✅ إصدار 0.8.0 — بناء 2026/07/18',
+                    '✅ إصدار 0.8.1 — بناء 2026/07/18 (بيانات تجريبية)',
                     style: TextStyle(
                         color: Color(0xFFFECA1E),
                         fontSize: 12,
@@ -227,6 +227,17 @@ class _CustomerLoginTabState extends State<_CustomerLoginTab> {
               child: Text('تسجيل دخول العميل',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
+            _DemoCredsCard(entries: [
+              _DemoEntry('عميل تجريبي', () {
+                _phoneCtrl.text = '777100001';
+                _passwordCtrl.text = 'Pass@2026';
+              }),
+              _DemoEntry('مستلِم للتحويل', () {
+                _phoneCtrl.text = '777100002';
+                _passwordCtrl.text = 'Pass@2026';
+              }),
+            ]),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _phoneCtrl,
               keyboardType: TextInputType.phone,
@@ -376,6 +387,39 @@ class _MerchantLoginTabState extends State<_MerchantLoginTab> {
               child: Text('تسجيل دخول التاجر',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
+            _DemoCredsCard(entries: [
+              _DemoEntry('⛽ محطة وقود', () {
+                _merchantNumCtrl.text = 'AM-FUEL-004';
+                _phoneCtrl.text = '777200004';
+                _passwordCtrl.text = 'Pass@2026';
+              }, highlight: true),
+              _DemoEntry('🛒 بقالة', () {
+                _merchantNumCtrl.text = 'AM-GROC-001';
+                _phoneCtrl.text = '777200001';
+                _passwordCtrl.text = 'Pass@2026';
+              }),
+              _DemoEntry('💊 صيدلية', () {
+                _merchantNumCtrl.text = 'AM-PHAR-003';
+                _phoneCtrl.text = '777200003';
+                _passwordCtrl.text = 'Pass@2026';
+              }),
+              _DemoEntry('🍽️ مطعم', () {
+                _merchantNumCtrl.text = 'AM-REST-002';
+                _phoneCtrl.text = '777200002';
+                _passwordCtrl.text = 'Pass@2026';
+              }),
+              _DemoEntry('📦 جملة', () {
+                _merchantNumCtrl.text = 'AM-WHOL-005';
+                _phoneCtrl.text = '777200005';
+                _passwordCtrl.text = 'Pass@2026';
+              }),
+              _DemoEntry('🐟 بيع سريع', () {
+                _merchantNumCtrl.text = 'AM-FISH-006';
+                _phoneCtrl.text = '777200006';
+                _passwordCtrl.text = 'Pass@2026';
+              }),
+            ]),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _merchantNumCtrl,
               decoration: const InputDecoration(
@@ -545,6 +589,13 @@ class _AgentLoginTabState extends State<_AgentLoginTab> {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
             if (!_otpStep) ...[
+              _DemoCredsCard(entries: [
+                _DemoEntry('وكيل تجريبي', () {
+                  _agentNumCtrl.text = 'AG-001';
+                  _passwordCtrl.text = 'Pass@2026';
+                }),
+              ]),
+              const SizedBox(height: 12),
               // ====== Step 1 ======
               TextFormField(
                 controller: _agentNumCtrl,
@@ -708,6 +759,13 @@ class _AdminLoginTabState extends State<_AdminLoginTab> {
               child: Text('دخول مدير النظام',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
+            _DemoCredsCard(entries: [
+              _DemoEntry('أدمن تجريبي', () {
+                _emailCtrl.text = 'admin@amyalpay.com';
+                _passwordCtrl.text = 'Pass@2026';
+              }),
+            ]),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _emailCtrl,
               keyboardType: TextInputType.emailAddress,
@@ -768,6 +826,80 @@ class _AdminLoginTabState extends State<_AdminLoginTab> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Demo credentials helper — تعبئة بيانات الدخول التجريبية بضغطة واحدة
+// ============================================================
+class _DemoEntry {
+  final String label;
+  final VoidCallback onFill;
+  final bool highlight;
+  const _DemoEntry(this.label, this.onFill, {this.highlight = false});
+}
+
+class _DemoCredsCard extends StatelessWidget {
+  final List<_DemoEntry> entries;
+  const _DemoCredsCard({required this.entries});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: AmyalColors.yellow.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AmyalColors.yellow.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.vpn_key_rounded, size: 16, color: AmyalColors.primary),
+              SizedBox(width: 6),
+              Text('بيانات تجريبية — اضغط للتعبئة',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AmyalColors.primary)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: entries.map((e) {
+              return ActionChip(
+                label: Text(e.label,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight:
+                            e.highlight ? FontWeight.bold : FontWeight.w500,
+                        color: e.highlight ? Colors.white : AmyalColors.primary)),
+                backgroundColor:
+                    e.highlight ? AmyalColors.primary : Colors.white,
+                side: BorderSide(
+                    color: e.highlight
+                        ? AmyalColors.primary
+                        : AmyalColors.primary.withValues(alpha: 0.35)),
+                onPressed: () {
+                  e.onFill();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('تم تعبئة بيانات: ${e.label}'),
+                      duration: const Duration(milliseconds: 900),
+                      backgroundColor: AmyalColors.primary,
+                    ),
+                  );
+                },
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }
