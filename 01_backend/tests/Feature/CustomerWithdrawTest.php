@@ -122,4 +122,39 @@ class CustomerWithdrawTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->svc->execute($this->agent, $req->op_code, '+967700999999'); // ليس العميل
     }
+
+    /**
+     * @test AMIAL-FIX(WITHDRAW-CANCEL) — الإلغاء لا يعلق عند نقص المحجوز.
+     * الحجز قد يُحرَّر من مسار آخر (كنس انتهاء الصلاحية) بينما الطلب pending —
+     * كان الإلغاء يرمي «لا يوجد محجوز كافٍ لفكّه» ويحبس المستخدم في الشاشة.
+     */
+    public function cancel_succeeds_even_if_hold_already_released(): void
+    {
+        $req = $this->svc->request($this->customer, '10000');
+
+        // محاكاة تحرير الحجز من مسار آخر (الطلب ما زال pending)
+        EMoney::where('user_id', $this->customer->id)
+            ->update(['held_balance' => '0.0000', 'current_balance' => '100000.0000']);
+
+        $cancelled = $this->svc->cancel($this->customer, $req->id);
+        $this->assertContains($cancelled->status, ['cancelled', 'expired']);
+
+        // الرصيد لم يُنفخ (لا فكّ لحجز غير موجود)
+        $this->assertSame('100000.0000',
+            (string) EMoney::where('user_id', $this->customer->id)->value('current_balance'));
+    }
+
+    /** @test AMIAL-FIX(WITHDRAW-CANCEL) — إلغاء الملغى مسبقاً نجاح صامت (idempotent). */
+    public function cancel_is_idempotent(): void
+    {
+        $req = $this->svc->request($this->customer, '10000');
+        $this->svc->cancel($this->customer, $req->id);
+
+        $again = $this->svc->cancel($this->customer, $req->id);
+        $this->assertSame('cancelled', $again->status);
+
+        // الرصيد عاد كاملاً مرة واحدة فقط
+        $this->assertSame('100000.0000',
+            (string) EMoney::where('user_id', $this->customer->id)->value('current_balance'));
+    }
 }

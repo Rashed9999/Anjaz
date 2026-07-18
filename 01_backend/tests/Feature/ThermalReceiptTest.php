@@ -50,7 +50,7 @@ class ThermalReceiptTest extends TestCase
         $resp = $this->get("/api/v1/amial/receipts/{$r->id}/thermal?size=58");
         $resp->assertStatus(200)->assertHeader('Content-Type', 'application/pdf');
 
-        $pdf = $resp->streamedContent();
+        $pdf = $resp->getContent();
         $this->assertStringStartsWith('%PDF', $pdf);
         // 58مم ≈ 164pt
         $this->assertEqualsWithDelta(164, $this->pdfWidth($pdf), 2);
@@ -65,7 +65,7 @@ class ThermalReceiptTest extends TestCase
 
         $resp = $this->get("/api/v1/amial/receipts/{$r->id}/thermal?size=80");
         $resp->assertStatus(200);
-        $pdf = $resp->streamedContent();
+        $pdf = $resp->getContent();
         $this->assertStringStartsWith('%PDF', $pdf);
         // 80مم ≈ 227pt
         $this->assertEqualsWithDelta(227, $this->pdfWidth($pdf), 2);
@@ -80,7 +80,7 @@ class ThermalReceiptTest extends TestCase
 
         $resp = $this->get("/api/v1/amial/receipts/{$r->id}/thermal?size=999");
         $resp->assertStatus(200);
-        $this->assertEqualsWithDelta(164, $this->pdfWidth($resp->streamedContent()), 2);
+        $this->assertEqualsWithDelta(164, $this->pdfWidth($resp->getContent()), 2);
     }
 
     /** @test AMIAL-THERMAL: لا يُطبع إيصال مستخدم آخر (IDOR) */

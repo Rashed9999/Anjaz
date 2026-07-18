@@ -239,6 +239,37 @@ class FinancialGuardService
     }
 
     /**
+     * AMIAL-FIX(WITHDRAW-CANCEL): يفكّ من الحجز «ما هو موجود فعلاً» حتى سقف
+     * المبلغ المطلوب، بدل الرمي عند النقص. لمسارات الإلغاء/انتهاء الصلاحية
+     * فقط — حيث قد يكون الحجز حُرّر جزئياً من مسار آخر (كنس انتهاء الصلاحية،
+     * إعادة بذر تجريبية…) ولا يجوز أن يبقى الطلب عالقاً بلا إلغاء.
+     * تبقى releaseHold الصارمة للمسارات المالية الاعتيادية.
+     *
+     * @return string المبلغ الذي فُكّ فعلاً (قد يكون 0)
+     */
+    public function releaseHoldUpTo(int $userId, string $amount, string $reason = 'release_hold'): string
+    {
+        $this->assertInTransaction();
+        $amount = MoneyService::normalize($amount);
+
+        $wallet = $this->lockWallet($userId);
+        $toRelease = MoneyService::gte($wallet->held_balance, $amount)
+            ? $amount
+            : MoneyService::normalize($wallet->held_balance);
+
+        if (MoneyService::compare($toRelease, '0') <= 0) {
+            return MoneyService::normalize('0');
+        }
+
+        $wallet->held_balance = MoneyService::sub($wallet->held_balance, $toRelease);
+        $wallet->current_balance = MoneyService::add($wallet->current_balance, $toRelease);
+        $wallet->version = $wallet->version + 1;
+        $wallet->save();
+
+        return $toRelease;
+    }
+
+    /**
      * يصرف المبلغ المحجوز نهائياً (يخرج من المحفظة) — عند تنفيذ السحب.
      * held -= amount فقط (المال غادر؛ يُضاف للوكيل/الأدمن بعمليات منفصلة).
      */

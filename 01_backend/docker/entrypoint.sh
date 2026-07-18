@@ -96,8 +96,14 @@ export LOG_CHANNEL="${LOG_CHANNEL:-stderr}"
 # سبب 500: throttle يكتب كاش ملفّات في storage/framework/cache/data لكن
 # المجلّد غير قابل للكتابة → fopen يفشل. نُنشئها ونمنحها صلاحية الكتابة.
 mkdir -p storage/framework/cache/data storage/framework/sessions \
-         storage/framework/views storage/logs bootstrap/cache
+         storage/framework/views storage/logs storage/fonts bootstrap/cache
+# AMIAL-FIX(LOG-PERMS): ننشئ laravel.log مقدّماً بملكية www-data وصلاحية 666.
+# كان يُنشأ لاحقاً بملكية root (أوامر artisan الخلفية تعمل كـroot) فيعجز
+# عامل php-fpm (www-data) عن الكتابة → «Permission denied» يحوّل أي خطأ
+# إلى 500 قاسٍ (شوهد في التحويل وتنزيل PDF).
+touch storage/logs/laravel.log 2>/dev/null || true
 chmod -R 777 storage bootstrap/cache 2>/dev/null || true
+chmod 666 storage/logs/laravel.log 2>/dev/null || true
 chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
 
 # ── تنظيف أي كاش قديم من بناء الصورة (يقرأ Laravel المفاتيح المُصدَّرة
@@ -111,6 +117,9 @@ php artisan view:clear 2>/dev/null || true
 # nginx فوراً، ونؤجّل انتظار قاعدة البيانات + migrations للخلفية حتى لا
 # يفشل الفحص الصحّي إن كانت القاعدة غير جاهزة بعد.
 (
+    # AMIAL-FIX(LOG-PERMS): أوامر artisan هنا تعمل كـroot — نوجّه سجلّها إلى
+    # stderr كي لا تُنشئ laravel.log بملكية root فتكسر كتابة عمّال php-fpm.
+    export LOG_CHANNEL=stderr
     if [ -n "$DB_HOST" ]; then
         # نستخدم اتصال Laravel نفسه (PDO) لا أداة mysql الطرفية — أوثق مع
         # شبكة Railway الداخلية (IPv6). نُعيد المحاولة حتى تجهز القاعدة.
@@ -159,8 +168,17 @@ php artisan view:clear 2>/dev/null || true
         if [ "$DB_OK" -eq 1 ]; then
             echo "🔎 [خلفية] ضمان واختبار الحساب التجريبي..."
             php artisan amial:ensure-demo 2>&1 || true
+            # AMIAL-FIX(ADMIN-LOGIN): حسابا الأدمن والوكيل التجريبيان لم يكونا
+            # يُبذران عند الإقلاع (الأمر أدناه لم يكن يُستدعى) → لوحة الويب
+            # ترفض الدخول بـ«Credentials does not match». الأوامر idempotent.
+            php artisan amial:ensure-demo-staff 2>&1 || true
+            php artisan amial:ensure-demo-merchants 2>&1 || true
         fi
         php artisan storage:link --force 2>/dev/null || true
+        # AMIAL-FIX(LOG-PERMS): أي ملفّ أنشأته أوامر artisan أعلاه كـroot يعود
+        # ملكاً لـwww-data — حزام أمان أخير لكتابة السجلّ وكاش dompdf.
+        chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache 2>/dev/null || true
+        chmod 666 /var/www/html/storage/logs/laravel.log 2>/dev/null || true
         if [ "$DB_OK" -eq 1 ]; then
             echo "✅ [خلفية] تهيئة قاعدة البيانات اكتملت."
         else

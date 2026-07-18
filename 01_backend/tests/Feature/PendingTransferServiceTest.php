@@ -131,6 +131,10 @@ class PendingTransferServiceTest extends TestCase
         // نافذة صفرية (للاختبار)
         $pending = $this->service->initiate($sender, $recipient, '1000', '1234', cooldownSeconds: 0);
 
+        // AMIAL-FIX: النافذة صار حدّها الأدنى 5 ثوانٍ (max(5, cooldown)) —
+        // نسافر بالزمن بعدها بدل افتراض نافذة صفرية
+        $this->travel(6)->seconds();
+
         // تسليم
         $released = $this->service->release($pending);
 
@@ -147,6 +151,7 @@ class PendingTransferServiceTest extends TestCase
         $recipient = $this->makeUser('0');
 
         $pending = $this->service->initiate($sender, $recipient, '1000', '1234', cooldownSeconds: 0);
+        $this->travel(6)->seconds();
         $this->service->release($pending);
 
         // محاولة إلغاء بعد التسليم
@@ -165,6 +170,7 @@ class PendingTransferServiceTest extends TestCase
         // المستلم يُحظر خلال النافذة
         $recipient->forceFill(['sanction_status' => 'blocked'])->save();
 
+        $this->travel(6)->seconds();
         $released = $this->service->release($pending);
 
         $this->assertEquals('failed', $released->status);
@@ -195,6 +201,7 @@ class PendingTransferServiceTest extends TestCase
         $this->service->initiate($sender, $r1, '1000', '1234', cooldownSeconds: 0);
         $this->service->initiate($sender, $r2, '2000', '1234', cooldownSeconds: 0);
 
+        $this->travel(6)->seconds();
         $count = $this->service->releaseAllDue();
         $this->assertEquals(2, $count);
 

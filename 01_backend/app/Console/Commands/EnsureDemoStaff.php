@@ -39,15 +39,20 @@ class EnsureDemoStaff extends Command
             $email = 'admin@amyalpay.com';
             $admin = User::where('type', ADMIN_TYPE)->where('email', $email)->first();
             if ($admin) {
-                // AMIAL-WEB-ADMIN: لوحة الويب تدخل بالجوال — نُكمل الرقم إن كان
-                // ناقصاً فقط (إضافة آمنة لا تمسّ شيئاً آخر).
+                // AMIAL-FIX(ADMIN-LOGIN): «ضمان» يعني بيانات دخول معلومة دوماً.
+                // كان يُبقي كلمة سرّ قديمة/مجهولة فيفشل الدخول بـ«Credentials
+                // does not match» رغم اتباع الدليل. نعيد ضبط جوال/كلمة سرّ
+                // الأدمن التجريبي هذا فقط (بإيميله المعروف) — لا يُمسّ غيره.
                 if (empty($admin->phone)) {
                     $admin->phone = '967777000001';
-                    $admin->save();
-                    $this->info('✓ أُضيف جوال للأدمن الموجود (967777000001) لدخول لوحة الويب');
-                } else {
-                    $this->info('✓ أدمن تجريبي موجود مسبقاً — لم يُمسّ');
                 }
+                $admin->password = Hash::make(self::PASSWORD);
+                $admin->is_active = 1;
+                if (Schema::hasColumn('users', 'two_factor_enabled')) {
+                    $admin->two_factor_enabled = 0;
+                }
+                $admin->save();
+                $this->info("✓ أدمن تجريبي مضمون — جوال {$admin->phone} / " . self::PASSWORD);
                 return;
             }
             $admin = new User();

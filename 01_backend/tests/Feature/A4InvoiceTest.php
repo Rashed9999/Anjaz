@@ -50,7 +50,7 @@ class A4InvoiceTest extends TestCase
         $resp = $this->get("/api/v1/amial/receipts/{$r->id}/invoice");
         $resp->assertStatus(200)->assertHeader('Content-Type', 'application/pdf');
 
-        $pdf = $resp->streamedContent();
+        $pdf = $resp->getContent();
         $this->assertStringStartsWith('%PDF', $pdf);
         // A4 = 210mm ≈ 595pt
         $this->assertEqualsWithDelta(595, $this->pdfWidth($pdf), 3);
@@ -71,7 +71,7 @@ class A4InvoiceTest extends TestCase
 
         $resp = $this->get("/api/v1/amial/receipts/{$r->id}/invoice");
         $resp->assertStatus(200);
-        $this->assertStringStartsWith('%PDF', $resp->streamedContent());
+        $this->assertStringStartsWith('%PDF', $resp->getContent());
     }
 
     /** @test لا يُصدر فاتورة مستخدم آخر (IDOR) */

@@ -96,12 +96,21 @@ class CustomerWithdrawService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            // AMIAL-FIX(WITHDRAW-CANCEL): الملغاة/المنتهية سلفاً = نجاح صامت
+            // (idempotent) — لا نرمي خطأً يمنع المستخدم من إغلاق الشاشة.
+            if (in_array($req->status, ['cancelled', 'expired'], true)) {
+                return $req;
+            }
             if ($req->status !== 'pending') {
                 throw new RuntimeException('لا يمكن إلغاء عملية غير معلّقة');
             }
 
-            $this->guard()->releaseHold($customer->id, (string)$req->total_debit, 'withdraw_cancel');
-            $req->update(['status' => 'cancelled']);
+            // AMIAL-FIX(WITHDRAW-CANCEL): نفكّ ما هو محجوز فعلاً حتى سقف المبلغ
+            // بدل الرمي عند النقص — الحجز قد يكون حُرّر من مسار آخر (كنس
+            // انتهاء الصلاحية مثلاً) بينما الطلب ما زال pending، فكان الإلغاء
+            // يفشل بـ«لا يوجد محجوز كافٍ لفكّه» ويعلق المستخدم في الشاشة.
+            $this->guard()->releaseHoldUpTo($customer->id, (string)$req->total_debit, 'withdraw_cancel');
+            $req->update(['status' => $req->expires_at->isPast() ? 'expired' : 'cancelled']);
             return $req;
         });
     }
@@ -124,7 +133,7 @@ class CustomerWithdrawService
             }
             if ($req->expires_at->isPast()) {
                 // منتهية: نفكّ الحجز ونعلّمها
-                $this->guard()->releaseHold($req->customer_user_id, (string)$req->total_debit, 'withdraw_expired');
+                $this->guard()->releaseHoldUpTo($req->customer_user_id, (string)$req->total_debit, 'withdraw_expired');
                 $req->update(['status' => 'expired']);
                 throw new RuntimeException('انتهت صلاحية العملية');
             }
@@ -239,7 +248,7 @@ class CustomerWithdrawService
                 DB::transaction(function () use ($req) {
                     $locked = WithdrawalRequest::where('id', $req->id)->lockForUpdate()->first();
                     if ($locked && $locked->status === 'pending') {
-                        $this->guard()->releaseHold($locked->customer_user_id, (string)$locked->total_debit, 'withdraw_expired');
+                        $this->guard()->releaseHoldUpTo($locked->customer_user_id, (string)$locked->total_debit, 'withdraw_expired');
                         $locked->update(['status' => 'expired']);
                     }
                 });
