@@ -230,4 +230,15 @@ Route::prefix('hub')->name('hub.')->group(function () {
     Route::post('/finance/topup', [$hc, 'adminTopup'])->name('finance.topup');
     Route::get('/finance/stats.json', [$hc, 'financeStats'])->name('finance.stats');
     Route::get('/finance/feed.json', [$hc, 'financeFeed'])->name('finance.feed');
+
+    // لوحة الاشتراكات (الباقات) — حقيقية عبر SubscriptionService
+    Route::get('/subscriptions', [$hc, 'subscriptions'])->name('subscriptions');
+    Route::get('/subscriptions/list.json', [$hc, 'subsList'])->name('subscriptions.list');
+    Route::post('/subscriptions/{merchantId}/plan', [$hc, 'subsChangePlan'])
+        ->where('merchantId', '[0-9]+')->name('subscriptions.plan');
+    Route::post('/subscriptions/{merchantId}/extend', [$hc, 'subsExtend'])
+        ->where('merchantId', '[0-9]+')->name('subscriptions.extend');
+
+    // لوحة النزاعات — واجهة فوق مسارات safe-payments الموجودة (JSON)
+    Route::get('/disputes', [$hc, 'disputes'])->name('disputes');
 });

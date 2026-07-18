@@ -99,6 +99,36 @@
                 <input class="form-control" id="add-phone" dir="ltr" placeholder="9677xxxxxxxx"></div>
             <div class="mb-2"><label class="form-label">كلمة السر (8+ أحرف)</label>
                 <input class="form-control" id="add-password" dir="ltr"></div>
+            <div class="mb-2"><label class="form-label">رمز PIN للمعاملات (4 أرقام — الافتراضي 1234)</label>
+                <input class="form-control" id="add-pin" dir="ltr" maxlength="4" placeholder="1234"></div>
+
+            @if($hubType == 3)
+            {{-- حقول التاجر: تفتح لوحة القطاع الصحيحة والباقة في التطبيق --}}
+            <div class="mb-2"><label class="form-label">اسم المتجر</label>
+                <input class="form-control" id="add-store"></div>
+            <div class="mb-2"><label class="form-label">نوع النشاط</label>
+                <select class="form-select" id="add-biz">
+                    <option value="retail">بقالة / سوبرماركت</option>
+                    <option value="quick_sale">بيع سريع (بسطة/خضار/أسماك)</option>
+                    <option value="fuel">محطة وقود</option>
+                    <option value="pharmacy">صيدلية</option>
+                    <option value="wholesale">جملة</option>
+                    <option value="restaurant">مطعم</option>
+                </select></div>
+            <div class="mb-2"><label class="form-label">الباقة</label>
+                <select class="form-select" id="add-plan">
+                    <option value="free">مجاني</option>
+                    <option value="starter">البداية</option>
+                    <option value="business">الأعمال</option>
+                    <option value="merchant_pro">تاجر محترف</option>
+                    <option value="enterprise">مؤسسة</option>
+                </select></div>
+            @endif
+
+            <div class="alert alert-info small py-2">
+                الحساب يُنشأ جاهزاً للدخول من التطبيق فوراً: الهاتف + كلمة السر أعلاه،
+                وPIN المعاملات المدخل، والتوثيق معتمد تلقائياً.
+            </div>
             <div class="text-danger small" id="add-error"></div>
         </div>
         <div class="modal-footer">
@@ -265,12 +295,19 @@
         const errEl = document.getElementById('add-error');
         errEl.textContent = '';
         try {
-            const j = await post(`${base}/${slug}/users`, {
+            const payload = {
                 f_name: document.getElementById('add-fname').value,
                 l_name: document.getElementById('add-lname').value,
                 phone: document.getElementById('add-phone').value,
                 password: document.getElementById('add-password').value,
-            });
+                pin: document.getElementById('add-pin').value || undefined,
+            };
+            if (slug === 'merchants') {
+                payload.store_name = document.getElementById('add-store').value;
+                payload.business_type = document.getElementById('add-biz').value;
+                payload.plan = document.getElementById('add-plan').value;
+            }
+            const j = await post(`${base}/${slug}/users`, payload);
             bootstrap.Modal.getInstance(document.getElementById('modal-add')).hide();
             alert(j.message); loadUsers();
         } catch (err) { errEl.textContent = err.message; }

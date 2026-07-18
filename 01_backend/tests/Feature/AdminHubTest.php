@@ -176,6 +176,124 @@ class AdminHubTest extends TestCase
             (string) EMoney::where('user_id', $this->admin->id)->value('current_balance'));
     }
 
+    // ==================== «حقيقي وليس واجهة» ====================
+    // الحساب المُنشأ من اللوحة يجب أن يدخل من مسار دخول التطبيق نفسه فوراً.
+
+    /** @test */
+    public function hub_created_customer_can_login_from_app(): void
+    {
+        $this->actingAs($this->admin, 'user')
+            ->postJson('/admin/amial/hub/customers/users', [
+                'f_name' => 'عميل', 'l_name' => 'حقيقي',
+                'phone' => '967771009050', 'password' => 'Secret@123', 'pin' => '5678',
+            ])->assertCreated();
+
+        \Illuminate\Support\Facades\Artisan::call('passport:install', ['--no-interaction' => true]);
+        $this->postJson('/api/v1/auth/login', [
+            'role' => 'customer', 'phone' => '967771009050', 'password' => 'Secret@123',
+        ])->assertOk();
+    }
+
+    /** @test */
+    public function hub_created_merchant_can_login_and_use_cashier(): void
+    {
+        $this->actingAs($this->admin, 'user')
+            ->postJson('/admin/amial/hub/merchants/users', [
+                'f_name' => 'تاجر', 'l_name' => 'حقيقي',
+                'phone' => '967771009051', 'password' => 'Secret@123',
+                'store_name' => 'بقالة الاختبار', 'business_type' => 'retail', 'plan' => 'business',
+            ])->assertCreated();
+
+        // دخول التطبيق بدور تاجر — التطبيق يطلب رقم التاجر الذي تعيده اللوحة
+        \Illuminate\Support\Facades\Artisan::call('passport:install', ['--no-interaction' => true]);
+        $merchantUser = User::where('phone', '967771009051')->first();
+        $merchantNumber = \App\Models\Merchant::where('user_id', $merchantUser->id)->value('merchant_number');
+        $this->assertNotNull($merchantNumber);
+        $this->postJson('/api/v1/auth/login', [
+            'role' => 'merchant', 'merchant_number' => $merchantNumber,
+            'phone' => '967771009051', 'password' => 'Secret@123',
+        ])->assertOk();
+
+        // الملف والباقة حقيقيان
+        $merchant = User::where('phone', '967771009051')->first();
+        $profile = \App\Models\MerchantProfile::where('user_id', $merchant->id)->first();
+        $this->assertSame('verified', $profile->verification_status);
+        $this->assertSame('business', $profile->subscription_plan);
+        $this->assertSame('retail', $profile->business_type);
+
+        // واجهة الكاشير في التطبيق تعمل لهذا التاجر (تتطلّب MerchantProfile فعلياً)
+        \Laravel\Passport\Passport::actingAs($merchant, [], 'api');
+        $this->getJson('/api/v1/amial/merchant/cashier/products')->assertOk();
+    }
+
+    /** @test */
+    public function hub_created_agent_passes_app_login_step_one(): void
+    {
+        $this->actingAs($this->admin, 'user')
+            ->postJson('/admin/amial/hub/agents/users', [
+                'f_name' => 'وكيل', 'l_name' => 'حقيقي',
+                'phone' => '967771009052', 'password' => 'Secret@123',
+            ])->assertCreated();
+
+        $agent = User::where('phone', '967771009052')->first();
+        $this->assertNotNull($agent->agent_number, 'رقم الوكيل يُولَّد تلقائياً');
+
+        // خطوة الدخول الأولى (رقم الوكيل + كلمة السر) تنجح وتصدر رمز OTP
+        $this->postJson('/api/v1/auth/login', [
+            'role' => 'agent', 'agent_number' => $agent->agent_number,
+            'phone' => '967771009052', 'password' => 'Secret@123',
+        ])->assertOk();
+    }
+
+    // ==================== لوحة الاشتراكات ====================
+
+    /** @test */
+    public function subscriptions_page_and_plan_change_are_real(): void
+    {
+        $this->actingAs($this->admin, 'user')
+            ->postJson('/admin/amial/hub/merchants/users', [
+                'f_name' => 'تاجر', 'l_name' => 'باقات',
+                'phone' => '967771009053', 'password' => 'Secret@123',
+                'store_name' => 'متجر الباقات', 'plan' => 'free',
+            ])->assertCreated();
+        $merchant = User::where('phone', '967771009053')->first();
+
+        $this->actingAs($this->admin, 'user')
+            ->get('/admin/amial/hub/subscriptions')->assertOk();
+
+        $this->actingAs($this->admin, 'user')
+            ->getJson('/admin/amial/hub/subscriptions/list.json')
+            ->assertOk()->assertJsonStructure(['summary', 'data']);
+
+        // تغيير الباقة يمرّ عبر SubscriptionService الحقيقي ويغيّر الملف فعلاً
+        $this->actingAs($this->admin, 'user')
+            ->postJson("/admin/amial/hub/subscriptions/{$merchant->id}/plan", ['plan' => 'merchant_pro'])
+            ->assertOk();
+        $this->assertSame('merchant_pro',
+            \App\Models\MerchantProfile::where('user_id', $merchant->id)->value('subscription_plan'));
+
+        // والتمديد يحرّك تاريخ الانتهاء
+        $before = \App\Models\MerchantProfile::where('user_id', $merchant->id)->value('subscription_expires_at');
+        $this->actingAs($this->admin, 'user')
+            ->postJson("/admin/amial/hub/subscriptions/{$merchant->id}/extend", ['days' => 30])
+            ->assertOk();
+        $after = \App\Models\MerchantProfile::where('user_id', $merchant->id)->value('subscription_expires_at');
+        $this->assertTrue(\Carbon\Carbon::parse($after)->gt(\Carbon\Carbon::parse($before)));
+    }
+
+    // ==================== لوحة النزاعات ====================
+
+    /** @test */
+    public function disputes_page_renders_and_lists_safe_payments(): void
+    {
+        $this->actingAs($this->admin, 'user')
+            ->get('/admin/amial/hub/disputes')->assertOk();
+
+        $this->actingAs($this->admin, 'user')
+            ->getJson('/admin/amial/safe-payments?status=disputed_open')
+            ->assertOk();
+    }
+
     /** @test */
     public function finance_stats_and_feed_respond(): void
     {

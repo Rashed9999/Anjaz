@@ -219,7 +219,14 @@ class AdminHubController extends Controller
         return response()->json(['kyc' => $status, 'message' => $status === 1 ? 'تم اعتماد الوثائق' : 'تم رفض الوثائق']);
     }
 
-    /** POST hub/{slug}/users — إضافة عميل/وكيل/تاجر */
+    /**
+     * POST hub/{slug}/users — إضافة عميل/وكيل/تاجر «حقيقي».
+     *
+     * الحساب المُنشأ هنا جاهز للدخول من التطبيق فوراً بنفس وصفة الحسابات
+     * التجريبية العاملة: هاتف موثّق + PIN معاملات + KYC معتمد + محفظة، وللوكيل
+     * رقم وكيل، وللتاجر سجلّ Merchant + ملف MerchantProfile موثّق بنشاطه
+     * وباقته وحدوده — فيفتح التطبيق لوحة القطاع الصحيحة مباشرة.
+     */
     public function storeUser(Request $request, string $slug): JsonResponse
     {
         $type = $this->typeFromSlug($slug);
@@ -230,15 +237,25 @@ class AdminHubController extends Controller
             'l_name' => 'nullable|string|max:100',
             'phone' => 'required|string|min:6|max:20',
             'password' => 'required|string|min:8',
+            'pin' => 'nullable|digits:4',
+            // حقول التاجر
+            'store_name' => 'nullable|string|max:120',
+            'business_type' => 'nullable|string|in:' . implode(',', \App\Support\Access\AccessConstants::ALL_BUSINESS_TYPES),
+            'plan' => 'nullable|string|in:' . implode(',', \App\Support\Access\AccessConstants::ALL_PLANS),
         ]);
         if ($v->fails()) return response()->json(['message' => $v->errors()->first()], 422);
+
+        if ($type === MERCHANT_TYPE && trim((string) $request->input('store_name', '')) === '') {
+            return response()->json(['message' => 'اسم المتجر مطلوب للتاجر'], 422);
+        }
 
         $phone = Helpers::filter_phone($request->input('phone'));
         if (User::where('phone', $phone)->exists()) {
             return response()->json(['message' => 'رقم الهاتف مستخدم مسبقاً'], 422);
         }
 
-        $user = DB::transaction(function () use ($request, $type, $phone) {
+        $schema = \Illuminate\Support\Facades\Schema::class;
+        $user = DB::transaction(function () use ($request, $type, $phone, $schema) {
             $user = new User();
             $user->f_name = $request->input('f_name');
             $user->l_name = $request->input('l_name', '');
@@ -247,20 +264,47 @@ class AdminHubController extends Controller
             $user->type = $type;
             $user->is_active = 1;
             $user->is_phone_verified = 1;
-            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'zone_code')) {
-                $user->zone_code = 'SOUTH';
+            // حساب أنشأه الأدمن = موثّق (نفس وصفة الحسابات التجريبية العاملة)
+            if ($schema::hasColumn('users', 'is_kyc_verified')) $user->is_kyc_verified = 1;
+            if ($schema::hasColumn('users', 'kyc_tier')) $user->kyc_tier = 3;
+            if ($schema::hasColumn('users', 'zone_code')) $user->zone_code = 'SOUTH';
+            if ($schema::hasColumn('users', 'transaction_pin')) {
+                $user->transaction_pin = Hash::make($request->input('pin') ?: '1234');
+            }
+            if ($type === AGENT_TYPE && $schema::hasColumn('users', 'agent_number')) {
+                $seq = User::where('type', AGENT_TYPE)->count() + 1;
+                $user->agent_number = sprintf('AG-%03d', $seq);
             }
             $user->save();
 
             EMoney::firstOrCreate(['user_id' => $user->id], [
                 'current_balance' => '0.0000', 'held_balance' => '0.0000',
                 'pending_balance' => '0.0000', 'charge_earned' => '0.0000',
-                'zone_code' => 'SOUTH',
+                'zone_code' => 'SOUTH', 'version' => 1,
             ]);
 
             if ($type === MERCHANT_TYPE) {
+                // سجلّ Merchant القديم (تعتمد عليه شاشات 6cash المتبقية)
+                $mr = \App\Models\Merchant::where('user_id', $user->id)->first() ?? new \App\Models\Merchant();
+                $mr->user_id = $user->id;
+                $mr->store_name = trim((string) $request->input('store_name'));
+                $mr->merchant_number = sprintf('M-%05d', $user->id);
+                $mr->address = trim((string) $request->input('address', '')) ?: '—';
+                $mr->save();
+
+                // ملف أميال: النشاط يفتح لوحة القطاع، والباقة تفتح الميزات
                 MerchantProfile::firstOrCreate(['user_id' => $user->id], [
-                    'verification_status' => 'pending',
+                    'business_type' => $request->input('business_type') ?: \App\Support\Access\AccessConstants::BIZ_RETAIL,
+                    'verification_status' => 'verified',
+                    'verified_at' => now(),
+                    'zone_code' => 'SOUTH',
+                    'subscription_plan' => $request->input('plan') ?: \App\Support\Access\AccessConstants::PLAN_FREE,
+                    'subscription_expires_at' => now()->addDays(30),
+                    'subscription_notes' => 'أُنشئ من لوحة الإدارة',
+                    'daily_receive_limit' => '5000000',
+                    'single_receive_limit' => '1000000',
+                    'monthly_receive_limit' => '50000000',
+                    'can_transfer_out' => true,
                 ]);
             }
             return $user;
@@ -273,7 +317,23 @@ class AdminHubController extends Controller
             'context' => ['type' => $type], 'severity' => 'info',
         ]);
 
-        return response()->json(['id' => $user->id, 'message' => 'تم إنشاء الحساب'], 201);
+        // أرقام الدخول التي يسلّمها الأدمن لصاحب الحساب — التطبيق يطلبها:
+        // التاجر يدخل بـ merchant_number + الهاتف، والوكيل بـ agent_number + الهاتف.
+        $merchantNumber = $type === MERCHANT_TYPE
+            ? \App\Models\Merchant::where('user_id', $user->id)->value('merchant_number') : null;
+
+        $loginHint = match ($type) {
+            AGENT_TYPE => "دخول التطبيق: رقم الوكيل {$user->agent_number} + الهاتف + كلمة السر (ثم OTP)",
+            MERCHANT_TYPE => "دخول التطبيق: رقم التاجر {$merchantNumber} + الهاتف + كلمة السر",
+            default => 'دخول التطبيق: الهاتف + كلمة السر',
+        };
+
+        return response()->json([
+            'id' => $user->id,
+            'agent_number' => $user->agent_number ?? null,
+            'merchant_number' => $merchantNumber,
+            'message' => "تم إنشاء الحساب — {$loginHint}",
+        ], 201);
     }
 
     /**
@@ -468,6 +528,106 @@ class AdminHubController extends Controller
                 ];
             })->values(),
         ]);
+    }
+
+    // ==================== لوحة الاشتراكات ====================
+
+    public function subscriptions(): View
+    {
+        $A = \App\Support\Access\AccessConstants::class;
+        return view('admin-views.amial.hub.subscriptions', [
+            'plans' => array_map(fn ($p) => ['code' => $p, 'label' => $A::PLAN_LABELS[$p] ?? $p], $A::ALL_PLANS),
+            'bizLabels' => $A::BUSINESS_TYPE_LABELS,
+        ]);
+    }
+
+    /** GET hub/subscriptions/list.json?plan=&search= — التجّار مع باقاتهم */
+    public function subsList(Request $request): JsonResponse
+    {
+        $A = \App\Support\Access\AccessConstants::class;
+        $q = MerchantProfile::with('user:id,f_name,l_name,phone');
+        if ($request->filled('plan')) $q->where('subscription_plan', $request->query('plan'));
+        $search = trim((string) $request->query('search', ''));
+        if ($search !== '') {
+            $q->whereHas('user', fn ($w) => $w->where('phone', 'like', "%{$search}%")
+                ->orWhere('f_name', 'like', "%{$search}%")->orWhere('l_name', 'like', "%{$search}%"));
+        }
+        $items = $q->orderByDesc('id')->paginate(15);
+
+        return response()->json([
+            'summary' => app(\App\Services\SubscriptionService::class)->summary(),
+            'data' => collect($items->items())->map(fn (MerchantProfile $p) => [
+                'merchant_user_id' => $p->user_id,
+                'name' => trim(($p->user->f_name ?? '') . ' ' . ($p->user->l_name ?? '')) ?: '—',
+                'phone' => $p->user->phone ?? '',
+                'business_type' => $p->business_type,
+                'plan' => $p->subscription_plan,
+                'plan_label' => $A::PLAN_LABELS[$p->subscription_plan] ?? ($p->subscription_plan ?: 'مجاني'),
+                'expires_at' => optional($p->subscription_expires_at)->format('Y-m-d'),
+                'expired' => $p->subscription_expires_at !== null && $p->subscription_expires_at->isPast(),
+                'verification' => $p->verification_status,
+            ])->values(),
+            'current_page' => $items->currentPage(),
+            'last_page' => $items->lastPage(),
+            'total' => $items->total(),
+        ]);
+    }
+
+    /** POST hub/subscriptions/{merchantId}/plan — تغيير الباقة (حقيقي عبر الخدمة) */
+    public function subsChangePlan(Request $request, int $merchantId): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'plan' => 'required|string|in:' . implode(',', \App\Support\Access\AccessConstants::ALL_PLANS),
+            'notes' => 'nullable|string|max:500',
+        ]);
+        if ($v->fails()) return response()->json(['message' => $v->errors()->first()], 422);
+
+        $merchant = User::where('id', $merchantId)->where('type', MERCHANT_TYPE)->first();
+        if (!$merchant) return response()->json(['message' => 'التاجر غير موجود'], 404);
+
+        try {
+            $change = app(\App\Services\SubscriptionService::class)->changePlan(
+                $merchant, $request->input('plan'), $request->user(),
+                ['notes' => $request->input('notes')],
+            );
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'فشل تغيير الباقة: ' . $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'new_expires_at' => optional($change->new_expires_at)->format('Y-m-d'),
+            'message' => 'تم تغيير الباقة',
+        ]);
+    }
+
+    /** POST hub/subscriptions/{merchantId}/extend — تمديد بالأيام */
+    public function subsExtend(Request $request, int $merchantId): JsonResponse
+    {
+        $v = Validator::make($request->all(), ['days' => 'required|integer|min:1|max:365']);
+        if ($v->fails()) return response()->json(['message' => $v->errors()->first()], 422);
+
+        $merchant = User::where('id', $merchantId)->where('type', MERCHANT_TYPE)->first();
+        if (!$merchant) return response()->json(['message' => 'التاجر غير موجود'], 404);
+
+        try {
+            $change = app(\App\Services\SubscriptionService::class)->extend(
+                $merchant, (int) $request->input('days'), $request->user(), [],
+            );
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'فشل التمديد: ' . $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'new_expires_at' => optional($change->new_expires_at)->format('Y-m-d'),
+            'message' => 'تم التمديد',
+        ]);
+    }
+
+    // ==================== لوحة النزاعات (الدفع الآمن) ====================
+
+    public function disputes(): View
+    {
+        return view('admin-views.amial.hub.disputes');
     }
 
     // ==================== مساعدات ====================

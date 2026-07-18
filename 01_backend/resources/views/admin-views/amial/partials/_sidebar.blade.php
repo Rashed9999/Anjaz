@@ -43,6 +43,18 @@
         <span class="text-truncate">💰 المركز المالي (بثّ حيّ)</span>
     </a>
 </li>
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/hub/subscriptions*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.hub.subscriptions')}}" title="لوحة الاشتراكات">
+        <i class="tio-diamond nav-icon"></i>
+        <span class="text-truncate">💎 لوحة الاشتراكات</span>
+    </a>
+</li>
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/hub/disputes*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.hub.disputes')}}" title="لوحة النزاعات">
+        <i class="tio-gavel nav-icon"></i>
+        <span class="text-truncate">⚖️ لوحة النزاعات (دفع آمن)</span>
+    </a>
+</li>
 
 {{-- Executive Dashboard (AMIAL-EXEC-DASHBOARD-001) --}}
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/executive*')?'active':''}}">
