@@ -199,6 +199,15 @@ class AdminHubController extends Controller
         $user->is_kyc_verified = $status;
         $user->save();
 
+        // AMIAL-VERIFY-HUB: اعتماد تاجر يوثّق ملفه أيضاً (يفتح ميزات التطبيق فعلياً)
+        if ((int) $user->type === MERCHANT_TYPE) {
+            MerchantProfile::where('user_id', $user->id)->update(
+                $status === 1
+                    ? ['verification_status' => 'verified', 'verified_at' => now()]
+                    : ['verification_status' => 'rejected'],
+            );
+        }
+
         app(AuditService::class)->record([
             'actor_type' => 'admin', 'actor_user_id' => $request->user()?->id,
             'subject_type' => 'user', 'subject_id' => $user->id,
@@ -628,6 +637,71 @@ class AdminHubController extends Controller
     public function disputes(): View
     {
         return view('admin-views.amial.hub.disputes');
+    }
+
+    // ==================== لوحة التحقق (اعتماد الحسابات الجديدة) ====================
+
+    public function verification(): View
+    {
+        return view('admin-views.amial.hub.verification', [
+            'pendingCount' => User::whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE])
+                ->where(fn ($q) => $q->where('is_kyc_verified', 0)->orWhereNull('is_kyc_verified'))
+                ->count(),
+        ]);
+    }
+
+    /**
+     * GET hub/verification/list.json?filter=pending|rejected|all
+     * كل الحسابات قيد التحقق (التسجيل الذاتي يصل هنا) عبر الأدوار الثلاثة،
+     * مع بياناتها ووثائقها ومتجر التاجر — للاعتماد/الرفض/الحظر.
+     */
+    public function verificationJson(Request $request): JsonResponse
+    {
+        $filter = $request->query('filter', 'pending');
+        $q = User::whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE]);
+        if ($filter === 'pending') {
+            $q->where(fn ($w) => $w->where('is_kyc_verified', 0)->orWhereNull('is_kyc_verified'));
+        } elseif ($filter === 'rejected') {
+            $q->where('is_kyc_verified', 2);
+        }
+
+        $users = $q->orderByDesc('id')->paginate(12);
+        $merchantRecords = \App\Models\Merchant::whereIn('user_id', $users->pluck('id'))
+            ->get()->keyBy('user_id');
+        $profiles = MerchantProfile::whereIn('user_id', $users->pluck('id'))
+            ->get()->keyBy('user_id');
+
+        return response()->json([
+            'data' => $users->map(function (User $u) use ($merchantRecords, $profiles) {
+                $roleLabel = match ((int) $u->type) {
+                    AGENT_TYPE => 'وكيل', MERCHANT_TYPE => 'تاجر', default => 'عميل',
+                };
+                return [
+                    'id' => $u->id,
+                    'role' => $roleLabel,
+                    'type' => (int) $u->type,
+                    'name' => trim(($u->f_name ?? '') . ' ' . ($u->l_name ?? '')) ?: '—',
+                    'phone' => $u->phone,
+                    'kyc' => (int) ($u->is_kyc_verified ?? 0),
+                    'is_active' => (int) $u->is_active === 1,
+                    'id_type' => $u->identification_type,
+                    'id_number' => $u->identification_number,
+                    'documents' => $u->identification_image_fullpath ?? [],
+                    'address' => $u->address ?? null,
+                    'kin' => trim(implode(' — ', array_filter([
+                        $u->kin_name ?? null, $u->kin_phone ?? null, $u->kin_relation ?? null,
+                    ]))) ?: null,
+                    'store_name' => $merchantRecords[$u->id]->store_name ?? null,
+                    'merchant_number' => $merchantRecords[$u->id]->merchant_number ?? null,
+                    'business_type' => $profiles[$u->id]->business_type ?? null,
+                    'agent_number' => $u->agent_number ?? null,
+                    'registered_at' => optional($u->created_at)->format('Y-m-d H:i'),
+                ];
+            })->values(),
+            'current_page' => $users->currentPage(),
+            'last_page' => $users->lastPage(),
+            'total' => $users->total(),
+        ]);
     }
 
     // ==================== مساعدات ====================

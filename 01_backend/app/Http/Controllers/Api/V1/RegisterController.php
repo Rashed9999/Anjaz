@@ -63,6 +63,11 @@ class RegisterController extends Controller
             'date_of_birth' => 'sometimes|nullable|date',
             'identification_issue_date' => 'sometimes|nullable|date',
             'identification_expiry_date' => 'sometimes|nullable|date',
+            // AMIAL-REG-ROLES: التسجيل الذاتي للأدوار الثلاثة من نفس المعالج —
+            // الحساب يُنشأ «قيد التحقق» (kyc=0) ويظهر في لوحة التحقق للاعتماد.
+            'account_type' => 'sometimes|nullable|in:customer,merchant,agent',
+            'store_name' => 'sometimes|nullable|string|max:120',
+            'business_type' => 'sometimes|nullable|in:' . implode(',', \App\Support\Access\AccessConstants::ALL_BUSINESS_TYPES),
         ]);
 
 
@@ -106,7 +111,20 @@ class RegisterController extends Controller
         // لأنّه IO ملفّات) — نمرّر المسار للحفظ داخل المعاملة.
         $signaturePath = $this->storeSignature($request->input('signature'));
 
-        DB::transaction(function () use ($request, $verify, $phone, $signaturePath) {
+        // AMIAL-REG-ROLES: نوع الحساب المطلوب (افتراضياً عميل)
+        $accountType = match ($request->input('account_type')) {
+            'merchant' => MERCHANT_TYPE,
+            'agent' => AGENT_TYPE,
+            default => CUSTOMER_TYPE,
+        };
+        if ($accountType === MERCHANT_TYPE && trim((string) $request->input('store_name', '')) === '') {
+            return response()->json(['errors' => [
+                ['code' => 'store_name', 'message' => 'اسم المتجر مطلوب لحساب التاجر'],
+            ]], 403);
+        }
+
+        $loginNumbers = ['agent_number' => null, 'merchant_number' => null];
+        DB::transaction(function () use ($request, $verify, $phone, $signaturePath, $accountType, &$loginNumbers) {
             $verify?->delete();
 
             $user = $this->user;
@@ -120,8 +138,15 @@ class RegisterController extends Controller
             $user->email = $request->email;
             $user->identification_image = json_encode([]);
             $user->password = bcrypt($request->password);
-            $user->type = CUSTOMER_TYPE;
+            $user->type = $accountType;
             $user->referral_id = $request->referral_id ?? null;
+            // PIN المعاملات = نفس رمز الدخول المُدخل (يغيّره المستخدم لاحقاً)
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'transaction_pin')) {
+                $user->transaction_pin = $request->password;
+            }
+            if ($accountType === AGENT_TYPE && \Illuminate\Support\Facades\Schema::hasColumn('users', 'agent_number')) {
+                $user->agent_number = sprintf('AG-%03d', User::where('type', AGENT_TYPE)->count() + 1);
+            }
             if ($signaturePath) {
                 $user->signature_encrypted_path = $signaturePath;
                 $user->signature_captured_at = now();
@@ -166,7 +191,7 @@ class RegisterController extends Controller
                     $user->{$dc} = $request->input($dc);
                 }
             }
-            $user->is_kyc_verified = 0; // بانتظار مراجعة الإدارة
+            $user->is_kyc_verified = 0; // بانتظار مراجعة الإدارة (لوحة التحقق)
 
             $user->save();
 
@@ -177,6 +202,28 @@ class RegisterController extends Controller
             $emoney = $this->eMoney;
             $emoney->user_id = $user->id;
             $emoney->save();
+
+            // AMIAL-REG-ROLES: سجلات التاجر — رقم دخوله + ملف «قيد التحقق»
+            if ($accountType === MERCHANT_TYPE) {
+                $mr = new \App\Models\Merchant();
+                $mr->user_id = $user->id;
+                $mr->store_name = trim((string) $request->input('store_name'));
+                $mr->merchant_number = sprintf('M-%05d', $user->id);
+                $mr->address = trim((string) $request->input('address', '')) ?: '—';
+                $mr->save();
+                $loginNumbers['merchant_number'] = $mr->merchant_number;
+
+                \App\Models\MerchantProfile::firstOrCreate(['user_id' => $user->id], [
+                    'business_type' => $request->input('business_type')
+                        ?: \App\Support\Access\AccessConstants::BIZ_RETAIL,
+                    'verification_status' => 'pending_review',
+                    'zone_code' => 'SOUTH',
+                    'subscription_plan' => \App\Support\Access\AccessConstants::PLAN_FREE,
+                ]);
+            }
+            if ($accountType === AGENT_TYPE) {
+                $loginNumbers['agent_number'] = $user->agent_number;
+            }
         });
 
         if($request->has('referral_id')) {
@@ -186,7 +233,13 @@ class RegisterController extends Controller
             } catch (\Exception $e){}
         }
 
-        return response()->json(['message' => 'Registration Successful'], 200);
+        return response()->json([
+            'message' => 'Registration Successful',
+            // أرقام الدخول للتاجر/الوكيل — يعرضها التطبيق في شاشة النجاح
+            'agent_number' => $loginNumbers['agent_number'],
+            'merchant_number' => $loginNumbers['merchant_number'],
+            'verification_status' => 'pending_review',
+        ], 200);
     }
 
     /**

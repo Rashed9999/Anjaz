@@ -40,6 +40,12 @@ class _AmialRegistrationWizardScreenState
   final _email = TextEditingController();
   final _occupation = TextEditingController();
   String _gender = 'male';
+  // AMIAL-REG-ROLES: نوع الحساب + حقول التاجر + أرقام الدخول من الخادم
+  String _accountType = 'customer';
+  String _businessType = 'retail';
+  final _storeName = TextEditingController();
+  String? _agentNumber;
+  String? _merchantNumber;
   final _phone = TextEditingController();
   final String _dialCode = '+967';
 
@@ -81,7 +87,7 @@ class _AmialRegistrationWizardScreenState
       _name1, _name2, _name3, _name4, _dob, _email, _occupation, _phone,
       _idNumber, _idIssue, _idExpiry,
       _addrGov, _addrDir, _addrArea, _addrStreet, _addrLandmark,
-      _kinName, _kinPhone, _kinRelation, _pin, _pinConfirm, _otp,
+      _kinName, _kinPhone, _kinRelation, _pin, _pinConfirm, _otp, _storeName,
     ]) {
       c.dispose();
     }
@@ -117,6 +123,10 @@ class _AmialRegistrationWizardScreenState
   bool _validateStep(int s) {
     switch (s) {
       case 0:
+        if (_accountType == 'merchant' && _storeName.text.trim().isEmpty) {
+          _snack('أدخل اسم المتجر');
+          return false;
+        }
         if (_name1.text.trim().isEmpty || _name2.text.trim().isEmpty ||
             _name3.text.trim().isEmpty || _name4.text.trim().isEmpty) {
           _snack('أدخل الاسم الرباعي كاملاً');
@@ -222,11 +232,19 @@ class _AmialRegistrationWizardScreenState
   Future<void> _sendOtp() async {
     try {
       final api = Get.find<ApiClient>();
-      await api.postData('/api/v1/customer/auth/check-phone', {
+      final r = await api.postData('/api/v1/customer/auth/check-phone', {
         'phone': '$_dialCode${_phone.text.trim()}',
       });
       _otpSent = true;
-      _snack('تم إرسال رمز التحقق إلى هاتفك');
+      // AMIAL-DEMO-OTP: في وضع التجربة (بلا بوابة SMS) يعيد الخادم الرمز
+      // مباشرة — نعبّئه تلقائياً كي لا يقف التسجيل عند رمز لا يصل.
+      final demoOtp = (r.body is Map) ? r.body['demo_otp'] : null;
+      if (demoOtp != null && '$demoOtp'.isNotEmpty) {
+        setState(() => _otp.text = '$demoOtp');
+        _snack('وضع التجربة: عُبّئ رمز التحقق تلقائياً');
+      } else {
+        _snack('تم إرسال رمز التحقق إلى هاتفك');
+      }
     } catch (_) {/* قد يكون التحقّق بالهاتف معطّلاً */}
   }
 
@@ -273,6 +291,10 @@ class _AmialRegistrationWizardScreenState
         'kin_phone': _kinPhone.text.trim(),
         'kin_relation': _kinRelation.text.trim(),
         'declaration_accepted': '1',
+        // AMIAL-REG-ROLES: نوع الحساب وحقول التاجر
+        'account_type': _accountType,
+        if (_accountType == 'merchant') 'store_name': _storeName.text.trim(),
+        if (_accountType == 'merchant') 'business_type': _businessType,
         if (signature != null) 'signature': signature,
       };
       final parts = _idImages
@@ -288,6 +310,9 @@ class _AmialRegistrationWizardScreenState
           ('${r.body['message'] ?? ''}').toLowerCase().contains('success');
       if (ok) {
         setState(() {
+          // أرقام الدخول للتاجر/الوكيل — تُعرض في شاشة النجاح ليحفظها المستخدم
+          _agentNumber = (r.body is Map) ? r.body['agent_number']?.toString() : null;
+          _merchantNumber = (r.body is Map) ? r.body['merchant_number']?.toString() : null;
           _step = _successStep;
           _submitting = false;
         });
@@ -446,7 +471,36 @@ class _AmialRegistrationWizardScreenState
   }
 
   Widget _stepPersonal() => _wrap([
-        _sectionNote('أدخل اسمك الرباعي كما في وثيقة الهوية.'),
+        // AMIAL-REG-ROLES: نوع الحساب — الحساب يُنشأ حقيقياً بالدور المختار
+        // ويصل للوحة «التحقق» في الإدارة لاعتماده.
+        _sectionNote('اختر نوع الحساب ثم أدخل اسمك الرباعي كما في وثيقة الهوية.'),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'customer', label: Text('عميل'), icon: Icon(Icons.person_outline)),
+            ButtonSegment(value: 'merchant', label: Text('تاجر'), icon: Icon(Icons.storefront_outlined)),
+            ButtonSegment(value: 'agent', label: Text('وكيل'), icon: Icon(Icons.handshake_outlined)),
+          ],
+          selected: {_accountType},
+          onSelectionChanged: (s) => setState(() => _accountType = s.first),
+        ),
+        if (_accountType == 'merchant') ...[
+          const SizedBox(height: 14),
+          _field(_storeName, 'اسم المتجر *'),
+          DropdownButtonFormField<String>(
+            value: _businessType,
+            decoration: const InputDecoration(labelText: 'نوع النشاط', border: OutlineInputBorder()),
+            items: const [
+              DropdownMenuItem(value: 'retail', child: Text('بقالة / سوبرماركت')),
+              DropdownMenuItem(value: 'quick_sale', child: Text('بيع سريع (بسطة/خضار/أسماك)')),
+              DropdownMenuItem(value: 'fuel', child: Text('محطة وقود')),
+              DropdownMenuItem(value: 'pharmacy', child: Text('صيدلية')),
+              DropdownMenuItem(value: 'wholesale', child: Text('جملة')),
+              DropdownMenuItem(value: 'restaurant', child: Text('مطعم')),
+            ],
+            onChanged: (v) => setState(() => _businessType = v ?? 'retail'),
+          ),
+        ],
+        const SizedBox(height: 14),
         _field(_name1, 'الاسم الأول *'),
         _field(_name2, 'اسم الأب *'),
         _field(_name3, 'اسم الجد *'),
@@ -633,6 +687,34 @@ class _AmialRegistrationWizardScreenState
               textAlign: TextAlign.center,
               style: TextStyle(color: Color(0xFF5F6B7C), height: 1.6),
             ),
+            // AMIAL-REG-ROLES: رقم دخول التاجر/الوكيل — يحتاجه عند تسجيل الدخول
+            if (_merchantNumber != null || _agentNumber != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AmyalColors.yellow.withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AmyalColors.yellowDark),
+                ),
+                child: Column(children: [
+                  Text(
+                    _merchantNumber != null
+                        ? 'رقم التاجر الخاص بك (احفظه — تدخل به للتطبيق):'
+                        : 'رقم الوكيل الخاص بك (احفظه — تدخل به للتطبيق):',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  SelectableText(
+                    _merchantNumber ?? _agentNumber ?? '',
+                    style: const TextStyle(
+                        fontSize: 22, fontWeight: FontWeight.bold,
+                        color: AmyalColors.primary, fontFamily: 'monospace'),
+                  ),
+                ]),
+              ),
+            ],
             const SizedBox(height: 24),
 
             // ====== مسار المراجعة ======

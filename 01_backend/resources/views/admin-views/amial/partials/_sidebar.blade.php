@@ -43,6 +43,12 @@
         <span class="text-truncate">💰 المركز المالي (بثّ حيّ)</span>
     </a>
 </li>
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/hub/verification*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.hub.verification')}}" title="لوحة التحقق">
+        <i class="tio-verified nav-icon"></i>
+        <span class="text-truncate">🪪 لوحة التحقق (الحسابات الجديدة)</span>
+    </a>
+</li>
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/hub/subscriptions*')?'active':''}}">
     <a class="nav-link" href="{{route('admin.amial.hub.subscriptions')}}" title="لوحة الاشتراكات">
         <i class="tio-diamond nav-icon"></i>

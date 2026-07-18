@@ -113,7 +113,8 @@ class UnifiedAuthController extends Controller
         $v = Validator::make($request->all(), [
             'merchant_number' => 'required|string|min:3|max:50',
             'phone' => 'required|string|min:6|max:30',
-            'password' => 'required|string|min:6|max:200',
+            // كلمة السرّ قد تكون PIN من 4 أرقام (معيار التسجيل الذاتي)
+            'password' => 'required|string|min:4|max:200',
             'pos_number' => 'sometimes|nullable|string|max:50',
         ]);
         if ($v->fails()) return $this->validationError($v);
@@ -132,7 +133,8 @@ class UnifiedAuthController extends Controller
     {
         $v = Validator::make($request->all(), [
             'agent_number' => 'required|string|min:3|max:50',
-            'password' => 'required|string|min:6|max:200',
+            // كلمة السرّ قد تكون PIN من 4 أرقام (معيار التسجيل الذاتي)
+            'password' => 'required|string|min:4|max:200',
         ]);
         if ($v->fails()) return $this->validationError($v);
 

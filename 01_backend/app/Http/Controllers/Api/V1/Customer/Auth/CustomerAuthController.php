@@ -99,9 +99,17 @@ class CustomerAuthController extends Controller
                 $response = SmsModule::send($request['phone'], $otp);
             }
 
+            // AMIAL-DEMO-OTP: بلا بوابة SMS لا يصل الرمز لأحد فيقف التسجيل نهائياً.
+            // في وضع التجربة (APP_MODE != live) نفصح عن الرمز في الاستجابة ليعبّئه
+            // التطبيق تلقائياً — يختفي هذا تلقائياً عند APP_MODE=live مع بوابة حقيقية.
+            $demoHint = (env('APP_MODE') != 'live') ? (string) $otp
+                : (is_string(config('app.amial_demo_otp')) && config('app.amial_demo_otp') !== ''
+                    ? (string) config('app.amial_demo_otp') : null);
+
             return response()->json([
                 'message' => 'Number is ready to register',
-                'otp' => 'active'
+                'otp' => 'active',
+                'demo_otp' => $demoHint,
             ], 200);
         }
         else{

@@ -241,4 +241,8 @@ Route::prefix('hub')->name('hub.')->group(function () {
 
     // لوحة النزاعات — واجهة فوق مسارات safe-payments الموجودة (JSON)
     Route::get('/disputes', [$hc, 'disputes'])->name('disputes');
+
+    // لوحة التحقق — اعتماد/رفض/حظر الحسابات المسجَّلة ذاتياً (كل الأدوار)
+    Route::get('/verification', [$hc, 'verification'])->name('verification');
+    Route::get('/verification/list.json', [$hc, 'verificationJson'])->name('verification.list');
 });
