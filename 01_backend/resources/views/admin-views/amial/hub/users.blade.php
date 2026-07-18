@@ -177,7 +177,7 @@
 @endsection
 
 @push('script')
-<script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     const root = document.getElementById('hub-root');
     const slug = root.dataset.slug;

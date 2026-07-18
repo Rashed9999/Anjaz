@@ -82,7 +82,7 @@
 @endsection
 
 @push('script')
-<script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     const csrf = document.querySelector('meta[name="csrf-token"]').content;
     const base = '{{ url('admin/amial/safe-payments') }}';

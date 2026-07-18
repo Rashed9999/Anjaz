@@ -83,4 +83,40 @@ class AdminHubExtraPanelsTest extends TestCase
             ->get('/admin/maintenance')
             ->assertOk();
     }
+
+    /**
+     * @test AMIAL-CSP-FIX: كل سكربتات لوحات الـhub يجب أن تحمل nonce الـCSP —
+     * وإلّا حجبها المتصفّح فتتوقّف كل الأزرار والقوائم («جار التحميل» للأبد).
+     * هذا الاختبار يمنع تكرار العطل: يتحقّق أن السكربت المضمّن يحمل نفس الـnonce
+     * الموجود في ترويسة Content-Security-Policy لكل صفحة.
+     */
+    public function every_hub_page_inline_script_carries_the_csp_nonce(): void
+    {
+        $pages = ['customers', 'agents', 'merchants', 'finance',
+            'settlements', 'staff', 'settings', 'subscriptions', 'disputes', 'verification'];
+
+        foreach ($pages as $page) {
+            $resp = $this->actingAs($this->admin, 'user')->get("/admin/amial/hub/{$page}");
+            $resp->assertOk();
+
+            $html = $resp->getContent();
+            $csp = $resp->headers->get('Content-Security-Policy');
+            $this->assertNotNull($csp, "لا ترويسة CSP في صفحة {$page}");
+
+            // استخرج الـnonce من الترويسة
+            preg_match("/'nonce-([^']+)'/", (string) $csp, $m);
+            $nonce = $m[1] ?? null;
+            $this->assertNotNull($nonce, "لا nonce في CSP لصفحة {$page}");
+
+            // كل صفحة hub فيها سكربت مضمّن — يجب أن يحمل هذا الـnonce
+            $this->assertStringContainsString(
+                'script nonce="' . $nonce . '"',
+                $html,
+                "سكربت صفحة {$page} لا يحمل nonce الـCSP — سيحجبه المتصفّح"
+            );
+            // ولا يوجد سكربت مضمّن مجرّد بلا nonce (باستثناء سكربتات src=)
+            $this->assertStringNotContainsString('<script>', $html,
+                "صفحة {$page} فيها سكربت بلا nonce سيُحجب");
+        }
+    }
 }
