@@ -717,6 +717,185 @@ class AdminHubController extends Controller
         ]);
     }
 
+    // ==================== لوحة التسويات (تسويات الوكلاء) ====================
+
+    public function settlements(): View
+    {
+        return view('admin-views.amial.hub.settlements');
+    }
+
+    /** GET hub/settlements/list.json?status=pending|completed|rejected */
+    public function settlementsJson(Request $request): JsonResponse
+    {
+        $status = $request->query('status', 'pending');
+        $q = \App\Models\AgentSettlement::with('agent:id,f_name,l_name,phone');
+        if (in_array($status, ['pending', 'completed', 'rejected'], true)) {
+            $q->where('status', $status);
+        }
+        $items = $q->orderByDesc('id')->paginate(15);
+
+        $sums = \App\Models\AgentSettlement::selectRaw('status, COUNT(*) c, SUM(amount) s')
+            ->groupBy('status')->get()->keyBy('status');
+
+        return response()->json([
+            'summary' => [
+                'pending' => (int) ($sums['pending']->c ?? 0),
+                'pending_amount' => (string) ($sums['pending']->s ?? '0'),
+                'completed' => (int) ($sums['completed']->c ?? 0),
+                'completed_amount' => (string) ($sums['completed']->s ?? '0'),
+            ],
+            'data' => collect($items->items())->map(fn ($s) => [
+                'ulid' => $s->settlement_ulid,
+                'agent' => trim(($s->agent->f_name ?? '') . ' ' . ($s->agent->l_name ?? '')) ?: '—',
+                'phone' => $s->agent->phone ?? '',
+                'type' => $s->settlement_type,
+                'amount' => (string) $s->amount,
+                'commission' => (string) $s->commission_amount,
+                'method' => $s->payment_method,
+                'reference' => $s->payment_reference,
+                'status' => $s->status,
+                'note' => $s->note,
+                'created_at' => optional($s->created_at)->format('Y-m-d H:i'),
+            ])->values(),
+            'current_page' => $items->currentPage(),
+            'last_page' => $items->lastPage(),
+            'total' => $items->total(),
+        ]);
+    }
+
+    /** POST hub/settlements/{ulid}/approve — يعتمد التسوية ويضيف الرصيد (دفتر قيود) */
+    public function settlementApprove(Request $request, string $ulid): JsonResponse
+    {
+        $s = \App\Models\AgentSettlement::where('settlement_ulid', $ulid)->first();
+        if (!$s) return response()->json(['message' => 'التسوية غير موجودة'], 404);
+        try {
+            $r = app(AgentNetworkService::class)->approveSettlement($s, $request->user());
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'فشل الاعتماد: ' . $e->getMessage()], 422);
+        }
+        return response()->json(['status' => $r->status, 'message' => 'تم اعتماد التسوية وإضافة الرصيد']);
+    }
+
+    /** POST hub/settlements/{ulid}/reject */
+    public function settlementReject(Request $request, string $ulid): JsonResponse
+    {
+        $s = \App\Models\AgentSettlement::where('settlement_ulid', $ulid)->first();
+        if (!$s) return response()->json(['message' => 'التسوية غير موجودة'], 404);
+        try {
+            $r = app(AgentNetworkService::class)->rejectSettlement($s, $request->user(), $request->input('reason'));
+        } catch (\Throwable $e) {
+            return response()->json(['message' => 'فشل الرفض: ' . $e->getMessage()], 422);
+        }
+        return response()->json(['status' => $r->status, 'message' => 'تم رفض التسوية']);
+    }
+
+    // ==================== لوحة الموظفين (طاقم نقاط بيع التجّار) ====================
+
+    public function staff(): View
+    {
+        return view('admin-views.amial.hub.staff', [
+            'roles' => \App\Models\Role::orderBy('id')->get(['id', 'code', 'label_ar'])->map(fn ($r) => [
+                'id' => $r->id, 'name' => $r->code,
+                'label' => $r->label_ar ?? $r->code,
+            ]),
+        ]);
+    }
+
+    /** GET hub/staff/list.json?search=&merchant_id= */
+    public function staffJson(Request $request): JsonResponse
+    {
+        $q = \App\Models\PosUser::with(['user:id,f_name,l_name,phone', 'merchant:id,f_name,l_name', 'branch:id,name']);
+        if ($request->filled('merchant_id')) {
+            $q->where('merchant_user_id', (int) $request->query('merchant_id'));
+        }
+        $search = trim((string) $request->query('search', ''));
+        if ($search !== '') {
+            $q->where(fn ($w) => $w->where('display_name', 'like', "%{$search}%")
+                ->orWhere('pos_number', 'like', "%{$search}%")
+                ->orWhereHas('user', fn ($u) => $u->where('phone', 'like', "%{$search}%")));
+        }
+        $items = $q->orderByDesc('id')->paginate(15);
+
+        return response()->json([
+            'summary' => [
+                'total' => \App\Models\PosUser::count(),
+                'active' => \App\Models\PosUser::where('is_active', true)->count(),
+            ],
+            'data' => collect($items->items())->map(fn ($p) => [
+                'id' => $p->id,
+                'display_name' => $p->display_name,
+                'pos_number' => $p->pos_number,
+                'phone' => $p->user->phone ?? '',
+                'merchant' => trim(($p->merchant->f_name ?? '') . ' ' . ($p->merchant->l_name ?? '')) ?: '—',
+                'branch' => $p->branch->name ?? null,
+                'is_active' => (bool) $p->is_active,
+                'roles' => $p->roles()->pluck('label_ar')->filter()->values(),
+                'last_login' => optional($p->last_login_at)->format('Y-m-d H:i'),
+            ])->values(),
+            'current_page' => $items->currentPage(),
+            'last_page' => $items->lastPage(),
+            'total' => $items->total(),
+        ]);
+    }
+
+    /** POST hub/staff/{id}/toggle-active */
+    public function staffToggle(Request $request, int $id): JsonResponse
+    {
+        $p = \App\Models\PosUser::findOrFail($id);
+        $p->is_active = !$p->is_active;
+        $p->save();
+
+        app(AuditService::class)->record([
+            'actor_type' => 'admin', 'actor_user_id' => $request->user()?->id,
+            'subject_type' => 'user', 'subject_id' => $p->user_id,
+            'action' => 'ADMIN_POS_STAFF_TOGGLE',
+            'decision_code' => $p->is_active ? 'STAFF_ENABLED' : 'STAFF_DISABLED',
+            'severity' => 'notice',
+        ]);
+
+        return response()->json([
+            'is_active' => (bool) $p->is_active,
+            'message' => $p->is_active ? 'تم تفعيل الموظف' : 'تم تعطيل الموظف',
+        ]);
+    }
+
+    // ==================== لوحة الإعدادات (تحكّم بضغطة زر) ====================
+
+    public function settings(): View
+    {
+        $keys = ['phone_verification', 'referral_earning_status', 'maintenance_mode'];
+        $values = [];
+        foreach ($keys as $k) {
+            $values[$k] = (string) (DB::table('business_settings')->where('key', $k)->value('value') ?? '0');
+        }
+        return view('admin-views.amial.hub.settings', ['flags' => $values]);
+    }
+
+    /** POST hub/settings/flag — تبديل قيمة إعداد منطقي (0/1) بضغطة زر */
+    public function settingsToggle(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'key' => 'required|string|in:phone_verification,referral_earning_status,maintenance_mode',
+            'value' => 'required|in:0,1',
+        ]);
+        if ($v->fails()) return response()->json(['message' => $v->errors()->first()], 422);
+
+        DB::table('business_settings')->updateOrInsert(
+            ['key' => $request->input('key')],
+            ['value' => $request->input('value'), 'updated_at' => now()],
+        );
+
+        app(AuditService::class)->record([
+            'actor_type' => 'admin', 'actor_user_id' => $request->user()?->id,
+            'subject_type' => 'system', 'subject_id' => $request->input('key'),
+            'action' => 'ADMIN_SETTING_TOGGLE', 'decision_code' => 'SETTING_UPDATED',
+            'context' => ['key' => $request->input('key'), 'value' => $request->input('value')],
+            'severity' => 'notice',
+        ]);
+
+        return response()->json(['message' => 'تم حفظ الإعداد']);
+    }
+
     // ==================== مساعدات ====================
 
     private function typeFromSlug(string $slug): ?int

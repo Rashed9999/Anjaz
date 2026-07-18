@@ -245,4 +245,22 @@ Route::prefix('hub')->name('hub.')->group(function () {
     // لوحة التحقق — اعتماد/رفض/حظر الحسابات المسجَّلة ذاتياً (كل الأدوار)
     Route::get('/verification', [$hc, 'verification'])->name('verification');
     Route::get('/verification/list.json', [$hc, 'verificationJson'])->name('verification.list');
+
+    // لوحة التسويات — تسويات الوكلاء (اعتماد/رفض مع دفتر القيود)
+    Route::get('/settlements', [$hc, 'settlements'])->name('settlements');
+    Route::get('/settlements/list.json', [$hc, 'settlementsJson'])->name('settlements.list');
+    Route::post('/settlements/{ulid}/approve', [$hc, 'settlementApprove'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('settlements.approve');
+    Route::post('/settlements/{ulid}/reject', [$hc, 'settlementReject'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('settlements.reject');
+
+    // لوحة الموظفين — طاقم نقاط بيع التجّار (تفعيل/تعطيل)
+    Route::get('/staff', [$hc, 'staff'])->name('staff');
+    Route::get('/staff/list.json', [$hc, 'staffJson'])->name('staff.list');
+    Route::post('/staff/{id}/toggle-active', [$hc, 'staffToggle'])
+        ->where('id', '[0-9]+')->name('staff.toggle');
+
+    // لوحة الإعدادات — تحكّم بضغطة زر (بلا كود)
+    Route::get('/settings', [$hc, 'settings'])->name('settings');
+    Route::post('/settings/flag', [$hc, 'settingsToggle'])->name('settings.flag');
 });

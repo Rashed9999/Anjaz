@@ -61,6 +61,30 @@
         <span class="text-truncate">⚖️ لوحة النزاعات (دفع آمن)</span>
     </a>
 </li>
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/hub/settlements*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.hub.settlements')}}" title="لوحة التسويات">
+        <i class="tio-receipt nav-icon"></i>
+        <span class="text-truncate">🧾 لوحة التسويات (الوكلاء)</span>
+    </a>
+</li>
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/hub/staff*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.hub.staff')}}" title="لوحة الموظفين">
+        <i class="tio-user-add nav-icon"></i>
+        <span class="text-truncate">👔 لوحة الموظفين (نقاط البيع)</span>
+    </a>
+</li>
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/hub/settings*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.hub.settings')}}" title="لوحة الإعدادات">
+        <i class="tio-settings nav-icon"></i>
+        <span class="text-truncate">⚙️ لوحة الإعدادات (بضغطة زر)</span>
+    </a>
+</li>
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/maintenance*')?'active':''}}">
+    <a class="nav-link" href="{{ url('admin/maintenance') }}" title="وضع الصيانة">
+        <i class="tio-settings nav-icon"></i>
+        <span class="text-truncate">🛠️ وضع الصيانة (إيقاف/تشغيل الخدمات)</span>
+    </a>
+</li>
 
 {{-- Executive Dashboard (AMIAL-EXEC-DASHBOARD-001) --}}
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/executive*')?'active':''}}">
