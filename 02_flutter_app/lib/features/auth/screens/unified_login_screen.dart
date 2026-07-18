@@ -72,6 +72,16 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
                     'دفع سريع وآمن',
                     style: TextStyle(color: Colors.white70, fontSize: 13),
                   ),
+                  // AMIAL-BUILD-STAMP: علامة إصدار مرئية — للتحقّق أن الـAPK
+                  // المثبَّت هو أحدث بناء. إن رأيت هذا السطر فالبناء حديث.
+                  SizedBox(height: 10),
+                  Text(
+                    '✅ إصدار 0.8.0 — بناء 2026/07/18',
+                    style: TextStyle(
+                        color: Color(0xFFFECA1E),
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold),
+                  ),
                 ],
               ),
             ),
