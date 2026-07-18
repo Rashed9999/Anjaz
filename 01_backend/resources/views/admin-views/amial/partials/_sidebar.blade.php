@@ -18,6 +18,32 @@
     </small>
 </li>
 
+{{-- AMIAL-ADMIN-HUB-001 — اللوحات المركزية الأربع --}}
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/hub/customers*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.hub.customers')}}" title="مركز العملاء">
+        <i class="tio-group nav-icon"></i>
+        <span class="text-truncate">👥 مركز العملاء</span>
+    </a>
+</li>
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/hub/agents*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.hub.agents')}}" title="مركز الوكلاء">
+        <i class="tio-briefcase nav-icon"></i>
+        <span class="text-truncate">🤝 مركز الوكلاء</span>
+    </a>
+</li>
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/hub/merchants*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.hub.merchants')}}" title="مركز التجّار">
+        <i class="tio-shop nav-icon"></i>
+        <span class="text-truncate">🏪 مركز التجّار</span>
+    </a>
+</li>
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/hub/finance*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.hub.finance')}}" title="المركز المالي">
+        <i class="tio-money nav-icon"></i>
+        <span class="text-truncate">💰 المركز المالي (بثّ حيّ)</span>
+    </a>
+</li>
+
 {{-- Executive Dashboard (AMIAL-EXEC-DASHBOARD-001) --}}
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/executive*')?'active':''}}">
     <a class="nav-link"

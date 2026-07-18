@@ -196,3 +196,38 @@ Route::prefix('executive')->name('executive.')->group(function () {
     Route::get('/', [App\Http\Controllers\Admin\ExecutiveDashboardController::class, 'index'])->name('index');
     Route::get('/summary', [App\Http\Controllers\Admin\ExecutiveDashboardController::class, 'summary'])->name('summary');
 });
+
+// ============ AMIAL-ADMIN-HUB-001 — اللوحات المركزية الأربع ============
+Route::prefix('hub')->name('hub.')->group(function () {
+    $hc = App\Http\Controllers\Admin\AdminHubController::class;
+
+    // الصفحات
+    Route::get('/customers', [$hc, 'customers'])->name('customers');
+    Route::get('/agents', [$hc, 'agents'])->name('agents');
+    Route::get('/merchants', [$hc, 'merchants'])->name('merchants');
+    Route::get('/finance', [$hc, 'finance'])->name('finance');
+
+    // JSON قوائم
+    Route::get('/{slug}/users.json', [$hc, 'usersJson'])
+        ->where('slug', 'customers|agents|merchants')->name('users.json');
+    Route::get('/{slug}/kyc.json', [$hc, 'kycJson'])
+        ->where('slug', 'customers|agents|merchants')->name('kyc.json');
+    Route::get('/users/{id}/transactions.json', [$hc, 'userTransactionsJson'])
+        ->where('id', '[0-9]+')->name('users.transactions');
+
+    // إجراءات
+    Route::post('/{slug}/users', [$hc, 'storeUser'])
+        ->where('slug', 'customers|agents|merchants')->name('users.store');
+    Route::post('/users/{id}/toggle-active', [$hc, 'toggleActive'])
+        ->where('id', '[0-9]+')->name('users.toggle-active');
+    Route::post('/users/{id}/kyc', [$hc, 'kycStatus'])
+        ->where('id', '[0-9]+')->name('users.kyc');
+    Route::post('/transfer', [$hc, 'transfer'])->name('transfer');
+    Route::post('/agents/{id}/credit', [$hc, 'agentCredit'])
+        ->where('id', '[0-9]+')->name('agents.credit');
+
+    // المالية
+    Route::post('/finance/topup', [$hc, 'adminTopup'])->name('finance.topup');
+    Route::get('/finance/stats.json', [$hc, 'financeStats'])->name('finance.stats');
+    Route::get('/finance/feed.json', [$hc, 'financeFeed'])->name('finance.feed');
+});
