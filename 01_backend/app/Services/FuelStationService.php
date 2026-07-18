@@ -284,8 +284,35 @@ class FuelStationService
 
             if ($paymentMethod === 'amial_pay') {
                 $paidTxId = $data['paid_transaction_id'] ?? null;
+                // AMIAL-FUEL-PAY-001: الدفع الحقيقي في خطوة واحدة — التاجر يُدخل
+                // هاتف العميل، فنشحن العميل مباشرةً عبر محرّك دفع التاجر (يحرّك
+                // المال + الرسوم + دفتر القيود + الإيصال) ونربط المرجع بالبيع.
+                // يبقى تمرير paid_transaction_id مدعوماً (دفع مسبق من تطبيق العميل).
+                $customerPhone = trim((string) ($data['customer_phone'] ?? ''));
+                if (empty($paidTxId) && $customerPhone !== '') {
+                    $customer = User::whereIn('phone', \App\Support\Phone::variants($customerPhone))
+                        ->where('type', CUSTOMER_TYPE)->first();
+                    if (!$customer) {
+                        throw new RuntimeException('لا يوجد عميل بهذا الرقم');
+                    }
+                    if ($customer->id === $merchant->id) {
+                        throw new RuntimeException('لا يمكن الدفع لنفسك');
+                    }
+                    $paidTxId = $this->merchant_payment_transaction(
+                        $customer->id,
+                        $merchant->id,
+                        $totalAmount,
+                        'pos',
+                        $posUserId,
+                        'دفع وقود',
+                        context: ['sector' => 'fuel'],
+                    );
+                    if (empty($paidTxId)) {
+                        throw new RuntimeException('تعذّر تنفيذ دفع أميال باي');
+                    }
+                }
                 if (empty($paidTxId)) {
-                    throw new InvalidArgumentException('مرجع الدفع مطلوب لـ أميال باي');
+                    throw new InvalidArgumentException('أدخل رقم هاتف العميل أو مرجع الدفع لـ أميال باي');
                 }
             }
 

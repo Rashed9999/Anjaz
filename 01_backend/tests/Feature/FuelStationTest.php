@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\EMoney;
+use App\Models\FeeScheme;
 use App\Models\FuelCompanyAccount;
 use App\Models\FuelProduct;
 use App\Models\FuelPump;
@@ -115,6 +117,72 @@ class FuelStationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.history.0.product', 'ديزل')
             ->assertJsonPath('meta.history.0.direction', 'up');
+    }
+
+    /**
+     * @test AMIAL-FUEL-PAY-001 — بيع أميال باي يشحن العميل مباشرةً في خطوة واحدة:
+     * المال يتحرّك فعلاً (خصم العميل + إضافة التاجر) ويُربط مرجع المعاملة بالبيع.
+     */
+    public function amial_pay_sale_charges_customer_and_moves_money(): void
+    {
+        // محافظ التاجر والعميل + رسوم دفع نقطة بيع
+        \App\Models\EMoney::create([
+            'user_id' => $this->merchant->id, 'current_balance' => '0.0000',
+            'held_balance' => '0.0000', 'pending_balance' => '0.0000',
+            'charge_earned' => '0.0000', 'zone_code' => 'SOUTH',
+        ]);
+        $admin = User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
+        \App\Models\EMoney::create([
+            'user_id' => $admin->id, 'current_balance' => '0.0000',
+            'held_balance' => '0.0000', 'pending_balance' => '0.0000',
+            'charge_earned' => '0.0000', 'zone_code' => 'SOUTH',
+        ]);
+        $customer = User::factory()->create(['type' => 2, 'phone' => '+967771700001', 'zone_code' => 'SOUTH']);
+        \App\Models\EMoney::create([
+            'user_id' => $customer->id, 'current_balance' => '50000.0000',
+            'held_balance' => '0.0000', 'pending_balance' => '0.0000',
+            'charge_earned' => '0.0000', 'zone_code' => 'SOUTH',
+        ]);
+        \App\Models\FeeScheme::create([
+            'code' => 'MERCHANT_POS', 'zone_code' => 'SOUTH', 'applies_to' => 'merchant',
+            'fee_type' => 'percent', 'percent_rate' => '1.0000', 'fixed_amount' => '0',
+            'agent_commission_percent' => '0', 'agent_commission_fixed' => '0',
+            'bearer' => 'receiver', 'version' => 1, 'is_active' => true, 'effective_from' => now(),
+        ]);
+
+        $pump = $this->svc->addPump($this->station, ['pump_number' => 1]);
+        $product = $this->svc->addProduct($this->station, ['name' => 'بنزين', 'price_per_liter' => '500']);
+
+        $sale = $this->svc->recordSale($this->merchant, null, [
+            'pump_id' => $pump->id,
+            'fuel_product_id' => $product->id,
+            'sale_type' => 'by_amount',
+            'amount' => '10000',
+            'payment_method' => 'amial_pay',
+            'customer_phone' => '967771700001',
+        ]);
+
+        // المرجع ارتبط بالبيع
+        $this->assertNotNull($sale->paid_transaction_id);
+        // العميل خُصم منه 10000 (الرسم على التاجر — bearer=receiver)
+        $this->assertSame('40000.0000',
+            (string) \App\Models\EMoney::where('user_id', $customer->id)->value('current_balance'));
+        // التاجر استلم الصافي (10000 - 1% = 9900)
+        $this->assertSame('9900.0000',
+            (string) \App\Models\EMoney::where('user_id', $this->merchant->id)->value('current_balance'));
+    }
+
+    /** @test AMIAL-FUEL-PAY-001 — بيع أميال باي بلا هاتف ولا مرجع يُرفض. */
+    public function amial_pay_sale_requires_phone_or_reference(): void
+    {
+        $pump = $this->svc->addPump($this->station, ['pump_number' => 1]);
+        $product = $this->svc->addProduct($this->station, ['name' => 'ديزل', 'price_per_liter' => '400']);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->svc->recordSale($this->merchant, null, [
+            'pump_id' => $pump->id, 'fuel_product_id' => $product->id,
+            'sale_type' => 'by_amount', 'amount' => '4000', 'payment_method' => 'amial_pay',
+        ]);
     }
 
     /** @test */

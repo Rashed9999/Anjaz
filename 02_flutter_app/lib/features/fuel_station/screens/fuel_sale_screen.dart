@@ -42,6 +42,8 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
 
   // لـ amial_pay
   final _paidTxIdCtrl = TextEditingController();
+  // AMIAL-FUEL-PAY-001: هاتف العميل للشحن المباشر عبر أميال باي
+  final _customerPhoneCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -61,6 +63,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
     _driverCtrl.dispose();
     _cardIdCtrl.dispose();
     _paidTxIdCtrl.dispose();
+    _customerPhoneCtrl.dispose();
     super.dispose();
   }
 
@@ -112,10 +115,14 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
     };
 
     if (_paymentMethod == 'amial_pay') {
-      if (_paidTxIdCtrl.text.trim().isEmpty) {
-        return _snack('أدخل مرجع دفع أميال باي');
+      // AMIAL-FUEL-PAY-001: هاتف العميل يشحن مباشرةً؛ أو مرجع دفع مسبق
+      final phone = _customerPhoneCtrl.text.trim();
+      final ref = _paidTxIdCtrl.text.trim();
+      if (phone.isEmpty && ref.isEmpty) {
+        return _snack('أدخل رقم هاتف العميل (أو مرجع دفع مسبق)');
       }
-      data['paid_transaction_id'] = _paidTxIdCtrl.text.trim();
+      if (phone.isNotEmpty) data['customer_phone'] = phone;
+      if (ref.isNotEmpty) data['paid_transaction_id'] = ref;
     }
 
     if (_paymentMethod == 'company_card') {
@@ -205,6 +212,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
     _driverCtrl.clear();
     _cardIdCtrl.clear();
     _paidTxIdCtrl.clear();
+    _customerPhoneCtrl.clear();
     setState(() {
       _selectedPump = null;
       _selectedProduct = null;
@@ -314,7 +322,13 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
 
             if (_paymentMethod == 'amial_pay') ...[
               const SizedBox(height: 12),
-              _textField(_paidTxIdCtrl, 'مرجع دفع أميال باي'),
+              _textField(_customerPhoneCtrl, 'رقم هاتف العميل',
+                  type: TextInputType.phone),
+              const SizedBox(height: 6),
+              const Text(
+                'يُخصم المبلغ من محفظة العميل فوراً ويُضاف لك (بعد الرسوم).',
+                style: TextStyle(fontSize: 11, color: AmyalColors.textMuted),
+              ),
             ],
 
             if (_paymentMethod == 'company_card') ...[
