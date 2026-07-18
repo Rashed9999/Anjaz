@@ -192,6 +192,9 @@ php artisan view:clear 2>/dev/null || true
             # ترفض الدخول بـ«Credentials does not match». الأوامر idempotent.
             php artisan amial:ensure-demo-staff 2>&1 || true
             php artisan amial:ensure-demo-merchants 2>&1 || true
+            # AMIAL-ROLE-SYNC-001: تصحيح role للحسابات القديمة (تاجر/وكيل/أدمن)
+            # حتى يوجّهها التطبيق للوحة قطاعها بدل شاشة العميل. idempotent.
+            php artisan amial:backfill-roles 2>&1 || true
         fi
         php artisan storage:link --force 2>/dev/null || true
         # AMIAL-FIX(LOG-PERMS): أي ملفّ أنشأته أوامر artisan أعلاه كـroot يعود

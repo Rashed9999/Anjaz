@@ -114,6 +114,38 @@ class User extends Authenticatable
 
     protected $appends = ['image_fullpath', 'identification_image_fullpath', 'merchant_identification_image_fullpath'];
 
+    /**
+     * AMIAL-ROLE-SYNC-001 — مزامنة `role` مع `type` تلقائياً عند الحفظ.
+     *
+     * الجذر: توجيه القطاعات في التطبيق (HomeDispatcher) وبوابة الميزات
+     * (FeatureAccessService) تعتمد كلّها على العمود `users.role`. لكن أعمدة
+     * الإنشاء (التسجيل، لوحة الأدمن، البذور التجريبية) كانت تضبط `type` فقط
+     * وتترك `role` على الافتراضي 'user' — فيظهر التاجر كعميل ولا تُفتح لوحة
+     * القطاع (محطة الوقود مثلاً). هذا الخطّاف يضمن الاتساق دائماً دون أن
+     * تتذكّره كلّ نقطة إنشاء.
+     *
+     * يعمل فقط حين يكون `role` فارغاً أو 'user' (الافتراضي)، فلا يدهس أدواراً
+     * صريحة مثل 'super_admin' أو 'pos' أو 'distributor'.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (User $user): void {
+            $current = $user->role ?? null;
+            if ($current !== null && $current !== '' && $current !== \App\Support\Access\AccessConstants::ROLE_USER) {
+                return; // دور صريح مضبوط — لا نلمسه
+            }
+            $mapped = match ((int) ($user->type ?? CUSTOMER_TYPE)) {
+                ADMIN_TYPE    => \App\Support\Access\AccessConstants::ROLE_ADMIN,
+                AGENT_TYPE    => \App\Support\Access\AccessConstants::ROLE_AGENT,
+                MERCHANT_TYPE => \App\Support\Access\AccessConstants::ROLE_MERCHANT,
+                default       => \App\Support\Access\AccessConstants::ROLE_USER, // عميل
+            };
+            if ($mapped !== $current) {
+                $user->role = $mapped;
+            }
+        });
+    }
+
     public function getImageFullPathAttribute(): ?string
     {
         $image = $this->image ?? null;
