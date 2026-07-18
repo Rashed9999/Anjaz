@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/pharmacy/controllers/pharmacy_controller.dart';
 import 'package:amyal_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
@@ -22,6 +23,8 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await c.loadPharmacy();
       await c.loadDashboard();
+      // AMIAL-SUB-GATING: أعِد تحميل الصلاحيات لتنعكس ترقية الخطة
+      try { await Get.find<AccessController>().load(); } catch (_) {}
     });
   }
 

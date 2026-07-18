@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/wholesale/controllers/wholesale_controller.dart';
 import 'package:amyal_pay/features/wholesale/screens/wholesale_screens_secondary.dart';
@@ -24,6 +25,8 @@ class _WholesaleDashboardScreenState extends State<WholesaleDashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await c.loadBusiness();
       await c.loadDashboard();
+      // AMIAL-SUB-GATING: أعِد تحميل الصلاحيات لتنعكس ترقية الخطة
+      try { await Get.find<AccessController>().load(); } catch (_) {}
     });
   }
 

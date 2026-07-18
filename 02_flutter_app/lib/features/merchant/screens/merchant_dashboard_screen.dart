@@ -10,6 +10,7 @@ import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/profit_report_screen.dart';
 import 'package:amyal_pay/features/suppliers/screens/suppliers_screen.dart';
 import 'package:amyal_pay/features/access/widgets/access_gate.dart';
+import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/split_bill_create_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
 import 'package:amyal_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
@@ -329,17 +330,33 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       label: 'الكاشير',
                       onTap: () => Get.to(() => const CashierPosScreen()),
                     ),
-                    // AMIAL-INVENTORY-001 (التصميم 42): إدارة المخزون
-                    _LinkTile(
-                      icon: Icons.inventory_2_outlined,
-                      label: 'إدارة المخزون',
-                      onTap: () => Get.to(() => const InventoryScreen()),
+                    // AMIAL-INVENTORY-001 (التصميم 42): إدارة المخزون — باقة البداية فأعلى
+                    AccessGate(
+                      feature: 'inventory',
+                      fallback: _LinkTile(
+                        icon: Icons.inventory_2_outlined,
+                        label: 'إدارة المخزون 🔒 (ترقية)',
+                        onTap: () => Get.to(() => const PlansCatalogScreen()),
+                      ),
+                      child: _LinkTile(
+                        icon: Icons.inventory_2_outlined,
+                        label: 'إدارة المخزون',
+                        onTap: () => Get.to(() => const InventoryScreen()),
+                      ),
                     ),
-                    // AMIAL-PROFIT-001 (التصميم 48): تقارير الربحية
-                    _LinkTile(
-                      icon: Icons.trending_up_rounded,
-                      label: 'تقارير الربحية',
-                      onTap: () => Get.to(() => const ProfitReportScreen()),
+                    // AMIAL-PROFIT-001 (التصميم 48): تقارير الربحية — باقة الأعمال فأعلى
+                    AccessGate(
+                      feature: 'profit_reports',
+                      fallback: _LinkTile(
+                        icon: Icons.trending_up_rounded,
+                        label: 'تقارير الربحية 🔒 (ترقية)',
+                        onTap: () => Get.to(() => const PlansCatalogScreen()),
+                      ),
+                      child: _LinkTile(
+                        icon: Icons.trending_up_rounded,
+                        label: 'تقارير الربحية',
+                        onTap: () => Get.to(() => const ProfitReportScreen()),
+                      ),
                     ),
                     // AMIAL-SUPPLIERS-001 (68): الموردون — لباقات Business فأعلى
                     AccessGate(
