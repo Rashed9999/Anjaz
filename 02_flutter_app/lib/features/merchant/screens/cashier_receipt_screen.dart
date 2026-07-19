@@ -1,20 +1,31 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:amyal_pay/features/merchant/controllers/receipt_settings_controller.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
+import 'package:amyal_pay/features/payments/widgets/amial_invoice_card.dart';
 import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
-/// AMIAL-POS-003 — «تم التحصيل» (التصميم 38/85):
-/// شارة نجاح + بطاقة الإيصال (المبلغ/الوسيلة/المرجع/العميل/الحالة)
-/// + مشاركة رقمياً + «عملية جديدة» (عودة للكاشير).
-class CashierReceiptScreen extends StatelessWidget {
+/// AMIAL-POS-003 / AMIAL-RECEIPT-SETTINGS-001 — «تم التحصيل».
+///
+/// يعرض الفاتورة الموحّدة (تقرأ إعدادات التاجر) مع: طباعة + إرسال واتساب +
+/// عملية جديدة. موصولة ببيانات البيع الحقيقية.
+class CashierReceiptScreen extends StatefulWidget {
   const CashierReceiptScreen({
     super.key,
     required this.sale,
     required this.total,
     required this.method,
     this.customerName,
+    this.customerPhone,
     this.pendingPayment = false,
   });
 
@@ -22,189 +33,202 @@ class CashierReceiptScreen extends StatelessWidget {
   final double total;
   final String method;
   final String? customerName;
+  final String? customerPhone;
 
   /// أميال باي: بانتظار دفع العميل عبر QR.
   final bool pendingPayment;
 
-  String get _methodLabel => switch (method) {
-        'cash' => 'تحصيل نقدي',
+  @override
+  State<CashierReceiptScreen> createState() => _CashierReceiptScreenState();
+}
+
+class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
+  final ScreenshotController _shot = ScreenshotController();
+  late final ReceiptSettingsController _settings;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _settings = Get.isRegistered<ReceiptSettingsController>()
+        ? Get.find<ReceiptSettingsController>()
+        : Get.put(ReceiptSettingsController(), permanent: true);
+    _settings.load();
+  }
+
+  String get _methodLabel => switch (widget.method) {
+        'cash' => 'نقداً',
         'credit' => 'بيع آجل',
-        'amial_pay' => 'أميال باي (QR)',
-        _ => method,
+        'amial_pay' => 'أميال باي',
+        _ => widget.method,
       };
 
-  String get _ref => '${sale['sale_ulid'] ?? sale['id'] ?? ''}';
+  String get _ref => '${widget.sale['sale_ulid'] ?? widget.sale['id'] ?? ''}';
 
-  Future<void> _share() async {
-    await Share.share('''
-إيصال بيع — أميال باي
-النوع: $_methodLabel
-المبلغ: ${AmialMoney.yer(total)}
-${customerName != null ? 'العميل: $customerName\n' : ''}المرجع: $_ref
-''');
+  String _fmtNum(double v) => v
+      .toStringAsFixed(v == v.roundToDouble() ? 0 : 2)
+      .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?:\.|$))'), (m) => '${m[1]},');
+
+  String _now() {
+    final d = DateTime.now();
+    final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
+    final ampm = d.hour < 12 ? 'ص' : 'م';
+    return '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}  •  '
+        '$h12:${d.minute.toString().padLeft(2, '0')} $ampm';
   }
+
+  List<(String, String)> _rows() {
+    final items = (widget.sale['items'] as List?) ?? const [];
+    if (items.isEmpty) return const [];
+    return items.take(15).map<(String, String)>((e) {
+      final m = e as Map;
+      final name = '${m['name'] ?? ''}';
+      final qty = int.tryParse('${m['qty'] ?? 1}') ?? 1;
+      final price = double.tryParse('${m['price'] ?? 0}') ?? 0;
+      final line = (price * qty);
+      return ('$name ×$qty', AmialMoney.yer(line));
+    }).toList();
+  }
+
+  Future<File?> _capture() async {
+    final Uint8List? bytes = await _shot.capture(pixelRatio: 3);
+    if (bytes == null) return null;
+    final dir = await getApplicationDocumentsDirectory();
+    final f = File('${dir.path}/invoice_${DateTime.now().millisecondsSinceEpoch}.png');
+    await f.writeAsBytes(bytes, flush: true);
+    return f;
+  }
+
+  Future<void> _print() async {
+    setState(() => _busy = true);
+    try {
+      final f = await _capture();
+      if (f == null) throw Exception('capture');
+      await OpenFile.open(f.path, type: 'image/png');
+    } catch (_) {
+      _snack('تعذّرت الطباعة — جرّب المشاركة');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _whatsapp() async {
+    setState(() => _busy = true);
+    try {
+      final f = await _capture();
+      if (f == null) throw Exception('capture');
+      final caption = 'فاتورة بيع — ${widget.sale['store_name'] ?? ''}\n'
+          'الإجمالي: ${AmialMoney.yer(widget.total)}\nمرجع: $_ref';
+      await Share.shareXFiles([XFile(f.path, mimeType: 'image/png')], text: caption);
+      final phone = _waPhone(widget.customerPhone);
+      if (phone != null) {
+        final uri = Uri.parse('https://wa.me/$phone?text=${Uri.encodeComponent(caption)}');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      }
+    } catch (_) {
+      _snack('تعذّر الإرسال عبر واتساب');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  String? _waPhone(String? raw) {
+    if (raw == null) return null;
+    var p = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    if (p.isEmpty) return null;
+    if (p.startsWith('00')) p = p.substring(2);
+    if (p.startsWith('967')) return p;
+    if (p.startsWith('0')) p = p.substring(1);
+    if (p.length == 9) return '967$p';
+    return p;
+  }
+
+  void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(m), backgroundColor: AmyalColors.red));
 
   @override
   Widget build(BuildContext context) {
-    final waiting = pendingPayment;
+    final waiting = widget.pendingPayment;
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         backgroundColor: AmyalColors.primary,
         foregroundColor: Colors.white,
         title: Text(waiting ? 'بانتظار الدفع' : 'تم التحصيل'),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Get.back(),
-        ),
+        leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Get.back()),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          const SizedBox(height: 8),
-          // ====== شارة الحالة ======
-          Center(
-            child: Container(
-              height: 104,
-              width: 104,
-              decoration: BoxDecoration(
-                color: waiting ? AmyalColors.yellow : AmyalColors.primary,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                  waiting ? Icons.qr_code_2 : Icons.check_rounded,
-                  color: waiting ? const Color(0xFF053391) : Colors.white,
-                  size: 56),
-            ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            waiting ? 'بانتظار دفع العميل' : 'تم التحصيل ($_methodLabel)',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                fontSize: 19,
-                fontWeight: FontWeight.bold,
-                color: AmyalColors.primary),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            waiting
-                ? 'اطلب من العميل مسح QR متجرك ودفع المبلغ — تُربط العملية بهذا البيع تلقائياً'
-                : 'تمت عملية الدفع بنجاح وتسجيلها في النظام',
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-                fontSize: 13, color: AmyalColors.textSecondary, height: 1.6),
-          ),
-          const SizedBox(height: 24),
-
-          // ====== بطاقة الإيصال ======
-          Container(
-            padding: const EdgeInsets.all(18),
+      body: ListView(padding: const EdgeInsets.all(20), children: [
+        // شارة الحالة
+        Center(
+          child: Container(
+            height: 88, width: 88,
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Column(children: [
-              const Text('المبلغ الإجمالي',
-                  style: TextStyle(
-                      fontSize: 12, color: AmyalColors.textSecondary)),
-              const SizedBox(height: 6),
-              Text(AmialMoney.yer(total),
-                  style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: AmyalColors.primary)),
-              const Divider(height: 28),
-              _row('نوع العملية', _methodLabel,
-                  chip: true,
-                  chipColor: waiting
-                      ? const Color(0xFFFBF3D9)
-                      : const Color(0xFFE3F3E5),
-                  chipFg: waiting
-                      ? const Color(0xFFB8860B)
-                      : const Color(0xFF2E7D32)),
-              if (customerName != null) _row('العميل', customerName!),
-              _row('رقم المرجع', _ref, ltr: true),
-              _row('التاريخ والوقت', _now()),
-              _row('حالة الدفع', waiting ? 'قيد الانتظار' : 'مكتمل',
-                  chip: true,
-                  chipColor: waiting
-                      ? const Color(0xFFFBF3D9)
-                      : const Color(0xFFEFEFEF),
-                  chipFg: waiting
-                      ? const Color(0xFFB8860B)
-                      : Colors.black87),
-            ]),
+                color: waiting ? AmyalColors.yellow : const Color(0xFF2E7D32),
+                shape: BoxShape.circle),
+            child: Icon(waiting ? Icons.qr_code_2 : Icons.check_rounded,
+                color: waiting ? const Color(0xFF053391) : Colors.white, size: 48),
           ),
-          const SizedBox(height: 26),
+        ),
+        const SizedBox(height: 12),
+        Text(waiting ? 'بانتظار دفع العميل' : 'تمّت العملية بنجاح',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontSize: 17, fontWeight: FontWeight.bold,
+                color: waiting ? AmyalColors.yellowDark : const Color(0xFF2E7D32))),
+        const SizedBox(height: 18),
 
-          // ====== الأزرار ======
-          FilledButton.icon(
-            onPressed: () => Get.off(() => const CashierPosScreen()),
-            icon: const Icon(Icons.add),
-            label: const Text('عملية جديدة',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
-              minimumSize: const Size.fromHeight(54),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-            ),
+        // الفاتورة الموحّدة
+        Center(
+          child: Screenshot(
+            controller: _shot,
+            child: Obx(() => AmialInvoiceCard(
+                  settings: _settings.effective,
+                  title: widget.method == 'credit' ? 'فاتورة بيع آجل' : 'فاتورة بيع',
+                  rows: _rows(),
+                  total: _fmtNum(widget.total),
+                  method: _methodLabel,
+                  reference: _ref,
+                  dateTime: _now(),
+                  customer: widget.customerName ?? widget.customerPhone,
+                )),
           ),
+        ),
+        const SizedBox(height: 22),
+
+        if (!waiting) ...[
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(
+              onPressed: _busy ? null : _print,
+              icon: const Icon(Icons.print_outlined, size: 20),
+              label: const Text('طباعة'),
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: AmyalColors.primary,
+                  side: const BorderSide(color: AmyalColors.primary),
+                  minimumSize: const Size.fromHeight(50)),
+            )),
+            const SizedBox(width: 10),
+            Expanded(child: FilledButton.icon(
+              onPressed: _busy ? null : _whatsapp,
+              icon: _busy
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Icon(Icons.chat, size: 20),
+              label: const Text('واتساب'),
+              style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF25D366), minimumSize: const Size.fromHeight(50)),
+            )),
+          ]),
           const SizedBox(height: 10),
-          OutlinedButton.icon(
-            onPressed: _share,
-            icon: const Icon(Icons.share, size: 18),
-            label: const Text('مشاركة الإيصال رقمياً'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AmyalColors.primary,
-              side: const BorderSide(color: AmyalColors.yellowDark),
-              minimumSize: const Size.fromHeight(52),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-            ),
-          ),
         ],
-      ),
-    );
-  }
-
-  String _now() {
-    final d = DateTime.now();
-    final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
-    final ampm = d.hour < 12 ? 'ص' : 'م';
-    return '${d.year}/${d.month}/${d.day} • $h12:${d.minute.toString().padLeft(2, '0')} $ampm';
-  }
-
-  Widget _row(String label, String value,
-      {bool chip = false, Color? chipColor, Color? chipFg, bool ltr = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        chip
-            ? Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                decoration: BoxDecoration(
-                  color: chipColor,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(value,
-                    style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: chipFg)),
-              )
-            : Flexible(
-                child: Text(value,
-                    textDirection: ltr ? TextDirection.ltr : null,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600)),
-              ),
-        Text(label,
-            style:
-                const TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+        FilledButton.icon(
+          onPressed: () => Get.off(() => const CashierPosScreen()),
+          icon: const Icon(Icons.add),
+          label: const Text('عملية جديدة',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          style: FilledButton.styleFrom(
+              backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(54)),
+        ),
       ]),
     );
   }
