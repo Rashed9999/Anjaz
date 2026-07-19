@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/agent/domain/repositories/agent_repo.dart';
+import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-WD-CODE-001 — صرف سحب العميل برمز العملية.
@@ -65,6 +66,26 @@ class _AgentCashOutScreenState extends State<AgentCashOutScreen> {
     if (_expiresAt == null) return Duration.zero;
     final d = _expiresAt!.difference(DateTime.now());
     return d.isNegative ? Duration.zero : d;
+  }
+
+  /// مسح QR رمز السحب الظاهر في تطبيق العميل (AMIAL-WD:<code>) ثم بحث تلقائي.
+  Future<void> _scan() async {
+    final raw = await Get.to<String>(() => const QrScannerScreen(title: 'مسح رمز السحب'));
+    if (raw == null || raw.isEmpty || !mounted) return;
+    String code = raw.trim();
+    if (code.startsWith('AMIAL-WD:')) {
+      code = code.substring('AMIAL-WD:'.length).trim();
+    } else {
+      // قد يكون JSON {t:amial_wd, code} أو رقماً مجرّداً
+      final m = RegExp(r'(\d{6,12})').firstMatch(code);
+      if (m != null) code = m.group(1)!;
+    }
+    if (!RegExp(r'^\d{6,12}$').hasMatch(code)) {
+      _snack('هذا الرمز ليس رمز سحب صالحاً');
+      return;
+    }
+    _codeCtrl.text = code;
+    await _lookup();
   }
 
   Future<void> _lookup() async {
@@ -198,6 +219,16 @@ class _AgentCashOutScreenState extends State<AgentCashOutScreen> {
         label: const Text('بحث عن العملية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         style: FilledButton.styleFrom(
           backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(52)),
+      ),
+      const SizedBox(height: 10),
+      OutlinedButton.icon(
+        onPressed: _busy ? null : _scan,
+        icon: const Icon(Icons.qr_code_scanner),
+        label: const Text('مسح رمز QR للعميل', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AmyalColors.primary,
+          side: const BorderSide(color: AmyalColors.primary),
+          minimumSize: const Size.fromHeight(50)),
       ),
     ]);
   }
