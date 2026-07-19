@@ -705,6 +705,10 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/daily-stats', [MerchantController::class, 'dailyStats'])->name('daily-stats');
     });
 
+    // -------- AMIAL-MERCHANT-AUDIT-001 — سجلّ التدقيق للتاجر (برو فأعلى) --------
+    Route::get('merchant/audit-log', [\App\Http\Controllers\Api\V1\Amial\MerchantAuditController::class, 'index'])
+        ->name('amial.merchant.audit-log');
+
     // -------- AMIAL-MERCHANT-STAFF-001 — التاجر يدير موظفي نقاط البيع --------
     Route::prefix('merchant/staff')->name('amial.merchant.staff.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'index'])->name('index');

@@ -9,6 +9,8 @@ import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_products_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_report_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_staff_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_audit_log_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_excel_export_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_customers_screen.dart';
 import 'package:amyal_pay/features/agent/screens/agent_cash_in_screen.dart';
@@ -173,6 +175,16 @@ class MerchantRetailHomeScreen extends StatelessWidget {
                 icon: Icons.badge, label: 'الموظفون',
                 color: AmyalColors.primary,
                 onTap: () => Get.to(() => const MerchantStaffScreen()),
+              )),
+              AccessGate(feature: 'excel_export', child: _MiniAction(
+                icon: Icons.grid_on, label: 'تصدير Excel',
+                color: const Color(0xFF1D6F42),
+                onTap: () => Get.to(() => const MerchantExcelExportScreen()),
+              )),
+              AccessGate(feature: 'audit_log', child: _MiniAction(
+                icon: Icons.fact_check, label: 'سجلّ التدقيق',
+                color: AmyalColors.primary,
+                onTap: () => Get.to(() => const MerchantAuditLogScreen()),
               )),
             ],
           ),

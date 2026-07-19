@@ -12,6 +12,8 @@ import 'package:amyal_pay/features/fuel_station/screens/fuel_cashier_screen.dart
 import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/profit_report_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_staff_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_audit_log_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_excel_export_screen.dart';
 import 'package:amyal_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/access/widgets/access_gate.dart';
@@ -451,6 +453,18 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
         Expanded(child: _featTile(
           icon: Icons.badge, label: 'الموظفون', feature: 'employees',
           planLabel: 'الأعمال', onOpen: () => Get.to(() => const MerchantStaffScreen()),
+        )),
+        const SizedBox(width: 8),
+        Expanded(child: _featTile(
+          icon: Icons.grid_on, label: 'تصدير Excel', feature: 'excel_export',
+          planLabel: 'الأعمال', onOpen: () => Get.to(() => const MerchantExcelExportScreen()),
+        )),
+      ]),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: _featTile(
+          icon: Icons.fact_check, label: 'سجلّ التدقيق', feature: 'audit_log',
+          planLabel: 'التاجر برو', onOpen: () => Get.to(() => const MerchantAuditLogScreen()),
         )),
         const SizedBox(width: 8),
         const Expanded(child: SizedBox()),
