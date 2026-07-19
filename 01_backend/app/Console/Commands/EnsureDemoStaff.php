@@ -91,7 +91,17 @@ class EnsureDemoStaff extends Command
                     || in_array($u->phone, [$phone, '777900001'], true);
             });
             if ($agent) {
-                EMoney::firstOrCreate([chr(39)."user_id".chr(39) => $agent->id], [chr(39)."current_balance".chr(39) => chr(39)."500000.0000".chr(39), chr(39)."charge_earned".chr(39) => chr(39)."0".chr(39), chr(39)."pending_balance".chr(39) => chr(39)."0".chr(39), chr(39)."held_balance".chr(39) => chr(39)."0".chr(39), chr(39)."zone_code".chr(39) => chr(39)."SOUTH".chr(39), chr(39)."version".chr(39) => 1]);
+                EMoney::firstOrCreate(
+                    ['user_id' => $agent->id],
+                    [
+                        'current_balance' => '500000.0000',
+                        'charge_earned' => '0',
+                        'pending_balance' => '0',
+                        'held_balance' => '0',
+                        'zone_code' => 'SOUTH',
+                        'version' => 1,
+                    ]
+                );
                 $this->info("✓ وكيل تجريبي موجود مسبقاً — لم يُمسّ");
                 return;
             }
