@@ -738,6 +738,8 @@ Route::middleware(['auth:api'])->group(function () {
             ->where('id', '[0-9]+')->name('toggle');
         Route::post('/{id}/operations-manager', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'setOperationsManager'])
             ->where('id', '[0-9]+')->name('ops-manager');
+        Route::post('/{id}/financial-manager', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'setFinancialManager'])
+            ->where('id', '[0-9]+')->name('fin-manager');
     });
 
     // -------- AMIAL-CUSTOMER-CREDIT-VIEW-001 — العميل يرى ما عليه من آجل --------

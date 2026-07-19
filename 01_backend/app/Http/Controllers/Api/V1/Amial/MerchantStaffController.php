@@ -56,6 +56,7 @@ class MerchantStaffController extends Controller
                 'is_active' => (bool) $p->is_active,
                 'permissions' => $p->permissions ?? [],
                 'is_operations_manager' => in_array('operations_manager', $p->permissions ?? [], true),
+                'is_financial_manager' => in_array('financial_manager', $p->permissions ?? [], true),
                 'last_login_at' => $p->last_login_at?->toIso8601String(),
             ]);
 
@@ -121,6 +122,12 @@ class MerchantStaffController extends Controller
         'credit', 'employees', 'customers', 'suppliers', 'branches',
     ];
 
+    /** مجموعة صلاحيات المدير المالي — مالية بحتة (بلا بيع/مخزون). */
+    private const FINANCE_MANAGER_PERMISSIONS = [
+        'financial_manager', 'reports', 'profit_reports', 'excel_export',
+        'credit', 'customers', 'audit_log',
+    ];
+
     /**
      * تعيين/إلغاء «مدير عمليات» لموظف (الباقة المؤسسية).
      * مدير العمليات يحصل على مجموعة صلاحيات إشرافية واسعة.
@@ -153,6 +160,35 @@ class MerchantStaffController extends Controller
             'is_operations_manager' => $request->boolean('enabled'),
             'permissions' => $pos->permissions,
         ], 'OPS_MANAGER_SET', $request->boolean('enabled') ? 'تم تعيين مدير العمليات' : 'تم الإلغاء');
+    }
+
+    /**
+     * تعيين/إلغاء «مدير مالي» لموظف (الباقة المؤسسية).
+     * صلاحيات مالية بحتة: التقارير والأرباح والتصدير والتحصيلات وسجلّ التدقيق.
+     */
+    public function setFinancialManager(Request $request, int $id): JsonResponse
+    {
+        $m = $this->guardMerchant($request);
+        if ($m instanceof JsonResponse) return $m;
+
+        if (!$this->access->hasFeature($m, A::F_FINANCIAL_MANAGER)) {
+            return $this->error('FEATURE_LOCKED', 'المدير المالي متاح في الباقة المؤسسية', 402);
+        }
+
+        $v = Validator::make($request->all(), ['enabled' => 'required|boolean']);
+        if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);
+
+        $pos = PosUser::where('id', $id)->where('merchant_user_id', $m->id)->first();
+        if (!$pos) return $this->error('NOT_FOUND', 'الموظف غير موجود', 404);
+
+        $pos->permissions = $request->boolean('enabled') ? self::FINANCE_MANAGER_PERMISSIONS : ['sell'];
+        $pos->save();
+
+        return $this->ok([
+            'id' => $pos->id,
+            'is_financial_manager' => $request->boolean('enabled'),
+            'permissions' => $pos->permissions,
+        ], 'FIN_MANAGER_SET', $request->boolean('enabled') ? 'تم تعيين المدير المالي' : 'تم الإلغاء');
     }
 
     public function toggle(Request $request, int $id): JsonResponse

@@ -179,8 +179,10 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
   Widget _staffCard(Map<String, dynamic> s) {
     final active = s['is_active'] == true;
     final isOps = s['is_operations_manager'] == true;
+    final isFin = s['is_financial_manager'] == true;
+    final badge = isOps ? 'مدير عمليات' : (isFin ? 'مدير مالي' : null);
     final perms = ((s['permissions'] ?? []) as List)
-        .where((p) => p != 'operations_manager')
+        .where((p) => p != 'operations_manager' && p != 'financial_manager')
         .map((p) => _allPerms[p] ?? '$p').join(' • ');
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -188,31 +190,46 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: (active ? AmyalColors.primary : AmyalColors.textMuted).withValues(alpha: 0.12),
-          child: Icon(isOps ? Icons.manage_accounts : Icons.badge,
+          child: Icon((isOps || isFin) ? Icons.manage_accounts : Icons.badge,
               color: active ? AmyalColors.primary : AmyalColors.textMuted),
         ),
         title: Row(children: [
           Flexible(child: Text('${s['display_name'] ?? ''}',
               overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold))),
-          if (isOps) ...[
+          if (badge != null) ...[
             const SizedBox(width: 6),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(color: AmyalColors.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6)),
-              child: const Text('مدير عمليات', style: TextStyle(fontSize: 9, color: AmyalColors.primary, fontWeight: FontWeight.bold)),
+              child: Text(badge, style: const TextStyle(fontSize: 9, color: AmyalColors.primary, fontWeight: FontWeight.bold)),
             ),
           ],
         ]),
         subtitle: Text('POS: ${s['pos_number']}${perms.isEmpty ? '' : '  •  $perms'}',
             style: const TextStyle(fontSize: 11)),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          AccessGate(feature: 'operations_manager', child: IconButton(
-            tooltip: isOps ? 'إلغاء مدير العمليات' : 'تعيين مدير عمليات',
-            icon: Icon(isOps ? Icons.star : Icons.star_border,
-                color: isOps ? AmyalColors.yellowDark : AmyalColors.textMuted),
-            onPressed: () => _setOps(s['id'] as int, !isOps),
-          )),
+          AccessGate(
+            anyOf: const ['operations_manager', 'financial_manager'],
+            child: PopupMenuButton<String>(
+              icon: const Icon(Icons.admin_panel_settings_outlined, color: AmyalColors.primary),
+              tooltip: 'الأدوار الإدارية',
+              onSelected: (v) {
+                switch (v) {
+                  case 'ops_on': _setRole(s['id'] as int, 'operations-manager', true);
+                  case 'ops_off': _setRole(s['id'] as int, 'operations-manager', false);
+                  case 'fin_on': _setRole(s['id'] as int, 'financial-manager', true);
+                  case 'fin_off': _setRole(s['id'] as int, 'financial-manager', false);
+                }
+              },
+              itemBuilder: (_) => [
+                if (!isOps) const PopupMenuItem(value: 'ops_on', child: Text('تعيين مدير عمليات')),
+                if (isOps) const PopupMenuItem(value: 'ops_off', child: Text('إلغاء مدير العمليات')),
+                if (!isFin) const PopupMenuItem(value: 'fin_on', child: Text('تعيين مدير مالي')),
+                if (isFin) const PopupMenuItem(value: 'fin_off', child: Text('إلغاء المدير المالي')),
+              ],
+            ),
+          ),
           Switch(
             value: active,
             activeColor: AmyalColors.primary,
@@ -223,10 +240,10 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
     );
   }
 
-  Future<void> _setOps(int id, bool enabled) async {
-    final r = await _api.postData('/api/v1/amial/merchant/staff/$id/operations-manager', {'enabled': enabled});
+  Future<void> _setRole(int id, String role, bool enabled) async {
+    final r = await _api.postData('/api/v1/amial/merchant/staff/$id/$role', {'enabled': enabled});
     if (r.statusCode == 200) {
-      _snack(enabled ? 'تم تعيين مدير العمليات' : 'تم الإلغاء', ok: true);
+      _snack(enabled ? 'تم التعيين' : 'تم الإلغاء', ok: true);
       _load();
     } else {
       _snack((r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر التنفيذ');
