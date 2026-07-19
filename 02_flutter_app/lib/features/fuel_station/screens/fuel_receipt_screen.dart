@@ -8,6 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:amyal_pay/features/merchant/controllers/receipt_settings_controller.dart';
+import 'package:amyal_pay/features/payments/widgets/amial_invoice_card.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-FUEL-RECEIPT-001 — فاتورة بيع الوقود بمقاس حراري 80مم.
@@ -40,6 +42,17 @@ class FuelReceiptScreen extends StatefulWidget {
 class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
   final ScreenshotController _shot = ScreenshotController();
   bool _busy = false;
+
+  late final ReceiptSettingsController _settings;
+
+  @override
+  void initState() {
+    super.initState();
+    _settings = Get.isRegistered<ReceiptSettingsController>()
+        ? Get.find<ReceiptSettingsController>()
+        : Get.put(ReceiptSettingsController(), permanent: true);
+    _settings.load();
+  }
 
   String _fmt(dynamic v) {
     final n = v is num ? v : num.tryParse('${v ?? ''}') ?? 0;
@@ -167,78 +180,32 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
                   color: Color(0xFF2E7D32))),
           const SizedBox(height: 18),
 
-          // ====== الفاتورة الحرارية 80مم (تُلتقط كاملة) ======
+          // ====== الفاتورة الموحّدة (تقرأ إعدادات التاجر، تُلتقط كاملة) ======
           Center(
             child: Screenshot(
               controller: _shot,
-              child: Container(
-                width: 300, // ≈ 80مم عند pixelRatio عالٍ
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
-                color: Colors.white,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // الترويسة
-                    Text(widget.stationName,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black)),
-                    const SizedBox(height: 2),
-                    const Text('فاتورة تعبئة وقود',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 12, color: Colors.black54)),
-                    const SizedBox(height: 2),
-                    const Text('مدعوم من أميال باي',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 10, color: Colors.black38)),
-                    _dashed(),
-
-                    _line('نوع الوقود', '${widget.sale['product_name'] ?? widget.sale['fuel_product'] ?? 'وقود'}'),
-                    if (widget.pumpLabel != null) _line('المضخّة', widget.pumpLabel!),
-                    _line('اللترات', '${_fmt(widget.sale['liters'])} لتر'),
-                    _line('السعر/لتر', '${_fmt(widget.sale['price_per_liter'])} ر.ي'),
-                    _dashed(),
-
-                    // الإجمالي بارز
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('${_fmt(widget.sale['total_amount'])} ر.ي',
-                            style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black)),
-                        const Text('الإجمالي',
-                            style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black)),
-                      ],
-                    ),
-                    _dashed(),
-
-                    _line('طريقة الدفع', _method),
-                    if (widget.customerPhone != null &&
-                        widget.customerPhone!.isNotEmpty)
-                      _line('العميل', widget.customerPhone!),
-                    _line('التاريخ', _now()),
-                    const SizedBox(height: 6),
-                    Text('مرجع: $_ref',
-                        textDirection: TextDirection.ltr,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 10, color: Colors.black45)),
-                    _dashed(),
-                    const Text('شكراً لتعاملكم معنا',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black)),
-                  ],
-                ),
-              ),
+              child: Obx(() => AmialInvoiceCard(
+                    settings: {
+                      ..._settings.effective,
+                      // اسم المحطة من العملية إن لم يُضبط اسم المتجر
+                      'store_name': (_settings.effective['store_name'] == null ||
+                              _settings.effective['store_name'] == 'المتجر')
+                          ? widget.stationName
+                          : _settings.effective['store_name'],
+                    },
+                    title: 'فاتورة تعبئة وقود',
+                    rows: [
+                      ('نوع الوقود', '${widget.sale['product_name'] ?? widget.sale['fuel_product'] ?? 'وقود'}'),
+                      if (widget.pumpLabel != null) ('المضخّة', widget.pumpLabel!),
+                      ('اللترات', '${_fmt(widget.sale['liters'])} لتر'),
+                      ('السعر/لتر', '${_fmt(widget.sale['price_per_liter'])} ر.ي'),
+                    ],
+                    total: _fmt(widget.sale['total_amount']),
+                    method: _method,
+                    reference: _ref,
+                    dateTime: _now(),
+                    customer: widget.customerPhone,
+                  )),
             ),
           ),
           const SizedBox(height: 22),
@@ -292,31 +259,4 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
     );
   }
 
-  Widget _line(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Flexible(
-            child: Text(v,
-                textAlign: TextAlign.left,
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600, color: Colors.black)),
-          ),
-          Text(k, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-        ]),
-      );
-
-  Widget _dashed() => const Padding(
-        padding: EdgeInsets.symmetric(vertical: 8),
-        child: ClipRect(
-          child: SizedBox(
-            height: 12,
-            child: Text(
-              '- - - - - - - - - - - - - - - - - - - - - - - - - - - - - -',
-              maxLines: 1,
-              overflow: TextOverflow.clip,
-              style: TextStyle(color: Colors.black26, fontSize: 11, height: 1),
-            ),
-          ),
-        ),
-      );
 }

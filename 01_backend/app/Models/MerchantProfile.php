@@ -24,6 +24,8 @@ class MerchantProfile extends Model
         'verified_by_admin_id', 'verified_at', 'zone_code',
         // CRITICAL-001 — الاشتراكات + الميزات
         'subscription_plan', 'subscription_expires_at', 'subscription_notes', 'extra_features',
+        // AMIAL-RECEIPT-SETTINGS-001 — إعدادات الفاتورة/الطباعة
+        'receipt_settings',
     ];
 
     protected $casts = [
@@ -38,6 +40,7 @@ class MerchantProfile extends Model
         // CRITICAL-001
         'subscription_expires_at' => 'datetime',
         'extra_features' => 'array',
+        'receipt_settings' => 'array',
     ];
 
     public function user(): BelongsTo { return $this->belongsTo(User::class, 'user_id'); }

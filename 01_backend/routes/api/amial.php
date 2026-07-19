@@ -705,6 +705,13 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/daily-stats', [MerchantController::class, 'dailyStats'])->name('daily-stats');
     });
 
+    // -------- AMIAL-RECEIPT-SETTINGS-001 — إعدادات الفاتورة والطباعة --------
+    Route::prefix('merchant/receipt-settings')->name('amial.merchant.receipt-settings.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\V1\Amial\MerchantReceiptSettingsController::class, 'show'])->name('show');
+        Route::post('/', [\App\Http\Controllers\Api\V1\Amial\MerchantReceiptSettingsController::class, 'save'])->name('save');
+        Route::post('/logo', [\App\Http\Controllers\Api\V1\Amial\MerchantReceiptSettingsController::class, 'uploadLogo'])->name('logo');
+    });
+
     // -------- AMIAL-MERCHANT-AUDIT-001 — سجلّ التدقيق للتاجر (برو فأعلى) --------
     Route::get('merchant/audit-log', [\App\Http\Controllers\Api\V1\Amial\MerchantAuditController::class, 'index'])
         ->name('amial.merchant.audit-log');

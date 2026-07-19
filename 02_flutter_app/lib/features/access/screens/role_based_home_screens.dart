@@ -11,6 +11,7 @@ import 'package:amyal_pay/features/merchant/screens/cashier_report_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_audit_log_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_excel_export_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/receipt_settings_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_customers_screen.dart';
 import 'package:amyal_pay/features/agent/screens/agent_cash_in_screen.dart';
@@ -186,6 +187,11 @@ class MerchantRetailHomeScreen extends StatelessWidget {
                 color: AmyalColors.primary,
                 onTap: () => Get.to(() => const MerchantAuditLogScreen()),
               )),
+              _MiniAction(
+                icon: Icons.receipt_long, label: 'إعدادات الفاتورة',
+                color: AmyalColors.yellowDark,
+                onTap: () => Get.to(() => const ReceiptSettingsScreen()),
+              ),
             ],
           ),
 

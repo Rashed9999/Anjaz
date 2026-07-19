@@ -14,6 +14,7 @@ import 'package:amyal_pay/features/merchant/screens/profit_report_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_audit_log_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_excel_export_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/receipt_settings_screen.dart';
 import 'package:amyal_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/access/widgets/access_gate.dart';
@@ -232,6 +233,14 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
               Expanded(child: _miniAction(
                 Icons.tune, 'الإعدادات', () => Get.to(() => const FuelSettingsScreen()),
               )),
+            ]),
+            const SizedBox(height: 8),
+            Row(children: [
+              Expanded(child: _miniAction(
+                Icons.receipt_long, 'إعدادات الفاتورة', () => Get.to(() => const ReceiptSettingsScreen()),
+              )),
+              const SizedBox(width: 8),
+              const Expanded(child: SizedBox()),
             ]),
             const SizedBox(height: 18),
 
