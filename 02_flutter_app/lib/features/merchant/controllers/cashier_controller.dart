@@ -191,6 +191,8 @@ class CashierController extends GetxController implements GetxService {
     Map<String, String>? customer,
     String? paidTransactionId,
     String? creditDueDate, // AMIAL-CUSTOMER-CREDIT-001 — تاريخ استحقاق بيع الأجل
+    int? corporateAccountId, // AMIAL-CORPORATE-ACCOUNTS-001 — بيع على حساب شركة
+    int? corporateMemberId,
   }) async {
     try {
       isSubmitting.value = true;
@@ -202,6 +204,8 @@ class CashierController extends GetxController implements GetxService {
         'customer': ?customer,
         'paid_transaction_id': ?paidTransactionId,
         if (creditDueDate != null && creditDueDate.isNotEmpty) 'credit_due_date': creditDueDate,
+        if (corporateAccountId != null) 'corporate_account_id': corporateAccountId,
+        if (corporateMemberId != null) 'corporate_member_id': corporateMemberId,
       };
       final r = await repo.recordSale(data);
       // CRITICAL-001-USAGE — التقاط 402 وعرض الحوار

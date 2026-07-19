@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:amyal_pay/data/api/api_client.dart';
+import 'package:amyal_pay/features/access/widgets/access_gate.dart';
 import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_receipt_screen.dart';
 import 'package:amyal_pay/features/payments/screens/amial_qr_collect_screen.dart';
@@ -39,7 +41,63 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         await _amialPay();
       case 'credit':
         await _credit();
+      case 'corporate':
+        await _corporate();
     }
+  }
+
+  /// حساب شركة: يختار التاجر شركة (وعضواً اختيارياً) فيُقيَّد البيع على دَينها.
+  Future<void> _corporate() async {
+    setState(() => _busy = true);
+    final api = Get.find<ApiClient>();
+    Map<String, dynamic>? picked;
+    try {
+      final r = await api.getData('/api/v1/amial/merchant/corporate/accounts');
+      if (r.statusCode == 402) { _snack('حسابات الشركات متاحة في الباقة المؤسسية'); return; }
+      final list = (r.statusCode == 200 && r.body is Map)
+          ? (((r.body['meta'] ?? {})['accounts'] ?? []) as List)
+              .map((e) => Map<String, dynamic>.from(e as Map)).toList()
+          : <Map<String, dynamic>>[];
+      if (list.isEmpty) { _snack('لا توجد شركات — أضِفها من «حسابات الشركات»'); return; }
+      if (!mounted) return;
+      picked = await showModalBottomSheet<Map<String, dynamic>>(
+        context: context,
+        builder: (ctx) => SafeArea(child: ListView(shrinkWrap: true, children: [
+          const Padding(padding: EdgeInsets.all(14),
+              child: Text('اختر الشركة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+          ...list.map((a) => ListTile(
+                leading: const Icon(Icons.business, color: AmyalColors.primary),
+                title: Text('${a['company_name']}'),
+                subtitle: Text('المتاح: ${a['available']} ر.ي'),
+                onTap: () => Navigator.pop(ctx, a),
+              )),
+        ])),
+      );
+    } catch (_) {
+      _snack('خطأ في الشبكة');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    if (picked == null || !mounted) return;
+
+    setState(() => _busy = true);
+    final sale = await c.recordSale(
+      total: widget.total,
+      method: 'corporate',
+      corporateAccountId: picked['id'] as int,
+    );
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (sale == null) {
+      if (c.lastError.value.isNotEmpty) _snack(c.lastError.value);
+      return;
+    }
+    Get.off(() => CashierReceiptScreen(
+          sale: sale,
+          total: widget.total,
+          method: 'corporate',
+          customerName: '${picked!['company_name']}',
+        ));
   }
 
   Future<void> _recordAndShowReceipt(String method,
@@ -256,13 +314,12 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             title: 'آجل',
             subtitle: 'قيد العملية على حساب العميل',
           ),
-          _methodCard(
-            value: 'mixed',
-            icon: Icons.layers_outlined,
-            title: 'مختلط',
-            subtitle: 'توزيع المبلغ بين نقدي ومحفظة — قريباً',
-            disabled: true,
-          ),
+          AccessGate(feature: 'corporate_accounts', child: _methodCard(
+            value: 'corporate',
+            icon: Icons.business_center_outlined,
+            title: 'حساب شركة',
+            subtitle: 'قيد العملية على حساب شركة (ضمن حدّ الائتمان)',
+          )),
           const SizedBox(height: 20),
 
           FilledButton.icon(

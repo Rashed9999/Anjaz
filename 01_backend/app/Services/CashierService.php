@@ -113,6 +113,8 @@ class CashierService
         ?array $customer = null,
         ?string $paidTransactionId = null,
         ?string $creditDueDate = null,
+        ?int $corporateAccountId = null,
+        ?int $corporateMemberId = null,
     ): MerchantSale {
         if (!in_array($paymentMethod, MerchantSale::METHODS, true)) {
             throw new InvalidArgumentException('طريقة دفع غير صحيحة');
@@ -135,7 +137,19 @@ class CashierService
             $status = empty($paidTransactionId) ? 'pending_payment' : 'completed';
         }
 
-        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate) {
+        // AMIAL-CORPORATE-ACCOUNTS-001: بيع على حساب شركة — يلزم حساب مملوك للتاجر.
+        $corporateAccount = null;
+        if ($paymentMethod === 'corporate') {
+            $corporateAccount = \App\Models\CorporateAccount::where('id', (int) $corporateAccountId)
+                ->where('merchant_user_id', $merchant->id)->first();
+            if (!$corporateAccount) {
+                throw new InvalidArgumentException('حساب الشركة غير موجود');
+            }
+            // اسم الشركة يظهر على الفاتورة
+            $customer = ['name' => $corporateAccount->company_name, 'phone' => $corporateAccount->account_code];
+        }
+
+        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId) {
             $sale = MerchantSale::create([
                 'sale_ulid' => (string) Str::ulid(),
                 'merchant_user_id' => $merchant->id,
@@ -170,6 +184,24 @@ class CashierService
                     dueDate: $creditDueDate,
                     note: 'بيع آجل من الكاشير',
                     createdBy: $posUserId ?? $merchant->id,
+                    referenceType: 'merchant_sale',
+                    referenceId: $sale->sale_ulid,
+                    referenceNumber: '#' . substr($sale->sale_ulid, -8),
+                );
+            }
+
+            // AMIAL-CORPORATE-ACCOUNTS-001 — تحميل البيع على حساب الشركة (يفرض الحدّ)
+            if ($paymentMethod === 'corporate' && $corporateAccount) {
+                $member = $corporateMemberId
+                    ? \App\Models\CorporateAccountMember::where('id', $corporateMemberId)
+                        ->where('corporate_account_id', $corporateAccount->id)->first()
+                    : null;
+                app(\App\Services\CorporateAccountService::class)->recordCharge(
+                    account: $corporateAccount,
+                    amount: $total,
+                    member: $member,
+                    createdBy: $posUserId ?? $merchant->id,
+                    note: 'بيع من الكاشير',
                     referenceType: 'merchant_sale',
                     referenceId: $sale->sale_ulid,
                     referenceNumber: '#' . substr($sale->sale_ulid, -8),

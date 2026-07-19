@@ -25,6 +25,6 @@ class MerchantSale extends Model
         'settled_at' => 'datetime',
     ];
 
-    public const METHODS = ['cash', 'credit', 'amial_pay'];
+    public const METHODS = ['cash', 'credit', 'amial_pay', 'corporate'];
     public const STATUSES = ['completed', 'credit_unpaid', 'credit_paid', 'pending_payment'];
 }

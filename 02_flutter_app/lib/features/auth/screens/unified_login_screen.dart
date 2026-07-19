@@ -76,7 +76,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
                   // المثبَّت هو أحدث بناء. إن رأيت هذا السطر فالبناء حديث.
                   SizedBox(height: 10),
                   Text(
-                    '✅ إصدار 1.1.0 — حسابات الشركات (مؤسسات)',
+                    '✅ إصدار 1.1.1 — الكاشير على حساب شركة',
                     style: TextStyle(
                         color: Color(0xFFFECA1E),
                         fontSize: 12,

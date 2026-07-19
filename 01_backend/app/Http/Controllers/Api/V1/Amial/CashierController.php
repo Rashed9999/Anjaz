@@ -113,7 +113,7 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
     {
         $v = Validator::make($request->all(), [
             'total' => 'required|numeric|min:0.01',
-            'payment_method' => 'required|in:cash,credit,amial_pay',
+            'payment_method' => 'required|in:cash,credit,amial_pay,corporate',
             'items' => 'sometimes|array',
             'items.*.name' => 'sometimes|string|max:160',
             'items.*.qty' => 'sometimes|numeric|min:0',
@@ -123,12 +123,20 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             'customer.phone' => 'sometimes|nullable|string|max:32',
             'paid_transaction_id' => 'sometimes|nullable|string|max:40',
             'credit_due_date' => 'sometimes|nullable|date_format:Y-m-d',
+            'corporate_account_id' => 'sometimes|nullable|integer',
+            'corporate_member_id' => 'sometimes|nullable|integer',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant, $posUserId] = $ctx;
+
+        // AMIAL-CORPORATE-ACCOUNTS-001: البيع على حساب شركة يتطلّب الباقة المؤسسية
+        if ($request->input('payment_method') === 'corporate'
+            && !app(\App\Services\FeatureAccessService::class)->hasFeature($merchant, \App\Support\Access\AccessConstants::F_CORPORATE_ACCOUNTS)) {
+            return $this->error('FEATURE_LOCKED', 'حسابات الشركات متاحة في الباقة المؤسسية', 402);
+        }
 
         try {
             $sale = $this->cashier->recordSale(
@@ -140,9 +148,13 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
                 customer: $request->input('customer'),
                 paidTransactionId: $request->input('paid_transaction_id'),
                 creditDueDate: $request->input('credit_due_date'),
+                corporateAccountId: $request->input('corporate_account_id'),
+                corporateMemberId: $request->input('corporate_member_id'),
             );
         } catch (\InvalidArgumentException $e) {
             return $this->error('SALE_INVALID', $e->getMessage(), 422);
+        } catch (\RuntimeException $e) {
+            return $this->error('SALE_FAILED', $e->getMessage(), 422);
         }
 
         return $this->ok(['sale' => $sale], 'SALE_RECORDED', 'تم تسجيل البيع');
