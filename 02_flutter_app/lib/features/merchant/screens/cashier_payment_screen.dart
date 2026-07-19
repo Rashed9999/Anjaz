@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_receipt_screen.dart';
+import 'package:amyal_pay/features/payments/screens/amial_qr_collect_screen.dart';
 import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
@@ -64,21 +65,26 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         ));
   }
 
-  /// أميال باي: بيع معلّق يُربط تلقائياً عند دفع العميل عبر QR التاجر.
+  /// أميال باي: يعرض QR بمبلغ ثابت يمسحه العميل ويدفع من محفظته، ثم يُسجَّل
+  /// البيع مربوطاً بمرجع الدفع وتُفتح الفاتورة تلقائياً (استقبال حقيقي).
   Future<void> _amialPay() async {
-    setState(() => _busy = true);
-    final sale = await c.recordSale(total: widget.total, method: 'amial_pay');
-    if (!mounted) return;
-    setState(() => _busy = false);
-    if (sale == null) {
-      if (c.lastError.value.isNotEmpty) _snack(c.lastError.value);
-      return;
-    }
-    Get.off(() => CashierReceiptScreen(
-          sale: sale,
-          total: widget.total,
-          method: 'amial_pay',
-          pendingPayment: true,
+    Get.to(() => AmialQrCollectScreen(
+          amount: widget.total,
+          note: 'دفع مشتريات',
+          onPaid: (paidTxId) async {
+            final sale = await c.recordSale(
+              total: widget.total,
+              method: 'amial_pay',
+              paidTransactionId: paidTxId,
+            );
+            if (sale == null) return false;
+            Get.off(() => CashierReceiptScreen(
+                  sale: sale,
+                  total: widget.total,
+                  method: 'amial_pay',
+                ));
+            return true;
+          },
         ));
   }
 
