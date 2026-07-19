@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
+import 'package:amyal_pay/features/access/widgets/access_gate.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-MERCHANT-STAFF-001 — إدارة موظفي نقاط البيع (باقة الأعمال فأعلى).
@@ -177,7 +178,9 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
 
   Widget _staffCard(Map<String, dynamic> s) {
     final active = s['is_active'] == true;
+    final isOps = s['is_operations_manager'] == true;
     final perms = ((s['permissions'] ?? []) as List)
+        .where((p) => p != 'operations_manager')
         .map((p) => _allPerms[p] ?? '$p').join(' • ');
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -185,17 +188,48 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: (active ? AmyalColors.primary : AmyalColors.textMuted).withValues(alpha: 0.12),
-          child: Icon(Icons.badge, color: active ? AmyalColors.primary : AmyalColors.textMuted),
+          child: Icon(isOps ? Icons.manage_accounts : Icons.badge,
+              color: active ? AmyalColors.primary : AmyalColors.textMuted),
         ),
-        title: Text('${s['display_name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Row(children: [
+          Flexible(child: Text('${s['display_name'] ?? ''}',
+              overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold))),
+          if (isOps) ...[
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: AmyalColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6)),
+              child: const Text('مدير عمليات', style: TextStyle(fontSize: 9, color: AmyalColors.primary, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ]),
         subtitle: Text('POS: ${s['pos_number']}${perms.isEmpty ? '' : '  •  $perms'}',
             style: const TextStyle(fontSize: 11)),
-        trailing: Switch(
-          value: active,
-          activeColor: AmyalColors.primary,
-          onChanged: (_) => _toggle(s['id'] as int),
-        ),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          AccessGate(feature: 'operations_manager', child: IconButton(
+            tooltip: isOps ? 'إلغاء مدير العمليات' : 'تعيين مدير عمليات',
+            icon: Icon(isOps ? Icons.star : Icons.star_border,
+                color: isOps ? AmyalColors.yellowDark : AmyalColors.textMuted),
+            onPressed: () => _setOps(s['id'] as int, !isOps),
+          )),
+          Switch(
+            value: active,
+            activeColor: AmyalColors.primary,
+            onChanged: (_) => _toggle(s['id'] as int),
+          ),
+        ]),
       ),
     );
+  }
+
+  Future<void> _setOps(int id, bool enabled) async {
+    final r = await _api.postData('/api/v1/amial/merchant/staff/$id/operations-manager', {'enabled': enabled});
+    if (r.statusCode == 200) {
+      _snack(enabled ? 'تم تعيين مدير العمليات' : 'تم الإلغاء', ok: true);
+      _load();
+    } else {
+      _snack((r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر التنفيذ');
+    }
   }
 }

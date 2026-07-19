@@ -55,6 +55,7 @@ class MerchantStaffController extends Controller
                 'display_name' => $p->display_name,
                 'is_active' => (bool) $p->is_active,
                 'permissions' => $p->permissions ?? [],
+                'is_operations_manager' => in_array('operations_manager', $p->permissions ?? [], true),
                 'last_login_at' => $p->last_login_at?->toIso8601String(),
             ]);
 
@@ -112,6 +113,46 @@ class MerchantStaffController extends Controller
             'pos_number' => $pos->pos_number,
             'login_hint' => "دخول الموظف: رقم التاجر + جوال التاجر + رقم نقطة البيع {$pos->pos_number} + كلمة مروره",
         ], 'STAFF_CREATED', 'تم إنشاء الموظف', 201);
+    }
+
+    /** مجموعة صلاحيات مدير العمليات — إشراف تشغيلي واسع (بلا إعدادات النشاط/الاشتراك). */
+    private const OPS_MANAGER_PERMISSIONS = [
+        'operations_manager', 'sell', 'refund', 'products', 'reports',
+        'credit', 'employees', 'customers', 'suppliers', 'branches',
+    ];
+
+    /**
+     * تعيين/إلغاء «مدير عمليات» لموظف (الباقة المؤسسية).
+     * مدير العمليات يحصل على مجموعة صلاحيات إشرافية واسعة.
+     */
+    public function setOperationsManager(Request $request, int $id): JsonResponse
+    {
+        $m = $this->guardMerchant($request);
+        if ($m instanceof JsonResponse) return $m;
+
+        if (!$this->access->hasFeature($m, A::F_OPERATIONS_MANAGER)) {
+            return $this->error('FEATURE_LOCKED', 'مدير العمليات متاح في الباقة المؤسسية', 402);
+        }
+
+        $v = Validator::make($request->all(), ['enabled' => 'required|boolean']);
+        if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);
+
+        $pos = PosUser::where('id', $id)->where('merchant_user_id', $m->id)->first();
+        if (!$pos) return $this->error('NOT_FOUND', 'الموظف غير موجود', 404);
+
+        if ($request->boolean('enabled')) {
+            $pos->permissions = self::OPS_MANAGER_PERMISSIONS;
+        } else {
+            // إلغاء الترقية → يعود لصلاحيات بيع أساسية
+            $pos->permissions = ['sell'];
+        }
+        $pos->save();
+
+        return $this->ok([
+            'id' => $pos->id,
+            'is_operations_manager' => $request->boolean('enabled'),
+            'permissions' => $pos->permissions,
+        ], 'OPS_MANAGER_SET', $request->boolean('enabled') ? 'تم تعيين مدير العمليات' : 'تم الإلغاء');
     }
 
     public function toggle(Request $request, int $id): JsonResponse
