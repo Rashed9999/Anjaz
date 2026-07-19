@@ -10,6 +10,8 @@ import 'package:amyal_pay/features/fuel_station/screens/fuel_shifts_screen.dart'
 import 'package:amyal_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
 import 'package:amyal_pay/features/fuel_station/screens/fuel_cashier_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/profit_report_screen.dart';
+import 'package:amyal_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/access/widgets/access_gate.dart';
 import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
@@ -228,6 +230,12 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
                 Icons.tune, 'الإعدادات', () => Get.to(() => const FuelSettingsScreen()),
               )),
             ]),
+            const SizedBox(height: 18),
+
+            // ====== ميزات متقدّمة (حسب باقتك) ======
+            // AMIAL-SUB-GATING: تظهر مقفلة على المجاني ومفتوحة فور ترقية الأدمن
+            // للخطة — دليل مرئي مباشر أن الاشتراك يفتح الميزات في التطبيق.
+            _advancedFeatures(),
           ]),
         ),
       ),
@@ -403,6 +411,85 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
         ),
       );
     });
+  }
+
+  // ====== ميزات متقدّمة (حسب باقتك) ======
+  Widget _advancedFeatures() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('ميزات متقدّمة (حسب باقتك)',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 4),
+      const Text('تُفتح تلقائياً عند ترقية باقتك من لوحة الإدارة',
+          style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+      const SizedBox(height: 10),
+      Row(children: [
+        Expanded(child: _featTile(
+          icon: Icons.trending_up, label: 'تقارير الأرباح', feature: 'profit_reports',
+          planLabel: 'الأعمال', onOpen: () => Get.to(() => const ProfitReportScreen()),
+        )),
+        const SizedBox(width: 8),
+        Expanded(child: _featTile(
+          icon: Icons.account_tree, label: 'الفروع', feature: 'branches',
+          planLabel: 'التاجر برو', onOpen: () => Get.to(() => const BranchesManagementScreen()),
+        )),
+      ]),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: _featTile(
+          icon: Icons.inventory_2, label: 'المخزون', feature: 'inventory',
+          planLabel: 'البداية', onOpen: () => Get.to(() => const CashierPosScreen()),
+        )),
+        const SizedBox(width: 8),
+        Expanded(child: _featTile(
+          icon: Icons.credit_card, label: 'بطاقات آجل', feature: 'fuel_cards',
+          planLabel: 'الأعمال', onOpen: () => Get.to(() => const FuelCompaniesScreen()),
+        )),
+      ]),
+    ]);
+  }
+
+  /// بطاقة ميزة: مفتوحة (تفتح شاشتها) أو مقفلة (قفل + دعوة ترقية).
+  Widget _featTile({
+    required IconData icon, required String label, required String feature,
+    required String planLabel, required VoidCallback onOpen,
+  }) {
+    Widget tile({required bool locked}) => InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: locked ? () => Get.to(() => const PlansCatalogScreen()) : onOpen,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 10),
+            decoration: BoxDecoration(
+              color: locked ? const Color(0xFFEDEFF3) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: locked ? AmyalColors.border : AmyalColors.primary.withValues(alpha: 0.35)),
+            ),
+            child: Column(children: [
+              Stack(alignment: Alignment.topRight, children: [
+                Icon(icon, size: 26,
+                    color: locked ? Colors.grey.shade500 : AmyalColors.primary),
+                if (locked)
+                  const Icon(Icons.lock, size: 13, color: AmyalColors.textMuted),
+              ]),
+              const SizedBox(height: 6),
+              Text(label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 12.5, fontWeight: FontWeight.w600,
+                      color: locked ? Colors.grey.shade700 : AmyalColors.textPrimary)),
+              if (locked) ...[
+                const SizedBox(height: 2),
+                Text('باقة $planLabel',
+                    style: const TextStyle(fontSize: 10, color: AmyalColors.yellowDark, fontWeight: FontWeight.bold)),
+              ],
+            ]),
+          ),
+        );
+    return AccessGate(
+      feature: feature,
+      child: tile(locked: false),
+      fallback: tile(locked: true),
+    );
   }
 
   // AMIAL-SUB-GATING: إجراء مقفل (خطّة أعلى) — يدعو للترقية بدل الفتح
