@@ -722,6 +722,9 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditViewController::class, 'myAccounts'])->name('mine');
         Route::get('/{id}/statement', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditViewController::class, 'myStatement'])
             ->where('id', '[0-9]+')->name('statement');
+        Route::post('/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditViewController::class, 'settle'])
+            ->where('id', '[0-9]+')
+            ->middleware('amial.rate-limit:credit_settle,30,1')->name('settle');
     });
 
     // -------- AMIAL-CUSTOMER-WITHDRAW-001 — السحب المبدوء من العميل --------

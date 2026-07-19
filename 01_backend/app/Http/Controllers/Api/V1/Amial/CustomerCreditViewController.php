@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Api\V1\Amial;
 
+use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\CustomerCreditAccount;
 use App\Models\CustomerCreditMovement;
 use App\Models\User;
+use App\Services\CustomerCreditSettleService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 /**
  * AMIAL-CUSTOMER-CREDIT-VIEW-001 — واجهة العميل لعرض ما عليه من آجل.
@@ -96,6 +99,44 @@ class CustomerCreditViewController extends Controller
             'credit_limit' => (string) $account->credit_limit,
             'movements' => $movements,
         ], 'OK', 'كشف الحساب الآجل');
+    }
+
+    /** سداد الدَّين الآجل (كلّه أو جزء) من محفظة العميل. */
+    public function settle(Request $request, int $id): JsonResponse
+    {
+        $user = $request->user();
+
+        $v = Validator::make($request->all(), [
+            'amount' => 'required|numeric|min:0.01',
+            'pin' => 'required|string|min:4|max:8',
+        ]);
+        if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);
+
+        if (!Helpers::pin_check($user->id, $request->input('pin'))) {
+            return $this->error('WRONG_PIN', 'رمز الدخول غير صحيح', 403);
+        }
+
+        $account = CustomerCreditAccount::where('id', $id)
+            ->where('customer_user_id', $user->id)->first();
+        if (!$account) {
+            return $this->error('NOT_FOUND', 'الحساب غير موجود أو لا يخصّك', 404);
+        }
+
+        try {
+            $result = app(CustomerCreditSettleService::class)
+                ->settle($user, $account, (string) $request->input('amount'));
+        } catch (\App\Exceptions\InsufficientBalanceException $e) {
+            return $this->error('INSUFFICIENT_BALANCE', 'رصيد محفظتك لا يكفي', 422);
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('INVALID', $e->getMessage(), 422);
+        } catch (\Throwable $e) {
+            return $this->error('SETTLE_FAILED', 'تعذّر تنفيذ السداد', 422);
+        }
+
+        return $this->ok([
+            'paid' => $result['paid'],
+            'new_balance' => $result['new_balance'],
+        ], 'SETTLED', 'تم السداد بنجاح');
     }
 
     private function typeLabel(string $type): string

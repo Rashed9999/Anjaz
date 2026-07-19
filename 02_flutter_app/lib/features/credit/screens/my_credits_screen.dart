@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
+import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-CUSTOMER-CREDIT-VIEW-001 — «فواتيري الآجلة».
@@ -188,6 +189,59 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
     return n.toStringAsFixed(n == n.roundToDouble() ? 0 : 2);
   }
 
+  Future<void> _settle() async {
+    final balance = double.tryParse(_balance) ?? 0;
+    if (balance <= 0) return;
+    final amtCtrl = TextEditingController(text: balance.toStringAsFixed(0));
+
+    final amount = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('سداد الآجل'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('المستحقّ: ${_fmt(_balance)} ر.ي',
+              style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.red)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: amtCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(
+                labelText: 'مبلغ السداد', suffixText: 'ر.ي', border: OutlineInputBorder()),
+          ),
+          const SizedBox(height: 6),
+          const Text('يُخصم من محفظتك ويُضاف للتاجر فوراً.',
+              style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, amtCtrl.text.trim()), child: const Text('متابعة')),
+        ],
+      ),
+    );
+    if (amount == null || amount.isEmpty || !mounted) return;
+    final val = double.tryParse(amount) ?? 0;
+    if (val <= 0 || val > balance) { _snack('مبلغ غير صحيح'); return; }
+
+    final pin = await askAmialPinInput(title: 'أدخل رمز الدخول لتأكيد السداد');
+    if (pin == null || pin.isEmpty || !mounted) return;
+
+    final r = await _api.postData(
+      '/api/v1/amial/customer/credits/${widget.accountId}/settle',
+      {'amount': amount, 'pin': pin},
+    );
+    if (!mounted) return;
+    if (r.statusCode == 200) {
+      _snack('تم السداد بنجاح ✓', ok: true);
+      _load();
+    } else {
+      final msg = (r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر السداد';
+      _snack(msg);
+    }
+  }
+
+  void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+
   String _date(String? iso) {
     if (iso == null) return '';
     final d = DateTime.tryParse(iso)?.toLocal();
@@ -218,6 +272,17 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
                     const Text('الرصيد المستحقّ', style: TextStyle(color: AmyalColors.textSecondary)),
                   ]),
                 ),
+                if ((double.tryParse(_balance) ?? 0) > 0) ...[
+                  const SizedBox(height: 10),
+                  FilledButton.icon(
+                    onPressed: _settle,
+                    icon: const Icon(Icons.account_balance_wallet),
+                    label: const Text('سداد من محفظتي'),
+                    style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF2E7D32),
+                        minimumSize: const Size.fromHeight(50)),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 ..._movements.map(_movementRow),
               ]),
