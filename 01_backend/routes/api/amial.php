@@ -705,6 +705,19 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/daily-stats', [MerchantController::class, 'dailyStats'])->name('daily-stats');
     });
 
+    // -------- AMIAL-API-ACCESS-001 — إدارة مفاتيح API للتاجر --------
+    Route::prefix('merchant/api-keys')->name('amial.merchant.api-keys.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\MerchantApiKeyController::class;
+        Route::get('/', [$c, 'index'])->name('index');
+        Route::post('/', [$c, 'store'])->name('store');
+        Route::post('/{id}/toggle', [$c, 'toggle'])->where('id', '[0-9]+')->name('toggle');
+        Route::delete('/{id}', [$c, 'destroy'])->where('id', '[0-9]+')->name('destroy');
+    });
+
+    // -------- AMIAL-BACKUP-001 — نسخة احتياطية لبيانات التاجر --------
+    Route::get('merchant/backup', [\App\Http\Controllers\Api\V1\Amial\MerchantBackupController::class, 'download'])
+        ->name('amial.merchant.backup');
+
     // -------- AMIAL-MULTI-CURRENCY-001 — عملات التاجر --------
     Route::prefix('merchant/currencies')->name('amial.merchant.currencies.')->group(function () {
         $c = \App\Http\Controllers\Api\V1\Amial\MerchantCurrencyController::class;
@@ -812,6 +825,13 @@ Route::middleware(['auth:api'])->group(function () {
 
         Route::get('/my-donations', [DonationsController::class, 'myDonations'])->name('my-donations');
     });
+});
+
+// ==========================================================
+// AMIAL-API-ACCESS-001 — واجهة الشركاء (مصادقة بمفتاح API لا auth:api)
+// ==========================================================
+Route::prefix('partner')->middleware('amial.api-key')->name('amial.partner.')->group(function () {
+    Route::get('/sales', [\App\Http\Controllers\Api\V1\Partner\PartnerController::class, 'sales'])->name('sales');
 });
 
 // ==========================================================

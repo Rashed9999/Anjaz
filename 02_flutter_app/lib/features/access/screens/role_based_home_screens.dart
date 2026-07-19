@@ -14,6 +14,8 @@ import 'package:amyal_pay/features/merchant/screens/merchant_excel_export_screen
 import 'package:amyal_pay/features/merchant/screens/receipt_settings_screen.dart';
 import 'package:amyal_pay/features/corporate/screens/corporate_accounts_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_currencies_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_api_keys_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_backup_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_customers_screen.dart';
 import 'package:amyal_pay/features/agent/screens/agent_cash_in_screen.dart';
@@ -203,6 +205,16 @@ class MerchantRetailHomeScreen extends StatelessWidget {
                 icon: Icons.currency_exchange, label: 'العملات',
                 color: AmyalColors.primary,
                 onTap: () => Get.to(() => const MerchantCurrenciesScreen()),
+              )),
+              AccessGate(feature: 'api_access', child: _MiniAction(
+                icon: Icons.api, label: 'مفاتيح API',
+                color: AmyalColors.primary,
+                onTap: () => Get.to(() => const MerchantApiKeysScreen()),
+              )),
+              AccessGate(feature: 'advanced_backup', child: _MiniAction(
+                icon: Icons.backup, label: 'نسخة احتياطية',
+                color: const Color(0xFF1D6F42),
+                onTap: () => Get.to(() => const MerchantBackupScreen()),
               )),
             ],
           ),

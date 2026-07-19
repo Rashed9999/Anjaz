@@ -168,6 +168,8 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'amial.rate-limit' => PerUserRateLimit::class,
             'amial.usage' => EnforceUsageLimit::class,
             'amial.pos-permission' => \App\Http\Middleware\PosPermission::class,
+            // AMIAL-API-ACCESS-001 — مصادقة الشركاء بمفتاح API
+            'amial.api-key' => \App\Http\Middleware\AuthenticateApiKey::class,
             'amial.agent' => \App\Http\Middleware\EnsureAgent::class,  // AMIAL-FIX-004
 
             // Amial Pay — الحارس المخفي (Application-level IDS)
