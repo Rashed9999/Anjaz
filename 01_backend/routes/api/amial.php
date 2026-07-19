@@ -705,6 +705,13 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/daily-stats', [MerchantController::class, 'dailyStats'])->name('daily-stats');
     });
 
+    // -------- AMIAL-CUSTOMER-CREDIT-VIEW-001 — العميل يرى ما عليه من آجل --------
+    Route::prefix('customer/credits')->name('amial.customer.credits.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditViewController::class, 'myAccounts'])->name('mine');
+        Route::get('/{id}/statement', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditViewController::class, 'myStatement'])
+            ->where('id', '[0-9]+')->name('statement');
+    });
+
     // -------- AMIAL-CUSTOMER-WITHDRAW-001 — السحب المبدوء من العميل --------
     Route::prefix('withdraw')->name('amial.withdraw.')->group(function () {
         Route::post('/request', [\App\Http\Controllers\Api\V1\Amial\CustomerWithdrawController::class, 'request'])

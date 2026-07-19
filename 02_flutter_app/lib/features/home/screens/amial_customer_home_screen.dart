@@ -5,6 +5,7 @@ import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/transaction_money/screens/transaction_money_screen.dart';
 import 'package:amyal_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
 import 'package:amyal_pay/features/withdraw/screens/withdraw_request_screen.dart';
+import 'package:amyal_pay/features/credit/screens/my_credits_screen.dart';
 import 'package:amyal_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
 import 'package:amyal_pay/features/family_fund/screens/my_funds_screen.dart';
 import 'package:amyal_pay/features/donations/screens/donations_home_screen.dart';
@@ -345,6 +346,8 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       // AMIAL-AUDIT: كانت شاشة «حصصي في الفواتير» موجودة لكن بلا مدخل للعميل
       _Svc('تقسيم الفواتير', Icons.call_split_rounded, () => Get.to(() => const SplitBillMySharesScreen())),
       _Svc('طلب سحب', Icons.account_balance_outlined, () => Get.to(() => const WithdrawRequestScreen())),
+      // AMIAL-CUSTOMER-CREDIT-VIEW-001: فواتير الآجل المستحقّة على العميل
+      _Svc('فواتيري الآجلة', Icons.receipt_long_outlined, () => Get.to(() => const MyCreditsScreen())),
       _Svc('الإيصالات', Icons.description_outlined, () => Get.to(() => const ReceiptsListScreen())),
       // AMIAL-REPORTS-001: المصروفات/الإيرادات/كشف الحساب (أيقونة حمراء بطلب العميل)
       _Svc('التقارير', Icons.bar_chart_rounded, () => Get.to(() => const AmialReportsScreen()),
