@@ -705,6 +705,20 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/daily-stats', [MerchantController::class, 'dailyStats'])->name('daily-stats');
     });
 
+    // -------- AMIAL-CORPORATE-ACCOUNTS-001 — حسابات الشركات (B2B) --------
+    Route::prefix('merchant/corporate')->name('amial.merchant.corporate.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\CorporateAccountController::class;
+        Route::get('/dashboard', [$c, 'dashboard'])->name('dashboard');
+        Route::get('/accounts', [$c, 'index'])->name('accounts');
+        Route::post('/accounts', [$c, 'store'])->name('accounts.store');
+        Route::get('/accounts/{id}', [$c, 'show'])->where('id', '[0-9]+')->name('accounts.show');
+        Route::post('/accounts/{id}', [$c, 'update'])->where('id', '[0-9]+')->name('accounts.update');
+        Route::post('/accounts/{id}/members', [$c, 'addMember'])->where('id', '[0-9]+')->name('accounts.members');
+        Route::post('/accounts/{id}/charge', [$c, 'charge'])->where('id', '[0-9]+')->name('accounts.charge');
+        Route::post('/accounts/{id}/settle', [$c, 'settle'])->where('id', '[0-9]+')->name('accounts.settle');
+        Route::get('/accounts/{id}/statement', [$c, 'statement'])->where('id', '[0-9]+')->name('accounts.statement');
+    });
+
     // -------- AMIAL-RECEIPT-SETTINGS-001 — إعدادات الفاتورة والطباعة --------
     Route::prefix('merchant/receipt-settings')->name('amial.merchant.receipt-settings.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\MerchantReceiptSettingsController::class, 'show'])->name('show');

@@ -15,6 +15,7 @@ import 'package:amyal_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_audit_log_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_excel_export_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/receipt_settings_screen.dart';
+import 'package:amyal_pay/features/corporate/screens/corporate_accounts_screen.dart';
 import 'package:amyal_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/access/widgets/access_gate.dart';
@@ -476,7 +477,10 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
           planLabel: 'التاجر برو', onOpen: () => Get.to(() => const MerchantAuditLogScreen()),
         )),
         const SizedBox(width: 8),
-        const Expanded(child: SizedBox()),
+        Expanded(child: _featTile(
+          icon: Icons.business_center, label: 'حسابات الشركات', feature: 'corporate_accounts',
+          planLabel: 'المؤسسات', onOpen: () => Get.to(() => const CorporateAccountsScreen()),
+        )),
       ]),
     ]);
   }
