@@ -13,6 +13,16 @@ class AgentRepo extends GetxService {
   Future<Response> getProfile() => apiClient.getData('$_base/get-agent');
   Future<Response> dailyStats() => apiClient.getData('/api/v1/amial/agent/daily-stats');
 
+  // ====== Cash-out by withdrawal code (AMIAL-WD-CODE-001) ======
+  /// الوكيل يبحث عن عملية سحب العميل برمزها → المبلغ + بيانات العميل + الصلاحية.
+  Future<Response> withdrawLookup(String opCode) =>
+      apiClient.postData('/api/v1/amial/agent/withdraw/lookup', {'op_code': opCode});
+
+  /// تنفيذ السحب: الرمز + معرّف العميل (هاتف/رقم حساب) للتأكيد الأمني.
+  Future<Response> withdrawExecute(String opCode, String identifier) =>
+      apiClient.postData('/api/v1/amial/agent/withdraw/execute',
+          {'op_code': opCode, 'identifier': identifier});
+
   // ====== AMIAL-AGENT-NETWORK-001 (v2.4): Float + Settlements ======
   Future<Response> floatDashboard() =>
       apiClient.getData('/api/v1/amial/agent/float-dashboard');

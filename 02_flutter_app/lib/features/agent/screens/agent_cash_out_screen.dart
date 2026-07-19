@@ -1,13 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/agent/controllers/agent_controller.dart';
+import 'package:amyal_pay/features/agent/domain/repositories/agent_repo.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
-/// AMIAL-AGENT-APP-001 (v1.6)
+/// AMIAL-WD-CODE-001 — صرف سحب العميل برمز العملية.
 ///
-/// Cash-Out: العميل يأخذ كاش من الوكيل ويُخصم من محفظته الإلكترونية.
-/// الوكيل يطلب من العميل تأكيد ⇒ العميل يوافق من تطبيقه ⇒ المال ينتقل ⇒ الوكيل يعطي الكاش.
+/// العميل يُنشئ طلب سحب من تطبيقه فيحصل على «رمز العملية» (9 أرقام، صالح 45
+/// دقيقة، والمبلغ محجوز من محفظته). يأتي للوكيل ويعطيه الرمز. الوكيل:
+///   1) يُدخل الرمز → «بحث» → يرى المبلغ وبيانات العميل والوقت المتبقّي.
+///   2) يتأكّد من هوية العميل (هاتفه/رقم حسابه) → «تنفيذ الصرف» → يُعطي الكاش.
+/// المال ينتقل من المحجوز إلى محفظة الوكيل لحظة التنفيذ (لا اسم/رقم يدوي).
 class AgentCashOutScreen extends StatefulWidget {
   const AgentCashOutScreen({super.key});
 
@@ -15,95 +20,125 @@ class AgentCashOutScreen extends StatefulWidget {
   State<AgentCashOutScreen> createState() => _AgentCashOutScreenState();
 }
 
+enum _Step { enterCode, confirm }
+
 class _AgentCashOutScreenState extends State<AgentCashOutScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _phoneCtrl = TextEditingController();
-  final _amountCtrl = TextEditingController();
-  final _noteCtrl = TextEditingController();
+  final _repo = Get.find<AgentRepo>();
+  final _codeCtrl = TextEditingController();
+  final _identifierCtrl = TextEditingController();
+
+  _Step _step = _Step.enterCode;
+  bool _busy = false;
+
+  // بيانات العملية بعد البحث
+  String _amount = '';
+  String _customerName = '';
+  String _customerPhone = '';
+  DateTime? _expiresAt;
+  Timer? _tick;
 
   @override
   void dispose() {
-    _phoneCtrl.dispose();
-    _amountCtrl.dispose();
-    _noteCtrl.dispose();
+    _codeCtrl.dispose();
+    _identifierCtrl.dispose();
+    _tick?.cancel();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+  void _snack(String m, {bool error = true}) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(m),
+        backgroundColor: error ? AmyalColors.red : AmyalColors.primary,
+      ));
 
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('إرسال طلب سحب'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('للعميل: ${_phoneCtrl.text}'),
-            const SizedBox(height: 4),
-            Text('المبلغ: ${_amountCtrl.text} ر.ي',
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: AmyalColors.primary,
-                    fontSize: 16)),
-            const SizedBox(height: 12),
-            const Text(
-              'سيستقبل العميل طلب الدفع في تطبيقه. عليه الموافقة قبل أن تعطيه الكاش.',
-              style: TextStyle(fontSize: 12),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AmyalColors.primary),
-            child: const Text('إرسال', style: TextStyle(color: Colors.white)),
+  String _msg(Response r, String fallback) {
+    try {
+      if (r.body is Map && r.body['message'] != null) {
+        final m = r.body['message'].toString();
+        if (m.isNotEmpty) return m;
+      }
+    } catch (_) {}
+    return fallback;
+  }
+
+  Duration get _remaining {
+    if (_expiresAt == null) return Duration.zero;
+    final d = _expiresAt!.difference(DateTime.now());
+    return d.isNegative ? Duration.zero : d;
+  }
+
+  Future<void> _lookup() async {
+    final code = _codeCtrl.text.trim();
+    if (code.length < 6) { _snack('أدخل رمز العملية'); return; }
+    setState(() => _busy = true);
+    try {
+      final r = await _repo.withdrawLookup(code);
+      if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        final meta = (r.body['meta'] ?? {}) as Map;
+        final cust = (meta['customer'] ?? {}) as Map;
+        setState(() {
+          _amount = '${meta['amount'] ?? ''}';
+          _customerName = '${cust['name'] ?? ''}';
+          _customerPhone = '${cust['phone'] ?? ''}';
+          _expiresAt = DateTime.tryParse('${meta['expires_at'] ?? ''}')?.toLocal();
+          _step = _Step.confirm;
+        });
+        _startTick();
+      } else {
+        _snack(_msg(r, 'رمز غير صحيح أو منتهٍ'));
+      }
+    } catch (_) {
+      _snack('خطأ في الشبكة');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _startTick() {
+    _tick?.cancel();
+    _tick = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) { t.cancel(); return; }
+      if (_remaining == Duration.zero) {
+        t.cancel();
+        _snack('انتهت صلاحية العملية — اطلب من العميل إنشاء طلب جديد');
+        setState(() => _step = _Step.enterCode);
+      } else {
+        setState(() {});
+      }
+    });
+  }
+
+  Future<void> _execute() async {
+    final identifier = _identifierCtrl.text.trim();
+    if (identifier.length < 4) { _snack('أدخل هاتف/رقم حساب العميل للتأكيد'); return; }
+    setState(() => _busy = true);
+    try {
+      final r = await _repo.withdrawExecute(_codeCtrl.text.trim(), identifier);
+      if (!mounted) return;
+      if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        _tick?.cancel();
+        await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 56),
+            title: const Text('تم الصرف بنجاح', textAlign: TextAlign.center),
+            content: Text('انتقل $_amount ر.ي إلى محفظتك. سلّم العميل الكاش الآن.',
+                textAlign: TextAlign.center),
+            actions: [
+              FilledButton(
+                onPressed: () { Navigator.pop(ctx); Get.back(); },
+                child: const Text('تم'),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    final ctrl = Get.find<AgentController>();
-    final success = await ctrl.requestCashOut(
-      customerPhone: _phoneCtrl.text.trim(),
-      amount: _amountCtrl.text.trim(),
-      note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
-    );
-
-    if (!mounted) return;
-    if (success) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          icon: const Icon(Icons.send, color: AmyalColors.primary, size: 56),
-          title: const Text('تم الإرسال'),
-          content: const Text(
-            'تم إرسال الطلب للعميل. ينتظر موافقته. لا تعطيه الكاش حتى تنجح العملية في صفحة "عملياتي".',
-            textAlign: TextAlign.center,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                Get.back();
-              },
-              child: const Text('حسناً'),
-            ),
-          ],
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(ctrl.lastError.value),
-            backgroundColor: AmyalColors.red),
-      );
+        );
+      } else {
+        _snack(_msg(r, 'تعذّر تنفيذ الصرف'));
+      }
+    } catch (_) {
+      _snack('خطأ في الشبكة');
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -114,103 +149,130 @@ class _AgentCashOutScreenState extends State<AgentCashOutScreen> {
       appBar: AppBar(
         backgroundColor: AmyalColors.primary,
         foregroundColor: Colors.white,
-        title: const Text('سحب من العميل'),
+        title: const Text('صرف سحب لعميل'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEF4444).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning_amber, color: Color(0xFFEF4444)),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'العميل سيستلم طلب موافقة في تطبيقه. لا تُسلِّمه الكاش حتى ينجح الطلب.',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              TextFormField(
-                controller: _phoneCtrl,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'رقم جوال العميل *',
-                  hintText: '+967700000000',
-                  prefixIcon: Icon(Icons.phone),
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) =>
-                    (v == null || v.length < 6) ? 'رقم غير صحيح' : null,
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
-                ],
-                decoration: const InputDecoration(
-                  labelText: 'المبلغ المطلوب (ر.ي) *',
-                  prefixIcon: Icon(Icons.attach_money),
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) {
-                  final n = double.tryParse(v ?? '');
-                  if (n == null || n <= 0) return 'مبلغ غير صحيح';
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              TextFormField(
-                controller: _noteCtrl,
-                maxLength: 200,
-                decoration: const InputDecoration(
-                  labelText: 'ملاحظة للعميل (اختياري)',
-                  prefixIcon: Icon(Icons.notes),
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              Obx(() {
-                final ctrl = Get.find<AgentController>();
-                return ElevatedButton.icon(
-                  onPressed: ctrl.isSubmitting.value ? null : _submit,
-                  icon: ctrl.isSubmitting.value
-                      ? const SizedBox(
-                          width: 18, height: 18,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
-                      : const Icon(Icons.send),
-                  label: const Text('إرسال طلب السحب',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
+        child: _step == _Step.enterCode ? _enterCodeView() : _confirmView(),
       ),
     );
   }
+
+  Widget _enterCodeView() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AmyalColors.yellow.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: const Row(children: [
+          Icon(Icons.info_outline, color: AmyalColors.primary),
+          SizedBox(width: 8),
+          Expanded(child: Text(
+            'اطلب من العميل «رمز العملية» الظاهر في تطبيقه (9 أرقام، صالح 45 دقيقة).',
+            style: TextStyle(fontSize: 12.5),
+          )),
+        ]),
+      ),
+      const SizedBox(height: 20),
+      TextField(
+        controller: _codeCtrl,
+        keyboardType: TextInputType.number,
+        textAlign: TextAlign.center,
+        maxLength: 9,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: 6),
+        decoration: const InputDecoration(
+          labelText: 'رمز العملية',
+          counterText: '',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 20),
+      FilledButton.icon(
+        onPressed: _busy ? null : _lookup,
+        icon: _busy
+            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            : const Icon(Icons.search),
+        label: const Text('بحث عن العملية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        style: FilledButton.styleFrom(
+          backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(52)),
+      ),
+    ]);
+  }
+
+  Widget _confirmView() {
+    final r = _remaining;
+    final mm = r.inMinutes.toString().padLeft(2, '0');
+    final ss = (r.inSeconds % 60).toString().padLeft(2, '0');
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      // بطاقة العملية
+      Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+        child: Column(children: [
+          const Text('مبلغ السحب', style: TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+          const SizedBox(height: 4),
+          Text('$_amount ر.ي',
+              style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+          const Divider(height: 26),
+          _row('العميل', _customerName),
+          _row('الهاتف', _customerPhone, ltr: true),
+          _row('رمز العملية', _codeCtrl.text.trim(), ltr: true),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: (r.inMinutes < 5 ? AmyalColors.red : AmyalColors.primary).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text('ينتهي خلال $mm:$ss',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: r.inMinutes < 5 ? AmyalColors.red : AmyalColors.primary)),
+          ),
+        ]),
+      ),
+      const SizedBox(height: 16),
+      const Text('تأكيد هوية العميل قبل الصرف:',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 8),
+      TextField(
+        controller: _identifierCtrl,
+        keyboardType: TextInputType.text,
+        decoration: const InputDecoration(
+          labelText: 'هاتف العميل أو رقم حسابه',
+          prefixIcon: Icon(Icons.badge_outlined),
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 20),
+      FilledButton.icon(
+        onPressed: _busy ? null : _execute,
+        icon: _busy
+            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            : const Icon(Icons.payments),
+        label: const Text('تنفيذ الصرف وتسليم الكاش', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF2E7D32), minimumSize: const Size.fromHeight(54)),
+      ),
+      const SizedBox(height: 8),
+      TextButton(
+        onPressed: () { _tick?.cancel(); setState(() => _step = _Step.enterCode); },
+        child: const Text('رجوع'),
+      ),
+    ]);
+  }
+
+  Widget _row(String k, String v, {bool ltr = false}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Flexible(child: Text(v,
+              textDirection: ltr ? TextDirection.ltr : null,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+          Text(k, style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+        ]),
+      );
 }
