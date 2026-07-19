@@ -11,6 +11,7 @@ import 'package:amyal_pay/features/fuel_station/screens/fuel_sales_history_scree
 import 'package:amyal_pay/features/fuel_station/screens/fuel_cashier_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/profit_report_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amyal_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/access/widgets/access_gate.dart';
@@ -444,6 +445,15 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
           icon: Icons.credit_card, label: 'بطاقات آجل', feature: 'fuel_cards',
           planLabel: 'الأعمال', onOpen: () => Get.to(() => const FuelCompaniesScreen()),
         )),
+      ]),
+      const SizedBox(height: 8),
+      Row(children: [
+        Expanded(child: _featTile(
+          icon: Icons.badge, label: 'الموظفون', feature: 'employees',
+          planLabel: 'الأعمال', onOpen: () => Get.to(() => const MerchantStaffScreen()),
+        )),
+        const SizedBox(width: 8),
+        const Expanded(child: SizedBox()),
       ]),
     ]);
   }

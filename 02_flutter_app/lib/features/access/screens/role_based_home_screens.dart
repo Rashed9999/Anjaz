@@ -8,6 +8,7 @@ import 'package:amyal_pay/features/me/screens/my_services_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_products_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_report_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_customers_screen.dart';
 import 'package:amyal_pay/features/agent/screens/agent_cash_in_screen.dart';
@@ -167,6 +168,11 @@ class MerchantRetailHomeScreen extends StatelessWidget {
                 icon: Icons.bar_chart, label: 'التقارير',
                 color: Colors.green.shade700,
                 onTap: () => Get.to(() => const CashierReportScreen()),
+              )),
+              AccessGate(feature: 'employees', child: _MiniAction(
+                icon: Icons.badge, label: 'الموظفون',
+                color: AmyalColors.primary,
+                onTap: () => Get.to(() => const MerchantStaffScreen()),
               )),
             ],
           ),

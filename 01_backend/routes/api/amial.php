@@ -705,6 +705,14 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/daily-stats', [MerchantController::class, 'dailyStats'])->name('daily-stats');
     });
 
+    // -------- AMIAL-MERCHANT-STAFF-001 — التاجر يدير موظفي نقاط البيع --------
+    Route::prefix('merchant/staff')->name('amial.merchant.staff.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'index'])->name('index');
+        Route::post('/', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'store'])->name('store');
+        Route::post('/{id}/toggle', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'toggle'])
+            ->where('id', '[0-9]+')->name('toggle');
+    });
+
     // -------- AMIAL-CUSTOMER-CREDIT-VIEW-001 — العميل يرى ما عليه من آجل --------
     Route::prefix('customer/credits')->name('amial.customer.credits.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditViewController::class, 'myAccounts'])->name('mine');
