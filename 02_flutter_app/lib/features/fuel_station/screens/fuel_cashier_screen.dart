@@ -4,6 +4,7 @@ import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/fuel_station/controllers/fuel_station_controller.dart';
 import 'package:amyal_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
 import 'package:amyal_pay/features/fuel_station/screens/fuel_receipt_screen.dart';
+import 'package:amyal_pay/features/fuel_station/screens/fuel_qr_collect_screen.dart';
 
 /// AMIAL-FUEL-CASHIER-001 — كاشير محطة الوقود (تصميم #103).
 ///
@@ -91,7 +92,20 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
     await _submit(data);
   }
 
-  /// «QR الفوري» — دفع أميال باي بهاتف العميل (شحن حقيقي فوري).
+  /// «QR الفوري» — يعرض رمزاً بمبلغ ثابت يمسحه العميل ويدفع من محفظته،
+  /// ثم يُسجَّل البيع تلقائياً عند تأكيد الدفع. المسار المهني الافتراضي.
+  Future<void> _payByQr() async {
+    if (!_validate()) return;
+    Get.to(() => FuelQrCollectScreen(
+          saleData: _baseData(),
+          amount: _amount,
+          stationName: c.station.value?['station_name'] ?? 'محطة الوقود',
+          pumpLabel: _pump == null ? null : 'المضخّة #${_pump!['pump_number']}',
+          productName: _product?['name']?.toString(),
+        ));
+  }
+
+  /// دفع أميال باي بهاتف العميل (شحن مباشر) — خيار بديل سريع.
   Future<void> _payAmial() async {
     if (!_validate()) return;
     final phoneCtrl = TextEditingController();
@@ -257,11 +271,11 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
 
           // ===== الدفع =====
           Obx(() => FilledButton.icon(
-            onPressed: c.isSubmitting.value ? null : _payAmial,
+            onPressed: c.isSubmitting.value ? null : _payByQr,
             icon: c.isSubmitting.value
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : const Icon(Icons.qr_code_2),
-            label: const Text('QR الفوري (أميال باي)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            label: const Text('استلام بـ QR (العميل يمسح ويدفع)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
             style: FilledButton.styleFrom(
               backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(54)),
           )),
@@ -271,6 +285,12 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
               onPressed: c.isSubmitting.value ? null : _payCash,
               icon: const Icon(Icons.payments_outlined),
               label: const Text('نقد'),
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: OutlinedButton.icon(
+              onPressed: c.isSubmitting.value ? null : _payAmial,
+              icon: const Icon(Icons.phone_iphone),
+              label: const Text('بالهاتف'),
             )),
             const SizedBox(width: 8),
             Expanded(child: OutlinedButton.icon(

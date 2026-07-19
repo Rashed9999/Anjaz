@@ -76,7 +76,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
                   // المثبَّت هو أحدث بناء. إن رأيت هذا السطر فالبناء حديث.
                   SizedBox(height: 10),
                   Text(
-                    '✅ إصدار 0.8.2 — فاتورة الوقود + ميزات الباقة',
+                    '✅ إصدار 0.9.0 — استلام بـ QR + فاتورة الوقود',
                     style: TextStyle(
                         color: Color(0xFFFECA1E),
                         fontSize: 12,

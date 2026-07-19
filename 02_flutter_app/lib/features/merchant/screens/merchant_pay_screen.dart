@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/merchant/controllers/merchant_pay_controller.dart';
+import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
 import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
@@ -56,23 +57,34 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
   /// AMIAL-MERCHANT-PAY-001 — تعبئة رقم التاجر بمسح رمز QR الخاص به.
   /// رموز أميال باي JSON فيها حقل phone؛ ويُقبل أيضاً رمز نصّه رقم هاتف مباشرةً.
   Future<void> _scanMerchantQr() async {
-    final raw = await Get.to<String>(() => const QrScannerScreen(title: 'مسح رمز التاجر'));
+    final raw = await Get.to<String>(() => const QrScannerScreen(title: 'مسح رمز الدفع'));
     if (raw == null || raw.isEmpty || !mounted) return;
 
+    // 1) رمز «طلب دفع بمبلغ ثابت» (كاشير الوقود/المتجر) — {t:amial_pr, code}
+    String? prCode;
     String? phone;
     try {
       final decoded = jsonDecode(raw);
-      if (decoded is Map && decoded['phone'] != null) {
-        phone = decoded['phone'].toString();
+      if (decoded is Map) {
+        if (decoded['t'] == 'amial_pr' && decoded['code'] != null) {
+          prCode = decoded['code'].toString();
+        } else if (decoded['phone'] != null) {
+          phone = decoded['phone'].toString();
+        }
       }
     } catch (_) {
       final cleaned = raw.replaceAll(RegExp(r'[\s\-]'), '');
       if (RegExp(r'^\+?[0-9]{6,15}$').hasMatch(cleaned)) phone = cleaned;
     }
 
+    if (prCode != null) {
+      await _payFixedRequest(prCode);
+      return;
+    }
+
     if (phone == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('هذا الرمز ليس رمز تاجر في أميال باي'),
+        content: Text('هذا الرمز ليس رمز دفع في أميال باي'),
         backgroundColor: AmyalColors.red,
       ));
       return;
@@ -81,6 +93,66 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
     setState(() => _phoneCtrl.text = phone!);
     _refreshQuote();
   }
+
+  /// دفع «طلب بمبلغ ثابت» بعد مسحه: معاينة (المستلِم + المبلغ) ثم تأكيد ودفع.
+  Future<void> _payFixedRequest(String code) async {
+    final pr = Get.find<PaymentRequestController>();
+    final data = await pr.showByCode(code);
+    if (!mounted) return;
+    if (data == null) {
+      _err(pr.lastError.value.isEmpty ? 'الطلب غير موجود' : pr.lastError.value);
+      return;
+    }
+    final req = (data['request'] ?? {}) as Map;
+    final requester = (data['requester'] ?? {}) as Map;
+    final isActive = data['is_active'] == true;
+    final amount = '${req['amount'] ?? ''}';
+    if (!isActive) {
+      _err('الطلب غير صالح (مدفوع/ملغى/منتهٍ)');
+      return;
+    }
+
+    final confirm = await Get.dialog<bool>(AlertDialog(
+      title: const Text('تأكيد الدفع'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('$amount ر.ي',
+            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+        const SizedBox(height: 8),
+        Text('إلى: ${requester['name'] ?? 'تاجر'}', style: const TextStyle(fontSize: 14)),
+        if (req['note'] != null) ...[
+          const SizedBox(height: 4),
+          Text('${req['note']}', style: const TextStyle(fontSize: 12, color: AmyalColors.textMuted)),
+        ],
+        const SizedBox(height: 8),
+        const Text('سيُخصم المبلغ من محفظتك فوراً.',
+            style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Get.back(result: false), child: const Text('إلغاء')),
+        FilledButton(onPressed: () => Get.back(result: true), child: const Text('ادفع الآن')),
+      ],
+    ));
+    if (confirm != true || !mounted) return;
+
+    final ok = await pr.pay(code);
+    if (!mounted) return;
+    if (ok) {
+      await Get.dialog(AlertDialog(
+        icon: const Icon(Icons.check_circle, color: Colors.green, size: 48),
+        title: const Text('تم الدفع', textAlign: TextAlign.center),
+        content: Text('تم دفع $amount ر.ي بنجاح. ستجد الإيصال في قائمة الإيصالات.',
+            textAlign: TextAlign.center),
+        actions: [
+          FilledButton(onPressed: () { Get.back(); Get.back(); }, child: const Text('تم')),
+        ],
+      ));
+    } else {
+      _err(pr.lastError.value.isEmpty ? 'فشل الدفع' : pr.lastError.value);
+    }
+  }
+
+  void _err(String m) => ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(m), backgroundColor: AmyalColors.red));
 
   void _refreshQuote() {
     final amount = _amountCtrl.text.trim();
