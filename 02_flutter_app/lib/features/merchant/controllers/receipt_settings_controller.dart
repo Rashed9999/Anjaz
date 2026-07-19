@@ -12,6 +12,7 @@ class ReceiptSettingsController extends GetxController {
   static const _base = '/api/v1/amial/merchant/receipt-settings';
 
   final RxMap<String, dynamic> settings = <String, dynamic>{}.obs;
+  final RxList<Map<String, dynamic>> currencies = <Map<String, dynamic>>[].obs;
   final RxBool isLoaded = false.obs;
   final RxBool isSaving = false.obs;
 
@@ -38,8 +39,10 @@ class ReceiptSettingsController extends GetxController {
     try {
       final r = await _api.getData(_base);
       if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
-        final s = ((r.body['meta'] ?? {})['settings'] ?? {}) as Map;
-        settings.assignAll(Map<String, dynamic>.from(s));
+        final meta = (r.body['meta'] ?? {}) as Map;
+        settings.assignAll(Map<String, dynamic>.from((meta['settings'] ?? {}) as Map));
+        currencies.assignAll(((meta['currencies'] ?? []) as List)
+            .map((e) => Map<String, dynamic>.from(e as Map)).toList());
         isLoaded.value = true;
       }
     } catch (_) {/* الافتراضيات تكفي */}

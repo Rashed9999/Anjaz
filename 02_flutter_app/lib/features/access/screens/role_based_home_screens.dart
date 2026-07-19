@@ -13,6 +13,7 @@ import 'package:amyal_pay/features/merchant/screens/merchant_audit_log_screen.da
 import 'package:amyal_pay/features/merchant/screens/merchant_excel_export_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/receipt_settings_screen.dart';
 import 'package:amyal_pay/features/corporate/screens/corporate_accounts_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_currencies_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_customers_screen.dart';
 import 'package:amyal_pay/features/agent/screens/agent_cash_in_screen.dart';
@@ -197,6 +198,11 @@ class MerchantRetailHomeScreen extends StatelessWidget {
                 icon: Icons.business_center, label: 'حسابات الشركات',
                 color: AmyalColors.primary,
                 onTap: () => Get.to(() => const CorporateAccountsScreen()),
+              )),
+              AccessGate(feature: 'multi_currency', child: _MiniAction(
+                icon: Icons.currency_exchange, label: 'العملات',
+                color: AmyalColors.primary,
+                onTap: () => Get.to(() => const MerchantCurrenciesScreen()),
               )),
             ],
           ),

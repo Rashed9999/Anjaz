@@ -205,6 +205,8 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
                     reference: _ref,
                     dateTime: _now(),
                     customer: widget.customerPhone,
+                    totalYer: double.tryParse('${widget.sale['total_amount'] ?? 0}'),
+                    currencies: _settings.currencies,
                   )),
             ),
           ),

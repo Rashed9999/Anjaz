@@ -61,7 +61,15 @@ class MerchantReceiptSettingsController extends Controller
         $settings['store_name'] = $merchant?->store_name ?? trim(($user->f_name ?? '') . ' ' . ($user->l_name ?? ''));
         $settings['logo_url'] = $merchant?->logo_fullpath;
 
-        return $this->ok(['settings' => $settings], 'OK', 'إعدادات الفاتورة');
+        // AMIAL-MULTI-CURRENCY-001: عملات التاجر الفعّالة (لعرض المكافئ على الفاتورة)
+        $currencies = \App\Models\MerchantCurrency::where('merchant_user_id', $user->id)
+            ->where('is_active', true)->orderBy('code')->get()
+            ->map(fn ($c) => [
+                'code' => $c->code, 'symbol' => $c->symbol,
+                'rate_to_base' => (string) $c->rate_to_base,
+            ]);
+
+        return $this->ok(['settings' => $settings, 'currencies' => $currencies], 'OK', 'إعدادات الفاتورة');
     }
 
     public function save(Request $request): JsonResponse

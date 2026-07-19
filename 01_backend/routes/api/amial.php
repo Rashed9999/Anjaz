@@ -705,6 +705,16 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/daily-stats', [MerchantController::class, 'dailyStats'])->name('daily-stats');
     });
 
+    // -------- AMIAL-MULTI-CURRENCY-001 — عملات التاجر --------
+    Route::prefix('merchant/currencies')->name('amial.merchant.currencies.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\MerchantCurrencyController::class;
+        Route::get('/', [$c, 'index'])->name('index');
+        Route::post('/', [$c, 'store'])->name('store');
+        Route::post('/{id}', [$c, 'update'])->where('id', '[0-9]+')->name('update');
+        Route::post('/{id}/toggle', [$c, 'toggle'])->where('id', '[0-9]+')->name('toggle');
+        Route::delete('/{id}', [$c, 'destroy'])->where('id', '[0-9]+')->name('destroy');
+    });
+
     // -------- AMIAL-CORPORATE-ACCOUNTS-001 — حسابات الشركات (B2B) --------
     Route::prefix('merchant/corporate')->name('amial.merchant.corporate.')->group(function () {
         $c = \App\Http\Controllers\Api\V1\Amial\CorporateAccountController::class;

@@ -192,6 +192,8 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
                   reference: _ref,
                   dateTime: _now(),
                   customer: widget.customerName ?? widget.customerPhone,
+                  totalYer: widget.total,
+                  currencies: _settings.currencies,
                 )),
           ),
         ),

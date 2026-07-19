@@ -16,6 +16,8 @@ class AmialInvoiceCard extends StatelessWidget {
     this.reference,
     this.dateTime,
     this.customer,
+    this.totalYer,
+    this.currencies = const [],
   });
 
   /// إعدادات الفاتورة كما تعود من الخادم (merchant/receipt-settings).
@@ -31,8 +33,25 @@ class AmialInvoiceCard extends StatelessWidget {
   final String? dateTime;
   final String? customer;
 
+  /// AMIAL-MULTI-CURRENCY-001: الإجمالي بالريال + العملات لعرض المكافئ.
+  final double? totalYer;
+  final List<Map<String, dynamic>> currencies;
+
   double get _width => (settings['paper_width'] == 58) ? 230 : 300;
   bool _flag(String k, [bool def = true]) => settings[k] == null ? def : settings[k] == true;
+
+  /// «≈ 22.6 USD • 84.3 SAR» — مكافئ الإجمالي بالعملات الفعّالة.
+  String _equivalents() {
+    if (totalYer == null || totalYer! <= 0 || currencies.isEmpty) return '';
+    final parts = <String>[];
+    for (final c in currencies) {
+      final rate = double.tryParse('${c['rate_to_base'] ?? 0}') ?? 0;
+      if (rate <= 0) continue;
+      final v = totalYer! / rate;
+      parts.add('${v.toStringAsFixed(2)} ${c['symbol'] ?? c['code'] ?? ''}');
+    }
+    return parts.isEmpty ? '' : '≈ ${parts.join(' • ')}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +110,13 @@ class AmialInvoiceCard extends StatelessWidget {
           const Text('الإجمالي',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black)),
         ]),
+        if (_equivalents().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(_equivalents(), textAlign: TextAlign.center,
+                textDirection: TextDirection.ltr,
+                style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          ),
         _dashed(),
 
         if (method != null) _line('طريقة الدفع', method!),

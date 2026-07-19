@@ -76,7 +76,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
                   // المثبَّت هو أحدث بناء. إن رأيت هذا السطر فالبناء حديث.
                   SizedBox(height: 10),
                   Text(
-                    '✅ إصدار 1.2.1 — مدير عمليات + مدير مالي',
+                    '✅ إصدار 1.3.0 — تعدّد العملات + إصلاح البناء',
                     style: TextStyle(
                         color: Color(0xFFFECA1E),
                         fontSize: 12,

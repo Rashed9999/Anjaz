@@ -81,9 +81,10 @@ class _FuelQrCollectScreenState extends State<FuelQrCollectScreen> {
       });
       return;
     }
-    final meta = _pr.currentRequest.value;
-    _code = (meta['short_code'] ?? meta['request']?['short_code'])?.toString();
-    _requestId = int.tryParse('${meta['request']?['id'] ?? ''}');
+    final meta = _pr.currentRequest.value ?? <String, dynamic>{};
+    final req = (meta['request'] is Map) ? meta['request'] as Map : const {};
+    _code = (meta['short_code'] ?? req['short_code'])?.toString();
+    _requestId = int.tryParse('${req['id'] ?? ''}');
     if (_code == null || _code!.isEmpty) {
       setState(() {
         _stage = _Stage.error;
