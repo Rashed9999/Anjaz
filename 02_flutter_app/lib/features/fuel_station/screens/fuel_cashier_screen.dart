@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/fuel_station/controllers/fuel_station_controller.dart';
 import 'package:amyal_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
+import 'package:amyal_pay/features/fuel_station/screens/fuel_receipt_screen.dart';
 
 /// AMIAL-FUEL-CASHIER-001 — كاشير محطة الوقود (تصميم #103).
 ///
@@ -124,55 +125,43 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
     );
     if (ok != true) return;
     if (phoneCtrl.text.trim().isEmpty) { _snack('أدخل رقم هاتف العميل'); return; }
+    _lastCustomerPhone = phoneCtrl.text.trim();
     final data = _baseData()
       ..['payment_method'] = 'amial_pay'
       ..['customer_phone'] = phoneCtrl.text.trim();
     await _submit(data);
   }
 
+  /// هاتف العميل لآخر عملية أميال باي — يُمرَّر للفاتورة (إرسال واتساب).
+  String? _lastCustomerPhone;
+
   Future<void> _submit(Map<String, dynamic> data) async {
     final ok = await c.recordSale(data);
     if (!mounted) return;
     if (ok) {
-      _showReceipt();
       setState(() => _entry = '');
       c.loadSales();
+      _showReceipt();
     } else {
       _snack(c.lastError.value.isEmpty ? 'فشل تسجيل البيع' : c.lastError.value);
     }
   }
 
   void _showReceipt() {
-    final s = c.lastSale.value ?? {};
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        icon: const Icon(Icons.check_circle, color: Colors.green, size: 48),
-        title: const Text('تمّت التعبئة', textAlign: TextAlign.center),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          _r('اللترات', '${s['liters'] ?? _fmt(_liters)} لتر'),
-          _r('السعر/لتر', '${s['price_per_liter'] ?? _fmt(_pricePerLiter)} ر.ي'),
-          const Divider(),
-          _r('الإجمالي', '${s['total_amount'] ?? _fmt(_amount)} ر.ي', bold: true),
-        ]),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('حسناً'),
-          ),
-        ],
-      ),
-    );
+    final s = Map<String, dynamic>.from(c.lastSale.value ?? {});
+    // اضمن ظهور اسم الوقود واللترات/السعر حتى لو لم يُرجعها الخادم صراحةً.
+    s.putIfAbsent('liters', () => _liters);
+    s.putIfAbsent('price_per_liter', () => _pricePerLiter);
+    s.putIfAbsent('total_amount', () => _amount);
+    s.putIfAbsent('product_name', () => _product?['name']);
+    Get.to(() => FuelReceiptScreen(
+          sale: s,
+          stationName: c.station.value?['station_name'] ?? 'محطة الوقود',
+          pumpLabel: _pump == null ? null : 'المضخّة #${_pump!['pump_number']}',
+          customerPhone: _lastCustomerPhone,
+        ));
+    _lastCustomerPhone = null;
   }
-
-  Widget _r(String k, String v, {bool bold = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(v, style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.w500,
-              fontSize: bold ? 18 : 14, color: bold ? AmyalColors.primary : null)),
-          Text(k, style: const TextStyle(color: AmyalColors.textSecondary, fontSize: 13)),
-        ]),
-      );
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(m), backgroundColor: AmyalColors.red));
