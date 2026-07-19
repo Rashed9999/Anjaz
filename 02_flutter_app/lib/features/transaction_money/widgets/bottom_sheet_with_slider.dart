@@ -38,6 +38,7 @@ class BottomSheetWithSlider extends StatefulWidget {
 
 class _BottomSheetWithSliderState extends State<BottomSheetWithSlider> {
   String? transactionId ;
+  String? transactionNo ; // AMIAL-TXN-NO-001: رقم العملية الرقمي المميّز بالنوع
 
   @override
   void initState() {
@@ -262,10 +263,18 @@ class _BottomSheetWithSliderState extends State<BottomSheetWithSlider> {
                             const SizedBox(height: Dimensions.paddingSizeExtraSmall),
 
                             transactionMoneyController.isNextBottomSheet ?
-                            transactionId != null? Text(
-                              'TrxID: $transactionId',
-                              style: rubikLight.copyWith(fontSize: Dimensions.fontSizeDefault),
-                            ): const SizedBox() : const SizedBox(),
+                            Column(children: [
+                              if (transactionNo != null)
+                                Text(
+                                  'رقم العملية: $transactionNo',
+                                  style: rubikSemiBold.copyWith(fontSize: Dimensions.fontSizeDefault),
+                                ),
+                              if (transactionId != null)
+                                Text(
+                                  'المرجع: $transactionId',
+                                  style: rubikLight.copyWith(fontSize: Dimensions.fontSizeSmall),
+                                ),
+                            ]) : const SizedBox(),
 
                           ],
                         ),
@@ -358,6 +367,7 @@ class _BottomSheetWithSliderState extends State<BottomSheetWithSlider> {
                               )
                             ).then((value) {
                               transactionId = value.body['transaction_id'];
+                              transactionNo = value.body['transaction_no']?.toString();
                             });
                           }else if(widget.transactionType == TransactionType.requestMoney){
                             transactionMoneyController.requestMoney(
@@ -379,6 +389,7 @@ class _BottomSheetWithSliderState extends State<BottomSheetWithSlider> {
                               }
                             ).then((value) {
                               transactionId = value.body['transaction_id'];
+                              transactionNo = value.body['transaction_no']?.toString();
                             });
                           }
 

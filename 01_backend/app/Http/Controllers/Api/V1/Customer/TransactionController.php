@@ -120,7 +120,7 @@ class TransactionController extends Controller
             $transactionLimit->update();
         }
 
-        return response()->json(['message' => 'success', 'transaction_id' => $customerTransaction], 200);
+        return response()->json(['message' => 'success', 'transaction_id' => $customerTransaction, 'transaction_no' => Transaction::where('transaction_id', $customerTransaction)->value('transaction_no')], 200);
     }
 
     public function cashOut(Request $request): JsonResponse
@@ -207,7 +207,7 @@ class TransactionController extends Controller
             $transactionLimit->update();
         }
 
-        return response()->json(['message' => 'success', 'transaction_id' => $customerTransaction], 200);
+        return response()->json(['message' => 'success', 'transaction_id' => $customerTransaction, 'transaction_no' => Transaction::where('transaction_id', $customerTransaction)->value('transaction_no')], 200);
     }
 
     public function requestMoney(Request $request): JsonResponse
@@ -379,7 +379,7 @@ class TransactionController extends Controller
         $requestMoney->note = $request->note;
         $requestMoney->save();
 
-        return response()->json(['message' => 'success', 'transaction_id' => $customerTransaction], 200);
+        return response()->json(['message' => 'success', 'transaction_id' => $customerTransaction, 'transaction_no' => Transaction::where('transaction_id', $customerTransaction)->value('transaction_no')], 200);
     }
 
     public function addMoney(Request $request): JsonResponse

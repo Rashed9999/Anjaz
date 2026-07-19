@@ -58,6 +58,8 @@ class Transaction extends Model
         'bonus_id',
         'note',
         'transaction_id',
+        // AMIAL-TXN-NO-001 — رقم عملية رقمي مقروء مميّز بنوع العملية
+        'transaction_no',
         // AMIAL-REFACTOR-CORE-001 — جديد
         'idempotency_key',
         'decision_code',

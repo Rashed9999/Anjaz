@@ -201,7 +201,59 @@ trait TransactionTrait
             );
         }
 
+        // AMIAL-TXN-NO-001 — رقم عملية رقمي مقروء (15 خانة) مميّز بالنوع.
+        // الصف الأساسي (بلا ref) يولّد الرقم بحسب نوعه؛ والصفوف الثانوية
+        // (ref_trans_id = مرجع الأساسي) تُعيد استخدام رقم الصف الأساسي نفسه،
+        // فتشترك كل صفوف العملية في رقم واحد يبدأ بالبادئة الصحيحة.
+        if (empty($data['transaction_no'])) {
+            if (!empty($data['ref_trans_id'])) {
+                $data['transaction_no'] = Transaction::where('transaction_id', $data['ref_trans_id'])
+                    ->value('transaction_no');
+            }
+            if (empty($data['transaction_no'])) {
+                $data['transaction_no'] = $this->newTransactionNo(
+                    $this->transactionNoPrefix($data['transaction_type'])
+                );
+            }
+        }
+
         return Transaction::create($data);
+    }
+
+    /**
+     * بادئة رقم العملية حسب نوع العملية الأساسي:
+     *   120 عميل↔عميل | 20 عميل→تاجر | 50 وكيل↔عميل | 90 غير ذلك.
+     */
+    protected function transactionNoPrefix(string $type): string
+    {
+        return match ($type) {
+            SEND_MONEY, RECEIVED_MONEY            => '120', // عميل ↔ عميل
+            PAYMENT, 'merchant_payment'           => '20',  // عميل → تاجر
+            CASH_IN, CASH_OUT, WITHDRAW           => '50',  // وكيل ↔ عميل
+            default                               => '90',
+        };
+    }
+
+    /**
+     * يولّد رقم عملية من 15 خانة رقمية يبدأ بالبادئة المعطاة، فريداً في الجدول.
+     */
+    protected function newTransactionNo(string $prefix): string
+    {
+        $total = 15;
+        for ($attempt = 0; $attempt < 8; $attempt++) {
+            $tailLen = $total - strlen($prefix);
+            $tail = '';
+            for ($j = 0; $j < $tailLen; $j++) {
+                $tail .= (string) random_int(0, 9);
+            }
+            $no = $prefix . $tail;
+            if (!Transaction::where('transaction_no', $no)->exists()) {
+                return $no;
+            }
+        }
+        // fallback شبه مؤكّد الفرادة (وقت + عشوائي) مقصوص إلى 15 خانة.
+        $seed = $prefix . str_pad((string) (int) (microtime(true) * 1000), 13, '0', STR_PAD_LEFT);
+        return substr($seed . random_int(1000, 9999), 0, $total);
     }
 
     /** ========= CUSTOMER ↔ CUSTOMER ========= */

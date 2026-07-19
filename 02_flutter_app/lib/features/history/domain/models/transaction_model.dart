@@ -58,6 +58,7 @@ class Transactions {
   String? id;
   String? transactionType;
   String? transactionId;
+  String? transactionNo; // AMIAL-TXN-NO-001: رقم العملية الرقمي المميّز بالنوع
   double? debit;
   double? credit;
   UserInfo? userInfo;
@@ -73,6 +74,7 @@ class Transactions {
     this.id,
     this.transactionType,
     this.transactionId,
+    this.transactionNo,
     this.debit,
     this.credit,
     this.userInfo,
@@ -89,6 +91,7 @@ class Transactions {
     id = json['id'].toString();
     transactionType = json['transaction_type'];
     transactionId = json['transaction_id'];
+    transactionNo = json['transaction_no']?.toString();
     debit = json['debit'].toDouble();
     credit = json['credit'].toDouble();
     userInfo = json['user_info'] != null
@@ -113,6 +116,7 @@ class Transactions {
     data['id'] = id;
     data['transaction_type'] = transactionType;
     data['transaction_id'] = transactionId;
+    data['transaction_no'] = transactionNo;
     data['debit'] = debit;
     data['credit'] = credit;
     if (userInfo != null) {
