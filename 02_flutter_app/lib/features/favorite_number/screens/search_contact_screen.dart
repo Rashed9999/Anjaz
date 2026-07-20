@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_text_field_widget.dart';
 import 'package:amyal_pay/features/camera_verification/screens/camera_screen.dart';
 import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
@@ -32,7 +32,7 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CustomAppbarWidget(title: 'favorite_number'.tr),
+      appBar: AppBar(title: Text('favorite_number'.tr), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
       body: GetBuilder<ContactController>(
         builder: (contactController) {
           return CustomScrollView(slivers: [

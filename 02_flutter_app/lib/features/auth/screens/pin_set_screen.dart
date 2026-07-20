@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_large_widget.dart';
 import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amyal_pay/features/camera_verification/controllers/camera_screen_controller.dart';
@@ -30,7 +30,7 @@ class _PinSetScreenState extends State<PinSetScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CustomAppbarWidget(title: "setup_pin".tr),
+      appBar: AppBar(title: Text("setup_pin".tr), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
       body: SafeArea(child: Column(children: [
 
         Expanded(child: SingleChildScrollView(

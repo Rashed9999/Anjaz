@@ -15,7 +15,7 @@ import 'package:amyal_pay/helper/price_converter_helper.dart';
 import 'package:amyal_pay/helper/transaction_type.dart';
 import 'package:amyal_pay/util/dimensions.dart';
 import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_loader_widget.dart';
 import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
 import 'package:amyal_pay/features/transaction_money/screens/transaction_confirmation_screen.dart';
@@ -89,7 +89,7 @@ class _TransactionBalanceInputScreenState extends State<TransactionBalanceInputS
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-          appBar: CustomAppbarWidget(title: widget.transactionType!.tr),
+          appBar: AppBar(title: Text(widget.transactionType!.tr), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
 
           body: GetBuilder<TransactionMoneyController>(
               builder: (transactionMoneyController) {

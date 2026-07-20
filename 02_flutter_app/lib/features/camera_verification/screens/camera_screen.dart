@@ -2,7 +2,7 @@ import 'package:camera/camera.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/auth/screens/sign_up_information_screen.dart';
 import 'package:amyal_pay/features/camera_verification/controllers/camera_screen_controller.dart';
 import 'package:amyal_pay/features/camera_verification/widgets/camera_instruction_widget.dart';
@@ -60,17 +60,26 @@ class _CameraScreenState extends State<CameraScreen> {
 
 
     return Scaffold(
-      appBar: CustomAppbarWidget(
-        title: widget.isBarCodeScan ? 'scanner'.tr : 'face_verification'.tr,
-        isBackButtonExist: (Get.previousRoute.split('?').first) == RouteHelper.verifyScreen ? false : true,
-        isSkip: (!widget.isBarCodeScan && true && !widget.fromEditProfile),
-        function: () {
-          if(widget.fromEditProfile) {
-            Get.off(() => const EditProfileScreen());
-          }else{
-            Get.off(() => const SignUpInformationScreen());
-          }
-        },
+      appBar: AppBar(
+        title: Text(widget.isBarCodeScan ? 'scanner'.tr : 'face_verification'.tr),
+        backgroundColor: AmyalColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading:
+            (Get.previousRoute.split('?').first) == RouteHelper.verifyScreen ? false : true,
+        actions: [
+          if (!widget.isBarCodeScan && !widget.fromEditProfile)
+            TextButton(
+              onPressed: () {
+                if (widget.fromEditProfile) {
+                  Get.off(() => const EditProfileScreen());
+                } else {
+                  Get.off(() => const SignUpInformationScreen());
+                }
+              },
+              child: Text('skip'.tr, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+            ),
+        ],
       ),
       body: Column(children: [
         Flexible(flex: 2, child: GetBuilder<CameraScreenController>(

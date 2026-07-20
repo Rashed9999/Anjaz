@@ -6,7 +6,7 @@ import 'package:amyal_pay/features/setting/widgets/custom_fag_expansion_tile.dar
 import 'package:amyal_pay/features/setting/widgets/empty_fag_widget.dart';
 import 'package:amyal_pay/util/dimensions.dart';
 import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/setting/widgets/faq_shimmer.dart';
 
 class FaqScreen extends StatefulWidget {
@@ -48,7 +48,7 @@ class _FaqScreenState extends State<FaqScreen>  with SingleTickerProviderStateMi
   Widget build(BuildContext context) {
 
     return Scaffold(
-      appBar: CustomAppbarWidget(title: widget.title),
+      appBar: AppBar(title: Text(widget.title), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
       body: GetBuilder<FaqController>(builder: (faqController) {
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 

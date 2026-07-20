@@ -1,7 +1,7 @@
 import 'package:country_code_picker/country_code_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_button_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_text_field_widget.dart';
 import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
@@ -62,7 +62,7 @@ class _AddFavNumberScreenState extends State<AddFavNumberScreen> {
     final bool isEdit = widget.favNumber != null;
 
     return Scaffold(
-      appBar: CustomAppbarWidget(title: isEdit ? 'edit_favorite_number'.tr : 'favorite_number'.tr),
+      appBar: AppBar(title: Text(isEdit ? 'edit_favorite_number'.tr : 'favorite_number'.tr), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
       body: Padding(
         padding: const EdgeInsets.all(Dimensions.paddingSizeLarge),
         child: Form(key: _formKey, child: Column(children: [

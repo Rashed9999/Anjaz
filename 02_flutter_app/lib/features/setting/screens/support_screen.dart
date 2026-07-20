@@ -6,7 +6,7 @@ import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amyal_pay/util/dimensions.dart';
 import 'package:amyal_pay/util/images.dart';
 import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class SupportScreen extends StatelessWidget {
@@ -16,7 +16,7 @@ class SupportScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final splashController =  Get.find<SplashController>();
     return Scaffold(
-      appBar: CustomAppbarWidget(title: '24_support'.tr),
+      appBar: AppBar(title: Text('24_support'.tr), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
       body: SingleChildScrollView(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,

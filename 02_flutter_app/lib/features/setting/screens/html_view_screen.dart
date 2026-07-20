@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 
 class HtmlViewScreen extends StatelessWidget {
   final String title;
@@ -10,7 +10,7 @@ class HtmlViewScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CustomAppbarWidget(title: title),
+      appBar: AppBar(title: Text(title), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.all(Dimensions.paddingSizeSmall),

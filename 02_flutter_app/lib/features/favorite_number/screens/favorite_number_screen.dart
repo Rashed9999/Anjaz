@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/no_data_widget.dart';
 import 'package:amyal_pay/features/favorite_number/controllers/fav_number_controller.dart';
 import 'package:amyal_pay/features/favorite_number/domain/models/favorite_list_model.dart';
@@ -47,7 +47,7 @@ class _FavoriteNumberScreenState extends State<FavoriteNumberScreen> {
             inAsyncCall: contactController.isContactListLoading,
             progressIndicator: CircularProgressIndicator(color: Theme.of(context).primaryColor),
             child: Scaffold(
-              appBar: CustomAppbarWidget(title: 'favorite_number'.tr),
+              appBar: AppBar(title: Text('favorite_number'.tr), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
               body: Skeletonizer(
                 enabled: favNumberController.favouriteListModel == null,
                 child: Column(children: [

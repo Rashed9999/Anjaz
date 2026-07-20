@@ -5,7 +5,7 @@ import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amyal_pay/features/auth/controllers/create_account_controller.dart';
 import 'package:amyal_pay/features/verification/controllers/verification_controller.dart';
 import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_pin_code_field_widget.dart';
 import 'package:amyal_pay/common/widgets/demo_otp_hint_widget.dart';
 import 'package:amyal_pay/features/verification/widgets/information_view.dart';
@@ -33,10 +33,19 @@ class _VerificationScreenState extends State<VerificationScreen> {
     final bool isForgetPassword = widget.phoneNumber != null;
     return Scaffold(
       backgroundColor: Theme.of(context).cardColor,
-      appBar: CustomAppbarWidget(title: 'phone_verification'.tr, onTap:() {
-        Get.find<VerificationController>().cancelTimer();
-        Get.back();
-      }),
+      appBar: AppBar(
+        title: Text('phone_verification'.tr),
+        backgroundColor: AmyalColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            Get.find<VerificationController>().cancelTimer();
+            Get.back();
+          },
+        ),
+      ),
       body: Column(
         children: [
           Expanded(child: SingleChildScrollView(

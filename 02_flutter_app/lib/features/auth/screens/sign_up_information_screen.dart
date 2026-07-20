@@ -9,7 +9,7 @@ import 'package:amyal_pay/common/models/signup_body_model.dart';
 import 'package:amyal_pay/helper/dialog_helper.dart';
 import 'package:amyal_pay/helper/route_helper.dart';
 import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_large_widget.dart';
 import 'package:amyal_pay/features/auth/widgets/gender_field_widget.dart';
 import 'package:amyal_pay/features/auth/widgets/sign_up_input_widget.dart';
@@ -54,7 +54,13 @@ class _SignUpInformationScreenState extends State<SignUpInformationScreen> {
       isExit: false,
       onPopInvoked:()=> _onWillPop(context),
       child: Scaffold(
-        appBar: CustomAppbarWidget(title: 'information'.tr, onTap: ()=> _onWillPop(context)),
+        appBar: AppBar(
+          title: Text('information'.tr),
+          backgroundColor: AmyalColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => _onWillPop(context)),
+        ),
 
         body: Column(children: [
           Expanded(flex: 10, child: SingleChildScrollView(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

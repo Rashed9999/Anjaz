@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
 import 'package:amyal_pay/common/models/contact_model.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_asset_image_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_button_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_image_widget.dart';
@@ -77,7 +77,7 @@ class _TransactionMoneyScreenState extends State<TransactionMoneyScreen> {
 
 
     return Scaffold(
-      appBar:  CustomAppbarWidget(title: widget.transactionType!.tr),
+      appBar: AppBar(title: Text(widget.transactionType!.tr), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
 
       body: GetBuilder<ContactController>(builder: (contactController) => Column(children: [
         Expanded(child: ModalProgressHUD(
