@@ -26,6 +26,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
   late final PlansController c;
   late final PageController _pageCtrl;
   bool _annual = false;
+  bool _compare = false; // AMIAL-PLANS-COMPARE-001: بطاقات ↔ جدول مقارنة
 
   // ألوان لكل خطّة
   static const _planColors = {
@@ -98,16 +99,29 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
           // الخطّة الحالية (إن وُجدت)
           if (c.currentPlan.value != null) _currentPlanBadge(),
 
+          // مبدّل العرض: بطاقات ↔ مقارنة
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(children: [
+              _viewBtn('بطاقات', Icons.view_carousel, !_compare, () => setState(() => _compare = false)),
+              const SizedBox(width: 8),
+              _viewBtn('مقارنة', Icons.table_chart, _compare, () => setState(() => _compare = true)),
+            ]),
+          ),
+          const SizedBox(height: 8),
+
           // كتالوج الخطط
           Expanded(child: c.plans.isEmpty
               ? Center(child: Text('لا توجد خطط متاحة',
                   style: TextStyle(color: Colors.grey.shade600)))
-              : PageView.builder(
-                  controller: _pageCtrl,
-                  itemCount: c.plans.length,
-                  padEnds: true,
-                  itemBuilder: (_, i) => _planCard(c.plans[i]),
-                ),
+              : (_compare
+                  ? _comparisonMatrix()
+                  : PageView.builder(
+                      controller: _pageCtrl,
+                      itemCount: c.plans.length,
+                      padEnds: true,
+                      itemBuilder: (_, i) => _planCard(c.plans[i]),
+                    )),
           ),
 
           // ملاحظة قانونية
@@ -143,6 +157,181 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
       ),
     ),
   );
+
+  Widget _viewBtn(String label, IconData icon, bool active, VoidCallback onTap) => Expanded(
+    child: InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        decoration: BoxDecoration(
+          color: active ? AmyalColors.primary.withValues(alpha: 0.12) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: active ? AmyalColors.primary : AmyalColors.border),
+        ),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, size: 16, color: active ? AmyalColors.primary : Colors.grey.shade600),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(
+              color: active ? AmyalColors.primary : Colors.grey.shade700,
+              fontWeight: FontWeight.bold, fontSize: 13)),
+        ]),
+      ),
+    ),
+  );
+
+  // AMIAL-PLANS-COMPARE-001 — جدول مقارنة عملي: الميزات (صفوف) × الباقات (أعمدة).
+  static const double _cmpRowH = 44;
+  static const double _cmpSecH = 34;
+  static const double _cmpHeadH = 132;
+  static const double _cmpPlanW = 124;
+  static const double _cmpLabelW = 128;
+
+  Widget _comparisonMatrix() {
+    final plans = c.plans;
+    // اتحاد أكواد الميزات بترتيب ظهورها التصاعدي عبر الباقات
+    final seen = <String>{};
+    final featureCodes = <String>[];
+    for (final p in plans) {
+      for (final f in ((p['features'] ?? []) as List)) {
+        final code = f.toString();
+        if (seen.add(code)) featureCodes.add(code);
+      }
+    }
+    // وصف الصفوف: (النوع، التسمية، مفتاح الحدّ)
+    final rows = <(String, String, String)>[
+      ('section', 'الحدود', ''),
+      ('limit', 'عدد المنتجات', 'max_products'),
+      ('limit', 'عمليات شهرية', 'monthly_operations'),
+      ('limit', 'الموظفون', 'max_employees'),
+      ('limit', 'الفروع', 'max_branches'),
+      ('limit', 'نقاط البيع', 'max_pos_devices'),
+      ('limit', 'مدّة الأرشيف', 'archive_days'),
+      ('section', 'الميزات', ''),
+      for (final code in featureCodes) ('feature', _featureLabel(code), code),
+    ];
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.vertical,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // عمود التسميات (ثابت أفقياً)
+        _labelColumn(rows),
+        // أعمدة الباقات (تمرير أفقي)
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: plans.map((p) => _planColumn(p, rows)).toList()),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _labelColumn(List<(String, String, String)> rows) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      // خانة الترويسة
+      Container(
+        width: _cmpLabelW, height: _cmpHeadH,
+        alignment: Alignment.bottomRight,
+        padding: const EdgeInsets.only(right: 8, bottom: 10),
+        child: const Text('قارن الباقات',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AmyalColors.primary)),
+      ),
+      ...rows.map((r) {
+        if (r.$1 == 'section') {
+          return Container(
+            width: _cmpLabelW, height: _cmpSecH,
+            color: AmyalColors.primary.withValues(alpha: 0.06),
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 8),
+            child: Text(r.$2, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+          );
+        }
+        return Container(
+          width: _cmpLabelW, height: _cmpRowH,
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 8),
+          decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFFF0F1F4)))),
+          child: Text(r.$2, style: const TextStyle(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
+        );
+      }),
+    ]);
+  }
+
+  Widget _planColumn(Map<String, dynamic> plan, List<(String, String, String)> rows) {
+    final code = plan['code']?.toString() ?? '';
+    final color = _planColors[code] ?? AmyalColors.primary;
+    final isCurrent = c.isCurrentPlan(code);
+    final price = _annual ? plan['price_annual_sar'] : plan['price_monthly_sar'];
+    final limits = (plan['limits'] ?? {}) as Map;
+    final featSet = ((plan['features'] ?? []) as List).map((e) => e.toString()).toSet();
+
+    return Container(
+      width: _cmpPlanW,
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: Colors.grey.shade200)),
+        color: isCurrent ? AmyalColors.yellow.withValues(alpha: 0.06) : null,
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        // ترويسة الباقة
+        Container(
+          height: _cmpHeadH,
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+          color: color.withValues(alpha: 0.10),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Text(_planEmojis[code] ?? '📋', style: const TextStyle(fontSize: 20)),
+            Text(plan['label']?.toString() ?? '',
+                textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: color)),
+            const SizedBox(height: 2),
+            Text(plan['is_free'] == true ? 'مجاني' : '$price ر.ي',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            if (plan['is_free'] != true)
+              Text(_annual ? 'سنوياً' : 'شهرياً',
+                  style: TextStyle(fontSize: 9, color: Colors.grey.shade600)),
+            const SizedBox(height: 4),
+            isCurrent
+                ? const Text('باقتك', style: TextStyle(
+                    fontSize: 10, fontWeight: FontWeight.bold, color: AmyalColors.yellowDark))
+                : InkWell(
+                    onTap: () => _showContactDialog(plan),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(14)),
+                      child: const Text('اختيار',
+                          style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+          ]),
+        ),
+        ...rows.map((r) {
+          if (r.$1 == 'section') {
+            return Container(width: _cmpPlanW, height: _cmpSecH,
+                color: AmyalColors.primary.withValues(alpha: 0.06));
+          }
+          Widget cell;
+          if (r.$1 == 'limit') {
+            final txt = r.$3 == 'archive_days' ? _archiveText(limits[r.$3]) : _limitText(limits[r.$3]);
+            cell = Text(txt, style: TextStyle(
+                fontSize: 11.5, fontWeight: FontWeight.w600,
+                color: txt == '—' ? Colors.grey.shade400 : Colors.black87));
+          } else {
+            final has = featSet.contains(r.$3);
+            cell = Icon(has ? Icons.check_circle : Icons.remove,
+                size: 17, color: has ? color : Colors.grey.shade300);
+          }
+          return Container(
+            width: _cmpPlanW, height: _cmpRowH,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: Color(0xFFF0F1F4)))),
+            child: cell,
+          );
+        }),
+      ]),
+    );
+  }
 
   Widget _currentPlanBadge() {
     final cp = c.currentPlan.value!;
