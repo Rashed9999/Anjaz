@@ -740,6 +740,16 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/adjust', [$c, 'adjust'])->name('adjust');
     });
 
+    // -------- AMIAL-SHIFT-CLOSE-001 — ورديات الكاشير ودرج النقد --------
+    Route::prefix('cashier/shift')->name('amial.cashier.shift.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\CashierShiftController::class;
+        Route::get('/', [$c, 'current'])->name('current');
+        Route::post('/open', [$c, 'open'])->name('open');
+        Route::get('/x', [$c, 'xReport'])->name('x');
+        Route::post('/close', [$c, 'close'])->name('close');
+        Route::get('/history', [$c, 'history'])->name('history');
+    });
+
     // -------- AMIAL-GIFT-CARDS-001 — بطاقات الهدايا ورصيد المتجر --------
     Route::prefix('merchant/gift-cards')->name('amial.merchant.gift-cards.')->group(function () {
         $c = \App\Http\Controllers\Api\V1\Amial\GiftCardController::class;
