@@ -17,6 +17,7 @@ import 'package:amyal_pay/features/merchant/screens/merchant_currencies_screen.d
 import 'package:amyal_pay/features/merchant/screens/merchant_api_keys_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_backup_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_loyalty_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_promotions_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_customers_screen.dart';
 import 'package:amyal_pay/features/agent/screens/agent_cash_in_screen.dart';
@@ -197,6 +198,11 @@ class MerchantRetailHomeScreen extends StatelessWidget {
                 color: AmyalColors.yellowDark,
                 onTap: () => Get.to(() => const ReceiptSettingsScreen()),
               ),
+              AccessGate(feature: 'promotions', child: _MiniAction(
+                icon: Icons.local_offer, label: 'العروض والخصومات',
+                color: const Color(0xFFC0392B),
+                onTap: () => Get.to(() => const MerchantPromotionsScreen()),
+              )),
               AccessGate(feature: 'loyalty', child: _MiniAction(
                 icon: Icons.card_giftcard, label: 'برنامج الولاء',
                 color: const Color(0xFFB8860B),

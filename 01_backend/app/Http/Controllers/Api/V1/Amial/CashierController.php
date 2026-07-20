@@ -125,6 +125,8 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             'credit_due_date' => 'sometimes|nullable|date_format:Y-m-d',
             'corporate_account_id' => 'sometimes|nullable|integer',
             'corporate_member_id' => 'sometimes|nullable|integer',
+            'discount_amount' => 'sometimes|nullable|numeric|min:0',
+            'promotion_id' => 'sometimes|nullable|integer',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -150,6 +152,8 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
                 creditDueDate: $request->input('credit_due_date'),
                 corporateAccountId: $request->input('corporate_account_id'),
                 corporateMemberId: $request->input('corporate_member_id'),
+                discountAmount: $request->input('discount_amount'),
+                promotionId: $request->input('promotion_id'),
             );
         } catch (\InvalidArgumentException $e) {
             return $this->error('SALE_INVALID', $e->getMessage(), 422);

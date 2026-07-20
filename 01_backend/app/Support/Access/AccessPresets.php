@@ -117,6 +117,7 @@ class AccessPresets
                 A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
+                A::F_PROMOTIONS,
             ],
 
             // BUSINESS (35 SAR/شهر) — يفتح إدارة العملاء + الموردين + الموظفين
@@ -124,6 +125,7 @@ class AccessPresets
                 A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
+                A::F_PROMOTIONS,
                 A::F_CUSTOMERS, A::F_SUPPLIERS, A::F_PURCHASES,
                 A::F_PROFIT_REPORTS, A::F_EXCEL_EXPORT, A::F_ADVANCED_REPORTS,
                 A::F_EMPLOYEES, A::F_EMPLOYEE_PERMISSIONS, A::F_MULTI_POS,
@@ -136,6 +138,7 @@ class AccessPresets
                 A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
+                A::F_PROMOTIONS,
                 A::F_CUSTOMERS, A::F_SUPPLIERS, A::F_PURCHASES,
                 A::F_PROFIT_REPORTS, A::F_EXCEL_EXPORT, A::F_ADVANCED_REPORTS,
                 A::F_EMPLOYEES, A::F_EMPLOYEE_PERMISSIONS, A::F_MULTI_POS,
@@ -153,6 +156,7 @@ class AccessPresets
                 A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
+                A::F_PROMOTIONS,
                 A::F_CUSTOMERS, A::F_SUPPLIERS, A::F_PURCHASES,
                 A::F_PROFIT_REPORTS, A::F_EXCEL_EXPORT, A::F_ADVANCED_REPORTS,
                 A::F_EMPLOYEES, A::F_EMPLOYEE_PERMISSIONS, A::F_MULTI_POS,

@@ -718,6 +718,17 @@ Route::middleware(['auth:api'])->group(function () {
     Route::get('merchant/backup', [\App\Http\Controllers\Api\V1\Amial\MerchantBackupController::class, 'download'])
         ->name('amial.merchant.backup');
 
+    // -------- AMIAL-PROMOTIONS-001 — العروض والخصومات والكوبونات --------
+    Route::prefix('merchant/promotions')->name('amial.merchant.promotions.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\PromotionController::class;
+        Route::get('/', [$c, 'index'])->name('index');
+        Route::post('/', [$c, 'store'])->name('store');
+        Route::post('/apply', [$c, 'apply'])->name('apply');
+        Route::post('/{id}', [$c, 'update'])->where('id', '[0-9]+')->name('update');
+        Route::post('/{id}/toggle', [$c, 'toggle'])->where('id', '[0-9]+')->name('toggle');
+        Route::delete('/{id}', [$c, 'destroy'])->where('id', '[0-9]+')->name('destroy');
+    });
+
     // -------- AMIAL-LOYALTY-001 — برنامج الولاء والنقاط --------
     Route::prefix('merchant/loyalty')->name('amial.merchant.loyalty.')->group(function () {
         $c = \App\Http\Controllers\Api\V1\Amial\LoyaltyController::class;

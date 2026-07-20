@@ -115,6 +115,8 @@ class CashierService
         ?string $creditDueDate = null,
         ?int $corporateAccountId = null,
         ?int $corporateMemberId = null,
+        ?string $discountAmount = null,
+        ?int $promotionId = null,
     ): MerchantSale {
         if (!in_array($paymentMethod, MerchantSale::METHODS, true)) {
             throw new InvalidArgumentException('طريقة دفع غير صحيحة');
@@ -149,12 +151,16 @@ class CashierService
             $customer = ['name' => $corporateAccount->company_name, 'phone' => $corporateAccount->account_code];
         }
 
-        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId) {
+        $discountAmount = $discountAmount !== null ? MoneyService::normalize($discountAmount) : '0';
+
+        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId) {
             $sale = MerchantSale::create([
                 'sale_ulid' => (string) Str::ulid(),
                 'merchant_user_id' => $merchant->id,
                 'pos_user_id' => $posUserId,
                 'total_amount' => $total,
+                'discount_amount' => $discountAmount,
+                'promotion_id' => $promotionId,
                 'payment_method' => $paymentMethod,
                 'status' => $status,
                 'items' => $items,
@@ -206,6 +212,15 @@ class CashierService
                     referenceId: $sale->sale_ulid,
                     referenceNumber: '#' . substr($sale->sale_ulid, -8),
                 );
+            }
+
+            // AMIAL-PROMOTIONS-001 — استهلاك استخدام العرض (يحترم الحدّ) عند البيع.
+            if ($promotionId) {
+                try {
+                    app(\App\Services\PromotionService::class)->consume($merchant, $promotionId);
+                } catch (\Throwable $e) {
+                    logger()->warning('Promotion consume failed: ' . $e->getMessage());
+                }
             }
 
             // AMIAL-LOYALTY-001 — كسب نقاط الولاء مركزياً لكل بيع مُتمّ بعميل معروف.

@@ -33,6 +33,65 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   String _method = 'amial_pay';
   bool _busy = false;
 
+  // AMIAL-PROMOTIONS-001 — خصم مطبَّق (عرض تلقائي أو كوبون)
+  double _discount = 0;
+  int? _promotionId;
+  String? _promoLabel;
+
+  double get _net => (widget.total - _discount).clamp(0, widget.total).toDouble();
+
+  /// يقيّم خصماً على الفاتورة (تلقائي أو بكوبون) ويُطبّقه.
+  Future<void> _applyDiscount() async {
+    final codeCtrl = TextEditingController();
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('خصم / كوبون'),
+        content: TextField(
+          controller: codeCtrl,
+          textDirection: TextDirection.ltr,
+          decoration: const InputDecoration(
+            labelText: 'رمز الكوبون (اتركه فارغاً للعرض التلقائي)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تطبيق')),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final api = Get.find<ApiClient>();
+      final r = await api.postData('/api/v1/amial/merchant/promotions/apply', {
+        'subtotal': widget.total,
+        if (codeCtrl.text.trim().isNotEmpty) 'code': codeCtrl.text.trim(),
+      });
+      if (r.statusCode == 402) { _snack('العروض متاحة في باقة ستارتر فأعلى'); return; }
+      if (r.statusCode == 200 && r.body is Map) {
+        final meta = (r.body['meta'] ?? {}) as Map;
+        final disc = double.tryParse('${meta['discount'] ?? 0}') ?? 0;
+        if (disc <= 0) { _snack('لا يوجد خصم منطبق'); return; }
+        setState(() {
+          _discount = disc;
+          _promotionId = meta['promotion_id'] is int ? meta['promotion_id'] as int : int.tryParse('${meta['promotion_id']}');
+          _promoLabel = meta['label']?.toString();
+        });
+        _snack('طُبّق خصم ${disc.toStringAsFixed(0)} ر.ي', ok: true);
+      } else {
+        _snack((r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر تطبيق الخصم');
+      }
+    } catch (_) {
+      _snack('خطأ في الشبكة');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _clearDiscount() => setState(() { _discount = 0; _promotionId = null; _promoLabel = null; });
+
   Future<void> _confirm() async {
     switch (_method) {
       case 'cash':
@@ -82,9 +141,11 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
 
     setState(() => _busy = true);
     final sale = await c.recordSale(
-      total: widget.total,
+      total: _net,
       method: 'corporate',
       corporateAccountId: picked['id'] as int,
+      discountAmount: _discount,
+      promotionId: _promotionId,
     );
     if (!mounted) return;
     setState(() => _busy = false);
@@ -94,7 +155,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     }
     Get.off(() => CashierReceiptScreen(
           sale: sale,
-          total: widget.total,
+          total: _net,
           method: 'corporate',
           customerName: '${picked!['company_name']}',
         ));
@@ -104,10 +165,12 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       {Map<String, String>? customer, String? creditDueDate}) async {
     setState(() => _busy = true);
     final sale = await c.recordSale(
-      total: widget.total,
+      total: _net,
       method: method,
       customer: customer,
       creditDueDate: creditDueDate,
+      discountAmount: _discount,
+      promotionId: _promotionId,
     );
     if (!mounted) return;
     setState(() => _busy = false);
@@ -117,7 +180,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     }
     Get.off(() => CashierReceiptScreen(
           sale: sale,
-          total: widget.total,
+          total: _net,
           method: method,
           customerName: customer?['name'],
         ));
@@ -127,18 +190,20 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   /// البيع مربوطاً بمرجع الدفع وتُفتح الفاتورة تلقائياً (استقبال حقيقي).
   Future<void> _amialPay() async {
     Get.to(() => AmialQrCollectScreen(
-          amount: widget.total,
+          amount: _net,
           note: 'دفع مشتريات',
           onPaid: (paidTxId) async {
             final sale = await c.recordSale(
-              total: widget.total,
+              total: _net,
               method: 'amial_pay',
               paidTransactionId: paidTxId,
+              discountAmount: _discount,
+              promotionId: _promotionId,
             );
             if (sale == null) return false;
             Get.off(() => CashierReceiptScreen(
                   sale: sale,
-                  total: widget.total,
+                  total: _net,
                   method: 'amial_pay',
                 ));
             return true;
@@ -278,14 +343,47 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                   style: TextStyle(
                       fontSize: 13, color: AmyalColors.textSecondary)),
               const SizedBox(height: 8),
-              Text(AmialMoney.yer(widget.total),
+              if (_discount > 0)
+                Text(AmialMoney.yer(widget.total),
+                    style: const TextStyle(
+                        fontSize: 16,
+                        color: AmyalColors.textMuted,
+                        decoration: TextDecoration.lineThrough)),
+              Text(AmialMoney.yer(_net),
                   style: const TextStyle(
                       fontSize: 34,
                       fontWeight: FontWeight.bold,
                       color: AmyalColors.primary)),
+              if (_discount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text('خصم ${AmialMoney.yer(_discount)}${_promoLabel != null ? ' • $_promoLabel' : ''}',
+                      style: const TextStyle(
+                          fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
+                ),
             ]),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 12),
+
+          // ====== خصم / كوبون (باقة ستارتر فأعلى) ======
+          AccessGate(feature: 'promotions', child: Align(
+            alignment: Alignment.centerRight,
+            child: _discount > 0
+                ? TextButton.icon(
+                    onPressed: _busy ? null : _clearDiscount,
+                    icon: const Icon(Icons.close, size: 18, color: AmyalColors.red),
+                    label: const Text('إزالة الخصم', style: TextStyle(color: AmyalColors.red)),
+                  )
+                : OutlinedButton.icon(
+                    onPressed: _busy ? null : _applyDiscount,
+                    icon: const Icon(Icons.local_offer_outlined, size: 18),
+                    label: const Text('تطبيق خصم / كوبون'),
+                    style: OutlinedButton.styleFrom(
+                        foregroundColor: AmyalColors.primary,
+                        side: const BorderSide(color: AmyalColors.primary)),
+                  ),
+          )),
+          const SizedBox(height: 10),
 
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: const [
             Text('الرجاء تحديد خيار واحد',
