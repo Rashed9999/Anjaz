@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Agent;
 
 use App\Models\User;
+use App\Support\Phone;
 use App\Models\EMoney;
 use App\Models\Transaction;
 use App\Models\RequestMoney;
@@ -55,11 +56,14 @@ class TransactionController extends Controller
         if (!$sendMoneyStatus)
             return response()->json(['message' => translate('send money feature is not activate')], 403);
 
-        $receiverPhone = Helpers::filter_phone($request->phone);
-        $user = $this->user->where('phone', $receiverPhone)->first();
+        // AMIAL-FIX: طابِق كل صيغ الرقم (بلا/مع رمز الدولة) كما تفعل شاشة التحقّق
+        // — كان المطابقة الحرفية تفشل فيظهر «Receiver not found» رغم وجود العميل.
+        $user = $this->user->whereIn('phone', Phone::variants($request->phone))->first();
 
         if (!isset($user))
             return response()->json(['message' => translate('Receiver not found')], 403);
+
+        $receiverPhone = $user->phone; // الرقم كما هو مخزَّن (للاستخدامات اللاحقة)
 
         if($user->is_kyc_verified != 1)
             return response()->json(['message' => translate('Receiver is not verified')], 403);
@@ -85,7 +89,7 @@ class TransactionController extends Controller
             }
         }
 
-        $customerTransaction = $this->cash_in_transaction($request->user()->id, Helpers::get_user_id($receiverPhone), $request['amount']);
+        $customerTransaction = $this->cash_in_transaction($request->user()->id, $user->id, $request['amount']);
 
         if(isset($sendMoneyLimit) && $sendMoneyLimit['status'] == 1){
             $transactionLimit = TransactionLimit::where(['user_id' => $request->user()->id, 'type' => 'send_money'])->first();
