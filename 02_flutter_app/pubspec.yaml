@@ -1,7 +1,7 @@
 name: amyal_pay
 description: Amyal Pay - دفع سريع وآمن
 publish_to: 'none'
-version: 1.20.1+1201
+version: 1.20.2+1202
 
 environment:
   sdk: ^3.8.1
@@ -69,6 +69,8 @@ dependencies:
   # نطبع الإيصال كصورة raster (نولّد أوامر GS v 0 يدوياً عبر dart:ui) لدعم
   # العربية سليمةً — تبعية واحدة فقط لتقليل مخاطر البناء.
   print_bluetooth_thermal: ^1.2.2
+  # AMIAL-BUILD-STAMP: قراءة إصدار التطبيق تلقائياً (بلا نصّ ثابت يتقادم)
+  package_info_plus: ^8.0.0
 
 dev_dependencies:
   flutter_lints: ^6.0.0

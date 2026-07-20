@@ -7,6 +7,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:amyal_pay/features/forget_pin/screens/forget_pin_screen.dart';
 import 'package:amyal_pay/features/amyal/screens/account_recovery_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 /// AMIAL-UNIFIED-AUTH-001 (v1.5)
 ///
@@ -72,16 +73,10 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
                     'دفع سريع وآمن',
                     style: TextStyle(color: Colors.white70, fontSize: 13),
                   ),
-                  // AMIAL-BUILD-STAMP: علامة إصدار مرئية — للتحقّق أن الـAPK
-                  // المثبَّت هو أحدث بناء. إن رأيت هذا السطر فالبناء حديث.
+                  // AMIAL-BUILD-STAMP: علامة إصدار مرئية تُقرأ تلقائياً من البناء
+                  // (package_info) — لا تتقادم أبداً. تؤكّد أن الـAPK المثبّت أحدث.
                   SizedBox(height: 10),
-                  Text(
-                    '✅ إصدار 1.15.0 — تعديل بياناتي (تصميم أميال)',
-                    style: TextStyle(
-                        color: Color(0xFFFECA1E),
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold),
-                  ),
+                  _VersionStamp(),
                 ],
               ),
             ),
@@ -901,6 +896,45 @@ class _DemoCredsCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// AMIAL-BUILD-STAMP — علامة الإصدار: تُقرأ تلقائياً من بيانات البناء
+/// (package_info) فلا تتقادم مع كل إصدار. تظهر أسفل شعار الدخول.
+class _VersionStamp extends StatefulWidget {
+  const _VersionStamp();
+
+  @override
+  State<_VersionStamp> createState() => _VersionStampState();
+}
+
+class _VersionStampState extends State<_VersionStamp> {
+  String _label = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (!mounted) return;
+      setState(() => _label = '✅ إصدار ${info.version} (${info.buildNumber})');
+    } catch (_) {
+      if (mounted) setState(() => _label = '');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_label.isEmpty) return const SizedBox(height: 16);
+    return Text(
+      _label,
+      style: const TextStyle(
+          color: Color(0xFFFECA1E), fontSize: 12, fontWeight: FontWeight.bold),
     );
   }
 }
