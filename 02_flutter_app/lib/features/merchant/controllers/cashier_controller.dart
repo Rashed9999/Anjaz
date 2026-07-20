@@ -195,6 +195,8 @@ class CashierController extends GetxController implements GetxService {
     int? corporateMemberId,
     double? discountAmount, // AMIAL-PROMOTIONS-001 — خصم مطبَّق
     int? promotionId,
+    double? cashAmount, // AMIAL-MIXED-PAYMENT-001 — تقسيم الدفع
+    double? walletAmount,
   }) async {
     try {
       isSubmitting.value = true;
@@ -210,6 +212,8 @@ class CashierController extends GetxController implements GetxService {
         if (corporateMemberId != null) 'corporate_member_id': corporateMemberId,
         if (discountAmount != null && discountAmount > 0) 'discount_amount': discountAmount.toStringAsFixed(2),
         if (promotionId != null) 'promotion_id': promotionId,
+        if (cashAmount != null) 'cash_amount': cashAmount.toStringAsFixed(2),
+        if (walletAmount != null) 'wallet_amount': walletAmount.toStringAsFixed(2),
       };
       final r = await repo.recordSale(data);
       // CRITICAL-001-USAGE — التقاط 402 وعرض الحوار

@@ -117,6 +117,8 @@ class CashierService
         ?int $corporateMemberId = null,
         ?string $discountAmount = null,
         ?int $promotionId = null,
+        ?string $cashAmount = null,
+        ?string $walletAmount = null,
     ): MerchantSale {
         if (!in_array($paymentMethod, MerchantSale::METHODS, true)) {
             throw new InvalidArgumentException('طريقة دفع غير صحيحة');
@@ -139,6 +141,22 @@ class CashierService
             $status = empty($paidTransactionId) ? 'pending_payment' : 'completed';
         }
 
+        // AMIAL-MIXED-PAYMENT-001: مختلط = جزء نقد + جزء محفظة. الجزء المحفظي يُحصَّل
+        // عبر QR (paid_transaction_id) والجزء النقدي يدوي. يجب أن يساوي مجموعهما الإجمالي.
+        if ($paymentMethod === 'mixed') {
+            $cash = MoneyService::normalize($cashAmount ?? '0');
+            $wallet = MoneyService::normalize($walletAmount ?? '0');
+            if (MoneyService::normalize(MoneyService::add($cash, $wallet)) !== $total) {
+                throw new InvalidArgumentException('مجموع النقد والمحفظة يجب أن يساوي الإجمالي');
+            }
+            if (MoneyService::isPositive($wallet) && empty($paidTransactionId)) {
+                throw new InvalidArgumentException('الجزء المحفظي يحتاج تحصيلاً فعلياً عبر QR');
+            }
+            $cashAmount = $cash;
+            $walletAmount = $wallet;
+            $status = 'completed';
+        }
+
         // AMIAL-CORPORATE-ACCOUNTS-001: بيع على حساب شركة — يلزم حساب مملوك للتاجر.
         $corporateAccount = null;
         if ($paymentMethod === 'corporate') {
@@ -153,7 +171,7 @@ class CashierService
 
         $discountAmount = $discountAmount !== null ? MoneyService::normalize($discountAmount) : '0';
 
-        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId) {
+        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount) {
             $sale = MerchantSale::create([
                 'sale_ulid' => (string) Str::ulid(),
                 'merchant_user_id' => $merchant->id,
@@ -161,13 +179,15 @@ class CashierService
                 'total_amount' => $total,
                 'discount_amount' => $discountAmount,
                 'promotion_id' => $promotionId,
+                'cash_amount' => $paymentMethod === 'mixed' ? $cashAmount : null,
+                'wallet_amount' => $paymentMethod === 'mixed' ? $walletAmount : null,
                 'payment_method' => $paymentMethod,
                 'status' => $status,
                 'items' => $items,
                 'customer_name' => $customer['name'] ?? null,
                 'customer_phone' => $customer['phone'] ?? null,
                 'paid_transaction_id' => $paidTransactionId,
-                'settled_at' => ($paymentMethod === 'amial_pay' && !empty($paidTransactionId)) ? now() : null,
+                'settled_at' => (($paymentMethod === 'amial_pay' && !empty($paidTransactionId)) || $paymentMethod === 'mixed') ? now() : null,
                 'zone_code' => $merchant->zone_code ?? 'SOUTH',
             ]);
 

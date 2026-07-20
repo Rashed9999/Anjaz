@@ -113,7 +113,9 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
     {
         $v = Validator::make($request->all(), [
             'total' => 'required|numeric|min:0.01',
-            'payment_method' => 'required|in:cash,credit,amial_pay,corporate',
+            'payment_method' => 'required|in:cash,credit,amial_pay,corporate,mixed',
+            'cash_amount' => 'sometimes|nullable|numeric|min:0',
+            'wallet_amount' => 'sometimes|nullable|numeric|min:0',
             'items' => 'sometimes|array',
             'items.*.name' => 'sometimes|string|max:160',
             'items.*.qty' => 'sometimes|numeric|min:0',
@@ -154,6 +156,8 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
                 corporateMemberId: $request->input('corporate_member_id'),
                 discountAmount: $request->input('discount_amount'),
                 promotionId: $request->input('promotion_id'),
+                cashAmount: $request->input('cash_amount'),
+                walletAmount: $request->input('wallet_amount'),
             );
         } catch (\InvalidArgumentException $e) {
             return $this->error('SALE_INVALID', $e->getMessage(), 422);

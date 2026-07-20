@@ -102,7 +102,87 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         await _credit();
       case 'corporate':
         await _corporate();
+      case 'mixed':
+        await _mixed();
     }
+  }
+
+  /// مختلط: التاجر يحدّد الجزء المحفظي، والباقي نقد. يُحصَّل المحفظي عبر QR ثم
+  /// يُسجَّل البيع بالتقسيم كاملاً (نقد + محفظة = الإجمالي بعد الخصم).
+  Future<void> _mixed() async {
+    final walletCtrl = TextEditingController(text: (_net / 2).toStringAsFixed(0));
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) {
+        final wallet = double.tryParse(walletCtrl.text.trim()) ?? 0;
+        final cash = (_net - wallet).clamp(0, _net).toDouble();
+        return AlertDialog(
+          title: const Text('دفع مختلط'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('الإجمالي: ${AmialMoney.yer(_net)}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: walletCtrl,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              onChanged: (_) => setLocal(() {}),
+              decoration: const InputDecoration(
+                labelText: 'الجزء المدفوع محفظةً (أميال باي)',
+                suffixText: 'ر.ي', border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: AmyalColors.background, borderRadius: BorderRadius.circular(8)),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Text('نقداً: ${AmialMoney.yer(cash)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
+                Text('محفظةً: ${AmialMoney.yer(wallet)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+              ]),
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('متابعة')),
+          ],
+        );
+      }),
+    );
+    if (go != true || !mounted) return;
+
+    final wallet = (double.tryParse(walletCtrl.text.trim()) ?? 0).clamp(0, _net).toDouble();
+    final cash = (_net - wallet).clamp(0, _net).toDouble();
+
+    // كله نقد → لا حاجة لـ QR
+    if (wallet <= 0) {
+      final sale = await c.recordSale(
+        total: _net, method: 'mixed', cashAmount: cash, walletAmount: 0,
+        discountAmount: _discount, promotionId: _promotionId,
+      );
+      if (!mounted) return;
+      if (sale == null) { if (c.lastError.value.isNotEmpty) _snack(c.lastError.value); return; }
+      Get.off(() => CashierReceiptScreen(sale: sale, total: _net, method: 'mixed'));
+      return;
+    }
+
+    // حصّل الجزء المحفظي عبر QR ثم سجّل البيع المختلط كاملاً
+    Get.to(() => AmialQrCollectScreen(
+          amount: wallet,
+          note: 'دفع مختلط — جزء محفظة',
+          onPaid: (paidTxId) async {
+            final sale = await c.recordSale(
+              total: _net, method: 'mixed', paidTransactionId: paidTxId,
+              cashAmount: cash, walletAmount: wallet,
+              discountAmount: _discount, promotionId: _promotionId,
+            );
+            if (sale == null) return false;
+            Get.off(() => CashierReceiptScreen(sale: sale, total: _net, method: 'mixed'));
+            return true;
+          },
+        ));
   }
 
   /// حساب شركة: يختار التاجر شركة (وعضواً اختيارياً) فيُقيَّد البيع على دَينها.
@@ -411,6 +491,12 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             icon: Icons.calendar_today_outlined,
             title: 'آجل',
             subtitle: 'قيد العملية على حساب العميل',
+          ),
+          _methodCard(
+            value: 'mixed',
+            icon: Icons.call_split,
+            title: 'مختلط',
+            subtitle: 'جزء نقداً وجزء من محفظة أميال باي',
           ),
           AccessGate(feature: 'corporate_accounts', child: _methodCard(
             value: 'corporate',

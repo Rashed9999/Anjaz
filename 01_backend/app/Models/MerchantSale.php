@@ -14,6 +14,7 @@ class MerchantSale extends Model
     protected $fillable = [
         'sale_ulid', 'merchant_user_id', 'pos_user_id',
         'total_amount', 'discount_amount', 'promotion_id',
+        'cash_amount', 'wallet_amount',
         'payment_method', 'status', 'items',
         'customer_name', 'customer_phone', 'paid_transaction_id',
         'settled_at', 'zone_code',
@@ -27,6 +28,6 @@ class MerchantSale extends Model
         'settled_at' => 'datetime',
     ];
 
-    public const METHODS = ['cash', 'credit', 'amial_pay', 'corporate'];
+    public const METHODS = ['cash', 'credit', 'amial_pay', 'corporate', 'mixed'];
     public const STATUSES = ['completed', 'credit_unpaid', 'credit_paid', 'pending_payment'];
 }

@@ -60,6 +60,8 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
         'cash' => 'نقداً',
         'credit' => 'بيع آجل',
         'amial_pay' => 'أميال باي',
+        'mixed' => 'مختلط (نقد + محفظة)',
+        'corporate' => 'حساب شركة',
         _ => widget.method,
       };
 
