@@ -1,7 +1,7 @@
 name: amyal_pay
 description: Amyal Pay - دفع سريع وآمن
 publish_to: 'none'
-version: 1.20.0+1200
+version: 1.20.1+1201
 
 environment:
   sdk: ^3.8.1
@@ -66,10 +66,9 @@ dependencies:
   # AMYAL-BRANDING-001: UUID لـ Idempotency-Key (v0.7-C)
   uuid: ^4.5.1
   # AMIAL-THERMAL-PRINT-001: طباعة الإيصالات على طابعة حرارية (بلوتوث ESC/POS).
-  # نطبع الإيصال كصورة raster لدعم العربية سليمةً (يعتمد على screenshot + image).
-  print_bluetooth_thermal: ^2.0.0
-  esc_pos_utils_plus: ^2.0.0
-  image: ^4.0.0
+  # نطبع الإيصال كصورة raster (نولّد أوامر GS v 0 يدوياً عبر dart:ui) لدعم
+  # العربية سليمةً — تبعية واحدة فقط لتقليل مخاطر البناء.
+  print_bluetooth_thermal: ^1.2.2
 
 dev_dependencies:
   flutter_lints: ^6.0.0
