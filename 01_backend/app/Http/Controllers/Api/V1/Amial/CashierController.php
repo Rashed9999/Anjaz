@@ -129,6 +129,7 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             'corporate_member_id' => 'sometimes|nullable|integer',
             'discount_amount' => 'sometimes|nullable|numeric|min:0',
             'promotion_id' => 'sometimes|nullable|integer',
+            'client_uuid' => 'sometimes|nullable|string|max:64',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -158,6 +159,7 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
                 promotionId: $request->input('promotion_id'),
                 cashAmount: $request->input('cash_amount'),
                 walletAmount: $request->input('wallet_amount'),
+                clientUuid: $request->input('client_uuid'),
             );
         } catch (\InvalidArgumentException $e) {
             return $this->error('SALE_INVALID', $e->getMessage(), 422);

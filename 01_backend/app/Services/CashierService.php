@@ -119,7 +119,17 @@ class CashierService
         ?int $promotionId = null,
         ?string $cashAmount = null,
         ?string $walletAmount = null,
+        ?string $clientUuid = null,
     ): MerchantSale {
+        // AMIAL-OFFLINE-POS-001: idempotency — بيع دون اتصال يُعاد إرساله بنفس
+        // client_uuid عند المزامنة؛ إن كان مُسجَّلاً سابقاً نُعيده كما هو دون
+        // تكرار للحركة (لا مخزون/ولاء/مال مزدوج).
+        if (!empty($clientUuid)) {
+            $existing = MerchantSale::where('merchant_user_id', $merchant->id)
+                ->where('client_uuid', $clientUuid)->first();
+            if ($existing) return $existing;
+        }
+
         if (!in_array($paymentMethod, MerchantSale::METHODS, true)) {
             throw new InvalidArgumentException('طريقة دفع غير صحيحة');
         }
@@ -171,9 +181,10 @@ class CashierService
 
         $discountAmount = $discountAmount !== null ? MoneyService::normalize($discountAmount) : '0';
 
-        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount) {
+        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid) {
             $sale = MerchantSale::create([
                 'sale_ulid' => (string) Str::ulid(),
+                'client_uuid' => $clientUuid ?: null,
                 'merchant_user_id' => $merchant->id,
                 'pos_user_id' => $posUserId,
                 'total_amount' => $total,

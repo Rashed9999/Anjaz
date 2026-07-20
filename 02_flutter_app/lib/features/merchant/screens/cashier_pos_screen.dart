@@ -4,6 +4,8 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_payment_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_scan_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/offline_sales_screen.dart';
+import 'package:amyal_pay/features/merchant/services/offline_sale_queue.dart';
 import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
@@ -23,10 +25,16 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
   final _search = TextEditingController();
   String _category = 'الكل';
 
+  final _offline = Get.find<OfflineSaleQueue>();
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => c.loadProducts());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      c.loadProducts();
+      // AMIAL-OFFLINE-POS-001 — حاول مزامنة أي مبيعات معلّقة عند فتح الكاشير.
+      _offline.refreshCount().then((n) { if (n > 0) _offline.sync(); });
+    });
   }
 
   @override
@@ -223,6 +231,28 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
         foregroundColor: Colors.white,
         title: const Text('المبيعات'),
         actions: [
+          // مؤشّر المبيعات دون اتصال (يظهر عند وجود معلّق)
+          Obx(() => _offline.pending.value == 0
+              ? const SizedBox.shrink()
+              : Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Stack(alignment: Alignment.center, children: [
+                    IconButton(
+                      tooltip: 'مبيعات دون اتصال',
+                      icon: const Icon(Icons.cloud_off),
+                      onPressed: () => Get.to(() => const OfflineSalesScreen()),
+                    ),
+                    Positioned(
+                      right: 6, top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(color: AmyalColors.red, shape: BoxShape.circle),
+                        child: Text('${_offline.pending.value}',
+                            style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                  ]),
+                )),
           IconButton(
             tooltip: 'إدخال يدوي',
             icon: const Icon(Icons.edit_note_rounded),

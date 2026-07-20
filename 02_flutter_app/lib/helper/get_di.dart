@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:amyal_pay/features/merchant/services/offline_sale_queue.dart';
 import 'package:amyal_pay/features/favorite_number/controllers/fav_number_controller.dart';
 import 'package:amyal_pay/features/favorite_number/domain/repositories/fav_number_repo.dart';
 import 'package:amyal_pay/features/forget_pin/domain/reposotories/forget_pin_repo.dart';
@@ -138,6 +139,9 @@ Future<Map<String, Map<String, String>>> init() async {
     uniqueId: Get.find(),
     deiceInfo: Get.find(),
   ));
+
+  // AMIAL-OFFLINE-POS-001 — طابور مبيعات دون اتصال
+  Get.put(OfflineSaleQueue(), permanent: true);
 
   // Repository
    Get.lazyPut(() => SplashRepo(sharedPreferences: Get.find(), apiClient: Get.find()));

@@ -1,5 +1,7 @@
 import 'package:get/get.dart';
+import 'package:uuid/uuid.dart';
 import 'package:amyal_pay/features/merchant/domain/repositories/cashier_repo.dart';
+import 'package:amyal_pay/features/merchant/services/offline_sale_queue.dart';
 import 'package:amyal_pay/features/plans/screens/my_usage_screen.dart';
 
 /// عنصر في سلة الكاشير (حالة محلية فقط — لا جدول خادم).
@@ -214,8 +216,28 @@ class CashierController extends GetxController implements GetxService {
         if (promotionId != null) 'promotion_id': promotionId,
         if (cashAmount != null) 'cash_amount': cashAmount.toStringAsFixed(2),
         if (walletAmount != null) 'wallet_amount': walletAmount.toStringAsFixed(2),
+        // AMIAL-OFFLINE-POS-001 — مفتاح idempotency: يمنع ازدواج البيع عند المزامنة
+        'client_uuid': const Uuid().v4(),
       };
       final r = await repo.recordSale(data);
+
+      // AMIAL-OFFLINE-POS-001 — دون اتصال: احفظ البيع محلياً وأكمل العمل.
+      // البيع النقدي/الآجل يمكن حفظه دون اتصال؛ «أميال باي» يحتاج تحصيلاً فورياً
+      // فلا يُخزَّن (سبق أن حُصّل مرجع الدفع أونلاين قبل الوصول هنا).
+      if (r.statusCode == 1 && method != 'amial_pay') {
+        try {
+          await Get.find<OfflineSaleQueue>().enqueue(data);
+          clearCart();
+          return {
+            'offline': true,
+            'sale_ulid': data['client_uuid'],
+            'total_amount': total.toString(),
+            'payment_method': method,
+            'items': data['items'] ?? [],
+          };
+        } catch (_) {/* يسقط للخطأ العادي أدناه */}
+      }
+
       // CRITICAL-001-USAGE — التقاط 402 وعرض الحوار
       if (await UsageLimitDialog.handleIfLimitExceeded(r)) return null;
       if (_ok(r)) {

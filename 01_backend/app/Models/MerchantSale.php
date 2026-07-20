@@ -12,7 +12,7 @@ class MerchantSale extends Model
     protected $table = 'merchant_sales';
 
     protected $fillable = [
-        'sale_ulid', 'merchant_user_id', 'pos_user_id',
+        'sale_ulid', 'client_uuid', 'merchant_user_id', 'pos_user_id',
         'total_amount', 'discount_amount', 'promotion_id',
         'cash_amount', 'wallet_amount',
         'payment_method', 'status', 'items',
