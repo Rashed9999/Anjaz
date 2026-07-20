@@ -19,6 +19,7 @@ import 'package:amyal_pay/features/merchant/screens/merchant_backup_screen.dart'
 import 'package:amyal_pay/features/merchant/screens/merchant_loyalty_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_promotions_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_installments_screen.dart';
+import 'package:amyal_pay/features/restaurant/screens/restaurant_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_customers_screen.dart';
 import 'package:amyal_pay/features/agent/screens/agent_cash_in_screen.dart';
@@ -213,6 +214,11 @@ class MerchantRetailHomeScreen extends StatelessWidget {
                 icon: Icons.handshake, label: 'البيع بالتقسيط',
                 color: const Color(0xFF00695C),
                 onTap: () => Get.to(() => const MerchantInstallmentsScreen()),
+              )),
+              AccessGate(feature: 'restaurant_orders', child: _MiniAction(
+                icon: Icons.restaurant, label: 'المطعم',
+                color: const Color(0xFFC2410C),
+                onTap: () => Get.to(() => const RestaurantScreen()),
               )),
               AccessGate(feature: 'corporate_accounts', child: _MiniAction(
                 icon: Icons.business_center, label: 'حسابات الشركات',

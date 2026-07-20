@@ -740,6 +740,22 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/adjust', [$c, 'adjust'])->name('adjust');
     });
 
+    // -------- AMIAL-RESTAURANT-001 — المطاعم: طاولات + طلبات + مطبخ --------
+    Route::prefix('restaurant')->name('amial.restaurant.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\RestaurantController::class;
+        Route::get('/tables', [$c, 'tables'])->name('tables');
+        Route::post('/tables', [$c, 'createTable'])->name('tables.create');
+        Route::post('/tables/{id}', [$c, 'updateTable'])->where('id', '[0-9]+')->name('tables.update');
+        Route::delete('/tables/{id}', [$c, 'deleteTable'])->where('id', '[0-9]+')->name('tables.delete');
+        Route::get('/orders', [$c, 'orders'])->name('orders');
+        Route::post('/orders', [$c, 'openOrder'])->name('orders.open');
+        Route::get('/kitchen', [$c, 'kitchen'])->name('kitchen');
+        Route::get('/orders/{id}', [$c, 'showOrder'])->where('id', '[0-9]+')->name('orders.show');
+        Route::post('/orders/{id}', [$c, 'updateOrder'])->where('id', '[0-9]+')->name('orders.update');
+        Route::post('/orders/{id}/status', [$c, 'setStatus'])->where('id', '[0-9]+')->name('orders.status');
+        Route::post('/orders/{id}/close', [$c, 'closeOrder'])->where('id', '[0-9]+')->name('orders.close');
+    });
+
     // -------- AMIAL-INSTALLMENTS-001 — البيع بالتقسيط --------
     Route::prefix('merchant/installments')->name('amial.merchant.installments.')->group(function () {
         $c = \App\Http\Controllers\Api\V1\Amial\InstallmentController::class;
