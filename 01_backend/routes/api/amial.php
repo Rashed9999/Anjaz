@@ -843,6 +843,8 @@ Route::middleware(['auth:api'])->group(function () {
     // -------- AMIAL-MERCHANT-STAFF-001 — التاجر يدير موظفي نقاط البيع --------
     Route::prefix('merchant/staff')->name('amial.merchant.staff.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'index'])->name('index');
+        // AMIAL-STAFF-PERFORMANCE-001 — أداء الموظفين من المبيعات الفعلية
+        Route::get('/performance', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'performance'])->name('performance');
         Route::post('/', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'store'])->name('store');
         Route::post('/{id}/toggle', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'toggle'])
             ->where('id', '[0-9]+')->name('toggle');

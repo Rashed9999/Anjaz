@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Controller;
 use App\Models\PosUser;
 use App\Models\User;
+use App\Models\MerchantSale;
 use App\Services\FeatureAccessService;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Http\JsonResponse;
@@ -61,6 +62,68 @@ class MerchantStaffController extends Controller
             ]);
 
         return $this->ok(['staff' => $staff, 'count' => $staff->count()], 'OK', 'موظفو نقاط البيع');
+    }
+
+    /**
+     * AMIAL-STAFF-PERFORMANCE-001 — أداء الموظفين من المبيعات الفعلية.
+     * GET /merchant/staff/performance?days=7|30|90
+     * يجمّع merchant_sales حسب pos_user_id: عدد + إجمالي + متوسط الفاتورة + اليوم.
+     */
+    public function performance(Request $request): JsonResponse
+    {
+        $m = $this->guardMerchant($request);
+        if ($m instanceof JsonResponse) return $m;
+
+        $days = max(1, min(90, (int) $request->query('days', 7)));
+        $from = now()->subDays($days - 1)->startOfDay();
+        $todayFrom = now()->startOfDay();
+
+        $staff = PosUser::where('merchant_user_id', $m->id)->orderBy('pos_number')->get();
+
+        $agg = MerchantSale::where('merchant_user_id', $m->id)
+            ->whereNotNull('pos_user_id')
+            ->where('created_at', '>=', $from)
+            ->selectRaw('pos_user_id, COUNT(*) as cnt, SUM(total_amount) as total')
+            ->groupBy('pos_user_id')->get()->keyBy('pos_user_id');
+
+        $todayAgg = MerchantSale::where('merchant_user_id', $m->id)
+            ->whereNotNull('pos_user_id')
+            ->where('created_at', '>=', $todayFrom)
+            ->selectRaw('pos_user_id, COUNT(*) as cnt, SUM(total_amount) as total')
+            ->groupBy('pos_user_id')->get()->keyBy('pos_user_id');
+
+        $rows = $staff->map(function (PosUser $p) use ($agg, $todayAgg) {
+            $a = $agg->get($p->id);
+            $t = $todayAgg->get($p->id);
+            $cnt = $a ? (int) $a->cnt : 0;
+            $total = $a ? (string) $a->total : '0';
+            $avg = $cnt > 0 ? bcdiv($total, (string) $cnt, 2) : '0';
+            return [
+                'id' => $p->id,
+                'pos_number' => $p->pos_number,
+                'display_name' => $p->display_name,
+                'is_active' => (bool) $p->is_active,
+                'sales_count' => $cnt,
+                'sales_total' => $total,
+                'avg_ticket' => $avg,
+                'today_count' => $t ? (int) $t->cnt : 0,
+                'today_total' => $t ? (string) $t->total : '0',
+            ];
+        })->sortByDesc(fn ($r) => (float) $r['sales_total'])->values();
+
+        // مبيعات غير منسوبة لموظف (سجّلها التاجر نفسه) + الإجمالي العام
+        $unattributed = (string) MerchantSale::where('merchant_user_id', $m->id)
+            ->whereNull('pos_user_id')
+            ->where('created_at', '>=', $from)->sum('total_amount');
+        $grandTotal = (string) MerchantSale::where('merchant_user_id', $m->id)
+            ->where('created_at', '>=', $from)->sum('total_amount');
+
+        return $this->ok([
+            'days' => $days,
+            'staff' => $rows,
+            'unattributed_total' => $unattributed,
+            'grand_total' => $grandTotal,
+        ], 'OK', 'أداء الموظفين');
     }
 
     public function store(Request $request): JsonResponse

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/features/access/widgets/access_gate.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_staff_performance_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-MERCHANT-STAFF-001 — إدارة موظفي نقاط البيع (باقة الأعمال فأعلى).
@@ -137,6 +138,13 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
         title: const Text('الموظفون'),
         backgroundColor: AmyalColors.primary,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bar_chart),
+            tooltip: 'الأداء',
+            onPressed: () => Get.to(() => const MerchantStaffPerformanceScreen()),
+          ),
+        ],
       ),
       floatingActionButton: _error == null
           ? FloatingActionButton.extended(
