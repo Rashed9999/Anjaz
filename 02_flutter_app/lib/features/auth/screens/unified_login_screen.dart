@@ -76,7 +76,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
                   // المثبَّت هو أحدث بناء. إن رأيت هذا السطر فالبناء حديث.
                   SizedBox(height: 10),
                   Text(
-                    '✅ إصدار 1.10.0 — وضع عدم الاتصال (مزامنة آمنة)',
+                    '✅ إصدار 1.11.0 — بطاقات الهدايا ورصيد المتجر',
                     style: TextStyle(
                         color: Color(0xFFFECA1E),
                         fontSize: 12,

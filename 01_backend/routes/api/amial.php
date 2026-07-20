@@ -740,6 +740,19 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/adjust', [$c, 'adjust'])->name('adjust');
     });
 
+    // -------- AMIAL-GIFT-CARDS-001 — بطاقات الهدايا ورصيد المتجر --------
+    Route::prefix('merchant/gift-cards')->name('amial.merchant.gift-cards.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\GiftCardController::class;
+        Route::get('/', [$c, 'index'])->name('index');
+        Route::post('/', [$c, 'issue'])->name('issue');
+        Route::get('/lookup', [$c, 'lookup'])->name('lookup');
+        Route::post('/redeem', [$c, 'redeem'])->name('redeem');
+        Route::post('/topup', [$c, 'topUp'])->name('topup');
+        Route::post('/void', [$c, 'void'])->name('void');
+    });
+    Route::get('me/gift-cards', [\App\Http\Controllers\Api\V1\Amial\GiftCardController::class, 'mine'])
+        ->name('amial.me.gift-cards');
+
     // -------- AMIAL-RESTAURANT-001 — المطاعم: طاولات + طلبات + مطبخ --------
     Route::prefix('restaurant')->name('amial.restaurant.')->group(function () {
         $c = \App\Http\Controllers\Api\V1\Amial\RestaurantController::class;

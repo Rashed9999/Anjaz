@@ -237,6 +237,7 @@ class AccessConstants
     public const F_PROMOTIONS = 'promotions'; // العروض والخصومات والكوبونات (ستارتر+)
     public const F_INSTALLMENTS = 'installments'; // البيع بالتقسيط من المحفظة (التاجر برو+)
     public const F_OFFLINE_POS = 'offline_pos';   // وضع البيع دون اتصال + مزامنة (الأعمال+)
+    public const F_GIFT_CARDS = 'gift_cards';     // بطاقات الهدايا ورصيد المتجر (الأعمال+)
 
     // العملات المدعومة (يفتحها MERCHANT_PRO فأعلى)
     public const CURRENCY_YER = 'YER';   // الافتراضي (الجنوب)
