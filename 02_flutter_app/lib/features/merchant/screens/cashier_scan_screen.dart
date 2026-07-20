@@ -130,6 +130,38 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
     }
   }
 
+  /// إدخال باركود يدوياً — يعمل حتى لو تعذّرت الكاميرا (يضمن عمل الباركود دائماً).
+  Future<void> _manualEntry() async {
+    final ctrl = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إدخال الباركود يدوياً'),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          textDirection: TextDirection.ltr,
+          decoration: const InputDecoration(labelText: 'رقم الباركود', border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('بحث')),
+        ],
+      ),
+    );
+    if (code == null || code.isEmpty || !mounted) return;
+    final result = await c.lookupAndAddByBarcode(code);
+    if (!mounted) return;
+    if (result == 'added') {
+      setState(() { _addedCount++; _show('✓ أُضيف للسلّة', Colors.green); });
+    } else if (result == 'not_found') {
+      setState(() => _show('لا يوجد منتج بهذا الباركود', AmyalColors.red));
+    } else {
+      setState(() => _show(c.lastError.value.isEmpty ? 'تعذّر البحث' : c.lastError.value, AmyalColors.red));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -139,6 +171,7 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
         backgroundColor: AmyalColors.primary,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(icon: const Icon(Icons.keyboard), tooltip: 'إدخال يدوي', onPressed: _manualEntry),
           IconButton(icon: const Icon(Icons.flash_on), onPressed: () => _scanner.toggleTorch()),
           IconButton(icon: const Icon(Icons.cameraswitch), onPressed: () => _scanner.switchCamera()),
         ],

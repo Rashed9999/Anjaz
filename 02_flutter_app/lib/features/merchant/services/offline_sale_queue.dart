@@ -11,7 +11,7 @@ import 'package:amyal_pay/data/api/api_client.dart';
 /// (idempotency)، فإعادة الإرسال آمنة تماماً.
 class OfflineSaleQueue extends GetxService {
   static const _key = 'amial_offline_sales_v1';
-  static const _endpoint = '/api/v1/amial/cashier/sales';
+  static const _endpoint = '/api/v1/amial/merchant/cashier/sales';
 
   /// عدد المبيعات المعلّقة (يتفاعل معه الواجهة).
   final RxInt pending = 0.obs;

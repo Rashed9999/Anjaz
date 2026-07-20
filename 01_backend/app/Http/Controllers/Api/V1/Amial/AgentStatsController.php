@@ -24,40 +24,34 @@ class AgentStatsController extends Controller
     public function dailyStats(Request $request): JsonResponse
     {
         $agent = $request->user();
+        $agentId = $agent->id;
         $startOfDay = Carbon::now()->startOfDay();
-        $wallet = $this->ledger->getOrCreateUserWallet($agent->id);
 
-        // Cash-In: الوكيل يخصم من محفظته (debit) لإيداع للعميل
-        $todayCashIn = (string) DB::table('ledger_entry_lines as lel')
-            ->join('ledger_journal_entries as lje', 'lel.journal_entry_id', '=', 'lje.id')
-            ->where('lel.account_id', $wallet->id)
-            ->where('lel.direction', 'debit')
-            ->whereIn('lje.source_type', ['agent_cash_in', 'cash_in', 'send_money'])
-            ->where('lel.created_at', '>=', $startOfDay)
-            ->sum('lel.amount');
+        // AMIAL-FIX(AGENT-STATS): كانت الإحصاءات تقرأ من دفتر ledger_journal_entries
+        // بينما العمليات تُسجَّل فعلياً في جدول transactions + withdrawal_requests
+        // (عبر TransactionTrait/guard). النتيجة: أصفار دائمة رغم تنفيذ العمليات.
+        // الآن نقرأ من مصدر السجلّ الفعلي.
 
-        // Cash-Out: الوكيل يستلم في محفظته (credit)
-        $todayCashOut = (string) DB::table('ledger_entry_lines as lel')
-            ->join('ledger_journal_entries as lje', 'lel.journal_entry_id', '=', 'lje.id')
-            ->where('lel.account_id', $wallet->id)
-            ->where('lel.direction', 'credit')
-            ->whereIn('lje.source_type', ['agent_cash_out', 'cash_out', 'request_money'])
-            ->where('lel.created_at', '>=', $startOfDay)
-            ->sum('lel.amount');
+        // سحبات العملاء المكتملة اليوم (المصدر الموثوق: طلبات السحب)
+        $wd = DB::table('withdrawal_requests')
+            ->where('agent_user_id', $agentId)
+            ->where('status', 'completed')
+            ->where('completed_at', '>=', $startOfDay);
+        $todayCashOut = (string) ((clone $wd)->sum('amount') ?: '0');
+        $todayCommission = (string) ((clone $wd)->sum('agent_commission') ?: '0');
+        $cashOutCount = (clone $wd)->count();
 
-        $todayCount = DB::table('ledger_entry_lines')
-            ->where('account_id', $wallet->id)
-            ->where('created_at', '>=', $startOfDay)
-            ->count();
+        // إيداعات الوكيل للعملاء اليوم (صفوف transactions من نوع cash_in للوكيل)
+        $cashInQ = DB::table('transactions')
+            ->where('user_id', $agentId)
+            ->where('transaction_type', 'cash_in')
+            ->where('created_at', '>=', $startOfDay);
+        $todayCashIn = (string) ((clone $cashInQ)->sum('debit') ?: '0');
+        $cashInCount = (clone $cashInQ)->count();
 
-        // العمولة: من earned_charge أو حساب commission منفصل
-        $todayCommission = (string) DB::table('ledger_entry_lines as lel')
-            ->join('ledger_accounts as la', 'lel.account_id', '=', 'la.id')
-            ->join('ledger_journal_entries as lje', 'lel.journal_entry_id', '=', 'lje.id')
-            ->where('la.account_code', "AGENT_COMMISSION_{$agent->id}")
-            ->where('lel.direction', 'credit')
-            ->where('lel.created_at', '>=', $startOfDay)
-            ->sum('lel.amount');
+        // رصيد المحفظة من EMoney (نظام الأرصدة الفعلي الذي تحرّكه guard)
+        $emoney = \App\Models\EMoney::where('user_id', $agentId)->first();
+        $balance = $emoney ? (string) $emoney->current_balance : '0';
 
         return new JsonResponse([
             'success' => true,
@@ -65,11 +59,11 @@ class AgentStatsController extends Controller
             'message' => 'OK',
             'errors' => (object)[],
             'meta' => [
-                'today_cash_in' => $todayCashIn ?: '0',
-                'today_cash_out' => $todayCashOut ?: '0',
-                'today_commission' => $todayCommission ?: '0',
-                'today_count' => $todayCount,
-                'current_balance' => (string) $wallet->current_balance,
+                'today_cash_in' => $todayCashIn,
+                'today_cash_out' => $todayCashOut,
+                'today_commission' => $todayCommission,
+                'today_count' => $cashOutCount + $cashInCount,
+                'current_balance' => $balance,
             ],
         ]);
     }
