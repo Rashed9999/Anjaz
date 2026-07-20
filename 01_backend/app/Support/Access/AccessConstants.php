@@ -232,6 +232,9 @@ class AccessConstants
     // مرتبطة بـ verification (لـ v2)
     public const F_MULTI_CURRENCY = 'multi_currency';
 
+    // ============ النمو والولاء (Growth) — تُضاف تدريجياً وكلٌّ لها شاشة تعمل ============
+    public const F_LOYALTY = 'loyalty';   // برنامج النقاط والولاء
+
     // العملات المدعومة (يفتحها MERCHANT_PRO فأعلى)
     public const CURRENCY_YER = 'YER';   // الافتراضي (الجنوب)
     public const CURRENCY_SAR = 'SAR';

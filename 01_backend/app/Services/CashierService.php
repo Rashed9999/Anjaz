@@ -208,6 +208,18 @@ class CashierService
                 );
             }
 
+            // AMIAL-LOYALTY-001 — كسب نقاط الولاء مركزياً لكل بيع مُتمّ بعميل معروف.
+            // آمنة تماماً: تتجاهل بصمت إن لا برنامج مُفعّل/لا هاتف (لا تُعطّل البيع).
+            if ($status === 'completed' && !empty($customer['phone'])) {
+                try {
+                    app(\App\Services\LoyaltyService::class)->earnForSale(
+                        $merchant, $customer['phone'], $customer['name'] ?? null, $total, $sale->sale_ulid,
+                    );
+                } catch (\Throwable $e) {
+                    logger()->warning('Loyalty earn failed: ' . $e->getMessage());
+                }
+            }
+
             return $sale;
         });
     }

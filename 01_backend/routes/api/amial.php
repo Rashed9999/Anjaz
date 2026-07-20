@@ -718,6 +718,17 @@ Route::middleware(['auth:api'])->group(function () {
     Route::get('merchant/backup', [\App\Http\Controllers\Api\V1\Amial\MerchantBackupController::class, 'download'])
         ->name('amial.merchant.backup');
 
+    // -------- AMIAL-LOYALTY-001 — برنامج الولاء والنقاط --------
+    Route::prefix('merchant/loyalty')->name('amial.merchant.loyalty.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\LoyaltyController::class;
+        Route::get('/program', [$c, 'program'])->name('program');
+        Route::post('/program', [$c, 'saveProgram'])->name('program.save');
+        Route::get('/accounts', [$c, 'accounts'])->name('accounts');
+        Route::get('/lookup', [$c, 'lookup'])->name('lookup');
+        Route::post('/redeem', [$c, 'redeem'])->name('redeem');
+        Route::post('/adjust', [$c, 'adjust'])->name('adjust');
+    });
+
     // -------- AMIAL-MULTI-CURRENCY-001 — عملات التاجر --------
     Route::prefix('merchant/currencies')->name('amial.merchant.currencies.')->group(function () {
         $c = \App\Http\Controllers\Api\V1\Amial\MerchantCurrencyController::class;

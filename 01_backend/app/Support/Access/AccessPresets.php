@@ -128,6 +128,7 @@ class AccessPresets
                 A::F_PROFIT_REPORTS, A::F_EXCEL_EXPORT, A::F_ADVANCED_REPORTS,
                 A::F_EMPLOYEES, A::F_EMPLOYEE_PERMISSIONS, A::F_MULTI_POS,
                 A::F_FUEL_CARDS, A::F_FUEL_VARIANCE,
+                A::F_LOYALTY,
             ],
 
             // MERCHANT_PRO (65 SAR/شهر) — كل ما في Business + فروع + متعدّد العملات + audit
@@ -139,6 +140,7 @@ class AccessPresets
                 A::F_PROFIT_REPORTS, A::F_EXCEL_EXPORT, A::F_ADVANCED_REPORTS,
                 A::F_EMPLOYEES, A::F_EMPLOYEE_PERMISSIONS, A::F_MULTI_POS,
                 A::F_FUEL_CARDS, A::F_FUEL_VARIANCE,
+                A::F_LOYALTY,
                 A::F_BRANCHES, A::F_BRANCH_REPORTS,
                 A::F_MULTI_CURRENCY,
                 A::F_AUDIT_LOG, A::F_ADVANCED_BACKUP,
@@ -155,6 +157,7 @@ class AccessPresets
                 A::F_PROFIT_REPORTS, A::F_EXCEL_EXPORT, A::F_ADVANCED_REPORTS,
                 A::F_EMPLOYEES, A::F_EMPLOYEE_PERMISSIONS, A::F_MULTI_POS,
                 A::F_FUEL_CARDS, A::F_FUEL_VARIANCE,
+                A::F_LOYALTY,
                 A::F_BRANCHES, A::F_BRANCH_REPORTS,
                 A::F_MULTI_CURRENCY,
                 A::F_AUDIT_LOG, A::F_ADVANCED_BACKUP,
