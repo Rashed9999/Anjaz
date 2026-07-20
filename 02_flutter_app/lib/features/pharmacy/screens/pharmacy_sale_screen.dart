@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/pharmacy/controllers/pharmacy_controller.dart';
 import 'package:amyal_pay/features/barcode/screens/continuous_scanner_screen.dart';
+import 'package:amyal_pay/features/payments/screens/amial_qr_collect_screen.dart';
 
 /// AMIAL-PHARMACY-001 — شاشة بيع الصيدلية (الجوهر).
 ///
@@ -82,6 +83,31 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
       final confirmed = await _showAllergyDialog(conflicts);
       if (!confirmed) return;
       ackList = conflicts.map((cf) => cf['product_name'] as String).toList();
+    }
+
+    // AMIAL-PAY-QR: «أميال باي» يعرض رمز الاستقبال أولاً؛ يدفع العميل من محفظته،
+    // ثم يُسجَّل البيع مربوطاً بمرجع الدفع (استقبال حقيقي كباقي القطاعات).
+    if (_paymentMethod == 'amial_pay') {
+      final total = c.cartTotal;
+      Get.to(() => AmialQrCollectScreen(
+            amount: total,
+            note: 'دفع صيدلية',
+            onPaid: (paidTxId) async {
+              final ok = await c.recordCurrentSale(
+                paymentMethod: 'amial_pay',
+                paidTransactionId: paidTxId,
+                prescriptionNumber: _prescriptionCtrl.text.trim(),
+                prescribingDoctor: _doctorCtrl.text.trim(),
+                discountAmount: _discountCtrl.text.trim(),
+                acknowledgedWarnings: ackList,
+              );
+              if (!ok || !mounted) return false;
+              Get.back(); // أغلق شاشة QR وعُد لشاشة البيع
+              _showSuccessDialog();
+              return true;
+            },
+          ));
+      return;
     }
 
     final ok = await c.recordCurrentSale(

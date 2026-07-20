@@ -76,7 +76,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
                   // المثبَّت هو أحدث بناء. إن رأيت هذا السطر فالبناء حديث.
                   SizedBox(height: 10),
                   Text(
-                    '✅ إصدار 1.4.0 — مفاتيح API + النسخ الاحتياطي',
+                    '✅ إصدار 1.4.1 — إصلاح الدخول والسحب + QR الصيدلية + سلة أنيقة',
                     style: TextStyle(
                         color: Color(0xFFFECA1E),
                         fontSize: 12,

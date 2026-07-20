@@ -118,6 +118,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   height: 120,
                   child: Center(child: Text('السلة فارغة')));
             }
+            final count = c.cart.fold<int>(0, (s, l) => s + l.qty);
             return Column(mainAxisSize: MainAxisSize.min, children: [
               Container(
                 width: 44,
@@ -126,93 +127,56 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                     color: Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(2)),
               ),
-              const SizedBox(height: 12),
-              const Text('مراجعة الطلب',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
+              // العنوان + شارة عدد الأصناف
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AmyalColors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text('$count صنف',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AmyalColors.primary)),
+                ),
+                const Text('مراجعة الطلب',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+              ]),
+              const SizedBox(height: 14),
               ConstrainedBox(
                 constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(ctx).size.height * 0.45),
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.42),
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: c.cart.length,
-                  separatorBuilder: (_, _) =>
-                      const Divider(height: 1, color: AmyalColors.border),
-                  itemBuilder: (_, i) {
-                    final l = c.cart[i];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(children: [
-                        // الكمية ±
-                        Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F4FF),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Row(children: [
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              icon: const Icon(Icons.add, size: 16),
-                              onPressed: () => c.incLine(i),
-                            ),
-                            Text('${l.qty}',
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold)),
-                            IconButton(
-                              visualDensity: VisualDensity.compact,
-                              icon: Icon(
-                                  l.qty <= 1
-                                      ? Icons.delete_outline
-                                      : Icons.remove,
-                                  size: 16,
-                                  color: l.qty <= 1
-                                      ? AmyalColors.red
-                                      : Colors.black87),
-                              onPressed: () => c.decLine(i),
-                            ),
-                          ]),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(AmialMoney.yer(l.lineTotal),
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: AmyalColors.primary)),
-                        const Spacer(),
-                        Expanded(
-                          flex: 2,
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(l.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13)),
-                                Text('${AmialMoney.fmt(l.price)} ر.ي للوحدة',
-                                    style: const TextStyle(
-                                        fontSize: 11,
-                                        color: AmyalColors.textMuted)),
-                              ]),
-                        ),
-                      ]),
-                    );
-                  },
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) => _cartLine(i),
                 ),
               ),
-              const Divider(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(AmialMoney.yer(c.cartTotal),
-                      style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AmyalColors.primary)),
-                  const Text('الإجمالي',
-                      style: TextStyle(
-                          fontSize: 15, fontWeight: FontWeight.bold)),
-                ],
+              const SizedBox(height: 14),
+              // بطاقة الإجمالي
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: AmyalColors.primary.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(AmialMoney.yer(c.cartTotal),
+                        style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: AmyalColors.primary)),
+                    const Text('الإجمالي المطلوب',
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
+                  ],
+                ),
               ),
               const SizedBox(height: 14),
               FilledButton.icon(
@@ -220,10 +184,10 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   Navigator.pop(ctx);
                   Get.to(() => CashierPaymentScreen(total: c.cartTotal));
                 },
-                icon: const Icon(Icons.payments_outlined),
-                label: const Text('دفع الآن',
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('متابعة للدفع',
                     style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 style: FilledButton.styleFrom(
                   backgroundColor: AmyalColors.primary,
                   minimumSize: const Size.fromHeight(54),
@@ -231,12 +195,15 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                       borderRadius: BorderRadius.circular(16)),
                 ),
               ),
-              TextButton(
+              const SizedBox(height: 4),
+              TextButton.icon(
                 onPressed: () {
                   c.clearCart();
                   Navigator.pop(ctx);
                 },
-                child: const Text('مسح السلة',
+                icon: const Icon(Icons.delete_sweep_outlined,
+                    size: 18, color: AmyalColors.red),
+                label: const Text('إفراغ السلة',
                     style: TextStyle(color: AmyalColors.red, fontSize: 13)),
               ),
             ]);
@@ -418,6 +385,90 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
           ),
         );
       }),
+    );
+  }
+
+  /// سطر سلة أنيق: صورة/أيقونة + الاسم وسعر الوحدة + إجمالي السطر + مُبدّل الكمية.
+  Widget _cartLine(int i) {
+    final l = c.cart[i];
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AmyalColors.border),
+      ),
+      child: Row(children: [
+        // مُبدّل الكمية (± أو حذف)
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0F4FF),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => c.incLine(i),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.add, size: 18, color: AmyalColors.primary),
+              ),
+            ),
+            SizedBox(
+              width: 24,
+              child: Text('${l.qty}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 14)),
+            ),
+            InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => c.decLine(i),
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: Icon(
+                    l.qty <= 1 ? Icons.delete_outline : Icons.remove,
+                    size: 18,
+                    color: l.qty <= 1 ? AmyalColors.red : Colors.black87),
+              ),
+            ),
+          ]),
+        ),
+        const SizedBox(width: 10),
+        // إجمالي السطر
+        Text(AmialMoney.yer(l.lineTotal),
+            style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: AmyalColors.primary)),
+        const Spacer(),
+        // الاسم + سعر الوحدة
+        Expanded(
+          flex: 2,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(l.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700, fontSize: 13.5)),
+            Text('${AmialMoney.fmt(l.price)} ر.ي × ${l.qty}',
+                style: const TextStyle(
+                    fontSize: 11, color: AmyalColors.textMuted)),
+          ]),
+        ),
+        const SizedBox(width: 10),
+        // أيقونة المنتج
+        Container(
+          height: 42,
+          width: 42,
+          decoration: BoxDecoration(
+            color: AmyalColors.yellow.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.inventory_2_outlined,
+              color: AmyalColors.yellowDark, size: 20),
+        ),
+      ]),
     );
   }
 
