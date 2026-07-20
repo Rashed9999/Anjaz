@@ -14,7 +14,6 @@ import 'package:amyal_pay/features/home/screens/nav_bar_screen.dart';
 import 'package:amyal_pay/features/forget_pin/screens/forget_pin_screen.dart';
 import 'package:amyal_pay/features/forget_pin/screens/reset_pin_screen.dart';
 import 'package:amyal_pay/features/history/screens/history_screen.dart';
-import 'package:amyal_pay/features/home/screens/home_screen.dart';
 import 'package:amyal_pay/features/access/screens/home_dispatcher_screen.dart';
 import 'package:amyal_pay/features/language/screens/change_language_screen.dart';
 import 'package:amyal_pay/features/notification/screens/notifications_center_screen.dart';
@@ -144,7 +143,7 @@ class RouteHelper {
 
   static List<GetPage> routes = [
     GetPage(name: splash, page: () => const SplashScreen()),
-    GetPage(name: home, page: () => const HomeDispatcherScreen(userHomeFallback: HomeScreen())),
+    GetPage(name: home, page: () => const HomeDispatcherScreen(userHomeFallback: NavBarScreen())),
     GetPage(name: navbar, page: () =>  NavBarScreen(
       selectedPage: (Get.parameters['selectedPage']?.isNotEmpty ?? false) ? Get.parameters['selectedPage'] : null,
     )),
