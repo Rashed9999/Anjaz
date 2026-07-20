@@ -104,6 +104,99 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
 
   String _n(dynamic v) => (double.tryParse(v?.toString() ?? '0') ?? 0).toStringAsFixed(2);
 
+  String _hourLabel(dynamic h) {
+    final hr = h is int ? h : int.tryParse('$h') ?? 0;
+    final h12 = hr % 12 == 0 ? 12 : hr % 12;
+    return '$h12 ${hr < 12 ? 'ص' : 'م'}';
+  }
+
+  // AMIAL-REPORTS-HOURLY-001 — قسم المبيعات بالساعة (مخطط 24 ساعة + قائمة).
+  Widget _hourlySection(Map<String, dynamic> r) {
+    final byHour = ((r['by_hour'] ?? []) as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    if (byHour.isEmpty) return const SizedBox.shrink();
+    final peak = r['peak_hour'];
+    double amt(Map h) => double.tryParse('${h['total']}') ?? 0;
+    final maxT = byHour.fold<double>(0, (a, h) => amt(h) > a ? amt(h) : a);
+    final active = byHour.where((h) => (h['count'] ?? 0) != 0).toList();
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const SizedBox(height: 18),
+      Row(children: [
+        const Text('المبيعات بالساعة', style: TextStyle(fontWeight: FontWeight.bold)),
+        const Spacer(),
+        if (peak != null && maxT > 0)
+          Text('الذروة: ${_hourLabel(peak)} • ${_n(r['peak_hour_total'])} ر.ي',
+              style: const TextStyle(fontSize: 12, color: AmyalColors.yellowDark, fontWeight: FontWeight.bold)),
+      ]),
+      const SizedBox(height: 10),
+      if (maxT <= 0)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Text('لا مبيعات اليوم بعد', style: TextStyle(color: AmyalColors.textSecondary, fontSize: 13)),
+        )
+      else ...[
+        // مخطط أعمدة لكل 24 ساعة
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: AmyalColors.cardSurface, borderRadius: BorderRadius.circular(10)),
+          child: SizedBox(
+            height: 92,
+            child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: byHour.map((h) {
+              final t = amt(h);
+              final hh = h['hour'] as int;
+              final barH = maxT > 0 ? (t / maxT) * 72.0 : 0.0;
+              final isPeak = peak != null && hh == peak;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 1),
+                  child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                    Container(
+                      height: (t > 0 && barH < 3) ? 3 : barH,
+                      decoration: BoxDecoration(
+                        color: isPeak ? AmyalColors.yellowDark : AmyalColors.primary.withValues(alpha: t > 0 ? 0.85 : 0.0),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    if (hh % 6 == 0)
+                      Text('$hh', style: const TextStyle(fontSize: 8, color: AmyalColors.textMuted)),
+                  ]),
+                ),
+              );
+            }).toList()),
+          ),
+        ),
+        const SizedBox(height: 12),
+        // قائمة الساعات النشطة (المبلغ + العدد)
+        ...active.map((h) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(children: [
+                SizedBox(width: 52, child: Text(_hourLabel(h['hour']),
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700))),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: maxT > 0 ? amt(h) / maxT : 0,
+                      minHeight: 8,
+                      backgroundColor: AmyalColors.border,
+                      valueColor: AlwaysStoppedAnimation(
+                          (peak == h['hour']) ? AmyalColors.yellowDark : AmyalColors.primary),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text('${_n(h['total'])} ر.ي', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(width: 6),
+                Text('(${h['count']})', style: const TextStyle(fontSize: 11, color: AmyalColors.textSecondary)),
+              ]),
+            )),
+      ],
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -160,6 +253,9 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
                       ),
                     )),
               ],
+
+              // AMIAL-REPORTS-HOURLY-001 — تفصيل المبيعات بالساعة + ساعة الذروة
+              _hourlySection(r),
 
               // AMIAL-CASHIER-REFUND-001 — قائمة مبيعات اليوم مع مدخل الاسترجاع
               const SizedBox(height: 16),

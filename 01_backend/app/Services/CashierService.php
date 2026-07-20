@@ -493,11 +493,20 @@ class CashierService
         $byMethod = ['cash' => '0', 'credit' => '0', 'amial_pay' => '0'];
         $topProducts = [];
 
+        // AMIAL-REPORTS-HOURLY-001: توزيع المبيعات على 24 ساعة (عدد + مبلغ).
+        $byHour = [];
+        for ($h = 0; $h < 24; $h++) {
+            $byHour[$h] = ['count' => 0, 'total' => '0'];
+        }
+
         foreach ($sales as $sale) {
             $byMethod[$sale->payment_method] = MoneyService::add(
                 $byMethod[$sale->payment_method] ?? '0',
                 (string) $sale->total_amount
             );
+            $h = (int) Carbon::parse($sale->created_at)->format('G'); // 0..23 بتوقيت التطبيق
+            $byHour[$h]['count']++;
+            $byHour[$h]['total'] = MoneyService::add($byHour[$h]['total'], (string) $sale->total_amount);
             foreach (($sale->items ?? []) as $item) {
                 $name = $item['name'] ?? null;
                 if (!$name) continue;
@@ -506,6 +515,16 @@ class CashierService
             }
         }
         arsort($topProducts);
+
+        // ساعة الذروة (الأعلى مبيعاً)
+        $peakHour = null;
+        $peakTotal = '0';
+        foreach ($byHour as $h => $b) {
+            if (MoneyService::gt($b['total'], $peakTotal)) {
+                $peakTotal = $b['total'];
+                $peakHour = $h;
+            }
+        }
 
         // إجمالي الإيرادات الفعلية (نقد + أميال باي) — الأجل غير المسوّى مستحقّات
         $realized = MoneyService::add($byMethod['cash'], $byMethod['amial_pay']);
@@ -524,6 +543,13 @@ class CashierService
                 array_map(fn ($k, $v) => ['name' => $k, 'qty' => $v], array_keys($topProducts), $topProducts),
                 0, 5
             ),
+            // AMIAL-REPORTS-HOURLY-001: تفصيل بالساعة + ساعة الذروة
+            'by_hour' => array_map(
+                fn ($h, $b) => ['hour' => $h, 'count' => $b['count'], 'total' => $b['total']],
+                array_keys($byHour), $byHour
+            ),
+            'peak_hour' => $peakHour,
+            'peak_hour_total' => $peakTotal,
         ];
     }
 }
