@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:amyal_pay/features/merchant/services/offline_sale_queue.dart';
+import 'package:amyal_pay/features/printer/services/thermal_print_service.dart';
 import 'package:amyal_pay/features/favorite_number/controllers/fav_number_controller.dart';
 import 'package:amyal_pay/features/favorite_number/domain/repositories/fav_number_repo.dart';
 import 'package:amyal_pay/features/forget_pin/domain/reposotories/forget_pin_repo.dart';
@@ -142,6 +143,8 @@ Future<Map<String, Map<String, String>>> init() async {
 
   // AMIAL-OFFLINE-POS-001 — طابور مبيعات دون اتصال
   Get.put(OfflineSaleQueue(), permanent: true);
+  // AMIAL-THERMAL-PRINT-001: خدمة الطباعة الحرارية (تحمّل إعداد الطابعة المحفوظ)
+  Get.put(ThermalPrintService(), permanent: true);
 
   // Repository
    Get.lazyPut(() => SplashRepo(sharedPreferences: Get.find(), apiClient: Get.find()));
