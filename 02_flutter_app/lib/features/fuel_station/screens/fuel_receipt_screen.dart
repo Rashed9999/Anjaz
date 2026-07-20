@@ -10,6 +10,9 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:amyal_pay/features/merchant/controllers/receipt_settings_controller.dart';
 import 'package:amyal_pay/features/payments/widgets/amial_invoice_card.dart';
+import 'package:amyal_pay/features/printer/services/thermal_print_service.dart';
+import 'package:amyal_pay/features/printer/widgets/thermal_receipt_widget.dart';
+import 'package:amyal_pay/features/printer/screens/printer_settings_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-FUEL-RECEIPT-001 — فاتورة بيع الوقود بمقاس حراري 80مم.
@@ -94,13 +97,42 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
     return f;
   }
 
-  /// طباعة/حفظ: يلتقط الإيصال صورةً ويفتحه بتطبيق النظام (طباعة أو حفظ بالمعرض).
+  List<ThermalReceiptLine> _thermalLines() {
+    final liters = double.tryParse('${widget.sale['liters'] ?? 0}') ?? 0;
+    final ppl = double.tryParse('${widget.sale['price_per_liter'] ?? 0}') ?? 0;
+    final fuel = '${widget.sale['fuel_type'] ?? widget.sale['product'] ?? 'وقود'}';
+    return [ThermalReceiptLine('$fuel (لتر)', liters, ppl)];
+  }
+
+  /// طباعة: على الطابعة الحرارية (بهويّة المحطة + الشعار) إن ضُبطت، وإلا صورة.
   Future<void> _print() async {
     setState(() => _busy = true);
     try {
-      final f = await _capture();
-      if (f == null) throw Exception('capture');
-      await OpenFile.open(f.path, type: 'image/png');
+      final svc = Get.isRegistered<ThermalPrintService>() ? Get.find<ThermalPrintService>() : null;
+      final total = double.tryParse('${widget.sale['total_amount'] ?? 0}') ?? 0;
+      if (svc != null && svc.config.value != null) {
+        final r = await svc.printSale(
+          settings: _settings.effective,
+          lines: _thermalLines(),
+          total: total,
+          invoiceNo: _ref,
+          dateTime: DateTime.now(),
+        );
+        if (mounted) _snack(r.message, ok: r.ok);
+      } else {
+        final f = await _capture();
+        if (f == null) throw Exception('capture');
+        await OpenFile.open(f.path, type: 'image/png');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('لطباعة حرارية مباشرة، اضبط طابعتك'),
+            action: SnackBarAction(
+                label: 'إعداد', textColor: Colors.white,
+                onPressed: () => Get.to(() => const PrinterSettingsScreen())),
+            backgroundColor: AmyalColors.primary,
+          ));
+        }
+      }
     } catch (_) {
       _snack('تعذّرت الطباعة — جرّب المشاركة');
     } finally {
@@ -147,8 +179,8 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
     return p;
   }
 
-  void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: AmyalColors.red));
+  void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
 
   @override
   Widget build(BuildContext context) {

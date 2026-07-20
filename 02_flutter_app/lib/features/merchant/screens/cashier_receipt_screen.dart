@@ -11,6 +11,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:amyal_pay/features/merchant/controllers/receipt_settings_controller.dart';
 import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amyal_pay/features/payments/widgets/amial_invoice_card.dart';
+import 'package:amyal_pay/features/printer/services/thermal_print_service.dart';
+import 'package:amyal_pay/features/printer/widgets/thermal_receipt_widget.dart';
+import 'package:amyal_pay/features/printer/screens/printer_settings_screen.dart';
 import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
@@ -101,12 +104,45 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
     return f;
   }
 
+  List<ThermalReceiptLine> _thermalLines() {
+    final items = (widget.sale['items'] as List?) ?? const [];
+    return items.map<ThermalReceiptLine>((e) {
+      final m = e as Map;
+      return ThermalReceiptLine('${m['name'] ?? ''}',
+          int.tryParse('${m['qty'] ?? 1}') ?? 1, double.tryParse('${m['price'] ?? 0}') ?? 0);
+    }).toList();
+  }
+
+  /// طباعة: على الطابعة الحرارية (بهويّة المتجر + الشعار) إن كانت مضبوطة،
+  /// وإلا حفظ الفاتورة صورةً وفتحها (احتياطي يعمل دائماً).
   Future<void> _print() async {
     setState(() => _busy = true);
     try {
-      final f = await _capture();
-      if (f == null) throw Exception('capture');
-      await OpenFile.open(f.path, type: 'image/png');
+      final svc = Get.isRegistered<ThermalPrintService>() ? Get.find<ThermalPrintService>() : null;
+      if (svc != null && svc.config.value != null) {
+        final r = await svc.printSale(
+          settings: _settings.effective,
+          lines: _thermalLines(),
+          total: widget.total,
+          invoiceNo: _ref,
+          dateTime: DateTime.now(),
+        );
+        if (mounted) _snack(r.message, ok: r.ok);
+      } else {
+        // لا طابعة مضبوطة — احفظ صورةً وافتحها، مع دعوة لإعداد الطابعة.
+        final f = await _capture();
+        if (f == null) throw Exception('capture');
+        await OpenFile.open(f.path, type: 'image/png');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('لطباعة حرارية مباشرة، اضبط طابعتك'),
+            action: SnackBarAction(
+              label: 'إعداد', textColor: Colors.white,
+              onPressed: () => Get.to(() => const PrinterSettingsScreen())),
+            backgroundColor: AmyalColors.primary,
+          ));
+        }
+      }
     } catch (_) {
       _snack('تعذّرت الطباعة — جرّب المشاركة');
     } finally {
@@ -147,8 +183,8 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
     return p;
   }
 
-  void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: AmyalColors.red));
+  void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
 
   @override
   Widget build(BuildContext context) {
