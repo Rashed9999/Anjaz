@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:amyal_pay/theme/custom_theme_colors.dart';
 
-// AMIAL-BRANDING-002: ألوان هوية أميال باي من تصاميم المشروع — أخضر غابيّ عميق
-// + ذهبي، وخلفية كريميّة دافئة. (كانت سماويّ #003E47 + ليموني #E0EC53 من 6cash).
-const Color _primaryColor = Color(0xFF053391);   // أخضر غابيّ (بطاقة الرصيد/الأزرار)
-const Color _secondaryColor = Color(0xFFE6B84C); // ذهبي (إبرازات/أزرار ثانوية)
+// AMIAL-BRANDING-003: ألوان هوية أميال باي = أزرق الشعار + أصفر الشعار.
+// موحّدة تماماً مع AmyalColors (primary/yellow) ليتطابق النظامان عبر كل الشاشات.
+const Color _primaryColor = Color(0xFF053391);   // أزرق الشعار (بطاقة الرصيد/الأزرار)
+const Color _secondaryColor = Color(0xFFFECA1E); // أصفر الشعار (إبرازات/أزرار ثانوية)
+const Color _onSecondaryColor = Color(0xFF053391); // نصّ/أيقونة أزرق على الأصفر
 
 ThemeData light = ThemeData(
   brightness: Brightness.light,
@@ -25,8 +26,8 @@ ThemeData light = ThemeData(
     primary: _primaryColor,
     onPrimary: Colors.white,
     secondary: _secondaryColor,
-    onSecondary: _secondaryColor,
-    error: const Color(0xFFFF4040),
+    onSecondary: _onSecondaryColor,
+    error: const Color(0xFFDC0A0B),
     onError: const Color(0xFFFFD1D1),
     surface: Colors.white,
     onSurface:  const Color(0xFF222324), // textTheme.titleLarge?.color
