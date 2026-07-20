@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/withdraw/screens/withdraw_request_screen.dart';
 import 'package:amyal_pay/features/me/screens/my_account_number_screen.dart';
+import 'package:amyal_pay/features/installments/screens/my_installments_screen.dart';
 import 'package:amyal_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amyal_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amyal_pay/features/me/domain/me_repo.dart';
@@ -206,6 +207,13 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                 color: Colors.green.shade700,
                 onTap: () => Get.to(() => const MySafePaymentsScreen()),
               )),
+              _serviceCard(
+                icon: Icons.handshake,
+                label: 'أقساطي',
+                subtitle: 'سداد التقسيط',
+                color: const Color(0xFF00695C),
+                onTap: () => Get.to(() => const MyInstallmentsScreen()),
+              ),
               AccessGate(feature: 'family_fund', child: _serviceCard(
                 icon: Icons.savings,
                 label: 'الصناديق المشتركة',

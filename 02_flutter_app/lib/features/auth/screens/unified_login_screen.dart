@@ -76,7 +76,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
                   // المثبَّت هو أحدث بناء. إن رأيت هذا السطر فالبناء حديث.
                   SizedBox(height: 10),
                   Text(
-                    '✅ إصدار 1.7.0 — الدفع المختلط (نقد + محفظة)',
+                    '✅ إصدار 1.8.0 — البيع بالتقسيط (تمويل بضمانات)',
                     style: TextStyle(
                         color: Color(0xFFFECA1E),
                         fontSize: 12,

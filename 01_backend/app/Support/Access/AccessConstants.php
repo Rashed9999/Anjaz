@@ -235,6 +235,7 @@ class AccessConstants
     // ============ النمو والولاء (Growth) — تُضاف تدريجياً وكلٌّ لها شاشة تعمل ============
     public const F_LOYALTY = 'loyalty';       // برنامج النقاط والولاء (الأعمال+)
     public const F_PROMOTIONS = 'promotions'; // العروض والخصومات والكوبونات (ستارتر+)
+    public const F_INSTALLMENTS = 'installments'; // البيع بالتقسيط من المحفظة (التاجر برو+)
 
     // العملات المدعومة (يفتحها MERCHANT_PRO فأعلى)
     public const CURRENCY_YER = 'YER';   // الافتراضي (الجنوب)

@@ -740,6 +740,23 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/adjust', [$c, 'adjust'])->name('adjust');
     });
 
+    // -------- AMIAL-INSTALLMENTS-001 — البيع بالتقسيط --------
+    Route::prefix('merchant/installments')->name('amial.merchant.installments.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\InstallmentController::class;
+        Route::get('/plan', [$c, 'plan'])->name('plan');
+        Route::post('/plan', [$c, 'savePlan'])->name('plan.save');
+        Route::post('/quote', [$c, 'quote'])->name('quote');
+        Route::get('/contracts', [$c, 'contracts'])->name('contracts');
+        Route::post('/contracts', [$c, 'createContract'])->name('contracts.create');
+        Route::get('/contracts/{id}', [$c, 'showContract'])->where('id', '[0-9]+')->name('contracts.show');
+    });
+    // جهة العميل — أقساطي
+    Route::prefix('me/installments')->name('amial.me.installments.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\InstallmentController::class;
+        Route::get('/', [$c, 'myContracts'])->name('mine');
+        Route::post('/{id}/pay', [$c, 'pay'])->where('id', '[0-9]+')->name('pay');
+    });
+
     // -------- AMIAL-MULTI-CURRENCY-001 — عملات التاجر --------
     Route::prefix('merchant/currencies')->name('amial.merchant.currencies.')->group(function () {
         $c = \App\Http\Controllers\Api\V1\Amial\MerchantCurrencyController::class;

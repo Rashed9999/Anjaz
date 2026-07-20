@@ -21,6 +21,7 @@ import 'package:amyal_pay/features/merchant/screens/merchant_api_keys_screen.dar
 import 'package:amyal_pay/features/merchant/screens/merchant_backup_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_loyalty_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_promotions_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_installments_screen.dart';
 import 'package:amyal_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/access/widgets/access_gate.dart';
@@ -518,7 +519,10 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
           planLabel: 'ستارتر', onOpen: () => Get.to(() => const MerchantPromotionsScreen()),
         )),
         const SizedBox(width: 8),
-        const Expanded(child: SizedBox()),
+        Expanded(child: _featTile(
+          icon: Icons.handshake, label: 'البيع بالتقسيط', feature: 'installments',
+          planLabel: 'التاجر برو', onOpen: () => Get.to(() => const MerchantInstallmentsScreen()),
+        )),
       ]),
     ]);
   }
