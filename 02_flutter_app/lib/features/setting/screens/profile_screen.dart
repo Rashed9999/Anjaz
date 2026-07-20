@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_switch_button.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amyal_pay/features/favorite_number/screens/favorite_number_screen.dart';
 import 'package:amyal_pay/features/me/screens/my_services_screen.dart';
@@ -98,7 +98,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).cardColor,
-      appBar: CustomAppbarWidget(title: 'profile'.tr, onlyTitle: true),
+      appBar: AppBar(
+        title: Text('profile'.tr),
+        centerTitle: true,
+        backgroundColor: AmyalColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: GetBuilder<AuthController>(builder: (authController){
         return ModalProgressHUD(
           inAsyncCall: authController.isLoading,
@@ -252,13 +258,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ProfileHeader(title: 'support'.tr),
 
                 Column(children: [
-                  if(((splashController.configModel!.companyEmail != null) || (splashController.configModel!.companyPhone != null)))
+                  if(((splashController.configModel?.companyEmail != null) || (splashController.configModel?.companyPhone != null)))
                     CustomInkWellWidget(
                       child: widget.MenuItem(image: Images.supportLogo,title: '24_support'.tr),
                       onTap: () => Get.toNamed(RouteHelper.getSupportRoute()),
                     ),
 
-                 if(splashController.configModel!.systemFeature!.faqStatus!) CustomInkWellWidget(
+                 if(splashController.configModel?.systemFeature?.faqStatus ?? false) CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.questionLogo, title: 'faq'.tr),
                     onTap:()=> Get.toNamed(RouteHelper.faq),
                   )

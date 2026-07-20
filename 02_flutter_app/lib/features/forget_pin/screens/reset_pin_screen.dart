@@ -1,4 +1,4 @@
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_large_widget.dart';
 import 'package:amyal_pay/features/auth/widgets/pin_field_widget.dart';
 import 'package:amyal_pay/features/forget_pin/controllers/forget_pin_controller.dart';
@@ -25,7 +25,12 @@ class _ResetPinScreenState extends State<ResetPinScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CustomAppbarWidget(title: "reset_setup_pin".tr),
+      appBar: AppBar(
+        title: Text("reset_setup_pin".tr),
+        backgroundColor: AmyalColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: SingleChildScrollView(
         child: Column(children: [
         

@@ -2,7 +2,7 @@ import 'package:country_code_picker/country_code_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:phone_numbers_parser/phone_numbers_parser.dart';
-import 'package:amyal_pay/common/widgets/custom_app_bar_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_large_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_logo_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_text_field_widget.dart';
@@ -32,14 +32,19 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
   void initState() {
      super.initState();
      countryDialCode =  widget.countryCode;
-     phoneNumberController.text = widget.phoneNumber!;
+     phoneNumberController.text = widget.phoneNumber ?? '';
 
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: CustomAppbarWidget(title: 'forget_pin'.tr),
+      appBar: AppBar(
+        title: Text('forget_pin'.tr),
+        backgroundColor: AmyalColors.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: Column(children: [
 
         Expanded(child: SingleChildScrollView(child: Column(children: [

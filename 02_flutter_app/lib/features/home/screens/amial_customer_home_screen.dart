@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/transaction_money/screens/transaction_money_screen.dart';
+import 'package:amyal_pay/features/requested_money/screens/payment_request_create_screen.dart';
 import 'package:amyal_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
 import 'package:amyal_pay/features/withdraw/screens/withdraw_request_screen.dart';
 import 'package:amyal_pay/features/credit/screens/my_credits_screen.dart';
@@ -336,7 +336,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   Widget _servicesGrid() {
     final services = [
       // AMIAL: طلب المال — يُرسَل طلب لشخص، وبموافقته يتمّ التحويل تلقائياً
-      _Svc('طلب المال', Icons.request_page_outlined, () => Get.to(() => const TransactionMoneyScreen(fromEdit: false, transactionType: 'request_money'))),
+      _Svc('طلب المال', Icons.request_page_outlined, () => Get.to(() => const PaymentRequestCreateScreen())),
       _Svc('الطلبات الواردة', Icons.mark_email_unread_outlined, () => Get.to(() => const RequestedMoneyListScreen(requestType: RequestType.request))),
       // AMIAL-MERCHANT-PAY-001: دفع العميل لتاجر (يدوي أو بمسح QR داخل الشاشة)
       _Svc('ادفع لتاجر', Icons.storefront_outlined, () => Get.to(() => const MerchantPayScreen())),
