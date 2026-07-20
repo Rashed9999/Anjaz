@@ -239,6 +239,7 @@ class AccessConstants
     public const F_OFFLINE_POS = 'offline_pos';   // وضع البيع دون اتصال + مزامنة (الأعمال+)
     public const F_GIFT_CARDS = 'gift_cards';     // بطاقات الهدايا ورصيد المتجر (الأعمال+)
     public const F_SHIFT_CLOSE = 'shift_close';   // إقفال الوردية ودرج النقد X/Z (الأعمال+)
+    public const F_EXPENSES = 'expenses';         // المصروفات والصندوق النثري (الأعمال+)
 
     // العملات المدعومة (يفتحها MERCHANT_PRO فأعلى)
     public const CURRENCY_YER = 'YER';   // الافتراضي (الجنوب)

@@ -740,6 +740,15 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/adjust', [$c, 'adjust'])->name('adjust');
     });
 
+    // -------- AMIAL-EXPENSES-001 — المصروفات والصندوق النثري --------
+    Route::prefix('merchant/expenses')->name('amial.merchant.expenses.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\ExpenseController::class;
+        Route::get('/', [$c, 'index'])->name('index');
+        Route::post('/', [$c, 'store'])->name('store');
+        Route::post('/{id}', [$c, 'update'])->where('id', '[0-9]+')->name('update');
+        Route::delete('/{id}', [$c, 'destroy'])->where('id', '[0-9]+')->name('destroy');
+    });
+
     // -------- AMIAL-SHIFT-CLOSE-001 — ورديات الكاشير ودرج النقد --------
     Route::prefix('cashier/shift')->name('amial.cashier.shift.')->group(function () {
         $c = \App\Http\Controllers\Api\V1\Amial\CashierShiftController::class;
