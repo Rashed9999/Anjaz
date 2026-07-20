@@ -18,6 +18,7 @@ import 'package:amyal_pay/features/wholesale/screens/wholesale_screens.dart';
 import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amyal_pay/features/plans/screens/my_usage_screen.dart';
 import 'package:amyal_pay/features/branches/screens/branches_management_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_services_hub_screen.dart';
 import 'package:amyal_pay/features/access/widgets/access_gate.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/family_fund/screens/my_funds_screen.dart';
@@ -236,6 +237,20 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                 color: Colors.amber.shade800,
                 onTap: () => Get.to(() => const BillPayProvidersScreen()),
               )),
+
+              // AMIAL-MERCHANT-SERVICES-HUB-001: مدخل موحّد لكل خدمات التاجر
+              // (المفتوحة والمقفلة حسب الباقة + شرح كل خدمة).
+              AccessGate(
+                anyOf: const ['products', 'inventory', 'fuel_pos', 'pharmacy_pos',
+                    'wholesale_invoices', 'daily_reports', 'profit_reports'],
+                child: _serviceCard(
+                  icon: Icons.grid_view_rounded,
+                  label: 'خدمات التاجر',
+                  subtitle: 'كل الميزات وباقاتها',
+                  color: AmyalColors.primary,
+                  onTap: () => Get.to(() => const MerchantServicesHubScreen()),
+                ),
+              ),
 
               // ميزات التاجر
               AccessGate(feature: 'merchant_verification', child: _serviceCard(
