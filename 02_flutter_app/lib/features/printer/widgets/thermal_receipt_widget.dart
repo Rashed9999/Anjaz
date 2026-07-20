@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 /// AMIAL-THERMAL-PRINT-001 — سطر في الإيصال الحراري.
@@ -25,7 +26,39 @@ class ThermalReceiptWidget extends StatelessWidget {
     this.invoiceNo,
     this.paid,
     this.change,
+    this.logoBytes,
+    this.phone,
+    this.address,
   });
+
+  /// يبني الإيصال من إعدادات متجر التاجر (اسم/شعار/هاتف/عنوان/تذييل).
+  factory ThermalReceiptWidget.fromSettings({
+    required Map<String, dynamic> settings,
+    required List<ThermalReceiptLine> lines,
+    required num total,
+    Uint8List? logoBytes,
+    String? invoiceNo,
+    DateTime? dateTime,
+    num? paid,
+    num? change,
+  }) {
+    String s(String k, [String d = '']) => '${settings[k] ?? d}';
+    bool flag(String k) => settings[k] == true || settings[k] == 1 || settings[k] == '1';
+    return ThermalReceiptWidget(
+      storeName: s('store_name', 'المتجر'),
+      subtitle: s('header_note'),
+      footer: s('footer_note', 'شكراً لتعاملكم معنا'),
+      phone: flag('show_phone') ? s('phone') : null,
+      address: flag('show_address') ? s('address') : null,
+      logoBytes: flag('show_logo') ? logoBytes : null,
+      lines: lines,
+      total: total,
+      invoiceNo: invoiceNo,
+      dateTime: dateTime,
+      paid: paid,
+      change: change,
+    );
+  }
 
   final String storeName;
   final String? subtitle;
@@ -36,6 +69,9 @@ class ThermalReceiptWidget extends StatelessWidget {
   final String footer;
   final DateTime? dateTime;
   final String? invoiceNo;
+  final Uint8List? logoBytes;
+  final String? phone;
+  final String? address;
 
   String _money(num v) => v.toStringAsFixed(0);
 
@@ -53,11 +89,24 @@ class ThermalReceiptWidget extends StatelessWidget {
         color: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+          if (logoBytes != null) ...[
+            Center(child: Image.memory(logoBytes!, height: 90, fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink())),
+            const SizedBox(height: 8),
+          ],
           Text(storeName, textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.black, fontSize: 30, fontWeight: FontWeight.bold)),
           if (subtitle != null && subtitle!.isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(subtitle!, textAlign: TextAlign.center, style: small),
+          ],
+          if (phone != null && phone!.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text('هاتف: $phone', textAlign: TextAlign.center, style: small),
+          ],
+          if (address != null && address!.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(address!, textAlign: TextAlign.center, style: small),
           ],
           const SizedBox(height: 10),
           if (invoiceNo != null) Text('فاتورة: $invoiceNo', style: small),

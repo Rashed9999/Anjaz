@@ -2,9 +2,11 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+import 'package:amyal_pay/features/printer/widgets/thermal_receipt_widget.dart';
 
 /// AMIAL-THERMAL-PRINT-001 — إعداد الطابعة الحرارية المحفوظ.
 class ThermalPrinterConfig {
@@ -106,6 +108,39 @@ class ThermalPrintService extends GetxService {
     } catch (_) {
       return const PrintResult(false, 'تعذّر تجهيز الإيصال للطباعة');
     }
+  }
+
+  /// يجلب بايتات الشعار من رابطه (لتُطبع مع الإيصال). null إن تعذّر.
+  Future<Uint8List?> fetchLogoBytes(String? url) async {
+    if (url == null || url.isEmpty) return null;
+    try {
+      final r = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 6));
+      if (r.statusCode == 200 && r.bodyBytes.isNotEmpty) return r.bodyBytes;
+    } catch (_) {}
+    return null;
+  }
+
+  /// يطبع فاتورة بيع بهويّة متجر التاجر (اسم + شعار + هاتف + عنوان + تذييل).
+  Future<PrintResult> printSale({
+    required Map<String, dynamic> settings,
+    required List<ThermalReceiptLine> lines,
+    required num total,
+    String? invoiceNo,
+    num? paid,
+    num? change,
+    DateTime? dateTime,
+  }) async {
+    final logo = await fetchLogoBytes(settings['logo_url']?.toString());
+    return printWidget(ThermalReceiptWidget.fromSettings(
+      settings: settings,
+      lines: lines,
+      total: total,
+      logoBytes: logo,
+      invoiceNo: invoiceNo,
+      paid: paid,
+      change: change,
+      dateTime: dateTime,
+    ));
   }
 
   /// يطبع صورة PNG جاهزة (raster) على الطابعة المحفوظة.

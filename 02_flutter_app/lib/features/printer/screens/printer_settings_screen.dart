@@ -5,6 +5,7 @@ import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/printer/services/thermal_print_service.dart';
 import 'package:amyal_pay/features/printer/widgets/thermal_receipt_widget.dart';
+import 'package:amyal_pay/features/merchant/controllers/receipt_settings_controller.dart';
 
 /// AMIAL-THERMAL-PRINT-001 — «إعدادات الطابعة الحرارية».
 ///
@@ -54,9 +55,15 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
 
   Future<void> _testPrint() async {
     setState(() => _testing = true);
-    final receipt = ThermalReceiptWidget(
-      storeName: 'أميال باي',
-      subtitle: 'طباعة تجريبية',
+    // AMIAL: اطبع بهويّة متجر التاجر الحقيقية (اسم + شعار) لا نصّ ثابت.
+    final rc = Get.isRegistered<ReceiptSettingsController>()
+        ? Get.find<ReceiptSettingsController>()
+        : Get.put(ReceiptSettingsController(), permanent: true);
+    try {
+      await rc.load();
+    } catch (_) {}
+    final r = await _svc.printSale(
+      settings: rc.effective,
       invoiceNo: 'TEST-0001',
       lines: const [
         ThermalReceiptLine('منتج تجريبي أ', 2, 500),
@@ -67,7 +74,6 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       paid: 4000,
       change: 750,
     );
-    final r = await _svc.printWidget(receipt);
     if (!mounted) return;
     setState(() => _testing = false);
     _snack(r.message, ok: r.ok);
