@@ -133,9 +133,17 @@ class EnsureDemoMerchants extends Command
         $existing = User::where('type', MERCHANT_TYPE)->get()->first(function ($u) use ($m, $shortPhone) {
             return in_array($u->phone, [$m['phone'], $shortPhone], true);
         });
-        // AMIAL-REAL-DATA: لا نعيد ضبط حساب موجود (كلمة سر/رمز/رصيد) —
-        // النشرات المتكررة كانت «تمسح» نشاط التجربة وكأن البيانات ليست حقيقية.
+        // AMIAL-DEMO-FIX: نفرض بيانات الدخول لحسابات التجربة (كلمة المرور/الرمز/
+        // التفعيل/الدور) دون المساس بالرصيد أو النشاط — وإلا فشل الدخول بـ«بيانات
+        // غير صحيحة» إن كان السرّ قديماً على النشر الحالي.
         if ($existing) {
+            $existing->password = Hash::make(self::PASSWORD);
+            $existing->transaction_pin = Hash::make(self::PIN);
+            $existing->is_active = 1;
+            if (Schema::hasColumn('users', 'role') && $existing->role !== 'merchant') {
+                $existing->role = 'merchant';
+            }
+            $existing->save();
             return $existing;
         }
 

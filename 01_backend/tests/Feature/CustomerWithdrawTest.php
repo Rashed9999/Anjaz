@@ -123,6 +123,30 @@ class CustomerWithdrawTest extends TestCase
         $this->svc->execute($this->agent, $req->op_code, '+967700999999'); // ليس العميل
     }
 
+    /** @test AMIAL-WITHDRAW-FIX — رقم العملية وحده يكفي (تأكيد الهوية اختياري). */
+    public function execute_succeeds_with_op_code_only(): void
+    {
+        $req = $this->svc->request($this->customer, '10000');
+
+        $result = $this->svc->execute($this->agent, $req->op_code, ''); // بلا معرّف
+        $this->assertNotNull($result['transaction_id']);
+        $this->assertSame('completed', $req->fresh()->status);
+
+        // تُسجَّل المعاملة فعلاً في النظام
+        $this->assertNotNull($req->fresh()->transaction_id);
+    }
+
+    /** @test AMIAL-WITHDRAW-FIX — الرقم المحلّي (700…) يطابق المخزَّن (+967700…). */
+    public function execute_matches_local_format_phone(): void
+    {
+        $req = $this->svc->request($this->customer, '10000');
+
+        // العميل مخزَّن كـ +967700555000؛ الوكيل يُدخل 700555000 المحلّي
+        $result = $this->svc->execute($this->agent, $req->op_code, '700555000');
+        $this->assertNotNull($result['transaction_id']);
+        $this->assertSame('completed', $req->fresh()->status);
+    }
+
     /**
      * @test AMIAL-FIX(WITHDRAW-CANCEL) — الإلغاء لا يعلق عند نقص المحجوز.
      * الحجز قد يُحرَّر من مسار آخر (كنس انتهاء الصلاحية) بينما الطلب pending —

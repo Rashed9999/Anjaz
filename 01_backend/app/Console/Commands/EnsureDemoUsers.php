@@ -37,6 +37,18 @@ class EnsureDemoUsers extends Command
             // AMIAL-REAL-DATA: حساب موجود لا يُعاد ضبطه (سر/رمز/رصيد) —
             // النشرات كانت «تمسح» النشاط وتُبطل الجلسات.
             if ($user) {
+                // AMIAL-DEMO-FIX: حسابات التجربة يجب أن تدخل دائماً بكلمة المرور
+                // المعروفة. سابقاً «لم يُمسّ» → إن كان السرّ قديماً/مختلفاً فشل
+                // الدخول بـ«بيانات غير صحيحة» للأبد. نفرض بيانات الدخول فقط
+                // (كلمة المرور/الرمز/التفعيل/التوثيق) دون المساس بالرصيد والنشاط.
+                $user->password = Hash::make($password);
+                $user->transaction_pin = Hash::make('1237');
+                $user->is_active = 1;
+                $user->is_kyc_verified = 1;
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {
+                    $user->kyc_tier = 3;
+                }
+                $user->save();
                 EMoney::firstOrCreate(
                     ['user_id' => $user->id],
                     [
@@ -45,7 +57,7 @@ class EnsureDemoUsers extends Command
                         'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
                     ]
                 );
-                $this->info("✓ حساب العميل التجريبي موجود مسبقاً id={$user->id} — لم يُمسّ");
+                $this->info("✓ حساب العميل التجريبي موجود — فُرضت بيانات الدخول id={$user->id}");
                 goto demo_recipient;
             }
             $user = new User();
@@ -91,7 +103,15 @@ class EnsureDemoUsers extends Command
                 return in_array($u->phone, [$rxPhone, '777100002'], true);
             });
             if ($existingRx) {
-                // AMIAL-REAL-DATA: لا نمسّ حساباً موجوداً
+                // AMIAL-DEMO-FIX: فرض بيانات الدخول لحساب المستلِم التجريبي أيضاً.
+                $existingRx->password = Hash::make($password);
+                $existingRx->transaction_pin = Hash::make('1237');
+                $existingRx->is_active = 1;
+                $existingRx->is_kyc_verified = 1;
+                if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_tier')) {
+                    $existingRx->kyc_tier = 3;
+                }
+                $existingRx->save();
                 EMoney::firstOrCreate(
                     ['user_id' => $existingRx->id],
                     [
@@ -100,7 +120,7 @@ class EnsureDemoUsers extends Command
                         'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
                     ]
                 );
-                $this->info("✓ المستلِم التجريبي موجود مسبقاً id={$existingRx->id} — لم يُمسّ");
+                $this->info("✓ المستلِم التجريبي موجود — فُرضت بيانات الدخول id={$existingRx->id}");
                 goto after_recipient;
             }
             $recipient = new User();

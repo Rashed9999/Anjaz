@@ -138,8 +138,12 @@ class CustomerWithdrawService
                 throw new RuntimeException('انتهت صلاحية العملية');
             }
 
-            // مطابقة معرّف العميل (دفاع في العمق ضد الخطأ المطبعي/الوكيل)
-            if (!$this->identifierMatches($req->customer_user_id, $identifier)) {
+            // AMIAL-WITHDRAW-FIX: رقم العملية (op_code) هو المُصرّح الفعلي. تأكيد
+            // الهوية اختياري (دفاع في العمق) — يُطابَق فقط إن أدخله الوكيل، ولا
+            // يمنع تنفيذ عملية صحيحة. سابقاً كان إجبارياً ويقارن الهاتف حرفياً
+            // (777… ≠ 967777…) فيرمي خطأً ولا تُسجَّل المعاملة إطلاقاً.
+            $identifier = trim($identifier);
+            if ($identifier !== '' && !$this->identifierMatches($req->customer_user_id, $identifier)) {
                 throw new RuntimeException('معرّف العميل لا يطابق صاحب العملية');
             }
 
@@ -274,7 +278,11 @@ class CustomerWithdrawService
         $customer = User::find($customerId);
         if (!$customer) return false;
 
-        if ($customer->phone === $identifier) return true;
+        // AMIAL-WITHDRAW-FIX: توحيد صيغة الهاتف — الوكيل قد يُدخل الرقم المحلّي
+        // (777…) بينما المخزَّن بصيغة الدولة (967777…). نطابق كل الصيغ المكافئة.
+        $inputVariants = \App\Support\Phone::variants($identifier);
+        $storedVariants = !empty($customer->phone) ? \App\Support\Phone::variants($customer->phone) : [];
+        if (array_intersect($inputVariants, $storedVariants)) return true;
         if (!empty($customer->account_number) && $customer->account_number === $identifier) return true;
 
         // ملاحظة: الهوية الوطنية تُخزَّن مجزّأة في سجلّات الفحص لا كحقل عميل موثوق،

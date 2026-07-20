@@ -127,7 +127,10 @@ class CustomerWithdrawController extends Controller
         }
         $v = Validator::make($request->all(), [
             'op_code' => 'required|string|max:16',
-            'identifier' => 'required|string|max:32', // هاتف أو رقم حساب العميل
+            // AMIAL-WITHDRAW-FIX: المُصرّح الفعلي هو رقم العملية (أنشأه العميل على
+            // جهازه، صالح ٤٥ دقيقة، والمبلغ محجوز سلفاً). تأكيد الهوية اختياري —
+            // إن أُدخل يُطابَق بعد توحيد صيغة الهاتف، وإلا يُنفَّذ بالرمز وحده.
+            'identifier' => 'nullable|string|max:32',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -135,7 +138,7 @@ class CustomerWithdrawController extends Controller
             $result = $this->service->execute(
                 $request->user(),
                 $request->input('op_code'),
-                $request->input('identifier'),
+                (string) $request->input('identifier', ''),
             );
         } catch (\RuntimeException $e) {
             return $this->error('WITHDRAW_EXECUTE_FAILED', $e->getMessage(), 422);

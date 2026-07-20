@@ -130,8 +130,10 @@ class _AgentCashOutScreenState extends State<AgentCashOutScreen> {
   }
 
   Future<void> _execute() async {
+    // AMIAL-WITHDRAW-FIX: رمز العملية هو المُصرّح الفعلي (أنشأه العميل على جهازه،
+    // صالح ٤٥ دقيقة، والمبلغ محجوز). تأكيد الهوية اختياري — لا يمنع تنفيذ عملية
+    // صحيحة. سابقاً كان إجبارياً فيفشل الصرف ولا تُسجَّل المعاملة.
     final identifier = _identifierCtrl.text.trim();
-    if (identifier.length < 4) { _snack('أدخل هاتف/رقم حساب العميل للتأكيد'); return; }
     setState(() => _busy = true);
     try {
       final r = await _repo.withdrawExecute(_codeCtrl.text.trim(), identifier);
@@ -266,14 +268,17 @@ class _AgentCashOutScreenState extends State<AgentCashOutScreen> {
         ]),
       ),
       const SizedBox(height: 16),
-      const Text('تأكيد هوية العميل قبل الصرف:',
+      const Text('تأكيد هوية العميل (اختياري):',
           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 4),
+      const Text('رمز العملية وحده كافٍ للصرف. أدخل الهاتف/رقم الحساب فقط إن أردت تأكيداً إضافياً.',
+          style: TextStyle(fontSize: 11.5, color: AmyalColors.textSecondary)),
       const SizedBox(height: 8),
       TextField(
         controller: _identifierCtrl,
         keyboardType: TextInputType.text,
         decoration: const InputDecoration(
-          labelText: 'هاتف العميل أو رقم حسابه',
+          labelText: 'هاتف العميل أو رقم حسابه — اختياري',
           prefixIcon: Icon(Icons.badge_outlined),
           border: OutlineInputBorder(),
         ),

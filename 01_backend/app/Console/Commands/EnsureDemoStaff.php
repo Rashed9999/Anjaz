@@ -91,6 +91,20 @@ class EnsureDemoStaff extends Command
                     || in_array($u->phone, [$phone, '777900001'], true);
             });
             if ($agent) {
+                // AMIAL-DEMO-FIX: نفرض بيانات الدخول للوكيل التجريبي (سرّ/رمز/
+                // تفعيل/دور) دون المساس بالرصيد — وإلا فشل الدخول بسرّ قديم.
+                $agent->password = Hash::make(self::PASSWORD);
+                $agent->is_active = 1;
+                if (Schema::hasColumn('users', 'transaction_pin')) {
+                    $agent->transaction_pin = Hash::make('1237');
+                }
+                if (Schema::hasColumn('users', 'role') && $agent->role !== 'agent') {
+                    $agent->role = 'agent';
+                }
+                if (Schema::hasColumn('users', 'agent_number') && empty($agent->agent_number)) {
+                    $agent->agent_number = $agentNumber;
+                }
+                $agent->save();
                 EMoney::firstOrCreate(
                     ['user_id' => $agent->id],
                     [
@@ -102,7 +116,7 @@ class EnsureDemoStaff extends Command
                         'version' => 1,
                     ]
                 );
-                $this->info("✓ وكيل تجريبي موجود مسبقاً — لم يُمسّ");
+                $this->info("✓ وكيل تجريبي موجود — فُرضت بيانات الدخول");
                 return;
             }
             $agent = new User();
