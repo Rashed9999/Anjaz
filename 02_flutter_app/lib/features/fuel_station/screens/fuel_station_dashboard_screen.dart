@@ -182,6 +182,13 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
                       );
                     })),
                   ],
+                  // AMIAL-REPORTS-HOURLY-001: مبيعات الوقود بالساعة + الذروة
+                  if (d?['by_hour'] != null && (d!['by_hour'] as List).isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    _fuelHourly(d),
+                  ],
                 ]),
               );
             }),
@@ -265,6 +272,60 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
     if (value == null) return '0';
     final n = double.tryParse(value.toString()) ?? 0;
     return n.toStringAsFixed(n == n.roundToDouble() ? 0 : 2);
+  }
+
+  String _hourLabel(dynamic h) {
+    final hr = h is int ? h : int.tryParse('$h') ?? 0;
+    final h12 = hr % 12 == 0 ? 12 : hr % 12;
+    return '$h12 ${hr < 12 ? 'ص' : 'م'}';
+  }
+
+  // AMIAL-REPORTS-HOURLY-001 — مبيعات الوقود بالساعة (مخطط 24 ساعة + الذروة).
+  Widget _fuelHourly(Map d) {
+    final byHour = (d['by_hour'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final peak = d['peak_hour'];
+    double amt(Map h) => double.tryParse('${h['total']}') ?? 0;
+    final maxT = byHour.fold<double>(0, (a, h) => amt(h) > a ? amt(h) : a);
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [
+        const Text('المبيعات بالساعة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        const Spacer(),
+        if (peak != null && maxT > 0)
+          Text('الذروة: ${_hourLabel(peak)} • ${_fmt(d['peak_hour_total'])} ر.ي',
+              style: const TextStyle(fontSize: 11.5, color: AmyalColors.yellowDark, fontWeight: FontWeight.bold)),
+      ]),
+      const SizedBox(height: 8),
+      if (maxT <= 0)
+        const Text('لا مبيعات اليوم بعد', style: TextStyle(color: AmyalColors.textSecondary, fontSize: 12))
+      else
+        SizedBox(
+          height: 78,
+          child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: byHour.map((h) {
+            final t = amt(h);
+            final hh = h['hour'] as int;
+            final barH = maxT > 0 ? (t / maxT) * 60.0 : 0.0;
+            final isPeak = peak != null && hh == peak;
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 1),
+                child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  Container(
+                    height: (t > 0 && barH < 3) ? 3 : barH,
+                    decoration: BoxDecoration(
+                      color: isPeak ? AmyalColors.yellowDark : AmyalColors.primary.withValues(alpha: t > 0 ? 0.85 : 0.0),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  if (hh % 6 == 0)
+                    Text('$hh', style: const TextStyle(fontSize: 8, color: AmyalColors.textMuted)),
+                ]),
+              ),
+            );
+          }).toList()),
+        ),
+    ]);
   }
 
   // ====== المناوبة الحالية (تصميم #105/#106) ======

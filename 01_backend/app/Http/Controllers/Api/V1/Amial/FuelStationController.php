@@ -561,6 +561,31 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
             ->with('product:id,name')
             ->get();
 
+        // AMIAL-REPORTS-HOURLY-001: توزيع مبيعات الوقود على 24 ساعة + ساعة الذروة.
+        $byHourRaw = (clone $q)
+            ->selectRaw('HOUR(created_at) as h, COUNT(*) as c, SUM(total_amount) as total, SUM(liters) as liters')
+            ->groupBy('h')
+            ->get()
+            ->keyBy('h');
+
+        $byHour = [];
+        $peakHour = null;
+        $peakTotal = 0.0;
+        for ($h = 0; $h < 24; $h++) {
+            $row = $byHourRaw->get($h);
+            $total = $row ? (float) $row->total : 0.0;
+            $byHour[] = [
+                'hour' => $h,
+                'count' => $row ? (int) $row->c : 0,
+                'total' => (string) ($row->total ?? '0'),
+                'liters' => (string) ($row->liters ?? '0'),
+            ];
+            if ($total > $peakTotal) {
+                $peakTotal = $total;
+                $peakHour = $h;
+            }
+        }
+
         return $this->ok([
             'today' => [
                 'total_liters' => $totalLiters,
@@ -568,6 +593,9 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
                 'sales_count' => $countSales,
                 'by_payment' => $byMethod,
                 'by_product' => $byProduct,
+                'by_hour' => $byHour,
+                'peak_hour' => $peakHour,
+                'peak_hour_total' => (string) $peakTotal,
             ],
         ]);
     }
