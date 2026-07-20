@@ -386,8 +386,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     );
   }
 
-  void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+  void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red),
       );
 
   @override
