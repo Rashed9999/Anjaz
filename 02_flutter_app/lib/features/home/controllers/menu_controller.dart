@@ -1,6 +1,6 @@
 import 'package:amyal_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amyal_pay/features/home/screens/amial_customer_home_screen.dart';
-import 'package:amyal_pay/features/notification/screens/notification_screen.dart';
+import 'package:amyal_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amyal_pay/features/setting/screens/profile_screen.dart';
 
 import 'package:flutter/material.dart';
@@ -20,7 +20,7 @@ class MenuItemController extends GetxController implements GetxService{
   final List<Widget> screen = [
     const AmialCustomerHomeScreen(),
     const ReceiptsListScreen(),
-    const NotificationScreen(),
+    const NotificationsCenterScreen(),
     const ProfileScreen()
   ];
 

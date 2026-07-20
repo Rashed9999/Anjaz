@@ -17,7 +17,7 @@ import 'package:amyal_pay/features/history/screens/history_screen.dart';
 import 'package:amyal_pay/features/home/screens/home_screen.dart';
 import 'package:amyal_pay/features/access/screens/home_dispatcher_screen.dart';
 import 'package:amyal_pay/features/language/screens/change_language_screen.dart';
-import 'package:amyal_pay/features/notification/screens/notification_screen.dart';
+import 'package:amyal_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amyal_pay/features/onboarding/screens/on_boarding_sceen.dart';
 import 'package:amyal_pay/features/setting/screens/profile_screen.dart';
 import 'package:amyal_pay/features/setting/widgets/change_pin_screen.dart';
@@ -152,7 +152,7 @@ class RouteHelper {
             transactionType: utf8.decode(base64Url.decode(Get.parameters['transaction-type']!.replaceAll(' ', '+'))), contactModel: ContactModel.fromJson(jsonDecode(utf8.decode(base64Url.decode(Get.parameters['contact']!)))))),
 
     GetPage(name: history, page: () => const HistoryScreen()),
-    GetPage(name: notification, page: () => const NotificationScreen()),
+    GetPage(name: notification, page: () => const NotificationsCenterScreen()),
     // GetPage(name: themeAndLanguage, page: () => ThemeAndLanguage()),
     GetPage(name: profile, page: () => const ProfileScreen()),
     GetPage(name: changePinScreen, page: () => const ChangePinScreen()),

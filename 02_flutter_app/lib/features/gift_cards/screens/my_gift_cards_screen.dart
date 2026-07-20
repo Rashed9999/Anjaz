@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/common/widgets/async_state_view.dart';
 
 /// AMIAL-GIFT-CARDS-001 — «بطاقات هديتي» (جهة العميل).
 ///
@@ -17,6 +18,7 @@ class MyGiftCardsScreen extends StatefulWidget {
 class _MyGiftCardsScreenState extends State<MyGiftCardsScreen> {
   final _api = Get.find<ApiClient>();
   bool _loading = true;
+  String? _error;
   List<Map<String, dynamic>> _cards = [];
 
   @override
@@ -26,15 +28,20 @@ class _MyGiftCardsScreenState extends State<MyGiftCardsScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() { _loading = true; _error = null; });
     try {
       final r = await _api.getData('/api/v1/amial/me/gift-cards');
       if (r.statusCode == 200 && r.body is Map) {
         _cards = (((r.body['meta'] ?? {})['cards'] ?? []) as List)
             .map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } else {
+        _error = 'تعذّر تحميل البطاقات';
       }
-    } catch (_) {}
-    finally { if (mounted) setState(() => _loading = false); }
+    } catch (_) {
+      _error = 'تعذّر الاتصال — تحقّق من الشبكة';
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   @override
@@ -42,19 +49,15 @@ class _MyGiftCardsScreenState extends State<MyGiftCardsScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(title: const Text('بطاقات هديتي'), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: _cards.isEmpty
-                  ? ListView(children: const [
-                      SizedBox(height: 120),
-                      Icon(Icons.card_giftcard, size: 56, color: AmyalColors.textSecondary),
-                      SizedBox(height: 12),
-                      Center(child: Text('لا بطاقات هدايا', style: TextStyle(color: AmyalColors.textSecondary))),
-                    ])
-                  : ListView(padding: const EdgeInsets.all(14), children: _cards.map(_card).toList()),
-            ),
+      body: AsyncStateView(
+        loading: _loading,
+        error: _error,
+        isEmpty: _cards.isEmpty,
+        emptyText: 'لا بطاقات هدايا',
+        emptyIcon: Icons.card_giftcard,
+        onRetry: _load,
+        child: ListView(padding: const EdgeInsets.all(14), children: _cards.map(_card).toList()),
+      ),
     );
   }
 

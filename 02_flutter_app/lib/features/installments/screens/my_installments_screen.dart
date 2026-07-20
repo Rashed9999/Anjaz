@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/common/widgets/async_state_view.dart';
 
 /// AMIAL-INSTALLMENTS-001 — «أقساطي» (جهة العميل).
 ///
@@ -16,6 +17,7 @@ class MyInstallmentsScreen extends StatefulWidget {
 class _MyInstallmentsScreenState extends State<MyInstallmentsScreen> {
   final _api = Get.find<ApiClient>();
   bool _loading = true;
+  String? _error;
   List<Map<String, dynamic>> _contracts = [];
 
   @override
@@ -25,15 +27,20 @@ class _MyInstallmentsScreenState extends State<MyInstallmentsScreen> {
   }
 
   Future<void> _load() async {
-    setState(() => _loading = true);
+    setState(() { _loading = true; _error = null; });
     try {
       final r = await _api.getData('/api/v1/amial/me/installments');
       if (r.statusCode == 200 && r.body is Map) {
         _contracts = (((r.body['meta'] ?? {})['contracts'] ?? []) as List)
             .map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      } else {
+        _error = 'تعذّر تحميل الأقساط';
       }
-    } catch (_) {}
-    finally { if (mounted) setState(() => _loading = false); }
+    } catch (_) {
+      _error = 'تعذّر الاتصال — تحقّق من الشبكة';
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
@@ -76,19 +83,15 @@ class _MyInstallmentsScreenState extends State<MyInstallmentsScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(title: const Text('أقساطي'),
           backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: _contracts.isEmpty
-                  ? ListView(children: const [
-                      SizedBox(height: 120),
-                      Icon(Icons.receipt_long, size: 56, color: AmyalColors.textSecondary),
-                      SizedBox(height: 12),
-                      Center(child: Text('لا توجد أقساط عليك', style: TextStyle(color: AmyalColors.textSecondary))),
-                    ])
-                  : ListView(padding: const EdgeInsets.all(12), children: _contracts.map(_card).toList()),
-            ),
+      body: AsyncStateView(
+        loading: _loading,
+        error: _error,
+        isEmpty: _contracts.isEmpty,
+        emptyText: 'لا توجد أقساط عليك',
+        emptyIcon: Icons.receipt_long,
+        onRetry: _load,
+        child: ListView(padding: const EdgeInsets.all(12), children: _contracts.map(_card).toList()),
+      ),
     );
   }
 
