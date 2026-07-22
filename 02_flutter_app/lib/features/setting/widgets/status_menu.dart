@@ -37,7 +37,7 @@ class StatusMenu extends StatelessWidget {
           GetBuilder<AuthController>(builder: (authController) {
               return GetBuilder<ProfileController>(builder: (profController) {
 
-                bool? isOn = isAuth ? (authController.biometric && authController.bioList.isNotEmpty) : profController.userInfo!.twoFactor;
+                bool? isOn = isAuth ? (authController.biometric && authController.bioList.isNotEmpty) : (profController.userInfo?.twoFactor ?? false);
                return profController.isLoading ? Center(child: Text('off'.tr))
                    : Text(isOn! ? 'on'.tr : 'off'.tr);
 
@@ -70,7 +70,7 @@ class TwoFactorShimmer extends StatelessWidget {
             Text('two_factor_authentication'.tr,style: rubikRegular.copyWith(fontSize: Dimensions.fontSizeLarge)),
             const Spacer(),
 
-            GetBuilder<ProfileController>(builder: (profController)=> profController.isLoading ? Center(child: Text('off'.tr)) : Text(profController.userInfo!.twoFactor! ? 'on'.tr : 'off'.tr)),
+            GetBuilder<ProfileController>(builder: (profController)=> profController.isLoading ? Center(child: Text('off'.tr)) : Text((profController.userInfo?.twoFactor ?? false) ? 'on'.tr : 'off'.tr)),
 
           ]),
         ),

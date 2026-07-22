@@ -87,7 +87,7 @@ class _TransactionDetailsBottomSheetWidgetState extends State<TransactionDetails
           break;
 
         default:
-          userPhone = transactions?.userInfo!.phone;
+          userPhone = transactions?.userInfo?.phone;
       }
 
 
@@ -110,7 +110,7 @@ class _TransactionDetailsBottomSheetWidgetState extends State<TransactionDetails
           break;
 
         default:
-          userName = transactions!.userInfo!.name;
+          userName = (transactions?.userInfo?.name ?? '');
       }
 
 

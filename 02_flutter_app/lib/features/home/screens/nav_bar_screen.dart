@@ -8,12 +8,7 @@ import 'package:amyal_pay/features/favorite_number/controllers/fav_number_contro
 import 'package:amyal_pay/features/history/controllers/transaction_history_controller.dart';
 import 'package:amyal_pay/features/home/controllers/menu_controller.dart';
 import 'package:amyal_pay/features/home/domain/enums/nav_bar_page_enum.dart';
-import 'package:amyal_pay/features/home/widgets/bottom_item_widget.dart';
-import 'package:amyal_pay/features/home/widgets/floating_action_button_widget.dart';
 import 'package:amyal_pay/features/home/widgets/show_case/showcaseview.dart';
-import 'package:amyal_pay/helper/custom_extension_helper.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
 
 class NavBarScreen extends StatefulWidget {
   final String? selectedPage;
@@ -75,52 +70,53 @@ class _NavBarScreenState extends State<NavBarScreen> {
               FirebaseMessaging.instance.requestPermission();
             }
           },
+          // AMIAL-NAV-002: شريط تنقّل بتصميم «المحفظة» — أبيض بحواف علوية
+          // مستديرة + زرّ مسح QR عائم في المنتصف (أزرق بحلقة صفراء). لا فكّ
+          // إجباري لألوان الثيم (كان bodyLarge!.color! مصدر رمادية محتملاً).
           builder : (context) => Scaffold(
-            backgroundColor: Theme.of(context).bottomNavigationBarTheme.selectedItemColor,
+            backgroundColor: const Color(0xFFF2F3F7),
             body: PageStorage(bucket: bucket, child: menuController.screen[menuController.currentTabIndex]),
 
-            floatingActionButton: FloatingActionButtonWidget(
-              strokeWidth: 1.5,
-              radius: 50,
-              gradient: LinearGradient(
-                colors: context.customThemeColors.floatingGradientColor,
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
+            floatingActionButton: Container(
+              width: 62, height: 62,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFFECA1E), width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF053391).withValues(alpha: 0.35),
+                    blurRadius: 14, offset: const Offset(0, 5),
+                  ),
+                ],
               ),
               child: FloatingActionButton(
                 shape: const CircleBorder(),
-                backgroundColor: Theme.of(context).colorScheme.secondary,
-                elevation: 1,
+                backgroundColor: const Color(0xFF053391),
+                elevation: 0,
                 onPressed: ()=> Get.to(()=> const CameraScreen(
                   fromEditProfile: false, isBarCodeScan: true, isHome: true,
                 )),
-                child: Padding(
-                  padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),
-                  child: Image.asset(Images.scannerIcon),
-                ),
+                child: const Icon(Icons.qr_code_scanner_rounded,
+                    color: Colors.white, size: 27),
               ),
             ),
 
             floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
 
             bottomNavigationBar: Container(
-              padding: EdgeInsets.only(top: Dimensions.paddingSizeDefault,
-                bottom: padding.bottom > 15 ? 0 : Dimensions.paddingSizeDefault,
+              padding: EdgeInsets.only(top: 10,
+                bottom: padding.bottom > 15 ? 0 : 10,
               ),
               decoration: BoxDecoration(
-                color: Theme.of(context).canvasColor,
+                color: Colors.white,
                 borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Theme.of(context).textTheme.bodyLarge!.color!.withValues(alpha:0.14),
-                    blurRadius: 80, offset: const Offset(0, 20),
-                  ),
-                  BoxShadow(
-                    color: Theme.of(context).textTheme.bodyLarge!.color!.withValues(alpha:0.20),
-                    blurRadius: 0.5, offset: const Offset(0, 0),
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 20, offset: const Offset(0, -4),
                   ),
                 ],
               ),
@@ -130,46 +126,26 @@ class _NavBarScreenState extends State<NavBarScreen> {
 
                   Expanded(
                     child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-
-                      BottomItemWidget(
-                        onTap: () => menuController.selectHomePage(),
-                        icon: menuController.currentTabIndex == 0 ? Images.homeIconBold : Images.homeIcon,
-                        name: 'home'.tr,
-                        selectIndex: 0,
-                      ),
-
-                      BottomItemWidget(
-                        onTap: () {
-                          Get.find<TransactionHistoryController>().setIndex(0, reload: false);
-                          menuController.selectHistoryPage();
-                        },
-                        icon: menuController.currentTabIndex == 1
-                            ? Images.clockIconBold : Images.clockIcon,
-                        name: 'history'.tr, selectIndex: 1,
-                      ),
-
+                      _navItem(menuController, 0, Icons.home_rounded,
+                          Icons.home_outlined, 'الرئيسية',
+                          () => menuController.selectHomePage()),
+                      _navItem(menuController, 1, Icons.receipt_long_rounded,
+                          Icons.receipt_long_outlined, 'السجل', () {
+                        Get.find<TransactionHistoryController>().setIndex(0, reload: false);
+                        menuController.selectHistoryPage();
+                      }),
                     ]),
                   ),
-                  const SizedBox(width: Dimensions.paddingSizeDefault),
+                  const SizedBox(width: 56), // مساحة الزرّ العائم
 
                   Expanded(
                     child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
-
-                      BottomItemWidget(
-                        onTap: () => menuController.selectNotificationPage(),
-                        icon: menuController.currentTabIndex == 2
-                            ? Images.notificationIconBold : Images.notificationIcon,
-                        name: 'notification'.tr, selectIndex: 2,
-                      ),
-
-                      BottomItemWidget(
-                        onTap: () => menuController.selectProfilePage(),
-                        icon: menuController.currentTabIndex == 3
-                            ? Images.profileIconBold : Images.profileIcon,
-                        name: 'profile'.tr,
-                        selectIndex: 3,
-                      ),
-
+                      _navItem(menuController, 2, Icons.notifications_rounded,
+                          Icons.notifications_none_rounded, 'الإشعارات',
+                          () => menuController.selectNotificationPage()),
+                      _navItem(menuController, 3, Icons.person_rounded,
+                          Icons.person_outline_rounded, 'حسابي',
+                          () => menuController.selectProfilePage()),
                     ]),
                   ),
 
@@ -180,6 +156,32 @@ class _NavBarScreenState extends State<NavBarScreen> {
         ),
       );
     });
+  }
+
+  /// عنصر تبويب حديث: أيقونة Material + تسمية، بألوان هوية أميال.
+  Widget _navItem(MenuItemController c, int index, IconData selectedIcon,
+      IconData icon, String label, VoidCallback onTap) {
+    final selected = c.currentTabIndex == index;
+    const active = Color(0xFF053391);
+    const inactive = Color(0xFF8B97A8);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(selected ? selectedIcon : icon,
+              size: 24, color: selected ? active : inactive),
+          const SizedBox(height: 3),
+          Text(label,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                color: selected ? active : inactive,
+              )),
+        ]),
+      ),
+    );
   }
 
   NavBarPageEnum _getNavPageEnum(String? page){

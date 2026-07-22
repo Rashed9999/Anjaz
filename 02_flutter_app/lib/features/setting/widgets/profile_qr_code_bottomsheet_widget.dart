@@ -45,7 +45,7 @@ class ProfileQRCodeBottomSheetWidget extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(50.0),
                 decoration: BoxDecoration(shape: BoxShape.circle, color: Theme.of(context).colorScheme.secondary),
-                child: SvgPicture.string(controller.userInfo!.qrCode!,height: size.width*0.4,width: size.width*0.4),
+                child: SvgPicture.string((controller.userInfo?.qrCode ?? '<svg/>'),height: size.width*0.4,width: size.width*0.4),
               ),
             );
           }),
@@ -61,7 +61,7 @@ class ProfileQRCodeBottomSheetWidget extends StatelessWidget {
                   textSize: Dimensions.fontSizeLarge,
                   textColor: Theme.of(context).textTheme.bodyLarge!.color,
                   backgroundColor: Theme.of(context).colorScheme.secondary,
-                  onTap: () => Get.find<ShareController>().qrCodeDownloadAndShare(qrCode: Get.find<ProfileController>().userInfo!.qrCode!, phoneNumber: Get.find<ProfileController>().userInfo!.phone!,isShare: false),
+                  onTap: () => Get.find<ShareController>().qrCodeDownloadAndShare(qrCode: (Get.find<ProfileController>().userInfo?.qrCode ?? ''), phoneNumber: (Get.find<ProfileController>().userInfo?.phone ?? ''),isShare: false),
                 ),
                 /*child: Container(
                   alignment: Alignment.center,
@@ -84,7 +84,7 @@ class ProfileQRCodeBottomSheetWidget extends StatelessWidget {
                   textSize: Dimensions.fontSizeLarge,
                   textColor: Theme.of(context).cardColor,
                   backgroundColor: Theme.of(context).textTheme.titleLarge!.color,
-                  onTap: () => Get.find<ShareController>().qrCodeDownloadAndShare(qrCode: Get.find<ProfileController>().userInfo!.qrCode!, phoneNumber: Get.find<ProfileController>().userInfo!.phone!,isShare: true),
+                  onTap: () => Get.find<ShareController>().qrCodeDownloadAndShare(qrCode: (Get.find<ProfileController>().userInfo?.qrCode ?? ''), phoneNumber: (Get.find<ProfileController>().userInfo?.phone ?? ''),isShare: true),
                 ),
                 /*child: InkWell(
                   onTap: (){

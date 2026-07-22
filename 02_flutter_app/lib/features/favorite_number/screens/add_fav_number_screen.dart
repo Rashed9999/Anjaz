@@ -226,7 +226,7 @@ class _AddFavNumberScreenState extends State<AddFavNumberScreen> {
   void _addNumber() async {
     final enteredFavNumber = '$_countryCode${phoneNumberTextController.text}';
 
-    if(Get.find<ProfileController>().userInfo!.phone == enteredFavNumber){
+    if(Get.find<ProfileController>().userInfo?.phone == enteredFavNumber){
       showCustomSnackBarHelper('you_can_not_add_your_own_number'.tr);
       return;
     }

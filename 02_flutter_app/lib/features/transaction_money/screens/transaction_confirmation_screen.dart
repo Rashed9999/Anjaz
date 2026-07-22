@@ -190,7 +190,7 @@ class TransactionConfirmationScreen extends StatelessWidget {
                                     _placeWithdrawRequest();
                                   }
                                   else if(configModel!.twoFactor!
-                                      && Get.find<ProfileController>().userInfo!.twoFactor!
+                                      && (Get.find<ProfileController>().userInfo?.twoFactor ?? false)
                                   ){
                                     Get.find<AuthController>().checkOtp().then((value) =>
                                     value.isOk ? Get.defaultDialog(

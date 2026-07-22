@@ -50,7 +50,7 @@ class TransactionHistoryWidget extends StatelessWidget {
           break;
 
         default:
-          userPhone = transactions?.userInfo!.phone;
+          userPhone = transactions?.userInfo?.phone;
       }
 
 
@@ -73,7 +73,7 @@ class TransactionHistoryWidget extends StatelessWidget {
           break;
 
         default:
-          userName = transactions!.userInfo!.name;
+          userName = (transactions?.userInfo?.name ?? '');
       }
 
 

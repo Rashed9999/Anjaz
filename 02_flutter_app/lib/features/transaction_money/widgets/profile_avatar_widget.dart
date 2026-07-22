@@ -53,7 +53,7 @@ class _ProfileAvatarWidgetState extends State<ProfileAvatarWidget> {
                       fit: BoxFit.cover,
                       image: "${Get.find<SplashController>().configModel!.baseUrls!.customerImageUrl
                       }/${Get.find<ProfileController>().userInfo == null ? ''
-                          : Get.find<ProfileController>().userInfo!.image}",
+                          : (Get.find<ProfileController>().userInfo?.image ?? '')}",
                       placeholder: Images.avatar,
                     ),
                   ),
