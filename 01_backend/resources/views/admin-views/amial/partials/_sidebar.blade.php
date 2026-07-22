@@ -78,6 +78,18 @@
     <a class="nav-link" href="{{route('admin.amial.charity.page')}}" title="لوحة التبرعات">
         <span class="text-truncate">🎗️ لوحة التبرعات (الجمعيات)</span>
     </a>
+    <a class="nav-link" href="{{route('admin.amial.surface.bill-providers')}}" title="مزوّدو الفواتير">
+        <span class="text-truncate">⚡ مزوّدو الفواتير</span>
+    </a>
+    <a class="nav-link" href="{{route('admin.amial.surface.funds')}}" title="صناديق العائلة">
+        <span class="text-truncate">👨‍👩‍👧 صناديق العائلة</span>
+    </a>
+    <a class="nav-link" href="{{route('admin.amial.surface.payment-requests')}}" title="طلبات الأموال">
+        <span class="text-truncate">📨 طلبات الأموال</span>
+    </a>
+    <a class="nav-link" href="{{route('admin.amial.surface.rbac')}}" title="الصلاحيات">
+        <span class="text-truncate">🛡️ الصلاحيات (RBAC)</span>
+    </a>
     <a class="nav-link" href="{{route('admin.support-center.index')}}" title="مركز الدعم">
         <span class="text-truncate">🎧 مركز الدعم (بحث شامل)</span>
     </a>

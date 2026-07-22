@@ -12,6 +12,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class BillProvider extends Model
 {
     protected $table = 'bill_providers';
+    // AMIAL-SURFACE-002: طلبات المزوّد (للوحة الأدمن)
+    public function orders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(BillPaymentOrder::class, 'provider_id');
+    }
+
     protected $fillable = [
         'code', 'name', 'display_name_ar', 'integration_type',
         'endpoint_url', 'api_key_encrypted', 'config',

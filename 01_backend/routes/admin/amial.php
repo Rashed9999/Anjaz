@@ -75,6 +75,16 @@ Route::prefix('safe-payments')->name('safe-payments.')->group(function () {
 });
 
 // ============ AMIAL-DONATIONS-001 (v1.2) ============
+// AMIAL-SURFACE-002 — لوحات الأنظمة اليتيمة الأربع
+Route::prefix('surface')->name('surface.')->group(function () {
+    $sc = App\Http\Controllers\Admin\AdminSurfaceController::class;
+    Route::get('/bill-providers', [$sc, 'billProviders'])->name('bill-providers');
+    Route::post('/bill-providers/{id}/toggle', [$sc, 'toggleBillProvider'])->where('id', '[0-9]+')->name('bill-providers.toggle');
+    Route::get('/funds', [$sc, 'funds'])->name('funds');
+    Route::get('/payment-requests', [$sc, 'paymentRequests'])->name('payment-requests');
+    Route::get('/rbac', [$sc, 'rbac'])->name('rbac');
+});
+
 Route::prefix('charity')->name('charity.')->group(function () {
     // AMIAL-CHARITY-ADMIN-UI-001: صفحة اللوحة (الواجهة)
     Route::view('/', 'admin-views.amial.charity.index')->name('page');
