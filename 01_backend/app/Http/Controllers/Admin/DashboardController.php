@@ -73,6 +73,17 @@ class DashboardController extends Controller
                 ->first()->total_credit ?? 0;
         }
 
+        // AMIAL-ADMIN-DASH-002: عدّادات حقيقية للوحة (عملاء/وكلاء/تجار + اليوم)
+        $data['counts'] = [
+            'customers' => $this->user->where('type', 2)->count(),
+            'agents' => $this->user->where('type', 1)->count(),
+            'merchants' => $this->user->where('type', 4)->count(),
+        ];
+        $data['today'] = [
+            'tx_count' => $this->transaction->whereDate('created_at', today())->count(),
+            'tx_volume' => (float) $this->transaction->whereDate('created_at', today())->sum('debit'),
+        ];
+
         return view('admin-views.dashboard', compact('balance', 'transaction', 'data'));
     }
 
