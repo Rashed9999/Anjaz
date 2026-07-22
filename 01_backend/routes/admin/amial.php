@@ -76,6 +76,8 @@ Route::prefix('safe-payments')->name('safe-payments.')->group(function () {
 
 // ============ AMIAL-DONATIONS-001 (v1.2) ============
 Route::prefix('charity')->name('charity.')->group(function () {
+    // AMIAL-CHARITY-ADMIN-UI-001: صفحة اللوحة (الواجهة)
+    Route::view('/', 'admin-views.amial.charity.index')->name('page');
     // Organizations
     Route::get('/organizations', [AdminCharityController::class, 'indexOrgs'])->name('orgs.index');
     Route::post('/organizations', [AdminCharityController::class, 'createOrg'])->name('orgs.create');

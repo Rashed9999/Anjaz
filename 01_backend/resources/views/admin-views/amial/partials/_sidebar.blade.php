@@ -74,6 +74,13 @@
     </a>
 </li>
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/hub/settings*')?'active':''}}">
+    {{-- AMIAL-SURFACE-001: أنظمة كانت بلا لوحة --}}
+    <a class="nav-link" href="{{route('admin.amial.charity.page')}}" title="لوحة التبرعات">
+        <span class="text-truncate">🎗️ لوحة التبرعات (الجمعيات)</span>
+    </a>
+    <a class="nav-link" href="{{route('admin.support-center.index')}}" title="مركز الدعم">
+        <span class="text-truncate">🎧 مركز الدعم (بحث شامل)</span>
+    </a>
     {{-- AMIAL-BIZ-SETUP-001: إعدادات الأعمال بتبويبات (6cash-style) --}}
     <a class="nav-link" href="{{route('admin.business-settings.business-setup')}}" title="إعدادات الأعمال">
         <span class="text-truncate">🏢 إعدادات الأعمال (عام/رسوم)</span>
