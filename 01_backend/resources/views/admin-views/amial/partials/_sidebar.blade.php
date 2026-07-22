@@ -74,6 +74,10 @@
     </a>
 </li>
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/hub/settings*')?'active':''}}">
+    {{-- AMIAL-BIZ-SETUP-001: إعدادات الأعمال بتبويبات (6cash-style) --}}
+    <a class="nav-link" href="{{route('admin.business-settings.business-setup')}}" title="إعدادات الأعمال">
+        <span class="text-truncate">🏢 إعدادات الأعمال (عام/رسوم)</span>
+    </a>
     <a class="nav-link" href="{{route('admin.amial.hub.settings')}}" title="لوحة الإعدادات">
         <i class="tio-settings nav-icon"></i>
         <span class="text-truncate">⚙️ لوحة الإعدادات (بضغطة زر)</span>
