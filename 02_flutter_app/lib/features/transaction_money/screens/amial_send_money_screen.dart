@@ -17,7 +17,10 @@ import 'package:amyal_pay/util/app_constants.dart';
 /// الشاشات): بطاقة الرصيد + رقم المستلِم + المبلغ + ملاحظة + «المحوَّل لهم
 /// مؤخراً» في صفحة واحدة، ثم تصبّ في شاشة التأكيد/PIN المجرَّبة نفسها.
 class AmialSendMoneyScreen extends StatefulWidget {
-  const AmialSendMoneyScreen({super.key});
+  /// AMIAL-QUICK-SEND: رقم يُعبَّأ مسبقاً (من «تحويل سريع» في الرئيسية).
+  final String? initialPhone;
+
+  const AmialSendMoneyScreen({super.key, this.initialPhone});
 
   @override
   State<AmialSendMoneyScreen> createState() => _AmialSendMoneyScreenState();
@@ -32,6 +35,13 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
   @override
   void initState() {
     super.initState();
+    // AMIAL-QUICK-SEND: تعبئة الرقم القادم من «تحويل سريع» (بلا 967)
+    final ip = widget.initialPhone;
+    if (ip != null && ip.isNotEmpty) {
+      var ph = ip.replaceAll('+', '');
+      if (ph.startsWith('967')) ph = ph.substring(3);
+      _phoneCtrl.text = ph;
+    }
     // الرصيد + «المحوَّل لهم مؤخراً»
     try {
       final p = Get.find<ProfileController>();
