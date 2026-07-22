@@ -5,11 +5,12 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/features/auth/domain/models/user_short_data_model.dart';
 import 'package:amyal_pay/helper/route_helper.dart';
+import 'package:amyal_pay/util/app_constants.dart';
 import 'package:amyal_pay/util/images.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -63,37 +64,39 @@ class _SplashScreenState extends State<SplashScreen> with WidgetsBindingObserver
   }
 
   Future<void> _route() async {
-    // AMIAL-FIX: التطبيق كان يعلق على شاشة البداية للأبد إذا كان الخادم غير
-    // متاح (getConfigData بلا مهلة). الآن: نحاول جلب الإعدادات بمهلة قصيرة،
-    // وسواء نجح أو فشل نُكمل التوجيه ليبقى التطبيق قابلاً للاستخدام.
+    // AMIAL-STARTUP-FLOW-001: بداية سريعة واحدة.
+    // - لا تأخير صناعي (كانت ثانية كاملة فوق سبلاش النظام = «شاشتا شعار»).
+    // - جلب الإعدادات بمهلة قصيرة، وسواء نجح أو فشل نُكمل (لا تعليق).
     try {
       await Get.find<SplashController>()
           .getConfigData()
-          .timeout(const Duration(seconds: 8));
+          .timeout(const Duration(seconds: 5));
     } catch (_) {
       // الخادم غير متاح أو بطيء — نُكمل بدل التعليق.
     }
-
-    await Future.delayed(const Duration(seconds: 1));
 
     try {
       await Get.find<SplashController>().initSharedData();
     } catch (_) {/* تجاهل — بيانات محلية */}
 
-    UserShortDataModel? userData = Get.find<AuthController>().getUserData();
-    final config = Get.find<SplashController>().configModel;
+    if (!mounted) return;
 
-    // AMIAL: كل المسارات تؤدّي لدخول أميال باي الموحّد — لا لشاشة PIN القديمة
-    // (6cash). المستخدم العائد (userData موجود) يذهب مباشرةً للدخول الموحّد؛
-    // الجديد يمرّ باختيار اللغة ثمّ الدخول الموحّد.
-    if (userData != null && config?.companyName != null) {
-      if (GetPlatform.isAndroid) {
-        try { await FirebaseMessaging.instance.requestPermission(); } catch (_) {}
-      }
-      Get.offNamed(RouteHelper.getUnifiedLoginRoute());
-    } else {
+    // AMIAL-STARTUP-FLOW-001: شاشة اللغة تظهر «أول تشغيل فقط» — علامتها وجود
+    // language_code المحفوظ عند أيّ اختيار سابق. كانت تظهر لكل غير مسجّل دخول
+    // (وكل مرة يفشل فيها جلب الإعداد) — وهذا خطأ تدفّق لا علاقة له بالحساب.
+    final prefs = Get.find<SharedPreferences>();
+    final languageChosen = prefs.containsKey(AppConstants.languageCode);
+
+    if (!languageChosen) {
       Get.offNamed(RouteHelper.getChoseLanguageRoute());
+      return;
     }
+
+    if (GetPlatform.isAndroid &&
+        Get.find<AuthController>().getUserData() != null) {
+      try { await FirebaseMessaging.instance.requestPermission(); } catch (_) {}
+    }
+    Get.offNamed(RouteHelper.getUnifiedLoginRoute());
   }
 
   @override

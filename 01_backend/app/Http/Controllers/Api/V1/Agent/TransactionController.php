@@ -44,7 +44,7 @@ class TransactionController extends Controller
             'amount' => 'required|min:0|not_in:0',
         ],
             [
-                'amount.not_in' => translate('Amount must be greater than zero!'),
+                'amount.not_in' => translate('المبلغ يجب أن يكون أكبر من صفر'),
             ]);
 
         if ($validator->fails()) {
@@ -54,31 +54,31 @@ class TransactionController extends Controller
         $sendMoneyStatus = Helpers::get_business_settings('send_money_status');
 
         if (!$sendMoneyStatus)
-            return response()->json(['message' => translate('send money feature is not activate')], 403);
+            return response()->json(['message' => translate('خدمة تحويل المال غير مفعّلة حالياً')], 403);
 
         // AMIAL-FIX: طابِق كل صيغ الرقم (بلا/مع رمز الدولة) كما تفعل شاشة التحقّق
         // — كان المطابقة الحرفية تفشل فيظهر «Receiver not found» رغم وجود العميل.
         $user = $this->user->whereIn('phone', Phone::variants($request->phone))->first();
 
         if (!isset($user))
-            return response()->json(['message' => translate('Receiver not found')], 403);
+            return response()->json(['message' => translate('المستلِم غير موجود — تحقّق من الرقم')], 403);
 
         $receiverPhone = $user->phone; // الرقم كما هو مخزَّن (للاستخدامات اللاحقة)
 
         if($user->is_kyc_verified != 1)
-            return response()->json(['message' => translate('Receiver is not verified')], 403);
+            return response()->json(['message' => translate('حساب المستلِم غير موثّق')], 403);
 
         if($request->user()->is_kyc_verified != 1)
-            return response()->json(['message' => translate('Complete your account verification')], 403);
+            return response()->json(['message' => translate('أكمل توثيق حسابك أولاً')], 403);
 
         if ($request->user()->phone == $receiverPhone)
-            return response()->json(['message' => translate('Transaction should not with own number')], 400);
+            return response()->json(['message' => translate('لا يمكن إجراء المعاملة على رقمك نفسه')], 400);
 
         if($user->type != 2)
-            return response()->json(['message' => translate('Receiver must be a user')], 400);
+            return response()->json(['message' => translate('المستلِم يجب أن يكون عميلاً')], 400);
 
         if (!Helpers::pin_check($request->user()->id, $request->pin))
-            return response()->json(['message' => translate('PIN is incorrect')], 403);
+            return response()->json(['message' => translate('رمز PIN غير صحيح')], 403);
 
         $sendMoneyLimit = Helpers::get_business_settings('agent_send_money_limit');
 
@@ -103,7 +103,7 @@ class TransactionController extends Controller
             $transactionLimit->update();
         }
 
-        if (is_null($customerTransaction)) return response()->json(['message' => translate('failed')], 501);
+        if (is_null($customerTransaction)) return response()->json(['message' => translate('فشلت العملية')], 501);
         return response()->json(['message' => 'success', 'transaction_id' => $customerTransaction], 200);
     }
 
@@ -117,7 +117,7 @@ class TransactionController extends Controller
             'note' => '',
         ],
             [
-                'amount.not_in' => translate('Amount must be greater than zero!'),
+                'amount.not_in' => translate('المبلغ يجب أن يكون أكبر من صفر'),
             ]);
 
         if ($validator->fails()) {
@@ -127,21 +127,21 @@ class TransactionController extends Controller
         $sendMoneyRequestStatus = Helpers::get_business_settings('send_money_request_status');
 
         if (!$sendMoneyRequestStatus)
-            return response()->json(['message' => translate('request money feature is not activate')], 403);
+            return response()->json(['message' => translate('خدمة طلب المال غير مفعّلة حالياً')], 403);
 
         $user = $this->user->where('type', 0)->first();
         $receiverPhone = $user->phone;
 
         if (!isset($user))
-            return response()->json(['message' => 'Receiver not found'], 403);
+            return response()->json(['message' => 'المستلِم غير موجود — تحقّق من الرقم'], 403);
 
         if($request->user()->is_kyc_verified != 1)
-            return response()->json(['message' => 'Complete your account verification'], 403);
+            return response()->json(['message' => 'أكمل توثيق حسابك أولاً'], 403);
 
         if ($request->user()->phone == $receiverPhone)
-            return response()->json(['message' => 'Transaction should not with own number'], 400);
+            return response()->json(['message' => 'لا يمكن إجراء المعاملة على رقمك نفسه'], 400);
         if($user->type !=  ADMIN_TYPE)
-            return response()->json(['message' => 'Receiver must be an admin'], 400);
+            return response()->json(['message' => 'المستلِم يجب أن يكون مديراً'], 400);
 
         $sendMoneyRequestLimit = Helpers::get_business_settings('agent_send_money_request_limit');
 
@@ -195,10 +195,10 @@ class TransactionController extends Controller
         $addMoneyStatus = Helpers::get_business_settings('add_money_status');
 
         if (!$addMoneyStatus)
-            return response()->json(['message' => translate('add money feature is not activate')], 403);
+            return response()->json(['message' => translate('خدمة إضافة الرصيد غير مفعّلة حالياً')], 403);
 
         if($request->user()->is_kyc_verified != 1) {
-            return response()->json(['message' => 'Complete your account verification'], 403);
+            return response()->json(['message' => 'أكمل توثيق حسابك أولاً'], 403);
         }
 
         $amount = $request->amount;
@@ -207,7 +207,7 @@ class TransactionController extends Controller
 
         $adminEmoney = $this->eMoney->where('user_id', Helpers::get_admin_id())->first();
         if($adminEmoney && $totalAmount > $adminEmoney->current_balance) {
-            return response()->json(['message' => translate('The amount is too big. Please contact with admin')], 403);
+            return response()->json(['message' => translate('المبلغ كبير جداً — تواصل مع الإدارة')], 403);
         }
 
         $addMoneyLimit = Helpers::get_business_settings('agent_add_money_limit');
@@ -372,7 +372,7 @@ class TransactionController extends Controller
             'withdrawal_method_fields' => 'required',
         ],
             [
-                'amount.not_in' => translate('Amount must be greater than zero!'),
+                'amount.not_in' => translate('المبلغ يجب أن يكون أكبر من صفر'),
             ]);
 
         if ($validator->fails()) {
@@ -382,10 +382,10 @@ class TransactionController extends Controller
         $withdrawRequestStatus = Helpers::get_business_settings('withdraw_request_status');
 
         if (!$withdrawRequestStatus)
-            return response()->json(['message' => translate('withdraw request feature is not activate')], 403);
+            return response()->json(['message' => translate('خدمة طلب السحب غير مفعّلة حالياً')], 403);
 
         if($request->user()->is_kyc_verified != 1) {
-            return response()->json(['message' => translate('Your account is not verified, Complete your account verification')], 403);
+            return response()->json(['message' => translate('حسابك غير موثّق — أكمل توثيق حسابك أولاً')], 403);
         }
 
         $withdrawalMethod = $this->withdrawalMethod->find($request->withdrawal_method_id);
@@ -424,7 +424,7 @@ class TransactionController extends Controller
 
         $agentEmoney = $this->eMoney->where('user_id', $request->user()->id)->first();
         if ($agentEmoney->current_balance < $totalAmount) {
-            return response()->json(['message' => translate('Your account do not have enough balance')], 403);
+            return response()->json(['message' => translate('رصيدك غير كافٍ')], 403);
         }
 
         $agentEmoney->current_balance -= $totalAmount;
