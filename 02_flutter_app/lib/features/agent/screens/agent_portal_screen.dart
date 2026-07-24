@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/agent/controllers/agent_portal_controller.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// AMIAL-AGENT-PORTAL-001 — لوحة ويب الوكيل (مدير شركة الصرافة من الكمبيوتر).
 ///
@@ -83,12 +84,12 @@ class _AgentPortalScreenState extends State<AgentPortalScreen> {
 
   Widget _kpiGrid(int cols) {
     final items = [
-      _kpi('الرصيد (السيولة)', '${c.currentFloat.value} ر.ي', Icons.account_balance_wallet, AmyalColors.primary),
-      _kpi('إيداعات اليوم', '${_t('cash_in_total')} ر.ي', Icons.south_west, Colors.green.shade700),
-      _kpi('سحوبات اليوم', '${_t('cash_out_total')} ر.ي', Icons.north_east, Colors.orange.shade800),
+      _kpi('الرصيد (السيولة)', '${AmialMoney.fmt(c.currentFloat.value)} ر.ي', Icons.account_balance_wallet, AmyalColors.primary),
+      _kpi('إيداعات اليوم', '${AmialMoney.fmt(_t('cash_in_total'))} ر.ي', Icons.south_west, Colors.green.shade700),
+      _kpi('سحوبات اليوم', '${AmialMoney.fmt(_t('cash_out_total'))} ر.ي', Icons.north_east, Colors.orange.shade800),
       _kpi('عدد العمليات', _t('transaction_count'), Icons.swap_horiz, Colors.blue.shade700),
-      _kpi('العمولة/الأرباح', '${_t('commission_earned')} ر.ي', Icons.savings, AmyalColors.yellowDark),
-      _kpi('شحن اليوم', '${_t('topup_total')} ر.ي', Icons.add_card, Colors.teal),
+      _kpi('العمولة/الأرباح', '${AmialMoney.fmt(_t('commission_earned'))} ر.ي', Icons.savings, AmyalColors.yellowDark),
+      _kpi('شحن اليوم', '${AmialMoney.fmt(_t('topup_total'))} ر.ي', Icons.add_card, Colors.teal),
     ];
     return GridView.count(
       crossAxisCount: cols,
@@ -159,12 +160,12 @@ class _AgentPortalScreenState extends State<AgentPortalScreen> {
             const SizedBox(width: 8),
             const Text('الرصيد الحالي', style: TextStyle(fontWeight: FontWeight.bold)),
             const Spacer(),
-            Text('${c.currentFloat.value} ر.ي',
+            Text('${AmialMoney.fmt(c.currentFloat.value)} ر.ي',
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
           ]),
           if (remaining != null) ...[
             const SizedBox(height: 6),
-            Text('المتبقّي من حدّ الإيداع اليومي: $remaining ر.ي',
+            Text('المتبقّي من حدّ الإيداع اليومي: ${AmialMoney.fmt(remaining)} ر.ي',
                 style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
           ],
           const SizedBox(height: 12),
@@ -214,7 +215,7 @@ class _AgentPortalScreenState extends State<AgentPortalScreen> {
       title: Text(isTopup ? 'شحن رصيد' : 'خصم/تسوية', style: const TextStyle(fontSize: 14)),
       subtitle: Text((s['created_at'] ?? '').toString().split('T').first, style: const TextStyle(fontSize: 11)),
       trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Text('${s['amount']} ر.ي', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        Text('${AmialMoney.fmt(s['amount'])} ر.ي', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
         Text(status, style: TextStyle(color: statusColor, fontSize: 11)),
       ]),
     );

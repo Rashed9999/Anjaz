@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/async_state_view.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// AMIAL-INSTALLMENTS-001 — «أقساطي» (جهة العميل).
 ///
@@ -53,7 +54,7 @@ class _MyInstallmentsScreenState extends State<MyInstallmentsScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('سداد قسط'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('المتبقّي: ${c['remaining']} ر.ي', style: const TextStyle(fontWeight: FontWeight.bold)),
+          Text('المتبقّي: ${AmialMoney.fmt(c['remaining'])} ر.ي', style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           TextField(controller: amountCtrl, keyboardType: TextInputType.number, textAlign: TextAlign.center,
               decoration: const InputDecoration(labelText: 'المبلغ', suffixText: 'ر.ي', border: OutlineInputBorder())),
@@ -118,14 +119,14 @@ class _MyInstallmentsScreenState extends State<MyInstallmentsScreen> {
                 backgroundColor: AmyalColors.background, color: AmyalColors.primary)),
         const SizedBox(height: 8),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('سُدّد: $paid ر.ي', style: const TextStyle(fontSize: 12)),
-          Text('متبقٍّ: ${c['remaining']} ر.ي',
+          Text('سُدّد: ${AmialMoney.fmt(paid)} ر.ي', style: const TextStyle(fontSize: 12)),
+          Text('متبقٍّ: ${AmialMoney.fmt(c['remaining'])} ر.ي',
               style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
         ]),
         if (!done) ...[
           const SizedBox(height: 10),
           FilledButton.icon(onPressed: () => _pay(c), icon: const Icon(Icons.account_balance_wallet),
-              label: Text('سداد قسط (${c['monthly_amount']} ر.ي)'),
+              label: Text('سداد قسط (${AmialMoney.fmt(c['monthly_amount'])} ر.ي)'),
               style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(46))),
         ],
       ]),

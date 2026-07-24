@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/restaurant/screens/restaurant_order_screen.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// AMIAL-RESTAURANT-001 — لوحة المطعم: الطاولات + شاشة المطبخ.
 class RestaurantScreen extends StatefulWidget {
@@ -170,7 +171,7 @@ class _RestaurantScreenState extends State<RestaurantScreen> with SingleTickerPr
           Text(occupied ? 'مشغولة' : 'متاحة',
               style: TextStyle(fontSize: 11, color: occupied ? AmyalColors.red : const Color(0xFF2E7D32))),
           if (occupied && order != null)
-            Text('${order['total']} ر.ي', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+            Text('${AmialMoney.fmt(order['total'])} ر.ي', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
         ]),
       ),
     );

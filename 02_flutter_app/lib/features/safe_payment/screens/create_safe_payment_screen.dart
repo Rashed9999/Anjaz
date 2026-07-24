@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/features/safe_payment/controllers/safe_payment_controller.dart';
 import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
 class CreateSafePaymentScreen extends StatefulWidget {
@@ -43,7 +44,7 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              'سيتم خصم ${_amountCtrl.text} ر.ي من حسابك وحجزه حتى تأكيد الاستلام.',
+              'سيتم خصم ${AmialMoney.fmt(_amountCtrl.text)} ر.ي من حسابك وحجزه حتى تأكيد الاستلام.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 12),

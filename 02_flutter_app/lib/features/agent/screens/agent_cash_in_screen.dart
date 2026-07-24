@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/features/agent/controllers/agent_controller.dart';
 import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// AMIAL-AGENT-APP-001 (v1.6)
 ///
@@ -101,7 +102,7 @@ class _AgentCashInScreenState extends State<AgentCashInScreen> {
             const SizedBox(height: 4),
             Text('رقم الجوال: ${_phoneCtrl.text}'),
             const SizedBox(height: 4),
-            Text('المبلغ: ${_amountCtrl.text} ر.ي',
+            Text('المبلغ: ${AmialMoney.fmt(_amountCtrl.text)} ر.ي',
                 style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: AmyalColors.primary,
@@ -140,7 +141,7 @@ class _AgentCashInScreenState extends State<AgentCashInScreen> {
           icon: const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 56),
           title: const Text('تمت العملية'),
           content: Text(
-            'تم إيداع ${_amountCtrl.text} ر.ي للعميل $_customerName',
+            'تم إيداع ${AmialMoney.fmt(_amountCtrl.text)} ر.ي للعميل $_customerName',
             textAlign: TextAlign.center,
           ),
           actions: [

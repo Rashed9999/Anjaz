@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/agent/domain/repositories/agent_repo.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// AMIAL-AGENT-NETWORK-001 (v2.4)
 ///
@@ -82,7 +83,7 @@ class _AgentFloatScreenState extends State<AgentFloatScreen> {
           const Text('الرصيد المتاح (السيولة)',
               style: TextStyle(color: Colors.white70, fontSize: 13)),
           const SizedBox(height: 4),
-          Text('$float ر.ي',
+          Text('${AmialMoney.fmt(float)} ر.ي',
               style: const TextStyle(
                   color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
@@ -96,7 +97,7 @@ class _AgentFloatScreenState extends State<AgentFloatScreen> {
               children: [
                 const Icon(Icons.trending_up, color: Colors.white70, size: 18),
                 const SizedBox(width: 8),
-                Text('المتبقي من حد الإيداع اليومي: $remaining ر.ي',
+                Text('المتبقي من حد الإيداع اليومي: ${AmialMoney.fmt(remaining)} ر.ي',
                     style: const TextStyle(color: Colors.white, fontSize: 12)),
               ],
             ),
@@ -143,16 +144,16 @@ class _AgentFloatScreenState extends State<AgentFloatScreen> {
           const Text('حركة اليوم',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           const SizedBox(height: 16),
-          _row('إيداعات للعملاء', '${today['cash_in_total'] ?? 0} ر.ي',
+          _row('إيداعات للعملاء', '${AmialMoney.fmt(today['cash_in_total'] ?? 0)} ر.ي',
               Icons.arrow_downward, const Color(0xFF10B981)),
           const Divider(height: 24),
-          _row('سحوبات من العملاء', '${today['cash_out_total'] ?? 0} ر.ي',
+          _row('سحوبات من العملاء', '${AmialMoney.fmt(today['cash_out_total'] ?? 0)} ر.ي',
               Icons.arrow_upward, const Color(0xFFEF4444)),
           const Divider(height: 24),
-          _row('شراء رصيد', '${today['topup_total'] ?? 0} ر.ي',
+          _row('شراء رصيد', '${AmialMoney.fmt(today['topup_total'] ?? 0)} ر.ي',
               Icons.add_card, AmyalColors.primary),
           const Divider(height: 24),
-          _row('العمولة', '${today['commission_earned'] ?? 0} ر.ي',
+          _row('العمولة', '${AmialMoney.fmt(today['commission_earned'] ?? 0)} ر.ي',
               Icons.star, AmyalColors.yellow),
           const Divider(height: 24),
           _row('عدد العمليات', '${today['transaction_count'] ?? 0}',

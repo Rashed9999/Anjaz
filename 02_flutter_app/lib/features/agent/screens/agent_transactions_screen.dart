@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/features/agent/controllers/agent_controller.dart';
 import 'package:amyal_pay/features/agent/domain/models/agent_models.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// AMIAL-AGENT-APP-001 (v1.6)
 class AgentTransactionsScreen extends StatefulWidget {
@@ -181,7 +182,7 @@ class _TransactionTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '${isIn ? "+" : "-"}${transaction.amount} ر.ي',
+                  '${isIn ? "+" : "-"}${AmialMoney.fmt(transaction.amount)} ر.ي',
                   style: TextStyle(fontWeight: FontWeight.bold, color: color),
                 ),
                 Container(

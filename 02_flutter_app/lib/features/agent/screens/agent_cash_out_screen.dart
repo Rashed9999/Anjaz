@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/features/agent/domain/repositories/agent_repo.dart';
 import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// AMIAL-WD-CODE-001 — صرف سحب العميل برمز العملية.
 ///
@@ -145,7 +146,7 @@ class _AgentCashOutScreenState extends State<AgentCashOutScreen> {
           builder: (ctx) => AlertDialog(
             icon: const Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 56),
             title: const Text('تم الصرف بنجاح', textAlign: TextAlign.center),
-            content: Text('انتقل $_amount ر.ي إلى محفظتك. سلّم العميل الكاش الآن.',
+            content: Text('انتقل ${AmialMoney.fmt(_amount)} ر.ي إلى محفظتك. سلّم العميل الكاش الآن.',
                 textAlign: TextAlign.center),
             actions: [
               FilledButton(
@@ -247,7 +248,7 @@ class _AgentCashOutScreenState extends State<AgentCashOutScreen> {
         child: Column(children: [
           const Text('مبلغ السحب', style: TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
           const SizedBox(height: 4),
-          Text('$_amount ر.ي',
+          Text('${AmialMoney.fmt(_amount)} ر.ي',
               style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
           const Divider(height: 26),
           _row('العميل', _customerName),

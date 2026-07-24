@@ -5,6 +5,7 @@ import 'package:amyal_pay/features/safe_payment/domain/models/safe_payment_model
 import 'package:amyal_pay/features/safe_payment/screens/create_safe_payment_screen.dart';
 import 'package:amyal_pay/features/safe_payment/screens/safe_payment_detail_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
 class MySafePaymentsScreen extends StatefulWidget {
@@ -156,7 +157,7 @@ class _PaymentTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(
-            '${payment.amount} ر.ي',
+            '${AmialMoney.fmt(payment.amount)} ر.ي',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
           if (payment.isDisputed)

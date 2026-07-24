@@ -7,6 +7,7 @@ import 'package:amyal_pay/features/agent/screens/agent_float_screen.dart';
 import 'package:amyal_pay/features/agent/screens/agent_portal_screen.dart';
 import 'package:amyal_pay/features/agent/screens/agent_transactions_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// AMIAL-AGENT-APP-001 (v1.6)
 class AgentDashboardScreen extends StatefulWidget {
@@ -107,7 +108,7 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
                                   style: TextStyle(color: Colors.white70, fontSize: 12)),
                               const SizedBox(height: 2),
                               Text(
-                                '${ctrl.stats.value.balance} ر.ي',
+                                '${AmialMoney.fmt(ctrl.stats.value.balance)} ر.ي',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 22,
@@ -175,21 +176,21 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
                       const SizedBox(height: 16),
                       _StatRow(
                         label: 'إيداعات للعملاء',
-                        value: '${ctrl.stats.value.todayCashIn} ر.ي',
+                        value: '${AmialMoney.fmt(ctrl.stats.value.todayCashIn)} ر.ي',
                         icon: Icons.arrow_downward,
                         color: const Color(0xFF10B981),
                       ),
                       const Divider(height: 24),
                       _StatRow(
                         label: 'سحوبات من العملاء',
-                        value: '${ctrl.stats.value.todayCashOut} ر.ي',
+                        value: '${AmialMoney.fmt(ctrl.stats.value.todayCashOut)} ر.ي',
                         icon: Icons.arrow_upward,
                         color: const Color(0xFFEF4444),
                       ),
                       const Divider(height: 24),
                       _StatRow(
                         label: 'العمولة',
-                        value: '${ctrl.stats.value.todayCommission} ر.ي',
+                        value: '${AmialMoney.fmt(ctrl.stats.value.todayCommission)} ر.ي',
                         icon: Icons.star,
                         color: AmyalColors.yellow,
                       ),

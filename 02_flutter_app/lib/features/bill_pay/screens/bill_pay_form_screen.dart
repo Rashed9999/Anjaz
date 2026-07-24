@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/features/bill_pay/controllers/bill_pay_controller.dart';
 import 'package:amyal_pay/features/bill_pay/domain/models/bill_pay_models.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// AMIAL-BILL-PAY-001 (v0.9-D)
 ///
@@ -82,7 +83,7 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                order.isSuccess ? 'تم خصم ${order.totalDebited} ر.ي من حسابك. ستجد الإيصال في قائمة الإيصالات.' :
+                order.isSuccess ? 'تم خصم ${AmialMoney.fmt(order.totalDebited)} ر.ي من حسابك. ستجد الإيصال في قائمة الإيصالات.' :
                 order.isPending ? 'العملية أُرسلت للمزود. ستحصل على تأكيد قريباً.' :
                 'لم تنجح العملية. المبلغ أعيد لحسابك.',
                 textAlign: TextAlign.center,
@@ -248,7 +249,7 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
                 if (_selectedProduct != null) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'الرسوم: ${_selectedProduct!.feeAmount} ر.ي',
+                    'الرسوم: ${AmialMoney.fmt(_selectedProduct!.feeAmount)} ر.ي',
                     style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary),
                   ),
                 ],

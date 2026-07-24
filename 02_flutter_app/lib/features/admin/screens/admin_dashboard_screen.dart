@@ -4,6 +4,7 @@ import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/admin/controllers/admin_controller.dart';
 import 'package:amyal_pay/features/admin/screens/subscriptions_management_screen.dart';
 import 'package:amyal_pay/features/admin/screens/settings_center_screen.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// CRITICAL-001-ADMIN — لوحة الإدارة الموحّدة.
 ///
@@ -333,7 +334,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             Text(agent['phone']?.toString() ?? '',
                 style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
           ])),
-          Text('${s['amount']} ر.ي',
+          Text('${AmialMoney.fmt(s['amount'])} ر.ي',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
         ]),
         if (method.isNotEmpty) ...[
@@ -473,7 +474,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(width: 8),
             Expanded(child: Text(isPositive ? 'فائض' : 'عجز',
                 style: TextStyle(color: isPositive ? Colors.green : Colors.red, fontWeight: FontWeight.bold))),
-            Text('${v['variance_amount']} ر.ي',
+            Text('${AmialMoney.fmt(v['variance_amount'])} ر.ي',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold,
                     color: isPositive ? Colors.green : Colors.red)),
           ]),
