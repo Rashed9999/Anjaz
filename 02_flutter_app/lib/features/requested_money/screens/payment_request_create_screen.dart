@@ -72,6 +72,30 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
         SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
       );
 
+  /// AMYAL-DS-001: شريحة مبلغ سريع — تملأ حقل المبلغ بضغطة.
+  Widget _amountChip(int v) {
+    return InkWell(
+      onTap: () {
+        _amount.text = v.toString();
+        setState(() {});
+      },
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: AmyalColors.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AmyalColors.primary.withValues(alpha: 0.18)),
+        ),
+        child: Text(AmialMoney.fmt(v),
+            style: const TextStyle(
+                color: AmyalColors.primary,
+                fontWeight: FontWeight.w600,
+                fontSize: 13)),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -104,6 +128,16 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
                 onChanged: (_) => setState(() {}), // تحديث معاينة الطلب
               )),
             ]),
+          ),
+          const SizedBox(height: 10),
+          // AMYAL-DS-001: مبالغ سريعة بضغطة (كالمرجع).
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 8,
+            runSpacing: 8,
+            children: const [500, 1000, 2000, 5000, 10000, 20000]
+                .map((v) => _amountChip(v))
+                .toList(),
           ),
           const SizedBox(height: 20),
 
