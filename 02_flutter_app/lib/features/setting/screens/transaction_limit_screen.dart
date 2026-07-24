@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/common/widgets/custom_asset_image_widget.dart';
-import 'package:amyal_pay/common/widgets/rounded_button_widget.dart';
-import 'package:amyal_pay/features/language/controllers/localization_controller.dart';
-import 'package:amyal_pay/common/models/config_model.dart';
 import 'package:amyal_pay/features/setting/domain/models/profile_model.dart';
 import 'package:amyal_pay/helper/custom_extension_helper.dart';
 import 'package:amyal_pay/helper/price_converter_helper.dart';
-import 'package:amyal_pay/helper/route_helper.dart';
-import 'package:amyal_pay/util/app_constants.dart';
 import 'package:amyal_pay/util/dimensions.dart';
 import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_ink_well_widget.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/no_data_widget.dart';
 
 
@@ -38,72 +33,31 @@ class _TransactionLimitScreenState extends State<TransactionLimitScreen> with Ti
 
   @override
   Widget build(BuildContext context) {
-    final String languageText = AppConstants.languages[Get.find<LocalizationController>().selectedIndex].languageName!;
-
     return DefaultTabController(
       length: tabItem.length,
       child: Scaffold(
         appBar: AppBar(
-          toolbarHeight: 60,
-          leadingWidth: 90,
-          leading: Container(
-            padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeExtraSmall),
-            margin: const EdgeInsets.symmetric(vertical: Dimensions.fontSizeDefault, horizontal: Dimensions.paddingSizeLarge),
-            child: CustomInkWellWidget(
-              onTap: ()=> Get.back(),
-              radius: Dimensions.radiusSizeSmall,
-              child: Container(
-                alignment: Alignment.center,
-                height: 40,
-                width: 35,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Theme.of(context).cardColor, width: 1),
-                  borderRadius: BorderRadius.circular(Dimensions.radiusSizeExtraSmall),
-                ),
-                child: Icon(Icons.arrow_back_ios_new, size: Dimensions.paddingSizeDefault, color: Theme.of(context).cardColor),
-              ),
-            ),
-          ),
           elevation: 0,
-          backgroundColor: Theme.of(context).primaryColor,
+          backgroundColor: AmyalColors.primary,
+          foregroundColor: Colors.white,
+          title: Text('transaction_limit'.tr),
           bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(40.0),
+            preferredSize: const Size.fromHeight(46.0),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal:Dimensions.paddingSizeLarge),
-              width: MediaQuery.of(context).size.width,
-              color: Theme.of(context).canvasColor,
+              width: double.infinity,
+              color: Colors.white,
               child: TabBar(
                 indicatorSize: TabBarIndicatorSize.tab,
-                tabAlignment: TabAlignment.start,
-                dividerHeight: 0,
                 dividerColor: Colors.transparent,
-                labelColor: Theme.of(context).textTheme.bodyLarge?.color,
-                unselectedLabelColor: Theme.of(context).hintColor.withValues(alpha: 0.6),
+                labelColor: AmyalColors.primary,
+                unselectedLabelColor: AmyalColors.textMuted,
+                indicatorColor: AmyalColors.primary,
+                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 controller: tabController,
-                isScrollable: true,
-                padding: EdgeInsets.zero,
-                labelPadding: const EdgeInsets.symmetric(
-                  horizontal: Dimensions.paddingSizeSmall,
-                  vertical: Dimensions.paddingSizeSmall,
-                ),
-                indicatorColor: Theme.of(context).textTheme.bodyLarge?.color,
-                tabs: tabItem.map((e) => Tab(text: e.tr, height: 20)).toList(),
+                tabs: tabItem.map((e) => Tab(text: e.tr)).toList(),
               ),
             ),
           ),
-          title: Text('transaction_limit'.tr, style: rubikRegular.copyWith(color: Colors.white, fontSize: Dimensions.fontSizeExtraLarge)),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),
-              child: RoundedButtonWidget(
-                buttonText: languageText,
-                isSkip: true,
-                onTap: AppConstants.languages.length > 1 ? (){
-                  Get.toNamed(RouteHelper.getChoseLanguageRoute());
-                } : null,
-              ),
-            ),
-          ],
         ),
 
         body: widget.transactionTableModelList.isNotEmpty ? Padding(
