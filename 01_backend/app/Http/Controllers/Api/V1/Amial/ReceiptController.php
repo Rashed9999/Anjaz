@@ -113,25 +113,22 @@ class ReceiptController extends Controller
             $qrUrl = 'data:image/svg+xml;base64,' . base64_encode($svg);
         } catch (\Throwable $e) { /* بلا QR — نعرض الرمز نصّاً فقط */ }
 
-        if (!class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
-            return $this->error('PDF_UNAVAILABLE', 'PDF engine not installed', 500);
-        }
-
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('receipts.thermal', [
+        // AMIAL-FIX(PDF-RTL): mPDF بدل DomPDF — تشكيل الحروف العربية وترتيبها.
+        $html = view('receipts.thermal', [
             'receipt' => $receipt,
             'user' => $receipt->user,
             'counterparty' => $receipt->counterparty,
             'qrUrl' => $qrUrl,
             'width' => $width,
             'widthMm' => $widthMm,
-        ])->setPaper([0, 0, $width, 900]); // ارتفاع سخيّ (رول حراري يُقصّ)
+        ])->render();
+
+        $content = \App\Support\ArabicPdf::render($html, [
+            'format' => \App\Support\ArabicPdf::thermalFormat($widthMm),
+            'margin' => 3,
+        ]);
 
         $receipt->incrementDownloadCount();
-
-        // AMIAL-FIX(PDF-2): ردّ كامل بطول معلوم بدل البثّ (انظر invoice).
-        @ini_set('memory_limit', '512M');
-        @set_time_limit(120);
-        $content = $pdf->output();
 
         return response($content, 200, [
             'Content-Type' => 'application/pdf',
@@ -190,7 +187,9 @@ class ReceiptController extends Controller
         $content = Cache::get($cacheKey);
 
         if ($content === null) {
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('receipts.a4-invoice', [
+            // AMIAL-FIX(PDF-RTL): كان DomPDF يعرض العربية أحرفاً منفصلة ومقلوبة
+            // (لا يدعم تشكيل الحروف ولا bidi). mPDF يشكّل ويصل ويعيد الترتيب.
+            $html = view('receipts.a4-invoice', [
                 'receipt' => $receipt,
                 'user' => $receipt->user,
                 'counterparty' => $receipt->counterparty,
@@ -198,11 +197,11 @@ class ReceiptController extends Controller
                 'businessName' => $businessName,
                 'amountWords' => $this->amountInArabicWords((float) $receipt->net_amount),
                 'items' => $items,
-            ])->setPaper('a4', 'portrait');
+            ])->render();
 
-            @ini_set('memory_limit', '512M');
-            @set_time_limit(120);
-            $content = $pdf->output();
+            // هامش 0 هنا: القالب يضبط @page margin بنفسه — وإضافة هامش ثانٍ
+            // تُضاعفه فيفيض المحتوى إلى صفحة إضافية فارغة.
+            $content = \App\Support\ArabicPdf::render($html, ["format" => "A4", "margin" => 14]);
 
             try {
                 Cache::put($cacheKey, $content, now()->addMinutes(15));

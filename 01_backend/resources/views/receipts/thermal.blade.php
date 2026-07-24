@@ -5,7 +5,7 @@
 <head>
 <meta charset="utf-8">
 <style>
-    @page { margin: 4pt 5pt; }
+
     * { font-family: 'DejaVu Sans', monospace; }
     body { width: {{ $width - 12 }}pt; color:#000; font-size: {{ $widthMm >= 80 ? '10' : '8.5' }}px; line-height:1.35; }
     .c { text-align:center; }

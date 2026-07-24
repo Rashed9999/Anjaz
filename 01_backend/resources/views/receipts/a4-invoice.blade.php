@@ -20,7 +20,9 @@
     <meta charset="UTF-8">
     <title>فاتورة {{ $receipt->receipt_number }}</title>
     <style>
-        @page { margin: 14mm 14mm; size: A4 portrait; }
+        /* AMIAL-FIX(PDF-RTL): أُزيلت @page — مُحرّك mPDF يضبط المقاس
+           والهوامش. وجودها هنا كان يُربك مُقسِّم الصفحات فيولّد مئات
+           الصفحات الفارغة (رُصد: 356 صفحة لإيصال واحد). */
         * { box-sizing: border-box; }
         body {
             font-family: 'DejaVu Sans', sans-serif;
