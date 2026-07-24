@@ -13,8 +13,8 @@
 --}}
 
 <li class="nav-item">
-    <small class="nav-subtitle text-uppercase fw-bold" title="{{ translate('Amial Pay Section') }}">
-        Amial Pay
+    <small class="nav-subtitle text-uppercase fw-bold" title="{{ 'قسم أميال باي' }}">
+        أميال باي
     </small>
 </li>
 
@@ -138,9 +138,9 @@
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/executive*')?'active':''}}">
     <a class="nav-link"
        href="{{route('admin.amial.executive.index')}}"
-       title="{{translate('Executive Dashboard')}}">
+       title="{{'لوحة القيادة التنفيذية'}}">
         <i class="tio-chart-bar-1 nav-icon"></i>
-        <span class="text-truncate">{{translate('Executive Dashboard')}}</span>
+        <span class="text-truncate">{{'لوحة القيادة التنفيذية'}}</span>
     </a>
 </li>
 
@@ -148,9 +148,9 @@
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/zones*')?'active':''}}">
     <a class="nav-link"
        href="{{route('admin.amial.zones.index')}}"
-       title="{{translate('Zone Management')}}">
+       title="{{'إدارة المناطق'}}">
         <i class="tio-globe nav-icon"></i>
-        <span class="text-truncate">{{translate('Zone Management')}}</span>
+        <span class="text-truncate">{{'إدارة المناطق'}}</span>
     </a>
 </li>
 
@@ -158,9 +158,9 @@
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/fees*')?'active':''}}">
     <a class="nav-link"
        href="{{route('admin.amial.fees.index')}}"
-       title="{{translate('Fee & Profit Control')}}">
+       title="{{'التحكّم بالرسوم والأرباح'}}">
         <i class="tio-percent nav-icon"></i>
-        <span class="text-truncate">{{translate('Fee & Profit Control')}}</span>
+        <span class="text-truncate">{{'التحكّم بالرسوم والأرباح'}}</span>
     </a>
 </li>
 
@@ -168,9 +168,9 @@
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/legal*')?'active':''}}">
     <a class="nav-link"
        href="{{route('admin.amial.legal.index')}}"
-       title="{{translate('Legal Terms')}}">
+       title="{{'الشروط القانونية'}}">
         <i class="tio-document-text nav-icon"></i>
-        <span class="text-truncate">{{translate('Legal Terms')}}</span>
+        <span class="text-truncate">{{'الشروط القانونية'}}</span>
     </a>
 </li>
 
@@ -178,9 +178,9 @@
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/recovery*')?'active':''}}">
     <a class="nav-link"
        href="{{route('admin.amial.recovery.index')}}"
-       title="{{translate('Account Recovery')}}">
+       title="{{'استعادة الحسابات'}}">
         <i class="tio-shield-outlined nav-icon"></i>
-        <span class="text-truncate">{{translate('Account Recovery')}}</span>
+        <span class="text-truncate">{{'استعادة الحسابات'}}</span>
         @if(isset($pending_recovery_count) && $pending_recovery_count > 0)
             <span class="badge badge-soft-warning rounded-pill ms-auto">{{ $pending_recovery_count }}</span>
         @endif
@@ -191,9 +191,9 @@
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/security-events*')?'active':''}}">
     <a class="nav-link"
        href="{{route('admin.amial.security-events.index')}}"
-       title="{{translate('Security Events')}}">
+       title="{{'أحداث الأمان'}}">
         <i class="tio-warning nav-icon"></i>
-        <span class="text-truncate">{{translate('Security Events')}}</span>
+        <span class="text-truncate">{{'أحداث الأمان'}}</span>
     </a>
 </li>
 
@@ -201,9 +201,9 @@
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/audit*')?'active':''}}">
     <a class="nav-link"
        href="{{route('admin.amial.audit.index')}}"
-       title="{{translate('System Audit Log')}}">
+       title="{{'سجلّ تدقيق النظام'}}">
         <i class="tio-search nav-icon"></i>
-        <span class="text-truncate">{{translate('System Audit Log')}}</span>
+        <span class="text-truncate">{{'سجلّ تدقيق النظام'}}</span>
     </a>
 </li>
 
@@ -211,8 +211,8 @@
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/sentinel*')?'active':''}}">
     <a class="nav-link"
        href="{{route('admin.amial.sentinel.index')}}"
-       title="{{translate('Security Sentinel')}}">
+       title="{{'حارس الأمان'}}">
         <i class="tio-security nav-icon"></i>
-        <span class="text-truncate">{{translate('Security Sentinel')}}</span>
+        <span class="text-truncate">{{'حارس الأمان'}}</span>
     </a>
 </li>

@@ -6,7 +6,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>@yield('title', translate('Admin')) — {{ Helpers::get_business_settings('business_name') ?? 'Amial Pay' }}</title>
+    <title>@yield('title', 'الإدارة') — {{ Helpers::get_business_settings('business_name') ?? 'Amial Pay' }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
     <style>
         body { background:#f4f6fa; }
@@ -29,23 +29,23 @@
             <ul class="nav nav-pills nav-vertical card-navbar-nav flex-column gap-1">
                 <li class="nav-item {{ Request::is('admin') ? 'active' : '' }}">
                     <a class="nav-link" href="{{ route('admin.dashboard') }}" data-testid="nav-dashboard">
-                        <i class="tio-home nav-icon"></i>{{ translate('Dashboard') }}
+                        <i class="tio-home nav-icon"></i>{{ 'لوحة التحكم' }}
                     </a>
                 </li>
                 @includeIf('admin-views.amial.partials._sidebar')
                 <li class="nav-item {{ Request::is('admin/support-center') ? 'active' : '' }}">
                     <a class="nav-link" href="{{ url('admin/support-center') }}" data-testid="nav-support-center">
-                        <i class="tio-headset nav-icon"></i>{{ translate('Operations Console') }}
+                        <i class="tio-headset nav-icon"></i>{{ 'مركز العمليات' }}
                     </a>
                 </li>
                 <li class="nav-item {{ Request::is('admin/maintenance') ? 'active' : '' }}">
                     <a class="nav-link" href="{{ url('admin/maintenance') }}" data-testid="nav-maintenance">
-                        <i class="tio-settings nav-icon"></i>{{ translate('Initial Maintenance') }}
+                        <i class="tio-settings nav-icon"></i>{{ 'وضع الصيانة' }}
                     </a>
                 </li>
                 <li class="nav-item mt-3">
                     <a class="nav-link" href="{{ route('admin.auth.logout') }}" data-testid="nav-logout">
-                        <i class="tio-logout nav-icon"></i>{{ translate('Logout') }}
+                        <i class="tio-logout nav-icon"></i>{{ 'تسجيل الخروج' }}
                     </a>
                 </li>
             </ul>
@@ -54,8 +54,8 @@
         <!-- المحتوى -->
         <main class="col-lg-10 col-md-9 p-4">
             <header class="d-flex justify-content-between align-items-center mb-4">
-                <h4 class="m-0" data-testid="page-title">@yield('title', translate('Admin'))</h4>
-                <span class="text-muted small">{{ auth('user')->user()?->f_name ?? translate('Admin') }}</span>
+                <h4 class="m-0" data-testid="page-title">@yield('title', 'الإدارة')</h4>
+                <span class="text-muted small">{{ auth('user')->user()?->f_name ?? 'الإدارة' }}</span>
             </header>
 
             @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
