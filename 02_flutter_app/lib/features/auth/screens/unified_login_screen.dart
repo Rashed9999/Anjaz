@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/auth/controllers/unified_auth_controller.dart';
 import 'package:amyal_pay/features/auth/screens/amial_registration_wizard_screen.dart';
@@ -10,14 +11,54 @@ import 'package:amyal_pay/features/setting/screens/support_screen.dart';
 import 'package:amyal_pay/features/language/screens/change_language_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/util/images.dart';
+import 'package:amyal_pay/common/widgets/amial_button.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-/// AMIAL-UNIFIED-AUTH-001 (v1.5)
+/// AMIAL-UNIFIED-AUTH-002 — شاشة دخول واحدة بقائمة نوع الحساب.
 ///
-/// شاشة تسجيل دخول موحدة لكل الأدوار:
-///   - عميل (Customer): هوية + هاتف + كلمة مرور
-///   - تاجر (Merchant): رقم تاجر + هاتف + كلمة مرور + رقم POS اختياري
-///   - وكيل (Agent): رقم وكيل + كلمة مرور → OTP
+/// بدل أربعة تبويبات منفصلة، أصبحت الشاشة نموذجاً واحداً:
+///   • قائمة منسدلة تختار نوع الحساب (عميل / تاجر / نقطة بيع / وكيل / أدمن).
+///   • الأساس دائماً: المُعرِّف + كلمة المرور — وتظهر حقول إضافية حسب النوع
+///     احتراماً لعقد الخادم (التاجر يحتاج رقم تاجر، نقطة البيع تحتاج رقمها،
+///     الوكيل يدخل برقم الوكيل ثم OTP، الأدمن بالبريد).
+///   • صندوق «بيانات تجريبية» أسفل النموذج يُعبّئ الحقول بضغطة حسب النوع.
+enum AccountKind { customer, merchant, pos, agent, admin }
+
+extension _KindMeta on AccountKind {
+  String get label => switch (this) {
+        AccountKind.customer => 'عميل',
+        AccountKind.merchant => 'تاجر',
+        AccountKind.pos => 'نقطة بيع',
+        AccountKind.agent => 'وكيل',
+        AccountKind.admin => 'أدمن',
+      };
+
+  IconData get icon => switch (this) {
+        AccountKind.customer => Icons.person,
+        AccountKind.merchant => Icons.store,
+        AccountKind.pos => Icons.point_of_sale,
+        AccountKind.agent => Icons.business_center,
+        AccountKind.admin => Icons.admin_panel_settings_outlined,
+      };
+
+  Color get color => switch (this) {
+        AccountKind.customer => const Color(0xFF053391),
+        AccountKind.merchant => const Color(0xFF1B9E4B),
+        AccountKind.pos => const Color(0xFF0E7C7B),
+        AccountKind.agent => const Color(0xFFE08A00),
+        AccountKind.admin => const Color(0xFFB3261E),
+      };
+
+  /// وصف قصير يوضّح لمن هذا النوع.
+  String get hint => switch (this) {
+        AccountKind.customer => 'محفظتك الشخصية: تحويل، فواتير، سحب',
+        AccountKind.merchant => 'حساب المتجر الرئيسي',
+        AccountKind.pos => 'دخول موظّف على نقطة بيع تابعة لتاجر',
+        AccountKind.agent => 'وكيل الإيداع والسحب النقدي',
+        AccountKind.admin => 'لوحة إدارة المنصّة',
+      };
+}
+
 class UnifiedLoginScreen extends StatefulWidget {
   const UnifiedLoginScreen({super.key});
 
@@ -25,380 +66,719 @@ class UnifiedLoginScreen extends StatefulWidget {
   State<UnifiedLoginScreen> createState() => _UnifiedLoginScreenState();
 }
 
-class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
+  final _formKey = GlobalKey<FormState>();
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-  }
+  AccountKind _kind = AccountKind.customer;
+
+  final _phoneCtrl = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  final _merchantNumCtrl = TextEditingController();
+  final _posNumCtrl = TextEditingController();
+  final _agentNumCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _otpCtrl = TextEditingController();
+
+  bool _obscure = true;
+  bool _otpStep = false;
+  String _maskedPhone = '';
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _phoneCtrl.dispose();
+    _passwordCtrl.dispose();
+    _merchantNumCtrl.dispose();
+    _posNumCtrl.dispose();
+    _agentNumCtrl.dispose();
+    _emailCtrl.dispose();
+    _otpCtrl.dispose();
     super.dispose();
   }
+
+  void _switchKind(AccountKind k) {
+    setState(() {
+      _kind = k;
+      _otpStep = false;
+      _otpCtrl.clear();
+    });
+  }
+
+  // ============================================================
+  // الإرسال — يوجّه لكل دور حسب عقد الخادم
+  // ============================================================
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    final ctrl = Get.find<UnifiedAuthController>();
+    bool ok = false;
+
+    switch (_kind) {
+      case AccountKind.customer:
+        ok = await ctrl.loginCustomer(
+          nationalId: '',
+          phone: _phoneCtrl.text.trim(),
+          password: _passwordCtrl.text,
+        );
+        if (ok && mounted) {
+          // AMIAL-BIO-001: اعرض «تفعيل الدخول السريع» مرّة بعد أوّل دخول ناجح
+          try {
+            if (!await AmialBiometricSetupScreen.isEnabled()) {
+              await Get.to(() => AmialBiometricSetupScreen(
+                    phone: _phoneCtrl.text.trim(),
+                    password: _passwordCtrl.text,
+                  ));
+            }
+          } catch (_) {}
+        }
+        break;
+
+      case AccountKind.merchant:
+        ok = await ctrl.loginMerchant(
+          merchantNumber: _merchantNumCtrl.text.trim(),
+          phone: _phoneCtrl.text.trim(),
+          password: _passwordCtrl.text,
+        );
+        break;
+
+      case AccountKind.pos:
+        ok = await ctrl.loginMerchant(
+          merchantNumber: _merchantNumCtrl.text.trim(),
+          phone: _phoneCtrl.text.trim(),
+          password: _passwordCtrl.text,
+          posNumber: _posNumCtrl.text.trim(),
+        );
+        break;
+
+      case AccountKind.agent:
+        final masked = await ctrl.loginAgentStep1(
+          agentNumber: _agentNumCtrl.text.trim(),
+          password: _passwordCtrl.text,
+        );
+        if (masked != null && mounted) {
+          setState(() {
+            _otpStep = true;
+            _maskedPhone = masked;
+          });
+          return; // ننتظر إدخال الرمز
+        }
+        ok = false;
+        break;
+
+      case AccountKind.admin:
+        ok = await ctrl.loginAdmin(
+          email: _emailCtrl.text.trim(),
+          password: _passwordCtrl.text,
+        );
+        break;
+    }
+
+    if (!mounted) return;
+    if (ok) {
+      ctrl.navigateToHomeForRole();
+    } else {
+      _error(ctrl.lastError.value.isNotEmpty
+          ? ctrl.lastError.value
+          : 'فشل تسجيل الدخول');
+    }
+  }
+
+  Future<void> _submitOtp() async {
+    if (_otpCtrl.text.trim().length != 6) {
+      _error('الرمز 6 أرقام');
+      return;
+    }
+    final ctrl = Get.find<UnifiedAuthController>();
+    final ok = await ctrl.loginAgentStep2(_otpCtrl.text.trim());
+    if (!mounted) return;
+    if (ok) {
+      ctrl.navigateToHomeForRole();
+    } else {
+      _error(ctrl.lastError.value.isNotEmpty ? ctrl.lastError.value : 'رمز غير صحيح');
+    }
+  }
+
+  /// AMIAL-BIO-001: دخول ببصمة الإصبع (للعميل فقط).
+  Future<void> _bioLogin() async {
+    try {
+      if (!await AmialBiometricSetupScreen.isEnabled()) {
+        _error('فعّل الدخول السريع أولاً بالدخول بكلمة المرور');
+        return;
+      }
+      final auth = LocalAuthentication();
+      final okBio = await auth.authenticate(
+        localizedReason: 'الدخول إلى أميال باي',
+        biometricOnly: true,
+        persistAcrossBackgrounding: true,
+      );
+      if (!okBio || !mounted) return;
+      final creds = await AmialBiometricSetupScreen.savedCredentials();
+      if (creds == null) return;
+      final ctrl = Get.find<UnifiedAuthController>();
+      final ok = await ctrl.loginCustomer(
+          nationalId: '', phone: creds.$1, password: creds.$2);
+      if (!mounted) return;
+      if (ok) {
+        ctrl.navigateToHomeForRole();
+      } else {
+        _error(ctrl.lastError.value);
+      }
+    } catch (_) {
+      _error('تعذّر التحقق الحيوي');
+    }
+  }
+
+  void _error(String m) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+    );
+  }
+
+  // ============================================================
+  // بيانات تجريبية حسب النوع
+  // ============================================================
+  List<_Demo> get _demos => switch (_kind) {
+        AccountKind.customer => [
+            _Demo('عميل تجريبي', () {
+              _phoneCtrl.text = '777100001';
+              _passwordCtrl.text = 'Pass@2026';
+            }),
+            _Demo('مستلِم للتحويل', () {
+              _phoneCtrl.text = '777100002';
+              _passwordCtrl.text = 'Pass@2026';
+            }),
+          ],
+        AccountKind.merchant || AccountKind.pos => [
+            _Demo('⛽ محطة وقود', () {
+              _merchantNumCtrl.text = 'AM-FUEL-004';
+              _phoneCtrl.text = '777200004';
+              _passwordCtrl.text = 'Pass@2026';
+            }, highlight: true),
+            _Demo('🛒 بقالة', () {
+              _merchantNumCtrl.text = 'AM-GROC-001';
+              _phoneCtrl.text = '777200001';
+              _passwordCtrl.text = 'Pass@2026';
+            }),
+            _Demo('💊 صيدلية', () {
+              _merchantNumCtrl.text = 'AM-PHAR-003';
+              _phoneCtrl.text = '777200003';
+              _passwordCtrl.text = 'Pass@2026';
+            }),
+            _Demo('🍽️ مطعم', () {
+              _merchantNumCtrl.text = 'AM-REST-002';
+              _phoneCtrl.text = '777200002';
+              _passwordCtrl.text = 'Pass@2026';
+            }),
+            _Demo('📦 جملة', () {
+              _merchantNumCtrl.text = 'AM-WHOL-005';
+              _phoneCtrl.text = '777200005';
+              _passwordCtrl.text = 'Pass@2026';
+            }),
+          ],
+        AccountKind.agent => [
+            _Demo('وكيل تجريبي', () {
+              _agentNumCtrl.text = 'AG-001';
+              _passwordCtrl.text = 'Pass@2026';
+            }),
+          ],
+        AccountKind.admin => [
+            _Demo('أدمن تجريبي', () {
+              _emailCtrl.text = 'admin@amyalpay.com';
+              _passwordCtrl.text = 'Pass@2026';
+            }),
+          ],
+      };
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       body: SafeArea(
-        child: Column(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
           children: [
-            // ====== Header ======
-            // AMYAL-UI-002: صندوق أزرق أصغر (يكفي أعلى الشاشة)، شعار أكبر في
-            // دائرة بيضاء، مع دخول متحرّك سلس. علامة الإصدار صغيرة وهادئة.
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 26, 20, 18),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [AmyalColors.primary, Color(0xFF1D4FB8)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
-              ),
-              child: TweenAnimationBuilder<double>(
-                tween: Tween<double>(begin: 0, end: 1),
-                duration: const Duration(milliseconds: 650),
-                curve: Curves.easeOut,
-                builder: (context, t, child) => Opacity(
-                  opacity: t.clamp(0.0, 1.0),
-                  child: Transform.translate(
-                    offset: Offset(0, (1 - t) * 12),
-                    child: Transform.scale(scale: 0.94 + 0.06 * t, child: child),
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.14),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Image.asset(Images.logo, height: 58, width: 58),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'أميال باي',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'دفع سريع وآمن',
-                      style: TextStyle(color: Colors.white70, fontSize: 13),
-                    ),
-                    // AMIAL-BUILD-STAMP: علامة إصدار مرئية تُقرأ تلقائياً من البناء
-                    // (package_info) — لا تتقادم أبداً. تؤكّد أن الـAPK المثبّت أحدث.
-                    const SizedBox(height: 8),
-                    const _VersionStamp(),
-                  ],
-                ),
-              ),
-            ),
-
-            // ====== Tabs ======
-            Container(
-              color: Colors.white,
-              child: TabBar(
-                controller: _tabController,
-                indicatorColor: AmyalColors.primary,
-                labelColor: AmyalColors.primary,
-                unselectedLabelColor: AmyalColors.textMuted,
-                // AMYAL-UI-002: أيقونة ملوّنة مميّزة لكل نوع حساب.
-                tabs: const [
-                  Tab(icon: Icon(Icons.person, color: Color(0xFF053391)), text: 'عميل'),
-                  Tab(icon: Icon(Icons.store, color: Color(0xFF1B9E4B)), text: 'تاجر'),
-                  Tab(icon: Icon(Icons.business_center, color: Color(0xFFE08A00)), text: 'وكيل'),
-                  Tab(icon: Icon(Icons.admin_panel_settings_outlined, color: Color(0xFFB3261E)), text: 'أدمن'),
-                ],
-              ),
-            ),
-
-            // ====== Tab Views ======
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: const [
-                  _CustomerLoginTab(),
-                  _MerchantLoginTab(),
-                  _AgentLoginTab(),
-                  _AdminLoginTab(),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// Customer Login Tab
-// ============================================================
-class _CustomerLoginTab extends StatefulWidget {
-  const _CustomerLoginTab();
-
-  @override
-  State<_CustomerLoginTab> createState() => _CustomerLoginTabState();
-}
-
-class _CustomerLoginTabState extends State<_CustomerLoginTab> {
-  final _formKey = GlobalKey<FormState>();
-  final _nationalIdCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  bool _obscurePassword = true;
-
-  @override
-  void dispose() {
-    _nationalIdCtrl.dispose();
-    _phoneCtrl.dispose();
-    _passwordCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    final ctrl = Get.find<UnifiedAuthController>();
-    final success = await ctrl.loginCustomer(
-      nationalId: '', // AMIAL: الدخول بالهاتف + كلمة المرور فقط (الهوية تخصّ KYC)
-      phone: _phoneCtrl.text.trim(),
-      password: _passwordCtrl.text,
-    );
-    if (success && mounted) {
-      // AMIAL-BIO-001: اعرض «تفعيل الدخول السريع» مرة واحدة بعد أول دخول ناجح
-      try {
-        if (!await AmialBiometricSetupScreen.isEnabled()) {
-          await Get.to(() => AmialBiometricSetupScreen(
-                phone: _phoneCtrl.text.trim(),
-                password: _passwordCtrl.text,
-              ));
-        }
-      } catch (_) {}
-      ctrl.navigateToHomeForRole();
-    } else if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ctrl.lastError.value),
-            backgroundColor: AmyalColors.red),
-      );
-    }
-  }
-
-  /// AMIAL-BIO-001: دخول ببصمة الإصبع — تحقق حيوي ثم دخول بالبيانات المحفوظة.
-  Future<void> _bioLogin() async {
-    try {
-      if (!await AmialBiometricSetupScreen.isEnabled()) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('فعّل الدخول السريع أولاً بالدخول بكلمة المرور'),
-              backgroundColor: AmyalColors.red));
-        }
-        return;
-      }
-      final auth = LocalAuthentication();
-      final ok = await auth.authenticate(
-        localizedReason: 'الدخول إلى أميال باي',
-        biometricOnly: true,
-        persistAcrossBackgrounding: true,
-      );
-      if (!ok || !mounted) return;
-      final creds = await AmialBiometricSetupScreen.savedCredentials();
-      if (creds == null) return;
-      final ctrl = Get.find<UnifiedAuthController>();
-      final success = await ctrl.loginCustomer(
-          nationalId: '', phone: creds.$1, password: creds.$2);
-      if (success && mounted) {
-        ctrl.navigateToHomeForRole();
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(ctrl.lastError.value),
-            backgroundColor: AmyalColors.red));
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('تعذّر التحقق الحيوي'),
-            backgroundColor: AmyalColors.red));
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('تسجيل دخول العميل',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            ),
-            _DemoCredsCard(entries: [
-              _DemoEntry('عميل تجريبي', () {
-                _phoneCtrl.text = '777100001';
-                _passwordCtrl.text = 'Pass@2026';
-              }),
-              _DemoEntry('مستلِم للتحويل', () {
-                _phoneCtrl.text = '777100002';
-                _passwordCtrl.text = 'Pass@2026';
-              }),
-            ]),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'رقم الجوال *',
-                hintText: '7XXXXXXXX',
-                prefixIcon: Icon(Icons.phone_outlined),
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) => (v == null || v.length < 6) ? 'رقم غير صحيح' : null,
-            ),
-            const SizedBox(height: 8),
-            // AMYAL-UI-002: بادئات أرقام اليمن — ضغطة واحدة لبدء الرقم.
-            _PhonePrefixChips(
-              onPick: (p) {
-                _phoneCtrl.text = p;
-                _phoneCtrl.selection = TextSelection.fromPosition(
-                    TextPosition(offset: _phoneCtrl.text.length));
-                setState(() {});
-              },
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _passwordCtrl,
-              obscureText: _obscurePassword,
-              decoration: InputDecoration(
-                labelText: 'كلمة المرور *',
-                prefixIcon: const Icon(Icons.lock_outline),
-                suffixIcon: IconButton(
-                  icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                ),
-                border: const OutlineInputBorder(),
-              ),
-              validator: (v) => (v == null || v.length < 6) ? 'كلمة المرور 6 أحرف على الأقل' : null,
-            ),
-            const SizedBox(height: 20),
-            Obx(() {
-              final ctrl = Get.find<UnifiedAuthController>();
-              return ElevatedButton(
-                onPressed: ctrl.isSubmitting.value ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AmyalColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: ctrl.isSubmitting.value
-                    ? const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                              height: 18, width: 18,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2)),
-                          SizedBox(width: 10),
-                          Text('جارٍ تسجيل الدخول...',
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                        ],
-                      )
-                    : const Text('دخول', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              );
-            }),
-            const SizedBox(height: 12),
-            // AMIAL-BIO-001: دخول سريع ببصمة الإصبع — يظهر فقط إن كان مُفعّلاً.
-            FutureBuilder<bool>(
-              future: AmialBiometricSetupScreen.isEnabled(),
-              builder: (context, snap) {
-                if (snap.data != true) return const SizedBox.shrink();
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: OutlinedButton.icon(
-                    onPressed: _bioLogin,
-                    icon: const Icon(Icons.fingerprint, size: 22),
-                    label: const Text('الدخول ببصمة الإصبع'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AmyalColors.primary,
-                      side: const BorderSide(color: AmyalColors.primary),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      minimumSize: const Size.fromHeight(48),
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 8),
-            // AMIAL: رابط إنشاء حساب جديد (بالبيانات والوثائق)
-            TextButton(
-              onPressed: () => Get.to(() => const AmialRegistrationWizardScreen()),
-              child: const Text('ليس لديك حساب؟ أنشئ حساباً الآن',
-                  style: TextStyle(
-                      color: AmyalColors.primary, fontWeight: FontWeight.w600)),
-            ),
-            // AMIAL-AUDIT: مساران كانا غير موصولين من الدخول الموحّد
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                TextButton(
-                  onPressed: () => Get.to(() => const ForgetPinScreen()),
-                  child: const Text('نسيت كلمة المرور؟',
-                      style: TextStyle(color: Color(0xFF5F6B7C), fontSize: 13)),
-                ),
-                const Text('|', style: TextStyle(color: Color(0xFFCBD5D1))),
-                TextButton(
-                  onPressed: () => Get.to(() => const AccountRecoveryScreen()),
-                  child: const Text('استعادة الحساب (رقم جديد)',
-                      style: TextStyle(color: Color(0xFF5F6B7C), fontSize: 13)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            const Divider(height: 1),
-            const SizedBox(height: 4),
-            // AMYAL-UI-002: تذييل — مركز المساعدة + تغيير اللغة.
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                TextButton.icon(
-                  onPressed: () => Get.to(() => const SupportScreen()),
-                  icon: const Icon(Icons.help_outline, size: 18, color: AmyalColors.primary),
-                  label: const Text('مركز المساعدة',
-                      style: TextStyle(color: AmyalColors.primary, fontSize: 13)),
-                ),
-                const Text('|', style: TextStyle(color: Color(0xFFCBD5D1))),
-                TextButton.icon(
-                  onPressed: () => Get.to(() => const ChooseLanguageScreen()),
-                  icon: const Icon(Icons.language, size: 18, color: AmyalColors.primary),
-                  label: const Text('اللغة',
-                      style: TextStyle(color: AmyalColors.primary, fontSize: 13)),
-                ),
-              ],
-            ),
-            // AMYAL-SEC-LOGIN-001: آخر تسجيل دخول (يظهر فقط إن وُجد سجلّ سابق).
+            _header(),
+            const SizedBox(height: 18),
+            _kindSelector(),
+            const SizedBox(height: 16),
+            Form(key: _formKey, child: _formFields()),
+            const SizedBox(height: 18),
+            _primaryAction(),
+            if (_kind == AccountKind.customer) ...[
+              const SizedBox(height: 10),
+              _biometricButton(),
+            ],
+            const SizedBox(height: 14),
+            _demoBox(),
+            const SizedBox(height: 10),
+            _links(),
+            const Divider(height: 26),
+            _footer(),
             const _LastLoginNote(),
           ],
         ),
       ),
     );
   }
+
+  // ===== الرأس: مضغوط لا يبتلع الشاشة =====
+  Widget _header() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AmyalColors.primary, Color(0xFF1D4FB8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(22)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.14),
+              shape: BoxShape.circle,
+            ),
+            child: Image.asset(Images.logo, height: 46, width: 46),
+          ),
+          const SizedBox(height: 10),
+          const Text('أميال باي',
+              style: TextStyle(
+                  color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 2),
+          const Text('دفع سريع وآمن',
+              style: TextStyle(color: Colors.white70, fontSize: 12)),
+          const SizedBox(height: 6),
+          const _VersionStamp(),
+        ],
+      ),
+    );
+  }
+
+  // ===== القائمة المنسدلة لنوع الحساب =====
+  Widget _kindSelector() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AmyalColors.border),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<AccountKind>(
+          value: _kind,
+          isExpanded: true,
+          borderRadius: BorderRadius.circular(14),
+          icon: const Icon(Icons.keyboard_arrow_down_rounded,
+              color: AmyalColors.primary),
+          items: AccountKind.values.map((k) {
+            return DropdownMenuItem<AccountKind>(
+              value: k,
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: k.color.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(k.icon, size: 19, color: k.color),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(k.label,
+                            style: const TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.w700)),
+                        Text(k.hint,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 10.5, color: AmyalColors.textMuted)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: (k) {
+            if (k != null) _switchKind(k);
+          },
+        ),
+      ),
+    );
+  }
+
+  // ===== الحقول: تتبدّل حسب النوع =====
+  Widget _formFields() {
+    // خطوة رمز الوكيل تحلّ محلّ النموذج
+    if (_kind == AccountKind.agent && _otpStep) return _otpFields();
+
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      child: Column(
+        key: ValueKey(_kind),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ---- حقول خاصّة بالنوع ----
+          if (_kind == AccountKind.merchant || _kind == AccountKind.pos) ...[
+            _field(
+              controller: _merchantNumCtrl,
+              label: 'رقم التاجر *',
+              icon: Icons.store,
+              validator: (v) =>
+                  (v == null || v.trim().length < 3) ? 'رقم تاجر غير صحيح' : null,
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (_kind == AccountKind.pos) ...[
+            _field(
+              controller: _posNumCtrl,
+              label: 'رقم نقطة البيع *',
+              hint: 'POS-001',
+              icon: Icons.point_of_sale,
+              validator: (v) =>
+                  (v == null || v.trim().isEmpty) ? 'مطلوب' : null,
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (_kind == AccountKind.agent) ...[
+            _field(
+              controller: _agentNumCtrl,
+              label: 'رقم الوكيل *',
+              icon: Icons.business_center,
+              validator: (v) =>
+                  (v == null || v.trim().length < 3) ? 'رقم وكيل غير صحيح' : null,
+            ),
+            const SizedBox(height: 12),
+          ],
+          if (_kind == AccountKind.admin) ...[
+            _field(
+              controller: _emailCtrl,
+              label: 'البريد الإلكتروني *',
+              hint: 'admin@amyalpay.com',
+              icon: Icons.alternate_email,
+              keyboard: TextInputType.emailAddress,
+              ltr: true,
+              validator: (v) =>
+                  (v == null || !v.contains('@')) ? 'بريد غير صحيح' : null,
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // ---- الهاتف: لكل الأنواع عدا الوكيل والأدمن ----
+          if (_kind != AccountKind.agent && _kind != AccountKind.admin) ...[
+            _field(
+              controller: _phoneCtrl,
+              label: 'رقم الجوال *',
+              hint: '7XXXXXXXX',
+              icon: Icons.phone_outlined,
+              keyboard: TextInputType.phone,
+              validator: (v) =>
+                  (v == null || v.trim().length < 6) ? 'رقم غير صحيح' : null,
+            ),
+            const SizedBox(height: 8),
+            _PhonePrefixChips(onPick: (p) {
+              _phoneCtrl.text = p;
+              _phoneCtrl.selection = TextSelection.fromPosition(
+                  TextPosition(offset: _phoneCtrl.text.length));
+              setState(() {});
+            }),
+            const SizedBox(height: 12),
+          ],
+
+          // ---- كلمة المرور: دائماً ----
+          _field(
+            controller: _passwordCtrl,
+            label: 'كلمة المرور *',
+            icon: Icons.lock_outline,
+            obscure: _obscure,
+            suffix: IconButton(
+              icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+              onPressed: () => setState(() => _obscure = !_obscure),
+            ),
+            validator: (v) =>
+                (v == null || v.length < 4) ? 'كلمة المرور قصيرة' : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _otpFields() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AmyalColors.yellow.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            children: [
+              const Icon(Icons.sms, color: AmyalColors.primary, size: 30),
+              const SizedBox(height: 6),
+              Text('تم إرسال رمز التحقق إلى $_maskedPhone',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12.5)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        TextFormField(
+          controller: _otpCtrl,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          textAlign: TextAlign.center,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          style: const TextStyle(
+              fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 8),
+          decoration: const InputDecoration(
+            labelText: 'رمز التحقق (6 أرقام)',
+            counterText: '',
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: () => setState(() {
+            _otpStep = false;
+            _otpCtrl.clear();
+          }),
+          child: const Text('رجوع'),
+        ),
+      ],
+    );
+  }
+
+  Widget _field({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    String? hint,
+    TextInputType? keyboard,
+    bool obscure = false,
+    bool ltr = false,
+    Widget? suffix,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboard,
+      obscureText: obscure,
+      textDirection: ltr ? TextDirection.ltr : null,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon),
+        suffixIcon: suffix,
+        filled: true,
+        fillColor: Colors.white,
+        border: const OutlineInputBorder(),
+      ),
+      validator: validator,
+    );
+  }
+
+  Widget _primaryAction() {
+    final isOtp = _kind == AccountKind.agent && _otpStep;
+    return Obx(() {
+      final ctrl = Get.find<UnifiedAuthController>();
+      final busy = ctrl.isSubmitting.value;
+      return AmialButton(
+        label: busy
+            ? 'جارٍ تسجيل الدخول...'
+            : isOtp
+                ? 'تأكيد ودخول'
+                : _kind == AccountKind.agent
+                    ? 'إرسال رمز التحقق'
+                    : 'دخول',
+        loading: busy,
+        onPressed: busy ? null : (isOtp ? _submitOtp : _submit),
+      );
+    });
+  }
+
+  Widget _biometricButton() {
+    return FutureBuilder<bool>(
+      future: AmialBiometricSetupScreen.isEnabled(),
+      builder: (context, snap) {
+        if (snap.data != true) return const SizedBox.shrink();
+        return AmialButton(
+          label: 'الدخول ببصمة الإصبع',
+          icon: Icons.fingerprint,
+          kind: AmialButtonKind.outline,
+          onPressed: _bioLogin,
+        );
+      },
+    );
+  }
+
+  // ===== صندوق البيانات التجريبية (يتبدّل حسب النوع) =====
+  Widget _demoBox() {
+    final entries = _demos;
+    if (entries.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: AmyalColors.yellow.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AmyalColors.yellow.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.vpn_key_rounded, size: 16, color: AmyalColors.primary),
+              const SizedBox(width: 6),
+              Text('بيانات تجريبية (${_kind.label}) — اضغط للتعبئة',
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AmyalColors.primary)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: entries.map((e) {
+              return ActionChip(
+                label: Text(e.label,
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight:
+                            e.highlight ? FontWeight.bold : FontWeight.w500,
+                        color: e.highlight ? Colors.white : AmyalColors.primary)),
+                backgroundColor:
+                    e.highlight ? AmyalColors.primary : Colors.white,
+                side: BorderSide(
+                    color: e.highlight
+                        ? AmyalColors.primary
+                        : AmyalColors.primary.withValues(alpha: 0.35)),
+                onPressed: () {
+                  e.onFill();
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: Text('تم تعبئة بيانات: ${e.label}'),
+                    duration: const Duration(milliseconds: 900),
+                    backgroundColor: AmyalColors.primary,
+                  ));
+                },
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _links() {
+    return Column(
+      children: [
+        TextButton(
+          onPressed: () => Get.to(() => const AmialRegistrationWizardScreen()),
+          child: const Text('ليس لديك حساب؟ أنشئ حساباً الآن',
+              style: TextStyle(
+                  color: AmyalColors.primary, fontWeight: FontWeight.w600)),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            TextButton(
+              onPressed: () => Get.to(() => const ForgetPinScreen()),
+              child: const Text('نسيت كلمة المرور؟',
+                  style: TextStyle(color: AmyalColors.textSecondary, fontSize: 13)),
+            ),
+            const Text('|', style: TextStyle(color: AmyalColors.border)),
+            TextButton(
+              onPressed: () => Get.to(() => const AccountRecoveryScreen()),
+              child: const Text('استعادة الحساب',
+                  style: TextStyle(color: AmyalColors.textSecondary, fontSize: 13)),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _footer() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        TextButton.icon(
+          onPressed: () => Get.to(() => const SupportScreen()),
+          icon: const Icon(Icons.help_outline, size: 18, color: AmyalColors.primary),
+          label: const Text('مركز المساعدة',
+              style: TextStyle(color: AmyalColors.primary, fontSize: 13)),
+        ),
+        const Text('|', style: TextStyle(color: AmyalColors.border)),
+        TextButton.icon(
+          onPressed: () => Get.to(() => const ChooseLanguageScreen()),
+          icon: const Icon(Icons.language, size: 18, color: AmyalColors.primary),
+          label: const Text('اللغة',
+              style: TextStyle(color: AmyalColors.primary, fontSize: 13)),
+        ),
+      ],
+    );
+  }
 }
 
 // ============================================================
-// Last-login security note — AMYAL-SEC-LOGIN-001
+class _Demo {
+  final String label;
+  final VoidCallback onFill;
+  final bool highlight;
+  const _Demo(this.label, this.onFill, {this.highlight = false});
+}
+
+// ============================================================
+// بادئات أرقام اليمن — AMYAL-UI-002
+// ============================================================
+class _PhonePrefixChips extends StatelessWidget {
+  final void Function(String prefix) onPick;
+  const _PhonePrefixChips({required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    const prefixes = ['77', '78', '73', '71', '70'];
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Wrap(
+        spacing: 6,
+        children: prefixes.map((p) {
+          return ActionChip(
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            label: Text(p,
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AmyalColors.primary)),
+            backgroundColor: AmyalColors.primary.withValues(alpha: 0.06),
+            side: BorderSide(color: AmyalColors.primary.withValues(alpha: 0.25)),
+            onPressed: () => onPick(p),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// آخر تسجيل دخول — AMYAL-SEC-LOGIN-001
 // ============================================================
 class _LastLoginNote extends StatelessWidget {
   const _LastLoginNote();
@@ -443,10 +823,6 @@ class _LastLoginNote extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 11.5, color: AmyalColors.textSecondary),
                 ),
-                if (last.ip.isNotEmpty)
-                  Text('IP: ${last.ip}',
-                      style: const TextStyle(
-                          fontSize: 10, color: AmyalColors.textMuted)),
                 const Text('إن لم تكن أنت، غيّر كلمة المرور فوراً.',
                     style: TextStyle(fontSize: 10.5, color: AmyalColors.textMuted)),
               ],
@@ -458,620 +834,7 @@ class _LastLoginNote extends StatelessWidget {
   }
 }
 
-// ============================================================
-// Phone prefix chips (Yemen) — AMYAL-UI-002
-// ============================================================
-class _PhonePrefixChips extends StatelessWidget {
-  final void Function(String prefix) onPick;
-  const _PhonePrefixChips({required this.onPick});
-
-  @override
-  Widget build(BuildContext context) {
-    const prefixes = ['77', '78', '73', '71', '70'];
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Wrap(
-        spacing: 6,
-        children: prefixes.map((p) {
-          return ActionChip(
-            visualDensity: VisualDensity.compact,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            label: Text(p,
-                style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: AmyalColors.primary)),
-            backgroundColor: AmyalColors.primary.withValues(alpha: 0.06),
-            side: BorderSide(color: AmyalColors.primary.withValues(alpha: 0.25)),
-            onPressed: () => onPick(p),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// Merchant Login Tab
-// ============================================================
-class _MerchantLoginTab extends StatefulWidget {
-  const _MerchantLoginTab();
-
-  @override
-  State<_MerchantLoginTab> createState() => _MerchantLoginTabState();
-}
-
-class _MerchantLoginTabState extends State<_MerchantLoginTab> {
-  final _formKey = GlobalKey<FormState>();
-  final _merchantNumCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  final _posNumCtrl = TextEditingController();
-  bool _obscurePassword = true;
-  bool _isPosLogin = false;
-
-  @override
-  void dispose() {
-    _merchantNumCtrl.dispose();
-    _phoneCtrl.dispose();
-    _passwordCtrl.dispose();
-    _posNumCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    final ctrl = Get.find<UnifiedAuthController>();
-    final success = await ctrl.loginMerchant(
-      merchantNumber: _merchantNumCtrl.text.trim(),
-      phone: _phoneCtrl.text.trim(),
-      password: _passwordCtrl.text,
-      posNumber: _isPosLogin ? _posNumCtrl.text.trim() : null,
-    );
-    if (success && mounted) {
-      ctrl.navigateToHomeForRole();
-    } else if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ctrl.lastError.value),
-            backgroundColor: AmyalColors.red),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('تسجيل دخول التاجر',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            ),
-            _DemoCredsCard(entries: [
-              _DemoEntry('⛽ محطة وقود', () {
-                _merchantNumCtrl.text = 'AM-FUEL-004';
-                _phoneCtrl.text = '777200004';
-                _passwordCtrl.text = 'Pass@2026';
-              }, highlight: true),
-              _DemoEntry('🛒 بقالة', () {
-                _merchantNumCtrl.text = 'AM-GROC-001';
-                _phoneCtrl.text = '777200001';
-                _passwordCtrl.text = 'Pass@2026';
-              }),
-              _DemoEntry('💊 صيدلية', () {
-                _merchantNumCtrl.text = 'AM-PHAR-003';
-                _phoneCtrl.text = '777200003';
-                _passwordCtrl.text = 'Pass@2026';
-              }),
-              _DemoEntry('🍽️ مطعم', () {
-                _merchantNumCtrl.text = 'AM-REST-002';
-                _phoneCtrl.text = '777200002';
-                _passwordCtrl.text = 'Pass@2026';
-              }),
-              _DemoEntry('📦 جملة', () {
-                _merchantNumCtrl.text = 'AM-WHOL-005';
-                _phoneCtrl.text = '777200005';
-                _passwordCtrl.text = 'Pass@2026';
-              }),
-              _DemoEntry('🐟 بيع سريع', () {
-                _merchantNumCtrl.text = 'AM-FISH-006';
-                _phoneCtrl.text = '777200006';
-                _passwordCtrl.text = 'Pass@2026';
-              }),
-            ]),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _merchantNumCtrl,
-              decoration: const InputDecoration(
-                labelText: 'رقم التاجر *',
-                prefixIcon: Icon(Icons.store),
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) => (v == null || v.length < 3) ? 'رقم تاجر غير صحيح' : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'رقم الجوال *',
-                prefixIcon: Icon(Icons.phone_outlined),
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) => (v == null || v.length < 6) ? 'رقم غير صحيح' : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _passwordCtrl,
-              obscureText: _obscurePassword,
-              decoration: InputDecoration(
-                labelText: 'كلمة المرور *',
-                prefixIcon: const Icon(Icons.lock_outline),
-                suffixIcon: IconButton(
-                  icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                  onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                ),
-                border: const OutlineInputBorder(),
-              ),
-              validator: (v) => (v == null || v.length < 6) ? 'كلمة المرور قصيرة' : null,
-            ),
-            const SizedBox(height: 16),
-            CheckboxListTile(
-              title: const Text('دخول كموظف نقطة بيع'),
-              subtitle: const Text('سجل بـ POS number',
-                  style: TextStyle(fontSize: 11)),
-              value: _isPosLogin,
-              activeColor: AmyalColors.primary,
-              onChanged: (v) => setState(() => _isPosLogin = v ?? false),
-              controlAffinity: ListTileControlAffinity.leading,
-              dense: true,
-            ),
-            if (_isPosLogin)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: TextFormField(
-                  controller: _posNumCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'رقم نقطة البيع *',
-                    hintText: 'POS-001',
-                    prefixIcon: Icon(Icons.point_of_sale),
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (v) {
-                    if (!_isPosLogin) return null;
-                    return (v == null || v.isEmpty) ? 'مطلوب' : null;
-                  },
-                ),
-              ),
-            const SizedBox(height: 20),
-            Obx(() {
-              final ctrl = Get.find<UnifiedAuthController>();
-              return ElevatedButton(
-                onPressed: ctrl.isSubmitting.value ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AmyalColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: ctrl.isSubmitting.value
-                    ? const SizedBox(
-                        height: 20, width: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : const Text('دخول', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// Agent Login Tab (2-step with OTP)
-// ============================================================
-class _AgentLoginTab extends StatefulWidget {
-  const _AgentLoginTab();
-
-  @override
-  State<_AgentLoginTab> createState() => _AgentLoginTabState();
-}
-
-class _AgentLoginTabState extends State<_AgentLoginTab> {
-  final _formKey = GlobalKey<FormState>();
-  final _agentNumCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  final _otpCtrl = TextEditingController();
-  bool _obscurePassword = true;
-  bool _otpStep = false;
-  String _maskedPhone = '';
-
-  @override
-  void dispose() {
-    _agentNumCtrl.dispose();
-    _passwordCtrl.dispose();
-    _otpCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submitStep1() async {
-    if (!_formKey.currentState!.validate()) return;
-    final ctrl = Get.find<UnifiedAuthController>();
-    final result = await ctrl.loginAgentStep1(
-      agentNumber: _agentNumCtrl.text.trim(),
-      password: _passwordCtrl.text,
-    );
-    if (result != null && mounted) {
-      setState(() {
-        _otpStep = true;
-        _maskedPhone = result;
-      });
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ctrl.lastError.value),
-            backgroundColor: AmyalColors.red),
-      );
-    }
-  }
-
-  Future<void> _submitOtp() async {
-    if (_otpCtrl.text.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('الرمز 6 أرقام')),
-      );
-      return;
-    }
-    final ctrl = Get.find<UnifiedAuthController>();
-    final success = await ctrl.loginAgentStep2(_otpCtrl.text.trim());
-    if (success && mounted) {
-      ctrl.navigateToHomeForRole();
-    } else if (!success && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ctrl.lastError.value),
-            backgroundColor: AmyalColors.red),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('تسجيل دخول الوكيل',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            ),
-            if (!_otpStep) ...[
-              _DemoCredsCard(entries: [
-                _DemoEntry('وكيل تجريبي', () {
-                  _agentNumCtrl.text = 'AG-001';
-                  _passwordCtrl.text = 'Pass@2026';
-                }),
-              ]),
-              const SizedBox(height: 12),
-              // ====== Step 1 ======
-              TextFormField(
-                controller: _agentNumCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'رقم الوكيل *',
-                  prefixIcon: Icon(Icons.business_center),
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) => (v == null || v.length < 3) ? 'رقم وكيل غير صحيح' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _passwordCtrl,
-                obscureText: _obscurePassword,
-                decoration: InputDecoration(
-                  labelText: 'كلمة المرور *',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                  ),
-                  border: const OutlineInputBorder(),
-                ),
-                validator: (v) => (v == null || v.length < 6) ? 'كلمة المرور قصيرة' : null,
-              ),
-              const SizedBox(height: 20),
-              Obx(() {
-                final ctrl = Get.find<UnifiedAuthController>();
-                return ElevatedButton(
-                  onPressed: ctrl.isSubmitting.value ? null : _submitStep1,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: ctrl.isSubmitting.value
-                      ? const SizedBox(
-                          height: 20, width: 20,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
-                      : const Text('إرسال رمز التحقق',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                );
-              }),
-            ] else ...[
-              // ====== Step 2: OTP ======
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AmyalColors.yellow.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: [
-                    const Icon(Icons.sms, color: AmyalColors.primary, size: 32),
-                    const SizedBox(height: 8),
-                    Text('تم إرسال رمز التحقق إلى $_maskedPhone',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 12)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _otpCtrl,
-                keyboardType: TextInputType.number,
-                maxLength: 6,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                    fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 8),
-                decoration: const InputDecoration(
-                  labelText: 'رمز التحقق (6 أرقام)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Obx(() {
-                final ctrl = Get.find<UnifiedAuthController>();
-                return ElevatedButton(
-                  onPressed: ctrl.isSubmitting.value ? null : _submitOtp,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  child: ctrl.isSubmitting.value
-                      ? const SizedBox(
-                          height: 20, width: 20,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2))
-                      : const Text('تأكيد ودخول',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                );
-              }),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => setState(() {
-                  _otpStep = false;
-                  _otpCtrl.clear();
-                }),
-                child: const Text('رجوع'),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// Admin Login Tab — بريد + كلمة مرور (لوحة الإدارة داخل التطبيق)
-// ============================================================
-class _AdminLoginTab extends StatefulWidget {
-  const _AdminLoginTab();
-
-  @override
-  State<_AdminLoginTab> createState() => _AdminLoginTabState();
-}
-
-class _AdminLoginTabState extends State<_AdminLoginTab> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  bool _obscure = true;
-
-  @override
-  void dispose() {
-    _emailCtrl.dispose();
-    _passwordCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    final ctrl = Get.find<UnifiedAuthController>();
-    final ok = await ctrl.loginAdmin(
-      email: _emailCtrl.text.trim(),
-      password: _passwordCtrl.text,
-    );
-    if (ok && mounted) {
-      ctrl.navigateToHomeForRole();
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(ctrl.lastError.value),
-          backgroundColor: AmyalColors.red));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('دخول مدير النظام',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            ),
-            _DemoCredsCard(entries: [
-              _DemoEntry('أدمن تجريبي', () {
-                _emailCtrl.text = 'admin@amyalpay.com';
-                _passwordCtrl.text = 'Pass@2026';
-              }),
-            ]),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              textDirection: TextDirection.ltr,
-              decoration: const InputDecoration(
-                labelText: 'البريد الإلكتروني *',
-                hintText: 'admin@amyalpay.com',
-                prefixIcon: Icon(Icons.alternate_email),
-                border: OutlineInputBorder(),
-              ),
-              validator: (v) =>
-                  (v == null || !v.contains('@')) ? 'بريد غير صحيح' : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _passwordCtrl,
-              obscureText: _obscure,
-              decoration: InputDecoration(
-                labelText: 'كلمة المرور *',
-                prefixIcon: const Icon(Icons.lock_outline),
-                suffixIcon: IconButton(
-                  icon:
-                      Icon(_obscure ? Icons.visibility_off : Icons.visibility),
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                ),
-                border: const OutlineInputBorder(),
-              ),
-              validator: (v) =>
-                  (v == null || v.length < 6) ? '6 أحرف على الأقل' : null,
-            ),
-            const SizedBox(height: 20),
-            Obx(() {
-              final ctrl = Get.find<UnifiedAuthController>();
-              return ElevatedButton.icon(
-                onPressed: ctrl.isSubmitting.value ? null : _submit,
-                icon: ctrl.isSubmitting.value
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.admin_panel_settings_outlined),
-                label: const Text('دخول لوحة الإدارة',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AmyalColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              );
-            }),
-            const SizedBox(height: 16),
-            const Text(
-              'لوحة الإدارة الكاملة متاحة أيضاً عبر المتصفح على مسار /admin في خادمك.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 11, color: AmyalColors.textMuted),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// Demo credentials helper — تعبئة بيانات الدخول التجريبية بضغطة واحدة
-// ============================================================
-class _DemoEntry {
-  final String label;
-  final VoidCallback onFill;
-  final bool highlight;
-  const _DemoEntry(this.label, this.onFill, {this.highlight = false});
-}
-
-class _DemoCredsCard extends StatelessWidget {
-  final List<_DemoEntry> entries;
-  const _DemoCredsCard({required this.entries});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(
-        color: AmyalColors.yellow.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AmyalColors.yellow.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.vpn_key_rounded, size: 16, color: AmyalColors.primary),
-              SizedBox(width: 6),
-              Text('بيانات تجريبية — اضغط للتعبئة',
-                  style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AmyalColors.primary)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: entries.map((e) {
-              return ActionChip(
-                label: Text(e.label,
-                    style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight:
-                            e.highlight ? FontWeight.bold : FontWeight.w500,
-                        color: e.highlight ? Colors.white : AmyalColors.primary)),
-                backgroundColor:
-                    e.highlight ? AmyalColors.primary : Colors.white,
-                side: BorderSide(
-                    color: e.highlight
-                        ? AmyalColors.primary
-                        : AmyalColors.primary.withValues(alpha: 0.35)),
-                onPressed: () {
-                  e.onFill();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('تم تعبئة بيانات: ${e.label}'),
-                      duration: const Duration(milliseconds: 900),
-                      backgroundColor: AmyalColors.primary,
-                    ),
-                  );
-                },
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// AMIAL-BUILD-STAMP — علامة الإصدار: تُقرأ تلقائياً من بيانات البناء
-/// (package_info) فلا تتقادم مع كل إصدار. تظهر أسفل شعار الدخول.
+/// AMIAL-BUILD-STAMP — علامة الإصدار تُقرأ من بيانات البناء.
 class _VersionStamp extends StatefulWidget {
   const _VersionStamp();
 
@@ -1092,7 +855,6 @@ class _VersionStampState extends State<_VersionStamp> {
     try {
       final info = await PackageInfo.fromPlatform();
       if (!mounted) return;
-      // AMYAL-UI-002: تنسيق هادئ وصغير — «الإصدار 1.33.0 (1330)».
       setState(() => _label = 'الإصدار ${info.version} (${info.buildNumber})');
     } catch (_) {
       if (mounted) setState(() => _label = '');
