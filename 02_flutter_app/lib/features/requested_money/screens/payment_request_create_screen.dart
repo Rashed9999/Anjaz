@@ -6,6 +6,7 @@ import 'package:amyal_pay/features/requested_money/controllers/payment_request_c
 import 'package:amyal_pay/features/requested_money/screens/payment_request_show_screen.dart';
 import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amyal_pay/common/widgets/amial_button.dart';
 
 /// AMIAL-PAYMENT-REQUESTS-001 — شاشة إنشاء طلب أموال.
 class PaymentRequestCreateScreen extends StatefulWidget {
@@ -202,18 +203,13 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
           _previewCard(),
           const SizedBox(height: 24),
 
-          // زر الإنشاء
-          Obx(() => FilledButton.icon(
-            onPressed: c.isSubmitting.value ? null : _submit,
-            icon: c.isSubmitting.value
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.send),
-            label: const Text('إنشاء الطلب', style: TextStyle(fontSize: 16)),
-            style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
-              minimumSize: const Size.fromHeight(52),
-            ),
-          )),
+          // زر الإنشاء — موحّد عبر AmialButton (DS)
+          Obx(() => AmialButton(
+                label: 'إنشاء الطلب',
+                icon: Icons.send,
+                loading: c.isSubmitting.value,
+                onPressed: c.isSubmitting.value ? null : _submit,
+              )),
         ]),
       ),
     );
@@ -245,12 +241,12 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFFE6B84C)),
+              border: Border.all(color: const Color(0xFFFECA1E)),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Text('AMYAL PAY',
                 style: TextStyle(
-                    color: Color(0xFFE6B84C),
+                    color: Color(0xFFFECA1E),
                     fontSize: 10,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 1)),
@@ -279,7 +275,7 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
           children: [
             const Padding(
               padding: EdgeInsets.only(bottom: 6),
-              child: Text(' YER',
+              child: Text(' ر.ي',
                   style: TextStyle(color: Colors.white70, fontSize: 14)),
             ),
             Text(amount.isEmpty ? '0' : AmialMoney.fmt(amount),
@@ -306,7 +302,7 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
           ),
           child: Row(children: [
             Icon(_shareMethod == 'qr' ? Icons.qr_code_2 : Icons.link,
-                color: const Color(0xFFE6B84C), size: 18),
+                color: const Color(0xFFFECA1E), size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Text(

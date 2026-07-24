@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/merchant/controllers/split_bill_controller.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 
 /// AMIAL-SPLIT-BILL-001 — حصص العميل المعلّقة في الفواتير المقسّمة + دفعها.
 class SplitBillMySharesScreen extends StatefulWidget {
@@ -28,7 +29,7 @@ class _SplitBillMySharesScreenState extends State<SplitBillMySharesScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('تأكيد دفع الحصة'),
-        content: Text('سيتم دفع $amount ر.ي للتاجر. متابعة؟'),
+        content: Text('سيتم دفع ${AmialMoney.yer(amount)} للتاجر. متابعة؟'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
           ElevatedButton(
@@ -108,13 +109,13 @@ class _SplitBillMySharesScreenState extends State<SplitBillMySharesScreen> {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          Text('${share['share_amount'] ?? ''} ر.ي',
+                          Text(AmialMoney.yer(share['share_amount'] ?? ''),
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold, fontSize: 16, color: AmyalColors.primary)),
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Text('إجمالي الفاتورة: ${bill['total_amount'] ?? ''} ر.ي',
+                      Text('إجمالي الفاتورة: ${AmialMoney.yer(bill['total_amount'] ?? '')}',
                           style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
                       const SizedBox(height: 10),
                       SizedBox(

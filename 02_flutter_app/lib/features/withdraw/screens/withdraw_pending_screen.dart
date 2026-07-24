@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:amyal_pay/features/withdraw/controllers/customer_withdraw_controller.dart';
 
 /// AMIAL-CUSTOMER-WITHDRAW-001 — شاشة الطلب المعلّق.
@@ -298,11 +299,11 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(children: [
-                _row('مبلغ السحب', '$amount ر.ي'),
+                _row('مبلغ السحب', AmialMoney.yer(amount)),
                 const Divider(height: 24),
-                _row('رسوم العملية', '$fee ر.ي', color: AmyalColors.red),
+                _row('رسوم العملية', AmialMoney.yer(fee), color: AmyalColors.red),
                 const Divider(height: 24),
-                _row('الإجمالي المخصوم', '$total ر.ي', bold: true, color: AmyalColors.primary, size: 18),
+                _row('الإجمالي المخصوم', AmialMoney.yer(total), bold: true, color: AmyalColors.primary, size: 18),
               ]),
             ),
             const SizedBox(height: 24),

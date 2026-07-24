@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/theme/amial_spacing.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amyal_pay/common/widgets/amial_button.dart';
 import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
 
 /// AMIAL-PAYMENT-REQUESTS-001 — شاشة عرض طلب بعد إنشائه.
@@ -102,7 +105,8 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
               child: Column(children: [
                 const Text('المبلغ المطلوب', style: TextStyle(color: Colors.white70)),
                 const SizedBox(height: 8),
-                Text('$amount ر.ي',
+                // AMYAL-DS-001: تنسيق نقدي نظيف (كان يظهر «5000.0000» خام).
+                Text(AmialMoney.yer(amount),
                     style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
                 if (note != null && note.isNotEmpty) ...[
                   const SizedBox(height: 8),
@@ -195,31 +199,23 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
             ),
             const SizedBox(height: 20),
 
-            // أزرار النسخ
+            // أزرار النسخ — موحّدة عبر AmialButton (DS)
             Row(children: [
-              Expanded(child: FilledButton.icon(
+              Expanded(child: AmialButton(
+                label: 'نسخ الرمز',
+                icon: Icons.copy,
+                kind: AmialButtonKind.secondary,
                 onPressed: () => _copy(shortCode, 'الرمز نُسخ'),
-                icon: const Icon(Icons.copy),
-                label: const Text('نسخ الرمز'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AmyalColors.yellow,
-                  foregroundColor: Colors.black87,
-                  minimumSize: const Size.fromHeight(48),
-                ),
               )),
-              const SizedBox(width: 12),
-              Expanded(child: OutlinedButton.icon(
-                onPressed: () => _copy(publicUrl, 'الرابط نُسخ'),
-                icon: const Icon(Icons.share, size: 18),
-                label: const Text('مشاركة الرابط'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(48),
-                  side: const BorderSide(color: AmyalColors.primary),
-                  foregroundColor: AmyalColors.primary,
-                ),
+              const SizedBox(width: AmialSpacing.sm),
+              Expanded(child: AmialButton(
+                label: 'مشاركة الرابط',
+                icon: Icons.share,
+                kind: AmialButtonKind.outline,
+                onPressed: publicUrl.isEmpty ? null : () => _copy(publicUrl, 'الرابط نُسخ'),
               )),
             ]),
-            const SizedBox(height: 12),
+            const SizedBox(height: AmialSpacing.sm),
 
             // زر الإلغاء
             if (id != null && req['status'] == 'pending')
