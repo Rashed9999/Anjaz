@@ -5,6 +5,7 @@ import 'package:amyal_pay/features/merchant/controllers/merchant_pay_controller.
 import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
 import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/common/widgets/amial_result_sheet.dart';
 
 /// AMIAL-MERCHANT-PAY-001 — شاشة دفع العميل للتاجر (QR / POS).
 ///
@@ -165,67 +166,38 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
     if (!_formKey.currentState!.validate()) return;
     final ctrl = Get.find<MerchantPayController>();
 
-    final ok = await ctrl.pay(
-      merchantPhone: widget.merchantUserId == null ? _phoneCtrl.text.trim() : null,
-      merchantUserId: widget.merchantUserId,
-      amount: _amountCtrl.text.trim(),
-      channel: widget.channel,
-      posUserId: widget.posUserId,
-      note: _noteCtrl.text.trim(),
+    // AMYAL-DS-001: ورقة النتيجة الموحّدة (جارٍ التنفيذ → نجاح/فشل) بدل
+    // AlertDialog + SnackBar المتفرّقين — نفس النمط عبر كل العمليات المالية.
+    final done = await AmialResultSheet.run<bool>(
+      context,
+      processingTitle: 'جارٍ تنفيذ الدفع',
+      successTitle: 'تم الدفع بنجاح',
+      successSubtitle: 'ستجد الإيصال في قائمة الإيصالات',
+      successButton: 'تم',
+      errorMessage: (_) =>
+          ctrl.lastError.value.isNotEmpty ? ctrl.lastError.value : 'فشل الدفع',
+      action: () async {
+        final ok = await ctrl.pay(
+          merchantPhone:
+              widget.merchantUserId == null ? _phoneCtrl.text.trim() : null,
+          merchantUserId: widget.merchantUserId,
+          amount: _amountCtrl.text.trim(),
+          channel: widget.channel,
+          posUserId: widget.posUserId,
+          note: _noteCtrl.text.trim(),
+        );
+        if (!ok) {
+          throw Exception(ctrl.lastError.value.isNotEmpty
+              ? ctrl.lastError.value
+              : 'فشل الدفع');
+        }
+        return true;
+      },
     );
 
     if (!mounted) return;
-
-    if (ok) {
-      final meta = ctrl.lastResult.value ?? {};
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          icon: const Icon(Icons.check_circle, color: Colors.green, size: 56),
-          title: const Text('تم الدفع بنجاح', textAlign: TextAlign.center),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'تم دفع ${meta['amount'] ?? ''} ر.ي للتاجر. ستجد الإيصال في قائمة الإيصالات.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13),
-              ),
-              if (meta['transaction_id'] != null) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'مرجع: ${meta['transaction_id']}',
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                Navigator.pop(context);
-              },
-              child: const Text('حسناً'),
-            ),
-          ],
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ctrl.lastError.value.isNotEmpty ? ctrl.lastError.value : 'فشل الدفع'),
-          backgroundColor: AmyalColors.red,
-        ),
-      );
+    if (done == true) {
+      Navigator.of(context).pop(); // أغلق شاشة الدفع بعد النجاح
     }
   }
 
