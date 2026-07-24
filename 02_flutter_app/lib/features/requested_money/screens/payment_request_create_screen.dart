@@ -7,6 +7,7 @@ import 'package:amyal_pay/features/requested_money/screens/payment_request_show_
 import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:amyal_pay/common/widgets/amial_button.dart';
+import 'package:amyal_pay/common/widgets/amial_quick_amounts.dart';
 
 /// AMIAL-PAYMENT-REQUESTS-001 — شاشة إنشاء طلب أموال.
 class PaymentRequestCreateScreen extends StatefulWidget {
@@ -72,29 +73,6 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
         SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
       );
 
-  /// AMYAL-DS-001: شريحة مبلغ سريع — تملأ حقل المبلغ بضغطة.
-  Widget _amountChip(int v) {
-    return InkWell(
-      onTap: () {
-        _amount.text = v.toString();
-        setState(() {});
-      },
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: AmyalColors.primary.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AmyalColors.primary.withValues(alpha: 0.18)),
-        ),
-        child: Text(AmialMoney.fmt(v),
-            style: const TextStyle(
-                color: AmyalColors.primary,
-                fontWeight: FontWeight.w600,
-                fontSize: 13)),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -130,14 +108,13 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
             ]),
           ),
           const SizedBox(height: 10),
-          // AMYAL-DS-001: مبالغ سريعة بضغطة (كالمرجع).
-          Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 8,
-            runSpacing: 8,
-            children: const [500, 1000, 2000, 5000, 10000, 20000]
-                .map((v) => _amountChip(v))
-                .toList(),
+          // AMYAL-DS-001: مبالغ سريعة بضغطة (المكوّن الموحّد).
+          AmialQuickAmounts(
+            values: const [500, 1000, 2000, 5000, 10000, 20000],
+            onPick: (v) {
+              _amount.text = v.toString();
+              setState(() {});
+            },
           ),
           const SizedBox(height: 20),
 

@@ -10,6 +10,8 @@ import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amyal_pay/features/shared/widgets/amial_numpad.dart';
 import 'package:amyal_pay/helper/amial_errors.dart';
 import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amyal_pay/common/widgets/amial_button.dart';
+import 'package:amyal_pay/common/widgets/amial_quick_amounts.dart';
 
 /// AMIAL-CUSTOMER-WITHDRAW-001 — شاشة «سحب الأموال» (تصميم أميال):
 /// بطاقة الرصيد المتاح + المبلغ + مبالغ سريعة + طريقة السحب (وكيل/بنك)
@@ -247,6 +249,16 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
             ),
             const SizedBox(height: 16),
 
+            // AMYAL-DS-001: مبالغ سريعة بضغطة (كالمراجع الاحترافية).
+            AmialQuickAmounts(
+              values: const [1000, 2000, 5000, 10000, 20000, 50000],
+              onPick: (v) {
+                _amountCtrl.text = v.toString();
+                setState(() {});
+              },
+            ),
+            const SizedBox(height: 12),
+
             // AMIAL-DESIGN-26: لوحة أرقام بنمط أميال
             AmialNumpad(
               controller: _amountCtrl,
@@ -280,22 +292,12 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
             ),
             const SizedBox(height: 20),
 
-            // ====== زر التأكيد ======
-            Obx(() => FilledButton.icon(
+            // ====== زر التأكيد (موحّد عبر AmialButton) ======
+            Obx(() => AmialButton(
+                  label: 'تأكيد طلب السحب',
+                  icon: Icons.check_circle_outline,
+                  loading: c.isSubmitting.value,
                   onPressed: c.isSubmitting.value ? null : _submit,
-                  icon: c.isSubmitting.value
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.check_circle_outline),
-                  label:
-                      const Text('تأكيد طلب السحب', style: TextStyle(fontSize: 16)),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
-                    minimumSize: const Size.fromHeight(54),
-                  ),
                 )),
           ],
         ),

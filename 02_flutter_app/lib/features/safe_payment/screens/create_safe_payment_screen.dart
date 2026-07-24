@@ -4,6 +4,7 @@ import 'package:amyal_pay/features/safe_payment/controllers/safe_payment_control
 import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amyal_pay/common/widgets/amial_result_sheet.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
 class CreateSafePaymentScreen extends StatefulWidget {
@@ -85,26 +86,38 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
     if (!await askAmialPin(title: 'تأكيد الدفع الآمن')) return;
     if (!mounted) return;
 
-    final ok = await Get.find<SafePaymentController>().create(
-      sellerPhone: _sellerPhoneCtrl.text.trim(),
-      title: _titleCtrl.text.trim(),
-      description: _descCtrl.text.trim(),
-      amount: _amountCtrl.text.trim(),
-      deliveryTerms: _deliveryCtrl.text.trim().isEmpty
-          ? null
-          : _deliveryCtrl.text.trim(),
+    // AMYAL-DS-001: ورقة النتيجة الموحّدة (جارٍ الحجز → نجاح/فشل).
+    final ctrl = Get.find<SafePaymentController>();
+    final done = await AmialResultSheet.run<bool>(
+      context,
+      processingTitle: 'جارٍ حجز المبلغ',
+      processingSubtitle: 'نُنشئ طلب الدفع الآمن...',
+      successTitle: 'تم حجز المبلغ بنجاح',
+      successSubtitle: 'لن يصل للبائع إلا بعد تأكيد استلامك',
+      successButton: 'تم',
+      errorMessage: (e) => '$e',
+      action: () async {
+        final ok = await ctrl.create(
+          sellerPhone: _sellerPhoneCtrl.text.trim(),
+          title: _titleCtrl.text.trim(),
+          description: _descCtrl.text.trim(),
+          amount: _amountCtrl.text.trim(),
+          deliveryTerms: _deliveryCtrl.text.trim().isEmpty
+              ? null
+              : _deliveryCtrl.text.trim(),
+        );
+        if (!ok) {
+          throw Exception(ctrl.lastError.value.isNotEmpty
+              ? ctrl.lastError.value
+              : 'تعذّر إنشاء الطلب');
+        }
+        return true;
+      },
     );
 
     if (!mounted) return;
-    if (ok) {
+    if (done == true) {
       Navigator.pop(context, true);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(Get.find<SafePaymentController>().lastError.value),
-          backgroundColor: AmyalColors.red,
-        ),
-      );
     }
   }
 

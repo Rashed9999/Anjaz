@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/family_fund/controllers/funds_controller.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/common/widgets/amial_result_sheet.dart';
 
 /// AMIAL-FUND-FAMILY-001 (v0.9-D)
 class CreateFundScreen extends StatefulWidget {
@@ -29,22 +30,33 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    final ok = await Get.find<FundsController>().createFund(
-      name: _nameCtrl.text.trim(),
-      description: _descCtrl.text.trim().isNotEmpty ? _descCtrl.text.trim() : null,
-      requireOwnerApproval: _requireApproval,
-      targetAmount: _targetCtrl.text.trim().isNotEmpty ? _targetCtrl.text.trim() : null,
+    // AMYAL-DS-001: ورقة النتيجة الموحّدة.
+    final ctrl = Get.find<FundsController>();
+    final done = await AmialResultSheet.run<bool>(
+      context,
+      processingTitle: 'جارٍ إنشاء الصندوق',
+      successTitle: 'تم إنشاء الصندوق',
+      successSubtitle: 'يمكنك الآن دعوة الأعضاء',
+      successButton: 'تم',
+      errorMessage: (e) => '$e',
+      action: () async {
+        final ok = await ctrl.createFund(
+          name: _nameCtrl.text.trim(),
+          description: _descCtrl.text.trim().isNotEmpty ? _descCtrl.text.trim() : null,
+          requireOwnerApproval: _requireApproval,
+          targetAmount: _targetCtrl.text.trim().isNotEmpty ? _targetCtrl.text.trim() : null,
+        );
+        if (!ok) {
+          throw Exception(ctrl.lastError.value.isNotEmpty
+              ? ctrl.lastError.value
+              : 'تعذّر إنشاء الصندوق');
+        }
+        return true;
+      },
     );
     if (!mounted) return;
-    if (ok) {
+    if (done == true) {
       Navigator.pop(context, true);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(Get.find<FundsController>().lastError.value),
-          backgroundColor: AmyalColors.red,
-        ),
-      );
     }
   }
 

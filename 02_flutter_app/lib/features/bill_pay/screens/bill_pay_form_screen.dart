@@ -4,6 +4,7 @@ import 'package:amyal_pay/features/bill_pay/controllers/bill_pay_controller.dart
 import 'package:amyal_pay/features/bill_pay/domain/models/bill_pay_models.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amyal_pay/common/widgets/amial_result_sheet.dart';
 
 /// AMIAL-BILL-PAY-001 (v0.9-D)
 ///
@@ -49,82 +50,39 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
         ? _selectedProduct!.fixedAmount!
         : _amountCtrl.text.trim();
 
-    final ok = await ctrl.pay(
-      serviceId: widget.service.id,
-      productId: _selectedProduct?.id,
-      subscriberAccount: _subscriberCtrl.text.trim(),
-      amount: amount,
+    // AMYAL-DS-001: ورقة النتيجة الموحّدة (جارٍ الدفع → نجاح/فشل) بدل
+    // AlertDialog + SnackBar المتفرّقين.
+    final done = await AmialResultSheet.run<bool>(
+      context,
+      processingTitle: 'جارٍ تسديد الفاتورة',
+      processingSubtitle: 'نتواصل مع المزوّد...',
+      successTitle: 'تم تسديد الفاتورة',
+      successSubtitle: 'ستجد الإيصال في قائمة الإيصالات',
+      successButton: 'تم',
+      errorMessage: (e) => '$e',
+      action: () async {
+        final ok = await ctrl.pay(
+          serviceId: widget.service.id,
+          productId: _selectedProduct?.id,
+          subscriberAccount: _subscriberCtrl.text.trim(),
+          amount: amount,
+        );
+        final order = ctrl.lastOrder.value;
+        if (!ok || order == null) {
+          throw Exception(ctrl.lastError.value.isNotEmpty
+              ? ctrl.lastError.value
+              : 'فشل الدفع، حاول مرة أخرى');
+        }
+        if (order.isFailed) {
+          throw Exception('لم تنجح العملية. المبلغ أعيد لحسابك.');
+        }
+        return true;
+      },
     );
 
     if (!mounted) return;
-    final order = ctrl.lastOrder.value;
-
-    if (ok && order != null) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          icon: Icon(
-            order.isSuccess ? Icons.check_circle :
-            order.isPending ? Icons.hourglass_top :
-            Icons.error_outline,
-            color: order.isSuccess ? Colors.green :
-                    order.isPending ? Colors.orange :
-                    AmyalColors.red,
-            size: 56,
-          ),
-          title: Text(
-            order.isSuccess ? 'تم الدفع بنجاح' :
-            order.isPending ? 'العملية قيد المعالجة' :
-            'فشل الدفع',
-            textAlign: TextAlign.center,
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                order.isSuccess ? 'تم خصم ${AmialMoney.fmt(order.totalDebited)} ر.ي من حسابك. ستجد الإيصال في قائمة الإيصالات.' :
-                order.isPending ? 'العملية أُرسلت للمزود. ستحصل على تأكيد قريباً.' :
-                'لم تنجح العملية. المبلغ أعيد لحسابك.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 13),
-              ),
-              if (order.providerReference != null) ...[
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    'مرجع: ${order.providerReference}',
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                Navigator.pop(context); // العودة لصفحة المزودين
-              },
-              child: const Text('حسناً'),
-            ),
-          ],
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(ctrl.lastError.value.isNotEmpty
-              ? ctrl.lastError.value
-              : 'فشل الدفع، حاول مرة أخرى'),
-          backgroundColor: AmyalColors.red,
-        ),
-      );
+    if (done == true) {
+      Navigator.pop(context); // العودة لصفحة المزودين
     }
   }
 
