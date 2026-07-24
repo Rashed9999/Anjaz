@@ -388,8 +388,66 @@ class _CustomerLoginTabState extends State<_CustomerLoginTab> {
                 ),
               ],
             ),
+            // AMYAL-SEC-LOGIN-001: آخر تسجيل دخول (يظهر فقط إن وُجد سجلّ سابق).
+            const _LastLoginNote(),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Last-login security note — AMYAL-SEC-LOGIN-001
+// ============================================================
+class _LastLoginNote extends StatelessWidget {
+  const _LastLoginNote();
+
+  String _fmt(String iso) {
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return iso;
+    final l = dt.toLocal();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${l.year}/${two(l.month)}/${two(l.day)} - ${two(l.hour)}:${two(l.minute)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final last = UnifiedAuthController.readLastLogin();
+    if (last == null) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: AmyalColors.primary.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AmyalColors.primary.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.shield_outlined, size: 20, color: AmyalColors.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('آخر تسجيل دخول لهذا الجهاز',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AmyalColors.primary)),
+                const SizedBox(height: 2),
+                Text(
+                  '🕒 ${_fmt(last.at)}${last.ip.isNotEmpty ? '   •   📍 ${last.ip}' : ''}',
+                  style: const TextStyle(
+                      fontSize: 11.5, color: AmyalColors.textSecondary),
+                ),
+                const Text('إن لم تكن أنت، غيّر كلمة المرور فوراً.',
+                    style: TextStyle(fontSize: 10.5, color: AmyalColors.textMuted)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

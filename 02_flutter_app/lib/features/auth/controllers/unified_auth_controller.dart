@@ -7,6 +7,7 @@ import 'package:amyal_pay/features/auth/screens/role_router.dart';
 import 'package:amyal_pay/features/auth/screens/account_review_screen.dart';
 import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amyal_pay/data/api/secure_storage_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// AMIAL-UNIFIED-AUTH-001 (v1.5)
 class UnifiedAuthRepo {
@@ -125,6 +126,7 @@ class UnifiedAuthController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
         final meta = r.body['meta'] ?? {};
         await _saveAuth(meta);
+        await _persistLastLogin(meta);
         currentRole.value = (meta['role'] ?? 'agent').toString();
         _pendingOtpToken = null;
         // CRITICAL-001 — حمّل access بعد تسجيل الدخول الناجح
@@ -150,6 +152,7 @@ class UnifiedAuthController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
         final meta = r.body['meta'] ?? {};
         await _saveAuth(meta);
+        await _persistLastLogin(meta);
         currentRole.value = (meta['role'] ?? '').toString();
         // AMIAL-VERIFY-GATE: التقط حالة التوثيق واسم المستخدم من الاستجابة
         final user = (meta['user'] is Map) ? meta['user'] as Map : const {};
@@ -185,6 +188,35 @@ class UnifiedAuthController extends GetxController implements GetxService {
         try { repo.apiClient.updateHeader(token); } catch (_) {}
         try { await SecureStorageHelper.instance.setToken(token); } catch (_) {}
       }
+    }
+  }
+
+  // AMYAL-SEC-LOGIN-001: حفظ «آخر تسجيل دخول» محلياً — يعود من الخادم في الـ meta
+  // (وقت + IP لآخر دخول سابق). نعرضه في شاشة الدخول التالية ليكتشف المستخدم أي
+  // دخول غير مصرّح به. مفاتيح prefs ثابتة.
+  static const String _kLastLoginAt = 'amial_last_login_at';
+  static const String _kLastLoginIp = 'amial_last_login_ip';
+
+  Future<void> _persistLastLogin(Map meta) async {
+    try {
+      final ll = meta['last_login'];
+      if (ll is Map) {
+        final prefs = Get.find<SharedPreferences>();
+        await prefs.setString(_kLastLoginAt, (ll['at'] ?? '').toString());
+        await prefs.setString(_kLastLoginIp, (ll['ip'] ?? '').toString());
+      }
+    } catch (_) {/* غير حرج */}
+  }
+
+  /// يقرأ آخر تسجيل دخول محفوظ (at, ip) — أو null إن كانت أوّل مرة.
+  static ({String at, String ip})? readLastLogin() {
+    try {
+      final prefs = Get.find<SharedPreferences>();
+      final at = prefs.getString(_kLastLoginAt) ?? '';
+      if (at.isEmpty) return null;
+      return (at: at, ip: prefs.getString(_kLastLoginIp) ?? '');
+    } catch (_) {
+      return null;
     }
   }
 

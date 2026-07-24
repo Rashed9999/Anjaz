@@ -69,6 +69,31 @@ class UnifiedAuthTest extends TestCase
         $this->assertNotEmpty($response->json('meta.token'));
     }
 
+    /** @test AMYAL-SEC-LOGIN-001: الدخول الثاني يُرجع «آخر تسجيل دخول» في الـ meta */
+    public function second_login_returns_last_login_meta()
+    {
+        \Illuminate\Support\Facades\Artisan::call('passport:install', ['--no-interaction' => true]);
+
+        \App\Models\User::factory()->create([
+            'type' => 2, 'role' => 'customer', 'zone_code' => 'SOUTH',
+            'phone' => '967771230009', 'password' => \Illuminate\Support\Facades\Hash::make('1234'),
+            'is_active' => 1,
+        ]);
+
+        $payload = ['role' => 'customer', 'phone' => '967771230009', 'password' => '1234'];
+
+        // الدخول الأوّل: لا يوجد سجلّ سابق → لا last_login
+        $first = $this->postJson('/api/v1/auth/login', $payload);
+        $first->assertStatus(200);
+        $this->assertNull($first->json('meta.last_login'));
+
+        // الدخول الثاني: يجب أن يظهر آخر دخول (وقت + IP)
+        $second = $this->postJson('/api/v1/auth/login', $payload);
+        $second->assertStatus(200);
+        $this->assertNotEmpty($second->json('meta.last_login.at'));
+        $this->assertArrayHasKey('ip', $second->json('meta.last_login'));
+    }
+
     /** @test */
     public function merchant_login_fails_when_merchant_not_found()
     {

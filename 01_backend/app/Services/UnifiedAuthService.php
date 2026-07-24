@@ -33,9 +33,11 @@ use Illuminate\Support\Str;
  */
 class UnifiedAuthService
 {
-    // AMIAL-FIX: رُفع مؤقّتاً لإزالة الحظر أثناء التجربة (كان 5 → يقفل بسرعة).
-    private const MAX_FAILED_ATTEMPTS_WINDOW = 50;
-    private const FAILED_ATTEMPTS_LOCKOUT_MINUTES = 5;
+    // AMYAL-SEC-LOGIN-001: قفل مؤقّت بعد 5 محاولات فاشلة لمدة دقيقة (كما هو
+    // معيار المحافظ). عند بلوغ الحدّ: يُسجَّل حدث في سجلّ التدقيق ويُرسَل إشعار
+    // أمني للمستخدم. (كان مرفوعاً إلى 50 أثناء التجربة — أُعيد للسلوك الآمن.)
+    private const MAX_FAILED_ATTEMPTS_WINDOW = 5;
+    private const FAILED_ATTEMPTS_LOCKOUT_MINUTES = 1;
 
     public function __construct(
         private readonly EncryptionService $encryption,
@@ -73,7 +75,7 @@ class UnifiedAuthService
 
         $this->assertUserActive($user);
 
-        return $this->issueToken($user, 'customer', $request);
+        return $this->issueToken($user, 'customer', $request, [], $phone);
     }
 
     // ============================================================
@@ -137,7 +139,7 @@ class UnifiedAuthService
                 'pos_user_id' => $posUser->id,
                 'pos_number' => $posNumber,
                 'permissions' => $posUser->permissions ?? [],
-            ]);
+            ], $merchantNumber);
         }
 
         // login عادي للتاجر
@@ -148,7 +150,7 @@ class UnifiedAuthService
 
         $this->assertUserActive($merchant);
 
-        return $this->issueToken($merchant, 'merchant', $request);
+        return $this->issueToken($merchant, 'merchant', $request, [], $merchantNumber);
     }
 
     // ============================================================
@@ -239,7 +241,7 @@ class UnifiedAuthService
         }
 
         Cache::forget($this->otpCacheKey($otpToken));
-        return $this->issueToken($agent, 'agent', $request);
+        return $this->issueToken($agent, 'agent', $request, [], $agent->agent_number ?? null);
     }
 
     // ============================================================
@@ -274,7 +276,7 @@ class UnifiedAuthService
             }
         }
 
-        return $this->issueToken($admin, 'admin', $request);
+        return $this->issueToken($admin, 'admin', $request, [], $email);
     }
 
     // ============================================================
@@ -344,7 +346,7 @@ class UnifiedAuthService
     /**
      * إصدار token (Laravel Passport). يفترض Passport مُكوَّن.
      */
-    private function issueToken(User $user, string $role, Request $request, array $extraMeta = []): array
+    private function issueToken(User $user, string $role, Request $request, array $extraMeta = [], ?string $identifier = null): array
     {
         $tokenName = "amyal-{$role}";
         $token = $user->createToken($tokenName);
@@ -354,8 +356,16 @@ class UnifiedAuthService
         // فارغة. نُكرّر منطق 6cash: تعطيل الأجهزة القديمة ثمّ تفعيل الحالي.
         $this->registerDevice($user, $request);
 
-        // تسجيل الـ login الناجح
-        $this->recordSuccess($role, $user->id, $request);
+        // AMYAL-SEC-LOGIN-001: التقاط «آخر تسجيل دخول» السابق قبل تسجيل الحالي،
+        // ليعرضه التطبيق للمستخدم (شعور بالأمان + كشف أي دخول غير مصرّح).
+        $lastLogin = $this->previousLogin($user->id);
+
+        // تسجيل الـ login الناجح (+ إعادة تعيين عدّاد المحاولات بالمفتاح الصحيح)
+        $this->recordSuccess($role, $user->id, $request, $identifier);
+
+        if ($lastLogin !== null) {
+            $extraMeta['last_login'] = $lastLogin;
+        }
 
         return [
             'user' => $user,
@@ -364,6 +374,28 @@ class UnifiedAuthService
             'role' => $role,
             'meta' => $extraMeta,
         ];
+    }
+
+    /**
+     * AMYAL-SEC-LOGIN-001: آخر تسجيل دخول ناجح سابق للمستخدم (وقت + IP).
+     * تُقرأ من unified_login_attempts قبل إدراج الدخول الحالي. أيّ خطأ → null.
+     */
+    private function previousLogin(int $userId): ?array
+    {
+        try {
+            $row = DB::table('unified_login_attempts')
+                ->where('user_id', $userId)
+                ->where('success', true)
+                ->orderByDesc('attempted_at')
+                ->first();
+            if (!$row) return null;
+            return [
+                'at' => (string) $row->attempted_at,
+                'ip' => (string) ($row->ip_address ?? ''),
+            ];
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     /**
@@ -412,7 +444,14 @@ class UnifiedAuthService
     {
         $key = "auth_attempts:{$role}:" . md5($identifier);
         $current = Cache::get($key, 0);
-        Cache::put($key, $current + 1, now()->addMinutes(self::FAILED_ATTEMPTS_LOCKOUT_MINUTES));
+        $newCount = $current + 1;
+        Cache::put($key, $newCount, now()->addMinutes(self::FAILED_ATTEMPTS_LOCKOUT_MINUTES));
+
+        // AMYAL-SEC-LOGIN-001: عند بلوغ الحدّ بالضبط → حدث قفل (سجلّ تدقيق + إشعار
+        // أمني) مرّة واحدة، لا في كلّ محاولة لاحقة محظورة.
+        if ($newCount === self::MAX_FAILED_ATTEMPTS_WINDOW) {
+            $this->onAccountLocked($role, $identifier, $request, $userId);
+        }
 
         try {
             DB::table('unified_login_attempts')->insert([
@@ -431,11 +470,14 @@ class UnifiedAuthService
         }
     }
 
-    private function recordSuccess(string $role, int $userId, Request $request): void
+    private function recordSuccess(string $role, int $userId, Request $request, ?string $identifier = null): void
     {
-        // reset rate limit on success
-        $key = "auth_attempts:{$role}:" . md5((string)$userId);
-        Cache::forget($key);
+        // AMIAL-FIX: العدّاد مُخزَّن بمفتاح المعرّف (هاتف/رقم) لا بمعرّف المستخدم،
+        // فكان لا يُصفّر عند نجاح الدخول. نُصفّر المفتاحين معاً الآن.
+        Cache::forget("auth_attempts:{$role}:" . md5((string)$userId));
+        if ($identifier !== null && $identifier !== '') {
+            Cache::forget("auth_attempts:{$role}:" . md5($identifier));
+        }
 
         try {
             DB::table('unified_login_attempts')->insert([
@@ -450,6 +492,56 @@ class UnifiedAuthService
             ]);
         } catch (\Throwable $e) {
             // ignore
+        }
+    }
+
+    /**
+     * AMYAL-SEC-LOGIN-001: يُستدعى عند بلوغ حدّ المحاولات الفاشلة. يُسجّل حدثاً في
+     * سجلّ التدقيق (سلسلة تجزئة غير قابلة للعبث) ويُرسل إشعاراً أمنياً للمستخدم إن
+     * أمكن التعرّف عليه. كلا الجانبين «أفضل جهد» — لا يكسران مسار الدخول أبداً.
+     */
+    private function onAccountLocked(string $role, string $identifier, Request $request, ?int $userId): void
+    {
+        try {
+            $this->audit->record([
+                'actor_type' => 'user',
+                'actor_user_id' => $userId,
+                'subject_type' => 'user',
+                'subject_id' => $userId,
+                'action' => 'AUTH_LOCKOUT',
+                'decision_code' => 'ACCOUNT_TEMP_LOCKED',
+                'reason' => 'قفل مؤقّت بعد ' . self::MAX_FAILED_ATTEMPTS_WINDOW . ' محاولات دخول فاشلة',
+                'severity' => 'warning',
+                'context' => [
+                    'role' => $role,
+                    'identifier_masked' => $this->maskIdentifier($identifier),
+                    'ip' => (string) $request->ip(),
+                    'lockout_minutes' => self::FAILED_ATTEMPTS_LOCKOUT_MINUTES,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('lockout audit failed', ['err' => $e->getMessage()]);
+        }
+
+        if ($userId) {
+            try {
+                $user = User::find($userId);
+                if ($user) {
+                    app(\App\Services\NotificationService::class)->dispatch(
+                        $user,
+                        'security_alert',
+                        'تنبيه أمني: محاولات دخول فاشلة',
+                        'رصدنا ' . self::MAX_FAILED_ATTEMPTS_WINDOW . ' محاولات دخول فاشلة لحسابك، وتمّ قفله مؤقّتاً لمدة '
+                            . self::FAILED_ATTEMPTS_LOCKOUT_MINUTES . ' دقيقة. إن لم تكن أنت، غيّر كلمة المرور فوراً.',
+                        data: [
+                            'ip' => (string) $request->ip(),
+                            'at' => now()->toIso8601String(),
+                        ],
+                    );
+                }
+            } catch (\Throwable $e) {
+                Log::warning('lockout notify failed', ['err' => $e->getMessage()]);
+            }
         }
     }
 
