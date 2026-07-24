@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\CentralLogics\Helpers;
+
 use App\Models\CharityCampaign;
 use App\Models\CharityOrganization;
 use App\Models\Donation;
@@ -72,10 +74,10 @@ class DonationsService
         $maxAmount = (string)config('amial.donations.max_amount', '50000.0000');
 
         if (bccomp($amountNormalized, $minAmount, 4) < 0) {
-            throw new \RuntimeException("الحد الأدنى للتبرع {$minAmount} ر.ي");
+            throw new \RuntimeException("الحد الأدنى للتبرع " . Helpers::money($minAmount) . " ر.ي");
         }
         if (bccomp($amountNormalized, $maxAmount, 4) > 0) {
-            throw new \RuntimeException("الحد الأقصى للتبرع {$maxAmount} ر.ي");
+            throw new \RuntimeException("الحد الأقصى للتبرع " . Helpers::money($maxAmount) . " ر.ي");
         }
 
         // حساب الـ fee

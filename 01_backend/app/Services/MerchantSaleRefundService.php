@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\CentralLogics\Helpers;
+
 use App\Models\CustomerCreditAccount;
 use App\Models\MerchantRefund;
 use App\Models\MerchantSale;
@@ -278,7 +280,7 @@ class MerchantSaleRefundService
                         $customer,
                         'refund_received',
                         'تم استرداد مبلغ',
-                        "استلمت {$refund->refund_amount} ر.ي {$methodLabel} من {$merchant->f_name}",
+                        "استلمت " . Helpers::money($refund->refund_amount) . " ر.ي {$methodLabel} من {$merchant->f_name}",
                         data: [
                             'refund_ulid' => $refund->refund_ulid,
                             'amount' => (string)$refund->refund_amount,
@@ -294,7 +296,7 @@ class MerchantSaleRefundService
                     $merchant,
                     'refund_pending',
                     'مرتجع بانتظار موافقة',
-                    "مرتجع بمبلغ {$refund->refund_amount} ر.ي يحتاج موافقة الإدارة",
+                    "مرتجع بمبلغ " . Helpers::money($refund->refund_amount) . " ر.ي يحتاج موافقة الإدارة",
                     data: ['refund_ulid' => $refund->refund_ulid],
                 );
             }

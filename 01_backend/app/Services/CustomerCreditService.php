@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\CentralLogics\Helpers;
+
 use App\Models\CustomerCreditAccount;
 use App\Models\CustomerCreditMovement;
 use App\Models\User;
@@ -421,7 +423,7 @@ class CustomerCreditService
                             $customerUser,
                             'credit_sale',
                             'بيع آجل جديد',
-                            "تمّ تسجيل بيع آجل بمبلغ {$movement->amount} ر.ي عليك",
+                            "تمّ تسجيل بيع آجل بمبلغ " . Helpers::money($movement->amount) . " ر.ي عليك",
                             data: [
                                 'account_id' => $account->id,
                                 'movement_id' => $movement->id,
@@ -434,7 +436,7 @@ class CustomerCreditService
                             $customerUser,
                             'credit_payment',
                             'تم تسجيل سداد',
-                            "تم تسجيل سداد بمبلغ " . ltrim($movement->amount, '-') . " ر.ي. الرصيد المتبقّي: {$movement->balance_after} ر.ي",
+                            "تم تسجيل سداد بمبلغ " . ltrim($movement->amount, '-') . " ر.ي. الرصيد المتبقّي: " . Helpers::money($movement->balance_after) . " ر.ي",
                             data: ['account_id' => $account->id, 'movement_id' => $movement->id],
                         );
                     }
@@ -449,7 +451,7 @@ class CustomerCreditService
                         $merchant,
                         'credit_over_limit',
                         'تجاوز حد ائتمان',
-                        "العميل {$account->customer_name} تجاوز حد الائتمان ({$account->current_balance} / {$account->credit_limit} ر.ي)",
+                        "العميل {$account->customer_name} تجاوز حد الائتمان ({$account->current_balance} / " . Helpers::money($account->credit_limit) . " ر.ي)",
                         data: ['account_id' => $account->id],
                     );
                 }

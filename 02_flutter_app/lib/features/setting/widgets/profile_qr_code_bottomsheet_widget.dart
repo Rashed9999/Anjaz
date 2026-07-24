@@ -3,10 +3,9 @@ import 'package:amyal_pay/common/controllers/share_controller.dart';
 import 'package:amyal_pay/util/dimensions.dart';
 import 'package:amyal_pay/util/styles.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:amyal_pay/common/widgets/custom_small_button_widget.dart';
+import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
 
 
 class ProfileQRCodeBottomSheetWidget extends StatelessWidget {
@@ -40,12 +39,27 @@ class ProfileQRCodeBottomSheetWidget extends StatelessWidget {
             padding: const EdgeInsets.only(left: Dimensions.paddingSizeLarge,bottom: Dimensions.paddingSizeSmall),
             child: Text('my_qr_code'.tr,style: rubikRegular.copyWith(fontSize: Dimensions.fontSizeLarge, color: Theme.of(context).textTheme.bodyLarge!.color!.withValues(alpha:0.6),)),
           ),
+          // AMIAL-FIX(QR): كان يعرض SvgPicture.string لقيمة qrCode القادمة من
+          // الخادم — وهي فارغة فيسقط إلى '<svg/>' فلا يظهر رمز أصلاً (دائرة
+          // صفراء صمّاء). الآن نُولّد رمز QR محلياً من رقم الحساب/الهاتف عبر
+          // QrDisplayWidget (نفس مولّد بقية الشاشات) فيظهر رمزاً حقيقياً.
           GetBuilder<ProfileController>(builder: (controller){
+            final info = controller.userInfo;
+            final uid = (info?.uniqueId ?? '').trim();
+            final payload = uid.isNotEmpty ? uid : (info?.phone ?? '').trim();
+            if (payload.isEmpty) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('تعذّر توليد الرمز — بيانات الحساب غير متاحة'),
+                ),
+              );
+            }
             return Center(
-              child: Container(
-                padding: const EdgeInsets.all(50.0),
-                decoration: BoxDecoration(shape: BoxShape.circle, color: Theme.of(context).colorScheme.secondary),
-                child: SvgPicture.string((controller.userInfo?.qrCode ?? '<svg/>'),height: size.width*0.4,width: size.width*0.4),
+              child: QrDisplayWidget(
+                data: payload,
+                size: size.width * 0.5,
+                caption: payload,
               ),
             );
           }),

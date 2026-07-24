@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\CentralLogics\Helpers;
+
 use App\Models\User;
 use App\Models\WholesaleCollection;
 use App\Models\WholesaleCustomer;
@@ -64,7 +66,7 @@ class WholesaleCollectionService
             // لا يتجاوز balance_due
             if (MoneyService::compare($amount, (string)$inv->balance_due) > 0) {
                 throw new InvalidArgumentException(
-                    "المبلغ يتجاوز المتبقّي ({$inv->balance_due} ر.ي)"
+                    "المبلغ يتجاوز المتبقّي (" . Helpers::money($inv->balance_due) . " ر.ي)"
                 );
             }
 

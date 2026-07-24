@@ -369,6 +369,21 @@ class Helpers
         return $string;
     }
 
+    /**
+     * AMYAL-MONEY-FMT-001: تنسيق مبلغ للعرض النصّي (إشعارات/رسائل).
+     * الأعمدة المالية decimal:4، فإدراجها خاماً يُظهر «13500.0000» للمستخدم.
+     * يُعيد فواصل آلاف بلا أصفار زائدة: 13,500 — و 13,500.5 عند وجود كسر.
+     */
+    public static function money(mixed $amount): string
+    {
+        $n = is_numeric($amount) ? (float) $amount : 0.0;
+        $s = number_format($n, 2, '.', ',');
+        if (str_contains($s, '.')) {
+            $s = rtrim(rtrim($s, '0'), '.');
+        }
+        return $s;
+    }
+
     public static function get_business_settings(string $name): mixed
     {
         $config = null;

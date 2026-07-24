@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\CentralLogics\Helpers;
+
 use App\Models\PaymentRequest;
 use App\Models\User;
 use App\Traits\TransactionTrait;
@@ -225,7 +227,7 @@ class PaymentRequestService
                     $requester,
                     'transfer_received',
                     'استلمت دفعة لطلبك',
-                    "تم دفع {$request->amount} ر.ي من {$payer->f_name} لطلبك (#{$request->short_code})",
+                    "تم دفع " . Helpers::money($request->amount) . " ر.ي من {$payer->f_name} لطلبك (#{$request->short_code})",
                     data: [
                         'amount' => (string)$request->amount,
                         'short_code' => $request->short_code,
@@ -239,7 +241,7 @@ class PaymentRequestService
                 $payer,
                 'transfer_sent',
                 'دفعت طلباً',
-                "دفعت {$request->amount} ر.ي إلى {$requester?->f_name}",
+                "دفعت " . Helpers::money($request->amount) . " ر.ي إلى {$requester?->f_name}",
                 data: [
                     'amount' => (string)$request->amount,
                     'short_code' => $request->short_code,

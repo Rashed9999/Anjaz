@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\CentralLogics\Helpers;
+
 use App\Models\FuelCompanyAccount;
 use App\Models\FuelCompanyCard;
 use App\Models\FuelSale;
@@ -77,7 +79,7 @@ class FuelCompanyCardService
             $newDaily = MoneyService::add($todaySpent ?: '0', $saleAmount);
             if (MoneyService::compare($newDaily, (string)$card->daily_limit) > 0) {
                 throw new RuntimeException(
-                    "تجاوزت الحد اليومي للبطاقة ({$card->daily_limit} ر.ي)"
+                    "تجاوزت الحد اليومي للبطاقة (" . Helpers::money($card->daily_limit) . " ر.ي)"
                 );
             }
         }
@@ -92,7 +94,7 @@ class FuelCompanyCardService
             $newMonth = MoneyService::add($monthSpent ?: '0', $saleAmount);
             if (MoneyService::compare($newMonth, (string)$card->monthly_limit) > 0) {
                 throw new RuntimeException(
-                    "تجاوزت الحد الشهري للبطاقة ({$card->monthly_limit} ر.ي)"
+                    "تجاوزت الحد الشهري للبطاقة (" . Helpers::money($card->monthly_limit) . " ر.ي)"
                 );
             }
         }

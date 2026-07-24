@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\CentralLogics\Helpers;
+
 use App\Aml\AmlDecision;
 use App\Aml\RuleEvaluationResult;
 use App\Aml\Rules\AmlRuleInterface;
@@ -316,7 +318,7 @@ class AmlScreeningService
             'subject_type' => 'flagged_transaction',
             'subject_id' => $flagged->id,
             'title_ar' => "معاملة مشبوهة (نقاط: {$decision->totalRiskScore})",
-            'message_ar' => "تم {$decision->finalAction} عملية بقيمة {$flagged->amount} ر.ي. القواعد المُفعَّلة: " . implode(', ', $codes),
+            'message_ar' => "تم {$decision->finalAction} عملية بقيمة " . Helpers::money($flagged->amount) . " ر.ي. القواعد المُفعَّلة: " . implode(', ', $codes),
             'context' => [
                 'flag_id' => $flagged->id,
                 'rules' => $codes,

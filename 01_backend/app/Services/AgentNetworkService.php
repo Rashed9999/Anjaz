@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\CentralLogics\Helpers;
+
 use App\Models\AgentFloatLog;
 use App\Models\AgentProfile;
 use App\Models\AgentSettlement;
@@ -56,7 +58,7 @@ class AgentNetworkService
             $defaultSingle = (string) config('amial.agent.default_single_transaction_limit', '100000');
             if (bccomp($amount, $defaultSingle, 4) > 0) {
                 throw new RuntimeException(
-                    "المبلغ يتجاوز الحد الافتراضي للعملية ({$defaultSingle} ر.ي). يلزم تفعيل ملف الوكيل."
+                    "المبلغ يتجاوز الحد الافتراضي للعملية (" . Helpers::money($defaultSingle) . " ر.ي). يلزم تفعيل ملف الوكيل."
                 );
             }
             return;
@@ -69,7 +71,7 @@ class AgentNetworkService
         // حد العملية الواحدة
         if (bccomp($amount, (string)$profile->single_transaction_limit, 4) > 0) {
             throw new RuntimeException(
-                "المبلغ يتجاوز حد العملية الواحدة ({$profile->single_transaction_limit} ر.ي)"
+                "المبلغ يتجاوز حد العملية الواحدة (" . Helpers::money($profile->single_transaction_limit) . " ر.ي)"
             );
         }
 
@@ -78,7 +80,7 @@ class AgentNetworkService
         $newDailyTotal = bcadd((string)$todayLog->cash_in_total, $amount, 4);
         if (bccomp($newDailyTotal, (string)$profile->daily_cash_in_limit, 4) > 0) {
             throw new RuntimeException(
-                "هذه العملية ستتجاوز حدك اليومي للإيداع ({$profile->daily_cash_in_limit} ر.ي)"
+                "هذه العملية ستتجاوز حدك اليومي للإيداع (" . Helpers::money($profile->daily_cash_in_limit) . " ر.ي)"
             );
         }
     }

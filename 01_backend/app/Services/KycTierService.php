@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\CentralLogics\Helpers;
+
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -105,7 +107,7 @@ class KycTierService
         // 2) فحص حد العملية الواحدة
         if (bccomp($amount, $limits['max_single_transaction'], 4) > 0) {
             throw new RuntimeException(
-                "المبلغ يتجاوز حد العملية الواحدة ({$limits['max_single_transaction']} ر.ي) لمستواك"
+                "المبلغ يتجاوز حد العملية الواحدة (" . Helpers::money($limits['max_single_transaction']) . " ر.ي) لمستواك"
             );
         }
 
@@ -114,7 +116,7 @@ class KycTierService
         $newDailyTotal = bcadd($todayTotal, $amount, 4);
         if (bccomp($newDailyTotal, $limits['max_daily_total'], 4) > 0) {
             throw new RuntimeException(
-                "هذه العملية ستتجاوز حدك اليومي ({$limits['max_daily_total']} ر.ي)"
+                "هذه العملية ستتجاوز حدك اليومي (" . Helpers::money($limits['max_daily_total']) . " ر.ي)"
             );
         }
 
@@ -123,7 +125,7 @@ class KycTierService
         $newMonthlyTotal = bcadd($monthTotal, $amount, 4);
         if (bccomp($newMonthlyTotal, $limits['max_monthly_total'], 4) > 0) {
             throw new RuntimeException(
-                "هذه العملية ستتجاوز حدك الشهري ({$limits['max_monthly_total']} ر.ي)"
+                "هذه العملية ستتجاوز حدك الشهري (" . Helpers::money($limits['max_monthly_total']) . " ر.ي)"
             );
         }
     }
@@ -138,7 +140,7 @@ class KycTierService
 
         if (bccomp($newBalance, $limits['max_balance'], 4) > 0) {
             throw new RuntimeException(
-                "الرصيد سيتجاوز الحد المسموح ({$limits['max_balance']} ر.ي) لمستواك. أكمل التوثيق لرفع الحد."
+                "الرصيد سيتجاوز الحد المسموح (" . Helpers::money($limits['max_balance']) . " ر.ي) لمستواك. أكمل التوثيق لرفع الحد."
             );
         }
     }

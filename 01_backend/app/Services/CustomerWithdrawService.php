@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\CentralLogics\Helpers;
+
 use App\Models\User;
 use App\Models\WithdrawalRequest;
 use App\Services\NotificationService;
@@ -72,7 +74,7 @@ class CustomerWithdrawService
                     $customer,
                     'withdraw_pending',
                     'طلب سحب جديد',
-                    "تم إنشاء طلب سحب بمبلغ {$req->amount} ر.ي. رقم العملية: {$req->op_code}. اذهب لأقرب وكيل.",
+                    "تم إنشاء طلب سحب بمبلغ " . Helpers::money($req->amount) . " ر.ي. رقم العملية: {$req->op_code}. اذهب لأقرب وكيل.",
                     data: [
                         'op_code' => $req->op_code,
                         'amount' => (string)$req->amount,
@@ -223,7 +225,7 @@ class CustomerWithdrawService
                         $customer,
                         'withdrawal_completed',
                         'تم سحب المبلغ بنجاح',
-                        "تم استلام {$req->amount} ر.ي من الوكيل. رقم العملية: {$opCode}.",
+                        "تم استلام " . Helpers::money($req->amount) . " ر.ي من الوكيل. رقم العملية: {$opCode}.",
                         data: [
                             'op_code' => $opCode,
                             'amount' => (string)$req->amount,
