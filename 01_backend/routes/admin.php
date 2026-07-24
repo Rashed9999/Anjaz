@@ -357,7 +357,7 @@ Route::group(['as' => 'admin.'], function () {
             Route::get('create', [FAQController::class, 'create'])->name('create');
             Route::post('store', [FAQController::class, 'store'])->name('store');
             Route::delete('delete/{id}', [FAQController::class, 'delete'])->name('delete');
-            Route::get('status/{id}}', [FAQController::class, 'status'])->name('status');
+            Route::get('status/{id}/{status}', [FAQController::class, 'status'])->name('status');
             Route::get('edit/{id}', [FAQController::class, 'edit'])->name('edit');
             Route::get('details/{id}', [FAQController::class, 'details'])->name('details');
             Route::post('update/{id}', [FAQController::class, 'update'])->name('update');

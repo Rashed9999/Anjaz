@@ -104,6 +104,9 @@
     <a class="nav-link" href="{{route('admin.notification.add-new')}}" title="الإشعارات">
         <span class="text-truncate">🔔 إشعارات الدفع</span>
     </a>
+    <a class="nav-link" href="{{route('admin.faq.index')}}" title="الأسئلة الشائعة">
+        <span class="text-truncate">❓ الأسئلة الشائعة</span>
+    </a>
     {{-- AMIAL-BIZ-SETUP-001: إعدادات الأعمال بتبويبات (6cash-style) --}}
     <a class="nav-link" href="{{route('admin.business-settings.business-setup')}}" title="إعدادات الأعمال">
         <span class="text-truncate">🏢 إعدادات الأعمال (عام/رسوم)</span>
