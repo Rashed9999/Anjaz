@@ -12,6 +12,7 @@ import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
 import 'package:amyal_pay/helper/phone_cheker_helper.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amyal_pay/common/widgets/amial_quick_amounts.dart';
 
 /// AMIAL-SEND-V2 — شاشة تحويل الأموال بتصميم أميال (التصميم 15 من ملف
 /// الشاشات): بطاقة الرصيد + رقم المستلِم + المبلغ + ملاحظة + «المحوَّل لهم
@@ -436,9 +437,11 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const Text('YER',
+                      // AMIAL-FIX(CURRENCY): كان «YER» بالإنجليزية وبلون ذهبي
+                      // غريب — بينما بقية التطبيق «ر.ي» بلون البراند.
+                      const Text('ر.ي',
                           style: TextStyle(
-                              color: Color(0xFFB8860B),
+                              color: AmyalColors.textSecondary,
                               fontWeight: FontWeight.w700,
                               fontSize: 16)),
                       const SizedBox(width: 12),
@@ -469,6 +472,16 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
                           TextStyle(fontSize: 11, color: Color(0xFF8B97A8))),
                 ],
               ),
+            ),
+            const SizedBox(height: 10),
+
+            // AMYAL-DS-001: مبالغ سريعة — كانت غائبة عن أكثر شاشة استخداماً.
+            AmialQuickAmounts(
+              values: const [1000, 2000, 5000, 10000, 20000, 50000],
+              onPick: (v) {
+                _amountCtrl.text = v.toString();
+                setState(() {});
+              },
             ),
             const SizedBox(height: 16),
 

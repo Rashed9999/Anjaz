@@ -140,7 +140,9 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
           children: [
             _header(),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+              // AMIAL-FIX(HOME-BOTTOM): كانت الحشوة 24 فقط فيغطّي شريط التنقّل
+              // والزرّ العائم آخر صفّ من أيقونات الخدمات. الشريط يحتاج ~110.
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 110),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
