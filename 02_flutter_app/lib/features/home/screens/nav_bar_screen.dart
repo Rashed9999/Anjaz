@@ -70,60 +70,31 @@ class _NavBarScreenState extends State<NavBarScreen> {
               FirebaseMessaging.instance.requestPermission();
             }
           },
-          // AMIAL-NAV-002: شريط تنقّل بتصميم «المحفظة» — أبيض بحواف علوية
-          // مستديرة + زرّ مسح QR عائم في المنتصف (أزرق بحلقة صفراء). لا فكّ
-          // إجباري لألوان الثيم (كان bodyLarge!.color! مصدر رمادية محتملاً).
+          // AMIAL-NAV-003: شريط تنقّل «كبسولة عائمة» (كما في مراجع المحافظ
+          // الاحترافية): حاوية داكنة مستديرة بالكامل تطفو فوق المحتوى، وزرّ
+          // المسح في مركزها بلون البراند الأصفر. كان شريطاً أبيض بعرض الشاشة.
           builder : (context) => Scaffold(
             backgroundColor: const Color(0xFFF2F3F7),
+            extendBody: true,
             body: PageStorage(bucket: bucket, child: menuController.screen[menuController.currentTabIndex]),
 
-            floatingActionButton: Container(
-              width: 62, height: 62,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFFECA1E), width: 3),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF053391).withValues(alpha: 0.35),
-                    blurRadius: 14, offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: FloatingActionButton(
-                shape: const CircleBorder(),
-                backgroundColor: const Color(0xFF053391),
-                elevation: 0,
-                onPressed: ()=> Get.to(()=> const CameraScreen(
-                  fromEditProfile: false, isBarCodeScan: true, isHome: true,
-                )),
-                child: const Icon(Icons.qr_code_scanner_rounded,
-                    color: Colors.white, size: 27),
-              ),
-            ),
-
-            floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-
-            bottomNavigationBar: Container(
-              padding: EdgeInsets.only(top: 10,
-                bottom: padding.bottom > 15 ? 0 : 10,
-              ),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(24),
-                  topRight: Radius.circular(24),
+            bottomNavigationBar: Padding(
+              padding: EdgeInsets.fromLTRB(
+                  16, 0, 16, padding.bottom > 15 ? padding.bottom - 4 : 14),
+              child: Container(
+                height: 68,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0A2A6B),
+                  borderRadius: BorderRadius.circular(34),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF053391).withValues(alpha: 0.30),
+                      blurRadius: 22,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.08),
-                    blurRadius: 20, offset: const Offset(0, -4),
-                  ),
-                ],
-              ),
-
-              child: SafeArea(
                 child: Row(children: [
-
                   Expanded(
                     child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
                       _navItem(menuController, 0, Icons.home_rounded,
@@ -136,7 +107,29 @@ class _NavBarScreenState extends State<NavBarScreen> {
                       }),
                     ]),
                   ),
-                  const SizedBox(width: 56), // مساحة الزرّ العائم
+
+                  // زرّ المسح في مركز الكبسولة
+                  GestureDetector(
+                    onTap: () => Get.to(() => const CameraScreen(
+                          fromEditProfile: false, isBarCodeScan: true, isHome: true,
+                        )),
+                    child: Container(
+                      width: 54, height: 54,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFECA1E),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFECA1E).withValues(alpha: 0.45),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.qr_code_scanner_rounded,
+                          color: Color(0xFF053391), size: 26),
+                    ),
+                  ),
 
                   Expanded(
                     child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
@@ -148,7 +141,6 @@ class _NavBarScreenState extends State<NavBarScreen> {
                           () => menuController.selectProfilePage()),
                     ]),
                   ),
-
                 ]),
               ),
             ),
@@ -158,25 +150,25 @@ class _NavBarScreenState extends State<NavBarScreen> {
     });
   }
 
-  /// عنصر تبويب حديث: أيقونة Material + تسمية، بألوان هوية أميال.
+  /// عنصر تبويب داخل الكبسولة الداكنة: أصفر البراند للمحدَّد، أبيض باهت لغيره.
   Widget _navItem(MenuItemController c, int index, IconData selectedIcon,
       IconData icon, String label, VoidCallback onTap) {
     final selected = c.currentTabIndex == index;
-    const active = Color(0xFF053391);
-    const inactive = Color(0xFF8B97A8);
+    const active = Color(0xFFFECA1E);
+    final inactive = Colors.white.withValues(alpha: 0.55);
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(selected ? selectedIcon : icon,
-              size: 24, color: selected ? active : inactive),
+              size: 22, color: selected ? active : inactive),
           const SizedBox(height: 3),
           Text(label,
               style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                fontSize: 9.5,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                 color: selected ? active : inactive,
               )),
         ]),
