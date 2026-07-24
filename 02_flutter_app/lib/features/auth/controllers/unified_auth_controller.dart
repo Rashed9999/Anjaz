@@ -196,6 +196,7 @@ class UnifiedAuthController extends GetxController implements GetxService {
   // دخول غير مصرّح به. مفاتيح prefs ثابتة.
   static const String _kLastLoginAt = 'amial_last_login_at';
   static const String _kLastLoginIp = 'amial_last_login_ip';
+  static const String _kLastLoginZone = 'amial_last_login_zone';
 
   Future<void> _persistLastLogin(Map meta) async {
     try {
@@ -204,17 +205,22 @@ class UnifiedAuthController extends GetxController implements GetxService {
         final prefs = Get.find<SharedPreferences>();
         await prefs.setString(_kLastLoginAt, (ll['at'] ?? '').toString());
         await prefs.setString(_kLastLoginIp, (ll['ip'] ?? '').toString());
+        await prefs.setString(_kLastLoginZone, (ll['zone'] ?? '').toString());
       }
     } catch (_) {/* غير حرج */}
   }
 
-  /// يقرأ آخر تسجيل دخول محفوظ (at, ip) — أو null إن كانت أوّل مرة.
-  static ({String at, String ip})? readLastLogin() {
+  /// يقرأ آخر تسجيل دخول محفوظ (at, ip, zone) — أو null إن كانت أوّل مرة.
+  static ({String at, String ip, String zone})? readLastLogin() {
     try {
       final prefs = Get.find<SharedPreferences>();
       final at = prefs.getString(_kLastLoginAt) ?? '';
       if (at.isEmpty) return null;
-      return (at: at, ip: prefs.getString(_kLastLoginIp) ?? '');
+      return (
+        at: at,
+        ip: prefs.getString(_kLastLoginIp) ?? '',
+        zone: prefs.getString(_kLastLoginZone) ?? '',
+      );
     } catch (_) {
       return null;
     }

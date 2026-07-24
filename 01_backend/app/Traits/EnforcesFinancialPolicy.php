@@ -110,12 +110,7 @@ trait EnforcesFinancialPolicy
 
     private function zoneNameAr(string $zone): string
     {
-        return match ($zone) {
-            'NORTH' => 'الشمال',
-            'MIDDLE' => 'الوسط',
-            'OTHER' => 'أخرى',
-            'UNKNOWN' => 'غير محددة',
-            default => $zone,
-        };
+        // AMYAL-ZONE-LABEL-001: مصدر موحّد (كان SOUTH ناقصاً هنا فيظهر حرفياً).
+        return \App\Services\ZonePolicyService::zoneNameAr($zone);
     }
 }

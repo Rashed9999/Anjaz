@@ -364,6 +364,9 @@ class UnifiedAuthService
         $this->recordSuccess($role, $user->id, $request, $identifier);
 
         if ($lastLogin !== null) {
+            // AMYAL-ZONE-LABEL-001: «الموقع» من نظام المناطق الجاهز (الجنوب/…)
+            // بدل GeoIP — منطقة الحساب مستقرّة ومعيّنة عند KYC.
+            $lastLogin['zone'] = \App\Services\ZonePolicyService::zoneNameAr($user->zone_code ?? null);
             $extraMeta['last_login'] = $lastLogin;
         }
 

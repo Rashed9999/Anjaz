@@ -87,11 +87,13 @@ class UnifiedAuthTest extends TestCase
         $first->assertStatus(200);
         $this->assertNull($first->json('meta.last_login'));
 
-        // الدخول الثاني: يجب أن يظهر آخر دخول (وقت + IP)
+        // الدخول الثاني: يجب أن يظهر آخر دخول (وقت + IP + اسم المنطقة العربي)
         $second = $this->postJson('/api/v1/auth/login', $payload);
         $second->assertStatus(200);
         $this->assertNotEmpty($second->json('meta.last_login.at'));
         $this->assertArrayHasKey('ip', $second->json('meta.last_login'));
+        // zone_code = SOUTH → «الجنوب» (نظام المناطق الجاهز، لا GeoIP)
+        $this->assertEquals('الجنوب', $second->json('meta.last_login.zone'));
     }
 
     /** @test */

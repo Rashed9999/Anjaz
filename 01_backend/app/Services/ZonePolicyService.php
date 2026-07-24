@@ -30,6 +30,21 @@ class ZonePolicyService
     public const VALID_ZONES = ['SOUTH', 'NORTH', 'MIDDLE', 'OTHER', 'UNKNOWN'];
 
     /**
+     * AMYAL-ZONE-LABEL-001: الاسم العربي لرمز المنطقة — مصدر موحّد لكل الأماكن
+     * (كان تعيين SOUTH ناقصاً في EnforcesFinancialPolicy فيظهر «SOUTH» حرفياً).
+     */
+    public static function zoneNameAr(?string $zone): string
+    {
+        return match ($zone) {
+            'SOUTH' => 'الجنوب',
+            'NORTH' => 'الشمال',
+            'MIDDLE' => 'الوسط',
+            'OTHER' => 'أخرى',
+            default => 'غير محددة',
+        };
+    }
+
+    /**
      * العمليات المالية التي ترفض إن لم تكن في SOUTH.
      * أي endpoint له مفتاحه هنا يخضع للسياسة عند تطبيق middleware.
      */

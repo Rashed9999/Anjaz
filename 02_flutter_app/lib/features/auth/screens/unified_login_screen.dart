@@ -438,10 +438,15 @@ class _LastLoginNote extends StatelessWidget {
                         color: AmyalColors.primary)),
                 const SizedBox(height: 2),
                 Text(
-                  '🕒 ${_fmt(last.at)}${last.ip.isNotEmpty ? '   •   📍 ${last.ip}' : ''}',
+                  '🕒 ${_fmt(last.at)}'
+                  '${last.zone.isNotEmpty ? '   •   📍 ${last.zone}' : ''}',
                   style: const TextStyle(
                       fontSize: 11.5, color: AmyalColors.textSecondary),
                 ),
+                if (last.ip.isNotEmpty)
+                  Text('IP: ${last.ip}',
+                      style: const TextStyle(
+                          fontSize: 10, color: AmyalColors.textMuted)),
                 const Text('إن لم تكن أنت، غيّر كلمة المرور فوراً.',
                     style: TextStyle(fontSize: 10.5, color: AmyalColors.textMuted)),
               ],
