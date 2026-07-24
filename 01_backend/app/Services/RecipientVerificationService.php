@@ -36,11 +36,23 @@ class RecipientVerificationService
      */
     public function verifyRecipient(string $phone, int $senderId): array
     {
-        // AMIAL-PHONE-001: نبحث بكل الصيغ المكافئة (مهما كانت صيغة التخزين)
-        $recipient = User::whereIn('phone', \App\Support\Phone::variants($phone))->first();
+        $identifier = trim($phone);
+        $recipient = null;
+
+        // AMIAL-ACCOUNT-NUMBER-001: ادعم رقم الحساب (8 أرقام + Luhn) كمعرّف مستلِم
+        // إلى جانب الهاتف — كان البحث بالهاتف فقط فيفشل إدخال رقم الحساب.
+        if (preg_match('/^\d{8}$/', $identifier)) {
+            $recipient = app(AccountNumberService::class)
+                ->resolveRecipient($identifier, allowPhone: false);
+        }
+
+        // هاتف: نبحث بكل الصيغ المكافئة (مهما كانت صيغة التخزين)
+        if (!$recipient) {
+            $recipient = User::whereIn('phone', \App\Support\Phone::variants($identifier))->first();
+        }
 
         if (!$recipient) {
-            throw new RuntimeException('لا يوجد مستخدم بهذا الرقم');
+            throw new RuntimeException('لا يوجد مستخدم بهذا الرقم أو رقم الحساب');
         }
         $phone = $recipient->phone; // استخدم الصيغة المخزّنة الفعلية للكاش/العرض
 

@@ -28,46 +28,71 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
   }
 
   Future<void> _downloadPdf() async {
-    // AMIAL-FIX(PDF): كان يفتح الرابط في المتصفّح الخارجي بلا رمز الدخول →
-    // يُرفض (401). الآن نُنزّل الـ PDF داخل التطبيق مع ترويسة المصادقة، نحفظه
-    // مؤقّتاً، ثمّ نفتحه بعارض النظام.
+    // AMIAL-FIX(PDF-FINAL): الخادم قد يُسقط الاتصال أثناء إرسال ملفّ يُولَّد لحظياً
+    // عبر شبكة جوّال بطيئة («Connection closed while receiving data»). الحلّ
+    // النهائي: إعادة المحاولة تلقائياً حتى 3 مرّات بمهلة أطول وتراجع تصاعدي —
+    // والخادم يخزّن الملفّ مؤقّتاً فتصل المحاولة الثانية فوراً من الكاش.
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
       const SnackBar(content: Text('جارٍ تحضير الإيصال...')),
     );
+
+    final url = Get.find<ReceiptsController>().getDownloadUrl(widget.receiptId);
+    String? token;
     try {
-      final url = Get.find<ReceiptsController>().getDownloadUrl(widget.receiptId);
-      String? token;
+      token = await SecureStorageHelper.instance.getToken();
+    } catch (_) {}
+    final headers = {
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      'Accept': 'application/pdf',
+    };
+
+    const maxAttempts = 3;
+    Object? lastError;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        token = await SecureStorageHelper.instance.getToken();
-      } catch (_) {}
-      final resp = await http.get(
-        Uri.parse(url),
-        headers: {
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-          'Accept': 'application/pdf',
-        },
-      ).timeout(const Duration(seconds: 30));
+        final resp = await http
+            .get(Uri.parse(url), headers: headers)
+            .timeout(const Duration(seconds: 60));
 
-      final contentType = resp.headers['content-type'] ?? '';
-      if (resp.statusCode != 200 || contentType.contains('json')) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('تعذّر تحميل الإيصال (${resp.statusCode})')),
+        final contentType = resp.headers['content-type'] ?? '';
+        if (resp.statusCode != 200 || contentType.contains('json')) {
+          // خطأ منطقي (مصادقة/عدم وجود) — التكرار لن يُصلحه.
+          if (!mounted) return;
+          messenger.showSnackBar(
+            SnackBar(content: Text('تعذّر تحميل الإيصال (${resp.statusCode})')),
+          );
+          return;
+        }
+        if (resp.bodyBytes.isEmpty) {
+          throw Exception('ملفّ فارغ');
+        }
+
+        await PdfDownloaderHelper.downloadAndOpenPdf(
+          pdfData: resp.bodyBytes,
+          baseFileName: 'receipt_${widget.receiptId}',
         );
-        return;
+        return; // نجاح
+      } catch (e) {
+        lastError = e;
+        if (attempt < maxAttempts) {
+          if (mounted) {
+            messenger.showSnackBar(SnackBar(
+              content: Text('تعذّر الاتصال — إعادة المحاولة ($attempt/$maxAttempts)...'),
+              duration: const Duration(milliseconds: 900),
+            ));
+          }
+          await Future.delayed(Duration(seconds: attempt * 2)); // 2s ثمّ 4s
+        }
       }
-
-      // نُسلّم البايتات للمساعد القويّ (يحفظ + يفتح مع بدائل حسب المنصّة).
-      await PdfDownloaderHelper.downloadAndOpenPdf(
-        pdfData: resp.bodyBytes,
-        baseFileName: 'receipt_${widget.receiptId}',
-      );
-    } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('فشل تحميل PDF: $e')),
-      );
     }
+
+    if (!mounted) return;
+    messenger.showSnackBar(SnackBar(
+      content: Text('تعذّر تحميل الإيصال بعد $maxAttempts محاولات. تحقّق من الاتصال وحاول لاحقاً.\n$lastError'),
+      duration: const Duration(seconds: 4),
+    ));
   }
 
   Future<void> _shareReceipt() async {

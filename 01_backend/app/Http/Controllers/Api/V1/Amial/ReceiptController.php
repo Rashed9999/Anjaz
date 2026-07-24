@@ -7,6 +7,7 @@ use App\Models\Receipt;
 use App\Services\ReceiptService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -181,25 +182,34 @@ class ReceiptController extends Controller
             return $this->error('PDF_UNAVAILABLE', 'PDF engine not installed', 500);
         }
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('receipts.a4-invoice', [
-            'receipt' => $receipt,
-            'user' => $receipt->user,
-            'counterparty' => $receipt->counterparty,
-            'qrUrl' => $qrUrl,
-            'businessName' => $businessName,
-            'amountWords' => $this->amountInArabicWords((float) $receipt->net_amount),
-            'items' => $items,
-        ])->setPaper('a4', 'portrait');
+        // AMIAL-FIX(PDF-FINAL): نخزّن ناتج التصيير مؤقّتاً (15 دقيقة) بمفتاح مرتبط
+        // بآخر تعديل للإيصال. الإيصال ثابت المحتوى، فالتصيير مرّة واحدة يكفي —
+        // وإن أسقط الخادمُ الاتصالَ أثناء الإرسال (شبكة بطيئة)، تصل محاولة
+        // التطبيق التالية فوراً من الكاش بلا إعادة تصيير ثقيل.
+        $cacheKey = "receipt_pdf_a4:{$receipt->id}:" . (optional($receipt->updated_at)->timestamp ?? 0);
+        $content = Cache::get($cacheKey);
+
+        if ($content === null) {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('receipts.a4-invoice', [
+                'receipt' => $receipt,
+                'user' => $receipt->user,
+                'counterparty' => $receipt->counterparty,
+                'qrUrl' => $qrUrl,
+                'businessName' => $businessName,
+                'amountWords' => $this->amountInArabicWords((float) $receipt->net_amount),
+                'items' => $items,
+            ])->setPaper('a4', 'portrait');
+
+            @ini_set('memory_limit', '512M');
+            @set_time_limit(120);
+            $content = $pdf->output();
+
+            try {
+                Cache::put($cacheKey, $content, now()->addMinutes(15));
+            } catch (\Throwable $e) { /* الكاش تحسين لا شرط */ }
+        }
 
         $receipt->incrementDownloadCount();
-
-        // AMIAL-FIX(PDF-2): كان البثّ (StreamedResponse) ينقطع منتصف التنزيل
-        // على الخادم («Connection closed while receiving data») — غالباً بسبب
-        // انتهاء ذاكرة/وقت عامل PHP أثناء توليد خطوط عربية ~1MB بلا
-        // Content-Length. الحل: توليد كامل ثم ردّ عادي بطول معلوم.
-        @ini_set('memory_limit', '512M');
-        @set_time_limit(120);
-        $content = $pdf->output();
 
         return response($content, 200, [
             'Content-Type' => 'application/pdf',

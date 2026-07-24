@@ -40,6 +40,22 @@ class RecipientVerificationTest extends TestCase
         $this->assertStringContainsString('*', $result['masked_name']);
     }
 
+    /** @test AMIAL-ACCOUNT-NUMBER-001: التحقق بالمستلِم عبر رقم الحساب (8 أرقام) */
+    public function it_verifies_recipient_by_account_number()
+    {
+        $sender = User::factory()->create(['zone_code' => 'SOUTH']);
+        $accountNumber = app(\App\Services\AccountNumberService::class)->generateUnique();
+        $recipient = User::factory()->create([
+            'phone' => '777654321', 'f_name' => 'سالم', 'l_name' => 'عبدالله',
+            'zone_code' => 'SOUTH', 'account_number' => $accountNumber,
+        ]);
+
+        $result = $this->service->verifyRecipient($accountNumber, $sender->id);
+
+        $this->assertArrayHasKey('verification_token', $result);
+        $this->assertEquals($recipient->id, $result['recipient_id']);
+    }
+
     /** @test */
     public function it_rejects_unknown_phone()
     {

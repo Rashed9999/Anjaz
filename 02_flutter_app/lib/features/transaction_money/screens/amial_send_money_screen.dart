@@ -76,13 +76,20 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
 
     setState(() => _checking = true);
     try {
-      final phoneNumber = PhoneNumberHelper.getValidatePhoneNumberWithPhoneParser(
-        countryCode: '+967',
-        phoneNumber: rawPhone,
-      );
+      // AMIAL-ACCOUNT-NUMBER-001: يقبل الحقلُ رقمَ هاتف أو رقمَ حساب (8 أرقام).
+      // رقم الحساب يُرسَل كما هو؛ كان يُمرَّر دائماً عبر مُنسّق الهاتف (+967)
+      // فيتشوّه رقم الحساب ويفشل البحث. نُرسله خاماً إن كان 8 أرقام.
+      final compact = rawPhone.replaceAll(RegExp(r'\s'), '');
+      final isAccountNumber = RegExp(r'^\d{8}$').hasMatch(compact);
+      final recipientId = isAccountNumber
+          ? compact
+          : PhoneNumberHelper.getValidatePhoneNumberWithPhoneParser(
+              countryCode: '+967',
+              phoneNumber: rawPhone,
+            );
 
       // ── 1) التحقق من المستلم ──
-      final vr = await AmialTransferApi.verifyRecipient(phoneNumber);
+      final vr = await AmialTransferApi.verifyRecipient(recipientId);
       if (!mounted) return;
       setState(() => _checking = false);
 
@@ -345,7 +352,7 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
               keyboardType: TextInputType.phone,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: InputDecoration(
-                hintText: 'أدخل رقم الهاتف',
+                hintText: 'رقم الهاتف أو رقم الحساب (8 أرقام)',
                 prefixIcon: const Icon(Icons.smartphone_rounded, size: 20),
                 filled: true,
                 fillColor: Colors.white,
