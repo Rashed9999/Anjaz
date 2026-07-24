@@ -620,20 +620,33 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
             ]),
           )
         else
-          SizedBox(
-            height: 150,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _recent.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 10),
-              itemBuilder: (_, i) => _recentCard(_recent[i]),
+          // AMIAL-HOME-004: قائمة عمليات غنيّة داخل بطاقة بيضاء (كما في مراجع
+          // المحافظ): أيقونة ملوّنة + العنوان + سطر وصف + المبلغ + التاريخ.
+          // كانت بطاقات أفقية تُقصّ عند الحافة فلا يُقرأ نصفها.
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                    color: const Color(0xFF1A2433).withValues(alpha: 0.05),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6)),
+              ],
+            ),
+            child: Column(
+              children: List.generate(
+                _recent.length > 5 ? 5 : _recent.length,
+                (i) => _recentRow(_recent[i], isLast: i == (_recent.length > 5 ? 4 : _recent.length - 1)),
+              ),
             ),
           ),
       ],
     );
   }
 
-  Widget _recentCard(Map<String, dynamic> t) {
+  /// صفّ عملية غنيّ — أيقونة + عنوان + وصف + مبلغ + تاريخ.
+  Widget _recentRow(Map<String, dynamic> t, {required bool isLast}) {
     final type = (t['receipt_type'] ?? '').toString();
     final title = _receiptLabels[type] ?? (type.isEmpty ? 'عملية' : type);
     final icon = _receiptIcons[type] ?? Icons.swap_horiz_rounded;
@@ -642,51 +655,74 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         ? amountRaw.replaceAll(RegExp(r'\.?0+$'), '')
         : amountRaw;
     final isDebit = (t['direction'] ?? '').toString() == 'debit';
-    final date = (t['issued_at'] ?? t['created_at'] ?? '').toString();
-    final shortDate = date.length >= 10 ? date.substring(0, 10) : date;
-    final color = isDebit ? AmyalColors.red : const Color(0xFF12694E);
+    final rawDate = (t['issued_at'] ?? t['created_at'] ?? '').toString();
+    final dt = DateTime.tryParse(rawDate);
+    String two(int n) => n.toString().padLeft(2, '0');
+    final dateText = dt == null
+        ? (rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate)
+        : '${dt.year}/${two(dt.month)}/${two(dt.day)}  •  ${two(dt.hour)}:${two(dt.minute)}';
+    final ref = (t['transaction_no'] ?? t['receipt_number'] ?? '').toString();
+    final tone = isDebit ? const Color(0xFFDC2626) : const Color(0xFF16A34A);
 
     return InkWell(
       onTap: () => Get.to(() => const ReceiptsListScreen()),
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(20),
       child: Container(
-        width: 132,
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 8, offset: const Offset(0, 3)),
-          ],
+          border: isLast
+              ? null
+              : const Border(
+                  bottom: BorderSide(color: Color(0xFFF1F3F6), width: 1)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        child: Row(
           children: [
             Container(
-              width: 46, height: 46,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.10),
-                shape: BoxShape.circle,
+                color: tone.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: color, size: 22),
+              child: Icon(icon, color: tone, size: 21),
             ),
-            const SizedBox(height: 8),
-            Text(title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700, fontSize: 12.5)),
-            Text(shortDate,
-                style: const TextStyle(
-                    fontSize: 10.5, color: AmyalColors.textMuted)),
-            const Spacer(),
-            Text(
-              amount.isEmpty ? '—' : '${isDebit ? '-' : '+'}$amount ر.ي',
-              textDirection: TextDirection.ltr,
-              style: TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 13, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1A2433))),
+                  const SizedBox(height: 3),
+                  Text(
+                    ref.isNotEmpty ? ref : dateText,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 10.5, color: AmyalColors.textMuted),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${isDebit ? '-' : '+'}$amount ر.ي',
+                  style: TextStyle(
+                      fontSize: 13.5, fontWeight: FontWeight.bold, color: tone),
+                ),
+                const SizedBox(height: 3),
+                Text(dateText.split('  •  ').first,
+                    style: const TextStyle(
+                        fontSize: 10, color: AmyalColors.textMuted)),
+              ],
             ),
           ],
         ),
