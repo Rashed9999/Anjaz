@@ -113,6 +113,35 @@ class DonationsService
                 'zone_code' => 'SOUTH',
             ]);
 
+            // AMIAL-LEDGER-RECON-001: قيد مزدوج للتبرّع داخل نفس المعاملة —
+            // مدين محفظة المتبرّع = دائن عهدة التبرعات (الصافي) + رسوم المنصّة.
+            // غير مُعطِّل: فشل الدفتر يُسجَّل ولا يُفشل التبرّع (نمط safeLedgerPost).
+            try {
+                $ledger = app(\App\Services\LedgerService::class);
+                $donorAcc = $ledger->getOrCreateUserWallet($donor->id);
+                $escrowAcc = $ledger->getOrCreateSystemAccount(
+                    'CHARITY_ESCROW', 'liability', 'عهدة التبرعات (قبل التسوية)', 'credit');
+                $feeAcc = $ledger->getOrCreateSystemAccount(
+                    'PLATFORM_FEE', 'revenue', 'إيرادات رسوم المنصّة', 'credit');
+                $lines = [
+                    ['account' => $donorAcc->account_code, 'direction' => 'debit', 'amount' => $amountNormalized],
+                    ['account' => $escrowAcc->account_code, 'direction' => 'credit', 'amount' => $netToCharity],
+                ];
+                if (bccomp($platformFee, '0', 4) > 0) {
+                    $lines[] = ['account' => $feeAcc->account_code, 'direction' => 'credit', 'amount' => $platformFee];
+                }
+                $ledger->post(
+                    sourceType: 'donation',
+                    sourceId: $donation->donation_ulid,
+                    description: "تبرّع لحملة #{$campaign->id} — {$org->name}",
+                    lines: $lines,
+                    idempotencyKey: 'donation:' . $donation->donation_ulid,
+                    createdByUserId: $donor->id,
+                );
+            } catch (\Throwable $e) {
+                \Log::error('Ledger post failed for donation (non-blocking)', ['err' => $e->getMessage()]);
+            }
+
             // 3) تحديث campaign.current_amount + donor_count
             // نستخدم lockForUpdate لتجنب race conditions على العداد
             $lockedCampaign = CharityCampaign::lockForUpdate()->find($campaign->id);
