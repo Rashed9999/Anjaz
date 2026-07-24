@@ -93,6 +93,10 @@
     <a class="nav-link" href="{{route('admin.support-center.index')}}" title="مركز الدعم">
         <span class="text-truncate">🎧 مركز الدعم (بحث شامل)</span>
     </a>
+    {{-- AMIAL-TXN-ADMIN-001: كشف المعاملات الكامل بفلاتر + تصدير --}}
+    <a class="nav-link" href="{{route('admin.transaction.index')}}" title="كشف المعاملات">
+        <span class="text-truncate">📊 كشف المعاملات (فلاتر + تصدير)</span>
+    </a>
     {{-- AMIAL-BIZ-SETUP-001: إعدادات الأعمال بتبويبات (6cash-style) --}}
     <a class="nav-link" href="{{route('admin.business-settings.business-setup')}}" title="إعدادات الأعمال">
         <span class="text-truncate">🏢 إعدادات الأعمال (عام/رسوم)</span>
