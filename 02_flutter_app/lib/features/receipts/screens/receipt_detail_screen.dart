@@ -157,16 +157,42 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
               ),
               const SizedBox(height: 16),
 
-              // Details
-              _detailRow('رقم الإيصال', r.receiptNumber, monospace: true),
-              _detailRow('المعاملة', r.referenceTransactionId, monospace: true),
-              if (double.tryParse(r.fee) != null && double.parse(r.fee) > 0)
-                _detailRow('الرسوم', AmialMoney.yer(r.fee)),
-              if (double.tryParse(r.fee) != null && double.parse(r.fee) > 0)
-                _detailRow('الإجمالي', AmialMoney.yer(r.netAmount)),
-              if (r.issuedAt != null)
-                _detailRow('التاريخ', _fmtDate(r.issuedAt!)),
-              _detailRow('المنطقة', r.zoneCode),
+              // AMIAL-RECEIPT-STYLE-002: تفاصيل بأسلوب «جيب» — أرقام عملية نظيفة
+              // + من/إلى، داخل بطاقة بيضاء أنيقة.
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(children: [
+                  _detailRow('رقم مرجع العملية', _opRefNumber(r), monospace: true),
+                  const Divider(height: 1),
+                  _detailRow('العملية', r.arabicTypeLabel),
+                  const Divider(height: 1),
+                  _detailRow('رقم العملية', r.receiptNumber, monospace: true),
+                  const Divider(height: 1),
+                  if (r.issuedAt != null) ...[
+                    _detailRow('تاريخ العملية', _fmtDate(r.issuedAt!)),
+                    const Divider(height: 1),
+                  ],
+                  if (_party(r, 'from') != null) ...[
+                    _detailRow('من', _party(r, 'from')!),
+                    const Divider(height: 1),
+                  ],
+                  if (_party(r, 'to') != null) ...[
+                    _detailRow('إلى', _party(r, 'to')!),
+                    const Divider(height: 1),
+                  ],
+                  if (double.tryParse(r.fee) != null && double.parse(r.fee) > 0) ...[
+                    _detailRow('الرسوم', AmialMoney.yer(r.fee)),
+                    const Divider(height: 1),
+                    _detailRow('الإجمالي', AmialMoney.yer(r.netAmount)),
+                    const Divider(height: 1),
+                  ],
+                  _detailRow('المنطقة', r.zoneCode),
+                ]),
+              ),
 
               const SizedBox(height: 16),
 
@@ -268,7 +294,31 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
   }
 
   String _fmtDate(DateTime d) {
-    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')} '
-        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} '
+        '(${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')})';
+  }
+
+  /// AMIAL-RECEIPT-STYLE-002: رقم مرجع عملية نظيف ورقميّ (بأسلوب «جيب») — مشتقّ
+  /// بثبات من وقت الإصدار ومعرّف الإيصال، فلا يتغيّر لنفس الإيصال.
+  String _opRefNumber(dynamic r) {
+    final ms = r.issuedAt != null
+        ? (r.issuedAt as DateTime).millisecondsSinceEpoch
+        : DateTime.now().millisecondsSinceEpoch;
+    // 13 خانة رقمية ثابتة لكل إيصال
+    return '${(ms ~/ 1000)}${(r.id as int).toString().padLeft(3, '0')}';
+  }
+
+  /// اسم الطرف (من/إلى) من الميتاداتا إن توفّر — وإلا null فلا يُعرض السطر.
+  String? _party(dynamic r, String side) {
+    final meta = r.metadata as Map<String, dynamic>?;
+    if (meta == null) return null;
+    final keys = side == 'from'
+        ? ['from_name', 'sender_name', 'payer_name', 'from', 'counterparty_from']
+        : ['to_name', 'receiver_name', 'recipient_name', 'merchant_name', 'to', 'counterparty_to'];
+    for (final k in keys) {
+      final v = meta[k];
+      if (v != null && v.toString().trim().isNotEmpty) return v.toString();
+    }
+    return null;
   }
 }
