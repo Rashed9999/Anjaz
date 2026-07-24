@@ -191,11 +191,16 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Column(children: [
-                  _detailRow('رقم مرجع العملية', _opRefNumber(r), monospace: true),
-                  const Divider(height: 1),
+                  // AMIAL-TXN-NO-001: رقم العملية الرسمي (15 خانة، بادئة حسب
+                  // النوع) كما يولّده النظام. كان يُعرض رقم مرجع مُلفَّق محلياً
+                  // من الوقت+المعرّف — وهو غير مقبول في منتج مالي.
+                  if ((r.transactionNo ?? '').isNotEmpty) ...[
+                    _detailRow('رقم العملية', r.transactionNo!, monospace: true),
+                    const Divider(height: 1),
+                  ],
                   _detailRow('العملية', r.arabicTypeLabel),
                   const Divider(height: 1),
-                  _detailRow('رقم العملية', r.receiptNumber, monospace: true),
+                  _detailRow('رقم الإيصال', r.receiptNumber, monospace: true),
                   const Divider(height: 1),
                   if (r.issuedAt != null) ...[
                     _detailRow('تاريخ العملية', _fmtDate(r.issuedAt!)),
@@ -323,15 +328,6 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
         '(${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')})';
   }
 
-  /// AMIAL-RECEIPT-STYLE-002: رقم مرجع عملية نظيف ورقميّ (بأسلوب «جيب») — مشتقّ
-  /// بثبات من وقت الإصدار ومعرّف الإيصال، فلا يتغيّر لنفس الإيصال.
-  String _opRefNumber(dynamic r) {
-    final ms = r.issuedAt != null
-        ? (r.issuedAt as DateTime).millisecondsSinceEpoch
-        : DateTime.now().millisecondsSinceEpoch;
-    // 13 خانة رقمية ثابتة لكل إيصال
-    return '${(ms ~/ 1000)}${(r.id as int).toString().padLeft(3, '0')}';
-  }
 
   /// اسم الطرف (من/إلى) من الميتاداتا إن توفّر — وإلا null فلا يُعرض السطر.
   String? _party(dynamic r, String side) {

@@ -2,6 +2,8 @@
 class AmyalReceipt {
   final int id;
   final String receiptNumber;
+  /// AMIAL-TXN-NO-001: رقم العملية الرسمي (15 خانة) من الخادم — لا يُلفَّق محلياً.
+  final String? transactionNo;
   final String verificationCode;
   final String receiptType;
   final int userId;
@@ -23,6 +25,7 @@ class AmyalReceipt {
   AmyalReceipt({
     required this.id,
     required this.receiptNumber,
+    this.transactionNo,
     required this.verificationCode,
     required this.receiptType,
     required this.userId,
@@ -46,6 +49,7 @@ class AmyalReceipt {
     return AmyalReceipt(
       id: json['id'] ?? 0,
       receiptNumber: json['receipt_number'] ?? '',
+      transactionNo: json['transaction_no']?.toString(),
       verificationCode: json['verification_code'] ?? '',
       receiptType: json['receipt_type'] ?? '',
       userId: json['user_id'] ?? 0,

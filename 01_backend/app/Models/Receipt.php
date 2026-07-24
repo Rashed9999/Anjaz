@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Transaction;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -51,6 +52,22 @@ class Receipt extends Model
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
+
+    /**
+     * AMIAL-TXN-NO-001: رقم العملية الرسمي (15 خانة ببادئة حسب النوع) يُصدَّر
+     * مع الإيصال. كان غائباً عن الـAPI فاضطرّ التطبيق لتوليد رقم مرجع محلّي
+     * ملفّق — وهو خطأ في منتج مالي: الرقم المعروض يجب أن يكون رقم النظام نفسه.
+     */
+    protected $appends = ['transaction_no'];
+
+    public function getTransactionNoAttribute(): ?string
+    {
+        $ref = $this->reference_transaction_id;
+        if (empty($ref)) {
+            return null;
+        }
+        return Transaction::where('transaction_id', $ref)->value('transaction_no');
+    }
 
     public function user(): BelongsTo
     {
