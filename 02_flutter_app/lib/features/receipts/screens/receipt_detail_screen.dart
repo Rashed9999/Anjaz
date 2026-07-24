@@ -1,5 +1,6 @@
 import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
@@ -244,6 +245,23 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
               ),
             ),
           ),
+          // AMIAL-UNIFY-UI-001: نسخ رقم المرجع/الإيصال بضغطة (كان طويلاً وغير قابل للنسخ بوضوح)
+          if (monospace && value.isNotEmpty)
+            InkWell(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: value));
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text('نُسخ الرقم'),
+                  backgroundColor: Color(0xFF2E7D32),
+                  duration: Duration(seconds: 1),
+                ));
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(Icons.copy_rounded, size: 16, color: AmyalColors.primary),
+              ),
+            ),
         ],
       ),
     );
