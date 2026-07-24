@@ -21,6 +21,8 @@ import 'package:amyal_pay/features/branches/screens/branches_management_screen.d
 import 'package:amyal_pay/features/merchant/screens/merchant_services_hub_screen.dart';
 import 'package:amyal_pay/features/printer/screens/printer_settings_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/receipt_settings_screen.dart';
+// ملاحظة: access_gate.dart يُصدّر أيضاً BusinessTypeSelectionScreen المستخدَمة
+// في لافتة «اختر نوع نشاطك» — فلا يُحذف الاستيراد حتى لو لم يُستخدم AccessGate.
 import 'package:amyal_pay/features/access/widgets/access_gate.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/family_fund/screens/my_funds_screen.dart';
@@ -164,183 +166,84 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
           }),
 
           // ====== شبكة الخدمات ======
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.1,
-            children: [
-              // متاحة للجميع تقريباً
+          // AMIAL-UI-FIX(SERVICES-GRID): كانت البطاقات المقفلة (AccessGate)
+          // تحجز خلايا فارغة في الشبكة فتظهر فجوات ضخمة. الآن نبني قائمة
+          // البطاقات المرئية فقط (حسب الصلاحيات) قبل الشبكة — تخطيط متراصّ.
+          Obx(() {
+            final access = Get.find<AccessController>();
+            const merchantAny = ['products', 'inventory', 'fuel_pos', 'pharmacy_pos',
+                'wholesale_invoices', 'daily_reports', 'profit_reports'];
+            final isMerchant = access.hasAny(merchantAny);
+
+            final cards = <Widget>[
               _notificationCard(),
-              AccessGate(feature: 'receive', child: _serviceCard(
-                icon: Icons.qr_code_2,
-                label: 'رقم حسابي',
-                subtitle: 'مشاركة + نسخ',
-                color: AmyalColors.primary,
-                onTap: () => Get.to(() => const MyAccountNumberScreen()),
-              )),
-              AccessGate(feature: 'receipts', child: _serviceCard(
-                icon: Icons.receipt_long,
-                label: 'إيصالاتي',
-                subtitle: 'سجل كامل بـ PDF',
-                color: Colors.indigo,
-                onTap: () => Get.to(() => const ReceiptsListScreen()),
-              )),
+              if (access.has('receive'))
+                _serviceCard(icon: Icons.qr_code_2, label: 'رقم حسابي', subtitle: 'مشاركة + نسخ',
+                    color: AmyalColors.primary, onTap: () => Get.to(() => const MyAccountNumberScreen())),
+              if (access.has('receipts'))
+                _serviceCard(icon: Icons.receipt_long, label: 'إيصالاتي', subtitle: 'سجل كامل بـ PDF',
+                    color: Colors.indigo, onTap: () => Get.to(() => const ReceiptsListScreen())),
+              if (access.hasAny(const ['cash_out', 'wallet']))
+                _serviceCard(icon: Icons.arrow_downward, label: 'سحب نقدي', subtitle: 'عبر الوكيل',
+                    color: Colors.green, onTap: () => Get.to(() => const WithdrawRequestScreen())),
+              if (access.has('payment_requests'))
+                _serviceCard(icon: Icons.request_quote, label: 'طلب أموال', subtitle: 'QR أو رابط',
+                    color: AmyalColors.yellowDark, onTap: () => Get.to(() => const PaymentRequestCreateScreen())),
+              if (access.has('safe_pay'))
+                _serviceCard(icon: Icons.shield, label: 'الدفع الآمن', subtitle: 'حماية للبيع/الشراء',
+                    color: Colors.green.shade700, onTap: () => Get.to(() => const MySafePaymentsScreen())),
+              _serviceCard(icon: Icons.handshake, label: 'أقساطي', subtitle: 'سداد التقسيط',
+                  color: const Color(0xFF00695C), onTap: () => Get.to(() => const MyInstallmentsScreen())),
+              _serviceCard(icon: Icons.redeem, label: 'بطاقات هديتي', subtitle: 'رصيد المتجر',
+                  color: const Color(0xFF7B1FA2), onTap: () => Get.to(() => const MyGiftCardsScreen())),
+              if (access.has('family_fund'))
+                _serviceCard(icon: Icons.savings, label: 'الصناديق المشتركة', subtitle: 'صندوق عائلي',
+                    color: Colors.deepPurple, onTap: () => Get.to(() => const MyFundsScreen())),
+              if (access.has('bill_pay'))
+                _serviceCard(icon: Icons.flash_on, label: 'الفواتير', subtitle: 'كهرباء، اتصالات...',
+                    color: Colors.amber.shade800, onTap: () => Get.to(() => const BillPayProvidersScreen())),
+              if (isMerchant)
+                _serviceCard(icon: Icons.grid_view_rounded, label: 'خدمات التاجر', subtitle: 'كل الميزات وباقاتها',
+                    color: AmyalColors.primary, onTap: () => Get.to(() => const MerchantServicesHubScreen())),
+              if (isMerchant)
+                _serviceCard(icon: Icons.storefront, label: 'إعدادات المتجر', subtitle: 'الاسم والشعار والفاتورة',
+                    color: const Color(0xFF00695C), onTap: () => Get.to(() => const ReceiptSettingsScreen())),
+              if (isMerchant)
+                _serviceCard(icon: Icons.print, label: 'إعدادات الطابعة', subtitle: 'طابعة حرارية بلوتوث',
+                    color: const Color(0xFF455A64), onTap: () => Get.to(() => const PrinterSettingsScreen())),
+              if (access.has('merchant_verification'))
+                _serviceCard(icon: Icons.verified_user, label: 'توثيق المتجر', subtitle: 'KYC + شارة',
+                    color: Colors.teal, onTap: () => Get.to(() => const MerchantVerificationScreen())),
+              if (access.has('fuel_pos'))
+                _serviceCard(icon: Icons.local_gas_station, label: 'محطة وقود', subtitle: 'كاشير متخصّص',
+                    color: const Color(0xFF1B5E20), onTap: () => Get.to(() => const FuelStationDashboardScreen())),
+              if (access.has('pharmacy_pos'))
+                _serviceCard(icon: Icons.local_pharmacy, label: 'الصيدلية', subtitle: 'بيع + Batches',
+                    color: const Color(0xFF7B1FA2), onTap: () => Get.to(() => const PharmacyDashboardScreen())),
+              if (access.has('wholesale_invoices'))
+                _serviceCard(icon: Icons.warehouse, label: 'الجملة', subtitle: 'فواتير + ائتمان',
+                    color: const Color(0xFFE65100), onTap: () => Get.to(() => const WholesaleDashboardScreen())),
+              _serviceCard(icon: Icons.workspace_premium, label: 'خطّتي', subtitle: 'عرض الخطط',
+                  color: const Color(0xFFEAB308), onTap: () => Get.to(() => const PlansCatalogScreen())),
+              _serviceCard(icon: Icons.bar_chart, label: 'استخدامي', subtitle: 'الحدود + العدّاد',
+                  color: const Color(0xFF0EA5E9), onTap: () => Get.to(() => const MyUsageScreen())),
+              if (access.has('branches'))
+                _serviceCard(icon: Icons.store_mall_directory, label: 'الفروع', subtitle: 'إدارة + تقارير',
+                    color: const Color(0xFF7C3AED), onTap: () => Get.to(() => const BranchesManagementScreen())),
+              _serviceCard(icon: Icons.help_outline, label: 'المساعدة', subtitle: 'الأسئلة الشائعة',
+                  color: Colors.grey.shade700, onTap: () => _comingSoon('المساعدة')),
+            ];
 
-              // ميزات المستخدم
-              AccessGate(anyOf: const ['cash_out', 'wallet'], child: _serviceCard(
-                icon: Icons.arrow_downward,
-                label: 'سحب نقدي',
-                subtitle: 'عبر الوكيل',
-                color: Colors.green,
-                onTap: () => Get.to(() => const WithdrawRequestScreen()),
-              )),
-              AccessGate(feature: 'payment_requests', child: _serviceCard(
-                icon: Icons.request_quote,
-                label: 'طلب أموال',
-                subtitle: 'QR أو رابط',
-                color: AmyalColors.yellowDark,
-                onTap: () => Get.to(() => const PaymentRequestCreateScreen()),
-              )),
-              AccessGate(feature: 'safe_pay', child: _serviceCard(
-                icon: Icons.shield,
-                label: 'الدفع الآمن',
-                subtitle: 'حماية للبيع/الشراء',
-                color: Colors.green.shade700,
-                onTap: () => Get.to(() => const MySafePaymentsScreen()),
-              )),
-              _serviceCard(
-                icon: Icons.handshake,
-                label: 'أقساطي',
-                subtitle: 'سداد التقسيط',
-                color: const Color(0xFF00695C),
-                onTap: () => Get.to(() => const MyInstallmentsScreen()),
-              ),
-              _serviceCard(
-                icon: Icons.redeem,
-                label: 'بطاقات هديتي',
-                subtitle: 'رصيد المتجر',
-                color: const Color(0xFF7B1FA2),
-                onTap: () => Get.to(() => const MyGiftCardsScreen()),
-              ),
-              AccessGate(feature: 'family_fund', child: _serviceCard(
-                icon: Icons.savings,
-                label: 'الصناديق المشتركة',
-                subtitle: 'صندوق عائلي',
-                color: Colors.deepPurple,
-                onTap: () => Get.to(() => const MyFundsScreen()),
-              )),
-              AccessGate(feature: 'bill_pay', child: _serviceCard(
-                icon: Icons.flash_on,
-                label: 'الفواتير',
-                subtitle: 'كهرباء، اتصالات...',
-                color: Colors.amber.shade800,
-                onTap: () => Get.to(() => const BillPayProvidersScreen()),
-              )),
-
-              // AMIAL-MERCHANT-SERVICES-HUB-001: مدخل موحّد لكل خدمات التاجر
-              // (المفتوحة والمقفلة حسب الباقة + شرح كل خدمة).
-              AccessGate(
-                anyOf: const ['products', 'inventory', 'fuel_pos', 'pharmacy_pos',
-                    'wholesale_invoices', 'daily_reports', 'profit_reports'],
-                child: _serviceCard(
-                  icon: Icons.grid_view_rounded,
-                  label: 'خدمات التاجر',
-                  subtitle: 'كل الميزات وباقاتها',
-                  color: AmyalColors.primary,
-                  onTap: () => Get.to(() => const MerchantServicesHubScreen()),
-                ),
-              ),
-              // AMIAL-MERCHANT-IDENTITY-001: هويّة المتجر (اسم + شعار + بيانات الفاتورة)
-              AccessGate(
-                anyOf: const ['products', 'inventory', 'fuel_pos', 'pharmacy_pos',
-                    'wholesale_invoices', 'daily_reports', 'profit_reports'],
-                child: _serviceCard(
-                  icon: Icons.storefront,
-                  label: 'إعدادات المتجر',
-                  subtitle: 'الاسم والشعار والفاتورة',
-                  color: const Color(0xFF00695C),
-                  onTap: () => Get.to(() => const ReceiptSettingsScreen()),
-                ),
-              ),
-              // AMIAL-THERMAL-PRINT-001: إعداد الطابعة الحرارية (متاح لكل التجار)
-              AccessGate(
-                anyOf: const ['products', 'inventory', 'fuel_pos', 'pharmacy_pos',
-                    'wholesale_invoices', 'daily_reports', 'profit_reports'],
-                child: _serviceCard(
-                  icon: Icons.print,
-                  label: 'إعدادات الطابعة',
-                  subtitle: 'طابعة حرارية بلوتوث',
-                  color: const Color(0xFF455A64),
-                  onTap: () => Get.to(() => const PrinterSettingsScreen()),
-                ),
-              ),
-
-              // ميزات التاجر
-              AccessGate(feature: 'merchant_verification', child: _serviceCard(
-                icon: Icons.verified_user,
-                label: 'توثيق المتجر',
-                subtitle: 'KYC + شارة',
-                color: Colors.teal,
-                onTap: () => Get.to(() => const MerchantVerificationScreen()),
-              )),
-              AccessGate(feature: 'fuel_pos', child: _serviceCard(
-                icon: Icons.local_gas_station,
-                label: 'محطة وقود',
-                subtitle: 'كاشير متخصّص',
-                color: const Color(0xFF1B5E20),
-                onTap: () => Get.to(() => const FuelStationDashboardScreen()),
-              )),
-              AccessGate(feature: 'pharmacy_pos', child: _serviceCard(
-                icon: Icons.local_pharmacy,
-                label: 'الصيدلية',
-                subtitle: 'بيع + Batches',
-                color: const Color(0xFF7B1FA2),
-                onTap: () => Get.to(() => const PharmacyDashboardScreen()),
-              )),
-              AccessGate(feature: 'wholesale_invoices', child: _serviceCard(
-                icon: Icons.warehouse,
-                label: 'الجملة',
-                subtitle: 'فواتير + ائتمان',
-                color: const Color(0xFFE65100),
-                onTap: () => Get.to(() => const WholesaleDashboardScreen()),
-              )),
-              // CRITICAL-001-PLANS — متاحة لكل التجار
-              _serviceCard(
-                icon: Icons.workspace_premium,
-                label: 'خطّتي',
-                subtitle: 'عرض الخطط',
-                color: const Color(0xFFEAB308),
-                onTap: () => Get.to(() => const PlansCatalogScreen()),
-              ),
-              _serviceCard(
-                icon: Icons.bar_chart,
-                label: 'استخدامي',
-                subtitle: 'الحدود + العدّاد',
-                color: const Color(0xFF0EA5E9),
-                onTap: () => Get.to(() => const MyUsageScreen()),
-              ),
-              // P1-BRANCHES — متاحة لـ PRO + ENTERPRISE
-              AccessGate(feature: 'branches', child: _serviceCard(
-                icon: Icons.store_mall_directory,
-                label: 'الفروع',
-                subtitle: 'إدارة + تقارير',
-                color: const Color(0xFF7C3AED),
-                onTap: () => Get.to(() => const BranchesManagementScreen()),
-              )),
-
-              // ثابت
-              _serviceCard(
-                icon: Icons.help_outline,
-                label: 'المساعدة',
-                subtitle: 'الأسئلة الشائعة',
-                color: Colors.grey.shade700,
-                onTap: () => _comingSoon('المساعدة'),
-              ),
-            ],
-          ),
+            return GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              childAspectRatio: 1.1,
+              children: cards,
+            );
+          }),
         ],
       ),
     );
