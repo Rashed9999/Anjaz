@@ -97,6 +97,13 @@
     <a class="nav-link" href="{{route('admin.transaction.index')}}" title="كشف المعاملات">
         <span class="text-truncate">📊 كشف المعاملات (فلاتر + تصدير)</span>
     </a>
+    {{-- AMIAL-CONTENT-001: إدارة المحتوى (بانرات + إشعارات) --}}
+    <a class="nav-link" href="{{route('admin.banner.index')}}" title="البانرات">
+        <span class="text-truncate">🖼️ بانرات الرئيسية</span>
+    </a>
+    <a class="nav-link" href="{{route('admin.notification.add-new')}}" title="الإشعارات">
+        <span class="text-truncate">🔔 إشعارات الدفع</span>
+    </a>
     {{-- AMIAL-BIZ-SETUP-001: إعدادات الأعمال بتبويبات (6cash-style) --}}
     <a class="nav-link" href="{{route('admin.business-settings.business-setup')}}" title="إعدادات الأعمال">
         <span class="text-truncate">🏢 إعدادات الأعمال (عام/رسوم)</span>

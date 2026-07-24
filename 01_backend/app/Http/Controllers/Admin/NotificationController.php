@@ -108,8 +108,10 @@ class NotificationController extends Controller
             'title.required' => 'title is required!',
         ]);
 
+        // AMIAL-CONTENT-001: كان يستخدم النموذج الفارغ ($this->notification) فيُدرج
+        // سجلّاً جديداً بدل التعديل. الآن نُعدّل السجلّ الموجود نفسه.
         $oldNotification = $this->notification->find($id);
-        $notification = $this->notification;
+        $notification = $oldNotification;
         $notification->title = $request->title;
         $notification->description = $request->description;
         $notification->receiver = $request->has('receiver') ? $request->receiver : $oldNotification->receiver;
