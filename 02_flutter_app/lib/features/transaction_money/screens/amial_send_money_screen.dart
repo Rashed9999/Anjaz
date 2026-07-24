@@ -81,7 +81,7 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
       // فيتشوّه رقم الحساب ويفشل البحث. نُرسله خاماً إن كان 8 أرقام.
       final compact = rawPhone.replaceAll(RegExp(r'\s'), '');
       final isAccountNumber = RegExp(r'^\d{8}$').hasMatch(compact);
-      final recipientId = isAccountNumber
+      final phoneNumber = isAccountNumber
           ? compact
           : PhoneNumberHelper.getValidatePhoneNumberWithPhoneParser(
               countryCode: '+967',
@@ -89,7 +89,7 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
             );
 
       // ── 1) التحقق من المستلم ──
-      final vr = await AmialTransferApi.verifyRecipient(recipientId);
+      final vr = await AmialTransferApi.verifyRecipient(phoneNumber);
       if (!mounted) return;
       setState(() => _checking = false);
 
