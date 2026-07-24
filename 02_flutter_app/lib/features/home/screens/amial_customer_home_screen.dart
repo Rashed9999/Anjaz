@@ -363,11 +363,6 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                   ),
                   const SizedBox(width: 10),
                   _walletCircle(
-                    icon: Icons.send_rounded,
-                    onTap: () => Get.to(() => const AmialSendMoneyScreen()),
-                  ),
-                  const SizedBox(width: 8),
-                  _walletCircle(
                     icon: _hideBalance
                         ? Icons.visibility_off_outlined
                         : Icons.visibility_outlined,
@@ -375,10 +370,63 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                   ),
                 ],
               ),
+
+              // AMIAL-HOME-003: صفّ الإجراءات السريعة داخل البطاقة (كما في
+              // مراجع المحافظ): أيقونة دائرية + تسمية أسفلها، بدل زرّين فقط.
+              const SizedBox(height: 18),
+              Divider(color: Colors.white.withValues(alpha: 0.18), height: 1),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _walletAction(Icons.north_east_rounded, 'إرسال',
+                      () => Get.to(() => const AmialSendMoneyScreen())),
+                  _walletAction(Icons.request_page_outlined, 'طلب',
+                      () => Get.to(() => const PaymentRequestCreateScreen())),
+                  _walletAction(Icons.storefront_outlined, 'ادفع',
+                      () => Get.to(() => const MerchantPayScreen())),
+                  _walletAction(Icons.account_balance_outlined, 'سحب',
+                      () => Get.to(() => const WithdrawRequestScreen())),
+                  _walletAction(Icons.receipt_long_outlined, 'السجل',
+                      () => Get.to(() => const ReceiptsListScreen())),
+                ],
+              ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  /// إجراء سريع داخل بطاقة الرصيد: دائرة شفافة + تسمية.
+  Widget _walletAction(IconData icon, String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.16),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+              ),
+              child: Icon(icon, color: Colors.white, size: 19),
+            ),
+            const SizedBox(height: 6),
+            Text(label,
+                style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
     );
   }
 
@@ -683,46 +731,68 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       _Svc('خدماتي', Icons.apps_rounded, () => Get.to(() => const MyServicesScreen())),
       _Svc('حسابي', Icons.person_outline_rounded, () => Get.to(() => const ProfileScreen())),
     ];
-    return GridView.count(
-      crossAxisCount: 4,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 14,
-      crossAxisSpacing: 10,
-      childAspectRatio: 0.82,
-      children: services.map((s) {
-        final color = s.color ?? AmyalColors.primary;
-        return InkWell(
-          onTap: s.onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Column(
-            children: [
-              Container(
-                height: 52, width: 52,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(17),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
-                        blurRadius: 8, offset: const Offset(0, 3)),
-                  ],
+    // AMIAL-HOME-003: الخدمات داخل بطاقة بيضاء واحدة، وكل أيقونة في مربّع
+    // باستيل بلونها الخاصّ — كما في مراجع المحافظ الاحترافية. كانت 16 مربّعاً
+    // أبيض عائماً بلون أزرق واحد، فتبدو مبعثرة وبلا هرمية بصرية.
+    const palette = <Color>[
+      Color(0xFF053391), Color(0xFF1B9E4B), Color(0xFFE08A00), Color(0xFF7C3AED),
+      Color(0xFF0EA5E9), Color(0xFFDB2777), Color(0xFF0E7C7B), Color(0xFFB45309),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 18, 12, 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+              color: const Color(0xFF1A2433).withValues(alpha: 0.05),
+              blurRadius: 18,
+              offset: const Offset(0, 6)),
+        ],
+      ),
+      child: GridView.count(
+        crossAxisCount: 4,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 8,
+        childAspectRatio: 0.80,
+        children: List.generate(services.length, (i) {
+          final s = services[i];
+          final color = s.color ?? palette[i % palette.length];
+          return InkWell(
+            onTap: s.onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Column(
+              children: [
+                Container(
+                  height: 50,
+                  width: 50,
+                  decoration: BoxDecoration(
+                    // خلفية باستيل من لون الخدمة نفسها
+                    color: color.withValues(alpha: 0.11),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(s.icon, color: color, size: 23),
                 ),
-                child: Icon(s.icon, color: color, size: 24),
-              ),
-              const SizedBox(height: 7),
-              Expanded(
-                child: Text(s.label,
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 11, color: Color(0xFF2A3B33))),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
+                const SizedBox(height: 7),
+                Expanded(
+                  child: Text(s.label,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 10.5,
+                          height: 1.25,
+                          fontWeight: FontWeight.w500,
+                          color: Color(0xFF2A3B33))),
+                ),
+              ],
+            ),
+          );
+        }),
+      ),
     );
   }
 
