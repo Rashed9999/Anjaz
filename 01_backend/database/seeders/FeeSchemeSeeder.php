@@ -30,8 +30,12 @@ class FeeSchemeSeeder extends Seeder
             ['SEND_MONEY',        'تحويل بين الأفراد', 'percent_plus_fixed', '0.5000', '0',    null,  '500', '0',      '0', 'customer', 'sender'],
             ['CASH_OUT',          'سحب نقدي',          'percent_plus_fixed', '0.7500', '0',    '50',  null,  '40.0000','0', 'customer', 'sender'],
             ['CASH_IN',           'إيداع نقدي',        'fixed',              '0',      '0',    null,  null,  '0',      '0', 'customer', 'sender'],
-            ['MERCHANT_QR',       'دفع تاجر QR',       'percent',            '1.0000', '0',    null,  null,  '0',      '0', 'merchant', 'merchant'],
-            ['MERCHANT_POS',      'دفع تاجر POS',      'percent',            '1.0000', '0',    null,  null,  '0',      '0', 'merchant', 'merchant'],
+            // AMYAL-FEE-BEARER-001: التاجر يستلم المبلغ كاملاً — الرسم يتحمّله
+            // الدافع (bearer=sender) لا التاجر. (كان bearer=merchant فيُخصم من
+            // التاجر، وهو ما لا يقبله السوق اليمني.) الإدارة تضبط النسبة/المتحمّل
+            // من لوحة الرسوم.
+            ['MERCHANT_QR',       'دفع تاجر QR',       'percent',            '1.0000', '0',    null,  null,  '0',      '0', 'merchant', 'sender'],
+            ['MERCHANT_POS',      'دفع تاجر POS',      'percent',            '1.0000', '0',    null,  null,  '0',      '0', 'merchant', 'sender'],
             ['SAFE_PAYMENT',      'الدفع الآمن',       'percent',            '1.5000', '0',    '100', null,  '0',      '0', 'customer', 'sender'],
             ['BILL_PAY',          'تسديد فاتورة',      'fixed',              '0',      '10',   null,  null,  '0',      '0', 'customer', 'sender'],
             ['SPLIT_BILL',        'تقسيم فاتورة',      'percent',            '0',      '0',    null,  null,  '0',      '0', 'customer', 'sender'],

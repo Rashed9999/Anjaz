@@ -5,6 +5,7 @@ import 'package:amyal_pay/features/merchant/controllers/merchant_pay_controller.
 import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
 import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:amyal_pay/common/widgets/amial_result_sheet.dart';
 
 /// AMIAL-MERCHANT-PAY-001 — شاشة دفع العميل للتاجر (QR / POS).
@@ -283,7 +284,7 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
                     children: [
                       const Text('التاجر يستلم', style: TextStyle(color: AmyalColors.textSecondary)),
                       Text(
-                        '${ctrl.quoteMerchantReceives.value} ر.ي',
+                        AmialMoney.yer(ctrl.quoteMerchantReceives.value),
                         style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary),
                       ),
                     ],
