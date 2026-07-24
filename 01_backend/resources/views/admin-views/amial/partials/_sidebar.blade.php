@@ -107,6 +107,10 @@
     <a class="nav-link" href="{{route('admin.faq.index')}}" title="الأسئلة الشائعة">
         <span class="text-truncate">❓ الأسئلة الشائعة</span>
     </a>
+    {{-- AMIAL-EMONEY-001: رصيد المنصّة (إنشاء/شحن) --}}
+    <a class="nav-link" href="{{route('admin.emoney.index')}}" title="رصيد المنصّة">
+        <span class="text-truncate">🏦 رصيد المنصّة (إنشاء)</span>
+    </a>
     {{-- AMIAL-EXPENSE-001 / AMIAL-LANG-ADMIN-001: أنظمة كانت بلا واجهة --}}
     <a class="nav-link" href="{{route('admin.expense.index')}}" title="المصاريف">
         <span class="text-truncate">💸 مصاريف المنصّة</span>
