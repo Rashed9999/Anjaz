@@ -6,7 +6,10 @@ import 'package:amyal_pay/features/auth/screens/amial_biometric_setup_screen.dar
 import 'package:local_auth/local_auth.dart';
 import 'package:amyal_pay/features/forget_pin/screens/forget_pin_screen.dart';
 import 'package:amyal_pay/features/amyal/screens/account_recovery_screen.dart';
+import 'package:amyal_pay/features/setting/screens/support_screen.dart';
+import 'package:amyal_pay/features/language/screens/change_language_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/util/images.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 /// AMIAL-UNIFIED-AUTH-001 (v1.5)
@@ -46,8 +49,10 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
         child: Column(
           children: [
             // ====== Header ======
+            // AMYAL-UI-002: صندوق أزرق أصغر (يكفي أعلى الشاشة)، شعار أكبر في
+            // دائرة بيضاء، مع دخول متحرّك سلس. علامة الإصدار صغيرة وهادئة.
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
+              padding: const EdgeInsets.fromLTRB(20, 26, 20, 18),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [AmyalColors.primary, Color(0xFF1D4FB8)],
@@ -56,28 +61,46 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
                 ),
                 borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
               ),
-              child: const Column(
-                children: [
-                  Icon(Icons.account_balance_wallet,
-                      color: Colors.white, size: 56),
-                  SizedBox(height: 12),
-                  Text(
-                    'أميال باي',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: 1),
+                duration: const Duration(milliseconds: 650),
+                curve: Curves.easeOut,
+                builder: (context, t, child) => Opacity(
+                  opacity: t.clamp(0.0, 1.0),
+                  child: Transform.translate(
+                    offset: Offset(0, (1 - t) * 12),
+                    child: Transform.scale(scale: 0.94 + 0.06 * t, child: child),
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    'دفع سريع وآمن',
-                    style: TextStyle(color: Colors.white70, fontSize: 13),
-                  ),
-                  // AMIAL-BUILD-STAMP: علامة إصدار مرئية تُقرأ تلقائياً من البناء
-                  // (package_info) — لا تتقادم أبداً. تؤكّد أن الـAPK المثبّت أحدث.
-                  SizedBox(height: 10),
-                  _VersionStamp(),
-                ],
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.14),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Image.asset(Images.logo, height: 58, width: 58),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'أميال باي',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'دفع سريع وآمن',
+                      style: TextStyle(color: Colors.white70, fontSize: 13),
+                    ),
+                    // AMIAL-BUILD-STAMP: علامة إصدار مرئية تُقرأ تلقائياً من البناء
+                    // (package_info) — لا تتقادم أبداً. تؤكّد أن الـAPK المثبّت أحدث.
+                    const SizedBox(height: 8),
+                    const _VersionStamp(),
+                  ],
+                ),
               ),
             ),
 
@@ -89,11 +112,12 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen>
                 indicatorColor: AmyalColors.primary,
                 labelColor: AmyalColors.primary,
                 unselectedLabelColor: AmyalColors.textMuted,
+                // AMYAL-UI-002: أيقونة ملوّنة مميّزة لكل نوع حساب.
                 tabs: const [
-                  Tab(icon: Icon(Icons.person), text: 'عميل'),
-                  Tab(icon: Icon(Icons.store), text: 'تاجر'),
-                  Tab(icon: Icon(Icons.business_center), text: 'وكيل'),
-                  Tab(icon: Icon(Icons.admin_panel_settings_outlined), text: 'أدمن'),
+                  Tab(icon: Icon(Icons.person, color: Color(0xFF053391)), text: 'عميل'),
+                  Tab(icon: Icon(Icons.store, color: Color(0xFF1B9E4B)), text: 'تاجر'),
+                  Tab(icon: Icon(Icons.business_center, color: Color(0xFFE08A00)), text: 'وكيل'),
+                  Tab(icon: Icon(Icons.admin_panel_settings_outlined, color: Color(0xFFB3261E)), text: 'أدمن'),
                 ],
               ),
             ),
@@ -238,11 +262,21 @@ class _CustomerLoginTabState extends State<_CustomerLoginTab> {
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(
                 labelText: 'رقم الجوال *',
-                hintText: '+967700000000',
+                hintText: '7XXXXXXXX',
                 prefixIcon: Icon(Icons.phone_outlined),
                 border: OutlineInputBorder(),
               ),
               validator: (v) => (v == null || v.length < 6) ? 'رقم غير صحيح' : null,
+            ),
+            const SizedBox(height: 8),
+            // AMYAL-UI-002: بادئات أرقام اليمن — ضغطة واحدة لبدء الرقم.
+            _PhonePrefixChips(
+              onPick: (p) {
+                _phoneCtrl.text = p;
+                _phoneCtrl.selection = TextSelection.fromPosition(
+                    TextPosition(offset: _phoneCtrl.text.length));
+                setState(() {});
+              },
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -270,24 +304,42 @@ class _CustomerLoginTabState extends State<_CustomerLoginTab> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
                 child: ctrl.isSubmitting.value
-                    ? const SizedBox(
-                        height: 20, width: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
+                    ? const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                              height: 18, width: 18,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2)),
+                          SizedBox(width: 10),
+                          Text('جارٍ تسجيل الدخول...',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                        ],
+                      )
                     : const Text('دخول', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               );
             }),
             const SizedBox(height: 12),
-            // AMIAL-BIO-001: دخول سريع ببصمة الإصبع
-            OutlinedButton.icon(
-              onPressed: _bioLogin,
-              icon: const Icon(Icons.fingerprint, size: 22),
-              label: const Text('الدخول ببصمة الإصبع'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AmyalColors.primary,
-                side: const BorderSide(color: AmyalColors.primary),
-                padding: const EdgeInsets.symmetric(vertical: 13),
-              ),
+            // AMIAL-BIO-001: دخول سريع ببصمة الإصبع — يظهر فقط إن كان مُفعّلاً.
+            FutureBuilder<bool>(
+              future: AmialBiometricSetupScreen.isEnabled(),
+              builder: (context, snap) {
+                if (snap.data != true) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: OutlinedButton.icon(
+                    onPressed: _bioLogin,
+                    icon: const Icon(Icons.fingerprint, size: 22),
+                    label: const Text('الدخول ببصمة الإصبع'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AmyalColors.primary,
+                      side: const BorderSide(color: AmyalColors.primary),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 8),
             // AMIAL: رابط إنشاء حساب جديد (بالبيانات والوثائق)
@@ -314,8 +366,63 @@ class _CustomerLoginTabState extends State<_CustomerLoginTab> {
                 ),
               ],
             ),
+            const SizedBox(height: 4),
+            const Divider(height: 1),
+            const SizedBox(height: 4),
+            // AMYAL-UI-002: تذييل — مركز المساعدة + تغيير اللغة.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                TextButton.icon(
+                  onPressed: () => Get.to(() => const SupportScreen()),
+                  icon: const Icon(Icons.help_outline, size: 18, color: AmyalColors.primary),
+                  label: const Text('مركز المساعدة',
+                      style: TextStyle(color: AmyalColors.primary, fontSize: 13)),
+                ),
+                const Text('|', style: TextStyle(color: Color(0xFFCBD5D1))),
+                TextButton.icon(
+                  onPressed: () => Get.to(() => const ChooseLanguageScreen()),
+                  icon: const Icon(Icons.language, size: 18, color: AmyalColors.primary),
+                  label: const Text('اللغة',
+                      style: TextStyle(color: AmyalColors.primary, fontSize: 13)),
+                ),
+              ],
+            ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ============================================================
+// Phone prefix chips (Yemen) — AMYAL-UI-002
+// ============================================================
+class _PhonePrefixChips extends StatelessWidget {
+  final void Function(String prefix) onPick;
+  const _PhonePrefixChips({required this.onPick});
+
+  @override
+  Widget build(BuildContext context) {
+    const prefixes = ['77', '78', '73', '71', '70'];
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Wrap(
+        spacing: 6,
+        children: prefixes.map((p) {
+          return ActionChip(
+            visualDensity: VisualDensity.compact,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            label: Text(p,
+                style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: AmyalColors.primary)),
+            backgroundColor: AmyalColors.primary.withValues(alpha: 0.06),
+            side: BorderSide(color: AmyalColors.primary.withValues(alpha: 0.25)),
+            onPressed: () => onPick(p),
+          );
+        }).toList(),
       ),
     );
   }
@@ -922,7 +1029,8 @@ class _VersionStampState extends State<_VersionStamp> {
     try {
       final info = await PackageInfo.fromPlatform();
       if (!mounted) return;
-      setState(() => _label = '✅ إصدار ${info.version} (${info.buildNumber})');
+      // AMYAL-UI-002: تنسيق هادئ وصغير — «الإصدار 1.33.0 (1330)».
+      setState(() => _label = 'الإصدار ${info.version} (${info.buildNumber})');
     } catch (_) {
       if (mounted) setState(() => _label = '');
     }
@@ -930,11 +1038,13 @@ class _VersionStampState extends State<_VersionStamp> {
 
   @override
   Widget build(BuildContext context) {
-    if (_label.isEmpty) return const SizedBox(height: 16);
+    if (_label.isEmpty) return const SizedBox(height: 14);
     return Text(
       _label,
-      style: const TextStyle(
-          color: Color(0xFFFECA1E), fontSize: 12, fontWeight: FontWeight.bold),
+      style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.6),
+          fontSize: 10.5,
+          fontWeight: FontWeight.w500),
     );
   }
 }
