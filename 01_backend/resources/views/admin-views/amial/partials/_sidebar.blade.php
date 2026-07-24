@@ -107,6 +107,13 @@
     <a class="nav-link" href="{{route('admin.faq.index')}}" title="الأسئلة الشائعة">
         <span class="text-truncate">❓ الأسئلة الشائعة</span>
     </a>
+    {{-- AMIAL-EXPENSE-001 / AMIAL-LANG-ADMIN-001: أنظمة كانت بلا واجهة --}}
+    <a class="nav-link" href="{{route('admin.expense.index')}}" title="المصاريف">
+        <span class="text-truncate">💸 مصاريف المنصّة</span>
+    </a>
+    <a class="nav-link" href="{{route('admin.business-settings.language.index')}}" title="اللغات">
+        <span class="text-truncate">🌐 إدارة اللغات</span>
+    </a>
     {{-- AMIAL-BIZ-SETUP-001: إعدادات الأعمال بتبويبات (6cash-style) --}}
     <a class="nav-link" href="{{route('admin.business-settings.business-setup')}}" title="إعدادات الأعمال">
         <span class="text-truncate">🏢 إعدادات الأعمال (عام/رسوم)</span>
