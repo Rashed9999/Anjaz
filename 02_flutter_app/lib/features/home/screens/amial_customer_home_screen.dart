@@ -24,6 +24,7 @@ import 'package:amyal_pay/features/transaction_money/screens/amial_send_money_sc
 import 'package:amyal_pay/features/reports/screens/amial_reports_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_pay_screen.dart';
+import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 
 /// AMIAL-CUSTOMER-HOME-002 — الرئيسية بتصميم «المحفظة».
 ///
@@ -645,6 +646,21 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
 
   // ============ شبكة الخدمات (كل الوظائف محفوظة) ============
   Widget _servicesGrid() {
+    return Obx(() => _buildServicesGrid());
+  }
+
+  Widget _buildServicesGrid() {
+    // AMIAL-FIX(PLANS-SCOPE): «الباقات» مفهوم اشتراك خاصّ بالتاجر (حصص
+    // منتجات/موظفين/فروع). كانت تُعرض لكل مستخدم بلا شرط — فيظنّ المواطن
+    // العادي أن المحفظة تتطلّب اشتراكاً مدفوعاً. تقتصر الآن على التاجر.
+    bool isMerchant = false;
+    try {
+      isMerchant = Get.find<AccessController>().hasAny(const [
+        'products', 'inventory', 'fuel_pos', 'pharmacy_pos',
+        'wholesale_invoices', 'daily_reports', 'profit_reports',
+      ]);
+    } catch (_) {}
+
     final services = [
       _Svc('طلب المال', Icons.request_page_outlined, () => Get.to(() => const PaymentRequestCreateScreen())),
       _Svc('الطلبات الواردة', Icons.mark_email_unread_outlined, () => Get.to(() => const RequestedMoneyListScreen(requestType: RequestType.request))),
@@ -660,7 +676,8 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       _Svc('التقارير', Icons.bar_chart_rounded, () => Get.to(() => const AmialReportsScreen()),
           color: AmyalColors.red),
       _Svc('توثيق الحساب', Icons.verified_user_outlined, () => Get.to(() => const KycVerifyScreen())),
-      _Svc('الباقات', Icons.workspace_premium_outlined, () => Get.to(() => const PlansCatalogScreen())),
+      if (isMerchant)
+        _Svc('الباقات', Icons.workspace_premium_outlined, () => Get.to(() => const PlansCatalogScreen())),
       _Svc('خدماتي', Icons.apps_rounded, () => Get.to(() => const MyServicesScreen())),
       _Svc('حسابي', Icons.person_outline_rounded, () => Get.to(() => const ProfileScreen())),
     ];

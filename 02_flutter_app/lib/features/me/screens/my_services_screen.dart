@@ -223,10 +223,16 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
               if (access.has('wholesale_invoices'))
                 _serviceCard(icon: Icons.warehouse, label: 'الجملة', subtitle: 'فواتير + ائتمان',
                     color: const Color(0xFFE65100), onTap: () => Get.to(() => const WholesaleDashboardScreen())),
-              _serviceCard(icon: Icons.workspace_premium, label: 'خطّتي', subtitle: 'عرض الخطط',
-                  color: const Color(0xFFEAB308), onTap: () => Get.to(() => const PlansCatalogScreen())),
-              _serviceCard(icon: Icons.bar_chart, label: 'استخدامي', subtitle: 'الحدود + العدّاد',
-                  color: const Color(0xFF0EA5E9), onTap: () => Get.to(() => const MyUsageScreen())),
+              // AMIAL-FIX(PLANS-SCOPE): الباقات والاستخدام مفهوم خاصّ بالتاجر
+              // (حصص المنتجات/الموظفين/الفروع). كان التعليق يقول «لكل التجار»
+              // لكن بلا فحص صلاحية فعليّ — فكان المواطن العادي يراها، وهو ما
+              // يوحي خطأً بأن المحفظة تتطلّب اشتراكاً. الآن مقصورة على التاجر.
+              if (isMerchant)
+                _serviceCard(icon: Icons.workspace_premium, label: 'خطّتي', subtitle: 'عرض الخطط',
+                    color: const Color(0xFFEAB308), onTap: () => Get.to(() => const PlansCatalogScreen())),
+              if (isMerchant)
+                _serviceCard(icon: Icons.bar_chart, label: 'استخدامي', subtitle: 'الحدود + العدّاد',
+                    color: const Color(0xFF0EA5E9), onTap: () => Get.to(() => const MyUsageScreen())),
               if (access.has('branches'))
                 _serviceCard(icon: Icons.store_mall_directory, label: 'الفروع', subtitle: 'إدارة + تقارير',
                     color: const Color(0xFF7C3AED), onTap: () => Get.to(() => const BranchesManagementScreen())),
