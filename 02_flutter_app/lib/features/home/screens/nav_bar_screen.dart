@@ -9,6 +9,7 @@ import 'package:amyal_pay/features/history/controllers/transaction_history_contr
 import 'package:amyal_pay/features/home/controllers/menu_controller.dart';
 import 'package:amyal_pay/features/home/domain/enums/nav_bar_page_enum.dart';
 import 'package:amyal_pay/features/home/widgets/show_case/showcaseview.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 
 class NavBarScreen extends StatefulWidget {
   final String? selectedPage;
@@ -74,7 +75,7 @@ class _NavBarScreenState extends State<NavBarScreen> {
           // الاحترافية): حاوية داكنة مستديرة بالكامل تطفو فوق المحتوى، وزرّ
           // المسح في مركزها بلون البراند الأصفر. كان شريطاً أبيض بعرض الشاشة.
           builder : (context) => Scaffold(
-            backgroundColor: const Color(0xFFF2F3F7),
+            backgroundColor: AmyalColors.background,
             extendBody: true,
             body: PageStorage(bucket: bucket, child: menuController.screen[menuController.currentTabIndex]),
 

@@ -54,7 +54,7 @@ class _AmialPinInputScreenState extends State<_AmialPinInputScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F4EF),
+      backgroundColor: AmyalColors.background,
       appBar: AppBar(
         backgroundColor: AmyalColors.primary,
         foregroundColor: Colors.white,
@@ -182,7 +182,7 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F4EF),
+      backgroundColor: AmyalColors.background,
       appBar: AppBar(
         backgroundColor: AmyalColors.primary,
         foregroundColor: Colors.white,

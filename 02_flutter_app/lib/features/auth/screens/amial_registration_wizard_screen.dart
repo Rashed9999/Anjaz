@@ -361,7 +361,7 @@ class _AmialRegistrationWizardScreenState
                     child: Container(
                       width: 38, height: 38,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF2F3F7),
+                        color: AmyalColors.background,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(Icons.arrow_forward,

@@ -131,7 +131,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F3F7),
+      backgroundColor: AmyalColors.background,
       body: RefreshIndicator(
         color: AmyalColors.primary,
         onRefresh: _load,

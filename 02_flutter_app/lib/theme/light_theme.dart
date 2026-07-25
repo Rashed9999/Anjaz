@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:amyal_pay/theme/custom_theme_colors.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 
 // AMIAL-BRANDING-003: ألوان هوية أميال باي = أزرق الشعار + أصفر الشعار.
 // موحّدة تماماً مع AmyalColors (primary/yellow) ليتطابق النظامان عبر كل الشاشات.
@@ -12,7 +13,7 @@ ThemeData light = ThemeData(
   fontFamily: 'Rubik',
   primaryColor:  _primaryColor,
   primaryColorLight: const Color(0xFF1D4FB8),
-  scaffoldBackgroundColor: const Color(0xFFF5F4EF),
+  scaffoldBackgroundColor: AmyalColors.background,
   // highlightColor: const Color(0xFF003E47),
   cardColor: const Color(0xFFFAFAFA),
   shadowColor: Colors.grey[300],

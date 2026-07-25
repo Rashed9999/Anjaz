@@ -286,7 +286,7 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F4EF),
+      backgroundColor: AmyalColors.background,
       appBar: AppBar(
         backgroundColor: AmyalColors.primary,
         foregroundColor: Colors.white,

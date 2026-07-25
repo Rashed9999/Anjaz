@@ -80,7 +80,7 @@ class _AmialBiometricSetupScreenState extends State<AmialBiometricSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F5F3),
+      backgroundColor: AmyalColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
         foregroundColor: AmyalColors.primary,

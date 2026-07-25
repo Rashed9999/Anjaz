@@ -32,8 +32,12 @@ class AmyalColors {
   /// لا تستخدمه للزرّ "حذف" الافتراضي إلا في حالات حذف نهائي.
   static const Color red = Color(0xFFDC0A0B);
 
-  /// خلفية الشاشات الفاتحة
-  static const Color background = Color(0xFFFFF8E1);
+  /// خلفية الشاشات الفاتحة — المصدر الوحيد لخلفية الصفحات.
+  /// AMIAL-COLOR-002: كانت 0xFFFFF8E1 (كريمي دافئ) بينما theme الافتراضي
+  /// 0xFFF5F4EF وشاشات أخرى 0xFFF2F3F7 و0xFFF2F5F3 — أربع خلفيات متنافسة
+  /// في تطبيق واحد. وُحّدت على رمادي محايد فاتح كما في المراجع المهنية،
+  /// ليبرز الأصفر والأزرق كلونَي براند لا كخلفية.
+  static const Color background = Color(0xFFF2F3F7);
 
   /// خلفية البطاقات على background
   static const Color cardSurface = Color(0xFFFFFFFF);
