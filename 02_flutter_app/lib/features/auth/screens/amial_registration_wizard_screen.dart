@@ -6,6 +6,7 @@ import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/auth/widgets/signature_pad_widget.dart';
 import 'package:amyal_pay/features/auth/screens/unified_login_screen.dart';
+import 'package:amyal_pay/common/widgets/amial_button.dart';
 
 /// AMIAL-REG-WIZARD-001
 ///
@@ -342,23 +343,73 @@ class _AmialRegistrationWizardScreenState
       'المعلومات الشخصية', 'معلومات الهوية', 'العنوان', 'وثائق الهوية',
       'شخص قريب', 'التوقيع الإلكتروني', 'الإقرارات', 'رمز PIN', 'رمز التحقق', 'تم',
     ];
+    // AMIAL-REG-UI-002: لغة المراجع الاحترافية — بلا شريط عنوان ملوّن ثقيل.
+    // رجوع خفيف + شريط تقدّم مقسّم بعدد الخطوات + عنوان كبير أسفله.
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F4EF),
-      appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        title: Text('إنشاء حساب — ${titles[_step]}'),
-        leading: IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _back),
-        automaticallyImplyLeading: false,
-      ),
-      body: Column(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Column(
         children: [
-          if (_step < _successStep)
-            LinearProgressIndicator(
-              value: (_step + 1) / 9,
-              backgroundColor: Colors.grey.shade200,
-              color: AmyalColors.primary,
+          if (_step < _successStep) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Row(
+                children: [
+                  InkWell(
+                    onTap: _back,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 38, height: 38,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF2F3F7),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.arrow_forward,
+                          size: 19, color: Color(0xFF1A2433)),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text('الخطوة ${_step + 1} من 9',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AmyalColors.textMuted)),
+                ],
+              ),
             ),
+            // شريط تقدّم مقسّم إلى أجزاء بعدد الخطوات
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: List.generate(9, (i) {
+                  final done = i <= _step;
+                  return Expanded(
+                    child: Container(
+                      height: 4,
+                      margin: EdgeInsets.only(left: i == 8 ? 0 : 4),
+                      decoration: BoxDecoration(
+                        color: done ? AmyalColors.primary : const Color(0xFFE6E9EF),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  titles[_step],
+                  style: const TextStyle(
+                      fontSize: 23,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1A2433)),
+                ),
+              ),
+            ),
+          ],
           Expanded(
             child: PageView(
               controller: _page,
@@ -379,46 +430,43 @@ class _AmialRegistrationWizardScreenState
           ),
           if (_step < _successStep) _bottomBar(),
         ],
+        ),
       ),
     );
   }
 
+  /// AMIAL-REG-UI-002: شريط سفلي ثابت بحدّ علويّ خفيف — الزرّ الأساسي يأخذ
+  /// العرض الأكبر (كما في المراجع)، وموحّد عبر AmialButton.
   Widget _bottomBar() {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: _submitting ? null : _back,
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  side: const BorderSide(color: AmyalColors.primary),
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: Color(0xFFEEF1F5))),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: AmialButton(
+                  label: _step == 0 ? 'إلغاء' : 'السابق',
+                  kind: AmialButtonKind.outline,
+                  onPressed: _submitting ? null : _back,
                 ),
-                child: Text(_step == 0 ? 'إلغاء' : 'السابق',
-                    style: const TextStyle(color: AmyalColors.primary)),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: ElevatedButton(
-                onPressed: _submitting ? null : _next,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AmyalColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: AmialButton(
+                  label: _step == _lastInputStep ? 'إنشاء الحساب' : 'التالي',
+                  loading: _submitting,
+                  onPressed: _submitting ? null : _next,
                 ),
-                child: _submitting
-                    ? const SizedBox(
-                        height: 20, width: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : Text(_step == _lastInputStep ? 'إنشاء الحساب' : 'التالي'),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
