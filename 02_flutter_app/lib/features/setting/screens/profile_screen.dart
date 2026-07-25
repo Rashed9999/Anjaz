@@ -23,6 +23,7 @@ import 'package:amyal_pay/features/setting/widgets/status_menu.dart';
 import 'package:amyal_pay/features/setting/widgets/user_info_widget.dart';
 import 'package:amyal_pay/features/requested_money/screens/requested_money_list_screen.dart';
 import 'package:amyal_pay/features/setting/screens/transaction_limit_screen.dart';
+import 'package:amyal_pay/features/language/widgets/amial_language_switch.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({ super.key });
@@ -180,7 +181,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                  if(AppConstants.languages.length > 1) CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.languageLogo, title: 'change_language'.tr),
-                    onTap:()=> Get.toNamed(RouteHelper.getChoseLanguageRoute()),
+                    // AMIAL-I18N-002: قائمة قصيرة تُطبَّق فوراً بدل صفحة كاملة لخيارين.
+                    onTap: () => AmialLanguageSheet.open(context),
                   ),
 
                   if(Get.find<SplashController>().configModel?.twoFactor ?? false)

@@ -8,7 +8,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:amyal_pay/features/forget_pin/screens/forget_pin_screen.dart';
 import 'package:amyal_pay/features/amyal/screens/account_recovery_screen.dart';
 import 'package:amyal_pay/features/setting/screens/support_screen.dart';
-import 'package:amyal_pay/features/language/screens/change_language_screen.dart';
+import 'package:amyal_pay/features/language/widgets/amial_language_switch.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/util/images.dart';
 import 'package:amyal_pay/common/widgets/amial_button.dart';
@@ -81,6 +81,8 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
 
   bool _obscure = true;
   bool _otpStep = false;
+  /// AMIAL-LOGIN-UI-002: بادئة الشبكة المختارة داخل حقل الهاتف.
+  String _netPrefix = '77';
   String _maskedPhone = '';
 
   @override
@@ -200,7 +202,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   Future<void> _bioLogin() async {
     try {
       if (!await AmialBiometricSetupScreen.isEnabled()) {
-        _error('فعّل الدخول السريع أولاً بالدخول بكلمة المرور');
+        _error('فعّل الدخول السريع أولاً بالدخول بالرمز السري');
         return;
       }
       final auth = LocalAuthentication();
@@ -335,14 +337,10 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       ),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.14),
-              shape: BoxShape.circle,
-            ),
-            child: Image.asset(Images.logo, height: 46, width: 46),
-          ),
+          // AMIAL-LOGIN-UI-002: كانت دائرة بيضاء باهتة خلف الشعار، فيظهر
+          // مستطيل الشعار الأصفر داخل هالة بيضاء — «خلفية بيضاء حول الشعار».
+          // الشعار نفسه علامة كاملة، فلا يحتاج حاوية خلفه.
+          Image.asset(Images.logo, height: 62, fit: BoxFit.contain),
           const SizedBox(height: 10),
           const Text('أميال باي',
               style: TextStyle(
@@ -432,7 +430,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           if (_kind == AccountKind.merchant || _kind == AccountKind.pos) ...[
             _field(
               controller: _merchantNumCtrl,
-              label: 'رقم التاجر *',
+              label: 'رقم التاجر',
               icon: Icons.store,
               validator: (v) =>
                   (v == null || v.trim().length < 3) ? 'رقم تاجر غير صحيح' : null,
@@ -442,7 +440,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           if (_kind == AccountKind.pos) ...[
             _field(
               controller: _posNumCtrl,
-              label: 'رقم نقطة البيع *',
+              label: 'رقم نقطة البيع',
               hint: 'POS-001',
               icon: Icons.point_of_sale,
               validator: (v) =>
@@ -476,29 +474,40 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
 
           // ---- الهاتف: لكل الأنواع عدا الوكيل والأدمن ----
           if (_kind != AccountKind.agent && _kind != AccountKind.admin) ...[
+            // AMIAL-LOGIN-UI-002: كانت بادئات الشبكات خمس رقاقات عائمة أسفل
+            // الحقل بلا عنوان ولا سياق — تبدو أزراراً مبعثرة. صارت قائمة
+            // داخل الحقل نفسه، كما في كل تطبيق يطلب رقم هاتف.
             _field(
               controller: _phoneCtrl,
-              label: 'رقم الجوال *',
+              label: 'رقم الجوال',
               hint: '7XXXXXXXX',
               icon: Icons.phone_outlined,
               keyboard: TextInputType.phone,
+              prefix: _NetworkPrefixPicker(
+                value: _netPrefix,
+                onPick: (p) {
+                  setState(() => _netPrefix = p);
+                  final rest = _phoneCtrl.text.replaceAll(RegExp(r'[^0-9]'), '');
+                  // لا نُكرّر البادئة إن كان المستخدم كتبها بنفسه
+                  final tail = rest.length >= 2 &&
+                          const ['77', '78', '73', '71', '70'].contains(rest.substring(0, 2))
+                      ? rest.substring(2)
+                      : rest;
+                  _phoneCtrl.text = p + tail;
+                  _phoneCtrl.selection = TextSelection.fromPosition(
+                      TextPosition(offset: _phoneCtrl.text.length));
+                },
+              ),
               validator: (v) =>
                   (v == null || v.trim().length < 6) ? 'رقم غير صحيح' : null,
             ),
-            const SizedBox(height: 8),
-            _PhonePrefixChips(onPick: (p) {
-              _phoneCtrl.text = p;
-              _phoneCtrl.selection = TextSelection.fromPosition(
-                  TextPosition(offset: _phoneCtrl.text.length));
-              setState(() {});
-            }),
             const SizedBox(height: 12),
           ],
 
           // ---- كلمة المرور: دائماً ----
           _field(
             controller: _passwordCtrl,
-            label: 'كلمة المرور *',
+            label: 'الرمز السري',
             icon: Icons.lock_outline,
             obscure: _obscure,
             suffix: IconButton(
@@ -506,7 +515,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
               onPressed: () => setState(() => _obscure = !_obscure),
             ),
             validator: (v) =>
-                (v == null || v.length < 4) ? 'كلمة المرور قصيرة' : null,
+                (v == null || v.length < 4) ? 'الرمز السري قصير' : null,
           ),
         ],
       ),
@@ -562,6 +571,9 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     );
   }
 
+  /// AMIAL-LOGIN-UI-002: حدود موحّدة بنصف قطر 14 ولون AmyalColors.border —
+  /// كانت OutlineInputBorder الافتراضية (زوايا 4 ورمادي Material) فتختلف عن
+  /// قائمة نوع الحساب فوقها مباشرةً.
   Widget _field({
     required TextEditingController controller,
     required String label,
@@ -571,8 +583,14 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     bool obscure = false,
     bool ltr = false,
     Widget? suffix,
+    Widget? prefix,
     String? Function(String?)? validator,
   }) {
+    OutlineInputBorder side(Color c, [double w = 1]) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: c, width: w),
+        );
+
     return TextFormField(
       controller: controller,
       keyboardType: keyboard,
@@ -581,11 +599,24 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(icon),
+        prefixIcon: prefix == null
+            ? Icon(icon, color: AmyalColors.textMuted)
+            : Row(mainAxisSize: MainAxisSize.min, children: [
+                const SizedBox(width: 10),
+                Icon(icon, size: 20, color: AmyalColors.textMuted),
+                const SizedBox(width: 6),
+                prefix,
+              ]),
         suffixIcon: suffix,
         filled: true,
         fillColor: Colors.white,
-        border: const OutlineInputBorder(),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        border: side(AmyalColors.border),
+        enabledBorder: side(AmyalColors.border),
+        focusedBorder: side(AmyalColors.primary, 1.4),
+        errorBorder: side(AmyalColors.red),
+        focusedErrorBorder: side(AmyalColors.red, 1.4),
       ),
       validator: validator,
     );
@@ -699,7 +730,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           children: [
             TextButton(
               onPressed: () => Get.to(() => const ForgetPinScreen()),
-              child: const Text('نسيت كلمة المرور؟',
+              child: const Text('نسيت الرمز السري؟',
                   style: TextStyle(color: AmyalColors.textSecondary, fontSize: 13)),
             ),
             const Text('|', style: TextStyle(color: AmyalColors.border)),
@@ -725,12 +756,9 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
               style: TextStyle(color: AmyalColors.primary, fontSize: 13)),
         ),
         const Text('|', style: TextStyle(color: AmyalColors.border)),
-        TextButton.icon(
-          onPressed: () => Get.to(() => const ChooseLanguageScreen()),
-          icon: const Icon(Icons.language, size: 18, color: AmyalColors.primary),
-          label: const Text('اللغة',
-              style: TextStyle(color: AmyalColors.primary, fontSize: 13)),
-        ),
+        // AMIAL-I18N-002: كان يفتح صفحة كاملة لاختيار لغتين — صار قائمة
+        // قصيرة تُطبَّق فوراً في مكانها.
+        const AmialLanguageChip(),
       ],
     );
   }
@@ -747,31 +775,39 @@ class _Demo {
 // ============================================================
 // بادئات أرقام اليمن — AMYAL-UI-002
 // ============================================================
-class _PhonePrefixChips extends StatelessWidget {
-  final void Function(String prefix) onPick;
-  const _PhonePrefixChips({required this.onPick});
+/// AMIAL-LOGIN-UI-002 — قائمة بادئة الشبكة داخل حقل الهاتف.
+///
+/// بديل خمس رقاقات كانت تطفو أسفل الحقل بلا عنوان. هنا البادئة جزء من
+/// الحقل: يراها المستخدم قبل الكتابة ويفهم أن الرقم يبدأ بها.
+class _NetworkPrefixPicker extends StatelessWidget {
+  final String value;
+  final ValueChanged<String> onPick;
+  const _NetworkPrefixPicker({required this.value, required this.onPick});
+
+  static const prefixes = ['77', '78', '73', '71', '70'];
 
   @override
   Widget build(BuildContext context) {
-    const prefixes = ['77', '78', '73', '71', '70'];
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Wrap(
-        spacing: 6,
-        children: prefixes.map((p) {
-          return ActionChip(
-            visualDensity: VisualDensity.compact,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            label: Text(p,
-                style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w600,
-                    color: AmyalColors.primary)),
-            backgroundColor: AmyalColors.primary.withValues(alpha: 0.06),
-            side: BorderSide(color: AmyalColors.primary.withValues(alpha: 0.25)),
-            onPressed: () => onPick(p),
-          );
-        }).toList(),
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: prefixes.contains(value) ? value : prefixes.first,
+        isDense: true,
+        borderRadius: BorderRadius.circular(12),
+        icon: const Icon(Icons.arrow_drop_down_rounded,
+            size: 20, color: AmyalColors.textMuted),
+        style: const TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w700,
+            color: AmyalColors.primary),
+        items: prefixes
+            .map((p) => DropdownMenuItem<String>(
+                  value: p,
+                  child: Text(p, textDirection: TextDirection.ltr),
+                ))
+            .toList(),
+        onChanged: (p) {
+          if (p != null) onPick(p);
+        },
       ),
     );
   }
@@ -823,7 +859,7 @@ class _LastLoginNote extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 11.5, color: AmyalColors.textSecondary),
                 ),
-                const Text('إن لم تكن أنت، غيّر كلمة المرور فوراً.',
+                const Text('إن لم تكن أنت، غيّر رمزك السري فوراً.',
                     style: TextStyle(fontSize: 10.5, color: AmyalColors.textMuted)),
               ],
             ),
