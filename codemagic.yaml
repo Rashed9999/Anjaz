@@ -45,9 +45,14 @@ workflows:
           # "warning •" بلا مسافة بادئة و"  error •" بمسافتين و"   info •"
           # بثلاث. لذلك نُثبّت الأنماط بـ ^[[:space:]]* لا بمسافة مكتوبة.
           flutter analyze --no-pub > analyze_report.txt 2>&1 || true
-          if grep -qE '^[[:space:]]*error •' analyze_report.txt; then
+          # طبقة ثانية بعد exclude في analysis_options.yaml: نتجاهل أي خطأ
+          # مساره داخل build/ — مصادر حزم خارجية تنسخها آلة البناء، ليست لنا
+          # ولا نملك إصلاحها. الحارس يحرس شيفرتنا وحدها.
+          grep -E '^[[:space:]]*error •' analyze_report.txt \
+            | grep -v '• build/' > compile_errors.txt || true
+          if [ -s compile_errors.txt ]; then
             echo "❌ أخطاء تصريف — البناء متوقّف:"
-            grep -E '^[[:space:]]*error •' analyze_report.txt
+            cat compile_errors.txt
             exit 1
           fi
           echo "✅ صفر خطأ تصريف"

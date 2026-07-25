@@ -9,6 +9,18 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+# AMIAL-CI-GATE-001: استبعاد المُخرجات المولَّدة من التحليل.
+# مجلّد build/ يحوي على آلة البناء نسخاً من مصادر الحزم الخارجية —
+# منها ملفات اختبار firebase_messaging التي تستعمل mockito وتُحلَّل
+# بلا تبعياتها، فتُنتج عشرات أسطر "error" ليست من شيفرتنا في شيء.
+# لا نملكها ولا نصلحها، ووجودها في التقرير يُعمي عن أخطائنا الحقيقية.
+analyzer:
+  exclude:
+    - build/**
+    - .dart_tool/**
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`
