@@ -64,7 +64,17 @@ class CustomButtonWidget extends StatelessWidget {
               const SizedBox(width: Dimensions.paddingSizeExtraSmall)
             ],
 
-            Text(buttonText ?? '',maxLines: 1,overflow: TextOverflow.ellipsis, style: buttonTextStyle ?? const TextStyle(color: Colors.white)),
+            // AMIAL-BTN-OVERFLOW-001: كان Text مباشراً داخل Row بلا Flexible،
+            // فلا يجد عرضاً محدوداً يُطبّق عليه ellipsis — يفيض ويُقصّ من
+            // الحافة بدل أن ينتهي بنقاط. ظهر ذلك في حوار الخروج حيث صار
+            // «مسح البيانات وتسجيل الخروج» ← «لبيانات وتسجيل الخروج».
+            Flexible(
+              child: Text(buttonText ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: buttonTextStyle ?? const TextStyle(color: Colors.white)),
+            ),
 
             if(suffixIcon != null) ...[
               suffixIcon!,

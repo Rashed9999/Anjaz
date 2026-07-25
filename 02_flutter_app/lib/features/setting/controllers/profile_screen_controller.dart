@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amyal_pay/features/setting/controllers/theme_controller.dart';
 import 'package:amyal_pay/data/api/api_checker.dart';
 import 'package:amyal_pay/features/auth/domain/models/user_short_data_model.dart';
@@ -177,39 +176,41 @@ class ProfileController extends GetxController implements GetxService {
     }
   }
 
+  /// AMIAL-LOGOUT-UX-001 — حوار خروج بسؤال واحد وجوابين.
+  ///
+  /// كان يعرض زرّين كلاهما يُنفّذ خروجاً: «تسجيل الخروج» و«مسح البيانات
+  /// وتسجيل الخروج». والسؤال المعروض «هل أنت متأكد أنك تريد تسجيل الخروج؟»
+  /// سؤال نعم/لا — فلا يوجد زرّ «لا» أصلاً، ولا سبيل للتراجع إلا بزرّ الرجوع.
+  /// ونصّ الزرّ الثاني كان يفيض فيُقصّ إلى «لبيانات وتسجيل الخروج».
+  ///
+  /// وخيار «مسح البيانات» كان ينفّذ `sharedPreferences.clear()` — أي مسح
+  /// اللغة والسمة وكل التفضيلات، لا بيانات الجلسة فقط. هذا «تصفير تطبيق»
+  /// لا خيار خروج، ولا محلّ له في حوار تأكيد.
+  ///
+  /// الآن: «نعم» تُنفّذ خروجاً آمناً — إبطال الرمز + مسح بيانات البصمة
+  /// المحفوظة (تركها بعد الخروج ثغرة: من يمسك الجهاز يدخل ببصمته) —
+  /// و«لا» تُغلق الحوار.
   void logOut(BuildContext context) {
     DialogHelper.showAnimatedDialog(context,
         CustomDialogWidget(
           icon: Icons.logout,
           title: 'logout'.tr,
           description: 'are_you_sure_you_want_to_logout'.tr,
-          onTapFalseText: 'clear_logout'.tr,
-          onTapTrueText: 'logout'.tr,
+          onTapFalseText: 'no'.tr,
+          onTapTrueText: 'yes'.tr,
           isFailed: true,
-          // AMIAL-DIALOG-001: كلا الخيارين هنا «خروج» — الأخضر كان يوحي بأن
-          // أحدهما إجراء آمن. أزرق البراند للخروج العادي، وأحمر لمسح البيانات.
-          trueButtonColor: AmyalColors.primary,
-          falseButtonColor: AmyalColors.red,
-          onTapFalse: (){
-            Get.find<AuthController>().removeBiometricPin().then((value) async{
-              Get.find<SplashController>().removeSharedData();
+          trueButtonColor: AmyalColors.red,
+          falseButtonColor: AmyalColors.textMuted,
+          onTapFalse: () => Get.back(),
+          onTapTrue: () {
+            Get.find<AuthController>().removeBiometricPin().then((_) {
               Get.find<AuthController>().updateToken(isLogOut: true);
               Get.find<AuthController>().logout();
-
-              if(context.mounted) {
-                Navigator.pop(context);
-              }
-
             });
-
-          },
-          onTapTrue: (){
-            Get.find<AuthController>().updateToken(isLogOut: true);
-            Get.find<AuthController>().logout();
             Navigator.of(context).pop(true);
           },
         ),
-        dismissible: false,
+        dismissible: true,
         isFlip: true);
   }
 
