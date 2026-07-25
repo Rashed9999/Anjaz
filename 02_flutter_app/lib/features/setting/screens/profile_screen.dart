@@ -188,12 +188,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       return profileController.isLoading ? const TwoFactorShimmer() :
                       StatusMenu(
                         title: 'two_factor_authentication'.tr,
-                        leading: Image.asset(Images.twoFactorAuthentication,width: 28.0),
+                        leading: const widget.ProfileRowIcon(image: Images.twoFactorAuthentication),
                       );
                     }),
 
                   if(authController.isBiometricSupported) StatusMenu(
-                    title: 'biometric_login'.tr, leading: SizedBox(width: 28,child: Image.asset(Images.fingerprint)), isAuth: true,
+                    title: 'biometric_login'.tr, leading: const widget.ProfileRowIcon(image: Images.fingerprint), isAuth: true,
                   ),
 
 
@@ -201,9 +201,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     return Container(
                       padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeSmall, top: 10),
                       child: Row( children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeDefault),
-                          child: Image.asset(Images.changeTheme,width: Dimensions.fontSizeOverOverLarge,),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeDefault),
+                          child: widget.ProfileRowIcon(image: Images.changeTheme),
                         ),
 
                         Text('dark_mode'.tr,style: rubikRegular.copyWith(fontSize: Dimensions.fontSizeLarge - 1)),
@@ -227,9 +227,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     return Container(
                       padding: const EdgeInsets.only(bottom: Dimensions.paddingSizeSmall, top: 10),
                       child: Row( children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeDefault),
-                          child: Image.asset(Images.hideBalance,width: Dimensions.fontSizeOverOverLarge,),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeDefault),
+                          child: widget.ProfileRowIcon(image: Images.hideBalance),
                         ),
 
                         Expanded(

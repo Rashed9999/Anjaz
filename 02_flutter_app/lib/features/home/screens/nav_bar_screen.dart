@@ -74,9 +74,18 @@ class _NavBarScreenState extends State<NavBarScreen> {
           // AMIAL-NAV-003: شريط تنقّل «كبسولة عائمة» (كما في مراجع المحافظ
           // الاحترافية): حاوية داكنة مستديرة بالكامل تطفو فوق المحتوى، وزرّ
           // المسح في مركزها بلون البراند الأصفر. كان شريطاً أبيض بعرض الشاشة.
+          // AMIAL-NAV-004 (إصلاح انحدار): كان extendBody: true فيمرّ محتوى
+          // الشاشات تحت الكبسولة العائمة. الرئيسية كانت تعوّض بحشوة سفلية
+          // 110، أما «حسابي» و«الإشعارات» و«السجل» فلا — فاختفى زرّ تسجيل
+          // الخروج خلف الشريط ولم يعد قابلاً للضغط.
+          //
+          // الحلّ في الغلاف لا في كل شاشة: extendBody: false يجعل Scaffold
+          // يحجز ارتفاع الشريط فعلياً، فيستحيل أن يختفي محتوى خلفه — الآن
+          // ولا في أي شاشة تُضاف لاحقاً. المظهر العائم محفوظ لأن للكبسولة
+          // هوامش جانبية وسفلية تُظهر خلفية الصفحة حولها.
           builder : (context) => Scaffold(
             backgroundColor: AmyalColors.background,
-            extendBody: true,
+            extendBody: false,
             body: PageStorage(bucket: bucket, child: menuController.screen[menuController.currentTabIndex]),
 
             bottomNavigationBar: Padding(
