@@ -238,6 +238,30 @@ class CustomerWithdrawService
                 logger()->warning('Withdraw completion notification failed: ' . $e->getMessage());
             }
 
+            // AMIAL-RECEIPTS-002: إصدار إيصال للعميل عند اكتمال السحب.
+            //
+            // كان مسار السحب المبدوء من العميل هو المسار المالي الوحيد الذي لا
+            // يُصدر إيصالاً — فتظهر كل العمليات في «الإيصالات» و«آخر العمليات»
+            // إلا السحوبات. المستخدم يرى مالاً غادر حسابه بلا مستند يُثبته.
+            //
+            // يُصدَر بعد نجاح كل القيود، ويلتقط أي خطأ بصمت عبر
+            // safeIssueSingleReceipt — العملية المالية تمّت، وفشل الإيصال
+            // يُسجَّل ولا يُبطلها.
+            $this->safeIssueSingleReceipt('debit', [
+                'user_id' => $req->customer_user_id,
+                'counterparty_user_id' => $agent->id,
+                'reference_transaction_id' => $txId,
+                'receipt_type' => 'cash_out',
+                'amount' => (string) $req->amount,
+                'fee' => (string) $req->fee,
+                'zone_code' => $req->zone_code,
+                'metadata' => [
+                    'op_code' => $opCode,
+                    'agent_user_id' => $agent->id,
+                    'channel' => 'customer_withdraw',
+                ],
+            ]);
+
             return ['transaction_id' => $txId, 'request' => $req->fresh()];
         });
     }

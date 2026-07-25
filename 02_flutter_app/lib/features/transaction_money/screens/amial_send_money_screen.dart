@@ -17,6 +17,8 @@ import 'package:amyal_pay/common/widgets/amial_form.dart';
 import 'package:amyal_pay/features/setting/screens/support_screen.dart';
 import 'package:amyal_pay/features/favorite_number/screens/search_contact_screen.dart';
 import 'package:amyal_pay/features/transaction_money/domain/models/contact_tag_model.dart';
+import 'package:amyal_pay/common/models/contact_model.dart';
+import 'package:amyal_pay/features/transaction_money/domain/enums/suggest_type_enum.dart';
 
 /// AMIAL-SEND-V2 — شاشة تحويل الأموال بتصميم أميال (التصميم 15 من ملف
 /// الشاشات): بطاقة الرصيد + رقم المستلِم + المبلغ + ملاحظة + «المحوَّل لهم
@@ -156,6 +158,22 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
         try {
           Get.find<ProfileController>().getProfileData(reload: true);
         } catch (_) {}
+
+        // AMIAL-RECENT-FIX-001: تسجيل المستلِم في «تحويل سريع».
+        //
+        // كان القسم فارغاً دائماً: addToSuggestContact لا يُستدعى إلا من
+        // مسار التحويل القديم (bottom_sheet_with_slider) — أما هذه الشاشة،
+        // وهي المسار الفعلي من الرئيسية ومن الخدمات، فلم تكن تسجّل أحداً.
+        try {
+          Get.find<ContactController>().addToSuggestContact(
+            ContactModel(
+              phoneNumber: phoneNumber,
+              name: maskedName.isNotEmpty ? maskedName : phoneNumber,
+              isFavourite: false,
+            ),
+            type: SuggestType.sendMoney,
+          );
+        } catch (_) {/* غير حرج — لا يمنع نجاح التحويل */}
         Get.off(() => AmialTransferHoldingScreen(
               transferUlid: '${m['transfer_ulid']}',
               amount: '${m['amount'] ?? amount}',

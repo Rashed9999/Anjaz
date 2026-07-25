@@ -292,23 +292,91 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
               ),
               const SizedBox(height: 24),
 
-              // Action: download PDF — يُولَّد عند الطلب على الخادم دائماً،
-              // فلا حاجة لحالة «قيد التحضير» (الزرّ متاح دوماً).
-              ElevatedButton.icon(
-                onPressed: _downloadPdf,
-                icon: const Icon(Icons.download),
-                label: const Text('تحميل PDF'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AmyalColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+              // AMIAL-RECEIPT-ACTIONS-001: ثلاثة إجراءات كمربّعات — كما في
+              // الإيصالات المصرفية. كان زرّ PDF وحيداً وأيقونة مشاركة تائهة
+              // في شريط العنوان، فلا يجد المستخدم «نسخ» أصلاً.
+              Row(children: [
+                Expanded(
+                  child: _receiptAction(
+                    icon: Icons.picture_as_pdf_outlined,
+                    label: 'تحميل PDF',
+                    onTap: _downloadPdf,
+                  ),
                 ),
-              ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _receiptAction(
+                    icon: Icons.copy_rounded,
+                    label: 'نسخ',
+                    onTap: () => _copySummary(r),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _receiptAction(
+                    icon: Icons.share_outlined,
+                    label: 'مشاركة',
+                    onTap: _shareReceipt,
+                  ),
+                ),
+              ]),
             ],
           ),
         );
       }),
     );
+  }
+
+  /// مربّع إجراء على الإيصال — شكل موحّد للثلاثة.
+  Widget _receiptAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AmyalColors.border),
+        ),
+        child: Column(children: [
+          Icon(icon, size: 22, color: AmyalColors.primary),
+          const SizedBox(height: 6),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  color: AmyalColors.primary)),
+        ]),
+      ),
+    );
+  }
+
+  /// ينسخ ملخّص الإيصال نصّاً — بما فيه التفقيط وتفصيل الرسوم.
+  void _copySummary(dynamic r) {
+    final buf = StringBuffer()
+      ..writeln('إيصال أميال باي')
+      ..writeln('العملية: ${r.arabicTypeLabel}');
+    if ((r.transactionNo ?? '').toString().isNotEmpty) {
+      buf.writeln('رقم العملية: ${r.transactionNo}');
+    }
+    buf
+      ..writeln('رقم الإيصال: ${r.receiptNumber}')
+      ..writeln('المبلغ: ${AmialMoney.yer(r.amount)}')
+      ..writeln('(${ArabicNumberWords.yerFromString(r.amount) ?? ''})')
+      ..writeln('رسوم العملية: ${AmialMoney.yer(r.fee)}')
+      ..writeln('الإجمالي: ${AmialMoney.yer(r.netAmount)}')
+      ..writeln('كود التحقق: ${r.verificationCode}');
+    Clipboard.setData(ClipboardData(text: buf.toString()));
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('نُسخ ملخّص الإيصال'),
+      backgroundColor: Color(0xFF16A34A),
+      duration: Duration(seconds: 2),
+    ));
   }
 
   /// AMIAL-ZONE-AR-001: تحويل رمز المنطقة إلى اسمها العربي.

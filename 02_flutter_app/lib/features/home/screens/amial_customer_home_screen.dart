@@ -112,13 +112,6 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
     return intPart;
   }
 
-  /// رقم مقنَّع للبطاقة المُطلّة (آخر 4 أرقام).
-  String get _maskedPhone {
-    final digits = _phone.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.length < 4) return '•••• ••••';
-    return '•••• •••• ${digits.substring(digits.length - 4)}';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -602,7 +595,6 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
     final dateText = dt == null
         ? (rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate)
         : '${dt.year}/${two(dt.month)}/${two(dt.day)}  •  ${two(dt.hour)}:${two(dt.minute)}';
-    final ref = (t['transaction_no'] ?? t['receipt_number'] ?? '').toString();
     final tone = isDebit ? const Color(0xFFDC2626) : const Color(0xFF16A34A);
 
     return InkWell(
@@ -639,14 +631,24 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                           fontSize: 13.5,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF1A2433))),
-                  const SizedBox(height: 3),
-                  Text(
-                    ref.isNotEmpty ? ref : dateText,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        fontSize: 10.5, color: AmyalColors.textMuted),
-                  ),
+                  const SizedBox(height: 4),
+                  // AMIAL-STATUS-CHIP-001: كان يُعرض رقم المرجع الخام
+                  // (AMY-20260725-EHTE0K2W) في موضع الحالة — كود لا يعني
+                  // للمستخدم شيئاً. المحافظ المهنية تضع هنا **حالة** العملية
+                  // في كبسولة ملوّنة + التاريخ. المرجع مكانه شاشة التفاصيل.
+                  Row(children: [
+                    _statusChip((t['status'] ?? '').toString()),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        dateText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 10.5, color: AmyalColors.textMuted),
+                      ),
+                    ),
+                  ]),
                 ],
               ),
             ),
@@ -765,6 +767,48 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  /// كبسولة حالة العملية — لون واحد لكل حالة، بنصّ عربي مفهوم.
+  Widget _statusChip(String status) {
+    late final String label;
+    late final Color color;
+    switch (status) {
+      case 'pdf_generated':
+      case 'completed':
+      case 'success':
+        label = 'ناجحة';
+        color = const Color(0xFF16A34A);
+        break;
+      case 'pending_pdf':
+      case 'pending':
+        label = 'قيد المعالجة';
+        color = const Color(0xFFE08A00);
+        break;
+      case 'pdf_failed':
+      case 'failed':
+        label = 'فشلت';
+        color = AmyalColors.red;
+        break;
+      case 'voided':
+      case 'cancelled':
+        label = 'ملغاة';
+        color = AmyalColors.textMuted;
+        break;
+      default:
+        label = 'مكتملة';
+        color = const Color(0xFF16A34A);
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 10, fontWeight: FontWeight.w700, color: color)),
     );
   }
 
