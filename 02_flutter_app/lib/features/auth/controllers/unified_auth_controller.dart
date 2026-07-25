@@ -8,6 +8,7 @@ import 'package:amyal_pay/features/auth/screens/account_review_screen.dart';
 import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amyal_pay/data/api/secure_storage_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:amyal_pay/features/auth/controllers/session_guard.dart';
 
 /// AMIAL-UNIFIED-AUTH-001 (v1.5)
 class UnifiedAuthRepo {
@@ -154,6 +155,9 @@ class UnifiedAuthController extends GetxController implements GetxService {
         await _saveAuth(meta);
         await _persistLastLogin(meta);
         currentRole.value = (meta['role'] ?? '').toString();
+        // AMIAL-SESSION-GUARD-001: تصفير الحارس بعد دخول ناجح، وإلا حُسبت
+        // مغادرة ما قبل الدخول على الجلسة الجديدة فتُغلق فوراً.
+        SessionGuard.instance.reset();
         // AMIAL-VERIFY-GATE: التقط حالة التوثيق واسم المستخدم من الاستجابة
         final user = (meta['user'] is Map) ? meta['user'] as Map : const {};
         verificationState.value =

@@ -19,6 +19,7 @@ import 'package:amyal_pay/util/app_constants.dart';
 import 'package:amyal_pay/util/messages.dart';
 
 import 'helper/get_di.dart' as di;
+import 'package:amyal_pay/features/auth/controllers/session_guard.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
  late List<CameraDescription> cameras;
@@ -56,6 +57,10 @@ Future<void> main() async {
       // debug print removed — AMIAL-FIX-003
     }
   }
+
+  // AMIAL-SESSION-GUARD-001: مراقبة دورة حياة التطبيق — إغلاق الجلسة عند
+  // إطفاء الشاشة أو ضغط زرّ البيت أو نقل التطبيق إلى نافذة.
+  SessionGuard.instance.attach();
 
   runApp(MyApp(languages: languages, orderID: orderID));
 

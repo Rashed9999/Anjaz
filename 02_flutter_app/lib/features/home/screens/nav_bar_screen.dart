@@ -10,6 +10,7 @@ import 'package:amyal_pay/features/home/controllers/menu_controller.dart';
 import 'package:amyal_pay/features/home/domain/enums/nav_bar_page_enum.dart';
 import 'package:amyal_pay/features/home/widgets/show_case/showcaseview.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/features/auth/controllers/session_guard.dart';
 
 class NavBarScreen extends StatefulWidget {
   final String? selectedPage;
@@ -120,9 +121,17 @@ class _NavBarScreenState extends State<NavBarScreen> {
 
                   // زرّ المسح في مركز الكبسولة
                   GestureDetector(
-                    onTap: () => Get.to(() => const CameraScreen(
-                          fromEditProfile: false, isBarCodeScan: true, isHome: true,
-                        )),
+                    // AMIAL-SESSION-GUARD-001: الكاميرا نشاط خارجي يُخرج
+                    // التطبيق للخلفية. بلا هذا الدرع يُغلق الحارس الجلسة
+                    // كلّما طال المسح — فيخرج المستخدم من حسابه لأنه حاول
+                    // مسح رمز.
+                    onTap: () => SessionGuard.instance.shield(
+                      () async => Get.to(() => const CameraScreen(
+                            fromEditProfile: false,
+                            isBarCodeScan: true,
+                            isHome: true,
+                          )),
+                    ),
                     child: Container(
                       width: 54, height: 54,
                       decoration: BoxDecoration(
