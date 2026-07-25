@@ -210,6 +210,55 @@ class UnifiedAuthController extends GetxController implements GetxService {
     } catch (_) {/* غير حرج */}
   }
 
+  // AMIAL-LOGIN-UI-003: «المستخدم الأخير» على هذا الجهاز — الاسم ورقم الجوال
+  // ونوع الحساب. تعرضها شاشة الدخول لتُحيّي المستخدم باسمه وتُعبّئ رقمه، بدل
+  // شاشة لا تعرف من يقف أمامها. لا تُحفظ كلمة المرور هنا إطلاقاً — البصمة
+  // وحدها تحفظ بيانات الاعتماد وفي التخزين الآمن.
+  static const String _kLastUserName = 'amial_last_user_name';
+  static const String _kLastUserPhone = 'amial_last_user_phone';
+  static const String _kLastUserKind = 'amial_last_user_kind';
+
+  /// يحفظ هوية آخر مستخدم دخل بنجاح (بلا أي بيانات اعتماد).
+  static Future<void> rememberLastUser({
+    required String name,
+    required String phone,
+    required String kind,
+  }) async {
+    try {
+      final prefs = Get.find<SharedPreferences>();
+      await prefs.setString(_kLastUserName, name);
+      await prefs.setString(_kLastUserPhone, phone);
+      await prefs.setString(_kLastUserKind, kind);
+    } catch (_) {/* غير حرج */}
+  }
+
+  /// يقرأ هوية آخر مستخدم — أو null إن لم يسبق دخول على هذا الجهاز.
+  static ({String name, String phone, String kind})? readLastUser() {
+    try {
+      final prefs = Get.find<SharedPreferences>();
+      final phone = prefs.getString(_kLastUserPhone) ?? '';
+      final name = prefs.getString(_kLastUserName) ?? '';
+      if (phone.isEmpty && name.isEmpty) return null;
+      return (
+        name: name,
+        phone: phone,
+        kind: prefs.getString(_kLastUserKind) ?? 'customer',
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// يمسح المستخدم الأخير — يُستدعى من «لست أنت؟» في شاشة الدخول.
+  static Future<void> forgetLastUser() async {
+    try {
+      final prefs = Get.find<SharedPreferences>();
+      await prefs.remove(_kLastUserName);
+      await prefs.remove(_kLastUserPhone);
+      await prefs.remove(_kLastUserKind);
+    } catch (_) {/* غير حرج */}
+  }
+
   /// يقرأ آخر تسجيل دخول محفوظ (at, ip, zone) — أو null إن كانت أوّل مرة.
   static ({String at, String ip, String zone})? readLastLogin() {
     try {

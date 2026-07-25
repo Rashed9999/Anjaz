@@ -85,6 +85,29 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   String _netPrefix = '77';
   String _maskedPhone = '';
 
+  /// AMIAL-LOGIN-UI-003: هوية آخر مستخدم على هذا الجهاز (اسم + رقم، بلا
+  /// بيانات اعتماد) — تُستعمل للتحية وتعبئة الرقم.
+  ({String name, String phone, String kind})? _lastUser;
+
+  @override
+  void initState() {
+    super.initState();
+    final u = UnifiedAuthController.readLastUser();
+    if (u != null) {
+      _lastUser = u;
+      _phoneCtrl.text = u.phone;
+      final p = u.phone.replaceAll(RegExp(r'[^0-9]'), '');
+      if (p.length >= 2 &&
+          const ['77', '78', '73', '71', '70'].contains(p.substring(0, 2))) {
+        _netPrefix = p.substring(0, 2);
+      }
+      _kind = AccountKind.values.firstWhere(
+        (k) => k.name == u.kind,
+        orElse: () => AccountKind.customer,
+      );
+    }
+  }
+
   @override
   void dispose() {
     _phoneCtrl.dispose();
@@ -175,6 +198,14 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
 
     if (!mounted) return;
     if (ok) {
+      // AMIAL-LOGIN-UI-003: نحفظ الاسم والرقم فقط — لا رمز سري ولا رمز وصول.
+      await UnifiedAuthController.rememberLastUser(
+        name: ctrl.displayName,
+        phone: _kind == AccountKind.admin
+            ? _emailCtrl.text.trim()
+            : _phoneCtrl.text.trim(),
+        kind: _kind.name,
+      );
       ctrl.navigateToHomeForRole();
     } else {
       _error(ctrl.lastError.value.isNotEmpty
@@ -296,61 +327,284 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       backgroundColor: AmyalColors.background,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
           children: [
-            _header(),
-            const SizedBox(height: 18),
-            _kindSelector(),
+            _topBar(),
+            const SizedBox(height: 14),
+            _greeting(),
             const SizedBox(height: 16),
+            _kindSelector(),
+            const SizedBox(height: 14),
             Form(key: _formKey, child: _formFields()),
-            const SizedBox(height: 18),
+            const SizedBox(height: 10),
+            _forgotLink(),
+            const SizedBox(height: 8),
             _primaryAction(),
-            if (_kind == AccountKind.customer) ...[
-              const SizedBox(height: 10),
-              _biometricButton(),
-            ],
+            const SizedBox(height: 10),
+            _altLoginRow(),
+            const SizedBox(height: 14),
+            _createAccountLine(),
             const SizedBox(height: 14),
             _demoBox(),
-            const SizedBox(height: 10),
-            _links(),
-            const Divider(height: 26),
-            _footer(),
             const _LastLoginNote(),
+            const SizedBox(height: 18),
+            _quickLinks(),
+            const SizedBox(height: 12),
+            const Center(child: _VersionStamp()),
           ],
         ),
       ),
     );
   }
 
-  // ===== الرأس: مضغوط لا يبتلع الشاشة =====
-  Widget _header() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [AmyalColors.primary, Color(0xFF1D4FB8)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(22)),
-      ),
-      child: Column(
+  // ===== الشريط العلوي: شعار في الوسط، لغة ومساعدة على الطرفين =====
+  // AMIAL-LOGIN-UI-003: كانت كتلة زرقاء متدرّجة بارتفاع ~200 بكسل تحمل
+  // الشعار والعنوان والوصف ورقم الإصدار — تبتلع ثلث الشاشة قبل أي حقل.
+  // المحافظ المهنية تضع شريطاً خفيفاً وتترك المساحة للنموذج.
+  Widget _topBar() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 2),
+      child: Row(
         children: [
-          // AMIAL-LOGIN-UI-002: كانت دائرة بيضاء باهتة خلف الشعار، فيظهر
-          // مستطيل الشعار الأصفر داخل هالة بيضاء — «خلفية بيضاء حول الشعار».
-          // الشعار نفسه علامة كاملة، فلا يحتاج حاوية خلفه.
-          Image.asset(Images.logo, height: 62, fit: BoxFit.contain),
-          const SizedBox(height: 10),
-          const Text('أميال باي',
-              style: TextStyle(
-                  color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 2),
-          const Text('دفع سريع وآمن',
-              style: TextStyle(color: Colors.white70, fontSize: 12)),
-          const SizedBox(height: 6),
-          const _VersionStamp(),
+          const AmialLanguageChip(),
+          const Spacer(),
+          Image.asset(Images.logo, height: 38, fit: BoxFit.contain),
+          const Spacer(),
+          InkWell(
+            onTap: () => Get.to(() => const SupportScreen()),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AmyalColors.border),
+              ),
+              child: const Icon(Icons.headset_mic_outlined,
+                  size: 19, color: AmyalColors.primary),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  // ===== التحية: يعرف من يقف أمامه =====
+  Widget _greeting() {
+    final u = _lastUser;
+    if (u == null) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('مرحباً بك',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 21,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A2433))),
+          SizedBox(height: 3),
+          Text('سجّل الدخول للمتابعة إلى محفظتك',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.5, color: AmyalColors.textSecondary)),
+        ],
+      );
+    }
+    return Column(
+      children: [
+        Text(_dayGreeting,
+            style: const TextStyle(
+                fontSize: 12.5, color: AmyalColors.textSecondary)),
+        const SizedBox(height: 2),
+        Text(u.name.isEmpty ? 'أهلاً بعودتك' : 'أهلاً، ${u.name}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+                fontSize: 21,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A2433))),
+        TextButton(
+          onPressed: _forgetUser,
+          style: TextButton.styleFrom(
+              minimumSize: Size.zero,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+          child: const Text('لستَ أنت؟ تسجيل بحساب آخر',
+              style: TextStyle(fontSize: 11.5, color: AmyalColors.textMuted)),
+        ),
+      ],
+    );
+  }
+
+  String get _dayGreeting {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'صباح الخير';
+    if (h < 17) return 'طاب يومك';
+    return 'مساء الخير';
+  }
+
+  Future<void> _forgetUser() async {
+    await UnifiedAuthController.forgetLastUser();
+    if (!mounted) return;
+    setState(() {
+      _lastUser = null;
+      _phoneCtrl.clear();
+      _passwordCtrl.clear();
+    });
+  }
+
+  Widget _forgotLink() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton(
+        onPressed: () => Get.to(() => const ForgetPinScreen()),
+        style: TextButton.styleFrom(
+            minimumSize: Size.zero,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+        child: const Text('نسيت الرمز السري؟',
+            style: TextStyle(fontSize: 12.5, color: AmyalColors.primary)),
+      ),
+    );
+  }
+
+  // ===== صفّ الدخول البديل: بصمة + بدون إنترنت =====
+  Widget _altLoginRow() {
+    if (_kind != AccountKind.customer) return const SizedBox.shrink();
+    return Row(
+      children: [
+        Expanded(
+          child: _altButton(
+            icon: Icons.fingerprint_rounded,
+            label: 'الدخول بالبصمة',
+            onTap: _bioLogin,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _altButton(
+            icon: Icons.wifi_off_rounded,
+            label: 'دخول بدون نت',
+            enabled: false,
+            onTap: _offlineLoginSoon,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// AMIAL-LOGIN-OFFLINE-000: الزرّ ظاهر ومعطّل عمداً — الميزة لم تُبنَ بعد.
+  /// نُعلن ذلك صراحةً بدل فشل صامت: الضغط يشرح الحال ولا يوهم بالعمل.
+  void _offlineLoginSoon() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('الدخول بدون إنترنت قيد التطوير — سيتوفّر قريباً'),
+        backgroundColor: AmyalColors.primary,
+      ),
+    );
+  }
+
+  Widget _altButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool enabled = true,
+  }) {
+    final fg = enabled ? AmyalColors.primary : AmyalColors.textMuted;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        height: 48,
+        decoration: BoxDecoration(
+          color: enabled ? Colors.white : const Color(0xFFF7F8FA),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: enabled
+                  ? AmyalColors.primary.withValues(alpha: 0.30)
+                  : AmyalColors.border),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 19, color: fg),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 12.5, fontWeight: FontWeight.w600, color: fg)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _createAccountLine() {
+    return Center(
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          const Text('ليس لديك حساب؟ ',
+              style: TextStyle(fontSize: 13, color: AmyalColors.textSecondary)),
+          InkWell(
+            onTap: () => Get.to(() => const AmialRegistrationWizardScreen()),
+            child: const Text('أنشئ حساباً جديداً',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: AmyalColors.primary)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===== اختصارات ما قبل الدخول =====
+  // AMIAL-LOGIN-UI-003: من نسي رمزه أو تعطّل حسابه يحتاج مساعدة *قبل* الدخول
+  // لا بعده. المحافظ المهنية تضع هذه الاختصارات في شاشة الدخول نفسها.
+  Widget _quickLinks() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _quickLink(Icons.support_agent_rounded, 'خدمة العملاء',
+            () => Get.to(() => const SupportScreen())),
+        _quickLink(Icons.restore_rounded, 'استعادة حساب',
+            () => Get.to(() => const AccountRecoveryScreen())),
+        _quickLink(Icons.lock_reset_rounded, 'نسيت الرمز',
+            () => Get.to(() => const ForgetPinScreen())),
+      ],
+    );
+  }
+
+  Widget _quickLink(IconData icon, String label, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AmyalColors.border),
+              ),
+              child: Icon(icon, size: 21, color: AmyalColors.primary),
+            ),
+            const SizedBox(height: 6),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 11, color: AmyalColors.textSecondary)),
+          ],
+        ),
       ),
     );
   }
@@ -641,21 +895,6 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     });
   }
 
-  Widget _biometricButton() {
-    return FutureBuilder<bool>(
-      future: AmialBiometricSetupScreen.isEnabled(),
-      builder: (context, snap) {
-        if (snap.data != true) return const SizedBox.shrink();
-        return AmialButton(
-          label: 'الدخول ببصمة الإصبع',
-          icon: Icons.fingerprint,
-          kind: AmialButtonKind.outline,
-          onPressed: _bioLogin,
-        );
-      },
-    );
-  }
-
   // ===== صندوق البيانات التجريبية (يتبدّل حسب النوع) =====
   Widget _demoBox() {
     final entries = _demos;
@@ -716,52 +955,6 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     );
   }
 
-  Widget _links() {
-    return Column(
-      children: [
-        TextButton(
-          onPressed: () => Get.to(() => const AmialRegistrationWizardScreen()),
-          child: const Text('ليس لديك حساب؟ أنشئ حساباً الآن',
-              style: TextStyle(
-                  color: AmyalColors.primary, fontWeight: FontWeight.w600)),
-        ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextButton(
-              onPressed: () => Get.to(() => const ForgetPinScreen()),
-              child: const Text('نسيت الرمز السري؟',
-                  style: TextStyle(color: AmyalColors.textSecondary, fontSize: 13)),
-            ),
-            const Text('|', style: TextStyle(color: AmyalColors.border)),
-            TextButton(
-              onPressed: () => Get.to(() => const AccountRecoveryScreen()),
-              child: const Text('استعادة الحساب',
-                  style: TextStyle(color: AmyalColors.textSecondary, fontSize: 13)),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _footer() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        TextButton.icon(
-          onPressed: () => Get.to(() => const SupportScreen()),
-          icon: const Icon(Icons.help_outline, size: 18, color: AmyalColors.primary),
-          label: const Text('مركز المساعدة',
-              style: TextStyle(color: AmyalColors.primary, fontSize: 13)),
-        ),
-        const Text('|', style: TextStyle(color: AmyalColors.border)),
-        // AMIAL-I18N-002: كان يفتح صفحة كاملة لاختيار لغتين — صار قائمة
-        // قصيرة تُطبَّق فوراً في مكانها.
-        const AmialLanguageChip(),
-      ],
-    );
-  }
 }
 
 // ============================================================

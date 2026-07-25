@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/features/shared/widgets/amial_numpad.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/util/secure_screen.dart';
 
 /// AMIAL-PIN-GATE-001
 ///
@@ -45,8 +46,17 @@ class _AmialPinInputScreen extends StatefulWidget {
 class _AmialPinInputScreenState extends State<_AmialPinInputScreen> {
   final TextEditingController _pin = TextEditingController();
 
+  // AMIAL-SEC-CAPTURE-001: الرمز السري يُكتب هنا — نمنع لقطة الشاشة وتسجيلها
+  // ما دامت الشاشة معروضة، ونُعيد السماح فور مغادرتها.
+  @override
+  void initState() {
+    super.initState();
+    SecureScreen.enable();
+  }
+
   @override
   void dispose() {
+    SecureScreen.disable();
     _pin.dispose();
     super.dispose();
   }
@@ -135,8 +145,16 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
   bool _checking = false;
   String _error = '';
 
+  // AMIAL-SEC-CAPTURE-001: بوّابة الرمز السري — بلا تصوير ولا تسجيل شاشة.
+  @override
+  void initState() {
+    super.initState();
+    SecureScreen.enable();
+  }
+
   @override
   void dispose() {
+    SecureScreen.disable();
     _pin.dispose();
     super.dispose();
   }
