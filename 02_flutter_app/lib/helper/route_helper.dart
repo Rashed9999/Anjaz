@@ -176,9 +176,6 @@ class RouteHelper {
       password: Get.parameters['password'],
     )),
 
-      phoneNumber: Get.parameters['phone-number']),
-    ),
-
     GetPage(name: fPhoneNumberScreen, page: () => ForgetPinScreen(countryCode: Get.parameters['country-code']!.replaceAll(' ', '+'),phoneNumber: Get.parameters['phone-number'],)),
     // GetPage(name: fVerificationScreen, page: () => PhoneVerification(phoneNumber: Get.parameters['phone-number']!.replaceAll(' ', '+'),)),
     GetPage(name: resetPassScreen, page: () => ResetPinScreen(

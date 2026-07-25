@@ -12,7 +12,6 @@ import 'package:amyal_pay/helper/route_helper.dart';
 import 'package:amyal_pay/features/setting/screens/edit_profile_screen.dart';
 
 import '../../../main.dart';
-import '../../auth/screens/sign_up_information_screen.dart';
 import '../widgets/loader_dialog_widget.dart';
 import 'package:amyal_pay/features/auth/screens/amial_registration_wizard_screen.dart';
 

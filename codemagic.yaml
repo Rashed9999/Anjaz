@@ -29,6 +29,15 @@ workflows:
         script: |
           cd 02_flutter_app
           flutter pub get
+      # AMIAL-CI-GATE-001: بوّابة تصريف قبل Gradle.
+      # بناء Gradle يستغرق ~4 دقائق ثم يفشل على خطأ تصريف Dart كان يمكن
+      # كشفه في 10 ثوانٍ. هذه الخطوة تُفشل البناء فوراً عند أي خطأ تصريف
+      # وتطبع رسالته — وتتجاهل التحذيرات والملاحظات الأسلوبية عمداً حتى
+      # لا يتحوّل الحارس إلى ضجيج يُعطَّل.
+      - name: بوّابة التصريف (flutter analyze)
+        script: |
+          cd 02_flutter_app
+          flutter analyze --no-pub --no-fatal-warnings --no-fatal-infos
       - name: بناء APK release مقسّم حسب المعالج
         script: |
           cd 02_flutter_app
