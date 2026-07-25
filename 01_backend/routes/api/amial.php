@@ -297,6 +297,16 @@ Route::middleware(['auth:api'])->group(function () {
     // ==========================================================
 
     // -------- AMIAL-RECEIPTS-001 (v0.9-A) --------
+    // AMIAL-STATEMENT-001 — كشف حساب المحفظة (بيان محاسبي لفترة).
+    // مختلف عن الإيصالات: الإيصال مستند عملية واحدة، والكشف كل الحركات
+    // بعمودَي مدين ودائن ورصيد جارٍ — وهو ما يُطلب لإثبات الدخل أو تسوية خلاف.
+    Route::prefix('statement')->name('amial.statement.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Api\V1\Amial\AccountStatementController::class, 'index'])
+            ->name('index');
+        Route::get('/pdf', [\App\Http\Controllers\Api\V1\Amial\AccountStatementController::class, 'pdf'])
+            ->middleware('amial.rate-limit:statement_pdf,10,1')->name('pdf');
+    });
+
     Route::prefix('receipts')->name('amial.receipts.')->group(function () {
         Route::get('/', [ReceiptController::class, 'index'])->name('index');
         Route::get('/{id}', [ReceiptController::class, 'show'])

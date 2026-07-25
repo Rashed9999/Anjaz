@@ -10,6 +10,7 @@ import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/util/app_constants.dart';
 import 'package:amyal_pay/common/widgets/amial_donut_chart.dart';
 import 'package:amyal_pay/common/widgets/amial_form.dart';
+import 'package:amyal_pay/features/reports/screens/amial_account_statement_screen.dart';
 
 /// AMIAL-REPORTS-001 — شاشة «التقارير»:
 /// أنواع التقارير (المصروفات / الإيرادات / كشف الحساب) مع اختيار الفترة،
@@ -157,7 +158,16 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
       backgroundColor: AmyalColors.background,
       body: SafeArea(
         child: Column(children: [
-          const AmialScreenHeader(title: 'التقارير'),
+          AmialScreenHeader(
+            title: 'التقارير',
+            actions: [
+              // AMIAL-STATEMENT-001: كشف الحساب مدخله الطبيعي من التقارير.
+              AmialHeaderAction(
+                icon: Icons.table_rows_rounded,
+                onTap: () => Get.to(() => const AmialAccountStatementScreen()),
+              ),
+            ],
+          ),
           Expanded(
             child: RefreshIndicator(
         onRefresh: _load,

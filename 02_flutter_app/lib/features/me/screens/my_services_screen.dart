@@ -34,6 +34,7 @@ import 'package:amyal_pay/features/merchant/screens/split_bill_my_shares_screen.
 import 'package:amyal_pay/features/requested_money/screens/requested_money_list_screen.dart';
 import 'package:amyal_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
 import 'package:amyal_pay/common/widgets/amial_form.dart';
+import 'package:amyal_pay/features/reports/screens/amial_account_statement_screen.dart';
 
 /// AMIAL-MY-SERVICES — نقطة وصول موحّدة لميزات أميال باي الجديدة.
 ///
@@ -201,6 +202,13 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
               // AMIAL-HOME-005: انتقلت هذه الثلاثة من شبكة الرئيسية (التي
               // قُلّصت إلى تسعة مدخلات) — أُضيفت هنا *قبل* إزالتها من هناك
               // حتى لا تصبح شاشة يتيمة لا يفتحها زرّ.
+              // AMIAL-STATEMENT-001: كشف الحساب — بيان محاسبي لفترة، غير
+              // «الإيصالات» التي هي مستندات عمليات مفردة.
+              _serviceCard(icon: Icons.account_balance_wallet_outlined,
+                  label: 'كشف حساب',
+                  subtitle: 'مدين ودائن ورصيد',
+                  color: AmyalColors.primary,
+                  onTap: () => Get.to(() => const AmialAccountStatementScreen())),
               _serviceCard(icon: Icons.receipt_long_outlined, label: 'فواتيري الآجلة',
                   subtitle: 'ما عليك من دين',
                   color: const Color(0xFFB45309),
