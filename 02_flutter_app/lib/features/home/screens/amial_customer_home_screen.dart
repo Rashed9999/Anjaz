@@ -6,25 +6,16 @@ import 'package:amyal_pay/util/app_constants.dart';
 import 'package:amyal_pay/features/requested_money/screens/payment_request_create_screen.dart';
 import 'package:amyal_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
 import 'package:amyal_pay/features/withdraw/screens/withdraw_request_screen.dart';
-import 'package:amyal_pay/features/credit/screens/my_credits_screen.dart';
-import 'package:amyal_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
-import 'package:amyal_pay/features/family_fund/screens/my_funds_screen.dart';
-import 'package:amyal_pay/features/donations/screens/donations_home_screen.dart';
 import 'package:amyal_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amyal_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amyal_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amyal_pay/features/setting/screens/profile_screen.dart';
-import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
-import 'package:amyal_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
 import 'package:amyal_pay/features/setting/screens/qr_code_download_or_share_screen.dart';
-import 'package:amyal_pay/features/requested_money/screens/requested_money_list_screen.dart';
 import 'package:amyal_pay/features/me/screens/my_services_screen.dart';
 import 'package:amyal_pay/features/transaction_money/controllers/contact_controller.dart';
 import 'package:amyal_pay/features/transaction_money/screens/amial_send_money_screen.dart';
 import 'package:amyal_pay/features/reports/screens/amial_reports_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_pay_screen.dart';
-import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 
 /// AMIAL-CUSTOMER-HOME-002 — الرئيسية بتصميم «المحفظة».
 ///
@@ -241,208 +232,104 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   }
 
   // ============ محفظة بطبقات (بطاقة تُطلّ من الجيب) ============
+  // AMIAL-HOME-005 — بطاقة الرصيد: تعرض ولا تتصرّف.
+  //
+  // كانت تحمل ثلاث وظائف فتفشل في الثلاث: بطاقة ثانية «مُطلّة» خلفها (وهي
+  // مصدر التراكب البصري)، وزرّ استلام أصفر، وخمس أيقونات إجراءات بداخلها.
+  // المحافظ المهنية تفصل: البطاقة للرصيد وحده، والإجراءات في شبكة تحتها.
   Widget _walletHero() {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        // البطاقة المُطلّة من أعلى المحفظة
-        Positioned(
-          top: 0, left: 22, right: 22,
-          child: Container(
-            height: 96,
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1D4FB8), Color(0xFF3B6FD8)],
-                begin: Alignment.topRight, end: Alignment.bottomLeft,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1D4FB8), Color(0xFF053391)],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+        // كبسولة مستديرة بالكامل — لا مستطيل بزوايا خفيفة.
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: AmyalColors.primary.withValues(alpha: 0.28),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              // زرّ العين على الطرف — لا داخل صفّ أزرار
+              InkWell(
+                onTap: () => setState(() => _hideBalance = !_hideBalance),
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(
+                    _hideBalance
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: Colors.white.withValues(alpha: 0.85),
+                    size: 22,
+                  ),
+                ),
               ),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              const Spacer(),
+              const Text('ريال يمني',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // الرصيد: نقاط عند الإخفاء — لا نصّ «مخفي»
+          _hideBalance
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    6,
+                    (_) => Container(
+                      width: 11,
+                      height: 11,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: const BoxDecoration(
+                          color: Colors.white, shape: BoxShape.circle),
+                    ),
+                  ),
+                )
+              : FittedBox(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
                     children: [
-                      Text(_name.isEmpty ? 'عميل أميال' : _name,
-                          maxLines: 1, overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Text(_maskedPhone,
-                          textDirection: TextDirection.ltr,
-                          style: const TextStyle(
-                              color: Colors.white70, fontSize: 11)),
+                      Text(
+                        _loading ? '...' : _balanceText,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 34,
+                            fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text('ر.ي',
+                          style: TextStyle(
+                              color: AmyalColors.yellow,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700)),
                     ],
                   ),
                 ),
-                const Text('AMYAL',
-                    style: TextStyle(
-                        color: AmyalColors.yellow,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2)),
-              ],
-            ),
+          const SizedBox(height: 8),
+          Text(
+            _name.isEmpty ? 'محفظتي' : _name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.72), fontSize: 12),
           ),
-        ),
-
-        // جيب المحفظة الأمامي
-        Container(
-          margin: const EdgeInsets.only(top: 54),
-          padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF053391), Color(0xFF021F5C)],
-              begin: Alignment.topRight, end: Alignment.bottomLeft,
-            ),
-            borderRadius: BorderRadius.circular(26),
-            boxShadow: [
-              BoxShadow(
-                color: AmyalColors.primary.withValues(alpha: 0.35),
-                blurRadius: 22, offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('الرصيد الكلي',
-                  style: TextStyle(color: Colors.white70, fontSize: 13)),
-              const SizedBox(height: 6),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text(
-                    _loading ? '...' : _balanceText,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 34,
-                        fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(width: 6),
-                  const Text('ر.ي',
-                      style: TextStyle(
-                          color: AmyalColors.yellow,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  // زرّ الاستلام (QR) — الكبسة الأساسية
-                  Expanded(
-                    child: InkWell(
-                      onTap: _openReceiveQr,
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 11),
-                        decoration: BoxDecoration(
-                          color: AmyalColors.yellow,
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.qr_code_2_rounded,
-                                size: 18, color: Color(0xFF053391)),
-                            SizedBox(width: 6),
-                            Text('استلام الأموال',
-                                style: TextStyle(
-                                    color: Color(0xFF053391),
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13.5)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  _walletCircle(
-                    icon: _hideBalance
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    onTap: () => setState(() => _hideBalance = !_hideBalance),
-                  ),
-                ],
-              ),
-
-              // AMIAL-HOME-003: صفّ الإجراءات السريعة داخل البطاقة (كما في
-              // مراجع المحافظ): أيقونة دائرية + تسمية أسفلها، بدل زرّين فقط.
-              const SizedBox(height: 18),
-              Divider(color: Colors.white.withValues(alpha: 0.18), height: 1),
-              const SizedBox(height: 14),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _walletAction(Icons.north_east_rounded, 'إرسال',
-                      () => Get.to(() => const AmialSendMoneyScreen())),
-                  _walletAction(Icons.request_page_outlined, 'طلب',
-                      () => Get.to(() => const PaymentRequestCreateScreen())),
-                  _walletAction(Icons.storefront_outlined, 'ادفع',
-                      () => Get.to(() => const MerchantPayScreen())),
-                  _walletAction(Icons.account_balance_outlined, 'سحب',
-                      () => Get.to(() => const WithdrawRequestScreen())),
-                  _walletAction(Icons.receipt_long_outlined, 'السجل',
-                      () => Get.to(() => const ReceiptsListScreen())),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// إجراء سريع داخل بطاقة الرصيد: دائرة شفافة + تسمية.
-  Widget _walletAction(IconData icon, String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.16),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-              ),
-              child: Icon(icon, color: Colors.white, size: 19),
-            ),
-            const SizedBox(height: 6),
-            Text(label,
-                style: const TextStyle(
-                    color: Colors.white70,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _walletCircle({required IconData icon, required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      customBorder: const CircleBorder(),
-      child: Container(
-        width: 42, height: 42,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.14),
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-        ),
-        child: Icon(icon, color: Colors.white, size: 19),
+        ],
       ),
     );
   }
@@ -461,14 +348,17 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
             trailing: 'المزيد',
             onTrailing: () => Get.to(() => const AmialSendMoneyScreen())),
         const SizedBox(height: 12),
-        SizedBox(
-          height: 86,
-          child: GetBuilder<ContactController>(builder: (c) {
-            List recent = const [];
-            try {
-              recent = c.sendMoneySuggestList;
-            } catch (_) {}
-            return ListView(
+        GetBuilder<ContactController>(builder: (c) {
+          List recent = const [];
+          try {
+            recent = c.sendMoneySuggestList;
+          } catch (_) {}
+          // AMIAL-HOME-005: عند غياب المستلمين كان يظهر زرّ «+» وحيد في صفّ
+          // بعرض الشاشة، فيبدو القسم عاطلاً. الآن بطاقة دعوة كاملة العرض.
+          if (recent.isEmpty) return _quickSendEmpty();
+          return SizedBox(
+            height: 86,
+            child: ListView(
               scrollDirection: Axis.horizontal,
               children: [
                 // زرّ إضافة (دائرة متقطّعة) — يفتح الإرسال
@@ -523,10 +413,60 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                   );
                 }),
               ],
-            );
-          }),
-        ),
+            ),
+          );
+        }),
       ],
+    );
+  }
+
+  /// حالة «لا مستلمين بعد» — بطاقة دعوة بعرض القسم بدل زرّ يتيم.
+  Widget _quickSendEmpty() {
+    return InkWell(
+      onTap: () => Get.to(() => const AmialSendMoneyScreen()),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+              color: AmyalColors.primary.withValues(alpha: 0.18)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: AmyalColors.primary.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.person_add_alt_1_rounded,
+                  color: AmyalColors.primary, size: 22),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('لا مستلمين بعد',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1A2433))),
+                  SizedBox(height: 2),
+                  Text('أرسل أول تحويل ليظهر المستلِم هنا للمرّات القادمة',
+                      style: TextStyle(
+                          fontSize: 11.5, color: AmyalColors.textSecondary)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_left_rounded,
+                color: AmyalColors.textMuted),
+          ],
+        ),
+      ),
     );
   }
 
@@ -732,52 +672,41 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   }
 
   // ============ شبكة الخدمات (كل الوظائف محفوظة) ============
-  Widget _servicesGrid() {
-    return Obx(() => _buildServicesGrid());
-  }
+  Widget _servicesGrid() => _buildServicesGrid();
 
+  // AMIAL-HOME-005 — شبكة الخدمات: لون واحد، تسعة مربّعات.
+  //
+  // كانت 15–16 خدمة في أربعة أعمدة بثمانية ألوان باستيل — اللون يتنافس مع
+  // الأيقونة في شبكة متجاورة فيصير ضوضاء، والأيقونة 23px والنصّ 10.5px
+  // فيصير مزدحماً غير مقروء.
+  //
+  // القاعدة المأخوذة من المحافظ المهنية: في *الشبكة* لون واحد وأيقونات
+  // مفرّغة (اللون يُميّز في القوائم الرأسية لا في الشبكات)، وتسعة مدخل
+  // كحدّ أقصى، وما زاد يذهب خلف «المزيد». الوظائف كلّها محفوظة — لم يُحذف
+  // مدخل واحد، بل انتقل ما لا يُستعمل يومياً إلى شاشة «خدماتي».
   Widget _buildServicesGrid() {
-    // AMIAL-FIX(PLANS-SCOPE): «الباقات» مفهوم اشتراك خاصّ بالتاجر (حصص
-    // منتجات/موظفين/فروع). كانت تُعرض لكل مستخدم بلا شرط — فيظنّ المواطن
-    // العادي أن المحفظة تتطلّب اشتراكاً مدفوعاً. تقتصر الآن على التاجر.
-    bool isMerchant = false;
-    try {
-      isMerchant = Get.find<AccessController>().hasAny(const [
-        'products', 'inventory', 'fuel_pos', 'pharmacy_pos',
-        'wholesale_invoices', 'daily_reports', 'profit_reports',
-      ]);
-    } catch (_) {}
-
-    final services = [
-      _Svc('طلب المال', Icons.request_page_outlined, () => Get.to(() => const PaymentRequestCreateScreen())),
-      _Svc('الطلبات الواردة', Icons.mark_email_unread_outlined, () => Get.to(() => const RequestedMoneyListScreen(requestType: RequestType.request))),
-      _Svc('ادفع لتاجر', Icons.storefront_outlined, () => Get.to(() => const MerchantPayScreen())),
-      _Svc('دفع الفواتير', Icons.flash_on_rounded, () => Get.to(() => const BillPayProvidersScreen())),
-      _Svc('الدفع الآمن', Icons.shield_outlined, () => Get.to(() => const MySafePaymentsScreen())),
-      _Svc('صندوق العائلة', Icons.groups_outlined, () => Get.to(() => const MyFundsScreen())),
-      _Svc('التبرعات', Icons.volunteer_activism_outlined, () => Get.to(() => const DonationsHomeScreen())),
-      _Svc('تقسيم الفواتير', Icons.call_split_rounded, () => Get.to(() => const SplitBillMySharesScreen())),
-      _Svc('طلب سحب', Icons.account_balance_outlined, () => Get.to(() => const WithdrawRequestScreen())),
-      _Svc('فواتيري الآجلة', Icons.receipt_long_outlined, () => Get.to(() => const MyCreditsScreen())),
-      _Svc('الإيصالات', Icons.description_outlined, () => Get.to(() => const ReceiptsListScreen())),
-      _Svc('التقارير', Icons.bar_chart_rounded, () => Get.to(() => const AmialReportsScreen()),
-          color: AmyalColors.red),
-      _Svc('توثيق الحساب', Icons.verified_user_outlined, () => Get.to(() => const KycVerifyScreen())),
-      if (isMerchant)
-        _Svc('الباقات', Icons.workspace_premium_outlined, () => Get.to(() => const PlansCatalogScreen())),
-      _Svc('خدماتي', Icons.apps_rounded, () => Get.to(() => const MyServicesScreen())),
-      _Svc('حسابي', Icons.person_outline_rounded, () => Get.to(() => const ProfileScreen())),
-    ];
-    // AMIAL-HOME-003: الخدمات داخل بطاقة بيضاء واحدة، وكل أيقونة في مربّع
-    // باستيل بلونها الخاصّ — كما في مراجع المحافظ الاحترافية. كانت 16 مربّعاً
-    // أبيض عائماً بلون أزرق واحد، فتبدو مبعثرة وبلا هرمية بصرية.
-    const palette = <Color>[
-      Color(0xFF053391), Color(0xFF1B9E4B), Color(0xFFE08A00), Color(0xFF7C3AED),
-      Color(0xFF0EA5E9), Color(0xFFDB2777), Color(0xFF0E7C7B), Color(0xFFB45309),
+    final services = <_Svc>[
+      _Svc('إرسال أموال', Icons.north_east_rounded,
+          () => Get.to(() => const AmialSendMoneyScreen())),
+      _Svc('استلام', Icons.qr_code_2_rounded, _openReceiveQr),
+      _Svc('طلب المال', Icons.request_page_outlined,
+          () => Get.to(() => const PaymentRequestCreateScreen())),
+      _Svc('ادفع لتاجر', Icons.storefront_outlined,
+          () => Get.to(() => const MerchantPayScreen())),
+      _Svc('دفع الفواتير', Icons.receipt_long_outlined,
+          () => Get.to(() => const BillPayProvidersScreen())),
+      _Svc('سحب نقدي', Icons.account_balance_outlined,
+          () => Get.to(() => const WithdrawRequestScreen())),
+      _Svc('الإيصالات', Icons.description_outlined,
+          () => Get.to(() => const ReceiptsListScreen())),
+      _Svc('التقارير', Icons.bar_chart_rounded,
+          () => Get.to(() => const AmialReportsScreen())),
+      _Svc('المزيد', Icons.grid_view_rounded,
+          () => Get.to(() => const MyServicesScreen())),
     ];
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 18, 12, 14),
+      padding: const EdgeInsets.fromLTRB(14, 18, 14, 18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
@@ -789,46 +718,52 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         ],
       ),
       child: GridView.count(
-        crossAxisCount: 4,
+        crossAxisCount: 3,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 8,
-        childAspectRatio: 0.80,
-        children: List.generate(services.length, (i) {
-          final s = services[i];
-          final color = s.color ?? palette[i % palette.length];
-          return InkWell(
-            onTap: s.onTap,
-            borderRadius: BorderRadius.circular(16),
-            child: Column(
-              children: [
-                Container(
-                  height: 50,
-                  width: 50,
-                  decoration: BoxDecoration(
-                    // خلفية باستيل من لون الخدمة نفسها
-                    color: color.withValues(alpha: 0.11),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(s.icon, color: color, size: 23),
-                ),
-                const SizedBox(height: 7),
-                Expanded(
-                  child: Text(s.label,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 10.5,
-                          height: 1.25,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF2A3B33))),
-                ),
-              ],
+        mainAxisSpacing: 14,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.92,
+        children: services.map(_serviceTile).toList(),
+      ),
+    );
+  }
+
+  /// مربّع خدمة: أيقونة مفرّغة بلون البراند على مربّع أبيض بظلّ ناعم.
+  Widget _serviceTile(_Svc s) {
+    return InkWell(
+      onTap: s.onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+                color: const Color(0xFF1A2433).withValues(alpha: 0.07),
+                blurRadius: 10,
+                offset: const Offset(0, 3)),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(s.icon, size: 30, color: AmyalColors.primary),
+            const SizedBox(height: 9),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(s.label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.2,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF1A2433))),
             ),
-          );
-        }),
+          ],
+        ),
       ),
     );
   }

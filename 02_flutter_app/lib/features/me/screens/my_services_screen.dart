@@ -28,6 +28,11 @@ import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/family_fund/screens/my_funds_screen.dart';
 import 'package:amyal_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
 import 'package:amyal_pay/shared/widgets/verified_badge.dart';
+import 'package:amyal_pay/features/credit/screens/my_credits_screen.dart';
+import 'package:amyal_pay/features/donations/screens/donations_home_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
+import 'package:amyal_pay/features/requested_money/screens/requested_money_list_screen.dart';
+import 'package:amyal_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
 
 /// AMIAL-MY-SERVICES — نقطة وصول موحّدة لميزات أميال باي الجديدة.
 ///
@@ -192,6 +197,30 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
               if (access.has('safe_pay'))
                 _serviceCard(icon: Icons.shield, label: 'الدفع الآمن', subtitle: 'حماية للبيع/الشراء',
                     color: Colors.green.shade700, onTap: () => Get.to(() => const MySafePaymentsScreen())),
+              // AMIAL-HOME-005: انتقلت هذه الثلاثة من شبكة الرئيسية (التي
+              // قُلّصت إلى تسعة مدخلات) — أُضيفت هنا *قبل* إزالتها من هناك
+              // حتى لا تصبح شاشة يتيمة لا يفتحها زرّ.
+              _serviceCard(icon: Icons.receipt_long_outlined, label: 'فواتيري الآجلة',
+                  subtitle: 'ما عليك من دين',
+                  color: const Color(0xFFB45309),
+                  onTap: () => Get.to(() => const MyCreditsScreen())),
+              _serviceCard(icon: Icons.volunteer_activism_outlined, label: 'التبرعات',
+                  subtitle: 'تبرّع لجهة موثوقة',
+                  color: const Color(0xFFDB2777),
+                  onTap: () => Get.to(() => const DonationsHomeScreen())),
+              _serviceCard(icon: Icons.call_split_rounded, label: 'تقسيم الفواتير',
+                  subtitle: 'حصّتي مع الأصدقاء',
+                  color: const Color(0xFF0E7C7B),
+                  onTap: () => Get.to(() => const SplitBillMySharesScreen())),
+              _serviceCard(icon: Icons.mark_email_unread_outlined, label: 'الطلبات الواردة',
+                  subtitle: 'طلبات أموال وصلتك',
+                  color: const Color(0xFF1D4FB8),
+                  onTap: () => Get.to(() => const RequestedMoneyListScreen(
+                      requestType: RequestType.request))),
+              _serviceCard(icon: Icons.verified_user_outlined, label: 'توثيق الحساب',
+                  subtitle: 'ارفع هويتك',
+                  color: const Color(0xFF1B9E4B),
+                  onTap: () => Get.to(() => const KycVerifyScreen())),
               _serviceCard(icon: Icons.handshake, label: 'أقساطي', subtitle: 'سداد التقسيط',
                   color: const Color(0xFF00695C), onTap: () => Get.to(() => const MyInstallmentsScreen())),
               _serviceCard(icon: Icons.redeem, label: 'بطاقات هديتي', subtitle: 'رصيد المتجر',
