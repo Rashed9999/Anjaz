@@ -642,7 +642,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                   // للمستخدم شيئاً. المحافظ المهنية تضع هنا **حالة** العملية
                   // في كبسولة ملوّنة + التاريخ. المرجع مكانه شاشة التفاصيل.
                   Row(children: [
-                    _statusChip((t['status'] ?? '').toString()),
+                    _statusChip(t),
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
@@ -775,36 +775,47 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
     );
   }
 
-  /// كبسولة حالة العملية — لون واحد لكل حالة، بنصّ عربي مفهوم.
-  Widget _statusChip(String status) {
+  /// كبسولة حالة العملية.
+  ///
+  /// AMIAL-STATUS-CHIP-002 (إصلاح انحدار): كنتُ أقرأ `status` من الإيصال —
+  /// وهو حقل يخصّ **توليد ملف PDF** (pending_pdf/pdf_generated/pdf_failed)
+  /// لا حالة العملية. وبما أن التوليد صار عند الطلب، تبقى الإيصالات
+  /// pending_pdf فظهرت «قيد المعالجة» على كل العمليات الناجحة.
+  ///
+  /// نفس الفخّ موثّق في `ReceiptModel.operationStatusLabel` — ووقعتُ فيه.
+  /// الحقيقة: الإيصال لا يصدر إلا لعملية نُفّذت فعلاً، فالحالة «مكتملة»
+  /// بصياغة تناسب النوع، و«ملغاة» إن أُبطل الإيصال.
+  Widget _statusChip(Map<String, dynamic> t) {
+    final voided = (t['status'] ?? '').toString() == 'voided' ||
+        t['is_voided'] == true;
+    final type = (t['receipt_type'] ?? '').toString();
+
     late final String label;
     late final Color color;
-    switch (status) {
-      case 'pdf_generated':
-      case 'completed':
-      case 'success':
-        label = 'ناجحة';
-        color = const Color(0xFF16A34A);
-        break;
-      case 'pending_pdf':
-      case 'pending':
-        label = 'قيد المعالجة';
-        color = const Color(0xFFE08A00);
-        break;
-      case 'pdf_failed':
-      case 'failed':
-        label = 'فشلت';
-        color = AmyalColors.red;
-        break;
-      case 'voided':
-      case 'cancelled':
-        label = 'ملغاة';
-        color = AmyalColors.textMuted;
-        break;
-      default:
-        label = 'مكتملة';
-        color = const Color(0xFF16A34A);
+
+    if (voided) {
+      label = 'ملغاة';
+      color = AmyalColors.textMuted;
+    } else {
+      color = const Color(0xFF16A34A);
+      label = switch (type) {
+        'send_money' => 'تم التحويل',
+        'received_money' => 'تم الاستلام',
+        'cash_in' => 'تم الإيداع',
+        'cash_out' || 'withdraw' => 'تم السحب',
+        'add_money' => 'تمت الإضافة',
+        'pay_merchant' || 'pos_payment' || 'qr_payment' => 'تم الدفع',
+        'bill_payment' => 'تم السداد',
+        'refund' => 'تم الاسترجاع',
+        'safe_payment_funded' => 'مجمّد بأمان',
+        'safe_payment_released' => 'تم الإفراج',
+        'safe_payment_refunded' => 'أُعيد المبلغ',
+        'family_fund_contribute' => 'تمت المساهمة',
+        'donation' => 'تم التبرع',
+        _ => 'مكتملة',
+      };
     }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(

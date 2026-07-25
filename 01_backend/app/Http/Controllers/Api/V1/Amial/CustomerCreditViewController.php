@@ -29,6 +29,23 @@ class CustomerCreditViewController extends Controller
     {
         $userId = $request->user()->id;
 
+        // AMIAL-CREDIT-LINK-001 — استرجاع الحسابات غير المربوطة.
+        //
+        // حالتان تتركان customer_user_id فارغاً: (١) بيع آجل سُجّل قبل أن
+        // يُنشئ العميل حسابه، (٢) حسابات أُنشئت قبل إصلاح مطابقة الهاتف.
+        // في الحالتين المال مستحقّ فعلاً والعميل لا يراه. نطالب بها هنا عند
+        // أول فتح للشاشة — مطابقةً بكل صيغ الرقم لا بنصّه الحرفي.
+        try {
+            $phones = \App\Support\Phone::variants((string) $request->user()->phone);
+            CustomerCreditAccount::whereNull('customer_user_id')
+                ->whereIn('customer_phone', $phones)
+                ->update(['customer_user_id' => $userId]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning(
+                'Credit account back-link failed: ' . $e->getMessage()
+            );
+        }
+
         $accounts = CustomerCreditAccount::where('customer_user_id', $userId)
             ->orderByDesc('current_balance')
             ->get();

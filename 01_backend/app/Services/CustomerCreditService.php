@@ -61,8 +61,15 @@ class CustomerCreditService
             return $account;
         }
 
-        // اربط بمستخدم أميال باي إن وُجد
-        $linkedUserId = User::where('phone', $customerPhone)->value('id');
+        // AMIAL-CREDIT-LINK-001 — اربط بمستخدم أميال باي إن وُجد.
+        //
+        // كان الربط مطابقة نصّية حرفية على `phone`: التاجر يكتب «777100001»
+        // والمستخدمون مخزّنون «+967777100001» — فلا يُطابق أبداً، ويبقى
+        // customer_user_id فارغاً، فلا تظهر الفاتورة في «فواتيري الآجلة» عند
+        // العميل ولا يستطيع سدادها. نستعمل Phone::variants الموجود أصلاً
+        // لهذا الغرض بالضبط.
+        $linkedUserId = User::whereIn('phone', \App\Support\Phone::variants($customerPhone))
+            ->value('id');
 
         return CustomerCreditAccount::create([
             'merchant_user_id' => $merchantId,

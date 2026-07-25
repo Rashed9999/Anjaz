@@ -79,11 +79,58 @@ class ReceiptController extends Controller
      */
     public function download(Request $request, int $id): \Symfony\Component\HttpFoundation\Response
     {
-        // AMIAL-FIX(PDF): كان يبثّ ملفّاً مُولّداً مسبقاً على القرص، لكن تخزين
-        // Railway مؤقّت (ephemeral) — يختفي الملفّ بعد إعادة النشر (أو لم تُشغَّل
-        // مهمّة التوليد أصلاً) فينقطع الاتصال أثناء الاستلام
-        // (Connection closed while receiving data). الحلّ: نولّد الـ PDF عند
-        // الطلب مباشرةً (نفس مسار invoice، بلا اعتماد على ملفّ مُخزَّن).
+        // AMIAL-PDF-PIPELINE-001 — «ولّد مرّة، اخدم كثيراً».
+        //
+        // كان هذا المسار يُعيد التصيير في **كل** طلب، لأن الملف المخزَّن لم يكن
+        // يُنتَج أصلاً: المهمّة تُرسَل إلى طابور `receipts` والعامل يستمع إلى
+        // `default,notifications` فقط. فبقي كل تنزيل تصييراً كاملاً داخل الطلب —
+        // بطيء على خادم صغير، فيُقطع الاتصال على شبكة جوّال
+        // (Connection closed while receiving data).
+        //
+        // هذا ما تفعله الشركات: المستند يُولَّد مرّة عند إنشاء العملية ويُخزَّن،
+        // ثم يُخدَم كقراءة ملف — أجزاء من الثانية. وإن غاب الملف (نشر جديد على
+        // تخزين مؤقّت) نُولّده **ونحفظه** فتكون المرّة التالية فورية.
+        $receipt = Receipt::where('id', $id)
+            ->where('user_id', $request->user()->id)
+            ->first();
+        if (!$receipt) {
+            return $this->error('RECEIPT_NOT_FOUND', 'Receipt not found', 404);
+        }
+
+        $path = $receipt->pdf_storage_path;
+        if ($path && Storage::disk('local')->exists($path)) {
+            $receipt->incrementDownloadCount();
+
+            return response(Storage::disk('local')->get($path), 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Length' => (string) Storage::disk('local')->size($path),
+                'Content-Disposition' => "inline; filename=\"{$receipt->receipt_number}.pdf\"",
+                'Cache-Control' => 'private, max-age=86400',
+            ]);
+        }
+
+        // لا ملف بعد — ولّده الآن **بشكل متزامن** واحفظه للمرّات القادمة.
+        try {
+            (new \App\Jobs\GeneratePdfReceiptJob($receipt->id))->handle();
+            $receipt->refresh();
+            $path = $receipt->pdf_storage_path;
+            if ($path && Storage::disk('local')->exists($path)) {
+                $receipt->incrementDownloadCount();
+
+                return response(Storage::disk('local')->get($path), 200, [
+                    'Content-Type' => 'application/pdf',
+                    'Content-Length' => (string) Storage::disk('local')->size($path),
+                    'Content-Disposition' => "inline; filename=\"{$receipt->receipt_number}.pdf\"",
+                    'Cache-Control' => 'private, max-age=86400',
+                ]);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning(
+                'Receipt PDF on-demand generation failed: ' . $e->getMessage()
+            );
+        }
+
+        // آخر ملاذ: مسار الفاتورة القديم (تصيير في الذاكرة بلا تخزين).
         return $this->invoice($request, $id);
     }
 

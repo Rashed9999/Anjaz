@@ -81,4 +81,49 @@ class CustomerCreditViewTest extends TestCase
         $this->getJson("/api/v1/amial/customer/credits/{$account->id}/statement")
             ->assertStatus(404);
     }
+
+    /**
+     * AMIAL-CREDIT-LINK-001 — انحدار: التاجر يكتب الرقم الوطني «777100001»
+     * بينما المستخدم مخزَّن «+967777100001». المطابقة الحرفية كانت تفشل فيبقى
+     * الحساب غير مربوط، فلا يرى العميل ما عليه ولا يستطيع سداده.
+     */
+    public function test_credit_account_links_to_user_by_any_phone_form(): void
+    {
+        $national = ltrim(str_replace('+967', '', $this->customer->phone), '+');
+
+        $account = app(\App\Services\CustomerCreditService::class)->findOrCreateAccount(
+            merchantId: $this->merchant->id,
+            customerPhone: $national,
+            customerName: 'عميل اختبار',
+        );
+
+        $this->assertSame(
+            $this->customer->id,
+            $account->customer_user_id,
+            'يجب أن يُربط الحساب بالمستخدم مهما اختلفت صيغة الرقم'
+        );
+    }
+
+    /**
+     * حساب أُنشئ قبل تسجيل العميل يبقى بلا ربط — تُطالب به الشاشة عند أول فتح.
+     */
+    public function test_unlinked_account_is_claimed_on_first_open(): void
+    {
+        $orphan = \App\Models\CustomerCreditAccount::create([
+            'merchant_user_id' => $this->merchant->id,
+            'customer_phone' => $this->customer->phone,
+            'customer_user_id' => null,
+            'customer_name' => 'عميل قديم',
+            'credit_limit' => '0.0000',
+            'current_balance' => '2500.0000',
+            'classification' => 'bronze',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($this->customer, 'api')
+            ->getJson('/api/v1/amial/customer/credits')
+            ->assertOk();
+
+        $this->assertSame($this->customer->id, $orphan->fresh()->customer_user_id);
+    }
 }
