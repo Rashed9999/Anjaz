@@ -13,6 +13,7 @@ import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/util/images.dart';
 import 'package:amyal_pay/common/widgets/amial_button.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:amyal_pay/util/secure_screen.dart';
 
 /// AMIAL-UNIFIED-AUTH-002 — شاشة دخول واحدة بقائمة نوع الحساب.
 ///
@@ -89,9 +90,13 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   /// بيانات اعتماد) — تُستعمل للتحية وتعبئة الرقم.
   ({String name, String phone, String kind})? _lastUser;
 
+  // AMIAL-SEC-CAPTURE-001: الرمز السري يُكتب في هذه الشاشة — نمنع لقطة الشاشة
+  // وتسجيلها ما دامت معروضة، ونُعيد السماح فور مغادرتها (فتبقى الإيصالات
+  // وبقيّة الشاشات قابلة للتصوير والمشاركة).
   @override
   void initState() {
     super.initState();
+    SecureScreen.enable();
     final u = UnifiedAuthController.readLastUser();
     if (u != null) {
       _lastUser = u;
@@ -110,6 +115,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
 
   @override
   void dispose() {
+    SecureScreen.disable();
     _phoneCtrl.dispose();
     _passwordCtrl.dispose();
     _merchantNumCtrl.dispose();
