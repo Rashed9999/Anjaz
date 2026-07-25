@@ -192,8 +192,6 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: Text(waiting ? 'بانتظار الدفع' : 'تم التحصيل'),
         leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Get.back()),
       ),

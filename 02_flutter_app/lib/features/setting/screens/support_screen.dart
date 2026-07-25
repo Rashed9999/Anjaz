@@ -18,9 +18,6 @@ class SupportScreen extends StatelessWidget {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: Text('24_support'.tr),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),

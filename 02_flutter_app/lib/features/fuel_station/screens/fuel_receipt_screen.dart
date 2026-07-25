@@ -187,8 +187,6 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('فاتورة البيع'),
         leading: IconButton(
             icon: const Icon(Icons.close), onPressed: () => Get.back()),

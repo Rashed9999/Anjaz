@@ -59,11 +59,7 @@ class ForgetPinController extends GetxController implements GetxService{
 
       if(isValid) {
         await authController.updatePin(newPass);
-        Get.offAllNamed(RouteHelper.getLoginRoute(
-          countryCode: countryCode,
-          phoneNumber: nationalNumber,
-          userName: userData?.name ?? '',
-        ));
+        Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
       }else {
         showCustomSnackBarHelper('something_error_in_your_phone_number'.tr, isError: false);
 

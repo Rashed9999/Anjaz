@@ -191,7 +191,7 @@ class AuthController extends GetxController implements GetxService {
         ));
 
         authRepo.setBiometric(false);
-        Get.offNamed(RouteHelper.getLoginRoute(countryCode: countryCode,phoneNumber: nationalNumber, userName: userName));
+        Get.offNamed(RouteHelper.getUnifiedLoginRoute());
 
       }
       else{
@@ -285,11 +285,7 @@ class AuthController extends GetxController implements GetxService {
         Get.find<AuthController>().bioAthPinSetup(signUpBody.password).then((value) {
 
           UserShortDataModel? userData = Get.find<AuthController>().getUserData();
-          Get.offAllNamed(RouteHelper.getLoginRoute(
-              countryCode: signUpBody.dialCountryCode,
-              phoneNumber: signUpBody.phone,
-              userName: userData?.name ?? ''
-          ));
+          Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
         });
 
         // Get.offAllNamed(RouteHelper.getWelcomeRoute(

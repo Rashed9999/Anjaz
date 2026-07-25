@@ -90,10 +90,7 @@ class ProfileController extends GetxController implements GetxService {
         await Get.find<AuthController>().updatePin(newPassword);
         UserShortDataModel? userData = Get.find<AuthController>().getUserData();
 
-        Get.offAllNamed(RouteHelper.getLoginRoute(
-          countryCode: userData?.countryCode, phoneNumber: userData?.phone,
-          userName: userData?.name ?? '',
-        ));
+        Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
 
       } else {
         ApiChecker.checkApi(response);

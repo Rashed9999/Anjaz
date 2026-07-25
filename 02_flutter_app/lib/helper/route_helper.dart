@@ -3,21 +3,15 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amyal_pay/common/models/signup_body_model.dart';
 import 'package:amyal_pay/common/models/contact_model.dart';
-import 'package:amyal_pay/features/auth/screens/create_account_screen.dart';
 import 'package:amyal_pay/features/auth/screens/unified_login_screen.dart';
-import 'package:amyal_pay/features/auth/screens/login_screen.dart';
 import 'package:amyal_pay/features/auth/screens/sign_up_information_screen.dart';
 import 'package:amyal_pay/features/auth/screens/pin_set_screen.dart';
 import 'package:amyal_pay/features/camera_verification/screens/camera_screen.dart';
-import 'package:amyal_pay/features/verification/screens/varification_screen.dart';
 import 'package:amyal_pay/features/home/screens/nav_bar_screen.dart';
 import 'package:amyal_pay/features/forget_pin/screens/forget_pin_screen.dart';
 import 'package:amyal_pay/features/forget_pin/screens/reset_pin_screen.dart';
-import 'package:amyal_pay/features/history/screens/history_screen.dart';
 import 'package:amyal_pay/features/access/screens/home_dispatcher_screen.dart';
-import 'package:amyal_pay/features/language/screens/change_language_screen.dart';
 import 'package:amyal_pay/features/notification/screens/notifications_center_screen.dart';
-import 'package:amyal_pay/features/onboarding/screens/on_boarding_sceen.dart';
 import 'package:amyal_pay/features/setting/screens/profile_screen.dart';
 import 'package:amyal_pay/features/setting/widgets/change_pin_screen.dart';
 import 'package:amyal_pay/features/setting/screens/edit_profile_screen.dart';
@@ -31,6 +25,9 @@ import 'package:amyal_pay/features/transaction_money/screens/transaction_confirm
 import 'package:amyal_pay/features/transaction_money/screens/transaction_money_screen.dart';
 import 'package:amyal_pay/features/transaction_money/widgets/share_statement_widget.dart';
 import 'package:amyal_pay/features/splash/screens/welcome_screen.dart';
+import 'package:amyal_pay/features/language/screens/change_language_screen.dart';
+import 'package:amyal_pay/features/onboarding/screens/on_boarding_sceen.dart';
+import 'package:amyal_pay/features/verification/screens/varification_screen.dart';
 
 class RouteHelper {
   static const String splash = '/splash';
@@ -150,7 +147,6 @@ class RouteHelper {
     GetPage(name: shareStatement, page: () => ShareStatementWidget(amount: Get.parameters['amount'], charge: null, trxId: null,
             transactionType: utf8.decode(base64Url.decode(Get.parameters['transaction-type']!.replaceAll(' ', '+'))), contactModel: ContactModel.fromJson(jsonDecode(utf8.decode(base64Url.decode(Get.parameters['contact']!)))))),
 
-    GetPage(name: history, page: () => const HistoryScreen()),
     GetPage(name: notification, page: () => const NotificationsCenterScreen()),
     // GetPage(name: themeAndLanguage, page: () => ThemeAndLanguage()),
     GetPage(name: profile, page: () => const ProfileScreen()),
@@ -161,7 +157,6 @@ class RouteHelper {
 
     GetPage(name: choseLoginOrRegScreen, page: () => const OnBoardingScreen()),
     GetPage(name: unifiedLoginScreen, page: () => const UnifiedLoginScreen()),  // AMIAL
-    GetPage(name: createAccountScreen, page: () => const CreateAccountScreen()),
     GetPage(name: verifyScreen, page: () {
       final String? phoneNumber = Uri.decodeComponent(Get.parameters['phone_number']!)
           != 'null' ? Uri.decodeComponent(Get.parameters['phone_number']!) : null ;
@@ -181,9 +176,6 @@ class RouteHelper {
       password: Get.parameters['password'],
     )),
 
-    GetPage(name: loginScreen, page: () => LoginScreen(
-      userName: Get.parameters['user-name'],
-      countryCode: Get.parameters['country-code']!.replaceAll(' ', '+'),
       phoneNumber: Get.parameters['phone-number']),
     ),
 

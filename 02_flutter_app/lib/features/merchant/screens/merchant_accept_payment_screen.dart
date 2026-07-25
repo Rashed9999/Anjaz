@@ -139,8 +139,6 @@ class _MerchantAcceptPaymentScreenState
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('استلام دفعة'),
       ),
       body: SingleChildScrollView(
