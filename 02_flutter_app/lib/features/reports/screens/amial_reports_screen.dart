@@ -8,6 +8,8 @@ import 'package:amyal_pay/helper/date_converter_helper.dart';
 import 'package:amyal_pay/helper/pdf_downloader_helper.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amyal_pay/common/widgets/amial_donut_chart.dart';
+import 'package:amyal_pay/common/widgets/amial_form.dart';
 
 /// AMIAL-REPORTS-001 — شاشة «التقارير»:
 /// أنواع التقارير (المصروفات / الإيرادات / كشف الحساب) مع اختيار الفترة،
@@ -150,17 +152,17 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // AMIAL-DS-002: ترويسة خفيفة موحّدة بدل AppBar أزرق صلب.
     return Scaffold(
       backgroundColor: AmyalColors.background,
-      appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        title: const Text('التقارير'),
-      ),
-      body: RefreshIndicator(
+      body: SafeArea(
+        child: Column(children: [
+          const AmialScreenHeader(title: 'التقارير'),
+          Expanded(
+            child: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           children: [
             // ====== نوع التقرير ======
             _sectionTitle(Icons.assessment_outlined, 'نوع التقرير'),
@@ -227,6 +229,9 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
             ],
           ],
         ),
+      ),
+          ),
+        ]),
       ),
     );
   }
@@ -340,7 +345,17 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
         children: [
           Text(debit ? 'تفصيل المصروفات حسب النوع' : 'تفصيل الإيرادات حسب النوع',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
+          // AMIAL-CHART-001: مخطّط حلقي بالمجموع في المركز — كان القسم
+          // أشرطة نسب فقط بلا صورة كلّية تُقرأ بلمحة.
+          Center(
+            child: AmialDonutChart(
+              slices: entries.take(6).toList(),
+              centerLabel: debit ? 'إجمالي المصروفات' : 'إجمالي الإيرادات',
+              centerValue: AmialMoney.yer(total),
+            ),
+          ),
+          const SizedBox(height: 10),
           ...entries.map((e) {
             final ratio = total > 0 ? (e.value / total).clamp(0.0, 1.0) : 0.0;
             return Padding(
