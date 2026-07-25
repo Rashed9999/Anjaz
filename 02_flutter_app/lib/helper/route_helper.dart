@@ -4,7 +4,7 @@ import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amyal_pay/common/models/signup_body_model.dart';
 import 'package:amyal_pay/common/models/contact_model.dart';
 import 'package:amyal_pay/features/auth/screens/unified_login_screen.dart';
-import 'package:amyal_pay/features/auth/screens/sign_up_information_screen.dart';
+import 'package:amyal_pay/features/auth/screens/amial_registration_wizard_screen.dart';
 import 'package:amyal_pay/features/auth/screens/pin_set_screen.dart';
 import 'package:amyal_pay/features/camera_verification/screens/camera_screen.dart';
 import 'package:amyal_pay/features/home/screens/nav_bar_screen.dart';
@@ -165,7 +165,7 @@ class RouteHelper {
       );
     }),
     GetPage(name: selfieScreen, page: () => CameraScreen(fromEditProfile: Get.parameters['page'] == 'edit-profile')),
-    GetPage(name: otherInfoScreen, page: () => const SignUpInformationScreen()),
+    GetPage(name: otherInfoScreen, page: () => const AmialRegistrationWizardScreen()),
     GetPage(name: pinSetScreen, page: () => PinSetScreen(
       signUpBody: SignUpBodyModel.fromJson(jsonDecode(utf8.decode(base64Url.decode(Get.parameters['signup']!)))),
     )),

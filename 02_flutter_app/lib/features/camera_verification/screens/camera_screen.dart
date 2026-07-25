@@ -2,7 +2,7 @@ import 'package:camera/camera.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/auth/screens/sign_up_information_screen.dart';
+import 'package:amyal_pay/features/auth/screens/amial_registration_wizard_screen.dart';
 import 'package:amyal_pay/features/camera_verification/controllers/camera_screen_controller.dart';
 import 'package:amyal_pay/features/camera_verification/widgets/camera_instruction_widget.dart';
 import 'package:amyal_pay/features/setting/screens/edit_profile_screen.dart';
@@ -70,7 +70,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 if (widget.fromEditProfile) {
                   Get.off(() => const EditProfileScreen());
                 } else {
-                  Get.off(() => const SignUpInformationScreen());
+                  Get.off(() => const AmialRegistrationWizardScreen());
                 }
               },
               child: Text('skip'.tr, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),

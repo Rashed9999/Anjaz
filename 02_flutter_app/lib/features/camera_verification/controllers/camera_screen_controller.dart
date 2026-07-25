@@ -14,6 +14,7 @@ import 'package:amyal_pay/features/setting/screens/edit_profile_screen.dart';
 import '../../../main.dart';
 import '../../auth/screens/sign_up_information_screen.dart';
 import '../widgets/loader_dialog_widget.dart';
+import 'package:amyal_pay/features/auth/screens/amial_registration_wizard_screen.dart';
 
 class CameraScreenController extends GetxController implements GetxService{
   bool _isBusy = false;
@@ -245,7 +246,7 @@ class CameraScreenController extends GetxController implements GetxService{
         if(_fromEditProfile) {
           Get.off(() => const EditProfileScreen());
         }else{
-          Get.off(() => const SignUpInformationScreen());
+          Get.off(() => const AmialRegistrationWizardScreen());
         }
       });
 
