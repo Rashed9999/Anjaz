@@ -5,6 +5,10 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("dev.flutter.flutter-gradle-plugin")
+    // AMIAL-FCM-001: بدون تطبيق هذه الإضافة لا يُقرأ google-services.json إطلاقاً،
+    // فلا يُولَّد values.xml ولا تُسجَّل الحزمة لدى Firebase — الإشعارات تصمت بلا خطأ.
+    // كانت معرَّفة في settings.gradle.kts بـ `apply false` ولم تُطبَّق هنا قطّ.
+    id("com.google.gms.google-services")
 }
 
 val keystoreProperties = Properties()
@@ -58,7 +62,11 @@ android {
             isShrinkResources = false
         }
         getByName("debug") {
-            applicationIdSuffix = ".debug"
+            // AMIAL-FCM-001: أُزيل applicationIdSuffix = ".debug".
+            // الحزمة المسجّلة في Firebase هي com.amyalpay.app فقط؛ ومع اللاحقة
+            // تصير حزمة نسخة التطوير com.amyalpay.app.debug فيفشل بناء debug
+            // بـ "No matching client found for package name" — ولو نجح لما وصلت
+            // إشعارة واحدة أثناء الاختبار.
             versionNameSuffix = "-debug"
         }
     }
@@ -70,7 +78,9 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-    implementation("com.google.firebase:firebase-messaging:23.4.1")
+    // AMIAL-FCM-001: أُزيل التثبيت اليدوي firebase-messaging:23.4.1 (بقايا القالب).
+    // إضافة firebase_messaging لـ Flutter تجلب نسختها المتوافقة، والتثبيت اليدوي
+    // على نسخة أقدم يخاطر بخلط إصدارات Firebase داخل البناء الواحد.
     implementation("com.google.mlkit:face-detection:16.1.5")
     implementation("com.google.mlkit:barcode-scanning:17.0.2")
 }

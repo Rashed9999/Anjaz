@@ -41,26 +41,27 @@ class AuthRepo extends GetxService{
      String? deviceToken;
 
      if(!(isLogOut ?? false)){
-       if (GetPlatform.isIOS) {
-         NotificationSettings settings = await FirebaseMessaging.instance.requestPermission(
-           alert: true, announcement: false, badge: true, carPlay: false,
-           criticalAlert: false, provisional: false, sound: true,
-         );
-         if(settings.authorizationStatus == AuthorizationStatus.authorized) {
-           deviceToken = await _saveDeviceToken();
+       // AMIAL-FCM-001: أندرويد ١٣ فما فوق يشترط إذن POST_NOTIFICATIONS وقت
+       // التشغيل تماماً كـ iOS. كان الطلب هنا لـ iOS وحدها، فيصمت أندرويد الحديث.
+       final settings = await FirebaseMessaging.instance.requestPermission(
+         alert: true, announcement: false, badge: true, carPlay: false,
+         criticalAlert: false, provisional: false, sound: true,
+       );
+       final granted = settings.authorizationStatus == AuthorizationStatus.authorized
+           || settings.authorizationStatus == AuthorizationStatus.provisional;
+
+       if(granted) {
+         deviceToken = await _saveDeviceToken();
+         if(deviceToken != null && !GetPlatform.isWeb) {
            FirebaseMessaging.instance.subscribeToTopic(AppConstants.all);
            FirebaseMessaging.instance.subscribeToTopic(AppConstants.users);
-           debugPrint('=========>Device Token ======$deviceToken');
          }
-       }else {
-         deviceToken = await _saveDeviceToken();
-         FirebaseMessaging.instance.subscribeToTopic(AppConstants.all);
-         FirebaseMessaging.instance.subscribeToTopic(AppConstants.users);
-         debugPrint('=========>Device Token ======$deviceToken');
        }
-       if(!GetPlatform.isWeb) {
-         FirebaseMessaging.instance.subscribeToTopic(AppConstants.all);
-         FirebaseMessaging.instance.subscribeToTopic(AppConstants.users);
+
+       // AMIAL-FCM-001: إرسال token فارغ يمسح الرمز المحفوظ على الخادم فتتوقف
+       // الإشعارات نهائياً. إن تعذّر الحصول عليه نُبقي القديم كما هو.
+       if(deviceToken == null) {
+         return Response(statusCode: 200, body: {'skipped': 'no_fcm_token'});
        }
      }
 
@@ -69,11 +70,16 @@ class AuthRepo extends GetxService{
    }
 
 
+   /// AMIAL-FCM-001: كان `(await getToken())!` — والدالة تعيد null فعلياً حين
+   /// يُرفض الإذن أو تغيب Google Play Services، فيُرمى استثناء داخل `.then()`
+   /// غير المنتظَر في مسار الدخول: لا انهيار ظاهر، لكن الرمز لا يصل الخادم أبداً.
    Future<String?> _saveDeviceToken() async {
-     String? deviceToken = '';
-
-     deviceToken = (await FirebaseMessaging.instance.getToken())!;
-     return deviceToken;
+     try {
+       return await FirebaseMessaging.instance.getToken();
+     } catch (e) {
+       debugPrint('AMIAL-FCM: تعذّر الحصول على رمز الجهاز — $e');
+       return null;
+     }
    }
 
 

@@ -17,6 +17,7 @@ import 'package:amyal_pay/theme/dark_theme.dart';
 import 'package:amyal_pay/theme/light_theme.dart';
 import 'package:amyal_pay/util/app_constants.dart';
 import 'package:amyal_pay/util/messages.dart';
+import 'package:amyal_pay/firebase_options.dart';
 
 import 'helper/get_di.dart' as di;
 import 'package:amyal_pay/features/auth/controllers/session_guard.dart';
@@ -27,16 +28,19 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterL
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // AMIAL-FCM-001: كانت هنا إعدادات مشروع القالب gem-b5006 مكتوبةً يدوياً،
+  // وهي لمشروع لا تملكه ولا حزمتنا مسجّلة فيه. صارت تُقرأ من AmialFirebaseOptions
+  // المطابق لـ android/app/google-services.json.
   try{
-    await Firebase.initializeApp(options: FirebaseOptions(
-      apiKey: "AIzaSyA40XT2LSjEI_V9LCfp8YDE2qN_P9Fcduw", ///current_key here
-      appId: "1:384321080318:android:f1fd798581de62ff2c0eaf", ///mobilesdk_app_id here
-      messagingSenderId: "384321080318", ///project_number here
-      projectId: "gem-b5006", ///project_id her
-    ));
-
+    final options = AmialFirebaseOptions.forCurrentPlatform();
+    await Firebase.initializeApp(options: options);
   }catch(e) {
-    await Firebase.initializeApp();
+    // منصّة غير مسجّلة أو تهيئة مكرّرة — نرجع للملف الأصلي في المشروع الأصلي.
+    try {
+      await Firebase.initializeApp();
+    } catch (_) {
+      // بلا Firebase يبقى التطبيق يعمل كاملاً عدا الإشعارات.
+    }
   }
 
   cameras = await availableCameras();
