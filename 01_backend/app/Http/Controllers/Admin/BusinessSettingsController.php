@@ -236,21 +236,157 @@ class BusinessSettingsController extends Controller
         return back();
     }
 
+    /**
+     * AMIAL-FCM-002 — إعداد Firebase.
+     *
+     * القالب كان يشير إلى قالب عرض غير موجود، فكان فتح الصفحة يرمي
+     * View not found ولا سبيل إطلاقاً لإدخال مفتاح الخدمة من اللوحة.
+     */
     public function fcmIndex(): View
     {
-        return view('admin-views.business-settings.fcm-index');
+        return view('admin-views.business-settings.fcm-index', [
+            'fcm' => $this->fcmServiceAccountStatus(),
+        ]);
+    }
+
+    /**
+     * ملخّص آمن لحالة مفتاح الخدمة — بلا كشف private_key إطلاقاً.
+     */
+    private function fcmServiceAccountStatus(): array
+    {
+        $raw = DB::table('business_settings')
+            ->where('key', 'push_notification_service_file_content')
+            ->value('value');
+
+        $key = json_decode((string) $raw, true);
+
+        if (!is_array($key) || empty($key['project_id'])) {
+            return ['configured' => false];
+        }
+
+        return [
+            'configured' => true,
+            'project_id' => $key['project_id'],
+            'client_email' => $key['client_email'] ?? '—',
+            // بصمة قصيرة للتمييز بين مفتاحين دون كشف أيّهما.
+            'key_fingerprint' => substr(hash('sha256', (string) ($key['private_key'] ?? '')), 0, 12),
+            'has_private_key' => !empty($key['private_key'])
+                && str_contains((string) $key['private_key'], 'BEGIN PRIVATE KEY'),
+        ];
     }
 
     public function updateFcm(Request $request): RedirectResponse
     {
-        DB::table('business_settings')->updateOrInsert(['key' => 'push_notification_key'], [
-            'value' => $request['push_notification_key']
-        ]);
-        DB::table('business_settings')->updateOrInsert(['key' => 'push_notification_service_file_content'], [
-            'value' => $request['push_notification_service_file_content'],
-        ]);
+        // المفتاح القديم (server key) — تُبقيه Google للتوافق فقط، وأميال باي
+        // تستعمل HTTP v1 بمفتاح الخدمة أدناه.
+        if ($request->filled('push_notification_key')) {
+            DB::table('business_settings')->updateOrInsert(['key' => 'push_notification_key'], [
+                'value' => $request->input('push_notification_key'),
+            ]);
+        }
 
-        Toastr::success(translate('settings_updated'));
+        $content = trim((string) $request->input('push_notification_service_file_content', ''));
+
+        // AMIAL-FCM-002: حقل فارغ كان يمسح المفتاح المحفوظ فتتوقّف الإشعارات
+        // كلها بحفظٍ عابر لصفحة الإعدادات. الفراغ الآن = «لا تغيّر شيئاً».
+        if ($content === '') {
+            Toastr::success(translate('settings_updated'));
+            return back();
+        }
+
+        $key = json_decode($content, true);
+
+        if (!is_array($key)) {
+            Toastr::error(translate('محتوى الملف ليس JSON صالحاً — انسخ الملف كاملاً من { إلى }.'));
+            return back();
+        }
+
+        foreach (['project_id', 'client_email', 'private_key'] as $field) {
+            if (empty($key[$field])) {
+                Toastr::error(translate("الملف ناقص الحقل {$field} — تأكّد أنه ملف service account لا google-services.json."));
+                return back();
+            }
+        }
+
+        if (!str_contains((string) $key['private_key'], 'BEGIN PRIVATE KEY')) {
+            Toastr::error(translate('حقل private_key تالف — أعد نسخ الملف بلا تعديل.'));
+            return back();
+        }
+
+        // نحفظ صيغة موحّدة (json_encode لمصفوفة مفكوكة) حتى يقرأها
+        // get_business_settings مصفوفةً دائماً.
+        DB::table('business_settings')->updateOrInsert(
+            ['key' => 'push_notification_service_file_content'],
+            ['value' => json_encode($key)]
+        );
+
+        app(\App\Services\FirebaseTokenService::class)->invalidate($key['project_id']);
+
+        Toastr::success(translate('حُفظ مفتاح Firebase للمشروع ') . $key['project_id']);
+        return back();
+    }
+
+    /**
+     * AMIAL-FCM-002 — إرسال إشعارة اختبار حقيقية إلى رقم محدّد.
+     *
+     * الغرض تشخيصي بحت: يفصل بين «المفتاح خاطئ» و«الجهاز بلا رمز»
+     * و«Google رفضت»، بدل تخمين الصمت.
+     */
+    public function testFcm(Request $request): RedirectResponse
+    {
+        $phone = trim((string) $request->input('test_phone'));
+        if ($phone === '') {
+            Toastr::error(translate('أدخل رقم هاتف للاختبار.'));
+            return back();
+        }
+
+        $user = \App\Models\User::whereIn('phone', \App\Support\Phone::variants($phone))->first();
+        if (!$user) {
+            Toastr::error(translate('لا يوجد مستخدم بهذا الرقم.'));
+            return back();
+        }
+
+        if (empty($user->fcm_token)) {
+            Toastr::error(translate('المستخدم موجود لكن جهازه لم يسجّل رمز إشعارات — يفتح التطبيق ويسجّل الدخول ويسمح بالإشعارات أولاً.'));
+            return back();
+        }
+
+        $key = json_decode(
+            (string) DB::table('business_settings')
+                ->where('key', 'push_notification_service_file_content')->value('value'),
+            true
+        );
+
+        if (!is_array($key) || empty($key['project_id'])) {
+            Toastr::error(translate('احفظ مفتاح الخدمة أولاً.'));
+            return back();
+        }
+
+        $token = app(\App\Services\FirebaseTokenService::class)->getAccessToken($key);
+        if (!$token) {
+            Toastr::error(translate('تعذّر مصادقة المفتاح لدى Google — تحقّق أن الملف يخصّ هذا المشروع وأن ساعة الخادم مضبوطة.'));
+            return back();
+        }
+
+        $response = \Illuminate\Support\Facades\Http::withToken($token)->timeout(10)->post(
+            "https://fcm.googleapis.com/v1/projects/{$key['project_id']}/messages:send",
+            ['message' => [
+                'token' => $user->fcm_token,
+                'notification' => [
+                    'title' => 'أميال باي',
+                    'body' => 'إشعارة اختبار — الإعداد سليم ✅',
+                ],
+                'data' => ['type' => 'test'],
+            ]]
+        );
+
+        if ($response->successful()) {
+            Toastr::success(translate('أُرسلت الإشعارة إلى ') . $user->phone);
+        } else {
+            Toastr::error(translate('رفضت Google الإرسال: ')
+                . ($response->json('error.message') ?? $response->status()));
+        }
+
         return back();
     }
 

@@ -104,6 +104,10 @@
     <a class="nav-link" href="{{route('admin.notification.add-new')}}" title="الإشعارات">
         <span class="text-truncate">🔔 إشعارات الدفع</span>
     </a>
+    {{-- AMIAL-FCM-002: الصفحة كانت بلا رابط في القائمة إطلاقاً --}}
+    <a class="nav-link" href="{{route('admin.business-settings.fcm-index')}}" title="إعداد Firebase">
+        <span class="text-truncate">🔥 إعداد Firebase</span>
+    </a>
     <a class="nav-link" href="{{route('admin.faq.index')}}" title="الأسئلة الشائعة">
         <span class="text-truncate">❓ الأسئلة الشائعة</span>
     </a>

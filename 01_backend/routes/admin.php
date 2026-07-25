@@ -152,6 +152,8 @@ Route::group(['as' => 'admin.'], function () {
 
             Route::get('fcm-index', [BusinessSettingsController::class, 'fcmIndex'])->name('fcm-index');
             Route::post('update-fcm', [BusinessSettingsController::class, 'updateFcm'])->name('update-fcm');
+            // AMIAL-FCM-002: إرسال إشعارة اختبار حقيقية لتشخيص الصمت
+            Route::post('test-fcm', [BusinessSettingsController::class, 'testFcm'])->name('test-fcm');
             Route::post('update-fcm-messages', [BusinessSettingsController::class, 'updateFcmMessages'])->name('update-fcm-messages');
 
             Route::group(['prefix' => 'language', 'as' => 'language.', 'middleware' => []], function () {
