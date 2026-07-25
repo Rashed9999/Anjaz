@@ -13,6 +13,10 @@ import 'package:amyal_pay/helper/phone_cheker_helper.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/util/app_constants.dart';
 import 'package:amyal_pay/common/widgets/amial_quick_amounts.dart';
+import 'package:amyal_pay/common/widgets/amial_form.dart';
+import 'package:amyal_pay/features/setting/screens/support_screen.dart';
+import 'package:amyal_pay/features/favorite_number/screens/search_contact_screen.dart';
+import 'package:amyal_pay/features/transaction_money/domain/models/contact_tag_model.dart';
 
 /// AMIAL-SEND-V2 — شاشة تحويل الأموال بتصميم أميال (التصميم 15 من ملف
 /// الشاشات): بطاقة الرصيد + رقم المستلِم + المبلغ + ملاحظة + «المحوَّل لهم
@@ -285,15 +289,22 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // AMIAL-DS-002: ترويسة خفيفة بدل AppBar أزرق صلب — كما في المرجع.
     return Scaffold(
       backgroundColor: AmyalColors.background,
-      appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        title: const Text('تحويل الأموال'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+      body: SafeArea(
+        child: Column(children: [
+          AmialScreenHeader(
+            title: 'تحويل الأموال',
+            actions: [
+              AmialHeaderAction(
+                  icon: Icons.headset_mic_outlined,
+                  onTap: () => Get.to(() => const SupportScreen())),
+            ],
+          ),
+          Expanded(
+              child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -347,20 +358,29 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
             const SizedBox(height: 20),
 
             // ── إرسال إلى ────────────────────────────────────
-            _label('إرسال إلى'),
-            TextField(
-              controller: _phoneCtrl,
-              keyboardType: TextInputType.phone,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              decoration: InputDecoration(
-                hintText: 'رقم الهاتف أو رقم الحساب (8 أرقام)',
-                prefixIcon: const Icon(Icons.smartphone_rounded, size: 20),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none),
-              ),
+            // AMIAL-DS-002: التسمية ثابتة فوق القيمة، وأزرار المساعدة
+            // (دليل الهاتف) خارج الحقل في مربّع مستقلّ — لا أيقونة مزدحمة
+            // داخله كما كان.
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AmialFieldAction(
+                  icon: Icons.contacts_outlined,
+                  tooltip: 'اختر من جهات الاتصال',
+                  onTap: _pickFromContacts,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: AmialFormField(
+                    controller: _phoneCtrl,
+                    label: 'إرسال إلى',
+                    hint: 'رقم الهاتف أو رقم الحساب (8 أرقام)',
+                    keyboard: TextInputType.phone,
+                    ltr: true,
+                    formatters: [FilteringTextInputFormatter.digitsOnly],
+                  ),
+                ),
+              ],
             ),
 
             // ── المحوَّل لهم مؤخراً ───────────────────────────
@@ -486,20 +506,12 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
             const SizedBox(height: 16),
 
             // ── ملاحظة ───────────────────────────────────────
-            _label('ملاحظة (اختياري)'),
-            TextField(
+            AmialFormField(
               controller: _noteCtrl,
+              label: 'ملاحظة (اختياري)',
+              hint: 'ما هو سبب هذا التحويل؟',
               maxLines: 2,
               maxLength: 100,
-              decoration: InputDecoration(
-                hintText: 'ما هو سبب هذا التحويل؟',
-                counterText: '',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none),
-              ),
             ),
             const SizedBox(height: 24),
 
@@ -519,14 +531,32 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
                 backgroundColor: AmyalColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 15),
+                minimumSize: const Size.fromHeight(54),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28)),
+                    borderRadius: BorderRadius.circular(14)),
               ),
             ),
           ],
         ),
+      )),
+        ]),
       ),
     );
+  }
+
+  /// AMIAL-DS-002: يفتح دليل الهاتف ويُعبّئ الرقم بالفعل.
+  /// `SearchContactScreen` يُرجع `ContactTagModel` عبر `Get.back(result:)` —
+  /// فتحه بلا التقاط النتيجة يجعل الزرّ بلا أثر.
+  Future<void> _pickFromContacts() async {
+    final ContactTagModel? picked =
+        await Get.to(() => const SearchContactScreen());
+    if (picked == null || !mounted) return;
+    final phones = picked.contact?.phones ?? const [];
+    if (phones.isEmpty) return;
+    var number = phones.first.number.replaceAll(RegExp(r'[\s\-()]'), '');
+    final cc = PhoneNumberHelper.getCountryCode(number);
+    if (cc != null && cc.isNotEmpty) number = number.replaceFirst(cc, '');
+    setState(() => _phoneCtrl.text = number);
   }
 
   Widget _label(String t) => Padding(
