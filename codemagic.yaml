@@ -37,7 +37,22 @@ workflows:
       - name: بوّابة التصريف (flutter analyze)
         script: |
           cd 02_flutter_app
-          flutter analyze --no-pub --no-fatal-warnings --no-fatal-infos
+          # لا نعتمد على رمز خروج flutter analyze: دلالته تختلف بين الإصدارات،
+          # وبعضها يُفشل على الملاحظات الأسلوبية رغم --no-fatal-infos. نقرأ
+          # التقرير بأنفسنا ونُفشل على أسطر error وحدها — سلوك واحد أياً كان
+          # إصدار Flutter على آلة البناء.
+          # ملاحظة على الأنماط: flutter يحاذي عمود الشدّة بمسافات، فتصير
+          # "warning •" بلا مسافة بادئة و"  error •" بمسافتين و"   info •"
+          # بثلاث. لذلك نُثبّت الأنماط بـ ^[[:space:]]* لا بمسافة مكتوبة.
+          flutter analyze --no-pub > analyze_report.txt 2>&1 || true
+          if grep -qE '^[[:space:]]*error •' analyze_report.txt; then
+            echo "❌ أخطاء تصريف — البناء متوقّف:"
+            grep -E '^[[:space:]]*error •' analyze_report.txt
+            exit 1
+          fi
+          echo "✅ صفر خطأ تصريف"
+          echo "تحذيرات (غير مانعة): $(grep -cE '^[[:space:]]*warning •' analyze_report.txt)"
+          echo "ملاحظات أسلوبية    : $(grep -cE '^[[:space:]]*info •'    analyze_report.txt)"
       - name: بناء APK release مقسّم حسب المعالج
         script: |
           cd 02_flutter_app
