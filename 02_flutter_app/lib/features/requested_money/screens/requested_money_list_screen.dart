@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/features/requested_money/controllers/requested_money_controller.dart';
 import 'package:amyal_pay/util/dimensions.dart';
 import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/requested_money/widgets/requested_money_screen.dart';
 
 enum RequestType {
@@ -55,9 +54,6 @@ class _RequestedMoneyListScreenState extends State<RequestedMoneyListScreen> {
         title: Text(widget.requestType == RequestType.sendRequest
             ? 'send_requests'.tr : widget.requestType == RequestType.request
             ? 'requests'.tr : 'withdraw_history'.tr),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
 
       body: RefreshIndicator(

@@ -202,8 +202,6 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('تقرير اليوم'),
       ),
       body: RefreshIndicator(

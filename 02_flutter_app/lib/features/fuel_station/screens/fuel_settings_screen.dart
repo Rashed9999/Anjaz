@@ -35,8 +35,6 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
         backgroundColor: AmyalColors.background,
         appBar: AppBar(
           title: const Text('إعدادات المحطة'),
-          backgroundColor: AmyalColors.primary,
-          foregroundColor: Colors.white,
           bottom: const TabBar(
             isScrollable: true,
             indicatorColor: AmyalColors.yellow,

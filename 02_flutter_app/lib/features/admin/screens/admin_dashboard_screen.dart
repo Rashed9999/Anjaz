@@ -44,8 +44,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         backgroundColor: AmyalColors.background,
         appBar: AppBar(
           title: const Text('لوحة الإدارة'),
-          backgroundColor: AmyalColors.primary,
-          foregroundColor: Colors.white,
           actions: [
             // CRITICAL-001-SUBS — اختصار إدارة الاشتراكات
             IconButton(

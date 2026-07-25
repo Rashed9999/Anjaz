@@ -122,8 +122,6 @@ class _SplitBillCreateScreenState extends State<SplitBillCreateScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('تقسيم فاتورة'),
       ),
       body: SingleChildScrollView(

@@ -114,8 +114,6 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('إعدادات الفاتورة والطباعة'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

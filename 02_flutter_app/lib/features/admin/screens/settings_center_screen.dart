@@ -38,8 +38,6 @@ class _SettingsCenterScreenState extends State<SettingsCenterScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('مركز الإعدادات'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         if (c.isLoading.value && c.smsProviders.isEmpty) {

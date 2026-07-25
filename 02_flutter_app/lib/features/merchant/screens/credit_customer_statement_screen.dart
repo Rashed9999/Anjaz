@@ -40,8 +40,6 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: Text(widget.customer['customer_name'] ?? 'كشف حساب'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         if (c.isLoadingStatement.value) {

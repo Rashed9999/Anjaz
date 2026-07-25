@@ -32,8 +32,6 @@ class _AgentPortalScreenState extends State<AgentPortalScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('لوحة الوكيل'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(icon: const Icon(Icons.refresh), tooltip: 'تحديث', onPressed: c.loadAll),
         ],

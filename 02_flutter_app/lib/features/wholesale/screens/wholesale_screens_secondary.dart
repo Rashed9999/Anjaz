@@ -29,8 +29,6 @@ class _State extends State<WholesaleInvoicesListScreenImpl> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('الفواتير'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: Icon(_overdueOnly ? Icons.filter_alt : Icons.filter_alt_outlined),
@@ -132,8 +130,6 @@ class _WholesaleInvoiceDetailsState extends State<WholesaleInvoiceDetailsScreen>
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('تفاصيل الفاتورة'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           // AMIAL-WHOLESALE-PDF — زر تحميل/مشاركة PDF
           Obx(() => IconButton(
@@ -351,8 +347,6 @@ class _AgingState extends State<WholesaleAgingReportScreenImpl> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('تقرير تقادم الديون'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         final r = c.agingReport.value;
@@ -455,8 +449,6 @@ class _StatementState extends State<WholesaleCustomerStatementScreenImpl> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: Text(widget.customer['full_name'] ?? 'كشف حساب'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         final s = c.currentStatement.value;

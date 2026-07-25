@@ -126,8 +126,6 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('طلب دفع آمن جديد'),
       ),
       body: Obx(() {

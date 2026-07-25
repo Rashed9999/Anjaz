@@ -135,8 +135,6 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('المنتجات'),
       ),
       floatingActionButton: FloatingActionButton.extended(

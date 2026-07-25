@@ -28,8 +28,6 @@ class _CreditDashboardScreenState extends State<CreditDashboardScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('إدارة العملاء (الديون)'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         if (c.isLoadingDashboard.value) {

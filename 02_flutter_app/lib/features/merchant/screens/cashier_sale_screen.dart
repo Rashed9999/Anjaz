@@ -201,8 +201,6 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('الكاشير'),
         actions: [
           // AMIAL-CASHIER-BARCODE-001 — مسح باركود لإضافة المنتجات للسلّة

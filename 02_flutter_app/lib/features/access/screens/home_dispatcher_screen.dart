@@ -116,8 +116,6 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: Text(title),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Center(
         child: Padding(

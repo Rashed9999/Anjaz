@@ -132,8 +132,6 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('مرتجع مبيعات'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         if (c.isLoadingInfo.value) {

@@ -32,8 +32,6 @@ class _BMSState extends State<BranchesManagementScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('الفروع'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: RefreshIndicator(
         onRefresh: () => c.loadBranches(),

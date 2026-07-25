@@ -38,9 +38,6 @@ class _TransactionLimitScreenState extends State<TransactionLimitScreen> with Ti
       length: tabItem.length,
       child: Scaffold(
         appBar: AppBar(
-          elevation: 0,
-          backgroundColor: AmyalColors.primary,
-          foregroundColor: Colors.white,
           title: Text('transaction_limit'.tr),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(46.0),

@@ -36,8 +36,6 @@ class _WholesaleDashboardScreenState extends State<WholesaleDashboardScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('الجملة'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: RefreshIndicator(
         onRefresh: () async { await c.loadBusiness(); await c.loadDashboard(); },
@@ -224,8 +222,6 @@ class _WholesaleProductsScreenState extends State<WholesaleProductsScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('المنتجات'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AmyalColors.primary,
@@ -349,8 +345,6 @@ class _WholesaleCustomersScreenState extends State<WholesaleCustomersScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('العملاء'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: Icon(_withBalanceOnly ? Icons.filter_alt : Icons.filter_alt_outlined),
@@ -553,8 +547,6 @@ class _WholesaleInvoiceCreateScreenState extends State<WholesaleInvoiceCreateScr
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('فاتورة جديدة'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(icon: const Icon(Icons.qr_code_scanner), tooltip: 'مسح باركود',
               onPressed: _openScanner),

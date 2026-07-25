@@ -84,7 +84,6 @@ class _AmialBiometricSetupScreenState extends State<AmialBiometricSetupScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         foregroundColor: AmyalColors.primary,
-        elevation: 0,
         title: const Text('Amyal Pay',
             style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,

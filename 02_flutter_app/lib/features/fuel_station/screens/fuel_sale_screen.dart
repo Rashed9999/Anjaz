@@ -231,8 +231,6 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('بيع وقود'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         if (c.isLoading.value && c.pumps.isEmpty) {

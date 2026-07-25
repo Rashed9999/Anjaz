@@ -72,8 +72,6 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('الخطط والاشتراكات'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         if (c.isLoading.value && c.plans.isEmpty) {

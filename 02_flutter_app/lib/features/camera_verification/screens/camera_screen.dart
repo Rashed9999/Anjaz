@@ -2,7 +2,6 @@ import 'package:camera/camera.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/auth/screens/sign_up_information_screen.dart';
 import 'package:amyal_pay/features/camera_verification/controllers/camera_screen_controller.dart';
 import 'package:amyal_pay/features/camera_verification/widgets/camera_instruction_widget.dart';
@@ -62,9 +61,6 @@ class _CameraScreenState extends State<CameraScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.isBarCodeScan ? 'scanner'.tr : 'face_verification'.tr),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
         automaticallyImplyLeading:
             (Get.previousRoute.split('?').first) == RouteHelper.verifyScreen ? false : true,
         actions: [

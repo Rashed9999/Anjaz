@@ -66,8 +66,6 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('سجلّ التدقيق'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

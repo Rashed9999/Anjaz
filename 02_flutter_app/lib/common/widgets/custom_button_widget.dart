@@ -35,14 +35,16 @@ class CustomButtonWidget extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: onTap == null ? Theme.of(context).hintColor.withValues(alpha: 0.08) : color ?? Theme.of(context).colorScheme.secondary,
-        borderRadius: BorderRadius.circular(borderRadius ?? Dimensions.radiusSizeSmall),
+        // AMIAL-DS-003: نصف قطر 14 وارتفاع 52 — قياسا الزرّ الموحّد في
+        // أميال. كان 12 مع حشوة 10 فيخرج زرّ قصير بمظهر القالب.
+        borderRadius: BorderRadius.circular(borderRadius ?? 14),
         border: isBorder ? Border.all(width: 1, color: borderColor ?? Theme.of(context).primaryColor) : null,
       ),
       child: CustomInkWellWidget(
         onTap: isLoading ? null : onTap as void Function()?,
-        radius: borderRadius ?? Dimensions.radiusSizeSmall,
+        radius: borderRadius ?? 14,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: Dimensions.paddingSizeSmall),
+          padding: const EdgeInsets.symmetric(vertical: 15),
           child: isLoading ? Center(child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

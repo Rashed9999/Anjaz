@@ -168,8 +168,6 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
       backgroundColor: Colors.black,
       appBar: AppBar(
         title: const Text('مسح الباركود'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(icon: const Icon(Icons.keyboard), tooltip: 'إدخال يدوي', onPressed: _manualEntry),
           IconButton(icon: const Icon(Icons.flash_on), onPressed: () => _scanner.toggleTorch()),

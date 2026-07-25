@@ -28,8 +28,6 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('حسابات الشركات'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AmyalColors.primary,

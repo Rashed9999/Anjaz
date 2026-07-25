@@ -8,7 +8,6 @@ import 'package:amyal_pay/helper/phone_cheker_helper.dart';
 import 'package:amyal_pay/util/app_constants.dart';
 import 'package:amyal_pay/util/dimensions.dart';
 import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_logo_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_large_widget.dart';
 import 'package:flutter/material.dart';
@@ -39,9 +38,6 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
         backgroundColor: Theme.of(context).cardColor,
         appBar: AppBar(
           title: Text('create_account'.tr),
-          backgroundColor: AmyalColors.primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
           automaticallyImplyLeading: false,
         ),
         body: Form(

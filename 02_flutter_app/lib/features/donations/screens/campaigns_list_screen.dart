@@ -27,8 +27,6 @@ class _CampaignsListScreenState extends State<CampaignsListScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('حملات التصنيف'),
       ),
       body: Obx(() {

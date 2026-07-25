@@ -43,8 +43,6 @@ class _CreditCustomersScreenState extends State<CreditCustomersScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('عملاء الديون'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {

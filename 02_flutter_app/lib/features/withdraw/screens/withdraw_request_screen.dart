@@ -101,8 +101,6 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('سحب الأموال'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           // AMIAL-WD-HISTORY-001: سجل طلبات السحب
           IconButton(

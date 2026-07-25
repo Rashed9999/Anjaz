@@ -44,8 +44,6 @@ class _MyAccountNumberScreenState extends State<MyAccountNumberScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('رقم حسابي'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         if (c.isLoading.value && c.me.value == null) {

@@ -58,8 +58,6 @@ class _SplitBillMySharesScreenState extends State<SplitBillMySharesScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('حصصي في الفواتير'),
       ),
       body: RefreshIndicator(

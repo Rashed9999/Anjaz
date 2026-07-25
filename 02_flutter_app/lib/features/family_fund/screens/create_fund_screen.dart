@@ -65,8 +65,6 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('صندوق عائلي جديد'),
       ),
       body: Obx(() {

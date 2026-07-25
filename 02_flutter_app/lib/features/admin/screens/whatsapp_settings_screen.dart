@@ -56,8 +56,6 @@ class _WhatsappSettingsScreenState extends State<WhatsappSettingsScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('إعدادات واتساب'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         if (c.isLoading.value && c.providers.isEmpty) {

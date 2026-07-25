@@ -6,6 +6,8 @@ import 'package:amyal_pay/common/widgets/code_picker_widget.dart';
 import 'package:amyal_pay/features/transaction_money/widgets/field_item_widget.dart';
 import 'package:amyal_pay/util/dimensions.dart';
 import 'package:amyal_pay/util/styles.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/common/widgets/amial_form.dart';
 
 
 class CustomTextFieldWidget extends StatefulWidget {
@@ -31,6 +33,9 @@ class CustomTextFieldWidget extends StatefulWidget {
   final String? Function(String? )? onValidate;
   final EdgeInsets? contentPadding;
   final double? borderRadius, letterSpacing, fontSize;
+
+  /// AMIAL-DS-003: لون تعبئة الحقل — الافتراضي رمادي أميال الفاتح.
+  final Color? fillColor;
   final bool isRequired;
   final String? prefixIcon;
   final Function? onSuffixTap;
@@ -65,6 +70,7 @@ class CustomTextFieldWidget extends StatefulWidget {
         this.title,
         this.contentPadding,
         this.borderRadius,
+        this.fillColor,
         this.isRequired = true,
         this.prefixIcon,
         this.onSuffixTap,
@@ -140,28 +146,38 @@ class CustomTextFieldState extends State<CustomTextFieldWidget> {
             ),
           ): null,
           contentPadding: widget.contentPadding ?? const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeDefault),
+          // AMIAL-DS-003 — لغة حقول أميال داخل widget القالب المشترك.
+          //
+          // بدل إعادة كتابة 11 شاشة، نُغيّر الافتراضيات هنا فترثها كلّها:
+          // تعبئة رمادية فاتحة بلا حدّ ظاهر، وحدّ كحلي عند التركيز فقط.
+          // كان الحقل مؤطّراً برمادي داكن دائم بنصف قطر 12 — مظهر القالب.
+          // من مرّر لوناً صريحاً (borderRadius/enabledBorderColor) يُحترم كما هو.
           focusedBorder : OutlineInputBorder(
-            borderRadius: BorderRadius.circular(widget.borderRadius ?? Dimensions.radiusSizeSmall),
-            borderSide: BorderSide(color: widget.focusedBorderColor ?? Theme.of(context).primaryColor, width: 0.5),
+            borderRadius: BorderRadius.circular(widget.borderRadius ?? 14),
+            borderSide: BorderSide(
+                color: widget.focusedBorderColor ?? AmyalColors.primary, width: 1.5),
           ),
 
           enabledBorder : OutlineInputBorder(
-            borderRadius: BorderRadius.circular(widget.borderRadius ?? Dimensions.radiusSizeSmall),
-            borderSide: BorderSide(color: widget.enabledBorderColor ?? Theme.of(context).textTheme.bodyLarge!.color!.withValues(alpha: 0.7), width: 1,
+            borderRadius: BorderRadius.circular(widget.borderRadius ?? 14),
+            borderSide: BorderSide(
+              color: widget.enabledBorderColor ?? Colors.transparent, width: 1.5,
             ),
           ),
 
           errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(widget.borderRadius ?? Dimensions.radiusSizeSmall),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.error.withValues(alpha:0.5), width: 1,
-            ),
+            borderRadius: BorderRadius.circular(widget.borderRadius ?? 14),
+            borderSide: const BorderSide(color: AmyalColors.red, width: 1.5),
           ),
 
           focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(widget.borderRadius ?? Dimensions.radiusSizeSmall),
-            borderSide: BorderSide(color: Theme.of(context).colorScheme.error.withValues(alpha:0.5), width: 1,
-            ),
+            borderRadius: BorderRadius.circular(widget.borderRadius ?? 14),
+            borderSide: const BorderSide(color: AmyalColors.red, width: 1.5),
           ),
+
+          filled: true,
+
+          fillColor: widget.fillColor ?? AmialFormTokens.fieldFill,
 
           hintText: widget.hintText,
           hintStyle: rubikRegular.copyWith(

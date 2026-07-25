@@ -69,9 +69,6 @@ class _MerchantStaffPerformanceScreenState extends State<MerchantStaffPerformanc
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('أداء الموظفين'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
       body: Column(children: [
         // مبدّل الفترة

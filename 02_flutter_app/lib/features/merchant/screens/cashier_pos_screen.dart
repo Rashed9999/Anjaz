@@ -227,8 +227,6 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('المبيعات'),
         actions: [
           // مؤشّر المبيعات دون اتصال (يظهر عند وجود معلّق)

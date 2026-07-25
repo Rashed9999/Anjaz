@@ -240,8 +240,6 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('بيع صيدلية'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           // زر مسح الباركود السريع
           IconButton(

@@ -34,8 +34,6 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('الصيدلية'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: RefreshIndicator(
         onRefresh: () async { await c.loadPharmacy(); await c.loadDashboard(); },
@@ -222,8 +220,6 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('المنتجات'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: Icon(_lowStockOnly ? Icons.filter_alt : Icons.filter_alt_outlined),
@@ -513,8 +509,6 @@ class _PharmacyCustomersScreenState extends State<PharmacyCustomersScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('العملاء/المرضى'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AmyalColors.primary,
@@ -686,8 +680,6 @@ class _PharmacyAlertsScreenState extends State<PharmacyAlertsScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('تنبيهات المخزون'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -808,8 +800,6 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('سجل المبيعات'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         if (c.isLoading.value && c.sales.isEmpty) return const Center(child: CircularProgressIndicator());

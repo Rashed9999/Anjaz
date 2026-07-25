@@ -14,6 +14,31 @@ ThemeData light = ThemeData(
   primaryColor:  _primaryColor,
   primaryColorLight: const Color(0xFF1D4FB8),
   scaffoldBackgroundColor: AmyalColors.background,
+
+  // AMIAL-DS-003 — سمة شريط العنوان: مصدر واحد لـ134 شاشة.
+  //
+  // لم تكن هناك appBarTheme إطلاقاً، فكانت كل شاشة تُلوّن شريطها بنفسها
+  // (`backgroundColor: primary` + `foregroundColor: white`) — 141 ملفاً
+  // يكرّر نفس السطرين. النتيجة شريط أزرق صلب يبتلع أعلى كل شاشة، وهو
+  // التوقيع البصري الأوضح لقالب 6cash.
+  //
+  // المحافظ المهنية تجعل الشريط جزءاً من الصفحة لا كتلة فوقها: نفس خلفية
+  // الصفحة، عنوان داكن، بلا ظلّ. تغييره لاحقاً = هذا الموضع وحده.
+  appBarTheme: const AppBarTheme(
+    backgroundColor: AmyalColors.background,
+    foregroundColor: Color(0xFF1A2433),
+    surfaceTintColor: Colors.transparent,
+    elevation: 0,
+    scrolledUnderElevation: 0,
+    centerTitle: true,
+    titleTextStyle: TextStyle(
+      fontFamily: 'Rubik',
+      fontSize: 16,
+      fontWeight: FontWeight.bold,
+      color: Color(0xFF1A2433),
+    ),
+    iconTheme: IconThemeData(color: Color(0xFF1A2433), size: 22),
+  ),
   // highlightColor: const Color(0xFF003E47),
   cardColor: const Color(0xFFFAFAFA),
   shadowColor: Colors.grey[300],

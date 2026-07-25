@@ -3,7 +3,6 @@ import 'package:amyal_pay/common/widgets/custom_button_widget.dart';
 import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amyal_pay/util/dimensions.dart';
 import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_loader_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_password_field_widget.dart';
 import 'package:flutter/material.dart';
@@ -34,9 +33,6 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
           child: Scaffold(
               appBar: AppBar(
                 title: Text('pin_change'.tr),
-                backgroundColor: AmyalColors.primary,
-                foregroundColor: Colors.white,
-                elevation: 0,
               ),
               body: Padding(
                 padding: const EdgeInsets.all(Dimensions.paddingSizeLarge),

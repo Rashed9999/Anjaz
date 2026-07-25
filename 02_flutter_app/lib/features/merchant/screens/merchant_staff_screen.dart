@@ -136,8 +136,6 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('الموظفون'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.bar_chart),

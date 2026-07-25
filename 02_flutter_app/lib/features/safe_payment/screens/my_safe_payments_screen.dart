@@ -40,8 +40,6 @@ class _MySafePaymentsScreenState extends State<MySafePaymentsScreen>
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('الدفع الآمن'),
         bottom: TabBar(
           controller: _tabController,

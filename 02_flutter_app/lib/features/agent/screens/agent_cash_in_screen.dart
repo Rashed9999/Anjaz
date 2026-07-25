@@ -170,8 +170,6 @@ class _AgentCashInScreenState extends State<AgentCashInScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('إيداع للعميل'),
       ),
       body: SingleChildScrollView(

@@ -145,8 +145,6 @@ class _AmialQrCollectScreenState extends State<AmialQrCollectScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: Text(widget.title),
       ),
       body: Center(

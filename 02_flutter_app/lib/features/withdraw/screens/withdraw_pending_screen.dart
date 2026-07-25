@@ -186,8 +186,6 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('تفاصيل السحب'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Get.back(),

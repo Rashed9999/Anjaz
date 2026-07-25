@@ -4,7 +4,6 @@ import 'package:amyal_pay/features/kyc_verification/controllers/kyc_verify_contr
 import 'package:amyal_pay/features/kyc_verification/widgets/dotted_border_widget.dart';
 import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_button_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_drop_down_button_widget.dart';
 import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
@@ -45,9 +44,6 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('kyc_verification'.tr),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: Dimensions.fontSizeDefault, vertical: Dimensions.paddingSizeLarge),

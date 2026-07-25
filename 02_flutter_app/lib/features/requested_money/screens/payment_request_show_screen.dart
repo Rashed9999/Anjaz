@@ -62,8 +62,6 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('تم إنشاء الطلب'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         final data = c.currentRequest.value;

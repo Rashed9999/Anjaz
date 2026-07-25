@@ -62,8 +62,6 @@ class _MyCreditsScreenState extends State<MyCreditsScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('فواتيري الآجلة'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: RefreshIndicator(
         onRefresh: _load,
@@ -255,8 +253,6 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: Text(widget.merchantName),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

@@ -41,8 +41,6 @@ class _AgentFloatScreenState extends State<AgentFloatScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('سيولتي'),
       ),
       body: _loading

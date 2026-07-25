@@ -185,8 +185,6 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: Obx(() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(c.station.value?['station_name'] ?? 'كاشير المحطة',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),

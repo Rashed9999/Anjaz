@@ -98,7 +98,6 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
         appBar: AppBar(
           backgroundColor: AmyalColors.yellow,
           foregroundColor: AmyalColors.primary,
-          elevation: 0,
           automaticallyImplyLeading: !widget.mandatory,
           title: const Text(
             'سياسة الاستخدام',

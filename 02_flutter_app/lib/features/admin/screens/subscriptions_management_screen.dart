@@ -42,8 +42,6 @@ class _SMState extends State<SubscriptionsManagementScreen>
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('إدارة الاشتراكات'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabs,
           isScrollable: true,

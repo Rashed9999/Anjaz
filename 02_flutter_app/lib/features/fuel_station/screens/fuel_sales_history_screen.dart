@@ -36,8 +36,6 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('سجل المبيعات'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Column(children: [
         // ====== فلتر ======

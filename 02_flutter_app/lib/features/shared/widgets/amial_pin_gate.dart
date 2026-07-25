@@ -66,8 +66,6 @@ class _AmialPinInputScreenState extends State<_AmialPinInputScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: Text(widget.title),
         leading: IconButton(
           icon: const Icon(Icons.close),

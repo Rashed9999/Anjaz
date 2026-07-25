@@ -45,8 +45,6 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('تقارير الربحية'),
         actions: [
           IconButton(icon: const Icon(Icons.share), onPressed: _share),

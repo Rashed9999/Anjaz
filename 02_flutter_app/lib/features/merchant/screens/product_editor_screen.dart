@@ -167,8 +167,6 @@ class _ProductEditorScreenState extends State<ProductEditorScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: Text(_isEdit ? 'تعديل منتج' : 'إضافة منتج جديد'),
       ),
       bottomNavigationBar: SafeArea(

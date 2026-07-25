@@ -13,7 +13,6 @@ import 'package:amyal_pay/helper/price_converter_helper.dart';
 import 'package:amyal_pay/helper/transaction_type.dart';
 import 'package:amyal_pay/util/dimensions.dart';
 import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
@@ -56,9 +55,6 @@ class TransactionConfirmationScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(transactionType!.tr),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
 
       body: SingleChildScrollView(

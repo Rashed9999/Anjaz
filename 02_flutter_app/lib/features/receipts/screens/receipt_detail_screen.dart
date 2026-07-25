@@ -118,8 +118,6 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('تفاصيل الإيصال'),
         actions: [
           IconButton(

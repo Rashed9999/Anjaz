@@ -25,8 +25,6 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('تبرعاتي'),
       ),
       body: RefreshIndicator(

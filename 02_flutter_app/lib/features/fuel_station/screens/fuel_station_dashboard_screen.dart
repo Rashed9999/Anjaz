@@ -69,8 +69,6 @@ class _FuelStationDashboardScreenState extends State<FuelStationDashboardScreen>
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('محطة الوقود'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),

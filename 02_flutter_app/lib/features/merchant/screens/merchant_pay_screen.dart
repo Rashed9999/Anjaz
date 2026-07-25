@@ -209,8 +209,6 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('دفع تاجر'),
       ),
       body: SingleChildScrollView(

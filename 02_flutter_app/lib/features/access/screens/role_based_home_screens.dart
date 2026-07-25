@@ -51,8 +51,6 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: Obx(() => Text(access.userName.value ?? 'مرحباً')),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.menu),
@@ -112,8 +110,6 @@ class MerchantRetailHomeScreen extends StatelessWidget {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: Obx(() => Text(access.userName.value ?? 'متجري')),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(icon: const Icon(Icons.menu),
               onPressed: () => Get.to(() => const MyServicesScreen())),
@@ -286,8 +282,6 @@ class AgentHomeScreen extends StatelessWidget {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: Obx(() => Text('الوكيل: ${access.userName.value ?? ''}')),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(icon: const Icon(Icons.menu),
               onPressed: () => Get.to(() => const MyServicesScreen())),

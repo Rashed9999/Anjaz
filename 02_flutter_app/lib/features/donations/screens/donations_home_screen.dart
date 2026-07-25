@@ -34,8 +34,6 @@ class _DonationsHomeScreenState extends State<DonationsHomeScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('إحسان — التبرعات'),
         actions: [
           IconButton(

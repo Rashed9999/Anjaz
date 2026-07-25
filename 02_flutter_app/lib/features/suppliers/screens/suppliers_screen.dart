@@ -104,8 +104,6 @@ class _SuppliersScreenState extends State<SuppliersScreen>
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('إدارة الموردين'),
         bottom: TabBar(
           controller: _tabs,

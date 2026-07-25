@@ -90,8 +90,6 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
         backgroundColor: AmyalColors.background,
         appBar: AppBar(
           title: const Text('نوع النشاط التجاري'),
-          backgroundColor: AmyalColors.primary,
-          foregroundColor: Colors.white,
           automaticallyImplyLeading: !widget.mandatory,
         ),
         body: SingleChildScrollView(

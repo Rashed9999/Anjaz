@@ -124,8 +124,6 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('تدقيق المخزون'),
       ),
       bottomNavigationBar: SafeArea(

@@ -114,8 +114,6 @@ class _QrCodeDownloadOrShareScreenState
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('رمز الاستلام الخاص بي'),
       ),
       body: SingleChildScrollView(

@@ -2,7 +2,6 @@ import 'package:country_code_picker/country_code_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:phone_numbers_parser/phone_numbers_parser.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_large_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_logo_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_text_field_widget.dart';
@@ -41,9 +40,6 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('forget_pin'.tr),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
       body: Column(children: [
 

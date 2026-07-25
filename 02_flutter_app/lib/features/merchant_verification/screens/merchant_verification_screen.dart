@@ -122,8 +122,6 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('توثيق المتجر'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         if (c.isLoading.value && c.status.value == null) {

@@ -114,8 +114,6 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('تفاصيل الطلب'),
       ),
       body: Obx(() {

@@ -80,8 +80,6 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('طلب أموال'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

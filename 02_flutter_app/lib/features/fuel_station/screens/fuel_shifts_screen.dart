@@ -31,8 +31,6 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('النوبات والعجز/الفائض'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Obx(() {
         if (c.isLoading.value && c.currentShift.value == null && c.shifts.isEmpty) {

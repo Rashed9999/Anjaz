@@ -175,8 +175,6 @@ class _FuelQrCollectScreenState extends State<FuelQrCollectScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('استلام الدفع — QR'),
       ),
       body: Center(

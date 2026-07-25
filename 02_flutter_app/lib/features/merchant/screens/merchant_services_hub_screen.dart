@@ -37,9 +37,6 @@ class MerchantServicesHubScreen extends StatelessWidget {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('خدمات التاجر'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
       ),
       body: Obx(() {
         final planLabel = access.subscriptionPlanLabel.value ?? _planName(access.subscriptionPlan.value);

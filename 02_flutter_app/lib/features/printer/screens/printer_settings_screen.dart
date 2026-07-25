@@ -88,9 +88,6 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('إعدادات الطابعة'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
         actions: [
           IconButton(onPressed: _scanning ? null : _refresh, icon: const Icon(Icons.refresh), tooltip: 'تحديث'),
         ],

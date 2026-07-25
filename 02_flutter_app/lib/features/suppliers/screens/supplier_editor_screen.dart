@@ -73,8 +73,6 @@ class _SupplierEditorScreenState extends State<SupplierEditorScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('إضافة مورد جديد'),
       ),
       bottomNavigationBar: SafeArea(

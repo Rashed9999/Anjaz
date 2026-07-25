@@ -6,7 +6,6 @@ import 'package:amyal_pay/helper/route_helper.dart';
 import 'package:amyal_pay/util/app_constants.dart';
 import 'package:amyal_pay/util/dimensions.dart';
 import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/common/widgets/custom_logo_widget.dart';
 import 'package:amyal_pay/common/widgets/custom_small_button_widget.dart';
 import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
@@ -42,9 +41,6 @@ class _ChooseLanguageScreenState extends State<ChooseLanguageScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('language'.tr),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
         automaticallyImplyLeading: Navigator.canPop(Get.context!),
       ),
       body: GetBuilder<LocalizationController>(

@@ -49,10 +49,7 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('الإيصالات'),
-        elevation: 0,
       ),
       body: RefreshIndicator(
         onRefresh: () => Get.find<ReceiptsController>().loadReceipts(refresh: true),

@@ -80,8 +80,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('إدارة المخزون'),
         actions: [
           // AMIAL-AUDIT-001: جرد المخزون

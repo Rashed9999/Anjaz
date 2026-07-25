@@ -81,8 +81,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         backgroundColor: AmyalColors.background,
         appBar: AppBar(
           title: const Text('تعديل بياناتي'),
-          backgroundColor: AmyalColors.primary,
-          foregroundColor: Colors.white,
         ),
         body: Form(
           key: _formKey,

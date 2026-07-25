@@ -103,8 +103,6 @@ class _MerchantExcelExportScreenState extends State<MerchantExcelExportScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('تصدير Excel'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
       ),
       body: Center(
         child: Padding(

@@ -85,8 +85,6 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: Text(ro ? 'تفاصيل أمر الشراء' : 'استلام بضاعة'),
       ),
       bottomNavigationBar: ro

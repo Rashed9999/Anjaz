@@ -34,8 +34,6 @@ class _MyUsageScreenState extends State<MyUsageScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('استخدامي'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.workspace_premium),

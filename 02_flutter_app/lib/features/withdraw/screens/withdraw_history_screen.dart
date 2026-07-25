@@ -89,8 +89,6 @@ class _WithdrawHistoryScreenState extends State<WithdrawHistoryScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: const Text('سجل طلبات السحب'),
       ),
       body: Obx(() {

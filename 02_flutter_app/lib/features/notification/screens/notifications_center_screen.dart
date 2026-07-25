@@ -39,8 +39,6 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
         title: const Text('الإشعارات'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         actions: [
           Obx(() => c.unreadCount.value > 0
               ? TextButton.icon(

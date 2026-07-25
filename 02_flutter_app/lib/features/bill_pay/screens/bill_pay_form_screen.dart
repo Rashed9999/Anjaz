@@ -91,8 +91,6 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
     return Scaffold(
       backgroundColor: AmyalColors.background,
       appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
         title: Text(widget.service.displayNameAr),
       ),
       body: Obx(() {
