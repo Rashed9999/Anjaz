@@ -16,6 +16,7 @@ import 'package:amyal_pay/features/transaction_money/controllers/contact_control
 import 'package:amyal_pay/features/transaction_money/screens/amial_send_money_screen.dart';
 import 'package:amyal_pay/features/reports/screens/amial_reports_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_pay_screen.dart';
+import 'package:amyal_pay/common/widgets/amial_pattern_background.dart';
 
 /// AMIAL-CUSTOMER-HOME-002 — الرئيسية بتصميم «المحفظة».
 ///
@@ -114,9 +115,12 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // AMIAL-PATTERN-001: نقشة هوية خفيفة خلف الترويسة وبطاقة الرصيد —
+    // كانت الخلفية لوناً مسطّحاً بلا أي عمق أو انتماء بصري.
     return Scaffold(
       backgroundColor: AmyalColors.background,
-      body: RefreshIndicator(
+      body: AmialPatternBackground(
+        child: RefreshIndicator(
         color: AmyalColors.primary,
         onRefresh: _load,
         child: ListView(
@@ -146,6 +150,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

@@ -56,22 +56,37 @@ class GeneratePdfReceiptJob implements ShouldQueue
         }
 
         try {
-            // فحص أن المكتبة موجودة
-            if (!class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
-                Log::error('GeneratePdfReceiptJob: barryvdh/laravel-dompdf not installed');
-                $receipt->update(['status' => 'pdf_failed']);
-                return;
-            }
+            // AMIAL-NOTICE-001: التصيير عبر mPDF لا DomPDF.
+            //
+            // DomPDF لا يدعم تشكيل العربية ولا اتجاه النصّ، فتخرج الحروف
+            // مقطّعة ومعكوسة — وهو سبب «اللغة العربية معكوسة» في الإشعارات
+            // المولَّدة تلقائياً، بينما كانت الإشعارات المطلوبة عند الطلب
+            // سليمة لأنها تمرّ بـ ArabicPdf أصلاً. الآن المساران واحد.
+            $notice = app(\App\Services\ReceiptNoticeService::class);
+            $owner = $receipt->user;
 
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('receipts.pdf', [
+            $html = View::make('receipts.notice', [
                 'receipt' => $receipt,
-                'user' => $receipt->user,
-                'counterparty' => $receipt->counterparty,
-                'qrUrl' => $this->buildVerificationUrl($receipt->verification_code),
-            ])->setPaper('a5', 'portrait');
+                'title' => $notice->title($receipt),
+                'opening' => $notice->opening($receipt),
+                'narrative' => $notice->narrative($receipt),
+                'amountInWords' => $notice->amountInWords($receipt),
+                'amountFormatted' => \App\CentralLogics\Helpers::money($receipt->amount),
+                'feeFormatted' => \App\CentralLogics\Helpers::money($receipt->fee) . ' ر.ي',
+                'totalFormatted' => \App\CentralLogics\Helpers::money($receipt->net_amount) . ' ر.ي',
+                'ownerName' => $owner
+                    ? trim(($owner->f_name ?? '') . ' ' . ($owner->l_name ?? ''))
+                    : '',
+                'accountNumber' => $owner->account_number ?? $owner->unique_id ?? '',
+                'logoData' => $this->logoDataUri(),
+                'supportPhone' => config('amial.support_phone', ''),
+                'supportSite' => config('amial.support_site', ''),
+            ])->render();
+
+            $bytes = \App\Support\ArabicPdf::render($html, ['format' => 'A4', 'margin' => 12]);
 
             $path = $this->buildStoragePath($receipt);
-            Storage::disk('local')->put($path, $pdf->output());
+            Storage::disk('local')->put($path, $bytes);
 
             $receipt->update([
                 'pdf_storage_path' => $path,
@@ -108,6 +123,23 @@ class GeneratePdfReceiptJob implements ShouldQueue
     /**
      * مسار التخزين: receipts/2026/05/16/AMY-20260516-AB12CD34.pdf
      */
+    /**
+     * شعار أميال كـ data URI — mPDF لا يقرأ مسارات نسبية من قالب مُصيَّر
+     * خارج سياق HTTP. نُعيد سلسلة فارغة إن غاب الملف فلا ينكسر الإشعار.
+     */
+    private function logoDataUri(): string
+    {
+        foreach (['branding/logo.png', 'logo.png', 'images/logo.png'] as $rel) {
+            $abs = public_path($rel);
+            if (is_file($abs) && is_readable($abs)) {
+                $mime = str_ends_with($abs, '.png') ? 'image/png' : 'image/jpeg';
+                return 'data:' . $mime . ';base64,' . base64_encode((string) file_get_contents($abs));
+            }
+        }
+
+        return '';
+    }
+
     private function buildStoragePath(Receipt $receipt): string
     {
         $date = $receipt->issued_at ?? $receipt->created_at;
