@@ -209,7 +209,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     itemBuilder: (context, index) {
                       return TransactionHistoryWidget(transactions: transactionList[index]);
                     },
-                  ) : const NoDataFoundWidget(fromHome: false),
+                  ) : NoDataFoundWidget(
+                    fromHome: false,
+                    icon: Icons.receipt_long_rounded,
+                    title: 'لا توجد عمليات بعد',
+                    subtitle: 'ستظهر هنا كل تحويلاتك ومدفوعاتك فور تنفيذها.',
+                  ),
                 ) : const HistoryShimmerWidget();
               }),
             ),

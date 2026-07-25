@@ -3,8 +3,8 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/common/widgets/custom_text_field_widget.dart';
 import 'package:amyal_pay/common/widgets/text_field_title.dart';
 import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
 import 'package:amyal_pay/util/styles.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 
 class PinFieldWidget extends StatefulWidget {
   final TextEditingController pinController;
@@ -37,38 +37,51 @@ class _PinFieldWidgetState extends State<PinFieldWidget> {
         width: double.infinity,
         child: SingleChildScrollView(child: Column( crossAxisAlignment: CrossAxisAlignment.start , children: [
 
-          Center(child: Image.asset(Images.createPinIcon, height: 60,)),
+          // AMIAL-PIN-UI-001: كانت أيقونة PNG بقفل أخضر — لون خارج هوية
+          // البراند (أزرق/أصفر). استبدلناها بشارة مبنيّة بالكود بألوان البراند
+          // فلا تتعارض الألوان ولا تعتمد على أصل صورة.
+          Center(
+            child: Container(
+              width: 76, height: 76,
+              decoration: BoxDecoration(
+                color: AmyalColors.primary.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.lock_outline_rounded,
+                  size: 36, color: AmyalColors.primary),
+            ),
+          ),
 
           const SizedBox(height: Dimensions.paddingSizeDefault),
 
           Center(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Dimensions.radiusSizeExtraExtraLarge),
+              padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeSmall),
               child: Text(
                 widget.isRegistration ?  'set_your_pin'.tr : 'set_new_4_digit_pin'.tr,
                 textAlign: TextAlign.center,
                 style: rubikMedium.copyWith(
-                  color: Theme.of(context).primaryColor,
-                  fontSize: Dimensions.fontSizeExtraOverLarge,
+                  color: AmyalColors.primary,
+                  fontSize: Dimensions.fontSizeExtraLarge,
                 ),
               ),
             ),
           ),
-          const SizedBox(height: Dimensions.paddingSizeSuperExtraSmall),
+          const SizedBox(height: Dimensions.paddingSizeExtraSmall),
           Center(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: Dimensions.radiusSizeExtraExtraLarge),
+              padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeSmall),
               child: Text(
                 "create_4_digit_pin_for_for_future_login".tr,
                 textAlign: TextAlign.center,
                 style: rubikLight.copyWith(
-                  color: Theme.of(context).textTheme.titleLarge!.color,
+                  color: AmyalColors.textSecondary,
                   fontSize: Dimensions.fontSizeDefault,
                 ),
               ),
             ),
           ),
-          const SizedBox(height: Dimensions.paddingSizeExtraOverLarge),
+          const SizedBox(height: Dimensions.paddingSizeExtraLarge),
 
           TextFieldTitle(
             title: "pin".tr,

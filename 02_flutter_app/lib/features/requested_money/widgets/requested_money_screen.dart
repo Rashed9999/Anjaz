@@ -127,7 +127,11 @@ class _RequestedMoneyScreenState extends State<RequestedMoneyScreen> {
                   itemList: itemList,
                 );
               }),
-        ): const NoDataFoundWidget() : RequestedMoneyShimmer(isHome: widget.isHome),
+        ): const NoDataFoundWidget(
+          icon: Icons.request_page_outlined,
+          title: 'لا توجد طلبات',
+          subtitle: 'لم يصلك أو تُرسل أي طلب أموال حتى الآن.',
+        ) : RequestedMoneyShimmer(isHome: widget.isHome),
 
 
       ]);

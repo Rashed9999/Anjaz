@@ -285,7 +285,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
                 textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: color)),
             const SizedBox(height: 2),
-            Text(plan['is_free'] == true ? 'مجاني' : '$price ر.ي',
+            Text(plan['is_free'] == true ? _freePriceLabel(plan) : '$price ر.ي',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             if (plan['is_free'] != true)
               Text(_annual ? 'سنوياً' : 'شهرياً',
@@ -380,7 +380,11 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
     final limits = (plan['limits'] ?? {}) as Map;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      // AMIAL-PLANS-UI-001: كانت الهوامش 8 مع ظلّ عريض 16 وviewportFraction
+      // 0.85، فتتداخل ظلال البطاقات المجاورة وتبدو متراكبة. هامش أوسع وظلّ
+      // أخفض اتجاهه للأسفل يجعل البطاقة المجاورة «إطلالة» مقصودة لا تشويشاً.
+      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -388,7 +392,13 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
           color: isCurrent ? AmyalColors.yellow : (isSuggested ? color : Colors.transparent),
           width: isCurrent ? 3 : (isSuggested ? 2 : 0),
         ),
-        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.15), blurRadius: 16)],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.07),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(children: [
         // Header ملوّن
@@ -405,7 +415,8 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
                 style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             if (plan['is_free'] == true) ...[
-              const Text('مجاني', style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+              Text(_freePriceLabel(plan),
+                  style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold)),
               const Text('للأبد', style: TextStyle(color: Colors.white70, fontSize: 12)),
             ] else ...[
               Row(mainAxisAlignment: MainAxisAlignment.center,
@@ -495,6 +506,13 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
         ),
       ]),
     );
+  }
+
+  /// AMIAL-PLANS-UI-001: اسم الباقة المجانية يحمل كلمة «مجاني» أصلاً، فكان
+  /// السعر يكرّرها تحته مباشرةً («مجاني / مجاني»). نعرض «بلا رسوم» عندئذٍ.
+  String _freePriceLabel(Map<String, dynamic> plan) {
+    final label = plan['label']?.toString() ?? '';
+    return label.contains('مجان') ? 'بلا رسوم' : 'مجاني';
   }
 
   String _limitText(dynamic v) {

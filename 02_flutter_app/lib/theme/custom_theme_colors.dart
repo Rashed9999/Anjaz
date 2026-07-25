@@ -31,7 +31,9 @@ class CustomThemeColors extends ThemeExtension<CustomThemeColors> {
   // Predefined themes for light and dark modes
   factory CustomThemeColors.light() => const CustomThemeColors(
     success: Color(0xFF9BE4CA),
-    accept: Color(0xFF95CD41),
+    // AMIAL-COLOR-001: كان أخضر ليموني (0xFF95CD41) موروثاً من القالب —
+    // خارج هوية أميال ويبدو «نيّئاً» بجانب الأحمر في نوافذ التأكيد.
+    accept: Color(0xFF16A34A),
     addMoney: Color(0xFFACD9B3),
     cashOut: Color(0xFFFFCB66),
     requestMoney: Color(0xFFF6BDE9),

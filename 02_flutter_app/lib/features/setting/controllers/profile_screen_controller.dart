@@ -14,6 +14,7 @@ import 'package:amyal_pay/helper/route_helper.dart';
 import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
 import 'package:amyal_pay/common/widgets/custom_dialog_widget.dart';
 import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 
 
 class ProfileController extends GetxController implements GetxService {
@@ -185,6 +186,10 @@ class ProfileController extends GetxController implements GetxService {
           onTapFalseText: 'clear_logout'.tr,
           onTapTrueText: 'logout'.tr,
           isFailed: true,
+          // AMIAL-DIALOG-001: كلا الخيارين هنا «خروج» — الأخضر كان يوحي بأن
+          // أحدهما إجراء آمن. أزرق البراند للخروج العادي، وأحمر لمسح البيانات.
+          trueButtonColor: AmyalColors.primary,
+          falseButtonColor: AmyalColors.red,
           onTapFalse: (){
             Get.find<AuthController>().removeBiometricPin().then((value) async{
               Get.find<SplashController>().removeSharedData();

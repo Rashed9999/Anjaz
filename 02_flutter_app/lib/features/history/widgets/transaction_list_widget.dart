@@ -30,7 +30,12 @@ class TransactionListWidget extends StatelessWidget {
 
             return TransactionHistoryWidget(transactions: transactionList[index]);
             },
-        ),) : NoDataFoundWidget(fromHome: isHome) : const HistoryShimmerWidget(),
+        ),) : NoDataFoundWidget(
+          fromHome: isHome,
+          icon: Icons.receipt_long_rounded,
+          title: 'لا توجد عمليات بعد',
+          subtitle: 'ستظهر هنا كل تحويلاتك ومدفوعاتك فور تنفيذها.',
+        ) : const HistoryShimmerWidget(),
 
         transactionHistoryController.isLoading ? Center(child: Padding(
           padding: const EdgeInsets.all(Dimensions.paddingSizeDefault),

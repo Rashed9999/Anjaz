@@ -91,7 +91,11 @@ class _TransactionLimitScreenState extends State<TransactionLimitScreen> with Ti
 
               ]
           ),
-        ) : const NoDataFoundWidget(),
+        ) : const NoDataFoundWidget(
+          icon: Icons.speed_rounded,
+          title: 'لم تُضبط حدود بعد',
+          subtitle: 'ستظهر هنا حدودك اليومية والشهرية فور اعتمادها من الإدارة.',
+        ),
       ),
     );
   }

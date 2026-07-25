@@ -72,7 +72,11 @@ class _FavoriteNumberScreenState extends State<FavoriteNumberScreen> {
 
 
                   if(favNumberController.favouriteListModel != null && favNumberController.favouriteListModel?.total == 0)
-                    NoDataFoundWidget(title: 'no_contact_found'.tr),
+                    NoDataFoundWidget(
+                      icon: Icons.star_border_rounded,
+                      title: 'no_contact_found'.tr,
+                      subtitle: 'أضف أرقامك المتكرّرة لتحويل أسرع دون كتابة الرقم كل مرة.',
+                    ),
 
 
                   Expanded(child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min,children: [

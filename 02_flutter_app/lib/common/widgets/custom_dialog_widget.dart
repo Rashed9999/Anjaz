@@ -4,6 +4,7 @@ import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amyal_pay/helper/custom_extension_helper.dart';
 import 'package:amyal_pay/util/dimensions.dart';
 import 'package:amyal_pay/util/styles.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 
 import 'custom_button_widget.dart';
 
@@ -21,6 +22,12 @@ class CustomDialogWidget extends StatelessWidget {
   final bool bigTitle;
   final bool isSingleButton;
 
+  /// AMIAL-DIALOG-001: تلوين الأزرار حسب *نيّة* الإجراء لا حسب موضعه.
+  /// افتراضياً: الأيسر أحمر (رفض) والأيمن أخضر (قبول) — لكن في نوافذ مثل
+  /// «تسجيل الخروج» كلا الخيارين هدّام، فالأخضر مضلِّل. مرِّر لوناً صريحاً.
+  final Color? trueButtonColor;
+  final Color? falseButtonColor;
+
   const CustomDialogWidget({super.key,
     this.isFailed = false,
     this.rotateAngle = 0,
@@ -33,7 +40,9 @@ class CustomDialogWidget extends StatelessWidget {
     this.onTapFalseText,
     this.bigTitle = false,
     this.isSingleButton = false,
-    this.descriptionWidget
+    this.descriptionWidget,
+    this.trueButtonColor,
+    this.falseButtonColor,
   });
 
   @override
@@ -73,7 +82,7 @@ class CustomDialogWidget extends StatelessWidget {
                 visible: isSingleButton,
                 child:  Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeLarge),
-                  child: CustomButtonWidget(buttonText: 'ok'.tr , onTap: () => Navigator.pop(context),color: Colors.green,),
+                  child: CustomButtonWidget(buttonText: 'ok'.tr , onTap: () => Navigator.pop(context), color: AmyalColors.primary),
                 ),
               ),
 
@@ -86,14 +95,16 @@ class CustomDialogWidget extends StatelessWidget {
 
                         Expanded(child: CustomButtonWidget(
                           buttonText: onTapFalseText ?? 'no'.tr,
-                          color: Theme.of(context).colorScheme.error.withValues(alpha:0.7),
+                          color: falseButtonColor ??
+                              Theme.of(context).colorScheme.error.withValues(alpha: 0.7),
                           onTap: onTapFalse,
                         )),
                         const SizedBox(width: 10,),
 
                         Expanded(child: CustomButtonWidget(
                           buttonText: onTapTrueText ?? 'yes'.tr,
-                          onTap: onTapTrue, color: context.customThemeColors.accept,
+                          onTap: onTapTrue,
+                          color: trueButtonColor ?? context.customThemeColors.accept,
                         )),
                       ],
                     ),

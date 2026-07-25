@@ -145,8 +145,10 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                     ],
                   ))),
 
+                  // AMIAL-PIN-UI-001: كان الزرّ محبوساً في 45px فيُقصّ نصّه
+                  // العربي؛ 52px هو ارتفاع الزرّ الموحّد في التطبيق.
                   SizedBox(
-                    height: Dimensions.paddingSizeOverLarge,
+                    height: 52,
                     child: CustomButtonWidget(
                       buttonText: 'change_pin_button'.tr,
                       buttonTextStyle: rubikMedium.copyWith(color: Theme.of(context).primaryColor),
