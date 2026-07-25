@@ -12,8 +12,8 @@ import 'package:amyal_pay/features/language/widgets/amial_language_switch.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/util/images.dart';
 import 'package:amyal_pay/common/widgets/amial_button.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:amyal_pay/util/secure_screen.dart';
+import 'package:amyal_pay/common/widgets/amial_build_stamp.dart';
 
 /// AMIAL-UNIFIED-AUTH-002 — شاشة دخول واحدة بقائمة نوع الحساب.
 ///
@@ -356,7 +356,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             const SizedBox(height: 18),
             _quickLinks(),
             const SizedBox(height: 12),
-            const Center(child: _VersionStamp()),
+            const Center(child: AmialBuildStamp()),
           ],
         ),
       ),
@@ -1065,46 +1065,6 @@ class _LastLoginNote extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// AMIAL-BUILD-STAMP — علامة الإصدار تُقرأ من بيانات البناء.
-class _VersionStamp extends StatefulWidget {
-  const _VersionStamp();
-
-  @override
-  State<_VersionStamp> createState() => _VersionStampState();
-}
-
-class _VersionStampState extends State<_VersionStamp> {
-  String _label = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final info = await PackageInfo.fromPlatform();
-      if (!mounted) return;
-      setState(() => _label = 'الإصدار ${info.version} (${info.buildNumber})');
-    } catch (_) {
-      if (mounted) setState(() => _label = '');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_label.isEmpty) return const SizedBox(height: 14);
-    return Text(
-      _label,
-      style: TextStyle(
-          color: Colors.white.withValues(alpha: 0.6),
-          fontSize: 10.5,
-          fontWeight: FontWeight.w500),
     );
   }
 }

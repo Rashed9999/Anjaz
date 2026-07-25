@@ -12,6 +12,19 @@ workflows:
       flutter: stable
       java: 17
     scripts:
+      # AMIAL-BUILD-PROOF-001: أكثر سؤال تكرّر بعد كل بناء هو «أين التعديلات؟».
+      # السبب في كل مرة كان أن الـ APK بُني من التزام أقدم من العمل المدفوع.
+      # هذه الخطوة تطبع الفرع والالتزام ورقم الإصدار في أعلى سجلّ البناء،
+      # فيُحسم السؤال من السجلّ قبل تنزيل الملف — بلا تخمين.
+      - name: بصمة المصدر (فرع + التزام + إصدار)
+        script: |
+          echo "======== بصمة بناء أميال باي ========"
+          echo "الفرع    : $(git rev-parse --abbrev-ref HEAD)"
+          echo "الالتزام : $(git rev-parse --short HEAD)"
+          echo "التاريخ  : $(git log -1 --format=%cd --date=iso)"
+          echo "الرسالة  : $(git log -1 --format=%s)"
+          echo "الإصدار  : $(grep '^version:' 02_flutter_app/pubspec.yaml)"
+          echo "===================================="
       - name: جلب الحزم
         script: |
           cd 02_flutter_app

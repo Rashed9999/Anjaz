@@ -24,6 +24,7 @@ import 'package:amyal_pay/features/setting/widgets/user_info_widget.dart';
 import 'package:amyal_pay/features/requested_money/screens/requested_money_list_screen.dart';
 import 'package:amyal_pay/features/setting/screens/transaction_limit_screen.dart';
 import 'package:amyal_pay/features/language/widgets/amial_language_switch.dart';
+import 'package:amyal_pay/common/widgets/amial_build_stamp.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({ super.key });
@@ -320,7 +321,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     },
                   ),
                   const SizedBox(height: Dimensions.paddingSizeLarge),
-                ],)
+                ],),
+
+                // AMIAL-BUILD-STAMP-002: رقم النسخة المشغَّلة فعلاً على هذا
+                // الجهاز. شاشة الدخول محميّة بـ FLAG_SECURE فلا تُصوَّر —
+                // فهذا هو المكان الوحيد الذي يمكن تصويره لإثبات أنّ البناء
+                // يحمل العمل المدفوع.
+                const AmialBuildStamp(),
+                const SizedBox(height: Dimensions.paddingSizeLarge),
               ],
             ),
           ),
