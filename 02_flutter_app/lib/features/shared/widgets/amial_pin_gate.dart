@@ -201,21 +201,22 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AmyalColors.background,
-      appBar: AppBar(
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-        title: Text(widget.title),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Get.back(result: false),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+      // AMIAL-PIN-UI-002: بلا AppBar ملوّن — شاشة قفل، لا صفحة محتوى.
+      body: SafeArea(
+        child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 24),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                icon: const Icon(Icons.close_rounded,
+                    color: AmyalColors.textSecondary),
+                onPressed: () => Get.back(result: false),
+              ),
+            ),
+            const SizedBox(height: 4),
             Container(
               height: 84,
               width: 84,
@@ -227,35 +228,57 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
               child: const Icon(Icons.lock_outline_rounded,
                   color: AmyalColors.primary, size: 40),
             ),
-            const SizedBox(height: 20),
-            const Text(
-              'أدخل رمز المعاملات (PIN) للمتابعة',
+            const SizedBox(height: 18),
+            Text(
+              widget.title,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 15, color: Color(0xFF5F6B7C)),
-            ),
-            const SizedBox(height: 24),
-            TextField(
-              controller: _pin,
-              // AMIAL-DESIGN-29/30: الإدخال عبر لوحة الأرقام (بلا كيبورد نظام)
-              readOnly: true,
-              obscureText: true,
-              maxLength: 4,
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               style: const TextStyle(
-                  fontSize: 28, letterSpacing: 18, fontWeight: FontWeight.bold),
-              decoration: InputDecoration(
-                counterText: '',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onSubmitted: (_) => _verify(),
+                  fontSize: 19,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A2433)),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 6),
+            const Text(
+              'أدخل رمزك السري للمتابعة',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13.5, color: AmyalColors.textSecondary),
+            ),
+            const SizedBox(height: 26),
+
+            // AMIAL-PIN-UI-002: أربع نقاط تمتلئ مع الإدخال.
+            // كان هنا TextField للقراءة فقط بتباعد حروف 18 داخل إطار —
+            // فيظهر فارغاً كصندوق أبيض ضخم بلا معنى قبل الكتابة.
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: _pin,
+              builder: (context, value, _) {
+                final n = value.text.length;
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(4, (i) {
+                    final filled = i < n;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      width: filled ? 18 : 16,
+                      height: filled ? 18 : 16,
+                      margin: const EdgeInsets.symmetric(horizontal: 11),
+                      decoration: BoxDecoration(
+                        color: filled
+                            ? AmyalColors.primary
+                            : Colors.transparent,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: filled
+                              ? AmyalColors.primary
+                              : AmyalColors.primary.withValues(alpha: 0.30),
+                          width: 1.6,
+                        ),
+                      ),
+                    );
+                  }),
+                );
+              },
+            ),
+            const SizedBox(height: 22),
             AmialNumpad(
               controller: _pin,
               maxLength: 4,
@@ -289,6 +312,7 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

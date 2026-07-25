@@ -149,17 +149,11 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           phone: _phoneCtrl.text.trim(),
           password: _passwordCtrl.text,
         );
-        if (ok && mounted) {
-          // AMIAL-BIO-001: اعرض «تفعيل الدخول السريع» مرّة بعد أوّل دخول ناجح
-          try {
-            if (!await AmialBiometricSetupScreen.isEnabled()) {
-              await Get.to(() => AmialBiometricSetupScreen(
-                    phone: _phoneCtrl.text.trim(),
-                    password: _passwordCtrl.text,
-                  ));
-            }
-          } catch (_) {}
-        }
+        // AMIAL-BIO-002: لم نعد نفرض شاشة «تفعيل الدخول السريع» بعد الدخول.
+        // كانت تُقحَم بعد كل دخول ما دامت البصمة غير مفعّلة — أي في كل مرة
+        // لمن لا يريدها، فتبدو شاشة طفيلية بين الدخول والرئيسية. التفعيل
+        // متاح حين يريده المستخدم: زرّ «الدخول بالبصمة» في شاشة الدخول،
+        // ومفتاح «تسجيل الدخول البيومتري» في الإعدادات.
         break;
 
       case AccountKind.merchant:
@@ -239,8 +233,19 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   Future<void> _bioLogin() async {
     try {
       if (!await AmialBiometricSetupScreen.isEnabled()) {
-        _error('فعّل الدخول السريع أولاً بالدخول بالرمز السري');
-        return;
+        // AMIAL-BIO-002: بدل رسالة خطأ تُغلق الطريق، نفتح شاشة التفعيل —
+        // هذا ما يتوقّعه من ضغط الزرّ. وتحتاج الشاشة الرقم والرمز، فإن كان
+        // الحقلان فارغين نطلب ملأهما أولاً.
+        final phone = _phoneCtrl.text.trim();
+        final pass = _passwordCtrl.text;
+        if (phone.isEmpty || pass.length < 4) {
+          _error('أدخل رقمك ورمزك السري أولاً لتفعيل الدخول بالبصمة');
+          return;
+        }
+        if (!mounted) return;
+        await Get.to(() =>
+            AmialBiometricSetupScreen(phone: phone, password: pass));
+        if (!await AmialBiometricSetupScreen.isEnabled()) return;
       }
       final auth = LocalAuthentication();
       final okBio = await auth.authenticate(

@@ -26,12 +26,6 @@ class _SplashScreenState extends State<SplashScreen>
   late StreamSubscription<List<ConnectivityResult>> subscription;
 
   // AMYAL-UI-001: خطوات إقلاع مرئية — تُظهر أن التطبيق «يعمل» أثناء التهيئة.
-  static const List<String> _steps = <String>[
-    'التحقق من الاتصال',
-    'التحقق من النسخة',
-    'تحميل البيانات',
-    'جاهز',
-  ];
   final ValueNotifier<int> _stepDone = ValueNotifier<int>(0);
 
   late final AnimationController _logoCtrl;
@@ -112,16 +106,18 @@ class _SplashScreenState extends State<SplashScreen>
     // خطوة 4: جاهز
     _mark(4);
 
-    // AMIAL-STARTUP-FLOW-001: شاشة اللغة تظهر «أول تشغيل فقط» — علامتها وجود
-    // language_code المحفوظ عند أيّ اختيار سابق. كانت تظهر لكل غير مسجّل دخول
-    // (وكل مرة يفشل فيها جلب الإعداد) — وهذا خطأ تدفّق لا علاقة له بالحساب.
-    final prefs = Get.find<SharedPreferences>();
-    final languageChosen = prefs.containsKey(AppConstants.languageCode);
-
-    if (!languageChosen) {
-      Get.offNamed(RouteHelper.getChoseLanguageRoute());
-      return;
-    }
+    // AMIAL-STARTUP-FLOW-002: لا شاشة لغة عند الإقلاع إطلاقاً.
+    // العربية هي لغة التطبيق الأساسية والإنجليزية ثانوية اختيارية — فسؤال
+    // المستخدم اليمني عن لغته قبل أن يرى التطبيق سؤال بلا معنى، ويُقحم شاشة
+    // كاملة بين شاشة البدء وتسجيل الدخول. من أراد الإنجليزية يبدّلها من
+    // القائمة المنسدلة في شاشة الدخول أو في الإعدادات.
+    try {
+      final prefs = Get.find<SharedPreferences>();
+      if (!prefs.containsKey(AppConstants.languageCode)) {
+        await prefs.setString(AppConstants.languageCode, 'ar');
+        await prefs.setString(AppConstants.customerCountryCode, 'SA');
+      }
+    } catch (_) {/* غير حرج */}
 
     if (GetPlatform.isAndroid &&
         Get.find<AuthController>().getUserData() != null) {
@@ -177,70 +173,22 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             ),
             const Spacer(flex: 2),
-            // ===== حالة الإقلاع =====
-            _StartupStatus(stepDone: _stepDone, steps: _steps),
-            const SizedBox(height: 40),
+            // AMIAL-SPLASH-002: كان هنا شريط تقدّم مع نصّ «جارٍ تحميل...»
+            // يظهر عدّة ثوانٍ — وهو يُشعر المستخدم بالبطء بدل أن يُخفيه،
+            // ولا يفعله أي تطبيق مصرفي. مؤشّر دائري صغير خافت يكفي.
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.2,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                    AmyalColors.primary.withValues(alpha: 0.55)),
+              ),
+            ),
+            const SizedBox(height: 46),
           ],
         ),
       ),
-    );
-  }
-}
-
-/// AMYAL-UI-001: مؤشّر إقلاع احترافي — شريط تقدّم + رسالة الخطوة الحالية.
-class _StartupStatus extends StatelessWidget {
-  final ValueNotifier<int> stepDone;
-  final List<String> steps;
-  const _StartupStatus({required this.stepDone, required this.steps});
-
-  @override
-  Widget build(BuildContext context) {
-    return ValueListenableBuilder<int>(
-      valueListenable: stepDone,
-      builder: (context, done, _) {
-        final total = steps.length;
-        final clamped = done.clamp(0, total);
-        final progress = clamped / total;
-        final isReady = clamped >= total;
-        // الرسالة الحالية: آخر خطوة اكتملت (أو أوّلها في البداية).
-        final idx = (clamped == 0 ? 0 : clamped - 1).clamp(0, total - 1);
-        final label = isReady ? 'جاهز ✓' : 'جارٍ ${steps[idx]}...';
-
-        return Column(
-          children: [
-            SizedBox(
-              width: 200,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween<double>(begin: 0, end: progress),
-                  duration: const Duration(milliseconds: 400),
-                  builder: (context, value, __) => LinearProgressIndicator(
-                    value: value == 0 ? null : value,
-                    minHeight: 6,
-                    backgroundColor: AmyalColors.primary.withValues(alpha: 0.15),
-                    valueColor:
-                        const AlwaysStoppedAnimation<Color>(AmyalColors.primary),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: Text(
-                label,
-                key: ValueKey<String>(label),
-                style: TextStyle(
-                  color: AmyalColors.primary.withValues(alpha: 0.85),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }
