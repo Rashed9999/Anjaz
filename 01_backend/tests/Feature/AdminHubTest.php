@@ -217,12 +217,21 @@ class AdminHubTest extends TestCase
         // الملف والباقة حقيقيان
         $merchant = User::where('phone', '967771009051')->first();
         $profile = \App\Models\MerchantProfile::where('user_id', $merchant->id)->first();
-        $this->assertSame('verified', $profile->verification_status);
+        // AMIAL-ADMIN-KYC-001: كان هنا assertSame('verified', ...) — أي أن هذا
+        // الاختبار كان يُثبّت العطل نفسه: حساب يخرج موثّقاً بلا مراجعة وثائق.
+        // الصحيح أن يخرج بانتظار المراجعة، ويُوثَّق بقرار من لوحة التحقّق.
+        $this->assertSame('pending_review', $profile->verification_status);
         $this->assertSame('business', $profile->subscription_plan);
         $this->assertSame('retail', $profile->business_type);
 
+        // بعد اعتماد الإدارة يصير موثّقاً
+        $this->actingAs($this->admin, 'user')
+            ->postJson("/admin/amial/hub/users/{$merchant->id}/kyc", ['status' => 1])
+            ->assertSuccessful();
+        $this->assertSame('verified', $profile->fresh()->verification_status);
+
         // واجهة الكاشير في التطبيق تعمل لهذا التاجر (تتطلّب MerchantProfile فعلياً)
-        \Laravel\Passport\Passport::actingAs($merchant, [], 'api');
+        \Laravel\Passport\Passport::actingAs($merchant->fresh(), [], 'api');
         $this->getJson('/api/v1/amial/merchant/cashier/products')->assertOk();
     }
 

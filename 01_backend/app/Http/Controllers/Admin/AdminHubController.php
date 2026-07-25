@@ -427,10 +427,19 @@ class AdminHubController extends Controller
             $user->password = Hash::make($request->input('password'));
             $user->type = $type;
             $user->is_active = 1;
+            // الهاتف يُعدّ متحقّقاً منه: الأدمن أدخله بنفسه، ولا OTP في هذا المسار.
             $user->is_phone_verified = 1;
-            // حساب أنشأه الأدمن = موثّق (نفس وصفة الحسابات التجريبية العاملة)
-            if ($schema::hasColumn('users', 'is_kyc_verified')) $user->is_kyc_verified = 1;
-            if ($schema::hasColumn('users', 'kyc_tier')) $user->kyc_tier = 3;
+
+            // AMIAL-ADMIN-KYC-001: كان هنا is_kyc_verified = 1 بتعليق يقول
+            // «حساب أنشأه الأدمن = موثّق (نفس وصفة الحسابات التجريبية)».
+            // هذا اختصار كُتب للحسابات التجريبية ثم صار سلوك الإنتاج: كل حساب
+            // يُنشأ من اللوحة يخرج موثّقاً بلا وثيقة واحدة ولا مراجعة — في تطبيق
+            // مالي هذا يُفرغ لوحة التحقّق من معناها ويكسر الامتثال.
+            // الحساب الآن يخرج «بانتظار المراجعة» تماماً كالمسجَّل من التطبيق،
+            // ويمرّ بلوحة التحقّق (قبول/رفض) عبر kycStatus.
+            if ($schema::hasColumn('users', 'is_kyc_verified')) $user->is_kyc_verified = 0;
+            // المستوى الأدنى حتى الاعتماد — يرفعه قرار المراجعة لا الإنشاء.
+            if ($schema::hasColumn('users', 'kyc_tier')) $user->kyc_tier = 0;
             if ($schema::hasColumn('users', 'zone_code')) $user->zone_code = 'SOUTH';
             if ($schema::hasColumn('users', 'transaction_pin')) {
                 $user->transaction_pin = Hash::make($request->input('pin') ?: '1234');
@@ -459,8 +468,10 @@ class AdminHubController extends Controller
                 // ملف أميال: النشاط يفتح لوحة القطاع، والباقة تفتح الميزات
                 MerchantProfile::firstOrCreate(['user_id' => $user->id], [
                     'business_type' => $request->input('business_type') ?: \App\Support\Access\AccessConstants::BIZ_RETAIL,
-                    'verification_status' => 'verified',
-                    'verified_at' => now(),
+                    // AMIAL-ADMIN-KYC-001: ملف التاجر يتبع حالة الحساب — بانتظار
+                    // المراجعة لا موثّقاً. يرفعه kycStatus عند الاعتماد.
+                    'verification_status' => 'pending_review',
+                    'verified_at' => null,
                     'zone_code' => 'SOUTH',
                     'subscription_plan' => $request->input('plan') ?: \App\Support\Access\AccessConstants::PLAN_FREE,
                     'subscription_expires_at' => now()->addDays(30),

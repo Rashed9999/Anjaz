@@ -69,7 +69,11 @@ class CustomerAuthController extends Controller
             ], 403);
         }
 
-        if ($this->businessSetting->where(['key' => 'phone_verification'])->first()->value) {
+        // AMIAL-DEMO-OTP: كان ->first()->value بلا حارس. سجلّ phone_verification
+        // غير موجود في قاعدة نظيفة (ولا بذرة تُنشئه)، فيُقرأ من null ويُرمى
+        // "Attempt to read property value on null" → 500 → يرى المستخدم
+        // «خطأ» عند خطوة الرمز بلا سبب مفهوم.
+        if ((int) (Helpers::get_business_settings('phone_verification') ?? 0) === 1) {
             $OTPIntervalTime= Helpers::get_business_settings('otp_resend_time') ?? 60;// seconds
             $OTPVerificationData= DB::table('phone_verifications')->where('phone', $request['phone'])->first();
 
@@ -82,7 +86,15 @@ class CustomerAuthController extends Controller
                 ], 200);
             }
 
-            $otp = (env('APP_MODE') != 'live') ? '1234' : rand(1000, 9999);
+            // AMIAL-DEMO-OTP: رمز واحد في كل المسارات.
+            // كان هنا رمزان مختلفان: هذا الموضع ينتج '1234' في غير الإنتاج،
+            // بينما RegisterController يقبل config('app.amial_demo_otp') أي
+            // '123456' — فيعبّئ التطبيق رمزاً ويقبل الخادم آخر. نستعمل الرمز
+            // المضبوط إن وُجد، وإلا نولّد عشوائياً كالمعتاد.
+            $configuredOtp = config('app.amial_demo_otp');
+            $otp = (is_string($configuredOtp) && $configuredOtp !== '')
+                ? $configuredOtp
+                : rand(1000, 9999);
 
             DB::table('phone_verifications')->updateOrInsert(['phone' => $request['phone']], [
                 'otp' => $otp,
@@ -100,11 +112,10 @@ class CustomerAuthController extends Controller
             }
 
             // AMIAL-DEMO-OTP: بلا بوابة SMS لا يصل الرمز لأحد فيقف التسجيل نهائياً.
-            // في وضع التجربة (APP_MODE != live) نفصح عن الرمز في الاستجابة ليعبّئه
-            // التطبيق تلقائياً — يختفي هذا تلقائياً عند APP_MODE=live مع بوابة حقيقية.
-            $demoHint = (env('APP_MODE') != 'live') ? (string) $otp
-                : (is_string(config('app.amial_demo_otp')) && config('app.amial_demo_otp') !== ''
-                    ? (string) config('app.amial_demo_otp') : null);
+            // نفصح عن الرمز في الاستجابة ليعبّئه التطبيق تلقائياً — ويختفي
+            // الإفصاح وحده متى أُفرغ AMIAL_DEMO_OTP مع بوابة SMS حقيقية.
+            $demoHint = (is_string($configuredOtp) && $configuredOtp !== '')
+                ? (string) $configuredOtp : null;
 
             return response()->json([
                 'message' => 'Number is ready to register',
@@ -132,7 +143,15 @@ class CustomerAuthController extends Controller
 
         $phone = $request['phone'];
         try {
-            $otp = (env('APP_MODE') != 'live') ? '1234' : rand(1000, 9999);
+            // AMIAL-DEMO-OTP: رمز واحد في كل المسارات.
+            // كان هنا رمزان مختلفان: هذا الموضع ينتج '1234' في غير الإنتاج،
+            // بينما RegisterController يقبل config('app.amial_demo_otp') أي
+            // '123456' — فيعبّئ التطبيق رمزاً ويقبل الخادم آخر. نستعمل الرمز
+            // المضبوط إن وُجد، وإلا نولّد عشوائياً كالمعتاد.
+            $configuredOtp = config('app.amial_demo_otp');
+            $otp = (is_string($configuredOtp) && $configuredOtp !== '')
+                ? $configuredOtp
+                : rand(1000, 9999);
 
             DB::table('phone_verifications')->updateOrInsert(['phone' => $phone], [
                 'otp' => $otp,

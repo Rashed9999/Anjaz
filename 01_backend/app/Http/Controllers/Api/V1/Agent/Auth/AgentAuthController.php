@@ -50,7 +50,9 @@ class AgentAuthController extends Controller
             ], 403);
         }
 
-        if ($this->businessSetting->where(['key' => 'phone_verification'])->first()->value) {
+        // AMIAL-DEMO-OTP: نفس عطل مسار العميل — قراءة ->value من null حين
+        // يغيب سجلّ phone_verification فيُرمى 500 عند خطوة الرمز.
+        if ((int) (\App\CentralLogics\Helpers::get_business_settings('phone_verification') ?? 0) === 1) {
 
             $otpIintervalTime = Helpers::get_business_settings('otp_resend_time') ?? 60;
             $otpVerificationData= DB::table('phone_verifications')->where('phone', $request['phone'])->first();
