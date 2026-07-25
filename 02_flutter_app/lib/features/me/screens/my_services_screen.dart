@@ -33,6 +33,7 @@ import 'package:amyal_pay/features/donations/screens/donations_home_screen.dart'
 import 'package:amyal_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
 import 'package:amyal_pay/features/requested_money/screens/requested_money_list_screen.dart';
 import 'package:amyal_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
+import 'package:amyal_pay/common/widgets/amial_form.dart';
 
 /// AMIAL-MY-SERVICES — نقطة وصول موحّدة لميزات أميال باي الجديدة.
 ///
@@ -62,15 +63,15 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // AMIAL-DS-002: ترويسة خفيفة موحّدة بدل AppBar أزرق صلب.
     return Scaffold(
       backgroundColor: AmyalColors.background,
-      appBar: AppBar(
-        title: const Text('خدماتي'),
-        backgroundColor: AmyalColors.primary,
-        foregroundColor: Colors.white,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      body: SafeArea(
+        child: Column(children: [
+          const AmialScreenHeader(title: 'خدماتي'),
+          Expanded(
+            child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         children: [
           // ====== بطاقة رقم الحساب المختصرة ======
           Obx(() {
@@ -280,6 +281,9 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
             );
           }),
         ],
+            ),
+          ),
+        ]),
       ),
     );
   }
@@ -303,13 +307,18 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            // AMIAL-COLOR-003: لون واحد في الشبكة.
+            // كانت كل بطاقة بلونها الخاصّ (ثمانية ألوان في شاشة واحدة) —
+            // واللون في شبكة متجاورة ينافس شكل الأيقونة فيصير ضوضاء بدل أن
+            // يُميّز. نُبقي معامل `color` في التوقيع كي لا تنكسر 25 نداءً،
+            // ونتجاهله هنا عمداً — التمييز بالأيقونة والاسم لا باللون.
             Container(
               width: 48, height: 48,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
+                color: AmyalColors.primary.withValues(alpha: 0.09),
+                borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: color, size: 24),
+              child: Icon(icon, color: AmyalColors.primary, size: 24),
             ),
             const SizedBox(height: 10),
             Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),

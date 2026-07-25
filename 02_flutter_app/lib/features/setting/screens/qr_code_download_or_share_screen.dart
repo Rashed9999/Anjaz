@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
@@ -11,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
 
 /// AMIAL-MYQR-002 — «رمز QR الخاص بي» بتصميم موحّد:
 /// بطاقة أميال (شعار + اسم صاحب الحساب + رمز QR + رقم الجوال + رقم الحساب)
@@ -179,10 +179,15 @@ class _QrCodeDownloadOrShareScreenState
                     borderRadius: BorderRadius.circular(18),
                     border: Border.all(color: AmyalColors.yellow, width: 2),
                   ),
-                  child: SvgPicture.string(
-                    widget.qrCode,
-                    height: size.width * 0.52,
-                    width: size.width * 0.52,
+                  // AMIAL-QR-FIX-002: كان SvgPicture.string(widget.qrCode) —
+                  // و qrCode القادم من الخادم فارغ، فتُحفظ وتُشارَك صورة بلا
+                  // رمز. نُولّده محلياً من رقم الحساب (أو الهاتف) كما تفعل
+                  // بقيّة الشاشات، فيصير الملف المُنزَّل صالحاً للمسح فعلاً.
+                  child: QrDisplayWidget(
+                    data: (_accountNumber != null && _accountNumber!.isNotEmpty)
+                        ? _accountNumber!
+                        : widget.phoneNumber,
+                    size: size.width * 0.52,
                   ),
                 ),
                 const SizedBox(height: 16),

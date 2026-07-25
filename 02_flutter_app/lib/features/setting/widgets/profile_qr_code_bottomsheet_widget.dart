@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/common/widgets/custom_small_button_widget.dart';
 import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
 
 
 class ProfileQRCodeBottomSheetWidget extends StatelessWidget {
@@ -43,15 +44,45 @@ class ProfileQRCodeBottomSheetWidget extends StatelessWidget {
           // الخادم — وهي فارغة فيسقط إلى '<svg/>' فلا يظهر رمز أصلاً (دائرة
           // صفراء صمّاء). الآن نُولّد رمز QR محلياً من رقم الحساب/الهاتف عبر
           // QrDisplayWidget (نفس مولّد بقية الشاشات) فيظهر رمزاً حقيقياً.
+          // AMIAL-QR-FIX-002: كانت الورقة تعرض «تعذّر توليد الرمز» لأنها تقرأ
+          // `userInfo` ولا تطلبه. الورقة تُفتح من مسارات لم تُحمَّل فيها بيانات
+          // الملف بعد، فتكون null → رسالة عطل بدل الرمز. الآن نطلب البيانات
+          // عند أول بناء إن كانت غائبة، ونعرض مؤشّر تحميل ريثما تصل.
           GetBuilder<ProfileController>(builder: (controller){
             final info = controller.userInfo;
-            final uid = (info?.uniqueId ?? '').trim();
-            final payload = uid.isNotEmpty ? uid : (info?.phone ?? '').trim();
-            if (payload.isEmpty) {
+            if (info == null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                final c = Get.find<ProfileController>();
+                if (c.userInfo == null && !c.isLoading) {
+                  c.getProfileData(isUpdate: true);
+                }
+              });
               return const Center(
                 child: Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Text('تعذّر توليد الرمز — بيانات الحساب غير متاحة'),
+                  padding: EdgeInsets.all(40),
+                  child: CircularProgressIndicator(color: AmyalColors.primary),
+                ),
+              );
+            }
+            final uid = (info.uniqueId ?? '').trim();
+            final payload = uid.isNotEmpty ? uid : (info.phone ?? '').trim();
+            if (payload.isEmpty) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(children: [
+                    const Icon(Icons.qr_code_2_rounded,
+                        size: 40, color: AmyalColors.textMuted),
+                    const SizedBox(height: 10),
+                    const Text('تعذّر توليد الرمز — بيانات الحساب غير متاحة',
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 10),
+                    TextButton(
+                      onPressed: () => Get.find<ProfileController>()
+                          .getProfileData(reload: true, isUpdate: true),
+                      child: const Text('إعادة المحاولة'),
+                    ),
+                  ]),
                 ),
               );
             }
@@ -64,7 +95,7 @@ class ProfileQRCodeBottomSheetWidget extends StatelessWidget {
             );
           }),
 
-          const SizedBox(height: 50.0,),
+          const SizedBox(height: 30.0,),
 
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeDefault),

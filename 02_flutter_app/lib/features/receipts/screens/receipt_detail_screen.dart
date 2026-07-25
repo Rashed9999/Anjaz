@@ -8,6 +8,7 @@ import 'package:amyal_pay/features/receipts/controllers/receipts_controller.dart
 import 'package:amyal_pay/data/api/secure_storage_helper.dart';
 import 'package:amyal_pay/helper/pdf_downloader_helper.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/util/arabic_number_words.dart';
 
 /// AMIAL-RECEIPTS-001 (v0.9-D)
 class ReceiptDetailScreen extends StatefulWidget {
@@ -147,16 +148,19 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow,
-                  borderRadius: BorderRadius.circular(12),
+                  // AMIAL-RECEIPT-STYLE-003: كان مستطيلاً أصفر مشبعاً يصرخ في
+                  // وجه المستخدم. الإيصالات المصرفية تستعمل خلفية محايدة
+                  // والمبلغ وحده ملوّن — أخضر للوارد وأحمر للصادر.
+                  color: const Color(0xFFEEF1F7),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
                   children: [
                     Text(
                       r.arabicTypeLabel,
                       style: const TextStyle(
-                        color: AmyalColors.primary,
-                        fontSize: 14,
+                        color: AmyalColors.textSecondary,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -164,17 +168,36 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                     Text(
                       (isCredit ? '+' : '-')+AmialMoney.yer(r.amount),
                       style: TextStyle(
-                        color: AmyalColors.primary,
+                        color: isCredit
+                            ? const Color(0xFF16A34A)
+                            : AmyalColors.red,
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
+                    // AMIAL-RECEIPT-TAFQIT-001: المبلغ بالحروف — معيار مصرفي
+                    // يمنع تحريف الرقم، وكان غائباً عن إيصالاتنا كلّها.
+                    Builder(builder: (_) {
+                      final words = ArabicNumberWords.yerFromString(r.amount);
+                      if (words == null) return const SizedBox.shrink();
+                      return Text(
+                        words,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFF1A2433),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          height: 1.5,
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 6),
                     Text(
                       isCredit ? 'مضاف لحسابك' : 'مخصوم من حسابك',
-                      style: TextStyle(
-                        color: AmyalColors.primary.withValues(alpha: 0.7),
-                        fontSize: 12,
+                      style: const TextStyle(
+                        color: AmyalColors.textMuted,
+                        fontSize: 11.5,
                       ),
                     ),
                   ],
@@ -214,13 +237,21 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                     _detailRow('إلى', _party(r, 'to')!),
                     const Divider(height: 1),
                   ],
-                  if (double.tryParse(r.fee) != null && double.parse(r.fee) > 0) ...[
-                    _detailRow('الرسوم', AmialMoney.yer(r.fee)),
-                    const Divider(height: 1),
-                    _detailRow('الإجمالي', AmialMoney.yer(r.netAmount)),
-                    const Divider(height: 1),
-                  ],
-                  _detailRow('المنطقة', r.zoneCode),
+                  // AMIAL-RECEIPT-FEES-001: تفصيل الرسوم يظهر **دائماً**، حتى
+                  // حين تكون صفراً. إخفاؤه عند الصفر يترك المستخدم يظنّ أن
+                  // ثمّة اقتطاعاً خفياً — وهي الشكوى الأصلية عن النِسَب.
+                  // ثلاثة أسطر كما في الإيصالات المصرفية: المبلغ، الرسوم،
+                  // الإجمالي.
+                  _detailRow('المبلغ', AmialMoney.yer(r.amount)),
+                  const Divider(height: 1),
+                  _detailRow('رسوم العملية', AmialMoney.yer(r.fee)),
+                  const Divider(height: 1),
+                  _detailRow('الإجمالي', AmialMoney.yer(r.netAmount), bold: true),
+                  const Divider(height: 1),
+                  // AMIAL-ZONE-AR-001: كان يُعرض رمز المنطقة الخام «SOUTH»
+                  // بالإنجليزية للمستخدم. الخادم يملك التسمية العربية أصلاً
+                  // (ZonePolicyService::zoneNameAr) ولم تكن مربوطة هنا.
+                  _detailRow('المنطقة', _zoneAr(r.zoneCode)),
                 ]),
               ),
 
@@ -280,7 +311,27 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
     );
   }
 
-  Widget _detailRow(String label, String value, {bool monospace = false}) {
+  /// AMIAL-ZONE-AR-001: تحويل رمز المنطقة إلى اسمها العربي.
+  /// نفس خريطة `ZonePolicyService::zoneNameAr` في الخادم.
+  String _zoneAr(String code) {
+    switch (code.trim().toUpperCase()) {
+      case 'SOUTH':
+        return 'الجنوب';
+      case 'NORTH':
+        return 'الشمال';
+      case 'EAST':
+        return 'الشرق';
+      case 'WEST':
+        return 'الغرب';
+      case 'ALL':
+        return 'كل المناطق';
+      default:
+        return code.isEmpty ? '—' : code;
+    }
+  }
+
+  Widget _detailRow(String label, String value,
+      {bool monospace = false, bool bold = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
@@ -296,8 +347,11 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
               value,
               style: TextStyle(
                 fontFamily: monospace ? 'monospace' : null,
-                fontWeight: monospace ? FontWeight.w600 : FontWeight.w500,
-                fontSize: monospace ? 12 : 13,
+                fontWeight: bold
+                    ? FontWeight.bold
+                    : (monospace ? FontWeight.w600 : FontWeight.w500),
+                fontSize: bold ? 14.5 : (monospace ? 12 : 13),
+                color: bold ? AmyalColors.primary : null,
               ),
             ),
           ),
