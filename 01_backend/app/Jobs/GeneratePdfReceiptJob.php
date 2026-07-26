@@ -70,6 +70,9 @@ class GeneratePdfReceiptJob implements ShouldQueue
                 'title' => $notice->title($receipt),
                 // AMIAL-RECEIPT-TYPE-001: اسم العملية في حقل معنون
                 'typeLabel' => $notice->typeLabel($receipt),
+                // AMIAL-RECEIPT-NUMBERS-001: الأرقام مجموعةً للقراءة والإملاء
+                'receiptNumberGrouped' => \App\Support\ReadableCode::group($receipt->receipt_number),
+                'verificationGrouped' => \App\Support\ReadableCode::group($receipt->verification_code, 4),
                 'opening' => $notice->opening($receipt),
                 'narrative' => $notice->narrative($receipt),
                 'amountInWords' => $notice->amountInWords($receipt),

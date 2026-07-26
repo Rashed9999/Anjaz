@@ -361,8 +361,12 @@ class ReceiptController extends Controller
      */
     public function verifyPublic(string $code): JsonResponse
     {
-        // Sanitize
-        if (!preg_match('/^[A-Z2-9]{16}$/', $code)) {
+        // AMIAL-RECEIPT-NUMBERS-001: يُقبل الشكلان — رقميّ (الجديد) وBase32
+        // (القديم). ونسمح بالمسافات والشَرطات لأن العميل يكتب الكود كما
+        // يراه مجموعاً على الورقة: «1234 5678 9012 3456».
+        $code = preg_replace('/[\s\-]+/', '', strtoupper($code));
+
+        if (!preg_match('/^([0-9]{16}|[A-Z2-9]{16})$/', $code)) {
             return $this->error('INVALID_CODE', 'Verification code format invalid', 400);
         }
 

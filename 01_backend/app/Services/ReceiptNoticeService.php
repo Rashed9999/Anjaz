@@ -116,15 +116,17 @@ class ReceiptNoticeService
     {
         $meta = is_array($receipt->metadata) ? $receipt->metadata : [];
         $party = $this->counterpartyName($receipt);
-        // `transaction_no` accessor يستعلم جدول المعاملات — قد يرمي إن كانت
-        // القاعدة غير متاحة لحظتها. الإشعار لا يجوز أن يفشل لأجل رقم مرجع.
-        $ref = null;
-        try {
-            $ref = $receipt->transaction_no;
-        } catch (\Throwable) {
-            $ref = null;
-        }
-        $ref = $ref ?: $receipt->reference_transaction_id;
+
+        // AMIAL-RECEIPT-NUMBERS-001: أُزيل «رقم المرجع» من البيان.
+        //
+        // كان يطبع ULID المعاملة (26 خانة: 01KYCSWXQDYM7R5M0AG46ZTMYH) على
+        // مستند يقرؤه عميل. سألتُ: لمن هذا الرقم؟ فلم أجد جمهوراً — العميل
+        // لا يستطيع إملاءه، والدعم يبحث برقم الإشعار أصلاً، والمهندس يجده في
+        // قاعدة البيانات لا على ورقة. رمز بلا قارئ يشوّش المستند ويوهم
+        // العميل أن عليه حفظه.
+        //
+        // رقم الإشعار (12 رقماً) هو المرجع الوحيد الذي يحتاجه العميل، وهو
+        // مطبوع في صدر الإشعار. الـ ULID باقٍ في قاعدة البيانات للهندسة.
 
         $body = match ($receipt->receipt_type) {
             'cash_out', 'withdraw' => sprintf(
@@ -182,9 +184,6 @@ class ReceiptNoticeService
 
         $body = trim(preg_replace('/\s+/u', ' ', $body));
 
-        if ($ref) {
-            $body .= " — رقم المرجع {$ref}";
-        }
 
         return $body . ' — عبر تطبيق أميال باي';
     }

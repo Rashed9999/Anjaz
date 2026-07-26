@@ -51,12 +51,15 @@ class ReceiptServiceTest extends TestCase
         $this->assertEquals('105.0000', (string)$receipt->net_amount); // amount + fee
         $this->assertEquals('pending_pdf', $receipt->status);
 
-        // verification_code format: 16 chars from base32-like alphabet
-        $this->assertEquals(16, strlen($receipt->verification_code));
-        $this->assertMatchesRegularExpression('/^[A-Z2-9]{16}$/', $receipt->verification_code);
+        // AMIAL-RECEIPT-NUMBERS-001: الشكلان صارا رقميَّين بحتَين.
+        // كان الكود 16 حرفاً Base32 والرقم AMY-YYYYMMDD-XXXXXXXX — ولا
+        // واحد منهما يستطيع عميل إملاءه على الهاتف لموظّف الدعم، وهو
+        // الغرض الأول من رقم الإشعار.
+        $this->assertMatchesRegularExpression('/^[0-9]{16}$/', $receipt->verification_code);
 
-        // receipt_number format: AMY-YYYYMMDD-XXXXXXXX
-        $this->assertMatchesRegularExpression('/^AMY-\d{8}-[A-Z0-9]{8}$/', $receipt->receipt_number);
+        // رقم الإشعار: YYMMDD + 6 أرقام (التاريخ في الصدر يجعله مرتّباً)
+        $this->assertMatchesRegularExpression('/^[0-9]{12}$/', $receipt->receipt_number);
+        $this->assertStringStartsWith(now()->format('ymd'), $receipt->receipt_number);
     }
 
     /** @test */

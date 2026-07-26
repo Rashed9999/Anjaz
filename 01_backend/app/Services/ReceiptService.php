@@ -123,26 +123,53 @@ class ReceiptService
     /**
      * مفتاح عرض: AMY-2026-0516-AB12CD34
      */
+    /**
+     * AMIAL-RECEIPT-NUMBERS-001 — رقم إشعار رقميّ بحت.
+     *
+     * كان `AMY-20260725-HUW8YUD1`: واحد وعشرون خانة فيها حروف وشَرطات.
+     * والرقم غرضه الأول أن يقرأه العميل على الهاتف لموظّف الدعم — و«HUW8YUD1»
+     * لا تُملى ولا تُكتب بلا خطأ، خصوصاً لمن لا يعرف الإنجليزية. الحروف
+     * المتشابهة (O/0، I/1) تضاعف الخطأ.
+     *
+     * الشكل الجديد: YYMMDD + ست خانات عشوائية = 12 رقماً، تُعرض مجموعةً
+     * `260726 481037`. التاريخ في صدره يجعله مرتّباً زمنياً ومفيداً للدعم،
+     * والذيل العشوائي يمنع التخمين والتصادم (مليون احتمال لليوم الواحد،
+     * مع فحص تفرّد وإعادة محاولة).
+     */
     private function generateReceiptNumber(string $type): string
     {
-        $prefix = 'AMY';
-        $date = now()->format('Ymd');
-        // 8 chars random لتجنب التصادم (entropy: 36^8 ≈ 2.8 trillion)
-        $rand = strtoupper(Str::random(8));
-        return "{$prefix}-{$date}-{$rand}";
+        $date = now()->format('ymd');
+
+        for ($attempt = 0; $attempt < 8; $attempt++) {
+            $number = $date . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+            if (!Receipt::where('receipt_number', $number)->exists()) {
+                return $number;
+            }
+        }
+
+        // احتياط لا يُتوقّع بلوغه: نوسّع الفضاء بدل رمي استثناء يوقف عملية مالية.
+        return $date . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT)
+            . str_pad((string) random_int(0, 99), 2, '0', STR_PAD_LEFT);
     }
 
     /**
-     * كود تحقق للـ QR code (16 chars).
+     * AMIAL-RECEIPT-NUMBERS-001 — كود تحقّق رقميّ.
+     *
+     * كان 16 حرفاً Base32. صار 16 رقماً تُعرض `1234 5678 9012 3456`.
+     *
+     * ملاحظة على الأمان: الفضاء انخفض من 31^16 (~79 بت) إلى 10^16 (~53 بت).
+     * ما زال بعيداً عن التخمين اليدوي، لكنه لم يعد كافياً وحده أمام آلة
+     * تجرّب بلا حدّ — ولذلك أُضيف حدّ معدّل على /v/{code} في نفس التغيير.
+     * الاثنان معاً لا أحدهما.
      */
     private function generateVerificationCode(): string
     {
-        // Base32-like (لتجنب 0/O، 1/I)
-        $alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
         $code = '';
         for ($i = 0; $i < 16; $i++) {
-            $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+            $code .= (string) random_int(0, 9);
         }
+
         return $code;
     }
 

@@ -76,6 +76,17 @@
         }
 
         .ref-no { color: #C1121F; }
+
+        /* AMIAL-RECEIPT-NUMBERS-001: الأرقام المجموعة تُعرض LTR إجبارياً.
+           في سياق RTL يعكس المحرّك ترتيب المجموعات المفصولة بمسافات، فيظهر
+           «260726 481037» على شكل «481037 260726» — والعميل يُملي رقماً
+           مقلوباً لموظّف الدعم فلا تُوجد العملية. bidi-override يثبّت
+           الترتيب كما كُتب. */
+        .ltr-code {
+            direction: ltr;
+            unicode-bidi: bidi-override;
+            display: inline-block;
+        }
         .amount-no { color: #053391; font-size: 14px; }
 
         .opening {
@@ -126,7 +137,9 @@
 
         {{-- الصف 1: التاريخ + رقم الإشعار --}}
         <td class="label">رقم الإشعار</td>
-        <td><span class="boxed ref-no">{{ $receipt->receipt_number }}</span></td>
+        {{-- AMIAL-RECEIPT-NUMBERS-001: مجموعاً بثلاثات — رقم من 12 خانة
+             متّصلة يُخطئ في قراءته كل أحد، والتجميع يجعله يُملى ويُكتب. --}}
+        <td><span class="boxed ref-no ltr-code" dir="ltr">{{ $receiptNumberGrouped ?? $receipt->receipt_number }}</span></td>
         <td style="text-align:left;font-weight:bold;">
             التاريخ: {{ optional($receipt->issued_at)->format('d-m-Y') }}
         </td>
@@ -191,7 +204,7 @@
         </td>
         <td style="text-align:left;">
             <span class="muted">كود التحقق:</span>
-            <strong>{{ $receipt->verification_code }}</strong>
+            <strong class="ltr-code" dir="ltr">{{ $verificationGrouped ?? $receipt->verification_code }}</strong>
         </td>
     </tr>
 </table>

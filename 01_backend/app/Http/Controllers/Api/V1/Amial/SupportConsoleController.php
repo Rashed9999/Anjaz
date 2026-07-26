@@ -61,13 +61,22 @@ class SupportConsoleController extends Controller
         $transactions = collect();
         $receipts = collect();
 
-        // — رقم عملية (ULID/ref) أو رقم إيصال
-        if (preg_match('/^[A-Za-z0-9\-_]{6,40}$/', $q)) {
-            $transactions = Transaction::where('transaction_id', $q)
-                ->orWhere('ref_trans_id', $q)
+        // — رقم عملية (ULID/ref) أو رقم إيصال أو كود تحقّق
+        //
+        // AMIAL-RECEIPT-NUMBERS-001: العميل يقرأ الرقم كما هو مطبوع —
+        // مجموعاً بمسافات «260726 481037». البحث بالنصّ الخام كان يفشل
+        // فيظنّ الموظّف أن العملية غير موجودة. نطبّع قبل المطابقة، ونطابق
+        // المخزَّن مطبّعاً أيضاً كي تُوجد الأشكال القديمة والجديدة معاً.
+        $normalized = \App\Support\ReadableCode::normalize($q);
+
+        if ($normalized !== '' && preg_match('/^[A-Z0-9]{6,40}$/', $normalized)) {
+            $transactions = Transaction::where('transaction_id', $normalized)
+                ->orWhere('ref_trans_id', $normalized)
                 ->limit(5)->get();
 
             $receipts = Receipt::where('receipt_number', $q)
+                ->orWhere('receipt_number', $normalized)
+                ->orWhere('verification_code', $normalized)
                 ->orWhere('verification_code', strtoupper($q))
                 ->limit(5)->get();
         }
