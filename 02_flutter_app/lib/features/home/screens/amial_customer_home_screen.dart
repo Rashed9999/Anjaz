@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
+import 'package:amyal_pay/features/home/widgets/set_governorate_sheet.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/favorite_number/screens/amial_favorites_screen.dart';
 import 'package:amyal_pay/util/app_constants.dart';
@@ -51,6 +52,8 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   // خطأ غامض عند الضغط، ويصحّح نفسه يوم يُعتمد وكيل هناك.
   String? _coverageNotice;
   bool _coverageIsGap = false;
+  /// AMIAL-COVERAGE-002: الحساب بلا محافظة — اللافتة تصير زرّاً لا نصّاً.
+  bool _needsGovernorate = false;
 
   @override
   void initState() {
@@ -88,9 +91,10 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       if (d is Map) {
         final agents = (d['agents'] ?? 0) as num;
         final merchants = (d['merchants'] ?? 0) as num;
+        _needsGovernorate = d['needs_governorate'] == true;
         _coverageIsGap = agents == 0 && merchants == 0;
         // لا نُزعج من تغطيته كاملة — الرسالة تظهر عند النقص فقط.
-        _coverageNotice = (agents == 0 || merchants == 0)
+        _coverageNotice = (_needsGovernorate || agents == 0 || merchants == 0)
             ? (d['notice'] as String?)
             : null;
       }
@@ -200,19 +204,55 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withValues(alpha: 0.45)),
       ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(_coverageIsGap ? Icons.storefront_outlined : Icons.info_outline,
-            size: 20, color: color),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            _coverageNotice!,
-            style: const TextStyle(
-                fontSize: 12.5, height: 1.7, color: Color(0xFF1A2433)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(
+              _needsGovernorate
+                  ? Icons.place_outlined
+                  : _coverageIsGap
+                      ? Icons.storefront_outlined
+                      : Icons.info_outline,
+              size: 20,
+              color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _coverageNotice!,
+              style: const TextStyle(
+                  fontSize: 12.5, height: 1.7, color: Color(0xFF1A2433)),
+            ),
           ),
-        ),
+        ]),
+
+        // نصيحة بلا طريق ليست نصيحة. الزرّ هو الطريق.
+        if (_needsGovernorate) ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: ElevatedButton.icon(
+              onPressed: _openGovernorateSheet,
+              icon: const Icon(Icons.my_location_rounded, size: 18),
+              label: const Text('حدّد محافظتي'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF053391),
+                foregroundColor: Colors.white,
+                textStyle: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
       ]),
     );
+  }
+
+  Future<void> _openGovernorateSheet() async {
+    final saved = await SetGovernorateSheet.open(context);
+    if (!saved || !mounted) return;
+    // إعادة التحميل تُبدّل الرسالة فوراً إلى عدد الوكلاء والتجّار — الأثر
+    // المرئيّ هو ما يُثبت للمستخدم أن ما فعله وقع.
+    await _load();
   }
 
   // ============ Header — أزرار دائرية بيضاء + عنوان مركزي ============

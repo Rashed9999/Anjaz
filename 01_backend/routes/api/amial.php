@@ -936,6 +936,12 @@ Route::middleware(['auth:api'])->group(function () {
     Route::get('/service-coverage', [\App\Http\Controllers\Api\V1\Amial\ServiceCoverageController::class, 'show'])
         ->name('amial.service-coverage');
 
+    // AMIAL-COVERAGE-002 — تحديد محافظة الإقامة من التطبيق. كانت الرسالة
+    // تنصح بتحديث العنوان ولا سبيل إليه.
+    Route::post('/me/governorate', [\App\Http\Controllers\Api\V1\Amial\ServiceCoverageController::class, 'setGovernorate'])
+        ->middleware('amial.rate-limit:set_governorate,6,1')
+        ->name('amial.me.governorate');
+
     Route::prefix('split-bills')->name('amial.split-bills.')->group(function () {
         Route::get('/mine', [\App\Http\Controllers\Api\V1\Amial\SplitBillController::class, 'mine'])->name('mine');
         Route::post('/participants/{id}/pay', [\App\Http\Controllers\Api\V1\Amial\SplitBillController::class, 'payShare'])

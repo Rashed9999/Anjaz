@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\YemenGovernorates;
 use App\Models\PosUser;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -364,9 +365,20 @@ class UnifiedAuthService
         $this->recordSuccess($role, $user->id, $request, $identifier);
 
         if ($lastLogin !== null) {
-            // AMYAL-ZONE-LABEL-001: «الموقع» من نظام المناطق الجاهز (الجنوب/…)
-            // بدل GeoIP — منطقة الحساب مستقرّة ومعيّنة عند KYC.
-            $lastLogin['zone'] = \App\Services\ZonePolicyService::zoneNameAr($user->zone_code ?? null);
+            // AMYAL-ZONE-LABEL-001: «الموقع» من نظام المناطق الجاهز بدل
+            // GeoIP — منطقة الحساب مستقرّة ومعيّنة عند KYC.
+            //
+            // AMIAL-COVERAGE-002: تُفضَّل المحافظة على اسم المنطقة. «الجنوب»
+            // يشمل ثماني محافظات، فلا يُميّز دخولاً مشروعاً من آخر مشبوه —
+            // وهذا هو الغرض كلّه من عرض آخر دخول. أما «عدن» فيعرف صاحبها
+            // فوراً إن كان هو أم لا.
+            $governorate = YemenGovernorates::name(
+                YemenGovernorates::codeFromName((string) ($user->residence_governorate ?? ''))
+            );
+
+            $lastLogin['zone'] = $governorate
+                ?? \App\Services\ZonePolicyService::zoneNameAr($user->zone_code ?? null);
+
             $extraMeta['last_login'] = $lastLogin;
         }
 
