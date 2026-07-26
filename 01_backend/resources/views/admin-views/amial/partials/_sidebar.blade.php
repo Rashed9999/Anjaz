@@ -108,6 +108,10 @@
     <a class="nav-link" href="{{route('admin.business-settings.fcm-index')}}" title="إعداد Firebase">
         <span class="text-truncate">🔥 إعداد Firebase</span>
     </a>
+    {{-- AMIAL-ZONE-PANEL-001: سياسة المناطق كانت بلا واجهة إطلاقاً --}}
+    <a class="nav-link" href="{{route('admin.amial.hub.zones.index')}}" title="لوحة المناطق">
+        <span class="text-truncate">🗺️ لوحة المناطق (النطاق والمخالفات)</span>
+    </a>
     <a class="nav-link" href="{{route('admin.faq.index')}}" title="الأسئلة الشائعة">
         <span class="text-truncate">❓ الأسئلة الشائعة</span>
     </a>

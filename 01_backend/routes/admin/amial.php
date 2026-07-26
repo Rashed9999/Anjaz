@@ -260,6 +260,18 @@ Route::prefix('hub')->name('hub.')->group(function () {
     Route::get('/disputes', [$hc, 'disputes'])->name('disputes');
 
     // لوحة التحقق — اعتماد/رفض/حظر الحسابات المسجَّلة ذاتياً (كل الأدوار)
+    // AMIAL-ZONE-PANEL-001 — لوحة المناطق (نطاق التشغيل، العالقون، المخالفات)
+    Route::prefix('zones')->name('zones.')->group(function () {
+        $zc = App\Http\Controllers\Admin\ZoneControlController::class;
+        Route::get('/', [$zc, 'index'])->name('index');
+        Route::get('/summary.json', [$zc, 'summary'])->name('summary');
+        Route::get('/events.json', [$zc, 'events'])->name('events');
+        Route::get('/users/{id}/geo-check.json', [$zc, 'geoCheck'])
+            ->where('id', '[0-9]+')->name('geo-check');
+        Route::post('/users/{id}/reassign', [$zc, 'reassign'])
+            ->where('id', '[0-9]+')->name('reassign');
+    });
+
     Route::get('/verification', [$hc, 'verification'])->name('verification');
     Route::get('/verification/list.json', [$hc, 'verificationJson'])->name('verification.list');
 
