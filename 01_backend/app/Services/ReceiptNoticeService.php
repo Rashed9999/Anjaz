@@ -46,10 +46,47 @@ class ReceiptNoticeService
         'donation'                => 'إشعار تبرع',
     ];
 
+    /**
+     * AMIAL-RECEIPT-TYPE-001 — اسم العملية صريحاً.
+     *
+     * العنوان الجانبي («إشعار تحويل») يصنّف المستند، لا العملية: «إشعار دفع»
+     * واحد لدفع نقطة بيع ودفع QR ودفع تاجر. القارئ يحتاج اسم العملية نفسها
+     * في حقل معنون، كما تفعل إشعارات الصرافة.
+     */
+    private const TYPE_LABELS = [
+        'cash_out'                => 'سحب نقدي',
+        'withdraw'                => 'طلب سحب',
+        'cash_in'                 => 'إيداع نقدي',
+        'add_money'               => 'شحن رصيد',
+        'send_money'              => 'تحويل أموال',
+        'received_money'          => 'تحويل وارد',
+        'pay_merchant'            => 'دفع مشتريات',
+        'pos_payment'             => 'دفع عبر نقطة بيع',
+        'qr_payment'              => 'دفع بمسح رمز',
+        'bill_payment'            => 'سداد فاتورة',
+        'refund'                  => 'استرجاع مبلغ',
+        'safe_payment_funded'     => 'حجز مبلغ (دفع آمن)',
+        'safe_payment_released'   => 'تحرير مبلغ (دفع آمن)',
+        'safe_payment_refunded'   => 'استرجاع مبلغ (دفع آمن)',
+        'family_fund_contribute'  => 'مساهمة في صندوق عائلي',
+        'donation'                => 'تبرع',
+    ];
+
     /** عنوان الإشعار. */
     public function title(Receipt $receipt): string
     {
         return self::TITLES[$receipt->receipt_type] ?? 'إشعار عملية';
+    }
+
+    /**
+     * اسم العملية للعرض في حقل «نوع العملية».
+     *
+     * أي نوع غير مُعرَّف يقع على «عملية مالية» لا على الرمز الخام — لا يجوز
+     * أن يرى العميل `family_fund_contribute` في مستند رسمي.
+     */
+    public function typeLabel(Receipt $receipt): string
+    {
+        return self::TYPE_LABELS[$receipt->receipt_type] ?? 'عملية مالية';
     }
 
     /**

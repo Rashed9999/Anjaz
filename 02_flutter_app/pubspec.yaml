@@ -1,7 +1,7 @@
 name: amyal_pay
 description: Amyal Pay - دفع سريع وآمن
 publish_to: 'none'
-version: 1.77.0+1770
+version: 1.78.0+1780
 
 environment:
   sdk: ^3.8.1
@@ -71,6 +71,9 @@ dependencies:
   print_bluetooth_thermal: ^1.2.2
   # AMIAL-BUILD-STAMP: قراءة إصدار التطبيق تلقائياً (بلا نصّ ثابت يتقادم)
   package_info_plus: ^8.0.0
+  # AMIAL-GEO-ZONE-001: تحديد الموقع لاستنتاج المحافظة عند التسجيل.
+  # الموقع اختياري تماماً: رفض الإذن يُبقي إدخال العنوان يدوياً كما هو.
+  geolocator: ^14.0.2
 
 dev_dependencies:
   flutter_lints: ^6.0.0

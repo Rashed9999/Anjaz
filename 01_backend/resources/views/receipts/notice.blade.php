@@ -105,9 +105,15 @@
 <table class="notice">
     {{-- الشريط الجانبي يمتدّ على كل الصفوف --}}
     <tr>
-        <td class="brand" rowspan="7">
+        {{-- AMIAL-RECEIPT-TYPE-001: 8 لا 7 بعد إضافة صفّ «نوع العملية».
+             رقم أقلّ من عدد الصفوف يدفع الخلايا الزائدة خارج الشريط الجانبي. --}}
+        <td class="brand" rowspan="8">
             @if(!empty($logoData))
-                <img src="{{ $logoData }}" class="logo" alt="أميال باي">
+                {{-- AMIAL-RECEIPT-LOGO-001: العرض بنمط مباشر وسمة width معاً.
+                     mPDF لم يطبّق class="logo" على <img> فخرج الشعار بحجمه
+                     الأصلي وطمس الإشعار كلّه. الأنماط المباشرة يحترمها دائماً. --}}
+                <img src="{{ $logoData }}" width="78"
+                     style="width:78px;height:auto;margin-bottom:4px;" alt="أميال باي">
             @endif
             <div style="font-weight:bold;font-size:12px;margin-top:2px;">أميال باي</div>
             <div class="contact">
@@ -132,6 +138,18 @@
         <td><span class="boxed">{{ $accountNumber ?: '—' }}</span></td>
         <td style="text-align:left;font-weight:bold;">
             السيد: {{ $ownerName ?: '—' }}
+        </td>
+    </tr>
+
+    {{-- AMIAL-RECEIPT-TYPE-001: نوع العملية صريحاً.
+         العنوان الجانبي يصنّف المستند («إشعار دفع») لا العملية؛ حقل معنون
+         يميّز دفع المشتريات من دفع نقطة البيع من الدفع بمسح رمز. --}}
+    <tr>
+        <td class="label">نوع العملية</td>
+        <td><span class="boxed">{{ $typeLabel }}</span></td>
+        <td style="text-align:left;">
+            <span class="muted">اتجاه القيد:</span>
+            <strong>{{ $receipt->direction === 'debit' ? 'مدين' : 'دائن' }}</strong>
         </td>
     </tr>
 

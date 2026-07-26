@@ -53,6 +53,12 @@ Route::get('/support-contact', [\App\Http\Controllers\Api\V1\Amial\AdminSettings
 Route::get('/app-version', [\App\Http\Controllers\Api\V1\Amial\AdminOpsController::class, 'publicAppVersion'])
     ->name('amial.app-version');
 
+// AMIAL-GEO-ZONE-001 — إحداثيات الجهاز ← اسم المحافظة (عام: يُستدعى أثناء
+// التسجيل قبل وجود حساب). محدود المعدّل لأنه بلا مصادقة.
+Route::post('/geo/resolve-zone', [\App\Http\Controllers\Api\V1\Amial\GeoZoneController::class, 'resolve'])
+    ->middleware('throttle:30,1')
+    ->name('amial.geo.resolve-zone');
+
 // P0-LEGAL — Markdown docs للموقع العام (بدون auth)
 Route::prefix('legal-docs')->name('amial.legal-docs.')->group(function () {
     Route::get('/', [\App\Http\Controllers\Api\V1\Amial\PublicLegalController::class, 'index'])->name('index');

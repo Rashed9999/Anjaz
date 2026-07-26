@@ -149,7 +149,17 @@ class _SplashScreenState extends State<SplashScreen>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Image.asset(Images.logo, height: 150),
+                  // AMIAL-SPLASH-003: الشعار محكوم بعرض الشاشة لا بارتفاع
+                  // ثابت. `height: 150` وحده يجعل العرض 218 نقطة مهما ضاقت
+                  // النافذة، فيُقصّ من الجانبين. الآن لا يتجاوز 62% من العرض
+                  // المتاح، ويصغر بدل أن يُقصّ.
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.sizeOf(context).width * 0.62,
+                      maxHeight: 150,
+                    ),
+                    child: Image.asset(Images.logo, fit: BoxFit.contain),
+                  ),
                   const SizedBox(height: 18),
                   const Text(
                     'أميال باي',

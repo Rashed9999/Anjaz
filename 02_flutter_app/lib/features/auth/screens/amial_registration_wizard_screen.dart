@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/auth/widgets/signature_pad_widget.dart';
@@ -228,6 +229,84 @@ class _AmialRegistrationWizardScreenState
     setState(() => _step--);
     _page.animateToPage(_step,
         duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
+  }
+
+  // AMIAL-GEO-ZONE-001 — حالة تحديد الموقع
+  bool _locating = false;
+  String? _locationNotice;
+  bool? _inServiceArea;
+
+  /// يطلب الموقع، ويسأل الخادم عن المحافظة، ويعبّئ حقل المحافظة.
+  ///
+  /// كل مسارات الفشل تنتهي برسالة مفهومة وإبقاء الإدخال اليدوي عاملاً —
+  /// لا يجوز أن يمنع تعذّرُ الموقع إتمامَ التسجيل.
+  Future<void> _detectLocation() async {
+    setState(() {
+      _locating = true;
+      _locationNotice = null;
+      _inServiceArea = null;
+    });
+
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        setState(() => _locationNotice =
+            'خدمة الموقع (GPS) مُطفأة في جهازك. شغّلها ثم أعد المحاولة، '
+            'أو أدخل عنوانك يدوياً.');
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever) {
+        setState(() => _locationNotice =
+            'إذن الموقع مرفوض نهائياً. يمكنك السماح به من إعدادات التطبيق، '
+            'أو إدخال عنوانك يدوياً.');
+        return;
+      }
+      if (permission == LocationPermission.denied) {
+        setState(() => _locationNotice =
+            'لم تسمح بالوصول إلى الموقع. أدخل عنوانك يدوياً.');
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+
+      final r = await Get.find<ApiClient>().postData(
+        '/api/v1/amial/geo/resolve-zone',
+        {'latitude': position.latitude, 'longitude': position.longitude},
+      );
+
+      final data = (r.body is Map) ? r.body['data'] : null;
+      if (data is! Map) {
+        setState(() => _locationNotice =
+            'تعذّر تحديد المحافظة من موقعك. أدخل عنوانك يدوياً.');
+        return;
+      }
+
+      final governorate = data['governorate'];
+      setState(() {
+        _inServiceArea = data['in_service_area'] == true;
+        _locationNotice = (data['notice'] as String?) ??
+            'تم تحديد موقعك.';
+        // نعبّئ المحافظة ولا نُقفل الحقل: التحديد تقريبيّ بأقرب مركز،
+        // فيجب أن يبقى تصحيحه ممكناً.
+        if (governorate is String && governorate.isNotEmpty) {
+          _addrGov.text = governorate;
+        }
+      });
+    } catch (e) {
+      setState(() => _locationNotice =
+          'تعذّر تحديد موقعك الآن. أدخل عنوانك يدوياً.');
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
   }
 
   Future<void> _sendOtp() async {
@@ -593,6 +672,53 @@ class _AmialRegistrationWizardScreenState
 
   Widget _stepAddress() => _wrap([
         _sectionNote('أدخل عنوان سكنك بالتفصيل لتسهيل التحقّق.'),
+
+        // AMIAL-GEO-ZONE-001: تحديد المحافظة من موقع الجهاز.
+        // اختياري تماماً — رفض الإذن يترك الإدخال اليدوي كما هو.
+        OutlinedButton.icon(
+          onPressed: _locating ? null : _detectLocation,
+          icon: _locating
+              ? const SizedBox(
+                  width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.my_location),
+          label: Text(_locating ? 'جارٍ تحديد موقعك…' : 'حدّد موقعي تلقائياً'),
+        ),
+        if (_locationNotice != null) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: (_inServiceArea ?? false)
+                  ? const Color(0xFFE8F5E9)
+                  : const Color(0xFFFFF3E0),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: (_inServiceArea ?? false)
+                    ? const Color(0xFF0F9D58)
+                    : const Color(0xFFCFA300),
+              ),
+            ),
+            child: Row(children: [
+              Icon(
+                (_inServiceArea ?? false)
+                    ? Icons.check_circle_outline
+                    : Icons.info_outline,
+                size: 20,
+                color: (_inServiceArea ?? false)
+                    ? const Color(0xFF0F9D58)
+                    : const Color(0xFFCFA300),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(_locationNotice!,
+                    style: const TextStyle(fontSize: 13, height: 1.5)),
+              ),
+            ]),
+          ),
+        ],
+        const SizedBox(height: 16),
+
         _field(_addrGov, 'المحافظة *'),
         _field(_addrDir, 'المديرية *'),
         _field(_addrArea, 'الحي / العزلة *'),

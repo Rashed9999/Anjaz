@@ -68,6 +68,8 @@ class GeneratePdfReceiptJob implements ShouldQueue
             $html = View::make('receipts.notice', [
                 'receipt' => $receipt,
                 'title' => $notice->title($receipt),
+                // AMIAL-RECEIPT-TYPE-001: اسم العملية في حقل معنون
+                'typeLabel' => $notice->typeLabel($receipt),
                 'opening' => $notice->opening($receipt),
                 'narrative' => $notice->narrative($receipt),
                 'amountInWords' => $notice->amountInWords($receipt),

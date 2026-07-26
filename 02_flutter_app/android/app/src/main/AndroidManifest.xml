@@ -17,6 +17,12 @@
     <!-- AMYAL-BRANDING-001: لاستلام إشعارات FCM -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
+    <!-- AMIAL-GEO-ZONE-001: تحديد المحافظة عند التسجيل (اختياري تماماً —
+         رفض الإذن يُبقي إدخال العنوان يدوياً عاملاً). COARSE تكفي: نحن
+         نطابق أقرب مركز محافظة، لا نتتبّع المستخدم. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+
     <!-- AMIAL-THERMAL-PRINT-001: طباعة الإيصالات على طابعة حرارية عبر البلوتوث -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>

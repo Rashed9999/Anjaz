@@ -79,9 +79,18 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return GetBuilder<ThemeController>(builder: (themeController) {
       return GetBuilder<LocalizationController>(builder: (localizeController) {
+        // AMIAL-SPLASH-003: أُزيل SafeArea الذي كان يلفّ GetMaterialApp كلّه.
+        //
+        // لفّ التطبيق كاملاً بـ SafeArea خطأ بنيوي: الحشوات تُطبَّق مرّة واحدة
+        // على الجذر فتُقلَّص نافذة التطبيق كلّها — كل الشاشات، لا الشاشة التي
+        // تحتاجها. وهو الودجت الوحيد في هذه الشجرة القادر على تضييق عرض
+        // التطبيق، وقد ظهر أثره في شاشة البداية: الشعار مقصوص من اليسار
+        // والمحتوى كلّه متمركز حول 61% من عرض الشاشة لا حول منتصفها.
+        //
+        // الصحيح أن تستعمل كل شاشة SafeArea لنفسها — وشاشة البداية تفعل.
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(0.95)),
-          child: SafeArea(top: false, child: GetMaterialApp(
+          child: GetMaterialApp(
             navigatorObservers: [FlutterSmartDialog.observer],
             builder: FlutterSmartDialog.init(),
             title: AppConstants.appName,
@@ -96,7 +105,7 @@ class MyApp extends StatelessWidget {
             defaultTransition: Transition.topLevel,
             transitionDuration: const Duration(milliseconds: 500),
 
-          )),
+          ),
         );
       },
       );

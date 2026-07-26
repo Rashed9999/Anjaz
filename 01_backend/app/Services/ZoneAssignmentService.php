@@ -152,6 +152,105 @@ class ZoneAssignmentService
     }
 
     /**
+     * AMIAL-GEO-ZONE-001 — مراكز المحافظات اليمنية (خط العرض، خط الطول).
+     *
+     * لماذا مراكز لا حدود مضلّعة: حدود المحافظات ملفّ ضخم يحتاج مكتبة
+     * هندسية، والدقّة الزائدة بلا فائدة هنا — نريد اسم محافظة يطمئن العميل
+     * ويعبّئ حقل العنوان، لا فصلاً قضائياً في نزاع حدودي.
+     *
+     * حضرموت وشبوة شاسعتان فلهما مرساتان لكلٍّ منهما (ساحل وداخل)، وإلا
+     * وقعت المكلا على أقرب محافظة أخرى.
+     */
+    private const GOVERNORATE_ANCHORS = [
+        // الجنوب
+        ['عدن',      12.7855, 45.0187],
+        ['لحج',      13.0567, 44.8819],
+        ['أبين',     13.1280, 45.3800],
+        ['الضالع',   13.6957, 44.7311],
+        ['شبوة',     14.5366, 46.8319],
+        ['شبوة',     14.0000, 47.5000],
+        ['حضرموت',   14.5424, 49.1242],   // المكلا (الساحل)
+        ['حضرموت',   15.9422, 48.7869],   // سيئون (الوادي)
+        ['حضرموت',   17.5000, 49.5000],   // الصحراء الشمالية
+        ['المهرة',   16.2094, 52.1751],
+        ['سقطرى',    12.6519, 54.0219],
+        // الشمال
+        ['صنعاء',    15.3694, 44.1910],
+        ['عمران',    15.6594, 43.9439],
+        ['صعدة',     16.9402, 43.7637],
+        ['حجة',      15.6943, 43.6017],
+        ['المحويت',  15.4700, 43.5450],
+        ['ذمار',     14.5426, 44.4018],
+        ['إب',       13.9667, 44.1833],
+        ['تعز',      13.5795, 44.0209],
+        ['الحديدة',  14.7979, 42.9545],
+        ['ريمة',     14.6278, 43.4239],
+        ['البيضاء',  13.9889, 45.5744],
+        ['مأرب',     15.4600, 45.3256],
+        ['الجوف',    16.1633, 44.7833],
+    ];
+
+    /** الإطار الجغرافي لليمن شاملاً سقطرى — خارجه لا نخمّن محافظة. */
+    private const YEMEN_BOUNDS = ['lat' => [11.9, 19.2], 'lng' => [41.6, 54.8]];
+
+    /**
+     * اسم المحافظة من الإحداثيات، أو null خارج اليمن.
+     *
+     * تقريبيّ بأقرب مركز — لا يُعتمد عليه في قرار مالي. الغرض عرض اسم
+     * مفهوم للعميل وتعبئة حقل العنوان.
+     */
+    public function governorateFromCoordinates(float $lat, float $lng): ?string
+    {
+        [$latMin, $latMax] = self::YEMEN_BOUNDS['lat'];
+        [$lngMin, $lngMax] = self::YEMEN_BOUNDS['lng'];
+
+        if ($lat < $latMin || $lat > $latMax || $lng < $lngMin || $lng > $lngMax) {
+            return null;
+        }
+
+        $best = null;
+        $bestDistance = PHP_FLOAT_MAX;
+
+        foreach (self::GOVERNORATE_ANCHORS as [$name, $aLat, $aLng]) {
+            $d = $this->haversineKm($lat, $lng, $aLat, $aLng);
+            if ($d < $bestDistance) {
+                $bestDistance = $d;
+                $best = $name;
+            }
+        }
+
+        return $best;
+    }
+
+    /**
+     * المنطقة التشغيلية من الإحداثيات — إشارة لا قرار.
+     *
+     * ⚠️ لا تُسند هذه النتيجة إلى user->zone_code مباشرة. إحداثيات الجهاز
+     * يمكن تزويرها بتطبيق موقع وهمي في دقائق، فجعلها تمنح SOUTH يحوّل
+     * سياسة المناطق كلها إلى إجراء شكلي. السلطة تبقى لتوثيق KYC وقرار
+     * الإدارة، تماماً كما هو مصمَّم.
+     */
+    public function zoneFromCoordinates(float $lat, float $lng): string
+    {
+        $governorate = $this->governorateFromCoordinates($lat, $lng);
+
+        return $governorate === null ? self::ZONE_OTHER : $this->cityToZone($governorate);
+    }
+
+    /** المسافة بالكيلومترات بين نقطتين على سطح الأرض. */
+    private function haversineKm(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $earthRadiusKm = 6371.0;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+
+        $a = sin($dLat / 2) ** 2
+            + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng / 2) ** 2;
+
+        return $earthRadiusKm * 2 * atan2(sqrt($a), sqrt(1 - $a));
+    }
+
+    /**
      * جمع كل الإشارات المتاحة (للتسجيل والـ audit).
      */
     public function gatherSignals(User $user, ?Request $request): array
