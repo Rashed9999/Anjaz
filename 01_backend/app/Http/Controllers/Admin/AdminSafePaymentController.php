@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\SafePayment;
+use App\Models\User;
 use App\Services\SafePaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -53,6 +54,26 @@ class AdminSafePaymentController extends Controller
             ->first();
         if (!$payment) return $this->error('NOT_FOUND', 'Not found', 404);
 
+        // AMIAL-SAFEPAY-AUDIT-001: من فتح النزاع ومتى.
+        //
+        // القرار وحده لا يكفي للكشف عن التحايل: موظّف يفتح نزاعات ليست من
+        // نصيبه، أو يفتح نزاعاً عشرين مرّة قبل أن يحسمه، أو يفتحه ولا يحسمه
+        // ثم يحسمه زميله — كلّها أنماط لا تظهر إلا إذا سُجّلت القراءة أيضاً.
+        app(\App\Services\AuditService::class)->record([
+            'actor_type' => 'admin',
+            'actor_user_id' => $request->user()?->id,
+            'subject_type' => 'safe_payment',
+            'subject_id' => (string) $payment->id,
+            'action' => 'SAFE_PAYMENT_DISPUTE_VIEWED',
+            'decision_code' => 'VIEWED',
+            'severity' => 'notice',
+            'context' => [
+                'payment_ulid' => $payment->payment_ulid,
+                'status' => $payment->status,
+                'ip' => $request->ip(),
+            ],
+        ]);
+
         return $this->ok([
             'payment' => $payment,
             // AMIAL-SAFEPAY-EVIDENCE-001: القرار المالي يُبنى على الأدلّة.
@@ -64,7 +85,40 @@ class AdminSafePaymentController extends Controller
                 : null,
             'delivery_code_verified' => $payment->delivery_code_verified_at !== null,
             'delivery_code_attempts' => (int) $payment->delivery_code_attempts,
+            'audit_trail' => $this->auditTrail($payment),
         ]);
+    }
+
+    /**
+     * سجلّ التدقيق لهذا النزاع — يُعرض للموظّف وهو يقرّر.
+     *
+     * عرضه أمامه ليس تكميلاً للمعلومة بل ردعٌ في محلّه: من يرى أن فتحه
+     * للملفّ مُسجَّل باسمه ووقته، وأن قراره سيُقيَّد ببصمات الأدلّة التي
+     * أمامه، يتصرّف تصرّف من يعلم أنه مرئيّ. سجلٌّ لا يراه أحد لا يردع أحداً.
+     */
+    private function auditTrail(SafePayment $payment): array
+    {
+        $rows = \App\Models\AuditDecision::where('subject_type', 'safe_payment')
+            ->where('subject_id', (string) $payment->id)
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get(['actor_type', 'actor_user_id', 'action',
+                   'decision_code', 'reason', 'severity', 'created_at']);
+
+        // أسماء الفاعلين باستعلام واحد لا باستعلام لكل سطر.
+        $names = User::whereIn('id', $rows->pluck('actor_user_id')->filter()->unique())
+            ->pluck('f_name', 'id');
+
+        return $rows->map(fn ($row) => [
+            'action' => $row->action,
+            'decision_code' => $row->decision_code,
+            'actor_type' => $row->actor_type,
+            'actor_user_id' => $row->actor_user_id,
+            'actor_name' => $names[$row->actor_user_id] ?? null,
+            'reason' => $row->reason,
+            'severity' => $row->severity,
+            'at' => optional($row->created_at)->format('Y-m-d H:i'),
+        ])->all();
     }
 
     /**
@@ -101,6 +155,26 @@ class AdminSafePaymentController extends Controller
         if ($contents === null) {
             return $this->error('FILE_MISSING', 'تعذّر قراءة الملفّ من القرص', 404);
         }
+
+        // صور بضاعة الناس وفواتيرهم ومحادثاتهم. الوصول إليها مشروع للمراجع
+        // ومشروط بأثر: من سحب ملفّاً بمعرّفه دون أن يفتح نزاعه أصلاً ظهر
+        // في السجلّ وحده بلا فتحٍ يسبقه.
+        app(\App\Services\AuditService::class)->record([
+            'actor_type' => 'admin',
+            'actor_user_id' => $request->user()?->id,
+            'subject_type' => 'safe_payment',
+            'subject_id' => (string) $evidence->safe_payment_id,
+            'action' => 'SAFE_PAYMENT_EVIDENCE_VIEWED',
+            'decision_code' => 'VIEWED',
+            'severity' => 'notice',
+            'context' => [
+                'evidence_id' => $evidence->id,
+                'stage' => $evidence->stage,
+                'uploaded_by_role' => $evidence->role,
+                'fingerprint' => substr((string) $evidence->sha256, 0, 12),
+                'ip' => $request->ip(),
+            ],
+        ]);
 
         return response($contents, 200, [
             'Content-Type' => $evidence->mime,

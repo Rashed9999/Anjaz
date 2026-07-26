@@ -36,6 +36,15 @@ class AuditDecisionsController extends Controller
         if ($action = $request->query('action')) {
             $query->where('action', 'like', "%{$action}%");
         }
+        // AMIAL-SAFEPAY-AUDIT-001: «أرني كل ما جرى على هذا الشيء بعينه».
+        // بدونهما كان السجلّ يُقرأ بالفاعل أو بالنوع فقط — فمن أراد تتبّع
+        // نزاع واحد من فتحه إلى حسمه لم يكن له سبيل.
+        if ($subjectType = $request->query('subject_type')) {
+            $query->where('subject_type', $subjectType);
+        }
+        if ($subjectId = $request->query('subject_id')) {
+            $query->where('subject_id', (string) $subjectId);
+        }
         if ($from = $request->query('date_from')) {
             $query->where('created_at', '>=', $from);
         }
@@ -56,7 +65,8 @@ class AuditDecisionsController extends Controller
             'decisions' => $decisions,
             'stats_24h' => $stats24h,
             'filters' => $request->only([
-                'decision_code', 'severity', 'actor_user_id', 'action', 'date_from', 'date_to'
+                'decision_code', 'severity', 'actor_user_id', 'action',
+                'subject_type', 'subject_id', 'date_from', 'date_to',
             ]),
         ]);
     }

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\InsufficientBalanceException;
 use App\Models\SafePayment;
 use App\Models\SafePaymentEvent;
+use App\Models\SafePaymentEvidence;
 use App\Models\User;
 use App\Services\FeeService;
 use Illuminate\Support\Facades\DB;
@@ -563,6 +564,61 @@ class SafePaymentService
     // 7. Admin resolutions (للنزاعات)
     // ============================================================
 
+    /**
+     * AMIAL-SAFEPAY-AUDIT-001 — قرار الموظّف في سجلّ لا يُحذف.
+     *
+     * قرار حسم النزاع هو الموضع الوحيد في النظام كلّه الذي ينقل فيه موظّفٌ
+     * مالاً بين عميلين بإرادته. كان يُكتب في `safe_payment_events` وحده —
+     * جدول عاديّ يُحذف منه من ملك القاعدة ولا يترك أثراً. أما
+     * `audit_decisions` فسلسلة تجزئة: كل سجلّ يحمل بصمة سابقه، فحذف واحد
+     * أو تعديله يكسر السلسلة ويكشفه `amial:audit-verify`.
+     *
+     * **الأهمّ: القرار يُقيَّد بالأدلّة التي كانت أمامه لحظة اتّخاذه** —
+     * معرّفاتها وبصماتها. بدون ذلك يستطيع من أراد التحايل أن يقرّر أوّلاً
+     * ثم يرفع دليلاً يُبرّر قراره، ولا يُظهر السجلّ الترتيب. وبها يصير
+     * السؤال قابلاً للإجابة: على أيّ شيء بالضبط بنى فلانٌ حكمه؟
+     */
+    private function auditAdminResolution(
+        SafePayment $payment,
+        User $admin,
+        string $action,
+        string $decisionCode,
+        string $reason,
+        array $amounts,
+    ): void {
+        $evidence = SafePaymentEvidence::where('safe_payment_id', $payment->id)
+            ->orderBy('id')
+            ->get(['id', 'role', 'stage', 'sha256']);
+
+        $this->audit->record([
+            'actor_type' => 'admin',
+            'actor_user_id' => $admin->id,
+            'subject_type' => 'safe_payment',
+            'subject_id' => (string) $payment->id,
+            'action' => $action,
+            'decision_code' => $decisionCode,
+            'reason' => mb_substr($reason, 0, 255),
+            // قرار موظّف يحرّك مال عميلين: أعلى درجة، يظهر في أعلى اللوحة.
+            'severity' => 'critical',
+            'zone_code' => $payment->zone_code,
+            'context' => [
+                'payment_ulid' => $payment->payment_ulid,
+                'buyer_user_id' => (int) $payment->buyer_user_id,
+                'seller_user_id' => (int) $payment->seller_user_id,
+                'held_amount_before' => (string) $payment->held_amount,
+                'dispute_reason_code' => $payment->dispute_reason_code,
+                'delivery_code_verified' => $payment->delivery_code_verified_at !== null,
+                'evidence_at_decision' => $evidence->map(fn ($e) => [
+                    'id' => $e->id,
+                    'role' => $e->role,
+                    'stage' => $e->stage,
+                    'fingerprint' => substr((string) $e->sha256, 0, 12),
+                ])->all(),
+                'evidence_count' => $evidence->count(),
+            ] + $amounts,
+        ]);
+    }
+
     public function adminResolveRelease(SafePayment $payment, User $admin, string $reason): SafePayment
     {
         $this->assertDisputed($payment);
@@ -584,6 +640,11 @@ class SafePaymentService
             $this->recordEvent($locked, 'admin_resolved_release', 'disputed', 'released_to_seller',
                 actorType: 'admin', actorUserId: $admin->id, note: $reason);
         });
+
+        $this->auditAdminResolution(
+            $payment, $admin, 'SAFE_PAYMENT_ADMIN_RELEASE', 'RESOLVED_RELEASE', $reason,
+            ['to_seller' => (string) $payment->held_amount, 'to_buyer' => '0'],
+        );
 
         $payment = $payment->fresh();
         $this->safeIssueReceipt($payment, 'credit', $payment->seller_user_id, $payment->buyer_user_id, 'safe_payment_released');
@@ -614,6 +675,11 @@ class SafePaymentService
             $this->recordEvent($locked, 'admin_resolved_refund', 'disputed', 'refunded_to_buyer',
                 actorType: 'admin', actorUserId: $admin->id, note: $reason);
         });
+
+        $this->auditAdminResolution(
+            $payment, $admin, 'SAFE_PAYMENT_ADMIN_REFUND', 'RESOLVED_REFUND', $reason,
+            ['to_buyer' => (string) $payment->held_amount, 'to_seller' => '0'],
+        );
 
         $payment = $payment->fresh();
         $this->safeIssueReceipt($payment, 'credit', $payment->buyer_user_id, $payment->seller_user_id, 'safe_payment_refunded');
@@ -693,6 +759,13 @@ class SafePaymentService
                 actorType: 'admin', actorUserId: $admin->id, note: $reason,
                 context: ['buyer_amount' => $buyerAmount, 'seller_amount' => $sellerAmount]);
         });
+
+        // التسوية الجزئية أخطر الثلاثة: المبلغ يُقسَم برأي الموظّف وحده،
+        // فتُسجَّل الحصّتان كما أدخلهما لا كما آلتا.
+        $this->auditAdminResolution(
+            $payment, $admin, 'SAFE_PAYMENT_ADMIN_PARTIAL', 'RESOLVED_PARTIAL', $reason,
+            ['to_buyer' => $buyerAmount, 'to_seller' => $sellerAmount],
+        );
 
         $payment = $payment->fresh();
         if (bccomp((string)$payment->refunded_to_buyer_amount, '0', 4) > 0) {

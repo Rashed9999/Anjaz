@@ -63,6 +63,20 @@
                     <label class="form-label">{{ translate('Date to') }}</label>
                     <input type="date" name="date_to" class="form-control" value="{{ $filters['date_to'] ?? '' }}">
                 </div>
+
+                {{-- AMIAL-SAFEPAY-AUDIT-001: تتبّع شيء بعينه (نزاع، مستخدم، تسوية)
+                     من أوّل أثر له إلى آخره. تُملأ آلياً حين يُفتح السجلّ من
+                     لوحة النزاعات، ولذلك تبقى محفوظة عبر الفلترة والتصفّح. --}}
+                <div class="col-md-3">
+                    <label class="form-label">{{ translate('Subject type') }}</label>
+                    <input type="text" name="subject_type" class="form-control"
+                           placeholder="safe_payment, user, ..." value="{{ $filters['subject_type'] ?? '' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">{{ translate('Subject ID') }}</label>
+                    <input type="text" name="subject_id" class="form-control" dir="ltr"
+                           value="{{ $filters['subject_id'] ?? '' }}">
+                </div>
             </form>
         </div>
     </div>

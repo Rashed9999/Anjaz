@@ -62,8 +62,19 @@
             <div class="fw-bold mb-2">سجلّ الأحداث</div>
             <ul class="list-group mb-3" id="d-events" style="max-height:200px;overflow-y:auto"></ul>
 
+            {{-- AMIAL-SAFEPAY-AUDIT-001: السجلّ الذي لا يُحذف، معروضاً --}}
+            <div class="fw-bold mb-2">سجلّ التدقيق
+                <span class="badge bg-dark">لا يُحذف ولا يُعدَّل</span>
+                <a class="small ms-2" id="d-audit-link" href="#" target="_blank" rel="noopener">السجلّ الكامل ↗</a>
+            </div>
+            <ul class="list-group mb-3" id="d-audit" style="max-height:180px;overflow-y:auto"></ul>
+
             <div class="card p-3 bg-light border">
                 <div class="fw-bold mb-2">قرار الحسم</div>
+                <div class="alert alert-secondary py-2 small mb-2">
+                    قرارك يُقيَّد باسمك ووقته وببصمات الأدلّة المعروضة أعلاه في سلسلة
+                    تدقيق مترابطة — أي حذف أو تعديل لاحق يكسر السلسلة ويُكشف.
+                </div>
                 <div class="mb-2">
                     <label class="form-label">سبب القرار — 10 أحرف فأكثر (يُسجَّل ويُبلَّغ للطرفين)</label>
                     <input class="form-control" id="d-reason" placeholder="مثال: البضاعة سُلّمت حسب الاتفاق والصور المرفقة…">
@@ -186,6 +197,33 @@
             </div>`).join('');
     }
 
+    const AUDIT_LABEL = {
+        SAFE_PAYMENT_CREATED: 'إنشاء الطلب',
+        SAFE_PAYMENT_DISPUTED: 'فتح المشتري نزاعاً',
+        SAFE_PAYMENT_DISPUTE_VIEWED: 'فتح موظّف ملفّ النزاع',
+        SAFE_PAYMENT_EVIDENCE_VIEWED: 'اطّلاع موظّف على دليل',
+        SAFE_PAYMENT_ADMIN_RELEASE: 'قرار: إفراج كامل للبائع',
+        SAFE_PAYMENT_ADMIN_REFUND: 'قرار: إعادة كاملة للمشتري',
+        SAFE_PAYMENT_ADMIN_PARTIAL: 'قرار: تسوية جزئية',
+    };
+    const SEV_CLASS = {critical: 'text-danger fw-bold', warning: 'text-warning-emphasis', notice: 'text-muted'};
+
+    function renderAudit(rows, paymentId) {
+        const link = document.getElementById('d-audit-link');
+        link.href = `{{ url('admin/amial/audit') }}?subject_type=safe_payment&subject_id=${encodeURIComponent(paymentId ?? '')}`;
+
+        document.getElementById('d-audit').innerHTML = rows.length ? rows.map(r => `
+            <li class="list-group-item small d-flex justify-content-between align-items-start">
+                <span class="${SEV_CLASS[r.severity] || ''}">
+                    ${esc(AUDIT_LABEL[r.action] || r.action)}
+                    ${r.actor_name ? `— <span class="text-muted">${esc(r.actor_name)}</span>` : ''}
+                    ${r.reason ? `<div class="text-muted" style="font-size:11px">${esc(r.reason)}</div>` : ''}
+                </span>
+                <span class="text-muted text-nowrap ms-2" dir="ltr">${esc(r.at ?? '')}</span>
+            </li>`).join('')
+            : '<li class="list-group-item text-muted small">لا سجلّات بعد</li>';
+    }
+
     async function openDispute(ulid) {
         currentUlid = ulid;
         document.getElementById('d-error').textContent = '';
@@ -218,6 +256,7 @@
             </div>`;
 
         renderEvidence(meta.evidence || {});
+        renderAudit(meta.audit_trail || [], p.id);
         document.getElementById('d-partial-amount').max = p.amount ?? '';
         document.getElementById('d-events').innerHTML = (p.events || []).map(ev => `
             <li class="list-group-item small d-flex justify-content-between">

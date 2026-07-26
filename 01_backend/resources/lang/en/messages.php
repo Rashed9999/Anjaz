@@ -171,4 +171,6 @@
   'Cancel' => 'Cancel',
   'Save' => 'Save',
   'لوحة المناطق' => 'لوحة المناطق',
+  'Subject type' => 'Subject type',
+  'Subject ID' => 'Subject ID',
 );
