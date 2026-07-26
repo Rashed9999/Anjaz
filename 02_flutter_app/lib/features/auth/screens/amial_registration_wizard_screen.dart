@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:amyal_pay/features/auth/widgets/governorate_picker.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/auth/widgets/signature_pad_widget.dart';
@@ -56,8 +57,12 @@ class _AmialRegistrationWizardScreenState
   final _idIssue = TextEditingController();  // تاريخ الإصدار
   final _idExpiry = TextEditingController(); // تاريخ الانتهاء
 
+  // AMIAL-GOVERNORATES-001: محافظتا الأصل (من الهوية) والسكن (من وثيقة
+  // العنوان). المنطقة التشغيلية تتبع السكن؛ والأصل إشارة يقارنها المراجع.
+  String? _originGov;      // رمز ISO — محافظة الأصل
+  String? _residenceGov;   // رمز ISO — محافظة السكن
+
   // العنوان بالتفصيل
-  final _addrGov = TextEditingController();      // المحافظة
   final _addrDir = TextEditingController();      // المديرية
   final _addrArea = TextEditingController();     // الحي/العزلة
   final _addrStreet = TextEditingController();   // الشارع
@@ -88,13 +93,16 @@ class _AmialRegistrationWizardScreenState
     for (final c in [
       _name1, _name2, _name3, _name4, _dob, _email, _occupation, _phone,
       _idNumber, _idIssue, _idExpiry,
-      _addrGov, _addrDir, _addrArea, _addrStreet, _addrLandmark,
+      _addrDir, _addrArea, _addrStreet, _addrLandmark,
       _kinName, _kinPhone, _kinRelation, _pin, _pinConfirm, _otp, _storeName,
     ]) {
       c.dispose();
     }
     super.dispose();
   }
+
+  /// اسم المحافظة من رمزها — لبناء نصّ العنوان المرسل.
+  String _govName(String? code) => GovernoratePicker.nameOf(code) ?? '';
 
   void _snack(String msg) {
     if (!mounted) return;
@@ -150,9 +158,12 @@ class _AmialRegistrationWizardScreenState
         }
         return true;
       case 2:
-        if (_addrGov.text.trim().isEmpty || _addrDir.text.trim().isEmpty ||
-            _addrArea.text.trim().isEmpty) {
-          _snack('أدخل المحافظة والمديرية والحي على الأقل');
+        if (_residenceGov == null) {
+          _snack('اختر محافظة السكن');
+          return false;
+        }
+        if (_addrDir.text.trim().isEmpty || _addrArea.text.trim().isEmpty) {
+          _snack('أدخل المديرية والحي على الأقل');
           return false;
         }
         return true;
@@ -297,8 +308,9 @@ class _AmialRegistrationWizardScreenState
             'تم تحديد موقعك.';
         // نعبّئ المحافظة ولا نُقفل الحقل: التحديد تقريبيّ بأقرب مركز،
         // فيجب أن يبقى تصحيحه ممكناً.
-        if (governorate is String && governorate.isNotEmpty) {
-          _addrGov.text = governorate;
+        final code = data['governorate_code'];
+        if (code is String && code.isNotEmpty) {
+          _residenceGov = code;
         }
       });
     } catch (e) {
@@ -348,7 +360,7 @@ class _AmialRegistrationWizardScreenState
           .join(' ');
       // العنوان المفصّل يُجمع في نصّ واحد
       final address = [
-        _addrGov.text, _addrDir.text, _addrArea.text,
+        _govName(_residenceGov), _addrDir.text, _addrArea.text,
         _addrStreet.text, _addrLandmark.text,
       ].map((s) => s.trim()).where((s) => s.isNotEmpty).join('، ');
       final fields = <String, String>{
@@ -367,6 +379,9 @@ class _AmialRegistrationWizardScreenState
         'identification_issue_date': _idIssue.text.trim(),
         'identification_expiry_date': _idExpiry.text.trim(),
         'address': address,
+        // AMIAL-GOVERNORATES-001
+        if (_originGov != null) 'origin_governorate': _originGov!,
+        if (_residenceGov != null) 'residence_governorate': _residenceGov!,
         'kin_name': _kinName.text.trim(),
         'kin_phone': _kinPhone.text.trim(),
         'kin_relation': _kinRelation.text.trim(),
@@ -652,7 +667,16 @@ class _AmialRegistrationWizardScreenState
       ]);
 
   Widget _stepIdentity() => _wrap([
-        _sectionNote('اختر نوع وثيقة الهوية وأدخل رقمها.'),
+        _sectionNote('اختر نوع وثيقة الهوية وأدخل رقمها، ومحافظة الأصل كما '
+            'هي مدوّنة في الوثيقة.'),
+        // AMIAL-GOVERNORATES-001: الأصل من الهوية، والسكن في خطوة العنوان.
+        // فصلهما مقصود: من أصله إب ويسكن عدن حالة عادية، والمنطقة تتبع السكن.
+        GovernoratePicker(
+          label: 'محافظة الأصل (حسب الهوية)',
+          value: _originGov,
+          helper: 'كما هي في وثيقة الهوية — قد تختلف عن محافظة سكنك',
+          onChanged: (v) => setState(() => _originGov = v),
+        ),
         DropdownButtonFormField<String>(
           value: _idType,
           decoration: const InputDecoration(labelText: 'نوع الوثيقة', border: OutlineInputBorder()),
@@ -719,7 +743,12 @@ class _AmialRegistrationWizardScreenState
         ],
         const SizedBox(height: 16),
 
-        _field(_addrGov, 'المحافظة *'),
+        GovernoratePicker(
+          label: 'محافظة السكن *',
+          value: _residenceGov,
+          helper: 'حسب وثيقة العنوان — عليها تُحدَّد منطقة تشغيل حسابك',
+          onChanged: (v) => setState(() => _residenceGov = v),
+        ),
         _field(_addrDir, 'المديرية *'),
         _field(_addrArea, 'الحي / العزلة *'),
         _field(_addrStreet, 'الشارع'),

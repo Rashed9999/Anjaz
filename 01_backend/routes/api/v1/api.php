@@ -64,12 +64,12 @@ Route::middleware(['throttle:100,1'])->group(function () {
                 Route::put('update-fcm-token', [CustomerAuthController::class, 'updateFcmToken']);
                 Route::post('logout', [CustomerAuthController::class, 'logout']);
 
-                Route::post('send-money', [TransactionController::class, 'sendMoney']);
-                Route::post('cash-out', [TransactionController::class, 'cashOut']);
-                Route::post('request-money', [TransactionController::class, 'requestMoney']);
+                Route::post('send-money', [TransactionController::class, 'sendMoney'])->middleware('amial.zone:send_money');
+                Route::post('cash-out', [TransactionController::class, 'cashOut'])->middleware('amial.zone:cash_out');
+                Route::post('request-money', [TransactionController::class, 'requestMoney'])->middleware('amial.zone:request_money');
                 Route::post('request-money/{slug}', [TransactionController::class, 'requestMoneyStatus']);
-                Route::post('add-money', [TransactionController::class, 'addMoney']);
-                Route::post('withdraw', [TransactionController::class, 'withdraw']);
+                Route::post('add-money', [TransactionController::class, 'addMoney'])->middleware('amial.zone:add_money');
+                Route::post('withdraw', [TransactionController::class, 'withdraw'])->middleware('amial.zone:withdraw');
                 Route::get('transaction-history', [TransactionController::class, 'transactionHistory']);
                 Route::get('transaction/download-pdf', [TransactionController::class, 'downloadTransaction']);
 
@@ -124,10 +124,10 @@ Route::middleware(['throttle:100,1'])->group(function () {
                 Route::post('logout', [AgentController::class, 'logout']);
                 Route::delete('remove-account', [AgentController::class, 'removeAccount']);
 
-                Route::post('send-money', [AgentTransactionController::class, 'cashIn']);
-                Route::post('request-money', [AgentTransactionController::class, 'requestMoney']);
-                Route::post('add-money', [AgentTransactionController::class, 'addMoney']);
-                Route::post('withdraw', [AgentTransactionController::class, 'withdraw']);
+                Route::post('send-money', [AgentTransactionController::class, 'cashIn'])->middleware('amial.zone:cash_in');
+                Route::post('request-money', [AgentTransactionController::class, 'requestMoney'])->middleware('amial.zone:request_money');
+                Route::post('add-money', [AgentTransactionController::class, 'addMoney'])->middleware('amial.zone:add_money');
+                Route::post('withdraw', [AgentTransactionController::class, 'withdraw'])->middleware('amial.zone:withdraw');
                 Route::get('transaction-history', [AgentTransactionController::class, 'transactionHistory']);
                 Route::get('transaction/download-pdf', [AgentTransactionController::class, 'downloadTransaction']);
 

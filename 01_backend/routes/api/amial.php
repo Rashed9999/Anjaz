@@ -59,6 +59,10 @@ Route::post('/geo/resolve-zone', [\App\Http\Controllers\Api\V1\Amial\GeoZoneCont
     ->middleware('throttle:30,1')
     ->name('amial.geo.resolve-zone');
 
+// AMIAL-GOVERNORATES-001 — جدول المحافظات للقائمة المنسدلة في التسجيل
+Route::get('/geo/governorates', [\App\Http\Controllers\Api\V1\Amial\GeoZoneController::class, 'governorates'])
+    ->name('amial.geo.governorates');
+
 // P0-LEGAL — Markdown docs للموقع العام (بدون auth)
 Route::prefix('legal-docs')->name('amial.legal-docs.')->group(function () {
     Route::get('/', [\App\Http\Controllers\Api\V1\Amial\PublicLegalController::class, 'index'])->name('index');
@@ -396,7 +400,11 @@ Route::middleware(['auth:api'])->group(function () {
             ->where('ulid', '[A-Z0-9]{26}')->name('seller-delivered');
 
         // Buyer actions
+        // AMIAL-ZONE-GAP-001: كان الإنشاء محروساً بـ amial.zone والتحرير بلا
+        // حارس — أي حُرس فتح الصندوق ولم يُحرس إخراج المال منه. buyer-confirm
+        // هو ما ينقل المبلغ فعلاً إلى البائع.
         Route::post('/{ulid}/buyer-confirm', [SafePaymentController::class, 'buyerConfirm'])
+            ->middleware('amial.zone:safe_payment_release')
             ->where('ulid', '[A-Z0-9]{26}')->name('buyer-confirm');
         Route::post('/{ulid}/buyer-cancel', [SafePaymentController::class, 'buyerCancel'])
             ->where('ulid', '[A-Z0-9]{26}')->name('buyer-cancel');

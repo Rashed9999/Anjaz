@@ -216,6 +216,14 @@ $app = Application::configure(basePath: dirname(__DIR__))
             if (method_exists($e, 'render')) {
                 return null;
             }
+            // AMIAL-FIX(VISIBILITY-2): HttpResponseException يحمل استجابة
+            // جاهزة — وهو الآلية التي يردّ بها الوسيط عبر abort(response(...)).
+            // لا render() فيه ولا HttpExceptionInterface، فكان يسقط في فرع
+            // 500 أدناه: يردّ الوسيط «رقم الجهاز غير مطابق» فيرى المستخدم
+            // «حدث خطأ في الخادم». نُخرج استجابته كما هي.
+            if ($e instanceof \Illuminate\Http\Exceptions\HttpResponseException) {
+                return $e->getResponse();
+            }
             if ($e instanceof \Illuminate\Validation\ValidationException) {
                 return new \Illuminate\Http\JsonResponse([
                     'success' => false, 'code' => 'VALIDATION_FAILED',

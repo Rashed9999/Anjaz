@@ -13,11 +13,13 @@ use App\Models\User;
 use App\Services\AgentNetworkService;
 use App\Services\AuditService;
 use App\Services\MoneyService;
+use App\Services\ZoneAssignmentService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 /**
@@ -239,6 +241,11 @@ class AdminHubController extends Controller
                 'score' => $score,
                 'is_dangerous' => in_array($level, ['high', 'critical'], true),
             ],
+            // AMIAL-GOVERNORATES-001: المطابقة الجغرافية أمام المراجع —
+            // الأصل مقابل السكن مقابل جدول المناطق. أعلام لا حكم: القرار
+            // بشريّ لأن النزوح والعمل والدراسة تفصل الأصل عن السكن بلا ريبة.
+            'geo_check' => app(\App\Services\KycGeoConsistencyService::class)->evaluate($user),
+            'zone_code' => $user->zone_code,
             'transactions' => $transactions,
         ];
 
@@ -329,6 +336,38 @@ class AdminHubController extends Controller
         ]);
     }
 
+    /**
+     * AMIAL-ZONE-GAP-001 — إسناد المنطقة عند الاعتماد.
+     *
+     * الترتيب مقصود: محافظة السكن المخزّنة أولاً، فإن غابت فمحافظة الأصل
+     * (أضعف لكن أفضل من لا شيء)، فإن غابتا فقرار الأدمن الصريح إن أرسله.
+     * وإن لم يتوفّر شيء تبقى UNKNOWN — لا نخمّن SOUTH أبداً، فذلك بالضبط
+     * الافتراض الخطير الذي بُني هذا النظام لإلغائه.
+     */
+    private function assignZoneOnApproval(User $user, Request $request): void
+    {
+        $zones = app(ZoneAssignmentService::class);
+
+        $source = $user->residence_governorate
+            ?: $user->origin_governorate
+            ?: $request->input('governorate');
+
+        $code = \App\Support\YemenGovernorates::codeFromName((string) $source);
+
+        if ($code === null) {
+            Log::warning('KYC approved without a resolvable governorate — zone stays UNKNOWN', [
+                'user_id' => $user->id,
+            ]);
+            return;
+        }
+
+        $zones->assignFromKyc(
+            $user,
+            \App\Support\YemenGovernorates::name($code) ?? '',
+            $request->user()?->id
+        );
+    }
+
     /** POST hub/users/{id}/kyc — اعتماد/رفض الوثائق (status: 1 قبول / 2 رفض) */
     public function kycStatus(Request $request, int $id): JsonResponse
     {
@@ -340,6 +379,19 @@ class AdminHubController extends Controller
         $user = User::findOrFail($id);
         $user->is_kyc_verified = $status;
         $user->save();
+
+        // AMIAL-ZONE-GAP-001 — الاعتماد يُسند المنطقة التشغيلية.
+        //
+        // العطل: التسجيل يبدأ zone_code = 'UNKNOWN' عمداً («ممنوع حتى يثبت»)،
+        // وassignFromKyc موجودة منذ البداية — لكن هذا المسار لم يستدعِها قطّ.
+        // فكان العميل يُعتمد ويبقى UNKNOWN، وسياسة المناطق تمنع عنه كل عملية
+        // مالية إلى الأبد. لا رسالة خطأ مفهومة، فقط حساب معتمد لا يعمل.
+        //
+        // المنطقة تتبع محافظة السكن (وثيقة العنوان) لا الأصل: يمنيّ أصله من
+        // إب ويسكن عدن حالة عادية، والعبرة بمكان التعامل.
+        if ($status === 1) {
+            $this->assignZoneOnApproval($user, $request);
+        }
 
         // AMIAL-VERIFY-HUB: اعتماد تاجر يوثّق ملفه أيضاً (يفتح ميزات التطبيق فعلياً)
         if ((int) $user->type === MERCHANT_TYPE) {
@@ -406,6 +458,9 @@ class AdminHubController extends Controller
             'store_name' => 'nullable|string|max:120',
             'business_type' => 'nullable|string|in:' . implode(',', \App\Support\Access\AccessConstants::ALL_BUSINESS_TYPES),
             'plan' => 'nullable|string|in:' . implode(',', \App\Support\Access\AccessConstants::ALL_PLANS),
+            // AMIAL-GOVERNORATES-001: محافظتا الأصل والسكن (رموز ISO)
+            'origin_governorate' => 'nullable|string|in:' . implode(',', \App\Support\YemenGovernorates::codes()),
+            'residence_governorate' => 'nullable|string|in:' . implode(',', \App\Support\YemenGovernorates::codes()),
         ]);
         if ($v->fails()) return response()->json(['message' => $v->errors()->first()], 422);
 
@@ -440,7 +495,26 @@ class AdminHubController extends Controller
             if ($schema::hasColumn('users', 'is_kyc_verified')) $user->is_kyc_verified = 0;
             // المستوى الأدنى حتى الاعتماد — يرفعه قرار المراجعة لا الإنشاء.
             if ($schema::hasColumn('users', 'kyc_tier')) $user->kyc_tier = 0;
-            if ($schema::hasColumn('users', 'zone_code')) $user->zone_code = 'SOUTH';
+            // AMIAL-ZONE-GAP-001: كان zone_code = 'SOUTH' ثابتاً — أيّ وكيل أو
+            // تاجر يُنشأ من اللوحة يُعدّ جنوبياً بلا سؤال ولو كان في صنعاء،
+            // فيتجاوز سياسة المناطق كلها من أوسع أبوابها.
+            // الآن UNKNOWN كالتسجيل الذاتي، وتُسند المنطقة عند الاعتماد من
+            // محافظة السكن المسجّلة أدناه.
+            if ($schema::hasColumn('users', 'zone_code')) {
+                $user->zone_code = ZoneAssignmentService::ZONE_UNKNOWN;
+            }
+            $residence = \App\Support\YemenGovernorates::codeFromName(
+                (string) $request->input('residence_governorate', '')
+            );
+            $origin = \App\Support\YemenGovernorates::codeFromName(
+                (string) $request->input('origin_governorate', '')
+            );
+            if ($schema::hasColumn('users', 'residence_governorate')) {
+                $user->residence_governorate = $residence;
+            }
+            if ($schema::hasColumn('users', 'origin_governorate')) {
+                $user->origin_governorate = $origin;
+            }
             if ($schema::hasColumn('users', 'transaction_pin')) {
                 $user->transaction_pin = Hash::make($request->input('pin') ?: '1234');
             }

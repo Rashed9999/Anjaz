@@ -23,6 +23,28 @@ use Illuminate\Support\Facades\Validator;
  */
 class GeoZoneController extends Controller
 {
+    /**
+     * AMIAL-GOVERNORATES-001 — جدول المحافظات الكامل للقائمة المنسدلة.
+     *
+     * كل المحافظات الـ22 تُعرض، بما هي خارج نطاق التشغيل: العميل من صنعاء
+     * أصلاً ويسكن عدن يجب أن يجد «صنعاء» ليختارها محافظةَ أصل. إخفاؤها
+     * يدفعه لاختيار محافظة خاطئة، فنفسد البيانات التي نراجعها.
+     *
+     * الحقل in_service_area يخبر التطبيق أيّها ضمن النطاق ليُظهر تنبيهاً.
+     */
+    public function governorates(): JsonResponse
+    {
+        $list = array_map(static function (array $g) {
+            $g['in_service_area'] = \App\Support\YemenGovernorates::isOperational($g['code']);
+            return $g;
+        }, \App\Support\YemenGovernorates::all());
+
+        return response()->json([
+            'success' => true,
+            'data' => $list,
+        ]);
+    }
+
     public function resolve(Request $request, ZoneAssignmentService $zones): JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -62,6 +84,9 @@ class GeoZoneController extends Controller
             'message' => 'تم تحديد الموقع',
             'data' => [
                 'governorate' => $governorate,
+                // AMIAL-GOVERNORATES-001: الرمز أيضاً — التطبيق يختار به من
+                // القائمة المنسدلة، والاسم وحده لا يُطابَق بثقة.
+                'governorate_code' => \App\Support\YemenGovernorates::codeFromName($governorate),
                 'zone' => $zone,
                 'in_service_area' => $inServiceArea,
                 // نصّ جاهز للعرض — كي لا يعيد التطبيق صياغة السياسة عنده.

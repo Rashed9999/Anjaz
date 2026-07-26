@@ -56,6 +56,11 @@ class RegisterController extends Controller
             'identification_type' => 'sometimes|nullable|in:passport,driving_licence,nid,trade_license',
             'identification_image' => 'sometimes|nullable|array',
             'address' => 'sometimes|nullable|string|max:500',
+            // AMIAL-GOVERNORATES-001: محافظتا الأصل (من الهوية) والسكن (من
+            // وثيقة العنوان). المنطقة التشغيلية تتبع السكن، والأصل إشارة
+            // يقارنها المراجع البشري.
+            'origin_governorate' => 'sometimes|nullable|string|max:64',
+            'residence_governorate' => 'sometimes|nullable|string|max:64',
             'kin_name' => 'sometimes|nullable|string|max:150',
             'kin_phone' => 'sometimes|nullable|string|max:30',
             'kin_relation' => 'sometimes|nullable|string|max:60',
@@ -176,6 +181,20 @@ class RegisterController extends Controller
             foreach (['kin_name', 'kin_phone', 'kin_relation'] as $kc) {
                 if (\Illuminate\Support\Facades\Schema::hasColumn('users', $kc) && $request->filled($kc)) {
                     $user->{$kc} = $request->input($kc);
+                }
+            }
+            // AMIAL-GOVERNORATES-001: نخزّن رمز ISO لا النصّ الحرّ — الرمز
+            // يُقارَن ويُفهرَس، والنصّ الحرّ («صنعا»، «Sanaa»، «امانة العاصمة»)
+            // لا يُقارَن بشيء. codeFromName يبتلع الصيغ كلها.
+            foreach (['origin_governorate', 'residence_governorate'] as $gc) {
+                if (!\Illuminate\Support\Facades\Schema::hasColumn('users', $gc)) {
+                    continue;
+                }
+                $code = \App\Support\YemenGovernorates::codeFromName(
+                    (string) $request->input($gc, '')
+                );
+                if ($code !== null) {
+                    $user->{$gc} = $code;
                 }
             }
             if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_declaration_accepted')
