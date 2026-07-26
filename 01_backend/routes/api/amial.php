@@ -899,9 +899,15 @@ Route::middleware(['auth:api'])->group(function () {
     Route::prefix('agent/withdraw')->name('amial.agent.withdraw.')->group(function () {
         Route::post('/lookup', [\App\Http\Controllers\Api\V1\Amial\CustomerWithdrawController::class, 'lookup'])
             ->middleware('amial.rate-limit:withdraw_lookup,60,1')->name('lookup');
+        // AMIAL-ZONE-BOUNDARY-001: هنا يسلّم الوكيل ورقاً حقيقياً — الحدّ
+        // الفعلي بين العملتين. يُلزَم بموقعه لحظة التسليم.
         Route::post('/execute', [\App\Http\Controllers\Api\V1\Amial\CustomerWithdrawController::class, 'execute'])
-            ->middleware(['amial.zone:cash_out', 'amial.rate-limit:withdraw_exec,40,1'])->name('execute');
+            ->middleware(['amial.zone:cash_out', 'amial.agent-location', 'amial.rate-limit:withdraw_exec,40,1'])->name('execute');
     });
+
+    // AMIAL-COVERAGE-001 — تغطية الخدمة في محافظة المستخدم (وكلاء/تجار)
+    Route::get('/service-coverage', [\App\Http\Controllers\Api\V1\Amial\ServiceCoverageController::class, 'show'])
+        ->name('amial.service-coverage');
 
     Route::prefix('split-bills')->name('amial.split-bills.')->group(function () {
         Route::get('/mine', [\App\Http\Controllers\Api\V1\Amial\SplitBillController::class, 'mine'])->name('mine');

@@ -121,7 +121,8 @@ class ZoneEnforcementGapsTest extends TestCase
     public static function legacyMoneyRoutes(): array
     {
         return [
-            'تحويل'          => ['/api/v1/customer/send-money'],
+            // AMIAL-ZONE-BOUNDARY-001: send-money عملية دفتر فلا تُحجَب —
+            // الحراسة على مسارات النقد، وهي المقصودة بهذا الاختبار.
             'سحب نقدي'       => ['/api/v1/customer/cash-out'],
             'شحن رصيد'       => ['/api/v1/customer/add-money'],
             'طلب سحب'        => ['/api/v1/customer/withdraw'],

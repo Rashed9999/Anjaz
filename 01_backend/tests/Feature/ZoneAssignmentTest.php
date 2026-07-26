@@ -64,7 +64,7 @@ class ZoneAssignmentTest extends TestCase
     }
 
     /** @test */
-    public function sanaa_user_cannot_send_money()
+    public function sanaa_user_cannot_cash_out_but_can_transfer()
     {
         // مستخدم في صنعاء (NORTH) — السيناريو الذي سأل عنه المستخدم
         $sanaaUser = User::factory()->create();
@@ -73,10 +73,16 @@ class ZoneAssignmentTest extends TestCase
 
         $this->assertEquals('NORTH', $sanaaUser->zone_code);
 
-        // محاولة تحويل → ترفض
-        $result = $this->policyService->authorize($sanaaUser, 'send_money');
-        $this->assertFalse($result['allowed']);
-        $this->assertEquals('TX_ZONE_BLOCKED', $result['decision_code']);
+        // AMIAL-ZONE-BOUNDARY-001: السحب النقدي يُرفض — هنا يعبر النقد
+        // بين عملتين، وهو خطر العملتين بعينه.
+        $cash = $this->policyService->authorize($sanaaUser, 'cash_out');
+        $this->assertFalse($cash['allowed']);
+        $this->assertEquals('TX_ZONE_BLOCKED', $cash['decision_code']);
+
+        // أمّا التحويل فيبقى عاملاً: القيمة تنتقل داخل دفتر واحد بلا صرف،
+        // فحجبه يعاقب من انتقل أو سافر بلا مقابل في الحماية.
+        $ledger = $this->policyService->authorize($sanaaUser, 'send_money');
+        $this->assertTrue($ledger['allowed']);
     }
 
     /** @test */
@@ -103,7 +109,8 @@ class ZoneAssignmentTest extends TestCase
 
         $result = $this->policyService->authorize($adenUser, 'send_money');
         $this->assertTrue($result['allowed']);
-        $this->assertEquals('ALLOWED_ZONE_OK', $result['decision_code']);
+        // AMIAL-ZONE-BOUNDARY-001: التحويل عملية دفتر — رمز القرار تغيّر لا الإذن
+        $this->assertEquals('ALLOWED_LEDGER_ONLY', $result['decision_code']);
     }
 
     /** @test */

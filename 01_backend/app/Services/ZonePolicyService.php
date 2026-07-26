@@ -45,8 +45,57 @@ class ZonePolicyService
     }
 
     /**
-     * العمليات المالية التي ترفض إن لم تكن في SOUTH.
-     * أي endpoint له مفتاحه هنا يخضع للسياسة عند تطبيق middleware.
+     * AMIAL-ZONE-BOUNDARY-001 — عمليات لا يعبر فيها نقد.
+     *
+     * القيمة تنتقل من محفظة إلى محفظة داخل دفتر واحد مقوَّم بريال واحد.
+     * لا بنك مركزي يُلمَس ولا عملة تُصرَف، فموقع المستخدم لا يغيّر شيئاً.
+     *
+     * كانت هذه العمليات محكومة بـ SOUTH كغيرها، فمن انتقل شمالاً — أو سافر
+     * أسبوعاً — يفقد محفظته كاملة وهو لم يفعل ما يضرّ. العقوبة على السفر
+     * لا على المخاطرة.
+     *
+     * تبقى مشروطة بأن يكون للحساب منطقة مُسندة (لا UNKNOWN): ذلك شرط هوية
+     * موثّقة لا شرط جغرافيا.
+     */
+    public const LEDGER_ACTIONS = [
+        'send_money',
+        'request_money',
+        'refund',
+        'split_bill',
+        'donate',
+        'safe_payment_create',
+        'safe_payment_fund',
+        'safe_payment_release',
+        'family_fund_contribute',
+        'family_fund_disburse',
+    ];
+
+    /**
+     * AMIAL-ZONE-BOUNDARY-001 — عمليات يعبر فيها النقد حدَّ النظام.
+     *
+     * هنا وحدها يقع خطر العملتين: الوكيل يسلّم أو يستلم ورقاً حقيقياً،
+     * والتاجر يسعّر بضاعته بعملة منطقته. عملية واحدة عبر الخط تعني صرفاً
+     * بسعر خاطئ — والدفاتر تبقى متوازنة بينما الخسارة حقيقية.
+     *
+     * الطرف الحاسم هنا هو **الوكيل أو التاجر** لا العميل: هو العقدة
+     * المعتمدة المعروفة الموقع، وهو الذي يلمس النقد.
+     */
+    public const CASH_BOUNDARY_ACTIONS = [
+        'cash_in',
+        'cash_out',
+        'add_money',
+        'withdraw',
+        'withdraw_request',
+        'withdraw_execute',
+        'merchant_payment',
+        'qr_payment',
+        'pay_bill',
+    ];
+
+    /**
+     * كل العمليات المالية — اتحاد المجموعتين.
+     *
+     * تبقى للتوافق: مواضع كثيرة تسأل «هل هذه عملية مالية؟» بلا تمييز.
      */
     public const FINANCIAL_ACTIONS = [
         'send_money',
@@ -132,8 +181,21 @@ class ZonePolicyService
             ];
         }
 
-        // 3) عمليات مالية: account_zone يجب أن يساوي SOUTH
-        if (in_array($action, self::FINANCIAL_ACTIONS, true)) {
+        // 3) AMIAL-ZONE-BOUNDARY-001 — عمليات الدفتر: لا نقد يعبر، فلا معنى
+        // لحجبها جغرافياً. القيمة تنتقل بين محفظتين في دفتر واحد مقوَّم بريال
+        // واحد. حجبها كان يعاقب المسافر والمنتقل بلا مقابل في الحماية.
+        if (in_array($action, self::LEDGER_ACTIONS, true)) {
+            return [
+                'allowed' => true,
+                'decision_code' => 'ALLOWED_LEDGER_ONLY',
+                'reason' => 'Ledger-internal action — no cash crosses the currency line',
+                'account_zone' => $accountZone,
+                'request_zone' => $requestZone,
+            ];
+        }
+
+        // 4) عمليات يعبر فيها النقد: account_zone يجب أن يساوي SOUTH
+        if (in_array($action, self::CASH_BOUNDARY_ACTIONS, true)) {
             if ($accountZone !== self::ALLOWED_OPERATIONAL_ZONE) {
                 return $this->deny(
                     $user,

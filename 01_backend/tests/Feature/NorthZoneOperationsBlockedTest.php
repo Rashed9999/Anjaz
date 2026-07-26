@@ -57,11 +57,13 @@ class NorthZoneOperationsBlockedTest extends TestCase
     // ============================================================
 
     /** @test */
-    public function north_user_is_blocked_for_every_financial_action(): void
+    public function north_user_is_blocked_for_every_cash_boundary_action(): void
     {
+        // AMIAL-ZONE-BOUNDARY-001: الحجب انتقل من «كل عملية مالية» إلى
+        // «كل عملية يعبر فيها نقد». عمليات الدفتر تُختبر أدناه بأنها مسموحة.
         $north = $this->userInZone('NORTH');
 
-        foreach (ZonePolicyService::FINANCIAL_ACTIONS as $action) {
+        foreach (ZonePolicyService::CASH_BOUNDARY_ACTIONS as $action) {
             $decision = $this->policy->authorize($north, $action);
             $this->assertFalse(
                 $decision['allowed'],
@@ -72,13 +74,35 @@ class NorthZoneOperationsBlockedTest extends TestCase
     }
 
     /** @test */
-    public function middle_other_and_unknown_zones_are_also_blocked(): void
+    public function middle_other_and_unknown_zones_are_also_blocked_from_cash(): void
     {
         foreach (['MIDDLE', 'OTHER', 'UNKNOWN'] as $zone) {
             $user = $this->userInZone($zone);
-            $decision = $this->policy->authorize($user, 'send_money');
-            $this->assertFalse($decision['allowed'], "المنطقة {$zone} يجب أن تُرفض");
+            $decision = $this->policy->authorize($user, 'cash_out');
+            $this->assertFalse($decision['allowed'], "المنطقة {$zone} يجب أن تُرفض نقدياً");
         }
+    }
+
+    /** @test */
+    public function north_user_keeps_ledger_actions(): void
+    {
+        $north = $this->userInZone('NORTH');
+
+        foreach (ZonePolicyService::LEDGER_ACTIONS as $action) {
+            $this->assertTrue(
+                $this->policy->authorize($north, $action)['allowed'],
+                "عملية الدفتر '{$action}' لا يعبر فيها نقد فلا تُحجَب"
+            );
+        }
+    }
+
+    /** @test */
+    public function unknown_zone_is_blocked_even_from_ledger_actions(): void
+    {
+        // UNKNOWN شرط هوية لا شرط جغرافيا — يبقى حاجزاً شاملاً.
+        $this->assertFalse(
+            $this->policy->authorize($this->userInZone('UNKNOWN'), 'send_money')['allowed']
+        );
     }
 
     /** @test */

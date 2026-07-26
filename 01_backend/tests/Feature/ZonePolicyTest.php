@@ -36,18 +36,31 @@ class ZonePolicyTest extends TestCase
         $result = $this->svc->authorize($user, 'send_money', Request::create('/'));
 
         $this->assertTrue($result['allowed']);
-        $this->assertSame('ALLOWED_ZONE_OK', $result['decision_code']);
+        // AMIAL-ZONE-BOUNDARY-001: التحويل عملية دفتر — رمز القرار تغيّر لا الإذن
+        $this->assertSame('ALLOWED_LEDGER_ONLY', $result['decision_code']);
         $this->assertSame('SOUTH', $result['account_zone']);
     }
 
     /** @test */
-    public function north_user_cannot_send_money(): void
+    public function north_user_cannot_cash_out(): void
+    {
+        // AMIAL-ZONE-BOUNDARY-001: الحجب انتقل من الشخص إلى نقطة عبور النقد.
+        // التحويل يبقى عاملاً؛ السحب لدى وكيل هو ما يُحجَب.
+        $user = User::factory()->create(['zone_code' => 'NORTH']);
+        $result = $this->svc->authorize($user, 'cash_out', Request::create('/'));
+
+        $this->assertFalse($result['allowed']);
+        $this->assertSame('TX_ZONE_BLOCKED', $result['decision_code']);
+    }
+
+    /** @test */
+    public function north_user_can_still_send_money(): void
     {
         $user = User::factory()->create(['zone_code' => 'NORTH']);
         $result = $this->svc->authorize($user, 'send_money', Request::create('/'));
 
-        $this->assertFalse($result['allowed']);
-        $this->assertSame('TX_ZONE_BLOCKED', $result['decision_code']);
+        $this->assertTrue($result['allowed']);
+        $this->assertSame('ALLOWED_LEDGER_ONLY', $result['decision_code']);
     }
 
     /** @test */

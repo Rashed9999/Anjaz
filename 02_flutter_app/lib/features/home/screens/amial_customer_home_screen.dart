@@ -43,6 +43,14 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   bool _loading = true;
   List<Map<String, dynamic>> _recent = [];
 
+  // AMIAL-COVERAGE-001: تغطية الخدمة في محافظة المستخدم.
+  // رسالة صادقة مشتقّة من وجود وكلاء وتجار فعليين، لا علَم سياسة: العميل
+  // الذي انتقل إلى منطقة بلا تغطية لا يُحجَب — يستقبل ويحوّل كالمعتاد، وما
+  // يتوقّف هو السحب والدفع لانعدام الوكيل والتاجر. قول ذلك صراحةً أصدق من
+  // خطأ غامض عند الضغط، ويصحّح نفسه يوم يُعتمد وكيل هناك.
+  String? _coverageNotice;
+  bool _coverageIsGap = false;
+
   @override
   void initState() {
     super.initState();
@@ -71,6 +79,21 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         _phone = (b['phone'] ?? '').toString();
       }
     } catch (_) {/* دفاعي: نُبقي الواجهة نظيفة */}
+
+    try {
+      final cov = await Get.find<ApiClient>()
+          .getData('/api/v1/amial/service-coverage');
+      final d = (cov.body is Map) ? cov.body['data'] : null;
+      if (d is Map) {
+        final agents = (d['agents'] ?? 0) as num;
+        final merchants = (d['merchants'] ?? 0) as num;
+        _coverageIsGap = agents == 0 && merchants == 0;
+        // لا نُزعج من تغطيته كاملة — الرسالة تظهر عند النقص فقط.
+        _coverageNotice = (agents == 0 || merchants == 0)
+            ? (d['notice'] as String?)
+            : null;
+      }
+    } catch (_) {/* التغطية تحسينية — لا توقف الصفحة */}
 
     try {
       // «الإيصالات» = السجلّ الموحّد لكل النشاط (تحويلات + خدمات أميال)
@@ -136,6 +159,10 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _walletHero(),
+                  if (_coverageNotice != null) ...[
+                    const SizedBox(height: 14),
+                    _coverageBanner(),
+                  ],
                   const SizedBox(height: 22),
                   _quickSendSection(),
                   const SizedBox(height: 22),
@@ -152,6 +179,38 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         ),
       ),
       ),
+    );
+  }
+
+  // ============ AMIAL-COVERAGE-001 — تغطية الخدمة ============
+  //
+  // نبرة الرسالة مقصودة: «لا يوجد وكلاء قريبون» لا «ممنوع في منطقتك».
+  // الأولى حقيقة يفهمها العميل ويتصرّف بناءً عليها، والثانية تُشعره بأنه
+  // مطرود من خدمة يملك فيها رصيداً — وهو غير ممنوع أصلاً: يستقبل ويحوّل.
+  Widget _coverageBanner() {
+    final color = _coverageIsGap
+        ? const Color(0xFFCFA300)
+        : const Color(0xFF5F6B7C);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _coverageIsGap ? const Color(0xFFFFF8E1) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(_coverageIsGap ? Icons.storefront_outlined : Icons.info_outline,
+            size: 20, color: color),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            _coverageNotice!,
+            style: const TextStyle(
+                fontSize: 12.5, height: 1.7, color: Color(0xFF1A2433)),
+          ),
+        ),
+      ]),
     );
   }
 

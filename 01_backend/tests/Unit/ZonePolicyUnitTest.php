@@ -71,16 +71,29 @@ class ZonePolicyUnitTest extends TestCase
     {
         $d = $this->policy->authorize($this->userInZone('SOUTH'), 'send_money');
         $this->assertTrue($d['allowed']);
-        $this->assertSame('ALLOWED_ZONE_OK', $d['decision_code']);
+        // AMIAL-ZONE-BOUNDARY-001: التحويل صار عملية دفتر (لا نقد يعبر)
+        // فرمز القرار ALLOWED_LEDGER_ONLY. الإذن نفسه لم يتغيّر.
+        $this->assertSame('ALLOWED_LEDGER_ONLY', $d['decision_code']);
         $this->assertSame('SOUTH', $d['account_zone']);
     }
 
-    public function test_north_user_financial_action_blocked(): void
+    public function test_north_user_cash_action_blocked(): void
     {
-        $d = $this->policy->authorize($this->userInZone('NORTH'), 'send_money');
+        // AMIAL-ZONE-BOUNDARY-001: كان الفحص على send_money، وهو عملية دفتر
+        // لا يعبر فيها نقد فلم يعد يُحجَب. الحجب حيث يُلمَس النقد فعلاً.
+        $d = $this->policy->authorize($this->userInZone('NORTH'), 'cash_out');
         $this->assertFalse($d['allowed']);
         $this->assertSame('TX_ZONE_BLOCKED', $d['decision_code']);
         $this->assertSame('NORTH', $d['account_zone']);
+    }
+
+    public function test_north_user_ledger_action_allowed(): void
+    {
+        // الوجه الآخر للقاعدة: التحويل يبقى عاملاً لمن انتقل أو سافر —
+        // القيمة تنتقل داخل دفتر واحد ولا تلمس بنكاً ولا صرفاً.
+        $d = $this->policy->authorize($this->userInZone('NORTH'), 'send_money');
+        $this->assertTrue($d['allowed']);
+        $this->assertSame('ALLOWED_LEDGER_ONLY', $d['decision_code']);
     }
 
     public function test_unknown_zone_user_blocked_with_zone_unknown_code(): void
@@ -107,13 +120,36 @@ class ZonePolicyUnitTest extends TestCase
         $this->assertSame('ACTION_UNKNOWN', $d['decision_code']);
     }
 
-    public function test_every_financial_action_blocked_for_north(): void
+    public function test_every_cash_boundary_action_blocked_for_north(): void
+    {
+        // كان يمرّ على FINANCIAL_ACTIONS كلها. صار التصنيف مقسوماً: النقدية
+        // تُحجَب، والدفترية لا. الحجب الشامل كان يعاقب المسافر بلا مقابل.
+        $north = $this->userInZone('NORTH');
+        foreach (ZonePolicyService::CASH_BOUNDARY_ACTIONS as $action) {
+            $d = $this->policy->authorize($north, $action);
+            $this->assertFalse($d['allowed'], "العملية النقدية {$action} يجب أن تُرفض للشمال");
+        }
+    }
+
+    public function test_every_ledger_action_allowed_for_north(): void
     {
         $north = $this->userInZone('NORTH');
-        foreach (ZonePolicyService::FINANCIAL_ACTIONS as $action) {
+        foreach (ZonePolicyService::LEDGER_ACTIONS as $action) {
             $d = $this->policy->authorize($north, $action);
-            $this->assertFalse($d['allowed'], "العملية {$action} يجب أن تُرفض للشمال");
+            $this->assertTrue($d['allowed'], "عملية الدفتر {$action} لا تُحجَب بالجغرافيا");
         }
+    }
+
+    public function test_the_two_action_sets_do_not_overlap(): void
+    {
+        // تداخلٌ هنا يعني عملية مسموحة ومحجوبة في آن — التصنيف يجب أن يقطع.
+        $this->assertSame(
+            [],
+            array_intersect(
+                ZonePolicyService::LEDGER_ACTIONS,
+                ZonePolicyService::CASH_BOUNDARY_ACTIONS
+            )
+        );
     }
 
     // ---------- detectRequestZone() ----------

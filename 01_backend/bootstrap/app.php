@@ -158,6 +158,9 @@ $app = Application::configure(basePath: dirname(__DIR__))
 
             // Amial Pay v0.7-A
             'amial.zone' => EnforceZonePolicy::class,
+            // AMIAL-ZONE-BOUNDARY-001: موقع الوكيل لحظة العملية النقدية —
+            // الحدّ الحقيقي بين العملتين هو الوكيل لا العميل.
+            'amial.agent-location' => \App\Http\Middleware\EnforceAgentCashLocation::class,
             'amial.terms' => RequireTermsAcceptance::class,
             'amial.block-in-production' => BlockInProduction::class,
 
