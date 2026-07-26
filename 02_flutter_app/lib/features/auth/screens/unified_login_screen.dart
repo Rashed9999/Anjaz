@@ -90,7 +90,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   /// بيانات اعتماد) — تُستعمل للتحية وتعبئة الرقم.
   ({String name, String phone, String kind})? _lastUser;
 
-  // AMIAL-SEC-CAPTURE-001: الرمز السري يُكتب في هذه الشاشة — نمنع لقطة الشاشة
+  // AMIAL-SEC-CAPTURE-001: كلمة المرور تُكتب في هذه الشاشة — نمنع لقطة الشاشة
   // وتسجيلها ما دامت معروضة، ونُعيد السماح فور مغادرتها (فتبقى الإيصالات
   // وبقيّة الشاشات قابلة للتصوير والمشاركة).
   @override
@@ -239,7 +239,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         final phone = _phoneCtrl.text.trim();
         final pass = _passwordCtrl.text;
         if (phone.isEmpty || pass.length < 4) {
-          _error('أدخل رقمك ورمزك السري أولاً لتفعيل الدخول بالبصمة');
+          _error('أدخل رقمك وكلمة مرورك أولاً لتفعيل الدخول بالبصمة');
           return;
         }
         if (!mounted) return;
@@ -472,7 +472,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             minimumSize: Size.zero,
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-        child: const Text('نسيت الرمز السري؟',
+        child: const Text('نسيت كلمة المرور؟',
             style: TextStyle(fontSize: 12.5, color: AmyalColors.primary)),
       ),
     );
@@ -585,7 +585,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             () => Get.to(() => const SupportScreen())),
         _quickLink(Icons.restore_rounded, 'استعادة حساب',
             () => Get.to(() => const AccountRecoveryScreen())),
-        _quickLink(Icons.lock_reset_rounded, 'نسيت الرمز',
+        _quickLink(Icons.lock_reset_rounded, 'نسيت كلمة المرور',
             () => Get.to(() => const ForgetPinScreen())),
       ],
     );
@@ -770,9 +770,13 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           ],
 
           // ---- كلمة المرور: دائماً ----
+          // AMIAL-PIN-SEPARATION-001: كان اسمها «الرمز السري» وهو اسم رمز
+          // المعاملات (4 أرقام). فالعميل الذي غيّر رمز معاملاته يأتي هنا
+          // فيُدخله ويفشل — والحقل يؤكّد له أنه المطلوب. اسمان مختلفان
+          // لشيئين مختلفين.
           _field(
             controller: _passwordCtrl,
-            label: 'الرمز السري',
+            label: 'كلمة المرور',
             icon: Icons.lock_outline,
             obscure: _obscure,
             suffix: IconButton(
@@ -780,7 +784,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
               onPressed: () => setState(() => _obscure = !_obscure),
             ),
             validator: (v) =>
-                (v == null || v.length < 4) ? 'الرمز السري قصير' : null,
+                (v == null || v.length < 4) ? 'كلمة المرور قصيرة' : null,
           ),
         ],
       ),
@@ -1063,7 +1067,7 @@ class _LastLoginNote extends StatelessWidget {
                   style: const TextStyle(
                       fontSize: 11.5, color: AmyalColors.textSecondary),
                 ),
-                const Text('إن لم تكن أنت، غيّر رمزك السري فوراً.',
+                const Text('إن لم تكن أنت، غيّر كلمة مرورك فوراً.',
                     style: TextStyle(fontSize: 10.5, color: AmyalColors.textMuted)),
               ],
             ),

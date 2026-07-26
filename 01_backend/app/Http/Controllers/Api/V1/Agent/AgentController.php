@@ -205,9 +205,12 @@ class AgentController extends Controller
     public function changePin(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'old_pin' => 'required|min:4|max:4',
-            'new_pin' => 'required|min:4|max:4',
-            'confirm_pin' => 'required|min:4|max:4',
+            // AMIAL-PIN-SEPARATION-001: القديم اعتمادٌ يُتحقَّق منه لا صيغة
+            // تُخزَّن — والوكيل الذي لم يُعيَّن له رمز بعد يتحقّق بكلمة مروره،
+            // وهي أطول من أربعة محارف.
+            'old_pin' => 'required|string|min:4|max:64',
+            'new_pin' => 'required|digits:4',
+            'confirm_pin' => 'required|digits:4',
         ]);
 
         if ($validator->fails()) {
@@ -222,11 +225,16 @@ class AgentController extends Controller
             return response()->json(['message' => translate('PIN Mismatch')], 404);
         }
 
+        // AMIAL-PIN-SEPARATION-001 — نفس خلل حساب العميل: الرمز كان يُكتب في
+        // password فيمحو كلمة مرور دخول الوكيل ويهبط بها إلى أربعة أرقام،
+        // بينما رمز المعاملات الحقيقي لا يتغيّر.
         try {
             $user = $this->user->find($request->user()->id);
-            $user->password = bcrypt($request->confirm_pin);
-            $user->save();
+            app(\App\Services\TransactionPinService::class)->setPin($user, (string) $request->confirm_pin);
+
             return response()->json(['message' => translate('PIN updated successfully')], 200);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
         } catch (\Exception $e) {
             return response()->json(['message' => translate('PIN updated failed')], 401);
         }

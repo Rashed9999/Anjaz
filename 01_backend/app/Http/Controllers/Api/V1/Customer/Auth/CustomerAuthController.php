@@ -322,9 +322,18 @@ class CustomerAuthController extends Controller
     public function changePin(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'old_pin' => 'required|min:4|max:4',
-            'new_pin' => 'required|min:4|max:4',
-            'confirm_pin' => 'required|min:4|max:4',
+            // AMIAL-PIN-SEPARATION-001: القديم كان محدوداً بأربعة محارف تماماً.
+            //
+            // الحساب الذي لم يُعيَّن له رمز معاملات قطّ يتحقّق بكلمة مروره
+            // (توافق 6cash في pin_check)، وكلمة المرور أطول من أربعة محارف —
+            // فكان التحقّق يُرفض قبل أن يبلغ المنطق، ولا سبيل لصاحبه أن
+            // يُنشئ رمزاً أصلاً. أي أن الطريق إلى البنية الصحيحة كان مقفلاً
+            // على من هو أحوج الناس إليه.
+            //
+            // القديم اعتمادٌ يُتحقَّق منه لا صيغةٌ تُخزَّن، فلا يُقيَّد بطولها.
+            'old_pin' => 'required|string|min:4|max:64',
+            'new_pin' => 'required|digits:4',
+            'confirm_pin' => 'required|digits:4',
         ]);
         if ($validator->fails()) {
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
@@ -338,11 +347,29 @@ class CustomerAuthController extends Controller
             return response()->json(['message' => 'PIN Mismatch'], 404);
         }
 
+        // AMIAL-PIN-SEPARATION-001 — الرمز يُكتب في transaction_pin لا في password.
+        //
+        // كان السطر: `$user->password = bcrypt($request->confirm_pin);`
+        //
+        // أي أن تغيير رمز المعاملات كان يمحو كلمة مرور الدخول ويضع مكانها
+        // أربعة أرقام. ثلاث نتائج، كلّها صامتة:
+        //   1) العميل يجد نفسه يدخل حسابه بالرمز الجديد بدل كلمة مروره —
+        //      وهو ما اشتكى منه المستخدم حرفياً.
+        //   2) كلمة مرور الدخول تهبط إلى أربعة أرقام: عشرة آلاف احتمال
+        //      يُجرَّب آلياً. انهيار في قوّة الاعتماد لا يراه أحد.
+        //   3) الأسوأ: pin_check يقرأ transaction_pin أولاً، وهو لم يتغيّر.
+        //      فالرمز الذي ظنّ العميل أنه غيّره ظلّ القديم في المعاملات،
+        //      بينما «تم التغيير بنجاح» على شاشته.
+        //
+        // البنية الصحيحة موجودة أصلاً (TransactionPinService) ولم تكن موصولة
+        // بأي مسار. هذا يصلها.
         try {
             $user = $this->user->find($request->user()->id);
-            $user->password = bcrypt($request->confirm_pin);
-            $user->save();
+            app(\App\Services\TransactionPinService::class)->setPin($user, (string) $request->confirm_pin);
+
             return response()->json(['message' => 'PIN updated successfully'], 200);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
         } catch (\Exception $e) {
             return response()->json(['message' => 'PIN updated failed'], 401);
         }

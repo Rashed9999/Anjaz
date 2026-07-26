@@ -1,13 +1,19 @@
-import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
-import 'package:amyal_pay/common/widgets/custom_button_widget.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_loader_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_password_field_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amyal_pay/features/shared/widgets/amial_numpad.dart';
+import 'package:amyal_pay/features/shared/widgets/amial_pin_dots.dart';
+import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/util/secure_screen.dart';
 
+/// AMIAL-PIN-UI-002 — تغيير رمز المعاملات.
+///
+/// كانت ثلاثة حقول نصّ فوق بعضها بتباعد حروف 10، تفتح لوحة مفاتيح النظام
+/// وتُخفي نصف الشاشة، ويرى المستخدم الثلاثة معاً فلا يدري أيّها المطلوب
+/// الآن. صارت ثلاث خطوات، في كل خطوة سؤال واحد ونقاط ولوحة أرقام مبعثرة.
+///
+/// **تسمية مقصودة:** «رمز المعاملات» لا «الرمز السري». الاسم الأخير كان
+/// يُطلق على كلمة مرور الدخول أيضاً، فيظنّ العميل أنه يغيّر ما يدخل به.
 class ChangePinScreen extends StatefulWidget {
   const ChangePinScreen({super.key});
 
@@ -15,154 +21,260 @@ class ChangePinScreen extends StatefulWidget {
   State<ChangePinScreen> createState() => _ChangePinScreenState();
 }
 
+enum _Step { old, fresh, confirm }
+
 class _ChangePinScreenState extends State<ChangePinScreen> {
-  final TextEditingController _oldPasswordController = TextEditingController();
-  final TextEditingController _newPasswordController = TextEditingController();
-  final TextEditingController _confirmPasswordController = TextEditingController();
-  final FocusNode _oldPinFocus = FocusNode();
-  final FocusNode _newPinFocus = FocusNode();
-  final FocusNode _confirmPinFocus = FocusNode();
+  final _old = TextEditingController();
+  final _fresh = TextEditingController();
+  final _confirm = TextEditingController();
+
+  _Step _step = _Step.old;
+  String _error = '';
+  int _round = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // AMIAL-SEC-CAPTURE-001: رمز سرّي على الشاشة — لا تصوير ولا تسجيل.
+    SecureScreen.enable();
+  }
+
+  @override
+  void dispose() {
+    SecureScreen.disable();
+    _old.dispose();
+    _fresh.dispose();
+    _confirm.dispose();
+    super.dispose();
+  }
+
+  TextEditingController get _active => switch (_step) {
+        _Step.old => _old,
+        _Step.fresh => _fresh,
+        _Step.confirm => _confirm,
+      };
+
+  String get _title => switch (_step) {
+        _Step.old => 'رمزك الحالي',
+        _Step.fresh => 'الرمز الجديد',
+        _Step.confirm => 'أعد إدخال الرمز الجديد',
+      };
+
+  String get _hint => switch (_step) {
+        _Step.old => 'أدخل رمز المعاملات المستعمل حالياً للتأكّد من هويتك',
+        _Step.fresh => 'أربعة أرقام غير متسلسلة ولا متكرّرة — لا 1234 ولا 0000',
+        _Step.confirm => 'مرّة أخرى، حتى لا يُحفظ رمز أخطأت في كتابته',
+      };
+
+  void _onFilled(String value) {
+    if (value.length < 4) return;
+
+    switch (_step) {
+      case _Step.old:
+        setState(() {
+          _step = _Step.fresh;
+          _error = '';
+          _round++;
+        });
+
+      case _Step.fresh:
+        // الرمز نفسه ليس تغييراً. قولها الآن أرحم من ردّ الخادم بعد خطوتين.
+        if (_fresh.text == _old.text) {
+          setState(() {
+            _error = 'الرمز الجديد مطابق للحالي — اختر غيره';
+            _fresh.clear();
+            _round++;
+          });
+          return;
+        }
+        setState(() {
+          _step = _Step.confirm;
+          _error = '';
+          _round++;
+        });
+
+      case _Step.confirm:
+        if (_confirm.text != _fresh.text) {
+          setState(() {
+            _error = 'الرمزان غير متطابقين — أعد المحاولة';
+            _confirm.clear();
+            _fresh.clear();
+            _step = _Step.fresh;
+            _round++;
+          });
+          return;
+        }
+        _submit();
+    }
+  }
+
+  Future<void> _submit() async {
+    final ctrl = Get.find<ProfileController>();
+    await ctrl.changePin(
+      oldPassword: _old.text,
+      newPassword: _fresh.text,
+      confirmPassword: _confirm.text,
+    );
+
+    if (!mounted) return;
+    // الفشل يعيدنا إلى البداية: رسالة الخادم ظهرت بالفعل عبر المتحكّم،
+    // والحقول تُمسح كي لا يُعاد إرسال رمز مرفوض.
+    setState(() {
+      _old.clear();
+      _fresh.clear();
+      _confirm.clear();
+      _step = _Step.old;
+      _round++;
+    });
+  }
+
+  void _back() {
+    if (_step == _Step.old) {
+      Get.back();
+      return;
+    }
+    setState(() {
+      _active.clear();
+      _step = _step == _Step.confirm ? _Step.fresh : _Step.old;
+      _error = '';
+      _round++;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return GetBuilder<ProfileController>(
-      builder: (controller) {
-        return ModalProgressHUD(
-          inAsyncCall: controller.isLoading,
-          progressIndicator: CustomLoaderWidget(color: Theme.of(context).textTheme.titleLarge!.color,),
-          child: Scaffold(
-              appBar: AppBar(
-                title: Text('pin_change'.tr),
-              ),
-              body: Padding(
-                padding: const EdgeInsets.all(Dimensions.paddingSizeLarge),
-                child: Column(children: [
-
-                  Expanded(child: SingleChildScrollView(child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-
-                      Row(mainAxisAlignment: MainAxisAlignment.center,children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: Dimensions.paddingSizeSmall),
-                          child: Text(
-                            'set_your_4_digit'.tr,
-                            textAlign: TextAlign.center,
-                            style: rubikMedium.copyWith(
-                              color: Theme.of(context).textTheme.bodyLarge?.color,
-                              fontSize: Dimensions.fontSizeDefault,
-                            ),
-                          ),
-                        ),
-                      ]),
-                      const SizedBox(height: Dimensions.paddingSizeLarge),
-
-                      Text('old_password'.tr, style: rubikRegular.copyWith(fontSize: Dimensions.fontSizeDefault, color: Theme.of(context).textTheme.bodyLarge?.color)),
-                      const SizedBox(height: Dimensions.paddingSizeSmall),
-
-                      CustomPasswordFieldWidget(
-                        controller: _oldPasswordController,
-                        focusNode: _oldPinFocus,
-                        isPassword: true,
-                        isShowSuffixIcon: true,
-                        isIcon: false,
-                        hint: 'type_old_pin'.tr,
-                        letterSpacing: 10.0,
-                        nextFocus: _newPinFocus,
-                        showMaxLength: false,
-                        suffixIconColor: Theme.of(context).hintColor.withValues(alpha: 0.5),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(Dimensions.radiusSizeSmall),
-                          borderSide: BorderSide(color: Theme.of(context).hintColor.withValues(alpha: 0.1), width: 1),
-                        ),
-                        hintTextStyle: rubikRegular.copyWith(
-                          color: Theme.of(context).hintColor.withValues(alpha: 0.5),
-                          fontSize: Dimensions.fontSizeDefault,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: Dimensions.paddingSizeExtraLarge),
-
-                      Text('new_password'.tr, style: rubikRegular.copyWith(fontSize: Dimensions.fontSizeDefault, color: Theme.of(context).textTheme.bodyLarge?.color)),
-                      const SizedBox(height: Dimensions.paddingSizeSmall),
-
-                      CustomPasswordFieldWidget(
-                        controller: _newPasswordController,
-                        focusNode: _newPinFocus,
-                        nextFocus: _confirmPinFocus,
-                        hint: 'type_new_pin'.tr,
-                        isShowSuffixIcon: true,
-                        isPassword: true,
-                        isIcon: false,
-                        textAlign: TextAlign.start,
-                        letterSpacing: 10.0,
-                        showMaxLength: false,
-                        suffixIconColor: Theme.of(context).hintColor.withValues(alpha: 0.5),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(Dimensions.radiusSizeSmall),
-                          borderSide: BorderSide(color: Theme.of(context).hintColor.withValues(alpha: 0.1), width: 1),
-                        ),
-                        hintTextStyle: rubikRegular.copyWith(
-                          color: Theme.of(context).hintColor.withValues(alpha: 0.5),
-                          fontSize: Dimensions.fontSizeDefault,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: Dimensions.paddingSizeExtraLarge),
-
-                      Text('confirm_password'.tr, style: rubikRegular.copyWith(fontSize: Dimensions.fontSizeDefault, color: Theme.of(context).textTheme.bodyLarge?.color)),
-                      const SizedBox(height: Dimensions.paddingSizeSmall),
-
-                      CustomPasswordFieldWidget(
-                        controller: _confirmPasswordController,
-                        focusNode: _confirmPinFocus,
-                        textInputAction: TextInputAction.done,
-                        hint: 'type_new_pin'.tr,
-                        isShowSuffixIcon: true,
-                        isPassword: true,
-                        isIcon: false,
-                        letterSpacing: 10.0,
-                        textAlign: TextAlign.start,
-                        showMaxLength: false,
-                        suffixIconColor: Theme.of(context).hintColor.withValues(alpha: 0.5),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(Dimensions.radiusSizeSmall),
-                          borderSide: BorderSide(color: Theme.of(context).hintColor.withValues(alpha: 0.1), width: 1),
-                        ),
-                        hintTextStyle: rubikRegular.copyWith(
-                          color: Theme.of(context).hintColor.withValues(alpha: 0.5),
-                          fontSize: Dimensions.fontSizeDefault,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: Dimensions.paddingSizeExtraOverLarge),
-                    ],
-                  ))),
-
-                  // AMIAL-PIN-UI-001: كان الزرّ محبوساً في 45px فيُقصّ نصّه
-                  // العربي؛ 52px هو ارتفاع الزرّ الموحّد في التطبيق.
-                  SizedBox(
-                    height: 52,
-                    child: CustomButtonWidget(
-                      buttonText: 'change_pin_button'.tr,
-                      buttonTextStyle: rubikMedium.copyWith(color: Theme.of(context).primaryColor),
-                      borderRadius: Dimensions.radiusSizeExtraSmall,
-                      color: Theme.of(context).colorScheme.secondary,
-                      onTap: (){
-                        controller.changePin(
-                            oldPassword: _oldPasswordController.text,
-                            confirmPassword: _confirmPasswordController.text,
-                            newPassword: _newPasswordController.text,
-                        );
-                      },
-                    ),
+    return GetBuilder<ProfileController>(builder: (controller) {
+      return Scaffold(
+        backgroundColor: AmyalColors.background,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back_rounded,
+                        color: AmyalColors.textSecondary),
+                    onPressed: controller.isLoading ? null : _back,
                   ),
-                ]),
-              ),
-        ));
-      },
-    );
+                ),
+
+                // مؤشّر الخطوات: يعرف المستخدم أين هو وكم بقي.
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(3, (i) {
+                    final done = i <= _Step.values.indexOf(_step);
+                    return Container(
+                      width: 34,
+                      height: 4,
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      decoration: BoxDecoration(
+                        color: done
+                            ? AmyalColors.primary
+                            : AmyalColors.primary.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 22),
+
+                Container(
+                  height: 76,
+                  width: 76,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AmyalColors.primary.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.password_rounded,
+                      color: AmyalColors.primary, size: 34),
+                ),
+                const SizedBox(height: 16),
+
+                Text(_title,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.bold,
+                        color: AmyalColors.textPrimary)),
+                const SizedBox(height: 6),
+                Text(_hint,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        fontSize: 13, height: 1.6,
+                        color: AmyalColors.textSecondary)),
+                const SizedBox(height: 26),
+
+                AmialPinDots(controller: _active, error: _error.isNotEmpty),
+                const SizedBox(height: 10),
+
+                SizedBox(
+                  height: 34,
+                  child: controller.isLoading
+                      ? const Center(
+                          child: SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: AmyalColors.primary),
+                          ),
+                        )
+                      : _error.isEmpty
+                          ? const SizedBox.shrink()
+                          : Center(
+                              child: Text(_error,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      color: AmyalColors.red, fontSize: 13)),
+                            ),
+                ),
+                const SizedBox(height: 8),
+
+                AbsorbPointer(
+                  absorbing: controller.isLoading,
+                  child: AmialNumpad(
+                    // مفتاح جديد لكل خطوة ولكل خطأ: ترتيب جديد في كل مرّة.
+                    key: ValueKey('$_step-$_round'),
+                    controller: _active,
+                    maxLength: 4,
+                    shuffle: true,
+                    onChanged: (v) {
+                      setState(() {});
+                      if (v.length == 4) _onFilled(v);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                Container(
+                  padding: const EdgeInsets.all(11),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AmyalColors.border),
+                  ),
+                  child: const Row(children: [
+                    Icon(Icons.info_outline_rounded,
+                        size: 17, color: AmyalColors.textMuted),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'رمز المعاملات يؤكّد التحويلات والسحب — وهو غير كلمة '
+                        'مرور الدخول. تغييره هنا لا يغيّر كلمة مرورك.',
+                        style: TextStyle(
+                            fontSize: 11.5, height: 1.6,
+                            color: AmyalColors.textSecondary),
+                      ),
+                    ),
+                  ]),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    });
   }
 }

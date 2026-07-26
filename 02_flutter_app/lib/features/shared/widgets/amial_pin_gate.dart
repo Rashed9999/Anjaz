@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/features/shared/widgets/amial_numpad.dart';
+import 'package:amyal_pay/features/shared/widgets/amial_pin_dots.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/util/secure_screen.dart';
 
@@ -96,27 +96,12 @@ class _AmialPinInputScreenState extends State<_AmialPinInputScreen> {
               style: TextStyle(fontSize: 15, color: Color(0xFF5F6B7C)),
             ),
             const SizedBox(height: 24),
-            TextField(
-              controller: _pin,
-              readOnly: true,
-              obscureText: true,
-              maxLength: 4,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 28, letterSpacing: 18, fontWeight: FontWeight.bold),
-              decoration: InputDecoration(
-                counterText: '',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
+            AmialPinDots(controller: _pin),
+            const SizedBox(height: 22),
             AmialNumpad(
               controller: _pin,
               maxLength: 4,
+              shuffle: true,
               onChanged: (v) {
                 setState(() {});
                 if (v.length == 4) Get.back(result: v);
@@ -142,6 +127,9 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
   final TextEditingController _pin = TextEditingController();
   bool _checking = false;
   String _error = '';
+
+  /// يزداد بعد كل محاولة فاشلة ليُعيد بعثرة لوحة الأرقام.
+  int _round = 0;
 
   // AMIAL-SEC-CAPTURE-001: بوّابة الرمز السري — بلا تصوير ولا تسجيل شاشة.
   @override
@@ -186,6 +174,7 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
         _checking = false;
         _error = msg;
         _pin.clear();
+        _round++;
       });
     } catch (_) {
       setState(() {
@@ -244,42 +233,15 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
             const SizedBox(height: 26),
 
             // AMIAL-PIN-UI-002: أربع نقاط تمتلئ مع الإدخال.
-            // كان هنا TextField للقراءة فقط بتباعد حروف 18 داخل إطار —
-            // فيظهر فارغاً كصندوق أبيض ضخم بلا معنى قبل الكتابة.
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: _pin,
-              builder: (context, value, _) {
-                final n = value.text.length;
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(4, (i) {
-                    final filled = i < n;
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 160),
-                      width: filled ? 18 : 16,
-                      height: filled ? 18 : 16,
-                      margin: const EdgeInsets.symmetric(horizontal: 11),
-                      decoration: BoxDecoration(
-                        color: filled
-                            ? AmyalColors.primary
-                            : Colors.transparent,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: filled
-                              ? AmyalColors.primary
-                              : AmyalColors.primary.withValues(alpha: 0.30),
-                          width: 1.6,
-                        ),
-                      ),
-                    );
-                  }),
-                );
-              },
-            ),
+            AmialPinDots(controller: _pin, error: _error.isNotEmpty),
             const SizedBox(height: 22),
             AmialNumpad(
+              // مفتاح يتبدّل بعد كل محاولة فاشلة فيُعاد بناء اللوحة بترتيب
+              // جديد: من راقب المحاولة الأولى لا ينتفع بها في الثانية.
+              key: ValueKey(_round),
               controller: _pin,
               maxLength: 4,
+              shuffle: true,
               onChanged: (v) {
                 setState(() {});
                 if (v.length == 4) _verify();

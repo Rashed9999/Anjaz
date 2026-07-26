@@ -208,12 +208,14 @@ class TransactionPinService
     private function validatePinFormat(string $pin): void
     {
         if (!preg_match('/^\d{4,6}$/', $pin)) {
-            throw new \InvalidArgumentException('PIN must be 4-6 digits');
+            throw new \InvalidArgumentException('الرمز يجب أن يكون من 4 إلى 6 أرقام');
         }
-        // ضعفاً: نرفض 1234 و 0000 و تكرار رقم
+        // ضعفاً: نرفض 1234 و 0000 و تكرار رقم.
+        // الرسالة بالعربية لأنها تصل شاشة العميل مباشرةً — ورسالة إنجليزية
+        // في تطبيق عربي تُقرأ كعطل لا كإرشاد.
         $bannedPatterns = ['0000', '1111', '2222', '3333', '4444', '5555', '6666', '7777', '8888', '9999', '1234', '4321', '0123'];
         if (in_array($pin, $bannedPatterns, true)) {
-            throw new \InvalidArgumentException('PIN too weak — please choose a less predictable number');
+            throw new \InvalidArgumentException('رمز سهل التخمين — اختر أرقاماً غير متسلسلة ولا متكرّرة');
         }
     }
 }

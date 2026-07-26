@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amyal_pay/features/me/domain/me_repo.dart';
 
 /// AMIAL-ME-001 — شاشة "رقم حسابي" مع نسخ + مشاركة.
@@ -114,8 +115,11 @@ class _MyAccountNumberScreenState extends State<MyAccountNumberScreen> {
                     ),
                   ]),
                   const SizedBox(height: 28),
-                  SelectableText(
+                  // AMIAL-RTL-NUMBER-001: التنسيق يُدخل مسافات بين المقاطع،
+                  // والمحيط العربي يعكس ترتيبها فيظهر «5678 34 12».
+                  AmialLtrNumber(
                     _formatAccountNumber(acc),
+                    selectable: true,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 38,
@@ -123,14 +127,14 @@ class _MyAccountNumberScreenState extends State<MyAccountNumberScreen> {
                       letterSpacing: 4,
                       fontFeatures: [FontFeature.tabularFigures()],
                     ),
-                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),
                   if (name.isNotEmpty)
                     Text(name, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
                   if (phone.isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Text(phone, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                    AmialLtrNumber(phone,
+                        style: const TextStyle(color: Colors.white70, fontSize: 12)),
                   ],
                 ]),
               ),

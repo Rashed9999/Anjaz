@@ -9,7 +9,6 @@ import 'package:amyal_pay/features/setting/domain/reposotories/profile_repo.dart
 import 'package:amyal_pay/features/transaction_money/controllers/bootom_slider_controller.dart';
 import 'package:amyal_pay/helper/dialog_helper.dart';
 import 'package:amyal_pay/helper/phone_cheker_helper.dart';
-import 'package:amyal_pay/helper/route_helper.dart';
 import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
 import 'package:amyal_pay/common/widgets/custom_dialog_widget.dart';
 import 'package:amyal_pay/util/app_constants.dart';
@@ -87,11 +86,21 @@ class ProfileController extends GetxController implements GetxService {
       );
 
       if (response.statusCode == 200) {
-        await Get.find<AuthController>().updatePin(newPassword);
-        UserShortDataModel? userData = Get.find<AuthController>().getUserData();
-
-        Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
-
+        // AMIAL-PIN-SEPARATION-001 — كان هنا سطران خاطئان:
+        //
+        //   await Get.find<AuthController>().updatePin(newPassword);
+        //   Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
+        //
+        // الأول يكتب رمز المعاملات الجديد في خانة كلمة مرور الدخول بالبصمة
+        // (biometricPin تُرسَل كـ password عند الدخول الحيوي) — فيفسد الدخول
+        // بالبصمة عند أوّل تغيير للرمز.
+        //
+        // والثاني يُخرج العميل من حسابه ويرميه إلى شاشة الدخول. تغيير رمز
+        // المعاملات ليس تغيير كلمة مرور ولا يُبطل الجلسة. اجتماع السطرين هو
+        // ما جعل العميل يجد نفسه بعد التغيير أمام شاشة دخول تطلب الرمز
+        // الجديد بدل كلمة مروره.
+        showCustomSnackBarHelper('تم تغيير رمز المعاملات بنجاح', isError: false);
+        Get.back();
       } else {
         ApiChecker.checkApi(response);
       }

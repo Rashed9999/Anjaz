@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/withdraw/screens/withdraw_request_screen.dart';
+import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amyal_pay/features/me/screens/my_account_number_screen.dart';
 import 'package:amyal_pay/features/installments/screens/my_installments_screen.dart';
 import 'package:amyal_pay/features/gift_cards/screens/my_gift_cards_screen.dart';
@@ -116,8 +117,9 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                           ],
                         ]),
                         const SizedBox(height: 4),
-                        Text(
+                        AmialLtrNumber(
                           acc,
+                          textAlign: TextAlign.start,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 24,
