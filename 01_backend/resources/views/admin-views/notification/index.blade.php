@@ -76,10 +76,11 @@
                                         </td>
                                         <td><span class="badge bg-soft-info text-info">{{ translate($notification->receiver ?? 'all') }}</span></td>
                                         <td>
-                                            <a href="{{ route('admin.notification.status', ['id' => $notification->id, 'status' => $notification->status ? 0 : 1]) }}"
-                                               class="badge {{ $notification->status ? 'bg-soft-success text-success' : 'bg-soft-secondary text-secondary' }}">
+                                            <button type="button"
+                                               onclick="notifToggle('{{ route('admin.notification.status', ['id' => $notification->id, 'status' => $notification->status ? 0 : 1]) }}')"
+                                               class="badge border-0 {{ $notification->status ? 'bg-soft-success text-success' : 'bg-soft-secondary text-secondary' }}">
                                                 {{ $notification->status ? translate('مفعّل') : translate('معطّل') }}
-                                            </a>
+                                            </button>
                                         </td>
                                         <td>
                                             <a href="{{ route('admin.notification.edit', ['id' => $notification->id]) }}"
@@ -105,4 +106,11 @@
         </div>
     </div>
 </div>
+<script>
+    // AMIAL-CSRF-001: تفعيل إشعار وتعطيله تغيير في الحالة — POST مع رمز.
+    function notifToggle(url) {
+        fetch(url, { method: 'POST', headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } })
+            .then(function () { location.reload(); });
+    }
+</script>
 @endsection

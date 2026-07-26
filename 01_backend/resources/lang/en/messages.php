@@ -420,4 +420,7 @@
   'بدون فئة' => 'بدون فئة',
   'الإجابة' => 'الإجابة',
   'رجوع' => 'رجوع',
+  'Banner status updated' => 'Banner status updated',
+  'Banner removed' => 'Banner removed',
+  'حذف هذا البانر؟' => 'حذف هذا البانر؟',
 );

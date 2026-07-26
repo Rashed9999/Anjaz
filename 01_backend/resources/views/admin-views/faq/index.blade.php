@@ -94,8 +94,11 @@
 
 <script>
     function faqToggle(id, status) {
-        fetch("{{ url('admin/faq/status') }}/" + id + "/" + status)
-            .then(function () { location.reload(); });
+        // AMIAL-CSRF-001: كان GET — تبديل حالة سؤال بطلب لا يحمل رمزاً.
+        fetch("{{ url('admin/faq/status') }}/" + id + "/" + status, {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' }
+        }).then(function () { location.reload(); });
     }
     function faqDelete(id) {
         if (!confirm('{{ translate('حذف هذا السؤال؟') }}')) return;

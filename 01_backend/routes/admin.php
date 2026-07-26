@@ -131,12 +131,11 @@ Route::group(['as' => 'admin.'], function () {
             Route::group(['prefix' => 'language', 'as' => 'language.', 'middleware' => []], function () {
                 Route::get('', [LanguageController::class, 'index'])->name('index');
                 Route::post('add-new', [LanguageController::class, 'store'])->name('add-new');
-                Route::get('update-status', [LanguageController::class, 'updateStatus'])->name('update-status');
-                Route::get('update-default-status', [LanguageController::class, 'updateDefaultStatus'])->name('update-default-status');
+                Route::post('update-status', [LanguageController::class, 'updateStatus'])->name('update-status');
+                Route::post('update-default-status', [LanguageController::class, 'updateDefaultStatus'])->name('update-default-status');
                 Route::post('update', [LanguageController::class, 'update'])->name('update');
                 Route::post('translate-submit/{lang}', [LanguageController::class, 'translateSubmit'])->name('translate-submit');
                 Route::post('remove-key/{lang}', [LanguageController::class, 'translateKeyRemove'])->name('remove-key');
-                Route::get('delete/{lang}', [LanguageController::class, 'delete'])->name('delete');
             });
 
             Route::post('otp-setup-update', [BusinessSettingsController::class, 'otpSetupUpdate'])->name('otp_setup_update');
@@ -159,7 +158,7 @@ Route::group(['as' => 'admin.'], function () {
             Route::post('store', [NotificationController::class, 'store'])->name('store');
             Route::get('edit/{id}', [NotificationController::class, 'edit'])->name('edit');
             Route::post('update/{id}', [NotificationController::class, 'update'])->name('update');
-            Route::get('status/{id}/{status}', [NotificationController::class, 'status'])->name('status');
+            Route::post('status/{id}/{status}', [NotificationController::class, 'status'])->name('status');
             Route::delete('delete/{id}', [NotificationController::class, 'delete'])->name('delete');
         });
 
@@ -168,8 +167,8 @@ Route::group(['as' => 'admin.'], function () {
             Route::post('store', [BannerController::class, 'store'])->name('store');
             Route::get('edit/{id}', [BannerController::class, 'edit'])->name('edit');
             Route::post('update/{id}', [BannerController::class, 'update'])->name('update');
-            Route::get('status/{id}', [BannerController::class, 'status'])->name('status');
-            Route::get('delete/{id}', [BannerController::class, 'delete'])->name('delete');
+            Route::post('status/{id}', [BannerController::class, 'status'])->name('status');
+            Route::delete('delete/{id}', [BannerController::class, 'delete'])->name('delete');
         });
 
         Route::group(['prefix' => 'bonus', 'as' => 'bonus.'], function () {
@@ -231,7 +230,6 @@ Route::group(['as' => 'admin.'], function () {
                 Route::post('delete/{id}', [BlogCategoryController::class, 'delete'])->name('delete');
                 // AMIAL-FIX: أُزيل مسار PUT مكرّر (نفس الاسم/الـURI/الإجراء للـ POST أعلاه)
                 // كان يكسر route:cache بخطأ "Another route has already been assigned name".
-                Route::get('count-increment/{id}', [BlogCategoryController::class, 'countIncrement'])->name('count-increment');
             });
         });
 
@@ -240,7 +238,7 @@ Route::group(['as' => 'admin.'], function () {
             Route::get('create', [FAQController::class, 'create'])->name('create');
             Route::post('store', [FAQController::class, 'store'])->name('store');
             Route::delete('delete/{id}', [FAQController::class, 'delete'])->name('delete');
-            Route::get('status/{id}/{status}', [FAQController::class, 'status'])->name('status');
+            Route::post('status/{id}/{status}', [FAQController::class, 'status'])->name('status');
             Route::get('edit/{id}', [FAQController::class, 'edit'])->name('edit');
             Route::get('details/{id}', [FAQController::class, 'details'])->name('details');
             Route::post('update/{id}', [FAQController::class, 'update'])->name('update');
@@ -250,7 +248,6 @@ Route::group(['as' => 'admin.'], function () {
                 Route::post('store', [FAQCategoryController::class, 'store'])->name('store');
                 Route::post('update/{id}', [FAQCategoryController::class, 'update'])->name('update');
                 Route::post('delete/{id}', [FAQCategoryController::class, 'delete'])->name('delete');
-                Route::get('count-increment/{id}', [FAQCategoryController::class, 'countIncrement'])->name('count-increment');
             });
         });
 

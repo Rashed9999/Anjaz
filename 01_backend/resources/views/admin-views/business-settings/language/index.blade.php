@@ -63,8 +63,8 @@
                                             @if(!empty($lang['default']))
                                                 <span class="badge bg-soft-primary text-primary">★ {{ translate('افتراضية') }}</span>
                                             @else
-                                                <a href="{{ route('admin.business-settings.language.update-default-status', ['code' => $lang['code']]) }}"
-                                                   class="btn btn-sm btn-outline-primary">{{ translate('اجعلها افتراضية') }}</a>
+                                                <button type="button" onclick="langDefault('{{ $lang['code'] }}')"
+                                                        class="btn btn-sm btn-outline-primary">{{ translate('اجعلها افتراضية') }}</button>
                                             @endif
                                         </td>
                                     </tr>
@@ -81,9 +81,25 @@
 </div>
 
 <script>
+    // AMIAL-CSRF-001: تفعيل لغة وتعيينها افتراضيةً تغييران في حالة النظام،
+    // فيُرسَلان بـ POST مع رمز CSRF. كانا GET — ووسم صورة في أي صفحة يفتحها
+    // مديرٌ مسجَّل الدخول كان يكفي لتنفيذهما بجلسته بلا علمه.
+    function langPost(url) {
+        return fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'Accept': 'application/json'
+            }
+        }).then(function () { location.reload(); });
+    }
+
     function langToggle(code) {
-        fetch("{{ route('admin.business-settings.language.update-status') }}?code=" + encodeURIComponent(code))
-            .then(function () { location.reload(); });
+        langPost("{{ route('admin.business-settings.language.update-status') }}?code=" + encodeURIComponent(code));
+    }
+
+    function langDefault(code) {
+        langPost("{{ route('admin.business-settings.language.update-default-status') }}?code=" + encodeURIComponent(code));
     }
 </script>
 @endsection

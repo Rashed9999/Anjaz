@@ -59,26 +59,16 @@ class RouteSurfaceGuardTest extends TestCase
     }
 
     /**
-     * دَيْن معروف: مسارات GET تكتب، ورثناها من لوحة 6cash وصفحاتها حيّة
-     * تستعملها اللوحة اليوم. تحويلها إلى POST يلزمه تعديل روابط القوالب
-     * معها، وهو تغيير في واجهة عاملة لا يصحّ خلطه بتنظيف اللوحة الميتة.
+     * القائمة فارغة — وهذا هو المقصود.
      *
-     * القائمة تُقلَّص ولا تُوسَّع: أي مسار GET كاتب جديد يُسقط الاختبار.
-     * حذف سطر من هنا بعد تحويله إلى POST هو المقصود.
+     * كانت تحمل أحد عشر مساراً GET يكتب، ورثناها من لوحة 6cash. سِتّة منها
+     * كانت مستعملة فعلاً فحُوّلت إلى POST/DELETE مع روابطها، وخمسة لم يكن
+     * يشير إليها شيء فحُذفت.
+     *
+     * تبقى الثابتة موجودةً فارغةً عمداً: إبقاؤها يجعل إضافة استثناء قراراً
+     * ظاهراً في المراجعة، لا تعديلاً صامتاً في منطق الاختبار.
      */
-    private const KNOWN_GET_WRITES = [
-        'admin/business-settings/language/update-status',
-        'admin/business-settings/language/update-default-status',
-        'admin/business-settings/language/delete/{lang}',
-        'admin/notification/status/{id}/{status}',
-        'admin/banner/status/{id}',
-        'admin/banner/delete/{id}',
-        'admin/blog/category/count-increment/{id}',
-        'admin/blog/category/status/{id}',
-        'admin/faq/status/{id}/{status}',
-        'admin/faq/category/count-increment/{id}',
-        'admin/faq/category/status/{id}',
-    ];
+    private const KNOWN_GET_WRITES = [];
 
     public function test_no_get_route_writes_to_the_database(): void
     {

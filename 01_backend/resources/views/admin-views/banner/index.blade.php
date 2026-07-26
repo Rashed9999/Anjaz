@@ -70,17 +70,18 @@
                                         <td>{{ $banner->title }}</td>
                                         <td><span class="badge bg-soft-info text-info">{{ translate($banner->receiver ?? 'all') }}</span></td>
                                         <td>
-                                            <a href="{{ route('admin.banner.status', ['id' => $banner->id]) }}"
-                                               class="badge {{ $banner->status ? 'bg-soft-success text-success' : 'bg-soft-secondary text-secondary' }}">
+                                            <button type="button"
+                                               onclick="bannerToggle('{{ route('admin.banner.status', ['id' => $banner->id]) }}')"
+                                               class="badge border-0 {{ $banner->status ? 'bg-soft-success text-success' : 'bg-soft-secondary text-secondary' }}">
                                                 {{ $banner->status ? translate('مفعّل') : translate('معطّل') }}
-                                            </a>
+                                            </button>
                                         </td>
                                         <td>
                                             <a href="{{ route('admin.banner.edit', ['id' => $banner->id]) }}"
                                                class="btn btn-sm btn-outline-primary"><i class="tio-edit"></i></a>
-                                            <a href="{{ route('admin.banner.delete', ['id' => $banner->id]) }}"
+                                            <button type="button"
                                                class="btn btn-sm btn-outline-danger"
-                                               onclick="return confirm('{{ translate('حذف هذا البانر؟') }}')"><i class="tio-delete"></i></a>
+                                               onclick="bannerDelete('{{ route('admin.banner.delete', ['id' => $banner->id]) }}')"><i class="tio-delete"></i></button>
                                         </td>
                                     </tr>
                                 @empty
@@ -97,4 +98,18 @@
         </div>
     </div>
 </div>
+<script>
+    // AMIAL-CSRF-001: كان التبديل والحذف روابط GET. رابط الحذف بالذات خطر
+    // مضاعف: أي زاحف أو جالب مسبق للصفحات يتبع الروابط، فيحذف بلا نيّة أحد.
+    function bannerToggle(url) {
+        fetch(url, { method: 'POST', headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } })
+            .then(function () { location.reload(); });
+    }
+
+    function bannerDelete(url) {
+        if (!confirm('{{ translate('حذف هذا البانر؟') }}')) return;
+        fetch(url, { method: 'DELETE', headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } })
+            .then(function () { location.reload(); });
+    }
+</script>
 @endsection
