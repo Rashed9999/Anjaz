@@ -97,6 +97,18 @@ export LOG_CHANNEL="${LOG_CHANNEL:-stderr}"
 # المجلّد غير قابل للكتابة → fopen يفشل. نُنشئها ونمنحها صلاحية الكتابة.
 mkdir -p storage/framework/cache/data storage/framework/sessions \
          storage/framework/views storage/logs storage/fonts bootstrap/cache
+
+# AMIAL-PDF-DURABLE-001: مجلّدات storage/app تُنشأ هنا لا في الصورة.
+#
+# حين يُثبَّت volume على storage/app فإنه يحجب ما أنشأته الصورة تحته، ولا
+# يستقبل مجلدات جديدة تُضاف إليها لاحقاً. mPDF يحتاج tempDir قابلاً
+# للكتابة، فإن غاب رمى استثناءً وسط توليد الإيصال — فيبدو كأن «خدمة PDF
+# انقطعت» ولا خدمة في الأمر أصلاً.
+#
+# كان هذا الإصلاح في entrypoint.prod.sh وحده، وهذا الملفّ هو المُستعمل
+# فعلاً في النشر الحالي (Dockerfile لا Dockerfile.prod) — فلم يكن يصل.
+mkdir -p storage/app/mpdf storage/app/private \
+         storage/app/receipts storage/app/signatures storage/app/public
 # AMIAL-FIX(LOG-PERMS): ننشئ laravel.log مقدّماً بملكية www-data وصلاحية 666.
 # كان يُنشأ لاحقاً بملكية root (أوامر artisan الخلفية تعمل كـroot) فيعجز
 # عامل php-fpm (www-data) عن الكتابة → «Permission denied» يحوّل أي خطأ
@@ -105,6 +117,16 @@ touch storage/logs/laravel.log 2>/dev/null || true
 chmod -R 777 storage bootstrap/cache 2>/dev/null || true
 chmod 666 storage/logs/laravel.log 2>/dev/null || true
 chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
+
+# فحص فعليّ لا افتراض: نكتب بهوية www-data ونقرأ. سطر واحد في سجلّ
+# الإقلاع يوفّر ساعةً من التخمين لاحقاً حين «يتعطّل الـ PDF».
+if su -s /bin/sh www-data -c 'touch storage/app/mpdf/.probe' 2>/dev/null; then
+    rm -f storage/app/mpdf/.probe
+    echo "✓ مجلّدات storage/app جاهزة (توليد PDF ممكن)"
+else
+    echo "⚠️  www-data لا يستطيع الكتابة في storage/app/mpdf — توليد PDF سيفشل."
+    echo "   شخّص على الخادم: php artisan amial:pdf-doctor"
+fi
 
 # ── تنظيف أي كاش قديم من بناء الصورة (يقرأ Laravel المفاتيح المُصدَّرة
 #    مباشرةً من البيئة بدل كاش قديم بُني قبل توليد APP_KEY — يمنع 500) ──

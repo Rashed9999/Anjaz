@@ -64,8 +64,10 @@ WORKDIR /var/www/html
 COPY . .
 
 # صلاحيات storage
+# AMIAL-PDF-DURABLE-001: تُنشأ هنا للنشرات بلا volume، ويُعاد إنشاؤها في
+# entrypoint لأن volume على storage/app يحجب ما في الصورة تحته.
 RUN mkdir -p storage/logs storage/framework/{cache/data,sessions,views} \
-             storage/app/public bootstrap/cache \
+             storage/app/{public,mpdf,private,receipts,signatures} bootstrap/cache \
  && chmod -R 775 storage bootstrap/cache \
  && chown -R www-data:www-data storage bootstrap/cache
 
