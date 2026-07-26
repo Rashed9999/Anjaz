@@ -19,22 +19,10 @@ use App\Http\Controllers\Web\RegistrationController;
 */
 
 
-Route::get('/', [LandingPageController::class, 'landingPageHome'])->name('landing-page-home');
 Route::post('newsletter/subscribe', [NewsLetterController::class, 'newsLetterSubscribe'])->name('newsletter.subscribe');
-Route::post('send-message', [LandingPageController::class, 'contactUsMessage'])->name('send-message');
-Route::get('contact-us', [LandingPageController::class, 'contactUs'])->name('contact-us');
-Route::get('blog', [LandingPageController::class, 'blog'])->name('blog');
-Route::get('faq', [LandingPageController::class, 'faq'])->name('faq');
-Route::get('blog/details/{slug}', [LandingPageController::class, 'blogDetails'])->name('blog.details');
-Route::get('popular-blog', [LandingPageController::class, 'popularBlogs'])->name('popular-blog');
 
 
 Route::group(['prefix' => 'agent', 'as' => 'agent.'], function () {
-    Route::get('registration', [RegistrationController::class, 'agentSelfRegistration'])->name('agent-self-registration');
-    Route::post('store-registration', [RegistrationController::class, 'storeAgentData'])->name('store-registration');
-    Route::post('phone-number-check', [RegistrationController::class, 'phoneNumberCheck'])->name('phone-number-check');
-    Route::post('otp-verify', [RegistrationController::class, 'agentVerifyOtp'])->name('verify-otp');
-    Route::post('resend-otp', [RegistrationController::class, 'resendOtp'])->name('resend-otp');
 });
 
 
@@ -51,9 +39,6 @@ Route::get('authentication-failed', function () {
 })->name('authentication-failed');
 
 Route::group(['prefix' => 'pages', 'as' => 'pages.'], function () {
-    Route::get('terms-conditions', [PageController::class, 'getTermsAndConditions'])->name('terms-conditions');
-    Route::get('privacy-policy', [PageController::class, 'getPrivacyPolicy'])->name('privacy-policy');
-    Route::get('about-us', [PageController::class, 'getAboutUs'])->name('about-us');
 });
 
 Route::get('test', function () {

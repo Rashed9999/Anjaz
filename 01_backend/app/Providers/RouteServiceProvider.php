@@ -34,10 +34,14 @@ class RouteServiceProvider extends ServiceProvider
                 ->namespace($this->namespace)
                 ->group(base_path('routes/admin.php'));
 
-            Route::prefix('merchant')
-                ->middleware('web')
-                ->namespace($this->namespace)
-                ->group(base_path('routes/merchant.php'));
+            // AMIAL-AUDIT-ORPHAN-002: أُزيل تسجيل routes/merchant.php —
+            // لوحة التاجر الويبيّة من قالب 6cash. قوالبها كلّها محذوفة، فكل
+            // صفحاتها ترمي 500، ولا شيء خارجها يشير إليها (مراجعها الوحيدة
+            // متحكّماتها نفسها). تاجر أميال يعمل من التطبيق عبر
+            // /api/v1/amial/merchant/* — وهي حيّة ومختبَرة.
+            //
+            // الملفّ يبقى في المستودع لا يُحمَّل: حذفه يُفقد سياق ما كان،
+            // وتسجيله يُبقي سطح خطأ بلا وظيفة.
 
             // AMIAL-CLEANUP: أُزيل تسجيل routes/install.php (معالج تثبيت 6cash)
 
