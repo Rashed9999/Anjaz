@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/merchant/controllers/merchant_pay_controller.dart';
+import 'package:amyal_pay/features/payments/domain/amial_qr_payload.dart';
 import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
 import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
@@ -19,12 +19,18 @@ class MerchantPayScreen extends StatefulWidget {
   final String channel; // 'qr' | 'pos'
   final int? posUserId;
 
+  /// AMIAL-QR-UNIFIED-001 — رمز «طلب دفع بمبلغ ثابت» ممرَّراً من الماسح
+  /// المركزي. حين يُمرَّر تُفتح معاينة الدفع فوراً: البائع والمبلغ ثم تأكيد،
+  /// ولا يُطلب من العميل رقمٌ ولا مبلغ — البائع حدّدهما.
+  final String? requestCode;
+
   const MerchantPayScreen({
     super.key,
     this.prefillMerchantPhone,
     this.merchantUserId,
     this.channel = 'qr',
     this.posUserId,
+    this.requestCode,
   });
 
   @override
@@ -45,6 +51,8 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Get.find<MerchantPayController>().prepareNewPayment();
+      final code = widget.requestCode;
+      if (code != null && code.isNotEmpty) _payFixedRequest(code);
     });
   }
 
@@ -62,22 +70,12 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
     final raw = await Get.to<String>(() => const QrScannerScreen(title: 'مسح رمز الدفع'));
     if (raw == null || raw.isEmpty || !mounted) return;
 
-    // 1) رمز «طلب دفع بمبلغ ثابت» (كاشير الوقود/المتجر) — {t:amial_pr, code}
-    String? prCode;
-    String? phone;
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is Map) {
-        if (decoded['t'] == 'amial_pr' && decoded['code'] != null) {
-          prCode = decoded['code'].toString();
-        } else if (decoded['phone'] != null) {
-          phone = decoded['phone'].toString();
-        }
-      }
-    } catch (_) {
-      final cleaned = raw.replaceAll(RegExp(r'[\s\-]'), '');
-      if (RegExp(r'^\+?[0-9]{6,15}$').hasMatch(cleaned)) phone = cleaned;
-    }
+    // AMIAL-QR-UNIFIED-001: التحليل من القارئ المشترك لا نسخةً محلّية.
+    // كانت هنا نسخة ثانية من المنطق تقبل أي 6–15 رقماً هاتفاً، فتبتلع
+    // باركود المنتجات (EAN‑13 ثلاثة عشر رقماً) وتعرض تحويلاً لرقم لا وجود له.
+    final payload = AmialQrPayload.parse(raw);
+    final String? prCode = payload.isPaymentRequest ? payload.requestCode : null;
+    final String? phone = payload.phone;
 
     if (prCode != null) {
       await _payFixedRequest(prCode);
@@ -92,7 +90,7 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
       return;
     }
 
-    setState(() => _phoneCtrl.text = phone!);
+    setState(() => _phoneCtrl.text = phone);
     _refreshQuote();
   }
 

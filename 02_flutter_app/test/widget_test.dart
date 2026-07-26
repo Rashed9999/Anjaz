@@ -13,6 +13,7 @@ import 'package:amyal_pay/util/app_constants.dart';
 import 'package:amyal_pay/features/auth/screens/role_router.dart';
 import 'package:amyal_pay/features/home/screens/nav_bar_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_dashboard_screen.dart';
+import 'package:amyal_pay/features/access/screens/home_dispatcher_screen.dart';
 import 'package:amyal_pay/features/agent/screens/agent_dashboard_screen.dart';
 
 void main() {
@@ -36,9 +37,16 @@ void main() {
       expect(RoleRouter.homeForRole('unknown'), isA<NavBarScreen>());
     }, timeout: fast);
 
-    test('التاجر/الـ POS → لوحة التاجر', () {
-      expect(RoleRouter.homeForRole('merchant'), isA<MerchantDashboardScreen>());
-      expect(RoleRouter.homeForRole('pos'), isA<MerchantDashboardScreen>());
+    test('التاجر/الـ POS → موزّع القطاعات، ومرجعه لوحة التاجر', () {
+      // AMIAL-SECTOR-ROUTING: التاجر لم يعد يذهب إلى لوحة واحدة، بل يمرّ
+      // بموزّع يقرأ نوع نشاطه (صيدلية/مطعم/وقود/جملة) ويفتح لوحته. ولوحة
+      // التاجر العامّة هي المرجع حين لا يكون النشاط من القطاعات المعروفة.
+      for (final role in ['merchant', 'pos']) {
+        final home = RoleRouter.homeForRole(role);
+        expect(home, isA<HomeDispatcherScreen>(), reason: 'الدور: $role');
+        expect((home as HomeDispatcherScreen).userHomeFallback,
+            isA<MerchantDashboardScreen>());
+      }
     }, timeout: fast);
 
     test('الوكيل → لوحة الوكيل', () {
