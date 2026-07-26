@@ -42,6 +42,40 @@ fi
 echo "🗄️  تطبيق الـ migrations..."
 php artisan migrate --force
 
+# ── AMIAL-PDF-DURABLE-001: مجلدات التخزين تُهيَّأ هنا لا في الصورة ─────
+#
+# `storage/app` مُثبَّت عليه volume دائم (amial_storage_prod). و volume
+# يُغطّي ما في الصورة تحته: أي مجلّد أنشأه Dockerfile داخل storage/app لا
+# يراه التطبيق بعد التثبيت، والمجلدات الجديدة لا تُنقل إلى volume قائم أبداً.
+#
+# لهذا كانت مشكلة الـ PDF تعود بعد كل «إصلاح»: الإصلاح يُوضع في الصورة
+# فيُحجب. mPDF يحتاج tempDir قابلاً للكتابة، فإن غاب رمى استثناءً وسط توليد
+# الإيصال — فيبدو كأن «خدمة PDF انقطعت» وليس في الأمر خدمة أصلاً.
+#
+# الموضع الصحيح هنا: بعد التثبيت، في كل إقلاع، وهو رخيص ولا يُتلف موجوداً.
+echo "📁 تهيئة مجلدات التخزين..."
+mkdir -p storage/app/mpdf \
+         storage/app/private \
+         storage/app/receipts \
+         storage/app/signatures \
+         storage/app/public \
+         storage/logs \
+         storage/framework/cache/data \
+         storage/framework/sessions \
+         storage/framework/views \
+         bootstrap/cache
+chown -R www-data:www-data storage bootstrap/cache 2>/dev/null || true
+chmod -R 775 storage bootstrap/cache 2>/dev/null || true
+
+# فحص فعليّ لا افتراض: نكتب ملفاً بهوية www-data ونقرؤه.
+if su -s /bin/sh www-data -c 'touch storage/app/mpdf/.probe' 2>/dev/null; then
+    rm -f storage/app/mpdf/.probe
+    echo "✓ مجلدات التخزين جاهزة وقابلة للكتابة"
+else
+    echo "⚠️  تحذير: www-data لا يستطيع الكتابة في storage/app/mpdf"
+    echo "   توليد ملفات PDF سيفشل. افحص ملكية الـ volume."
+fi
+
 # ── AMIAL-FIX: مفاتيح Passport (مُستثناة من الصورة) — تُولَّد مرّة وتُحفَظ ──
 # نُفضّل حجم مُثبَّت (mounted secret/volume). إن غابت، نولّدها (تحتاج تثبيت
 # storage على volume دائم حتى تبقى الرموز صالحة عبر إعادات التشغيل).
