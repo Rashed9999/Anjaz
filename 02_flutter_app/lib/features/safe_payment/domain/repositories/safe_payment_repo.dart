@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/data/api/idempotency_key_generator.dart';
@@ -60,11 +62,45 @@ class SafePaymentRepo extends GetxService {
   Future<Response> buyerCancel(String ulid, String reason) =>
       _action(ulid, 'buyer-cancel', {'reason': reason}, 'sp_cancel');
 
-  Future<Response> buyerDispute(String ulid, String reason, {List<String>? attachments}) =>
+  Future<Response> buyerDispute(
+    String ulid,
+    String reason, {
+    String? reasonCode,
+    List<String>? attachments,
+  }) =>
       _action(ulid, 'buyer-dispute', {
         'reason': reason,
+        'reason_code': ?reasonCode,
         'attachments': ?attachments,
       }, 'sp_dispute');
+
+  // ============ AMIAL-SAFEPAY-EVIDENCE-001 ============
+
+  /// أسباب النزاع من الخادم — إضافة سبب لا تستحقّ إصدار تطبيق.
+  Future<Response> disputeReasons() =>
+      apiClient.getData('${AppConstants.amyalSafePayments}/dispute-reasons');
+
+  Future<Response> evidence(String ulid) =>
+      apiClient.getData('${AppConstants.amyalSafePayments}/$ulid/evidence');
+
+  /// رفع أدلّة حقيقية (ملفات) — البائع للشحن والتسليم، والمشتري للنزاع.
+  Future<Response> uploadEvidence({
+    required String ulid,
+    required String stage,
+    required List<File> files,
+    String? note,
+  }) {
+    return apiClient.postMultipartData(
+      '${AppConstants.amyalSafePayments}/$ulid/evidence',
+      {'stage': stage, 'note': ?note},
+      // الخادم يقرأ files[] — المفتاح نفسه لكل ملفّ.
+      files.map((f) => MultipartBody('files[]', f)).toList(),
+    );
+  }
+
+  /// البائع يؤكّد التسليم برمز المشتري.
+  Future<Response> verifyDelivery(String ulid, String code) =>
+      _action(ulid, 'verify-delivery', {'code': code}, 'sp_verify_delivery');
 
   Future<Response> _action(String ulid, String path, Map<String, dynamic> body, String idemPrefix) {
     return apiClient.postData(

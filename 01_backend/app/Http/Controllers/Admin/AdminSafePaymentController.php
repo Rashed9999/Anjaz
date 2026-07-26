@@ -53,7 +53,62 @@ class AdminSafePaymentController extends Controller
             ->first();
         if (!$payment) return $this->error('NOT_FOUND', 'Not found', 404);
 
-        return $this->ok(['payment' => $payment]);
+        return $this->ok([
+            'payment' => $payment,
+            // AMIAL-SAFEPAY-EVIDENCE-001: القرار المالي يُبنى على الأدلّة.
+            // كانت الأدلّة تُرفع وتُخزَّن ولا تصل من يقرّر — فيحكم بين طرفين
+            // بنصّ الشكوى وحده وهو أضعف ما في الملفّ.
+            'evidence' => $this->evidenceForReview($payment),
+            'dispute_reason_label' => $payment->dispute_reason_code
+                ? (SafePaymentService::DISPUTE_REASONS[$payment->dispute_reason_code] ?? null)
+                : null,
+            'delivery_code_verified' => $payment->delivery_code_verified_at !== null,
+            'delivery_code_attempts' => (int) $payment->delivery_code_attempts,
+        ]);
+    }
+
+    /**
+     * أدلّة العملية مجموعةً بالمرحلة، مع التحقّق من سلامة كل ملفّ.
+     *
+     * التحقّق يُجرى هنا لا في الواجهة: من يوقّع قراراً مالياً يجب أن يُقال له
+     * صراحةً إن كانت بصمة الملفّ لم تعد تطابق المسجَّلة وقت الرفع.
+     */
+    private function evidenceForReview(SafePayment $payment): array
+    {
+        $svc = app(\App\Services\SafePaymentEvidenceService::class);
+
+        return \App\Models\SafePaymentEvidence::where('safe_payment_id', $payment->id)
+            ->orderBy('created_at')
+            ->get()
+            ->map(function (\App\Models\SafePaymentEvidence $e) use ($svc) {
+                return $svc->present($e) + [
+                    'url' => route('admin.amial.safe-payments.evidence-file', ['id' => $e->id]),
+                    'integrity_ok' => $svc->verifyIntegrity($e),
+                    'note' => $e->note,
+                ];
+            })
+            ->groupBy('stage')
+            ->toArray();
+    }
+
+    /** GET /admin/amial/safe-payments/evidence/{id}/file — الملفّ للمراجع. */
+    public function evidenceFile(Request $request, int $id)
+    {
+        $evidence = \App\Models\SafePaymentEvidence::find($id);
+        if (!$evidence) return $this->error('NOT_FOUND', 'الدليل غير موجود', 404);
+
+        $contents = app(\App\Services\SafePaymentEvidenceService::class)->read($evidence);
+        if ($contents === null) {
+            return $this->error('FILE_MISSING', 'تعذّر قراءة الملفّ من القرص', 404);
+        }
+
+        return response($contents, 200, [
+            'Content-Type' => $evidence->mime,
+            'Content-Length' => (string) strlen($contents),
+            // أدلّة نزاع: لا تُخزَّن في وسيط مشترك ولا تُفهرس.
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     /** POST /admin/safe-payments/{ulid}/release */

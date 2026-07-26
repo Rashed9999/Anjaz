@@ -18,6 +18,21 @@ class SafePaymentController extends GetxController implements GetxService {
   final RxBool isSubmitting = false.obs;
   final RxString lastError = ''.obs;
 
+  // ===== AMIAL-SAFEPAY-EVIDENCE-001 / CODE-001 / TRUST-001 =====
+
+  /// رمز التسليم — يصل للمشتري وحده ويبقى null عند البائع.
+  final RxString deliveryCode = ''.obs;
+  final RxBool deliveryCodeVerified = false.obs;
+
+  /// أدلّة العملية مجموعةً بالمرحلة.
+  final RxMap<String, List<AmyalEvidenceItem>> evidence =
+      <String, List<AmyalEvidenceItem>>{}.obs;
+
+  final Rx<AmyalTrustSummary?> counterpartyTrust = Rx<AmyalTrustSummary?>(null);
+
+  /// أسباب النزاع — تُجلب مرّة وتبقى.
+  final RxList<AmyalDisputeReason> disputeReasons = <AmyalDisputeReason>[].obs;
+
   Future<void> loadList({String role = 'all', String? status}) async {
     try {
       isLoading.value = true;
@@ -50,6 +65,17 @@ class SafePaymentController extends GetxController implements GetxService {
         yourRole.value = (meta['your_role'] ?? '').toString();
         availableActions.value = AmyalSafePaymentActions.fromJson(
             Map<String, dynamic>.from(meta['can_actions'] ?? {}));
+
+        deliveryCode.value = (meta['delivery_code'] ?? '').toString();
+        deliveryCodeVerified.value = meta['delivery_code_verified'] == true;
+
+        counterpartyTrust.value = meta['counterparty_trust'] is Map
+            ? AmyalTrustSummary.fromJson(
+                Map<String, dynamic>.from(meta['counterparty_trust']))
+            : null;
+
+        _absorbEvidence(meta['evidence']);
+
         lastError.value = '';
         return true;
       }
@@ -115,8 +141,75 @@ class SafePaymentController extends GetxController implements GetxService {
   Future<bool> buyerCancel(String ulid, String reason) =>
       _executeAction(() => repo.buyerCancel(ulid, reason), ulid);
 
-  Future<bool> buyerDispute(String ulid, String reason, {List<String>? attachments}) =>
-      _executeAction(() => repo.buyerDispute(ulid, reason, attachments: attachments), ulid);
+  Future<bool> buyerDispute(
+    String ulid,
+    String reason, {
+    String? reasonCode,
+    List<String>? attachments,
+  }) =>
+      _executeAction(
+          () => repo.buyerDispute(ulid, reason,
+              reasonCode: reasonCode, attachments: attachments),
+          ulid);
+
+  // ============ AMIAL-SAFEPAY-CODE-001 ============
+
+  /// البائع يؤكّد التسليم برمز المشتري.
+  ///
+  /// لا يمرّ عبر `_executeAction` لأن الفشل هنا ليس فشلاً عابراً: للمشتري
+  /// ثلاث محاولات فقط، فرسالة الخادم (كم بقي) يجب أن تصل للبائع حرفياً.
+  Future<bool> verifyDelivery(String ulid, String code) =>
+      _executeAction(() => repo.verifyDelivery(ulid, code), ulid);
+
+  // ============ AMIAL-SAFEPAY-EVIDENCE-001 ============
+
+  Future<void> loadDisputeReasons() async {
+    if (disputeReasons.isNotEmpty) return;
+    try {
+      final r = await repo.disputeReasons();
+      if (r.statusCode == 200 && r.body is Map && r.body['data'] is List) {
+        disputeReasons.value = (r.body['data'] as List)
+            .map((j) => AmyalDisputeReason.fromJson(Map<String, dynamic>.from(j)))
+            .toList();
+      }
+    } catch (_) {
+      // القائمة تكميلية: النزاع يُفتح بنصّ حرّ حتى لو تعذّر جلبها.
+    }
+  }
+
+  Future<void> refreshEvidence(String ulid) async {
+    try {
+      final r = await repo.evidence(ulid);
+      if (r.statusCode == 200 && r.body is Map) {
+        _absorbEvidence(r.body['data']);
+      }
+    } catch (_) {
+      // الصمت مقصود: فشل تحديث المعرض لا يُفسد الشاشة.
+    }
+  }
+
+  /// يقبل خريطة (مجموعة بالمرحلة) أو قائمة فارغة — PHP يُرجع `[]` لا `{}`
+  /// حين لا أدلّة، وقراءتها كخريطة تُلقي استثناءً يُفرغ الشاشة.
+  void _absorbEvidence(dynamic raw) {
+    if (raw is! Map) {
+      evidence.clear();
+      return;
+    }
+
+    final parsed = <String, List<AmyalEvidenceItem>>{};
+    raw.forEach((stage, items) {
+      if (items is! List) return;
+      parsed['$stage'] = items
+          .whereType<Map>()
+          .map((j) => AmyalEvidenceItem.fromJson(Map<String, dynamic>.from(j)))
+          .toList();
+    });
+
+    evidence.value = parsed;
+  }
+
+  int get evidenceCount =>
+      evidence.values.fold<int>(0, (sum, list) => sum + list.length);
 
   Future<bool> _executeAction(
       Future<Response> Function() action, String ulid) async {

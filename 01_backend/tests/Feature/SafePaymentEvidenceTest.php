@@ -321,4 +321,112 @@ class SafePaymentEvidenceTest extends TestCase
         // بائع بصفقة واحدة جارية: ليس «موثوقاً» بعد.
         $this->assertNotSame('موثوق', $trust['badge']);
     }
+
+    /**
+     * الحالة النهائية للصفقة الناجحة اسمها released_to_seller.
+     *
+     * كان الشرط يطابق 'released' — قيمة غير موجودة في العمود أصلاً — فكان
+     * «أتمّ» صفراً مهما بلغ سجلّ البائع، ووسام «موثوق» غير قابل للبلوغ.
+     * الخلل من النوع الذي لا يُرى: الحقل موجود، والرقم معروض، وهو كذب.
+     */
+    public function test_completed_deals_counts_the_status_that_actually_exists(): void
+    {
+        [$p, $buyer, $seller] = $this->deal();
+
+        $svc = app(SafePaymentService::class);
+        $svc->sellerAccept($p, $seller);
+        $svc->sellerMarkInDelivery($p->fresh(), $seller);
+        $svc->sellerMarkDelivered($p->fresh(), $seller);
+        $svc->buyerConfirm($p->fresh(), $buyer);
+
+        $this->assertSame('released_to_seller', $p->fresh()->status);
+
+        // صفقة ثانية مع البائع نفسه كي يبقى للمشتري ما يفتحه ويقرأ فيه سجلّه.
+        $second = $svc->createAndFund(
+            buyer: $buyer, seller: $seller,
+            title: 'طلب آخر', description: 'وصف كافٍ الطول للتحقّق', amount: '5000',
+        );
+
+        $trust = $this->actingAs($buyer, 'api')
+            ->getJson("/api/v1/amial/safe-payments/{$second->payment_ulid}")
+            ->assertOk()->json('meta.counterparty_trust');
+
+        $this->assertSame(1, $trust['completed_deals']);
+        $this->assertSame('seller', $trust['role']);
+    }
+
+    /** البائع يرى سجلّ خصمه مشترياً لا بائعاً — وإلا رأى صفراً مضلّلاً. */
+    public function test_trust_is_read_in_the_role_the_counterparty_plays(): void
+    {
+        [$p, , $seller] = $this->deal();
+
+        $trust = $this->actingAs($seller, 'api')
+            ->getJson("/api/v1/amial/safe-payments/{$p->payment_ulid}")
+            ->assertOk()->json('meta.counterparty_trust');
+
+        $this->assertSame('buyer', $trust['role']);
+        $this->assertSame(1, $trust['total_deals']);
+    }
+
+    // ===================== الأدلّة في لوحة الإدارة =====================
+
+    private function admin(): User
+    {
+        return User::factory()->create(['type' => ADMIN_TYPE]);
+    }
+
+    /**
+     * القرار المالي كان يُتّخذ على نصّ الشكوى وحده: الأدلّة تُرفع وتُخزَّن
+     * ولا تصل من يوقّع القرار.
+     */
+    public function test_admin_review_receives_the_evidence(): void
+    {
+        [$p, $buyer, $seller] = $this->deal();
+
+        $this->upload($seller, $p, 'in_delivery', [$this->image('ship.jpg')])->assertOk();
+        $this->upload($buyer, $p, 'dispute', [$this->image('damage.jpg')])->assertOk();
+
+        $response = $this->actingAs($this->admin(), 'user')
+            ->getJson("/admin/amial/safe-payments/{$p->payment_ulid}")
+            ->assertOk();
+
+        $evidence = $response->json('meta.evidence');
+
+        $this->assertArrayHasKey('in_delivery', $evidence);
+        $this->assertArrayHasKey('dispute', $evidence);
+        $this->assertTrue($evidence['in_delivery'][0]['integrity_ok']);
+        $this->assertStringContainsString(
+            '/admin/amial/safe-payments/evidence/', $evidence['dispute'][0]['url']
+        );
+    }
+
+    /** الملفّ المبدَّل بعد الرفع يصل المراجع موسوماً لا صامتاً. */
+    public function test_admin_review_flags_a_tampered_file(): void
+    {
+        [$p, , $seller] = $this->deal();
+        $this->upload($seller, $p, 'in_delivery', [$this->image()])->assertOk();
+
+        $record = SafePaymentEvidence::where('safe_payment_id', $p->id)->firstOrFail();
+        \Illuminate\Support\Facades\Storage::disk(config('amial.receipts.storage_disk', 'local'))
+            ->put($record->path, 'محتوى مستبدَل');
+
+        $evidence = $this->actingAs($this->admin(), 'user')
+            ->getJson("/admin/amial/safe-payments/{$p->payment_ulid}")
+            ->assertOk()->json('meta.evidence');
+
+        $this->assertFalse($evidence['in_delivery'][0]['integrity_ok']);
+    }
+
+    public function test_admin_can_open_an_evidence_file(): void
+    {
+        [$p, , $seller] = $this->deal();
+        $this->upload($seller, $p, 'in_delivery', [$this->image()])->assertOk();
+
+        $record = SafePaymentEvidence::where('safe_payment_id', $p->id)->firstOrFail();
+
+        $this->actingAs($this->admin(), 'user')
+            ->get("/admin/amial/safe-payments/evidence/{$record->id}/file")
+            ->assertOk()
+            ->assertHeader('Content-Type', $record->mime);
+    }
 }

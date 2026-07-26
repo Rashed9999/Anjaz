@@ -55,6 +55,10 @@
         <div class="modal-body">
             <div id="d-info" class="mb-3"></div>
 
+            {{-- AMIAL-SAFEPAY-EVIDENCE-001: الأدلّة قبل القرار لا بعده --}}
+            <div class="fw-bold mb-2">الأدلّة المرفوعة</div>
+            <div id="d-evidence" class="mb-3"></div>
+
             <div class="fw-bold mb-2">سجلّ الأحداث</div>
             <ul class="list-group mb-3" id="d-events" style="max-height:200px;overflow-y:auto"></ul>
 
@@ -136,6 +140,52 @@
             : '<tr><td colspan="7" class="text-center text-muted py-4">لا نزاعات — كل شيء صافٍ 🎉</td></tr>';
     }
 
+    const STAGE_ORDER = ['created', 'in_delivery', 'delivered', 'dispute', 'admin_review'];
+    const STAGE_LABEL = {
+        created: 'عند الإنشاء', in_delivery: 'عند الشحن', delivered: 'عند التسليم',
+        dispute: 'مع النزاع', admin_review: 'مراجعة الإدارة',
+    };
+    const ROLE_LABEL = {buyer: 'المشتري', seller: 'البائع', admin: 'الإدارة'};
+
+    /// كل دليل يُعرض بصاحبه ووقته وبصمته — وبتحذير صريح إن لم تعد البصمة
+    /// تطابق المسجَّلة، لأن قراراً مالياً يُبنى على ملفّ مشكوك فيه أسوأ من
+    /// قرار يُبنى على لا شيء.
+    function renderEvidence(groups) {
+        const el = document.getElementById('d-evidence');
+        const stages = STAGE_ORDER.filter(s => (groups[s] || []).length)
+            .concat(Object.keys(groups).filter(s => !STAGE_ORDER.includes(s) && (groups[s] || []).length));
+
+        if (!stages.length) {
+            el.innerHTML = '<div class="alert alert-warning py-2 small mb-0">'
+                + 'لا أدلّة مرفوعة في هذه العملية. القرار هنا يستند إلى الرواية وسجلّ الأحداث وحدهما.'
+                + '</div>';
+            return;
+        }
+
+        el.innerHTML = stages.map(stage => `
+            <div class="mb-2">
+                <div class="small fw-bold text-muted mb-1">${esc(STAGE_LABEL[stage] || stage)}
+                    <span class="text-muted fw-normal">(${(groups[stage] || []).length})</span></div>
+                <div class="d-flex flex-wrap gap-2">
+                    ${(groups[stage] || []).map(ev => `
+                        <div class="border rounded p-1 text-center" style="width:132px">
+                            <a href="${esc(ev.url)}" target="_blank" rel="noopener">
+                                ${ev.mime === 'application/pdf'
+                                    ? '<div class="d-flex align-items-center justify-content-center bg-light" style="height:96px"><span class="text-danger">PDF</span></div>'
+                                    : `<img src="${esc(ev.url)}" alt="دليل" style="width:100%;height:96px;object-fit:cover">`}
+                            </a>
+                            <div class="small mt-1">${esc(ROLE_LABEL[ev.role] || ev.role)}</div>
+                            <div class="text-muted" style="font-size:10px">${esc(ev.uploaded_at ?? '')}</div>
+                            <div class="text-muted font-monospace" style="font-size:10px" dir="ltr">${esc(ev.fingerprint ?? '')}</div>
+                            ${ev.integrity_ok === false
+                                ? '<div class="badge bg-danger mt-1" style="font-size:9px">بصمة غير مطابقة</div>'
+                                : ''}
+                            ${ev.note ? `<div class="small text-muted mt-1" style="font-size:10px">${esc(ev.note)}</div>` : ''}
+                        </div>`).join('')}
+                </div>
+            </div>`).join('');
+    }
+
     async function openDispute(ulid) {
         currentUlid = ulid;
         document.getElementById('d-error').textContent = '';
@@ -144,9 +194,12 @@
         document.getElementById('d-events').innerHTML = '';
         new bootstrap.Modal('#modal-dispute').show();
 
+        document.getElementById('d-evidence').innerHTML = '';
+
         const r = await fetch(`${base}/${ulid}`, {headers: {'Accept': 'application/json'}});
         const j = await r.json();
-        const p = (j.meta || {}).payment || {};
+        const meta = j.meta || {};
+        const p = meta.payment || {};
         document.getElementById('d-title').textContent = `نزاع ${p.payment_ulid ?? ''}`;
         document.getElementById('d-info').innerHTML = `
             <div class="row g-2">
@@ -155,8 +208,16 @@
                 <div class="col-md-4"><div class="border rounded p-2">المبلغ: <b>${fmt(p.amount)} ر.ي</b></div></div>
                 <div class="col-md-4"><div class="border rounded p-2">الحالة: ${badge(p.status)}</div></div>
                 <div class="col-md-4"><div class="border rounded p-2 small">الوصف: ${esc(p.description ?? '—')}</div></div>
+                ${meta.dispute_reason_label ? `<div class="col-12"><div class="border rounded p-2 bg-warning-subtle"><b>تصنيف الشكوى:</b> ${esc(meta.dispute_reason_label)}</div></div>` : ''}
                 ${p.dispute_reason ? `<div class="col-12"><div class="border rounded p-2 bg-danger-subtle">سبب النزاع: ${esc(p.dispute_reason)}</div></div>` : ''}
+                <div class="col-12"><div class="border rounded p-2 small">
+                    ${meta.delivery_code_verified
+                        ? '<span class="badge bg-success">التسليم مؤكَّد برمز المشتري</span> — إنكار الاستلام بعد ذلك يحتاج دليلاً قوياً.'
+                        : `<span class="badge bg-secondary">لم يُؤكَّد برمز</span> — التسليم ادّعاء من طرف واحد (محاولات الرمز: ${esc(meta.delivery_code_attempts ?? 0)}).`}
+                </div></div>
             </div>`;
+
+        renderEvidence(meta.evidence || {});
         document.getElementById('d-partial-amount').max = p.amount ?? '';
         document.getElementById('d-events').innerHTML = (p.events || []).map(ev => `
             <li class="list-group-item small d-flex justify-content-between">

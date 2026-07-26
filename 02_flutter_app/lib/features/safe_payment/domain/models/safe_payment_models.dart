@@ -182,6 +182,111 @@ class AmyalSafePaymentEvent {
   }
 }
 
+/// AMIAL-SAFEPAY-EVIDENCE-001 — دليل واحد مرفوع.
+///
+/// لا يحمل الملفّ نفسه بل وصفه: الملفّ يُجلب عند الطلب برابط محميّ، لأن
+/// تحميل خمس صور لكل مرحلة مع كل فتح للشاشة يستهلك باقة المستخدم بلا داعٍ.
+class AmyalEvidenceItem {
+  final int id;
+  final String role; // buyer | seller | admin
+  final String stage;
+  final String mime;
+  final int sizeBytes;
+  final String? originalName;
+  final String fingerprint;
+  final DateTime? uploadedAt;
+
+  AmyalEvidenceItem({
+    required this.id,
+    required this.role,
+    required this.stage,
+    required this.mime,
+    required this.sizeBytes,
+    this.originalName,
+    required this.fingerprint,
+    this.uploadedAt,
+  });
+
+  factory AmyalEvidenceItem.fromJson(Map<String, dynamic> j) => AmyalEvidenceItem(
+        id: j['id'] ?? 0,
+        role: j['role']?.toString() ?? '',
+        stage: j['stage']?.toString() ?? '',
+        mime: j['mime']?.toString() ?? 'image/jpeg',
+        sizeBytes: int.tryParse('${j['size_bytes'] ?? 0}') ?? 0,
+        originalName: j['original_name']?.toString(),
+        fingerprint: j['fingerprint']?.toString() ?? '',
+        uploadedAt: j['uploaded_at'] != null
+            ? DateTime.tryParse(j['uploaded_at'].toString())
+            : null,
+      );
+
+  bool get isPdf => mime == 'application/pdf';
+
+  String get roleLabel => switch (role) {
+        'buyer' => 'المشتري',
+        'seller' => 'البائع',
+        'admin' => 'الإدارة',
+        _ => role,
+      };
+
+  static String stageLabel(String stage) => switch (stage) {
+        'created' => 'عند الإنشاء',
+        'in_delivery' => 'عند الشحن',
+        'delivered' => 'عند التسليم',
+        'dispute' => 'مع النزاع',
+        'admin_review' => 'مراجعة الإدارة',
+        _ => stage,
+      };
+}
+
+/// AMIAL-SAFEPAY-TRUST-001 — سجلّ الطرف المقابل.
+class AmyalTrustSummary {
+  final String role;
+  final int completedDeals;
+  final int disputedDeals;
+  final int totalDeals;
+  final double disputeRate;
+  final String? memberSince;
+  final String badge;
+
+  AmyalTrustSummary({
+    required this.role,
+    required this.completedDeals,
+    required this.disputedDeals,
+    required this.totalDeals,
+    required this.disputeRate,
+    this.memberSince,
+    required this.badge,
+  });
+
+  factory AmyalTrustSummary.fromJson(Map<String, dynamic> j) => AmyalTrustSummary(
+        role: j['role']?.toString() ?? 'seller',
+        completedDeals: int.tryParse('${j['completed_deals'] ?? 0}') ?? 0,
+        disputedDeals: int.tryParse('${j['disputed_deals'] ?? 0}') ?? 0,
+        totalDeals: int.tryParse('${j['total_deals'] ?? 0}') ?? 0,
+        disputeRate: double.tryParse('${j['dispute_rate'] ?? 0}') ?? 0,
+        memberSince: j['member_since']?.toString(),
+        badge: j['badge']?.toString() ?? 'جديد',
+      );
+
+  bool get isNew => totalDeals == 0;
+  bool get isRisky => badge == 'نزاعات متكرّرة';
+  bool get isTrusted => badge == 'موثوق';
+}
+
+/// سبب نزاع منظّم — يأتي من الخادم لا مطبوعاً في التطبيق.
+class AmyalDisputeReason {
+  final String code;
+  final String label;
+
+  AmyalDisputeReason({required this.code, required this.label});
+
+  factory AmyalDisputeReason.fromJson(Map<String, dynamic> j) => AmyalDisputeReason(
+        code: j['code']?.toString() ?? 'other',
+        label: j['label']?.toString() ?? '',
+      );
+}
+
 class AmyalSafePaymentActions {
   final bool sellerAccept;
   final bool sellerReject;

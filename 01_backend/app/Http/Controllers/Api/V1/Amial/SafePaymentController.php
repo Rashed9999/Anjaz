@@ -81,9 +81,12 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
                 : null,
             'delivery_code_verified' => $payment->delivery_code_verified_at !== null,
             // AMIAL-SAFEPAY-TRUST-001: سجلّ الطرف المقابل
-            'counterparty_trust' => $this->trustSummary(
-                $isBuyer ? (int) $payment->seller_user_id : (int) $payment->buyer_user_id
-            ),
+            // سجلّ الطرف المقابل في الدور الذي يلعبه هنا: المشتري يرى سجلّ
+            // خصمه بائعاً، والبائع يرى سجلّ خصمه مشترياً. خلطُ الدورين يُظهر
+            // «صفر صفقات» لبائع مخضرم لم يشترِ قطّ.
+            'counterparty_trust' => $isBuyer
+                ? $this->trustSummary((int) $payment->seller_user_id, 'seller')
+                : $this->trustSummary((int) $payment->buyer_user_id, 'buyer'),
             'evidence' => app(\App\Services\SafePaymentEvidenceService::class)->timeline($payment),
         ]);
     }
@@ -335,16 +338,21 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
      *
      * أرقام مجرّدة بلا أسماء ولا مبالغ — تكفي للحكم ولا تكشف تعاملات أحد.
      */
-    private function trustSummary(int $userId): array
+    private function trustSummary(int $userId, string $role = 'seller'): array
     {
-        $asSeller = SafePayment::where('seller_user_id', $userId);
+        $column = $role === 'buyer' ? 'buyer_user_id' : 'seller_user_id';
+        $base = SafePayment::where($column, $userId);
 
-        $completed = (clone $asSeller)->where('status', 'released')->count();
-        $disputed = (clone $asSeller)->where('is_disputed', true)->count();
-        $total = (clone $asSeller)->count();
+        // الحالة النهائية للصفقة الناجحة اسمها released_to_seller لا released.
+        // كان الشرط يطابق قيمة غير موجودة أصلاً، فكان «أتمّ» صفراً دائماً
+        // ووسام «موثوق» غير قابل للبلوغ مهما بلغ سجلّ البائع.
+        $completed = (clone $base)->where('status', 'released_to_seller')->count();
+        $disputed = (clone $base)->where('is_disputed', true)->count();
+        $total = (clone $base)->count();
         $user = User::find($userId);
 
         return [
+            'role' => $role,
             'completed_deals' => $completed,
             'disputed_deals' => $disputed,
             'total_deals' => $total,

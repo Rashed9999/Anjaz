@@ -64,6 +64,9 @@ Route::get('/security-events', [SecurityEventsController::class, 'index'])->name
 // ============ AMIAL-SAFE-PAYMENT-001 (v1.1) — Disputes resolution ============
 Route::prefix('safe-payments')->name('safe-payments.')->group(function () {
     Route::get('/', [AdminSafePaymentController::class, 'index'])->name('index');
+    // AMIAL-SAFEPAY-EVIDENCE-001 — قبل مسار {ulid} كي لا يبتلعه
+    Route::get('/evidence/{id}/file', [AdminSafePaymentController::class, 'evidenceFile'])
+        ->where('id', '[0-9]+')->name('evidence-file');
     Route::get('/{ulid}', [AdminSafePaymentController::class, 'show'])
         ->where('ulid', '[A-Z0-9]{26}')->name('show');
     Route::post('/{ulid}/release', [AdminSafePaymentController::class, 'resolveRelease'])

@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/safe_payment/controllers/safe_payment_controller.dart';
 import 'package:amyal_pay/features/safe_payment/domain/models/safe_payment_models.dart';
+import 'package:amyal_pay/features/safe_payment/widgets/delivery_code_card.dart';
+import 'package:amyal_pay/features/safe_payment/widgets/dispute_sheet.dart';
+import 'package:amyal_pay/features/safe_payment/widgets/evidence_gallery.dart';
+import 'package:amyal_pay/features/safe_payment/widgets/evidence_picker_sheet.dart';
+import 'package:amyal_pay/features/safe_payment/widgets/trust_card.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
@@ -208,6 +213,11 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
               _StagesStrip(status: payment.status),
               const SizedBox(height: 16),
 
+              // ====== AMIAL-SAFEPAY-CODE-001: رمز التسليم ======
+              // موضعه فوق كل شيء بعد الحالة مقصود: هو أهمّ ما في الشاشة
+              // لحظة اللقاء، ومن يبحث عنه في الأسفل يجده متأخّراً.
+              ..._buildDeliveryCodeBlock(ctrl, payment, isBuyer),
+
               // ====== Parties ======
               _Section(
                 title: 'الأطراف',
@@ -218,6 +228,17 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
                 ],
               ),
               const SizedBox(height: 16),
+
+              // ====== AMIAL-SAFEPAY-TRUST-001: سجلّ الطرف المقابل ======
+              if (ctrl.counterpartyTrust.value != null) ...[
+                TrustCard(
+                  trust: ctrl.counterpartyTrust.value!,
+                  counterpartyName: isBuyer
+                      ? (payment.seller?.displayName ?? 'البائع')
+                      : (payment.buyer?.displayName ?? 'المشتري'),
+                ),
+                const SizedBox(height: 16),
+              ],
 
               // ====== Description ======
               _Section(
@@ -242,6 +263,9 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
               ),
               const SizedBox(height: 16),
 
+              // ====== AMIAL-SAFEPAY-EVIDENCE-001: الأدلّة ======
+              ..._buildEvidenceBlock(ctrl, payment, isBuyer),
+
               // ====== Timeline ======
               if (payment.events != null && payment.events!.isNotEmpty)
                 _Section(
@@ -259,6 +283,157 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
           ),
         );
       }),
+    );
+  }
+
+  /// رمز التسليم: يُعرض للمشتري ويُدخَل عند البائع — ولا يظهر لأيّهما بعد
+  /// تأكيده أو بعد انتهاء العملية، لأن رمزاً مستهلكاً على الشاشة يوهم بأن
+  /// هناك خطوة باقية.
+  List<Widget> _buildDeliveryCodeBlock(
+      SafePaymentController ctrl, AmyalSafePayment payment, bool isBuyer) {
+    if (payment.isTerminal || ctrl.deliveryCodeVerified.value) {
+      if (!ctrl.deliveryCodeVerified.value) return const [];
+      return [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8F5E9),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Row(children: [
+            Icon(Icons.verified_user_rounded, size: 18, color: Color(0xFF2E7D32)),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text('تُوثِّق هذه العملية بتأكيد التسليم برمز المشتري.',
+                  style: TextStyle(fontSize: 11.5, color: Color(0xFF2E7D32))),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 16),
+      ];
+    }
+
+    if (isBuyer) {
+      final code = ctrl.deliveryCode.value;
+      if (code.isEmpty) return const [];
+      return [BuyerDeliveryCodeCard(code: code), const SizedBox(height: 16)];
+    }
+
+    // البائع: الإدخال متاح في الحالتين اللتين يقبلهما الخادم فقط.
+    if (!['funded', 'in_delivery'].contains(payment.status)) return const [];
+
+    return [SellerDeliveryCodeEntry(ulid: widget.ulid), const SizedBox(height: 16)];
+  }
+
+  /// المرحلة التي يُرفَع إليها الدليل الآن — تُشتقّ من الدور والحالة بدل أن
+  /// يُطلب من المستخدم اختيارها. من يُسأل «في أيّ مرحلة؟» يختار خطأً.
+  ({String stage, String label, String hint})? _evidenceTarget(
+      String status, bool isBuyer) {
+    if (status == 'disputed') {
+      return isBuyer
+          ? (
+              stage: 'dispute',
+              label: 'إضافة أدلّة للنزاع',
+              hint: 'صور تُظهر المشكلة: التلف، النقص، الاختلاف عن الوصف، أو شاشة المحادثة.',
+            )
+          : (
+              stage: 'dispute',
+              label: 'إضافة أدلّتك ردّاً',
+              hint: 'أثبت ما سلّمت: صور البضاعة قبل الشحن، إيصال الناقل، أو محادثة الاتفاق.',
+            );
+    }
+
+    if (!isBuyer) {
+      return switch (status) {
+        'funded' || 'in_delivery' => (
+            stage: 'in_delivery',
+            label: 'إرفاق أدلّة الشحن',
+            hint: 'صوّر البضاعة قبل إغلاق الطرد، والطرد مغلقاً، وإيصال الناقل إن وُجد.',
+          ),
+        'delivered' => (
+            stage: 'delivered',
+            label: 'إرفاق أدلّة التسليم',
+            hint: 'صورة لحظة التسليم أو توقيع المستلم — تحسم دعوى «لم يصلني».',
+          ),
+        _ => null,
+      };
+    }
+
+    return switch (status) {
+      'delivered' => (
+          stage: 'delivered',
+          label: 'توثيق ما وصلك',
+          hint: 'صوّر الطرد قبل فتحه ثم بعد فتحه. هذه الصور حمايتك إن ظهر خلل لاحقاً.',
+        ),
+      _ => null,
+    };
+  }
+
+  List<Widget> _buildEvidenceBlock(
+      SafePaymentController ctrl, AmyalSafePayment payment, bool isBuyer) {
+    final target = _evidenceTarget(payment.status, isBuyer);
+
+    return [
+      EvidenceGallery(evidence: Map.of(ctrl.evidence)),
+      if (target != null) ...[
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => _openEvidenceSheet(
+              stage: target.stage, title: target.label, hint: target.hint),
+          icon: const Icon(Icons.add_a_photo_outlined, size: 19),
+          label: Text(target.label),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AmyalColors.primary,
+            minimumSize: const Size(double.infinity, 46),
+          ),
+        ),
+      ],
+      const SizedBox(height: 16),
+    ];
+  }
+
+  /// النزاع ثم الأدلّة في نفَس واحد.
+  ///
+  /// من يفتح نزاعاً ثم يُترك في الشاشة نفسها نادراً ما يعود ليرفع صوراً —
+  /// فيصل للإدارة ادّعاء بلا سند. سَوقُه إلى الرفع مباشرةً وهو في لحظة
+  /// انفعاله بالمشكلة هو أنجع وقت لطلب الدليل.
+  Future<void> _openDispute() async {
+    final opened = await DisputeSheet.open(context, ulid: widget.ulid);
+    if (!opened || !mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('فُتح النزاع — المبلغ محجوز حتى المراجعة'),
+        backgroundColor: Color(0xFF2E7D32),
+      ),
+    );
+
+    await _openEvidenceSheet(
+      stage: 'dispute',
+      title: 'أضف أدلّة النزاع الآن',
+      hint: 'صور تُظهر المشكلة: التلف، النقص، الاختلاف عن الوصف، أو شاشة المحادثة. '
+          'النزاع المدعوم بالصور يُحسم أسرع وأعدل.',
+    );
+  }
+
+  Future<void> _openEvidenceSheet({
+    required String stage,
+    required String title,
+    required String hint,
+  }) async {
+    final uploaded = await EvidencePickerSheet.open(
+      context,
+      ulid: widget.ulid,
+      stage: stage,
+      title: title,
+      hint: hint,
+    );
+    if (!uploaded || !mounted) return;
+
+    await Get.find<SafePaymentController>().refreshEvidence(widget.ulid);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('رُفعت الأدلّة ✓'), backgroundColor: Color(0xFF2E7D32)),
     );
   }
 
@@ -288,8 +463,14 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
       ));
     }
     if (a.sellerMarkDelivered) {
-      widgets.add(_actionButton('تأكيد التسليم', Icons.done_all, Colors.green.shade700,
-        () => _confirmAction('تأكيد التسليم', 'هل تم تسليم السلعة للمشتري؟',
+      // التأكيد بلا رمز يبقى متاحاً (الشحن البعيد لا يلتقي فيه الطرفان)، لكن
+      // يُقال للبائع صراحةً إنه أضعف — فهو ادّعاء من طرف واحد يُنازَع فيه.
+      widgets.add(_actionButton('تأكيد التسليم بدون رمز', Icons.done_all, Colors.orange.shade800,
+        () => _confirmAction(
+          'تأكيد التسليم بدون رمز',
+          'التأكيد برمز المشتري أقوى: لا يُنازَع فيه. أما التأكيد بدونه فهو '
+          'إقرارٌ منك وحدك، وإن أنكر المشتري الاستلام احتجتَ أدلّة الشحن.\n\n'
+          'هل تريد المتابعة بدون رمز؟',
           () => ctrl.sellerMarkDelivered(ulid)),
       ));
     }
@@ -311,13 +492,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
       }));
     }
     if (a.buyerDispute) {
-      widgets.add(_actionButton('فتح نزاع', Icons.warning, AmyalColors.red, () {
-        _showReasonDialog(
-          title: 'فتح نزاع',
-          hint: 'اشرح المشكلة بالتفصيل (10 أحرف على الأقل)...',
-          onConfirm: (reason) => ctrl.buyerDispute(ulid, reason),
-        );
-      }));
+      widgets.add(_actionButton('فتح نزاع', Icons.warning, AmyalColors.red, _openDispute));
     }
 
     if (widgets.isEmpty) {
