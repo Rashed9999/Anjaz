@@ -123,15 +123,20 @@
                 {{-- AMIAL-RECEIPT-LOGO-001: العرض بنمط مباشر وسمة width معاً.
                      mPDF لم يطبّق class="logo" على <img> فخرج الشعار بحجمه
                      الأصلي وطمس الإشعار كلّه. الأنماط المباشرة يحترمها دائماً. --}}
-                <img src="{{ $logoData }}" width="78"
-                     style="width:78px;height:auto;margin-bottom:4px;" alt="أميال باي">
+                {{-- AMIAL-RECEIPT-LOGO-002: الشعار كان 78px داخل عمود عرضه
+                     22% من الصفحة (~150px)، فيبدو صغيراً تائهاً وسط فراغ.
+                     صار يملأ عرض الخلية مطروحاً منه حشوة الخليتين. --}}
+                <img src="{{ $logoData }}" width="128"
+                     style="width:128px;height:auto;margin-bottom:6px;" alt="أميال باي">
             @endif
-            <div style="font-weight:bold;font-size:12px;margin-top:2px;">أميال باي</div>
-            <div class="contact">
-                دفع سريع وآمن<br>
-                {{ $supportPhone ?? '' }}<br>
-                {{ $supportSite ?? '' }}
-            </div>
+            {{-- الشعار نفسه يحمل «أميال» و«AMYAL PAY» و«دفع سريع وآمن»،
+                 فتكرارها نصّاً تحته حشو يزاحم عنوان المستند. --}}
+            @if(!empty($supportPhone) || !empty($supportSite))
+                <div class="contact">
+                    {{ $supportPhone ?? '' }}<br>
+                    {{ $supportSite ?? '' }}
+                </div>
+            @endif
             <div class="doc-title">{{ $title }}</div>
         </td>
 
@@ -140,8 +145,15 @@
         {{-- AMIAL-RECEIPT-NUMBERS-001: مجموعاً بثلاثات — رقم من 12 خانة
              متّصلة يُخطئ في قراءته كل أحد، والتجميع يجعله يُملى ويُكتب. --}}
         <td><span class="boxed ref-no ltr-code" dir="ltr">{{ $receiptNumberGrouped ?? $receipt->receipt_number }}</span></td>
+        {{-- AMIAL-RECEIPT-TIME-001: الوقت مع التاريخ.
+             يوم واحد قد يحمل عشرات العمليات لنفس العميل بنفس المبلغ؛
+             بلا وقت لا يميّز العميل ولا الدعم أيّها المقصودة.
+             24 ساعة عمداً: «5:17» بلا ص/م تحتمل قراءتين. --}}
         <td style="text-align:left;font-weight:bold;">
-            التاريخ: {{ optional($receipt->issued_at)->format('d-m-Y') }}
+            التاريخ:
+            <span class="ltr-code" dir="ltr">{{ optional($receipt->issued_at)->format('d-m-Y') }}</span>
+            &nbsp;&nbsp;الوقت:
+            <span class="ltr-code" dir="ltr">{{ optional($receipt->issued_at)->format('H:i') }}</span>
         </td>
     </tr>
 

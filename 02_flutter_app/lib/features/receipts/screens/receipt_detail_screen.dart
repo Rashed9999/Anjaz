@@ -100,12 +100,14 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
     final receipt = Get.find<ReceiptsController>().selectedReceipt.value;
     if (receipt == null) return;
 
+    // AMIAL-RECEIPT-TIME-001: كان يطبع DateTime خاماً
+    // (2026-07-26 12:12:00.000) في رسالة يقرؤها متلقٍّ عاديّ.
     final shareText = '''
 إيصال Amyal Pay
 الرقم: ${receipt.receiptNumber}
 النوع: ${receipt.arabicTypeLabel}
 المبلغ: ${AmialMoney.fmt(receipt.amount)} ر.ي
-التاريخ: ${receipt.issuedAt}
+التاريخ: ${_formatWhen(receipt.issuedAt)}
 
 للتحقق:
 ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
@@ -461,5 +463,13 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
       if (v != null && v.toString().trim().isNotEmpty) return v.toString();
     }
     return null;
+  }
+
+  /// تاريخ ووقت مقروءان في نصّ المشاركة.
+  /// الوقت جزء من هوية العملية: يوم واحد قد يحمل عدّة عمليات بنفس المبلغ.
+  static String _formatWhen(DateTime? d) {
+    if (d == null) return '—';
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${two(d.day)}-${two(d.month)}-${d.year} • ${two(d.hour)}:${two(d.minute)}';
   }
 }
