@@ -10,7 +10,7 @@ import 'package:amyal_pay/util/secure_screen.dart';
 ///
 /// كانت ثلاثة حقول نصّ فوق بعضها بتباعد حروف 10، تفتح لوحة مفاتيح النظام
 /// وتُخفي نصف الشاشة، ويرى المستخدم الثلاثة معاً فلا يدري أيّها المطلوب
-/// الآن. صارت ثلاث خطوات، في كل خطوة سؤال واحد ونقاط ولوحة أرقام مبعثرة.
+/// الآن. صارت ثلاث خطوات، في كل خطوة سؤال واحد ونقاط ولوحة أرقام.
 ///
 /// **تسمية مقصودة:** «رمز المعاملات» لا «الرمز السري». الاسم الأخير كان
 /// يُطلق على كلمة مرور الدخول أيضاً، فيظنّ العميل أنه يغيّر ما يدخل به.
@@ -30,7 +30,6 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
 
   _Step _step = _Step.old;
   String _error = '';
-  int _round = 0;
 
   @override
   void initState() {
@@ -74,7 +73,6 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
         setState(() {
           _step = _Step.fresh;
           _error = '';
-          _round++;
         });
 
       case _Step.fresh:
@@ -83,14 +81,12 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
           setState(() {
             _error = 'الرمز الجديد مطابق للحالي — اختر غيره';
             _fresh.clear();
-            _round++;
           });
           return;
         }
         setState(() {
           _step = _Step.confirm;
           _error = '';
-          _round++;
         });
 
       case _Step.confirm:
@@ -100,7 +96,6 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
             _confirm.clear();
             _fresh.clear();
             _step = _Step.fresh;
-            _round++;
           });
           return;
         }
@@ -124,7 +119,6 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
       _fresh.clear();
       _confirm.clear();
       _step = _Step.old;
-      _round++;
     });
   }
 
@@ -137,7 +131,6 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
       _active.clear();
       _step = _step == _Step.confirm ? _Step.fresh : _Step.old;
       _error = '';
-      _round++;
     });
   }
 
@@ -235,11 +228,9 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                 AbsorbPointer(
                   absorbing: controller.isLoading,
                   child: AmialNumpad(
-                    // مفتاح جديد لكل خطوة ولكل خطأ: ترتيب جديد في كل مرّة.
-                    key: ValueKey('$_step-$_round'),
                     controller: _active,
                     maxLength: 4,
-                    shuffle: true,
+                    rtl: true,
                     onChanged: (v) {
                       setState(() {});
                       if (v.length == 4) _onFilled(v);

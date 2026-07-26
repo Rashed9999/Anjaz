@@ -101,7 +101,7 @@ class _AmialPinInputScreenState extends State<_AmialPinInputScreen> {
             AmialNumpad(
               controller: _pin,
               maxLength: 4,
-              shuffle: true,
+              rtl: true,
               onChanged: (v) {
                 setState(() {});
                 if (v.length == 4) Get.back(result: v);
@@ -128,8 +128,6 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
   bool _checking = false;
   String _error = '';
 
-  /// يزداد بعد كل محاولة فاشلة ليُعيد بعثرة لوحة الأرقام.
-  int _round = 0;
 
   // AMIAL-SEC-CAPTURE-001: بوّابة الرمز السري — بلا تصوير ولا تسجيل شاشة.
   @override
@@ -174,7 +172,6 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
         _checking = false;
         _error = msg;
         _pin.clear();
-        _round++;
       });
     } catch (_) {
       setState(() {
@@ -236,12 +233,9 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
             AmialPinDots(controller: _pin, error: _error.isNotEmpty),
             const SizedBox(height: 22),
             AmialNumpad(
-              // مفتاح يتبدّل بعد كل محاولة فاشلة فيُعاد بناء اللوحة بترتيب
-              // جديد: من راقب المحاولة الأولى لا ينتفع بها في الثانية.
-              key: ValueKey(_round),
               controller: _pin,
               maxLength: 4,
-              shuffle: true,
+              rtl: true,
               onChanged: (v) {
                 setState(() {});
                 if (v.length == 4) _verify();

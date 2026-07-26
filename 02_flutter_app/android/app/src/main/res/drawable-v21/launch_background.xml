@@ -1,9 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  AMIAL-SPLASH-004 — شاشة الإقلاع الأصلية (قبل أن يبدأ Flutter).
+
+  كانت تعرض @mipmap/ic_launcher_foreground: وجه الأيقونة التكيّفية. وهي
+  مصمَّمة بهامش أمان يبلغ ثلث المساحة لتُقصّ داخل قناع دائري، فالشعار فيها
+  لا يملأ الإطار ولا يقع في مركزه البصري. عرضُها خامّةً على خلفية صفراء
+  يُظهر شعاراً صغيراً منزاحاً — وهو ما يبدو «منحرفاً».
+
+  البديل launch_logo: الشعار الأصلي نفسه، مولَّداً بخمس كثافات، وعرضه
+  165dp — أي قريب من نسبته في سبلاش Flutter الذي يليه مباشرةً، فلا تقع
+  قفزة في الحجم عند الانتقال.
+
+  وهو مسطَّح على @color/amyal_yellow لا شفّاف: في ملفّ الشعار رِمّ فاتح
+  رفيع عند حدّ المستطيل المستدير، يظهر على الخلفية الصفراء كإطار شبحيّ.
+  استُبدل الرِمّ بلون الشعار ثم سُطِّح على لون الخلفية نفسه، فلم تبقَ
+  حافة تُرى.
+
+  التوليد ليس يدوياً: scripts/generate_launch_logo.py يعيد إنتاج الملفات
+  الخمسة من assets/image/logo.png متى تغيّر الشعار.
+-->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/amyal_yellow" />
     <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/ic_launcher_foreground" />
+            android:src="@drawable/launch_logo" />
     </item>
 </layer-list>
