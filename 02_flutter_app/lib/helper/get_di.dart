@@ -29,6 +29,7 @@ import 'package:amyal_pay/features/merchant/controllers/split_bill_controller.da
 import 'package:amyal_pay/features/merchant/domain/repositories/split_bill_repo.dart';
 import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amyal_pay/features/merchant/domain/repositories/cashier_repo.dart';
+import 'package:amyal_pay/features/favorite_number/controllers/amial_favorites_controller.dart';
 import 'package:amyal_pay/features/suppliers/controllers/suppliers_controller.dart';
 import 'package:amyal_pay/features/suppliers/domain/repositories/suppliers_repo.dart';
 import 'package:amyal_pay/features/merchant/controllers/customer_credit_controller.dart';
@@ -320,6 +321,11 @@ Future<Map<String, Map<String, String>>> init() async {
   // AMIAL-SUPPLIERS-001 — الموردون وأوامر الشراء
   Get.lazyPut(() => SuppliersRepo(apiClient: Get.find()));
   Get.lazyPut(() => SuppliersController(repo: Get.find()), fenix: true);
+
+  // AMIAL-FAVORITES-001: المفضّلة الموحّدة — permanent لأن النجمة تظهر في
+  // شاشات كثيرة، وإعادة بنائها في كل شاشة تُفقد الحالة المخبّأة فترتدّ
+  // النجوم إلى الفارغ عند كل تنقّل.
+  Get.put(AmialFavoritesController(), permanent: true);
 
 
 

@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
 import 'package:amyal_pay/common/widgets/custom_switch_button.dart';
 import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/favorite_number/screens/favorite_number_screen.dart';
+import 'package:amyal_pay/features/favorite_number/screens/amial_favorites_screen.dart';
 import 'package:amyal_pay/features/me/screens/my_services_screen.dart';
 import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
@@ -145,9 +145,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: () => Get.to(()=> const RequestedMoneyListScreen(requestType: RequestType.withdraw)),
                   ),
 
-                  if(splashController.configModel?.isFavoriteNumberActive ?? false) CustomInkWellWidget(
-                    child: widget.MenuItem(image: Images.favoriteNumberIcon,title: 'favorite_number'.tr),
-                    onTap: () => Get.to(()=> const FavoriteNumberScreen()),
+                  // AMIAL-FAVORITES-001: المفضّلة صارت تشمل الحسابات والتجّار
+                  // والعمليات لا الأرقام وحدها، فلم تعد مشروطة بعلَم «الأرقام
+                  // المفضّلة» — إطفاؤه كان يُخفي المفضّلة كلها.
+                  CustomInkWellWidget(
+                    child: widget.MenuItem(image: Images.favoriteNumberIcon, title: 'المفضّلة'),
+                    onTap: () => Get.to(() => const AmialFavoritesScreen()),
                   ),
 
 

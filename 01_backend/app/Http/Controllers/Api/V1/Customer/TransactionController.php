@@ -88,7 +88,7 @@ class TransactionController extends Controller
         $favouriteNumberStatus = helpers::get_business_settings('favorite_number_status') ?? 0;
 
         if ($favouriteNumberStatus){
-            $favouriteList = FavouriteNumber::where('user_id', $request->user()->id)->pluck('phone')->toArray();
+            $favouriteList = FavouriteNumber::where('user_id', $request->user()->id)->contacts()->pluck('phone')->toArray();
             $isFavouriteExist = in_array($receiverPhone, $favouriteList);
 
             if ($isFavouriteExist){
@@ -177,7 +177,7 @@ class TransactionController extends Controller
         $favouriteNumberStatus = helpers::get_business_settings('favorite_number_status') ?? 0;
 
         if ($favouriteNumberStatus){
-            $favouriteList = FavouriteNumber::where('user_id', $request->user()->id)->pluck('phone')->toArray();
+            $favouriteList = FavouriteNumber::where('user_id', $request->user()->id)->contacts()->pluck('phone')->toArray();
             $isFavouriteExist = in_array($receiverPhone, $favouriteList);
 
             if ($isFavouriteExist){
@@ -345,7 +345,7 @@ class TransactionController extends Controller
         $receiverPhone = $this->user->find($requestMoney->from_user_id)->phone;
 
         if ($favouriteNumberStatus){
-            $favouriteList = FavouriteNumber::where('user_id', $request->user()->id)->pluck('phone')->toArray();
+            $favouriteList = FavouriteNumber::where('user_id', $request->user()->id)->contacts()->pluck('phone')->toArray();
             $isFavouriteExist = in_array($receiverPhone, $favouriteList);
 
             if ($isFavouriteExist){

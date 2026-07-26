@@ -8,6 +8,8 @@ import 'package:amyal_pay/features/receipts/controllers/receipts_controller.dart
 import 'package:amyal_pay/data/api/secure_storage_helper.dart';
 import 'package:amyal_pay/helper/pdf_downloader_helper.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/features/favorite_number/controllers/amial_favorites_controller.dart';
+import 'package:amyal_pay/features/favorite_number/widgets/amial_favorite_star.dart';
 import 'package:amyal_pay/util/arabic_number_words.dart';
 
 /// AMIAL-RECEIPTS-001 (v0.9-D)
@@ -122,6 +124,23 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
       appBar: AppBar(
         title: const Text('تفاصيل الإيصال'),
         actions: [
+          // AMIAL-FAVORITES-001: حفظ العملية للتكرار — الإيجار والاشتراك
+          // والتحويل الشهري تُعاد بنفس التفاصيل، وإيجادها في السجلّ كل
+          // مرّة بحثٌ لا داعي له.
+          Obx(() {
+            final r = Get.find<ReceiptsController>().selectedReceipt.value;
+            if (r == null) return const SizedBox.shrink();
+            return AmialFavoriteStar(
+              kind: FavKind.operation,
+              value: r.receiptNumber,
+              label: r.arabicTypeLabel,
+              metadata: {
+                'amount': r.amount,
+                'type_label': r.arabicTypeLabel,
+                'receipt_id': r.id,
+              },
+            );
+          }),
           IconButton(
             icon: const Icon(Icons.share),
             onPressed: _shareReceipt,

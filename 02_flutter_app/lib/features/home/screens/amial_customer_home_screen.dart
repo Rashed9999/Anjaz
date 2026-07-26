@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amyal_pay/features/favorite_number/screens/amial_favorites_screen.dart';
 import 'package:amyal_pay/util/app_constants.dart';
 import 'package:amyal_pay/features/requested_money/screens/payment_request_create_screen.dart';
 import 'package:amyal_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
@@ -224,6 +225,15 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
             child: const Icon(Icons.person_outline_rounded,
                 color: AmyalColors.primary, size: 24),
             onTap: () => Get.to(() => const ProfileScreen()),
+          ),
+          const SizedBox(width: 8),
+          // AMIAL-FAVORITES-001: المفضّلة في الترويسة لا في الشبكة — الشبكة
+          // محكومة بتسعة مداخل بقاعدة مقصودة، وكسرُها لأجل مدخل عاشر يُفسد
+          // ما بُنيت لأجله. والترويسة موضعها الطبيعي في المحافظ المهنية.
+          _circleBtn(
+            child: const Icon(Icons.star_border_rounded,
+                color: AmyalColors.primary, size: 24),
+            onTap: () => Get.to(() => const AmialFavoritesScreen()),
           ),
           Expanded(
             child: Column(

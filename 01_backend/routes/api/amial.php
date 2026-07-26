@@ -905,6 +905,16 @@ Route::middleware(['auth:api'])->group(function () {
             ->middleware(['amial.zone:cash_out', 'amial.agent-location', 'amial.rate-limit:withdraw_exec,40,1'])->name('execute');
     });
 
+    // AMIAL-FAVORITES-001 — مفضّلة موحّدة (جهة اتصال/حساب/تاجر/عملية)
+    Route::prefix('favorites')->name('amial.favorites.')->group(function () {
+        $fc = \App\Http\Controllers\Api\V1\Amial\FavoritesController::class;
+        Route::get('/', [$fc, 'index'])->name('index');
+        Route::post('/toggle', [$fc, 'toggle'])
+            ->middleware('amial.rate-limit:fav_toggle,60,1')->name('toggle');
+        Route::post('/check', [$fc, 'check'])->name('check');
+        Route::delete('/{id}', [$fc, 'destroy'])->where('id', '[0-9]+')->name('destroy');
+    });
+
     // AMIAL-COVERAGE-001 — تغطية الخدمة في محافظة المستخدم (وكلاء/تجار)
     Route::get('/service-coverage', [\App\Http\Controllers\Api\V1\Amial\ServiceCoverageController::class, 'show'])
         ->name('amial.service-coverage');
