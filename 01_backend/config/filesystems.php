@@ -30,6 +30,19 @@ return [
 
     'disks' => [
 
+        // AMIAL-PRIVATE-DISK-001: قرص خاصّ لوثائق KYC والإيصالات وأدلّة
+        // الدفع الآمن. كان .env.example يطلبه (AMIAL_RECEIPTS_DISK=private)
+        // ويقول «يجب تعريفه في config/filesystems.php» — ولم يُعرَّف قطّ،
+        // فأي كتابة عليه ترمي «Disk [private] does not have a configured
+        // driver». لا رابط عامّ له: هذه ملفّات لا يجوز أن تُقرأ إلا عبر
+        // نقطة تفحص الصلاحية.
+        'private' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private'),
+            'serve' => false,
+            'throw' => false,
+        ],
+
         'local' => [
             'driver' => 'local',
             'root' => storage_path('app'),

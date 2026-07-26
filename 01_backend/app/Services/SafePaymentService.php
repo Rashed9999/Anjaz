@@ -8,6 +8,7 @@ use App\Models\SafePaymentEvent;
 use App\Models\User;
 use App\Services\FeeService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -211,6 +212,112 @@ class SafePaymentService
     // 2. Seller Response
     // ============================================================
 
+    /**
+     * AMIAL-SAFEPAY-CODE-001 — الرمز الصريح بعد التوليد، للمشتري وحده.
+     *
+     * لا يُخزَّن صريحاً في أي مكان: قاعدة البيانات تحمل تعميته فقط. تسريب
+     * القاعدة لا يجوز أن يمنح أحداً القدرة على تأكيد تسليم لم يحدث.
+     */
+    public ?string $deliveryCodeForBuyer = null;
+
+    /**
+     * AMIAL-SAFEPAY-DISPUTE-001 — أسباب النزاع منظّمة.
+     *
+     * النصّ الحرّ وحده يجعل كل نزاع حالةً فريدة يقرؤها الموظّف من الصفر،
+     * ويمنع أي إحصاء يكشف السبب المتكرّر. القائمة تُصنّف، والنصّ الحرّ
+     * يبقى مطلوباً للتفصيل — التصنيف لا يُغني عن الرواية.
+     */
+    public const DISPUTE_REASONS = [
+        'not_received' => 'لم أستلم البضاعة',
+        'not_as_described' => 'البضاعة تخالف الوصف',
+        'damaged' => 'وصلت تالفة',
+        'incomplete' => 'ناقصة أو غير مكتملة',
+        'counterfeit' => 'مقلّدة أو غير أصلية',
+        'wrong_item' => 'صنف مختلف عمّا طلبت',
+        'seller_unreachable' => 'البائع لا يردّ',
+        'other' => 'سبب آخر',
+    ];
+
+
+    /**
+     * الرمز الصريح بفكّ التشفير — للمشتري وللتحقّق.
+     * يعيد null إن تعذّر الفكّ (مفتاح تغيّر) بدل أن يرمي ويوقف العملية.
+     */
+    public function plainDeliveryCode(SafePayment $payment): ?string
+    {
+        if (empty($payment->delivery_code_hash)) {
+            return null;
+        }
+
+        try {
+            return Crypt::decryptString($payment->delivery_code_hash);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /** ستّة أرقام: يُملى صوتاً ويُكتب بلا خطأ. */
+    private function generateDeliveryCode(): string
+    {
+        return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * يتحقّق البائع من رمز التسليم فيؤكّد الاستلام بشهادة الطرفين.
+     *
+     * ثلاث محاولات ثم يُقفل. بلا حدّ يستطيع بائع سيّئ النيّة تجريب مليون
+     * احتمال في دقائق فيؤكّد تسليماً لم يقع.
+     */
+    public function verifyDeliveryCode(SafePayment $payment, User $seller, string $code): SafePayment
+    {
+        $this->assertSeller($payment, $seller);
+
+        if (!in_array($payment->status, ['funded', 'in_delivery'], true)) {
+            throw new \RuntimeException('لا يمكن تأكيد التسليم في الحالة الراهنة');
+        }
+
+        if (empty($payment->delivery_code_hash)) {
+            throw new \RuntimeException('لا يوجد رمز تسليم لهذه العملية');
+        }
+
+        if ((int) $payment->delivery_code_attempts >= 3) {
+            throw new \RuntimeException(
+                'تجاوزت عدد المحاولات. تواصل مع الدعم أو أكمل بالأدلّة المرفوعة.'
+            );
+        }
+
+        $clean = preg_replace('/[^0-9]/', '', $code);
+
+        $expected = $this->plainDeliveryCode($payment);
+
+        if ($expected === null || !hash_equals($expected, (string) $clean)) {
+            $payment->increment('delivery_code_attempts');
+            $this->recordEvent($payment, 'delivery_code_failed', $payment->status, $payment->status,
+                actorType: 'seller', actorUserId: $seller->id,
+                context: ['attempts' => $payment->delivery_code_attempts]);
+
+            throw new \RuntimeException('رمز التسليم غير صحيح');
+        }
+
+        DB::transaction(function () use ($payment, $seller) {
+            $locked = SafePayment::lockForUpdate()->find($payment->id);
+            $from = $locked->status;
+
+            $locked->update([
+                'status' => 'delivered',
+                'delivered_at' => now(),
+                'delivery_code_verified_at' => now(),
+                'in_delivery_at' => $locked->in_delivery_at ?? now(),
+            ]);
+
+            $this->recordEvent($locked, 'delivery_code_verified', $from, 'delivered',
+                actorType: 'seller', actorUserId: $seller->id,
+                note: 'أكّد البائع التسليم برمز المشتري');
+        });
+
+        return $payment->fresh();
+    }
+
     public function sellerAccept(SafePayment $payment, User $seller, ?string $note = null): SafePayment
     {
         $this->assertSeller($payment, $seller);
@@ -222,13 +329,23 @@ class SafePaymentService
                 throw new \RuntimeException('Payment is no longer pending acceptance');
             }
 
+            // AMIAL-SAFEPAY-CODE-001: رمز التسليم يُولَّد عند القبول لا عند
+            // الإنشاء — قبل قبول البائع لا صفقة، ورمز لصفقة قد تُرفض تشويش.
+            $plainCode = $this->generateDeliveryCode();
+
             $locked->update([
                 'status' => 'funded',
                 'seller_accepted_at' => now(),
+                'delivery_code_hash' => Crypt::encryptString($plainCode),
+                'delivery_code_attempts' => 0,
             ]);
 
             $this->recordEvent($locked, 'seller_accepted', 'pending_seller_acceptance', 'funded',
                 actorType: 'seller', actorUserId: $seller->id, note: $note);
+
+            // الرمز يصل المشتري وحده. لا يُسجَّل في الأحداث ولا في التدقيق:
+            // سجلّ يقرؤه موظّف ويحوي رمزاً يُنهي الصفقة يُبطل الغرض منه.
+            $this->deliveryCodeForBuyer = $plainCode;
         });
 
         return $payment->fresh();
@@ -392,7 +509,7 @@ class SafePaymentService
     // 6. Dispute
     // ============================================================
 
-    public function buyerDispute(SafePayment $payment, User $buyer, string $reason, ?array $attachments = null): SafePayment
+    public function buyerDispute(SafePayment $payment, User $buyer, string $reason, ?array $attachments = null, ?string $reasonCode = null): SafePayment
     {
         $this->assertBuyer($payment, $buyer);
         if (!$payment->canBuyerDispute()) {
@@ -402,7 +519,12 @@ class SafePaymentService
             throw new \RuntimeException('Dispute reason must be at least 10 characters');
         }
 
-        DB::transaction(function () use ($payment, $buyer, $reason, $attachments) {
+        // AMIAL-SAFEPAY-DISPUTE-001: رمز غير معروف يقع على 'other' بدل أن
+        // يُرفض — لا نمنع مشترياً من فتح نزاع لأن تطبيقه أقدم من القائمة.
+        $code = array_key_exists((string) $reasonCode, self::DISPUTE_REASONS)
+            ? $reasonCode : 'other';
+
+        DB::transaction(function () use ($payment, $buyer, $reason, $attachments, $code) {
             $locked = SafePayment::lockForUpdate()->find($payment->id);
             if ($locked->is_disputed) {
                 throw new \RuntimeException('Already disputed');
@@ -413,11 +535,14 @@ class SafePaymentService
                 'status' => 'disputed',
                 'is_disputed' => true,
                 'disputed_at' => now(),
+                'dispute_reason_code' => $code,
             ]);
 
             $this->recordEvent($locked, 'buyer_disputed', $fromStatus, 'disputed',
                 actorType: 'buyer', actorUserId: $buyer->id, note: $reason,
-                attachments: $attachments);
+                attachments: $attachments,
+                context: ['reason_code' => $code,
+                          'reason_label' => self::DISPUTE_REASONS[$code]]);
 
             $this->audit->record([
                 'actor_type' => 'user',

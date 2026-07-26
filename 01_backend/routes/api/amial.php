@@ -382,12 +382,29 @@ Route::middleware(['auth:api'])->group(function () {
     // AMIAL-MAINT-001: مثال حيّ — الدفع الآمن يُغلق من لوحة الصيانة (بحارس مالي)
     Route::prefix('safe-payments')->name('amial.safe-pay.')->middleware('feature:safe_payment')->group(function () {
         Route::get('/', [SafePaymentController::class, 'index'])->name('index');
+        // أسباب النزاع من الخادم — إضافة سبب لا تستحقّ إصدار تطبيق
+        Route::get('/dispute-reasons', [SafePaymentController::class, 'disputeReasons'])
+            ->name('dispute-reasons');
+        Route::get('/evidence/{id}/file', [SafePaymentController::class, 'evidenceFile'])
+            ->where('id', '[0-9]+')->name('evidence.file');
         Route::post('/', [SafePaymentController::class, 'create'])
             ->middleware(['amial.zone:safe_payment_create', 'amial.rate-limit:safe_pay_create,5,1'])
             ->name('create');
 
         Route::get('/{ulid}', [SafePaymentController::class, 'show'])
             ->where('ulid', '[A-Z0-9]{26}')->name('show');
+
+        // AMIAL-SAFEPAY-EVIDENCE-001 — أدلّة حقيقية (ملفات) للطرفين معاً
+        Route::post('/{ulid}/evidence', [SafePaymentController::class, 'uploadEvidence'])
+            ->where('ulid', '[A-Z0-9]{26}')
+            ->middleware('amial.rate-limit:safe_pay_evidence,20,1')->name('evidence.upload');
+        Route::get('/{ulid}/evidence', [SafePaymentController::class, 'listEvidence'])
+            ->where('ulid', '[A-Z0-9]{26}')->name('evidence.list');
+
+        // AMIAL-SAFEPAY-CODE-001 — تأكيد التسليم برمز المشتري
+        Route::post('/{ulid}/verify-delivery', [SafePaymentController::class, 'verifyDelivery'])
+            ->where('ulid', '[A-Z0-9]{26}')
+            ->middleware('amial.rate-limit:safe_pay_delivery,10,1')->name('verify-delivery');
 
         // Seller actions
         Route::post('/{ulid}/seller-accept', [SafePaymentController::class, 'sellerAccept'])

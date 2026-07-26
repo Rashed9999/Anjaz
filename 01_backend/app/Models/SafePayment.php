@@ -28,6 +28,11 @@ class SafePayment extends Model
         'fee_scheme_version',
         'held_amount',
         'status',
+        // AMIAL-SAFEPAY-CODE-001 / DISPUTE-001
+        'delivery_code_hash',
+        'delivery_code_verified_at',
+        'delivery_code_attempts',
+        'dispute_reason_code',
         'buyer_debit_tx_id',
         'seller_credit_tx_id',
         'buyer_refund_tx_id',
@@ -52,6 +57,12 @@ class SafePayment extends Model
         'metadata',
     ];
 
+    /**
+     * AMIAL-SAFEPAY-CODE-001: تعمية رمز التسليم لا تُسرَّب في أي استجابة.
+     * ظهورها في JSON يمنح المهاجم هدفاً يكسره في وقته الخاصّ.
+     */
+    protected $hidden = ['delivery_code_hash'];
+
     protected $casts = [
         'buyer_user_id' => 'integer',
         'seller_user_id' => 'integer',
@@ -63,6 +74,8 @@ class SafePayment extends Model
         'attachments' => 'array',
         'metadata' => 'array',
         'is_disputed' => 'boolean',
+        'delivery_code_verified_at' => 'datetime',
+        'delivery_code_attempts' => 'integer',
         'seller_response_deadline' => 'datetime',
         'seller_accepted_at' => 'datetime',
         'seller_rejected_at' => 'datetime',
