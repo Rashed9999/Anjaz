@@ -50,20 +50,27 @@ class _SplashScreenState extends State<SplashScreen>
     // صلابة إضافية: نتعامل مع أخطاء الـ stream بأمان دون إسقاط الشاشة.
     if (GetPlatform.isMobile) {
       subscription = Connectivity().onConnectivityChanged.listen(
-          (List<ConnectivityResult> result) async {
-        if (await ApiChecker.isVpnActive()) {
-          showCustomSnackBarHelper('you are using vpn',
-              isVpn: true, duration: const Duration(minutes: 10));
-        }
-        if (isFirstTime) {
-          isFirstTime = false;
-          await _route();
-        }
-      }, onError: (Object e) {
-        if (kDebugMode) debugPrint('[Splash] connectivity stream error: $e');
-      });
+        (List<ConnectivityResult> result) async {
+          if (await ApiChecker.isVpnActive()) {
+            showCustomSnackBarHelper(
+              'you are using vpn',
+              isVpn: true,
+              duration: const Duration(minutes: 10),
+            );
+          }
+          if (isFirstTime) {
+            isFirstTime = false;
+            await _route();
+          }
+        },
+        onError: (Object e) {
+          if (kDebugMode) debugPrint('[Splash] connectivity stream error: $e');
+        },
+      );
     } else {
-      subscription = const Stream<List<ConnectivityResult>>.empty().listen((_) {});
+      subscription = const Stream<List<ConnectivityResult>>.empty().listen(
+        (_) {},
+      );
     }
 
     _route();
@@ -87,9 +94,9 @@ class _SplashScreenState extends State<SplashScreen>
 
     try {
       // خطوة 2: النسخة/الإعدادات البعيدة
-      await Get.find<SplashController>()
-          .getConfigData()
-          .timeout(const Duration(seconds: 5));
+      await Get.find<SplashController>().getConfigData().timeout(
+        const Duration(seconds: 5),
+      );
     } catch (_) {
       // الخادم غير متاح أو بطيء — نُكمل بدل التعليق.
     }
@@ -98,7 +105,9 @@ class _SplashScreenState extends State<SplashScreen>
     try {
       // خطوة 3: البيانات المحلية (اللغة/الثيم/الجلسة)
       await Get.find<SplashController>().initSharedData();
-    } catch (_) {/* تجاهل — بيانات محلية */}
+    } catch (_) {
+      /* تجاهل — بيانات محلية */
+    }
     _mark(3);
 
     if (!mounted) return;
@@ -117,7 +126,9 @@ class _SplashScreenState extends State<SplashScreen>
         await prefs.setString(AppConstants.languageCode, 'ar');
         await prefs.setString(AppConstants.customerCountryCode, 'SA');
       }
-    } catch (_) {/* غير حرج */}
+    } catch (_) {
+      /* غير حرج */
+    }
 
     if (GetPlatform.isAndroid &&
         Get.find<AuthController>().getUserData() != null) {
@@ -140,63 +151,79 @@ class _SplashScreenState extends State<SplashScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFFECA1E),
       body: SafeArea(
-        child: Column(
-          children: [
-            const Spacer(flex: 3),
-            // ===== الشعار + الاسم + الشعار النصّي =====
-            ScaleTransition(
-              scale: _logoScale,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // AMIAL-SPLASH-003: الشعار محكوم بعرض الشاشة لا بارتفاع
-                  // ثابت. `height: 150` وحده يجعل العرض 218 نقطة مهما ضاقت
-                  // النافذة، فيُقصّ من الجانبين. الآن لا يتجاوز 62% من العرض
-                  // المتاح، ويصغر بدل أن يُقصّ.
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.sizeOf(context).width * 0.62,
-                      maxHeight: 150,
+        // AMIAL-SPLASH-006 — العمود يجب أن يملأ العرض صراحةً.
+        //
+        // **العطل الذي بقي ثلاث جولات:** Scaffold يُخطّط جسمه بقيود
+        // **فضفاضة** ثم يضعه عند x=0. والعمود ينكمش إلى عرض أعرض أبنائه.
+        // فلمّا صار أعرضهم هو الشعار المحدود بـ 62% من الشاشة، انكمش العمود
+        // كلّه إلى 62% وانزوى إلى الحافّة اليسرى — ومعه النصّان والمؤشّر.
+        //
+        // ولهذا كان «الانحراف» يصيب كل شيء بالقدر نفسه: قياس الفيديو أعطى
+        // إزاحةً واحدة (-142 بكسل) لكل عنصر على حدة، ثابتةً طوال عمر الشاشة.
+        // وهو ما ميّزه عن حركة انتقال، ودلّ على أن الجاني هو الحاوي لا الأبناء.
+        //
+        // والمحاولات السابقة أخطأت الطبقة: أُصلح مقاس الشعار مرّة، وشاشة
+        // إقلاع النظام مرّة، وكلاهما سليم — الخلل في عرض الحاوي وحده.
+        child: SizedBox.expand(
+          child: Column(
+            children: [
+              const Spacer(flex: 3),
+              // ===== الشعار + الاسم + الشعار النصّي =====
+              ScaleTransition(
+                scale: _logoScale,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // AMIAL-SPLASH-003: الشعار محكوم بعرض الشاشة لا بارتفاع
+                    // ثابت. `height: 150` وحده يجعل العرض 218 نقطة مهما ضاقت
+                    // النافذة، فيُقصّ من الجانبين. الآن لا يتجاوز 62% من العرض
+                    // المتاح، ويصغر بدل أن يُقصّ.
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: MediaQuery.sizeOf(context).width * 0.62,
+                        maxHeight: 150,
+                      ),
+                      child: Image.asset(Images.logo, fit: BoxFit.contain),
                     ),
-                    child: Image.asset(Images.logo, fit: BoxFit.contain),
-                  ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'أميال باي',
-                    style: TextStyle(
-                      color: AmyalColors.primary,
-                      fontSize: 30,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
+                    const SizedBox(height: 18),
+                    const Text(
+                      'أميال باي',
+                      style: TextStyle(
+                        color: AmyalColors.primary,
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'دفع سريع وآمن',
-                    style: TextStyle(
-                      color: AmyalColors.primary.withValues(alpha: 0.75),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                    const SizedBox(height: 6),
+                    Text(
+                      'دفع سريع وآمن',
+                      style: TextStyle(
+                        color: AmyalColors.primary.withValues(alpha: 0.75),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const Spacer(flex: 2),
-            // AMIAL-SPLASH-002: كان هنا شريط تقدّم مع نصّ «جارٍ تحميل...»
-            // يظهر عدّة ثوانٍ — وهو يُشعر المستخدم بالبطء بدل أن يُخفيه،
-            // ولا يفعله أي تطبيق مصرفي. مؤشّر دائري صغير خافت يكفي.
-            SizedBox(
-              width: 22,
-              height: 22,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.2,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                    AmyalColors.primary.withValues(alpha: 0.55)),
+              const Spacer(flex: 2),
+              // AMIAL-SPLASH-002: كان هنا شريط تقدّم مع نصّ «جارٍ تحميل...»
+              // يظهر عدّة ثوانٍ — وهو يُشعر المستخدم بالبطء بدل أن يُخفيه،
+              // ولا يفعله أي تطبيق مصرفي. مؤشّر دائري صغير خافت يكفي.
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AmyalColors.primary.withValues(alpha: 0.55),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 46),
-          ],
+              const SizedBox(height: 46),
+            ],
+          ),
         ),
       ),
     );
