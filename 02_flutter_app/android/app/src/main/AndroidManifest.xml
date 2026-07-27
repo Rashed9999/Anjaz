@@ -50,6 +50,30 @@
         <intent>
             <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>
+
+        <!--
+          AMIAL-PDF-OPEN-001 — رؤية التطبيقات التي تفتح المستندات.
+
+          منذ أندرويد 11 (API 30) لا يرى التطبيق حزم الجهاز الأخرى إلا ما
+          يُعلنه هنا. وبلا هذا الإعلان يعود resolveActivity فارغاً، فيفشل
+          فتح الإيصال بعد تنزيله بنجاح — يُحفَظ الملفّ ثم لا يُفتح، ويظهر
+          للمستخدم «تعذّرت معالجة الملف» بلا سبب مفهوم.
+
+          العطل لا يظهر في المُصيِّر ولا في الخادم ولا في كتابة الملفّ:
+          كلّها تنجح. يقع في الخطوة الأخيرة وحدها — تسليم الملفّ لقارئ.
+        -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/pdf" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="image/*" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="*/*" />
+        </intent>
     </queries>
 
     <application

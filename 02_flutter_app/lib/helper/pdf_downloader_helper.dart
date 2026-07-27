@@ -1,11 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:open_file/open_file.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:amyal_pay/common/models/notification_body.dart';
 import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
 import 'package:amyal_pay/helper/notification_helper.dart';
@@ -62,22 +61,47 @@ class PdfDownloaderHelper {
   static Future<void> _openFileWithFallback(String filePath) async {
 
     if(Platform.isAndroid) {
-      // AMIAL-FIX(PDF): افتح الملف مباشرة (كان يكتفي بإشعار قد لا يظهر إن
-      // مُنع إذن الإشعارات على أندرويد 13+ فيبدو التحميل «لا يعمل»).
+      // AMIAL-PDF-OPEN-001 — لا تُترك النتيجة صامتة.
+      //
+      // كان المسار: حاول الفتح، فإن فشل اعرض إشعاراً «اضغط للفتح». وعلى
+      // أندرويد 13 فما فوق يحتاج الإشعار إذناً منفصلاً — فإن مُنع (وهو
+      // الافتراضي حتى يُطلب) لا يقع شيء مرئيّ إطلاقاً: يضغط المستخدم
+      // «تحميل» فلا يرى ولا يسمع شيئاً، والملفّ محفوظ على جهازه.
+      //
+      // وسبب الفشل نفسه كان في البيان: منذ أندرويد 11 لا يرى التطبيق أي
+      // قارئ PDF ما لم يُعلن ذلك في <queries>، فيعود resolveActivity
+      // فارغاً. أُصلح الإعلان — وهذا يضمن أن يُقال للمستخدم ما جرى مهما
+      // كانت النتيجة.
+      OpenResult? result;
       try {
-        final result = await OpenFile.open(filePath, type: 'application/pdf');
+        result = await OpenFile.open(filePath, type: 'application/pdf');
         if (result.type == ResultType.done) return;
+      } catch (e) {
+        debugPrint('AMIAL-PDF: تعذّر فتح الملفّ — $e');
+      }
+
+      // لا قارئ PDF على الجهاز: كثير من الهواتف الاقتصادية بلا واحد.
+      // المشاركة تعمل دائماً وتُوصِل الملفّ إلى واتساب أو البريد أو أي
+      // تطبيق يقرؤه — مخرجٌ حقيقيّ لا رسالة اعتذار.
+      if (result?.type == ResultType.noAppToOpen) {
+        await _shareInstead(filePath);
+        return;
+      }
+
+      // الإشعار يبقى مساعداً لا معتمَداً عليه.
+      try {
+        final NotificationBody payload = NotificationBody(
+          title: 'اكتمل التنزيل',
+          body: 'اضغط لفتح الإيصال',
+          type: 'download',
+          filePath: filePath,
+        );
+        NotificationHelper.showDownloadNotification(
+            jsonEncode(payload.toJson()), flutterLocalNotificationsPlugin);
       } catch (_) {}
 
-      // احتياط: إشعار «اضغط للفتح»
-      final NotificationBody payload = NotificationBody(
-        title: 'Download Complete',
-        body: 'Tap to open transaction_statement.pdf',
-        type: 'download',
-        filePath: filePath,
-      );
-
-      NotificationHelper.showDownloadNotification(jsonEncode(payload.toJson()), flutterLocalNotificationsPlugin);
+      // ثمّ يُقال للمستخدم صراحةً — وهذا ما كان غائباً.
+      await _shareInstead(filePath);
 
     } else {
       try {
@@ -110,6 +134,23 @@ class PdfDownloaderHelper {
     }
 
 
+  }
+
+  /// يعرض ورقة المشاركة على الملفّ المحفوظ.
+  ///
+  /// مخرجٌ يعمل حين لا يوجد قارئ PDF: يستطيع المستخدم إرساله لنفسه عبر
+  /// واتساب أو حفظه في تطبيق ملفّات — بدل أن يبقى الملفّ على جهازه لا
+  /// يعرف أنه موجود.
+  static Future<void> _shareInstead(String filePath) async {
+    try {
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(filePath)], subject: 'إيصال أميال باي'),
+      );
+    } catch (_) {
+      showCustomSnackBarHelper(
+          'حُفظ الإيصال في ملفّات التطبيق، لكن لا يوجد تطبيق يفتح ملفّات PDF '
+          'على جهازك. ثبّت قارئ PDF ثم أعد المحاولة.');
+    }
   }
 
   static Future<void> _iosFallbackOpen(String originalPath) async {
@@ -157,17 +198,4 @@ class PdfDownloaderHelper {
     return getApplicationDocumentsDirectory();
   }
 
-  static Future<PermissionStatus> _requestAndroidStoragePermission() async {
-    final plugin = DeviceInfoPlugin();
-    final android = await plugin.androidInfo;
-    var status = android.version.sdkInt < 33
-        ? await Permission.storage.request()
-        : PermissionStatus.granted;
-
-    if (status != PermissionStatus.granted) {
-      status = await Permission.storage.request();
-    }
-
-    return status;
-  }
 }
