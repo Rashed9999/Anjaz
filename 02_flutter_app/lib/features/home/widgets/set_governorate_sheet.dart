@@ -12,9 +12,11 @@ import 'package:amyal_pay/theme/amyal_colors.dart';
 /// يُسأل عنه أحد — ولا سبيل في التطبيق إلى تحديث العنوان. نصيحةٌ إلى طريق
 /// مسدود تبقى معروضة إلى الأبد.
 ///
-/// **الترتيب مقصود:** الموقع أوّلاً لأنه ضغطة واحدة، والاختيار اليدوي تحته
-/// دائماً لا كبديل عند الفشل — من يرفض إذن الموقع لا يُترك بلا طريق، ومن
-/// يسكن قرب حدّ محافظتين يصحّح ما التقطه الجهاز.
+/// AMIAL-COVERAGE-003 — هذه الورقة صارت **المخرج الاحتياطي** لا الطريق
+/// الأوّل: التطبيق يطلب إذن الموقع بنفسه عند فتح الشاشة الرئيسية ويحدّد
+/// المحافظة صامتاً. فلا يراها إلا من رفض الإذن أو تعذّر تحديد موقعه — أو
+/// من أراد تصحيح ما التقطه الجهاز (التحديد بأقرب مركز، ومن يسكن قرب حدّ
+/// محافظتين قد يُنسب إلى جارتها).
 class SetGovernorateSheet extends StatefulWidget {
   const SetGovernorateSheet({super.key});
 
@@ -197,7 +199,7 @@ class _SetGovernorateSheetState extends State<SetGovernorateSheet> {
                       : const Icon(Icons.my_location_rounded, size: 19),
                   label: Text(_locating
                       ? 'جارٍ تحديد موقعك…'
-                      : 'تحديدها من موقعي الحالي'),
+                      : 'إعادة المحاولة بالموقع'),
                   style: OutlinedButton.styleFrom(
                       foregroundColor: AmyalColors.primary),
                 ),

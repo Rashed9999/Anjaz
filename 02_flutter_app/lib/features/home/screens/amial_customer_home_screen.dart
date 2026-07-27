@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/features/home/widgets/set_governorate_sheet.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
@@ -55,6 +56,10 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   /// AMIAL-COVERAGE-002: الحساب بلا محافظة — اللافتة تصير زرّاً لا نصّاً.
   bool _needsGovernorate = false;
 
+  /// AMIAL-COVERAGE-003: حاولنا التحديد التلقائي في هذه الجلسة.
+  /// المحاولة مرّة واحدة: من رفض الإذن لا يُسأل في كل فتح للشاشة.
+  bool _autoLocateTried = false;
+
   @override
   void initState() {
     super.initState();
@@ -99,6 +104,21 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
             : null;
       }
     } catch (_) {/* التغطية تحسينية — لا توقف الصفحة */}
+
+    // AMIAL-COVERAGE-003: التطبيق يطلب الإذن بنفسه ويحدّد المحافظة.
+    //
+    // كانت اللافتة تطلب من العميل أن يختار محافظته من قائمة — وهذا عملُ
+    // التطبيق لا عملُه. الهاتف يعرف موقعه، والنظام له طريقة معروفة لطلب
+    // الإذن كما يُطلب إذن الكاميرا والاستديو. أن نُحيل المستخدم إلى قائمة
+    // من اثنتين وعشرين محافظة بدل سؤالٍ واحد يجيب عنه بنقرة هو تحميلٌ له
+    // ما تكفّل به الجهاز.
+    //
+    // القائمة اليدوية تبقى — لكن كمخرجٍ لمن رفض الإذن أو تعذّر تحديده، لا
+    // كطريق أوّل.
+    if (_needsGovernorate && !_autoLocateTried) {
+      _autoLocateTried = true;
+      await _autoDetectGovernorate();
+    }
 
     try {
       // «الإيصالات» = السجلّ الموحّد لكل النشاط (تحويلات + خدمات أميال)
@@ -233,7 +253,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
             child: ElevatedButton.icon(
               onPressed: _openGovernorateSheet,
               icon: const Icon(Icons.my_location_rounded, size: 18),
-              label: const Text('حدّد محافظتي'),
+              label: const Text('اختيار المحافظة يدوياً'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF053391),
                 foregroundColor: Colors.white,
@@ -245,6 +265,70 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         ],
       ]),
     );
+  }
+
+  /// يطلب إذن الموقع ويحدّد المحافظة بلا تدخّل من المستخدم.
+  ///
+  /// يفشل صامتاً: من رفض الإذن أو تعذّر تحديد موقعه يرى اللافتة والزرّ
+  /// اليدوي — لا رسالة خطأ على شاشة فتحها ليرى رصيده.
+  Future<void> _autoDetectGovernorate() async {
+    try {
+      var permission = await Geolocator.checkPermission();
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission != LocationPermission.always &&
+          permission != LocationPermission.whileInUse) {
+        return;
+      }
+
+      if (!await Geolocator.isLocationServiceEnabled()) return;
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+
+      final api = Get.find<ApiClient>();
+      final resolved = await api.postData('/api/v1/amial/geo/resolve-zone', {
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+      });
+
+      final data = (resolved.body is Map) ? resolved.body['data'] : null;
+      final code = (data is Map) ? data['governorate_code'] : null;
+      if (code is! String || code.isEmpty) return;
+
+      final saved = await api.postData(
+          '/api/v1/amial/me/governorate', {'governorate_code': code});
+
+      final ok = saved.statusCode == 200 &&
+          saved.body is Map &&
+          saved.body['success'] == true;
+      if (!ok || !mounted) return;
+
+      // نُعيد قراءة التغطية وحدها: إعادة _load كاملةً تُعيد استدعاء هذه
+      // الدالّة نفسها وتُطيل الانتظار بلا فائدة.
+      final cov = await api.getData('/api/v1/amial/service-coverage');
+      final d = (cov.body is Map) ? cov.body['data'] : null;
+      if (d is! Map || !mounted) return;
+
+      final agents = (d['agents'] ?? 0) as num;
+      final merchants = (d['merchants'] ?? 0) as num;
+      setState(() {
+        _needsGovernorate = false;
+        _coverageIsGap = agents == 0 && merchants == 0;
+        _coverageNotice = (agents == 0 || merchants == 0)
+            ? (d['notice'] as String?)
+            : null;
+      });
+    } catch (_) {
+      // الفشل يترك اللافتة والزرّ اليدوي — وهو المخرج المقصود.
+    }
   }
 
   Future<void> _openGovernorateSheet() async {
