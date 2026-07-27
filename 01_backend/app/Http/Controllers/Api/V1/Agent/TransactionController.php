@@ -344,16 +344,30 @@ class TransactionController extends Controller
         $totalDebit = $allTransactions->sum('debit');
         $totalCredit = $allTransactions->sum('credit');
 
-        $pdf = Pdf::loadView('admin-views.transaction.statement', [
-            'transactions' => $allTransactions,
-            'user' => $request->user(),
-            'totalDebit' => $totalDebit,
-            'totalCredit' => $totalCredit,
-            'start_date' => $request->start_date,
-            'end_date' => $request->end_date,
-        ]);
+        // AMIAL-PDF-CACHE-001: انظر النظير في متحكّم العميل — نفس العلّة.
+        // الوكيل أشدّ حاجةً: حركاته أكثر، فكشفه أثقل تصييراً.
+        $bytes = app(\App\Services\PdfCacheService::class)->remember(
+            'agent_txn_history_' . $request->user()->id . '_'
+                . sha1(json_encode([
+                    $allTransactions->pluck('id')->all(),
+                    (string) $totalDebit, (string) $totalCredit,
+                    $request->start_date, $request->end_date,
+                ])),
+            fn () => Pdf::loadView('admin-views.transaction.statement', [
+                'transactions' => $allTransactions,
+                'user' => $request->user(),
+                'totalDebit' => $totalDebit,
+                'totalCredit' => $totalCredit,
+                'start_date' => $request->start_date,
+                'end_date' => $request->end_date,
+            ])->output(),
+        );
 
-        return $pdf->download('transaction-history.pdf');
+        return response($bytes, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Length' => (string) strlen($bytes),
+            'Content-Disposition' => 'attachment; filename="transaction-history.pdf"',
+        ]);
     }
 
     public function withdrawalMethods(): JsonResponse

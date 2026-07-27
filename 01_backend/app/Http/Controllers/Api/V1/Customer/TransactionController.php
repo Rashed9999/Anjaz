@@ -590,17 +590,36 @@ class TransactionController extends Controller
         $totalDebit = $allTransactions->sum('debit');
         $totalCredit = $allTransactions->sum('credit');
 
-        $pdf = Pdf::loadView('admin-views.transaction.statement', [
-            'transactions' => $allTransactions,
-            'user' => $request->user(),
-            'totalDebit' => $totalDebit,
-            'totalCredit' => $totalCredit,
-            'start_date' => $request->start_date,
-            'end_date' => $request->end_date,
-            'transaction_type' => $request->transaction_type,
-        ]);
+        // AMIAL-PDF-CACHE-001: كان يُصيَّر في كل طلب. كشف الحركات المفلتَر
+        // من أثقل ما يُصيَّر — صفوفه بعدد حركات الفترة — ويُطلَب من الجوّال،
+        // فهو أوّل من يُقطع اتصاله.
+        //
+        // المفتاح يشمل تلبيد المحتوى نفسه لا المرشّحات وحدها: الفترة قد
+        // تمتدّ إلى اليوم فتدخلها حركة بعد لحظة، وتلبيد المحتوى يجعل أي
+        // تبدّل يُنتج مفتاحاً جديداً حتماً.
+        $bytes = app(\App\Services\PdfCacheService::class)->remember(
+            'txn_history_' . $request->user()->id . '_'
+                . sha1(json_encode([
+                    $allTransactions->pluck('id')->all(),
+                    (string) $totalDebit, (string) $totalCredit,
+                    $request->start_date, $request->end_date, $request->transaction_type,
+                ])),
+            fn () => Pdf::loadView('admin-views.transaction.statement', [
+                'transactions' => $allTransactions,
+                'user' => $request->user(),
+                'totalDebit' => $totalDebit,
+                'totalCredit' => $totalCredit,
+                'start_date' => $request->start_date,
+                'end_date' => $request->end_date,
+                'transaction_type' => $request->transaction_type,
+            ])->output(),
+        );
 
-        return $pdf->download('transaction-history.pdf');
+        return response($bytes, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Length' => (string) strlen($bytes),
+            'Content-Disposition' => 'attachment; filename="transaction-history.pdf"',
+        ]);
     }
 
     public function withdrawalMethods(Request $request): JsonResponse

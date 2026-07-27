@@ -87,10 +87,23 @@ class AccountStatementController extends Controller
             'totalCredit' => $totalCredit,
         ])->render();
 
-        $bytes = ArabicPdf::render($html, ['format' => 'A4-L', 'margin' => 10]);
+        // AMIAL-PDF-CACHE-001: كان يُصيَّر في كل طلب. وكشف الحساب أثقل ما
+        // يُصيَّر في التطبيق — A4 عرضيّ بصفوف بعدد حركات الفترة — فهو أوّل
+        // من يُقطع اتصاله على شبكة جوّال.
+        //
+        // والمفتاح تلبيدُ محتوى الكشف نفسه لا تاريخُه: الفترة قد تمتدّ إلى
+        // اليوم، فتدخلها حركة جديدة بعد لحظة. وتلبيد المحتوى يجعل أي تبدّل
+        // — صفّاً أو رصيداً أو مجموعاً — يُنتج مفتاحاً جديداً حتماً. فلا
+        // يُخدَم كشف قديم، وهو خطأ أخطر من البطء: يُبنى عليه تحصيل ومحاسبة.
+        $bytes = app(\App\Services\PdfCacheService::class)->remember(
+            "stmt_{$user->id}_{$from->format('Ymd')}_{$to->format('Ymd')}_"
+                . sha1(json_encode([$rows, $totalDebit, $totalCredit])),
+            fn () => ArabicPdf::render($html, ['format' => 'A4-L', 'margin' => 10]),
+        );
 
         return response($bytes, 200, [
             'Content-Type' => 'application/pdf',
+            'Content-Length' => (string) strlen($bytes),
             'Content-Disposition' => 'attachment; filename="statement-'
                 . $from->format('Ymd') . '-' . $to->format('Ymd') . '.pdf"',
         ]);
