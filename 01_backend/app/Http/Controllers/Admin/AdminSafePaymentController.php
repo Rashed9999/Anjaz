@@ -198,6 +198,13 @@ class AdminSafePaymentController extends Controller
 
         try {
             $payment = $this->service->adminResolveRelease($payment, $request->user(), $request->input('reason'));
+        } catch (\DomainException $e) {
+            // AMIAL-FOUR-EYES-001: منعٌ مقصود لا عطل — والرسالة تقول ذلك
+            // صراحةً كي لا يُعاد المحاولة ولا يُظنّ الخلل في النظام.
+            return $e->getMessage() === 'FOUR_EYES_VIOLATION'
+                ? $this->error('FOUR_EYES_VIOLATION',
+                    \App\Services\FourEyesService::message(), 403)
+                : $this->error('RESOLVE_FAILED', $e->getMessage(), 422);
         } catch (\RuntimeException $e) {
             return $this->error('RESOLVE_FAILED', $e->getMessage(), 422);
         }
@@ -217,6 +224,13 @@ class AdminSafePaymentController extends Controller
 
         try {
             $payment = $this->service->adminResolveRefund($payment, $request->user(), $request->input('reason'));
+        } catch (\DomainException $e) {
+            // AMIAL-FOUR-EYES-001: منعٌ مقصود لا عطل — والرسالة تقول ذلك
+            // صراحةً كي لا يُعاد المحاولة ولا يُظنّ الخلل في النظام.
+            return $e->getMessage() === 'FOUR_EYES_VIOLATION'
+                ? $this->error('FOUR_EYES_VIOLATION',
+                    \App\Services\FourEyesService::message(), 403)
+                : $this->error('RESOLVE_FAILED', $e->getMessage(), 422);
         } catch (\RuntimeException $e) {
             return $this->error('RESOLVE_FAILED', $e->getMessage(), 422);
         }
@@ -241,6 +255,13 @@ class AdminSafePaymentController extends Controller
                 (string)$request->input('buyer_refund_amount'),
                 $request->input('reason'),
             );
+        } catch (\DomainException $e) {
+            // AMIAL-FOUR-EYES-001: منعٌ مقصود لا عطل — والرسالة تقول ذلك
+            // صراحةً كي لا يُعاد المحاولة ولا يُظنّ الخلل في النظام.
+            return $e->getMessage() === 'FOUR_EYES_VIOLATION'
+                ? $this->error('FOUR_EYES_VIOLATION',
+                    \App\Services\FourEyesService::message(), 403)
+                : $this->error('RESOLVE_FAILED', $e->getMessage(), 422);
         } catch (\RuntimeException $e) {
             return $this->error('RESOLVE_FAILED', $e->getMessage(), 422);
         }

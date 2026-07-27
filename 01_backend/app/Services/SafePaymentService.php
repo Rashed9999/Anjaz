@@ -622,6 +622,7 @@ class SafePaymentService
     public function adminResolveRelease(SafePayment $payment, User $admin, string $reason): SafePayment
     {
         $this->assertDisputed($payment);
+        $this->assertFourEyes($payment, $admin);
 
         DB::transaction(function () use ($payment, $admin, $reason) {
             $locked = SafePayment::lockForUpdate()->find($payment->id);
@@ -655,6 +656,7 @@ class SafePaymentService
     public function adminResolveRefund(SafePayment $payment, User $admin, string $reason): SafePayment
     {
         $this->assertDisputed($payment);
+        $this->assertFourEyes($payment, $admin);
 
         DB::transaction(function () use ($payment, $admin, $reason) {
             $locked = SafePayment::lockForUpdate()->find($payment->id);
@@ -697,6 +699,7 @@ class SafePaymentService
         string $reason,
     ): SafePayment {
         $this->assertDisputed($payment);
+        $this->assertFourEyes($payment, $admin);
 
         $buyerAmount = MoneyService::normalize($buyerRefundAmount);
         if (bccomp($buyerAmount, '0', 4) < 0) {
@@ -996,5 +999,22 @@ class SafePaymentService
         if ($payment->status !== 'disputed') {
             throw new \RuntimeException('Action requires disputed status');
         }
+    }
+
+    /**
+     * AMIAL-FOUR-EYES-001 — من تعامل مع هذا النزاع لا يفصل فيه.
+     *
+     * الفصل في النزاع يُحرّك مالاً بين طرفين، وكان بلا أي ضابط: من عالج
+     * الأدلّة يستطيع الفصل، ومن فصل يستطيع إعادة الفصل. والرقابة الذاتية
+     * ليست رقابة — من أخطأ لا يرى خطأه، ومن تعمّد يُغطّي أثره.
+     *
+     * والمصدر سجلّ التدقيق لا حقل `admin_resolved_by`: الحقل يُكتب فوقه عند
+     * أوّل قرار ثانٍ فيضيع التاريخ، والسجلّ لا يُحذف ولا يُعدَّل.
+     */
+    private function assertFourEyes(SafePayment $payment, User $admin): void
+    {
+        app(\App\Services\FourEyesService::class)->assertNotPreviousActor(
+            'safe_payment', $payment->id, $admin,
+        );
     }
 }
