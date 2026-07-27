@@ -30,6 +30,10 @@ class SupportConsoleTest extends TestCase
     {
         parent::setUp();
         $this->admin = User::factory()->create(['type' => 0, 'phone' => '967770000001']);
+        // AMIAL-OPERATOR-RBAC-001: صار لكل مسار حسّاس صلاحيةٌ مطلوبة، وحساب
+        // الإدارة بلا دور لا يملك شيئاً (الافتراض منعٌ لا سماح). وهذا المدير
+        // يمثّل مالك اللوحة، فيُسند إليه دور مدير المنصّة كما تفعل الهجرة.
+        $this->grantPlatformAdmin($this->admin);
         $this->customer = User::factory()->create([
             'type' => 2, 'phone' => '967771555001',
             'f_name' => 'سالم', 'l_name' => 'الحضرمي',
@@ -357,5 +361,17 @@ class SupportConsoleTest extends TestCase
         $this->assertArrayHasKey('pending_jobs', $r->json('meta.queues'));
         $this->assertArrayHasKey('failed_jobs', $r->json('meta.queues'));
         $this->assertSame(1, $r->json('meta.support.tickets_by_status.open'));
+    }
+
+    /** يُسند دور مدير المنصّة — كما تفعل الهجرة لحسابات الإدارة القائمة. */
+    private function grantPlatformAdmin(User $user): void
+    {
+        $roleId = \Illuminate\Support\Facades\DB::table('roles')
+            ->whereNull('merchant_user_id')->where('code', 'platform_admin')->value('id');
+
+        \Illuminate\Support\Facades\DB::table('admin_user_roles')->updateOrInsert(
+            ['user_id' => $user->id, 'role_id' => $roleId],
+            ['created_at' => now(), 'updated_at' => now()],
+        );
     }
 }

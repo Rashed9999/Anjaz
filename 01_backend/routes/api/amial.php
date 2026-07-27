@@ -147,8 +147,8 @@ Route::middleware(['auth:api'])->group(function () {
             $c = \App\Http\Controllers\Api\V1\Amial\SupportConsoleController::class;
             Route::get('/search', [$c, 'search'])->name('search');
             Route::get('/ops-dashboard', [$c, 'opsDashboard'])->name('ops-dashboard');
-            Route::get('/customers/{id}', [$c, 'customer'])->where('id', '[0-9]+')->name('customers.show');
-            Route::get('/customers/{id}/transactions', [$c, 'customerTransactions'])->where('id', '[0-9]+')->name('customers.transactions');
+            Route::get('/customers/{id}', [$c, 'customer'])->where('id', '[0-9]+')->middleware('platform:platform.customers.view')->name('customers.show');
+            Route::get('/customers/{id}/transactions', [$c, 'customerTransactions'])->where('id', '[0-9]+')->middleware('platform:platform.transactions.view')->name('customers.transactions');
             Route::get('/transactions/{ref}', [$c, 'transaction'])->name('transactions.show');
             // إجراءات التحقّق — كلها تتطلب سبباً وتُسجَّل في التدقيق
             Route::post('/customers/{id}/freeze', [$c, 'freeze'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.freeze');

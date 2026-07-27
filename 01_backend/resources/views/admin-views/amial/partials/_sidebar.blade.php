@@ -216,6 +216,16 @@
 </li>
 @endif
 
+{{-- AMIAL-OPERATOR-RBAC-003 — أدوار الموظّفين (مدير المنصّة وحده) --}}
+@if (auth('user')->check() && auth('user')->user()->hasPlatformPermission('platform.settings.update'))
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/ops/roles*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.ops.roles.index')}}" title="أدوار الموظّفين">
+        <i class="tio-user-switch nav-icon"></i>
+        <span class="text-truncate">👥 أدوار الموظّفين (الدعم/الصيانة/الإشراف)</span>
+    </a>
+</li>
+@endif
+
 {{-- Audit Decisions --}}
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/audit*')?'active':''}}">
     <a class="nav-link"

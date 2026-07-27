@@ -130,6 +130,19 @@ class SupportConsoleController extends Controller
             return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
         }
 
+        // AMIAL-SUPPORT-PII-001: فتح ملفّ عميل وصولٌ إلى بيانات شخصية —
+        // اسمه ورقمه ورصيده وحركاته. والصلاحية تقول «يجوز له»، والسجلّ يقول
+        // «فعلها». وبينهما فرقٌ يظهر عند أوّل شكوى تسريب: من فتح ملفّ فلان
+        // ومتى وكم مرّة. وبلا سجلّ يبقى السؤال بلا جواب مهما ضُبطت الأدوار.
+        app(\App\Services\PiiAccessAuditService::class)->logAccess(
+            actorUserId: $request->user()->id,
+            subjectType: 'user',
+            subjectId: $user->id,
+            fieldName: 'support_customer_file',
+            accessType: 'view',
+            accessReason: (string) $request->query('reason', 'فتح ملفّ العميل من لوحة الدعم'),
+        );
+
         $wallet = EMoney::where('user_id', $user->id)->first();
 
         $activeSessions = (int) DB::table('oauth_access_tokens')
@@ -194,7 +207,48 @@ class SupportConsoleController extends Controller
             'recent_transactions' => $recentTx,
             'open_tickets' => $openTickets,
             'recent_audit' => $recentAudit,
+            'documents' => $this->documentsFor($user),
         ]);
+    }
+
+    /**
+     * AMIAL-SUPPORT-DOCS-001 — «أين إيصالي؟» يُجاب عنه من هنا.
+     *
+     * كان هذا السؤال بلا جواب في اللوحة: الإيصال يظهر في قائمة العميل بينما
+     * ملفّه غير مولَّد، فيفشل تنزيله ولا يعرف الدعم لماذا. والجواب كان في
+     * عمود `pdf_storage_path` لا يقرؤه أحد.
+     *
+     * وإيصالٌ بلا ملفّ ليس عطلاً بذاته — يُولَّد عند أوّل تنزيل. لكنه يصير
+     * عطلاً حين يكثر: التوليد داخل الطلب بطيء، فيُقطع الاتصال على شبكة
+     * جوّال. فالعدد هنا إشارةٌ إلى صحّة الطابور لا إلى حال إيصال بعينه.
+     */
+    private function documentsFor(\App\Models\User $user): array
+    {
+        $receipts = \App\Models\Receipt::where('user_id', $user->id)
+            ->orderByDesc('id')->limit(10)
+            ->get(['id', 'receipt_number', 'receipt_type', 'amount', 'status',
+                   'pdf_storage_path', 'download_count', 'issued_at']);
+
+        $missing = \App\Models\Receipt::where('user_id', $user->id)
+            ->whereNull('pdf_storage_path')->count();
+
+        return [
+            'receipts_without_file' => $missing,
+            'recent' => $receipts->map(fn ($r) => [
+                'id' => $r->id,
+                'number' => $r->receipt_number,
+                'type' => $r->receipt_type,
+                'amount' => (string) $r->amount,
+                'status' => $r->status,
+                // الحقيقة لا الحقل: المسار محفوظ والملفّ قد يكون ذهب مع
+                // نشرة جديدة على تخزين مؤقّت. الفرق بينهما هو الفرق بين
+                // «سيُفتح فوراً» و«سيُصيَّر الآن وقد يُقطع».
+                'file_ready' => $r->pdf_storage_path
+                    && \Illuminate\Support\Facades\Storage::disk('local')->exists($r->pdf_storage_path),
+                'downloads' => (int) $r->download_count,
+                'issued_at' => (string) $r->issued_at,
+            ])->all(),
+        ];
     }
 
     /** GET /admin/support/customers/{id}/transactions */

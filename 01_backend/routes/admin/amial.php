@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\AdminCharityController;
 use App\Http\Controllers\Admin\AdminSafePaymentController;
 use App\Http\Controllers\Admin\AuditDecisionsController;
 use App\Http\Controllers\Admin\LegalTermsController;
+use App\Http\Controllers\Admin\OperatorRolesController;
 use App\Http\Controllers\Admin\OpsConsoleController;
 use App\Http\Controllers\Admin\SecurityEventsController;
 use App\Http\Controllers\Admin\ZoneManagementController;
@@ -311,4 +312,13 @@ Route::prefix('ops')->name('ops.')->group(function () {
 
     Route::post('/pdf-doctor', [OpsConsoleController::class, 'pdfDoctor'])
         ->middleware('platform:platform.ops.retry')->name('pdf-doctor');
+
+    // إسناد الأدوار: من يمنح دور مدير المنصّة يمنح كل شيء دفعةً واحدة،
+    // فلا يملكه إلا مدير المنصّة. ولذلك رُبط بأخطر صلاحية لا بصلاحية تشغيل.
+    Route::get('/roles', [OperatorRolesController::class, 'index'])
+        ->middleware('platform:platform.settings.update')->name('roles.index');
+
+    Route::post('/roles/{userId}', [OperatorRolesController::class, 'update'])
+        ->where('userId', '[0-9]+')
+        ->middleware('platform:platform.settings.update')->name('roles.update');
 });

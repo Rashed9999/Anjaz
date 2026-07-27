@@ -50,8 +50,8 @@ Route::group(['as' => 'admin.'], function () {
             Route::get('/', fn () => view('admin-views.support.console'))->name('index');
             Route::get('search', [$sc, 'search'])->name('search');
             Route::get('ops-dashboard', [$sc, 'opsDashboard'])->name('ops-dashboard');
-            Route::get('customers/{id}', [$sc, 'customer'])->where('id', '[0-9]+')->name('customers.show');
-            Route::get('customers/{id}/transactions', [$sc, 'customerTransactions'])->where('id', '[0-9]+')->name('customers.transactions');
+            Route::get('customers/{id}', [$sc, 'customer'])->where('id', '[0-9]+')->middleware('platform:platform.customers.view')->name('customers.show');
+            Route::get('customers/{id}/transactions', [$sc, 'customerTransactions'])->where('id', '[0-9]+')->middleware('platform:platform.transactions.view')->name('customers.transactions');
             Route::get('transactions/{ref}', [$sc, 'transaction'])->name('transactions.show');
             Route::post('customers/{id}/freeze', [$sc, 'freeze'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.freeze');
             Route::post('customers/{id}/reset-pin', [$sc, 'resetPin'])->where('id', '[0-9]+')->middleware('platform:platform.customers.reset_pin')->name('customers.reset-pin');
