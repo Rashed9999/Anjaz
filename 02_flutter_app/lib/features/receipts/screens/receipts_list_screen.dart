@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amyal_pay/features/receipts/controllers/receipts_controller.dart';
 import 'package:amyal_pay/features/receipts/domain/models/receipt_models.dart';
 import 'package:amyal_pay/features/receipts/screens/receipt_detail_screen.dart';
@@ -153,8 +154,10 @@ class _ReceiptListTile extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(
+          // AMIAL-RTL-SIGN-001: مبلغ بإشارة يُعرض باتجاه لاتيني صريح.
+          AmialLtrNumber(
             '${isCredit ? '+' : '-'}${_fmtAmount(receipt.amount)}',
+            textAlign: TextAlign.end,
             style: TextStyle(
               fontWeight: FontWeight.bold,
               color: amountColor,

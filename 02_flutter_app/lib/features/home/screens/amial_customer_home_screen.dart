@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
 import 'package:amyal_pay/features/home/widgets/set_governorate_sheet.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
@@ -854,8 +855,10 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
+                // AMIAL-RTL-SIGN-001
+                AmialLtrNumber(
                   '${isDebit ? '-' : '+'}$amount ر.ي',
+                  textAlign: TextAlign.end,
                   style: TextStyle(
                       fontSize: 13.5, fontWeight: FontWeight.bold, color: tone),
                 ),

@@ -1,3 +1,4 @@
+import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amyal_pay/helper/amial_money.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -184,8 +185,9 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      (isCredit ? '+' : '-')+AmialMoney.yer(r.amount),
+                    // AMIAL-RTL-SIGN-001
+                    AmialLtrNumber(
+                      (isCredit ? '+' : '-') + AmialMoney.yer(r.amount),
                       style: TextStyle(
                         color: isCredit
                             ? const Color(0xFF16A34A)

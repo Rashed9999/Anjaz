@@ -103,7 +103,7 @@ void main() {
       // ويمرّ الاختبار على العدم.
       PackageInfo.setMockInitialValues(
         appName: 'أميال باي', packageName: 'com.amyalpay.app',
-        version: '1.95.0', buildNumber: '1950', buildSignature: '',
+        version: '1.96.0', buildNumber: '1960', buildSignature: '',
       );
     });
 
@@ -111,15 +111,15 @@ void main() {
       await tester.pumpWidget(wrap(const AmialBuildStamp()));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('1.95.0'), findsOneWidget);
-      expect(find.textContaining('1950'), findsOneWidget);
+      expect(find.textContaining('1.96.0'), findsOneWidget);
+      expect(find.textContaining('1960'), findsOneWidget);
     });
 
     testWidgets('الضغطة المطوّلة تفتح التشخيص وتُظهر حالة التبليغ', (tester) async {
       await tester.pumpWidget(wrap(const AmialBuildStamp()));
       await tester.pumpAndSettle();
 
-      await tester.longPress(find.textContaining('1.95.0'));
+      await tester.longPress(find.textContaining('1.96.0'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -137,7 +137,7 @@ void main() {
       await tester.pumpWidget(wrap(const AmialBuildStamp()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.textContaining('1.95.0'));
+      await tester.tap(find.textContaining('1.96.0'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('غير فعّالة'), findsNothing);
@@ -164,6 +164,48 @@ void main() {
       final text = tester.widget<Text>(find.text('12 34 5678'));
       expect(text.textDirection, TextDirection.ltr,
           reason: 'بلا اتجاه صريح ينعكس الترتيب فيظهر «5678 34 12»');
+    });
+
+    test('علامة السالب تقع عند الطرف الخطأ في الاتجاه العربي', () {
+      // AMIAL-RTL-SIGN-001 — قياسٌ لسلوك المنصّة نفسها، لا لودجتنا.
+      //
+      // هذا ما ظهر على جهاز المستخدم: «-1,000 ر.ي» عُرضت «1,000- ر.ي».
+      // و«1,000-» تُقرأ ألفاً موجباً بعلامة عالقة — والفرق بين خصمٍ وإيداع
+      // هو كل شيء في كشف حساب.
+      //
+      // يُقاس موضع أوّل حرف («-») في الاتجاهين. الاختبار يوثّق السبب: لو
+      // تبدّل سلوك المحرّك يوماً سقط هنا فنراجع الحلّ بدل أن نحمله إرثاً.
+      double signLeft(TextDirection dir) {
+        final tp = TextPainter(
+          text: const TextSpan(text: '-1,000 ر.ي', style: TextStyle(fontSize: 20)),
+          textDirection: dir,
+        )..layout();
+        return tp
+            .getBoxesForSelection(
+                const TextSelection(baseOffset: 0, extentOffset: 1))
+            .first
+            .left;
+      }
+
+      expect(signLeft(TextDirection.ltr), lessThan(10),
+          reason: 'في اللاتيني يجب أن تسبق الإشارةُ الرقمَ');
+      expect(signLeft(TextDirection.rtl), greaterThan(100),
+          reason: 'في العربي تنزاح إلى الطرف المقابل — وهذا سبب الإصلاح');
+    });
+
+    testWidgets('المبلغ ذو الإشارة يُلفّ باتجاه لاتيني', (tester) async {
+      await tester.pumpWidget(wrap(const AmialLtrNumber('-1,000 ر.ي')));
+
+      final text = tester.widget<Text>(find.text('-1,000 ر.ي'));
+      expect(text.textDirection, TextDirection.ltr);
+      expect(
+          tester
+              .widget<Directionality>(find.ancestor(
+                  of: find.text('-1,000 ر.ي'),
+                  matching: find.byType(Directionality)).first)
+              .textDirection,
+          TextDirection.ltr,
+          reason: 'الاتجاه على Text وحده لا يكفي داخل شجرة عربية');
     });
   });
 
