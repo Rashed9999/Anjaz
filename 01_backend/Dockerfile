@@ -28,9 +28,18 @@ RUN docker-php-ext-configure gd \
         pcntl \
         bcmath \
         gd \
-        zip \
         opcache \
-        intl
+        intl \
+    # AMIAL-BUILD-001: zip يُبنى وحده بلا توازٍ.
+    #
+    # `-j$(nproc)` يُمرَّر إلى make، وهدفا zip — php_zip.lo و zip_stream.lo —
+    # يتسابقان على إنشاء المجلّد .libs، فيفشل أحدهما بـ:
+    #     mkdir: can't create directory '.libs': File exists
+    #
+    # عطل متقطّع يعتمد على عدد الأنوية وتوقيتها: نجحت نشرات كثيرة بالصدفة ثم
+    # فشلت واحدة بلا تغيير في الشيفرة. بناؤه وحده يُنهي السباق، وكلفته ثوانٍ
+    # لأن بقيّة الامتدادات تبقى متوازية.
+    && docker-php-ext-install zip
 
 # ── Composer ────────────────────────────────────────────
 COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
