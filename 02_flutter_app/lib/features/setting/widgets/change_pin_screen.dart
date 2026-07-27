@@ -230,7 +230,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                   child: AmialNumpad(
                     controller: _active,
                     maxLength: 4,
-                    rtl: true,
+                    compact: true,
                     onChanged: (v) {
                       setState(() {});
                       if (v.length == 4) _onFilled(v);

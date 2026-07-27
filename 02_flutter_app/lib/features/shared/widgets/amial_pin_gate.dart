@@ -101,7 +101,7 @@ class _AmialPinInputScreenState extends State<_AmialPinInputScreen> {
             AmialNumpad(
               controller: _pin,
               maxLength: 4,
-              rtl: true,
+              compact: true,
               onChanged: (v) {
                 setState(() {});
                 if (v.length == 4) Get.back(result: v);
@@ -235,7 +235,7 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
             AmialNumpad(
               controller: _pin,
               maxLength: 4,
-              rtl: true,
+              compact: true,
               onChanged: (v) {
                 setState(() {});
                 if (v.length == 4) _verify();

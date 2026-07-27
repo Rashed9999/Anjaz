@@ -41,7 +41,7 @@ void main() {
     testWidgets('الضغط يكتب في المتحكّم ويحترم الحدّ', (tester) async {
       final controller = TextEditingController();
       await tester.pumpWidget(wrap(
-        AmialNumpad(controller: controller, maxLength: 4, rtl: true),
+        AmialNumpad(controller: controller, maxLength: 4, compact: true),
       ));
 
       for (final d in ['1', '2', '3', '4', '5']) {
@@ -62,10 +62,31 @@ void main() {
       expect(controller.text, '12');
     });
 
+    testWidgets('الترتيب على الشاشة: 1 يساراً ثم 2 ثم 3', (tester) async {
+      // هذا ما اشتكى منه المستخدم ولم يلتقطه أي اختبار: كانت الأرقام
+      // موجودة كلّها — فيمرّ فحص الوجود — لكنها تظهر «3 2 1» لأن الواجهة
+      // العربية تعكس الصفوف. الوجود ليس ترتيباً، فيُقاس الموضع نفسه.
+      final controller = TextEditingController();
+      await tester.pumpWidget(wrap(AmialNumpad(controller: controller)));
+
+      double x(String d) => tester.getCenter(find.text(d)).dx;
+
+      expect(x('1'), lessThan(x('2')), reason: 'ظهر «2 1» معكوساً');
+      expect(x('2'), lessThan(x('3')), reason: 'ظهر «3 2» معكوساً');
+      expect(x('4'), lessThan(x('6')));
+      expect(x('7'), lessThan(x('9')));
+
+      // والصفوف تنزل تصاعدياً: 1 فوق 4 فوق 7 — كلوحة الاتصال.
+      double y(String d) => tester.getCenter(find.text(d)).dy;
+      expect(y('1'), lessThan(y('4')));
+      expect(y('4'), lessThan(y('7')));
+      expect(y('7'), lessThan(y('0')));
+    });
+
     testWidgets('وضع الرمز السري بلا زرّ 000', (tester) async {
       final controller = TextEditingController();
       await tester.pumpWidget(wrap(
-        AmialNumpad(controller: controller, rtl: true),
+        AmialNumpad(controller: controller, compact: true),
       ));
 
       // «000» يمنح المتلصّص ضغطةً مميّزة الشكل يقرؤها من بعيد.
