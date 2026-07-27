@@ -22,6 +22,10 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.1.0" apply false
     // AMIAL-FCM-001: 4.3.15 يسبق AGP 8 ويتعثّر مع Gradle الحديث؛ 4.4.2 هو المتوافق.
     id("com.google.gms.google-services") version "4.4.2" apply false
+    // AMIAL-CRASH-001: الحزمة وحدها ترفع أعطال Dart. أمّا انهيارات الطبقة
+    // الأصلية (NDK/Java) ورموز الأسطر في بناء release — حيث يُشوَّه الكود —
+    // فتحتاج هذه الإضافة لرفع خرائط الرموز، وإلّا وصل الأثر غير مقروء.
+    id("com.google.firebase.crashlytics") version "3.0.2" apply false
 
 }
 

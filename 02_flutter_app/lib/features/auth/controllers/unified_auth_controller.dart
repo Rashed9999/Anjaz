@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
+import 'package:amyal_pay/helper/amial_crash_reporter.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amyal_pay/data/api/api_client.dart';
@@ -193,6 +194,19 @@ class UnifiedAuthController extends GetxController implements GetxService {
         try { await SecureStorageHelper.instance.setToken(token); } catch (_) {}
       }
     }
+
+    // AMIAL-CRASH-001: هنا تمرّ كل مسارات الدخول — العميل والتاجر والوكيل
+    // والمدير — فالربط يقع مرّة واحدة بدل أربع.
+    //
+    // المعرّف هو المعرّف الداخلي لا رقم الهاتف ولا رقم الحساب: يكفي للبحث
+    // في لوحة الإدارة عند التحقيق في عطل، ولا يدلّ على صاحبه لمن يقرأ لوحة
+    // الأعطال. ورقم الهاتف يُنقّى من كل نصّ يُرفع (scrub) فلا يصل بطريق آخر.
+    final user = (meta['user'] is Map) ? meta['user'] as Map : const {};
+    await AmialCrashReporter.identify(
+      account: user['id']?.toString(),
+      role: (meta['role'] ?? '').toString(),
+      zone: user['zone_code']?.toString(),
+    );
   }
 
   // AMYAL-SEC-LOGIN-001: حفظ «آخر تسجيل دخول» محلياً — يعود من الخادم في الـ meta

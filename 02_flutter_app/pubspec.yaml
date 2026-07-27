@@ -1,7 +1,7 @@
 name: amyal_pay
 description: Amyal Pay - دفع سريع وآمن
 publish_to: 'none'
-version: 1.91.0+1910
+version: 1.92.0+1920
 
 environment:
   sdk: ^3.8.1
@@ -74,6 +74,9 @@ dependencies:
   # AMIAL-GEO-ZONE-001: تحديد الموقع لاستنتاج المحافظة عند التسجيل.
   # الموقع اختياري تماماً: رفض الإذن يُبقي إدخال العنوان يدوياً كما هو.
   geolocator: ^14.0.2
+  # AMIAL-CRASH-001: قبلها كان المستخدم هو جهاز كشف الأعطال الوحيد — لا يُعرف
+  # أن شيئاً انكسر إلا إذا اصطدم به وأبلغ. الآن يصل الأثر مع رقم السطر تلقائياً.
+  firebase_crashlytics: ^5.2.6
 
 dev_dependencies:
   flutter_lints: ^6.0.0

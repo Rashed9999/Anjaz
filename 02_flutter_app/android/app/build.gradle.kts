@@ -9,6 +9,8 @@ plugins {
     // فلا يُولَّد values.xml ولا تُسجَّل الحزمة لدى Firebase — الإشعارات تصمت بلا خطأ.
     // كانت معرَّفة في settings.gradle.kts بـ `apply false` ولم تُطبَّق هنا قطّ.
     id("com.google.gms.google-services")
+    // AMIAL-CRASH-001: تُطبَّق بعد google-services — تقرأ منها معرّف المشروع.
+    id("com.google.firebase.crashlytics")
 }
 
 val keystoreProperties = Properties()

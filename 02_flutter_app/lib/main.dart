@@ -11,6 +11,7 @@ import 'package:get/get.dart';
 import 'package:amyal_pay/common/models/notification_body.dart';
 import 'package:amyal_pay/features/language/controllers/localization_controller.dart';
 import 'package:amyal_pay/features/setting/controllers/theme_controller.dart';
+import 'package:amyal_pay/helper/amial_crash_reporter.dart';
 import 'package:amyal_pay/helper/notification_helper.dart';
 import 'package:amyal_pay/helper/route_helper.dart';
 import 'package:amyal_pay/theme/dark_theme.dart';
@@ -43,6 +44,9 @@ Future<void> main() async {
     }
   }
 
+  // AMIAL-CRASH-001: أوّل ما يُهيَّأ بعد Firebase — كل ما بعده صار مرصوداً.
+  await AmialCrashReporter.init();
+
   cameras = await availableCameras();
 
   Map<String, Map<String, String>> languages = await di.init();
@@ -56,10 +60,10 @@ Future<void> main() async {
     }
     await NotificationHelper.initialize(flutterLocalNotificationsPlugin);
     FirebaseMessaging.onBackgroundMessage(myBackgroundMessageHandler);
-  }catch(e) {
-    if (kDebugMode) {
-      // debug print removed — AMIAL-FIX-003
-    }
+  }catch(e, s) {
+    // AMIAL-CRASH-001: كان يُبتلع صامتاً. وفشلُ التهيئة هنا يعني أن كل
+    // إشعارات هذا الجهاز صامتة — عطل جسيم لا أثر له في الواجهة إطلاقاً.
+    AmialCrashReporter.record(e, s, reason: 'تهيئة الإشعارات');
   }
 
   // AMIAL-SESSION-GUARD-001: مراقبة دورة حياة التطبيق — إغلاق الجلسة عند
@@ -91,7 +95,9 @@ class MyApp extends StatelessWidget {
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(0.95)),
           child: GetMaterialApp(
-            navigatorObservers: [FlutterSmartDialog.observer],
+            // AMIAL-CRASH-001: مسار الشاشات يُرفق بالعطل — «انهار عند الدفع»
+            // و«انهار عند الدفع قادماً من المسح» عطلان مختلفان في التشخيص.
+            navigatorObservers: [FlutterSmartDialog.observer, AmialCrashRouteObserver()],
             builder: FlutterSmartDialog.init(),
             title: AppConstants.appName,
             debugShowCheckedModeBanner: false,

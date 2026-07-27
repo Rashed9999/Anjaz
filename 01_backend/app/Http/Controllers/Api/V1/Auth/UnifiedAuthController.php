@@ -205,6 +205,10 @@ class UnifiedAuthController extends Controller
                     'id' => $result['user']->id,
                     'role' => $result['role'],
                     'name' => $this->getUserDisplayName($result['user']),
+                    // AMIAL-CRASH-001: يربطه التطبيق بتقارير الأعطال، فيُعرف
+                    // هل العطل محصور بمنطقة — وهو ما يفرّق عطل الإعداد عن عطل
+                    // الشيفرة — بدل أن يبقى «ينهار عند بعض المستخدمين».
+                    'zone_code' => $result['user']->zone_code,
                     // AMIAL-VERIFY-GATE: حالة التوثيق ليقرّر التطبيق أي شاشة يفتح.
                     // 0 = قيد المراجعة (لوحة التحقق لم تعتمده بعد) / 1 = موثّق / 2 = مرفوض
                     'is_kyc_verified' => (int) ($result['user']->is_kyc_verified ?? 0),
