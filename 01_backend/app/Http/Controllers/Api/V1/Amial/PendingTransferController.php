@@ -74,7 +74,15 @@ class PendingTransferController extends Controller
     /** POST /api/v1/amial/transfer/{ulid}/cancel */
     public function cancel(Request $request, string $ulid): JsonResponse
     {
-        $pending = PendingTransfer::where('transfer_ulid', $ulid)->first();
+        // AMIAL-TRANSFER-CONTRACT-001: مقيَّد بالمرسل كما في status.
+        //
+        // المنع نفسه قائم في الخدمة (ترمي «غير مصرّح لك»)، لكنّ البحث
+        // بالمعرّف وحده كان يجعل الردّ 422 على تحويل قائم و404 على غير
+        // القائم. والفرق بين الردّين يُخبر من يجرّب معرّفات أن هذا المعرّف
+        // حقيقي. لا فائدة في قول ذلك، والتقييد هنا يجعل الجوابين واحداً.
+        $pending = PendingTransfer::where('transfer_ulid', $ulid)
+            ->where('sender_user_id', $request->user()->id)
+            ->first();
         if (!$pending) return $this->error('NOT_FOUND', 'التحويل غير موجود', 404);
 
         try {
