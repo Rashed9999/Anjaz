@@ -205,6 +205,17 @@
     </a>
 </li>
 
+{{-- AMIAL-OPS-CONSOLE-001 — حالة التشغيل (فريق الصيانة) --}}
+{{-- يظهر لمن يملك صلاحية العرض وحده: رابطٌ يُفتح فيُردّ 403 يُربك أكثر ممّا يفيد. --}}
+@if (auth('user')->check() && auth('user')->user()->hasPlatformPermission('platform.ops.view'))
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/ops*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.ops.index')}}" title="حالة التشغيل">
+        <i class="tio-settings-outlined nav-icon"></i>
+        <span class="text-truncate">🩺 حالة التشغيل (الطوابير والمستندات)</span>
+    </a>
+</li>
+@endif
+
 {{-- Audit Decisions --}}
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/audit*')?'active':''}}">
     <a class="nav-link"

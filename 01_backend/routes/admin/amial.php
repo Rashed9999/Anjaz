@@ -6,6 +6,7 @@ use App\Http\Controllers\Admin\AdminCharityController;
 use App\Http\Controllers\Admin\AdminSafePaymentController;
 use App\Http\Controllers\Admin\AuditDecisionsController;
 use App\Http\Controllers\Admin\LegalTermsController;
+use App\Http\Controllers\Admin\OpsConsoleController;
 use App\Http\Controllers\Admin\SecurityEventsController;
 use App\Http\Controllers\Admin\ZoneManagementController;
 use Illuminate\Support\Facades\Route;
@@ -295,4 +296,19 @@ Route::prefix('hub')->name('hub.')->group(function () {
     // لوحة الإعدادات — تحكّم بضغطة زر (بلا كود)
     Route::get('/settings', [$hc, 'settings'])->name('settings');
     Route::post('/settings/flag', [$hc, 'settingsToggle'])->name('settings.flag');
+});
+
+// ============ AMIAL-OPS-CONSOLE-001 — حالة التشغيل (فريق الصيانة) ============
+//
+// العرض يحتاج ops.view، وإعادة التشغيل تحتاج ops.retry — فمن يراقب ليس
+// بالضرورة من يتدخّل، وفصلُهما يسمح بمنح المراقبة لمن لا يُؤذن له بالتغيير.
+Route::prefix('ops')->name('ops.')->group(function () {
+    Route::get('/', [OpsConsoleController::class, 'index'])
+        ->middleware('platform:platform.ops.view')->name('index');
+
+    Route::post('/retry', [OpsConsoleController::class, 'retry'])
+        ->middleware('platform:platform.ops.retry')->name('retry');
+
+    Route::post('/pdf-doctor', [OpsConsoleController::class, 'pdfDoctor'])
+        ->middleware('platform:platform.ops.retry')->name('pdf-doctor');
 });
