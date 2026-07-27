@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AMIAL-SPLASH-005 — شاشة الإقلاع على أندرويد 12 فما فوق.
+
+  **لماذا لم تنفع المحاولتان السابقتان:**
+  منذ أندرويد 12 (API 31)، وحين يكون targetSdk ≥ 31 — وهو هنا 36 — يتجاهل
+  النظام `android:windowBackground` كلّياً في شاشة الإقلاع، ويستعمل واجهة
+  SplashScreen الجديدة. فملفّ launch_background.xml لا يُقرأ أصلاً على أي
+  هاتف حديث، ومهما وُضع فيه من شعار لم يُعرض.
+
+  والافتراضي حين لا يُحدَّد شيء هنا: أيقونة التطبيق، **مقصوصةً في دائرة**.
+  ولأن أيقونة أميال تكيّفية بهامش أمان يبلغ ثلث المساحة، تظهر صغيرةً منزاحة
+  — وهذا هو «الانحراف» الذي بقي ظاهراً بعد كل إصلاح.
+
+  **قيد يحكم التصميم:** أيقونة السبلاش تُقصّ في قرص دائري دائماً، قطره
+  المرئيّ 192dp من لوحة 288dp. فالشعار العريض (نسبة 1.45) لا يمكن عرضه
+  بعرضه الكامل؛ splash_icon يضعه داخل القرص بأكبر مقاس يسعه سالماً.
+  والشعار الكامل يظهر بعدها مباشرةً في سبلاش Flutter.
+-->
+<resources>
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowSplashScreenBackground">@color/amyal_yellow</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>
