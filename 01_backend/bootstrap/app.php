@@ -145,6 +145,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'verified' => EnsureEmailIsVerified::class,
 
             'admin' => AdminMiddleware::class,
+            // AMIAL-OPERATOR-RBAC-001: «هل هو موظّف منصّة؟» يجيب عنه admin،
+            // و«هل يحقّ له هذا الفعل؟» يجيب عنه platform. وخلطُ السؤالين هو
+            // ما جعل موظّف الدعم قادراً على تصفير رمز عميل سرّي.
+            'platform' => \App\Http\Middleware\PlatformPermissionMiddleware::class,
             'customerAuth' => CustomerMiddleware::class,
             'agentAuth' => AgentMiddleware::class,
             'trackLastActiveAt' => TrackLastActiveAt::class,

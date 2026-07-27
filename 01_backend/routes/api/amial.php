@@ -151,10 +151,10 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/customers/{id}/transactions', [$c, 'customerTransactions'])->where('id', '[0-9]+')->name('customers.transactions');
             Route::get('/transactions/{ref}', [$c, 'transaction'])->name('transactions.show');
             // إجراءات التحقّق — كلها تتطلب سبباً وتُسجَّل في التدقيق
-            Route::post('/customers/{id}/freeze', [$c, 'freeze'])->where('id', '[0-9]+')->name('customers.freeze');
-            Route::post('/customers/{id}/reset-pin', [$c, 'resetPin'])->where('id', '[0-9]+')->name('customers.reset-pin');
-            Route::post('/customers/{id}/revoke-sessions', [$c, 'revokeSessions'])->where('id', '[0-9]+')->name('customers.revoke-sessions');
-            Route::post('/customers/{id}/require-kyc', [$c, 'requireKyc'])->where('id', '[0-9]+')->name('customers.require-kyc');
+            Route::post('/customers/{id}/freeze', [$c, 'freeze'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.freeze');
+            Route::post('/customers/{id}/reset-pin', [$c, 'resetPin'])->where('id', '[0-9]+')->middleware('platform:platform.customers.reset_pin')->name('customers.reset-pin');
+            Route::post('/customers/{id}/revoke-sessions', [$c, 'revokeSessions'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.revoke-sessions');
+            Route::post('/customers/{id}/require-kyc', [$c, 'requireKyc'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.require-kyc');
             // تذاكر النزاعات
             Route::get('/tickets', [$c, 'tickets'])->name('tickets.index');
             Route::post('/tickets', [$c, 'createTicket'])->name('tickets.create');

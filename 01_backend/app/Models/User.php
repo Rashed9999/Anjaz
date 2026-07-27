@@ -289,4 +289,41 @@ class User extends Authenticatable
             }
         });
     }
+
+    // ================= AMIAL-OPERATOR-RBAC-001 =================
+
+    /** أدوار المنصّة المسندة إلى هذا الحساب (لموظّفي المنصّة لا التجّار). */
+    public function platformRoles()
+    {
+        return $this->belongsToMany(
+            \App\Models\Role::class, 'admin_user_roles', 'user_id', 'role_id');
+    }
+
+    /**
+     * هل يملك هذا المشغّل صلاحية بعينها؟
+     *
+     * تُقرأ مرّة لكل طلب وتُحفظ في الذاكرة: الحارس يُنادى على كل مسار، وضربُ
+     * قاعدة البيانات في كل نداء يجعل الأمان ثمناً يُدفع من سرعة اللوحة —
+     * فيُطلب تخفيفه لاحقاً، وهو أسوأ ما يُطلب في ضابط أمان.
+     */
+    public function hasPlatformPermission(string $code): bool
+    {
+        if (!isset($this->cachedPlatformPermissions)) {
+            $this->cachedPlatformPermissions = $this->platformRoles()
+                ->join('role_permissions', 'roles.id', '=', 'role_permissions.role_id')
+                ->join('permissions', 'permissions.id', '=', 'role_permissions.permission_id')
+                ->pluck('permissions.code')
+                ->all();
+        }
+
+        return in_array($code, $this->cachedPlatformPermissions, true);
+    }
+
+    /** يُقرأ في القوائم: لا يُعرض للمشغّل ما لا يستطيع فتحه. */
+    public function platformRoleLabels(): array
+    {
+        return $this->platformRoles()->pluck('label_ar')->all();
+    }
+
+    private ?array $cachedPlatformPermissions = null;
 }

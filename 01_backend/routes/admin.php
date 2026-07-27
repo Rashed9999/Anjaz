@@ -53,10 +53,10 @@ Route::group(['as' => 'admin.'], function () {
             Route::get('customers/{id}', [$sc, 'customer'])->where('id', '[0-9]+')->name('customers.show');
             Route::get('customers/{id}/transactions', [$sc, 'customerTransactions'])->where('id', '[0-9]+')->name('customers.transactions');
             Route::get('transactions/{ref}', [$sc, 'transaction'])->name('transactions.show');
-            Route::post('customers/{id}/freeze', [$sc, 'freeze'])->where('id', '[0-9]+')->name('customers.freeze');
-            Route::post('customers/{id}/reset-pin', [$sc, 'resetPin'])->where('id', '[0-9]+')->name('customers.reset-pin');
-            Route::post('customers/{id}/revoke-sessions', [$sc, 'revokeSessions'])->where('id', '[0-9]+')->name('customers.revoke-sessions');
-            Route::post('customers/{id}/require-kyc', [$sc, 'requireKyc'])->where('id', '[0-9]+')->name('customers.require-kyc');
+            Route::post('customers/{id}/freeze', [$sc, 'freeze'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.freeze');
+            Route::post('customers/{id}/reset-pin', [$sc, 'resetPin'])->where('id', '[0-9]+')->middleware('platform:platform.customers.reset_pin')->name('customers.reset-pin');
+            Route::post('customers/{id}/revoke-sessions', [$sc, 'revokeSessions'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.revoke-sessions');
+            Route::post('customers/{id}/require-kyc', [$sc, 'requireKyc'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.require-kyc');
             Route::get('tickets', [$sc, 'tickets'])->name('tickets.index');
             Route::post('tickets', [$sc, 'createTicket'])->name('tickets.create');
             Route::get('tickets/{id}', [$sc, 'showTicket'])->where('id', '[0-9]+')->name('tickets.show');
@@ -64,8 +64,8 @@ Route::group(['as' => 'admin.'], function () {
             Route::post('tickets/{id}/note', [$sc, 'addTicketNote'])->where('id', '[0-9]+')->name('tickets.note');
             // AMIAL-INSIDER-001: Maker-Checker + مراقبة الموظفين
             Route::get('approvals', [$sc, 'approvalsList'])->name('approvals.index');
-            Route::post('approvals/{id}/approve', [$sc, 'approveRequest'])->where('id', '[0-9]+')->name('approvals.approve');
-            Route::post('approvals/{id}/reject', [$sc, 'rejectRequest'])->where('id', '[0-9]+')->name('approvals.reject');
+            Route::post('approvals/{id}/approve', [$sc, 'approveRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.approve');
+            Route::post('approvals/{id}/reject', [$sc, 'rejectRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.reject');
             Route::get('insider/overview', [$sc, 'insiderOverview'])->name('insider.overview');
             Route::post('insider/alerts/{id}/ack', [$sc, 'acknowledgeAlert'])->where('id', '[0-9]+')->name('insider.alerts.ack');
         });
@@ -78,7 +78,7 @@ Route::group(['as' => 'admin.'], function () {
             Route::post('{key}/enable', [$mc, 'enable'])->name('enable');
             Route::post('{key}/disable', [$mc, 'disable'])->name('disable');
         });
-        Route::post('settings', [DashboardController::class, 'settingsUpdate'])->name('settings.update');
+        Route::post('settings', [DashboardController::class, 'settingsUpdate'])->middleware('platform:platform.settings.update')->name('settings.update');
         Route::post('settings-password', [DashboardController::class, 'settingsPasswordUpdate'])->name('settings-password');
 
         Route::group(['prefix' => 'pages', 'as' => 'pages.'], function () {
