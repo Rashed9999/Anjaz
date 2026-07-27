@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:amyal_pay/helper/amial_crash_reporter.dart';
 
@@ -15,6 +16,8 @@ import 'package:amyal_pay/helper/amial_crash_reporter.dart';
 /// والوجه الآخر مُختبَر أيضاً: تنقية تبتلع كل شيء تجعل التقرير عديم الفائدة.
 /// فما يُشخَّص به العطل — النوع، والملفّ، ورقم السطر، ورمز HTTP — يجب أن يبقى.
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('لا يغادر الجهاز', () {
     test('رقم الهاتف اليمني بكل صوره', () {
       for (final raw in const [
@@ -119,6 +122,56 @@ void main() {
       expect(out, isNot(contains('a@b.co')));
       expect(out, isNot(contains('4821')));
       expect(out, contains('حوالة من'), reason: 'ضاع سياق العطل كلّه');
+    });
+  });
+
+  group('بقاء الهوية بين الإقلاعات', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('الهوية تُحفظ عند الدخول', () async {
+      // العطل الذي يحرسه: كان الربط في مسار الدخول وحده، ومن يفتح التطبيق
+      // بجلسة محفوظة لا يمرّ به — أي كل مستخدم عائد. فكانت أعطالهم تصل بلا
+      // هوية ولا شيء في اللوحة يشي بأن حقلاً ناقص.
+      await AmialCrashReporter.identify(
+          account: '412', role: 'customer', zone: 'SOUTH');
+
+      final stored = await AmialCrashReporter.storedIdentity();
+      expect(stored['account'], '412');
+      expect(stored['role'], 'customer');
+      expect(stored['zone'], 'SOUTH');
+    });
+
+    test('تُحفظ حتى والتقارير معطّلة — التعطيل حالة تتبدّل', () async {
+      expect(AmialCrashReporter.isActive, isFalse);
+
+      await AmialCrashReporter.identify(account: '99', role: 'agent');
+
+      expect((await AmialCrashReporter.storedIdentity())['account'], '99',
+          reason: 'أوّل إقلاع تُفعَّل فيه التقارير يجب أن يجد الهوية جاهزة');
+    });
+
+    test('الخروج يمحوها', () async {
+      // الجهاز الواحد يتناوب عليه صرّافان. إبقاء هوية السابق يقود التحقيق
+      // إلى الشخص الخطأ — وهو أسوأ من لا هوية.
+      await AmialCrashReporter.identify(
+          account: '412', role: 'customer', zone: 'SOUTH');
+      await AmialCrashReporter.forgetIdentity();
+
+      final stored = await AmialCrashReporter.storedIdentity();
+      expect(stored['account'], isNull);
+      expect(stored['role'], isNull);
+      expect(stored['zone'], isNull);
+    });
+
+    test('القيم الفارغة لا تمحو ما هو محفوظ', () async {
+      // استجابة دخول ناقصة يجب ألّا تُفقدنا هوية صحيحة سابقة.
+      await AmialCrashReporter.identify(
+          account: '412', role: 'customer', zone: 'SOUTH');
+      await AmialCrashReporter.identify(account: '412', role: '', zone: null);
+
+      final stored = await AmialCrashReporter.storedIdentity();
+      expect(stored['role'], 'customer');
+      expect(stored['zone'], 'SOUTH');
     });
   });
 

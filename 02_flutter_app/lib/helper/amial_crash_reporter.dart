@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// AMIAL-CRASH-001 — تقارير الأعطال: كيف نعرف أن شيئاً انكسر.
 ///
@@ -58,7 +59,34 @@ class AmialCrashReporter {
       _send(error, stack, fatal: true);
       return true;
     };
+
+    await _restoreIdentity();
   }
+
+  /// AMIAL-CRASH-005 — يُعيد ربط الحساب عند كل إقلاع.
+  ///
+  /// **العطل الذي يمنعه:** كان الربط يقع في مسار تسجيل الدخول وحده. ومن
+  /// يفتح التطبيق ومعه جلسة محفوظة لا يمرّ به أبداً — وهي حال كل مستخدم
+  /// عائد، أي الحالة الغالبة. فكانت أعطالهم كلّها تصل بلا هوية ولا دور ولا
+  /// منطقة، ولا شيء في اللوحة يشي بأن حقلاً ناقص.
+  ///
+  /// فالهوية تُحفظ عند الدخول وتُستعاد هنا، ولا تُنتظر شبكة ولا ملفّ شخصي.
+  static Future<void> _restoreIdentity() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final account = prefs.getString(_kAccount);
+      if (account == null) return;
+      await identify(
+        account: account,
+        role: prefs.getString(_kRole),
+        zone: prefs.getString(_kZone),
+      );
+    } catch (_) {}
+  }
+
+  static const _kAccount = 'amial_crash_account';
+  static const _kRole = 'amial_crash_role';
+  static const _kZone = 'amial_crash_zone';
 
   /// يربط الأعطال القادمة بحساب — بمعرّفه الداخلي لا برقم هاتفه.
   ///
@@ -70,6 +98,18 @@ class AmialCrashReporter {
   /// يقول لمن يقرأ لوحة الأعطال من هو صاحبه. وبدون أيّ معرّف يصير السؤال
   /// «كم مستخدماً أصابه؟» بلا جواب، فتضيع فائدة التقرير أصلاً.
   static Future<void> identify({String? account, String? role, String? zone}) async {
+    // الحفظ قبل فحص [_ready] عمداً: التعطيل حالة راهنة قد تتبدّل، أمّا
+    // الهوية فحقيقة عن هذه الجلسة. حفظُها دائماً يجعل أوّل إقلاع تُفعَّل فيه
+    // التقارير يجدها جاهزة، ويجعل هذا المسار قابلاً للاختبار بلا Firebase.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (account != null && account.isNotEmpty) {
+        await prefs.setString(_kAccount, account);
+      }
+      if (role != null && role.isNotEmpty) await prefs.setString(_kRole, role);
+      if (zone != null && zone.isNotEmpty) await prefs.setString(_kZone, zone);
+    } catch (_) {}
+
     if (!_ready) return;
     try {
       final c = FirebaseCrashlytics.instance;
@@ -81,6 +121,33 @@ class AmialCrashReporter {
     } catch (_) {
       // التبليغ لا يُسقط التطبيق أبداً.
     }
+  }
+
+  /// الهوية المحفوظة — يقرؤها الاختبار، وهي ما يُستعاد عند الإقلاع.
+  @visibleForTesting
+  static Future<Map<String, String?>> storedIdentity() async {
+    final prefs = await SharedPreferences.getInstance();
+    return {
+      'account': prefs.getString(_kAccount),
+      'role': prefs.getString(_kRole),
+      'zone': prefs.getString(_kZone),
+    };
+  }
+
+  /// يُنادى عند الخروج: أعطال من يأتي بعده لا تُنسب إلى حسابه.
+  ///
+  /// الجهاز الواحد قد يتناوب عليه صرّافان أو موظّفا نقطة بيع. وإبقاء الهوية
+  /// السابقة يجعل التحقيق يقود إلى الشخص الخطأ — وهو أسوأ من لا هوية.
+  static Future<void> forgetIdentity() async {
+    try {
+      if (_ready) {
+        await FirebaseCrashlytics.instance.setUserIdentifier('guest');
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_kAccount);
+      await prefs.remove(_kRole);
+      await prefs.remove(_kZone);
+    } catch (_) {}
   }
 
   /// عطل غير قاتل: التُقط وعُولج، لكنّه يجب أن يُرى.
