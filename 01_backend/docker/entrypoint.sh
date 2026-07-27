@@ -108,7 +108,7 @@ mkdir -p storage/framework/cache/data storage/framework/sessions \
 # كان هذا الإصلاح في entrypoint.prod.sh وحده، وهذا الملفّ هو المُستعمل
 # فعلاً في النشر الحالي (Dockerfile لا Dockerfile.prod) — فلم يكن يصل.
 mkdir -p storage/app/mpdf storage/app/private \
-         storage/app/receipts storage/app/signatures storage/app/public
+         storage/app/receipts storage/app/documents storage/app/signatures storage/app/public
 # AMIAL-FIX(LOG-PERMS): ننشئ laravel.log مقدّماً بملكية www-data وصلاحية 666.
 # كان يُنشأ لاحقاً بملكية root (أوامر artisan الخلفية تعمل كـroot) فيعجز
 # عامل php-fpm (www-data) عن الكتابة → «Permission denied» يحوّل أي خطأ

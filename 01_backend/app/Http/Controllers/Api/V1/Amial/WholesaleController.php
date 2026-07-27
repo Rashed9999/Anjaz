@@ -554,7 +554,14 @@ class WholesaleController extends Controller
         if (!$inv) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
 
         try {
-            $pdfBytes = $this->pdfSvc->generate($inv);
+            // AMIAL-PDF-CACHE-001: كانت تُصيَّر في كل طلب ولا تُخزَّن — فاتورة
+            // يفتحها التاجر عشر مرّات تُصيَّر عشراً، وكلّ تصيير يعرّض الاتصال
+            // للقطع على شبكة جوّال. updated_at في المفتاح: تعديل الفاتورة
+            // يُنتج مفتاحاً جديداً، فلا تُخدَم نسخةٌ قديمة بأرقام قديمة.
+            $pdfBytes = app(\App\Services\PdfCacheService::class)->remember(
+                "wholesale_invoice_{$inv->id}_{$inv->updated_at?->timestamp}",
+                fn () => $this->pdfSvc->generate($inv),
+            );
         } catch (\Throwable $e) {
             \Log::error('Wholesale PDF gen failed', [
                 'invoice_id' => $inv->id, 'error' => $e->getMessage(),
@@ -567,7 +574,10 @@ class WholesaleController extends Controller
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'attachment; filename="' . $filename . '"',
             'Content-Length' => strlen($pdfBytes),
-            'Cache-Control' => 'no-store',
+            // خاصّ لا عامّ: الفاتورة تخصّ تاجراً بعينه فلا تُخزَّن في وسيط
+            // مشترك. لكن منعُ تخزينها على الجهاز كان يُجبر على تنزيلها كاملةً
+            // في كل مرّة بلا داعٍ.
+            'Cache-Control' => 'private, max-age=3600',
         ]);
     }
 

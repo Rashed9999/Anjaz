@@ -137,11 +137,23 @@ class CustomerCreditController extends Controller
         if (!$account) return $this->error('NOT_FOUND', 'العميل غير موجود', 404);
 
         $pdfSvc = app(\App\Services\CreditStatementPdfService::class);
-        $pdf = $pdfSvc->generate($account, $request->query('from'), $request->query('to'));
+        $from = $request->query('from');
+        $to = $request->query('to');
+
+        // AMIAL-PDF-CACHE-001: كشف الحساب مستند حيّ لا فاتورة ثابتة، فمفتاحه
+        // يشمل ما يتبدّل بتبدّله: مدى التاريخ، ووقت آخر تعديل، والرصيد.
+        // فأي دفعة تُسجَّل تُغيّر الرصيد فيُصيَّر الكشف من جديد. وخدمة كشف
+        // قديم أسوأ من بطئه: رقمٌ خاطئ يظهر واثقاً ويُبنى عليه تحصيل.
+        $pdf = app(\App\Services\PdfCacheService::class)->remember(
+            "credit_stmt_{$account->id}_{$from}_{$to}"
+                . "_{$account->updated_at?->timestamp}_{$account->current_balance}",
+            fn () => $pdfSvc->generate($account, $from, $to),
+        );
         $filename = $pdfSvc->suggestedFilename($account);
 
         return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
+            'Content-Length' => (string) strlen($pdf),
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
     }

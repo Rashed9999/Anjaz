@@ -56,7 +56,7 @@ php artisan migrate --force
 echo "📁 تهيئة مجلدات التخزين..."
 mkdir -p storage/app/mpdf \
          storage/app/private \
-         storage/app/receipts \
+         storage/app/receipts storage/app/documents \
          storage/app/signatures \
          storage/app/public \
          storage/logs \

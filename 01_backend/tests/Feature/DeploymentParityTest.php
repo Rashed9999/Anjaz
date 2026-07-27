@@ -21,7 +21,7 @@ use Tests\TestCase;
 class DeploymentParityTest extends TestCase
 {
     /** مجلّدات لا يعمل النظام بدونها ولا تُنشأ تلقائياً. */
-    private const REQUIRED_DIRS = ['mpdf', 'private', 'receipts', 'signatures'];
+    private const REQUIRED_DIRS = ['mpdf', 'private', 'receipts', 'documents', 'signatures'];
 
     public static function deploymentFiles(): array
     {

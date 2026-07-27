@@ -69,11 +69,17 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
         if (!$sale) return $this->error('NOT_FOUND', 'البيع غير موجود', 404);
 
         $pdfSvc = app(FuelReceiptPdfService::class);
-        $pdf = $pdfSvc->generate($sale);
+
+        // AMIAL-PDF-CACHE-001: بيعٌ تمّ لا يتغيّر، فالتصيير مرّة تكفي أبداً.
+        $pdf = app(\App\Services\PdfCacheService::class)->remember(
+            "fuel_receipt_{$sale->sale_ulid}",
+            fn () => $pdfSvc->generate($sale),
+        );
         $filename = $pdfSvc->suggestedFilename($sale);
 
         return response($pdf, 200, [
             'Content-Type' => 'application/pdf',
+            'Content-Length' => (string) strlen($pdf),
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
         ]);
     }
