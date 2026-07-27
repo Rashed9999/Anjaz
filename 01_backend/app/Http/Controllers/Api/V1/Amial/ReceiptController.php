@@ -125,9 +125,19 @@ class ReceiptController extends Controller
                 ]);
             }
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning(
-                'Receipt PDF on-demand generation failed: ' . $e->getMessage()
-            );
+            // AMIAL-PDF-VISIBILITY-001: كان تحذيراً بنصّ الرسالة وحدها.
+            //
+            // وذلك يعني أن أخطر فشل في هذا المسار — تعذّر تصيير الإيصال —
+            // يُبتلع بلا نوع ولا ملفّ ولا سطر ولا أثر استدعاء. فيبقى السؤال
+            // «لماذا لا يُحمَّل الإيصال؟» بلا جواب في السجلّ، وقد بقي كذلك
+            // فعلاً حتى كشفه تسجيلُ شاشة من جهاز المستخدم.
+            \Illuminate\Support\Facades\Log::error('Receipt PDF generation failed', [
+                'receipt_id' => $receipt->id,
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile() . ':' . $e->getLine(),
+                'trace' => array_slice(explode("\n", $e->getTraceAsString()), 0, 12),
+            ]);
         }
 
         // آخر ملاذ: مسار الفاتورة القديم (تصيير في الذاكرة بلا تخزين).

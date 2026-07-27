@@ -19,7 +19,9 @@ use Illuminate\Console\Command;
  */
 class AmialPdfDoctor extends Command
 {
-    protected $signature = 'amial:pdf-doctor {--keep : يحفظ ملفّ الاختبار بدل حذفه}';
+    protected $signature = 'amial:pdf-doctor
+                            {--keep : يحفظ ملفّ الاختبار بدل حذفه}
+                            {--receipt= : يشغّل مسار إيصال حقيقي بالكامل ويطبع الاستثناء}';
     protected $description = 'يفحص جاهزية توليد ملفات PDF ويشخّص سبب الفشل';
 
     public function handle(): int
@@ -97,6 +99,77 @@ class AmialPdfDoctor extends Command
         } catch (\Throwable $e) {
             $this->error('  ✗ فشل التوليد: ' . $e->getMessage());
             $problems[] = 'السبب أعلاه حرفياً — ابدأ منه';
+        }
+
+        // ── إيصال حقيقي ──
+        //
+        // AMIAL-PDF-DOCTOR-002: الفحص العامّ أعلاه يثبت أن المكتبة تعمل
+        // والمجلّدات تُكتب. ولا يثبت أن *هذا* الإيصال يُصيَّر: قالبه يقرأ
+        // علاقات وحقولاً قد تكون فارغة، وخطّه العربي قد يبتلع الذاكرة.
+        //
+        // ولمّا كان الفشل في الإنتاج يُبتلع في Log::warning بلا أثر استدعاء،
+        // فهذا الخيار هو السبيل الوحيد لرؤية الاستثناء كاملاً.
+        if ($id = $this->option('receipt')) {
+            $this->newLine();
+            $this->info("تصيير الإيصال رقم {$id} عبر المسار الحقيقي…");
+
+            $receipt = \App\Models\Receipt::find($id);
+            if (!$receipt) {
+                $this->error("  ✗ لا يوجد إيصال بهذا المعرّف");
+                $problems[] = 'المعرّف خاطئ — جرّب: php artisan tinker ثم Receipt::latest()->first()->id';
+            } else {
+                $before = microtime(true);
+                $memBefore = memory_get_usage(true);
+                try {
+                    (new \App\Jobs\GeneratePdfReceiptJob($receipt->id))->handle();
+                    $receipt->refresh();
+                    $path = $receipt->pdf_storage_path;
+                    $ok = $path && \Illuminate\Support\Facades\Storage::disk('local')->exists($path);
+
+                    $secs = round(microtime(true) - $before, 2);
+                    $mb = round((memory_get_peak_usage(true) - $memBefore) / 1048576, 1);
+
+                    if ($ok) {
+                        $size = \Illuminate\Support\Facades\Storage::disk('local')->size($path);
+                        $this->info("  ✓ نجح — {$path} ({$size} بايت) في {$secs}s، ذروة الذاكرة +{$mb}MB");
+                        // البطء وحده يقطع الاتصال على شبكة جوّال حتى لو نجح.
+                        if ($secs > 8) {
+                            $problems[] = "التصيير يستغرق {$secs}s — بطيء بما يكفي لقطع الاتصال. "
+                                . 'تأكّد أن عامل الطابور يستمع إلى receipts فيُولَّد مسبقاً.';
+                        }
+                    } else {
+                        $this->error('  ✗ انتهت المهمّة بلا ملفّ محفوظ');
+                        $problems[] = 'المهمّة لم ترمِ خطأً ولم تحفظ ملفّاً — راجع GeneratePdfReceiptJob';
+                    }
+                } catch (\Throwable $e) {
+                    $this->error('  ✗ ' . get_class($e) . ': ' . $e->getMessage());
+                    $this->line('     ' . $e->getFile() . ':' . $e->getLine());
+                    $this->newLine();
+                    $this->line('أثر الاستدعاء (أوّل ١٥ سطراً):');
+                    foreach (array_slice(explode("\n", $e->getTraceAsString()), 0, 15) as $line) {
+                        $this->line('  ' . $line);
+                    }
+                    $problems[] = 'الاستثناء أعلاه هو سبب فشل تنزيل الإيصال — ابدأ منه';
+                }
+            }
+        }
+
+        // ── عامل الطابور ──
+        //
+        // إن لم يستمع إلى receipts لم يُولَّد أي إيصال مسبقاً، فكل تنزيل
+        // يُصيّر داخل الطلب — وهو ما يقطع الاتصال على شبكة جوّال.
+        $pending = \Illuminate\Support\Facades\DB::table('jobs')
+            ->where('queue', 'receipts')->count();
+        $failed = \Illuminate\Support\Facades\DB::table('failed_jobs')
+            ->where('payload', 'like', '%GeneratePdfReceiptJob%')->count();
+
+        $this->newLine();
+        $this->line("طابور receipts: {$pending} منتظرة، {$failed} فاشلة");
+        if ($pending > 3) {
+            $problems[] = "{$pending} مهمّة عالقة في طابور receipts — العامل لا يستمع إليه أو متوقّف";
+        }
+        if ($failed > 0) {
+            $problems[] = "{$failed} مهمّة فاشلة — اقرأ سببها: php artisan queue:failed";
         }
 
         // ── الخلاصة ──

@@ -116,4 +116,58 @@ class DeploymentParityTest extends TestCase
             . "ابنِه وحده بـ `docker-php-ext-install zip`.\n  "
             . implode("\n  ", $offenders));
     }
+
+    /**
+     * AMIAL-PDF-QUEUE-001 — كل طابور تُرسَل إليه مهمّة يجب أن يستمع إليه عامل.
+     *
+     * وُجد من تسجيل شاشة: تنزيل الإيصال يفشل بـ
+     * «Connection closed while receiving data». والسبب سلسلة صامتة —
+     * ReceiptService يُرسل التوليد إلى طابور `receipts`، وعامل الإنتاج كان
+     * يستمع إلى `default,notifications` وحدهما. فلا يُولَّد إيصال مسبقاً
+     * قطّ، ويصير كل تنزيل تصييراً كاملاً داخل الطلب، فيُقطع على شبكة جوّال.
+     *
+     * ولا شيء يشتكي: المهمّة تُخزَّن في الجدول وتنتظر إلى الأبد. لا خطأ،
+     * ولا سجلّ، ولا مهمّة فاشلة — طابور ينمو وحده في صمت.
+     *
+     * والملفّان تباعدا كعادتهما: النسخة العادية صحيحة والإنتاجية ناقصة،
+     * وهو الصنف الذي أنشئ هذا الملفّ لأجله.
+     */
+    public function test_every_dispatched_queue_has_a_worker_listening_to_it(): void
+    {
+        $dispatched = [];
+        foreach ($this->phpFilesIn(base_path('app')) as $file) {
+            if (preg_match_all("/onQueue\\(['\"]([a-z_\\-]+)['\"]\\)/", file_get_contents($file), $m)) {
+                foreach ($m[1] as $q) $dispatched[$q] = basename($file);
+            }
+        }
+
+        $this->assertNotEmpty($dispatched, 'لم يُعثر على أي onQueue — تغيّرت الصياغة والفحص صار أعمى');
+
+        foreach (['docker/supervisord.conf', 'docker/supervisord.prod.conf'] as $conf) {
+            $text = file_get_contents(base_path($conf));
+            $this->assertStringContainsString('queue:work', $text, "$conf بلا عامل طابور");
+
+            foreach ($dispatched as $queue => $source) {
+                $this->assertMatchesRegularExpression(
+                    '/--queue=[a-z_,\-]*\b' . preg_quote($queue, '/') . '\b/',
+                    $text,
+                    // الأقواس ضرورية: أسماء متغيّرات PHP تقبل البايتات العالية،
+                    // فـ«$queue» يُقرأ اسماً واحداً يشمل الشولة العربية بعده.
+                    "$conf لا يستمع إلى طابور «{$queue}» الذي يُرسل إليه $source — "
+                        . 'المهام ستنتظر إلى الأبد بلا خطأ ولا سجلّ'
+                );
+            }
+        }
+    }
+
+    /** يمرّ على ملفّات php تحت مجلّد. */
+    private function phpFilesIn(string $dir): array
+    {
+        $out = [];
+        $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir));
+        foreach ($it as $f) {
+            if ($f->isFile() && $f->getExtension() === 'php') $out[] = $f->getPathname();
+        }
+        return $out;
+    }
 }
