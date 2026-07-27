@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+
+import 'package:amyal_pay/common/widgets/amial_build_stamp.dart';
 
 import 'package:amyal_pay/features/shared/widgets/amial_numpad.dart';
 import 'package:amyal_pay/features/shared/widgets/amial_pin_dots.dart';
@@ -91,6 +94,53 @@ void main() {
 
       // «000» يمنح المتلصّص ضغطةً مميّزة الشكل يقرؤها من بعيد.
       expect(find.text('000'), findsNothing);
+    });
+  });
+
+  group('شاشة التشخيص (ضغطة مطوّلة على رقم الإصدار)', () {
+    setUp(() {
+      // بلا هذا يفشل قارئ الإصدار فتُخفي البصمةُ نفسها، فلا يبقى ما يُضغط
+      // ويمرّ الاختبار على العدم.
+      PackageInfo.setMockInitialValues(
+        appName: 'أميال باي', packageName: 'com.amyalpay.app',
+        version: '1.93.0', buildNumber: '1930', buildSignature: '',
+      );
+    });
+
+    testWidgets('البصمة تعرض الإصدار المشغَّل', (tester) async {
+      await tester.pumpWidget(wrap(const AmialBuildStamp()));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('1.93.0'), findsOneWidget);
+      expect(find.textContaining('1930'), findsOneWidget);
+    });
+
+    testWidgets('الضغطة المطوّلة تفتح التشخيص وتُظهر حالة التبليغ', (tester) async {
+      await tester.pumpWidget(wrap(const AmialBuildStamp()));
+      await tester.pumpAndSettle();
+
+      await tester.longPress(find.textContaining('1.93.0'));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+
+      // بلا Firebase في الاختبار: يجب أن تُقال الحقيقة صراحةً بدل عرض زرّ
+      // إرسال لا يُرسل شيئاً — وهذا بالضبط ما يجب أن يراه المستخدم لو تعطّل
+      // التبليغ على جهازه.
+      expect(find.textContaining('غير فعّالة'), findsOneWidget);
+      expect(find.text('إرسال تقرير اختبار'), findsNothing,
+          reason: 'زرّ إرسال وهو معطّل يجعل المستخدم ينتظر تقريراً لن يصل');
+    });
+
+    testWidgets('لا يُفتح التشخيص بضغطة عادية', (tester) async {
+      // العميل يمرّ على هذه الشاشة يومياً؛ فتحُه بالخطأ يعرض له زرّ انهيار.
+      await tester.pumpWidget(wrap(const AmialBuildStamp()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.textContaining('1.93.0'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('غير فعّالة'), findsNothing);
     });
   });
 

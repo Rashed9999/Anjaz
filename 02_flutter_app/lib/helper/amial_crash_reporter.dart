@@ -105,6 +105,27 @@ class AmialCrashReporter {
     } catch (_) {}
   }
 
+  /// تقرير متعمَّد للتأكّد من وصول السلسلة كاملةً إلى لوحة Firebase.
+  ///
+  /// بدونه يبقى «التبليغ يعمل» ادّعاءً: الحزمة مركّبة والشيفرة تُنادى، وقد
+  /// لا يصل شيء لسبب خارج الشيفرة كلّها — مشروع غير مطابق، أو حزمة غير
+  /// مسجّلة، أو خرائط رموز لم تُرفع. الفحص الوحيد الصادق أن يُرسَل ويُرى.
+  static Future<bool> sendTestReport() async {
+    if (!_ready) return false;
+    await record(
+      Exception('تقرير اختبار متعمَّد — أُرسل من شاشة التشخيص'),
+      StackTrace.current,
+      reason: 'فحص سلسلة التبليغ',
+    );
+    return true;
+  }
+
+  /// انهيار متعمَّد — يفحص المسار القاتل وهو غير المسار أعلاه.
+  ///
+  /// الأعطال القاتلة يلتقطها مُعالج أصلي ويرفعها عند التشغيل التالي، لا
+  /// المُرسِل الذي يرفع غير القاتلة. فنجاح أحدهما لا يثبت الآخر.
+  static void forceCrash() => FirebaseCrashlytics.instance.crash();
+
   static Future<void> _send(
     Object error,
     StackTrace? stack, {
