@@ -125,6 +125,30 @@ void main() {
     });
   });
 
+  group('نصّ العطل في اللوحة', () {
+    test('لا يتكرّر اسم النوع', () {
+      // ظهر فعلاً على اللوحة: «_Exception: Exception: …». الاستثناء يذكر
+      // اسمه في نصّه، وإلحاق runtimeType دائماً يكرّره في كل تقرير.
+      final out = AmialCrashReporter.describe(Exception('فشل التحويل'));
+
+      expect(out, 'Exception: فشل التحويل');
+      expect('Exception'.allMatches(out).length, 1);
+    });
+
+    test('النوع يُضاف حين لا يذكره النصّ — فعليه تُصنَّف القضايا', () {
+      expect(AmialCrashReporter.describe(const FormatException('نصّ تالف')),
+          startsWith('FormatException'));
+    });
+
+    test('نصّ الخطأ يُنقّى هنا أيضاً — لا يكفي التنقية في مكان واحد', () {
+      final out = AmialCrashReporter.describe(
+          Exception('تعذّر التحويل إلى 771234567'));
+
+      expect(out, isNot(contains('771234567')));
+      expect(out, contains('تعذّر التحويل'));
+    });
+  });
+
   group('بقاء الهوية بين الإقلاعات', () {
     setUp(() => SharedPreferences.setMockInitialValues({}));
 

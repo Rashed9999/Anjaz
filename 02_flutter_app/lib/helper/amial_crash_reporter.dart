@@ -202,14 +202,28 @@ class AmialCrashReporter {
     if (!_ready) return;
     try {
       await FirebaseCrashlytics.instance.recordError(
-        // النصّ لا يُرفع خامّاً: رسالة الاستثناء قد تحمل رقم هاتف أو مسار
-        // طلب فيه رقم حساب. النوع يبقى ظاهراً — وهو ما يُصنَّف عليه.
-        '${error.runtimeType}: ${scrub(error.toString())}',
+        describe(error),
         stack,
         reason: reason == null ? null : scrub(reason),
         fatal: fatal,
       );
     } catch (_) {}
+  }
+
+  /// نصّ العطل كما يظهر في اللوحة: منقّى، ومسبوقاً بنوعه مرّة واحدة.
+  ///
+  /// النوع يبقى ظاهراً لأنه ما تُصنَّف عليه القضايا. لكن أكثر الاستثناءات
+  /// تذكر اسمها في نصّها أصلاً، فإلحاقه دائماً يُنتج
+  /// `_Exception: Exception: …` — تكرارٌ يلوّث كل تقرير.
+  ///
+  /// وتُنزع الشرطة السفلية من اسم النوع قبل المقارنة: `Exception('…')` في
+  /// Dart نوعه `_Exception` ونصّه يبدأ بـ `Exception:`، فالمقارنة الحرفية
+  /// لا تتطابق أبداً ويبقى التكرار.
+  @visibleForTesting
+  static String describe(Object error) {
+    final text = scrub(error.toString());
+    final type = error.runtimeType.toString().replaceFirst(RegExp(r'^_'), '');
+    return text.startsWith(type) ? text : '$type: $text';
   }
 
   // ── التنقية ───────────────────────────────────────────────────────────
