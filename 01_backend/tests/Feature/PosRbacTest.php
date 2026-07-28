@@ -49,7 +49,20 @@ class PosRbacTest extends TestCase
     /** @test */
     public function seeder_creates_six_system_roles(): void
     {
-        $this->assertEquals(6, Role::where('is_system', true)->count());
+        // AMIAL-OPERATOR-RBAC-001: صار جدول roles يحمل عائلتين:
+        // أدوار موظّفي التاجر (هذه)، وأدوار فريق المنصّة (platform_*).
+        // وكلتاهما is_system، فالعدّ المطلق صار يخلط بينهما ويسقط كلّما
+        // أُضيف دورٌ إلى العائلة الأخرى — وهو سقوطٌ بلا معنى.
+        //
+        // فيُعدّ المقصود بالاسم: أدوار التاجر الستّة كما يعرّفها النموذج.
+        $this->assertEqualsCanonicalizing(
+            Role::ALL_SYSTEM_ROLES,
+            Role::where('is_system', true)
+                ->whereIn('code', Role::ALL_SYSTEM_ROLES)
+                ->pluck('code')->all(),
+        );
+
+        $this->assertCount(6, Role::ALL_SYSTEM_ROLES);
     }
 
     /** @test */

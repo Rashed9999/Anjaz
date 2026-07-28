@@ -226,6 +226,16 @@
 </li>
 @endif
 
+{{-- AMIAL-SUPERVISION-001 — لوحة الإشراف --}}
+@if (auth('user')->check() && auth('user')->user()->hasPlatformPermission('platform.audit.view'))
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/supervision*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.supervision.index')}}" title="لوحة الإشراف">
+        <i class="tio-visible-outlined nav-icon"></i>
+        <span class="text-truncate">👁️ لوحة الإشراف (الفريق والقرارات)</span>
+    </a>
+</li>
+@endif
+
 {{-- Audit Decisions --}}
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/audit*')?'active':''}}">
     <a class="nav-link"

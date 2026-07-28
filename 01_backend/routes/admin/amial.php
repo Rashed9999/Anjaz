@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\LegalTermsController;
 use App\Http\Controllers\Admin\OperatorRolesController;
 use App\Http\Controllers\Admin\OpsConsoleController;
 use App\Http\Controllers\Admin\SecurityEventsController;
+use App\Http\Controllers\Admin\SupervisionController;
 use App\Http\Controllers\Admin\ZoneManagementController;
 use Illuminate\Support\Facades\Route;
 
@@ -322,3 +323,9 @@ Route::prefix('ops')->name('ops.')->group(function () {
         ->where('userId', '[0-9]+')
         ->middleware('platform:platform.settings.update')->name('roles.update');
 });
+
+// ============ AMIAL-SUPERVISION-001 — لوحة الإشراف ============
+//
+// قراءةٌ محضة: الإشراف رقابةٌ على التنفيذ لا تنفيذ، فلا فعل هنا يُغيّر شيئاً.
+Route::get('/supervision', [SupervisionController::class, 'index'])
+    ->middleware('platform:platform.audit.view')->name('supervision.index');

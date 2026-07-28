@@ -35,6 +35,21 @@ class InsiderDefenseTest extends TestCase
         parent::setUp();
         $this->maker = User::factory()->create(['type' => 0, 'phone' => '967770001001']);
         $this->checker = User::factory()->create(['type' => 0, 'phone' => '967770001002']);
+
+        // AMIAL-OPERATOR-RBAC-001: صار لكل مسار حسّاس صلاحيةٌ مطلوبة، وحساب
+        // الإدارة بلا دور لا يملك شيئاً. وهذان يمثّلان مشرفَين حقيقيَّين،
+        // فيُسند إليهما دور مدير المنصّة كما تفعل الهجرة للحسابات القائمة.
+        foreach ([$this->maker, $this->checker] as $admin) {
+            \Illuminate\Support\Facades\DB::table('admin_user_roles')->updateOrInsert(
+                [
+                    'user_id' => $admin->id,
+                    'role_id' => \Illuminate\Support\Facades\DB::table('roles')
+                        ->whereNull('merchant_user_id')
+                        ->where('code', 'platform_admin')->value('id'),
+                ],
+                ['created_at' => now(), 'updated_at' => now()],
+            );
+        }
         $this->customer = User::factory()->create([
             'type' => 2, 'phone' => '967771666001',
             'is_temp_blocked' => 1, 'temp_block_time' => now(),
