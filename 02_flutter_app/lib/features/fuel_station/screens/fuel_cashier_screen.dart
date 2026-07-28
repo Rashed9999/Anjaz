@@ -234,7 +234,9 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
               const SizedBox(height: 6),
               Text(
                 _mode == 'by_amount'
-                    ? 'YER ${_fmt(_enteredValue)}'
+                    // AMIAL-CURRENCY-001: كانت 'YER 80' — رمزٌ لاتينيّ يخالف
+                    // «ر.ي» في كل شاشة أخرى، ويُقرأ على أنه عملة أجنبية.
+                    ? '${_fmt(_enteredValue)} ر.ي'
                     : '${_fmt(_enteredValue)} L',
                 style: const TextStyle(fontSize: 34, fontWeight: FontWeight.bold, color: AmyalColors.primary),
               ),
@@ -261,10 +263,24 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
           const SizedBox(height: 12),
 
           // ===== لوحة الأرقام =====
-          _keypadRow(['1', '2', '3']),
-          _keypadRow(['4', '5', '6']),
-          _keypadRow(['7', '8', '9']),
-          _keypadRow(['C', '0', '<']),
+          //
+          // AMIAL-KEYPAD-LTR-002: الاتجاه مفروض LTR كما في AmialNumpad.
+          //
+          // بدونه يعكس المحيطُ العربي كل Row فتظهر «٣ ٢ ١» — وهو ما ظهر في
+          // تسجيل شاشة من محطة الوقود. وهذه ثاني لوحة أرقام في التطبيق:
+          // أُصلحت المشتركة ولم يُسأل هل لها نظير، فبقي هذا شهراً.
+          //
+          // ولوحة الاتصال التي في يد الكاشير كل يوم هي المرجع، لا اتجاه
+          // القراءة — والكاشير يُدخل مبالغ وزبونٌ ينتظر.
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Column(children: [
+              _keypadRow(['1', '2', '3']),
+              _keypadRow(['4', '5', '6']),
+              _keypadRow(['7', '8', '9']),
+              _keypadRow(['C', '0', '<']),
+            ]),
+          ),
           const SizedBox(height: 14),
 
           // ===== الدفع =====

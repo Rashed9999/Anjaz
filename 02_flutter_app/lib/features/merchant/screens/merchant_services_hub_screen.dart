@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:amyal_pay/features/merchant/screens/inventory_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
@@ -40,32 +41,79 @@ class MerchantServicesHubScreen extends StatelessWidget {
       ),
       body: Obx(() {
         final planLabel = access.subscriptionPlanLabel.value ?? _planName(access.subscriptionPlan.value);
-        final unlocked = _catalog.where((s) => access.has(s.code)).length;
+
+        // AMIAL-SERVICES-ORDER-001: الترتيب بالملكية لا بالتصنيف.
+        //
+        // كان الكتالوج مرتّباً بالمجموعات (مبيعات، مالية، …) فيتخلّل المقفلُ
+        // المفتوحَ في كل مجموعة. والتاجر يفتح هذه الشاشة ليعمل لا ليتسوّق،
+        // فيمرّ على ما لا يملكه في طريقه إلى ما يملكه.
+        //
+        // فصار ما يملكه أوّلاً وكاملاً، وما لا يملكه أسفلَه بعنوانٍ صريح.
+        // والتصنيف لم يُفقَد — نزل إلى سطر تحت كل خدمة.
+        final open = _catalog.where((s) => access.has(s.code)).toList();
+        final locked = _catalog.where((s) => !access.has(s.code)).toList();
+
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _planHeader(planLabel, unlocked, _catalog.length),
+            _planHeader(planLabel, open.length, _catalog.length),
             const SizedBox(height: 18),
-            for (final group in _groups) ...[
-              _sectionTitle(group.title, group.icon),
+
+            if (open.isNotEmpty) ...[
+              _sectionTitle('خدماتك (${open.length})', Icons.check_circle_outline),
               const SizedBox(height: 10),
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 10,
-                crossAxisSpacing: 10,
-                childAspectRatio: 1.05,
-                children: group.codes
-                    .map((c) => _catalog.firstWhere((s) => s.code == c))
-                    .map((s) => _tile(context, access, s))
-                    .toList(),
-              ),
-              const SizedBox(height: 20),
+              _grid(context, access, open),
+              const SizedBox(height: 22),
             ],
+
+            if (locked.isNotEmpty) ...[
+              _sectionTitle('متاح بترقية الباقة (${locked.length})', Icons.lock_outline),
+              const SizedBox(height: 4),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 10),
+                child: Text('اضغط أي خدمة لترى ما تفعله وباقتها',
+                    style: TextStyle(fontSize: 11.5, color: AmyalColors.textMuted)),
+              ),
+              _grid(context, access, locked),
+            ],
+
+            // باقةٌ تفتح كل شيء: لا يُعرض قسم الترقية فارغاً ولا يُقال
+            // «متاح بالترقية» لمن لا ترقية فوقه.
+            if (locked.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.verified, color: Color(0xFF2E7D32)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text('باقتك تفتح كل الخدمات — لا شيء محجوب عنك.',
+                        style: TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600,
+                            color: Colors.green.shade900)),
+                  ),
+                ]),
+              ),
+
+            const SizedBox(height: 24),
           ],
         );
       }),
+    );
+  }
+
+  Widget _grid(BuildContext context, AccessController access, List<_Svc> items) {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 10,
+      crossAxisSpacing: 10,
+      childAspectRatio: 1.05,
+      children: items.map((s) => _tile(context, access, s)).toList(),
     );
   }
 
@@ -162,6 +210,10 @@ class MerchantServicesHubScreen extends StatelessWidget {
               style: TextStyle(
                   fontSize: 13, fontWeight: FontWeight.w600,
                   color: locked ? Colors.grey.shade700 : AmyalColors.textPrimary)),
+          const SizedBox(height: 1),
+          Text(_categoryOf(s.code),
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 9.5, color: AmyalColors.textMuted)),
           const SizedBox(height: 2),
           Text(locked ? 'باقة ${s.planLabel}' : 'مفتوحة',
               style: TextStyle(
@@ -266,6 +318,14 @@ class MerchantServicesHubScreen extends StatelessWidget {
   }
 
   // ── فئات العرض ────────────────────────────────────────────────────
+  /// تصنيف الخدمة — لم يُفقَد بإعادة الترتيب، نزل تحت اسمها.
+  static String _categoryOf(String code) {
+    for (final g in _groups) {
+      if (g.codes.contains(code)) return g.title;
+    }
+    return 'أخرى';
+  }
+
   static const List<_Group> _groups = [
     _Group('المبيعات والكاشير', Icons.point_of_sale,
         ['inventory', 'promotions', 'installments', 'gift_cards', 'shift_close', 'offline_pos']),
@@ -279,9 +339,12 @@ class MerchantServicesHubScreen extends StatelessWidget {
 
   // ── كتالوج الخدمات (الكود، العنوان، الشرح، الأيقونة، الباقة، الشاشة) ─
   static final List<_Svc> _catalog = [
-    _Svc('inventory', 'المخزون والكاشير',
-        'نقطة بيع كاملة: أضِف منتجاتك، امسح الباركود، وتابع الكميات مع تنبيه عند نفاد المخزون.',
-        Icons.inventory_2, 'البداية', () => const CashierPosScreen()),
+    // AMIAL-INVENTORY-LINK-001: كانت تفتح CashierPosScreen — أي نقطة البيع
+    // لا المخزون. فيضغط التاجر «المخزون» فيُفتح له الكاشير، بلا خطأ ولا
+    // رسالة: شاشةٌ خاطئة تعمل بثقة. وInventoryScreen مبنيّة وكانت مهملة.
+    _Svc('inventory', 'المخزون',
+        'أضِف منتجاتك وتابع كمياتها، مع تنبيه عند اقتراب النفاد وجردٍ دوريّ.',
+        Icons.inventory_2, 'البداية', () => const InventoryScreen()),
     _Svc('promotions', 'العروض والخصومات',
         'أنشئ كوبونات وخصومات (نسبة مئوية أو مبلغ ثابت) تُطبَّق تلقائياً عند الدفع في الكاشير.',
         Icons.local_offer, 'ستارتر', () => const MerchantPromotionsScreen()),

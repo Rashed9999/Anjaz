@@ -103,7 +103,7 @@ void main() {
       // ويمرّ الاختبار على العدم.
       PackageInfo.setMockInitialValues(
         appName: 'أميال باي', packageName: 'com.amyalpay.app',
-        version: '1.96.0', buildNumber: '1960', buildSignature: '',
+        version: '1.97.0', buildNumber: '1970', buildSignature: '',
       );
     });
 
@@ -111,15 +111,15 @@ void main() {
       await tester.pumpWidget(wrap(const AmialBuildStamp()));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('1.96.0'), findsOneWidget);
-      expect(find.textContaining('1960'), findsOneWidget);
+      expect(find.textContaining('1.97.0'), findsOneWidget);
+      expect(find.textContaining('1970'), findsOneWidget);
     });
 
     testWidgets('الضغطة المطوّلة تفتح التشخيص وتُظهر حالة التبليغ', (tester) async {
       await tester.pumpWidget(wrap(const AmialBuildStamp()));
       await tester.pumpAndSettle();
 
-      await tester.longPress(find.textContaining('1.96.0'));
+      await tester.longPress(find.textContaining('1.97.0'));
       await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
@@ -137,7 +137,7 @@ void main() {
       await tester.pumpWidget(wrap(const AmialBuildStamp()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.textContaining('1.96.0'));
+      await tester.tap(find.textContaining('1.97.0'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining('غير فعّالة'), findsNothing);
