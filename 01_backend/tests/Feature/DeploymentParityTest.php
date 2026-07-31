@@ -170,4 +170,29 @@ class DeploymentParityTest extends TestCase
         }
         return $out;
     }
+
+    public function test_the_ledger_backfill_runs_on_every_production_boot(): void
+    {
+        // AMIAL-LEDGER-OPENING-002 — أخطر ما يمكن أن يسقط من ملفّ النشر.
+        //
+        // الترحيل يُدخل المحافظ القائمة في دفتر الأستاذ. وبدونه يرفض الدفترُ
+        // أوّل خصمٍ من أي محفظة قديمة، فتتوقّف التحويلات كلّها بعد النشر —
+        // بلا انهيار ولا رسالة تشرح، فقط «الرصيد لا يكفي» على أرصدةٍ كافية.
+        //
+        // وقد سُلّم أوّل مرّة أمراً يدوياً في رسالةٍ إلى المشغّل، وهو ما يُنسى
+        // مرّة واحدة فتكفي. فصار في ملفّ الإقلاع، وهذا الفحص يمنع سقوطه منه.
+        $script = file_get_contents(base_path('docker/entrypoint.prod.sh'));
+
+        $this->assertStringContainsString('amial:ledger-backfill', $script,
+            'سقط ترحيل الدفتر من ملفّ الإقلاع. وبدونه يرفض الدفترُ كل تحويل '
+            . 'من محفظةٍ قائمة بعد أوّل نشرة — بلا رسالة تشرح السبب.');
+
+        // وبعد الهجرات لا قبلها: الجداول يجب أن تكون قائمة أوّلاً.
+        $migratePos = strpos($script, 'artisan migrate');
+        $backfillPos = strpos($script, 'amial:ledger-backfill');
+
+        $this->assertNotFalse($migratePos, 'لا هجرات في ملفّ الإقلاع');
+        $this->assertLessThan($backfillPos, $migratePos,
+            'الترحيل يسبق الهجرات — فيعمل على جداول لم تُنشأ بعد');
+    }
 }
