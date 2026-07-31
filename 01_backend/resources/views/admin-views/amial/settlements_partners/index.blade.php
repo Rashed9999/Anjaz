@@ -33,6 +33,11 @@
         الأوّل يُسجَّل وتبقى الحالة «بانتظار الاعتماد» حتى يأتي الثاني.
     </div>
 
+    {{-- لوحة المؤشّرات (الفصل ٠٨ من الوثيقة يطلبها أعلى الصفحة).
+         وكانت `dashboard()` مبنيّة في الخدمة ومسجَّلة في المسارات ولا تُستدعى
+         من هنا — أي نفس عطل «مبنيّ ولا يُوصَّل»، في هذه اللوحة نفسها. --}}
+    <div class="row g-3 mb-3" id="ps-tiles" data-testid="ps-tiles"></div>
+
     <div class="card p-3 mb-3">
         <div class="d-flex gap-2 flex-wrap align-items-center">
             <select id="ps-status" class="form-select" style="max-width:220px">
@@ -112,7 +117,35 @@
         </div>`;
     }
 
-    document.getElementById('ps-refresh').onclick = load;
+    const money = n => Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 0});
+
+    async function loadTiles() {
+        const j = await get('/dashboard');
+        if (!j.success) return;
+        const m = j.meta || {};
+        const c = m.counts || {}, a = m.amounts || {};
+
+        const tile = (label, value, sub, cls) => `
+            <div class="col-lg-3 col-md-4 col-6"><div class="card p-3 h-100 ${cls || ''}">
+                <div class="small text-muted">${label}</div>
+                <div class="fs-4 fw-bold">${value}</div>
+                ${sub ? `<div class="small text-muted">${sub}</div>` : ''}
+            </div></div>`;
+
+        document.getElementById('ps-tiles').innerHTML =
+            tile('رصيد محفظة الإيرادات', money(m.revenue_wallet && m.revenue_wallet.balance),
+                 esc(m.revenue_wallet && m.revenue_wallet.account_code)) +
+            tile('إيراد ٣٠ يوماً', money(m.total_revenue_30d), 'المُسوَّى فعلاً') +
+            tile('بانتظار الاعتماد', c.pending || 0, money(a.pending_approval) + ' ر.ي',
+                 (c.pending || 0) > 0 ? 'border-warning' : '') +
+            tile('معتمدة', c.approved || 0) +
+            tile('قيد التنفيذ', c.processing || 0) +
+            tile('مكتملة', c.completed || 0, money(a.completed) + ' ر.ي') +
+            tile('مرفوضة', c.rejected || 0) +
+            tile('ملغاة', c.cancelled || 0);
+    }
+
+    document.getElementById('ps-refresh').onclick = () => { loadTiles(); load(); };
     document.getElementById('ps-status').onchange = load;
 
     async function load() {
@@ -191,6 +224,7 @@
         load();
     });
 
+    loadTiles();
     load();
 })();
 </script>

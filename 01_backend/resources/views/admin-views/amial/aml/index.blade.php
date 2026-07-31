@@ -93,6 +93,25 @@
             </div>
         </div>
     </div>
+
+    {{-- ملفّ خطر العميل — الشاشة التي كانت نقطتا نهايتها مسجَّلتين بلا مستدعٍ --}}
+    <div class="modal fade" id="aml-profile" tabindex="-1" data-testid="aml-profile">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">ملفّ خطر العميل <span id="aml-profile-user" class="font-monospace text-muted"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="aml-profile-body"></div>
+                <div class="modal-footer justify-content-start gap-2">
+                    <button class="btn btn-sm btn-outline-success js-aml-override" data-override="whitelist">قائمة بيضاء</button>
+                    <button class="btn btn-sm btn-outline-danger js-aml-override" data-override="blacklist">قائمة سوداء</button>
+                    <button class="btn btn-sm btn-outline-secondary js-aml-override" data-override="none">إزالة الاستثناء</button>
+                    <span class="small text-muted ms-auto">القائمة البيضاء تُعطّل الرقابة عن هذا العميل — بسببٍ مكتوب يبقى في التدقيق.</span>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
@@ -158,6 +177,7 @@
                 <td><span class="badge bg-${f.total_risk_score >= 70 ? 'danger' : (f.total_risk_score >= 40 ? 'warning text-dark' : 'secondary')}">${esc(f.total_risk_score)}</span></td>
                 <td class="small">${reasons}</td>
                 <td class="small ${waitClass(f.created_at)}">${waited(f.created_at)}</td>
+                <td><button class="btn btn-sm btn-outline-secondary js-aml-profile" data-user="${f.actor_user_id}">ملفّ الخطر</button></td>
                 <td>${pending
                     ? `<button class="btn btn-sm btn-success js-aml-flag" data-do="approve" data-ulid="${esc(f.flag_ulid)}">اعتماد</button>
                        <button class="btn btn-sm btn-outline-danger js-aml-flag" data-do="reject" data-ulid="${esc(f.flag_ulid)}">رفض</button>`
@@ -166,8 +186,8 @@
         }).join('');
 
         box.innerHTML = `<div class="table-responsive"><table class="table table-sm table-hover" data-testid="aml-flagged-table">
-            <thead><tr><th>المرجع</th><th>العميل</th><th>المبلغ</th><th>الخطر</th><th>سبب التعليق</th><th>الانتظار</th><th></th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="7" class="text-muted text-center py-3">لا عمليات في هذه الحالة</td></tr>'}</tbody></table></div>`;
+            <thead><tr><th>المرجع</th><th>العميل</th><th>المبلغ</th><th>الخطر</th><th>سبب التعليق</th><th>الانتظار</th><th>الملفّ</th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="8" class="text-muted text-center py-3">لا عمليات في هذه الحالة</td></tr>'}</tbody></table></div>`;
     }
 
     document.addEventListener('click', async function (e) {
@@ -181,6 +201,67 @@
         const j = await send(`/flagged/${b.dataset.ulid}/${b.dataset.do}`, {note: note.trim()});
         alert(j.message || (j.success ? 'تم' : 'فشل'));
         loadFlagged();
+    });
+
+    // ---------- ملفّ خطر العميل والقائمتان ----------
+    //
+    // `users/{id}/profile` و`users/{id}/override` كانتا مسجَّلتين ولا تُستدعيان
+    // من أيّ مكان. والقائمة البيضاء/السوداء ضابطُ سياسةٍ لا صيانة: عميلٌ
+    // موثوق يُرهقه التعليق المتكرّر يُدرَج بيضاء بسببٍ مكتوب، وآخر ثبت عليه
+    // شيء يُدرَج سوداء — وكلاهما كان يتطلّب الدخول إلى قاعدة البيانات.
+    document.addEventListener('click', async function (e) {
+        const b = e.target.closest('.js-aml-profile');
+        if (!b) return;
+        const uid = b.dataset.user;
+
+        const j = await get(`/users/${uid}/profile`);
+        const p = (j.success && j.meta.profile) || null;
+        const evals = (j.success && j.meta.recent_evaluations) || [];
+
+        const lvl = {low: 'success', medium: 'info', high: 'warning text-dark', very_high: 'danger', critical: 'danger'};
+        const ovr = {none: 'بلا استثناء', whitelist: 'قائمة بيضاء', blacklist: 'قائمة سوداء'};
+
+        document.getElementById('aml-profile-body').innerHTML = p ? `
+            <div class="row g-3 mb-3">
+                <div class="col-6"><div class="border rounded p-2">
+                    <div class="small text-muted">درجة الخطر</div>
+                    <div class="fs-4 fw-bold">${esc(p.current_risk_score)}</div></div></div>
+                <div class="col-6"><div class="border rounded p-2">
+                    <div class="small text-muted">المستوى</div>
+                    <div><span class="badge bg-${lvl[p.risk_level] || 'secondary'}">${esc(p.risk_level)}</span></div></div></div>
+                <div class="col-12"><div class="border rounded p-2">
+                    <div class="small text-muted">الاستثناء اليدويّ</div>
+                    <div>${esc(ovr[p.manual_override] || p.manual_override)}</div>
+                    ${p.override_reason ? `<div class="small text-muted mt-1">${esc(p.override_reason)}</div>` : ''}</div></div>
+            </div>
+            <h6 class="small">آخر التقييمات</h6>
+            <div class="table-responsive" style="max-height:220px;overflow:auto">
+              <table class="table table-sm"><tbody>${
+                evals.map(ev => `<tr><td class="small">${esc(ev.rule_code || ev.rule_id)}</td>
+                    <td><span class="badge bg-${ev.matched ? 'warning text-dark' : 'light text-dark'}">${ev.matched ? 'طابقت' : 'لم تطابق'}</span></td>
+                    <td class="small text-muted">${esc((ev.created_at || '').toString().slice(0, 16))}</td></tr>`).join('')
+                || '<tr><td class="text-muted">لا تقييمات</td></tr>'}</tbody></table>
+            </div>`
+            : '<div class="alert alert-secondary">لا ملفّ خطر لهذا العميل بعد — يُنشأ عند أوّل استثناء يُطبَّق.</div>';
+
+        document.getElementById('aml-profile-user').textContent = '#' + uid;
+        document.getElementById('aml-profile').dataset.user = uid;
+        new bootstrap.Modal(document.getElementById('aml-profile')).show();
+    });
+
+    document.addEventListener('click', async function (e) {
+        const b = e.target.closest('.js-aml-override');
+        if (!b) return;
+        const uid = document.getElementById('aml-profile').dataset.user;
+        const target = b.dataset.override;
+
+        // السبب إلزاميّ: إدراجٌ في قائمةٍ بيضاء يُعطّل الرقابة عن شخصٍ بعينه،
+        // ومن يراجع القرار بعد سنة لن يجد في يده غير ما كُتب هنا.
+        const reason = prompt(`سبب وضع العميل في «${b.textContent.trim()}» (إلزامي — ١٠ أحرف على الأقل):`);
+        if (!reason || reason.trim().length < 10) { alert('السبب إلزامي (١٠ أحرف على الأقل)'); return; }
+
+        const j = await send(`/users/${uid}/override`, {override: target, reason: reason.trim()});
+        alert(j.message || (j.success ? 'تم' : 'فشل'));
     });
 
     // ---------- التنبيهات ----------
