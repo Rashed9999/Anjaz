@@ -32,17 +32,18 @@
                         <i class="tio-home nav-icon"></i>{{ 'لوحة التحكم' }}
                     </a>
                 </li>
+                {{-- AMIAL-ADMIN-MENU-002: حُذف من هنا رابطان كانا يكرّران
+                     وجهتين موجودتين في القائمة أدناه:
+
+                       • «مركز العمليات» → admin/support-center، وهو نفسه
+                         «مركز الدعم» في مجموعة «الخدمات والعملاء».
+                       • «وضع الصيانة» → admin/maintenance، وهو نفسه في
+                         مجموعة «الإعدادات والتشغيل».
+
+                     ووجهةٌ واحدة باسمين ليست إزعاجاً بصريّاً فحسب: تجعل
+                     المستخدم يظنّهما شاشتين فيجرّب الاثنتين، ثمّ يشكّ في
+                     أنّه فوّت شيئاً حين يجد الشاشة نفسها. --}}
                 @includeIf('admin-views.amial.partials._sidebar')
-                <li class="nav-item {{ Request::is('admin/support-center') ? 'active' : '' }}">
-                    <a class="nav-link" href="{{ url('admin/support-center') }}" data-testid="nav-support-center">
-                        <i class="tio-headset nav-icon"></i>{{ 'مركز العمليات' }}
-                    </a>
-                </li>
-                <li class="nav-item {{ Request::is('admin/maintenance') ? 'active' : '' }}">
-                    <a class="nav-link" href="{{ url('admin/maintenance') }}" data-testid="nav-maintenance">
-                        <i class="tio-settings nav-icon"></i>{{ 'وضع الصيانة' }}
-                    </a>
-                </li>
                 <li class="nav-item mt-3">
                     <a class="nav-link" href="{{ route('admin.auth.logout') }}" data-testid="nav-logout">
                         <i class="tio-logout nav-icon"></i>{{ 'تسجيل الخروج' }}
