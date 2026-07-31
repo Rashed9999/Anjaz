@@ -16,6 +16,22 @@ use Illuminate\Support\Facades\Validator;
  */
 class AdminAmlController extends Controller
 {
+    /**
+     * AMIAL-AML-PANEL-001 — الصفحة التي كانت ناقصة.
+     *
+     * اثنتا عشرة نقطة نهاية بُنيت هنا وسُجّلت في `routes/admin/amial.php`،
+     * ولم تُفتح واحدةٌ منها من متصفّح قطّ: كلّها تردّ JSON ولا صفحة تستدعيها،
+     * ولا رابط في القائمة الجانبية يصل إليها.
+     *
+     * ونتيجة ذلك أنّ نظام مكافحة غسل الأموال كان **يعمل بلا مُشغِّل**: يرصد
+     * ويعلّق ويُنبّه، والمعلَّق يبقى معلّقاً لأنّ أحداً لا يملك شاشةً يعتمد
+     * منها أو يرفض. وهذا أسوأ من غيابه — عميلٌ تُجمَّد عمليته ولا أحد يراها.
+     */
+    public function page()
+    {
+        return view('admin-views.amial.aml.index');
+    }
+
     // ============ Rules ============
     public function indexRules(): JsonResponse
     {
@@ -51,6 +67,9 @@ class AdminAmlController extends Controller
             'risk_score_contribution' => 'sometimes|numeric|min:0|max:100',
             'priority' => 'sometimes|integer|min:0|max:1000',
             'is_active' => 'sometimes|boolean',
+            // وضع الظل يُرصد ولا يمنع. كان يُضبط بأمر سطر أوامر وحده، فمن لا
+            // يملك الخادم لا يملك إخراج قاعدةٍ من الظل — وهو قرار سياسة لا صيانة.
+            'shadow_mode' => 'sometimes|boolean',
         ]);
         if ($v->fails()) return $this->validationError($v);
 

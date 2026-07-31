@@ -210,16 +210,25 @@ class KycDocumentService
         ];
     }
 
-    /** ما ينتظر مراجعة — أقدمه أوّلاً، فالانتظار هو ما يُشتكى منه. */
+    /**
+     * ما ينتظر مراجعة — أقدمه أوّلاً، فالانتظار هو ما يُشتكى منه.
+     *
+     * يُحمَّل صاحب المستند معه: مراجعُ يرى «العميل ٤١٧» لا يعرف من يراجع،
+     * ولو فتح ملفّ كلّ رقمٍ على حدة لسجَّل اطّلاعاً على بيانات شخصية في كلّ
+     * مرّة. الاسم والهاتف هنا أقلّ كشفاً من ذلك المسار وأكثر إفادة.
+     */
     public function pendingQueue(int $limit = 100): array
     {
-        return KycDocument::where('status', KycDocument::STATUS_PENDING)
+        return KycDocument::with('user:id,f_name,l_name,phone')
+            ->where('status', KycDocument::STATUS_PENDING)
             ->orderBy('created_at')
             ->limit($limit)
             ->get()
             ->map(fn ($d) => [
                 'id' => (int) $d->id,
                 'user_id' => (int) $d->user_id,
+                'customer_name' => trim((string) ($d->user?->f_name . ' ' . $d->user?->l_name)) ?: '—',
+                'customer_phone' => (string) ($d->user?->phone ?? '—'),
                 'doc_type' => $d->doc_type,
                 'doc_label' => KycDocument::TYPE_LABELS[$d->doc_type] ?? $d->doc_type,
                 'uploaded_at' => $d->created_at?->toIso8601String(),

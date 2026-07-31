@@ -15,6 +15,22 @@ class SettlementController extends AmialApiController
         private readonly UniversalSettlementService $svc,
     ) {}
 
+    /**
+     * AMIAL-SETTLEMENT-PANEL-001 — لوحة تسويات الشركاء.
+     *
+     * لوحة «التسويات» الموجودة في القائمة الجانبية تعرض `AgentSettlement`
+     * (تسويات الوكلاء). أمّا `Settlement` — تسويات الشركاء، وهي التي بُنيت
+     * عليها **الموافقة المزدوجة** وفصلُ المهام — فسطحها الوحيد كان الـAPI.
+     *
+     * فبقيت الموافقة المزدوجة ضابطاً لا يراه أحد: تسويةٌ فوق الحدّ توافق
+     * عليها مرّة فتبقى `pending_approval` بلا ما يقول إنها تنتظر ثانياً، ومن
+     * لا يعرف يظنّ الاعتماد فشل فيعيد الضغط — والنظام يرفضه لأنّه هو نفسه.
+     */
+    public function page()
+    {
+        return view('admin-views.amial.settlements_partners.index');
+    }
+
     public function dashboard(Request $request): JsonResponse
     {
         if (!$this->isAdmin($request->user())) {
@@ -29,8 +45,13 @@ class SettlementController extends AmialApiController
             return $this->error('FORBIDDEN', 'صلاحية إدارية مطلوبة', 403);
         }
 
-        $q = Settlement::with(['partner:id,name_ar,code', 'creator:id,f_name,l_name'])
-            ->orderByDesc('created_at');
+        // المعتمِدان يُحمَّلان مع القائمة: من يفتح الطابور يحتاج أن يعرف أيّ
+        // تسويةٍ تنتظر توقيعاً ثانياً وممّن جاء الأوّل — لا أن يفتح كلّ صفٍّ
+        // على حدة ليكتشف ذلك.
+        $q = Settlement::with([
+            'partner:id,name_ar,code', 'creator:id,f_name,l_name',
+            'approver:id,f_name,l_name', 'secondApprover:id,f_name,l_name',
+        ])->orderByDesc('created_at');
 
         if ($request->filled('status'))     $q->where('status', $request->query('status'));
         if ($request->filled('partner_id')) $q->where('destination_partner_id', $request->query('partner_id'));

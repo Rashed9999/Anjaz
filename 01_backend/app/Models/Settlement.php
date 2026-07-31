@@ -93,6 +93,17 @@ class Settlement extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    /**
+     * المعتمِد الثاني — AMIAL-DUAL-APPROVAL-001.
+     *
+     * يُسمّى في اللوحة ولا يُكتفى برقمه: الغرض من الموافقة الثانية أن يُعرف
+     * **من** وافق، فرقمٌ مجرَّد يُعيد الضابط إلى عدّاد.
+     */
+    public function secondApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'second_approved_by');
+    }
+
     public function completer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'completed_by');

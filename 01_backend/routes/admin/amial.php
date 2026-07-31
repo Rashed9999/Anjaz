@@ -124,6 +124,9 @@ Route::prefix('charity')->name('charity.')->group(function () {
 
 // ============ AMIAL-AML-001 (v1.4) ============
 Route::prefix('aml')->name('aml.')->group(function () {
+    // AMIAL-AML-PANEL-001 — الصفحة. كلّ ما تحتها كان JSON بلا مُشغِّل.
+    Route::get('/', [AdminAmlController::class, 'page'])->name('page');
+
     // Rules
     Route::get('/rules', [AdminAmlController::class, 'indexRules'])->name('rules.index');
     Route::get('/rules/{id}', [AdminAmlController::class, 'showRule'])->name('rules.show');
@@ -149,6 +152,44 @@ Route::prefix('aml')->name('aml.')->group(function () {
         ->where('userId', '[0-9]+')->name('users.profile');
     Route::post('/users/{userId}/override', [AdminAmlController::class, 'setUserOverride'])
         ->where('userId', '[0-9]+')->name('users.override');
+});
+
+// ============ AMIAL-SETTLEMENT-PANEL-001 — تسويات الشركاء ============
+//
+// غير `settlements` أدناه: تلك تسويات الوكلاء (`AgentSettlement`). هذه
+// تسويات الشركاء (`Settlement`) — وعليها بُنيت الموافقة المزدوجة، وكان
+// سطحها الوحيد الـAPI فبقي الضابط بلا شاشة تُظهره.
+Route::prefix('partner-settlements')->name('partner-settlements.')->group(function () {
+    $st = App\Http\Controllers\Api\V1\Amial\SettlementController::class;
+
+    Route::get('/', [$st, 'page'])->name('page');
+    Route::get('/list', [$st, 'index'])->name('list');
+    Route::get('/dashboard', [$st, 'dashboard'])->name('dashboard');
+    Route::get('/{id}', [$st, 'show'])->where('id', '[0-9]+')->name('show');
+    Route::post('/{id}/submit', [$st, 'submit'])->where('id', '[0-9]+')->name('submit');
+    Route::post('/{id}/approve', [$st, 'approve'])->where('id', '[0-9]+')->name('approve');
+    Route::post('/{id}/reject', [$st, 'reject'])->where('id', '[0-9]+')->name('reject');
+    Route::post('/{id}/process', [$st, 'process'])->where('id', '[0-9]+')->name('process');
+    Route::post('/{id}/complete', [$st, 'complete'])->where('id', '[0-9]+')->name('complete');
+    Route::post('/{id}/cancel', [$st, 'cancel'])->where('id', '[0-9]+')->name('cancel');
+});
+
+// ============ AMIAL-KYC-PANEL-001 — مراجعة مستندات الهوية ============
+//
+// كانت هذه النقاط مسجَّلة على سطح الـAPI وحده، فبقي المستند يصل بلا مراجع.
+// الصلاحية هي `platform.customers.freeze` نفسها المستعملة في الـAPI: اعتماد
+// هويّة يفتح حدوداً مالية أعلى، فهو من جنس القرارات التي تمسّ حساب العميل.
+Route::prefix('kyc')->name('kyc.')->group(function () {
+    $kyc = App\Http\Controllers\Api\V1\Amial\KycDocumentController::class;
+
+    Route::get('/', [$kyc, 'page'])->middleware('platform:platform.customers.freeze')->name('page');
+    Route::get('/queue', [$kyc, 'queue'])->middleware('platform:platform.customers.freeze')->name('queue');
+    Route::get('/documents/{id}/file', [$kyc, 'file'])
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('file');
+    Route::post('/documents/{id}/approve', [$kyc, 'approve'])
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('approve');
+    Route::post('/documents/{id}/reject', [$kyc, 'reject'])
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('reject');
 });
 
 // ============ AMIAL-2FA-001 (v1.8) ============

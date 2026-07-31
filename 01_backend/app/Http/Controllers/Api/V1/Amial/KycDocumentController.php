@@ -91,6 +91,19 @@ class KycDocumentController extends Controller
 
     // ==================== جانب المراجع ====================
 
+    /**
+     * AMIAL-KYC-PANEL-001 — الشاشة التي كانت ناقصة.
+     *
+     * `queue` و`file` و`approve` و`reject` بُنيت كلّها ولم تُسجَّل إلّا على
+     * سطح الـAPI. فالعميل صار يرفع مستنده، والمستند يصل، ولا مراجعَ يملك
+     * شاشةً يفتحه فيها — أي أنّ الدائرة التي قيل إنها أُغلقت أُغلق طرفٌ منها
+     * وحده.
+     */
+    public function page()
+    {
+        return view('admin-views.amial.kyc.index');
+    }
+
     /** GET /admin/kyc/queue */
     public function queue(Request $request): JsonResponse
     {

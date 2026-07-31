@@ -142,6 +142,43 @@
     </a>
 </li>
 
+{{--
+    AMIAL-ADMIN-REACH-001 — أربع لوحاتٍ كان منطقُها مبنيّاً ولا رابط يصل إليها.
+
+    وهذا نمطٌ تكرّر: يُبنى المنطق وتُسجَّل نقاط النهاية ويُختبر كلّ شيء، ثمّ
+    لا يُفتح من متصفّح قطّ. والنتيجة ضابطٌ قائمٌ في الكود غائبٌ عن العمل —
+    وهو أسوأ من غيابه، لأنّ من يقرأ الوثيقة يحسبه يعمل.
+--}}
+<li class="nav-item">
+    <small class="nav-subtitle text-uppercase fw-bold">الامتثال والرقابة</small>
+</li>
+
+{{-- AMIAL-KYC-PANEL-001 — طابور مراجعة الهوية --}}
+@if (auth('user')->check() && auth('user')->user()->hasPlatformPermission('platform.customers.freeze'))
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/kyc*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.kyc.page')}}" title="مراجعة الهوية">
+        <i class="tio-verified nav-icon"></i>
+        <span class="text-truncate">🪪 مراجعة مستندات الهوية</span>
+    </a>
+</li>
+@endif
+
+{{-- AMIAL-AML-PANEL-001 — اثنتا عشرة نقطة نهاية بلا صفحة واحدة --}}
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/aml*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.aml.page')}}" title="مكافحة غسل الأموال">
+        <i class="tio-shield-outlined nav-icon"></i>
+        <span class="text-truncate">🛡️ مكافحة غسل الأموال (المعلَّق والقواعد)</span>
+    </a>
+</li>
+
+{{-- AMIAL-SETTLEMENT-PANEL-001 — حيث تعيش الموافقة المزدوجة --}}
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/partner-settlements*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.partner-settlements.page')}}" title="تسويات الشركاء">
+        <i class="tio-receipt-outlined nav-icon"></i>
+        <span class="text-truncate">🤝 تسويات الشركاء (الموافقة المزدوجة)</span>
+    </a>
+</li>
+
 {{-- Executive Dashboard (AMIAL-EXEC-DASHBOARD-001) --}}
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/executive*')?'active':''}}">
     <a class="nav-link"

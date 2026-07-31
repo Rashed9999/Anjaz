@@ -184,6 +184,14 @@
                 <button class="btn btn-sm btn-primary js-act" data-act="open-ticket" data-id="${p.id}" data-name="${esc(p.name)}" data-testid="btn-open-ticket">+ فتح تذكرة</button>
             </div>
 
+            {{-- AMIAL-DEVICE-PANEL-001: الأجهزة كانت ثلاثة مسارات تردّ JSON
+                 ولا شاشة تفتحها — فالحظر مبنيٌّ ولا يُستعمل. --}}
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <h6 class="mb-0">الأجهزة</h6>
+                <button class="btn btn-sm btn-outline-secondary js-devices" data-id="${p.id}" data-testid="btn-devices">عرض الأجهزة</button>
+            </div>
+            <div id="devices-box" class="mt-2"></div>
+
             <h6 class="mt-4">آخر العمليات</h6>
             <div class="table-responsive"><table class="table table-sm">
                 <thead><tr><th>المرجع</th><th>النوع</th><th>مدين</th><th>دائن</th><th>القرار</th><th>التاريخ</th></tr></thead>
@@ -227,6 +235,62 @@
             if (act.dataset.act === 'open-ticket') openTicket(id, act.dataset.name || '');
             else doAction(id, act.dataset.act, !!act.dataset.unfreeze);
         }
+    });
+
+    // ---------- الأجهزة ----------
+    //
+    // حظرُ جهازٍ بديلٌ عن تجميد الحساب: عميلٌ سُرق هاتفه لا يُعاقب حسابه كلّه،
+    // ويبقى يستعمل أميال من جهازه الآخر. ولذلك يُعرَض هنا لا في شاشة منفصلة:
+    // القرار يُتّخذ وأنت تنظر إلى رصيده وعملياته، لا بمعزلٍ عنها.
+    window.loadDevices = async function (userId) {
+        const box = document.getElementById('devices-box');
+        if (!box) return;
+        box.innerHTML = '<div class="text-muted">جارٍ التحميل…</div>';
+        const j = await get('/customers/' + userId + '/devices?reason=' + encodeURIComponent('مراجعة أجهزة العميل'));
+        if (!j.success) { box.innerHTML = `<div class="alert alert-warning">${esc(j.message)}</div>`; return; }
+
+        const rows = (j.meta.devices || []).map(d => `
+            <tr class="${d.is_blocked ? 'table-danger' : ''}">
+                <td>
+                    <div class="fw-bold">${esc(d.device_model)}</div>
+                    <div class="small text-muted font-monospace">${esc(String(d.device_id).slice(0, 16))}…</div>
+                </td>
+                <td class="small">${esc(d.os)}${d.app_version ? ' • v' + esc(d.app_version) : ''}</td>
+                <td class="small font-monospace">${esc(d.ip_address)}</td>
+                <td class="small">${esc(d.last_seen_at || d.first_seen_at)}</td>
+                <td>
+                    ${d.is_blocked ? '<span class="badge bg-danger">محظور</span>' : (d.is_active ? '<span class="badge bg-success">نشط</span>' : '<span class="badge bg-secondary">غير نشط</span>')}
+                    ${d.is_trusted ? '<span class="badge bg-info">موثوق</span>' : ''}
+                    ${d.block_reason ? `<div class="small text-muted mt-1">${esc(d.block_reason)}</div>` : ''}
+                </td>
+                <td class="text-nowrap">
+                    ${d.is_blocked
+                        ? `<button class="btn btn-sm btn-outline-success js-dev" data-do="unblock" data-row="${d.id}" data-user="${userId}">رفع الحظر</button>`
+                        : `<button class="btn btn-sm btn-outline-danger js-dev" data-do="block" data-row="${d.id}" data-user="${userId}">حظر الجهاز</button>`}
+                </td>
+            </tr>`).join('');
+
+        box.innerHTML = `
+            ${j.meta.blocked > 0 ? `<div class="alert alert-danger py-2 small">${j.meta.blocked} من ${j.meta.total} جهاز محظور.</div>` : ''}
+            <div class="table-responsive"><table class="table table-sm" data-testid="devices-table">
+                <thead><tr><th>الجهاز</th><th>النظام</th><th>IP</th><th>آخر ظهور</th><th>الحالة</th><th></th></tr></thead>
+                <tbody>${rows || '<tr><td colspan="6" class="text-muted text-center py-3">لا أجهزة مسجَّلة</td></tr>'}</tbody>
+            </table></div>
+            <div class="small text-muted">من حظر الجهاز لا يرفع الحظر عنه — يراجعه موظّف آخر.</div>`;
+    };
+
+    document.addEventListener('click', async function (e) {
+        const open = e.target.closest('.js-devices');
+        if (open) { loadDevices(parseInt(open.dataset.id, 10)); return; }
+
+        const b = e.target.closest('.js-dev');
+        if (!b) return;
+        const isBlock = b.dataset.do === 'block';
+        const reason = prompt((isBlock ? 'سبب حظر الجهاز' : 'سبب رفع الحظر') + ' (إلزامي — 5 أحرف على الأقل، يُسجَّل في التدقيق):');
+        if (!reason || reason.trim().length < 5) { alert('السبب إلزامي (5 أحرف على الأقل)'); return; }
+        const j = await post(`/devices/${b.dataset.row}/${b.dataset.do}`, {reason: reason.trim()});
+        alert(j.message || (j.success ? 'تم' : 'فشل'));
+        loadDevices(parseInt(b.dataset.user, 10));
     });
 
     // ---------- فحص عملية ----------
