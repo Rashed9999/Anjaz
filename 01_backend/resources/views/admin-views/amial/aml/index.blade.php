@@ -16,7 +16,7 @@
     • **زمن الانتظار** على كلّ عملية معلّقة. العدد وحده لا يقول شيئاً: عشر
       عمليات عمرها ساعة غير عشرٍ عمرها أسبوع.
 
-    • **سبب التعليق** بنصّه (`matched_rules`)، لا رمزُ خطر مجرَّد. من يعتمد
+    • **سبب التعليق** بنصّه (`triggered_rules`)، لا رمزُ خطر مجرَّد. من يعتمد
       يحتاج أن يعرف أيّ قاعدةٍ أمسكت العملية.
 --}}
 
@@ -36,6 +36,8 @@
     <ul class="nav nav-tabs mb-3" role="tablist">
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#aml-tab-flagged" data-testid="aml-tab-flagged">🚩 عمليات معلّقة <span class="badge bg-danger" id="aml-flag-count">0</span></button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#aml-tab-alerts" data-testid="aml-tab-alerts">🔔 التنبيهات</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#aml-tab-cases" data-testid="aml-tab-cases">🗂️ التحقيقات <span class="badge bg-warning text-dark" id="aml-case-count">0</span></button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#aml-tab-reports" data-testid="aml-tab-reports">📄 البلاغات التنظيمية <span class="badge bg-danger" id="aml-report-count">0</span></button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#aml-tab-rules" data-testid="aml-tab-rules">⚖️ القواعد</button></li>
     </ul>
 
@@ -76,6 +78,63 @@
                     <button class="btn btn-outline-primary" id="aml-btn-alerts" data-testid="aml-btn-alerts">تحديث</button>
                 </div>
                 <div id="aml-alerts-list"></div>
+            </div>
+        </div>
+
+        {{-- ============ التحقيقات (التبويب ٧) ============ --}}
+        <div class="tab-pane fade" id="aml-tab-cases">
+            <div class="row g-3">
+                <div class="col-lg-5">
+                    <div class="card">
+                        <div class="card-header d-flex align-items-center gap-2">
+                            <h5 class="card-header-title mb-0">القضايا</h5>
+                            <select id="aml-case-status" class="form-select form-select-sm ms-auto" style="max-width:150px">
+                                <option value="open">المفتوحة</option>
+                                <option value="closed">المغلقة</option>
+                                <option value="">الكل</option>
+                            </select>
+                        </div>
+                        <div id="aml-cases" class="list-group list-group-flush" data-testid="aml-cases"></div>
+                    </div>
+                </div>
+                <div class="col-lg-7">
+                    <div class="card"><div class="card-body" id="aml-case-detail" data-testid="aml-case-detail">
+                        <div class="text-center text-muted py-5">
+                            <i class="tio-folder-outlined" style="font-size:48px;opacity:.3"></i>
+                            <div class="mt-2">اختر قضيّة لعرض ملفّها</div>
+                        </div>
+                    </div></div>
+                </div>
+            </div>
+        </div>
+
+        {{-- ============ البلاغات التنظيمية (التبويب ٨) ============ --}}
+        <div class="tab-pane fade" id="aml-tab-reports">
+            <div id="aml-report-summary" class="row g-3 mb-3"></div>
+            <div class="card p-3">
+                <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
+                    <select id="aml-report-type" class="form-select" style="max-width:200px">
+                        <option value="">كل الأنواع</option>
+                        <option value="STR">بلاغ اشتباه (STR)</option>
+                        <option value="CTR">بلاغ عملة (CTR)</option>
+                    </select>
+                    <select id="aml-report-status" class="form-select" style="max-width:200px">
+                        <option value="">كل الحالات</option>
+                        <option value="draft">مسودّة</option>
+                        <option value="pending_submission">بانتظار الإرسال</option>
+                        <option value="submitted">أُرسل</option>
+                    </select>
+                    <button class="btn btn-outline-primary" id="aml-btn-reports" data-testid="aml-btn-reports">تحديث</button>
+                    <button class="btn btn-outline-danger ms-auto" id="aml-btn-new-ctr">+ بلاغ عملة يدويّ</button>
+                </div>
+                <div class="alert alert-secondary py-2 small mb-3">
+                    <strong>الفرق بين البلاغين:</strong>
+                    بلاغ الاشتباه (STR) <em>تقديريّ</em> — يُرفع بعد تحقيق ويحتاج سرداً يشرح سبب الاشتباه.
+                    وبلاغ العملة (CTR) <em>غير تقديريّ</em> — كلّ عملية فوق الحدّ تُبلَّغ، مشبوهةً كانت أو لا،
+                    <strong>ولا يملك أحد إلغاءه</strong>.
+                    ومن ولّد بلاغاً لا يؤكّد إرساله بنفسه.
+                </div>
+                <div id="aml-reports-list"></div>
             </div>
         </div>
 
@@ -164,7 +223,7 @@
         const rows = items.map(f => {
             const pending = f.current_status === 'pending_review';
             // سبب التعليق بنصّه: من يعتمد يحتاج أن يعرف أيّ قاعدةٍ أمسكت العملية.
-            let matched = f.matched_rules;
+            let matched = f.triggered_rules;
             if (typeof matched === 'string') { try { matched = JSON.parse(matched); } catch (e) { matched = null; } }
             const reasons = Array.isArray(matched)
                 ? matched.map(m => esc(m.name_ar || m.code || m)).join('، ')
@@ -177,7 +236,10 @@
                 <td><span class="badge bg-${f.total_risk_score >= 70 ? 'danger' : (f.total_risk_score >= 40 ? 'warning text-dark' : 'secondary')}">${esc(f.total_risk_score)}</span></td>
                 <td class="small">${reasons}</td>
                 <td class="small ${waitClass(f.created_at)}">${waited(f.created_at)}</td>
-                <td><button class="btn btn-sm btn-outline-secondary js-aml-profile" data-user="${f.actor_user_id}">ملفّ الخطر</button></td>
+                <td class="text-nowrap">
+                    <button class="btn btn-sm btn-outline-secondary js-aml-profile" data-user="${f.actor_user_id}">ملفّ الخطر</button>
+                    <button class="btn btn-sm btn-outline-dark js-aml-open-case" data-ulid="${esc(f.flag_ulid)}">فتح قضية</button>
+                </td>
                 <td>${pending
                     ? `<button class="btn btn-sm btn-success js-aml-flag" data-do="approve" data-ulid="${esc(f.flag_ulid)}">اعتماد</button>
                        <button class="btn btn-sm btn-outline-danger js-aml-flag" data-do="reject" data-ulid="${esc(f.flag_ulid)}">رفض</button>`
@@ -300,6 +362,252 @@
         const j = await send(`/alerts/${b.dataset.ulid}/resolve`, {note: note.trim()});
         alert(j.message || (j.success ? 'تم' : 'فشل'));
         loadAlerts();
+    });
+
+    // ---------- التحقيقات ----------
+    //
+    // الجسر الذي كان مفقوداً: النظام يرصد ويعلّق، ثمّ لا شيء يجمع عشرين
+    // تنبيهاً على عميلٍ واحد في ملفٍّ له رقمٌ وضابطٌ وقرار. والمنظّم لا يسأل
+    // «هل رأيتم؟» بل «أروني ملفّ القضية».
+    document.addEventListener('click', async function (e) {
+        const b = e.target.closest('.js-aml-open-case');
+        if (!b) return;
+        if (!confirm('فتح قضية تحقيق على هذه العملية؟')) return;
+        const j = await send('/investigations', {flag_ulid: b.dataset.ulid, priority: 'high'});
+        alert(j.message || (j.success ? 'تم' : 'فشل'));
+        if (j.success) loadCases();
+    });
+
+    document.getElementById('aml-case-status').onchange = loadCases;
+
+    const prioBadge = {critical: 'danger', high: 'warning text-dark', medium: 'info', low: 'secondary'};
+    const prioLabel = {critical: 'حرجة', high: 'عالية', medium: 'متوسطة', low: 'منخفضة'};
+    const caseStatus = {open: 'مفتوحة', investigating: 'قيد التحقيق',
+                       pending_decision: 'تنتظر قراراً', closed: 'مغلقة', reopened: 'أُعيد فتحها'};
+
+    async function loadCases() {
+        const st = document.getElementById('aml-case-status').value;
+        const box = document.getElementById('aml-cases');
+        box.innerHTML = '<div class="list-group-item text-muted">جارٍ التحميل…</div>';
+        const j = await get('/investigations' + (st ? '?status=' + st : '?status='));
+        if (!j.success) { box.innerHTML = '<div class="list-group-item text-danger">تعذّر التحميل</div>'; return; }
+
+        const items = j.meta.items || [];
+        if (st === 'open' || st === '') {
+            document.getElementById('aml-case-count').textContent =
+                items.filter(i => i.status !== 'closed').length;
+        }
+
+        box.innerHTML = items.length ? items.map(c => `
+            <button class="list-group-item list-group-item-action js-aml-case" data-id="${c.id}" data-testid="aml-case-${c.id}">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="font-monospace small">${esc(c.case_number)}</div>
+                        <div class="fw-bold">${esc(c.subject_name)}</div>
+                        <div class="small text-muted">${esc(c.subject_phone)}</div>
+                        ${c.officer ? `<div class="small">الضابط: ${esc(c.officer)}</div>`
+                                    : '<div class="small text-danger">بلا ضابط مُسنَد</div>'}
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-${prioBadge[c.priority] || 'secondary'}">${esc(prioLabel[c.priority] || c.priority)}</span>
+                        <div class="small ${c.age_hours > 168 ? 'text-danger fw-bold' : 'text-muted'} mt-1">${c.age_hours} ساعة</div>
+                        <div class="small">${esc(caseStatus[c.status] || c.status)}</div>
+                    </div>
+                </div>
+            </button>`).join('')
+            : '<div class="list-group-item text-muted text-center py-4">لا قضايا</div>';
+    }
+
+    document.addEventListener('click', async function (e) {
+        const b = e.target.closest('.js-aml-case');
+        if (!b) return;
+        const j = await get('/investigations/' + b.dataset.id);
+        if (!j.success) return;
+        renderCase(j.meta);
+    });
+
+    function renderCase(c) {
+        const open = c.status !== 'closed';
+
+        // الخطّ الزمنيّ يُعرَض كاملاً بترتيبه: هو ملفّ القضية، وهو ما يُبرَز
+        // للمنظّم. وحذفُ أيّ حدثٍ منه مستحيلٌ بالتصميم — يُضاف إليه ولا يُعدَّل.
+        document.getElementById('aml-case-detail').innerHTML = `
+            <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+                <div>
+                    <div class="font-monospace text-muted">${esc(c.case_number)}</div>
+                    <h5 class="mb-0">${esc(c.subject_name)}</h5>
+                    <div class="small text-muted">${esc(c.subject_phone)} • #${c.subject_user_id}</div>
+                </div>
+                <div class="text-end">
+                    <span class="badge bg-${prioBadge[c.priority] || 'secondary'}">${esc(prioLabel[c.priority] || c.priority)}</span>
+                    <span class="badge bg-${open ? 'primary' : 'dark'}">${esc(caseStatus[c.status] || c.status)}</span>
+                    <div class="small text-muted mt-1">${c.age_hours} ساعة</div>
+                </div>
+            </div>
+
+            ${c.decision ? `<div class="alert alert-dark py-2">
+                <strong>القرار:</strong> ${esc(c.decision)}
+                ${c.closure_reason ? `<div class="small mt-1">${esc(c.closure_reason)}</div>` : ''}</div>` : ''}
+
+            ${c.reports.length ? `<div class="alert alert-info py-2 small">
+                البلاغات على هذه القضية:
+                ${c.reports.map(r => `<span class="badge bg-secondary">${esc(r.report_number)} — ${esc(r.status)}</span>`).join(' ')}
+            </div>` : ''}
+
+            ${open ? `<div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-sm btn-outline-primary js-case-do" data-do="evidence" data-id="${c.id}">+ دليل</button>
+                <button class="btn btn-sm btn-outline-danger js-case-do" data-do="action" data-id="${c.id}">إجراء امتثال</button>
+                <button class="btn btn-sm btn-outline-dark js-case-do" data-do="str" data-id="${c.id}">توليد بلاغ اشتباه</button>
+                <button class="btn btn-sm btn-success js-case-do" data-do="close" data-id="${c.id}">إغلاق بقرار</button>
+            </div>` : `<div class="mb-3">
+                <button class="btn btn-sm btn-outline-warning js-case-do" data-do="reopen" data-id="${c.id}">إعادة الفتح</button>
+            </div>`}
+
+            <h6>الخطّ الزمنيّ <span class="small text-muted fw-normal">— يُضاف إليه ولا يُعدَّل</span></h6>
+            <ul class="list-group list-group-flush" style="max-height:340px;overflow:auto">
+                ${c.timeline.map(t => `
+                    <li class="list-group-item px-0">
+                        <div class="d-flex justify-content-between">
+                            <span class="badge bg-light text-dark">${esc(t.type_label)}</span>
+                            <small class="text-muted">${esc((t.at || '').slice(0, 16).replace('T', ' '))}</small>
+                        </div>
+                        ${t.note ? `<div class="small mt-1">${esc(t.note)}</div>` : ''}
+                        <div class="small text-muted">${esc(t.actor)}</div>
+                    </li>`).join('') || '<li class="list-group-item text-muted">لا أحداث</li>'}
+            </ul>`;
+    }
+
+    const CASE_ACTIONS = {
+        freeze_account: 'تجميد الحساب', freeze_transaction: 'تجميد العملية',
+        request_kyc: 'طلب تحديث الهوية', request_source_of_funds: 'طلب إثبات مصدر الأموال',
+        escalate: 'تصعيد التحقيق', blacklist: 'إدراج في القائمة السوداء',
+    };
+    const CASE_DECISIONS = {
+        no_action: 'لا إجراء — نشاط مشروع', warning_issued: 'تنبيه العميل',
+        account_frozen: 'تجميد الحساب', blacklisted: 'إدراج في القائمة السوداء',
+        str_filed: 'رُفع بلاغ اشتباه',
+    };
+
+    document.addEventListener('click', async function (e) {
+        const b = e.target.closest('.js-case-do');
+        if (!b) return;
+        const id = b.dataset.id;
+        let j;
+
+        if (b.dataset.do === 'evidence') {
+            const note = prompt('ما وجدتَه (١٠ أحرف على الأقل — يبقى في الملفّ للأبد):');
+            if (!note || note.trim().length < 10) { alert('نصّ الدليل قصير'); return; }
+            j = await send(`/investigations/${id}/evidence`, {note: note.trim()});
+
+        } else if (b.dataset.do === 'action') {
+            const keys = Object.keys(CASE_ACTIONS);
+            const pick = prompt('الإجراء:\n' + keys.map((k, i) => `${i + 1}) ${CASE_ACTIONS[k]}`).join('\n'));
+            const act = keys[parseInt(pick, 10) - 1];
+            if (!act) return;
+            const reason = prompt(`سبب «${CASE_ACTIONS[act]}» (١٠ أحرف على الأقل):`);
+            if (!reason || reason.trim().length < 10) { alert('السبب إلزامي'); return; }
+            j = await send(`/investigations/${id}/action`, {action: act, reason: reason.trim()});
+
+        } else if (b.dataset.do === 'str') {
+            const narrative = prompt('سرد البلاغ — اشرح لماذا اشتُبه في هذا النشاط (٥٠ حرفاً على الأقل).\nهذا النصّ هو ما يقرؤه المنظّم:');
+            if (!narrative || narrative.trim().length < 50) { alert('السرد قصير — البلاغ بلا شرح يُعاد إلينا'); return; }
+            j = await send(`/investigations/${id}/str`, {narrative: narrative.trim()});
+
+        } else if (b.dataset.do === 'close') {
+            const keys = Object.keys(CASE_DECISIONS);
+            const pick = prompt('القرار:\n' + keys.map((k, i) => `${i + 1}) ${CASE_DECISIONS[k]}`).join('\n'));
+            const dec = keys[parseInt(pick, 10) - 1];
+            if (!dec) return;
+            const reason = prompt('سبب الإغلاق (٢٠ حرفاً على الأقل — هو ما يُراجَع لا القرار وحده):');
+            if (!reason || reason.trim().length < 20) { alert('سبب الإغلاق قصير'); return; }
+            j = await send(`/investigations/${id}/close`, {decision: dec, reason: reason.trim()});
+
+        } else {
+            const reason = prompt('سبب إعادة الفتح (١٠ أحرف على الأقل):');
+            if (!reason || reason.trim().length < 10) { alert('السبب إلزامي'); return; }
+            j = await send(`/investigations/${id}/reopen`, {reason: reason.trim()});
+        }
+
+        alert(j.message || (j.success ? 'تم' : 'فشل'));
+        const detail = await get('/investigations/' + id);
+        if (detail.success) renderCase(detail.meta);
+        loadCases();
+        loadReports();
+    });
+
+    // ---------- البلاغات التنظيمية ----------
+    document.getElementById('aml-btn-reports').onclick = loadReports;
+
+    document.getElementById('aml-btn-new-ctr').onclick = async function () {
+        const uid = prompt('رقم العميل:');
+        if (!uid) return;
+        const amount = prompt('المبلغ (يجب أن يكون فوق حدّ بلاغ العملة):');
+        if (!amount) return;
+        const j = await send('/reports/ctr', {user_id: parseInt(uid, 10), amount: amount});
+        alert(j.message || (j.success ? 'تم' : 'فشل'));
+        loadReports();
+    };
+
+    async function loadReports() {
+        const type = document.getElementById('aml-report-type').value;
+        const st = document.getElementById('aml-report-status').value;
+        const box = document.getElementById('aml-reports-list');
+        box.innerHTML = '<div class="text-muted">جارٍ التحميل…</div>';
+
+        const qs = [];
+        if (type) qs.push('type=' + type);
+        if (st) qs.push('status=' + st);
+        const j = await get('/reports' + (qs.length ? '?' + qs.join('&') : ''));
+        if (!j.success) { box.innerHTML = '<div class="alert alert-warning">تعذّر التحميل</div>'; return; }
+
+        const s = j.meta.summary || {};
+        document.getElementById('aml-report-count').textContent = s.pending_total || 0;
+
+        // البلاغ المتأخّر مخالفةٌ بذاته — فالعدد وحده لا يكفي، ويُعرَض معه
+        // أقدمُ بلاغٍ لم يُرسَل.
+        const tile = (label, val, sub, cls) => `
+            <div class="col-lg-3 col-6"><div class="card p-3 h-100 ${cls || ''}">
+                <div class="small text-muted">${label}</div><div class="fs-4 fw-bold">${val}</div>
+                ${sub ? `<div class="small text-muted">${sub}</div>` : ''}</div></div>`;
+
+        document.getElementById('aml-report-summary').innerHTML =
+            tile('بانتظار الإرسال', s.pending_total || 0,
+                 s.oldest_pending_number ? `أقدمها ${esc(s.oldest_pending_number)} منذ ${s.oldest_pending_hours} ساعة` : '',
+                 (s.pending_total || 0) > 0 ? 'border-danger' : '') +
+            tile('اشتباه بانتظار الإرسال', s.pending_str || 0) +
+            tile('عملة بانتظار الإرسال', s.pending_ctr || 0) +
+            tile('أُرسل', (s.submitted_str || 0) + (s.submitted_ctr || 0),
+                 `اشتباه ${s.submitted_str || 0} • عملة ${s.submitted_ctr || 0}`, 'border-success');
+
+        const rows = (j.meta.items || []).map(r => `
+            <tr class="${r.status !== 'submitted' && r.age_hours > 72 ? 'table-danger' : ''}">
+                <td class="font-monospace small">${esc(r.report_number)}</td>
+                <td><span class="badge bg-${r.report_type === 'STR' ? 'warning text-dark' : 'info'}">${esc(r.type_label)}</span></td>
+                <td>${esc(r.subject_name)}<div class="small text-muted">${esc(r.subject_phone)}</div></td>
+                <td>${esc(r.amount)}</td>
+                <td><span class="badge bg-${r.status === 'submitted' ? 'success' : 'secondary'}">${esc(r.status_label)}</span>
+                    ${r.external_reference ? `<div class="small text-muted">${esc(r.external_reference)}</div>` : ''}</td>
+                <td class="small">${esc(r.generated_by)}</td>
+                <td class="small ${r.status !== 'submitted' && r.age_hours > 72 ? 'text-danger fw-bold' : 'text-muted'}">${r.age_hours} ساعة</td>
+                <td>${r.status !== 'submitted'
+                    ? `<button class="btn btn-sm btn-success js-report-submit" data-id="${r.id}" data-num="${esc(r.report_number)}">تأكيد الإرسال</button>`
+                    : ''}</td>
+            </tr>`).join('');
+
+        box.innerHTML = `<div class="table-responsive"><table class="table table-sm" data-testid="aml-reports-table">
+            <thead><tr><th>الرقم</th><th>النوع</th><th>العميل</th><th>المبلغ</th><th>الحالة</th><th>المُولِّد</th><th>العمر</th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="8" class="text-muted text-center py-3">لا بلاغات</td></tr>'}</tbody></table></div>`;
+    }
+
+    document.addEventListener('click', async function (e) {
+        const b = e.target.closest('.js-report-submit');
+        if (!b) return;
+        const ref = prompt(`مرجع الجهة المستقبِلة للبلاغ ${b.dataset.num} (إلزامي).\n\nبلاغٌ «مُرسَل» بلا مرجعٍ منها ادّعاءٌ لا إثبات.`);
+        if (!ref || ref.trim().length < 3) { alert('المرجع إلزامي'); return; }
+        const j = await send(`/reports/${b.dataset.id}/submit`,
+            {external_reference: ref.trim(), note: prompt('ملاحظة (اختياري):') || null});
+        alert(j.message || (j.success ? 'تم' : 'فشل'));
+        loadReports();
     });
 
     // ---------- القواعد ----------

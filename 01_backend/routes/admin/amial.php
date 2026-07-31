@@ -147,6 +147,28 @@ Route::prefix('aml')->name('aml.')->group(function () {
     Route::post('/alerts/{ulid}/resolve', [AdminAmlController::class, 'resolveAlert'])
         ->where('ulid', '[A-Z0-9]{26}')->name('alerts.resolve');
 
+    // AMIAL-AML-INVESTIGATION-001 — مركز التحقيقات (الفصل ١٠، التبويب ٧)
+    Route::get('/investigations', [AdminAmlController::class, 'indexInvestigations'])->name('investigations.index');
+    Route::post('/investigations', [AdminAmlController::class, 'openInvestigation'])->name('investigations.open');
+    Route::get('/investigations/{id}', [AdminAmlController::class, 'showInvestigation'])
+        ->where('id', '[0-9]+')->name('investigations.show');
+    Route::post('/investigations/{id}/evidence', [AdminAmlController::class, 'investigationEvidence'])
+        ->where('id', '[0-9]+')->name('investigations.evidence');
+    Route::post('/investigations/{id}/action', [AdminAmlController::class, 'investigationAction'])
+        ->where('id', '[0-9]+')->name('investigations.action');
+    Route::post('/investigations/{id}/close', [AdminAmlController::class, 'closeInvestigation'])
+        ->where('id', '[0-9]+')->name('investigations.close');
+    Route::post('/investigations/{id}/reopen', [AdminAmlController::class, 'reopenInvestigation'])
+        ->where('id', '[0-9]+')->name('investigations.reopen');
+    Route::post('/investigations/{id}/str', [AdminAmlController::class, 'generateStr'])
+        ->where('id', '[0-9]+')->name('investigations.str');
+
+    // AMIAL-AML-REGREPORT-001 — التقارير التنظيمية (الفصل ١٠، التبويب ٨)
+    Route::get('/reports', [AdminAmlController::class, 'indexReports'])->name('reports.index');
+    Route::post('/reports/ctr', [AdminAmlController::class, 'generateCtr'])->name('reports.ctr');
+    Route::post('/reports/{id}/submit', [AdminAmlController::class, 'submitReport'])
+        ->where('id', '[0-9]+')->name('reports.submit');
+
     // User risk profiles
     Route::get('/users/{userId}/profile', [AdminAmlController::class, 'showUserProfile'])
         ->where('userId', '[0-9]+')->name('users.profile');

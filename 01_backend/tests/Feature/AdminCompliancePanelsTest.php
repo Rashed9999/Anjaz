@@ -266,6 +266,105 @@ class AdminCompliancePanelsTest extends TestCase
             ->assertSee('بانتظار التوقيع الثاني', false);
     }
 
+    // ── مركز التحقيقات والبلاغات عبر اللوحة ─────────────────────────────
+
+    /** @test */
+    public function the_full_investigation_journey_works_through_the_panel_endpoints(): void
+    {
+        // الرحلة التي تطلبها الوثيقة (الفصل ١٠ — Investigation Workflow):
+        // فتح ← دليل ← إجراء ← بلاغ ← إغلاق بقرار. وكلّ خطوةٍ عبر المسار الذي
+        // تستدعيه اللوحة فعلاً، لا عبر الخدمة مباشرةً — فبين الاثنين تحقُّقُ
+        // الصلاحيات والتحقّق من المدخلات، وهما حيث تنكسر الأشياء.
+        $customer = $this->customer('770000201');
+
+        $open = $this->actingAs($this->reviewer, 'user')
+            ->postJson('/admin/amial/aml/investigations',
+                ['user_id' => $customer->id, 'priority' => 'high'])
+            ->assertOk()
+            ->json('meta.investigation');
+
+        $id = $open['id'];
+        $this->assertMatchesRegularExpression('/^INV-\d{4}-\d{6}$/', $open['case_number']);
+
+        $this->actingAs($this->reviewer, 'user')
+            ->postJson("/admin/amial/aml/investigations/{$id}/evidence",
+                ['note' => 'كشف الحساب يُظهر أربعة عشر تحويلاً متقارباً خلال ثلاثة أيام'])
+            ->assertOk();
+
+        $this->actingAs($this->reviewer, 'user')
+            ->postJson("/admin/amial/aml/investigations/{$id}/action",
+                ['action' => 'freeze_account', 'reason' => 'تجميد احترازيّ حتى انتهاء الفحص'])
+            ->assertOk();
+
+        // الإغلاق بادّعاء بلاغٍ غير موجود يُرفض — وهذا هو الضابط الذي يمنع
+        // أخطر ادّعاء في الملفّ.
+        $this->actingAs($this->reviewer, 'user')
+            ->postJson("/admin/amial/aml/investigations/{$id}/close", [
+                'decision' => 'str_filed',
+                'reason' => 'نشاط مشبوه ورُفع بلاغ اشتباه إلى الجهة المختصّة بشأنه',
+            ])
+            ->assertStatus(422);
+
+        $this->actingAs($this->reviewer, 'user')
+            ->postJson("/admin/amial/aml/investigations/{$id}/str", [
+                'narrative' => 'حساب حديث تلقّى تحويلات متقاربة من أطراف غير مترابطة ثمّ '
+                    . 'أُخرجت نقداً خلال ساعات، بنمطٍ لا يتّفق مع نشاطه المُعلن ولا مع حدوده المعتادة.',
+            ])
+            ->assertOk();
+
+        $this->actingAs($this->reviewer, 'user')
+            ->postJson("/admin/amial/aml/investigations/{$id}/close", [
+                'decision' => 'str_filed',
+                'reason' => 'نشاط مشبوه ورُفع بلاغ اشتباه إلى الجهة المختصّة بشأنه',
+            ])
+            ->assertOk();
+
+        // والملفّ يُقرأ كاملاً من اللوحة: الخطّ الزمنيّ هو ما يُبرَز للمنظّم.
+        $detail = $this->actingAs($this->reviewer, 'user')
+            ->getJson("/admin/amial/aml/investigations/{$id}")
+            ->assertOk()
+            ->json('meta');
+
+        $this->assertSame('closed', $detail['status']);
+        $this->assertCount(1, $detail['reports'], 'البلاغ لا يظهر في ملفّ القضية');
+        $this->assertGreaterThanOrEqual(5, count($detail['timeline']),
+            'الخطّ الزمنيّ ناقص — فتح ودليل وإجراء وقرار وإغلاق');
+    }
+
+    /** @test */
+    public function the_reports_tab_shows_what_is_still_unsent(): void
+    {
+        $customer = $this->customer('770000202');
+        $threshold = app(\App\Services\AmlRegulatoryReportService::class)->ctrThreshold();
+
+        $this->actingAs($this->reviewer, 'user')
+            ->postJson('/admin/amial/aml/reports/ctr',
+                ['user_id' => $customer->id, 'amount' => bcadd($threshold, '1', 4)])
+            ->assertOk();
+
+        $body = $this->actingAs($this->reviewer, 'user')
+            ->getJson('/admin/amial/aml/reports')
+            ->assertOk()
+            ->json('meta');
+
+        $this->assertSame(1, $body['summary']['pending_total']);
+        $this->assertNotNull($body['summary']['oldest_pending_number'],
+            'لا يُسمّى أقدم بلاغ لم يُرسَل — فالتأخير لا يُلاحَق');
+
+        // ومن ولّد البلاغ لا يؤكّد إرساله عبر اللوحة أيضاً.
+        $reportId = $body['items'][0]['id'];
+
+        $this->actingAs($this->reviewer, 'user')
+            ->postJson("/admin/amial/aml/reports/{$reportId}/submit",
+                ['external_reference' => 'CBY-2026-0001'])
+            ->assertStatus(422);
+
+        $this->actingAs($this->secondReviewer, 'user')
+            ->postJson("/admin/amial/aml/reports/{$reportId}/submit",
+                ['external_reference' => 'CBY-2026-0001'])
+            ->assertOk();
+    }
+
     // ── أجهزة العميل في مركز الدعم ──────────────────────────────────────
 
     /** @test */

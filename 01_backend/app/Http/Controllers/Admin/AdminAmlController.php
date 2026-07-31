@@ -240,6 +240,213 @@ class AdminAmlController extends Controller
         return $this->ok(['profile' => $profile], 'OVERRIDE_SET', 'تم تطبيق الإعداد');
     }
 
+    // ============ مركز التحقيقات (الفصل ١٠ — التبويب ٧) ============
+
+    public function indexInvestigations(Request $request): JsonResponse
+    {
+        return $this->ok([
+            'items' => app(\App\Services\AmlInvestigationService::class)
+                ->queue($request->query('status', 'open')),
+        ]);
+    }
+
+    public function showInvestigation(int $id): JsonResponse
+    {
+        $inv = \App\Models\Aml\AmlInvestigation::find($id);
+        if (!$inv) return $this->error('NOT_FOUND', 'القضية غير موجودة', 404);
+
+        return $this->ok(app(\App\Services\AmlInvestigationService::class)->detail($inv));
+    }
+
+    /** فتح قضية من عملية معلّقة — الجسر الذي كان مفقوداً بين الرصد والتحقيق. */
+    public function openInvestigation(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'flag_ulid' => 'required_without:user_id|string|size:26',
+            'user_id' => 'required_without:flag_ulid|integer',
+            'priority' => 'sometimes|in:low,medium,high,critical',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $svc = app(\App\Services\AmlInvestigationService::class);
+
+        try {
+            if ($request->filled('flag_ulid')) {
+                $flag = AmlFlaggedTransaction::where('flag_ulid', $request->input('flag_ulid'))->first();
+                if (!$flag) return $this->error('NOT_FOUND', 'العملية غير موجودة', 404);
+                $inv = $svc->openFromFlagged($flag, $request->user(),
+                    $request->input('priority', 'high'));
+            } else {
+                $inv = $svc->open((int) $request->input('user_id'), $request->user(),
+                    'manual', null, $request->input('priority', 'medium'));
+            }
+        } catch (\DomainException $e) {
+            return $this->error('REJECTED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['investigation' => $inv], 'OPENED',
+            'فُتحت القضية ' . $inv->case_number);
+    }
+
+    public function investigationAction(Request $request, int $id): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'action' => 'required|string',
+            'reason' => 'required|string|min:10|max:500',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $inv = \App\Models\Aml\AmlInvestigation::find($id);
+        if (!$inv) return $this->error('NOT_FOUND', 'القضية غير موجودة', 404);
+
+        try {
+            $inv = app(\App\Services\AmlInvestigationService::class)->takeAction(
+                $inv, $request->user(), $request->input('action'), $request->input('reason'),
+            );
+        } catch (\DomainException $e) {
+            return $this->error('REJECTED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['investigation' => $inv], 'DONE', 'نُفِّذ الإجراء وسُجِّل في ملفّ القضية');
+    }
+
+    public function investigationEvidence(Request $request, int $id): JsonResponse
+    {
+        $v = Validator::make($request->all(), ['note' => 'required|string|min:10|max:2000']);
+        if ($v->fails()) return $this->validationError($v);
+
+        $inv = \App\Models\Aml\AmlInvestigation::find($id);
+        if (!$inv) return $this->error('NOT_FOUND', 'القضية غير موجودة', 404);
+
+        try {
+            app(\App\Services\AmlInvestigationService::class)
+                ->addEvidence($inv, $request->user(), $request->input('note'));
+        } catch (\DomainException $e) {
+            return $this->error('REJECTED', $e->getMessage(), 422);
+        }
+
+        return $this->ok([], 'ADDED', 'أُضيف الدليل إلى الخطّ الزمنيّ');
+    }
+
+    public function closeInvestigation(Request $request, int $id): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'decision' => 'required|string',
+            'reason' => 'required|string|min:20|max:2000',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $inv = \App\Models\Aml\AmlInvestigation::find($id);
+        if (!$inv) return $this->error('NOT_FOUND', 'القضية غير موجودة', 404);
+
+        try {
+            $inv = app(\App\Services\AmlInvestigationService::class)->close(
+                $inv, $request->user(), $request->input('decision'), $request->input('reason'),
+            );
+        } catch (\DomainException $e) {
+            return $this->error('REJECTED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['investigation' => $inv], 'CLOSED', 'أُغلقت القضية');
+    }
+
+    public function reopenInvestigation(Request $request, int $id): JsonResponse
+    {
+        $v = Validator::make($request->all(), ['reason' => 'required|string|min:10|max:500']);
+        if ($v->fails()) return $this->validationError($v);
+
+        $inv = \App\Models\Aml\AmlInvestigation::find($id);
+        if (!$inv) return $this->error('NOT_FOUND', 'القضية غير موجودة', 404);
+
+        try {
+            $inv = app(\App\Services\AmlInvestigationService::class)
+                ->reopen($inv, $request->user(), $request->input('reason'));
+        } catch (\DomainException $e) {
+            return $this->error('REJECTED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['investigation' => $inv], 'REOPENED', 'أُعيد فتح القضية');
+    }
+
+    // ============ التقارير التنظيمية (الفصل ١٠ — التبويب ٨) ============
+
+    public function indexReports(Request $request): JsonResponse
+    {
+        $svc = app(\App\Services\AmlRegulatoryReportService::class);
+
+        return $this->ok([
+            'items' => $svc->listReports($request->query('type'), $request->query('status')),
+            'summary' => $svc->pendingSummary(),
+            'ctr_threshold' => $svc->ctrThreshold(),
+        ]);
+    }
+
+    public function generateStr(Request $request, int $id): JsonResponse
+    {
+        $v = Validator::make($request->all(), ['narrative' => 'required|string|min:50|max:5000']);
+        if ($v->fails()) return $this->validationError($v);
+
+        $inv = \App\Models\Aml\AmlInvestigation::find($id);
+        if (!$inv) return $this->error('NOT_FOUND', 'القضية غير موجودة', 404);
+
+        try {
+            $report = app(\App\Services\AmlRegulatoryReportService::class)
+                ->generateStr($inv, $request->user(), $request->input('narrative'));
+        } catch (\DomainException $e) {
+            return $this->error('REJECTED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['report' => $report], 'GENERATED',
+            'وُلِّد بلاغ الاشتباه ' . $report->report_number);
+    }
+
+    public function generateCtr(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'user_id' => 'required|integer',
+            'amount' => 'required|numeric',
+            'transaction_ulid' => 'sometimes|nullable|string|size:26',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        try {
+            $report = app(\App\Services\AmlRegulatoryReportService::class)->generateCtr(
+                (int) $request->input('user_id'),
+                (string) $request->input('amount'),
+                $request->user(),
+                $request->input('transaction_ulid'),
+            );
+        } catch (\DomainException $e) {
+            return $this->error('REJECTED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['report' => $report], 'GENERATED',
+            'وُلِّد بلاغ العملة ' . $report->report_number);
+    }
+
+    public function submitReport(Request $request, int $id): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'external_reference' => 'required|string|min:3|max:120',
+            'note' => 'sometimes|nullable|string|max:1000',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $report = \App\Models\Aml\AmlRegulatoryReport::find($id);
+        if (!$report) return $this->error('NOT_FOUND', 'البلاغ غير موجود', 404);
+
+        try {
+            $report = app(\App\Services\AmlRegulatoryReportService::class)->markSubmitted(
+                $report, $request->user(),
+                $request->input('external_reference'), $request->input('note'),
+            );
+        } catch (\DomainException $e) {
+            return $this->error('REJECTED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['report' => $report], 'SUBMITTED', 'سُجّل إرسال البلاغ بمرجع الجهة');
+    }
+
     // ============================================================
     private function ok(array $meta, string $code = 'OK', string $message = 'OK'): JsonResponse
     {
