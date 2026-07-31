@@ -21,4 +21,15 @@ class PaymentRequestRepo extends GetxService {
   Future<Response> pay(String code) => apiClient.postData('$_base/code/$code/pay', {});
 
   Future<Response> cancel(int id) => apiClient.postData('$_base/$id/cancel', {});
+
+  // AMIAL-REQUEST-DIRECT-001 — الطرفان الناقصان في «يوافق أو يرفض».
+  //
+  // الدفع بالرمز القصير مسارُ من وصله رابط. أمّا من وصله الطلبُ في قائمته
+  // فلا يملك رمزاً يكتبه — فيراه ولا يستطيع دفعه.
+  Future<Response> payById(int id) => apiClient.postData('$_base/$id/pay', {});
+
+  Future<Response> decline(int id, {String? reason}) =>
+      apiClient.postData('$_base/$id/decline', {
+        if (reason != null && reason.isNotEmpty) 'reason': reason,
+      });
 }

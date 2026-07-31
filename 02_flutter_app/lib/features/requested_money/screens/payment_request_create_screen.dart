@@ -52,9 +52,25 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
       _snack('المبلغ يجب أن يكون أكبر من صفر');
       return;
     }
+
+    // AMIAL-REQUEST-DIRECT-001: المستلم إلزاميّ.
+    //
+    // كان اختيارياً وتحته سطرٌ يقول «اتركه فارغاً لجعل الطلب عاماً» — فكان
+    // المسار الافتراضي رابطاً يُشارَك باليد، بينما المتوقَّع أن يصل الطلبُ
+    // صاحبَه فيوافق أو يرفض. والرابط يبقى، لكن احتياطاً لمن ليس على أميال
+    // لا مساراً أوّل.
+    final phone = _recipientPhone.text.trim();
+    if (phone.isEmpty) {
+      _snack('اختر من تطلب منه — أو أدخل رقمه');
+      return;
+    }
+    if (phone.replaceAll(RegExp(r'[^0-9]'), '').length < 9) {
+      _snack('رقم الهاتف غير مكتمل');
+      return;
+    }
     final ok = await c.create(
       amount: _amount.text.trim(),
-      recipientPhone: _recipientPhone.text.trim().isEmpty ? null : _recipientPhone.text.trim(),
+      recipientPhone: phone,
       recipientName: _recipientName.text.trim().isEmpty ? null : _recipientName.text.trim(),
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       shareMethod: _shareMethod,
@@ -116,8 +132,8 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
           ),
           const SizedBox(height: 20),
 
-          // المستلم (اختياري)
-          const Text('المستلم (اختياري)', textAlign: TextAlign.right,
+          // من تطلب منه — إلزاميّ
+          const Text('من تطلب منه', textAlign: TextAlign.right,
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           Container(
@@ -148,7 +164,8 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
           ),
           const SizedBox(height: 6),
           Text(
-            'اتركه فارغاً لجعل الطلب عاماً (أيّ شخص يفتح الرابط)',
+            'إن كان الرقم على أميال يصله الطلب فوراً ويوافق أو يرفض. '
+            'وإن لم يكن، تحصل على رابط ترسله له.',
             textAlign: TextAlign.right,
             style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
           ),

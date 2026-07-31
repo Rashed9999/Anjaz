@@ -292,6 +292,17 @@ Route::middleware(['auth:api'])->group(function () {
             ->middleware('amial.rate-limit:payment_request_pay,30,1')->name('pay');
         Route::post('/{id}/cancel', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'cancel'])
             ->where('id', '[0-9]+')->name('cancel');
+
+        // AMIAL-REQUEST-DIRECT-001 — الطرفان الناقصان في «يوافق أو يرفض».
+        //
+        // كان الدفع لا يُمكن إلّا بالرمز القصير — وهو مسار من وصله رابط. أمّا
+        // من وصله الطلبُ في قائمته فلا يملك رمزاً يكتبه. ولا رفضَ إطلاقاً:
+        // من لا يريد الطلب يتجاهله حتى تنتهي صلاحيته، والطالب ينتظر أسبوعاً.
+        Route::post('/{id}/decline', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'decline'])
+            ->where('id', '[0-9]+')->name('decline');
+        Route::post('/{id}/pay', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'payById'])
+            ->where('id', '[0-9]+')
+            ->middleware('amial.rate-limit:payment_request_pay,30,1')->name('pay-by-id');
     });
 
     // -------- Legal Terms --------

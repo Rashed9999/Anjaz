@@ -135,4 +135,54 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
 
         return $this->ok(['request' => $cancelled], 'CANCELLED', 'تم الإلغاء');
     }
+
+    /**
+     * POST /payment-requests/{id}/decline  {reason?}
+     *
+     * AMIAL-REQUEST-DIRECT-001 — الطرف الناقص في «يوافق أو يرفض».
+     *
+     * كان في المسار «ادفع» و«ألغِ» (للطالب) ولا «ارفض» (للمستلم). فمن وصله
+     * طلبٌ لا يريده لم يكن أمامه إلّا تجاهله حتى تنتهي صلاحيته — والطالب
+     * ينتظر أسبوعاً ثمّ يتّصل.
+     */
+    public function decline(Request $request, int $id): JsonResponse
+    {
+        $req = PaymentRequest::find($id);
+        if (!$req) return $this->error('NOT_FOUND', 'الطلب غير موجود', 404);
+
+        try {
+            $declined = $this->service->decline(
+                $request->user(), $req, $request->input('reason'),
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
+        } catch (\RuntimeException $e) {
+            return $this->error('DECLINE_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['request' => $declined], 'DECLINED', 'تم رفض الطلب');
+    }
+
+    /**
+     * POST /payment-requests/{id}/pay — الدفع من قائمة الواردة.
+     *
+     * كان الدفع لا يُمكن إلّا بالرمز القصير (`code/{code}/pay`) — وهو مسار
+     * من وصله رابط. أمّا من وصله الطلبُ في قائمته فلا يملك رمزاً يكتبه،
+     * فيبقى يراه ولا يستطيع دفعه.
+     */
+    public function payById(Request $request, int $id): JsonResponse
+    {
+        $req = PaymentRequest::find($id);
+        if (!$req) return $this->error('NOT_FOUND', 'الطلب غير موجود', 404);
+
+        try {
+            $result = $this->service->pay($request->user(), $req);
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
+        } catch (\RuntimeException $e) {
+            return $this->error('PAY_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok($result, 'PAID', 'تم الدفع');
+    }
 }

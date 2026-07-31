@@ -59,7 +59,6 @@ class LedgerCoverageGuardTest extends TestCase
         'FamilyFundService' => 'دَين معلوم: صندوق العائلة لا يُرحَّل — نفس البند',
         'CharityService' => 'دَين معلوم: تسوية الجمعيات لا تُرحَّل (التبرّع نفسه يُرحَّل)',
         'SubscriptionService' => 'دَين معلوم: رسوم الاشتراك لا تُرحَّل — نفس البند',
-        'PaymentRequestService' => 'ينشئ طلب دفع؛ التنفيذ يمرّ بمسار الدفع المُرحِّل',
 
         // ── أدوات لا خدمات مال ──
         'FinancialGuardService' => 'الأداة التي تُحرّك الرصيد؛ الترحيل مسؤولية من ناداها',
@@ -83,6 +82,11 @@ class LedgerCoverageGuardTest extends TestCase
         'DonationsService',
         'PendingTransferService',
         'UniversalSettlementService',
+        // AMIAL-LEDGER-REQUEST-001: كانت مُعفاة بسببٍ مكتوبٍ خطأً — «التنفيذ
+        // يمرّ بمسار الدفع المُرحِّل» — وهي تُحرّك المال بيدها في pay().
+        // واكتُشف بقراءة الدالّة لا بالحارس: الحارس يقبل السبب المكتوب ولا
+        // يتحقّق منه، وهذا حدّه الذي يجب أن يُعرف.
+        'PaymentRequestService',
     ];
 
     /**
@@ -140,7 +144,18 @@ class LedgerCoverageGuardTest extends TestCase
         $src = file_get_contents($path);
 
         return (bool) preg_match('/\bPostsToLedger\b/', $src)
-            || (bool) preg_match('/\bLedgerService\b/', $src);
+            || (bool) preg_match('/\bLedgerService\b/', $src)
+            // نداءُ ترحيلٍ صريح مهما كان مصدره.
+            //
+            // وضُبطت هذه الإشارة على مرحلتين: أوّلاً كانت `PostsToLedger` أو
+            // `LedgerService` نصّاً — فأعلن الحارسُ `PaymentRequestService`
+            // «بلا قرار» وهي تُرحّل عبر `TransactionTrait` الذي يرث السمة،
+            // فلا يظهر الاسمان في ملفّها.
+            //
+            // ثمّ جُرّب `use TransactionTrait;` علامةً — فاتّهم سبعَ خدماتٍ
+            // بأنها «صارت تُرحّل» وهي تستعمل السمة لأشياء أخرى. استعمالُ
+            // السمة ليس ترحيلاً؛ الإشارة الوحيدة الصادقة هي **النداء**.
+            || (bool) preg_match('/\$this->ledger[A-Z]\w*\s*\(/', $src);
     }
 
     public function test_the_scan_actually_finds_services(): void

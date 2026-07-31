@@ -101,6 +101,46 @@ class PaymentRequestController extends GetxController implements GetxService {
     }
   }
 
+  /// المستلم يوافق: يدفع الطلب من قائمته بلا رمز.
+  Future<bool> payById(int id) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.payById(id);
+      if (_ok(r)) {
+        incoming.removeWhere((e) => e['id'] == id);
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'فشل الدفع';
+      return false;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  /// المستلم يرفض. والرفض غير الإلغاء: الإلغاء يفعله الطالب.
+  Future<bool> decline(int id, {String? reason}) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.decline(id, reason: reason);
+      if (_ok(r)) {
+        incoming.removeWhere((e) => e['id'] == id);
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'فشل الرفض';
+      return false;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
   Future<bool> cancel(int id) async {
     try {
       isSubmitting.value = true;

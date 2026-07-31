@@ -64,7 +64,7 @@ class PaymentRequestService
             $recipientId = User::where('phone', $recipientPhone)->value('id');
         }
 
-        return PaymentRequest::create([
+        $request = PaymentRequest::create([
             'request_ulid' => (string) Str::ulid(),
             'short_code' => $this->generateShortCode(),
             'requester_user_id' => $requester->id,
@@ -80,6 +80,103 @@ class PaymentRequestService
             'recurring_period' => $isRecurring ? $recurringPeriod : null,
             'zone_code' => $requester->zone_code ?? 'SOUTH',
         ]);
+
+        // AMIAL-REQUEST-DIRECT-001: يُخطَر المستلم فور الإنشاء.
+        //
+        // **العطل الذي يعالجه:** كان الطلب يُربَط بالمستلم (`recipient_user_id`)
+        // ثم **لا يُشعَر بشيء**. الإشعار الوحيد كان بعد الدفع — أي بعد فوات
+        // الأوان. فيُنشئ الطالبُ طلباً ويظنّ أنه وصل، والمستلم لا يعلم بشيء،
+        // ولا مكان في التطبيق يعرض «طلبات واردة».
+        //
+        // ولذلك بدا للمستخدم أن «طلب المال» صار رابطاً يُشارَك يدوياً بينما
+        // الطريقة المعتادة — يصل ويوافق أو يرفض — قائمةٌ في الخلفية ومقطوعة
+        // عن الواجهة.
+        $this->notifyRecipientOfNewRequest($request, $requester);
+
+        return $request;
+    }
+
+    /**
+     * إخطار المستلم بطلبٍ جديد — إن كان مسجَّلاً.
+     *
+     * غير مُعطِّل عمداً: فشلُ إشعارٍ لا يجوز أن يمنع إنشاء الطلب. والطلب يبقى
+     * ظاهراً للمستلم في «الطلبات الواردة» ولو ضاع الإشعار — فالقائمة هي
+     * مصدر الحقيقة، والإشعار تنبيهٌ عليها.
+     */
+    private function notifyRecipientOfNewRequest(PaymentRequest $request, User $requester): void
+    {
+        if (!$request->recipient_user_id) {
+            return; // رقمٌ غير مسجَّل — يُشارَك بالرابط
+        }
+
+        try {
+            $recipient = User::find($request->recipient_user_id);
+            if (!$recipient) {
+                return;
+            }
+
+            $this->notif->dispatch(
+                $recipient,
+                'payment_request_received',
+                'طلب دفع جديد',
+                trim(($requester->f_name ?? 'أحدهم')) . ' يطلب منك '
+                    . Helpers::money($request->amount) . ' ر.ي'
+                    . ($request->note ? " — {$request->note}" : ''),
+                data: [
+                    'amount' => (string) $request->amount,
+                    'short_code' => $request->short_code,
+                    'request_ulid' => $request->request_ulid,
+                    'requester_name' => $requester->f_name,
+                    'requester_phone' => $requester->phone,
+                ],
+            );
+        } catch (\Throwable $e) {
+            \Log::warning('notifyRecipientOfNewRequest failed', [
+                'request' => $request->id, 'err' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * المستلم يرفض الطلب.
+     *
+     * ويُفصل الرفض عن الإلغاء: الإلغاء يفعله **الطالب** فيسحب طلبه، والرفض
+     * يفعله **المستلم**. والطالب يحتاج أن يعرف أيّهما وقع — فالمرفوض لا
+     * يُعاد إرساله، والملغى قد يُعاد.
+     */
+    public function decline(User $recipient, PaymentRequest $request, ?string $reason = null): PaymentRequest
+    {
+        if ($request->recipient_user_id !== $recipient->id) {
+            throw new InvalidArgumentException('هذا الطلب ليس موجّهاً إليك');
+        }
+        if ($request->status !== 'pending') {
+            throw new RuntimeException('لا يمكن رفض طلب غير نشط');
+        }
+
+        $request->update([
+            'status' => 'declined',
+            'note' => $reason ? mb_substr($reason, 0, 255) : $request->note,
+        ]);
+
+        // الطالب ينتظر جواباً؛ وصمتُ الرفض يجعله يعيد الإرسال ويتّصل.
+        try {
+            $requester = User::find($request->requester_user_id);
+            if ($requester) {
+                $this->notif->dispatch(
+                    $requester,
+                    'payment_request_declined',
+                    'رُفض طلبك',
+                    trim(($recipient->f_name ?? 'المستلم')) . ' رفض طلب '
+                        . Helpers::money($request->amount) . ' ر.ي'
+                        . ($reason ? " — {$reason}" : ''),
+                    data: ['short_code' => $request->short_code],
+                );
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('decline notification failed', ['err' => $e->getMessage()]);
+        }
+
+        return $request->fresh();
     }
 
     /** يعيد الطلب بالرمز القصير (يستخدم في public endpoint). */
@@ -137,6 +234,24 @@ class PaymentRequestService
                 'paid_transaction_id' => $txId,
                 'paid_at' => now(),
             ]);
+
+            // AMIAL-LEDGER-REQUEST-001: قيد مزدوج داخل المعاملة.
+            //
+            // كان هذا المسار يُحرّك المال بـ`debit`/`credit` **ولا يُرحّل**.
+            // وسببُ إعفاء هذه الخدمة في LedgerCoverageGuardTest كان مكتوباً
+            // خطأً: «التنفيذ يمرّ بمسار الدفع المُرحِّل» — وهو لا يمرّ به، بل
+            // يُحرّك المال هنا بيده.
+            //
+            // واكتُشف بقراءة الدالّة لا بفحص الحارس: الحارس يقبل السببَ
+            // المكتوب ولا يتحقّق منه — وهذا حدّه الذي يجب أن يُعرف.
+            $this->ledgerTransfer(
+                fromUserId: $payer->id,
+                toUserId: $requesterId,
+                amount: $amount,
+                sourceType: 'payment_request',
+                sourceId: $request->request_ulid,
+                description: 'دفع طلب مال',
+            );
 
             // إشعارات
             $this->dispatchPaidNotifications($request, $payer);

@@ -10,6 +10,7 @@ import 'package:amyal_pay/features/notification/screens/notifications_center_scr
 import 'package:amyal_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amyal_pay/features/me/domain/me_repo.dart';
 import 'package:amyal_pay/features/requested_money/screens/payment_request_create_screen.dart';
+import 'package:amyal_pay/features/requested_money/screens/incoming_requests_screen.dart';
 import 'package:amyal_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amyal_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
 import 'package:amyal_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
@@ -196,8 +197,14 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                 _serviceCard(icon: Icons.arrow_downward, label: 'سحب نقدي', subtitle: 'عبر الوكيل',
                     color: Colors.green, onTap: () => Get.to(() => const WithdrawRequestScreen())),
               if (access.has('payment_requests'))
-                _serviceCard(icon: Icons.request_quote, label: 'طلب أموال', subtitle: 'QR أو رابط',
+                _serviceCard(icon: Icons.request_quote, label: 'طلب أموال', subtitle: 'يصل لمن تطلب منه',
                     color: AmyalColors.yellowDark, onTap: () => Get.to(() => const PaymentRequestCreateScreen())),
+              // AMIAL-REQUEST-DIRECT-001: الطلبات الواردة — كانت القائمة مبنيّة
+              // في المتحكّم والخلفية معاً، ولا شاشة تقرؤها. فمن طُلب منه مالٌ
+              // لم يكن يراه أبداً.
+              if (access.has('payment_requests'))
+                _serviceCard(icon: Icons.inbox, label: 'طلبات واردة', subtitle: 'وافق أو ارفض',
+                    color: AmyalColors.primary, onTap: () => Get.to(() => const IncomingRequestsScreen())),
               if (access.has('safe_pay'))
                 _serviceCard(icon: Icons.shield, label: 'الدفع الآمن', subtitle: 'حماية للبيع/الشراء',
                     color: Colors.green.shade700, onTap: () => Get.to(() => const MySafePaymentsScreen())),

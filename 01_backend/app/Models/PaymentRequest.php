@@ -32,7 +32,10 @@ class PaymentRequest extends Model
         'expires_at' => 'datetime',
     ];
 
-    public const STATUSES = ['pending', 'paid', 'cancelled', 'expired'];
+    // AMIAL-REQUEST-DIRECT-001: 'declined' — المستلم يرفض. ويُفصل عن
+    // 'cancelled' (الطالب يسحب طلبه): الطالب يحتاج أن يعرف أيّهما وقع،
+    // فالمرفوض لا يُعاد إرساله والملغى قد يُعاد.
+    public const STATUSES = ['pending', 'paid', 'cancelled', 'expired', 'declined'];
     public const PERIODS = ['daily', 'weekly', 'monthly'];
 
     public function requester(): BelongsTo
