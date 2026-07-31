@@ -147,6 +147,14 @@ Route::prefix('aml')->name('aml.')->group(function () {
     Route::post('/alerts/{ulid}/resolve', [AdminAmlController::class, 'resolveAlert'])
         ->where('ulid', '[A-Z0-9]{26}')->name('alerts.resolve');
 
+    // AMIAL-AML-DASHBOARD-001 — المؤشّرات والتبويبات ٢ و٣ و٦
+    Route::get('/dashboard', [AdminAmlController::class, 'dashboard'])->name('dashboard');
+    Route::get('/large-transactions', [AdminAmlController::class, 'largeTransactions'])->name('large.index');
+    Route::get('/structuring', [AdminAmlController::class, 'structuring'])->name('structuring.index');
+    Route::get('/sanctions', [AdminAmlController::class, 'sanctions'])->name('sanctions.index');
+    Route::post('/sanctions/{id}/review', [AdminAmlController::class, 'reviewSanction'])
+        ->where('id', '[0-9]+')->name('sanctions.review');
+
     // AMIAL-AML-INVESTIGATION-001 — مركز التحقيقات (الفصل ١٠، التبويب ٧)
     Route::get('/investigations', [AdminAmlController::class, 'indexInvestigations'])->name('investigations.index');
     Route::post('/investigations', [AdminAmlController::class, 'openInvestigation'])->name('investigations.open');

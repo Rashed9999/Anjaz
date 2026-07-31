@@ -240,6 +240,57 @@ class AdminAmlController extends Controller
         return $this->ok(['profile' => $profile], 'OVERRIDE_SET', 'تم تطبيق الإعداد');
     }
 
+    // ============ لوحة المؤشّرات + التبويبات ٢ و٣ و٦ ============
+
+    public function dashboard(): JsonResponse
+    {
+        return $this->ok(app(\App\Services\AmlDashboardService::class)->metrics());
+    }
+
+    /** التبويب ٢ — مراقبة العمليات الكبيرة. */
+    public function largeTransactions(): JsonResponse
+    {
+        return $this->ok([
+            'items' => app(\App\Services\AmlDashboardService::class)->largeTransactionList(),
+        ]);
+    }
+
+    /** التبويب ٣ — كشف تقسيم العمليات. */
+    public function structuring(): JsonResponse
+    {
+        return $this->ok([
+            'items' => app(\App\Services\AmlDashboardService::class)->structuringList(),
+        ]);
+    }
+
+    /** التبويب ٦ — فحص العقوبات. */
+    public function sanctions(Request $request): JsonResponse
+    {
+        return $this->ok([
+            'items' => app(\App\Services\AmlDashboardService::class)
+                ->sanctionList($request->query('review_status')),
+        ]);
+    }
+
+    public function reviewSanction(Request $request, int $id): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'decision' => 'required|in:dismissed,confirmed',
+            'note' => 'required|string|min:10|max:2000',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        try {
+            $out = app(\App\Services\AmlDashboardService::class)->reviewSanctionMatch(
+                $id, $request->user(), $request->input('decision'), $request->input('note'),
+            );
+        } catch (\DomainException $e) {
+            return $this->error('REJECTED', $e->getMessage(), 422);
+        }
+
+        return $this->ok($out, 'REVIEWED', 'سُجّل القرار في المطابقة');
+    }
+
     // ============ مركز التحقيقات (الفصل ١٠ — التبويب ٧) ============
 
     public function indexInvestigations(Request $request): JsonResponse

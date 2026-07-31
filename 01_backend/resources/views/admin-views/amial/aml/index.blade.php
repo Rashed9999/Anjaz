@@ -34,7 +34,11 @@
     <div id="aml-shadow-banner"></div>
 
     <ul class="nav nav-tabs mb-3" role="tablist">
-        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#aml-tab-flagged" data-testid="aml-tab-flagged">🚩 عمليات معلّقة <span class="badge bg-danger" id="aml-flag-count">0</span></button></li>
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#aml-tab-dash" data-testid="aml-tab-dash">📊 المؤشّرات</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#aml-tab-flagged" data-testid="aml-tab-flagged">🚩 عمليات معلّقة <span class="badge bg-danger" id="aml-flag-count">0</span></button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#aml-tab-large" data-testid="aml-tab-large">💰 العمليات الكبيرة</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#aml-tab-struct" data-testid="aml-tab-struct">🧩 تقسيم العمليات</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#aml-tab-sanctions" data-testid="aml-tab-sanctions">🚫 العقوبات <span class="badge bg-danger" id="aml-sanction-count">0</span></button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#aml-tab-alerts" data-testid="aml-tab-alerts">🔔 التنبيهات</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#aml-tab-cases" data-testid="aml-tab-cases">🗂️ التحقيقات <span class="badge bg-warning text-dark" id="aml-case-count">0</span></button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#aml-tab-reports" data-testid="aml-tab-reports">📄 البلاغات التنظيمية <span class="badge bg-danger" id="aml-report-count">0</span></button></li>
@@ -43,8 +47,58 @@
 
     <div class="tab-content">
 
+        {{-- ============ المؤشّرات (الفصل ١٠ — Dashboard) ============ --}}
+        <div class="tab-pane fade show active" id="aml-tab-dash">
+            <div id="aml-dash" class="row g-3" data-testid="aml-dash"></div>
+        </div>
+
+        {{-- ============ العمليات الكبيرة (التبويب ٢) ============ --}}
+        <div class="tab-pane fade" id="aml-tab-large">
+            <div class="card p-3">
+                <div class="alert alert-secondary py-2 small">
+                    العمود الذي يجعل هذه الصفحة أداةَ امتثال لا قائمةَ عمليات هو
+                    <strong>«بلاغ العملة»</strong>: عمليةٌ فوق الحدّ بلا بلاغ مخالفةٌ صريحة.
+                </div>
+                <div class="d-flex mb-2"><button class="btn btn-outline-primary btn-sm ms-auto" id="aml-btn-large">تحديث</button></div>
+                <div id="aml-large-list"></div>
+            </div>
+        </div>
+
+        {{-- ============ تقسيم العمليات (التبويب ٣) ============ --}}
+        <div class="tab-pane fade" id="aml-tab-struct">
+            <div class="card p-3">
+                <div class="alert alert-secondary py-2 small">
+                    التقسيم <strong>نمطٌ لا حادثة</strong> — ولذلك يُجمَّع على العميل لا على العملية.
+                    وصفٌّ بلا قضيّة مفتوحة هو الرصد الذي يقف عنده النظام.
+                </div>
+                <div class="d-flex mb-2"><button class="btn btn-outline-primary btn-sm ms-auto" id="aml-btn-struct">تحديث</button></div>
+                <div id="aml-struct-list"></div>
+            </div>
+        </div>
+
+        {{-- ============ العقوبات (التبويب ٦) ============ --}}
+        <div class="tab-pane fade" id="aml-tab-sanctions">
+            <div class="card p-3">
+                <div class="alert alert-secondary py-2 small">
+                    <strong>المطابقة المحتملة لا تحسم شيئاً بنفسها</strong> — تبقى «لم تُراجَع» حتى يبتّ فيها موظّف.
+                    والاستبعاد يحتاج سبباً أطول من التأكيد: التأكيد يوقف الحساب وأثره ظاهر،
+                    أمّا الاستبعاد فيُعيد العميل إلى العمل بلا أثر — وهو القرار الذي يُسأل عنه في التفتيش.
+                </div>
+                <div class="d-flex gap-2 mb-3 flex-wrap">
+                    <select id="aml-sanction-status" class="form-select" style="max-width:220px">
+                        <option value="pending">لم تُراجَع</option>
+                        <option value="confirmed">مؤكَّدة</option>
+                        <option value="dismissed">مستبعَدة</option>
+                        <option value="">الكل</option>
+                    </select>
+                    <button class="btn btn-outline-primary" id="aml-btn-sanctions">تحديث</button>
+                </div>
+                <div id="aml-sanctions-list"></div>
+            </div>
+        </div>
+
         {{-- ============ العمليات المعلّقة ============ --}}
-        <div class="tab-pane fade show active" id="aml-tab-flagged">
+        <div class="tab-pane fade" id="aml-tab-flagged">
             <div class="card p-3">
                 <div class="d-flex gap-2 mb-3 flex-wrap align-items-center">
                     <select id="aml-flag-status" class="form-select" style="max-width:220px">
@@ -205,6 +259,212 @@
         const h = (Date.now() - new Date(iso).getTime()) / 3600000;
         return h > 72 ? 'text-danger fw-bold' : (h > 24 ? 'text-warning fw-bold' : 'text-muted');
     }
+
+    // ---------- المؤشّرات ----------
+    //
+    // القرار الأهمّ هنا ليس حسابياً: ماذا يُعرَض عن ضابطٍ غير موجود؟
+    //
+    // «٠» في لوحة امتثال تُقرأ «فحصنا فلم نجد»، لا «لم نفحص». والفرق بينهما
+    // هو الفرق بين منصّةٍ نظيفة وأخرى عمياء — ومن يقرأ اللوحة يبني على ما
+    // قرأ. فما لم يُبنَ يُعرَض «غير مُفعَّل» بلا رقم.
+    function tile(label, value, sub, cls) {
+        return `<div class="col-lg-3 col-md-4 col-6"><div class="card p-3 h-100 ${cls || ''}">
+            <div class="small text-muted">${label}</div>
+            <div class="fs-4 fw-bold">${value}</div>
+            ${sub ? `<div class="small text-muted">${sub}</div>` : ''}</div></div>`;
+    }
+
+    function notConfigured(label, why) {
+        return `<div class="col-lg-3 col-md-4 col-6"><div class="card p-3 h-100 border-secondary bg-light">
+            <div class="small text-muted">${label}</div>
+            <div class="fs-6 fw-bold text-secondary">غير مُفعَّل</div>
+            <div class="small text-muted">${esc(why)}</div></div></div>`;
+    }
+
+    async function loadDash() {
+        const box = document.getElementById('aml-dash');
+        box.innerHTML = '<div class="col-12 text-muted">جارٍ التحميل…</div>';
+        const j = await get('/dashboard');
+        if (!j.success) { box.innerHTML = '<div class="col-12 alert alert-warning">تعذّر التحميل</div>'; return; }
+        const m = j.meta;
+
+        let html = '';
+
+        const hr = m.high_risk;
+        if (hr.configured) {
+            html += tile('عملاء عالو الخطر', hr.customers, '', hr.customers > 0 ? 'border-warning' : '')
+                 +  tile('تجّار عالو الخطر', hr.merchants)
+                 // وكيلٌ عالي الخطر مشكلةٌ من نوعٍ آخر: نقطةُ دخولٍ للنقد إلى
+                 // المنصّة كلّها لا حسابٌ واحد.
+                 +  tile('وكلاء عالو الخطر', hr.agents, 'نقاط دخول نقد', hr.agents > 0 ? 'border-danger' : '')
+                 +  tile('القائمة السوداء / البيضاء', hr.blacklisted + ' / ' + hr.whitelisted,
+                         'المستثنون من الرقابة', hr.whitelisted > 0 ? 'border-warning' : '');
+        } else { html += notConfigured('ملفّات الخطر', hr.why); }
+
+        const lt = m.large_transactions;
+        html += tile('عمليات كبيرة (٣٠ يوماً)', lt.flagged_30d, 'الحدّ ' + esc(lt.threshold))
+             +  tile('بلاغات عملة وُلِّدت', lt.ctr_generated_30d, '',
+                     lt.flagged_30d > lt.ctr_generated_30d ? 'border-danger' : 'border-success');
+
+        const st = m.structuring;
+        html += st.configured
+            ? tile('تقسيم عمليات (٣٠ يوماً)', st.matched_30d,
+                   st.distinct_customers_30d + ' عميلاً', st.matched_30d > 0 ? 'border-warning' : '')
+            : notConfigured('تقسيم العمليات', st.why);
+
+        const sc = m.sanctions;
+        html += sc.configured
+            ? tile('مطابقات عقوبات لم تُراجَع', sc.potential_pending,
+                   'مؤكَّدة ' + sc.confirmed + ' • موقوفون ' + sc.blocked_users,
+                   sc.potential_pending > 0 ? 'border-danger' : '')
+            : notConfigured('فحص العقوبات', sc.why);
+
+        html += notConfigured('قوائم المراقبة', m.watchlist.why)
+             +  notConfigured('الأشخاص المعرَّضون سياسيّاً', m.pep.why);
+
+        const iv = m.investigations;
+        html += tile('تحقيقات مفتوحة', iv.open,
+                     iv.unassigned > 0 ? iv.unassigned + ' بلا ضابط مُسنَد' : '',
+                     iv.critical_open > 0 ? 'border-danger' : '')
+             // قضيّةٌ مفتوحة منذ ستّة أشهر ليست تحقيقاً بل إهمالاً.
+             +  tile('أقدم قضيّة مفتوحة', iv.oldest_open_hours + ' ساعة',
+                     esc(iv.oldest_open_case || '—'), iv.oldest_open_hours > 720 ? 'border-danger' : '')
+             +  tile('تحقيقات مغلقة', iv.closed, 'متوسّط الإغلاق ' + iv.avg_close_hours + ' ساعة');
+
+        const rp = m.reports;
+        html += tile('بلاغات بانتظار الإرسال', rp.pending_total,
+                     rp.oldest_pending_number ? 'أقدمها منذ ' + rp.oldest_pending_hours + ' ساعة' : '',
+                     rp.pending_total > 0 ? 'border-danger' : 'border-success');
+
+        box.innerHTML = html;
+        document.getElementById('aml-sanction-count').textContent =
+            (sc.configured ? sc.potential_pending : 0);
+    }
+
+    // ---------- العمليات الكبيرة (التبويب ٢) ----------
+    document.getElementById('aml-btn-large').onclick = loadLarge;
+
+    async function loadLarge() {
+        const box = document.getElementById('aml-large-list');
+        box.innerHTML = '<div class="text-muted">جارٍ التحميل…</div>';
+        const j = await get('/large-transactions');
+        if (!j.success) { box.innerHTML = '<div class="alert alert-warning">تعذّر التحميل</div>'; return; }
+
+        const rows = (j.meta.items || []).map(t => `
+            <tr class="${t.ctr_report ? '' : 'table-danger'}">
+                <td class="font-monospace small">${esc(t.transaction_ulid || t.flag_ulid)}</td>
+                <td>${esc(t.source)}<div class="small text-muted">${esc(t.source_phone)}</div></td>
+                <td>${esc(t.destination)}</td>
+                <td class="fw-bold">${esc(t.amount)}</td>
+                <td>${esc(t.transaction_type)}</td>
+                <td>${esc(t.status)}</td>
+                <td>${t.ctr_report
+                    ? `<span class="badge bg-success">${esc(t.ctr_report)}</span>`
+                    : `<button class="btn btn-sm btn-danger js-quick-ctr" data-user="${t.actor_user_id}" data-amount="${esc(t.amount)}" data-ulid="${esc(t.transaction_ulid || '')}">لم يُبلَّغ — بلّغ الآن</button>`}</td>
+            </tr>`).join('');
+
+        box.innerHTML = `<div class="table-responsive"><table class="table table-sm" data-testid="aml-large-table">
+            <thead><tr><th>المرجع</th><th>المصدر</th><th>الوجهة</th><th>المبلغ</th><th>النوع</th><th>الحالة</th><th>بلاغ العملة</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="7" class="text-muted text-center py-3">لا عمليات فوق الحدّ</td></tr>'}</tbody></table></div>`;
+    }
+
+    document.addEventListener('click', async function (e) {
+        const b = e.target.closest('.js-quick-ctr');
+        if (!b) return;
+        if (!confirm('توليد بلاغ عملة عن هذه العملية؟\n\nبلاغ العملة غير تقديريّ — كلّ عملية فوق الحدّ تُبلَّغ.')) return;
+        const j = await send('/reports/ctr', {
+            user_id: parseInt(b.dataset.user, 10), amount: b.dataset.amount,
+            transaction_ulid: b.dataset.ulid || null,
+        });
+        alert(j.message || (j.success ? 'تم' : 'فشل'));
+        loadLarge(); loadDash();
+    });
+
+    // ---------- تقسيم العمليات (التبويب ٣) ----------
+    document.getElementById('aml-btn-struct').onclick = loadStruct;
+
+    async function loadStruct() {
+        const box = document.getElementById('aml-struct-list');
+        box.innerHTML = '<div class="text-muted">جارٍ التحميل…</div>';
+        const j = await get('/structuring');
+        if (!j.success) { box.innerHTML = '<div class="alert alert-warning">تعذّر التحميل</div>'; return; }
+
+        const rows = (j.meta.items || []).map(s => `
+            <tr class="${s.investigation ? '' : 'table-warning'}">
+                <td>${esc(s.customer)}<div class="small text-muted">${esc(s.phone)}</div></td>
+                <td class="fw-bold">${s.transactions}</td>
+                <td>${esc(s.total_amount)}</td>
+                <td>${s.window_hours} ساعة</td>
+                <td><span class="badge bg-${s.risk_score >= 70 ? 'danger' : 'warning text-dark'}">${esc(s.risk_score)}</span></td>
+                <td>${s.investigation
+                    ? `<span class="badge bg-info">${esc(s.investigation)}</span>`
+                    : `<button class="btn btn-sm btn-dark js-struct-case" data-user="${s.user_id}">افتح قضية</button>`}</td>
+            </tr>`).join('');
+
+        box.innerHTML = `<div class="table-responsive"><table class="table table-sm" data-testid="aml-struct-table">
+            <thead><tr><th>العميل</th><th>عدد العمليات</th><th>المجموع</th><th>النافذة الزمنية</th><th>الخطر</th><th>التحقيق</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="6" class="text-muted text-center py-3">لا أنماط تقسيم مرصودة</td></tr>'}</tbody></table></div>`;
+    }
+
+    document.addEventListener('click', async function (e) {
+        const b = e.target.closest('.js-struct-case');
+        if (!b) return;
+        const j = await send('/investigations', {user_id: parseInt(b.dataset.user, 10), priority: 'high'});
+        alert(j.message || (j.success ? 'تم' : 'فشل'));
+        loadStruct(); loadCases(); loadDash();
+    });
+
+    // ---------- العقوبات (التبويب ٦) ----------
+    document.getElementById('aml-btn-sanctions').onclick = loadSanctions;
+    document.getElementById('aml-sanction-status').onchange = loadSanctions;
+
+    async function loadSanctions() {
+        const st = document.getElementById('aml-sanction-status').value;
+        const box = document.getElementById('aml-sanctions-list');
+        box.innerHTML = '<div class="text-muted">جارٍ التحميل…</div>';
+        const j = await get('/sanctions' + (st ? '?review_status=' + st : ''));
+        if (!j.success) { box.innerHTML = '<div class="alert alert-warning">تعذّر التحميل</div>'; return; }
+
+        const rev = {pending: ['warning text-dark', 'لم تُراجَع'],
+                     confirmed: ['danger', 'مؤكَّدة'], dismissed: ['secondary', 'مستبعَدة']};
+
+        const rows = (j.meta.items || []).map(s => {
+            const r = rev[s.review_status] || rev.pending;
+            return `
+            <tr class="${s.review_status === 'pending' && s.age_hours > 48 ? 'table-danger' : ''}">
+                <td>${esc(s.customer)}<div class="small text-muted">${esc(s.phone)}</div></td>
+                <td class="small">${esc(s.matched_name)}<div class="text-muted">${esc(s.program)}</div></td>
+                <td><span class="badge bg-secondary">${esc(s.list_source)}</span></td>
+                <td>${esc(s.nationality)}</td>
+                <td><span class="badge bg-${s.match_score >= 95 ? 'danger' : 'warning text-dark'}">${esc(s.match_score)}٪</span></td>
+                <td><span class="badge bg-${r[0]}">${r[1]}</span>
+                    ${s.review_note ? `<div class="small text-muted">${esc(s.review_note)}</div>` : ''}</td>
+                <td class="small ${s.review_status === 'pending' && s.age_hours > 48 ? 'text-danger fw-bold' : 'text-muted'}">${s.age_hours} ساعة</td>
+                <td class="text-nowrap">${s.review_status === 'pending'
+                    ? `<button class="btn btn-sm btn-danger js-sanction" data-do="confirmed" data-id="${s.id}">تأكيد</button>
+                       <button class="btn btn-sm btn-outline-secondary js-sanction" data-do="dismissed" data-id="${s.id}">استبعاد</button>`
+                    : ''}</td>
+            </tr>`;
+        }).join('');
+
+        box.innerHTML = `<div class="table-responsive"><table class="table table-sm" data-testid="aml-sanctions-table">
+            <thead><tr><th>العميل</th><th>الاسم المطابق</th><th>القائمة</th><th>الجنسية</th><th>الدرجة</th><th>المراجعة</th><th>العمر</th><th></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="8" class="text-muted text-center py-3">لا مطابقات</td></tr>'}</tbody></table></div>`;
+    }
+
+    document.addEventListener('click', async function (e) {
+        const b = e.target.closest('.js-sanction');
+        if (!b) return;
+        const confirm_ = b.dataset.do === 'confirmed';
+        const note = prompt(confirm_
+            ? 'سبب التأكيد (١٠ أحرف على الأقل) — سيُوقَف الحساب:'
+            : 'سبب الاستبعاد (٢٠ حرفاً على الأقل).\n\nاذكر ما فحصتَه وكيف تبيّن الاختلاف — هذا ما يُسأل عنه في التفتيش.');
+        const min = confirm_ ? 10 : 20;
+        if (!note || note.trim().length < min) { alert(`السبب إلزامي (${min} حرفاً على الأقل)`); return; }
+        const j = await send(`/sanctions/${b.dataset.id}/review`, {decision: b.dataset.do, note: note.trim()});
+        alert(j.message || (j.success ? 'تم' : 'فشل'));
+        loadSanctions(); loadDash();
+    });
 
     // ---------- العمليات المعلّقة ----------
     document.getElementById('aml-btn-flagged').onclick = loadFlagged;
@@ -676,9 +936,14 @@
         loadRules();
     });
 
-    // أوّل ما يُفتح: المعلَّق. هو ما ينتظر قراراً.
+    // أوّل ما يُفتح: المؤشّرات — منها يُعرَف أين يُنظَر.
+    // ثمّ ما يحتاج قراراً: المعلَّق والعقوبات والقضايا والبلاغات.
+    loadDash();
     loadFlagged();
     loadRules();
+    loadSanctions();
+    loadCases();
+    loadReports();
 })();
 </script>
 @endsection
