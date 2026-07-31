@@ -184,6 +184,23 @@ Route::prefix('aml')->name('aml.')->group(function () {
         ->where('userId', '[0-9]+')->name('users.override');
 });
 
+// ============ AMIAL-LEDGER-CENTER-001 — مركز الدفتر (الفصل ١٧) ============
+//
+// الصلاحية `platform.audit.view`: قراءة الدفتر اطّلاعٌ على حركة المال كلّها،
+// وهي من جنس التدقيق لا من جنس خدمة العملاء.
+Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.view')
+    ->group(function () {
+        $lc = App\Http\Controllers\Admin\LedgerCenterController::class;
+
+        Route::get('/', [$lc, 'page'])->name('page');
+        Route::get('/trial-balance', [$lc, 'trialBalance'])->name('trial-balance');
+        Route::get('/accounts', [$lc, 'accounts'])->name('accounts');
+        Route::get('/accounts/{id}/statement', [$lc, 'statement'])
+            ->where('id', '[0-9]+')->name('statement');
+        Route::get('/reconciliation', [$lc, 'reconciliation'])->name('reconciliation');
+        Route::get('/entries', [$lc, 'entries'])->name('entries');
+    });
+
 // ============ AMIAL-SETTLEMENT-PANEL-001 — تسويات الشركاء ============
 //
 // غير `settlements` أدناه: تلك تسويات الوكلاء (`AgentSettlement`). هذه

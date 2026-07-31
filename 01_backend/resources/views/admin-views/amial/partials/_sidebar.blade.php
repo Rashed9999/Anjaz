@@ -171,6 +171,16 @@
     </a>
 </li>
 
+{{-- AMIAL-LEDGER-CENTER-001 — الدفتر أُصلح كلّه ولم تكن تقرؤه شاشة --}}
+@if (auth('user')->check() && auth('user')->user()->hasPlatformPermission('platform.audit.view'))
+<li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/ledger*')?'active':''}}">
+    <a class="nav-link" href="{{route('admin.amial.ledger.page')}}" title="مركز الدفتر">
+        <i class="tio-book nav-icon"></i>
+        <span class="text-truncate">📚 مركز الدفتر (ميزان المراجعة)</span>
+    </a>
+</li>
+@endif
+
 {{-- AMIAL-SETTLEMENT-PANEL-001 — حيث تعيش الموافقة المزدوجة --}}
 <li class="navbar-vertical-aside-has-menu {{Request::is('admin/amial/partner-settlements*')?'active':''}}">
     <a class="nav-link" href="{{route('admin.amial.partner-settlements.page')}}" title="تسويات الشركاء">

@@ -41,6 +41,7 @@ class AdminPanelDeadEndpointGuardTest extends TestCase
         'admin/amial/aml' => 'admin-views/amial/aml/index.blade.php',
         'admin/amial/kyc' => 'admin-views/amial/kyc/index.blade.php',
         'admin/amial/partner-settlements' => 'admin-views/amial/settlements_partners/index.blade.php',
+        'admin/amial/ledger' => 'admin-views/amial/ledger/index.blade.php',
     ];
 
     /**

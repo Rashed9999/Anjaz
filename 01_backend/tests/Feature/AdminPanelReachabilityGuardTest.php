@@ -53,6 +53,9 @@ class AdminPanelReachabilityGuardTest extends TestCase
         'admin.amial.partner-settlements.page' =>
             'الموافقة المزدوجة تعيش على تسويات الشركاء — وبلا لوحة لا يُعرف ما ينتظر توقيعاً ثانياً',
 
+        'admin.amial.ledger.page' =>
+            'الدفتر أُصلح كلّه في هذا المشروع ولم تكن تقرؤه شاشة — وميزان المراجعة أوّل ما يطلبه المدقّق',
+
         'admin.support-center.index' =>
             'حظر الأجهزة يُتّخذ من ملفّ العميل — وهو بديلٌ عن تجميد الحساب كلّه',
     ];
