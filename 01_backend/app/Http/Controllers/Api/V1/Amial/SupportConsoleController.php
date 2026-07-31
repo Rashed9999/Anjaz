@@ -187,7 +187,10 @@ class SupportConsoleController extends Controller
                 'exists' => (bool) $wallet,
             ],
             'kyc' => [
-                'is_verified' => (bool) $user->is_kyc_verified,
+                // AMIAL-KYC-FLAG-001: `=== 1` لا `(bool)`. الافتراضيّ ٣، والكود الذي
+                // يمنع التحويل يقرأ `!= 1` — فـ`(bool)` كانت تعرض «موثَّق» لعميلٍ
+                // ممنوع، فيبحث الموظّف عن سببٍ آخر لا وجود له.
+                'is_verified' => (int) $user->is_kyc_verified === 1,
                 'tier' => $user->kyc_tier,
                 'tier_updated_at' => $user->kyc_tier_updated_at,
             ],
@@ -992,7 +995,7 @@ class SupportConsoleController extends Controller
             },
             'is_active' => (bool) $u->is_active,
             'is_temp_blocked' => (bool) ($u->is_temp_blocked ?? false),
-            'is_kyc_verified' => (bool) $u->is_kyc_verified,
+            'is_kyc_verified' => (int) $u->is_kyc_verified === 1,   // AMIAL-KYC-FLAG-001
         ];
     }
 

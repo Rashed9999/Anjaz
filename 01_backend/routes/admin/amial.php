@@ -184,6 +184,21 @@ Route::prefix('aml')->name('aml.')->group(function () {
         ->where('userId', '[0-9]+')->name('users.override');
 });
 
+// ============ AMIAL-CUSTOMER-CENTER-001 — مركز العملاء (الفصل ٠٢) ============
+//
+// شاشةٌ واحدة تُدار منها كلّ شؤون العميل — والوثيقة تشترط ذلك حرفياً:
+// «دون الحاجة للانتقال بين أكثر من لوحة».
+Route::prefix('customer')->name('customer.')->middleware('platform:platform.customers.view')
+    ->group(function () {
+        $cc = App\Http\Controllers\Admin\CustomerCenterController::class;
+
+        Route::get('/', [$cc, 'page'])->name('page');
+        Route::get('/search', [$cc, 'search'])->name('search');
+        Route::get('/{id}/tab/{tab}', [$cc, 'tab'])
+            ->where(['id' => '[0-9]+', 'tab' => '[a-z]+'])->name('tab');
+        Route::post('/{id}/action', [$cc, 'act'])->where('id', '[0-9]+')->name('action');
+    });
+
 // ============ AMIAL-LEDGER-CENTER-001 — مركز الدفتر (الفصل ١٧) ============
 //
 // الصلاحية `platform.audit.view`: قراءة الدفتر اطّلاعٌ على حركة المال كلّها،

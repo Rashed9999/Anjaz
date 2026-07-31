@@ -39,9 +39,12 @@
         [
             'title' => 'المراكز الرئيسية',
             'icon' => '🏢',
-            'match' => ['admin/amial/hub/*'],
+            'match' => ['admin/amial/hub/*', 'admin/amial/customer*'],
             'links' => [
-                ['👥 مركز العملاء', route('admin.amial.hub.customers'), null],
+                // AMIAL-CUSTOMER-CENTER-001: الشاشة الموحَّدة أوّلاً — هي ما
+                // يُدار منه العميل. والقديمة تبقى للقائمة والإنشاء بالجملة.
+                ['🔎 ملفّ العميل الموحَّد (١٠ تبويبات)', route('admin.amial.customer.page'), 'platform.customers.view'],
+                ['👥 قائمة العملاء وإنشاء الحسابات', route('admin.amial.hub.customers'), null],
                 ['🤝 مركز الوكلاء', route('admin.amial.hub.agents'), null],
                 ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), null],
                 ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), null],
