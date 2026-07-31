@@ -138,39 +138,39 @@ class LedgerWalletReconciliationTest extends TestCase
     }
 
 
-    public function test_without_an_opening_balance_the_posting_is_silently_lost(): void
+    public function test_a_wallet_born_funded_enters_the_ledger_and_posting_succeeds(): void
     {
-        // AMIAL-LEDGER-DEAD-001 — أخطر ما كُشف في هذا المشروع.
+        // AMIAL-LEDGER-OPENING-002 — هذا الاختبار كان يوثّق العطل، وصار يحرس علاجه.
         //
-        // محفظةٌ مموَّلة من خارج الدفتر (بذرة، شحن إداريّ، مسارٌ لا يُرحّل)
-        // يبدأ حسابُها في الدفتر من صفر. فأوّل خصمٍ يرفضه الدفتر بـ«الرصيد
-        // لا يكفي» — ويُبتلع الرفض في `PostsToLedger::safeLedgerPost`.
+        // **ما كان:** محفظةٌ مموَّلة من خارج الدفتر يبدأ حسابها بصفر، فيُرفض
+        // أوّل خصمٍ بـ«الرصيد لا يكفي» ويُبتلع الرفض. قِيس حيّاً: نزل الرصيد
+        // من 10000 إلى 9000 وعدد قيود `send_money` **صفر**.
         //
-        // النتيجة: المال يتحرّك و**لا يُكتب قيدٌ إطلاقاً**، بلا خطأ ولا
-        // انهيار ولا صفٍّ في جدول. أي أن الدفتر ليس «غير مُلزِم» فحسب، بل
-        // معطَّلٌ في الحالة الشائعة.
+        // **ما صار:** `EMoneyObserver` يسجّل الرصيد الافتتاحيّ لحظةَ نشأة
+        // المحفظة، فيعرف الدفتر من أين جاء المال ويقبل الخصم.
         //
-        // ولا يُصلَح هذا بتوصيل الترحيل داخل المعاملة وحده: جُرّب فسقط 87
-        // اختباراً بالسبب نفسه. العلاج الصحيح رصيدٌ افتتاحيّ لكل محفظة —
-        // ومحاولةُ توليده تلقائياً عند أوّل لقاء تُضاعف القيد إن كانت
-        // المحفظة قد مُوّلت في العملية نفسها (قيس: 100000 بدل 50000).
-        // فالمسار السليم تسويةٌ **بعد** العملية لا افتتاحٌ قبلها.
+        // ولا يُنادى `openLedgerFor` هنا عمداً: المقصود أن يعمل المسار
+        // **بلا تدخّل** — وهو الفرق بين علاجٍ في الأداة وعلاجٍ في الاختبار.
         $sender = $this->makeUser('10000');
         $receiver = $this->makeUser('0');
-        // بلا openLedgerFor عمداً — هذه هي الحالة الواقعة اليوم.
 
         $this->customer_send_money_transaction(
             from_user_id: $sender->id, to_user_id: $receiver->id,
-            amount: '1000', charge: '0', note: 'عطل صامت',
+            amount: '1000', charge: '0', note: 'بلا تدخّل',
         );
 
-        $this->assertSame('9000.0000', $this->walletBalanceOf($sender->id),
-            'المال لم يتحرّك — تغيّر شيء في المسار المالي');
+        $this->assertSame('9000.0000', $this->walletBalanceOf($sender->id));
 
         $entries = \App\Models\Ledger\LedgerJournalEntry::where('source_type', 'send_money')->count();
-        $this->assertSame(0, $entries,
-            'كُتب قيدٌ الآن — يبدو أن العطل أُصلح. اقلب هذا التوقّع إلى '
-            . 'assertSame(1, ...) واحذف هذا الشرح.');
+        $this->assertSame(1, $entries,
+            'لم يُكتب قيدُ التحويل. هذا هو العطل الأصليّ عائداً: الدفتر لا '
+            . 'يعرف مصدر رصيد المحفظة فيرفض الخصم، ويُبتلع الرفض.');
+
+        foreach ([$sender, $receiver] as $u) {
+            $this->assertSame(0,
+                bccomp($this->walletBalanceOf($u->id), $this->ledgerBalanceOf($u->id), 4),
+                "انحراف على المستخدم {$u->id} بلا أي تدخّل يدويّ");
+        }
     }
 
     public function test_the_ledger_itself_stays_balanced_across_all_entries(): void

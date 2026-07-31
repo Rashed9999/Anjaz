@@ -49,6 +49,30 @@ class FourEyesService
         }
     }
 
+    /**
+     * القاعدة نفسها حين يكون التاريخ في جدولٍ آخر.
+     *
+     * AMIAL-FOUR-EYES-002 — التسويات تُسجَّل في `settlement_audit_logs` لا في
+     * `audit_decisions`، فلا تراها `assertNotPreviousActor`. والحلّ ليس تكرار
+     * الشرط هناك: الشرط المكرّر يُنسى في المسار التالي — وهو بالضبط سبب خلوّ
+     * النزاعات من الضابط سنواتٍ رغم وجوده في الاعتمادات.
+     *
+     * فيُستدعى هذا وتُمرَّر إليه قائمةُ من فَعَلَ سابقاً من مصدرها. يبقى
+     * القرارُ ورمزُ الخطأ ونصّه في مكان واحد يُختبر مرّة.
+     *
+     * @param  array<int|string>  $previousActorIds معرّفات من فعل سابقاً.
+     *
+     * @throws DomainException FOUR_EYES_VIOLATION
+     */
+    public function assertNotAmongPreviousActors(array $previousActorIds, User $reviewer): void
+    {
+        $ids = array_map('intval', array_filter($previousActorIds, fn ($v) => $v !== null));
+
+        if (in_array((int) $reviewer->id, $ids, true)) {
+            throw new DomainException('FOUR_EYES_VIOLATION');
+        }
+    }
+
     /** كم فعلاً سابقاً لهذا الشخص على هذا الموضوع. */
     public function previousActionsBy(
         string $subjectType,

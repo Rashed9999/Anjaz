@@ -199,12 +199,32 @@ class BillPayService
      */
     private function finalizeSuccess(BillPaymentOrder $order, $providerResponse): void
     {
-        $order->update([
-            'status' => 'success',
-            'provider_reference' => $providerResponse->providerReference,
-            'provider_message' => mb_substr($providerResponse->message ?? '', 0, 500),
-            'completed_at' => now(),
-        ]);
+        // AMIAL-LEDGER-BLOCKING-003: ختم النجاح والقيد معاً أو لا شيء.
+        //
+        // كان الترتيب: تُختم الحالة «ناجحة» ثم يُرحَّل القيد post-commit عبر
+        // safeLedgerPost الذي يبتلع الاستثناء. فإن تعطّل الدفتر بقيت فاتورةٌ
+        // مدفوعةٌ مختومةً بالنجاح بلا قيدٍ يقابلها، ولا شيء يعيد فتحها.
+        //
+        // الآن إن فشل القيد بقي الطلب `pending` — وهي حالةٌ لها مسار تعافٍ
+        // مبنيّ أصلاً: `reconcilePendingOrder`. أي أن الفشل يقع حيث يعرف
+        // النظام كيف يخرج منه، بدل أن يقع في فراغ.
+        DB::transaction(function () use ($order, $providerResponse) {
+            $order->update([
+                'status' => 'success',
+                'provider_reference' => $providerResponse->providerReference,
+                'provider_message' => mb_substr($providerResponse->message ?? '', 0, 500),
+                'completed_at' => now(),
+            ]);
+
+            $this->ledgerBillPayment(
+                fromUserId: $order->user_id,
+                providerId: $order->provider_id ?? 0,
+                grossAmount: MoneyService::add((string)$order->amount, (string)$order->fee),
+                feeAmount: (string)$order->fee,
+                sourceId: $order->order_ulid,
+                description: 'تسديد فاتورة',
+            );
+        });
 
         $this->receipts->issueDebit([
             'user_id' => $order->user_id,
@@ -237,15 +257,6 @@ class BillPayService
             ],
         ]);
 
-        // AMIAL-LEDGER-001 (v2.1): قيد محاسبي لدفع الفاتورة
-        $this->safeLedgerPost(fn() => $this->ledgerBillPayment(
-            fromUserId: $order->user_id,
-            providerId: $order->provider_id ?? 0,
-            grossAmount: MoneyService::add((string)$order->amount, (string)$order->fee),
-            feeAmount: (string)$order->fee,
-            sourceId: $order->order_ulid,
-            description: 'تسديد فاتورة',
-        ));
     }
 
     /**

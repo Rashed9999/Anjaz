@@ -79,7 +79,13 @@ class SafePaymentService
         $this->pendingLedgerPosts = [];
 
         foreach ($posts as $post) {
-            $this->safeLedgerPost(function () use ($post) {
+            // AMIAL-LEDGER-BLOCKING-003: التأجيل يبقى، والابتلاع يزول.
+            //
+            // هذه القيود مؤجَّلة بحكم التصميم: الإفراج والاسترداد يمرّان
+            // بعدّة انتقالات حالة في معاملات منفصلة، فجُمعت لتُنشر مرّة.
+            // لكنّ التأجيل شيء وابتلاع الفشل شيء آخر — كان الاستثناء يُبلع
+            // فيبقى مالٌ أُفرج عنه بلا قيد إفراج. الآن يُرمى فيصل المستدعي.
+            (function () use ($post) {
                 if ($post['type'] === 'release') {
                     $this->ledgerReleaseEscrow(
                         toSellerUserId: $post['seller_id'],
@@ -96,7 +102,7 @@ class SafePaymentService
                         description: "استرداد دفع آمن للمشتري: {$post['title']}",
                     );
                 }
-            });
+            })();
         }
     }
 
@@ -192,19 +198,21 @@ class SafePaymentService
                 ],
             ]);
 
+            // AMIAL-LEDGER-BLOCKING-003: قيد الحجز داخل المعاملة.
+            // بلا هذا يخرج مال المشتري إلى الضمان ولا يقول الدفتر أين هو —
+            // وهو أسوأ ما يقع في دفعٍ آمن: مالٌ محجوزٌ بلا سجلّ حجز.
+            $this->ledgerHoldEscrow(
+                fromUserId: $buyer->id,
+                amount: $amountNormalized,
+                sourceId: $payment->payment_ulid,
+                description: "حجز دفع آمن: {$title}",
+            );
+
             return $payment;
         });
 
-        // post-commit: receipt للمشتري عن الخصم
+        // post-commit: الإيصال وحده
         $this->safeIssueReceipt($payment, 'debit', $buyer->id, $seller->id, 'safe_payment_funded');
-
-        // post-commit: ledger hold escrow (AMIAL-LEDGER-001 v1.9)
-        $this->safeLedgerPost(fn() => $this->ledgerHoldEscrow(
-            fromUserId: $buyer->id,
-            amount: $amountNormalized,
-            sourceId: $payment->payment_ulid,
-            description: "حجز دفع آمن: {$title}",
-        ));
 
         return $payment;
     }

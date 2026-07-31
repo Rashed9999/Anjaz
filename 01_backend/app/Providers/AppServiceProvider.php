@@ -35,6 +35,11 @@ class AppServiceProvider extends ServiceProvider
     {
         Paginator::useBootstrap();
 
+        // AMIAL-LEDGER-OPENING-002: محفظةٌ تولد مموَّلة تدخل الدفتر برصيدها.
+        // بلا هذا يبدأ حسابها بصفر فيُرفض أوّل خصمٍ ويُبتلع الرفض، فيتحرّك
+        // المال بلا قيد. انظر شرح EMoneyObserver.
+        \App\Models\EMoney::observe(\App\Observers\EMoneyObserver::class);
+
         // AMIAL-CLEANUP: أُزيلت بوّابة تفعيل 6amtech + إعداد addon_admin_routes
         // (نظام إضافات 6cash — بلا وحدات، ومستهلِكوه محذوفون).
     }

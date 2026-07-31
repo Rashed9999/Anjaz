@@ -290,21 +290,23 @@ class PendingTransferService
                 'release_transaction_id' => $releaseTxId,
             ]);
 
+            // AMIAL-LEDGER-BLOCKING-003: القيد داخل المعاملة لا بعدها.
+            $this->ledgerTransferWithFee(
+                fromUserId: $locked->sender_user_id,
+                toUserId: $locked->recipient_user_id,
+                grossAmount: (string)$locked->total_debited,
+                feeAmount: (string)$locked->fee,
+                sourceType: 'send_money',
+                sourceId: $locked->transfer_ulid,
+                description: 'تحويل (بعد نافذة الإلغاء)',
+            );
+
             return ['transfer' => $locked->fresh(), 'delivered' => true];
         });
 
-        // post-commit: ledger + receipt
+        // post-commit: الإيصال وحده
         if ($result['delivered']) {
             $t = $result['transfer'];
-            $this->safeLedgerPost(fn() => $this->ledgerTransferWithFee(
-                fromUserId: $t->sender_user_id,
-                toUserId: $t->recipient_user_id,
-                grossAmount: (string)$t->total_debited,
-                feeAmount: (string)$t->fee,
-                sourceType: 'send_money',
-                sourceId: $t->transfer_ulid,
-                description: 'تحويل (بعد نافذة الإلغاء)',
-            ));
 
             // AMIAL-FIX(RECEIPTS): إصدار إيصالَي التحويل (مدين للمرسل/دائن
             // للمستلم) — كانا مفقودين فلا يظهر التحويل في «الإيصالات» ولا PDF.

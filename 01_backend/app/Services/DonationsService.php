@@ -117,9 +117,13 @@ class DonationsService
 
             // AMIAL-LEDGER-RECON-001: قيد مزدوج للتبرّع داخل نفس المعاملة —
             // مدين محفظة المتبرّع = دائن عهدة التبرعات (الصافي) + رسوم المنصّة.
-            // غير مُعطِّل: فشل الدفتر يُسجَّل ولا يُفشل التبرّع (نمط safeLedgerPost).
-            try {
-                $ledger = app(\App\Services\LedgerService::class);
+            // AMIAL-LEDGER-BLOCKING-003: صار مُعطِّلاً. كان الفشل يُبلع فيمرّ
+            // التبرّع بلا قيد — ومالُ خيرٍ بلا أثرٍ محاسبيّ أسوأ من غيره.
+            //
+            // ولا يُضاف قيدٌ ثانٍ بعد commit: جُرّب في محاولةٍ سابقة فخُصم
+            // المبلغ مرّتين وسقط الاختبار بـ«98 لا تكفي خصم 102». القيد
+            // موجودٌ هنا أصلاً — والقراءةُ وحدها لم تكشف التكرار، بل القياس.
+            $ledger = app(\App\Services\LedgerService::class);
                 $donorAcc = $ledger->getOrCreateUserWallet($donor->id);
                 $escrowAcc = $ledger->getOrCreateSystemAccount(
                     'CHARITY_ESCROW', 'liability', 'عهدة التبرعات (قبل التسوية)', 'credit');
@@ -140,9 +144,6 @@ class DonationsService
                     idempotencyKey: 'donation:' . $donation->donation_ulid,
                     createdByUserId: $donor->id,
                 );
-            } catch (\Throwable $e) {
-                \Log::error('Ledger post failed for donation (non-blocking)', ['err' => $e->getMessage()]);
-            }
 
             // 3) تحديث campaign.current_amount + donor_count
             // نستخدم lockForUpdate لتجنب race conditions على العداد
@@ -204,16 +205,6 @@ class DonationsService
 
         // ====== post-commit: receipt ======
         $this->safeIssueReceipt($donation, $donor, $org, $campaign);
-
-        // ====== post-commit: ledger (AMIAL-LEDGER-001 v1.8) ======
-        $this->safeLedgerPost(fn() => $this->ledgerDonation(
-            donorUserId: $donor->id,
-            orgId: $org->id,
-            grossAmount: (string) $donation->amount,
-            feeAmount: (string) $donation->platform_fee,
-            sourceId: $donation->donation_ulid,
-            description: "تبرع لحملة {$campaign->title_ar}",
-        ));
 
         return $donation;
     }

@@ -412,11 +412,33 @@ trait TransactionTrait
                 );
             });
 
+            // AMIAL-LEDGER-BLOCKING-003: القيد داخل المعاملة، وفشله يُسقطها.
+            //
+            // كان يُرحَّل بعد commit عبر safeLedgerPost الذي يبتلع الاستثناء
+            // ويكتفي بسطرٍ في اللوج. وقياسٌ حيّ أثبت أنه لم يكن يقع أصلاً:
+            // نزل الرصيد من 10000 إلى 9000 وعدد قيود send_money **صفر**.
+            //
+            // شرطُ صحّة هذا التحويل أن يسبقه رصيدٌ افتتاحيّ للمحفظة —
+            // يوفّره EMoneyObserver للجديدة و amial:ledger-backfill للقائمة.
+            //
+            // والثمن المقبول: خللٌ في LedgerService يوقف التحويل بدل أن
+            // يُفسد السجلّ. تحويلٌ فاشل يُعاد، وسجلٌّ فاسد لا يُصلَح.
+            $this->ledgerTransferWithFee(
+                fromUserId: $from_user_id,
+                toUserId: $to_user_id,
+                grossAmount: $total,      // المبلغ + الرسوم خرجت من المرسل
+                feeAmount: $charge,
+                sourceType: 'send_money',
+                sourceId: $primaryId,
+                description: 'تحويل بين مستخدمين',
+            );
+
             return $primaryId;
         });
 
         // AMIAL-RECEIPTS-001 (v0.9-A): إصدار إيصالات بعد commit ناجح.
-        // خارج DB::transaction كي لا يفشل المالي بسبب issue الإيصال.
+        // الإيصال ورقةٌ تُعاد طباعتها؛ القيد سجلٌّ لا يُعاد بناؤه — ولذلك
+        // بقي هذا خارجاً ونزل ذاك إلى الداخل.
         if ($txId) {
             $this->safeIssueReceipts([
                 'from_user_id' => $from_user_id,
@@ -429,18 +451,7 @@ trait TransactionTrait
             ]);
         }
 
-        // AMIAL-LEDGER-001 (v2.1): قيد محاسبي مزدوج بعد commit
         if ($txId) {
-            $this->safeLedgerPost(fn() => $this->ledgerTransferWithFee(
-                fromUserId: $from_user_id,
-                toUserId: $to_user_id,
-                grossAmount: $total,      // المبلغ + الرسوم خرجت من المرسل
-                feeAmount: $charge,
-                sourceType: 'send_money',
-                sourceId: $txId,
-                description: 'تحويل بين مستخدمين',
-            ));
-
             // AMIAL-MERCHANT-RISK-001 (v2.10): مراقبة المستلم إن كان تاجراً (خلفية)
             $this->maybeAnalyzeMerchantRisk($to_user_id, $from_user_id, $amount);
         }
@@ -893,6 +904,27 @@ trait TransactionTrait
                 SendTransactionNotificationJob::dispatch($merchant_user_id, $net, 'merchant_received', transactionId: $primaryId);
             });
 
+            // AMIAL-LEDGER-BLOCKING-003: القيد داخل المعاملة، وفشله يُسقطها.
+            //
+            // كان يُرحَّل بعد commit عبر safeLedgerPost الذي يبتلع الاستثناء
+            // ويكتفي بسطرٍ في اللوج. وقياسٌ حيّ أثبت أنه لم يكن يقع أصلاً:
+            // نزل الرصيد من 10000 إلى 9000 وعدد قيود merchant_payment **صفر**.
+            //
+            // شرطُ صحّة هذا التحويل أن يسبقه رصيدٌ افتتاحيّ للمحفظة —
+            // يوفّره EMoneyObserver للجديدة و amial:ledger-backfill للقائمة.
+            //
+            // والثمن المقبول: خللٌ في LedgerService يوقف التحويل بدل أن
+            // يُفسد السجلّ. تحويلٌ فاشل يُعاد، وسجلٌّ فاسد لا يُصلَح.
+            $this->ledgerTransferWithFee(
+                fromUserId: $customer_user_id,
+                toUserId: $merchant_user_id,
+                grossAmount: $amount,
+                feeAmount: $fee,
+                sourceType: 'merchant_payment',
+                sourceId: $primaryId,
+                description: 'دفع تاجر',
+            );
+
             return $primaryId;
         });
 
@@ -906,16 +938,6 @@ trait TransactionTrait
                 'fee' => $fee,
                 'zone_code' => 'SOUTH',
             ]);
-
-            $this->safeLedgerPost(fn() => $this->ledgerTransferWithFee(
-                fromUserId: $customer_user_id,
-                toUserId: $merchant_user_id,
-                grossAmount: $amount,
-                feeAmount: $fee,
-                sourceType: 'merchant_payment',
-                sourceId: $txId,
-                description: 'دفع تاجر',
-            ));
 
             $this->maybeAnalyzeMerchantRisk($merchant_user_id, $customer_user_id, $amount);
         }
@@ -1015,20 +1037,30 @@ trait TransactionTrait
                 SendTransactionNotificationJob::dispatch($to_user_id, $amount, CASH_IN, transactionId: $primaryId);
             });
 
-            return $primaryId;
-        });
-
-        // AMIAL-LEDGER-001 (v2.2): قيد محاسبي للوكيل (cash-in) بعد commit
-        if ($txId) {
-            $this->safeLedgerPost(fn() => $this->ledgerTransfer(
+            // AMIAL-LEDGER-BLOCKING-003: القيد داخل المعاملة، وفشله يُسقطها.
+            //
+            // كان يُرحَّل بعد commit عبر safeLedgerPost الذي يبتلع الاستثناء
+            // ويكتفي بسطرٍ في اللوج. وقياسٌ حيّ أثبت أنه لم يكن يقع أصلاً:
+            // نزل الرصيد من 10000 إلى 9000 وعدد قيود agent_cash_in **صفر**.
+            //
+            // شرطُ صحّة هذا التحويل أن يسبقه رصيدٌ افتتاحيّ للمحفظة —
+            // يوفّره EMoneyObserver للجديدة و amial:ledger-backfill للقائمة.
+            //
+            // والثمن المقبول: خللٌ في LedgerService يوقف التحويل بدل أن
+            // يُفسد السجلّ. تحويلٌ فاشل يُعاد، وسجلٌّ فاسد لا يُصلَح.
+            $this->ledgerTransfer(
                 fromUserId: $from_user_id,   // الوكيل يخصم من محفظته
                 toUserId: $to_user_id,        // العميل يستلم
                 amount: $amount,
                 sourceType: 'agent_cash_in',
-                sourceId: $txId,
+                sourceId: $primaryId,
                 description: 'إيداع وكيل لعميل (Cash-In)',
-            ));
+            );
 
+            return $primaryId;
+        });
+
+        if ($txId) {
             // AMIAL-AGENT-NETWORK-001 (v2.3): تتبع سيولة الوكيل
             try {
                 app(\App\Services\AgentNetworkService::class)
@@ -1189,32 +1221,31 @@ trait TransactionTrait
                 SendTransactionNotificationJob::dispatch($to_user_id, $total, $type, transactionId: $primaryId);
             });
 
+            // AMIAL-LEDGER-BLOCKING-003: القيد داخل المعاملة، وفشله يُسقطها.
+            //
+            // وهنا آكدُ من غيره: يُنشأ مالٌ داخل المنصّة مقابل نقدٍ خارجها،
+            // فسطرُ CASH_RESERVE ليس توثيقاً بل هو ما يجعل الزيادة مشروعة.
+            // بدونه يصير الرصيد رقماً ظهر من العدم — وهو ما تسمّيه الوثيقة
+            // Zero Money Creation وتمنعه.
+            $ledger = app(\App\Services\LedgerService::class);
+            $reserve = $ledger->getOrCreateSystemAccount(
+                'CASH_RESERVE', 'asset', 'احتياطي النقد (إيداعات النظام)', 'debit'
+            );
+            $userWallet = $ledger->getOrCreateUserWallet($to_user_id);
+            $ledgerTotal = MoneyService::add($amount, $bonus);
+            $ledger->post(
+                sourceType: 'add_money',
+                sourceId: (string) $primaryId,
+                description: 'إضافة رصيد من النظام',
+                lines: [
+                    ['account' => $reserve->account_code, 'direction' => 'debit', 'amount' => $ledgerTotal],
+                    ['account' => $userWallet->account_code, 'direction' => 'credit', 'amount' => $ledgerTotal],
+                ],
+                idempotencyKey: "add_money_{$primaryId}",
+            );
+
             return $primaryId;
         });
-
-        // AMIAL-LEDGER-001 (v2.2): قيد محاسبي لإضافة الرصيد (static — نستدعي الخدمة مباشرة)
-        if ($txId ?? null) {
-            try {
-                $ledger = app(\App\Services\LedgerService::class);
-                $reserve = $ledger->getOrCreateSystemAccount(
-                    'CASH_RESERVE', 'asset', 'احتياطي النقد (إيداعات النظام)', 'debit'
-                );
-                $userWallet = $ledger->getOrCreateUserWallet($to_user_id);
-                $total = MoneyService::add($amount, $bonus);
-                $ledger->post(
-                    sourceType: 'add_money',
-                    sourceId: $txId,
-                    description: 'إضافة رصيد من النظام',
-                    lines: [
-                        ['account' => $reserve->account_code, 'direction' => 'debit', 'amount' => $total],
-                        ['account' => $userWallet->account_code, 'direction' => 'credit', 'amount' => $total],
-                    ],
-                    idempotencyKey: "add_money_{$txId}",
-                );
-            } catch (\Throwable $e) {
-                \Log::error('Ledger post failed for add_money (non-blocking)', ['err' => $e->getMessage()]);
-            }
-        }
 
         return $txId;
     }

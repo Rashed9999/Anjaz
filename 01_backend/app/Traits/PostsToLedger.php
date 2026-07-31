@@ -272,17 +272,16 @@ trait PostsToLedger
         );
     }
 
-    /**
-     * helper آمن: لا يرمي exception (للاستخدام post-commit).
-     */
-    protected function safeLedgerPost(\Closure $ledgerCall): void
-    {
-        try {
-            $ledgerCall();
-        } catch (\Throwable $e) {
-            \Log::error('Ledger post failed (non-blocking)', [
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
+    // AMIAL-LEDGER-BLOCKING-003 — حُذف `safeLedgerPost` عمداً.
+    //
+    // كان يبتلع أي استثناء من الدفتر ويكتفي بسطرٍ في اللوج. وقياسٌ حيّ
+    // أثبت أن الترحيل لم يكن يقع أصلاً على محفظةٍ مموَّلة من خارج الدفتر:
+    // نزل الرصيد من 10000 إلى 9000 وعدد قيود send_money **صفر**.
+    //
+    // ولا يُعاد. من أراد ترحيلاً «لا يُفشل شيئاً» فقد أراد سجلّاً اختيارياً،
+    // وسجلٌّ اختياريّ ليس سجلّاً. القيد يوضع داخل المعاملة نفسها: إمّا أن
+    // يتمّ المال وقيدُه معاً وإمّا لا يتمّ شيء.
+    //
+    // ويحرسه `LedgerBlockingGuardTest`: يسقط إن عاد النمط.
 }
+

@@ -130,6 +130,19 @@ class UniversalSettlementService
                 throw new \RuntimeException('لا يمكن اعتماد تسوية أنشأتها بنفسك (فصل المهام)');
             }
 
+            // AMIAL-FOUR-EYES-002: ولا مَن قدّمها للاعتماد.
+            //
+            // فحصُ `created_by` وحده يترك ثغرةً واقعية: يُنشئ موظّفٌ التسوية
+            // ويقدّمها موظّفٌ ثانٍ ثم يعتمدها هو نفسه. فالمنشئ مختلف والشرط
+            // يمرّ، بينما القرار كلّه صار بيد شخص واحد فعلياً.
+            //
+            // والتاريخ يُقرأ من `settlement_audit_logs` لأنه غير قابل للتعديل،
+            // بخلاف عمودٍ واحد يُكتب فوقه عند القرار التالي.
+            $this->fourEyes()->assertNotAmongPreviousActors(
+                $this->actorsOn($settlement, [SettlementAuditLog::ACTION_SUBMITTED]),
+                $actor,
+            );
+
             $settlement->status      = Settlement::STATUS_APPROVED;
             $settlement->approved_by = $actor->id;
             $settlement->approved_at = now();
@@ -173,6 +186,16 @@ class UniversalSettlementService
 
     public function startProcessing(Settlement $settlement, User $actor): Settlement
     {
+        // AMIAL-FOUR-EYES-002: من اعتمد لا ينفّذ.
+        //
+        // التنفيذ هو ما يُخرج المال فعلاً؛ فلو جمع شخصٌ الاعتمادَ والتنفيذ
+        // لصار بيده أن يعتمد لنفسه ثم يُخرج المال بلا أن يمرّ على أحد.
+        // والاعتماد بلا تنفيذٍ منفصل توقيعٌ على ورقة لا حارسٌ على خزنة.
+        $this->fourEyes()->assertNotAmongPreviousActors(
+            $this->actorsOn($settlement, [SettlementAuditLog::ACTION_APPROVED]),
+            $actor,
+        );
+
         $this->assertCanTransition($settlement, Settlement::STATUS_PROCESSING);
         $this->assertIsFinanceManager($actor); // AMIAL-FIX(H1): التنفيذ يمسّ الدفتر
 
@@ -489,6 +512,29 @@ class UniversalSettlementService
         if (!$isAdmin) {
             throw new \RuntimeException('صلاحية المدير المالي مطلوبة');
         }
+    }
+
+    private function fourEyes(): FourEyesService
+    {
+        return app(FourEyesService::class);
+    }
+
+    /**
+     * من فَعَلَ هذه الأفعال على هذه التسوية — من سجلّها غير القابل للتعديل.
+     *
+     * @param  string[]  $actions
+     * @return array<int>
+     */
+    private function actorsOn(Settlement $settlement, array $actions): array
+    {
+        return SettlementAuditLog::where('settlement_id', $settlement->id)
+            ->whereIn('action', $actions)
+            ->whereNotNull('actor_user_id')
+            ->pluck('actor_user_id')
+            ->map(fn ($v) => (int) $v)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function audit(
