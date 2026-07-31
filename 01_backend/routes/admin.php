@@ -57,6 +57,12 @@ Route::group(['as' => 'admin.'], function () {
             Route::post('customers/{id}/reset-pin', [$sc, 'resetPin'])->where('id', '[0-9]+')->middleware('platform:platform.customers.reset_pin')->name('customers.reset-pin');
             Route::post('customers/{id}/revoke-sessions', [$sc, 'revokeSessions'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.revoke-sessions');
             Route::post('customers/{id}/require-kyc', [$sc, 'requireKyc'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.require-kyc');
+            // AMIAL-DEVICE-TRUST-001: أجهزة العميل — تُحظر واحداً واحداً بدل
+            // تجميد الحساب كلّه. والصلاحية نفسها المستعملة لإنهاء الجلسات:
+            // كلاهما قطعُ وصولٍ لا مسٌّ بالمال.
+            Route::get('customers/{id}/devices', [$sc, 'devices'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.devices');
+            Route::post('devices/{deviceRowId}/block', [$sc, 'blockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.block');
+            Route::post('devices/{deviceRowId}/unblock', [$sc, 'unblockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.unblock');
             Route::get('tickets', [$sc, 'tickets'])->name('tickets.index');
             Route::post('tickets', [$sc, 'createTicket'])->name('tickets.create');
             Route::get('tickets/{id}', [$sc, 'showTicket'])->where('id', '[0-9]+')->name('tickets.show');

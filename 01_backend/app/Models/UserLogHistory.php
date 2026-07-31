@@ -15,6 +15,22 @@ class UserLogHistory extends Model
         'device_model',
         'user_id',
         'is_active',
+        // AMIAL-DEVICE-TRUST-001
+        'is_trusted',
+        'is_blocked',
+        'blocked_at',
+        'blocked_by_user_id',
+        'block_reason',
+        'last_seen_at',
+        'app_version',
+    ];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+        'is_trusted' => 'boolean',
+        'is_blocked' => 'boolean',
+        'blocked_at' => 'datetime',
+        'last_seen_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

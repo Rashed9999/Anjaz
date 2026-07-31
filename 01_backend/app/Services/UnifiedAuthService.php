@@ -427,6 +427,24 @@ class UnifiedAuthService
                 // محلياً، وفي الإنتاج بلا device-id سيُرجع 400 (سلوك 6cash نفسه).
                 return;
             }
+            // AMIAL-DEVICE-TRUST-001: الجهاز المحظور لا يُعاد تنشيطه بالدخول.
+            //
+            // بلا هذا الشرط يكفي تسجيل دخولٍ ليعود `is_active = 1` على جهازٍ
+            // حظره الدعم. صحيحٌ أن `CheckDeviceId` سيمنعه بعد ذلك، لكن حالة
+            // الصفّ تصير كاذبة: يقول «نشط» عن جهازٍ ممنوع، فيقرأ الدعمُ
+            // شاشةً تناقض ما فعله بيده.
+            $existing = \App\Models\UserLogHistory::where('user_id', $user->id)
+                ->where('device_id', $deviceId)
+                ->first();
+
+            if ($existing && $existing->is_blocked) {
+                Log::warning('Blocked device attempted login', [
+                    'user_id' => $user->id, 'device_id' => $deviceId,
+                ]);
+
+                return;
+            }
+
             \App\Models\UserLogHistory::where('user_id', $user->id)->update(['is_active' => 0]);
             \App\Models\UserLogHistory::updateOrCreate(
                 ['user_id' => $user->id, 'device_id' => $deviceId],
@@ -435,6 +453,8 @@ class UnifiedAuthService
                     'browser' => (string) $request->header('browser', ''),
                     'os' => (string) $request->header('os', ''),
                     'device_model' => (string) $request->header('device-model', ''),
+                    'app_version' => (string) $request->header('app-version', '') ?: null,
+                    'last_seen_at' => now(),
                     'is_active' => 1,
                 ]
             );

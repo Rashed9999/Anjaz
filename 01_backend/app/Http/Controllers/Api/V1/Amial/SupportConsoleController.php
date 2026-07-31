@@ -591,6 +591,139 @@ class SupportConsoleController extends Controller
         return $this->ok(['user_id' => $user->id], 'OK', 'سيُطلب من العميل رفع وثائق الهوية مجدداً');
     }
 
+    // ==================== 4.5) أجهزة العميل ====================
+
+    /**
+     * GET /admin/support/customers/{id}/devices
+     *
+     * AMIAL-DEVICE-TRUST-001 — ما يحتاجه الدعم حين يقول العميل «حسابي مسروق».
+     *
+     * قبلها لم يكن أمام الموظّف إلّا تجميد الحساب كلّه — عقوبةٌ على الضحيّة
+     * تمنعه من ماله. والصواب أن يُرى **أيّ جهازٍ** يدخل، فيُحظر هو وحده.
+     *
+     * ويُرتَّب النشط أوّلاً ثم الأحدث استعمالاً: الموظّف يبحث عمّا يعمل الآن،
+     * لا عمّا سُجّل أوّلاً.
+     */
+    public function devices(Request $request, int $id): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+
+        $user = User::find($id);
+        if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
+
+        // فتحُ قائمة أجهزة عميل قراءةُ بياناتٍ شخصية — تُسجَّل كغيرها.
+        // (بصمة الجهاز وعنوان IP وأوقات الاستعمال تكشف أنماط حياةٍ لا مالاً.)
+        app(\App\Services\PiiAccessAuditService::class)->logAccess(
+            actorUserId: $request->user()->id,
+            subjectType: 'user',
+            subjectId: $user->id,
+            fieldName: 'support_customer_devices',
+            accessType: 'view',
+            accessReason: (string) $request->query('reason', 'مراجعة أجهزة العميل'),
+        );
+
+        $devices = \App\Models\UserLogHistory::where('user_id', $user->id)
+            ->orderByDesc('is_active')
+            ->orderByDesc('last_seen_at')
+            ->orderByDesc('updated_at')
+            ->limit(50)
+            ->get()
+            ->map(fn ($d) => [
+                'id' => (int) $d->id,
+                'device_id' => (string) $d->device_id,
+                'device_model' => (string) ($d->device_model ?: '—'),
+                'os' => (string) ($d->os ?: '—'),
+                'app_version' => $d->app_version,
+                'ip_address' => (string) ($d->ip_address ?: '—'),
+                'is_active' => (bool) $d->is_active,
+                'is_trusted' => (bool) $d->is_trusted,
+                'is_blocked' => (bool) $d->is_blocked,
+                'block_reason' => $d->block_reason,
+                'blocked_at' => $d->blocked_at?->toIso8601String(),
+                'last_seen_at' => $d->last_seen_at?->toIso8601String(),
+                'first_seen_at' => $d->created_at?->toIso8601String(),
+            ])->all();
+
+        return $this->ok([
+            'user_id' => $user->id,
+            'devices' => $devices,
+            'total' => count($devices),
+            'blocked' => count(array_filter($devices, fn ($d) => $d['is_blocked'])),
+        ]);
+    }
+
+    /** POST /admin/support/devices/{deviceRowId}/block  {reason} */
+    public function blockDevice(Request $request, int $deviceRowId): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+        if ($resp = $this->requireReason($request)) return $resp;
+
+        $device = \App\Models\UserLogHistory::find($deviceRowId);
+        if (!$device) return $this->error('DEVICE_NOT_FOUND', 'الجهاز غير موجود', 404);
+
+        $user = User::find($device->user_id);
+        if (!$user) return $this->error('USER_NOT_FOUND', 'صاحب الجهاز غير موجود', 404);
+
+        $device->is_blocked = true;
+        $device->is_trusted = false;   // محظورٌ وموثوق تناقض
+        $device->is_active = false;
+        $device->blocked_at = now();
+        $device->blocked_by_user_id = $request->user()->id;
+        $device->block_reason = mb_substr((string) $request->input('reason'), 0, 255);
+        $device->save();
+
+        $this->auditAction($request, $user, 'SUPPORT_BLOCK_DEVICE', [
+            'device_row_id' => $device->id,
+            'device_model' => $device->device_model,
+        ]);
+
+        return $this->ok([
+            'device_id' => $device->id,
+            'user_id' => $user->id,
+        ], 'OK', 'حُظر الجهاز — لن يصل الحساب منه ولو سُجّل الدخول');
+    }
+
+    /** POST /admin/support/devices/{deviceRowId}/unblock  {reason} */
+    public function unblockDevice(Request $request, int $deviceRowId): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) return $resp;
+        if ($resp = $this->requireReason($request)) return $resp;
+
+        $device = \App\Models\UserLogHistory::find($deviceRowId);
+        if (!$device) return $this->error('DEVICE_NOT_FOUND', 'الجهاز غير موجود', 404);
+
+        $user = User::find($device->user_id);
+        if (!$user) return $this->error('USER_NOT_FOUND', 'صاحب الجهاز غير موجود', 404);
+
+        // AMIAL-FOUR-EYES-003: من حظر لا يرفع الحظر.
+        //
+        // الحظر قرارُ حمايةٍ يُتّخذ على عجل تحت ضغط مكالمة. ورفعُه على العجل
+        // نفسه، بيد صاحب القرار الأوّل، يجعل الضابط كلّه شكلياً — وأخطر
+        // صورةٍ لذلك موظّفٌ يحظر جهازاً ثم يرفعه بعد اتّفاقٍ مع من حظره منه.
+        if ((int) $device->blocked_by_user_id === (int) $request->user()->id) {
+            return $this->error(
+                'FOUR_EYES_VIOLATION',
+                'من حظر الجهاز لا يرفع الحظر عنه — يراجعه موظّف آخر',
+                422,
+            );
+        }
+
+        $device->is_blocked = false;
+        $device->blocked_at = null;
+        $device->block_reason = null;
+        $device->blocked_by_user_id = null;
+        $device->save();
+
+        $this->auditAction($request, $user, 'SUPPORT_UNBLOCK_DEVICE', [
+            'device_row_id' => $device->id,
+        ]);
+
+        return $this->ok([
+            'device_id' => $device->id,
+            'user_id' => $user->id,
+        ], 'OK', 'رُفع الحظر عن الجهاز');
+    }
+
     // ==================== 5) تذاكر النزاعات ====================
 
     /** GET /admin/support/tickets?status=&assigned_to=&q= */

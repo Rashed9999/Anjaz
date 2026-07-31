@@ -155,6 +155,12 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/customers/{id}/reset-pin', [$c, 'resetPin'])->where('id', '[0-9]+')->middleware('platform:platform.customers.reset_pin')->name('customers.reset-pin');
             Route::post('/customers/{id}/revoke-sessions', [$c, 'revokeSessions'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.revoke-sessions');
             Route::post('/customers/{id}/require-kyc', [$c, 'requireKyc'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.require-kyc');
+            // AMIAL-DEVICE-TRUST-001 — نفس مسارات الويب بنفس الصلاحية.
+            // تحصينُ سطحٍ واحد يترك الآخر باباً مفتوحاً، وقد وقع ذلك في هذا
+            // المشروع من قبل: حُصّنت مسارات الويب وبقي توأمها في الـ API.
+            Route::get('/customers/{id}/devices', [$c, 'devices'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.devices');
+            Route::post('/devices/{deviceRowId}/block', [$c, 'blockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.block');
+            Route::post('/devices/{deviceRowId}/unblock', [$c, 'unblockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.unblock');
             // تذاكر النزاعات
             Route::get('/tickets', [$c, 'tickets'])->name('tickets.index');
             Route::post('/tickets', [$c, 'createTicket'])->name('tickets.create');
