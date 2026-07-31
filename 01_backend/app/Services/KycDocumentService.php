@@ -107,6 +107,21 @@ class KycDocumentService
         });
     }
 
+    /**
+     * الرفع ثمّ القراءة — بهذا الترتيب وخارج المعاملة.
+     *
+     * تشغيلُ المحرّك داخل `DB::transaction` يُبقي المعاملة مفتوحة ثوانيَ
+     * بينما تُقرأ صورة، فتُقفل صفوفاً ويتراكم الطابور تحت الحمل. والقراءة
+     * لا تُغيّر شيئاً يستحقّ ذريّةً: إن فشلت، بقي المستند مرفوعاً وحالتُه
+     * تقول إنّه لم يُقرأ.
+     */
+    public function uploadAndRead(User $user, string $docType, UploadedFile $file): KycDocument
+    {
+        $doc = $this->upload($user, $docType, $file);
+
+        return app(KycOcrService::class)->process($doc);
+    }
+
     // ── مراجعة ─────────────────────────────────────────────────────────
 
     public function approve(KycDocument $doc, User $reviewer, ?string $expiresAt = null): KycDocument

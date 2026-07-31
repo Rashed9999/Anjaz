@@ -36,6 +36,18 @@ RUN apk add --no-cache \
     freetype-dev \
     oniguruma-dev \
     icu-dev \
+ # AMIAL-KYC-OCR-001: محرّك قراءة الوثائق + بيانات اللغتين.
+ #
+ # يُثبَّت في الصورة لا يُفترض وجوده: بدونه يعمل الاستخراج على جهاز المطوّر
+ # ويصمت في الإنتاج — وأسوأ ما في ذلك أنّه يصمت **بلا خطأ**، فيبدو أنّ
+ # الوثائق لا تُقرأ لأنّها رديئة لا لأنّ المحرّك غائب.
+ #
+ # وبيانات العربية (`-data-ara`) ليست خياراً: الهويّات اليمنية عربية،
+ # والمحرّك بلا لغتها يُخرج حروفاً لاتينية عشوائية بثقةٍ عالية — وهو أسوأ
+ # من ألّا يقرأ.
+    tesseract-ocr \
+    tesseract-ocr-data-ara \
+    tesseract-ocr-data-eng \
  && docker-php-ext-configure gd --with-freetype --with-jpeg \
  && docker-php-ext-install -j$(nproc) \
         pdo_mysql mbstring exif pcntl bcmath gd opcache intl \

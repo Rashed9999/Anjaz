@@ -216,6 +216,14 @@ Route::prefix('kyc')->name('kyc.')->group(function () {
     Route::get('/queue', [$kyc, 'queue'])->middleware('platform:platform.customers.freeze')->name('queue');
     Route::get('/documents/{id}/file', [$kyc, 'file'])
         ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('file');
+    // AMIAL-KYC-OCR-001 — الحقول المستخرَجة وإقرارها
+    Route::get('/documents/{id}/ocr', [$kyc, 'ocr'])
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('ocr');
+    Route::post('/documents/{id}/fields', [$kyc, 'confirmFields'])
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('fields');
+    Route::post('/documents/{id}/reread', [$kyc, 'reread'])
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('reread');
+
     Route::post('/documents/{id}/approve', [$kyc, 'approve'])
         ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('approve');
     Route::post('/documents/{id}/reject', [$kyc, 'reject'])

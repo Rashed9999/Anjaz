@@ -12,6 +12,21 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
+        // AMIAL-KYC-OCR-001 — محرّك قراءة الوثائق.
+        //
+        // يُربط بالواجهة لا بالصنف: استبدالُ Tesseract بخدمةٍ سحابية لاحقاً
+        // (والوثيقة تُلمّح إليها) يصير تغييرَ سطرٍ هنا لا تعديلاً في كلّ
+        // مستدعٍ. ولا يُفحص وجود الملفّ التنفيذيّ هنا — يفحصه المحرّك عند
+        // أوّل استعمال ويُعيد `unavailable` صراحةً.
+        $this->app->bind(
+            \App\Services\Ocr\OcrDriverInterface::class,
+            fn () => new \App\Services\Ocr\TesseractOcrDriver(
+                binary: (string) config('amial.kyc.ocr.binary', 'tesseract'),
+                languages: (string) config('amial.kyc.ocr.languages', 'ara+eng'),
+                timeout: (int) config('amial.kyc.ocr.timeout_seconds', 25),
+            ),
+        );
+
         // Custom class aliases (facades) used in your app
         $aliases = [
             'Helpers'  => \App\CentralLogics\helpers::class,

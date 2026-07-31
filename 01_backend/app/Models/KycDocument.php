@@ -18,14 +18,28 @@ class KycDocument extends Model
         'user_id', 'doc_type', 'encrypted_path', 'original_mime', 'size_bytes',
         'content_sha256', 'status', 'reviewed_by', 'reviewed_at',
         'rejection_reason', 'document_expires_at',
+        // AMIAL-KYC-OCR-001
+        'ocr_status', 'ocr_extracted', 'verified_fields',
+        'ocr_confidence', 'ocr_engine', 'ocr_ran_at', 'ocr_findings',
     ];
 
-    protected $hidden = ['encrypted_path'];
+    /**
+     * المُشفَّران يُخفيان كالمسار.
+     *
+     * `ocr_extracted` و`verified_fields` يحملان الاسم ورقم الهوية. وهما
+     * مشفَّران في الجدول، لكنّ نموذجاً يُسلسَل إلى JSON في ردٍّ ما يُخرجهما
+     * كنصٍّ مشفَّر إلى العميل — ولا فائدة في ذلك إلّا تسريبُ حجمِ البيانات
+     * وشكلِها. يُقرآن عبر `KycOcrService` وحده.
+     */
+    protected $hidden = ['encrypted_path', 'ocr_extracted', 'verified_fields'];
 
     protected $casts = [
         'reviewed_at' => 'datetime',
         'document_expires_at' => 'date',
         'size_bytes' => 'integer',
+        'ocr_confidence' => 'decimal:2',
+        'ocr_ran_at' => 'datetime',
+        'ocr_findings' => 'array',
     ];
 
     public const STATUS_PENDING = 'pending';

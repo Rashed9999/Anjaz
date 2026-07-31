@@ -35,7 +35,9 @@ class KycDocumentController extends Controller
         ]);
 
         try {
-            $doc = $this->kyc->upload(
+            // AMIAL-KYC-OCR-001: تُقرأ الوثيقة فور رفعها فيجد المراجع الحقول
+            // مقترحةً أمامه. والقراءة لا تُفشل الرفع مهما جرى لها.
+            $doc = $this->kyc->uploadAndRead(
                 $request->user(),
                 (string) $request->input('doc_type'),
                 $request->file('file'),
@@ -133,6 +135,57 @@ class KycDocumentController extends Controller
             // لا تُخزَّن صورة هويّة في وسيطٍ ولا في متصفّح.
             'Cache-Control' => 'no-store, private',
             'Content-Disposition' => 'inline',
+        ]);
+    }
+
+    /**
+     * GET /admin/kyc/documents/{id}/ocr — ما قرأه المحرّك.
+     *
+     * يُقرأ منفصلاً عن الصورة لا مدمجاً بها: الصورة تُحمَّل في إطارٍ ثنائيّ،
+     * وهذه بيانات. ودمجُهما يجعل عرض الحقول ينتظر تحميل صورةٍ بحجم ميغابايت.
+     */
+    public function ocr(Request $request, int $id): JsonResponse
+    {
+        $doc = KycDocument::findOrFail($id);
+
+        return response()->json([
+            'success' => true,
+            'data' => app(\App\Services\KycOcrService::class)->forReviewer($doc),
+        ]);
+    }
+
+    /** POST /admin/kyc/documents/{id}/fields — إقرار المراجع للحقول. */
+    public function confirmFields(Request $request, int $id): JsonResponse
+    {
+        $doc = KycDocument::findOrFail($id);
+
+        try {
+            $doc = app(\App\Services\KycOcrService::class)
+                ->confirmFields($doc, $request->user(), (array) $request->input('fields', []));
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false, 'code' => 'KYC_FIELDS_REJECTED',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'أُقرّت الحقول',
+            'data' => ['id' => $doc->id],
+        ]);
+    }
+
+    /** POST /admin/kyc/documents/{id}/reread — إعادة القراءة. */
+    public function reread(Request $request, int $id): JsonResponse
+    {
+        $doc = KycDocument::findOrFail($id);
+        $doc = app(\App\Services\KycOcrService::class)->process($doc);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'أُعيدت القراءة',
+            'data' => app(\App\Services\KycOcrService::class)->forReviewer($doc),
         ]);
     }
 

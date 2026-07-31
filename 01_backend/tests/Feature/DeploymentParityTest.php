@@ -132,6 +132,34 @@ class DeploymentParityTest extends TestCase
      * والملفّان تباعدا كعادتهما: النسخة العادية صحيحة والإنتاجية ناقصة،
      * وهو الصنف الذي أنشئ هذا الملفّ لأجله.
      */
+    /**
+     * AMIAL-KYC-OCR-001 — محرّك القراءة يُثبَّت في الصورة لا يُفترض وجوده.
+     *
+     * **الفخّ الذي يمنعه هذا الحارس هو أشهر أنواع «يعمل عندي»:** ثُبِّت
+     * `tesseract` على جهاز التطوير ليُكتب الكود ويُختبَر، ونُشرت الصورة
+     * بلا الحزمة. والنتيجة أنّ الاستخراج يصمت في الإنتاج **بلا خطأ ظاهر**:
+     * تصل الوثائق، ولا تُملأ حقول، ويظنّ فريق المراجعة أنّ صور العملاء
+     * رديئة — فيطلبون صوراً أوضح شهوراً بلا فائدة.
+     *
+     * **وبيانات العربية ليست خياراً:** الهويّات اليمنية عربية، ومحرّكٌ بلا
+     * لغتها يُخرج حروفاً لاتينية عشوائية **بثقةٍ عالية** — وهو أسوأ من ألّا
+     * يقرأ، لأنّ الثقة العالية تتجاوز حدّ العرض فتُملأ الحقول بهراء.
+     *
+     * @dataProvider dockerfiles
+     */
+    public function test_the_ocr_engine_and_its_arabic_data_are_in_the_image(string $file): void
+    {
+        $contents = (string) file_get_contents(base_path($file));
+        $this->assertNotEmpty($contents);
+
+        foreach ([
+            'tesseract-ocr' => 'محرّك قراءة الوثائق غير مثبَّت في الصورة — سيصمت الاستخراج في الإنتاج بلا خطأ',
+            'tesseract-ocr-data-ara' => 'بيانات العربية غائبة — سيقرأ المحرّك الهويّات العربية حروفاً لاتينية بثقةٍ عالية',
+        ] as $needle => $why) {
+            $this->assertStringContainsString($needle, $contents, "{$file}: {$why}");
+        }
+    }
+
     public function test_every_dispatched_queue_has_a_worker_listening_to_it(): void
     {
         $dispatched = [];

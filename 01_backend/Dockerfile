@@ -14,6 +14,11 @@ RUN apk add --no-cache \
     freetype-dev \
     oniguruma-dev \
     icu-dev \
+    # AMIAL-KYC-OCR-001: يُثبَّت هنا أيضاً ليطابق الإنتاج — بيئةُ تطويرٍ
+    # تختلف عن الإنتاج تُنتج «يعمل عندي» ولا يعمل هناك.
+    tesseract-ocr \
+    tesseract-ocr-data-ara \
+    tesseract-ocr-data-eng \
     nodejs \
     npm
 

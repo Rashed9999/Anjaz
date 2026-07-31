@@ -141,13 +141,108 @@
                     </div>
                 </div>
                 <iframe src="${BASE}/documents/${encodeURIComponent(current.id)}/file?reason=${encodeURIComponent(reason)}"
-                        style="width:100%;height:520px;border:1px solid #ddd;border-radius:8px;background:#fafafa"
+                        style="width:100%;height:420px;border:1px solid #ddd;border-radius:8px;background:#fafafa"
                         title="مستند الهوية"></iframe>
+                <div id="kyc-ocr" class="mt-3" data-testid="kyc-ocr"></div>
                 <div id="kyc-completeness" class="mt-3"></div>
             </div>`;
 
         document.getElementById('kyc-approve').onclick = approve;
         document.getElementById('kyc-reject').onclick = reject;
+        loadOcr();
+    }
+
+    // ---------- الحقول المستخرَجة ----------
+    //
+    // المحرّك **يقترح ولا يقرّر**. الحقول تُعرَض في مربّعاتٍ قابلة للتعديل،
+    // وما يُعتمَد هو ما يُقرّه المراجع لا ما قالته الآلة. وما لم يُقرأ بثقةٍ
+    // كافية يُترك **فارغاً**: من يرى مربّعاً فارغاً يقرأ الصورة ويكتب، ومن
+    // يرى رقماً مكتوباً يمرّ عليه.
+    const FIELD_LABELS = {
+        full_name: 'الاسم', national_id: 'الرقم الوطني',
+        date_of_birth: 'تاريخ الميلاد', expiry_date: 'تاريخ الانتهاء',
+        gender: 'الجنس', country: 'الدولة',
+    };
+
+    const OCR_STATUS = {
+        not_run: ['secondary', 'لم تُقرأ بعد'],
+        success: ['success', 'قُرئت'],
+        low_confidence: ['warning text-dark', 'ثقة منخفضة — الحقول لم تُملأ عمداً'],
+        failed: ['danger', 'تعذّرت القراءة — الصورة رديئة'],
+        // ليست عطلاً في الوثيقة بل في الخادم — يُقال صراحةً لئلّا تُطلب من
+        // العميل صورةٌ أخرى بلا فائدة.
+        unavailable: ['dark', 'محرّك القراءة غير مثبَّت على الخادم — عطل تشغيليّ'],
+    };
+
+    async function loadOcr() {
+        const box = document.getElementById('kyc-ocr');
+        if (!box) return;
+        box.innerHTML = '<div class="text-muted small">جارٍ قراءة الحقول…</div>';
+
+        const j = await get(`/documents/${current.id}/ocr`);
+        if (!j.success) { box.innerHTML = ''; return; }
+        const o = j.data;
+
+        const st = OCR_STATUS[o.status] || OCR_STATUS.not_run;
+
+        const findings = (o.findings || []).map(f => `
+            <div class="alert alert-${f.severity === 'critical' ? 'danger' : (f.severity === 'warning' ? 'warning' : 'secondary')} py-2 small mb-2">
+                ${esc(f.message)}
+            </div>`).join('');
+
+        const rows = Object.keys(FIELD_LABELS).map(k => {
+            const f = o.fields[k];
+            const v = (o.verified && o.verified[k]) || (f ? f.value : '');
+            // «غير مؤكَّد» يُقال للمراجع: المحرّك استنتج الحقل بلا عنوانٍ
+            // صريح في الوثيقة، فيستحقّ نظرةً أدقّ.
+            const hint = f && !f.certain
+                ? '<span class="badge bg-warning text-dark ms-1">استُنتج — تحقّق</span>' : '';
+            return `
+            <div class="col-md-6 mb-2">
+                <label class="form-label small mb-1">${FIELD_LABELS[k]} ${hint}</label>
+                <input type="text" class="form-control form-control-sm js-ocr-field"
+                       data-field="${k}" value="${esc(v)}" data-testid="ocr-field-${k}">
+            </div>`;
+        }).join('');
+
+        box.innerHTML = `
+            <div class="card">
+                <div class="card-header d-flex align-items-center gap-2 py-2">
+                    <strong class="small">الحقول المستخرَجة</strong>
+                    <span class="badge bg-${st[0]}">${st[1]}</span>
+                    ${o.confidence ? `<span class="small text-muted">الثقة ${o.confidence}٪ (الحدّ ${o.min_confidence}٪)</span>` : ''}
+                    <button class="btn btn-sm btn-outline-secondary ms-auto" id="kyc-reread">إعادة القراءة</button>
+                </div>
+                <div class="card-body">
+                    ${findings}
+                    <div class="alert alert-secondary py-2 small">
+                        المحرّك <strong>يقترح ولا يقرّر</strong> — راجع كلّ حقل وصحّحه، فما يُعتمَد هو ما تُقرّه أنت.
+                    </div>
+                    <div class="row">${rows}</div>
+                    <div class="d-flex gap-2 align-items-center mt-2">
+                        <button class="btn btn-sm btn-primary" id="kyc-confirm-fields" data-testid="kyc-confirm-fields">إقرار الحقول</button>
+                        ${o.raw_text ? `<button class="btn btn-sm btn-link" type="button"
+                            data-bs-toggle="collapse" data-bs-target="#kyc-raw">النصّ الخام</button>` : ''}
+                    </div>
+                    ${o.raw_text ? `<div class="collapse mt-2" id="kyc-raw">
+                        <pre class="bg-light p-2 small mb-0" style="max-height:160px;overflow:auto;white-space:pre-wrap">${esc(o.raw_text)}</pre>
+                    </div>` : ''}
+                </div>
+            </div>`;
+
+        document.getElementById('kyc-reread').onclick = async () => {
+            await post(`/documents/${current.id}/reread`, {});
+            loadOcr();
+        };
+
+        document.getElementById('kyc-confirm-fields').onclick = async () => {
+            const fields = {};
+            document.querySelectorAll('.js-ocr-field').forEach(i => {
+                if (i.value.trim()) fields[i.dataset.field] = i.value.trim();
+            });
+            const r = await post(`/documents/${current.id}/fields`, {fields});
+            alert(r.message || (r.success ? 'أُقرّت الحقول' : 'فشل'));
+        };
     }
 
     function clearViewer(msg) {
