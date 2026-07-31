@@ -216,6 +216,62 @@ class LedgerService
     }
 
     /**
+     * يُسوّي الدفتر مع محفظةٍ تغيّرت من خارجه — بقيدٍ صريح لا بتزوير رصيد.
+     *
+     * AMIAL-LEDGER-ADJUST-001.
+     *
+     * ليس كل تغيّرٍ في الرصيد عمليةً بين طرفين: هناك الشحن الإداريّ، وتصحيح
+     * خطأ، وبذور التجربة. وهذه تُغيّر `e_money` مباشرةً فينحرف الدفتر، ثم
+     * يُرفض أوّل خصمٍ بعدها بـ«الرصيد لا يكفي» — وهو رفضٌ صحيح لأن الدفتر
+     * لا يعرف من أين جاء المال.
+     *
+     * فالعلاج قيدٌ يقول ذلك صراحةً: مقابلُ الفرق يُسجَّل في حساب تسويات
+     * خارجية، فيبقى الأثر مقروءاً ويُسأل عنه.
+     *
+     * **ولا تُستعمل هذه الدالّة لإسكات انحراف.** من ناداها فقد أقرّ أن
+     * المال دخل من خارج الدفتر وسمّى السبب. أمّا مسارٌ ماليّ ينسى الترحيل
+     * ثم يُنادي هذه ليمرّ، فقد حوّل عطلاً إلى عادة.
+     */
+    public function reconcileWalletBalance(int $userId, string $reason): ?LedgerJournalEntry
+    {
+        $account = $this->getOrCreateUserWallet($userId);
+
+        $wallet = \App\Models\EMoney::where('user_id', $userId)->value('current_balance');
+        $wallet = $wallet === null ? '0' : (string) $wallet;
+        $inLedger = $this->computeBalanceFromLines($account->id);
+
+        $delta = bcsub($wallet, $inLedger, 4);
+        if (bccomp($delta, '0', 4) === 0) {
+            return null; // متطابقان — لا قيد
+        }
+
+        $adjust = $this->getOrCreateSystemAccount(
+            'EXTERNAL_ADJUSTMENT', 'equity', 'تسويات رصيد من خارج الدفتر', 'debit'
+        );
+
+        // فرقٌ موجب: المحفظة أكبر ⇒ دخل مالٌ لم يمرّ بالدفتر (دائن للمحفظة).
+        $positive = bccomp($delta, '0', 4) > 0;
+        $magnitude = $positive ? $delta : bcmul($delta, '-1', 4);
+
+        return $this->post(
+            sourceType: 'external_adjustment',
+            sourceId: (string) $userId,
+            description: "تسوية رصيد من خارج الدفتر: {$reason}",
+            lines: $positive
+                ? [
+                    ['account' => $adjust->account_code, 'direction' => 'debit', 'amount' => $magnitude],
+                    ['account' => $account->account_code, 'direction' => 'credit', 'amount' => $magnitude],
+                ]
+                : [
+                    ['account' => $account->account_code, 'direction' => 'debit', 'amount' => $magnitude],
+                    ['account' => $adjust->account_code, 'direction' => 'credit', 'amount' => $magnitude],
+                ],
+            metadata: ['reason' => $reason, 'wallet' => $wallet, 'ledger_before' => $inLedger],
+            allowNegative: true,
+        );
+    }
+
+    /**
      * جلب حساب نظام (PLATFORM_FEE, ESCROW_HOLD, ...).
      */
     public function getOrCreateSystemAccount(string $code, string $type, string $name, string $normal = 'credit'): LedgerAccount
