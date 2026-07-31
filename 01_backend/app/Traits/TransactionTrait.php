@@ -670,6 +670,18 @@ trait TransactionTrait
                 SendTransactionNotificationJob::dispatch($to_user_id, $amount, CASH_IN, transactionId: $primaryId);
             });
 
+            // AMIAL-LEDGER-CASHOUT-001: كان هذا المسار بلا ترحيل إطلاقاً.
+            // انظر شرح البنية في PostsToLedger::ledgerAgentCashOut.
+            $this->ledgerAgentCashOut(
+                customerUserId: $from_user_id,
+                agentUserId: $to_user_id,
+                amount: $amount,
+                agentCommission: $agentCommission,
+                platformFee: $adminPortion,
+                sourceId: $primaryId,
+                description: 'سحب نقدي عبر وكيل',
+            );
+
             return $primaryId;
         });
 
@@ -1370,6 +1382,16 @@ trait TransactionTrait
             DB::afterCommit(function () use ($receiver_user_id, $amount, $primaryId) {
                 SendTransactionNotificationJob::dispatch($receiver_user_id, $amount, WITHDRAW, transactionId: $primaryId);
             });
+
+            // AMIAL-LEDGER-WITHDRAW-001: خروج المال من الحجز إلى الإدارة.
+            // ولا يُخصم من محفظة العميل هنا — خُصم عند الطلب. ومن أعاد خصمه
+            // خصم مرّتين، وهو خطأٌ لا يكشفه فحصُ التوازن.
+            $this->ledgerWithdrawApproved(
+                adminUserId: $adminUserId,
+                amount: $amount,
+                charge: $charge,
+                sourceId: $primaryId,
+            );
         });
     }
 

@@ -21,6 +21,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
+
 class TransactionController extends Controller
 {
     use TransactionTrait;
@@ -697,9 +698,20 @@ class TransactionController extends Controller
         $userEmoney->current_balance -= $totalAmount;
         $userEmoney->pending_balance += $totalAmount;
 
-        DB::transaction(function () use ($withdrawRequest, $userEmoney) {
+        DB::transaction(function () use ($withdrawRequest, $userEmoney, $totalAmount) {
             $withdrawRequest->save();
             $userEmoney->save();
+
+            // AMIAL-LEDGER-WITHDRAW-001: حجز المبلغ في الدفتر.
+            //
+            // كان هذا المسار بلا ترحيل إطلاقاً: يخرج المال من الرصيد المتاح
+            // إلى المعلّق ولا يقول الدفتر شيئاً — فيبدو رصيد العميل متاحاً
+            // وهو محجوز، ودفترٌ يقول ذلك يُبنى عليه قرارٌ خاطئ.
+            $this->ledgerWithdrawRequested(
+                userId: $userEmoney->user_id,
+                total: (string) $totalAmount,
+                sourceId: (string) $withdrawRequest->id,
+            );
         });
 
         /** Update Transaction limits data  */

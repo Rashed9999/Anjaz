@@ -105,6 +105,184 @@ trait PostsToLedger
     }
 
     /**
+     * سحب نقديّ عبر وكيل: العميل → الوكيل، والرسم يُقسَم بين الوكيل والمنصّة.
+     *
+     * AMIAL-LEDGER-CASHOUT-001 — كان هذا المسار **بلا ترحيل إطلاقاً**.
+     *
+     * لا «مؤجَّلاً» ولا «مبلوعاً» كبقيّة المسارات، بل غير مكتوبٍ أصلاً: يخرج
+     * المال من محفظة العميل ويدخل محفظة الوكيل ولا يمرّ بدفتر الأستاذ بحرف.
+     * وهو من أكثر المسارات حركةً في محفظةٍ يمنيّة — السحب النقديّ من وكيل هو
+     * ما يفعله المستخدم فعلاً، لا التحويل.
+     *
+     * **بنية القيد:** العميل يُخصم المبلغ + الرسم كاملاً. والرسم يُقسَم:
+     * حصّة الوكيل تُضاف إلى محفظته مع المبلغ، وحصّة المنصّة إلى حساب الإيراد.
+     * فالمدين = المبلغ + العمولة + حصّة المنصّة، والدائن مثله تماماً.
+     *
+     * ولا يُدمَج سطرا الوكيل (المبلغ والعمولة) في سطرٍ واحد رغم ذهابهما إلى
+     * الحساب نفسه: الفصل يجعل تقرير العمولات يُقرأ من الدفتر مباشرةً بدل
+     * استنتاجه بالطرح.
+     */
+    protected function ledgerAgentCashOut(
+        int $customerUserId,
+        int $agentUserId,
+        string $amount,
+        string $agentCommission,
+        string $platformFee,
+        string $sourceId,
+        string $description,
+    ): void {
+        $ledger = $this->ledgerService();
+        $customer = $ledger->getOrCreateUserWallet($customerUserId);
+        $agent = $ledger->getOrCreateUserWallet($agentUserId);
+
+        $totalDebit = bcadd(bcadd($amount, $agentCommission, 4), $platformFee, 4);
+
+        $lines = [
+            ['account' => $customer->account_code, 'direction' => 'debit', 'amount' => $totalDebit],
+            ['account' => $agent->account_code, 'direction' => 'credit', 'amount' => $amount],
+        ];
+
+        if (bccomp($agentCommission, '0', 4) > 0) {
+            $lines[] = [
+                'account' => $agent->account_code,
+                'direction' => 'credit',
+                'amount' => $agentCommission,
+                'description' => 'عمولة الوكيل',
+            ];
+        }
+
+        if (bccomp($platformFee, '0', 4) > 0) {
+            $feeAccount = $ledger->getOrCreateSystemAccount(
+                'PLATFORM_FEE', 'revenue', 'رسوم المنصة', 'credit'
+            );
+            $lines[] = [
+                'account' => $feeAccount->account_code,
+                'direction' => 'credit',
+                'amount' => $platformFee,
+                'description' => 'حصّة المنصّة من رسم السحب',
+            ];
+        }
+
+        $ledger->post(
+            sourceType: 'agent_cash_out',
+            sourceId: $sourceId,
+            description: $description,
+            lines: $lines,
+            idempotencyKey: "agent_cash_out_{$sourceId}",
+        );
+    }
+
+    /**
+     * السحب البنكيّ — ثلاث نقاط وحسابُ حجزٍ واحد بينها.
+     *
+     * AMIAL-LEDGER-WITHDRAW-001 — كان المسار كلّه بلا ترحيل.
+     *
+     * **لماذا حساب حجز؟** المال في السحب يمرّ بحالةٍ وسطى: يخرج من رصيد
+     * العميل المتاح (`current_balance`) إلى رصيدٍ معلّق (`pending_balance`)
+     * حين يطلب، ثم إمّا يخرج إلى الإدارة عند القبول وإمّا يعود إليه عند
+     * الرفض. وثلاثتها تحرّك مالاً فتحتاج ثلاثة قيود.
+     *
+     * وبلا حساب وسيط تُكتب حركةٌ واحدة عند القبول، فيبدو الدفتر كأن المال
+     * بقي عند العميل طوال أيام الانتظار وهو غير متاحٍ له. ودفترٌ يقول إن
+     * الرصيد متاح وهو محجوز أسوأ من دفترٍ صامت — يُبنى عليه قرار.
+     *
+     * `WITHDRAW_PENDING` التزامٌ على المنصّة: مالٌ تحتفظ به لحساب العميل ولم
+     * يصر ملكاً لها بعد.
+     */
+    protected function ledgerWithdrawRequested(
+        int $userId,
+        string $total,
+        string $sourceId,
+    ): void {
+        $ledger = $this->ledgerService();
+        $wallet = $ledger->getOrCreateUserWallet($userId);
+        $pending = $ledger->getOrCreateSystemAccount(
+            'WITHDRAW_PENDING', 'liability', 'سحوبات معلّقة (طُلبت ولم تُبتّ)', 'credit'
+        );
+
+        $ledger->post(
+            sourceType: 'withdraw_requested',
+            sourceId: $sourceId,
+            description: 'طلب سحب — حجز المبلغ',
+            lines: [
+                ['account' => $wallet->account_code, 'direction' => 'debit', 'amount' => $total],
+                ['account' => $pending->account_code, 'direction' => 'credit', 'amount' => $total],
+            ],
+            idempotencyKey: "withdraw_req_{$sourceId}",
+        );
+    }
+
+    /** رُفض الطلب: يعود المال من الحجز إلى العميل. */
+    protected function ledgerWithdrawDenied(
+        int $userId,
+        string $total,
+        string $sourceId,
+    ): void {
+        $ledger = $this->ledgerService();
+        $wallet = $ledger->getOrCreateUserWallet($userId);
+        $pending = $ledger->getOrCreateSystemAccount(
+            'WITHDRAW_PENDING', 'liability', 'سحوبات معلّقة (طُلبت ولم تُبتّ)', 'credit'
+        );
+
+        $ledger->post(
+            sourceType: 'withdraw_denied',
+            sourceId: $sourceId,
+            description: 'رفض طلب سحب — فكّ الحجز',
+            lines: [
+                ['account' => $pending->account_code, 'direction' => 'debit', 'amount' => $total],
+                ['account' => $wallet->account_code, 'direction' => 'credit', 'amount' => $total],
+            ],
+            idempotencyKey: "withdraw_deny_{$sourceId}",
+        );
+    }
+
+    /**
+     * قُبل الطلب: يخرج المال من الحجز إلى الإدارة، والرسم إلى إيراد المنصّة.
+     *
+     * ولا يُخصم من محفظة العميل هنا: خُصم منها عند الطلب. ومن أعاد خصمه
+     * هنا خصم مرّتين — وهو خطأٌ لا يكشفه فحصُ التوازن لأن الطرفين يتساويان
+     * في الحالتين.
+     */
+    protected function ledgerWithdrawApproved(
+        int $adminUserId,
+        string $amount,
+        string $charge,
+        string $sourceId,
+    ): void {
+        $ledger = $this->ledgerService();
+        $adminWallet = $ledger->getOrCreateUserWallet($adminUserId);
+        $pending = $ledger->getOrCreateSystemAccount(
+            'WITHDRAW_PENDING', 'liability', 'سحوبات معلّقة (طُلبت ولم تُبتّ)', 'credit'
+        );
+
+        $total = bcadd($amount, $charge, 4);
+        $lines = [
+            ['account' => $pending->account_code, 'direction' => 'debit', 'amount' => $total],
+            ['account' => $adminWallet->account_code, 'direction' => 'credit', 'amount' => $amount],
+        ];
+
+        if (bccomp($charge, '0', 4) > 0) {
+            $feeAccount = $ledger->getOrCreateSystemAccount(
+                'PLATFORM_FEE', 'revenue', 'رسوم المنصة', 'credit'
+            );
+            $lines[] = [
+                'account' => $feeAccount->account_code,
+                'direction' => 'credit',
+                'amount' => $charge,
+                'description' => 'رسم السحب',
+            ];
+        }
+
+        $ledger->post(
+            sourceType: 'withdraw_approved',
+            sourceId: $sourceId,
+            description: 'قبول طلب سحب',
+            lines: $lines,
+            idempotencyKey: "withdraw_appr_{$sourceId}",
+        );
+    }
+
+    /**
      * حجز escrow (الدفع الآمن): from user → escrow hold account.
      */
     protected function ledgerHoldEscrow(

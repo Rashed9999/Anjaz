@@ -52,7 +52,7 @@ class LedgerCoverageGuardTest extends TestCase
         'WholesaleInvoiceService' => 'إنشاء الفاتورة لا تحصيلها',
 
         // ── ديونٌ معلومة، لها بند في خطة التدقيق ──
-        'CustomerWithdrawService' => 'دَين معلوم: مسار السحب لا يُرحَّل — البند ٤ في docs/AUDIT_ENTERPRISE_2026-07.md §9.5',
+        'CustomerWithdrawService' => 'دَين معلوم: السحب البنكيّ (طلب/قبول/إلغاء) لا يُرحَّل — ثلاث نقاط إحداها في متحكّم. أمّا السحب النقديّ عبر وكيل فصار يُرحَّل (ledgerAgentCashOut)',
         'MerchantSaleRefundService' => 'دَين معلوم: المرتجعات لا تُرحَّل — نفس البند',
         'InstallmentService' => 'دَين معلوم: الأقساط لا تُرحَّل — نفس البند',
         'SplitBillService' => 'دَين معلوم: تقسيم الفاتورة لا يُرحَّل — نفس البند',

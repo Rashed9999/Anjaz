@@ -13,6 +13,7 @@ use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Rap2hpoutre\FastExcel\FastExcel;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -80,15 +81,32 @@ class WithdrawController extends Controller
         }
 
         if ($request->request_status == 'deny'){
-            $account = $this->eMoney->where(['user_id' => $withdrawRequest->user->id])->first();
-            $account->pending_balance -= ($withdrawRequest['amount'] + $withdrawRequest['admin_charge']);
-            $account->current_balance += ($withdrawRequest['amount'] + $withdrawRequest['admin_charge']);
-            $account->save();
+            $total = (string) ($withdrawRequest['amount'] + $withdrawRequest['admin_charge']);
 
-            $withdrawRequest->request_status = $request->request_status == 'deny' ? 'denied' : 'approved' ;
-            $withdrawRequest->is_paid = 0;
-            $withdrawRequest->admin_note = $request->admin_note ?? null;
-            $withdrawRequest->save();
+            // AMIAL-LEDGER-WITHDRAW-001 + سلامة الذرّية.
+            //
+            // كان هذا يُحرّك رصيدين ويحفظ صفّين **خارج أي معاملة**: لو سقط
+            // الاتصال بين الحفظين لعاد المال إلى الرصيد المتاح والطلبُ ما
+            // زال معلّقاً — فيسحب العميل المبلغ نفسه مرّتين.
+            //
+            // فصار الثلاثة (فكّ الحجز، ختم الطلب، القيد) في معاملة واحدة.
+            DB::transaction(function () use ($withdrawRequest, $request, $total) {
+                $account = $this->eMoney->where(['user_id' => $withdrawRequest->user->id])->first();
+                $account->pending_balance -= $total;
+                $account->current_balance += $total;
+                $account->save();
+
+                $withdrawRequest->request_status = 'denied';
+                $withdrawRequest->is_paid = 0;
+                $withdrawRequest->admin_note = $request->admin_note ?? null;
+                $withdrawRequest->save();
+
+                $this->ledgerWithdrawDenied(
+                    userId: (int) $withdrawRequest->user->id,
+                    total: $total,
+                    sourceId: (string) $withdrawRequest->id,
+                );
+            });
         }
 
         if ($request->request_status == 'approve')
