@@ -5,7 +5,6 @@ import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
 // شاشات الخدمات
-import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/profit_report_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_audit_log_screen.dart';
@@ -21,6 +20,18 @@ import 'package:amyal_pay/features/merchant/screens/cashier_shift_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_expenses_screen.dart';
 import 'package:amyal_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amyal_pay/features/corporate/screens/corporate_accounts_screen.dart';
+// AMIAL-SERVICES-CATALOG-002 — شاشات كانت مبنيّة بلا مدخل من «خدماتي»
+import 'package:amyal_pay/features/merchant/screens/offline_sales_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_refund_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/cashier_products_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/receipt_settings_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/split_bill_create_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/inventory_audit_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/stock_alerts_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/credit_customers_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/cashier_report_screen.dart';
+import 'package:amyal_pay/features/merchant/screens/merchant_transactions_screen.dart';
 
 /// AMIAL-MERCHANT-SERVICES-HUB-001 — «مركز خدمات التاجر».
 ///
@@ -50,13 +61,25 @@ class MerchantServicesHubScreen extends StatelessWidget {
         //
         // فصار ما يملكه أوّلاً وكاملاً، وما لا يملكه أسفلَه بعنوانٍ صريح.
         // والتصنيف لم يُفقَد — نزل إلى سطر تحت كل خدمة.
+        // AMIAL-SERVICES-SCOPE-001: المقفل نوعان لا نوع واحد.
+        //
+        // الباقة تفتح خدمةً، ونوع النشاط يقرّر أنها تخصّه أصلاً. وكان القسم
+        // المقفل يقول «متاح بترقية الباقة» عن الاثنين — فصاحب المحطة على
+        // الباقة المؤسسية (أعلى ما يُشترى) يرى خدمةً مقفلة ودعوةً لترقيةٍ
+        // لا وجود لها، ثم يرقّي فلا تُفتح. وعدٌ لا يستطيع النظام الوفاء به.
+        final biz = access.businessType.value;
+        bool fitsBusiness(_Svc s) =>
+            s.onlyFor.isEmpty || (biz != null && s.onlyFor.contains(biz));
+
         final open = _catalog.where((s) => access.has(s.code)).toList();
-        final locked = _catalog.where((s) => !access.has(s.code)).toList();
+        final closed = _catalog.where((s) => !access.has(s.code));
+        final upgradable = closed.where(fitsBusiness).toList();
+        final foreign = closed.where((s) => !fitsBusiness(s)).toList();
 
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _planHeader(planLabel, open.length, _catalog.length),
+            _planHeader(planLabel, open.length, _catalog.length - foreign.length),
             const SizedBox(height: 18),
 
             if (open.isNotEmpty) ...[
@@ -66,20 +89,34 @@ class MerchantServicesHubScreen extends StatelessWidget {
               const SizedBox(height: 22),
             ],
 
-            if (locked.isNotEmpty) ...[
-              _sectionTitle('متاح بترقية الباقة (${locked.length})', Icons.lock_outline),
+            if (upgradable.isNotEmpty) ...[
+              _sectionTitle('متاح بترقية الباقة (${upgradable.length})', Icons.lock_outline),
               const SizedBox(height: 4),
               const Padding(
                 padding: EdgeInsets.only(bottom: 10),
                 child: Text('اضغط أي خدمة لترى ما تفعله وباقتها',
                     style: TextStyle(fontSize: 11.5, color: AmyalColors.textMuted)),
               ),
-              _grid(context, access, locked),
+              _grid(context, access, upgradable),
+              const SizedBox(height: 22),
             ],
 
-            // باقةٌ تفتح كل شيء: لا يُعرض قسم الترقية فارغاً ولا يُقال
-            // «متاح بالترقية» لمن لا ترقية فوقه.
-            if (locked.isEmpty)
+            if (foreign.isNotEmpty) ...[
+              _sectionTitle('لأنواع نشاط أخرى (${foreign.length})', Icons.block),
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                    'هذه الخدمات مصمَّمة لنشاطات غير ${access.businessTypeLabel.value ?? 'نشاطك'} '
+                    '— لا تفتحها ترقية الباقة.',
+                    style: const TextStyle(fontSize: 11.5, color: AmyalColors.textMuted)),
+              ),
+              _grid(context, access, foreign),
+            ],
+
+            // باقةٌ تفتح كل ما يخصّ نشاطه: لا يُعرض قسم ترقية فارغ، ولا
+            // يُقال «متاح بالترقية» لمن لا ترقية فوقه.
+            if (upgradable.isEmpty)
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -166,18 +203,27 @@ class MerchantServicesHubScreen extends StatelessWidget {
     );
   }
 
+  // العنوان يحمل عدداً متغيّراً («متاح بترقية الباقة (24)»)، فيطول ويفيض على
+  // هاتفٍ ضيّق — التقطه اختبار الترتيب عند عرض 400. وExpanded يجعل النصّ
+  // يقصّ نفسه بدل أن يدفع الصفّ خارج الشاشة.
   Widget _sectionTitle(String title, IconData icon) => Row(children: [
         Icon(icon, size: 18, color: AmyalColors.primary),
         const SizedBox(width: 8),
-        Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        Expanded(
+          child: Text(title,
+              maxLines: 1, overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        ),
       ]);
 
-  // ── بطاقة خدمة (مفتوحة/مقفلة) ─────────────────────────────────────
+  // ── بطاقة خدمة (مفتوحة/بالترقية/لنشاط آخر) ────────────────────────
   Widget _tile(BuildContext context, AccessController access, _Svc s) {
+    final biz = access.businessType.value;
+    final foreign = s.onlyFor.isNotEmpty && (biz == null || !s.onlyFor.contains(biz));
     final locked = !access.has(s.code);
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: () => _showSheet(context, s, locked),
+      onTap: () => _showSheet(context, s, locked, foreign),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -200,8 +246,11 @@ class MerchantServicesHubScreen extends StatelessWidget {
               Positioned(top: -4, right: -4,
                   child: Container(
                     padding: const EdgeInsets.all(3),
-                    decoration: const BoxDecoration(color: AmyalColors.yellowDark, shape: BoxShape.circle),
-                    child: const Icon(Icons.lock, size: 11, color: Colors.white),
+                    decoration: BoxDecoration(
+                        color: foreign ? Colors.grey.shade500 : AmyalColors.yellowDark,
+                        shape: BoxShape.circle),
+                    child: Icon(foreign ? Icons.block : Icons.lock,
+                        size: 11, color: Colors.white),
                   )),
           ]),
           const SizedBox(height: 8),
@@ -215,17 +264,26 @@ class MerchantServicesHubScreen extends StatelessWidget {
               maxLines: 1, overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontSize: 9.5, color: AmyalColors.textMuted)),
           const SizedBox(height: 2),
-          Text(locked ? 'باقة ${s.planLabel}' : 'مفتوحة',
+          Text(
+              foreign
+                  ? 'لنشاط آخر'
+                  : locked
+                      ? 'باقة ${s.planLabel}'
+                      : 'مفتوحة',
               style: TextStyle(
                   fontSize: 10.5, fontWeight: FontWeight.bold,
-                  color: locked ? AmyalColors.yellowDark : const Color(0xFF2E7D32))),
+                  color: foreign
+                      ? Colors.grey.shade600
+                      : locked
+                          ? AmyalColors.yellowDark
+                          : const Color(0xFF2E7D32))),
         ]),
       ),
     );
   }
 
   // ── ورقة شرح الخدمة ───────────────────────────────────────────────
-  void _showSheet(BuildContext context, _Svc s, bool locked) {
+  void _showSheet(BuildContext context, _Svc s, bool locked, bool foreign) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -254,13 +312,32 @@ class MerchantServicesHubScreen extends StatelessWidget {
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(s.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 Row(children: [
-                  Icon(locked ? Icons.lock : Icons.check_circle,
-                      size: 14, color: locked ? AmyalColors.yellowDark : const Color(0xFF2E7D32)),
+                  Icon(
+                      foreign
+                          ? Icons.block
+                          : locked
+                              ? Icons.lock
+                              : Icons.check_circle,
+                      size: 14,
+                      color: foreign
+                          ? Colors.grey.shade600
+                          : locked
+                              ? AmyalColors.yellowDark
+                              : const Color(0xFF2E7D32)),
                   const SizedBox(width: 4),
-                  Text(locked ? 'متوفّرة في باقة ${s.planLabel}' : 'مفتوحة في باقتك',
+                  Text(
+                      foreign
+                          ? 'ليست لنشاطك'
+                          : locked
+                              ? 'متوفّرة في باقة ${s.planLabel}'
+                              : 'مفتوحة في باقتك',
                       style: TextStyle(
                           fontSize: 12, fontWeight: FontWeight.w600,
-                          color: locked ? AmyalColors.yellowDark : const Color(0xFF2E7D32))),
+                          color: foreign
+                              ? Colors.grey.shade600
+                              : locked
+                                  ? AmyalColors.yellowDark
+                                  : const Color(0xFF2E7D32))),
                 ]),
               ]),
             ),
@@ -268,7 +345,27 @@ class MerchantServicesHubScreen extends StatelessWidget {
           const SizedBox(height: 16),
           Text(s.desc, style: const TextStyle(fontSize: 14, height: 1.6, color: AmyalColors.textSecondary)),
           const SizedBox(height: 22),
-          if (locked)
+          // خدمةٌ لنشاطٍ آخر: لا زرّ ترقية. زرٌّ لا يُوصل إلى شيء أسوأ من
+          // غيابه — يدفع صاحب المحطة إلى شراء باقةٍ أعلى لن تفتحها له.
+          if (foreign)
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(children: [
+                Icon(Icons.info_outline, color: Colors.grey.shade700, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                      'هذه الخدمة مخصَّصة لـ${_bizNames(s.onlyFor)}. '
+                      'ترقية الباقة لا تفتحها — تُفتح بتغيير نوع النشاط.',
+                      style: const TextStyle(fontSize: 13, height: 1.5)),
+                ),
+              ]),
+            )
+          else if (locked)
             FilledButton.icon(
               onPressed: () { Navigator.pop(ctx); Get.to(() => const PlansCatalogScreen()); },
               icon: const Icon(Icons.workspace_premium),
@@ -307,6 +404,19 @@ class MerchantServicesHubScreen extends StatelessWidget {
     );
   }
 
+  /// أسماء أنواع النشاط بالعربية — للجملة «مخصَّصة لـ…».
+  static String _bizNames(Set<String> codes) {
+    const labels = {
+      'quick_sale': 'البيع السريع',
+      'retail': 'التجزئة',
+      'fuel': 'محطات الوقود',
+      'pharmacy': 'الصيدليات',
+      'wholesale': 'تجارة الجملة',
+      'restaurant': 'المطاعم',
+    };
+    return codes.map((c) => labels[c] ?? c).join(' و');
+  }
+
   String _planName(String code) {
     switch (code) {
       case 'starter': return 'البداية';
@@ -327,17 +437,35 @@ class MerchantServicesHubScreen extends StatelessWidget {
   }
 
   static const List<_Group> _groups = [
-    _Group('المبيعات والكاشير', Icons.point_of_sale,
-        ['inventory', 'promotions', 'installments', 'gift_cards', 'shift_close', 'offline_pos']),
-    _Group('المالية والتقارير', Icons.bar_chart,
-        ['profit_reports', 'expenses', 'excel_export', 'multi_currency', 'advanced_backup']),
+    _Group('المبيعات والكاشير', Icons.point_of_sale, [
+      'products', 'promotions', 'installments', 'gift_cards',
+      'shift_close', 'offline_pos', 'refunds', 'split_bill', 'receipts',
+    ]),
+    _Group('المخزون والجرد', Icons.inventory_2,
+        ['inventory', 'inventory_audit', 'low_stock_alerts']),
+    _Group('المالية والتقارير', Icons.bar_chart, [
+      'profit_reports', 'expenses', 'excel_export', 'multi_currency',
+      'advanced_backup', 'daily_reports', 'wallet',
+    ]),
     _Group('العملاء والتسويق', Icons.groups,
-        ['loyalty', 'corporate_accounts']),
+        ['loyalty', 'corporate_accounts', 'debts', 'customers']),
     _Group('الإدارة والفريق', Icons.admin_panel_settings,
         ['branches', 'employees', 'audit_log', 'api_access']),
   ];
 
   // ── كتالوج الخدمات (الكود، العنوان، الشرح، الأيقونة، الباقة، الشاشة) ─
+  //
+  // AMIAL-SERVICES-CATALOG-002 — «تظهر جميع الخدمات».
+  //
+  // كان الكتالوج سبع عشرة خدمة بينما في التطبيق شاشاتٌ مبنيّة وتعمل لا
+  // مدخل لها من هنا: الآجل، المرتجعات، الجرد، تنبيهات النفاد، تقرير اليوم،
+  // العملاء… وكانت تُفتح من `MerchantDashboardScreen` وحدها — وصاحب محطة
+  // الوقود لا يمرّ بها أبداً، لأن الموزِّع يرسله إلى لوحة المحطة مباشرة.
+  // فالشاشة مبنيّة ومدفوعٌ ثمنها في الباقة ولا يُمكن الوصول إليها.
+  //
+  // **الأكواد هنا ليست أسماء عرض**: كلٌّ منها مفتاح ميزة يقرؤه الخادم في
+  // `AccessPresets`. كودٌ مخترَع يجعل `access.has` تُرجع false دائماً،
+  // فتظهر خدمةٌ يملكها التاجر مقفلةً إلى الأبد بلا خطأ ولا رسالة.
   static final List<_Svc> _catalog = [
     // AMIAL-INVENTORY-LINK-001: كانت تفتح CashierPosScreen — أي نقطة البيع
     // لا المخزون. فيضغط التاجر «المخزون» فيُفتح له الكاشير، بلا خطأ ولا
@@ -357,9 +485,43 @@ class MerchantServicesHubScreen extends StatelessWidget {
     _Svc('shift_close', 'إقفال الوردية',
         'افتح وردية الكاشير وأقفلها بتقرير X/Z، مع حساب فرق الصندوق النقدي (العجز/الفائض).',
         Icons.lock_clock, 'الأعمال', () => const CashierShiftScreen()),
+    // كانت بلا شاشة (null) فتفتح ورقةً تقول «تعمل تلقائياً داخل الكاشير»،
+    // بينما OfflineSalesScreen مبنيّة وتعرض ما لم يُزامَن بعد. ومن باع دون
+    // اتصال يحتاج بالضبط أن يرى ما لم يصل الخادم — لا أن يُطمأن عنه.
     _Svc('offline_pos', 'البيع دون اتصال',
-        'استمر بالبيع عند انقطاع الإنترنت، وتُزامَن الفواتير تلقائياً وبأمان (بلا تكرار) عند عودة الاتصال.',
-        Icons.cloud_off, 'الأعمال', null),
+        'استمر بالبيع عند انقطاع الإنترنت، وتابع هنا ما لم يُزامَن بعد — تُرفع الفواتير تلقائياً وبلا تكرار عند عودة الاتصال.',
+        Icons.cloud_off, 'الأعمال', () => const OfflineSalesScreen()),
+    _Svc('refunds', 'المرتجعات',
+        'أرجع مبلغ عملية بيع كلياً أو جزئياً، مع تسجيل السبب وربط المرتجع بفاتورته الأصلية.',
+        Icons.assignment_return, 'المجانية', () => const MerchantRefundScreen()),
+    _Svc('products', 'المنتجات والأسعار',
+        'كتالوج منتجاتك: السعر والتكلفة والباركود وتاريخ الانتهاء — يُستخدم في الكاشير مباشرة.',
+        Icons.sell, 'البداية', () => const CashierProductsScreen()),
+    _Svc('receipts', 'إعدادات الفاتورة',
+        'اسم المتجر وشعاره وبيانات التواصل التي تُطبع أعلى كل إيصال، مع رسالة ختامية للعميل.',
+        Icons.receipt, 'المجانية', () => const ReceiptSettingsScreen()),
+    _Svc('split_bill', 'تقسيم الفاتورة',
+        'قسّم فاتورة واحدة على عدّة أشخاص، ويدفع كلٌّ حصّته من محفظته.',
+        Icons.call_split, 'المجانية', () => const SplitBillCreateScreen(),
+        onlyFor: {'retail'}),
+    _Svc('inventory_audit', 'الجرد',
+        'جردٌ دوريّ يقارن الكمية الدفترية بالكمية الفعلية على الرفّ ويُظهر الفروق صنفاً صنفاً.',
+        Icons.checklist, 'البداية', () => const InventoryAuditScreen()),
+    _Svc('low_stock_alerts', 'تنبيهات النفاد',
+        'حدّد لكل صنف حدّاً أدنى، ونبّهك قبل نفاده بوقتٍ يكفي لإعادة الطلب.',
+        Icons.notification_important, 'البداية', () => const StockAlertsScreen()),
+    _Svc('debts', 'البيع بالآجل',
+        'لوحة الآجل: كم لك على العملاء، ومن تأخّر، وسدادٌ جزئيّ أو كامل بكشف حساب لكل عميل.',
+        Icons.account_balance_wallet, 'المجانية', () => const CreditDashboardScreen()),
+    _Svc('customers', 'العملاء وحساباتهم',
+        'سجلّ عملائك وأرصدتهم الآجلة وحدودهم الائتمانية، مع كشف حساب قابل للتصدير.',
+        Icons.person_search, 'الأعمال', () => const CreditCustomersScreen()),
+    _Svc('daily_reports', 'تقرير اليوم',
+        'مبيعات اليوم بالتفصيل: عدد الفواتير، النقد مقابل المحفظة، وأعلى الأصناف مبيعاً.',
+        Icons.today, 'المجانية', () => const CashierReportScreen()),
+    _Svc('wallet', 'حركات المتجر',
+        'كل ما دخل محفظة متجرك وخرج منها: مقبوضات، تحويلات، رسوم — بترتيب زمنيّ وبحث.',
+        Icons.swap_vert, 'المجانية', () => const MerchantTransactionsScreen()),
     _Svc('profit_reports', 'تقارير الأرباح',
         'تقارير مبيعات وأرباح مفصّلة لمتجرك، بمقارنات يومية وشهرية لتعرف أداءك الحقيقي.',
         Icons.trending_up, 'الأعمال', () => const ProfitReportScreen()),
@@ -404,11 +566,21 @@ class _Group {
 }
 
 class _Svc {
+  /// مفتاح الميزة كما يُصدره الخادم في `AccessPresets` — لا اسم عرض.
   final String code;
   final String title;
   final String desc;
   final IconData icon;
   final String planLabel;
   final Widget Function()? builder;
-  _Svc(this.code, this.title, this.desc, this.icon, this.planLabel, this.builder);
+
+  /// أنواع النشاط التي تُمنح لها هذه الخدمة أصلاً. الفارغة = للجميع.
+  ///
+  /// بعض الميزات يمنحها الخادم حسب `business_type` لا حسب الباقة، فلا
+  /// تفتحها أغلى باقة لمن ليس من نوعها. وبلا هذا الحقل تظهر «متاح بترقية
+  /// الباقة» لمن هو أصلاً على الباقة الأعلى — وعدٌ كاذب.
+  final Set<String> onlyFor;
+
+  _Svc(this.code, this.title, this.desc, this.icon, this.planLabel, this.builder,
+      {this.onlyFor = const {}});
 }
