@@ -588,7 +588,18 @@ class SupportConsoleController extends Controller
 
         $this->auditAction($request, $user, 'SUPPORT_REQUIRE_KYC');
 
-        return $this->ok(['user_id' => $user->id], 'OK', 'سيُطلب من العميل رفع وثائق الهوية مجدداً');
+        // AMIAL-KYC-DOCS-001: الدائرة صارت مغلقة.
+        //
+        // كان هذا الزرّ يضع العلامة ثم لا مكان يرفع إليه العميل مستنده —
+        // فيطمئنّ الموظّف وينتظر العميل ما لن يأتي. الآن تُعاد حالةُ ما
+        // رفعه ليعرف الموظّف ما ينقص قبل أن يغلق المكالمة.
+        $kyc = app(\App\Services\KycDocumentService::class);
+
+        return $this->ok([
+            'user_id' => $user->id,
+            'kyc' => $kyc->completenessFor($user, 2),
+            'upload_endpoint' => 'POST /api/v1/amial/me/kyc/documents',
+        ], 'OK', 'سيُطلب من العميل رفع وثائق الهوية من التطبيق');
     }
 
     // ==================== 4.5) أجهزة العميل ====================

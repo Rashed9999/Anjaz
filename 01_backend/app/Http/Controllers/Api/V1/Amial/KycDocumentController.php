@@ -1,0 +1,176 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1\Amial;
+
+use App\Http\Controllers\Controller;
+use App\Models\KycDocument;
+use App\Models\User;
+use App\Services\KycDocumentService;
+use App\Services\PiiAccessAuditService;
+use DomainException;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+/**
+ * AMIAL-KYC-DOCS-001 — طرفا الدائرة: العميل يرفع، والمراجع يبتّ.
+ *
+ * كان في لوحة الدعم زرُّ «طلب تحديث الهوية» ولا مكان يرفع إليه العميل. هذا
+ * المتحكّم يغلق الدائرة من طرفيها.
+ */
+class KycDocumentController extends Controller
+{
+    public function __construct(
+        private readonly KycDocumentService $kyc,
+    ) {
+    }
+
+    // ==================== جانب العميل ====================
+
+    /** POST /me/kyc/documents  {doc_type, file} */
+    public function upload(Request $request): JsonResponse
+    {
+        $request->validate([
+            'doc_type' => 'required|string',
+            'file' => 'required|file|max:8192',
+        ]);
+
+        try {
+            $doc = $this->kyc->upload(
+                $request->user(),
+                (string) $request->input('doc_type'),
+                $request->file('file'),
+            );
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'code' => 'KYC_UPLOAD_REJECTED',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تمّ الرفع — سيُراجَع خلال يوم عمل',
+            'data' => [
+                'id' => $doc->id,
+                'doc_type' => $doc->doc_type,
+                'status' => $doc->status,
+            ],
+        ]);
+    }
+
+    /** GET /me/kyc/documents — ما رفعه العميل وحالة كلٍّ منه. */
+    public function mine(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $docs = KycDocument::where('user_id', $user->id)
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn ($d) => [
+                'id' => (int) $d->id,
+                'doc_type' => $d->doc_type,
+                'doc_label' => KycDocument::TYPE_LABELS[$d->doc_type] ?? $d->doc_type,
+                'status' => $d->status,
+                // سببُ الرفض يُعرَض للعميل عمداً: بدونه يرفع الصورة نفسها
+                // مرّةً بعد مرّة ويتّهم النظام بالعطل.
+                'rejection_reason' => $d->rejection_reason,
+                'uploaded_at' => $d->created_at?->toIso8601String(),
+                'reviewed_at' => $d->reviewed_at?->toIso8601String(),
+            ])->all();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'documents' => $docs,
+                'required_types' => KycDocument::TYPE_LABELS,
+                'completeness' => $this->kyc->completenessFor($user, 2),
+            ],
+        ]);
+    }
+
+    // ==================== جانب المراجع ====================
+
+    /** GET /admin/kyc/queue */
+    public function queue(Request $request): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => ['queue' => $this->kyc->pendingQueue()],
+        ]);
+    }
+
+    /** GET /admin/kyc/documents/{id}/file — الملفّ مفكوكاً، للمراجع وحده. */
+    public function file(Request $request, int $id)
+    {
+        $doc = KycDocument::findOrFail($id);
+
+        // فتحُ صورة هويّة أشدُّ أنواع الوصول إلى بيانات شخصية — يُسجَّل دائماً.
+        app(PiiAccessAuditService::class)->logAccess(
+            actorUserId: $request->user()->id,
+            subjectType: 'user',
+            subjectId: (int) $doc->user_id,
+            fieldName: 'kyc_document:' . $doc->doc_type,
+            accessType: 'view',
+            accessReason: (string) $request->query('reason', 'مراجعة مستند هوية'),
+        );
+
+        return response($this->kyc->decrypt($doc), 200, [
+            'Content-Type' => $doc->original_mime ?: 'application/octet-stream',
+            // لا تُخزَّن صورة هويّة في وسيطٍ ولا في متصفّح.
+            'Cache-Control' => 'no-store, private',
+            'Content-Disposition' => 'inline',
+        ]);
+    }
+
+    /** POST /admin/kyc/documents/{id}/approve  {expires_at?} */
+    public function approve(Request $request, int $id): JsonResponse
+    {
+        $doc = KycDocument::findOrFail($id);
+
+        try {
+            $doc = $this->kyc->approve(
+                $doc, $request->user(), $request->input('expires_at'),
+            );
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false, 'code' => 'KYC_REVIEW_REJECTED',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'اعتُمد المستند',
+            'data' => [
+                'id' => $doc->id,
+                'completeness' => $this->kyc->completenessFor(
+                    User::findOrFail($doc->user_id), 2,
+                ),
+            ],
+        ]);
+    }
+
+    /** POST /admin/kyc/documents/{id}/reject  {reason} */
+    public function reject(Request $request, int $id): JsonResponse
+    {
+        $request->validate(['reason' => 'required|string|min:3']);
+
+        $doc = KycDocument::findOrFail($id);
+
+        try {
+            $doc = $this->kyc->reject($doc, $request->user(), (string) $request->input('reason'));
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false, 'code' => 'KYC_REVIEW_REJECTED',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'رُفض المستند وأُبلغ العميل بالسبب',
+            'data' => ['id' => $doc->id, 'reason' => $doc->rejection_reason],
+        ]);
+    }
+}

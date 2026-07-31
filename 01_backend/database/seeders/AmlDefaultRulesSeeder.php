@@ -27,6 +27,18 @@ class AmlDefaultRulesSeeder extends Seeder
                 'action_on_match' => 'block',
                 'risk_score_contribution' => 100,
                 'priority' => 10,
+                // AMIAL-AML-ENFORCE-001: هذه وحدها تُنفَّذ من أوّل يوم.
+                //
+                // «الإطلاق الآمن» (observe ← enforce) صحيحٌ للقواعد التي قد
+                // تُخطئ: السرعة والتوقيت والحساب الجديد كلّها تقديرات، وإيقافها
+                // بريئاً أسوأ من تمريرها. أمّا الحدّ الأقصى المطلق فليس تقديراً
+                // بل سياسة: «لا تحويل يتجاوز 50,000 مهما كان».
+                //
+                // وإبقاؤها في الظلّ يعني أن المنصّة **بلا حدٍّ أقصى إطلاقاً** —
+                // فتمرّ معاملةٌ بمليون وتُسجَّل في aml_shadow_decisions أنها
+                // «كانت ستُمنع». وهذا أسوأ من عدم وجود القاعدة: يظنّ المشغّل
+                // أن الحدّ قائم لأنه يراه في الشاشة.
+                'shadow_mode' => false,
             ],
 
             // ==================== Hold (للمراجعة) ====================
@@ -179,15 +191,37 @@ class AmlDefaultRulesSeeder extends Seeder
         // كل القواعد تبدأ في shadow_mode=true: المحرّك يراقب ويسجّل في
         // aml_shadow_decisions دون إيقاف أي معاملة. بعد مراجعة أسابيع من
         // البيانات، يُفعّل الأدمن الإنفاذ لكل قاعدة بإيقاف shadow_mode.
+        // AMIAL-AML-ENFORCE-001: يُحترم إعلان القاعدة لنفسها.
+        //
+        // كان السطر: array_merge(['shadow_mode'=>true], $r, ['shadow_mode'=>true])
+        // فيكتب الظلّ **بعد** $r ويُلغي أي إعلانٍ فيها. أي أن كتابة
+        // 'shadow_mode' => false في تعريف قاعدةٍ كانت بلا أثر، صامتةً.
+        //
+        // ولا يُلمَس ما غيّره المشغّل يدوياً: `updateOrCreate` يعيد الكتابة على
+        // الصفّ القائم، فمن أطفأ الظلّ عن قاعدةٍ بعد مراجعة بياناته يجد قراره
+        // مُلغى عند أوّل إعادة بذر. فالظلّ يُكتب عند الإنشاء فقط.
+        $enforced = 0;
         foreach ($rules as $r) {
+            $shadow = $r['shadow_mode'] ?? true;
+            unset($r['shadow_mode']);
+
+            $existing = AmlRule::where('code', $r['code'])->first();
+
             AmlRule::updateOrCreate(
                 ['code' => $r['code']],
-                array_merge(['shadow_mode' => true], $r, ['is_active' => true, 'shadow_mode' => true]),
+                array_merge(
+                    $r,
+                    ['is_active' => true],
+                    // قرار المشغّل يبقى؛ والافتراض للجديدة فقط.
+                    $existing ? [] : ['shadow_mode' => $shadow],
+                ),
             );
+
+            if (!$shadow) $enforced++;
         }
 
-        $this->command->info('✓ Seeded ' . count($rules) . ' AML rules (كلها shadow_mode — مراقبة فقط)');
-        $this->command->info('  المحرّك يراقب ويسجّل في aml_shadow_decisions دون إيقاف أي معاملة.');
-        $this->command->info('  بعد مراجعة البيانات، فعّل الإنفاذ لكل قاعدة بإيقاف shadow_mode.');
+        $this->command->info('✓ Seeded ' . count($rules) . " AML rules ({$enforced} تُنفَّذ فعلياً، والباقي مراقبة)");
+        $this->command->info('  الحدّ الأقصى المطلق يُنفَّذ من أوّل يوم — سياسةٌ لا تقدير.');
+        $this->command->info('  والباقي يراقب ويسجّل؛ فعّله بـ php artisan amial:aml-enforce');
     }
 }

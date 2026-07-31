@@ -110,6 +110,13 @@ Route::middleware(['auth:api'])->group(function () {
 
         // CRITICAL-001 — Access endpoint (يقرأه AccessController في Flutter عند الدخول)
         Route::get('/access', [\App\Http\Controllers\Api\V1\Amial\AccessController::class, 'me'])->name('access');
+
+        // AMIAL-KYC-DOCS-001 — الطرف الناقص: مكانٌ يرفع فيه العميل هويّته.
+        //
+        // كان زرّ «طلب تحديث الهوية» في لوحة الدعم يضع علامةً على المستخدم
+        // ثم لا مكان يرفع إليه — الزرّ يعمل والعميل ينتظر ما لن يأتي.
+        Route::post('/kyc/documents', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'upload'])->name('kyc.upload');
+        Route::get('/kyc/documents', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'mine'])->name('kyc.mine');
     });
 
     // AMIAL-BARCODE-001 — البحث السريع بالباركود (للـ continuous scanner)
@@ -155,6 +162,14 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/customers/{id}/reset-pin', [$c, 'resetPin'])->where('id', '[0-9]+')->middleware('platform:platform.customers.reset_pin')->name('customers.reset-pin');
             Route::post('/customers/{id}/revoke-sessions', [$c, 'revokeSessions'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.revoke-sessions');
             Route::post('/customers/{id}/require-kyc', [$c, 'requireKyc'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.require-kyc');
+            // AMIAL-KYC-DOCS-001 — مراجعة مستندات الهوية.
+            // الصلاحية نفسها المستعملة لطلب تحديث الهوية: من يطلب المستند
+            // هو من يبتّ فيه، ولا معنى لفصلهما.
+            Route::get('/kyc/queue', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'queue'])->middleware('platform:platform.customers.freeze')->name('kyc.queue');
+            Route::get('/kyc/documents/{id}/file', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'file'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('kyc.file');
+            Route::post('/kyc/documents/{id}/approve', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'approve'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('kyc.approve');
+            Route::post('/kyc/documents/{id}/reject', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'reject'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('kyc.reject');
+
             // AMIAL-DEVICE-TRUST-001 — نفس مسارات الويب بنفس الصلاحية.
             // تحصينُ سطحٍ واحد يترك الآخر باباً مفتوحاً، وقد وقع ذلك في هذا
             // المشروع من قبل: حُصّنت مسارات الويب وبقي توأمها في الـ API.

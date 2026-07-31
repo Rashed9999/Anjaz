@@ -86,6 +86,10 @@ class UniversalSettlementService
                 'status'                     => Settlement::STATUS_DRAFT,
                 'created_by'                 => $actor->id,
                 'notes'                      => $options['notes'] ?? null,
+                // AMIAL-DUAL-APPROVAL-001: يُثبَّت عند الإنشاء لا يُحسب عند
+                // الاعتماد. لو غُيّر الحدّ في الإعدادات بين الخطوتين لتغيّر
+                // شرطُ تسويةٍ جارية — فتُعتمد بواحدة ما كان يلزمها اثنتان.
+                'approvals_required'         => $this->approvalsRequiredFor($amount),
             ]);
 
             $this->audit($settlement, SettlementAuditLog::ACTION_CREATED, $actor, [
@@ -143,15 +147,69 @@ class UniversalSettlementService
                 $actor,
             );
 
-            $settlement->status      = Settlement::STATUS_APPROVED;
-            $settlement->approved_by = $actor->id;
-            $settlement->approved_at = now();
+            // AMIAL-DUAL-APPROVAL-001: موافقتان فوق الحدّ، وواحدة تحته.
+            //
+            // فصلُ المهام يمنع أن يقوم شخصٌ بخطوتين. والموافقة المزدوجة تشترط
+            // أن يقرّر **شخصان في الخطوة الواحدة**. والفرق جوهريّ: تسويةٌ
+            // بمليون كانت تخرج بتوقيع موظّفٍ واحد، والتواطؤ يحتاج اثنين
+            // والخطأُ الفرديّ يلتقطه ثانٍ.
+            $required = (int) ($settlement->approvals_required ?: 1);
+            $firstApprover = $settlement->approved_by ? (int) $settlement->approved_by : null;
+
+            if ($required >= 2 && $firstApprover === null) {
+                // الموافقة الأولى: تُسجَّل ولا تُغيّر الحالة. تبقى التسوية
+                // `pending_approval` — فلو غُيّرت الحالة هنا لصار المسار
+                // `approved` بموافقةٍ واحدة، وهو ما نمنعه.
+                $settlement->approved_by = $actor->id;
+                $settlement->approved_at = now();
+                if ($notes) $settlement->notes = $notes;
+                $settlement->save();
+
+                $this->audit($settlement, SettlementAuditLog::ACTION_APPROVED, $actor, [
+                    'approval_index' => 1,
+                    'approvals_required' => $required,
+                ]);
+
+                return $settlement->fresh();
+            }
+
+            if ($required >= 2) {
+                // الموافقة الثانية: من وافق أوّلاً لا يوافق ثانياً.
+                // ولولا هذا لكفى ضغطُ الزرّ مرّتين — فيصير «موافقتان» عدّاداً
+                // لا رقابة.
+                $this->fourEyes()->assertNotAmongPreviousActors([$firstApprover], $actor);
+
+                $settlement->second_approved_by = $actor->id;
+                $settlement->second_approved_at = now();
+            }
+
+            $settlement->status = Settlement::STATUS_APPROVED;
+
+            if ($required < 2) {
+                $settlement->approved_by = $actor->id;
+                $settlement->approved_at = now();
+            }
+
             if ($notes) $settlement->notes = $notes;
             $settlement->save();
 
-            $this->audit($settlement, SettlementAuditLog::ACTION_APPROVED, $actor);
+            $this->audit($settlement, SettlementAuditLog::ACTION_APPROVED, $actor, [
+                'approval_index' => $required >= 2 ? 2 : 1,
+                'approvals_required' => $required,
+                'final' => true,
+            ]);
+
             return $settlement->fresh();
         });
+    }
+
+    /** هل ما زالت التسوية تنتظر موافقةً ثانية؟ */
+    public function awaitingSecondApproval(Settlement $settlement): bool
+    {
+        return (int) ($settlement->approvals_required ?: 1) >= 2
+            && $settlement->approved_by !== null
+            && $settlement->second_approved_by === null
+            && $settlement->status === Settlement::STATUS_PENDING_APPROVAL;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -512,6 +570,27 @@ class UniversalSettlementService
         if (!$isAdmin) {
             throw new \RuntimeException('صلاحية المدير المالي مطلوبة');
         }
+    }
+
+    /**
+     * كم موافقةً تحتاج تسويةٌ بهذا المبلغ.
+     *
+     * الحدّ من الإعدادات لا ثابتاً في الشيفرة: المبالغ تتغيّر بتغيّر حجم
+     * المنصّة، وحدٌّ محفورٌ يُنسى حتى يصير كل شيء فوقه أو كل شيء تحته.
+     *
+     * وصفرٌ أو حدٌّ غير مضبوط يعني «موافقتان دائماً» لا «واحدة دائماً»:
+     * الإعداد الناقص يجب أن يُشدّد لا أن يُرخي — فمن نسي الضبط لا يُعاقَب
+     * بتسويةٍ خرجت بتوقيعٍ واحد.
+     */
+    private function approvalsRequiredFor(string $amount): int
+    {
+        $threshold = (string) config('amial.settlement.dual_approval_threshold', '100000');
+
+        if (bccomp($threshold, '0', 4) <= 0) {
+            return 2;
+        }
+
+        return bccomp($amount, $threshold, 4) >= 0 ? 2 : 1;
     }
 
     private function fourEyes(): FourEyesService

@@ -28,6 +28,26 @@ class SettlementEngineTest extends TestCase
     private LedgerAccount $revenueWallet;
     private SettlementPartner $partner;
 
+    private User $secondApprover;
+
+    /**
+     * اعتمادٌ كامل: موافقةٌ ثمّ ثانية إن كانت التسوية تشترطهما.
+     *
+     * لم تُخفَّض العتبة لهذه الاختبارات عمداً. مبالغها بالملايين، وفي الإنتاج
+     * تحتاج موافقتين فعلاً — فتخفيضُ العتبة يجعلها تختبر مساراً لا يسلكه أحد،
+     * ويُخفي أن الشرط الجديد يعمل.
+     */
+    private function approveFully(Settlement $s, ?string $notes = null): Settlement
+    {
+        $s = $this->svc->approve($s, $this->approver, $notes);
+
+        if ($this->svc->awaitingSecondApproval($s)) {
+            $s = $this->svc->approve($s, $this->secondApprover);
+        }
+
+        return $s;
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -36,6 +56,9 @@ class SettlementEngineTest extends TestCase
         $this->admin = User::factory()->create(['type' => 0, 'role' => 'super_admin']);
         // AMIAL-FIX(C2): معتمِد منفصل عن المُنشئ (فصل المهام)
         $this->approver = User::factory()->create(['type' => 0, 'role' => 'super_admin']);
+        // AMIAL-DUAL-APPROVAL-001: مبالغ هذا الملفّ بالملايين — فوق حدّ
+        // الموافقة المزدوجة. فيلزمها معتمِدٌ ثانٍ كما يلزمها في الإنتاج.
+        $this->secondApprover = User::factory()->create(['type' => 0, 'role' => 'super_admin']);
 
         $this->revenueWallet = LedgerAccount::create([
             'account_code'    => UniversalSettlementService::REVENUE_WALLET_CODE,
@@ -100,7 +123,7 @@ class SettlementEngineTest extends TestCase
         $s = $this->svc->submit($s, $this->admin);
         $this->assertEquals(Settlement::STATUS_PENDING_APPROVAL, $s->status);
 
-        $s = $this->svc->approve($s, $this->approver, 'معتمد');
+        $s = $this->approveFully($s, 'معتمد');
         $this->assertEquals(Settlement::STATUS_APPROVED, $s->status);
         $this->assertNotNull($s->approved_at);
 
@@ -126,7 +149,7 @@ class SettlementEngineTest extends TestCase
 
         $s = $this->svc->create($this->revenueWallet->id, $this->partner->id, '1500000', $this->admin);
         $s = $this->svc->submit($s, $this->admin);
-        $s = $this->svc->approve($s, $this->approver);
+        $s = $this->approveFully($s);
         $s = $this->svc->startProcessing($s, $this->admin);
 
         $balanceAfter = (string) $this->revenueWallet->fresh()->current_balance;
@@ -146,7 +169,7 @@ class SettlementEngineTest extends TestCase
     {
         $s = $this->svc->create($this->revenueWallet->id, $this->partner->id, '500000', $this->admin);
         $s = $this->svc->submit($s, $this->admin);
-        $s = $this->svc->approve($s, $this->approver);
+        $s = $this->approveFully($s);
 
         $logs = SettlementAuditLog::where('settlement_id', $s->id)->get();
         $this->assertGreaterThanOrEqual(3, $logs->count());
@@ -191,7 +214,7 @@ class SettlementEngineTest extends TestCase
 
         $s = $this->svc->create($this->revenueWallet->id, $this->partner->id, '1000000', $this->admin);
         $s = $this->svc->submit($s, $this->admin);
-        $s = $this->svc->approve($s, $this->approver);
+        $s = $this->approveFully($s);
         $s = $this->svc->startProcessing($s, $this->admin);
 
         $debitEntryId = $s->debit_journal_entry_id;
@@ -313,7 +336,7 @@ class SettlementEngineTest extends TestCase
     {
         $s = $this->svc->create($this->revenueWallet->id, $this->partner->id, '100000', $this->admin);
         $s = $this->svc->submit($s, $this->admin);
-        $s = $this->svc->approve($s, $this->approver);
+        $s = $this->approveFully($s);
 
         // محاولة ثانية على نفس النسخة القديمة → الحالة صارت APPROVED → انتقال غير صالح
         $this->expectException(\LogicException::class);
@@ -326,7 +349,7 @@ class SettlementEngineTest extends TestCase
         $agent = User::factory()->create(['type' => 1, 'role' => 'agent']);
         $s = $this->svc->create($this->revenueWallet->id, $this->partner->id, '100000', $this->admin);
         $s = $this->svc->submit($s, $this->admin);
-        $s = $this->svc->approve($s, $this->approver);
+        $s = $this->approveFully($s);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('صلاحية المدير المالي مطلوبة');
@@ -337,7 +360,7 @@ class SettlementEngineTest extends TestCase
     {
         $s = $this->svc->create($this->revenueWallet->id, $this->partner->id, '100000', $this->admin);
         $s = $this->svc->submit($s, $this->admin);
-        $s = $this->svc->approve($s, $this->approver);
+        $s = $this->approveFully($s);
         $s = $this->svc->startProcessing($s, $this->admin);
         return $this->svc->complete($s, $this->admin, 'REF-001');
     }
@@ -346,7 +369,7 @@ class SettlementEngineTest extends TestCase
     {
         $s = $this->svc->create($this->revenueWallet->id, $this->partner->id, '100000', $this->admin);
         $s = $this->svc->submit($s, $this->admin);
-        $s = $this->svc->approve($s, $this->approver);
+        $s = $this->approveFully($s);
         return $this->svc->startProcessing($s, $this->admin);
     }
 }

@@ -25,6 +25,8 @@ class Settlement extends Model
         'destination_account_detail', 'currency', 'amount', 'status',
         'external_reference', 'external_bank_ref', 'attachment_path',
         'created_by', 'approved_by', 'rejected_by', 'completed_by', 'cancelled_by',
+        // AMIAL-DUAL-APPROVAL-001
+        'approvals_required', 'second_approved_by', 'second_approved_at',
         'approved_at', 'rejected_at', 'completed_at', 'cancelled_at',
         'debit_journal_entry_id', 'reverse_journal_entry_id',
         'balance_before', 'balance_after',
