@@ -503,9 +503,19 @@ class AgentPortalController extends Controller
         return $this->ok(['branch' => $branch], "أُنشئ الفرع {$branch->name}");
     }
 
-    /** شحن رصيد الفرع الإلكترونيّ من الشركة الأمّ — غير توريد النقد. */
+    /**
+     * شحن رصيد الفرع الإلكترونيّ من الشركة الأمّ — غير توريد النقد.
+     *
+     * وهو قرارُ الإدارة العامّة وحدها: المال يخرج من محفظة **الشركة**، فلا
+     * يسحبه مديرُ فرعٍ إلى فرعه بنفسه. وكان يستطيع — لأنّ فرعه ضمن فروعه
+     * المسموحة، والخدمة تفحص أبوّة الفرع لا رتبةَ الطالب.
+     */
     public function fundBranch(Request $request, int $id): JsonResponse
     {
+        if ($guard = $this->headOfficeOnly($request, 'شحن رصيد الفروع')) {
+            return $guard;
+        }
+
         $request->validate([
             'amount' => 'required|numeric|min:1',
             'note' => 'required|string|min:5|max:500',
@@ -523,6 +533,63 @@ class AgentPortalController extends Controller
         }
 
         return $this->ok($out, 'شُحن الفرع — رصيده الآن ' . $out['branch_balance']);
+    }
+
+    /** سحب رصيدٍ إلكترونيٍّ من الفرع إلى الشركة الأمّ — عكس الشحن. */
+    public function collectBranch(Request $request, int $id): JsonResponse
+    {
+        if ($guard = $this->headOfficeOnly($request, 'سحب رصيد الفروع')) {
+            return $guard;
+        }
+
+        $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'note' => 'required|string|min:5|max:500',
+        ]);
+
+        $branch = $this->authorizedBranch($request, $id);
+
+        try {
+            $out = $this->branches->collectFromBranch(
+                $branch, $this->companyUser($request),
+                (string) $request->input('amount'), (string) $request->input('note'),
+            );
+        } catch (DomainException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
+        return $this->ok($out, 'سُحب الرصيد — رصيد الفرع الآن ' . $out['branch_balance']);
+    }
+
+    /**
+     * كشفُ الطبقة الثانية: ما بين الشركة وفروعها.
+     *
+     * الطبقة الأولى (المنصّة ← الشركة) في تبويب التسويات. وهذه تكملتُها:
+     * بلا الاثنتين معاً لا يعرف المدير أين ذهب الرصيد الذي اشتراه.
+     */
+    public function branchSettlement(Request $request): JsonResponse
+    {
+        $rows = $this->branches->settlementWithBranches($this->companyUser($request));
+
+        // مديرُ الفرع يرى فرعه وحده. والشركة كلّها تُقرأ من الإدارة العامّة —
+        // فأرقامُ فرعٍ آخر ليست من شأنه، ولا تُترك الشاشة تكشفها بحجّة أنّ
+        // القائمة تُبنى مرّةً واحدة.
+        if ((string) $request->attributes->get('portal_role') !== AgentStaff::ROLE_HEAD_OFFICE) {
+            $allowed = array_map('intval', (array) $request->attributes->get('agent_branch_ids', []));
+            $rows = array_values(array_filter($rows, fn ($r) => in_array($r['id'], $allowed, true)));
+        }
+
+        return $this->ok(['branches' => $rows]);
+    }
+
+    /** ما يُحرّك مال الشركة قرارُ إدارتها العامّة. */
+    private function headOfficeOnly(Request $request, string $what): ?JsonResponse
+    {
+        if ((string) $request->attributes->get('portal_role') === AgentStaff::ROLE_HEAD_OFFICE) {
+            return null;
+        }
+
+        return $this->error("{$what} من صلاحية الإدارة العامّة للشركة", 403);
     }
 
     public function moveCash(Request $request, int $id): JsonResponse

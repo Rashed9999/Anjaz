@@ -39,6 +39,50 @@ class AgentNetworkService
         private readonly AuditService $audit,
     ) {}
 
+    /**
+     * AMIAL-FUNDING-HIERARCHY-001 — المنصّة طرفُ الوكيل الأمّ وحده.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     *      المنصّة ──topup/payout──► الوكيل الأمّ ──fundBranch──► الفرع
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * فللتمويل طبقتان: تسويةٌ بين المنصّة والوكيل، وتوزيعٌ بين الوكيل
+     * وفروعه. وطريقٌ مباشرٌ من المنصّة إلى الفرع يقطع الوكيل عن مسؤوليّة
+     * فرعه — فلا يعرف كم أُعطي، ولا يُسأل عنه.
+     *
+     * **وهو قبل ذلك خطأٌ حسابيّ يُفسد التسوية:**
+     *
+     * محرّك التسوية يقرأ الوكيل وفروعه كتلةً واحدة — محافظُ الفروع ضمن
+     * «الفعليّ» عند الأمّ لأنّ ما بينهما نقلٌ داخليّ. أمّا «المتوقَّع»
+     * فيُبنى من تسويات الأمّ وحده. فتمويلٌ مباشرٌ للفرع يرفع الفعليّ ولا
+     * يرفع المتوقَّع ⇒ **فائضٌ وهميّ دائم** عند الأمّ لا يُفسَّر. وأسوأ
+     * منه أنّ المسح الشبكيّ يستثني حسابات الفروع، فالتسوية نفسها لا تظهر
+     * في أيّ شاشة: مالٌ خرج ولا سطر يحمله.
+     *
+     * والرفض هنا — في الخدمة — لا في الشاشة: معرّفٌ يأتي من المتصفّح
+     * يمكن تغييره، وما لا يُقبل في الخدمة لا يحتاج إخفاءً في الواجهة.
+     */
+    public function assertNotBranchAccount(User $agent, string $operation): void
+    {
+        $parentId = (int) (AgentProfile::where('user_id', $agent->id)
+            ->value('parent_agent_id') ?? 0);
+
+        if ($parentId === 0) {
+            return;
+        }
+
+        $parent = User::find($parentId);
+        $parentName = $parent
+            ? (trim(($parent->f_name ?? '') . ' ' . ($parent->l_name ?? '')) ?: "#{$parentId}")
+            : "#{$parentId}";
+
+        // الرفض يسمّي الوجهة البديلة: رفضٌ بلا بديلٍ يُوقف العمل ولا يصحّحه.
+        throw new RuntimeException(
+            "هذا حسابُ فرعٍ تابعٍ لـ«{$parentName}» — و{$operation} يكون مع الوكيل الأمّ وحده. "
+            . "موّل «{$parentName}» من هنا، ثمّ يوزّع هو على فروعه من بوّابته."
+        );
+    }
+
     // ============================================================
     // 1. فحص الحدود قبل cash-in
     // ============================================================
@@ -169,6 +213,8 @@ class AgentNetworkService
         ?string $paymentMethod = 'cash',
         ?string $note = null,
     ): AgentSettlement {
+        $this->assertNotBranchAccount($agent, 'صرفُ الرصيد');
+
         $normalized = MoneyService::normalize($amount);
 
         if (bccomp($normalized, '0', 4) <= 0) {
@@ -223,6 +269,8 @@ class AgentNetworkService
         ?string $paymentMethod = 'cash',
         ?string $paymentReference = null,
     ): AgentSettlement {
+        $this->assertNotBranchAccount($agent, 'شحنُ الرصيد من المنصّة');
+
         $normalized = MoneyService::normalize($amount);
         if (bccomp($normalized, '0', 4) <= 0) {
             throw new RuntimeException('المبلغ يجب أن يكون موجباً');

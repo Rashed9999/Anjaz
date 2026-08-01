@@ -136,6 +136,7 @@
                     <select id="ag-till-branch" class="form-select" style="max-width:260px"></select>
                     <button class="btn btn-outline-primary" id="ag-till-load">عرض</button>
                     <button class="btn btn-outline-primary ms-auto" id="ag-fund">💳 شحن رصيد إلكترونيّ</button>
+                    <button class="btn btn-outline-primary" id="ag-collect">↩️ سحب رصيد من الفرع</button>
                     <button class="btn btn-outline-success" id="ag-cash-in">💵 توريد نقد إلى الفرع</button>
                     <button class="btn btn-outline-secondary" id="ag-cash-out">توريد نقد من الفرع</button>
                     <button class="btn btn-outline-dark" id="ag-count">جرد الدرج</button>
@@ -192,6 +193,36 @@
                 <div class="d-flex mb-2"><button class="btn btn-outline-primary btn-sm ms-auto" id="ag-settle-load">تحديث</button></div>
                 <div id="ag-settle-summary" class="row g-3 mb-3"></div>
                 <div id="ag-settle-list"></div>
+            </div>
+
+            {{-- ============ الطبقة الثانية: الشركة وفروعها ============
+                 للتمويل طبقتان:
+
+                     أميال ──► الشركة ──► الفرع
+
+                 وما فوق هذا السطر هو الطبقة الأولى. وبلا الثانية يعرف
+                 المدير كم اشترى ولا يعرف أين ذهب. --}}
+            <div class="card p-3 mt-3">
+                <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                    <div>
+                        <div class="fw-bold">🏬 تسوية الفروع</div>
+                        <div class="small text-muted">
+                            ما أعطيتَه كلَّ فرعٍ وما استرددتَه منه — محسوباً من الدفتر لا من الرصيد الحاليّ.
+                        </div>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm ms-auto" id="ag-bsettle-load">تحديث</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light"><tr>
+                            <th>الفرع</th><th>سُلِّم إليه</th><th>استُردَّ منه</th><th>الصافي لديه</th>
+                            <th>رصيده الإلكترونيّ</th><th>نقدُه</th><th></th>
+                        </tr></thead>
+                        <tbody id="ag-bsettle-tbody">
+                            <tr><td colspan="7" class="text-center text-muted py-3">اضغط «تحديث»</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -534,8 +565,66 @@
 
         const j = await post(`/branches/${id}/fund`, {amount, note});
         alert(j.message || (j.success ? 'تم' : 'فشل'));
-        if (j.success) { loadTill(); loadOverview(); }
+        if (j.success) { loadTill(); loadOverview(); loadBranchSettlement(); }
     };
+
+    // الاتّجاه المعاكس. فرعٌ يخدم السحوبات يمتلئ رصيدُه ويفرغ درجُه، وبلا
+    // هذا يبقى الرصيد حبيساً عنده: لا يُوزَّع على فرعٍ يحتاجه، ولا يُعاد إلى
+    // أميال — لأنّ طلب الصرف يُقدَّم من محفظة الشركة وحدها.
+    $el('ag-collect').onclick = async () => {
+        const id = $el('ag-till-branch').value;
+        if (!id) return;
+        const amount = prompt('مبلغ السحب من الفرع (رصيد إلكترونيّ يعود إلى الشركة):');
+        if (!amount) return;
+        const note = prompt('السبب (٥ أحرف على الأقل):');
+        if (!note || note.length < 5) { alert('السبب إلزامي'); return; }
+
+        const j = await post(`/branches/${id}/collect`, {amount, note});
+        alert(j.message || (j.success ? 'تم' : 'فشل'));
+        if (j.success) { loadTill(); loadOverview(); loadBranchSettlement(); }
+    };
+
+    // تسوية الفروع — الطبقة الثانية.
+    async function loadBranchSettlement() {
+        const tb = document.getElementById('ag-bsettle-tbody');
+        if (!tb) return;   // الدور لا يملك التبويب أصلاً
+        tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">جارٍ التحميل…</td></tr>';
+        const j = await get('/branch-settlement');
+        const rows = (j.data && j.data.branches) || [];
+        if (!rows.length) {
+            tb.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3">لا فروع بعد</td></tr>';
+            return;
+        }
+        tb.innerHTML = rows.map(b => `
+            <tr>
+                <td><b>${esc(b.name)}</b> <span class="small text-muted">${esc(b.code)}</span></td>
+                <td>${num(b.float_given)}</td>
+                <td>${num(b.float_returned)}</td>
+                <td class="fw-bold">${num(b.float_net)}</td>
+                <td>${num(b.emoney_balance)}</td>
+                <td>${num(b.cash_on_hand)}</td>
+                <td class="text-nowrap">
+                    <button class="btn btn-sm btn-outline-primary" data-bfund="${b.id}">شحن</button>
+                    <button class="btn btn-sm btn-outline-secondary" data-bcollect="${b.id}">سحب</button>
+                </td>
+            </tr>`).join('');
+    }
+
+    $el('ag-bsettle-tbody').addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-bfund], button[data-bcollect]');
+        if (!btn) return;
+        const isFund = btn.hasAttribute('data-bfund');
+        const id = isFund ? btn.dataset.bfund : btn.dataset.bcollect;
+        const amount = prompt(isFund ? 'مبلغ الشحن للفرع:' : 'مبلغ السحب من الفرع:');
+        if (!amount) return;
+        const note = prompt('السبب (٥ أحرف على الأقل):');
+        if (!note || note.length < 5) { alert('السبب إلزامي'); return; }
+        const j = await post(`/branches/${id}/${isFund ? 'fund' : 'collect'}`, {amount, note});
+        alert(j.message || (j.success ? 'تم' : 'فشل'));
+        if (j.success) { loadBranchSettlement(); loadOverview(); }
+    });
+
+    $el('ag-bsettle-load').addEventListener('click', loadBranchSettlement);
 
     $el('ag-cash-in').onclick = () => cashMove('in');
     $el('ag-cash-out').onclick = () => cashMove('out');

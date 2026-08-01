@@ -89,12 +89,19 @@ const HUB_HTML = bladeToHtml('resources/views/admin-views/amial/hub/users.blade.
     "$stats": '0',
 });
 
-// صفٌّ واحدٌ يشبه ما تُرجعه AdminHubController للوكلاء
-const FAKE_ROW = {
-    id: 7, name: 'البسيري للصرافة', phone: '967700000007', balance: 0,
-    kyc: 1, has_docs: true, is_active: true,
-    agent: { is_branch_account: false, no_branches: false, branches: 2, branches_active: 2, cash_on_hand: 150000, flags: [] },
-};
+// صفّان يشبهان ما تُرجعه AdminHubController للوكلاء: وكيلٌ أمّ، وفرعٌ تابع.
+const FAKE_ROWS = [
+    {
+        id: 7, name: 'البسيري للصرافة', phone: '967700000007', balance: 0,
+        kyc: 1, has_docs: true, is_active: true,
+        agent: { is_branch_account: false, no_branches: false, branches: 2, branches_active: 2, cash_on_hand: 150000, flags: [] },
+    },
+    {
+        id: 8, name: 'فرع المكلا', phone: '967700000008', balance: 0,
+        kyc: 1, has_docs: true, is_active: true,
+        agent: { is_branch_account: true, parent: { id: 7, name: 'البسيري للصرافة' } },
+    },
+];
 
 const STUBS = `
 window.__nav = null;
@@ -104,7 +111,7 @@ window.confirm = () => true;
 const _json = (o) => new Response(JSON.stringify(o), {status: 200, headers: {'Content-Type': 'application/json'}});
 window.fetch = async (url) => {
     const u = String(url);
-    if (u.includes('users.json')) return _json({data: [${JSON.stringify(FAKE_ROW)}], current_page: 1, last_page: 1, total: 1});
+    if (u.includes('users.json')) return _json({data: ${JSON.stringify(FAKE_ROWS)}, current_page: 1, last_page: 1, total: 2});
     if (u.includes('kyc.json'))   return _json({data: []});
     return _json({message: 'تمّ'});
 };
@@ -131,6 +138,22 @@ const CASES = [
         name: 'زر «تجميد» ينفّذ ولا ينقل',
         click: 'button[data-act="toggle"]',
         expectNav: null,
+    },
+    {
+        // المنصّة ──► الوكيل الأمّ ──► الفرع. والخدمة ترفض تمويل الفرع على
+        // كلّ حال؛ وهذا يتحقّق أنّ الشاشة تقول **السبب** بدل أن تَصُدّ بعد
+        // الضغط.
+        name: 'صفّ الفرع لا يعرض زرّ تحويل ويقول لماذا',
+        click: null,
+        expectNav: null,
+        dom: [
+            ['لا زرّ تحويل على صفّ الفرع',
+                `!document.querySelector('tr[data-id="8"] button[data-act="transfer"]')`],
+            ['والسبب مكتوبٌ في مكانه',
+                `/يُموَّل من البسيري/.test(document.querySelector('tr[data-id="8"]').textContent)`],
+            ['وزرّ التحويل قائمٌ على صفّ الوكيل الأمّ',
+                `!!document.querySelector('tr[data-id="7"] button[data-act="transfer"]')`],
+        ],
     },
 ];
 
@@ -159,8 +182,10 @@ for (const c of CASES) {
     try {
         await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
         await page.waitForSelector('tr[data-act="open"]', { timeout: 5000 });
-        await page.click(c.click);
-        await page.waitForTimeout(700);   // مهلة الانتقال وحركة النافذة
+        if (c.click) {
+            await page.click(c.click);
+            await page.waitForTimeout(700);   // مهلة الانتقال وحركة النافذة
+        }
 
         const modalShown = c.expectModal
             ? await page.evaluate((sel) => !!document.querySelector(sel)?.classList.contains('show'), c.expectModal)
@@ -174,6 +199,11 @@ for (const c of CASES) {
             else if (!c.expectNav.test(navigated)) problems.push(`انتقل إلى ${navigated} ولا يطابق المتوقَّع`);
         }
         if (c.expectModal && modalShown !== true) problems.push(`النافذة ${c.expectModal} لم تُفتح`);
+
+        for (const [desc, js] of (c.dom || [])) {
+            const okDom = await page.evaluate(`Boolean(${js})`).catch(() => false);
+            if (!okDom) problems.push(`تحقُّق غير محقَّق: ${desc}`);
+        }
 
         if (problems.length) { console.log(`  \x1b[31m✗\x1b[0m ${c.name}\n      ${problems.join('\n      ')}`); fail++; }
         else { console.log(`  \x1b[32m✓\x1b[0m ${c.name}`); pass++; }

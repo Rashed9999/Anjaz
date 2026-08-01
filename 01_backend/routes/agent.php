@@ -68,6 +68,8 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff) 
 
     Route::post('/branches', [$c, 'createBranch'])->name('branch.create');
     Route::post('/branches/{id}/fund', [$c, 'fundBranch'])->where('id', '[0-9]+')->name('branch.fund');
+    Route::post('/branches/{id}/collect', [$c, 'collectBranch'])->where('id', '[0-9]+')->name('branch.collect');
+    Route::get('/branch-settlement', [$c, 'branchSettlement'])->name('branch.settlement');
     Route::post('/branches/{id}/cash', [$c, 'moveCash'])->where('id', '[0-9]+')->name('branch.cash');
     Route::post('/branches/{id}/count', [$c, 'countTill'])->where('id', '[0-9]+')->name('branch.count');
 });

@@ -250,6 +250,25 @@
                                     : `${fmt(a.cash_on_hand)} ر.ي<div>${badges}</div>`}</td>`;
     }
 
+    // زرّ التمويل — ولا يظهر على صفّ فرع.
+    //
+    //      المنصّة ──► الوكيل الأمّ ──► الفرع
+    //
+    // فالمنصّة طرفُ الوكيل وحده، والوكيل يوزّع على فروعه من بوّابته.
+    // والخدمة ترفض تمويل الفرع على كلّ حال (AgentNetworkService)، وهذا
+    // هنا ليقرأ المدير **السبب** بدل أن يضغط ويُصدَّ.
+    function transferControl(u) {
+        const a = isAgents ? u.agent : null;
+        if (a && a.is_branch_account) {
+            const parent = esc(a.parent ? a.parent.name : 'الوكيل الأمّ');
+            return `<span class="badge bg-light text-dark border fw-normal"
+                          title="التمويل يمرّ بالوكيل الأمّ ليبقى مسؤولاً عن فرعه، ولتبقى التسوية مع طرفٍ واحد">
+                        يُموَّل من ${parent}</span>`;
+        }
+        return `<button class="btn btn-sm btn-outline-primary" data-act="transfer" data-id="${u.id}" data-name="${esc(u.name)}">
+                    ${isAgents ? 'تحويل رصيد' : 'إعادة مبلغ'}</button>`;
+    }
+
     async function loadUsers() {
         const tbody = document.getElementById('users-tbody');
         tbody.innerHTML = `<tr><td colspan="${COLS}" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>`;
@@ -277,8 +296,7 @@
                 <td>${u.is_active ? '<span class="badge bg-success">نشِط</span>' : '<span class="badge bg-danger">مجمَّد</span>'}</td>
                 <td class="text-nowrap">
                     <button class="btn btn-sm btn-primary" data-act="open" data-id="${u.id}">التفاصيل</button>
-                    <button class="btn btn-sm btn-outline-primary" data-act="transfer" data-id="${u.id}" data-name="${esc(u.name)}">
-                        ${isAgents ? 'تحويل رصيد' : 'إعادة مبلغ'}</button>
+                    ${transferControl(u)}
                     <button class="btn btn-sm ${u.is_active ? 'btn-outline-danger' : 'btn-outline-success'}"
                             data-act="toggle" data-id="${u.id}">${u.is_active ? 'تجميد' : 'فكّ التجميد'}</button>
                 </td>

@@ -608,6 +608,27 @@ class AdminHubController extends Controller
         ]);
         if ($v->fails()) return response()->json(['message' => $v->errors()->first()], 422);
 
+        // ── البابُ الخلفيّ يُغلق هنا ────────────────────────────────────
+        //
+        // هذا التحويل عامٌّ يقبل أيّ `to_user_id`. فلو أُغلق مسارُ شحن
+        // الوكلاء وحده لبقي هذا مفتوحاً، ونفسُ المال يصل بنفس الأثر —
+        // بل أسوأ: بلا تسويةٍ أصلاً، فلا «متوقَّع» يرتفع ولا سطر يحمله.
+        //
+        // فرصيدُ الوكلاء وفروعهم يمرّ من مسار التسويات وحده.
+        $receiver = User::find((int) $request->input('to_user_id'));
+        if ($receiver && (int) $receiver->type === AGENT_TYPE) {
+            try {
+                app(AgentNetworkService::class)->assertNotBranchAccount($receiver, 'التمويل');
+            } catch (\Throwable $e) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+
+            return response()->json([
+                'message' => 'رصيد الوكلاء يُشحن من «تحويل رصيد» في صفّ الوكيل — '
+                    . 'ليمرّ من مسار التسويات ويظهر في التوازن. والتحويل العامّ للعملاء.',
+            ], 422);
+        }
+
         $adminId = Helpers::get_admin_id();
         $amount = (string) $request->input('amount');
 
