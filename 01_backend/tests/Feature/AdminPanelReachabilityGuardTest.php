@@ -58,6 +58,28 @@ class AdminPanelReachabilityGuardTest extends TestCase
 
         'admin.support-center.index' =>
             'حظر الأجهزة يُتّخذ من ملفّ العميل — وهو بديلٌ عن تجميد الحساب كلّه',
+
+        'admin.amial.hub.agents' =>
+            'شبكة شركات الصرافة تُشرَف عليها من هنا: الفروع وخزائن النقد وحركته',
+    ];
+
+    /**
+     * بوّابات خارج لوحة الإدارة يجب أن يصل إليها رابطٌ من داخلها.
+     *
+     * **العطل الذي أدخل هذا السطر.** بُنيت بوّابة الوكيل كاملةً — خمسة عشر
+     * مساراً وستّة تبويبات — وتُفتح وتعمل، ولم يكن في لوحة الإدارة رابطٌ
+     * واحدٌ إليها. فقال صاحب المشروع «الرابط الوكيل لا يعمل»، وكان محقّاً:
+     * لا رابط أصلاً.
+     *
+     * وهذا **نفس** العطل الذي بُني له الحارس أعلى الملفّ، غير أنّ الحارس كان
+     * يفحص لوحات `admin/*` وحدها، والبوّابة خارجها فأفلتت. والدرس أنّ الحارس
+     * يحرس ما شُملَ في نطاقه لا ما يشبهه.
+     *
+     * @var array<string, string>
+     */
+    private const EXTERNAL_PORTALS_LINKED_FROM_ADMIN = [
+        'agent.login' =>
+            'شركات الصرافة تدخل من كمبيوترها، والمدير هو من يمرّر لها العنوان — فبلا رابطٍ في اللوحة لا يعرفه أحد',
     ];
 
     private User $admin;
@@ -147,6 +169,26 @@ class AdminPanelReachabilityGuardTest extends TestCase
                 "«{$name}» لا رابط لها في القائمة الجانبية — تعمل ولا أحد يصل إليها.\n"
                 . "السبب في وجوبها: {$why}",
             );
+        }
+    }
+
+    /** @test */
+    public function every_external_portal_is_reachable_from_the_admin_panel(): void
+    {
+        $sidebar = file_get_contents(
+            resource_path('views/admin-views/amial/partials/_sidebar.blade.php'),
+        );
+
+        foreach (self::EXTERNAL_PORTALS_LINKED_FROM_ADMIN as $name => $why) {
+            $this->assertTrue(Route::has($name), "لا مسار باسم «{$name}».\nالسبب: {$why}");
+
+            // البوّابة نفسها تُفتح بلا جلسة إدارة — فهي صفحة دخولٍ مستقلّة.
+            $this->assertSame(200, $this->get(route($name))->getStatusCode(),
+                "بوّابة «{$name}» لا تُفتح.\nالسبب في وجوبها: {$why}");
+
+            $this->assertStringContainsString("route('{$name}')", $sidebar,
+                "«{$name}» مبنيّة وتعمل ولا رابط لها في لوحة الإدارة — وهذا يساوي غيابها.\n"
+                . "السبب في وجوبها: {$why}");
         }
     }
 

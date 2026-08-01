@@ -9,8 +9,13 @@
 <div class="content container-fluid" id="hub-root"
      data-slug="{{ $hubSlug }}" data-type="{{ $hubType }}">
 
-    <div class="d-flex align-items-center gap-3 mb-4">
+    <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
         <h2 class="page-header-title mb-0">{{ $hubTitle }}</h2>
+        @if($hubSlug === 'agents')
+            {{-- الرابط الذي كان ناقصاً: البوّابة مبنيّة، ولم يكن إليها بابٌ من هنا. --}}
+            <a href="{{ route('agent.login') }}" target="_blank" rel="noopener"
+               class="btn btn-sm btn-dark">🏦 فتح بوّابة الوكيل (شركات الصرافة)</a>
+        @endif
         <span class="badge badge-soft-info ms-auto">AMIAL-HUB-001</span>
     </div>
 
@@ -38,9 +43,17 @@
         <span class="fs-4 fw-bold">{{ number_format((float) $stats['balance_sum'], 2) }} ر.ي</span>
     </div>
 
+    @if($hubSlug === 'agents')
+        @include('admin-views.amial.hub._agent_network_cards')
+    @endif
+
     {{-- تبويبات --}}
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-list">القائمة</a></li>
+        @if($hubSlug === 'agents')
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-branches" id="branches-tab-link">الفروع والخزائن</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-cash" id="cash-tab-link">حركة النقد</a></li>
+        @endif
         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-kyc" id="kyc-tab-link">طلبات التوثيق</a></li>
     </ul>
 
@@ -58,11 +71,14 @@
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="table-light"><tr>
-                            <th>#</th><th>الاسم</th><th>الهاتف</th><th>الرصيد</th>
+                            <th>#</th><th>الاسم</th><th>الهاتف</th><th>الرصيد الإلكترونيّ</th>
+                            @if($hubSlug === 'agents')
+                            <th>الفروع</th><th>النقد في الدرج</th>
+                            @endif
                             <th>التوثيق</th><th>الحالة</th><th>إجراءات</th>
                         </tr></thead>
                         <tbody id="users-tbody">
-                            <tr><td colspan="7" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>
+                            <tr><td colspan="9" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -75,6 +91,10 @@
                 </div>
             </div>
         </div>
+
+        @if($hubSlug === 'agents')
+            @include('admin-views.amial.hub._agent_tabs')
+        @endif
 
         {{-- ===== تبويب التوثيق ===== --}}
         <div class="tab-pane fade" id="tab-kyc">
@@ -203,9 +223,35 @@
     }
 
     // ===== قائمة المستخدمين =====
+    const COLS = isAgents ? 9 : 7;
+
+    // عمودا الوكيل: الفروع، والنقد في الدرج. وكيلٌ بلا فرعٍ لا يخدم أحداً مهما
+    // كان رصيده؛ وفرعٌ بلا نقدٍ يقبل الإيداع ويعجز عن السحب.
+    function agentCells(u) {
+        if (!isAgents) return '';
+        const a = u.agent;
+        if (!a) return '<td colspan="2" class="text-muted small">—</td>';
+
+        if (a.is_branch_account) {
+            return `<td><span class="badge bg-info text-dark">فرع</span>
+                        <div class="small text-muted">تابع لـ ${esc(a.parent ? a.parent.name : '—')}</div></td>
+                    <td class="text-muted small">يُدار من صفّ الوكيل الأمّ</td>`;
+        }
+
+        const labels = {low_cash: 'نقدٌ منخفض', overloaded: 'فوق الحدّ', not_counted: 'لم يُجرَد', no_till: 'خزنة ناقصة'};
+        const badges = (a.flags || []).map(f =>
+            `<span class="badge bg-warning text-dark">${labels[f] || f}</span>`).join(' ');
+
+        return `<td>${a.no_branches
+                    ? '<span class="badge bg-danger">بلا فروع</span>'
+                    : `<strong>${a.branches}</strong> <span class="small text-muted">(${a.branches_active} نشِط)</span>`}</td>
+                <td>${a.no_branches ? '<span class="text-muted small">—</span>'
+                                    : `${fmt(a.cash_on_hand)} ر.ي<div>${badges}</div>`}</td>`;
+    }
+
     async function loadUsers() {
         const tbody = document.getElementById('users-tbody');
-        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="${COLS}" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>`;
         const r = await fetch(`${base}/${slug}/users.json?page=${page}&search=${encodeURIComponent(search)}`,
             {headers: {'Accept': 'application/json'}});
         const j = await r.json();
@@ -213,7 +259,7 @@
         document.getElementById('page-info').textContent = `صفحة ${j.current_page} من ${j.last_page} — ${j.total} حساب`;
 
         if (!j.data.length) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">لا نتائج</td></tr>';
+            tbody.innerHTML = `<tr><td colspan="${COLS}" class="text-center text-muted py-4">لا نتائج</td></tr>`;
             return;
         }
         tbody.innerHTML = j.data.map(u => `
@@ -222,6 +268,7 @@
                 <td class="text-primary fw-bold">${esc(u.name)}</td>
                 <td dir="ltr">${esc(u.phone)}</td>
                 <td>${fmt(u.balance)} ر.ي</td>
+                ${agentCells(u)}
                 <td>${u.kyc === 1 ? '<span class="badge bg-success">موثّق</span>'
                     : (u.kyc === 2 ? '<span class="badge bg-danger">مرفوض</span>'
                     : (u.has_docs ? '<span class="badge bg-warning text-dark">بانتظار الاعتماد</span>'

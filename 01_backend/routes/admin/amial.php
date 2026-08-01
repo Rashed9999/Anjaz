@@ -360,6 +360,12 @@ Route::prefix('hub')->name('hub.')->group(function () {
     Route::post('/agents/{id}/credit', [$hc, 'agentCredit'])
         ->where('id', '[0-9]+')->name('agents.credit');
 
+    // AMIAL-AGENT-SUPERVISION-001 — إشراف الإدارة على شبكة شركات الصرافة
+    $asc = App\Http\Controllers\Admin\AgentSupervisionController::class;
+    Route::get('/agents/network.json', [$asc, 'network'])->name('agents.network');
+    Route::get('/agents/branches.json', [$asc, 'branches'])->name('agents.branches');
+    Route::get('/agents/movements.json', [$asc, 'movements'])->name('agents.movements');
+
     // المالية
     Route::post('/finance/topup', [$hc, 'adminTopup'])->name('finance.topup');
     Route::get('/finance/stats.json', [$hc, 'financeStats'])->name('finance.stats');

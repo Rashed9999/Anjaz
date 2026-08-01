@@ -33,15 +33,24 @@ use Tests\TestCase;
 class AdminPanelDeadEndpointGuardTest extends TestCase
 {
     /**
-     * اللوحة => قالبها.
+     * اللوحة => قالبها، أو قوالبها إن كانت مقسَّمة على أجزاء.
      *
-     * @var array<string, string>
+     * القائمة تقبل مصفوفةً لأنّ لوحةً كبيرةً تُقسَّم على `@include` طبيعيّاً،
+     * وحصرُ الفحص في ملفٍّ واحدٍ كان سيجعل كلّ نقطةِ نهايةٍ يستدعيها جزءٌ
+     * تبدو ميتةً — فيُسكَت الحارس بإعفاءاتٍ كاذبة بدل أن يُوسَّع نطاقه.
+     *
+     * @var array<string, string|array<string>>
      */
     private const PANELS = [
         'admin/amial/aml' => 'admin-views/amial/aml/index.blade.php',
         'admin/amial/kyc' => 'admin-views/amial/kyc/index.blade.php',
         'admin/amial/partner-settlements' => 'admin-views/amial/settlements_partners/index.blade.php',
         'admin/amial/ledger' => 'admin-views/amial/ledger/index.blade.php',
+        'admin/amial/hub/agents' => [
+            'admin-views/amial/hub/users.blade.php',
+            'admin-views/amial/hub/_agent_network_cards.blade.php',
+            'admin-views/amial/hub/_agent_tabs.blade.php',
+        ],
     ];
 
     /**
@@ -85,11 +94,14 @@ class AdminPanelDeadEndpointGuardTest extends TestCase
     {
         $dead = [];
 
-        foreach (self::PANELS as $prefix => $view) {
-            $path = resource_path('views/' . $view);
+        foreach (self::PANELS as $prefix => $views) {
+            $blade = '';
 
-            $this->assertFileExists($path, "قالب اللوحة «{$prefix}» غير موجود");
-            $blade = $this->codeOnly((string) file_get_contents($path));
+            foreach ((array) $views as $view) {
+                $path = resource_path('views/' . $view);
+                $this->assertFileExists($path, "قالب اللوحة «{$prefix}» غير موجود: {$view}");
+                $blade .= $this->codeOnly((string) file_get_contents($path)) . "\n";
+            }
 
             foreach (Route::getRoutes() as $route) {
                 $uri = $route->uri();

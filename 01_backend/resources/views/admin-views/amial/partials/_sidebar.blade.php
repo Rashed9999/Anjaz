@@ -45,7 +45,11 @@
                 // يُدار منه العميل. والقديمة تبقى للقائمة والإنشاء بالجملة.
                 ['🔎 ملفّ العميل الموحَّد (١٠ تبويبات)', route('admin.amial.customer.page'), 'platform.customers.view'],
                 ['👥 قائمة العملاء وإنشاء الحسابات', route('admin.amial.hub.customers'), null],
-                ['🤝 مركز الوكلاء', route('admin.amial.hub.agents'), null],
+                ['🤝 مركز الوكلاء (الفروع والخزائن)', route('admin.amial.hub.agents'), null],
+                // البوّابة مبنيّة منذ الالتزام السابق ولم يكن إليها بابٌ من هنا:
+                // شركة الصرافة تدخل من كمبيوترها بهاتف الحساب وكلمة سرّه، وهذا
+                // الرابط هو ما يُريه المدير العنوان ليمرّره لها.
+                ['🏦 بوّابة الوكيل (شركات الصرافة)', route('agent.login'), null, '_blank'],
                 ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), null],
                 ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), null],
                 ['🪪 لوحة التحقق (الحسابات الجديدة)', route('admin.amial.hub.verification'), null],
@@ -171,8 +175,12 @@
             <ul class="nav flex-column ms-3 mt-1 gap-1">
                 @foreach ($links as $l)
                     <li class="nav-item">
+                        {{-- العنصر الرابع الاختياريّ: `_blank` للبوّابات التي
+                             ليست جزءاً من لوحة الإدارة، كي لا يخرج المدير من
+                             جلسته حين يفتحها. --}}
                         <a class="nav-link py-1 {{ Request::url() === $l[1] ? 'active' : '' }}"
-                           href="{{ $l[1] }}" title="{{ $l[0] }}">
+                           href="{{ $l[1] }}" title="{{ $l[0] }}"
+                           @if(($l[3] ?? null) === '_blank') target="_blank" rel="noopener" @endif>
                             <span class="text-truncate small">{{ $l[0] }}</span>
                         </a>
                     </li>

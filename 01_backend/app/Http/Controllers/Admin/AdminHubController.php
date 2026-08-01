@@ -105,6 +105,14 @@ class AdminHubController extends Controller
         $balances = EMoney::whereIn('user_id', $users->pluck('id'))
             ->pluck('current_balance', 'user_id');
 
+        // الوكيل ليس عميلاً برصيد: هو شركة صرافة لها فروعٌ وخزائنُ نقدٍ ورقيّ،
+        // ورصيدُه الإلكترونيّ وحده لا يقول إن كان يستطيع الخدمة اليوم.
+        // تُحسب هذه الإضافات لمعرّفات الصفحة المعروضة فقط.
+        $extra = $type === AGENT_TYPE
+            ? app(\App\Services\AgentSupervisionService::class)
+                ->summariesFor($users->pluck('id')->map(fn ($v) => (int) $v)->all())
+            : [];
+
         return response()->json([
             'data' => $users->map(fn (User $u) => [
                 'id' => $u->id,
@@ -115,6 +123,7 @@ class AdminHubController extends Controller
                 'kyc' => (int) ($u->is_kyc_verified ?? 0), // 0 معلّق / 1 موثّق / 2 مرفوض
                 'has_docs' => !empty($u->identification_image),
                 'created_at' => optional($u->created_at)->format('Y-m-d'),
+                'agent' => $extra[$u->id] ?? null,
             ])->values(),
             'current_page' => $users->currentPage(),
             'last_page' => $users->lastPage(),
