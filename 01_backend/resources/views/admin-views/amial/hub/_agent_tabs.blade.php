@@ -65,6 +65,41 @@
     </div>
 </div>
 
+
+{{-- ===== التوازن والتسوية ===== --}}
+<div class="tab-pane fade" id="tab-settlement">
+    <div class="alert alert-secondary small">
+        <strong>كيف يُقرأ هذا الجدول.</strong>
+        «المتوقَّع» محسوبٌ من <strong>سطور الدفتر</strong> و<strong>سجلّ حركة النقد</strong>.
+        و«الفعليّ» مقروءٌ من الأعمدة المخزَّنة. <strong>والفرق بينهما هو المنتَج</strong> —
+        فلو حُسب المتوقَّع من العمود نفسه لخرج الفرق صفراً دائماً وبدا كلّ شيءٍ
+        متوازناً حتى وهو منهار.
+    </div>
+
+    <div class="card stat-card">
+        <div class="card-header d-flex gap-2 align-items-center flex-wrap">
+            <strong>ميزان الوكلاء</strong>
+            <span class="text-muted small" id="stl-count"></span>
+            <button class="btn btn-sm btn-outline-primary ms-auto" id="stl-refresh">تحديث</button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light"><tr>
+                    <th>الوكيل</th><th>الحالة</th>
+                    <th>الرصيد الإلكترونيّ<div class="small text-muted fw-normal">فعليّ · فرق</div></th>
+                    <th>النقد الورقيّ<div class="small text-muted fw-normal">فعليّ · فرق</div></th>
+                    <th>التزام المنصّة</th><th>صرفٌ معلَّق</th><th></th>
+                </tr></thead>
+                <tbody id="stl-tbody">
+                    <tr><td colspan="7" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="stl-detail" class="mt-3"></div>
+</div>
+
 @push('script')
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
@@ -226,6 +261,114 @@
     // التبويبات تُحمَّل عند فتحها — لا عند فتح الصفحة.
     document.getElementById('branches-tab-link').addEventListener('shown.bs.tab', loadBranches);
     document.getElementById('cash-tab-link').addEventListener('shown.bs.tab', loadCash);
+
+
+    // ═══ التوازن والتسوية ═══
+    const stlBadge = (s) => ({
+        balanced: '<span class="badge bg-success">متوازن</span>',
+        short: '<span class="badge bg-danger">عجز</span>',
+        over: '<span class="badge bg-warning text-dark">فائض</span>',
+        no_data: '<span class="badge bg-secondary">لا حركة بعد</span>',
+    }[s] || esc(s));
+
+    const diffCell = (actual, diff) => {
+        const zero = Math.abs(Number(diff)) < 0.0001;
+        return `${fmt(actual)}<div class="small ${zero ? 'text-muted' : 'text-danger fw-bold'}">`
+             + `${zero ? 'مطابق' : (Number(diff) > 0 ? '+' : '') + fmt(diff)}</div>`;
+    };
+
+    async function loadSettlement() {
+        const tbody = document.getElementById('stl-tbody');
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>';
+        const j = await get(`${base}/agents/settlement.json`);
+
+        document.getElementById('stl-count').textContent = `${j.data.length} وكيل`;
+
+        tbody.innerHTML = j.data.length ? j.data.map(r => `
+            <tr>
+                <td><strong>${esc(r.agent.name)}</strong>
+                    <div class="small text-muted">${r.agent.branches} فرع</div></td>
+                <td>${stlBadge(r.status)}</td>
+                <td>${diffCell(r.float_actual, r.float_difference)}</td>
+                <td>${diffCell(r.cash_actual, r.cash_difference)}</td>
+                <td class="text-primary">${fmt(r.company_liability)}</td>
+                <td>${Number(r.pending_payout) > 0
+                        ? `<span class="badge bg-info text-dark">${fmt(r.pending_payout)}</span>` : '—'}</td>
+                <td><button class="btn btn-sm btn-outline-primary" data-stl="${r.agent.id}">التفاصيل</button></td>
+            </tr>`).join('')
+            : '<tr><td colspan="7" class="text-center text-muted py-4">لا وكلاء</td></tr>';
+    }
+
+    document.getElementById('stl-tbody').addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-stl]');
+        if (!b) return;
+        const box = document.getElementById('stl-detail');
+        box.innerHTML = '<div class="text-muted small">جارٍ التحميل…</div>';
+
+        const j = await get(`${base}/agents/${b.dataset.stl}/settlement.json`);
+        const p = j.position, d = j.daily;
+        const fb = p.float.breakdown, cb = p.cash.breakdown;
+
+        box.innerHTML = `
+            <div class="card stat-card p-3">
+                <h6 class="mb-3">${esc(p.agent.name)} — ${stlBadge(p.status)}</h6>
+                <div class="row g-3">
+                    <div class="col-md-6"><div class="border rounded p-3 h-100">
+                        <div class="fw-bold text-primary mb-2">الرصيد الإلكترونيّ</div>
+                        <table class="table table-sm mb-0">
+                            <tr><td>اشترى (شحن معتمَد)</td><td class="text-end">${fmt(fb.bought)}</td></tr>
+                            <tr><td>أعاد (صرف معتمَد)</td><td class="text-end">−${fmt(fb.returned)}</td></tr>
+                            <tr><td>دخل من سحوبات العملاء</td><td class="text-end">+${fmt(fb.from_withdrawals)}</td></tr>
+                            <tr><td>خرج في إيداعاتهم</td><td class="text-end">−${fmt(fb.to_deposits)}</td></tr>
+                            <tr class="table-light"><td><strong>المتوقَّع</strong></td>
+                                <td class="text-end"><strong>${fmt(p.float.expected)}</strong></td></tr>
+                            <tr><td>الفعليّ</td><td class="text-end">${fmt(p.float.actual)}</td></tr>
+                            <tr><td><strong>الفرق</strong></td>
+                                <td class="text-end ${Math.abs(Number(p.float.difference))<0.0001?'':'text-danger fw-bold'}">
+                                ${fmt(p.float.difference)}</td></tr>
+                            <tr><td class="text-muted">محجوز</td><td class="text-end text-muted">${fmt(p.float.held)}</td></tr>
+                        </table>
+                    </div></div>
+                    <div class="col-md-6"><div class="border rounded p-3 h-100">
+                        <div class="fw-bold text-success mb-2">النقد الورقيّ</div>
+                        <table class="table table-sm mb-0">
+                            <tr><td>نقد إيداعات العملاء</td><td class="text-end">+${fmt(cb.deposits_in ?? 0)}</td></tr>
+                            <tr><td>نقد سحوباتهم</td><td class="text-end">−${fmt(cb.withdrawals_out ?? 0)}</td></tr>
+                            <tr><td>توريد إلى الفروع</td><td class="text-end">+${fmt(cb.treasury_in ?? 0)}</td></tr>
+                            <tr><td>توريد منها</td><td class="text-end">−${fmt(cb.treasury_out ?? 0)}</td></tr>
+                            <tr><td>تسويات جرد</td><td class="text-end">${fmt(cb.adjustments ?? 0)}</td></tr>
+                            <tr class="table-light"><td><strong>المتوقَّع</strong></td>
+                                <td class="text-end"><strong>${fmt(p.cash.expected)}</strong></td></tr>
+                            <tr><td>الفعليّ (خزائن ${fmt(p.cash.in_safes)} + أدراج ${fmt(p.cash.in_drawers)})</td>
+                                <td class="text-end">${fmt(p.cash.actual)}</td></tr>
+                            <tr><td><strong>الفرق</strong></td>
+                                <td class="text-end ${Math.abs(Number(p.cash.difference))<0.0001?'':'text-danger fw-bold'}">
+                                ${fmt(p.cash.difference)}</td></tr>
+                        </table>
+                    </div></div>
+                </div>
+
+                <div class="row g-3 mt-1">
+                    <div class="col-md-6"><div class="alert alert-primary mb-0 py-2 small">
+                        <strong>التزام المنصّة:</strong> ${fmt(p.net.company_liability)} ر.ي
+                        — مالٌ نَدين به للوكيل ويستطيع صرفه.
+                        ${Number(p.net.agent_liability) > 0
+                            ? `<div class="text-danger fw-bold mt-1">⚠️ رصيد سالب: ${fmt(p.net.agent_liability)}</div>` : ''}
+                    </div></div>
+                    <div class="col-md-6"><div class="alert alert-light border mb-0 py-2 small">
+                        <strong>تسوية اليوم (${esc(d.date)}):</strong>
+                        ${d.shifts_closed}/${d.shifts_total} ورديّة مُغلقة ·
+                        <span class="text-danger">عجز ${d.shortage_count} (${fmt(d.shortage_total)})</span> ·
+                        <span class="text-warning">فائض ${d.overage_count} (${fmt(d.overage_total)})</span>
+                        ${d.unclosed_drawers ? `<div class="mt-1">⚠️ ${d.unclosed_drawers} درج لم يُغلق</div>` : ''}
+                        <div class="text-muted mt-1">العجز والفائض لا يُقاصّان — كلٌّ حادثةٌ تستحقّ سؤالاً.</div>
+                    </div></div>
+                </div>
+            </div>`;
+    });
+
+    document.getElementById('stl-refresh').addEventListener('click', loadSettlement);
+    document.getElementById('settlement-tab-link').addEventListener('shown.bs.tab', loadSettlement);
 
     loadNetwork();
 })();

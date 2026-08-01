@@ -50,4 +50,35 @@ class AgentSupervisionController extends Controller
             ]),
         ]);
     }
+
+    /**
+     * GET hub/agents/settlement.json — مسحُ التوازن عبر الشبكة.
+     *
+     * كلّ رقمٍ هنا محسوبٌ من مصدره: المتوقَّع من الدفتر وسجلّ النقد،
+     * والفعليّ من الأعمدة، **والفرق بينهما هو المنتَج**.
+     */
+    public function settlementScan(): JsonResponse
+    {
+        return response()->json([
+            'data' => app(\App\Services\AgentSettlementEngine::class)->networkScan(),
+            'statuses' => \App\Services\AgentSettlementEngine::STATUS_LABELS,
+        ]);
+    }
+
+    /** GET hub/agents/{id}/settlement.json — وضع وكيلٍ واحدٍ بالتفصيل. */
+    public function agentSettlement(Request $request, int $id): JsonResponse
+    {
+        $agent = \App\Models\User::where('id', $id)->where('type', AGENT_TYPE)->first();
+
+        if (!$agent) {
+            return response()->json(['message' => 'الوكيل غير موجود'], 404);
+        }
+
+        $engine = app(\App\Services\AgentSettlementEngine::class);
+
+        return response()->json([
+            'position' => $engine->position($agent),
+            'daily' => $engine->dailySettlement($agent, $request->query('date')),
+        ]);
+    }
 }

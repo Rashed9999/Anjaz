@@ -366,6 +366,11 @@ Route::prefix('hub')->name('hub.')->group(function () {
     Route::get('/agents/branches.json', [$asc, 'branches'])->name('agents.branches');
     Route::get('/agents/movements.json', [$asc, 'movements'])->name('agents.movements');
 
+    // AMIAL-SETTLEMENT-ENGINE-001 — التوازن بين الرصيد والنقد
+    Route::get('/agents/settlement.json', [$asc, 'settlementScan'])->name('agents.settlement');
+    Route::get('/agents/{id}/settlement.json', [$asc, 'agentSettlement'])
+        ->where('id', '[0-9]+')->name('agents.settlement.one');
+
     // المالية
     Route::post('/finance/topup', [$hc, 'adminTopup'])->name('finance.topup');
     Route::get('/finance/stats.json', [$hc, 'financeStats'])->name('finance.stats');
