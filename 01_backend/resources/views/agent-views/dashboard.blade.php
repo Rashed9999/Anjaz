@@ -43,6 +43,9 @@
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ag-counter" data-testid="ag-tab-counter">💵 الشبّاك</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-branches" data-testid="ag-tab-branches">🏬 الفروع</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-till" data-testid="ag-tab-till">🧾 حركة النقد</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-earn" data-testid="ag-tab-earn">📈 العمولات</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-settle" data-testid="ag-tab-settle">🤝 التسويات</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-report" data-testid="ag-tab-report">📋 تقرير اليوم</button></li>
     </ul>
 
     <div class="tab-content">
@@ -122,6 +125,54 @@
                 <div id="ag-till-moves"></div>
             </div>
         </div>
+
+        {{-- ============ العمولات ============ --}}
+        <div class="tab-pane fade" id="ag-earn">
+            <div class="card p-3">
+                <div class="d-flex gap-2 mb-3 flex-wrap align-items-end">
+                    <select id="ag-earn-branch" class="form-select" style="max-width:260px"></select>
+                    <div><label class="form-label small mb-1">من</label>
+                        <input type="date" id="ag-earn-from" class="form-control form-control-sm"></div>
+                    <div><label class="form-label small mb-1">إلى</label>
+                        <input type="date" id="ag-earn-to" class="form-control form-control-sm"></div>
+                    <button class="btn btn-primary btn-sm" id="ag-earn-load">عرض</button>
+                </div>
+                <div class="alert alert-secondary py-2 small">
+                    العمولة تُشتقّ من <strong>قيود الدفتر</strong> لا من عدّادٍ تراكميّ —
+                    فالقيود تُلحَق ولا تُعدَّل، والرقم يُعاد حسابه في أيّ وقت ويطابق ما يراه المدقّق.
+                </div>
+                <div id="ag-earn-summary" class="row g-3 mb-3"></div>
+                <div id="ag-earn-days"></div>
+            </div>
+        </div>
+
+        {{-- ============ التسويات ============ --}}
+        <div class="tab-pane fade" id="ag-settle">
+            <div class="card p-3">
+                <div class="alert alert-secondary py-2 small">
+                    <strong>العمولة المستحقّة غير الرصيد الإلكترونيّ:</strong>
+                    ذاك سيولةُ تشغيلٍ تتحرّك مع كلّ عملية، وهذه أرباحٌ تُسحب.
+                    وخلطُهما يجعل وكيلاً يسحب أرباحه فيعجز عن الإيداع.
+                </div>
+                <div class="d-flex mb-2"><button class="btn btn-outline-primary btn-sm ms-auto" id="ag-settle-load">تحديث</button></div>
+                <div id="ag-settle-summary" class="row g-3 mb-3"></div>
+                <div id="ag-settle-list"></div>
+            </div>
+        </div>
+
+        {{-- ============ تقرير اليوم ============ --}}
+        <div class="tab-pane fade" id="ag-report">
+            <div class="card p-3">
+                <div class="d-flex gap-2 mb-3 flex-wrap align-items-end">
+                    <select id="ag-rep-branch" class="form-select" style="max-width:260px"></select>
+                    <div><label class="form-label small mb-1">التاريخ</label>
+                        <input type="date" id="ag-rep-date" class="form-control form-control-sm"></div>
+                    <button class="btn btn-primary btn-sm" id="ag-rep-load">عرض</button>
+                    <button class="btn btn-outline-secondary btn-sm" id="ag-rep-print">طباعة</button>
+                </div>
+                <div id="ag-rep-body"></div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -178,6 +229,8 @@
             `<option value="${b.id}">${esc(b.name)} (${esc(b.code)})</option>`).join('');
         document.getElementById('ag-branch').innerHTML = opts;
         document.getElementById('ag-till-branch').innerHTML = opts;
+        document.getElementById('ag-earn-branch').innerHTML = opts;
+        document.getElementById('ag-rep-branch').innerHTML = opts;
 
         document.getElementById('ag-branch-list').innerHTML = branches.length ? `
             <div class="table-responsive"><table class="table" data-testid="ag-branch-table">
@@ -373,6 +426,139 @@
         alert(j.message || (j.success ? 'تم' : 'فشل'));
         if (j.success) { loadTill(); loadOverview(); }
     };
+
+    // ---------- العمولات ----------
+    document.getElementById('ag-earn-load').onclick = loadEarnings;
+
+    async function loadEarnings() {
+        const id = document.getElementById('ag-earn-branch').value;
+        if (!id) return;
+        const from = document.getElementById('ag-earn-from').value;
+        const to = document.getElementById('ag-earn-to').value;
+        const qs = [];
+        if (from) qs.push('from=' + from);
+        if (to) qs.push('to=' + to);
+
+        const j = await get(`/branches/${id}/commissions` + (qs.length ? '?' + qs.join('&') : ''));
+        if (!j.success) return;
+        const m = j.meta;
+
+        const tile = (t, v, s2, cls) => `
+            <div class="col-lg-3 col-6"><div class="card p-3 h-100 ${cls || ''}">
+                <div class="small text-muted">${t}</div><div class="fs-5 fw-bold money">${num(v)}</div>
+                ${s2 ? `<div class="small text-muted">${s2}</div>` : ''}</div></div>`;
+
+        document.getElementById('ag-earn-summary').innerHTML =
+            tile('عمولتك', m.total_commission, m.operations + ' عملية', 'border-success') +
+            tile('إجمالي الرسوم', m.total_fee, 'ما دفعه العملاء') +
+            // ما يذهب للمنصّة يُعرَض صراحةً: وكيلٌ يرى ما كسبه ولا يرى ما
+            // دفعه يظنّ الرسم كلّه له، فيحتجّ يوم التسوية.
+            tile('حصّة المنصّة', m.platform_share, 'من الرسوم') +
+            tile('عدد العمليات', m.operations, m.from + ' → ' + m.to);
+
+        document.getElementById('ag-earn-days').innerHTML = `
+            <div class="table-responsive"><table class="table table-sm" data-testid="ag-earn-table">
+                <thead class="thead-light"><tr><th>اليوم</th><th>إيداعات</th><th>سحوبات</th>
+                    <th class="text-end">الحجم</th><th class="text-end">الرسوم</th><th class="text-end">عمولتك</th></tr></thead>
+                <tbody>${(m.days || []).map(d => `
+                    <tr><td>${esc(d.date)}</td><td>${d.deposits}</td><td>${d.withdrawals}</td>
+                        <td class="text-end money">${num(d.volume)}</td>
+                        <td class="text-end money">${num(d.fee)}</td>
+                        <td class="text-end money fw-bold cash">${num(d.commission)}</td></tr>`).join('')
+                    || '<tr><td colspan="6" class="text-muted text-center py-3">لا عمليات في هذه المدّة</td></tr>'}</tbody>
+            </table></div>`;
+    }
+
+    // ---------- التسويات ----------
+    document.getElementById('ag-settle-load').onclick = loadSettlements;
+
+    async function loadSettlements() {
+        const j = await get('/settlements');
+        if (!j.success) return;
+        const m = j.meta;
+
+        document.getElementById('ag-settle-summary').innerHTML = `
+            <div class="col-lg-4 col-6"><div class="card p-3 ${Number(m.summary.pending) > 0 ? 'border-warning' : ''}">
+                <div class="small text-muted">بانتظار التسوية</div>
+                <div class="fs-5 fw-bold money">${num(m.summary.pending)}</div>
+                <div class="small text-muted">${m.summary.pending_count} طلب</div></div></div>
+            <div class="col-lg-4 col-6"><div class="card p-3 border-success">
+                <div class="small text-muted">سُوِّي فعلاً</div>
+                <div class="fs-5 fw-bold money">${num(m.summary.completed)}</div></div></div>`;
+
+        document.getElementById('ag-settle-list').innerHTML = `
+            <div class="table-responsive"><table class="table table-sm" data-testid="ag-settle-table">
+                <thead class="thead-light"><tr><th>المرجع</th><th>النوع</th><th class="text-end">المبلغ</th>
+                    <th class="text-end">العمولة</th><th>الحالة</th><th>الطريقة</th><th>التاريخ</th></tr></thead>
+                <tbody>${(m.items || []).map(s2 => `
+                    <tr><td class="font-monospace small">${esc(String(s2.ulid).slice(0, 12))}…</td>
+                        <td>${esc(s2.type)}</td>
+                        <td class="text-end money">${num(s2.amount)}</td>
+                        <td class="text-end money cash">${num(s2.commission)}</td>
+                        <td><span class="badge bg-${s2.status === 'completed' ? 'success' : (s2.status === 'pending' ? 'warning text-dark' : 'secondary')}">${esc(s2.status)}</span></td>
+                        <td class="small">${esc(s2.method)}</td>
+                        <td class="small">${esc(String(s2.created_at).slice(0, 10))}</td></tr>`).join('')
+                    || '<tr><td colspan="7" class="text-muted text-center py-3">لا تسويات</td></tr>'}</tbody>
+            </table></div>`;
+    }
+
+    // ---------- تقرير اليوم ----------
+    document.getElementById('ag-rep-load').onclick = loadReport;
+    document.getElementById('ag-rep-print').onclick = () => window.print();
+
+    async function loadReport() {
+        const id = document.getElementById('ag-rep-branch').value;
+        if (!id) return;
+        const date = document.getElementById('ag-rep-date').value;
+        const j = await get(`/branches/${id}/report` + (date ? '?date=' + date : ''));
+        if (!j.success) return;
+        const m = j.meta, c = m.cash;
+
+        const row = (label, val, cls) =>
+            `<tr class="${cls || ''}"><td>${label}</td><td class="text-end money fw-bold">${num(val)}</td></tr>`;
+
+        document.getElementById('ag-rep-body').innerHTML = `
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div><h5 class="mb-0">${esc(m.branch.name)}</h5>
+                     <div class="small text-muted">${esc(m.branch.code)} — ${esc(m.date)}</div></div>
+                <div class="text-end">
+                    ${c.reconciles
+                        ? '<span class="badge bg-success fs-6">الحركة مطابقة ✓</span>'
+                        : `<span class="badge bg-danger fs-6">فرق ${num(Number(c.expected) - Number(c.closing))}</span>`}
+                    ${m.counted_today ? '' : '<div class="small text-danger mt-1">⚠️ لم يُجرَد الدرج اليوم</div>'}
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-lg-6"><div class="card p-3">
+                    <h6>حركة النقد</h6>
+                    <table class="table table-sm mb-0">
+                        ${row('الرصيد الافتتاحيّ', c.opening)}
+                        ${row('+ إيداعات العملاء', c.deposits)}
+                        ${row('− سحوبات العملاء', c.withdrawals)}
+                        ${row('+ توريد إلى الفرع', c.treasury_in)}
+                        ${row('− توريد من الفرع', c.treasury_out)}
+                        ${Number(c.adjustments) !== 0 ? row('± تسويات جرد', c.adjustments, 'table-warning') : ''}
+                        ${row('= الرصيد المتوقَّع', c.expected, 'table-light')}
+                        ${row('الرصيد المسجَّل', c.closing, c.reconciles ? 'table-success' : 'table-danger')}
+                    </table>
+                </div></div>
+
+                <div class="col-lg-6"><div class="card p-3">
+                    <h6>الملخّص</h6>
+                    <table class="table table-sm mb-0">
+                        <tr><td>عدد الإيداعات</td><td class="text-end fw-bold">${m.counts.deposits}</td></tr>
+                        <tr><td>عدد السحوبات</td><td class="text-end fw-bold">${m.counts.withdrawals}</td></tr>
+                        ${row('عمولة اليوم', m.commission)}
+                        ${row('الرصيد الإلكترونيّ', m.emoney_balance)}
+                    </table>
+                    <div class="small text-muted mt-2">
+                        الرصيد المتوقَّع محسوبٌ من الافتتاحيّ والحركة — لا مقروءٌ من الخزنة.
+                        وقراءتُه منها تجعل المطابقة تقارن الرقم بنفسه.
+                    </div>
+                </div></div>
+            </div>`;
+    }
 
     loadOverview();
 })();

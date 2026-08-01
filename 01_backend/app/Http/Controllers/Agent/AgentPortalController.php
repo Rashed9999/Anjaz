@@ -8,6 +8,7 @@ use App\Models\EMoney;
 use App\Models\User;
 use App\Services\AgentBranchService;
 use App\Services\AgentCounterService;
+use App\Services\AgentReportService;
 use App\Services\AgentTillService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -31,6 +32,7 @@ class AgentPortalController extends Controller
         private readonly AgentBranchService $branches,
         private readonly AgentTillService $till,
         private readonly AgentCounterService $counter,
+        private readonly AgentReportService $reports,
     ) {
     }
 
@@ -218,6 +220,46 @@ class AgentPortalController extends Controller
         return $this->ok($out, $op === 'deposit'
             ? "تمّ الإيداع — المرجع {$out['reference']}"
             : "تمّ السحب — سلّم العميل {$out['amount']} نقداً. المرجع {$out['reference']}");
+    }
+
+    // ── العمولات والتسويات والتقارير (الفصل ٠٣) ─────────────────────────
+
+    public function commissions(Request $request, int $id): JsonResponse
+    {
+        $branch = $this->authorizedBranch($request, $id);
+
+        return $this->ok($this->reports->commissions(
+            $branch, $request->query('from'), $request->query('to'),
+        ));
+    }
+
+    public function settlements(Request $request): JsonResponse
+    {
+        // التسويات على مستوى الشركة الأمّ لا الفرع: الأرباح تُسوّى مع من
+        // تعاقد مع أميال، لا مع كلّ شبّاك.
+        $agent = User::find((int) $request->attributes->get('agent_root_id'));
+
+        return $this->ok($this->reports->settlements($agent));
+    }
+
+    public function dailyReport(Request $request, int $id): JsonResponse
+    {
+        $branch = $this->authorizedBranch($request, $id);
+
+        return $this->ok($this->reports->dailyReport($branch, $request->query('date')));
+    }
+
+    public function setWorkingHours(Request $request, int $id): JsonResponse
+    {
+        $branch = $this->authorizedBranch($request, $id);
+
+        try {
+            $branch = $this->reports->setWorkingHours($branch, (array) $request->input('hours', []));
+        } catch (DomainException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
+        return $this->ok(['working_hours' => $branch->working_hours], 'حُفظت ساعات العمل');
     }
 
     // ── إدارة الفروع ────────────────────────────────────────────────────

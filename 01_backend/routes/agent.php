@@ -30,6 +30,12 @@ Route::middleware('agent.portal')->group(function () use ($c) {
     Route::post('/branches/{id}/deposit', [$c, 'deposit'])->where('id', '[0-9]+')->name('deposit');
     Route::post('/branches/{id}/withdraw', [$c, 'withdraw'])->where('id', '[0-9]+')->name('withdraw');
 
+    // العمولات والتسويات والتقارير (الفصل ٠٣)
+    Route::get('/branches/{id}/commissions', [$c, 'commissions'])->where('id', '[0-9]+')->name('branch.commissions');
+    Route::get('/branches/{id}/report', [$c, 'dailyReport'])->where('id', '[0-9]+')->name('branch.report');
+    Route::post('/branches/{id}/hours', [$c, 'setWorkingHours'])->where('id', '[0-9]+')->name('branch.hours');
+    Route::get('/settlements', [$c, 'settlements'])->name('settlements');
+
     // إدارة الفروع والنقد
     Route::post('/branches', [$c, 'createBranch'])->name('branch.create');
     Route::post('/branches/{id}/fund', [$c, 'fundBranch'])->where('id', '[0-9]+')->name('branch.fund');
