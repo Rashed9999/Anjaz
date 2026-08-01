@@ -26,10 +26,12 @@ class AgentCashMovement extends Model
         'treasury_out' => 'توريد من الفرع',
         'count_adjustment' => 'تسوية جرد',
         'opening' => 'رصيد افتتاحيّ',
+        'shift_open' => 'عهدة ورديّة (من الخزنة إلى الدرج)',
+        'shift_close' => 'تسليم ورديّة (من الدرج إلى الخزنة)',
     ];
 
     protected $fillable = [
-        'branch_id', 'direction', 'reason', 'amount',
+        'branch_id', 'shift_id', 'staff_id', 'direction', 'reason', 'amount',
         'balance_before', 'balance_after', 'reference',
         'actor_user_id', 'customer_user_id', 'note', 'created_at',
     ];

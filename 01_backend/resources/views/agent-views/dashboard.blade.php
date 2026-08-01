@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>بوّابة الوكيل — أميال باي</title>
-    <link rel="stylesheet" href="{{ asset('public/assets/admin/css/theme.min.css') }}">
+    {{-- كان هنا `asset('public/assets/admin/css/theme.min.css')` — ملفٌّ لا
+         وجود له في المستودع. فكانت اللوحة تُحمَّل بلا Bootstrap فتظهر نصّاً
+         خاماً بنقاطٍ سوداء، وبلا سكربته فلا تتبدّل التبويبات ولا تُفتح
+         النوافذ. وهو ما بدا «بدائياً» و«أزراراً لا تعمل». --}}
+    <link href="{{ asset('assets/vendor/bootstrap/css/bootstrap.rtl.min.css') }}" rel="stylesheet">
     <style>
         body { background:#f4f6fa; font-family:'Tajawal',system-ui,sans-serif; }
         .topbar { background:#0f1b2d; color:#fff; }
@@ -29,9 +33,16 @@
     بلونين، وتحت كلٍّ منهما ما يحدّه.
 --}}
 
-<div class="topbar py-2 px-3 d-flex align-items-center gap-3">
-    <strong>💳 أميال باي — بوّابة الوكيل</strong>
-    <span class="ms-auto small" id="ag-name"></span>
+<div class="topbar py-2 px-3 d-flex align-items-center gap-3 flex-wrap">
+    <strong>🏦 أميال باي — بوّابة شركات الصرافة</strong>
+    {{-- الفرع يُعرَض في الترويسة ولا يُختار في أيّ شاشة: هو هويّة الداخل. --}}
+    @if($branchName)
+        <span class="badge bg-light text-dark">🏬 {{ $branchName }}</span>
+    @endif
+    <span class="badge bg-secondary">{{ $roleLabel }}</span>
+    <span class="ms-auto small">
+        {{ $staffName }}@if($staffUsername) <span class="opacity-75" dir="ltr">({{ $staffUsername }})</span>@endif
+    </span>
     <a href="{{ route('agent.logout') }}" class="btn btn-sm btn-outline-light">خروج</a>
 </div>
 
@@ -39,66 +50,37 @@
 
     <div class="row g-3 mb-3" id="ag-totals"></div>
 
+    {{-- التبويبات تختلف بالدور. الصرّاف لا يرى «الفروع» لأنّ له فرعاً
+         واحداً هو فرعه، والمدير لا يرى «الشبّاك» لأنّه لا يقف عليه. --}}
     <ul class="nav nav-tabs mb-3">
-        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ag-counter" data-testid="ag-tab-counter">💵 الشبّاك</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-branches" data-testid="ag-tab-branches">🏬 الفروع</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-till" data-testid="ag-tab-till">🧾 حركة النقد</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-earn" data-testid="ag-tab-earn">📈 العمولات</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-settle" data-testid="ag-tab-settle">🤝 التسويات</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-report" data-testid="ag-tab-report">📋 تقرير اليوم</button></li>
+        @if($role === 'teller')
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ag-counter" data-testid="ag-tab-counter">💵 الشبّاك</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-report" data-testid="ag-tab-report">📋 تقرير اليوم</button></li>
+        @else
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ag-staff" data-testid="ag-tab-staff">👤 الموظّفون</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-shifts" data-testid="ag-tab-shifts">🪟 الشبابيك والورديّات</button></li>
+            @if($role !== 'branch_manager')
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-branches" data-testid="ag-tab-branches">🏬 الفروع</button></li>
+            @endif
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-till" data-testid="ag-tab-till">🧾 حركة النقد</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-earn" data-testid="ag-tab-earn">📈 العمولات</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-settle" data-testid="ag-tab-settle">🤝 التسويات</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-report" data-testid="ag-tab-report">📋 تقرير اليوم</button></li>
+        @endif
     </ul>
 
     <div class="tab-content">
 
-        {{-- ============ الشبّاك ============ --}}
-        <div class="tab-pane fade show active" id="ag-counter">
-            <div class="row g-3">
-                <div class="col-lg-5">
-                    <div class="card p-3">
-                        <h6>١) اختر الفرع</h6>
-                        <select id="ag-branch" class="form-select mb-3" data-testid="ag-branch"></select>
+        @if($role === 'teller')
+            @include('agent-views._counter')
+        @else
+            @include('agent-views._staff')
+        @endif
 
-                        <h6>٢) ابحث عن العميل</h6>
-                        <div class="input-group mb-2">
-                            <input type="text" id="ag-phone" class="form-control form-control-lg"
-                                   placeholder="رقم هاتف العميل" data-testid="ag-customer-phone">
-                            <button class="btn btn-primary" id="ag-find">بحث</button>
-                        </div>
-                        <div id="ag-customer"></div>
-                    </div>
-                </div>
-
-                <div class="col-lg-7">
-                    <div class="card p-3" id="ag-op" style="display:none">
-                        <h6>٣) العملية</h6>
-
-                        <div class="alert alert-secondary py-2 small" id="ag-capacity"></div>
-
-                        <div class="mb-3">
-                            <label class="form-label">المبلغ</label>
-                            <input type="number" id="ag-amount" class="form-control form-control-lg money"
-                                   min="1" step="1" data-testid="ag-amount">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">ملاحظة (اختياري)</label>
-                            <input type="text" id="ag-note" class="form-control">
-                        </div>
-
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-success btn-lg flex-fill" id="ag-deposit" data-testid="ag-deposit">
-                                ⬇️ إيداع — العميل يسلّمك نقداً
-                            </button>
-                            <button class="btn btn-warning btn-lg flex-fill" id="ag-withdraw" data-testid="ag-withdraw">
-                                ⬆️ سحب — تسلّم العميل نقداً
-                            </button>
-                        </div>
-
-                        <div id="ag-result" class="mt-3"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
+        {{-- ما دون هذا للإدارة ومديري الفروع. والصرّاف لا يراه: ليس
+             إخفاءَ واجهةٍ بل حدَّ صلاحية — نقاطُ النهاية نفسها تفحص الدور. --}}
+        @if($role !== 'teller')
+        @if($role === 'head_office')
         {{-- ============ الفروع ============ --}}
         <div class="tab-pane fade" id="ag-branches">
             <div class="card p-3">
@@ -110,6 +92,7 @@
             </div>
         </div>
 
+        @endif
         {{-- ============ حركة النقد ============ --}}
         <div class="tab-pane fade" id="ag-till">
             <div class="card p-3">
@@ -160,11 +143,15 @@
             </div>
         </div>
 
+        @endif
         {{-- ============ تقرير اليوم ============ --}}
         <div class="tab-pane fade" id="ag-report">
             <div class="card p-3">
                 <div class="d-flex gap-2 mb-3 flex-wrap align-items-end">
-                    <select id="ag-rep-branch" class="form-select" style="max-width:260px"></select>
+                    {{-- الصرّاف له فرعٌ واحد: تُملأ القائمة به وتُخفى.
+                         سؤالُه «أيّ فرع؟» وله فرعٌ واحدٌ نقرةٌ بلا معنى. --}}
+                    <select id="ag-rep-branch" class="form-select" style="max-width:260px"
+                            @if($role === 'teller') hidden @endif></select>
                     <div><label class="form-label small mb-1">التاريخ</label>
                         <input type="date" id="ag-rep-date" class="form-control form-control-sm"></div>
                     <button class="btn btn-primary btn-sm" id="ag-rep-load">عرض</button>
@@ -176,7 +163,7 @@
     </div>
 </div>
 
-<script src="{{ asset('public/assets/admin/js/theme.min.js') }}"></script>
+<script src="{{ asset('assets/vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     const BASE = '{{ url('agent') }}';

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Agent;
 
 use App\Http\Controllers\Controller;
 use App\Models\Agent\AgentBranch;
+use App\Models\Agent\AgentStaff;
 use App\Models\EMoney;
 use App\Models\User;
 use App\Services\AgentBranchService;
@@ -40,46 +41,101 @@ class AgentPortalController extends Controller
 
     public function loginPage()
     {
-        if (Auth::guard('user')->check()
-            && (int) Auth::guard('user')->user()->type === AGENT_TYPE) {
+        if (Auth::guard('agent_staff')->check() || $this->userIsAgent()) {
             return redirect()->route('agent.dashboard');
         }
 
         return view('agent-views.login');
     }
 
+    /**
+     * دخولٌ واحدٌ لبابين.
+     *
+     * موظّف الشركة يدخل برمزه (`MKL-014`)، وصاحب الشركة يدخل بهاتفه ما دام
+     * لم يُنشئ موظّفيه بعد. وحقلٌ واحد للاثنين لأنّ حقلين يجعلان الصرّاف
+     * يقف كلّ صباحٍ أمام سؤالٍ لا يعنيه.
+     */
     public function login(Request $request)
     {
         $request->validate([
-            'phone' => 'required|string',
+            'username' => 'required|string',
             'password' => 'required|string',
         ]);
 
-        $phone = preg_replace('/\D+/', '', (string) $request->input('phone'));
-        $user = User::where('phone', $phone)->first();
+        $id = trim((string) $request->input('username'));
+        $password = (string) $request->input('password');
 
-        // رسالةٌ واحدة للحالتين — «الهاتف غير مسجَّل» تُخبر من يجرّب أنّ
-        // الرقم صحيح، فيبقى له كلمة السرّ وحدها.
-        if (!$user || !Hash::check($request->input('password'), (string) $user->password)) {
-            return back()->withErrors(['phone' => 'بيانات الدخول غير صحيحة'])->withInput();
+        // رمزُ الموظّف أوّلاً: هو الحالة الغالبة في شركةٍ لها آلاف الموظّفين.
+        $staff = AgentStaff::whereRaw('UPPER(username) = ?', [mb_strtoupper($id)])->first();
+
+        if ($staff) {
+            if (!Hash::check($password, (string) $staff->password)) {
+                return $this->loginFailed($request);
+            }
+
+            if (!$staff->is_active) {
+                return back()->withErrors(['username' => 'الحساب معطَّل — راجع إدارة شركتك'])->withInput();
+            }
+
+            // شركةٌ أُوقفت لا يعمل موظّفوها — وإلّا بقي الشبّاك يخدم بعد
+            // إيقاف الشركة نفسها.
+            $company = User::find($staff->agent_user_id);
+            if (!$company || (int) $company->is_active !== 1) {
+                return back()->withErrors(['username' => 'حساب الشركة موقوف — راجع إدارة أميال'])->withInput();
+            }
+
+            Auth::guard('user')->logout();
+            Auth::guard('agent_staff')->login($staff, (bool) $request->boolean('remember'));
+            $request->session()->regenerate();
+
+            $staff->forceFill(['last_login_at' => now()])->save();
+
+            return redirect()->route('agent.dashboard');
+        }
+
+        // حساب الشركة نفسه بالهاتف.
+        $phone = preg_replace('/\D+/', '', $id);
+        $user = $phone !== '' ? User::where('phone', $phone)->first() : null;
+
+        if (!$user || !Hash::check($password, (string) $user->password)) {
+            return $this->loginFailed($request);
         }
 
         if ((int) $user->type !== AGENT_TYPE) {
-            return back()->withErrors(['phone' => 'هذه البوّابة للوكلاء وفروعهم'])->withInput();
+            return back()->withErrors(['username' => 'هذه البوّابة للوكلاء وموظّفيهم'])->withInput();
         }
 
         if ((int) ($user->is_temp_blocked ?? 0) === 1) {
-            return back()->withErrors(['phone' => 'الحساب موقوف — راجع إدارة أميال'])->withInput();
+            return back()->withErrors(['username' => 'الحساب موقوف — راجع إدارة أميال'])->withInput();
         }
 
+        Auth::guard('agent_staff')->logout();
         Auth::guard('user')->login($user, (bool) $request->boolean('remember'));
         $request->session()->regenerate();
 
         return redirect()->route('agent.dashboard');
     }
 
+    /**
+     * رسالةٌ واحدة لكلّ أسباب الفشل.
+     *
+     * «الرمز غير مسجَّل» تُخبر من يجرّب أنّ الرمز صحيح فيبقى له كلمة السرّ
+     * وحدها — ورموز الموظّفين متسلسلة يسهل تخمينها.
+     */
+    private function loginFailed(Request $request)
+    {
+        return back()->withErrors(['username' => 'بيانات الدخول غير صحيحة'])->withInput();
+    }
+
+    private function userIsAgent(): bool
+    {
+        return Auth::guard('user')->check()
+            && (int) Auth::guard('user')->user()->type === AGENT_TYPE;
+    }
+
     public function logout(Request $request)
     {
+        Auth::guard('agent_staff')->logout();
         Auth::guard('user')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
@@ -89,9 +145,20 @@ class AgentPortalController extends Controller
 
     // ── الصفحات ─────────────────────────────────────────────────────────
 
-    public function dashboard()
+    public function dashboard(Request $request)
     {
-        return view('agent-views.dashboard');
+        $staff = $request->attributes->get('agent_staff');
+
+        return view('agent-views.dashboard', [
+            'role' => (string) $request->attributes->get('portal_role'),
+            'staffName' => $staff?->name ?? trim(
+                (Auth::guard('user')->user()->f_name ?? '') . ' ' .
+                (Auth::guard('user')->user()->l_name ?? '')
+            ),
+            'staffUsername' => $staff?->username,
+            'roleLabel' => $staff?->roleLabel() ?? 'حساب الشركة',
+            'branchName' => $staff?->branch?->name,
+        ]);
     }
 
     // ── البيانات ────────────────────────────────────────────────────────

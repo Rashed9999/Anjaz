@@ -300,10 +300,14 @@ class AgentPortalTest extends TestCase
             ->getJson("/agent/branches/{$this->branch->id}/till")
             ->assertStatus(403);
 
-        $this->actingAs($rival, 'user')
-            ->postJson("/agent/branches/{$this->branch->id}/withdraw", [
-                'customer_phone' => $this->customer->phone, 'amount' => '1000',
-            ])->assertStatus(403);
+        // ولم يعد هناك مسارُ سحبٍ يقبل معرّف فرعٍ أصلاً: صار الفرع يأتي من
+        // ورديّة الداخل. وما لا يُقبل من الطلب لا يحتاج فحص ملكيّة.
+        $this->assertFalse(
+            collect(\Illuminate\Support\Facades\Route::getRoutes())
+                ->contains(fn ($r) => str_contains($r->uri(), 'agent/branches')
+                    && (str_contains($r->uri(), 'withdraw') || str_contains($r->uri(), 'deposit'))),
+            'عاد مسارُ شبّاكٍ يقبل معرّف فرعٍ من المتصفّح',
+        );
     }
 
     /** @test */
@@ -359,7 +363,7 @@ class AgentPortalTest extends TestCase
     public function an_agent_logs_in_with_phone_and_password(): void
     {
         $this->post('/agent/login', [
-            'phone' => $this->agent->phone, 'password' => 'agent-pass-123',
+            'username' => $this->agent->phone, 'password' => 'agent-pass-123',
         ])->assertRedirect('/agent');
 
         $this->assertAuthenticatedAs($this->agent, 'user');
@@ -370,15 +374,23 @@ class AgentPortalTest extends TestCase
     {
         // رسالتان مختلفتان تُخبران من يجرّب أنّ الرقم صحيح، فيبقى له كلمة
         // السرّ وحدها.
-        $a = $this->post('/agent/login', ['phone' => $this->agent->phone, 'password' => 'wrong'])
-            ->assertSessionHasErrors('phone');
-        $b = $this->post('/agent/login', ['phone' => '779999999', 'password' => 'wrong'])
-            ->assertSessionHasErrors('phone');
+        //
+        // (وكان هنا `assertSame($x, $x)` — يقارن التعبير بنفسه فيمرّ مهما
+        // اختلفت الرسالتان. تأكيدٌ يمرّ دائماً أسوأ من غيابه: يُطمئن ولا
+        // يحرس. فتُلتقط الرسالتان فعلاً وتُقارنان.)
+        $this->post('/agent/login', ['username' => $this->agent->phone, 'password' => 'wrong'])
+            ->assertSessionHasErrors('username');
+        $known = session()->get('errors')->first('username');
 
-        $this->assertSame(
-            session()->get('errors')->first('phone'),
-            session()->get('errors')->first('phone'),
-        );
+        session()->forget('errors');
+
+        $this->post('/agent/login', ['username' => '779999999', 'password' => 'wrong'])
+            ->assertSessionHasErrors('username');
+        $unknown = session()->get('errors')->first('username');
+
+        $this->assertNotSame('', $known);
+        $this->assertSame($known, $unknown,
+            'الرسالة تختلف بين رقمٍ مسجَّل وآخر غير مسجَّل — فتُفشي أيّهما صحيح');
     }
 
     // ══ حماية العميل ═══════════════════════════════════════════════════
@@ -401,7 +413,7 @@ class AgentPortalTest extends TestCase
         // موظّف الشبّاك يحتاج أن يعرف من أمامه وهل يُخدَم — لا كم يملك.
         // وعرضُ الرصيد يجعل كلّ موظّفٍ يرى ثروة كلّ من يمرّ به.
         $body = $this->actingAs($this->agent, 'user')
-            ->getJson('/agent/customer?phone=' . $this->customer->phone)
+            ->getJson('/agent/counter/customer?phone=' . $this->customer->phone)
             ->assertOk()->json('meta.customer');
 
         $this->assertArrayNotHasKey('balance', $body);

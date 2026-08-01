@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Agent\AgentBranch;
 use App\Models\Agent\AgentCashMovement;
+use App\Models\Agent\AgentShift;
 use App\Models\EMoney;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -44,7 +45,22 @@ class AgentSupervisionService
         $stale = 0;
         $today = now()->toDateString();
 
+        // نقدُ الأدراج المفتوحة جزءٌ من نقد الفرع.
+        //
+        // بعد فصل الدرج عن الخزنة صار في الفرع موضعان للورق. وقراءةُ الخزنة
+        // وحدها تُنقص الإجماليّ بكلّ ما في أيدي الصرّافين — فيبدو فرعٌ نشِطٌ
+        // فارغاً كلّما زاد عملُه، وهو أسوأ اتّجاهٍ ممكنٍ للخطأ.
+        $drawers = AgentShift::where('status', AgentShift::STATUS_OPEN)
+            ->selectRaw('branch_id, SUM(cash_on_hand) as total, COUNT(*) as n')
+            ->groupBy('branch_id')->get()->keyBy('branch_id');
+
+        $openShifts = 0;
+
         foreach ($branches as $b) {
+            $drawer = $drawers[$b->id] ?? null;
+            $openShifts += (int) ($drawer->n ?? 0);
+            $cash = bcadd($cash, (string) ($drawer->total ?? '0'), 4);
+
             $till = $b->till;
             if (!$till) {
                 // فرعٌ بلا خزنة: لا يُعدّ صفراً — يُعدّ ناقص التهيئة.
@@ -87,6 +103,8 @@ class AgentSupervisionService
                 'overloaded' => $overloaded,
                 'not_counted_today' => $stale,
             ],
+            // شبابيك مفتوحة الآن — أدراجٌ في أيدي صرّافين لم تُسلَّم بعد.
+            'open_shifts' => $openShifts,
             'movements_today' => AgentCashMovement::whereBetween(
                 'created_at',
                 [$today . ' 00:00:00', $today . ' 23:59:59']
@@ -113,6 +131,10 @@ class AgentSupervisionService
 
         $branches = AgentBranch::whereIn('agent_user_id', $userIds)
             ->with('till')->get()->groupBy('agent_user_id');
+
+        $drawers = AgentShift::where('status', AgentShift::STATUS_OPEN)
+            ->selectRaw('branch_id, SUM(cash_on_hand) as total')
+            ->groupBy('branch_id')->pluck('total', 'branch_id');
 
         // حسابات الفروع تظهر في قائمة الوكلاء لأنّها **وكلاءُ أبناء** فعلاً.
         // وإخفاؤها يجعل الإدارة تعدّ الوكلاء خطأً؛ فتُوسَم بأمّها بدل ذلك.
@@ -144,6 +166,9 @@ class AgentSupervisionService
             $flags = [];
 
             foreach ($mine as $b) {
+                // النقد في الأدراج المفتوحة نقدُ الفرع أيضاً — انظر `network()`.
+                $cash = bcadd($cash, (string) ($drawers[$b->id] ?? '0'), 4);
+
                 $till = $b->till;
                 if (!$till) {
                     $flags['no_till'] = true;
@@ -207,6 +232,12 @@ class AgentSupervisionService
 
         $today = now()->toDateString();
         $flag = (string) ($filters['flag'] ?? '');
+
+        $drawers = AgentShift::where('status', AgentShift::STATUS_OPEN)
+            ->whereIn('branch_id', $rows->pluck('id'))
+            ->selectRaw('branch_id, SUM(cash_on_hand) as total, COUNT(*) as n')
+            ->groupBy('branch_id')->get()->keyBy('branch_id');
+
         $out = [];
 
         foreach ($rows as $b) {
@@ -231,6 +262,10 @@ class AgentSupervisionService
                 'emoney' => (string) ($emoney[$b->branch_user_id] ?? '0'),
                 // …ومالُ شركة الصرافة الذي في درجه. لا يُجمعان.
                 'cash_on_hand' => $till ? (string) $till->cash_on_hand : null,
+                // خزنةٌ ودرجٌ يُعرضان منفصلَين: خزنةٌ فارغةٌ وفرعٌ يعمل ليست
+                // إنذاراً — النقد في أيدي الصرّافين.
+                'drawers_cash' => (string) ($drawers[$b->id]->total ?? '0'),
+                'open_shifts' => (int) ($drawers[$b->id]->n ?? 0),
                 'min_cash_alert' => $till ? (string) $till->min_cash_alert : null,
                 'max_cash_on_hand' => $till ? (string) $till->max_cash_on_hand : null,
                 'low_cash' => (bool) $till?->isLow(),

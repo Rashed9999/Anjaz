@@ -27,7 +27,7 @@
     <div class="col-md-3 col-6"><div class="card stat-card p-3 h-100" style="border-inline-start:4px solid #198754">
         <small class="text-muted">نقد ورقيّ في أدراج الفروع</small>
         <div class="fs-4 fw-bold text-success" data-net="cash_on_hand">—</div>
-        <small class="text-muted">مالُ شركات الصرافة — لا يُجمع مع أعلاه</small>
+        <small class="text-muted">الخزائن + أدراج الصرّافين المفتوحة — لا يُجمع مع أعلاه</small>
     </div></div>
 </div>
 
@@ -41,6 +41,9 @@
     <button class="btn btn-sm btn-outline-secondary" data-flag="not_counted">
         لم يُجرَد اليوم: <span data-net="not_counted_today">—</span>
     </button>
+    <span class="btn btn-sm btn-light disabled">
+        شبابيك مفتوحة الآن: <span data-net="open_shifts">—</span>
+    </span>
     <span class="btn btn-sm btn-light disabled">
         حركات نقدٍ اليوم: <span data-net="movements_today">—</span>
     </span>

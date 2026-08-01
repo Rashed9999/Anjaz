@@ -46,6 +46,16 @@ return [
             'provider' => 'users',
             'hash' => false,
         ],
+
+        // AMIAL-AGENT-STAFF-001 — موظّفو شركات الصرافة.
+        //
+        // حارسٌ منفصلٌ لا امتدادٌ لحارس المستخدمين: الصرّاف ليس مستخدماً في
+        // المنصّة ولا يملك محفظة، وخلطُه بـ`user` كان سيمنحه ضمناً كلّ ما
+        // يفحص انتماءً إلى `users` — بما فيه واجهات التطبيق.
+        'agent_staff' => [
+            'driver' => 'session',
+            'provider' => 'agent_staff',
+        ],
     ],
 
     /*
@@ -69,6 +79,11 @@ return [
         'users' => [
             'driver' => 'eloquent',
             'model' => App\Models\User::class,
+        ],
+
+        'agent_staff' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\Agent\AgentStaff::class,
         ],
 
         // 'users' => [

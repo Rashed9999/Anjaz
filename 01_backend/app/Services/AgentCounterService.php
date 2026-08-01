@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Agent\AgentBranch;
+use App\Models\Agent\AgentShift;
 use App\Models\EMoney;
 use App\Models\User;
 use App\Traits\PostsToLedger;
@@ -43,6 +44,7 @@ class AgentCounterService
         private readonly AgentTillService $till,
         private readonly AuditService $audit,
         private readonly FeeService $fees,
+        private readonly AgentShiftService $shifts,
     ) {
     }
 
@@ -90,7 +92,8 @@ class AgentCounterService
      * من رصيده هو. فبلا رصيدٍ إلكترونيّ لا إيداع، مهما امتلأ الدرج.
      */
     public function deposit(
-        AgentBranch $branch, User $customer, string $amount, User $actor, ?string $note = null
+        AgentBranch $branch, User $customer, string $amount, User $actor,
+        ?string $note = null, ?AgentShift $shift = null
     ): array {
         $this->assertOperable($branch, $customer, $amount);
 
@@ -120,7 +123,7 @@ class AgentCounterService
 
         $reference = 'DEP-' . strtoupper(Str::random(10));
 
-        return DB::transaction(function () use ($branch, $customer, $amount, $actor, $note, $reference, $q, $net) {
+        return DB::transaction(function () use ($branch, $customer, $amount, $actor, $note, $reference, $q, $net, $shift) {
             // القفل على الصفّين معاً وبترتيبٍ ثابت (الأصغر أوّلاً): ترتيبان
             // مختلفان في مسارين متزامنين يُنتجان جمود قفل.
             $ids = [$branch->branch_user_id, $customer->id];
@@ -132,11 +135,21 @@ class AgentCounterService
 
             // النقد الداخل هو **الإجماليّ**: العميل سلّم `amount` ورقاً.
             // وتسجيلُ الصافي يجعل الجرد ينقص بمقدار الرسوم كلّ يوم.
-            $this->till->record(
-                $branch, 'in', 'customer_deposit', $amount, $actor,
-                customerId: $customer->id, reference: $reference,
-                note: $note,
-            );
+            // النقد يدخل **درج الصرّاف** لا خزنة الفرع: الورق يقع في يد من
+            // يقف على الشبّاك، وهو من يُسأل عنه آخر ورديّته. وتسجيلُه على
+            // الخزنة يجعل عجز شبّاكٍ واحدٍ بلا صاحبٍ في فرعٍ فيه عشرون.
+            if ($shift) {
+                $this->shifts->recordDrawer(
+                    $shift, 'in', 'customer_deposit', $amount,
+                    customerId: $customer->id, reference: $reference, note: $note,
+                );
+            } else {
+                $this->till->record(
+                    $branch, 'in', 'customer_deposit', $amount, $actor,
+                    customerId: $customer->id, reference: $reference,
+                    note: $note,
+                );
+            }
 
             // الترحيل إلزاميّ وداخل المعاملة — لا `safeLedgerPost`.
             $this->ledgerTransfer(
@@ -188,7 +201,8 @@ class AgentCounterService
      * هو ما كان النظام يغفله.
      */
     public function withdraw(
-        AgentBranch $branch, User $customer, string $amount, User $actor, ?string $note = null
+        AgentBranch $branch, User $customer, string $amount, User $actor,
+        ?string $note = null, ?AgentShift $shift = null
     ): array {
         $this->assertOperable($branch, $customer, $amount);
 
@@ -212,27 +226,39 @@ class AgentCounterService
 
         // **قبل أيّ خصم.** والنقد المطلوب هو `amount` لا `total`: الرسم
         // إلكترونيّ ولا يخرج من الدرج.
-        $this->till->assertCanPayCash($branch, $amount);
+        //
+        // ويُقاس على **درج الصرّاف** حين تكون هناك ورديّة، لا على خزنة
+        // الفرع: خزنةٌ فيها خمسة ملايين لا تُعين صرّافاً في درجه عشرة آلاف
+        // — لا يستطيع أن يعدّ ما ليس بيده. والقياس على الخزنة كان يقبل
+        // سحباً يقف الصرّاف عاجزاً عن دفعه أمام العميل.
+        $this->assertCashAvailable($branch, $shift, $amount);
 
         $reference = 'WDR-' . strtoupper(Str::random(10));
 
-        return DB::transaction(function () use ($branch, $customer, $amount, $actor, $note, $reference, $q, $total) {
+        return DB::transaction(function () use ($branch, $customer, $amount, $actor, $note, $reference, $q, $total, $shift) {
             $ids = [$branch->branch_user_id, $customer->id];
             sort($ids);
             EMoney::whereIn('user_id', $ids)->lockForUpdate()->get();
 
             // يُعاد الفحص داخل القفل: بين الفحص الأوّل وبدء المعاملة قد
             // يكون شبّاكٌ آخر في الفرع نفسه أفرغ الدرج.
-            $this->till->assertCanPayCash($branch, $amount);
+            $this->assertCashAvailable($branch, $shift, $amount);
 
             EMoney::where('user_id', $customer->id)->decrement('current_balance', $total);
             EMoney::where('user_id', $branch->branch_user_id)->increment('current_balance', $total);
 
             // النقد الخارج هو المطلوب وحده — الرسم لم يخرج من الدرج.
-            $this->till->record(
-                $branch, 'out', 'customer_withdraw', $amount, $actor,
-                customerId: $customer->id, reference: $reference, note: $note,
-            );
+            if ($shift) {
+                $this->shifts->recordDrawer(
+                    $shift, 'out', 'customer_withdraw', $amount,
+                    customerId: $customer->id, reference: $reference, note: $note,
+                );
+            } else {
+                $this->till->record(
+                    $branch, 'out', 'customer_withdraw', $amount, $actor,
+                    customerId: $customer->id, reference: $reference, note: $note,
+                );
+            }
 
             $this->ledgerTransfer(
                 fromUserId: (int) $customer->id,
@@ -272,6 +298,34 @@ class AgentCounterService
                     ->value('current_balance'),
             ];
         });
+    }
+
+
+    /**
+     * هل يستطيع من يقف على الشبّاك أن يدفع هذا المبلغ نقداً؟
+     *
+     * مع ورديّة: السؤال عن الدرج. بلا ورديّة (فرعٌ صغيرٌ بشبّاكٍ واحدٍ يعمل
+     * على الخزنة مباشرةً): السؤال عن الخزنة.
+     */
+    private function assertCashAvailable(AgentBranch $branch, ?AgentShift $shift, string $amount): void
+    {
+        if (!$shift) {
+            $this->till->assertCanPayCash($branch, $amount);
+            return;
+        }
+
+        $fresh = $shift->fresh();
+
+        if (!$fresh || !$fresh->isOpen()) {
+            throw new DomainException('لا توجد ورديّة مفتوحة — افتح ورديّتك قبل العمل على الشبّاك');
+        }
+
+        if (!$fresh->canPayOut($amount)) {
+            throw new DomainException(sprintf(
+                'النقد في درجك %s ولا يكفي لدفع %s — اطلب توريداً من خزنة الفرع',
+                (string) $fresh->cash_on_hand, $amount,
+            ));
+        }
     }
 
     /**

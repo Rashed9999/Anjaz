@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ translate('Admin Login') }} — {{ Helpers::get_business_settings('business_name') ?? 'Amial Pay' }}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <link href="{{ asset('assets/vendor/bootstrap/css/bootstrap.rtl.min.css') }}" rel="stylesheet">
     <style>
         body { background:linear-gradient(135deg,#0f2b46,#17395c); min-height:100vh; display:flex; align-items:center; }
         .login-card { border:0; border-radius:1.25rem; box-shadow:0 10px 40px rgba(0,0,0,.25); }

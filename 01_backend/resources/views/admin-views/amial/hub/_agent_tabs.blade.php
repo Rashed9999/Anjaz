@@ -23,11 +23,11 @@
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light"><tr>
                     <th>الفرع</th><th>الوكيل الأمّ</th><th>المدينة</th>
-                    <th>رصيد إلكترونيّ</th><th>نقد في الدرج</th>
+                    <th>رصيد إلكترونيّ</th><th>خزنة الفرع</th><th>أدراج الصرّافين</th>
                     <th>حدود الخزنة</th><th>آخر جرد</th><th>الحالة</th><th></th>
                 </tr></thead>
                 <tbody id="branches-tbody">
-                    <tr><td colspan="9" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>
+                    <tr><td colspan="10" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -55,7 +55,7 @@
                     <th>المبلغ</th><th>قبل</th><th>بعد</th><th>الموظّف</th><th>المرجع</th>
                 </tr></thead>
                 <tbody id="cash-tbody">
-                    <tr><td colspan="9" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>
+                    <tr><td colspan="10" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -92,12 +92,13 @@
         set('overloaded', fmt(n.flags.overloaded));
         set('not_counted_today', fmt(n.flags.not_counted_today));
         set('movements_today', fmt(n.movements_today));
+        set('open_shifts', fmt(n.open_shifts));
     }
 
     // ===== الفروع =====
     async function loadBranches() {
         const tbody = document.getElementById('branches-tbody');
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>';
         const flag = document.getElementById('branch-flag').value;
         const search = document.getElementById('branch-search').value.trim();
         const j = await get(`${base}/agents/branches.json?flag=${flag}&search=${encodeURIComponent(search)}`);
@@ -105,7 +106,7 @@
         document.getElementById('branch-count').textContent = `${j.data.length} فرع`;
 
         if (!j.data.length) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">'
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">'
                 + 'لا فروع مطابقة. الفروع تُنشأ من بوّابة الوكيل بيد شركة الصرافة نفسها.'
                 + '</td></tr>';
             return;
@@ -132,6 +133,9 @@
                 <td>${esc(b.city ?? '—')}</td>
                 <td class="text-primary">${fmt(b.emoney)} ر.ي</td>
                 <td>${cash}</td>
+                <td>${Number(b.drawers_cash) > 0 || b.open_shifts > 0
+                        ? `${fmt(b.drawers_cash)} ر.ي<div class="small text-muted">${b.open_shifts} شبّاك مفتوح</div>`
+                        : '<span class="text-muted small">لا شبّاك مفتوح</span>'}</td>
                 <td>${limits}</td>
                 <td>${counted}</td>
                 <td>${b.is_active ? '<span class="badge bg-success">نشِط</span>'
@@ -145,7 +149,7 @@
     let branchFilter = '';
     async function loadCash() {
         const tbody = document.getElementById('cash-tbody');
-        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>';
         const qs = new URLSearchParams();
         if (branchFilter) qs.set('branch_id', branchFilter);
         const d = document.getElementById('cash-date').value;
@@ -158,7 +162,7 @@
             `${j.data.length} حركة${branchFilter ? ' — فرعٌ واحد' : ''}`;
 
         if (!j.data.length) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">لا حركات مطابقة</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-4">لا حركات مطابقة</td></tr>';
             return;
         }
 
