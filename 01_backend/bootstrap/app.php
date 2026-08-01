@@ -71,6 +71,16 @@ $app = Application::configure(basePath: dirname(__DIR__))
                 ->name('admin.amial.')
                 ->group(base_path('routes/admin/amial.php'));
 
+            // AMIAL-AGENT-PORTAL-001 — بوّابة شركات الصرافة وفروعها.
+            //
+            // منفصلةٌ عن `admin/*` عمداً: جمهورٌ آخر بمصادقةٍ أخرى. وخلطُها
+            // بلوحة الإدارة يجعل خطأً واحداً في وسيطٍ يفتح المنصّة كلّها
+            // لموظّف شبّاك.
+            \Illuminate\Support\Facades\Route::middleware('web')
+                ->prefix('agent')
+                ->name('agent.')
+                ->group(base_path('routes/agent.php'));
+
             // AMIAL-HEALTH-001 (v1.0-C): public health checks
             \Illuminate\Support\Facades\Route::middleware('api')
                 ->group(base_path('routes/api/health.php'));
@@ -149,6 +159,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
             // و«هل يحقّ له هذا الفعل؟» يجيب عنه platform. وخلطُ السؤالين هو
             // ما جعل موظّف الدعم قادراً على تصفير رمز عميل سرّي.
             'platform' => \App\Http\Middleware\PlatformPermissionMiddleware::class,
+
+            // AMIAL-AGENT-PORTAL-001 — بوّابة شركات الصرافة وفروعها.
+            // جمهورٌ آخر: يدخل ليخدم عملاء فرعه لا ليرى المنصّة.
+            'agent.portal' => \App\Http\Middleware\AgentPortalMiddleware::class,
             'customerAuth' => CustomerMiddleware::class,
             'agentAuth' => AgentMiddleware::class,
             'trackLastActiveAt' => TrackLastActiveAt::class,
