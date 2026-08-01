@@ -31,6 +31,29 @@
     </div></div>
 </div>
 
+{{-- **شحن رصيد الوكيل — كان مبنيّاً ومخفيّاً.**
+
+     المسار موجودٌ منذ البداية (`adminCreditAgent`) وزرّه في عمود «إجراءات»
+     داخل الجدول. فقيل: «لا توجد طريقة لشحن محفظة الوكيل، لم أرها في مركز
+     الوكلاء ولا التسويات» — وكان محقّاً: زرٌّ صغيرٌ في صفٍّ وسط أعمدةٍ كثيرة
+     ليس «موجوداً» عملياً.
+
+     والفرق بين ميزةٍ مبنيّةٍ وميزةٍ مستعمَلة هو أين تقع العين. --}}
+<div class="alert alert-primary d-flex flex-wrap align-items-center gap-3 mb-4">
+    <div>
+        <div class="fw-bold">💳 شحن رصيد وكيل من محفظة المنصّة</div>
+        <div class="small">
+            السيولة تنزل من أعلى: <strong>المنصّة ← الوكيل ← الفرع</strong>.
+            وبلا رصيدٍ لدى الفرع لا يستطيع قبول أيّ إيداع.
+        </div>
+    </div>
+    <div class="ms-auto text-center">
+        <div class="small text-muted">رصيد محفظة المنصّة</div>
+        <div class="fs-5 fw-bold" data-net="platform_wallet">—</div>
+    </div>
+    <button class="btn btn-primary" id="agent-credit-open">اختر وكيلاً واشحنه</button>
+</div>
+
 <div class="d-flex gap-2 flex-wrap mb-4" id="agent-network-flags">
     <button class="btn btn-sm btn-outline-danger" data-flag="low_cash">
         نقدٌ منخفض: <span data-net="low_cash">—</span>

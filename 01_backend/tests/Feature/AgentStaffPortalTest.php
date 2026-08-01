@@ -10,6 +10,7 @@ use App\Models\EMoney;
 use App\Models\User;
 use App\Services\AgentShiftService;
 use App\Services\AgentStaffService;
+use App\Services\CustomerWithdrawService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -204,11 +205,11 @@ class AgentStaffPortalTest extends TestCase
         app(AgentShiftService::class)->open($this->tellerMukalla, '10000');
 
         $customer = $this->makeCustomer('967772000001', '500000');
-        $this->actingAs($this->tellerMukalla, 'agent_staff');
+        $req = app(CustomerWithdrawService::class)->request($customer, '50000');
 
-        $r = $this->postJson(route('agent.counter.withdraw'), [
-            'customer_id' => $customer->id, 'amount' => '50000',
-        ])->assertStatus(422);
+        $r = $this->actingAs($this->tellerMukalla, 'agent_staff')
+            ->postJson(route('agent.counter.withdrawal.execute'),
+                ['op_code' => $req->op_code])->assertStatus(422);
 
         // القياس على الخزنة كان يقبلها ويقف الصرّاف عاجزاً أمام العميل.
         $this->assertStringContainsString('درجك', $r->json('message'));
@@ -435,5 +436,90 @@ class AgentStaffPortalTest extends TestCase
         ])->assertSessionHasErrors('username');
 
         $this->assertGuest('agent_staff');
+    }
+
+    // ── السحب برمز العميل ──────────────────────────────────────────────
+
+    /**
+     * @test
+     *
+     * لا سحبَ من محفظة عميلٍ بلا رمزٍ أصدره هو.
+     *
+     * **ثغرةٌ أمنيّة أدخلتُها.** في المنصّة نظامُ سحبٍ يبدأ من العميل: يطلب
+     * من تطبيقه فيُحجز المبلغ ويصدر رمزٌ مؤقّت، ثمّ يذهب به إلى الصرّاف.
+     * وشبّاكي كان يتجاوزه: رقمُ هاتفٍ ومبلغٌ يُدخلهما الصرّاف فيُخصم من
+     * محفظة العميل — **بلا موافقةٍ منه ولا أثرٍ يُثبت أنّه طلب السحب**.
+     *
+     * أي أنّ أيّ صرّافٍ يستطيع السحب من أيّ عميلٍ يعرف رقمه.
+     */
+    public function the_old_phone_based_withdrawal_is_closed(): void
+    {
+        app(AgentShiftService::class)->open($this->tellerMukalla, '500000');
+        $customer = $this->makeCustomer('967772900001', '400000');
+        $before = (string) EMoney::where('user_id', $customer->id)->value('current_balance');
+
+        $r = $this->actingAs($this->tellerMukalla, 'agent_staff')
+            ->postJson(route('agent.counter.withdraw'), [
+                'customer_id' => $customer->id, 'amount' => '100000',
+            ])->assertStatus(410);
+
+        $this->assertStringContainsString('رمز العملية', $r->json('message'));
+        $this->assertSame($before,
+            (string) EMoney::where('user_id', $customer->id)->value('current_balance'),
+            'خُصم من محفظة العميل بلا رمزٍ منه');
+    }
+
+    /** @test */
+    public function a_withdrawal_needs_a_code_the_customer_generated(): void
+    {
+        $shift = app(AgentShiftService::class)->open($this->tellerMukalla, '500000');
+        $customer = $this->makeCustomer('967772900002', '400000');
+
+        // العميل يطلب من تطبيقه — فيُحجز المبلغ ويصدر الرمز.
+        $req = app(CustomerWithdrawService::class)->request($customer, '100000');
+        $this->assertNotEmpty($req->op_code);
+
+        $this->actingAs($this->tellerMukalla, 'agent_staff');
+
+        // رمزٌ مخترع: يُرفض.
+        $this->getJson(route('agent.counter.withdrawal.lookup', ['op_code' => 'ZZZZZZ']))
+            ->assertStatus(404);
+
+        // والرمز الصحيح يُري الصرّاف ما سيدفع قبل أن يعدّ.
+        $look = $this->getJson(route('agent.counter.withdrawal.lookup',
+            ['op_code' => $req->op_code]))->assertOk()->json();
+
+        $this->assertSame('100000.0000', $look['request']['amount']);
+        $this->assertTrue($look['can_pay']);
+
+        $this->postJson(route('agent.counter.withdrawal.execute'),
+            ['op_code' => $req->op_code])->assertOk();
+
+        // النقد خرج من **درج الصرّاف** — فيُعرَف صاحب العجز عند الجرد.
+        $this->assertSame('400000.0000', (string) $shift->fresh()->cash_on_hand);
+        $this->assertSame('100000.0000', (string) $shift->fresh()->withdrawals_total);
+
+        // ولا يُنفَّذ الرمز مرّتين.
+        $this->postJson(route('agent.counter.withdrawal.execute'),
+            ['op_code' => $req->op_code])->assertStatus(422);
+    }
+
+    /** @test */
+    public function a_withdrawal_is_refused_when_the_drawer_cannot_cover_it(): void
+    {
+        app(AgentShiftService::class)->open($this->tellerMukalla, '10000');
+        $customer = $this->makeCustomer('967772900003', '400000');
+        $req = app(CustomerWithdrawService::class)->request($customer, '100000');
+
+        $look = $this->actingAs($this->tellerMukalla, 'agent_staff')
+            ->getJson(route('agent.counter.withdrawal.lookup',
+                ['op_code' => $req->op_code]))->assertOk()->json();
+
+        // يُقال قبل أن يعدّ الأوراق لا بعد أن يَعِد العميل.
+        $this->assertFalse($look['can_pay']);
+        $this->assertStringContainsString('درجك', $look['why_not']);
+
+        $this->postJson(route('agent.counter.withdrawal.execute'),
+            ['op_code' => $req->op_code])->assertStatus(422);
     }
 }

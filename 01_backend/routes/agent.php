@@ -41,6 +41,10 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff) 
         Route::get('/customer', [$c, 'findCustomer'])->name('customer');
         Route::post('/deposit', [$counter, 'deposit'])->name('deposit');
         Route::post('/withdraw', [$counter, 'withdraw'])->name('withdraw');
+
+        // السحب برمز العملية الذي يُصدره العميل من تطبيقه — لا برقم هاتفه.
+        Route::get('/withdrawal', [$counter, 'lookupWithdrawal'])->name('withdrawal.lookup');
+        Route::post('/withdrawal', [$counter, 'withdrawByCode'])->name('withdrawal.execute');
     });
 
     // ── الموظّفون والورديّات ──────────────────────────────────────────

@@ -103,6 +103,11 @@ class AgentSupervisionService
                 'overloaded' => $overloaded,
                 'not_counted_today' => $stale,
             ],
+            // رصيد محفظة المنصّة — المصدر الذي يُشحن منه الوكلاء. ويُعرَض
+            // بجانب زرّ الشحن: من يشحن يجب أن يرى ممّ يشحن.
+            'platform_wallet' => (string) (EMoney::where('user_id',
+                \App\CentralLogics\Helpers::get_admin_id())->value('current_balance') ?? '0'),
+
             // شبابيك مفتوحة الآن — أدراجٌ في أيدي صرّافين لم تُسلَّم بعد.
             'open_shifts' => $openShifts,
             'movements_today' => AgentCashMovement::whereBetween(

@@ -51,7 +51,60 @@
         </div>
     </div>
 
-    <div class="row g-3" id="ct-work" style="display:none">
+    {{-- **إيداعٌ وسحبٌ لا يتشابهان، فلا يُجمعان في نموذجٍ واحد.**
+
+         الإيداع يبدأ من الصرّاف: العميل يسلّم ورقاً، فيكفي رقم هاتفه.
+         والسحب يبدأ من **العميل**: يطلبه من تطبيقه فيُحجز المبلغ ويصدر
+         رمزٌ مؤقّت. وموافقتُه مثبتةٌ لأنّه أنشأ الطلب بنفسه.
+
+         وجمعُهما في شاشةٍ واحدة هو ما جعلني أبني سحباً برقم الهاتف —
+         أي خصماً من محفظة عميلٍ لم يوافق. --}}
+    <ul class="nav nav-pills mb-3" id="ct-modes" style="display:none">
+        <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill"
+            data-bs-target="#ct-dep-pane" data-testid="ct-mode-deposit">⬇️ إيداع</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="pill"
+            data-bs-target="#ct-wdr-pane" data-testid="ct-mode-withdraw">⬆️ سحب برمز العميل</button></li>
+    </ul>
+
+    <div class="tab-content" id="ct-panes" style="display:none">
+    {{-- ═══ سحب: رمزٌ واحد، لا رقم هاتفٍ ولا مبلغٍ يُدخله الصرّاف ═══ --}}
+    <div class="tab-pane fade" id="ct-wdr-pane">
+        <div class="row g-3">
+            <div class="col-lg-5">
+                <div class="card p-3 h-100">
+                    <h6>رمز العملية</h6>
+                    <p class="small text-muted">يطلب العميل السحب من تطبيقه فيظهر له رمزٌ مؤقّت.</p>
+                    <div class="input-group input-group-lg mb-2">
+                        <input type="text" id="wd-code" class="form-control text-uppercase" dir="ltr"
+                               placeholder="رمز العملية" data-testid="wd-code">
+                        <button class="btn btn-primary" id="wd-find" data-testid="wd-find">تحقّق</button>
+                    </div>
+                    <div id="wd-info"></div>
+                </div>
+            </div>
+            <div class="col-lg-7">
+                <div class="card p-3 h-100" id="wd-op" style="display:none">
+                    <h6>تسليم النقد</h6>
+                    <div class="alert alert-secondary py-2 small mb-3" id="wd-summary"></div>
+                    <div class="mb-3">
+                        <label class="form-label">تأكيد هويّة العميل (اختياري)</label>
+                        <input type="text" id="wd-ident" class="form-control" dir="ltr"
+                               placeholder="رقم الهاتف أو رقم الهوية">
+                        <div class="form-text">الرمز هو المُصرّح؛ وهذا تأكيدٌ إضافيّ إن طلبتَه.</div>
+                    </div>
+                    {{-- المبلغ لا يُدخله الصرّاف: هو ما طلبه العميل، فلا يُعدَّل. --}}
+                    <button class="btn btn-warning btn-lg w-100" id="wd-pay" data-testid="wd-pay">
+                        ⬆️ ادفع للعميل نقداً
+                    </button>
+                    <div id="wd-result" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- ═══ إيداع ═══ --}}
+    <div class="tab-pane fade show active" id="ct-dep-pane">
+    <div class="row g-3" id="ct-work-inner">
         {{-- العميل --}}
         <div class="col-lg-5">
             <div class="card p-3 h-100">
@@ -80,19 +133,17 @@
                     <input type="text" id="ct-note" class="form-control">
                 </div>
 
-                <div class="d-flex gap-2">
-                    <button class="btn btn-success btn-lg flex-fill" id="ct-deposit" data-testid="ct-deposit">
-                        ⬇️ إيداع — العميل يسلّمك نقداً
-                    </button>
-                    <button class="btn btn-warning btn-lg flex-fill" id="ct-withdraw" data-testid="ct-withdraw">
-                        ⬆️ سحب — تسلّم العميل نقداً
-                    </button>
-                </div>
+                {{-- زرّ السحب أُزيل من هنا: السحب له تبويبه ورمزه. --}}
+                <button class="btn btn-success btn-lg w-100" id="ct-deposit" data-testid="ct-deposit">
+                    ⬇️ إيداع — العميل يسلّمك نقداً
+                </button>
 
                 <div id="ct-result" class="mt-3"></div>
             </div>
         </div>
     </div>
+    </div>{{-- ct-dep-pane --}}
+    </div>{{-- ct-panes --}}
 </div>
 
 @once
@@ -138,7 +189,9 @@ document.addEventListener('DOMContentLoaded', function () {
         $('ct-open').style.display = (!open && j.staff && j.staff.role === 'teller') ? '' : 'none';
         $('ct-close').style.display = open ? '' : 'none';
         $('ct-refill').style.display = open ? '' : 'none';
-        $('ct-work').style.display = j.can_operate ? '' : 'none';
+        ['ct-modes', 'ct-panes'].forEach(id => {
+            if ($(id)) $(id).style.display = j.can_operate ? '' : 'none';
+        });
 
         if (open) {
             $('ct-drawer').textContent = fmt(s.cash_on_hand) + ' ر.ي';
@@ -243,7 +296,70 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     $('ct-deposit').addEventListener('click', () => operate('deposit'));
-    $('ct-withdraw').addEventListener('click', () => operate('withdraw'));
+
+    // ── السحب برمز العميل ────────────────────────────────────────
+    let wdCode = null;
+
+    $('wd-find').addEventListener('click', async () => {
+        const code = $('wd-code').value.trim().toUpperCase();
+        const box = $('wd-info');
+        wdCode = null;
+        $('wd-op').style.display = 'none';
+        box.innerHTML = '<div class="text-muted small">جارٍ التحقّق…</div>';
+
+        const r = await fetch(root + '/counter/withdrawal?op_code=' + encodeURIComponent(code),
+            {headers: {'Accept': 'application/json'}});
+        const j = await r.json();
+
+        if (!r.ok || j.success === false) {
+            box.innerHTML = `<div class="alert alert-danger py-2 mb-0 small">${esc(j.message)}</div>`;
+            return;
+        }
+
+        const q = j.request;
+        box.innerHTML = `
+            <div class="border rounded p-3">
+                <div class="fw-bold fs-5">${esc(q.customer.name)}</div>
+                <div class="text-muted" dir="ltr">${esc(q.customer.phone ?? '')}</div>
+                <div class="small text-muted mt-2">ينتهي: ${esc(q.expires_at ?? '—')}</div>
+            </div>`;
+
+        // سببُ التعذّر يُقال قبل أن يعدّ الصرّاف الأوراق لا بعد.
+        if (!j.can_pay) {
+            box.innerHTML += `<div class="alert alert-warning py-2 mt-2 mb-0 small">${esc(j.why_not)}</div>`;
+            return;
+        }
+
+        wdCode = q.op_code;
+        $('wd-summary').innerHTML =
+            `<div class="fs-4 fw-bold">ادفع نقداً: ${fmt(q.amount)} ر.ي</div>` +
+            `<div class="small text-muted">رسم العملية ${fmt(q.fee)} — مخصومٌ من رصيده، لا من النقد.</div>`;
+        $('wd-op').style.display = '';
+    });
+
+    $('wd-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('wd-find').click(); });
+
+    $('wd-pay').addEventListener('click', async () => {
+        if (busy || !wdCode) return;
+        busy = true;
+        $('wd-pay').disabled = true;
+        try {
+            const j = await post('/counter/withdrawal', {
+                op_code: wdCode, identifier: $('wd-ident').value.trim() || null,
+            });
+            $('wd-result').innerHTML =
+                `<div class="alert alert-success mb-0 fw-bold">${esc(j.message)}</div>`;
+            $('wd-code').value = ''; $('wd-ident').value = '';
+            $('wd-info').innerHTML = ''; $('wd-op').style.display = 'none';
+            wdCode = null;
+            render(j.shift ? {shift: j.shift, can_operate: true, staff: {role: 'teller'}} : {});
+        } catch (e) {
+            $('wd-result').innerHTML = `<div class="alert alert-danger mb-0">${esc(e.message)}</div>`;
+        } finally {
+            busy = false;
+            $('wd-pay').disabled = false;
+        }
+    });
 
     loadState();
 });

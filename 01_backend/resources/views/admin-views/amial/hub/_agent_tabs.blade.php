@@ -93,6 +93,7 @@
         set('not_counted_today', fmt(n.flags.not_counted_today));
         set('movements_today', fmt(n.movements_today));
         set('open_shifts', fmt(n.open_shifts));
+        set('platform_wallet', fmt(n.platform_wallet) + ' ر.ي');
     }
 
     // ===== الفروع =====
@@ -189,6 +190,16 @@
         bootstrap.Tab.getOrCreateInstance(document.getElementById('cash-tab-link')).show();
         loadCash();
     });
+
+    // زرّ الشحن يُرجع المدير إلى القائمة حيث زرّ «تحويل رصيد» في كلّ صفّ.
+    const creditBtn = document.getElementById('agent-credit-open');
+    if (creditBtn) {
+        creditBtn.addEventListener('click', () => {
+            document.querySelector('a[href="#tab-list"]')?.click();
+            const s = document.getElementById('search-box');
+            if (s) { s.focus(); s.scrollIntoView({behavior: 'smooth', block: 'center'}); }
+        });
+    }
 
     document.getElementById('agent-network-flags').addEventListener('click', (e) => {
         const btn = e.target.closest('[data-flag]');
