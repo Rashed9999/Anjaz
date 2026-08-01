@@ -11,6 +11,17 @@
             <button class="btn btn-sm btn-primary ms-auto" id="st-add" data-testid="st-add">+ تعيين موظّف</button>
         </div>
 
+        {{-- **كيف يدخل الموظّف؟** سؤالٌ لم تكن الشاشة تجيبه.
+             كنّا نُعطي الوكيل رمزاً ولا نقول له من أين يُستعمل، فيبقى الرمز
+             في يده بلا باب. والعنوان يُبنى من عنوان الخادم نفسه فيصحّ في كلّ
+             نشرٍ بلا ضبط. --}}
+        <div class="alert alert-info py-2 small d-flex flex-wrap align-items-center gap-2">
+            <span>🔑 <strong>الموظّف يدخل من:</strong></span>
+            <code class="user-select-all" dir="ltr" id="st-portal-url">{{ route('agent.login') }}</code>
+            <button class="btn btn-sm btn-outline-primary" id="st-copy-url">نسخ العنوان</button>
+            <span class="text-muted">برمزه (مثل <code dir="ltr">MKL-001</code>) وكلمة السرّ التي أعطيتَه إيّاها.</span>
+        </div>
+
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light"><tr>
@@ -111,6 +122,21 @@ document.addEventListener('DOMContentLoaded', function () {
     const get = async (u) => (await fetch(root + u, {headers: {'Accept': 'application/json'}})).json();
 
     let branches = [];
+    const PORTAL_URL = $('st-portal-url') ? $('st-portal-url').textContent.trim() : '';
+
+    if ($('st-copy-url')) {
+        $('st-copy-url').addEventListener('click', async () => {
+            try {
+                await navigator.clipboard.writeText(PORTAL_URL);
+                $('st-copy-url').textContent = 'نُسخ ✓';
+                setTimeout(() => { $('st-copy-url').textContent = 'نسخ العنوان'; }, 1800);
+            } catch (e) {
+                // المتصفّح قد يمنع النسخ على اتّصالٍ غير مشفَّر — يُقال ذلك
+                // بدل أن يبدو الزرّ معطّلاً بلا سبب.
+                alert('انسخ العنوان يدويّاً:\n' + PORTAL_URL);
+            }
+        });
+    }
 
     async function loadBranches() {
         // الغلاف `ok()` يضع الحمولة في `meta` — لا `data` ولا الجذر.
@@ -224,7 +250,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 max_txn_amount: $('st-limit').value || 0,
             });
             bootstrap.Modal.getInstance($('st-modal')).hide();
-            alert(j.message);
+            // الرمز والعنوان وكلمة السرّ معاً — وهي الثلاثة التي يحتاجها
+            // الموظّف. وإعطاءُ الرمز وحده يترك سؤالاً بلا جواب.
+            alert(j.message
+                + '\n\nالعنوان: ' + PORTAL_URL
+                + '\nالرمز: ' + j.username
+                + '\nكلمة السرّ: التي أدخلتَها الآن');
             $('st-name').value = $('st-pass').value = $('st-phone').value = '';
             loadStaff();
         } catch (e) { $('st-err').textContent = e.message; }

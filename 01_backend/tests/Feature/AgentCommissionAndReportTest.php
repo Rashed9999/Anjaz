@@ -36,6 +36,20 @@ use Tests\TestCase;
  */
 class AgentCommissionAndReportTest extends TestCase
 {
+    /**
+     * جلسةُ بوّابةٍ لحساب وكيل.
+     *
+     * البوّابة صار لها حارسها الخاصّ (`agent_staff`) ولا تقبل حارس `user` —
+     * لأنّ ذاك حارس لوحة الإدارة، وجلسةٌ عليه كانت تُعطّلها بحلقة إعادة
+     * توجيه. فيُفتح لصاحب الشركة حسابُ «إدارةٍ عامّة» كما يقع في الإنتاج.
+     */
+    private function portalAs(\App\Models\User $agent): self
+    {
+        $staff = app(\App\Services\AgentStaffService::class)->ensureHeadOfficeAccount($agent);
+
+        return $this->actingAs($staff, 'agent_staff');
+    }
+
     use RefreshDatabase;
 
     private User $agent;
@@ -343,7 +357,7 @@ class AgentCommissionAndReportTest extends TestCase
             "/agent/branches/{$this->branch->id}/report",
             '/agent/settlements',
         ] as $url) {
-            $this->actingAs($this->agent, 'user')->getJson($url)
+            $this->portalAs($this->agent)->getJson($url)
                 ->assertOk()->assertJsonPath('success', true);
         }
     }
@@ -356,7 +370,7 @@ class AgentCommissionAndReportTest extends TestCase
             'zone_code' => 'SOUTH', 'is_kyc_verified' => 1,
         ]);
 
-        $this->actingAs($rival, 'user')
+        $this->portalAs($rival)
             ->getJson("/agent/branches/{$this->branch->id}/commissions")
             ->assertStatus(403);
     }

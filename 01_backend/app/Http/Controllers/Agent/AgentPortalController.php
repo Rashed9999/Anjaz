@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\AgentBranchService;
 use App\Services\AgentCounterService;
 use App\Services\AgentReportService;
+use App\Services\AgentStaffService;
 use App\Services\AgentTillService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -41,7 +42,7 @@ class AgentPortalController extends Controller
 
     public function loginPage()
     {
-        if (Auth::guard('agent_staff')->check() || $this->userIsAgent()) {
+        if (Auth::guard('agent_staff')->check()) {
             return redirect()->route('agent.dashboard');
         }
 
@@ -109,9 +110,28 @@ class AgentPortalController extends Controller
             return back()->withErrors(['username' => 'الحساب موقوف — راجع إدارة أميال'])->withInput();
         }
 
-        Auth::guard('agent_staff')->logout();
-        Auth::guard('user')->login($user, (bool) $request->boolean('remember'));
+        // **لا تُفتح جلسةٌ على حارس `user` من هذه البوّابة أبداً.**
+        //
+        // كان صاحب الشركة يدخل هنا على حارس `user` — وهو **نفس حارس جلسة
+        // لوحة الإدارة**. فمن يدخل بوّابة الوكيل ثمّ يفتح لوحة الإدارة في
+        // المتصفّح نفسه يقع في حلقةٍ لا تنتهي:
+        //
+        //     /admin            → «لستَ مديراً» → /admin/auth/login
+        //     /admin/auth/login → «أنت داخلٌ»   → /admin
+        //
+        // فتتعطّل لوحة الإدارة كلّها ولا يظهر سببٌ في أيّ سجلّ. وهذا ليس
+        // عطلاً في لوحة الإدارة: هو تسرّبُ جلسةٍ من بوّابةٍ إلى أخرى.
+        //
+        // والعلاج أنّ للبوّابة حارسها الخاصّ، فيُفتح لصاحب الشركة حسابُ
+        // «إدارةٍ عامّة» عليه — كما لأيّ موظّفٍ عنده. وكلمةُ سرّه تبقى كلمة
+        // سرّ حساب الشركة، ولا تُخزَّن مرّتين.
+        $hq = app(AgentStaffService::class)->ensurePortalAccount($user);
+
+        Auth::guard('user')->logout();
+        Auth::guard('agent_staff')->login($hq, (bool) $request->boolean('remember'));
         $request->session()->regenerate();
+
+        $hq->forceFill(['last_login_at' => now()])->save();
 
         return redirect()->route('agent.dashboard');
     }
@@ -127,11 +147,6 @@ class AgentPortalController extends Controller
         return back()->withErrors(['username' => 'بيانات الدخول غير صحيحة'])->withInput();
     }
 
-    private function userIsAgent(): bool
-    {
-        return Auth::guard('user')->check()
-            && (int) Auth::guard('user')->user()->type === AGENT_TYPE;
-    }
 
     public function logout(Request $request)
     {

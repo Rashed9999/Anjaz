@@ -8,6 +8,7 @@ use App\Models\EMoney;
 use App\Models\User;
 use App\Services\AgentStaffService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -246,20 +247,19 @@ class AgentPortalContractTest extends TestCase
      * جرّبتُ المسار السليم، والمستعمل يسلك المسار الآخر. والدرس أنّ ميزةً
      * لها مدخلان تحتاج أن تُختبر من مدخليها لا من أحدهما.
      */
-    public function branch_management_works_under_both_login_modes(): void
+    public function branch_management_works_under_the_portal_guard_and_never_500s(): void
     {
         $b = $this->addBranch('DUO');
 
-        // (١) بحساب الشركة — الحارس `user`
+        // (١) حارس `user` **مرفوضٌ من البوّابة** — وهذا هو الإصلاح:
+        //     جلسةٌ عليه كانت تُعطّل لوحة الإدارة بحلقة إعادة توجيه.
         $this->actingAs($this->company, 'user')
             ->postJson(route('agent.branch.fund', ['id' => $b->id]),
                 ['amount' => '1', 'note' => 'اختبار المدخل الأوّل'])
-            ->assertStatus(422);   // رصيد الشركة صفر — رفضٌ منطقيّ لا انهيار
+            ->assertStatus(401);
 
-        // (٢) برمز موظّف الإدارة العامّة — الحارس `agent_staff`
-        //
-        // المطلوب هنا **ألّا** تكون 500. أيّ ردٍّ من الخادم مقبول، والانهيار
-        // وحده مرفوض.
+        // (٢) وحارس البوّابة يعمل. والمطلوب هنا **ألّا** يكون الردّ 500:
+        //     أيّ ردٍّ منطقيّ مقبول، والانهيار وحده مرفوض.
         foreach ([
             ['agent.branch.create', [], ['name' => 'فرع ثانٍ', 'code' => 'TWO',
                 'phone' => '967771700123', 'password' => 'branchpass1']],
@@ -272,7 +272,7 @@ class AgentPortalContractTest extends TestCase
 
             $this->assertLessThan(500, $status,
                 "«{$name}» تنهار لمن يدخل برمز موظّف (ردّت {$status}) — "
-                . 'وتعمل لمن يدخل بهاتف الشركة. المدخلان يجب أن يعملا.');
+                . 'وهي العمليّات التي كانت ميّتةً كلّها تحت هذا الحارس.');
         }
     }
 
@@ -303,5 +303,85 @@ class AgentPortalContractTest extends TestCase
         $handler = substr($blade, strpos($blade, "\$el('ag-new-branch')"), 1800);
         $this->assertStringNotContainsString('prompt(', $handler,
             'ما زال إنشاء الفرع يسأل عبر prompt');
+    }
+
+    /**
+     * @test
+     *
+     * جلسةُ بوّابة الوكيل لا تُعطّل لوحة الإدارة.
+     *
+     * **العطل الذي أدخل هذا الاختبار عطّل النظام كلّه، لا ميزةً فيه.**
+     *
+     * كانت البوّابة تفتح جلسة صاحب الشركة على حارس `user` — وهو **نفس حارس
+     * لوحة الإدارة**. فمن يدخل البوّابة ثمّ يفتح لوحة الإدارة في المتصفّح
+     * نفسه يقع في:
+     *
+     *     /admin            → «لستَ مديراً» → /admin/auth/login
+     *     /admin/auth/login → «أنت داخلٌ»   → /admin
+     *
+     * `ERR_TOO_MANY_REDIRECTS` — ولوحة الإدارة كلّها معطَّلة، بلا سطرٍ واحدٍ
+     * في السجلّ يشرح السبب. وأسوأ ما فيه أنّه **لا يظهر إلّا لمن يستعمل
+     * البوّابتين معاً**، أي لصاحب المشروع وحده في هذه المرحلة.
+     *
+     * ويُفحص هنا الطرفان: أنّ البوّابة لا تلمس حارس الإدارة، وأنّ لوحة
+     * الإدارة لا تدور مهما وُجدت جلسةٌ غريبة على حارسها.
+     */
+    public function using_the_agent_portal_never_breaks_the_admin_panel(): void
+    {
+        // (١) الدخول إلى البوّابة بهاتف الشركة
+        $this->post(route('agent.login.submit'), [
+            'username' => $this->company->phone, 'password' => 'secret123',
+        ])->assertRedirect(route('agent.dashboard'));
+
+        // البوّابة تفتح جلستها على حارسها هي، لا على حارس الإدارة.
+        $this->assertTrue(Auth::guard('agent_staff')->check(),
+            'البوّابة لم تفتح جلسةً على حارسها');
+        $this->assertGuest('user',
+            'البوّابة فتحت جلسةً على حارس لوحة الإدارة — وهذا مصدر الحلقة');
+
+        // (٢) ثمّ فتح لوحة الإدارة بالجلسة نفسها: تحويلةٌ واحدة إلى الدخول،
+        //     وصفحةُ الدخول تُفتح ولا تُعيد التحويل.
+        $this->get('/admin')->assertRedirect(route('admin.auth.login'));
+        $this->get(route('admin.auth.login'))->assertOk();
+    }
+
+    /**
+     * @test
+     *
+     * ولا تدور اللوحة حتى لو تسرّبت جلسةٌ غريبة إلى حارسها.
+     *
+     * أُصلح مصدر التسرّب، لكنّ الحلقة عيبٌ في الوسيط يبقى قائماً لأيّ تسرّبٍ
+     * آخر — عميلٌ أو تاجرٌ يدخل من الويب. فتُقطع من طرفها.
+     */
+    public function the_admin_panel_does_not_loop_on_a_non_admin_session(): void
+    {
+        $customer = User::factory()->create([
+            'type' => CUSTOMER_TYPE, 'phone' => '967773800001',
+        ]);
+
+        $this->actingAs($customer, 'user')
+            ->get('/admin')->assertRedirect(route('admin.auth.login'));
+
+        // الجلسة أُنهيت، فصفحة الدخول تُفتح بدل أن تُعيد التحويل إلى /admin.
+        $this->assertGuest('user');
+        $this->get(route('admin.auth.login'))->assertOk();
+    }
+
+    /**
+     * @test
+     *
+     * الموظّف يعرف من أين يدخل — العنوان مكتوبٌ في الشاشة.
+     *
+     * كنّا نُعطي الوكيل رمزاً (`MKL-001`) ولا نقول له من أين يُستعمل. فبقي
+     * الرمز في يده بلا باب، وكان أوّل سؤالٍ يُطرح: «كيف يدخل الموظّف؟».
+     */
+    public function the_staff_screen_tells_the_agent_where_employees_log_in(): void
+    {
+        $html = $this->actingAs($this->hq, 'agent_staff')
+            ->get(route('agent.dashboard'))->assertOk()->getContent();
+
+        $this->assertStringContainsString(route('agent.login'), $html,
+            'شاشة الموظّفين لا تعرض عنوان الدخول');
+        $this->assertStringContainsString('الموظّف يدخل من', $html);
     }
 }

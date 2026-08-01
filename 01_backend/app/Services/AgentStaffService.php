@@ -260,6 +260,63 @@ class AgentStaffService
         ]);
     }
 
+
+    /**
+     * حسابُ بوّابةٍ لمستخدمٍ من نوع وكيل — شركةً كان أو فرعاً.
+     *
+     * **ولماذا لا يكفي `ensureHeadOfficeAccount`.** حسابُ الفرع مستخدمٌ من
+     * نوع وكيلٍ أيضاً. ولو عومل معاملة الشركة لصار «إدارةً عامّة» لنفسه —
+     * فيرى فروع الشركة كلّها من حسابِ فرعٍ واحد. أي أنّ تبسيطَ الدخول كان
+     * سيفتح تسرّب بياناتٍ بين الفروع.
+     *
+     * فيُميَّز بالصعود: حسابٌ له `parent_agent_id` فرعٌ، ويُفتح له حساب
+     * **مدير فرع** محصورٌ بفرعه.
+     */
+    public function ensurePortalAccount(User $user): AgentStaff
+    {
+        // **لا يُفتح حساب بوّابةٍ لغير وكيل.** الدالّة تُنشئ حساباً بصلاحيات،
+        // فلو قُبل فيها عميلٌ أو تاجرٌ لصار له مدخلٌ إلى بوّابة الوكلاء بحسابٍ
+        // أنشأناه له نحن. والفحص هنا لا في المُنادي: مُنادٍ واحدٌ ينساه يفتح
+        // الباب كلّه.
+        if ((int) $user->type !== AGENT_TYPE) {
+            throw new DomainException('هذه البوّابة للوكلاء وموظّفيهم');
+        }
+
+        $branch = AgentBranch::where('branch_user_id', $user->id)->first();
+
+        if (!$branch) {
+            return $this->ensureHeadOfficeAccount($user);
+        }
+
+        $existing = AgentStaff::where('agent_user_id', $branch->agent_user_id)
+            ->where('branch_id', $branch->id)
+            ->where('role', AgentStaff::ROLE_BRANCH_MANAGER)
+            ->whereNull('phone')          // الحساب المشتقّ من حساب الفرع نفسه
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        $base = strtoupper($branch->code) . '-MGR';
+        $username = $base;
+        $i = 1;
+        while (AgentStaff::where('username', $username)->exists()) {
+            $username = $base . '-' . (++$i);
+        }
+
+        return AgentStaff::create([
+            'agent_user_id' => $branch->agent_user_id,
+            'branch_id' => $branch->id,
+            'username' => $username,
+            'name' => (string) $branch->name,
+            'phone' => null,
+            'password' => Hash::make(bin2hex(random_bytes(16))),
+            'role' => AgentStaff::ROLE_BRANCH_MANAGER,
+            'is_active' => true,
+        ]);
+    }
+
     private function assertCanManageStaff(AgentStaff $actor): void
     {
         if ($actor->isTeller()) {

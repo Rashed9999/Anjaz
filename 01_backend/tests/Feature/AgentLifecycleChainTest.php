@@ -28,6 +28,20 @@ use Tests\TestCase;
  */
 class AgentLifecycleChainTest extends TestCase
 {
+    /**
+     * جلسةُ بوّابةٍ لحساب وكيل.
+     *
+     * البوّابة صار لها حارسها الخاصّ (`agent_staff`) ولا تقبل حارس `user` —
+     * لأنّ ذاك حارس لوحة الإدارة، وجلسةٌ عليه كانت تُعطّلها بحلقة إعادة
+     * توجيه. فيُفتح لصاحب الشركة حسابُ «إدارةٍ عامّة» كما يقع في الإنتاج.
+     */
+    private function portalAs(\App\Models\User $agent): self
+    {
+        $staff = app(\App\Services\AgentStaffService::class)->ensureHeadOfficeAccount($agent);
+
+        return $this->actingAs($staff, 'agent_staff');
+    }
+
     use RefreshDatabase;
 
     private User $admin;
@@ -75,7 +89,10 @@ class AgentLifecycleChainTest extends TestCase
             'username' => '967771600001', 'password' => 'agent-pass-1',
         ])->assertRedirect(route('agent.dashboard'));
 
-        $this->assertAuthenticatedAs($agent, 'user');
+        // الجلسة على حارس البوّابة لا على حارس لوحة الإدارة: خلطُهما كان
+        // يُعطّل اللوحة بحلقة إعادة توجيه لا تنتهي.
+        $this->assertAuthenticated('agent_staff');
+        $this->assertGuest('user');
 
         // ولوحته تُفتح ودورُه «الإدارة العامّة» — يرى كلّ فروعه.
         $this->get(route('agent.dashboard'))->assertOk()
@@ -108,7 +125,7 @@ class AgentLifecycleChainTest extends TestCase
         $this->assertSame('1000000.0000',
             (string) EMoney::where('user_id', $agent->id)->value('current_balance'));
 
-        $this->actingAs($agent, 'user')
+        $this->portalAs($agent)
             ->postJson(route('agent.branch.fund', ['id' => $branch->id]), [
                 // السبب إلزاميّ في الخادم والشاشة تسأله — شحنُ سيولةٍ بلا
                 // سببٍ مكتوب لا يُفسَّر يوم التسوية.
@@ -119,7 +136,7 @@ class AgentLifecycleChainTest extends TestCase
             (string) EMoney::where('user_id', $branch->branch_user_id)->value('current_balance'));
 
         // ══ ٥ ══ الوكيل يُعيّن صرّافاً ══════════════════════════════════
-        $hire = $this->actingAs($agent, 'user')
+        $hire = $this->portalAs($agent)
             ->postJson(route('agent.staff.store'), [
                 'name' => 'أحمد الصرّاف', 'role' => 'teller',
                 'branch_id' => $branch->id, 'password' => 'teller-1',
@@ -223,7 +240,7 @@ class AgentLifecycleChainTest extends TestCase
         $this->assertSame(0, AgentStaff::where('agent_user_id', $agent->id)->count(),
             'الافتراض: لا موظّفين بعد');
 
-        $this->actingAs($agent, 'user');
+        $this->portalAs($agent);
 
         // اللوحة تُفتح…
         $this->get(route('agent.dashboard'))->assertOk();

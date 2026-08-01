@@ -52,34 +52,13 @@ class AgentPortalMiddleware
             return $next($request);
         }
 
-        $user = Auth::guard('user')->user();
-
-        if (!$user) {
-            return $this->reject($request, 'الجلسة غير صالحة');
-        }
-
-        if ((int) $user->type !== AGENT_TYPE) {
-            abort(403, 'هذه البوّابة للوكلاء وفروعهم');
-        }
-
-        // حسابُ الوكيل نفسه (أو حساب فرع). يُحسب الجذر بالصعود لا بالافتراض.
-        $parentId = DB::table('agent_profiles')->where('user_id', $user->id)->value('parent_agent_id');
-        $isBranchAccount = $parentId !== null;
-
-        $branchIds = $isBranchAccount
-            ? AgentBranch::where('branch_user_id', $user->id)->pluck('id')->map(fn ($v) => (int) $v)->all()
-            : AgentBranch::where('agent_user_id', $user->id)->pluck('id')->map(fn ($v) => (int) $v)->all();
-
-        $request->attributes->set('agent_staff', null);
-        $request->attributes->set('agent_root_id', $parentId ? (int) $parentId : (int) $user->id);
-        $request->attributes->set('portal_role', $isBranchAccount
-            ? AgentStaff::ROLE_BRANCH_MANAGER
-            : AgentStaff::ROLE_HEAD_OFFICE);
-        $request->attributes->set('agent_branch_ids', $branchIds);
-        $request->attributes->set('agent_branch_id', $isBranchAccount ? ($branchIds[0] ?? null) : null);
-        $request->attributes->set('is_branch_account', $isBranchAccount);
-
-        return $next($request);
+        // **حارسٌ واحدٌ لا حارسان.**
+        //
+        // كان هنا رجوعٌ إلى حارس `user` لمن يدخل بهاتف الشركة. وهو نفس حارس
+        // لوحة الإدارة، فكانت جلسةُ البوّابة تُعطّل لوحة الإدارة بحلقة إعادة
+        // توجيهٍ لا تنتهي. وقد أُزيل الرجوع من أصله: صاحب الشركة يُفتح له
+        // حسابُ «إدارةٍ عامّة» على حارس البوّابة عند الدخول.
+        return $this->reject($request, 'الجلسة غير صالحة');
     }
 
     private function reject(Request $request, string $message): mixed

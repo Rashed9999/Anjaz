@@ -35,6 +35,20 @@ use Tests\TestCase;
  */
 class AgentPortalTest extends TestCase
 {
+    /**
+     * جلسةُ بوّابةٍ لحساب وكيل.
+     *
+     * البوّابة صار لها حارسها الخاصّ (`agent_staff`) ولا تقبل حارس `user` —
+     * لأنّ ذاك حارس لوحة الإدارة، وجلسةٌ عليه كانت تُعطّلها بحلقة إعادة
+     * توجيه. فيُفتح لصاحب الشركة حسابُ «إدارةٍ عامّة» كما يقع في الإنتاج.
+     */
+    private function portalAs(\App\Models\User $agent): self
+    {
+        $staff = app(\App\Services\AgentStaffService::class)->ensurePortalAccount($agent);
+
+        return $this->actingAs($staff, 'agent_staff');
+    }
+
     use RefreshDatabase;
 
     private User $agent;
@@ -296,7 +310,7 @@ class AgentPortalTest extends TestCase
         // أمنياً. والمعرّف يأتي من المتصفّح — فلا يُوثَق به.
         $rival = $this->makeAgent('770002250', 'صرافة منافسة');
 
-        $this->actingAs($rival, 'user')
+        $this->portalAs($rival)
             ->getJson("/agent/branches/{$this->branch->id}/till")
             ->assertStatus(403);
 
@@ -315,7 +329,7 @@ class AgentPortalTest extends TestCase
     {
         $branchUser = User::find($this->branch->branch_user_id);
 
-        $ids = $this->actingAs($branchUser, 'user')
+        $ids = $this->portalAs($branchUser)
             ->getJson('/agent/overview')->assertOk()
             ->json('meta.branches');
 
@@ -330,7 +344,7 @@ class AgentPortalTest extends TestCase
         // التسلسل مستوىً واحد: فروعُ الفروع تُضيّع مسؤولية النقد.
         $branchUser = User::find($this->branch->branch_user_id);
 
-        $this->actingAs($branchUser, 'user')
+        $this->portalAs($branchUser)
             ->postJson('/agent/branches', [
                 'name' => 'فرع فرعيّ', 'code' => 'X-1',
                 'phone' => '770002298', 'password' => 'pass-12345',
@@ -344,12 +358,32 @@ class AgentPortalTest extends TestCase
     {
         $customer = $this->customer;
 
-        $this->actingAs($customer, 'user')->get('/agent')->assertStatus(403);
+        // بلا جلسة: البوّابة تردّ إلى صفحة الدخول.
+        $this->get('/agent')->assertRedirect(route('agent.login'));
 
+        // ولا يُفتح حساب بوّابةٍ لعميل — لا من الدخول ولا من الخدمة.
+        try {
+            app(\App\Services\AgentStaffService::class)->ensurePortalAccount($customer);
+            $this->fail('فُتح حساب بوّابةٍ لعميل');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString('للوكلاء', $e->getMessage());
+        }
+
+        // والمدير كذلك: البوّابة ليست امتداداً للوحة الإدارة.
         $admin = User::factory()->create([
             'type' => ADMIN_TYPE, 'role' => 'super_admin', 'phone' => '967770002260',
         ]);
-        $this->actingAs($admin, 'user')->get('/agent')->assertStatus(403);
+
+        try {
+            app(\App\Services\AgentStaffService::class)->ensurePortalAccount($admin);
+            $this->fail('فُتح حساب بوّابةٍ لمدير المنصّة');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString('للوكلاء', $e->getMessage());
+        }
+
+        // ولو دخل المدير بحساب لوحة الإدارة، لا تقبله البوّابة: حارسها آخر.
+        $this->actingAs($admin, 'user')
+            ->get('/agent')->assertRedirect(route('agent.login'));
     }
 
     /** @test */
@@ -366,7 +400,10 @@ class AgentPortalTest extends TestCase
             'username' => $this->agent->phone, 'password' => 'agent-pass-123',
         ])->assertRedirect('/agent');
 
-        $this->assertAuthenticatedAs($this->agent, 'user');
+        // الجلسة تُفتح على حارس البوّابة لا على حارس لوحة الإدارة — وهذا
+        // ما يمنع تعطُّل اللوحة بحلقة إعادة توجيه.
+        $this->assertAuthenticated('agent_staff');
+        $this->assertGuest('user');
     }
 
     /** @test */
@@ -412,7 +449,7 @@ class AgentPortalTest extends TestCase
     {
         // موظّف الشبّاك يحتاج أن يعرف من أمامه وهل يُخدَم — لا كم يملك.
         // وعرضُ الرصيد يجعل كلّ موظّفٍ يرى ثروة كلّ من يمرّ به.
-        $body = $this->actingAs($this->agent, 'user')
+        $body = $this->portalAs($this->agent)
             ->getJson('/agent/counter/customer?phone=' . $this->customer->phone)
             ->assertOk()->json('meta.customer');
 
