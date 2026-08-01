@@ -522,4 +522,135 @@ class AgentStaffPortalTest extends TestCase
         $this->postJson(route('agent.counter.withdrawal.execute'),
             ['op_code' => $req->op_code])->assertStatus(422);
     }
+
+    // ── التسويات: الاتّجاهان ────────────────────────────────────────────
+
+    /**
+     * @test
+     *
+     * لوحة التسويات لها ثلاثة أنواع، وكان لواحدٍ منها مُنشئٌ فقط.
+     *
+     * `topup` (المنصّة تشحن الوكيل) مبنيّ. و`payout` (الوكيل يُعيد رصيداً
+     * ويستلم مالاً) **لم يكن له مُنشئٌ واحد** — ووكيلٌ يخدم سحوبات العملاء
+     * طول اليوم يمتلئ رصيدُه ويفرغ درجُه، فيقف عاجزاً: رصيدٌ لا يُصرَف ونقدٌ
+     * لا يكفي. فيتوقّف عن السحب ثمّ عن العمل معنا.
+     */
+    public function an_agent_can_request_a_payout_and_the_amount_is_held(): void
+    {
+        EMoney::where('user_id', $this->company->id)->update(['current_balance' => '900000']);
+
+        $r = $this->actingAs($this->hq, 'agent_staff')
+            ->postJson(route('agent.settlements.payout'),
+                ['amount' => '300000', 'note' => 'تجميع نقدٍ للفروع'])
+            ->assertOk();
+
+        $ulid = $r->json('meta.settlement_ulid');
+        $this->assertNotEmpty($ulid);
+
+        $this->assertDatabaseHas('agent_settlements', [
+            'settlement_ulid' => $ulid, 'settlement_type' => 'payout', 'status' => 'pending',
+        ]);
+
+        // **الحجز عند الطلب لا عند الاعتماد.** ولو تُرك الرصيد طليقاً لأنفقه
+        // الوكيل في إيداعاتٍ ثمّ اعتُمدت تسويةٌ بلا غطاء.
+        $wallet = EMoney::where('user_id', $this->company->id)->first();
+        $this->assertSame('300000.0000', (string) $wallet->held_balance);
+    }
+
+    /** @test */
+    public function a_payout_beyond_the_balance_is_refused(): void
+    {
+        EMoney::where('user_id', $this->company->id)->update(['current_balance' => '1000']);
+
+        $r = $this->actingAs($this->hq, 'agent_staff')
+            ->postJson(route('agent.settlements.payout'), ['amount' => '50000'])
+            ->assertStatus(422);
+
+        $this->assertStringContainsString('لا يكفي', $r->json('message'));
+    }
+
+    /** @test */
+    public function a_teller_cannot_cash_out_the_companys_money(): void
+    {
+        EMoney::where('user_id', $this->company->id)->update(['current_balance' => '900000']);
+
+        $this->actingAs($this->tellerMukalla, 'agent_staff')
+            ->postJson(route('agent.settlements.payout'), ['amount' => '1000'])
+            ->assertStatus(403);
+    }
+
+    /**
+     * @test
+     *
+     * ولا نوعَ تسويةٍ يمرّ بلا معالجة.
+     *
+     * كان `payout` يصل إلى الاعتماد فيُعلَّم «مكتملاً» **بلا تحريك ريالٍ
+     * واحد**: الوكيل يرى تسويةً معتمدة ولا يستلم شيئاً، والمنصّة تظنّ أنّها
+     * دفعت. وصمتٌ كهذا أسوأ من خطأ — يُغلق الملفّ على مالٍ لم ينتقل.
+     */
+    public function approving_a_payout_actually_moves_the_money(): void
+    {
+        $admin0 = User::factory()->create([
+            'type' => ADMIN_TYPE, 'role' => 'super_admin', 'phone' => '967770007710',
+        ]);
+
+        // **الدورة كاملةً كما تقع فعلاً: شحنٌ ثمّ صرف.**
+        //
+        // ولا يُموَّل الرصيد بتحديثٍ مباشر: قيدُ الصرف يُدين محفظة الوكيل
+        // ويُقرِض احتياطي النقد، والاحتياطي لا يصير سالباً. فلو لم يسبقه شحنٌ
+        // حقيقيّ لصُرف مالٌ لم يدخل الخزينة قطّ — ورفضُ الدفتر لذلك صحيح.
+        $net = app(\App\Services\AgentNetworkService::class);
+        $topup = $net->requestTopup($this->company, '900000', null, 'cash', 'إيداع نقديّ');
+        $net->approveSettlement($topup, $admin0);
+
+        $this->assertSame('900000.0000',
+            (string) EMoney::where('user_id', $this->company->id)->value('current_balance'));
+
+        $ulid = $this->actingAs($this->hq, 'agent_staff')
+            ->postJson(route('agent.settlements.payout'), ['amount' => '300000'])
+            ->json('meta.settlement_ulid');
+
+        $admin = User::factory()->create([
+            'type' => ADMIN_TYPE, 'role' => 'super_admin', 'phone' => '967770007700',
+        ]);
+
+        $settlement = \App\Models\AgentSettlement::where('settlement_ulid', $ulid)->firstOrFail();
+        app(\App\Services\AgentNetworkService::class)->approveSettlement($settlement, $admin);
+
+        $wallet = EMoney::where('user_id', $this->company->id)->first();
+
+        $this->assertSame('600000.0000', (string) $wallet->current_balance,
+            'اعتُمدت التسوية ولم يُخصم الرصيد — المنصّة دفعت مرّتين');
+        $this->assertSame('0.0000', (string) $wallet->held_balance);
+
+        // وقيدٌ معاكسٌ لقيد الشحن في دفتر الأستاذ.
+        $this->assertDatabaseHas('ledger_journal_entries', [
+            'source_type' => 'agent_payout', 'source_id' => $ulid,
+        ]);
+    }
+
+    /** @test */
+    public function rejecting_a_payout_releases_the_hold(): void
+    {
+        EMoney::where('user_id', $this->company->id)->update(['current_balance' => '900000']);
+
+        $ulid = $this->actingAs($this->hq, 'agent_staff')
+            ->postJson(route('agent.settlements.payout'), ['amount' => '300000'])
+            ->json('meta.settlement_ulid');
+
+        $admin = User::factory()->create([
+            'type' => ADMIN_TYPE, 'role' => 'super_admin', 'phone' => '967770007701',
+        ]);
+
+        $settlement = \App\Models\AgentSettlement::where('settlement_ulid', $ulid)->firstOrFail();
+        app(\App\Services\AgentNetworkService::class)
+            ->rejectSettlement($settlement, $admin, 'غير مطلوب الآن');
+
+        $wallet = EMoney::where('user_id', $this->company->id)->first();
+
+        // ولولا فكّ الحجز لبقي المبلغ مجمَّداً إلى الأبد: لا صُرف ولا عاد.
+        $this->assertSame('0.0000', (string) $wallet->held_balance,
+            'رُفضت التسوية وبقي المبلغ محجوزاً');
+        $this->assertSame('900000.0000', (string) $wallet->current_balance);
+    }
 }

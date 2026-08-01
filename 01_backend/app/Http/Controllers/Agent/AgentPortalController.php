@@ -8,6 +8,7 @@ use App\Models\Agent\AgentStaff;
 use App\Models\EMoney;
 use App\Models\User;
 use App\Services\AgentBranchService;
+use App\Services\AgentNetworkService;
 use App\Services\AgentCounterService;
 use App\Services\AgentReportService;
 use App\Services\AgentStaffService;
@@ -406,6 +407,52 @@ class AgentPortalController extends Controller
         $agent = User::find((int) $request->attributes->get('agent_root_id'));
 
         return $this->ok($this->reports->settlements($agent));
+    }
+
+    /**
+     * طلب صرف رصيدٍ إلكترونيّ نقداً — الاتّجاه المعاكس للشحن.
+     *
+     * **كان غائباً بالكامل.** وكيلٌ يخدم سحوبات العملاء طول اليوم يدفع نقداً
+     * ورقيّاً ويستقبل رصيداً إلكترونيّاً: فيمتلئ رصيدُه ويفرغ درجُه. وبلا هذا
+     * الطلب يقف عاجزاً — رصيدٌ لا يستطيع صرفه، ونقدٌ لا يكفي لخدمة أحد.
+     * فيتوقّف عن السحب، ثمّ يتوقّف عن العمل معنا.
+     *
+     * ولوحة التسويات كانت تعرض ثلاثة أنواع (`topup`/`payout`/`reconciliation`)
+     * ولا مُنشئَ إلّا للأوّل.
+     */
+    public function requestPayout(Request $request): JsonResponse
+    {
+        $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'note' => 'nullable|string|max:255',
+        ]);
+
+        // الإدارة العامّة وحدها تطلب الصرف: مالُ الشركة لا يصرفه صرّاف.
+        if ((string) $request->attributes->get('portal_role') !== AgentStaff::ROLE_HEAD_OFFICE) {
+            return $this->error('طلب الصرف من صلاحية الإدارة العامّة للشركة', 403);
+        }
+
+        $agent = $this->companyUser($request);
+
+        if (!$agent) {
+            return $this->error('حساب الشركة غير موجود', 404);
+        }
+
+        try {
+            $settlement = app(AgentNetworkService::class)->requestPayout(
+                $agent,
+                (string) $request->input('amount'),
+                'cash',
+                $request->input('note'),
+            );
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
+        return $this->ok(
+            ['settlement_ulid' => $settlement->settlement_ulid],
+            'أُرسل طلب الصرف — حُجز المبلغ من رصيدك حتى تبتّ فيه الإدارة',
+        );
     }
 
     public function dailyReport(Request $request, int $id): JsonResponse

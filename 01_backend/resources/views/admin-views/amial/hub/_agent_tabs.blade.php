@@ -93,7 +93,7 @@
         set('not_counted_today', fmt(n.flags.not_counted_today));
         set('movements_today', fmt(n.movements_today));
         set('open_shifts', fmt(n.open_shifts));
-        set('platform_wallet', fmt(n.platform_wallet) + ' ر.ي');
+        set('cash_reserve', fmt(n.cash_reserve) + ' ر.ي');
     }
 
     // ===== الفروع =====

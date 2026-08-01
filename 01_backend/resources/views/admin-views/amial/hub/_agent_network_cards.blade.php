@@ -48,8 +48,8 @@
         </div>
     </div>
     <div class="ms-auto text-center">
-        <div class="small text-muted">رصيد محفظة المنصّة</div>
-        <div class="fs-5 fw-bold" data-net="platform_wallet">—</div>
+        <div class="small text-muted">مقابل الرصيد المُصدَر (احتياطي النقد)</div>
+        <div class="fs-5 fw-bold" data-net="cash_reserve">—</div>
     </div>
     <button class="btn btn-primary" id="agent-credit-open">اختر وكيلاً واشحنه</button>
 </div>

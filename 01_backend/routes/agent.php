@@ -64,6 +64,7 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff) 
     Route::get('/branches/{id}/report', [$c, 'dailyReport'])->where('id', '[0-9]+')->name('branch.report');
     Route::post('/branches/{id}/hours', [$c, 'setWorkingHours'])->where('id', '[0-9]+')->name('branch.hours');
     Route::get('/settlements', [$c, 'settlements'])->name('settlements');
+    Route::post('/settlements/payout', [$c, 'requestPayout'])->name('settlements.payout');
 
     Route::post('/branches', [$c, 'createBranch'])->name('branch.create');
     Route::post('/branches/{id}/fund', [$c, 'fundBranch'])->where('id', '[0-9]+')->name('branch.fund');

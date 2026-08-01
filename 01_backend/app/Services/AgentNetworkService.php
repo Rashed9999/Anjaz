@@ -148,6 +148,71 @@ class AgentNetworkService
     // 3. طلب topup (شراء رصيد)
     // ============================================================
 
+
+    /**
+     * طلب صرف: الوكيل يُعيد رصيداً إلكترونياً ويستلم مالاً حقيقياً.
+     *
+     * **الاتّجاه المعاكس للشحن، وكان غائباً بالكامل.**
+     *
+     * وكيلٌ يخدم سحوبات العملاء طول اليوم يدفع نقداً ورقيّاً ويستقبل رصيداً
+     * إلكترونيّاً. فيمتلئ رصيدُه ويفرغ درجُه — وهما القيدان المتعاكسان
+     * نفسُهما. وبلا هذا الطلب يقف عاجزاً: عنده رصيدٌ لا يستطيع صرفه، ولا
+     * نقدٌ يخدم به. فيتوقّف عن السحب، ثمّ يتوقّف عن العمل معنا.
+     *
+     * **والرصيد يُحجز عند الطلب لا عند الاعتماد.** ولو تُرك طليقاً لأنفقه
+     * الوكيل في إيداعاتٍ بين الطلب والاعتماد، فتُعتمد تسويةٌ لا غطاء لها
+     * وتصير المحفظة سالبة.
+     */
+    public function requestPayout(
+        User $agent,
+        string $amount,
+        ?string $paymentMethod = 'cash',
+        ?string $note = null,
+    ): AgentSettlement {
+        $normalized = MoneyService::normalize($amount);
+
+        if (bccomp($normalized, '0', 4) <= 0) {
+            throw new RuntimeException('المبلغ يجب أن يكون موجباً');
+        }
+
+        $balance = (string) (\App\Models\EMoney::where('user_id', $agent->id)
+            ->value('current_balance') ?? '0');
+
+        if (bccomp($balance, $normalized, 4) < 0) {
+            throw new RuntimeException(
+                "رصيدك الإلكترونيّ {$balance} ولا يكفي لطلب صرف {$normalized}",
+            );
+        }
+
+        return DB::transaction(function () use ($agent, $normalized, $paymentMethod, $note, $balance) {
+            // الحجز أوّلاً — قبل إنشاء الصفّ. ولو أُنشئ الصفّ ثمّ فشل الحجز
+            // لبقي طلبٌ معلَّقٌ بلا غطاء ينتظر اعتماداً يُنشئ مالاً من العدم.
+            $this->guard->hold($agent->id, $normalized, 'agent_payout_hold');
+
+            $settlement = AgentSettlement::create([
+                'settlement_ulid' => (string) Str::ulid(),
+                'agent_user_id' => $agent->id,
+                'settled_with_id' => 0,   // 0 = الإدارة
+                'settlement_type' => 'payout',
+                'amount' => $normalized,
+                'status' => 'pending',
+                'payment_method' => $paymentMethod,
+                'note' => $note,
+            ]);
+
+            $this->audit->record([
+                'actor_type' => 'agent',
+                'actor_user_id' => $agent->id,
+                'action' => 'agent.payout.request',
+                'subject_type' => 'agent_settlement',
+                'subject_id' => $settlement->id,
+                'metadata' => ['amount' => $normalized, 'balance_before' => (string) $balance],
+            ]);
+
+            return $settlement;
+        });
+    }
+
     /**
      * الوكيل يطلب شراء رصيد رقمي (يدفع كاش للموزّع/الإدارة).
      */
@@ -251,6 +316,38 @@ class AgentNetworkService
 
                 $settlement->ledger_entry_ulid = $journal->entry_ulid;
                 $this->recordFloatMovement($settlement->agent_user_id, 'topup', $amount);
+            } elseif ($settlement->settlement_type === 'payout') {
+                // الرصيد محجوزٌ منذ الطلب — هنا يُصرَف فعلاً.
+                $this->guard->captureHold($settlement->agent_user_id, $amount,
+                    "agent_payout:{$settlement->settlement_ulid}");
+
+                // قيدٌ معاكسٌ لقيد الشحن: محفظة الوكيل → احتياطي النقد.
+                $reserve = $this->ledger->getOrCreateSystemAccount(
+                    'CASH_RESERVE', 'asset', 'احتياطي النقد', 'debit'
+                );
+                $agentWallet = $this->ledger->getOrCreateUserWallet($settlement->agent_user_id);
+
+                $this->ledger->post(
+                    sourceType: 'agent_payout',
+                    sourceId: $settlement->settlement_ulid,
+                    description: 'صرف رصيد الوكيل نقداً',
+                    lines: [
+                        ['account' => $agentWallet->account_code, 'direction' => 'debit', 'amount' => $amount],
+                        ['account' => $reserve->account_code, 'direction' => 'credit', 'amount' => $amount],
+                    ],
+                    idempotencyKey: "agent_payout_{$settlement->settlement_ulid}",
+                    createdByUserId: $approver->id,
+                );
+            } else {
+                // **لا نوعَ يمرّ بلا معالجة.**
+                //
+                // كان `payout` يصل إلى هنا فيُعلَّم «مكتملاً» بلا تحريك ريالٍ
+                // واحد: الوكيل يرى تسويةً معتمدة ولا يستلم شيئاً، والمنصّة
+                // تظنّ أنّها دفعت. وصمتٌ كهذا أسوأ من خطأ — لأنّه يُغلق
+                // الملفّ على مالٍ لم ينتقل.
+                throw new RuntimeException(
+                    "نوع تسويةٍ غير معالَج: {$settlement->settlement_type}",
+                );
             }
 
             $settlement->status = 'completed';
@@ -306,6 +403,17 @@ class AgentNetworkService
 
             if ($settlement->status !== 'pending') {
                 throw new RuntimeException('التسوية ليست قيد الانتظار');
+            }
+
+            // **الرفض يفكّ الحجز.** طلبُ صرفٍ يحجز رصيد الوكيل عند إنشائه.
+            // ولو رُفض بلا فكّ لبقي المبلغ مجمَّداً في محفظته إلى الأبد: لا
+            // هو صُرف، ولا هو عاد إليه — ويكتشفه بعد أسبوعٍ حين يعجز عن
+            // إيداعٍ ورصيدُه يقول إنّه يستطيع.
+            if ($settlement->settlement_type === 'payout') {
+                $this->guard->releaseHoldUpTo(
+                    $settlement->agent_user_id, (string) $settlement->amount,
+                    "agent_payout_rejected:{$settlement->settlement_ulid}",
+                );
             }
 
             $settlement->status = 'rejected';

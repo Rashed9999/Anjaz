@@ -103,10 +103,17 @@ class AgentSupervisionService
                 'overloaded' => $overloaded,
                 'not_counted_today' => $stale,
             ],
-            // رصيد محفظة المنصّة — المصدر الذي يُشحن منه الوكلاء. ويُعرَض
-            // بجانب زرّ الشحن: من يشحن يجب أن يرى ممّ يشحن.
-            'platform_wallet' => (string) (EMoney::where('user_id',
-                \App\CentralLogics\Helpers::get_admin_id())->value('current_balance') ?? '0'),
+            // **مقابلُ الرصيد الإلكترونيّ المُصدَر — من الدفتر لا من محفظة.**
+            //
+            // شحنُ الوكيل ليس تحويلاً من محفظة الإدارة: هو إصدارُ رصيدٍ
+            // إلكترونيّ مقابل نقدٍ دخل خزينة المنصّة. فالقيد
+            // «احتياطي النقد مدين ← محفظة الوكيل دائن»، والرقم الذي يجب أن
+            // يراه من يشحن هو **الاحتياطي**.
+            //
+            // (وقد عرضتُ أوّلاً محفظة الإدارة — وكانت `NULL` في قاعدة
+            // البيانات، فتظهر صفراً وتُوحي بأنّ المنصّة مفلسة وهي ليست
+            // المصدر أصلاً.)
+            'cash_reserve' => $this->cashReserveBalance(),
 
             // شبابيك مفتوحة الآن — أدراجٌ في أيدي صرّافين لم تُسلَّم بعد.
             'open_shifts' => $openShifts,
@@ -338,6 +345,28 @@ class AgentSupervisionService
                 'note' => $m->note,
                 'created_at' => optional($m->created_at)->toDateTimeString(),
             ])->all();
+    }
+
+
+    /**
+     * رصيد حساب «احتياطي النقد» محسوباً من سطور الدفتر.
+     *
+     * من السطور لا من عمودٍ مخزَّن: عمودٌ يساوي نفسه لا يُثبت شيئاً.
+     */
+    private function cashReserveBalance(): string
+    {
+        $code = 'CASH_RESERVE';
+
+        $row = DB::table('ledger_entry_lines as l')
+            ->join('ledger_accounts as a', 'a.id', '=', 'l.account_id')
+            ->where('a.account_code', $code)
+            ->selectRaw("
+                COALESCE(SUM(CASE WHEN l.direction = 'debit'  THEN l.amount ELSE 0 END), 0) AS d,
+                COALESCE(SUM(CASE WHEN l.direction = 'credit' THEN l.amount ELSE 0 END), 0) AS c
+            ")->first();
+
+        // حسابُ أصلٍ رصيدُه الطبيعيّ مدين.
+        return bcsub((string) ($row->d ?? '0'), (string) ($row->c ?? '0'), 4);
     }
 
     /** معرّفات الحسابات التي هي فروع — كي لا تُعدّ وكلاءَ مستقلّين. */

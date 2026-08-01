@@ -168,6 +168,22 @@
         {{-- ============ التسويات ============ --}}
         <div class="tab-pane fade" id="ag-settle">
             <div class="card p-3">
+                {{-- **الاتّجاه المعاكس للشحن.** الوكيل الذي يخدم سحوبات
+                     العملاء يمتلئ رصيدُه ويفرغ درجُه. وبلا زرٍّ هنا يقف
+                     عاجزاً: رصيدٌ لا يُصرَف ونقدٌ لا يكفي. --}}
+                <div class="alert alert-light border d-flex flex-wrap align-items-center gap-3 mb-3">
+                    <div>
+                        <div class="fw-bold">💵 طلب صرف رصيد نقداً</div>
+                        <div class="small text-muted">
+                            تُعيد رصيداً إلكترونيّاً وتستلم مالاً حقيقياً من أميال.
+                            يُحجز المبلغ من رصيدك حتى تبتّ الإدارة.
+                        </div>
+                    </div>
+                    <button class="btn btn-warning ms-auto" id="ag-payout" data-testid="ag-payout">
+                        طلب صرف
+                    </button>
+                </div>
+
                 <div class="alert alert-secondary py-2 small">
                     <strong>العمولة المستحقّة غير الرصيد الإلكترونيّ:</strong>
                     ذاك سيولةُ تشغيلٍ تتحرّك مع كلّ عملية، وهذه أرباحٌ تُسحب.
@@ -581,6 +597,17 @@
 
     // ---------- التسويات ----------
     $el('ag-settle-load').onclick = loadSettlements;
+
+    $el('ag-payout').onclick = async () => {
+        const amount = prompt('مبلغ الصرف (رصيد إلكترونيّ تُعيده وتستلم مقابله نقداً):');
+        if (!amount) return;
+        const note = prompt('ملاحظة (اختياري):') || null;
+        try {
+            const j = await post('/settlements/payout', {amount, note});
+            alert(j.message || 'أُرسل الطلب');
+            loadSettlements(); loadOverview();
+        } catch (e) { alert(e.message); }
+    };
 
     async function loadSettlements() {
         const j = await get('/settlements');
