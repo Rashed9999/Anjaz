@@ -228,4 +228,80 @@ class AgentPortalContractTest extends TestCase
             }
         }
     }
+
+    /**
+     * @test
+     *
+     * إدارة الفروع والنقد تعمل بحساب الشركة **وبرمز موظّف الإدارة** معاً.
+     *
+     * **العطل الذي أدخل هذا الاختبار، وهو أسوأ ما وقع في هذه الميزة.**
+     *
+     * كان الكود يستعمل `$request->user()` في ستّة مواضع. وهي تقرأ الحارس
+     * الافتراضيّ (`user`)، وموظّف شركة الصرافة يدخل بحارس `agent_staff` —
+     * فترجع `null`. والنتيجة أنّ إنشاء الفرع وشحن رصيده وتوريد النقد وجرد
+     * الدرج **تسقط كلّها بـ500** لمن يدخل برمز موظّف، وتعمل كلّها لمن يدخل
+     * بهاتف الشركة.
+     *
+     * ولم يكشفه شيء لأنّ اختبار السلسلة الكامل دخل **بالهاتف**. أي أنّني
+     * جرّبتُ المسار السليم، والمستعمل يسلك المسار الآخر. والدرس أنّ ميزةً
+     * لها مدخلان تحتاج أن تُختبر من مدخليها لا من أحدهما.
+     */
+    public function branch_management_works_under_both_login_modes(): void
+    {
+        $b = $this->addBranch('DUO');
+
+        // (١) بحساب الشركة — الحارس `user`
+        $this->actingAs($this->company, 'user')
+            ->postJson(route('agent.branch.fund', ['id' => $b->id]),
+                ['amount' => '1', 'note' => 'اختبار المدخل الأوّل'])
+            ->assertStatus(422);   // رصيد الشركة صفر — رفضٌ منطقيّ لا انهيار
+
+        // (٢) برمز موظّف الإدارة العامّة — الحارس `agent_staff`
+        //
+        // المطلوب هنا **ألّا** تكون 500. أيّ ردٍّ من الخادم مقبول، والانهيار
+        // وحده مرفوض.
+        foreach ([
+            ['agent.branch.create', [], ['name' => 'فرع ثانٍ', 'code' => 'TWO',
+                'phone' => '967771700123', 'password' => 'branchpass1']],
+            ['agent.branch.fund', ['id' => $b->id], ['amount' => '1', 'note' => 'اختبار المدخل الثاني']],
+            ['agent.branch.cash', ['id' => $b->id], ['amount' => '1', 'direction' => 'in', 'note' => 'توريد اختباريّ']],
+            ['agent.branch.count', ['id' => $b->id], ['counted' => '50000', 'note' => 'جرد اختباريّ كامل']],
+        ] as [$name, $params, $body]) {
+            $status = $this->actingAs($this->hq, 'agent_staff')
+                ->postJson(route($name, $params), $body)->getStatusCode();
+
+            $this->assertLessThan(500, $status,
+                "«{$name}» تنهار لمن يدخل برمز موظّف (ردّت {$status}) — "
+                . 'وتعمل لمن يدخل بهاتف الشركة. المدخلان يجب أن يعملا.');
+        }
+    }
+
+    /**
+     * @test
+     *
+     * إنشاء الفرع نموذجٌ واحد لا ستّ نوافذ `prompt` متتالية.
+     *
+     * كان الحقل يُطلب في نافذةٍ منفصلة: اسم، رمز، هاتف، كلمة سرّ، مدينة،
+     * عنوان. ومن يخطئ في الثالثة يبدأ من الأولى، ولا يرى ما أدخله، ولا
+     * يعرف كم بقي. وعلى الهاتف كلّ نافذةٍ تُغطّي الشاشة.
+     */
+    public function creating_a_branch_uses_one_form_not_a_chain_of_prompts(): void
+    {
+        $blade = (string) preg_replace(
+            ['/\{\{--.*?--\}\}/s', '~^\s*//.*$~m'], ' ',
+            (string) file_get_contents(resource_path('views/agent-views/dashboard.blade.php')),
+        );
+
+        $this->assertStringContainsString('id="br-modal"', $blade,
+            'لا نموذج لإنشاء الفرع');
+
+        foreach (['br-name', 'br-code', 'br-phone', 'br-pass'] as $field) {
+            $this->assertStringContainsString('id="' . $field . '"', $blade, "الحقل {$field} غائب");
+        }
+
+        // لا يبقى `prompt` في مسار إنشاء الفرع.
+        $handler = substr($blade, strpos($blade, "\$el('ag-new-branch')"), 1800);
+        $this->assertStringNotContainsString('prompt(', $handler,
+            'ما زال إنشاء الفرع يسأل عبر prompt');
+    }
 }

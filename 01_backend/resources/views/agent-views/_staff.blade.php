@@ -171,10 +171,46 @@ document.addEventListener('DOMContentLoaded', function () {
         } catch (err) { alert(err.message); }
     });
 
-    $('st-add').addEventListener('click', () => {
+    // النافذة تجلب الفروع **عند كلّ فتح**، لا عند تحميل الصفحة.
+    //
+    // **العطل الذي أدخل هذا.** كانت `loadBranches()` تُستدعى مرّةً واحدة عند
+    // التحميل. فمن يفتح اللوحة وشركتُه بلا فروع، ثمّ يُنشئ فرعاً من تبويب
+    // «الفروع»، ثمّ يفتح نافذة التعيين — يرى «لا فروع لشركتك بعد» بينما
+    // البطاقة فوقه تقول «١ فرع». الشاشة نفسها تناقض نفسها.
+    //
+    // والسبب أنّ الصفحة فيها سكربتان مستقلّان لكلٍّ منهما نسختُه من قائمة
+    // الفروع، فيُحدَّث أحدهما ويبقى الآخر على ما حُمّل. وجلبُ القائمة عند
+    // الفتح يجعل التقادم مستحيلاً مهما فعل السكربت الآخر.
+    $('st-add').addEventListener('click', async () => {
         $('st-err').textContent = '';
+        applyBranchState(null);                  // «جارٍ التحميل» لا حكمٌ مبكّر
         new bootstrap.Modal($('st-modal')).show();
+        applyBranchState(await loadBranches());
     });
+
+    /**
+     * حالة حقل الفرع: null = يُجلب الآن، [] = لا فروع، وإلّا جاهز.
+     *
+     * والحالات الثلاث مفصولة عمداً: عرضُ «لا فروع» أثناء الجلب يجعل من
+     * ينشئ فرعه للتوّ يظنّ أنّه لم يُحفظ.
+     */
+    function applyBranchState(list) {
+        const wrap = $('st-branch-wrap');
+        const empty = $('st-no-branch');
+        const save = $('st-save');
+
+        if (list === null) {
+            if (wrap) wrap.style.display = 'none';
+            if (empty) empty.style.display = 'none';
+            if (save) save.disabled = true;
+            return;
+        }
+
+        const has = list.length > 0;
+        if (wrap) wrap.style.display = has ? '' : 'none';
+        if (empty) empty.style.display = has ? 'none' : '';
+        if (save) save.disabled = !has;
+    }
 
     $('st-save').addEventListener('click', async () => {
         $('st-err').textContent = '';
@@ -245,22 +281,10 @@ document.addEventListener('DOMContentLoaded', function () {
     //
     // فصارت القائمة تُعرَض دائماً، وحالةُ «لا فروع» تُقال صراحةً مع ما يجب
     // فعله — لأنّ الترتيب الصحيح: الفرع أوّلاً ثمّ موظّفوه.
-    loadBranches().then((list) => {
-        const wrap = $('st-branch-wrap');
-        const empty = $('st-no-branch');
+    // عند التحميل تُجلب القائمة لتبويب الورديّات فقط — وحالةُ النافذة
+    // تُحسب عند فتحها لا هنا.
+    loadBranches().then(() => loadShifts());
 
-        if (!list.length) {
-            if (wrap) wrap.style.display = 'none';
-            if (empty) empty.style.display = '';
-            if ($('st-save')) $('st-save').disabled = true;
-        } else {
-            if (wrap) wrap.style.display = '';
-            if (empty) empty.style.display = 'none';
-            if ($('st-save')) $('st-save').disabled = false;
-        }
-
-        loadShifts();
-    });
     loadStaff();
 });
 </script>

@@ -90,6 +90,41 @@
                     <button class="btn btn-sm btn-primary ms-auto" id="ag-new-branch" data-testid="ag-new-branch">+ فرع جديد</button>
                 </div>
                 <div id="ag-branch-list"></div>
+
+                {{-- كان إنشاء الفرع **ستّ نوافذ `prompt` متتالية**: اسم، رمز،
+                     هاتف، كلمة سرّ، مدينة، عنوان. من يخطئ في الثالثة يبدأ من
+                     الأولى، ولا يرى ما أدخله، ولا يعرف كم بقي. وعلى الهاتف
+                     كلّ نافذةٍ تُغطّي الشاشة. --}}
+                <div class="modal fade" id="br-modal" tabindex="-1">
+                    <div class="modal-dialog"><div class="modal-content">
+                        <div class="modal-header"><h5 class="modal-title">فرع جديد</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                        <div class="modal-body">
+                            <div class="mb-2"><label class="form-label">اسم الفرع</label>
+                                <input class="form-control" id="br-name" placeholder="فرع المكلا"></div>
+                            <div class="mb-2"><label class="form-label">رمز الفرع</label>
+                                <input class="form-control" id="br-code" dir="ltr" placeholder="MKL">
+                                <div class="form-text">حروفٌ لاتينيّة قصيرة — منه تُبنى رموز موظّفي الفرع (MKL-001).</div></div>
+                            <div class="mb-2"><label class="form-label">المدينة (اختياري)</label>
+                                <input class="form-control" id="br-city"></div>
+                            <div class="mb-2"><label class="form-label">العنوان (اختياري)</label>
+                                <input class="form-control" id="br-address"></div>
+                            <hr>
+                            <div class="mb-2"><label class="form-label">هاتف الفرع</label>
+                                <input class="form-control" id="br-phone" dir="ltr" placeholder="9677xxxxxxxx"></div>
+                            <div class="mb-2"><label class="form-label">كلمة سرّ الفرع (٨ أحرف فأكثر)</label>
+                                <input class="form-control" id="br-pass" dir="ltr"></div>
+                            <div class="alert alert-info small py-2 mb-0">
+                                هذا حسابُ دخولٍ للفرع نفسه. وموظّفوه يُعيَّنون بعد ذلك من تبويب «الموظّفون»،
+                                ولكلٍّ منهم رمزُه وكلمةُ سرّه.
+                            </div>
+                            <div class="text-danger small mt-2" id="br-err"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-primary" id="br-save" data-testid="br-save">إنشاء الفرع</button>
+                        </div>
+                    </div></div>
+                </div>
             </div>
         </div>
 
@@ -377,23 +412,44 @@
     }
 
     // ---------- الفروع ----------
-    $el('ag-new-branch').onclick = async () => {
-        const name = prompt('اسم الفرع:');
-        if (!name) return;
-        const code = prompt('رمز الفرع (مثل ADEN-01):');
-        if (!code) return;
-        const phone = prompt('هاتف الفرع (يُستعمل للدخول):');
-        if (!phone) return;
-        const password = prompt('كلمة مرور الفرع (٨ أحرف على الأقل):');
-        if (!password || password.length < 8) { alert('كلمة المرور قصيرة'); return; }
+    $el('ag-new-branch').onclick = () => {
+        $el('br-err').textContent = '';
+        new bootstrap.Modal($el('br-modal')).show();
+    };
 
-        const j = await post('/branches', {
-            name, code, phone, password,
-            city: prompt('المدينة (اختياري):') || null,
-            address: prompt('العنوان (اختياري):') || null,
-        });
-        alert(j.message || (j.success ? 'تم' : 'فشل'));
-        if (j.success) loadOverview();
+    $el('br-save').onclick = async () => {
+        const err = $el('br-err');
+        err.textContent = '';
+
+        const name = $el('br-name').value.trim();
+        const code = $el('br-code').value.trim();
+        const phone = $el('br-phone').value.trim();
+        const password = $el('br-pass').value;
+
+        // يُفحص كلّ شيءٍ **قبل** الإرسال والحقول كلّها أمام عين المستعمل —
+        // بخلاف سلسلة `prompt` التي كانت تُسقط كلّ ما أُدخل عند أوّل خطأ.
+        if (name.length < 2) { err.textContent = 'اسم الفرع إلزاميّ'; return; }
+        if (!code) { err.textContent = 'رمز الفرع إلزاميّ'; return; }
+        if (phone.replace(/\D+/g, '').length < 9) { err.textContent = 'هاتف الفرع ناقص'; return; }
+        if (password.length < 8) { err.textContent = 'كلمة السرّ ثمانية أحرف فأكثر'; return; }
+
+        $el('br-save').disabled = true;
+        try {
+            const j = await post('/branches', {
+                name, code, phone, password,
+                city: $el('br-city').value.trim() || null,
+                address: $el('br-address').value.trim() || null,
+            });
+            bootstrap.Modal.getInstance($el('br-modal')).hide();
+            alert(j.message || 'أُنشئ الفرع');
+            ['br-name','br-code','br-phone','br-pass','br-city','br-address']
+                .forEach(id => { $el(id).value = ''; });
+            await loadOverview();
+        } catch (e) {
+            err.textContent = e.message || 'تعذّر إنشاء الفرع';
+        } finally {
+            $el('br-save').disabled = false;
+        }
     };
 
     // ---------- حركة النقد ----------

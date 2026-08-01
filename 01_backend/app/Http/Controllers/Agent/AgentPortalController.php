@@ -161,6 +161,28 @@ class AgentPortalController extends Controller
         ]);
     }
 
+
+    /**
+     * حساب الشركة الذي تُنسَب إليه عمليات البوّابة.
+     *
+     * **العطل الذي أدخل هذه الدالّة.** كان الكود يستعمل `$request->user()`
+     * في ستّة مواضع. وهي تقرأ الحارس الافتراضيّ (`user`) — وموظّف شركة
+     * الصرافة يدخل بحارس `agent_staff`. فترجع `null`.
+     *
+     * والنتيجة أنّ **كلّ إدارة الفروع والنقد كانت ميّتةً لمن يدخل برمز
+     * موظّف**: إنشاء فرع، شحن رصيده، توريد نقد، جرد الدرج — أربعتها تسقط
+     * بـ500. وتعمل كلّها لمن يدخل بهاتف الشركة.
+     *
+     * ولم يكشفه شيء لأنّ اختبار السلسلة دخل بالهاتف: المسار الذي جرّبتُه
+     * كان المسار السليم، والمسار الذي يسلكه المستعمل الحقيقيّ هو الآخر.
+     *
+     * والجذر يأتي من الوسيط لا من الحارس — فيصحّ في الحالتين.
+     */
+    private function companyUser(Request $request): ?User
+    {
+        return User::find((int) $request->attributes->get('agent_root_id'));
+    }
+
     // ── البيانات ────────────────────────────────────────────────────────
 
     public function overview(Request $request): JsonResponse
@@ -339,9 +361,9 @@ class AgentPortalController extends Controller
         try {
             $out = $op === 'deposit'
                 ? $this->counter->deposit($branch, $customer, (string) $request->input('amount'),
-                    $request->user(), $request->input('note'))
+                    $this->companyUser($request), $request->input('note'))
                 : $this->counter->withdraw($branch, $customer, (string) $request->input('amount'),
-                    $request->user(), $request->input('note'));
+                    $this->companyUser($request), $request->input('note'));
         } catch (DomainException $e) {
             return $this->error($e->getMessage(), 422);
         }
@@ -411,7 +433,7 @@ class AgentPortalController extends Controller
         ]);
 
         try {
-            $branch = $this->branches->create($request->user(), $request->all());
+            $branch = $this->branches->create($this->companyUser($request), $request->all());
         } catch (DomainException $e) {
             return $this->error($e->getMessage(), 422);
         }
@@ -431,7 +453,7 @@ class AgentPortalController extends Controller
 
         try {
             $out = $this->branches->fundBranch(
-                $branch, $request->user(),
+                $branch, $this->companyUser($request),
                 (string) $request->input('amount'), (string) $request->input('note'),
             );
         } catch (DomainException $e) {
@@ -453,7 +475,7 @@ class AgentPortalController extends Controller
 
         try {
             $out = $this->branches->moveTreasuryCash(
-                $branch, $request->user(), $request->input('direction'),
+                $branch, $this->companyUser($request), $request->input('direction'),
                 (string) $request->input('amount'), (string) $request->input('note'),
             );
         } catch (DomainException $e) {
@@ -474,7 +496,7 @@ class AgentPortalController extends Controller
 
         try {
             $out = $this->till->count(
-                $branch, $request->user(),
+                $branch, $this->companyUser($request),
                 (string) $request->input('counted_amount'), (string) $request->input('note'),
             );
         } catch (DomainException $e) {
