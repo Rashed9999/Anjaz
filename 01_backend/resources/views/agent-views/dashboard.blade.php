@@ -313,9 +313,6 @@
         if (!j.success) return;
         const m = j.meta;
 
-        $el('ag-name').textContent =
-            m.agent.name + (m.agent.is_branch_account ? ' (فرع)' : '');
-
         branches = m.branches;
 
         // ── مؤشّرات الشركة ──────────────────────────────────────────
@@ -363,7 +360,6 @@
 
         const opts = branches.map(b =>
             `<option value="${b.id}">${esc(b.name)} (${esc(b.code)})</option>`).join('');
-        $el('ag-branch').innerHTML = opts;
         $el('ag-till-branch').innerHTML = opts;
         $el('ag-earn-branch').innerHTML = opts;
         $el('ag-rep-branch').innerHTML = opts;
@@ -387,76 +383,16 @@
     }
 
     // ---------- الشبّاك ----------
-    $el('ag-find').onclick = findCustomer;
-    $el('ag-phone').addEventListener('keydown', e => { if (e.key === 'Enter') findCustomer(); });
-
-    async function findCustomer() {
-        const phone = $el('ag-phone').value.trim();
-        const box = $el('ag-customer');
-        box.innerHTML = '<div class="text-muted small">جارٍ البحث…</div>';
-
-        const j = await get('/customer?phone=' + encodeURIComponent(phone));
-        if (!j.success) {
-            box.innerHTML = `<div class="alert alert-warning py-2 mb-0">${esc(j.message)}</div>`;
-            $el('ag-op').style.display = 'none';
-            return;
-        }
-
-        customer = j.meta.customer;
-        box.innerHTML = `
-            <div class="alert alert-${customer.can_transact ? 'success' : 'danger'} py-2 mb-0">
-                <strong>${esc(customer.name)}</strong> — ${esc(customer.phone)}
-                <span class="badge bg-${customer.severity}">${esc(customer.status_label)}</span>
-                ${customer.can_transact ? '' : '<div class="small mt-1">لا تُنفَّذ عمليات على هذا العميل</div>'}
-            </div>`;
-
-        $el('ag-op').style.display = customer.can_transact ? '' : 'none';
-        if (customer.can_transact) showCapacity();
-    }
-
-    // ما يستطيعه الفرع **الآن** يُقال قبل إدخال المبلغ لا بعد الرفض.
-    function showCapacity() {
-        const b = branches.find(x => x.id == $el('ag-branch').value);
-        if (!b) return;
-        $el('ag-capacity').innerHTML = `
-            هذا الفرع يستطيع الآن: <strong class="cash">${num(b.cash_on_hand)}</strong> سحباً نقدياً،
-            و<strong class="emoney">${num(b.emoney_balance)}</strong> إيداعاً.
-            ${b.cash_is_low ? '<div class="text-danger mt-1">⚠️ نقد الدرج منخفض — قد لا تكفي السحوبات الكبيرة.</div>' : ''}`;
-    }
-
-    $el('ag-branch').onchange = showCapacity;
-
-    $el('ag-deposit').onclick = () => doOp('deposit');
-    $el('ag-withdraw').onclick = () => doOp('withdraw');
-
-    async function doOp(op) {
-        const branchId = $el('ag-branch').value;
-        const amount = $el('ag-amount').value;
-        if (!branchId || !amount || Number(amount) <= 0) { alert('اختر الفرع وأدخل مبلغاً'); return; }
-
-        const label = op === 'deposit'
-            ? `استلمتَ ${num(amount)} نقداً من ${customer.name}؟`
-            : `ستسلّم ${num(amount)} نقداً إلى ${customer.name}؟`;
-        if (!confirm(label)) return;
-
-        const j = await post(`/branches/${branchId}/${op}`, {
-            customer_phone: customer.phone,
-            amount: amount,
-            note: $el('ag-note').value || null,
-        });
-
-        $el('ag-result').innerHTML = `
-            <div class="alert alert-${j.success ? 'success' : 'danger'} mb-0">
-                ${esc(j.message)}
-            </div>`;
-
-        if (j.success) {
-            $el('ag-amount').value = '';
-            $el('ag-note').value = '';
-            await loadOverview();
-            showCapacity();
-        }
-    }
+    //
+    // **حُذف من هنا.** كان في هذا الموضع شبّاكٌ كاملٌ مبنيٌّ على قائمة
+    // «اختر الفرع» (`ag-branch`) ينادي `POST /branches/{id}/deposit`.
+    // وقد استُبدل بشبّاك الصرّاف في `_counter.blade.php`: الفرع يأتي من
+    // الورديّة لا من قائمةٍ منسدلة، والمسار `POST /counter/deposit`.
+    //
+    // فبقيت الشيفرة تشير إلى اثني عشر عنصراً لا وجود لها وإلى مسارٍ
+    // أُزيل — لا تُلقي خطأً لأنّ `NOOP_EL` يبتلعه، فلا يظهر العطل ولا
+    // يُحذف الميت. وهو الصنف الذي يجعل قارئ الشيفرة يظنّ أنّ للوحة
+    // شبّاكاً وهي بلا شبّاك.
 
     // ---------- الفروع ----------
     $el('ag-new-branch').onclick = () => {

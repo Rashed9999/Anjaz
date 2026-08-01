@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Agent\AgentBranch;
 use App\Models\Agent\AgentCashMovement;
+use App\Models\Agent\AgentCashTill;
 use App\Models\Agent\AgentShift;
 use App\Models\Agent\AgentStaff;
 use App\Models\EMoney;
@@ -521,6 +522,46 @@ class AgentStaffPortalTest extends TestCase
 
         $this->postJson(route('agent.counter.withdrawal.execute'),
             ['op_code' => $req->op_code])->assertStatus(422);
+    }
+
+    /**
+     * @test
+     *
+     * **الرفض يقول أين الحلّ، ويفرّق بين حالتين لا تُعالَجان بنفس الفعل.**
+     *
+     * كانت الرسالة واحدةً دائماً: «اطلب توريداً من خزنة الفرع». فإن كانت
+     * الخزنة فارغةً أيضاً، ضغط الصرّاف «توريد» فصُدَّ برسالةٍ ثانية —
+     * رحلتان ليعرف أنّ الفرع كلَّه بلا نقد، وأمامه عميلٌ ينتظر. ومن لا
+     * يعرف أين المشكلة يظنّ النظام معطّلاً.
+     */
+    public function the_refusal_names_who_can_solve_it(): void
+    {
+        $customer = $this->makeCustomer('967772900044', '400000');
+
+        // ① الخزنة تكفي ⇒ الحلّ في يد الصرّاف نفسه، الآن.
+        app(AgentShiftService::class)->open($this->tellerMukalla, '1000');
+        AgentCashTill::updateOrCreate(
+            ['branch_id' => $this->mukalla->id], ['cash_on_hand' => '500000']);
+
+        $req = app(CustomerWithdrawService::class)->request($customer, '100000');
+        $why = $this->actingAs($this->tellerMukalla, 'agent_staff')
+            ->getJson(route('agent.counter.withdrawal.lookup',
+                ['op_code' => $req->op_code]))->assertOk()->json('why_not');
+
+        $this->assertStringContainsString('خزنة الفرع 500000', $why);
+        $this->assertStringContainsString('توريد', $why);
+        $this->assertStringNotContainsString('إدارة شركتك', $why);
+
+        // ② لا الدرج ولا الخزنة ⇒ الفرع بلا نقد، ولا يحلّها الصرّاف.
+        AgentCashTill::where('branch_id', $this->mukalla->id)
+            ->update(['cash_on_hand' => '0']);
+
+        $why2 = $this->actingAs($this->tellerMukalla, 'agent_staff')
+            ->getJson(route('agent.counter.withdrawal.lookup',
+                ['op_code' => $req->op_code]))->assertOk()->json('why_not');
+
+        $this->assertStringContainsString('إدارة شركتك', $why2);
+        $this->assertStringContainsString('حركة النقد', $why2);
     }
 
     // ── التسويات: الاتّجاهان ────────────────────────────────────────────

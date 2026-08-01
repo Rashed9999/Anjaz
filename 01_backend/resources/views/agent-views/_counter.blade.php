@@ -272,7 +272,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!amount || Number(amount) <= 0) { alert('أدخل مبلغاً'); return; }
 
         busy = true;
-        $('ct-deposit').disabled = $('ct-withdraw').disabled = true;
+        // كان هنا `$('ct-withdraw').disabled` — وزرُّ السحب هذا أُزيل حين
+        // صار السحب برمز العميل. فصار السطر يقرأ `null.disabled` **خارج
+        // `try`**، فيُلقي قبل أيّ طلبٍ ويموت المعالج بصمت: الزرّ يُضغط ولا
+        // يحدث شيء، ولا رسالة، ولا سطر في أيّ سجلّ.
+        $('ct-deposit').disabled = true;
         try {
             const j = await post('/counter/' + op, {
                 customer_id: customerId, amount, note: $('ct-note').value || null,
@@ -291,7 +295,7 @@ document.addEventListener('DOMContentLoaded', function () {
             $('ct-result').innerHTML = `<div class="alert alert-danger mb-0">${esc(e.message)}</div>`;
         } finally {
             busy = false;
-            $('ct-deposit').disabled = $('ct-withdraw').disabled = false;
+            $('ct-deposit').disabled = false;
         }
     }
 

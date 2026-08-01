@@ -78,7 +78,8 @@ ${scripts.map(j => `<script>${j}</script>`).join('\n')}
 </body></html>`;
 }
 
-const PAGE_URL = 'http://amial.test/admin/amial/hub/agents';
+const HUB_URL = 'http://amial.test/admin/amial/hub/agents';
+const COUNTER_URL = 'http://amial.test/agent/counter';
 
 const HUB_HTML = bladeToHtml('resources/views/admin-views/amial/hub/users.blade.php', {
     '$hubSlug': 'agents',
@@ -103,21 +104,95 @@ const FAKE_ROWS = [
     },
 ];
 
+// ── شبّاك الصرّاف ────────────────────────────────────────────────────
+//
+// يُبنى من `_counter.blade.php` وحدَه: جافاسكربته مكتفٍ بذاته وكلّ عناصره
+// في ملفّه، فلا حاجة إلى بقيّة اللوحة.
+const COUNTER_HTML = bladeToHtml('resources/views/agent-views/_counter.blade.php', {
+    "url('agent')": 'http://amial.test/agent',
+});
+
+const SHIFT_OPEN = {
+    shift: {
+        status: 'open', cash_on_hand: '50000',
+        deposits_total: '0', deposits_count: 0,
+        withdrawals_total: '0', withdrawals_count: 0,
+    },
+    staff: { role: 'teller' },
+    can_operate: true,
+    why_not: null,
+};
+
+// كلّ نداءٍ يُسجَّل، لأنّ سؤال هذا الفحص ليس «هل ظهر خطأ» بل **هل وصل
+// الطلب أصلاً**. وزرُّ الإيداع الميّت كان يسقط قبل أيّ نداء.
 const STUBS = `
-window.__nav = null;
+window.__calls = [];
 window.alert = () => {};
-window.prompt = () => 'سبب';
+window.prompt = () => 'سبب مكتوب';
 window.confirm = () => true;
 const _json = (o) => new Response(JSON.stringify(o), {status: 200, headers: {'Content-Type': 'application/json'}});
-window.fetch = async (url) => {
+window.fetch = async (url, opts) => {
     const u = String(url);
+    window.__calls.push({url: u, method: (opts && opts.method) || 'GET'});
+
     if (u.includes('users.json')) return _json({data: ${JSON.stringify(FAKE_ROWS)}, current_page: 1, last_page: 1, total: 2});
     if (u.includes('kyc.json'))   return _json({data: []});
-    return _json({message: 'تمّ'});
+
+    if (u.includes('/counter/state')) return _json(${JSON.stringify(SHIFT_OPEN)});
+    if (u.includes('/counter/customer')) return _json({
+        success: true,
+        meta: {customer: {id: 42, name: 'راشد محمد عوض معرابي', phone: '783545525',
+                          can_transact: true, status_label: 'نشط', severity: 'success'}},
+    });
+    if (u.includes('/counter/deposit')) return _json({
+        success: true, message: 'أُودع 2,000 ر.ي',
+        result: {reference: 'DEP-TEST', fee: '0', commission: '0'},
+        shift: ${JSON.stringify(SHIFT_OPEN.shift)},
+    });
+
+    return _json({success: true, message: 'تمّ'});
 };
 `;
 
 const CASES = [
+    // ── شبّاك الصرّاف ────────────────────────────────────────────────
+    {
+        // العطل الذي أدخل هذه الحالة: سطرٌ يقرأ `$('ct-withdraw').disabled`
+        // على زرٍّ أُزيل، **خارج `try`**، فيموت المعالج قبل أيّ طلب. الزرّ
+        // يُضغط ولا يحدث شيء ولا رسالة.
+        page: 'counter',
+        name: 'زر «إيداع» يرسل الطلب فعلاً ويعرض النتيجة',
+        steps: [
+            ['fill', '#ct-phone', '783545525'],
+            ['click', '#ct-find'],
+            ['fill', '#ct-amount', '2000'],
+            ['click', '#ct-deposit'],
+        ],
+        expectNav: null,
+        dom: [
+            ['وصل نداءُ الإيداع إلى الخادم',
+                `window.__calls.some(c => c.method === 'POST' && c.url.includes('/counter/deposit'))`],
+            ['وظهرت نتيجةُ نجاحٍ للصرّاف',
+                `/alert-success/.test(document.getElementById('ct-result').innerHTML)`],
+            ['وأُفرغ حقل المبلغ استعداداً للعملية التالية',
+                `document.getElementById('ct-amount').value === ''`],
+        ],
+    },
+    {
+        page: 'counter',
+        name: 'زر «بحث» يجد العميل ويفتح لوحة العملية',
+        steps: [
+            ['fill', '#ct-phone', '783545525'],
+            ['click', '#ct-find'],
+        ],
+        expectNav: null,
+        dom: [
+            ['اسم العميل ظهر', `/راشد/.test(document.getElementById('ct-customer').textContent)`],
+            ['ولوحة العملية فُتحت', `document.getElementById('ct-op').style.display !== 'none'`],
+        ],
+    },
+
+    // ── مركز الوكلاء ────────────────────────────────────────────────
     {
         name: 'زر «تحويل رصيد» يفتح نافذة التحويل ولا ينقل إلى ملفّ الوكيل',
         click: 'button[data-act="transfer"]',
@@ -157,18 +232,24 @@ const CASES = [
     },
 ];
 
+const PAGES = {
+    hub: { url: HUB_URL, html: HUB_HTML, ready: 'tr[data-act="open"]' },
+    counter: { url: COUNTER_URL, html: COUNTER_HTML, ready: '#ct-modes' },
+};
+
 const browser = await chromium.launch({ args: ['--no-sandbox'] });
 let pass = 0, fail = 0;
 
 for (const c of CASES) {
+    const target = PAGES[c.page || 'hub'];
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
     let navigated = null;
 
     await page.route('**/*', async (route) => {
         const u = route.request().url();
-        if (u === PAGE_URL) {
-            return route.fulfill({ contentType: 'text/html; charset=utf-8', body: HUB_HTML });
+        if (u === target.url) {
+            return route.fulfill({ contentType: 'text/html; charset=utf-8', body: target.html });
         }
         if (route.request().resourceType() === 'document') navigated = u;   // انتقالٌ وقع
         return route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<html><body>x</body></html>' });
@@ -180,8 +261,15 @@ for (const c of CASES) {
     page.on('pageerror', (err) => jsErrors.push(err.message));
 
     try {
-        await page.goto(PAGE_URL, { waitUntil: 'domcontentloaded' });
-        await page.waitForSelector('tr[data-act="open"]', { timeout: 5000 });
+        await page.goto(target.url, { waitUntil: 'domcontentloaded' });
+        await page.waitForSelector(target.ready, { timeout: 5000 });
+
+        for (const [action, sel, val] of (c.steps || [])) {
+            if (action === 'fill') await page.fill(sel, val);
+            else await page.click(sel);
+            await page.waitForTimeout(250);
+        }
+
         if (c.click) {
             await page.click(c.click);
             await page.waitForTimeout(700);   // مهلة الانتقال وحركة النافذة

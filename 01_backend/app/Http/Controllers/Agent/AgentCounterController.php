@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Agent;
 
 use App\Http\Controllers\Controller;
 use App\Models\Agent\AgentBranch;
+use App\Models\Agent\AgentCashTill;
 use App\Models\Agent\AgentShift;
 use App\Models\Agent\AgentStaff;
 use App\Models\User;
@@ -260,9 +261,7 @@ class AgentCounterController extends Controller
             ],
             // يُقال للصرّاف قبل أن يعدّ الأوراق لا بعد.
             'can_pay' => $canPay,
-            'why_not' => $canPay ? null : ($shift
-                ? 'النقد في درجك ' . $shift->cash_on_hand . ' ولا يكفي — اطلب توريداً من خزنة الفرع'
-                : 'افتح ورديّتك أوّلاً'),
+            'why_not' => $canPay ? null : $this->whyCannotPay($shift, (string) $req->amount),
         ]);
     }
 
@@ -424,5 +423,37 @@ class AgentCounterController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * لماذا لا يستطيع الصرّاف الدفع — بالرقمين معاً وباسم من يحلّها.
+     *
+     * **كان يقول «اطلب توريداً من خزنة الفرع» والخزنة نفسها فارغة.** فيضغط
+     * الصرّاف «توريد»، فيُصدّ برسالةٍ ثانية، وأمامه عميلٌ ينتظر. رحلتان
+     * ليعرف أنّ الفرع كلَّه بلا نقد — وهو ما كان يمكن قولُه في الأولى.
+     *
+     * والفرقُ ليس لطفاً في الصياغة: من لا يعرف أين المشكلة يظنّ النظام
+     * معطّلاً. ومن يعرف أنّ الفرع بلا نقدٍ يتّصل بإدارة شركته.
+     */
+    private function whyCannotPay(?AgentShift $shift, string $amount): string
+    {
+        if (!$shift) {
+            return 'افتح ورديّتك أوّلاً';
+        }
+
+        $drawer = (string) $shift->cash_on_hand;
+        $safe = (string) (AgentCashTill::where('branch_id', $shift->branch_id)
+            ->value('cash_on_hand') ?? '0');
+
+        $msg = "النقد في درجك {$drawer} ولا يكفي لدفع {$amount}.";
+
+        // الخزنة تكفي ⇒ الحلّ في يد الصرّاف نفسه، هنا، الآن.
+        if (bccomp($safe, $amount, 4) >= 0) {
+            return $msg . " وفي خزنة الفرع {$safe} — اضغط «توريد من/إلى الخزنة» واستلم ما يكفي.";
+        }
+
+        // لا الدرج ولا الخزنة ⇒ الفرع كلّه بلا نقد، ولا يحلّها الصرّاف.
+        return $msg . " وخزنة الفرع فيها {$safe} أيضاً — الفرع بلا نقدٍ كافٍ."
+            . ' اطلب من إدارة شركتك توريد نقدٍ إلى الفرع (بوّابة الشركة ← حركة النقد ← «توريد نقد إلى الفرع»).';
     }
 }

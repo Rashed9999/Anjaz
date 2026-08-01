@@ -354,8 +354,12 @@ class AgentShiftService
         $after = $direction === 'in' ? bcadd($before, $amount, 4) : bcsub($before, $amount, 4);
 
         if ($direction === 'out' && bccomp($after, '0', 4) < 0) {
+            // ورفضٌ بلا وجهةٍ يُوقف الفرع. فالخزنة لا يملؤها الصرّاف — يملؤها
+            // من يورّد النقد الورقيّ إليها، وهو إدارة الشركة.
             throw new DomainException(
-                "خزنة الفرع فيها {$before} ولا تكفي لإخراج {$amount}",
+                "خزنة الفرع فيها {$before} ولا تكفي لإخراج {$amount} — "
+                . 'اطلب من إدارة شركتك توريد نقدٍ إلى الفرع '
+                . '(بوّابة الشركة ← حركة النقد ← «توريد نقد إلى الفرع»).',
             );
         }
 
