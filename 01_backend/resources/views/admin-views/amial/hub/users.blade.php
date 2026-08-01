@@ -286,13 +286,16 @@
     }
 
     document.getElementById('users-tbody').addEventListener('click', async (e) => {
-        // فتح صفحة التفاصيل: الضغط على الصفّ أو زر «التفاصيل»
-        const openEl = e.target.closest('[data-act="open"]');
-        if (openEl) {
-            window.location.href = `${base}/account/${openEl.dataset.id}`;
+        // الزرّ يُحسم أوّلاً. الصفّ نفسه يحمل data-act="open"، فلو بُحث عن
+        // الصفّ قبل الزرّ لابتلع الصفُّ كلَّ ضغطةٍ على أزراره — وهو ما جعل
+        // «تحويل رصيد» ينقل إلى صفحة الوكيل بدل فتح النافذة.
+        const btn = e.target.closest('button[data-act]');
+        // فتح صفحة التفاصيل: زر «التفاصيل»، أو الضغط على الصفّ خارج الأزرار
+        const row = btn ? null : e.target.closest('tr[data-act="open"]');
+        if ((btn && btn.dataset.act === 'open') || row) {
+            window.location.href = `${base}/account/${(btn || row).dataset.id}`;
             return;
         }
-        const btn = e.target.closest('button[data-act]');
         if (!btn) return;
         const id = btn.dataset.id;
 
