@@ -49,6 +49,7 @@
 <div class="container-fluid p-3" id="ag" data-testid="agent-portal">
 
     <div class="row g-3 mb-3" id="ag-totals"></div>
+    <div id="ag-alerts"></div>
 
     {{-- التبويبات تختلف بالدور. الصرّاف لا يرى «الفروع» لأنّ له فرعاً
          واحداً هو فرعه، والمدير لا يرى «الشبّاك» لأنّه لا يقف عليه. --}}
@@ -183,6 +184,35 @@
         })).json();
     }
 
+    // AMIAL-AGENT-STAFF-002 — وصولٌ لا يسقط على عنصرٍ غائب.
+    //
+    // **العطل الذي أدخل هذا.** صارت التبويبات تختلف بالدور، فاختفت عناصر
+    // الشبّاك من صفحة الإدارة. وكان السكربت يصل إلى `#ag-find` مباشرةً،
+    // فيُرمى TypeError عند أوّل عنصرٍ غائب **ويتوقّف الملفّ كلّه**: لا
+    // مؤشّرات ولا فروع ولا أيّ تبويب. سطرٌ واحدٌ عطّل اللوحة كلّها.
+    //
+    // والحلّ عنصرٌ صوريّ بدل `null`: الإسناد إليه لا يفعل شيئاً، والقراءة
+    // منه تُعيد فراغاً، وربطُ حدثٍ عليه يُهمَل. فيبقى ما يخصّ دور الداخل
+    // عاملاً ويُتجاهَل ما لا يخصّه — بدل أن يسقط الاثنان معاً.
+    //
+    // (وهذا أسلم من إعادة كتابة كلّ إسناد: أوّل محاولةٍ فعلت ذلك بتعبيرٍ
+    // نمطيّ جشع فقطع دالّةَ سهمٍ في منتصفها وأنتجت قوساً زائداً — أي عطلاً
+    // جديداً مكان القديم.)
+    const NOOP_EL = new Proxy({}, {
+        get: (t, k) => (k === 'addEventListener' || k === 'removeEventListener'
+            || k === 'focus' || k === 'click' || k === 'reset') ? (() => {})
+            : (k === 'value' || k === 'textContent' || k === 'innerHTML') ? ''
+            : (k === 'classList') ? { add() {}, remove() {}, toggle() {} }
+            : (k === 'style') ? {}
+            : (k === 'dataset') ? {}
+            : undefined,
+        set: () => true,
+    });
+    // `document.getElementById` تُكتب هنا بلا اختصار عمداً: الاستبدال الشامل
+    // الذي أنشأ هذه الدالّة كان سيبتلع جسمها أيضاً فتستدعي نفسها بلا نهاية —
+    // وهو ما وقع فعلاً وأنتج «Maximum call stack size exceeded».
+    const $el = (id) => document.getElementById(id) || NOOP_EL;
+
     // الرقمان دائماً معاً — انظر شرح أعلى الملفّ.
     const dual = (cash, emoney, title, sub, cls) => `
         <div class="col-lg-3 col-md-6"><div class="card p-3 h-100 ${cls || ''}">
@@ -201,25 +231,62 @@
         if (!j.success) return;
         const m = j.meta;
 
-        document.getElementById('ag-name').textContent =
+        $el('ag-name').textContent =
             m.agent.name + (m.agent.is_branch_account ? ' (فرع)' : '');
 
         branches = m.branches;
 
-        document.getElementById('ag-totals').innerHTML =
+        // ── مؤشّرات الشركة ──────────────────────────────────────────
+        //
+        // الأرصدة تقول «كم عندنا»، ومؤشّرات اليوم تقول «ماذا حدث». ومديرُ
+        // شركةٍ يرى الأرصدة وحدها لا يعرف أنّ فرعاً لم يفتح شبّاكاً اليوم،
+        // ولا أنّ ورديّةً أُغلقت بعجز.
+        const t = m.today || {};
+        const kpi = (title, value, sub, cls) => `
+            <div class="col-lg-3 col-md-6"><div class="card p-3 h-100 ${cls || ''}">
+                <div class="small text-muted">${title}</div>
+                <div class="fs-4 fw-bold money mt-1">${value}</div>
+                ${sub ? `<div class="small text-muted mt-1">${sub}</div>` : ''}
+            </div></div>`;
+
+        $el('ag-totals').innerHTML =
             dual(m.totals.cash_on_hand, m.totals.emoney, 'إجمالي الفروع',
                  m.totals.branches + ' فرع' +
                  (m.totals.low_cash_branches ? ` • <span class="text-danger">${m.totals.low_cash_branches} نقدها منخفض</span>` : ''),
-                 m.totals.low_cash_branches ? 'border-danger' : '');
+                 m.totals.low_cash_branches ? 'border-danger' : '')
+
+            + kpi('عمليات اليوم',
+                  `${(t.deposits_count || 0) + (t.withdrawals_count || 0)}`,
+                  `إيداع ${num(t.deposits_total || 0)} · سحب ${num(t.withdrawals_total || 0)}`)
+
+            + kpi('الشبابيك',
+                  `${t.shifts_open_now || 0} <span class="fs-6 text-muted">مفتوح الآن</span>`,
+                  `${t.shifts_opened || 0} ورديّة اليوم · في الأدراج ${num(t.drawers_cash || 0)}`,
+                  t.branches_idle ? 'border-warning' : '')
+
+            + kpi('الموظّفون',
+                  `${t.staff_active || 0}<span class="fs-6 text-muted"> / ${t.staff_total || 0}</span>`,
+                  `${t.tellers || 0} صرّاف`
+                  + (t.branches_idle
+                     ? ` • <span class="text-warning">${t.branches_idle} فرع بلا شبّاك اليوم</span>` : ''));
+
+        // فروق الجرد لا تُقاصّ: فرعٌ نقص خمسةً وآخرُ زاد خمسةً ليسا «صفراً»،
+        // هما حادثتان تستحقّان سؤالين. فيُعرَض العدد لا المجموع وحده.
+        $el('ag-alerts').innerHTML = t.shifts_with_variance
+            ? `<div class="alert alert-warning py-2 mb-3">
+                 ⚠️ <strong>${t.shifts_with_variance}</strong> ورديّة أُغلقت بفرقٍ اليوم
+                 (صافي الفرق ${num(t.variance_total)}) — راجعها في «الشبابيك والورديّات».
+               </div>`
+            : '';
 
         const opts = branches.map(b =>
             `<option value="${b.id}">${esc(b.name)} (${esc(b.code)})</option>`).join('');
-        document.getElementById('ag-branch').innerHTML = opts;
-        document.getElementById('ag-till-branch').innerHTML = opts;
-        document.getElementById('ag-earn-branch').innerHTML = opts;
-        document.getElementById('ag-rep-branch').innerHTML = opts;
+        $el('ag-branch').innerHTML = opts;
+        $el('ag-till-branch').innerHTML = opts;
+        $el('ag-earn-branch').innerHTML = opts;
+        $el('ag-rep-branch').innerHTML = opts;
 
-        document.getElementById('ag-branch-list').innerHTML = branches.length ? `
+        $el('ag-branch-list').innerHTML = branches.length ? `
             <div class="table-responsive"><table class="table" data-testid="ag-branch-table">
                 <thead class="thead-light"><tr><th>الفرع</th><th>المدينة</th>
                     <th class="text-end">نقد الدرج</th><th class="text-end">الرصيد الإلكترونيّ</th><th>الحالة</th></tr></thead>
@@ -238,18 +305,18 @@
     }
 
     // ---------- الشبّاك ----------
-    document.getElementById('ag-find').onclick = findCustomer;
-    document.getElementById('ag-phone').addEventListener('keydown', e => { if (e.key === 'Enter') findCustomer(); });
+    $el('ag-find').onclick = findCustomer;
+    $el('ag-phone').addEventListener('keydown', e => { if (e.key === 'Enter') findCustomer(); });
 
     async function findCustomer() {
-        const phone = document.getElementById('ag-phone').value.trim();
-        const box = document.getElementById('ag-customer');
+        const phone = $el('ag-phone').value.trim();
+        const box = $el('ag-customer');
         box.innerHTML = '<div class="text-muted small">جارٍ البحث…</div>';
 
         const j = await get('/customer?phone=' + encodeURIComponent(phone));
         if (!j.success) {
             box.innerHTML = `<div class="alert alert-warning py-2 mb-0">${esc(j.message)}</div>`;
-            document.getElementById('ag-op').style.display = 'none';
+            $el('ag-op').style.display = 'none';
             return;
         }
 
@@ -261,28 +328,28 @@
                 ${customer.can_transact ? '' : '<div class="small mt-1">لا تُنفَّذ عمليات على هذا العميل</div>'}
             </div>`;
 
-        document.getElementById('ag-op').style.display = customer.can_transact ? '' : 'none';
+        $el('ag-op').style.display = customer.can_transact ? '' : 'none';
         if (customer.can_transact) showCapacity();
     }
 
     // ما يستطيعه الفرع **الآن** يُقال قبل إدخال المبلغ لا بعد الرفض.
     function showCapacity() {
-        const b = branches.find(x => x.id == document.getElementById('ag-branch').value);
+        const b = branches.find(x => x.id == $el('ag-branch').value);
         if (!b) return;
-        document.getElementById('ag-capacity').innerHTML = `
+        $el('ag-capacity').innerHTML = `
             هذا الفرع يستطيع الآن: <strong class="cash">${num(b.cash_on_hand)}</strong> سحباً نقدياً،
             و<strong class="emoney">${num(b.emoney_balance)}</strong> إيداعاً.
             ${b.cash_is_low ? '<div class="text-danger mt-1">⚠️ نقد الدرج منخفض — قد لا تكفي السحوبات الكبيرة.</div>' : ''}`;
     }
 
-    document.getElementById('ag-branch').onchange = showCapacity;
+    $el('ag-branch').onchange = showCapacity;
 
-    document.getElementById('ag-deposit').onclick = () => doOp('deposit');
-    document.getElementById('ag-withdraw').onclick = () => doOp('withdraw');
+    $el('ag-deposit').onclick = () => doOp('deposit');
+    $el('ag-withdraw').onclick = () => doOp('withdraw');
 
     async function doOp(op) {
-        const branchId = document.getElementById('ag-branch').value;
-        const amount = document.getElementById('ag-amount').value;
+        const branchId = $el('ag-branch').value;
+        const amount = $el('ag-amount').value;
         if (!branchId || !amount || Number(amount) <= 0) { alert('اختر الفرع وأدخل مبلغاً'); return; }
 
         const label = op === 'deposit'
@@ -293,24 +360,24 @@
         const j = await post(`/branches/${branchId}/${op}`, {
             customer_phone: customer.phone,
             amount: amount,
-            note: document.getElementById('ag-note').value || null,
+            note: $el('ag-note').value || null,
         });
 
-        document.getElementById('ag-result').innerHTML = `
+        $el('ag-result').innerHTML = `
             <div class="alert alert-${j.success ? 'success' : 'danger'} mb-0">
                 ${esc(j.message)}
             </div>`;
 
         if (j.success) {
-            document.getElementById('ag-amount').value = '';
-            document.getElementById('ag-note').value = '';
+            $el('ag-amount').value = '';
+            $el('ag-note').value = '';
             await loadOverview();
             showCapacity();
         }
     }
 
     // ---------- الفروع ----------
-    document.getElementById('ag-new-branch').onclick = async () => {
+    $el('ag-new-branch').onclick = async () => {
         const name = prompt('اسم الفرع:');
         if (!name) return;
         const code = prompt('رمز الفرع (مثل ADEN-01):');
@@ -330,16 +397,16 @@
     };
 
     // ---------- حركة النقد ----------
-    document.getElementById('ag-till-load').onclick = loadTill;
+    $el('ag-till-load').onclick = loadTill;
 
     async function loadTill() {
-        const id = document.getElementById('ag-till-branch').value;
+        const id = $el('ag-till-branch').value;
         if (!id) return;
         const j = await get(`/branches/${id}/till`);
         if (!j.success) return;
         const s = j.meta.summary;
 
-        document.getElementById('ag-till-summary').innerHTML =
+        $el('ag-till-summary').innerHTML =
             dual(s.cash_on_hand, s.emoney_balance, 'رصيد الفرع الآن',
                  s.last_counted_at ? 'آخر جرد: ' + esc(String(s.last_counted_at).slice(0, 10)) : 'لم يُجرَد بعد',
                  s.is_low ? 'border-danger' : (s.is_overloaded ? 'border-warning' : '')) +
@@ -353,7 +420,7 @@
                 النقد فوق الحدّ الأعلى — وَرِّد إلى الخزنة. فرعٌ يحتفظ بنقدٍ كبير خطرٌ أمنيّ لا ميزة سيولة.
             </div></div>` : '');
 
-        document.getElementById('ag-till-moves').innerHTML = `
+        $el('ag-till-moves').innerHTML = `
             <div class="table-responsive"><table class="table table-sm" data-testid="ag-till-table">
                 <thead class="thead-light"><tr><th>الحركة</th><th class="text-end">المبلغ</th>
                     <th class="text-end">الرصيد بعدها</th><th>المرجع</th><th>الموظّف</th><th>التاريخ</th></tr></thead>
@@ -370,7 +437,7 @@
     }
 
     async function cashMove(dir) {
-        const id = document.getElementById('ag-till-branch').value;
+        const id = $el('ag-till-branch').value;
         if (!id) return;
         const amount = prompt(dir === 'in' ? 'مبلغ التوريد إلى الفرع:' : 'مبلغ التوريد من الفرع:');
         if (!amount) return;
@@ -385,8 +452,8 @@
     // شحن الرصيد **غير** توريد النقد: هذا يمكّن الفرع من **الإيداع**، وذاك
     // يمكّنه من **السحب**. وخلطُهما يجعل مديراً يورّد نقداً ويظنّ أنّه مكّن
     // فرعه من قبول الإيداعات.
-    document.getElementById('ag-fund').onclick = async () => {
-        const id = document.getElementById('ag-till-branch').value;
+    $el('ag-fund').onclick = async () => {
+        const id = $el('ag-till-branch').value;
         if (!id) return;
         const amount = prompt('مبلغ الشحن (رصيد إلكترونيّ — يمكّن الفرع من قبول الإيداعات):');
         if (!amount) return;
@@ -398,11 +465,11 @@
         if (j.success) { loadTill(); loadOverview(); }
     };
 
-    document.getElementById('ag-cash-in').onclick = () => cashMove('in');
-    document.getElementById('ag-cash-out').onclick = () => cashMove('out');
+    $el('ag-cash-in').onclick = () => cashMove('in');
+    $el('ag-cash-out').onclick = () => cashMove('out');
 
-    document.getElementById('ag-count').onclick = async () => {
-        const id = document.getElementById('ag-till-branch').value;
+    $el('ag-count').onclick = async () => {
+        const id = $el('ag-till-branch').value;
         if (!id) return;
         const counted = prompt('المبلغ المعدود فعلاً في الدرج:');
         if (counted === null) return;
@@ -415,13 +482,13 @@
     };
 
     // ---------- العمولات ----------
-    document.getElementById('ag-earn-load').onclick = loadEarnings;
+    $el('ag-earn-load').onclick = loadEarnings;
 
     async function loadEarnings() {
-        const id = document.getElementById('ag-earn-branch').value;
+        const id = $el('ag-earn-branch').value;
         if (!id) return;
-        const from = document.getElementById('ag-earn-from').value;
-        const to = document.getElementById('ag-earn-to').value;
+        const from = $el('ag-earn-from').value;
+        const to = $el('ag-earn-to').value;
         const qs = [];
         if (from) qs.push('from=' + from);
         if (to) qs.push('to=' + to);
@@ -435,7 +502,7 @@
                 <div class="small text-muted">${t}</div><div class="fs-5 fw-bold money">${num(v)}</div>
                 ${s2 ? `<div class="small text-muted">${s2}</div>` : ''}</div></div>`;
 
-        document.getElementById('ag-earn-summary').innerHTML =
+        $el('ag-earn-summary').innerHTML =
             tile('عمولتك', m.total_commission, m.operations + ' عملية', 'border-success') +
             tile('إجمالي الرسوم', m.total_fee, 'ما دفعه العملاء') +
             // ما يذهب للمنصّة يُعرَض صراحةً: وكيلٌ يرى ما كسبه ولا يرى ما
@@ -443,7 +510,7 @@
             tile('حصّة المنصّة', m.platform_share, 'من الرسوم') +
             tile('عدد العمليات', m.operations, m.from + ' → ' + m.to);
 
-        document.getElementById('ag-earn-days').innerHTML = `
+        $el('ag-earn-days').innerHTML = `
             <div class="table-responsive"><table class="table table-sm" data-testid="ag-earn-table">
                 <thead class="thead-light"><tr><th>اليوم</th><th>إيداعات</th><th>سحوبات</th>
                     <th class="text-end">الحجم</th><th class="text-end">الرسوم</th><th class="text-end">عمولتك</th></tr></thead>
@@ -457,14 +524,14 @@
     }
 
     // ---------- التسويات ----------
-    document.getElementById('ag-settle-load').onclick = loadSettlements;
+    $el('ag-settle-load').onclick = loadSettlements;
 
     async function loadSettlements() {
         const j = await get('/settlements');
         if (!j.success) return;
         const m = j.meta;
 
-        document.getElementById('ag-settle-summary').innerHTML = `
+        $el('ag-settle-summary').innerHTML = `
             <div class="col-lg-4 col-6"><div class="card p-3 ${Number(m.summary.pending) > 0 ? 'border-warning' : ''}">
                 <div class="small text-muted">بانتظار التسوية</div>
                 <div class="fs-5 fw-bold money">${num(m.summary.pending)}</div>
@@ -473,7 +540,7 @@
                 <div class="small text-muted">سُوِّي فعلاً</div>
                 <div class="fs-5 fw-bold money">${num(m.summary.completed)}</div></div></div>`;
 
-        document.getElementById('ag-settle-list').innerHTML = `
+        $el('ag-settle-list').innerHTML = `
             <div class="table-responsive"><table class="table table-sm" data-testid="ag-settle-table">
                 <thead class="thead-light"><tr><th>المرجع</th><th>النوع</th><th class="text-end">المبلغ</th>
                     <th class="text-end">العمولة</th><th>الحالة</th><th>الطريقة</th><th>التاريخ</th></tr></thead>
@@ -490,13 +557,13 @@
     }
 
     // ---------- تقرير اليوم ----------
-    document.getElementById('ag-rep-load').onclick = loadReport;
-    document.getElementById('ag-rep-print').onclick = () => window.print();
+    $el('ag-rep-load').onclick = loadReport;
+    $el('ag-rep-print').onclick = () => window.print();
 
     async function loadReport() {
-        const id = document.getElementById('ag-rep-branch').value;
+        const id = $el('ag-rep-branch').value;
         if (!id) return;
-        const date = document.getElementById('ag-rep-date').value;
+        const date = $el('ag-rep-date').value;
         const j = await get(`/branches/${id}/report` + (date ? '?date=' + date : ''));
         if (!j.success) return;
         const m = j.meta, c = m.cash;
@@ -504,7 +571,7 @@
         const row = (label, val, cls) =>
             `<tr class="${cls || ''}"><td>${label}</td><td class="text-end money fw-bold">${num(val)}</td></tr>`;
 
-        document.getElementById('ag-rep-body').innerHTML = `
+        $el('ag-rep-body').innerHTML = `
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div><h5 class="mb-0">${esc(m.branch.name)}</h5>
                      <div class="small text-muted">${esc(m.branch.code)} — ${esc(m.date)}</div></div>

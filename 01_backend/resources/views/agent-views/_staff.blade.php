@@ -67,6 +67,10 @@
                 </select></div>
             <div class="mb-2" id="st-branch-wrap"><label class="form-label">الفرع</label>
                 <select class="form-select" id="st-branch"></select></div>
+            <div class="alert alert-warning py-2 small" id="st-no-branch" style="display:none">
+                لا فروع لشركتك بعد، والموظّف يعمل في فرع.
+                أغلق هذه النافذة وافتح تبويب <strong>«🏬 الفروع»</strong> ← «+ فرع جديد» أوّلاً.
+            </div>
             <div class="mb-2"><label class="form-label">الهاتف (اختياري)</label>
                 <input class="form-control" id="st-phone" dir="ltr"></div>
             <div class="mb-2"><label class="form-label">كلمة السرّ (٦ أحرف فأكثر)</label>
@@ -109,10 +113,18 @@ document.addEventListener('DOMContentLoaded', function () {
     let branches = [];
 
     async function loadBranches() {
+        // الغلاف `ok()` يضع الحمولة في `meta` — لا `data` ولا الجذر.
+        // وقراءةُ المفتاح الخطأ لا تُخطئ بصوتٍ عالٍ: تُعيد `[]` بهدوء،
+        // فتُخفى قائمة الفروع، ثمّ يرفض الخادم التعيين بـ«اختر الفرع» —
+        // فيقف المستعمل أمام رسالةٍ تطلب حقلاً لا يراه.
         const j = await get('/overview');
-        branches = (j.data ? j.data.branches : j.branches) || [];
-        const opts = branches.map(b => `<option value="${b.id}">${esc(b.name)} (${esc(b.code)})</option>`).join('');
+        branches = (j.meta && j.meta.branches) || [];
+
+        const opts = branches.map(b =>
+            `<option value="${b.id}">${esc(b.name)} (${esc(b.code)})</option>`).join('');
+
         ['sh-branch', 'st-branch'].forEach(id => { if ($(id)) $(id).innerHTML = opts; });
+        return branches;
     }
 
     async function loadStaff() {
@@ -225,12 +237,28 @@ document.addEventListener('DOMContentLoaded', function () {
     $('sh-load').addEventListener('click', loadShifts);
     $('sh-branch').addEventListener('change', loadShifts);
 
-    // الدور يقرّر ما يُعرَض في نافذة التعيين: مدير الفرع يعيّن صرّافين في
-    // فرعه وحده، فلا يُعرض له اختيار فرعٍ ولا دورٌ أعلى منه.
-    loadBranches().then(() => {
-        if (branches.length <= 1) {
-            $('st-branch-wrap').style.display = branches.length ? '' : 'none';
+    // ملاحظة على ما كان هنا: كانت قائمة الفرع **تُخفى** حين يكون للشركة
+    // فرعٌ واحدٌ أو لا فرع. وهذا خطأ في الحالتين — وأسوأه الثانية: شركةٌ بلا
+    // فروع تفتح النافذة فلا ترى حقل الفرع، وتضغط «تعيين»، فيردّ الخادم
+    // «اختر الفرع الذي يعمل فيه الموظّف». أي أنّ الواجهة تُخفي الحقل الذي
+    // يطلبه الخادم.
+    //
+    // فصارت القائمة تُعرَض دائماً، وحالةُ «لا فروع» تُقال صراحةً مع ما يجب
+    // فعله — لأنّ الترتيب الصحيح: الفرع أوّلاً ثمّ موظّفوه.
+    loadBranches().then((list) => {
+        const wrap = $('st-branch-wrap');
+        const empty = $('st-no-branch');
+
+        if (!list.length) {
+            if (wrap) wrap.style.display = 'none';
+            if (empty) empty.style.display = '';
+            if ($('st-save')) $('st-save').disabled = true;
+        } else {
+            if (wrap) wrap.style.display = '';
+            if (empty) empty.style.display = 'none';
+            if ($('st-save')) $('st-save').disabled = false;
         }
+
         loadShifts();
     });
     loadStaff();

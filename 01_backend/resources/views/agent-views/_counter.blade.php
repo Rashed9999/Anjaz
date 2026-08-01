@@ -193,7 +193,10 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        const c = j.data ? j.data.customer : j.customer;
+        // الغلاف `ok()` يضع الحمولة في `meta` — لا `data`. وقراءةُ المفتاح
+        // الخطأ تُعيد `undefined` بهدوء فتسقط الشاشة على `c.name` بلا رسالةٍ
+        // مفهومة للصرّاف الواقف أمام عميل.
+        const c = (j.meta && j.meta.customer) || j.customer;
         box.innerHTML = `
             <div class="border rounded p-3">
                 <div class="fw-bold fs-5">${esc(c.name)}</div>

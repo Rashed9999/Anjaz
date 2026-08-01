@@ -190,9 +190,71 @@ class AgentPortalController extends Controller
                 'cash_on_hand' => $totalCash,
                 'emoney' => $totalEmoney,
                 'branches' => count($branches),
+                'branches_active' => count(array_filter($branches, fn ($b) => $b['is_active'] ?? true)),
                 'low_cash_branches' => count(array_filter($branches, fn ($b) => $b['cash_is_low'])),
             ],
+            // ما تسأل عنه الإدارة العامّة كلّ صباح — لا الأرصدة وحدها.
+            'today' => $this->todaySnapshot($rootId, array_column($branches, 'id')),
         ]);
+    }
+
+    /**
+     * لقطةُ اليوم لشركة الصرافة.
+     *
+     * الأرصدة تقول «كم عندنا»، وهذه تقول «ماذا حدث». ومديرُ شركةٍ يرى
+     * الأرصدة وحدها لا يعرف أنّ فرعاً لم يفتح شبّاكاً اليوم، ولا أنّ ورديّةً
+     * أُغلقت بعجز.
+     *
+     * @param  array<int>  $branchIds
+     */
+    private function todaySnapshot(int $rootId, array $branchIds): array
+    {
+        $today = now()->toDateString();
+        $from = $today . ' 00:00:00';
+        $to = $today . ' 23:59:59';
+
+        $staff = \App\Models\Agent\AgentStaff::where('agent_user_id', $rootId);
+
+        $shiftsToday = \App\Models\Agent\AgentShift::whereIn('branch_id', $branchIds)
+            ->whereBetween('opened_at', [$from, $to])->get();
+
+        $openNow = \App\Models\Agent\AgentShift::whereIn('branch_id', $branchIds)
+            ->where('status', \App\Models\Agent\AgentShift::STATUS_OPEN)->get();
+
+        $moves = \App\Models\Agent\AgentCashMovement::whereIn('branch_id', $branchIds)
+            ->whereBetween('created_at', [$from, $to])
+            ->whereIn('reason', ['customer_deposit', 'customer_withdraw'])->get();
+
+        $sum = fn ($c) => (string) $c->reduce(fn ($a, $m) => bcadd($a, (string) $m->amount, 4), '0');
+
+        // العجز والفائض يُعدّان معاً ولا يُقاصّان: فرعٌ نقص خمسةً وآخرُ زاد
+        // خمسةً ليسا «صفراً» — هما حادثتان تستحقّان سؤالين.
+        $variances = $shiftsToday->whereNotNull('variance')
+            ->filter(fn ($s) => bccomp((string) $s->variance, '0', 4) !== 0);
+
+        return [
+            'date' => $today,
+            'staff_total' => (clone $staff)->count(),
+            'staff_active' => (clone $staff)->where('is_active', true)->count(),
+            'tellers' => (clone $staff)->where('role', \App\Models\Agent\AgentStaff::ROLE_TELLER)->count(),
+
+            'shifts_opened' => $shiftsToday->count(),
+            'shifts_open_now' => $openNow->count(),
+            'drawers_cash' => (string) $openNow->reduce(
+                fn ($a, $s) => bcadd($a, (string) $s->cash_on_hand, 4), '0'),
+
+            'deposits_count' => $moves->where('reason', 'customer_deposit')->count(),
+            'deposits_total' => $sum($moves->where('reason', 'customer_deposit')),
+            'withdrawals_count' => $moves->where('reason', 'customer_withdraw')->count(),
+            'withdrawals_total' => $sum($moves->where('reason', 'customer_withdraw')),
+
+            'shifts_with_variance' => $variances->count(),
+            'variance_total' => (string) $variances->reduce(
+                fn ($a, $s) => bcadd($a, (string) $s->variance, 4), '0'),
+
+            // فرعٌ لم يفتح شبّاكاً اليوم لا يخدم أحداً مهما كان رصيده.
+            'branches_idle' => count(array_diff($branchIds, $shiftsToday->pluck('branch_id')->all())),
+        ];
     }
 
     public function branchTill(Request $request, int $id): JsonResponse
