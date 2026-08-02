@@ -22,11 +22,33 @@ class AgentShift extends Model
     public const STATUS_OPEN = 'open';
     public const STATUS_CLOSED = 'closed';
 
+    /**
+     * حالةُ مراجعة ملفّ التسوية.
+     *
+     * `balanced` **ليست** `accepted`: الأولى «لا قرار مطلوب»، والثانية «نظر
+     * فيها إنسانٌ وقبِل». وخلطُهما يجعل ورديّةً بعجزٍ خمسة آلاف تبدو كأنّ
+     * أحداً راجعها وهي لم تُقرأ.
+     */
+    public const REVIEW_BALANCED = 'balanced';
+    public const REVIEW_PENDING = 'pending';
+    public const REVIEW_ACCEPTED = 'accepted';
+    public const REVIEW_INVESTIGATING = 'investigating';
+    public const REVIEW_RESOLVED = 'resolved';
+
+    public const REVIEW_LABELS = [
+        self::REVIEW_BALANCED => 'مطابقة — لا قرار مطلوب',
+        self::REVIEW_PENDING => 'بانتظار مراجعة الإدارة',
+        self::REVIEW_ACCEPTED => 'روجعت وقُبل الفرق',
+        self::REVIEW_INVESTIGATING => 'قيد التحقيق',
+        self::REVIEW_RESOLVED => 'أُغلقت بعد التحقيق',
+    ];
+
     protected $fillable = [
         'branch_id', 'staff_id', 'opening_float', 'cash_on_hand',
         'deposits_total', 'withdrawals_total', 'deposits_count', 'withdrawals_count',
         'counted_cash', 'variance', 'close_note', 'status',
         'opened_at', 'closed_at', 'closed_by',
+        'review_status', 'reviewed_by', 'reviewed_at', 'review_note',
     ];
 
     protected $casts = [
@@ -40,6 +62,7 @@ class AgentShift extends Model
         'withdrawals_count' => 'integer',
         'opened_at' => 'datetime',
         'closed_at' => 'datetime',
+        'reviewed_at' => 'datetime',
     ];
 
     public function branch(): BelongsTo

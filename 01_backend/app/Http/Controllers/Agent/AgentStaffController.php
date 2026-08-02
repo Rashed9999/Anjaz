@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Agent;
 use App\Http\Controllers\Controller;
 use App\Models\Agent\AgentStaff;
 use App\Services\AgentShiftService;
+use App\Services\AgentStaffProfileService;
+use App\Services\AuditService;
 use App\Services\AgentStaffService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
@@ -146,6 +148,111 @@ class AgentStaffController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'أُغلقت الورديّة — الفرق ' . $closed->variance,
+        ]);
+    }
+
+    /**
+     * ملفّ الموظّف الموحَّد — عمليّاته وورديّاته وتقييمه ودرجة مخاطرته.
+     *
+     * والصرّاف يرى ملفّ نفسه ولا يرى غيره: الرقابة تنزل ولا تصعد.
+     */
+    public function profile(Request $request, int $id): JsonResponse
+    {
+        $actor = $this->actor($request);
+        $target = AgentStaff::find($id);
+
+        if (!$target || (int) $target->agent_user_id !== (int) $actor->agent_user_id) {
+            return response()->json(['success' => false, 'message' => 'الموظّف خارج نطاقك'], 404);
+        }
+
+        if ($actor->isTeller() && (int) $target->id !== (int) $actor->id) {
+            return response()->json(['success' => false, 'message' => 'ملفّات الموظّفين للإدارة'], 403);
+        }
+
+        if (!$actor->isTeller() && !$actor->isHeadOffice()
+            && !in_array((int) $target->branch_id, $actor->visibleBranchIds(), true)) {
+            return response()->json(['success' => false, 'message' => 'الموظّف خارج فرعك'], 403);
+        }
+
+        return response()->json([
+            'success' => true,
+            'meta' => app(AgentStaffProfileService::class)->profile(
+                $target, $request->query('from'), $request->query('to'),
+            ),
+        ]);
+    }
+
+    /** سجلُّ عمليات الشركة — إيداعاً وسحباً، باسم من نفّذ. */
+    public function operations(Request $request): JsonResponse
+    {
+        $actor = $this->actor($request);
+
+        return response()->json([
+            'success' => true,
+            'meta' => app(AgentStaffProfileService::class)->operationsLog(
+                $actor->visibleBranchIds(),
+                $request->only(['branch_id', 'staff_id', 'reason', 'from', 'to']),
+            ),
+        ]);
+    }
+
+    /**
+     * قرارُ الإدارة في ملفّ تسوية ورديّة.
+     *
+     * **الفرق لا يُغلق بنفسه.** كان يُسجَّل ثمّ يُترك، فيمرّ العجز بصمتٍ
+     * ويصير عُرفاً. وهنا يُنسب القرار إلى إنسانٍ باسمه ووقته وسببه.
+     */
+    public function reviewShift(Request $request, int $shiftId): JsonResponse
+    {
+        $request->validate([
+            'decision' => 'required|in:accepted,investigating,resolved',
+            'note' => 'required|string|min:10|max:500',
+        ]);
+
+        $actor = $this->actor($request);
+
+        if ($actor->isTeller()) {
+            // ولا يُراجع الصرّافُ ورديّةَ نفسه: من عدّ الدرج لا يُصدّق على عدّه.
+            return response()->json([
+                'success' => false,
+                'message' => 'مراجعة الفروق من صلاحية الإدارة — لا يُصدّق الصرّاف على عدّ نفسه',
+            ], 403);
+        }
+
+        $shift = \App\Models\Agent\AgentShift::find($shiftId);
+
+        if (!$shift || !in_array((int) $shift->branch_id, $actor->visibleBranchIds(), true)) {
+            return response()->json(['success' => false, 'message' => 'الورديّة خارج نطاقك'], 404);
+        }
+
+        if ($shift->status !== \App\Models\Agent\AgentShift::STATUS_CLOSED) {
+            return response()->json(['success' => false, 'message' => 'الورديّة لم تُغلق بعد'], 422);
+        }
+
+        $shift->forceFill([
+            'review_status' => $request->input('decision'),
+            'reviewed_by' => $actor->id,
+            'reviewed_at' => now(),
+            'review_note' => (string) $request->input('note'),
+        ])->save();
+
+        app(AuditService::class)->record([
+            'actor_type' => 'agent',
+            'actor_user_id' => $actor->agent_user_id,
+            'action' => 'agent.shift.review',
+            'severity' => $request->input('decision') === 'investigating' ? 'critical' : 'warning',
+            'subject_type' => 'agent_shift',
+            'subject_id' => $shift->id,
+            'metadata' => [
+                'decision' => $request->input('decision'),
+                'reviewer_staff_id' => $actor->id,
+                'variance' => (string) $shift->variance,
+            ],
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'سُجّل القرار: ' . (\App\Models\Agent\AgentShift::REVIEW_LABELS[$request->input('decision')] ?? ''),
         ]);
     }
 

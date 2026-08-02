@@ -55,7 +55,15 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff) 
         Route::post('/{id}/password', [$staff, 'resetPassword'])->where('id', '[0-9]+')->name('password');
         Route::get('/shifts', [$staff, 'shifts'])->name('shifts');
         Route::post('/shifts/{id}/close', [$staff, 'closeShift'])->where('id', '[0-9]+')->name('shifts.close');
+
+        // ملفُّ التسوية لا يُغلق بنفسه: قرارُ الفرق يُنسب إلى إنسان.
+        Route::post('/shifts/{id}/review', [$staff, 'reviewShift'])->where('id', '[0-9]+')->name('shifts.review');
+
+        // ملفّ الموظّف الموحَّد + سجلّ عمليات الشركة.
+        Route::get('/{id}/profile', [$staff, 'profile'])->where('id', '[0-9]+')->name('profile');
     });
+
+    Route::get('/operations', [$staff, 'operations'])->name('operations');
 
     // ── إدارة الشركة: فروعٌ ونقدٌ وتقارير ─────────────────────────────
     Route::get('/overview', [$c, 'overview'])->name('overview');

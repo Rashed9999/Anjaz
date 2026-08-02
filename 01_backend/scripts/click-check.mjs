@@ -80,6 +80,7 @@ ${scripts.map(j => `<script>${j}</script>`).join('\n')}
 
 const HUB_URL = 'http://amial.test/admin/amial/hub/agents';
 const COUNTER_URL = 'http://amial.test/agent/counter';
+const STAFF_URL = 'http://amial.test/agent/staff-tab';
 
 const HUB_HTML = bladeToHtml('resources/views/admin-views/amial/hub/users.blade.php', {
     '$hubSlug': 'agents',
@@ -123,6 +124,70 @@ const SHIFT_OPEN = {
     why_not: null,
 };
 
+// ── لوحة الموظّفين ─────────────────────────────────────────────────
+const STAFF_HTML = bladeToHtml('resources/views/agent-views/_staff.blade.php', {
+    "url('agent')": 'http://amial.test/agent',
+    "route('agent.login')": 'http://amial.test/agent/login',
+});
+
+const STAFF_ROW = {
+    id: 9, name: 'محمد علي', username: 'MKL-001', role: 'teller', role_label: 'صرّاف (شبّاك)',
+    branch: 'فرع المكلا', phone: '967700000009', max_txn_amount: 0,
+    last_login_at: '2026-08-01 16:09:35', is_active: true, has_open_shift: false,
+};
+
+const PROFILE_RATED = {
+    staff: { ...STAFF_ROW, branch_id: 1, hired_at: '2026-07-01 09:00:00' },
+    period: { from: '2026-07-03', to: '2026-08-02' },
+    operations: {
+        deposits_count: 12, deposits_total: '480000', deposits_biggest: '90000',
+        withdrawals_count: 5, withdrawals_total: '150000', withdrawals_biggest: '50000',
+        total_count: 17, total_volume: '630000', distinct_customers: 11,
+    },
+    shifts: {
+        opened: 9, closed: 8, still_open: 1, exact_count: 5,
+        shortage_count: 2, shortage_total: '8000',
+        overage_count: 1, overage_total: '1500',
+        pending_review: 2, accuracy_pct: 62.5,
+    },
+    risk: {
+        score: 64, level: 'high', level_label: 'مرتفع', reason: null,
+        signals: [
+            { key: 'shortage_rate', label: 'تكرار العجز', value: '2 من 8 ورديّة', points: 25, max: 35 },
+            { key: 'shortage_weight', label: 'ثقل العجز في حجم عمله', value: '8000 من 630000', points: 25, max: 25 },
+            { key: 'overage_rate', label: 'تكرار الفائض', value: '1 من 8 ورديّة', points: 5, max: 15 },
+            { key: 'unclosed', label: 'ورديّات تُركت مفتوحة', value: '1', points: 5, max: 15 },
+            { key: 'unreviewed', label: 'فروقٌ لم تُراجَع بعد', value: '2', points: 6, max: 10 },
+        ],
+    },
+    recent_shifts: [{
+        id: 4, opened_at: '2026-08-01 08:00:00', closed_at: '2026-08-01 18:00:00', status: 'closed',
+        opening_float: '100000', deposits_total: '60000', withdrawals_total: '0',
+        counted_cash: '155000', variance: '-5000',
+        review_status: 'pending', review_label: 'بانتظار مراجعة الإدارة', close_note: 'فرقٌ في العدّ',
+    }],
+    recent_operations: [{
+        id: 1, at: '2026-08-01 09:12:00', reason: 'customer_deposit', label: 'إيداع عميل (نقد داخل)',
+        direction: 'in', amount: '2000', reference: 'DEP-ABC', customer: 'راشد معرابي', customer_phone: '783545525',
+    }],
+};
+
+const PROFILE_UNRATED = {
+    ...PROFILE_RATED,
+    shifts: {
+        opened: 0, closed: 0, still_open: 0, exact_count: 0,
+        shortage_count: 0, shortage_total: '0', overage_count: 0, overage_total: '0',
+        pending_review: 0, accuracy_pct: null,
+    },
+    risk: {
+        score: null, level: 'unrated', level_label: 'غير مُقيَّم',
+        reason: 'أغلق 0 ورديّة فقط — تُحسب الدرجة من 3 فأكثر. وموظّفٌ لم يُختبَر ليس منخفض المخاطر.',
+        signals: [],
+    },
+    recent_shifts: [],
+    recent_operations: [],
+};
+
 // كلّ نداءٍ يُسجَّل، لأنّ سؤال هذا الفحص ليس «هل ظهر خطأ» بل **هل وصل
 // الطلب أصلاً**. وزرُّ الإيداع الميّت كان يسقط قبل أيّ نداء.
 const STUBS = `
@@ -137,6 +202,12 @@ window.fetch = async (url, opts) => {
 
     if (u.includes('users.json')) return _json({data: ${JSON.stringify(FAKE_ROWS)}, current_page: 1, last_page: 1, total: 2});
     if (u.includes('kyc.json'))   return _json({data: []});
+
+    if (u.includes('/staff/9/profile')) return _json({success: true,
+        meta: window.__unrated ? ${JSON.stringify(PROFILE_UNRATED)} : ${JSON.stringify(PROFILE_RATED)}});
+    if (/\\/staff(\\?|$)/.test(u)) return _json({data: [${JSON.stringify(STAFF_ROW)}], can_manage: true, roles: {}});
+    if (u.includes('/overview')) return _json({success: true, meta: {branches: [{id: 1, name: 'فرع المكلا', code: 'MKL'}]}});
+    if (u.includes('/staff/shifts')) return _json({data: []});
 
     if (u.includes('/counter/state')) return _json(${JSON.stringify(SHIFT_OPEN)});
     if (u.includes('/counter/customer')) return _json({
@@ -155,6 +226,38 @@ window.fetch = async (url, opts) => {
 `;
 
 const CASES = [
+    // ── لوحة الموظّفين ──────────────────────────────────────────────
+    {
+        page: 'staff',
+        name: 'زر «الملفّ» يفتح ملفّ الموظّف بدرجته وإشاراتها',
+        steps: [['click', 'button[data-do="profile"]']],
+        expectNav: null,
+        expectModal: '#pr-modal',
+        dom: [
+            ['وصل نداءُ الملفّ',
+                `window.__calls.some(c => /\\/staff\\/9\\/profile/.test(c.url))`],
+            ['الدرجة معروضة', `/\\b64\\b/.test(document.getElementById('pr-body').textContent)`],
+            ['والإشارات مفصَّلةٌ لا رقمٌ وحده',
+                `/تكرار العجز/.test(document.getElementById('pr-body').textContent)`],
+            ['والعجز والفائض منفصلان',
+                `/عجز/.test(document.getElementById('pr-body').textContent)
+                 && /فائض/.test(document.getElementById('pr-body').textContent)`],
+        ],
+    },
+    {
+        // «غير معروف» ليس صفراً: من لم يُختبَر لا يُعرَض أخضرَ.
+        page: 'staff-unrated',
+        name: 'موظّفٌ بلا ورديّات يُعرَض «غير محسوبة» لا صفراً',
+        steps: [['click', 'button[data-do="profile"]']],
+        expectNav: null,
+        dom: [
+            ['تُقال «غير محسوبة»',
+                `/غير محسوبة/.test(document.getElementById('pr-body').textContent)`],
+            ['ولا تُعرَض درجةٌ خضراء',
+                `!document.querySelector('#pr-body .alert-success')`],
+        ],
+    },
+
     // ── شبّاك الصرّاف ────────────────────────────────────────────────
     {
         // العطل الذي أدخل هذه الحالة: سطرٌ يقرأ `$('ct-withdraw').disabled`
@@ -235,6 +338,9 @@ const CASES = [
 const PAGES = {
     hub: { url: HUB_URL, html: HUB_HTML, ready: 'tr[data-act="open"]' },
     counter: { url: COUNTER_URL, html: COUNTER_HTML, ready: '#ct-modes' },
+    staff: { url: STAFF_URL, html: STAFF_HTML, ready: 'button[data-do="profile"]' },
+    'staff-unrated': { url: STAFF_URL, html: STAFF_HTML, ready: 'button[data-do="profile"]',
+                       init: 'window.__unrated = true;' },
 };
 
 const browser = await chromium.launch({ args: ['--no-sandbox'] });
@@ -255,6 +361,7 @@ for (const c of CASES) {
         return route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<html><body>x</body></html>' });
     });
 
+    if (target.init) await page.addInitScript(target.init);
     await page.addInitScript(STUBS);
 
     const jsErrors = [];

@@ -161,6 +161,12 @@ class AgentShiftService
                 'status' => AgentShift::STATUS_CLOSED,
                 'closed_at' => now(),
                 'closed_by' => $actor->id,
+                // ملفُّ التسوية يُرفع إلى الإدارة. وبفرقٍ ⇒ ينتظر إنساناً؛
+                // وبلا فرقٍ ⇒ لا يحتاج قراراً. ولا يبدأ «مقبولاً» أبداً:
+                // «قُبل» تعني أنّ أحداً نظر.
+                'review_status' => bccomp($variance, '0', 4) === 0
+                    ? AgentShift::REVIEW_BALANCED
+                    : AgentShift::REVIEW_PENDING,
             ])->save();
 
             // ما عدّه الصرّاف يعود إلى الخزنة — المعدود لا المتوقَّع، فما
@@ -335,7 +341,15 @@ class AgentShiftService
         return $q->orderByDesc('id')->limit($limit)->get()
             ->map(fn (AgentShift $s) => array_merge($this->state($s), [
                 'staff' => $s->staff?->name,
+                'staff_id' => $s->staff_id ? (int) $s->staff_id : null,
                 'username' => $s->staff?->username,
+                // حالةُ ملفّ التسوية: الورديّة المغلقة إقرارٌ ماليّ ينتظر
+                // قراراً، وإخفاءُ حالته يجعل الفرق يمرّ بصمت.
+                'review_status' => $s->review_status,
+                'review_label' => AgentShift::REVIEW_LABELS[$s->review_status] ?? $s->review_status,
+                'review_note' => $s->review_note,
+                'reviewed_at' => $s->reviewed_at?->toDateTimeString(),
+                'close_note' => $s->close_note,
             ]))->all();
     }
 
