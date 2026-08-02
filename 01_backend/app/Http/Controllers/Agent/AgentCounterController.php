@@ -442,6 +442,58 @@ class AgentCounterController extends Controller
         ]);
     }
 
+    /**
+     * إيصالُ عمليةٍ جرت في فرعٍ من فروعي — صفحةٌ تُطبَع.
+     *
+     * **والنطاق يُفحص بالفرع لا بالرقم.** رقمُ الإيصال يأتي من المتصفّح،
+     * وصرّافٌ يبدّل رقماً يقرأ إيصال عميلٍ في فرعٍ آخر. فيُقرأ الفرع من
+     * بيانات الإيصال ويُقارَن بفروع الداخل.
+     */
+    public function receipt(Request $request, string $number)
+    {
+        $staff = $this->requireStaff($request);
+
+        $receipt = \App\Models\Receipt::where('receipt_number', $number)->first();
+
+        if (!$receipt) {
+            abort(404, 'الإيصال غير موجود');
+        }
+
+        $meta = (array) ($receipt->metadata ?? []);
+        $branchId = (int) ($meta['branch_id'] ?? 0);
+        $allowed = array_map('intval', (array) $request->attributes->get('agent_branch_ids', []));
+
+        if ($branchId === 0 || !in_array($branchId, $allowed, true)) {
+            abort(403, 'هذا الإيصال لعمليّةٍ خارج فروعك');
+        }
+
+        $customer = User::find($receipt->user_id);
+
+        return view('agent-views.receipt', ['r' => [
+            'receipt_number' => $receipt->receipt_number,
+            'verification_code' => $receipt->verification_code,
+            'verify_url' => url('/v/' . $receipt->verification_code),
+            'reference' => $receipt->reference_transaction_id,
+            'issued_at' => ($receipt->issued_at ?? $receipt->created_at)?->format('Y-m-d H:i'),
+            'direction' => $receipt->direction,
+            'kind_label' => $receipt->direction === 'credit'
+                ? 'إيداع نقديّ — أُضيف إلى محفظة العميل'
+                : 'سحب نقديّ — سُلّم للعميل نقداً',
+            'amount' => (string) $receipt->amount,
+            'fee' => (string) $receipt->fee,
+            'gross' => (string) $receipt->net_amount,
+            'customer_name' => $customer
+                ? (trim(($customer->f_name ?? '') . ' ' . ($customer->l_name ?? '')) ?: '—') : '—',
+            'customer_phone' => $customer?->phone ?? '—',
+            'branch_name' => $meta['branch_name'] ?? '—',
+            'branch_code' => $meta['branch_code'] ?? '',
+            'branch_city' => $meta['branch_city'] ?? null,
+            'teller_name' => $meta['teller_name'] ?? $staff->name,
+            'teller_code' => $meta['teller_code'] ?? $staff->username,
+            'note' => $meta['note'] ?? null,
+        ]]);
+    }
+
     // ── مساعدات ─────────────────────────────────────────────────────────
 
     private function staff(Request $request): ?AgentStaff

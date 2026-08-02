@@ -247,7 +247,7 @@ class CustomerWithdrawService
             // يُصدَر بعد نجاح كل القيود، ويلتقط أي خطأ بصمت عبر
             // safeIssueSingleReceipt — العملية المالية تمّت، وفشل الإيصال
             // يُسجَّل ولا يُبطلها.
-            $this->safeIssueSingleReceipt('debit', [
+            $receiptNumber = $this->safeIssueSingleReceipt('debit', [
                 'user_id' => $req->customer_user_id,
                 'counterparty_user_id' => $agent->id,
                 'reference_transaction_id' => $txId,
@@ -262,7 +262,12 @@ class CustomerWithdrawService
                 ],
             ]);
 
-            return ['transaction_id' => $txId, 'request' => $req->fresh()];
+            // رقم الإيصال يُعاد ليطبعه الصرّاف للعميل الواقف أمامه.
+            return [
+                'transaction_id' => $txId,
+                'receipt_number' => $receiptNumber,
+                'request' => $req->fresh(),
+            ];
         });
     }
 

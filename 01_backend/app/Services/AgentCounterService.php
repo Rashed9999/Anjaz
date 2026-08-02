@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Agent\AgentBranch;
 use App\Models\Agent\AgentShift;
 use App\Models\EMoney;
+use App\Services\ReceiptService;
 use App\Models\User;
 use App\Traits\PostsToLedger;
 use DomainException;
@@ -180,8 +181,14 @@ class AgentCounterService
                 ],
             ]);
 
+            $receiptNumber = $this->issueReceipt(
+                $branch, $customer, 'cash_in', 'credit',
+                $net, $q['fee'], $reference, $shift, $note,
+            );
+
             return [
                 'reference' => $reference,
+                'receipt_number' => $receiptNumber,
                 'amount' => $amount,
                 'fee' => $q['fee'],
                 'net' => $net,
@@ -190,6 +197,66 @@ class AgentCounterService
                     ->value('current_balance'),
             ];
         });
+    }
+
+
+    /**
+     * إيصالُ العملية — **نفسُ إيصال التطبيق، لا نسخةٌ خاصّةٌ بالشبّاك.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * كان الإيداع والسحب في الفرع **بلا إيصالٍ إطلاقاً**: لا في يد العميل
+     * ولا في قائمة إيصالاته بالتطبيق. فمن أودع مئة ألفٍ في فرعٍ يخرج بلا
+     * ورقةٍ تُثبت أنّه أودع — ولو أُنكرت العملية لما كان بيده إلّا كلامه.
+     *
+     * وهو يُصدَر بنفس `ReceiptService` الذي يُصدر بقيّة إيصالات المنصّة،
+     * فيحمل رقم إيصالٍ ورمزَ تحقّقٍ عامّاً وسنداً PDF ويظهر في تطبيق
+     * العميل. ولو بُني إيصالٌ خاصٌّ بالشبّاك لصار للعملية الواحدة مستندان
+     * برقمين — وذلك أوّل ما يُربك في أيّ نزاع.
+     *
+     * **ولا يُفشل العمليّة إن سقط.** المال انتقل وقُيّد في الدفتر؛ وإسقاطُ
+     * عمليّةٍ تمّت لأنّ ورقةً لم تُطبع خطأٌ أفدح من غياب الورقة.
+     */
+    private function issueReceipt(
+        AgentBranch $branch, User $customer, string $type, string $direction,
+        string $amount, string $fee, string $reference, ?AgentShift $shift, ?string $note,
+    ): ?string {
+        try {
+            $staff = $shift?->staff_id ? \App\Models\Agent\AgentStaff::find($shift->staff_id) : null;
+
+            $data = [
+                'user_id' => (int) $customer->id,
+                'counterparty_user_id' => (int) $branch->branch_user_id,
+                'reference_transaction_id' => $reference,
+                'reference_type' => 'agent_branch',
+                'reference_id' => (int) $branch->id,
+                'receipt_type' => $type,
+                'amount' => $amount,
+                'fee' => $fee,
+                'zone_code' => (string) ($branch->account?->zone_code ?? ''),
+                'metadata' => [
+                    'branch_id' => (int) $branch->id,
+                    'branch_name' => $branch->name,
+                    'branch_code' => $branch->code,
+                    'branch_city' => $branch->city,
+                    'agent_user_id' => (int) $branch->agent_user_id,
+                    'shift_id' => $shift?->id,
+                    'staff_id' => $staff?->id,
+                    'teller_name' => $staff?->name,
+                    'teller_code' => $staff?->username,
+                    'note' => $note,
+                ],
+            ];
+
+            $receipt = $direction === 'credit'
+                ? app(ReceiptService::class)->issueCredit($data)
+                : app(ReceiptService::class)->issueDebit($data);
+
+            return $receipt->receipt_number;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
     }
 
     // ── سحب ─────────────────────────────────────────────────────────────
@@ -288,8 +355,14 @@ class AgentCounterService
                 ],
             ]);
 
+            $receiptNumber = $this->issueReceipt(
+                $branch, $customer, 'cash_out', 'debit',
+                $amount, $q['fee'], $reference, $shift, $note,
+            );
+
             return [
                 'reference' => $reference,
+                'receipt_number' => $receiptNumber,
                 'amount' => $amount,
                 'fee' => $q['fee'],
                 'total_debited' => $total,

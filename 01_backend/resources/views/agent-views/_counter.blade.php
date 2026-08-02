@@ -160,6 +160,15 @@
                 </div>
 
                 {{-- زرّ السحب أُزيل من هنا: السحب له تبويبه ورمزه. --}}
+                {{-- **اختياريّ.** بعض العملاء يريد ورقةً وبعضهم لا، وطابعةٌ
+                     تعمل في كلّ عمليّةٍ تُهدر ورقاً وتُبطئ الطابور. --}}
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="ct-autoprint" checked>
+                    <label class="form-check-label" for="ct-autoprint">
+                        اطبع الإيصال تلقائياً بعد العملية
+                    </label>
+                </div>
+
                 <button class="btn btn-success btn-lg w-100" id="ct-deposit" data-testid="ct-deposit">
                     ⬇️ إيداع — العميل يسلّمك نقداً
                 </button>
@@ -313,7 +322,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     <div class="fw-bold">${esc(j.message)}</div>
                     <div class="small mt-1">المرجع: <span dir="ltr">${esc(r.reference)}</span></div>
                     <div class="small">الرسم: ${fmt(r.fee)} · عمولتك: ${fmt(r.commission)}</div>
+                    ${receiptButton(r.receipt_number)}
                 </div>`;
+            openReceipt(r.receipt_number);
             $('ct-amount').value = '';
             $('ct-note').value = '';
             render(j.shift ? {shift: j.shift, can_operate: true, staff: {role: 'teller'}} : {});
@@ -326,6 +337,31 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     $('ct-deposit').addEventListener('click', () => operate('deposit'));
+
+    // ── إيصال العملية ────────────────────────────────────────────
+    //
+    // **إيصالٌ لا يُطبَع إلّا إن طُلب.** وزرُّه يبقى ظاهراً بعد العملية
+    // حتى لو أُغلقت النافذة أو رفض العميل الورقة ثمّ عاد يطلبها.
+    function receiptUrl(n) { return root + '/receipt/' + encodeURIComponent(n); }
+
+    function receiptButton(n) {
+        if (!n) {
+            // الإيصال قد لا يصدر (عطلٌ في إصداره لا يُسقط عمليّةً تمّت).
+            // ويُقال ذلك بدل تركِ زرٍّ لا يفتح شيئاً.
+            return '<div class="small text-muted mt-2">لم يصدر إيصالٌ لهذه العملية — راجع الإدارة.</div>';
+        }
+        return `<div class="mt-2">
+            <a class="btn btn-sm btn-outline-dark" target="_blank" rel="noopener"
+               href="${receiptUrl(n)}">🖨️ طباعة الإيصال</a>
+            <span class="small text-muted ms-2">رقم الإيصال: <span dir="ltr">${esc(n)}</span></span>
+        </div>`;
+    }
+
+    function openReceipt(n) {
+        if (!n || !$('ct-autoprint') || !$('ct-autoprint').checked) return;
+        // نافذةٌ منفصلة: الطباعة من الشبّاك نفسه تطبع الشبّاك.
+        window.open(receiptUrl(n) + '?auto=1', '_blank', 'noopener');
+    }
 
     // ── كشوفاتي: ما رفعتُه إلى إدارة الشركة ──────────────────────
     const REVIEW_BADGE = {
@@ -421,8 +457,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const j = await post('/counter/withdrawal', {
                 op_code: wdCode, identifier: $('wd-ident').value.trim() || null,
             });
+            const rn = (j.result && j.result.receipt_number) || j.receipt_number || null;
             $('wd-result').innerHTML =
-                `<div class="alert alert-success mb-0 fw-bold">${esc(j.message)}</div>`;
+                `<div class="alert alert-success mb-0">
+                    <div class="fw-bold">${esc(j.message)}</div>
+                    ${receiptButton(rn)}
+                 </div>`;
+            openReceipt(rn);
             $('wd-code').value = ''; $('wd-ident').value = '';
             $('wd-info').innerHTML = ''; $('wd-op').style.display = 'none';
             wdCode = null;

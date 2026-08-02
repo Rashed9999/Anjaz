@@ -503,18 +503,21 @@ trait TransactionTrait
     /**
      * صياغة بديلة للإيصال المنفرد (للعمليات أحادية الجانب: cash_in/out, add_money).
      */
-    protected function safeIssueSingleReceipt(string $direction, array $data): void
+    protected function safeIssueSingleReceipt(string $direction, array $data): ?string
     {
         try {
             if (!class_exists(\App\Services\ReceiptService::class)) {
-                return;
+                return null;
             }
             $svc = app(\App\Services\ReceiptService::class);
-            if ($direction === 'debit') {
-                $svc->issueDebit($data);
-            } else {
-                $svc->issueCredit($data);
-            }
+
+            // **رقمُ الإيصال يُعاد الآن.** كان يُصدَر ويُنسى، فلا يعرف
+            // النداءُ ما أصدره — ولا يستطيع أن يعطي الصرّاف رابط طباعة.
+            $receipt = $direction === 'debit'
+                ? $svc->issueDebit($data)
+                : $svc->issueCredit($data);
+
+            return $receipt->receipt_number;
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('Single receipt issuance failed (non-fatal)', [
                 'direction' => $direction,
@@ -522,6 +525,8 @@ trait TransactionTrait
                 'error' => mb_substr($e->getMessage(), 0, 200),
             ]);
         }
+
+        return null;
     }
 
     /**

@@ -75,6 +75,11 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff) 
     // وهذه قراءةُ مستندٍ يملكه صاحبه، والمعرّف يُفحص ملكيّةً قبل أيّ ردّ
     // (`myStatement` تردّ ٤٠٤ لورديّةِ زميل). فلا تُوضع تحت الحارس
     // فتُضعفه، ولا تُخفى منه بحيلةٍ في شكل الرابط.
+    // إيصالُ الشبّاك: صفحةٌ تُطبَع. خارج بادئة `counter` لأنّها قراءةُ
+    // مستندٍ لا عمليّةُ مال — والنطاق يُفحص بالفرع قبل أيّ عرض.
+    Route::get('/receipt/{number}', [$counter, 'receipt'])
+        ->where('number', '[A-Za-z0-9\-]{4,40}')->name('counter.receipt');
+
     Route::get('/my-statements', [$counter, 'myStatements'])->name('counter.statements');
     Route::get('/my-statements/{id}', [$counter, 'myStatement'])
         ->where('id', '[0-9]+')->name('counter.statement');

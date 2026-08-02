@@ -226,6 +226,9 @@ window.__printed = false;
 window.__lastAlert = '';
 // print تُسجَّل ولا تُنفَّذ: نافذةُ طباعةٍ حقيقيّة تُجمّد المتصفّح بلا رادّ.
 window.print = () => { window.__printed = true; };
+// النوافذ تُسجَّل ولا تُفتح: نافذةُ طباعةٍ حقيقيّة تُجمّد الفحص.
+window.__opened = [];
+window.open = (u) => { window.__opened.push(String(u)); return null; };
 window.alert = (m) => { window.__lastAlert = String(m ?? ''); };
 window.prompt = () => 'سبب مكتوب';
 window.confirm = () => true;
@@ -277,7 +280,7 @@ window.fetch = async (url, opts) => {
     });
     if (u.includes('/counter/deposit')) return _json({
         success: true, message: 'أُودع 2,000 ر.ي',
-        result: {reference: 'DEP-TEST', fee: '0', commission: '0'},
+        result: {reference: 'DEP-TEST', fee: '0', commission: '0', receipt_number: 'RCP-2026-000123'},
         shift: ${JSON.stringify(SHIFT_OPEN.shift)},
     });
 
@@ -396,6 +399,44 @@ const CASES = [
                 `/alert-success/.test(document.getElementById('ct-result').innerHTML)`],
             ['وأُفرغ حقل المبلغ استعداداً للعملية التالية',
                 `document.getElementById('ct-amount').value === ''`],
+        ],
+    },
+    {
+        // **الإيصال اختياريّ.** والزرّ يبقى بعد العملية حتى لو رفض العميل
+        // الورقة ثمّ عاد يطلبها.
+        page: 'counter',
+        name: 'الإيداع يعرض زرّ طباعة الإيصال ويفتحه تلقائياً',
+        steps: [
+            ['fill', '#ct-phone', '783545525'],
+            ['click', '#ct-find'],
+            ['fill', '#ct-amount', '2000'],
+            ['click', '#ct-deposit'],
+        ],
+        expectNav: null,
+        dom: [
+            ['زرّ الطباعة ظهر برقم الإيصال',
+                `/RCP-2026-000123/.test(document.getElementById('ct-result').innerHTML)`],
+            ['ورابطُه يفتح صفحة الإيصال',
+                `document.querySelector('#ct-result a[href*="/receipt/RCP-2026-000123"]') !== null`],
+            ['وفُتحت نافذةُ الطباعة تلقائياً',
+                `window.__opened.some(u => u.includes('/receipt/RCP-2026-000123') && u.includes('auto=1'))`],
+        ],
+    },
+    {
+        page: 'counter',
+        name: 'إلغاءُ الطباعة التلقائيّة يمنع فتح النافذة ويُبقي الزرّ',
+        steps: [
+            ['fill', '#ct-phone', '783545525'],
+            ['click', '#ct-find'],
+            ['click', '#ct-autoprint'],
+            ['fill', '#ct-amount', '2000'],
+            ['click', '#ct-deposit'],
+        ],
+        expectNav: null,
+        dom: [
+            ['لم تُفتح نافذة', `window.__opened.length === 0`],
+            ['والزرّ ما زال متاحاً لمن يطلب الورقة',
+                `document.querySelector('#ct-result a[href*="/receipt/"]') !== null`],
         ],
     },
     {
