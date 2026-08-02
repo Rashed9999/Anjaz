@@ -150,6 +150,14 @@ const STAFF_ROW = {
     id: 9, name: 'محمد علي', username: 'MKL-001', role: 'teller', role_label: 'صرّاف (شبّاك)',
     branch: 'فرع المكلا', phone: '967700000009', max_txn_amount: 0,
     last_login_at: '2026-08-01 16:09:35', is_active: true, has_open_shift: false,
+    whatsapp: null,
+};
+
+// موظّفٌ رقمُه مربوطٌ فعلاً — لأنّ «اربط» و«فُكّ» زرّان مختلفان في حالتين
+// مختلفتين، وفحصُ إحداهما لا يفحص الأخرى.
+const STAFF_ROW_LINKED = {
+    ...STAFF_ROW,
+    whatsapp: { number: '967700000009', status: 'active', alerts_enabled: true },
 };
 
 const PROFILE_RATED = {
@@ -260,7 +268,9 @@ window.fetch = async (url, opts) => {
 
     if (u.includes('/staff/9/profile')) return _json({success: true,
         meta: window.__unrated ? ${JSON.stringify(PROFILE_UNRATED)} : ${JSON.stringify(PROFILE_RATED)}});
-    if (/\\/staff(\\?|$)/.test(u)) return _json({data: [${JSON.stringify(STAFF_ROW)}], can_manage: true, roles: {}});
+    if (/\\/staff(\\?|$)/.test(u)) return _json({
+        data: [window.__waLinked ? ${JSON.stringify(STAFF_ROW_LINKED)} : ${JSON.stringify(STAFF_ROW)}],
+        can_manage: true, roles: {}});
     if (u.includes('/overview')) return _json({success: true, meta: {
         agent: {name: 'البسيري للصرافة', is_branch_account: false},
         branches: [{id: 1, name: 'فرع المكلا', code: 'MKL', city: 'حضرموت', is_active: true,
@@ -375,6 +385,56 @@ const CASES = [
                 `/غير محسوبة/.test(document.getElementById('pr-body').textContent)`],
             ['ولا تُعرَض درجةٌ خضراء',
                 `!document.querySelector('#pr-body .alert-success')`],
+        ],
+    },
+
+    // ── ربط واتساب الموظّف ──────────────────────────────────────────
+    //
+    // **الحالة التي أدخلت هذين الفحصين:** نقطتا `wa.link` و`wa.unlink`
+    // كانتا مبنيّتين ومُختبَرتين ومسجَّلتين في `routes/agent.php` — ولا زرّ
+    // لهما في أيّ شاشة. الاختبارات تمرّ، والميزة غير موجودة عند المستعمل.
+    {
+        page: 'staff',
+        name: 'زر «واتساب» يفتح النافذة ويرسل رمز الربط فعلاً',
+        steps: [
+            ['click', 'button[data-do="wa"]'],
+            ['fill', '#wa-phone', '967700000009'],
+            ['click', '#wa-send'],
+        ],
+        expectNav: null,
+        dom: [
+            ['وصل نداءُ الربط إلى الخادم',
+                `window.__calls.some(c => c.method === 'POST' && /\\/staff\\/9\\/whatsapp$/.test(c.url))`],
+            ['ولم يُنادَ فكُّ الربط بالخطأ',
+                `!window.__calls.some(c => c.url.includes('/whatsapp/unlink'))`],
+        ],
+    },
+    {
+        // موظّفٌ غير مربوط لا يُعرَض له زرُّ فكّ: زرٌّ يفكّ ما ليس مربوطاً
+        // يجعل المدير يظنّ أنّ ربطاً قائمٌ فيبحث عن سبب صمت البوت.
+        page: 'staff',
+        name: 'غير المربوط: لا زرَّ فكّ، والحالة تُقال صراحةً',
+        steps: [['click', 'button[data-do="wa"]']],
+        expectNav: null,
+        expectModal: '#wa-modal',
+        dom: [
+            ['زرّ الفكّ مخفيّ', `document.getElementById('wa-unlink').style.display === 'none'`],
+            ['والحالة مكتوبة', `/لا رقم مربوطاً/.test(document.getElementById('wa-state').textContent)`],
+        ],
+    },
+    {
+        page: 'staff-wa-linked',
+        name: 'المربوط: تظهر حالتُه في الجدول ويعمل زرّ الفكّ',
+        steps: [
+            ['click', 'button[data-do="wa"]'],
+            ['click', '#wa-unlink'],
+        ],
+        expectNav: null,
+        dom: [
+            ['حالةُ الربط معروضةٌ في الصفّ',
+                `/مربوط/.test(document.getElementById('st-tbody').textContent)`],
+            ['ووصل نداءُ الفكّ',
+                `window.__calls.some(c => c.method === 'POST' && c.url.includes('/staff/9/whatsapp/unlink'))`],
         ],
     },
 
@@ -499,6 +559,8 @@ const PAGES = {
     staff: { url: STAFF_URL, html: STAFF_HTML, ready: 'button[data-do="profile"]' },
     'staff-unrated': { url: STAFF_URL, html: STAFF_HTML, ready: 'button[data-do="profile"]',
                        init: 'window.__unrated = true;' },
+    'staff-wa-linked': { url: STAFF_URL, html: STAFF_HTML, ready: 'button[data-do="wa"]',
+                         init: 'window.__waLinked = true;' },
     dashboard: { url: DASH_URL, html: DASH_HTML, ready: '#rp-load' },
 };
 

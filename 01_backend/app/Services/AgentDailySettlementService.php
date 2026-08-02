@@ -50,6 +50,7 @@ class AgentDailySettlementService
     public function __construct(
         private readonly AgentNetworkService $network,
         private readonly AuditService $audit,
+        private readonly \App\Services\Whatsapp\AgentAlertService $alerts,
     ) {
     }
 
@@ -376,7 +377,7 @@ class AgentDailySettlementService
         $agent = User::findOrFail($row->agent_user_id);
         $amount = (string) $row->conversion_amount;
 
-        return DB::transaction(function () use ($row, $agent, $admin, $amount, $note) {
+        $decided = DB::transaction(function () use ($row, $agent, $admin, $amount, $note) {
             $linked = null;
 
             if ($row->conversion === 'topup' && bccomp($amount, '0', 4) > 0) {
@@ -418,6 +419,11 @@ class AgentDailySettlementService
 
             return $row->fresh();
         });
+
+        // القرار يصل صاحبه — لا ينتظر أن يفتح البوّابة صباحاً.
+        $this->alerts->settlementDecided($decided);
+
+        return $decided;
     }
 
     public function reject(AgentDailySettlement $row, User $admin, string $note): AgentDailySettlement
@@ -447,7 +453,11 @@ class AgentDailySettlementService
             'metadata' => ['reason' => $note],
         ]);
 
-        return $row->fresh();
+        $fresh = $row->fresh();
+
+        $this->alerts->settlementDecided($fresh);
+
+        return $fresh;
     }
 
     /**

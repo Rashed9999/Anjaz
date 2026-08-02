@@ -284,6 +284,16 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping()
             ->onOneServer();
 
+        // AMIAL-WA-AGENT-002 — تذكير الوكلاء قبل إغلاق نافذة التسوية.
+        //
+        // النافذة ٢٢:٠٠–٢٤:٠٠، والتذكير ٢٣:٠٠ — ساعةٌ تكفي لجمع أرقام
+        // اليوم ورفعه، ولا تصل مبكّرةً فتُنسى قبل موعدها.
+        $schedule->command('amial:agent-settlement-reminder')
+            ->dailyAt('23:00')
+            ->name('agent-settlement-reminder')
+            ->withoutOverlapping()
+            ->onOneServer();
+
         // P0-BACKUPS — نسخة احتياطية يومية 3 صباحاً
         $schedule->command('amial:backup')
             ->dailyAt('03:00')

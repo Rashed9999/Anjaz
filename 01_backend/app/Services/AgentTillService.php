@@ -35,6 +35,7 @@ class AgentTillService
 {
     public function __construct(
         private readonly AuditService $audit,
+        private readonly \App\Services\Whatsapp\AgentAlertService $alerts,
     ) {
     }
 
@@ -85,7 +86,7 @@ class AgentTillService
             throw new DomainException('المبلغ يجب أن يكون موجباً');
         }
 
-        return DB::transaction(function () use (
+        $movement = DB::transaction(function () use (
             $branch, $direction, $reason, $amount, $actor, $customerId, $reference, $note
         ) {
             $till = AgentCashTill::where('branch_id', $branch->id)
@@ -127,6 +128,13 @@ class AgentTillService
 
             return $movement;
         });
+
+        // **بعد المعاملة لا داخلها:** رسالةٌ لا تُسقط حركةَ نقدٍ اكتملت.
+        // ويُفحص الحدّ في الاتّجاهين — توريدٌ يرفع الفرع فوق الحدّ يُنهي
+        // الكتم، فينبّه فوراً حين ينزل مرّةً أخرى.
+        $this->alerts->tillLow($branch);
+
+        return $movement;
     }
 
     // ── الجرد ───────────────────────────────────────────────────────────

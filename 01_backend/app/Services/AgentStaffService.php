@@ -147,6 +147,13 @@ class AgentStaffService
         $openShifts = AgentShift::where('status', AgentShift::STATUS_OPEN)
             ->pluck('id', 'staff_id');
 
+        // حالةُ واتساب تُقرأ مع الصفّ لا بطلبٍ لكلّ موظّف: شركةٌ فيها مئة
+        // موظّف كانت ستُرسل مئة طلبٍ لتعرف من رقمُه مربوط.
+        $waLinks = \App\Models\WhatsappLinkedDevice::whereNotNull('agent_staff_id')
+            ->where('status', '!=', \App\Models\WhatsappLinkedDevice::STATUS_REVOKED)
+            ->get(['agent_staff_id', 'whatsapp_number', 'status', 'alerts_enabled'])
+            ->keyBy('agent_staff_id');
+
         return $q->orderBy('branch_id')->orderBy('username')->limit(500)->get()
             ->map(fn (AgentStaff $s) => [
                 'id' => (int) $s->id,
@@ -163,6 +170,13 @@ class AgentStaffService
                 // الورديّة المفتوحة تُعرَض مع الموظّف: موظّفٌ يُعطَّل وورديّته
                 // مفتوحة يترك درجاً بلا جرد.
                 'has_open_shift' => $openShifts->has($s->id),
+                // «غير مربوط» و«بانتظار الرمز» حالتان مختلفتان: الأولى
+                // تحتاج بدايةً، والثانية تحتاج أن يفتح الموظّف هاتفه.
+                'whatsapp' => ($w = $waLinks->get($s->id)) ? [
+                    'number' => (string) $w->whatsapp_number,
+                    'status' => (string) $w->status,
+                    'alerts_enabled' => (bool) $w->alerts_enabled,
+                ] : null,
             ])->all();
     }
 

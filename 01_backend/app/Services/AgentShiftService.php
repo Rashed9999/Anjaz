@@ -22,8 +22,21 @@ use Illuminate\Support\Facades\DB;
  */
 class AgentShiftService
 {
-    public function __construct(private readonly AuditService $audit)
+    public function __construct(
+        private readonly AuditService $audit,
+        private readonly \App\Services\Whatsapp\AgentAlertService $alerts,
+    ) {
+    }
+
+    /**
+     * تنبيهٌ يُطلق **بعد** المعاملة لا داخلها.
+     *
+     * لو أُطلق داخلها لصار انقطاعُ شبكةٍ عند مزوّد واتساب سبباً في إسقاط
+     * إغلاق ورديّةٍ اكتمل حسابُه — أي عطلٌ ماليّ ثمنه رسالة.
+     */
+    private function afterMove(AgentBranch $branch): void
     {
+        $this->alerts->tillLow($branch);
     }
 
     /**
@@ -56,7 +69,7 @@ class AgentShiftService
 
         $branch = AgentBranch::findOrFail($teller->branch_id);
 
-        return DB::transaction(function () use ($teller, $branch, $openingFloat) {
+        $shift = DB::transaction(function () use ($teller, $branch, $openingFloat) {
             $shift = AgentShift::create([
                 'branch_id' => $branch->id,
                 'staff_id' => $teller->id,
@@ -85,6 +98,11 @@ class AgentShiftService
 
             return $shift->fresh();
         });
+
+        // العهدة تخرج من الخزنة — وقد تكون هي التي أنزلتها تحت الحدّ.
+        $this->afterMove($branch);
+
+        return $shift;
     }
 
     /**
@@ -127,7 +145,7 @@ class AgentShiftService
 
         $branch = AgentBranch::findOrFail($shift->branch_id);
 
-        return DB::transaction(function () use ($actor, $shift, $branch, $countedCash, $expected, $variance, $note) {
+        $closed = DB::transaction(function () use ($actor, $shift, $branch, $countedCash, $expected, $variance, $note) {
             $locked = AgentShift::where('id', $shift->id)->lockForUpdate()->first();
 
             if (!$locked->isOpen()) {
@@ -193,6 +211,11 @@ class AgentShiftService
 
             return $locked->fresh();
         });
+
+        // الفرق يُبلَّغ لصاحبه ولإدارته — لا يُنتظر أن يفتح أحدٌ شاشة.
+        $this->alerts->shiftClosedWithVariance($closed);
+
+        return $closed;
     }
 
     /**
@@ -283,7 +306,7 @@ class AgentShiftService
 
         $branch = AgentBranch::findOrFail($shift->branch_id);
 
-        return DB::transaction(function () use ($actor, $shift, $branch, $amount, $direction) {
+        $out = DB::transaction(function () use ($actor, $shift, $branch, $amount, $direction) {
             if ($direction === 'to_drawer') {
                 $this->moveBranchSafe($branch, 'out', 'treasury_out', $amount, $actor, $shift->id,
                     'توريد إلى درج ورديّة #' . $shift->id);
@@ -312,6 +335,10 @@ class AgentShiftService
             // فيشمل التوريد بلا تزويرٍ في أيّ عمود.
             return $shift->fresh();
         });
+
+        $this->afterMove($branch);
+
+        return $out;
     }
 
     /** حالة الورديّة كما تُعرَض للصرّاف. */

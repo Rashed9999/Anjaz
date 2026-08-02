@@ -26,10 +26,10 @@
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light"><tr>
                     <th>رمز الدخول</th><th>الاسم</th><th>الدور</th><th>الفرع</th>
-                    <th>حدّ العملية</th><th>آخر دخول</th><th>الحالة</th><th></th>
+                    <th>حدّ العملية</th><th>آخر دخول</th><th>واتساب</th><th>الحالة</th><th></th>
                 </tr></thead>
                 <tbody id="st-tbody">
-                    <tr><td colspan="8" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>
                 </tbody>
             </table>
         </div>
@@ -109,6 +109,44 @@
         </div>
         <div class="modal-body" id="pr-body">
             <div class="text-muted">جارٍ التحميل…</div>
+        </div>
+    </div></div>
+</div>
+
+{{-- ============ ربط واتساب الموظّف ============
+
+     **نقطتا النهاية كانتا مبنيّتين ومُختبَرتين، ولا زرّ لهما.** وهي حالةُ
+     العطل المتكرّرة في هذا المشروع: منطقٌ يعمل، ومسارٌ مسجَّل، واختبارٌ
+     يمرّ — ولا شاشة تناديه. فالميزة موجودة في الشيفرة وغائبة عن المستعمل.
+
+     والربط لا يكتمل بضغطة المدير: يُرسَل رمزٌ إلى الرقم نفسه، ولا يُفعَّل
+     حتى يُعيده صاحبه إلى البوت. فخطأٌ في رقمٍ واحد لا يُسلّم أرقام فرعٍ
+     إلى غريب. --}}
+<div class="modal fade" id="wa-modal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title" id="wa-title">واتساب الموظّف</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="alert alert-info py-2 small mb-3">
+                واتساب <strong>قناةُ استعلامٍ لا تنفيذ</strong>: يسأل الموظّف عن درجه أو
+                فرعه أو تسويته، ولا يُنفَّذ منها إيداعٌ ولا سحب.
+                <br>والتنبيهات تصله تلقائياً — فرقُ ورديّة، نقدٌ منخفض، قرارُ تسوية.
+            </div>
+
+            <div id="wa-state" class="mb-3"></div>
+
+            <div class="mb-2"><label class="form-label">رقم الواتساب</label>
+                <input class="form-control" id="wa-phone" dir="ltr" placeholder="967…">
+                <div class="form-text">
+                    يُرسَل رمزٌ إلى هذا الرقم، ولا يُفعَّل الربط حتى يُعيده الموظّف
+                    في محادثة البوت.
+                </div></div>
+
+            <div class="text-danger small" id="wa-err"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline-danger" id="wa-unlink" style="display:none">فكّ الربط</button>
+            <button class="btn btn-success" id="wa-send">إرسال رمز الربط</button>
         </div>
     </div></div>
 </div>
@@ -219,6 +257,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td>${esc(s.branch ?? '—')}</td>
                 <td>${Number(s.max_txn_amount) > 0 ? fmt(s.max_txn_amount) : '<span class="text-muted">بلا حدّ خاصّ</span>'}</td>
                 <td class="small">${esc(s.last_login_at ?? 'لم يدخل بعد')}</td>
+                <td class="small text-nowrap">${waCell(s)}</td>
                 <td>
                     ${s.is_active ? '<span class="badge bg-success">نشِط</span>' : '<span class="badge bg-danger">معطَّل</span>'}
                     ${s.has_open_shift ? '<span class="badge bg-warning text-dark">ورديّة مفتوحة</span>' : ''}
@@ -226,12 +265,34 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td class="text-nowrap">
                     <button class="btn btn-sm btn-primary" data-do="profile" data-id="${s.id}" data-name="${esc(s.name)}">الملفّ</button>
                     <button class="btn btn-sm btn-outline-secondary" data-do="pass" data-id="${s.id}">كلمة سرّ</button>
+                    <button class="btn btn-sm btn-outline-success" data-do="wa" data-id="${s.id}"
+                            data-name="${esc(s.name)}" data-phone="${esc((s.whatsapp && s.whatsapp.number) || s.phone || '')}"
+                            data-linked="${s.whatsapp ? 1 : 0}">واتساب</button>
                     <button class="btn btn-sm ${s.is_active ? 'btn-outline-danger' : 'btn-outline-success'}"
                             data-do="toggle" data-id="${s.id}" data-active="${s.is_active ? 0 : 1}">
                         ${s.is_active ? 'تعطيل' : 'تفعيل'}</button>
                 </td>
             </tr>`).join('')
-            : '<tr><td colspan="8" class="text-center text-muted py-4">لا موظّفين بعد — عيّن أوّل صرّافٍ ليعمل الشبّاك</td></tr>';
+            : '<tr><td colspan="9" class="text-center text-muted py-4">لا موظّفين بعد — عيّن أوّل صرّافٍ ليعمل الشبّاك</td></tr>';
+    }
+
+    /**
+     * حالة واتساب في الجدول — والحالات الثلاث مفصولة عمداً.
+     *
+     * «غير مربوط» تعني ابدأ، و«بانتظار الرمز» تعني أنّ الرمز أُرسل ولم
+     * يُعده صاحب الرقم — وهما مشكلتان مختلفتان تماماً. وعرضُهما بشارةٍ
+     * واحدة يجعل المدير يُعيد الإرسال على من لم يفتح هاتفه بعد.
+     */
+    function waCell(s) {
+        if (!s.whatsapp) return '<span class="text-muted">غير مربوط</span>';
+        const n = `<span dir="ltr" class="font-monospace">${esc(s.whatsapp.number)}</span>`;
+        if (s.whatsapp.status !== 'active') {
+            return `<span class="badge bg-warning text-dark">بانتظار الرمز</span><br>${n}`;
+        }
+        const bell = s.whatsapp.alerts_enabled
+            ? '<span class="badge bg-success">مربوط 🔔</span>'
+            : '<span class="badge bg-secondary">مربوط 🔕</span>';
+        return `${bell}<br>${n}`;
     }
 
     $('st-tbody').addEventListener('click', async (e) => {
@@ -240,6 +301,10 @@ document.addEventListener('DOMContentLoaded', function () {
         try {
             if (b.dataset.do === 'profile') {
                 openProfile(b.dataset.id, b.dataset.name);
+                return;
+            }
+            if (b.dataset.do === 'wa') {
+                openWa(b.dataset);
                 return;
             }
             if (b.dataset.do === 'toggle') {
@@ -317,6 +382,50 @@ document.addEventListener('DOMContentLoaded', function () {
             $('st-name').value = $('st-pass').value = $('st-phone').value = '';
             loadStaff();
         } catch (e) { $('st-err').textContent = e.message; }
+    });
+
+    // ── ربط واتساب ──────────────────────────────────────────────────────
+    let waStaffId = null;
+
+    function openWa(d) {
+        waStaffId = d.id;
+        $('wa-title').textContent = 'واتساب — ' + (d.name || '');
+        $('wa-err').textContent = '';
+        $('wa-phone').value = d.phone || '';
+
+        const linked = d.linked === '1';
+        $('wa-unlink').style.display = linked ? '' : 'none';
+        $('wa-send').textContent = linked ? 'إعادة إرسال الرمز' : 'إرسال رمز الربط';
+        $('wa-state').innerHTML = linked
+            ? '<div class="alert alert-success py-2 small mb-0">الرقم مربوط. وإعادة الإرسال تُعيد الربط إلى «بانتظار الرمز».</div>'
+            : '<div class="alert alert-secondary py-2 small mb-0">لا رقم مربوطاً بهذا الموظّف بعد.</div>';
+
+        new bootstrap.Modal($('wa-modal')).show();
+    }
+
+    $('wa-send').addEventListener('click', async () => {
+        $('wa-err').textContent = '';
+        const phone = ($('wa-phone').value || '').trim();
+        if (!phone) { $('wa-err').textContent = 'اكتب رقم الواتساب'; return; }
+        try {
+            const j = await post(`/staff/${waStaffId}/whatsapp`, {phone: phone});
+            bootstrap.Modal.getInstance($('wa-modal')).hide();
+            alert(j.message);
+            loadStaff();
+        } catch (e) { $('wa-err').textContent = e.message; }
+    });
+
+    $('wa-unlink').addEventListener('click', async () => {
+        // فكُّ الربط يقطع القناة فوراً — وقطعُ قناةٍ بالخطأ يترك مديراً
+        // بلا تنبيهات وهو لا يدري أنّه بلا تنبيهات.
+        if (!confirm('فكُّ الربط يُوقف الاستعلام والتنبيهات فوراً. أتُتابع؟')) return;
+        $('wa-err').textContent = '';
+        try {
+            const j = await post(`/staff/${waStaffId}/whatsapp/unlink`, {});
+            bootstrap.Modal.getInstance($('wa-modal')).hide();
+            alert(j.message);
+            loadStaff();
+        } catch (e) { $('wa-err').textContent = e.message; }
     });
 
     // ── ملفّ الموظّف ٣٦٠ ────────────────────────────────────────────────
