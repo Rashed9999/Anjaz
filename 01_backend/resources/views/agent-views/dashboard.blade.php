@@ -48,6 +48,8 @@
 
 <div class="container-fluid p-3" id="ag" data-testid="agent-portal">
 
+    @include('partials._clock_guard')
+
     <div class="row g-3 mb-3" id="ag-totals"></div>
     <div id="ag-alerts"></div>
 
