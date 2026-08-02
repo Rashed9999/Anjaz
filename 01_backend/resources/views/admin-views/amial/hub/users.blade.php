@@ -53,6 +53,7 @@
         @if($hubSlug === 'agents')
         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-branches" id="branches-tab-link">الفروع والخزائن</a></li>
         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-cash" id="cash-tab-link">حركة النقد</a></li>
+        <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-daily" id="daily-tab-link">🌙 إقفال اليوم</a></li>
         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-settlement" id="settlement-tab-link">⚖️ التوازن والتسوية</a></li>
         @endif
         <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-kyc" id="kyc-tab-link">طلبات التوثيق</a></li>

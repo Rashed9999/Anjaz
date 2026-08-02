@@ -9,6 +9,7 @@ use App\Models\EMoney;
 use App\Models\User;
 use App\Services\AgentBranchService;
 use App\Services\AgentNetworkService;
+use App\Services\AgentDailySettlementService;
 use App\Services\AgentCounterService;
 use App\Services\AgentReportService;
 use App\Services\AgentStaffService;
@@ -580,6 +581,84 @@ class AgentPortalController extends Controller
         }
 
         return $this->ok(['branches' => $rows]);
+    }
+
+    /**
+     * تسويةُ اليوم: ما جرى، وماذا يجب أن يتحوّل، ومتى تُفتح النافذة.
+     *
+     * **يُعرَض قبل الرفع لا بعده.** فمن يرفع رقماً لم يقرأه لا يكون قد
+     * أقرّ به.
+     */
+    public function dailySettlement(Request $request): JsonResponse
+    {
+        $agent = $this->companyUser($request);
+        $date = (string) $request->query('date', now()->toDateString());
+        $svc = app(AgentDailySettlementService::class);
+
+        $row = \App\Models\Agent\AgentDailySettlement::where('agent_user_id', $agent->id)
+            ->whereDate('settlement_date', $date)->first();
+
+        return $this->ok([
+            'day' => $svc->computeDay($agent, $date),
+            'window' => $svc->windowState($date),
+            'submitted' => $row ? [
+                'ulid' => $row->settlement_ulid,
+                'status' => $row->status,
+                'status_label' => \App\Models\Agent\AgentDailySettlement::STATUS_LABELS[$row->status] ?? $row->status,
+                'window_state' => $row->window_state,
+                'window_label' => $row->window_state
+                    ? (\App\Models\Agent\AgentDailySettlement::WINDOW_LABELS[$row->window_state] ?? '') : null,
+                'submitted_at' => $row->submitted_at?->toDateTimeString(),
+                'decision_note' => $row->decision_note,
+                'unlocked' => $row->unlocked_at !== null,
+                'unlock_reason' => $row->unlock_reason,
+                'conversion_amount' => (string) $row->conversion_amount,
+            ] : null,
+            'history' => \App\Models\Agent\AgentDailySettlement::where('agent_user_id', $agent->id)
+                ->orderByDesc('settlement_date')->limit(30)->get()
+                ->map(fn ($r) => [
+                    'date' => $r->settlement_date->toDateString(),
+                    'status' => $r->status,
+                    'status_label' => \App\Models\Agent\AgentDailySettlement::STATUS_LABELS[$r->status] ?? $r->status,
+                    'window_state' => $r->window_state,
+                    'conversion' => $r->conversion,
+                    'conversion_label' => \App\Models\Agent\AgentDailySettlement::CONVERSION_LABELS[$r->conversion] ?? '',
+                    'conversion_amount' => (string) $r->conversion_amount,
+                    'deposits_total' => (string) $r->deposits_total,
+                    'withdrawals_total' => (string) $r->withdrawals_total,
+                    'shortage_total' => (string) $r->shortage_total,
+                    'overage_total' => (string) $r->overage_total,
+                    'decision_note' => $r->decision_note,
+                ])->values()->all(),
+        ]);
+    }
+
+    /** رفعُ تسوية اليوم إلى أميال — داخل النافذة أو بفكٍّ منها. */
+    public function submitDailySettlement(Request $request): JsonResponse
+    {
+        $request->validate(['date' => 'nullable|date']);
+
+        $staff = $request->attributes->get('agent_staff');
+
+        if (!$staff instanceof AgentStaff) {
+            return $this->error('رفعُ التسوية بحساب الإدارة العامّة للشركة', 403);
+        }
+
+        try {
+            $row = app(AgentDailySettlementService::class)->submit(
+                $this->companyUser($request), $staff,
+                (string) $request->input('date', now()->toDateString()),
+            );
+        } catch (DomainException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
+        return $this->ok(
+            ['ulid' => $row->settlement_ulid, 'window_state' => $row->window_state],
+            $row->window_state === 'on_time'
+                ? 'رُفعت تسوية اليوم إلى أميال — بانتظار قرارهم'
+                : 'رُفعت التسوية وسُجّلت **متأخّرة** — سيراها فريق أميال بهذه الصفة',
+        );
     }
 
     /** ما يُحرّك مال الشركة قرارُ إدارتها العامّة. */

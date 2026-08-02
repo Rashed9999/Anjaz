@@ -66,6 +66,48 @@
 </div>
 
 
+{{-- ===== إقفال اليوم: التسويات المرفوعة من الوكلاء =====
+
+     **هنا يتحوّل الريال الورقيّ إلى إلكترونيّ والعكس.** الوكيل يرفع كشف
+     يومه في نافذةٍ ليليّة، وقبولُ أميال هو ما يُنفّذ التحويل فعلاً.
+
+     ومن **لم يرفع** يتصدّر الجدول: قائمةٌ تعرض المرفوع وحده تُخفي بالضبط
+     ما يجب أن يُرى. --}}
+<div class="tab-pane fade" id="tab-daily">
+    <div class="alert alert-secondary small">
+        <strong>لماذا نافذةٌ زمنيّة؟</strong>
+        عميلٌ أودع ألفاً في فرعٍ بالمكلا: سلّم ورقاً للوكيل، وخرج من رصيد الوكيل
+        ألفٌ إلى محفظة العميل. فصار في الشبكة ألفٌ إلكترونيٌّ <strong>غطاؤه ورقةٌ في
+        درج رجلٍ في المكلا</strong> — لا في خزينتنا. وذلك مقبولٌ ساعاتٍ لا أسابيع.
+        فآخر اليوم يسلّم الورق ويستلم رصيداً، فيعود الغطاء إلى مكانه.
+        <strong>ومن تأخّر لا يُغتفر بصمت</strong> — يحتاج فكّاً باسمٍ وسبب.
+    </div>
+
+    <div class="row g-3 mb-3" id="dly-totals"></div>
+
+    <div class="card stat-card">
+        <div class="card-header d-flex gap-2 align-items-center flex-wrap">
+            <strong>يوم الشبكة</strong>
+            <input type="date" id="dly-date" class="form-control form-control-sm" style="max-width:170px">
+            <button class="btn btn-sm btn-outline-primary" id="dly-refresh">عرض</button>
+            <span class="text-muted small ms-auto" id="dly-window"></span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light"><tr>
+                    <th>الوكيل</th><th>الحالة</th><th>الرفع</th>
+                    <th>إيداعات</th><th>سحوبات</th><th>عجز</th><th>فائض</th>
+                    <th>التحويل المطلوب</th><th></th>
+                </tr></thead>
+                <tbody id="dly-tbody">
+                    <tr><td colspan="9" class="text-center text-muted py-4">اضغط «عرض»</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div id="dly-detail" class="mt-3"></div>
+</div>
+
 {{-- ===== التوازن والتسوية ===== --}}
 <div class="tab-pane fade" id="tab-settlement">
     <div class="alert alert-secondary small">
@@ -369,6 +411,100 @@
 
     document.getElementById('stl-refresh').addEventListener('click', loadSettlement);
     document.getElementById('settlement-tab-link').addEventListener('shown.bs.tab', loadSettlement);
+
+    // ══════════════════════════════════════════════════════════════════
+    // إقفال اليوم
+    // ══════════════════════════════════════════════════════════════════
+    const DLY_BADGE = {
+        not_submitted: 'bg-danger',
+        submitted: 'bg-warning text-dark',
+        accepted: 'bg-success',
+        rejected: 'bg-secondary',
+    };
+
+    async function loadDaily() {
+        const d = $('dly-date').value || new Date().toISOString().slice(0, 10);
+        const tb = $('dly-tbody');
+        tb.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-3">جارٍ التحميل…</td></tr>';
+
+        const j = await (await fetch(`${base}/agents/daily.json?date=${d}`,
+            {headers: {'Accept': 'application/json'}})).json();
+
+        const t = j.totals || {};
+        $('dly-window').textContent = (j.window && j.window.message) || '';
+
+        const card = (label, value, cls) => `
+            <div class="col-md-2 col-4"><div class="card stat-card p-3">
+                <small class="text-muted">${label}</small>
+                <div class="fs-4 fw-bold ${cls || ''}">${value}</div></div></div>`;
+
+        // «لم يرفع» أوّل بطاقة: هي السؤال الذي يُفتح لأجله هذا التبويب.
+        $('dly-totals').innerHTML =
+            card('لم يرفعوا', t.not_submitted ?? 0, (t.not_submitted ? 'text-danger' : '')) +
+            card('بانتظار قرارك', t.awaiting ?? 0, (t.awaiting ? 'text-warning' : '')) +
+            card('قُبلت', t.accepted ?? 0, 'text-success') +
+            card('رُفعت متأخّرة', t.late ?? 0, (t.late ? 'text-danger' : '')) +
+            card('إشاراتٌ تستحقّ نظرة', t.suspicious ?? 0, (t.suspicious ? 'text-danger' : '')) +
+            card('وكلاء', t.agents ?? 0);
+
+        const rows = j.rows || [];
+        tb.innerHTML = rows.length ? rows.map(r => `
+            <tr>
+                <td><strong>${esc(r.agent)}</strong><div class="small text-muted" dir="ltr">${esc(r.phone ?? '')}</div></td>
+                <td><span class="badge ${DLY_BADGE[r.status] || 'bg-secondary'}">${esc(r.status_label)}</span>
+                    ${r.suspicious_count ? `<span class="badge bg-danger">${r.suspicious_count} إشارة</span>` : ''}</td>
+                <td class="small">${r.window_label
+                        ? `<span class="badge ${r.window_state === 'on_time' ? 'bg-success' : 'bg-danger'}">${esc(r.window_label)}</span>`
+                        : '—'}<div class="text-muted">${esc(r.submitted_at ?? '')}</div></td>
+                <td class="text-success">${fmt(r.deposits_total)}</td>
+                <td class="text-primary">${fmt(r.withdrawals_total)}</td>
+                <td class="${Number(r.shortage_total) > 0 ? 'text-danger fw-bold' : 'text-muted'}">${fmt(r.shortage_total)}</td>
+                <td class="${Number(r.overage_total) > 0 ? 'text-warning fw-bold' : 'text-muted'}">${fmt(r.overage_total)}</td>
+                <td>${r.conversion && r.conversion !== 'none'
+                        ? `<span class="badge ${r.conversion === 'topup' ? 'bg-success' : 'bg-warning text-dark'}">${esc(r.conversion_label)}</span>
+                           <div class="fw-bold">${fmt(r.conversion_amount)}</div>` : '<span class="text-muted">—</span>'}</td>
+                <td class="text-nowrap">
+                    ${r.status === 'submitted'
+                        ? `<button class="btn btn-sm btn-success" data-dly-ok="${r.ulid}">قبول وتنفيذ</button>
+                           <button class="btn btn-sm btn-outline-danger" data-dly-no="${r.ulid}">رفض</button>` : ''}
+                    ${r.status === 'not_submitted'
+                        ? `<button class="btn btn-sm btn-outline-warning" data-dly-unlock="${r.agent_user_id}">فكّ اليوم</button>` : ''}
+                </td>
+            </tr>`).join('')
+            : '<tr><td colspan="9" class="text-center text-muted py-4">لا وكلاء</td></tr>';
+    }
+
+    $('dly-refresh').addEventListener('click', loadDaily);
+
+    $('dly-tbody').addEventListener('click', async (e) => {
+        const b = e.target.closest('button[data-dly-ok], button[data-dly-no], button[data-dly-unlock]');
+        if (!b) return;
+        const d = $('dly-date').value || new Date().toISOString().slice(0, 10);
+
+        try {
+            if (b.hasAttribute('data-dly-ok')) {
+                if (!confirm('سيُنفَّذ التحويل بين النقد والرصيد فوراً. متابعة؟')) return;
+                const j = await post(`${base}/agents/daily/${b.dataset.dlyOk}/accept`, {});
+                alert(j.message);
+            } else if (b.hasAttribute('data-dly-no')) {
+                const note = prompt('سبب الرفض (عشرة أحرف فأكثر — يصل إلى الوكيل):');
+                if (!note || note.trim().length < 10) { alert('السبب إلزاميّ'); return; }
+                const j = await post(`${base}/agents/daily/${b.dataset.dlyNo}/reject`, {note});
+                alert(j.message);
+            } else {
+                // تدخّلُ إدارة المشروع: يُفتح الباب بقرارٍ باسمٍ وسبب، ولا
+                // يُمحى أنّ اليوم تأخّر.
+                const reason = prompt('سبب فكّ اليوم المتأخّر (عشرة أحرف فأكثر — يُسجَّل باسمك):');
+                if (!reason || reason.trim().length < 10) { alert('السبب إلزاميّ'); return; }
+                const j = await post(`${base}/agents/daily/unlock`,
+                    {agent_user_id: Number(b.dataset.dlyUnlock), date: d, reason});
+                alert(j.message);
+            }
+            loadDaily();
+        } catch (err) { alert(err.message); }
+    });
+
+    document.getElementById('daily-tab-link').addEventListener('shown.bs.tab', loadDaily);
 
     loadNetwork();
 })();

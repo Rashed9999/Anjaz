@@ -194,6 +194,26 @@
                     ذاك سيولةُ تشغيلٍ تتحرّك مع كلّ عملية، وهذه أرباحٌ تُسحب.
                     وخلطُهما يجعل وكيلاً يسحب أرباحه فيعجز عن الإيداع.
                 </div>
+                {{-- ═══ التسوية اليوميّة مع أميال ═══
+                     **هنا يتحوّل الريال الورقيّ إلى إلكترونيّ والعكس.**
+
+                     عميلٌ أودع ألفاً: سلّمك ورقاً وخرج من رصيدك ألفٌ إلى
+                     محفظته. فصار في الشبكة ألفٌ إلكترونيٌّ غطاؤه ورقةٌ في
+                     درجك أنت — لا في خزينة أميال. وهذه التسوية تُعيد
+                     الغطاء إلى مكانه. --}}
+                <div class="border rounded p-3 mb-3" id="ag-daily-box">
+                    <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                        <div>
+                            <div class="fw-bold">🌙 تسوية اليوم مع أميال</div>
+                            <div class="small text-muted" id="ag-daily-window">جارٍ قراءة النافذة…</div>
+                        </div>
+                        <input type="date" id="ag-daily-date" class="form-control form-control-sm ms-auto" style="max-width:170px">
+                        <button class="btn btn-outline-primary btn-sm" id="ag-daily-load">عرض</button>
+                        <button class="btn btn-success btn-sm" id="ag-daily-submit">📤 ارفع تسوية اليوم</button>
+                    </div>
+                    <div id="ag-daily-body" class="mt-2"></div>
+                </div>
+
                 <div class="d-flex mb-2"><button class="btn btn-outline-primary btn-sm ms-auto" id="ag-settle-load">تحديث</button></div>
                 <div id="ag-settle-summary" class="row g-3 mb-3"></div>
                 <div id="ag-settle-list"></div>
@@ -524,6 +544,78 @@
         if (j.success) { loadTill(); loadOverview(); loadBranchSettlement(); }
     };
 
+    // ── التسوية اليوميّة مع أميال ────────────────────────────────────
+    //
+    // التفاصيل تُعرَض **قبل** الرفع: من يرفع رقماً لم يقرأه لا يكون أقرّ به.
+    async function loadDaily() {
+        const d = $el('ag-daily-date').value || new Date().toISOString().slice(0, 10);
+        const j = await get('/daily-settlement?date=' + d);
+        if (!j.success) return;
+
+        const m = j.meta, day = m.day, w = m.window, sub = m.submitted;
+
+        $el('ag-daily-window').textContent = w.message;
+
+        const CONV = {
+            topup: ['success', '📥 تسلّم النقد لأميال وتستلم رصيداً إلكترونيّاً'],
+            payout: ['warning', '📤 تعيد رصيداً إلكترونيّاً وتستلم نقداً'],
+            none: ['secondary', 'اليوم متعادل — لا تحويل'],
+        };
+        const cv = CONV[day.conversion] || CONV.none;
+
+        const line = (label, value, cls) =>
+            `<div class="d-flex justify-content-between border-bottom py-1">
+                <span>${label}</span><span class="money fw-bold ${cls || ''}">${value}</span></div>`;
+
+        $el('ag-daily-body').innerHTML = `
+            <div class="row g-3">
+              <div class="col-md-6">
+                ${line('إيداعات العملاء (' + day.deposits_count + ')', num(day.deposits_total), 'text-success')}
+                ${line('سحوبات العملاء (' + day.withdrawals_count + ')', num(day.withdrawals_total), 'text-primary')}
+                ${line('الرسوم المحصّلة', num(day.fees_collected))}
+                ${line('عمولة شركتك', num(day.agent_commission), 'text-success')}
+              </div>
+              <div class="col-md-6">
+                ${line('عجزُ الورديّات (' + day.shortage_count + ')', num(day.shortage_total), 'text-danger')}
+                ${line('فائضُ الورديّات (' + day.overage_count + ')', num(day.overage_total), 'text-warning')}
+                ${line('ورديّات لم تُغلق', day.unclosed_shifts, day.unclosed_shifts ? 'text-danger' : '')}
+                ${line('فروقٌ لم تراجعها', day.pending_review, day.pending_review ? 'text-danger' : '')}
+              </div>
+            </div>
+
+            <div class="alert alert-${cv[0]} mt-3 mb-2">
+                <div class="fw-bold">${cv[1]}</div>
+                <div class="fs-4 fw-bold money">${num(day.conversion_amount)} ر.ي</div>
+                <div class="small">
+                    صافي الورق في يدك ${num(day.net_cash)} · وصافي رصيدك الإلكترونيّ ${num(day.net_float)}.
+                    والاثنان متعاكسان دائماً: كلّ ريالٍ إلكترونيٍّ خرج منك يقابله ريالٌ ورقيٌّ دخل درجك.
+                </div>
+            </div>
+
+            ${(day.flags || []).length ? `<div class="alert alert-warning py-2 small mb-2">
+                <strong>ما سيراه فريق أميال صراحةً:</strong>
+                <ul class="mb-0">${day.flags.map(f => `<li>${esc(f)}</li>`).join('')}</ul></div>` : ''}
+
+            ${sub ? `<div class="alert alert-${sub.status === 'accepted' ? 'success'
+                        : (sub.status === 'rejected' ? 'danger' : 'info')} py-2 small mb-0">
+                <strong>${esc(sub.status_label)}</strong>
+                ${sub.window_label ? ' — ' + esc(sub.window_label) : ''}
+                ${sub.submitted_at ? '<div>رُفعت: ' + esc(sub.submitted_at) + '</div>' : ''}
+                ${sub.decision_note ? '<div>ردّ أميال: ' + esc(sub.decision_note) + '</div>' : ''}
+                ${sub.unlock_reason ? '<div>فُكّ اليوم: ' + esc(sub.unlock_reason) + '</div>' : ''}
+             </div>` : ''}`;
+    }
+
+    $el('ag-daily-load').addEventListener('click', loadDaily);
+
+    $el('ag-daily-submit').addEventListener('click', async () => {
+        const d = $el('ag-daily-date').value || new Date().toISOString().slice(0, 10);
+        if (!confirm('سيُرفع كشفُ يوم ' + d + ' إلى أميال، ويُنفَّذ التحويل بعد قبولهم. متابعة؟')) return;
+        const j = await post('/daily-settlement', {date: d});
+        alert(j.message || (j.success ? 'تمّ' : 'فشل'));
+        loadDaily(); loadOverview();
+    });
+
     // تسوية الفروع — الطبقة الثانية.
     async function loadBranchSettlement() {
         const tb = document.getElementById('ag-bsettle-tbody');
@@ -565,6 +657,10 @@
     });
 
     $el('ag-bsettle-load').addEventListener('click', loadBranchSettlement);
+
+    // النافذة تُقرأ عند فتح التبويب: من يفتحه الساعة الحادية عشرة يجب أن
+    // يرى «مفتوحة» بلا أن يضغط شيئاً.
+    document.querySelector('[data-bs-target="#ag-settle"]')?.addEventListener('shown.bs.tab', loadDaily);
 
     $el('ag-cash-in').onclick = () => cashMove('in');
     $el('ag-cash-out').onclick = () => cashMove('out');

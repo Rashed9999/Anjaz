@@ -86,6 +86,10 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff) 
     Route::get('/branches/{id}/report', [$c, 'dailyReport'])->where('id', '[0-9]+')->name('branch.report');
     Route::post('/branches/{id}/hours', [$c, 'setWorkingHours'])->where('id', '[0-9]+')->name('branch.hours');
     Route::get('/settlements', [$c, 'settlements'])->name('settlements');
+
+    // التسوية اليوميّة مع أميال — نافذةٌ ليليّة يُقفل فيها اليوم.
+    Route::get('/daily-settlement', [$c, 'dailySettlement'])->name('daily.settlement');
+    Route::post('/daily-settlement', [$c, 'submitDailySettlement'])->name('daily.settlement.submit');
     Route::post('/settlements/payout', [$c, 'requestPayout'])->name('settlements.payout');
 
     Route::post('/branches', [$c, 'createBranch'])->name('branch.create');

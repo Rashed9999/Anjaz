@@ -371,6 +371,13 @@ Route::prefix('hub')->name('hub.')->group(function () {
     Route::get('/agents/{id}/settlement.json', [$asc, 'agentSettlement'])
         ->where('id', '[0-9]+')->name('agents.settlement.one');
 
+    // AMIAL-DAILY-SETTLEMENT-001 — إقفال يوم الشبكة والتحوّل ورقاً/رصيداً
+    Route::get('/agents/daily.json', [$asc, 'dailyBoard'])->name('agents.daily');
+    Route::get('/agents/daily/{ulid}.json', [$asc, 'dailyOne'])->name('agents.daily.one');
+    Route::post('/agents/daily/{ulid}/accept', [$asc, 'dailyAccept'])->name('agents.daily.accept');
+    Route::post('/agents/daily/{ulid}/reject', [$asc, 'dailyReject'])->name('agents.daily.reject');
+    Route::post('/agents/daily/unlock', [$asc, 'dailyUnlock'])->name('agents.daily.unlock');
+
     // المالية
     Route::post('/finance/topup', [$hc, 'adminTopup'])->name('finance.topup');
     Route::get('/finance/stats.json', [$hc, 'financeStats'])->name('finance.stats');
