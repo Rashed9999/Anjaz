@@ -13,7 +13,7 @@ class WhatsappLinkedDevice extends Model
     protected $table = 'whatsapp_linked_devices';
 
     protected $fillable = [
-        'user_id', 'whatsapp_number', 'device_fingerprint',
+        'user_id', 'agent_staff_id', 'whatsapp_number', 'device_fingerprint',
         'status', 'risk_score', 'otp_verified_at', 'last_activity_at',
         'revoked_at', 'revoked_by', 'revoke_reason',
     ];

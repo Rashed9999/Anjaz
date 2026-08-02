@@ -283,6 +283,47 @@ class AgentStaffController extends Controller
         ]);
     }
 
+    /** ربطُ واتساب موظّف — يُرسَل رمزٌ إلى الرقم ويُتمّه صاحبه. */
+    public function linkWhatsapp(Request $request, int $id): JsonResponse
+    {
+        $request->validate(['phone' => 'required|string|max:20']);
+
+        $actor = $this->actor($request);
+        $target = AgentStaff::find($id);
+
+        if (!$target || (int) $target->agent_user_id !== (int) $actor->agent_user_id) {
+            return response()->json(['success' => false, 'message' => 'الموظّف خارج نطاقك'], 404);
+        }
+
+        $out = app(\App\Services\Whatsapp\AgentWhatsappService::class)
+            ->startLink($actor, $target, (string) $request->input('phone'));
+
+        return response()->json(
+            ['success' => $out['ok'], 'message' => $out['message']],
+            $out['ok'] ? 200 : 422,
+        );
+    }
+
+    /** فكُّ الربط — يُغلق القناة فوراً. */
+    public function unlinkWhatsapp(Request $request, int $id): JsonResponse
+    {
+        $actor = $this->actor($request);
+
+        if ($actor->isTeller()) {
+            return response()->json(['success' => false, 'message' => 'فكُّ الربط من صلاحية الإدارة'], 403);
+        }
+
+        $target = AgentStaff::find($id);
+
+        if (!$target || (int) $target->agent_user_id !== (int) $actor->agent_user_id) {
+            return response()->json(['success' => false, 'message' => 'الموظّف خارج نطاقك'], 404);
+        }
+
+        app(\App\Services\Whatsapp\AgentWhatsappService::class)->revoke($target);
+
+        return response()->json(['success' => true, 'message' => 'فُكّ ربط واتساب — لن يستقبل استعلامات بعد الآن']);
+    }
+
     private function actor(Request $request): AgentStaff
     {
         $s = $request->attributes->get('agent_staff');

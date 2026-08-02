@@ -62,6 +62,10 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff) 
 
         // ملفّ الموظّف الموحَّد + سجلّ عمليات الشركة.
         Route::get('/{id}/profile', [$staff, 'profile'])->where('id', '[0-9]+')->name('profile');
+
+        // واتساب الموظّف: قناةُ **استعلامٍ** لا تنفيذ — انظر AgentWhatsappService.
+        Route::post('/{id}/whatsapp', [$staff, 'linkWhatsapp'])->where('id', '[0-9]+')->name('wa.link');
+        Route::post('/{id}/whatsapp/unlink', [$staff, 'unlinkWhatsapp'])->where('id', '[0-9]+')->name('wa.unlink');
     });
 
     Route::get('/operations', [$staff, 'operations'])->name('operations');

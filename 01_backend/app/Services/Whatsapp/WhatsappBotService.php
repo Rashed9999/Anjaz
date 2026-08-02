@@ -69,6 +69,29 @@ class WhatsappBotService
         ]);
 
         try {
+            // **موظّفو شركات الصرافة أوّلاً.**
+            //
+            // الصرّاف ليس `User` ولا محفظة له، فمسارُ العميل كلّه لا يعنيه:
+            // «رصيدي» عنده تعني نقدَ درجه لا رصيد محفظة. ولو مرّ من البوّابة
+            // العامّة لطُلب منه ربطُ حسابٍ لا يملكه.
+            $agentWa = app(AgentWhatsappService::class);
+
+            // ربطٌ معلَّق: الرمز يأتي قبل أن يصير الرقم مرتبطاً.
+            if ($pending = $agentWa->tryVerifyPending($fromPhone, $messageBody)) {
+                $this->send($fromPhone, $pending);
+
+                return;
+            }
+
+            $staff = $agentWa->resolveStaff($fromPhone);
+
+            if ($staff) {
+                $reply = $agentWa->handle($staff, $messageBody);
+                $this->send($fromPhone, $reply ?? $agentWa->menu($staff));
+
+                return;
+            }
+
             $intent = $this->parser->parse($messageBody);
             $step   = $this->session->currentStep($fromPhone);
 
@@ -780,16 +803,33 @@ class WhatsappBotService
 
     private function showAgents(string $phone, User $user): void
     {
+        // **ثلاثة أعطالٍ كانت هنا، وكلٌّ منها كافٍ وحده لإسقاط الأمر:**
+        //
+        //   `users.type = 2`            — والوكيل type = 1 (AGENT_TYPE).
+        //                                  فالنتيجة صفرٌ دائماً.
+        //   `agent_profiles.is_active`  — العمود اسمه `status`.
+        //   `agent_profiles.display_name` — العمود اسمه `business_name`.
+        //
+        // والأخيران يُسقطان الاستعلام بـSQLSTATE[42S22]، فيرى العميل
+        // «حدث خطأ» كلّما سأل عن أقرب وكيل. ولم يكشفه شيء لأنّ لا اختبار
+        // ينادي هذا المسار.
+        //
+        // **والفروع تُستثنى**: الفرع حسابُ وكيلٍ ابن، وعرضُه للعميل يُرسله
+        // إلى فرعٍ باسم شركةٍ لا يعرفه.
+        $branchAccounts = \App\Models\Agent\AgentBranch::pluck('branch_user_id')->all();
+
         $agents = DB::table('users')
             ->join('agent_profiles', 'users.id', '=', 'agent_profiles.user_id')
-            ->where('users.type', 2)
-            ->where('agent_profiles.is_active', true)
+            ->where('users.type', AGENT_TYPE)
+            ->where('users.is_active', 1)
+            ->where('agent_profiles.status', 'active')
+            ->whereNotIn('users.id', $branchAccounts ?: [0])
             ->where('agent_profiles.zone_code', $user->zone_code ?? 'SOUTH')
-            ->select('users.f_name', 'users.l_name', 'users.phone', 'agent_profiles.display_name')
+            ->select('users.f_name', 'users.l_name', 'users.phone', 'agent_profiles.business_name')
             ->limit(5)
             ->get()
             ->map(fn($a) => [
-                'display_name' => $a->display_name ?? trim("{$a->f_name} {$a->l_name}"),
+                'display_name' => $a->business_name ?: trim("{$a->f_name} {$a->l_name}"),
                 'phone'        => $a->phone,
             ])->toArray();
 
