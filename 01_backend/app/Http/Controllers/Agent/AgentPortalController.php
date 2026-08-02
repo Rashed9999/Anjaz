@@ -12,6 +12,7 @@ use App\Services\AgentNetworkService;
 use App\Services\AgentDailySettlementService;
 use App\Services\AgentCounterService;
 use App\Services\AgentReportService;
+use App\Services\AgentReportsService;
 use App\Services\AgentStaffService;
 use App\Services\AgentTillService;
 use DomainException;
@@ -659,6 +660,33 @@ class AgentPortalController extends Controller
                 ? 'رُفعت تسوية اليوم إلى أميال — بانتظار قرارهم'
                 : 'رُفعت التسوية وسُجّلت **متأخّرة** — سيراها فريق أميال بهذه الصفة',
         );
+    }
+
+    /**
+     * التقرير الكامل — ستّة أقسامٍ في نداءٍ واحد.
+     *
+     * ونداءٌ واحدٌ مقصود: ستّة نداءاتٍ متتابعة تبني الشاشة على دفعات،
+     * فمن يضغط «طباعة» بعد ثانيةٍ يطبع تقريراً نصفَ جاهز.
+     */
+    public function reports(Request $request): JsonResponse
+    {
+        $request->validate(['from' => 'nullable|date', 'to' => 'nullable|date']);
+
+        $agent = $this->companyUser($request);
+
+        // مديرُ الفرع يرى فرعه، والإدارة العامّة ترى الشركة.
+        $allowed = array_map('intval', (array) $request->attributes->get('agent_branch_ids', []));
+        $scoped = (string) $request->attributes->get('portal_role') === AgentStaff::ROLE_HEAD_OFFICE
+            ? [] : $allowed;
+
+        return $this->ok([
+            'report' => app(AgentReportsService::class)->full(
+                $agent,
+                (string) $request->query('from', now()->subDays(29)->toDateString()),
+                (string) $request->query('to', now()->toDateString()),
+                $scoped,
+            ),
+        ]);
     }
 
     /** ما يُحرّك مال الشركة قرارُ إدارتها العامّة. */

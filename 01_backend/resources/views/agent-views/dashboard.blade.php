@@ -66,6 +66,7 @@
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-till" data-testid="ag-tab-till">🧾 حركة النقد</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-earn" data-testid="ag-tab-earn">📈 العمولات</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-ops" data-testid="ag-tab-ops">📜 سجلّ العمليات</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-reports" data-testid="ag-tab-reports">📊 التقارير</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-settle" data-testid="ag-tab-settle">🤝 التسويات</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-report" data-testid="ag-tab-report">📋 تقرير اليوم</button></li>
         @endif
@@ -81,6 +82,11 @@
 
         {{-- كشف التسوية: مستندٌ واحدٌ يقرؤه الصرّاف والإدارة بنفس الشيفرة. --}}
         @include('agent-views._statement')
+
+        @if($role !== 'teller')
+            @include('agent-views._charts')
+            @include('agent-views._reports')
+        @endif
 
         {{-- ما دون هذا للإدارة ومديري الفروع. والصرّاف لا يراه: ليس
              إخفاءَ واجهةٍ بل حدَّ صلاحية — نقاطُ النهاية نفسها تفحص الدور. --}}
@@ -543,6 +549,287 @@
         alert(j.message || (j.success ? 'تم' : 'فشل'));
         if (j.success) { loadTill(); loadOverview(); loadBranchSettlement(); }
     };
+
+    // ══════════════════════════════════════════════════════════════════
+    // التقارير
+    // ══════════════════════════════════════════════════════════════════
+    let RP = null;      // آخر تقريرٍ حُمّل — تُبنى منه الطباعة والتصدير
+
+    const pct = (m) => {
+        if (m.change_pct === null) {
+            // نموٌّ من صفرٍ ليس «١٠٠٪»: هو بدايةُ عملٍ لم يكن.
+            return m.is_new
+                ? '<span class="badge bg-info text-dark">جديد</span>'
+                : '<span class="text-muted small">لا مقارنة</span>';
+        }
+        const up = m.change_pct >= 0;
+        return `<span class="small ${up ? 'text-success' : 'text-danger'}">
+                    ${up ? '▲' : '▼'} ${Math.abs(m.change_pct)}٪</span>`;
+    };
+
+    const rpCard = (title, m, cls, isCount) => `
+        <div class="col-md-3 col-6"><div class="card p-3 h-100">
+            <small class="text-muted">${title}</small>
+            <div class="fs-4 fw-bold ${cls || ''}">${isCount ? Number(m.value) : num(m.value)}</div>
+            <div>${pct(m)} <span class="text-muted small">سابقاً ${isCount ? Number(m.previous) : num(m.previous)}</span></div>
+        </div></div>`;
+
+    async function loadReports() {
+        const from = $el('rp-from').value, to = $el('rp-to').value;
+        $el('rp-body').innerHTML = '<div class="text-muted text-center py-5">جارٍ بناء التقرير…</div>';
+
+        const j = await get(`/reports?from=${from}&to=${to}`);
+        if (!j.success) {
+            $el('rp-body').innerHTML = `<div class="alert alert-danger">${esc(j.message)}</div>`;
+            return;
+        }
+
+        RP = j.meta.report;
+        renderReports(RP);
+    }
+
+    function renderReports(r) {
+        const s = r.summary;
+
+        // ترويسةُ الورقة تُملأ الآن — لا لحظةَ الطباعة، فالطباعة لا تنتظر.
+        $el('rp-h-agent').textContent = r.agent.name;
+        $el('rp-h-period').textContent = `الفترة: ${r.period.from} إلى ${r.period.to} (${r.period.days} يوماً)`;
+        $el('rp-h-generated').textContent = 'صدر: ' + r.generated_at;
+
+        const branchBars = r.by_branch.filter(b => Number(b.volume) > 0)
+            .sort((a, b) => Number(b.volume) - Number(a.volume))
+            .map(b => ({label: b.name, value: Number(b.volume), color: CHART_COLORS.vol}));
+
+        const staffBars = r.by_staff.slice(0, 10)
+            .map(x => ({label: x.name, value: Number(x.volume), color: CHART_COLORS.wdr}));
+
+        const idle = r.by_branch.filter(b => b.idle);
+
+        $el('rp-body').innerHTML = `
+        <div class="row g-3 mb-3 rp-section">
+            ${rpCard('حجم العمل', s.volume)}
+            ${rpCard('إيداعات', s.deposits, 'text-success')}
+            ${rpCard('سحوبات', s.withdrawals, 'text-primary')}
+            ${rpCard('عمولة شركتك', s.commission, 'text-success')}
+        </div>
+        <div class="row g-3 mb-3 rp-section">
+            ${rpCard('عدد العمليات', s.operations, '', true)}
+            <div class="col-md-3 col-6"><div class="card p-3 h-100">
+                <small class="text-muted">عملاء متميّزون</small>
+                <div class="fs-4 fw-bold">${Number(s.customers)}</div></div></div>
+            <div class="col-md-3 col-6"><div class="card p-3 h-100">
+                <small class="text-muted">متوسّط العملية</small>
+                <div class="fs-4 fw-bold">${s.avg_ticket === null
+                    ? '<span class="fs-6 text-muted">لا عمليات</span>' : num(s.avg_ticket)}</div></div></div>
+            <div class="col-md-3 col-6"><div class="card p-3 h-100">
+                <small class="text-muted">الرسوم المحصّلة</small>
+                <div class="fs-4 fw-bold">${num(s.fees.value)}</div></div></div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-lg-8"><div class="card p-3 h-100 rp-section">
+                <h6>حركة الأيّام</h6>
+                ${lineChart(r.daily, {title: 'الإيداعات والسحوبات يوميّاً'})}
+            </div></div>
+            <div class="col-lg-4"><div class="card p-3 h-100 rp-section">
+                <h6>نسبة الإيداع إلى السحب</h6>
+                ${donutChart([
+                    {label: 'إيداعات', value: Number(s.deposits.value), color: CHART_COLORS.dep},
+                    {label: 'سحوبات', value: Number(s.withdrawals.value), color: CHART_COLORS.wdr},
+                ], {centerLabel: 'حجم العمل'})}
+            </div></div>
+        </div>
+
+        <div class="card p-3 mb-3 rp-section">
+            <h6>الفروع</h6>
+            ${barChart(branchBars, {title: 'حجم العمل بالفروع'})}
+            ${idle.length ? `<div class="alert alert-warning py-2 small mt-3 mb-0">
+                <strong>${idle.length} فرعاً بلا حركةٍ في هذه الفترة:</strong>
+                ${idle.map(b => esc(b.name)).join('، ')} —
+                وفرعٌ لم يعمل ليس فرعاً حصيلتُه صفر، هو فرعٌ متوقّف.</div>` : ''}
+            <div class="table-responsive mt-3"><table class="table table-sm align-middle mb-0">
+                <thead class="table-light"><tr>
+                    <th>الفرع</th><th>إيداعات</th><th>سحوبات</th><th>حجم العمل</th>
+                    <th>العمولة</th><th>ورديّات</th><th>عجز</th><th>فائض</th><th>نقدُه الآن</th></tr></thead>
+                <tbody>${r.by_branch.map(b => `
+                    <tr class="${b.idle ? 'text-muted' : ''}">
+                        <td><b>${esc(b.name)}</b> <span class="small text-muted">${esc(b.code)}</span></td>
+                        <td>${num(b.deposits)} <span class="small text-muted">(${b.deposits_count})</span></td>
+                        <td>${num(b.withdrawals)} <span class="small text-muted">(${b.withdrawals_count})</span></td>
+                        <td class="fw-bold">${num(b.volume)}</td>
+                        <td class="text-success">${num(b.commission)}</td>
+                        <td>${b.shifts}</td>
+                        <td class="${Number(b.shortage_total) > 0 ? 'text-danger fw-bold' : ''}">${num(b.shortage_total)}</td>
+                        <td class="${Number(b.overage_total) > 0 ? 'text-warning fw-bold' : ''}">${num(b.overage_total)}</td>
+                        <td>${num(b.cash_on_hand)}</td>
+                    </tr>`).join('')}</tbody>
+            </table></div>
+        </div>
+
+        <div class="card p-3 mb-3 rp-section">
+            <h6>الموظّفون</h6>
+            ${barChart(staffBars, {title: 'حجم العمل بالموظّفين'})}
+            <div class="table-responsive mt-3"><table class="table table-sm align-middle mb-0">
+                <thead class="table-light"><tr>
+                    <th>الموظّف</th><th>الفرع</th><th>حجم العمل</th><th>عمليات</th>
+                    <th>ورديّات</th><th>الدقّة</th><th>عجز</th><th>فائض</th></tr></thead>
+                <tbody>${r.by_staff.length ? r.by_staff.map(x => `
+                    <tr>
+                        <td>${esc(x.name)} <span class="small text-muted font-monospace" dir="ltr">${esc(x.username ?? '')}</span></td>
+                        <td>${esc(x.branch ?? '—')}</td>
+                        <td class="fw-bold">${num(x.volume)}</td>
+                        <td>${x.operations}</td>
+                        <td>${x.shifts_closed}</td>
+                        <td>${x.accuracy_pct === null
+                            ? '<span class="text-muted small">لا إغلاق</span>' : x.accuracy_pct + '٪'}</td>
+                        <td class="${x.shortage_count ? 'text-danger' : ''}">${num(x.shortage_total)}
+                            <span class="small text-muted">(${x.shortage_count})</span></td>
+                        <td class="${x.overage_count ? 'text-warning' : ''}">${num(x.overage_total)}
+                            <span class="small text-muted">(${x.overage_count})</span></td>
+                    </tr>`).join('')
+                    : '<tr><td colspan="8" class="text-center text-muted py-3">لا عمليات في الفترة</td></tr>'}</tbody>
+            </table></div>
+        </div>
+
+        <div class="card p-3 mb-3 rp-section">
+            <h6>الفروق — أين ضاع المال</h6>
+            <div class="d-flex gap-4 flex-wrap mb-2">
+                <div><span class="text-muted small">عجز</span>
+                    <div class="fs-5 fw-bold text-danger">${num(r.variances.shortage_total)}
+                        <span class="small text-muted">(${r.variances.shortage_count})</span></div></div>
+                <div><span class="text-muted small">فائض</span>
+                    <div class="fs-5 fw-bold text-warning">${num(r.variances.overage_total)}
+                        <span class="small text-muted">(${r.variances.overage_count})</span></div></div>
+            </div>
+            <div class="alert alert-light border small py-2">
+                العجز والفائض لا يُقاصّان — من نقص خمسةً وزاد خمسةً ليس «صفراً»:
+                هما حادثتان تستحقّان سؤالين.
+            </div>
+            <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+                <thead class="table-light"><tr>
+                    <th>التاريخ</th><th>الفرع</th><th>الصرّاف</th><th>الفرق</th>
+                    <th>حالة المراجعة</th><th>ما كتبه الصرّاف</th></tr></thead>
+                <tbody>${r.variances.rows.length ? r.variances.rows.map(v => `
+                    <tr>
+                        <td class="small">${esc(v.date ?? '')}</td>
+                        <td>${esc(v.branch ?? '')}</td>
+                        <td>${esc(v.staff ?? '')}</td>
+                        <td class="fw-bold ${v.kind === 'shortage' ? 'text-danger' : 'text-warning'}">${num(v.variance)}</td>
+                        <td class="small">${esc(v.review_label ?? '')}</td>
+                        <td class="small">${esc(v.note ?? '—')}</td>
+                    </tr>`).join('')
+                    : '<tr><td colspan="6" class="text-center text-success py-3">لا فروق في الفترة 🎉</td></tr>'}</tbody>
+            </table></div>
+        </div>
+
+        <div class="card p-3 rp-section">
+            <h6>إقفال الأيّام مع أميال</h6>
+            <div class="d-flex gap-4 flex-wrap mb-3">
+                <div><span class="text-muted small">أيّام الفترة</span>
+                    <div class="fs-5 fw-bold">${r.settlements.expected_days}</div></div>
+                <div><span class="text-muted small">رُفعت</span>
+                    <div class="fs-5 fw-bold">${r.settlements.filed}</div></div>
+                <div><span class="text-muted small">لم تُرفع</span>
+                    <div class="fs-5 fw-bold ${r.settlements.missing ? 'text-danger' : ''}">${r.settlements.missing}</div></div>
+                <div><span class="text-muted small">في وقتها</span>
+                    <div class="fs-5 fw-bold text-success">${r.settlements.on_time}</div></div>
+                <div><span class="text-muted small">متأخّرة</span>
+                    <div class="fs-5 fw-bold ${r.settlements.late ? 'text-danger' : ''}">${r.settlements.late}</div></div>
+                <div><span class="text-muted small">الالتزام بالوقت</span>
+                    <div class="fs-5 fw-bold">${r.settlements.on_time_pct === null
+                        ? '<span class="fs-6 text-muted">لم تُرفع أيّام</span>' : r.settlements.on_time_pct + '٪'}</div></div>
+            </div>
+            <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+                <thead class="table-light"><tr>
+                    <th>اليوم</th><th>الحالة</th><th>الرفع</th><th>إيداعات</th><th>سحوبات</th><th>التحويل</th></tr></thead>
+                <tbody>${r.settlements.rows.length ? r.settlements.rows.map(x => `
+                    <tr>
+                        <td>${esc(x.date)}</td>
+                        <td class="small">${esc(x.status_label)}</td>
+                        <td class="small">${x.window_state === 'on_time'
+                            ? '<span class="badge bg-success">في وقتها</span>'
+                            : '<span class="badge bg-danger">متأخّرة</span>'}</td>
+                        <td>${num(x.deposits_total)}</td>
+                        <td>${num(x.withdrawals_total)}</td>
+                        <td class="small">${esc(x.conversion_label)} <b>${num(x.conversion_amount)}</b></td>
+                    </tr>`).join('')
+                    : '<tr><td colspan="6" class="text-center text-muted py-3">لم تُرفع تسويات في الفترة</td></tr>'}</tbody>
+            </table></div>
+        </div>`;
+    }
+
+    // مدياتٌ جاهزة — أكثر ما يُطلب.
+    document.querySelectorAll('[data-rp-range]').forEach(b => b.addEventListener('click', () => {
+        const d = Number(b.dataset.rpRange);
+        const to = new Date(), from = new Date(Date.now() - (d - 1) * 86400000);
+        $el('rp-to').value = to.toISOString().slice(0, 10);
+        $el('rp-from').value = from.toISOString().slice(0, 10);
+        loadReports();
+    }));
+
+    $el('rp-load').addEventListener('click', loadReports);
+
+    // **الطباعة لا تُستدعى على تقريرٍ لم يُبنَ.** من يضغط «طباعة» قبل
+    // «عرض» كان يطبع ورقةً فيها «اختر الفترة».
+    $el('rp-print').addEventListener('click', () => {
+        if (!RP) { alert('اعرض التقرير أوّلاً ثمّ اطبعه'); return; }
+        window.print();
+    });
+
+    $el('rp-csv').addEventListener('click', () => {
+        if (!RP) { alert('اعرض التقرير أوّلاً ثمّ صدّره'); return; }
+        exportCsv(RP);
+    });
+
+    /**
+     * تصديرٌ يفتحه Excel العربيّ صحيحاً.
+     *
+     * وبلا `\uFEFF` في المقدّمة يقرأ Excel النصّ العربيّ رموزاً مشوّشة —
+     * وهو أوّل ما يُشتكى منه في كلّ تصديرٍ عربيّ.
+     */
+    function exportCsv(r) {
+        const q = (v) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+        const L = [];
+
+        L.push([q('تقرير'), q(r.agent.name)].join(','));
+        L.push([q('الفترة'), q(r.period.from + ' إلى ' + r.period.to)].join(','));
+        L.push([q('صدر'), q(r.generated_at)].join(','));
+        L.push('');
+
+        L.push([q('الفروع'), q('إيداعات'), q('سحوبات'), q('حجم العمل'), q('العمولة'),
+                q('عجز'), q('فائض')].join(','));
+        r.by_branch.forEach(b => L.push([q(b.name), q(b.deposits), q(b.withdrawals),
+            q(b.volume), q(b.commission), q(b.shortage_total), q(b.overage_total)].join(',')));
+        L.push('');
+
+        L.push([q('الموظّفون'), q('الفرع'), q('حجم العمل'), q('عمليات'),
+                q('الدقّة٪'), q('عجز'), q('فائض')].join(','));
+        r.by_staff.forEach(x => L.push([q(x.name), q(x.branch), q(x.volume), q(x.operations),
+            q(x.accuracy_pct === null ? 'لا إغلاق' : x.accuracy_pct), q(x.shortage_total), q(x.overage_total)].join(',')));
+        L.push('');
+
+        L.push([q('اليوم'), q('إيداعات'), q('سحوبات'), q('حجم العمل'), q('عمليات')].join(','));
+        r.daily.forEach(d => L.push([q(d.date), q(d.deposits), q(d.withdrawals),
+            q(d.volume), q(d.count)].join(',')));
+
+        const blob = new Blob(['\uFEFF' + L.join('\n')], {type: 'text/csv;charset=utf-8;'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `amial-report-${r.period.from}_${r.period.to}.csv`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+
+    // الفترة الافتراضيّة: ثلاثون يوماً — والحقول تُملأ ليعرف من يفتح
+    // التبويب ما الذي سيُعرَض قبل أن يضغط.
+    if ($el('rp-to')) {
+        $el('rp-to').value = new Date().toISOString().slice(0, 10);
+        $el('rp-from').value = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+    }
+
+    document.querySelector('[data-bs-target="#ag-reports"]')?.addEventListener('shown.bs.tab', () => {
+        if (!RP) loadReports();
+    });
 
     // ── التسوية اليوميّة مع أميال ────────────────────────────────────
     //

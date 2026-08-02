@@ -55,8 +55,23 @@ if (!chromium) {
 //
 // الجافاسكربت يُنقل **حرفيّاً** بلا تعديل: أيّ إعادة صياغةٍ هنا تعني أنّنا
 // نختبر نصّاً غير الذي يعمل في اللوحة.
-function bladeToHtml(file, vars) {
+// نصُّ القالب بعد دمج جزئيّاته — قالبٌ يُختبر بلا ما يُضمّنه ليس القالب
+// الذي يعمل في اللوحة. (`@once` يُترك: تكراره هنا غير ممكنٍ أصلاً.)
+function bladeSource(file, depth = 0) {
     let s = readFileSync(resolve(ROOT, file), 'utf8');
+
+    if (depth < 4) {
+        s = s.replace(/^[ \t]*@include\(\s*['"]([^'"]+)['"]\s*\)\s*$/gm, (m, dotted) => {
+            const f = 'resources/views/' + dotted.replace(/\./g, '/') + '.blade.php';
+            try { return bladeSource(f, depth + 1); } catch { return ''; }
+        });
+    }
+
+    return s;
+}
+
+function bladeToHtml(file, vars) {
+    let s = bladeSource(file);
 
     s = s.replace(/\{\{--[\s\S]*?--\}\}/g, '');                       // تعليقات Blade
     s = s.replace(/\{\{\s*([\s\S]*?)\s*\}\}/g, (m, expr) => {          // {{ ... }}
@@ -81,6 +96,7 @@ ${scripts.map(j => `<script>${j}</script>`).join('\n')}
 const HUB_URL = 'http://amial.test/admin/amial/hub/agents';
 const COUNTER_URL = 'http://amial.test/agent/counter';
 const STAFF_URL = 'http://amial.test/agent/staff-tab';
+const DASH_URL = 'http://amial.test/agent/dashboard';
 
 const HUB_HTML = bladeToHtml('resources/views/admin-views/amial/hub/users.blade.php', {
     '$hubSlug': 'agents',
@@ -188,11 +204,29 @@ const PROFILE_UNRATED = {
     recent_operations: [],
 };
 
+// ── لوحة الوكيل الكاملة: التقارير والرسوم والطباعة ─────────────────
+const DASH_HTML = bladeToHtml('resources/views/agent-views/dashboard.blade.php', {
+    "url('agent')": 'http://amial.test/agent',
+    "route('agent.login')": 'http://amial.test/agent/login',
+    "route('agent.logout')": 'http://amial.test/agent/logout',
+    '$role': 'head_office',
+    '$staffName': 'البسيري للصرافة',
+    '$staffUsername': 'HQ19',
+    '$roleLabel': 'الإدارة العامّة',
+    '$branchName': '',
+});
+
+const REPORT = {"period": {"from": "2026-07-04", "to": "2026-08-02", "days": 30, "prev_from": "2026-06-04", "prev_to": "2026-07-03"}, "agent": {"name": "البسيري للصرافة", "phone": "967771500001"}, "summary": {"volume": {"value": "630000", "previous": "500000", "change_pct": 26.0, "is_new": false}, "deposits": {"value": "480000", "previous": "400000", "change_pct": 20.0, "is_new": false}, "withdrawals": {"value": "150000", "previous": "100000", "change_pct": 50.0, "is_new": false}, "commission": {"value": "6300", "previous": "5000", "change_pct": 26.0, "is_new": false}, "fees": {"value": "12600", "previous": "10000", "change_pct": 26.0, "is_new": false}, "operations": {"value": "17", "previous": "14", "change_pct": 21.4, "is_new": false}, "customers": 11, "avg_ticket": "37058.8235"}, "daily": [{"date": "2026-08-01", "label": "08-01", "deposits": "40000", "withdrawals": "10000", "volume": "50000", "count": 1, "net_cash": "30000"}, {"date": "2026-08-02", "label": "08-02", "deposits": "45000", "withdrawals": "12000", "volume": "57000", "count": 2, "net_cash": "33000"}, {"date": "2026-08-03", "label": "08-03", "deposits": "50000", "withdrawals": "14000", "volume": "64000", "count": 3, "net_cash": "36000"}, {"date": "2026-08-04", "label": "08-04", "deposits": "55000", "withdrawals": "16000", "volume": "71000", "count": 4, "net_cash": "39000"}, {"date": "2026-08-05", "label": "08-05", "deposits": "60000", "withdrawals": "18000", "volume": "78000", "count": 5, "net_cash": "42000"}], "by_branch": [{"id": 1, "name": "فرع المكلا", "code": "MKL", "city": "حضرموت", "is_active": true, "deposits": "380000", "deposits_count": 9, "withdrawals": "120000", "withdrawals_count": 4, "volume": "500000", "commission": "5000", "fees": "10000", "shifts": 6, "shortage_total": "8000", "overage_total": "1500", "cash_on_hand": "2000000", "idle": false}, {"id": 2, "name": "فرع سيحوت", "code": "SHT", "city": "المهرة", "is_active": true, "deposits": "0", "deposits_count": 0, "withdrawals": "0", "withdrawals_count": 0, "volume": "0", "commission": "0", "fees": "0", "shifts": 0, "shortage_total": "0", "overage_total": "0", "cash_on_hand": "0", "idle": true}], "by_staff": [{"id": 9, "name": "محمد علي", "username": "MKL-001", "branch": "فرع المكلا", "deposits": "380000", "withdrawals": "120000", "volume": "500000", "operations": 13, "shifts_closed": 6, "accuracy_pct": 66.7, "shortage_count": 2, "shortage_total": "8000", "overage_count": 1, "overage_total": "1500"}], "variances": {"rows": [{"shift_id": 4, "date": "2026-08-01", "branch": "فرع المكلا", "staff": "محمد علي", "variance": "-5000", "kind": "shortage", "review_status": "pending", "review_label": "بانتظار مراجعة الإدارة", "note": "فرقٌ في العدّ"}], "shortage_count": 2, "shortage_total": "8000", "overage_count": 1, "overage_total": "1500"}, "settlements": {"expected_days": 30, "filed": 28, "missing": 2, "on_time": 26, "late": 2, "accepted": 27, "rejected": 1, "on_time_pct": 92.9, "rows": [{"date": "2026-08-01", "status": "accepted", "status_label": "قُبلت ونُفّذ التحويل", "window_state": "on_time", "conversion": "topup", "conversion_label": "يسلّم نقداً ويستلم رصيداً إلكترونيّاً", "conversion_amount": "260000", "deposits_total": "380000", "withdrawals_total": "120000"}]}, "generated_at": "2026-08-02 23:15:00"};
+
 // كلّ نداءٍ يُسجَّل، لأنّ سؤال هذا الفحص ليس «هل ظهر خطأ» بل **هل وصل
 // الطلب أصلاً**. وزرُّ الإيداع الميّت كان يسقط قبل أيّ نداء.
 const STUBS = `
 window.__calls = [];
-window.alert = () => {};
+window.__printed = false;
+window.__lastAlert = '';
+// print تُسجَّل ولا تُنفَّذ: نافذةُ طباعةٍ حقيقيّة تُجمّد المتصفّح بلا رادّ.
+window.print = () => { window.__printed = true; };
+window.alert = (m) => { window.__lastAlert = String(m ?? ''); };
 window.prompt = () => 'سبب مكتوب';
 window.confirm = () => true;
 const _json = (o) => new Response(JSON.stringify(o), {status: 200, headers: {'Content-Type': 'application/json'}});
@@ -200,13 +234,39 @@ window.fetch = async (url, opts) => {
     const u = String(url);
     window.__calls.push({url: u, method: (opts && opts.method) || 'GET'});
 
+    // نقاطُ تبويبات الوكلاء في لوحة الإدارة — حمولةٌ فارغةٌ **حسنةُ الشكل**.
+    // فحمولةٌ ناقصةُ المفاتيح تُسقط الشيفرة بخطأٍ ليس من صنعها، فيضيع
+    // الفحص في مطاردة أعطالٍ اخترعها الفحص نفسه.
+    // **بلا تعبيرٍ نمطيّ هنا عمداً.** هذا النصّ داخل قالبٍ نصّيّ في ملفّ
+    // .mjs، و\/ فيه تُصبح / — فانقلب /\/agents\/…/ إلى //agents/… أي
+    // **تعليقُ سطر**، فمات سكربت التهيئة كلّه ولم تُستبدَل fetch أصلاً.
+    // وظهر العطل بثلاث رسائل لا تدلّ عليه.
+    if (u.includes('/reports')) return _json({success: true, meta: {report: ${JSON.stringify(REPORT)}}});
+
+    if (u.includes('/agents/network') || u.includes('/agents/branches')
+        || u.includes('/agents/movements') || u.includes('/agents/settlement')
+        || u.includes('/agents/daily')) return _json({
+        agents: 0, branches: 0, branches_active: 0, agents_without_branch: 0,
+        flags: {low_cash: 0, overloaded: 0, not_counted: 0, no_till: 0},
+        liability: '0', agent_cash: '0',
+        data: [], rows: [], totals: {}, window: {message: ''},
+    });
+
     if (u.includes('users.json')) return _json({data: ${JSON.stringify(FAKE_ROWS)}, current_page: 1, last_page: 1, total: 2});
     if (u.includes('kyc.json'))   return _json({data: []});
 
     if (u.includes('/staff/9/profile')) return _json({success: true,
         meta: window.__unrated ? ${JSON.stringify(PROFILE_UNRATED)} : ${JSON.stringify(PROFILE_RATED)}});
     if (/\\/staff(\\?|$)/.test(u)) return _json({data: [${JSON.stringify(STAFF_ROW)}], can_manage: true, roles: {}});
-    if (u.includes('/overview')) return _json({success: true, meta: {branches: [{id: 1, name: 'فرع المكلا', code: 'MKL'}]}});
+    if (u.includes('/overview')) return _json({success: true, meta: {
+        agent: {name: 'البسيري للصرافة', is_branch_account: false},
+        branches: [{id: 1, name: 'فرع المكلا', code: 'MKL', city: 'حضرموت', is_active: true,
+                    emoney_balance: '18000', cash_on_hand: '2000', cash_is_low: false, cash_is_overloaded: false}],
+        totals: {cash_on_hand: '2000', emoney: '18000', branches: 1, low_cash_branches: 0},
+        today: {deposits_count: 1, deposits_total: '2000', withdrawals_count: 0, withdrawals_total: '0',
+                shifts_open_now: 1, shifts_opened: 1, drawers_cash: '0', branches_idle: 0,
+                staff_total: 2, staff_tellers: 1, shifts_with_variance: 0, variance_total: '0'},
+    }});
     if (u.includes('/staff/shifts')) return _json({data: []});
 
     if (u.includes('/counter/state')) return _json(${JSON.stringify(SHIFT_OPEN)});
@@ -225,7 +285,64 @@ window.fetch = async (url, opts) => {
 };
 `;
 
+if (process.env.CLICK_DUMP) {
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync('/tmp/stubs-final.js', STUBS);
+}
+
 const CASES = [
+    // ── التقارير والرسوم والطباعة ───────────────────────────────────
+    {
+        page: 'dashboard',
+        name: 'التقرير يُبنى ورسومُه تُرسَم فعلاً',
+        steps: [['click', '#rp-load']],
+        expectNav: null,
+        dom: [
+            ['وصل نداءُ التقرير', `window.__calls.some(c => c.url.includes('/reports'))`],
+            ['الرسمُ الخطّيّ مرسوم — لا رسالةُ «لا بيانات»',
+                `document.querySelectorAll('#rp-body svg.amial-chart').length >= 3`],
+            ['وفيه مسارٌ حقيقيّ لا إطارٌ فارغ',
+                `document.querySelector('#rp-body svg.amial-chart path[stroke-width="2.5"]') !== null`],
+            ['بطاقاتُ الملخّص ظهرت بنسبة التغيّر',
+                `/٪/.test(document.getElementById('rp-body').textContent)`],
+            ['جداول الفروع والموظّفين والفروق ظهرت',
+                `/فرع المكلا/.test(document.getElementById('rp-body').textContent)
+                 && /محمد علي/.test(document.getElementById('rp-body').textContent)`],
+            ['وفرعٌ بلا حركةٍ يُقال عنه ذلك لا يُعرَض صفراً بين العاملين',
+                `/بلا حركة/.test(document.getElementById('rp-body').textContent)`],
+        ],
+    },
+    {
+        // **الطباعة تُقاس بما يظهر على الورقة لا بأنّ الزرّ نُقر.**
+        page: 'dashboard',
+        name: 'الطباعة تُخرج التقرير وحده بلا شريطٍ ولا أزرار',
+        steps: [['click', '#rp-load'], ['print', null]],
+        expectNav: null,
+        printMedia: true,
+        dom: [
+            ['التقرير ظاهرٌ على الورقة',
+                `getComputedStyle(document.getElementById('ag-reports')).display !== 'none'`],
+            ['والشريط الأسود مخفيّ',
+                `getComputedStyle(document.querySelector('.topbar')).display === 'none'`],
+            ['وأزرارُ التحكّم مخفيّة',
+                `getComputedStyle(document.querySelector('.rp-controls')).display === 'none'`],
+            ['وترويسةُ الورقة تظهر — اسمُ الشركة والفترة وتاريخ الإصدار',
+                `getComputedStyle(document.getElementById('rp-print-head')).display !== 'none'
+                 && document.getElementById('rp-h-agent').textContent.includes('البسيري')
+                 && document.getElementById('rp-h-period').textContent.includes('2026')`],
+        ],
+    },
+    {
+        page: 'dashboard',
+        name: 'الطباعة قبل بناء التقرير تُمنع بدل أن تُخرج ورقةً فارغة',
+        steps: [['click', '#rp-print']],
+        expectNav: null,
+        dom: [
+            ['لم يُستدعَ print', `window.__printed !== true`],
+            ['وقيل للمستعمل ماذا يفعل', `/اعرض التقرير/.test(window.__lastAlert || '')`],
+        ],
+    },
+
     // ── لوحة الموظّفين ──────────────────────────────────────────────
     {
         page: 'staff',
@@ -341,6 +458,7 @@ const PAGES = {
     staff: { url: STAFF_URL, html: STAFF_HTML, ready: 'button[data-do="profile"]' },
     'staff-unrated': { url: STAFF_URL, html: STAFF_HTML, ready: 'button[data-do="profile"]',
                        init: 'window.__unrated = true;' },
+    dashboard: { url: DASH_URL, html: DASH_HTML, ready: '#rp-load' },
 };
 
 const browser = await chromium.launch({ args: ['--no-sandbox'] });
@@ -366,6 +484,9 @@ for (const c of CASES) {
 
     const jsErrors = [];
     page.on('pageerror', (err) => jsErrors.push(err.message));
+    if (process.env.CLICK_DEBUG) {
+        page.on('console', (m) => console.log('    [console]', m.type(), m.text().slice(0, 200)));
+    }
 
     try {
         await page.goto(target.url, { waitUntil: 'domcontentloaded' });
@@ -373,8 +494,16 @@ for (const c of CASES) {
 
         for (const [action, sel, val] of (c.steps || [])) {
             if (action === 'fill') await page.fill(sel, val);
+            else if (action === 'print') await page.evaluate(() => window.print());
             else await page.click(sel);
             await page.waitForTimeout(250);
+        }
+
+        // الورقة تُقاس في وسط الطباعة لا وسط الشاشة: قواعد @media print
+        // لا تنطبق إلّا فيه، وفحصُها على الشاشة يقيس شيئاً آخر.
+        if (c.printMedia) {
+            await page.emulateMedia({ media: 'print' });
+            await page.waitForTimeout(150);
         }
 
         if (c.click) {
@@ -387,7 +516,7 @@ for (const c of CASES) {
             : null;
 
         const problems = [];
-        if (jsErrors.length) problems.push(`خطأ جافاسكربت: ${jsErrors[0]}`);
+        if (jsErrors.length) problems.push(`خطأ جافاسكربت: ${jsErrors.join(' | ')}`);
         if (c.expectNav === null && navigated) problems.push(`انتقل إلى ${navigated} والمفترض ألّا ينتقل`);
         if (c.expectNav instanceof RegExp) {
             if (!navigated) problems.push('لم ينتقل والمفترض أن ينتقل');
@@ -403,7 +532,8 @@ for (const c of CASES) {
         if (problems.length) { console.log(`  \x1b[31m✗\x1b[0m ${c.name}\n      ${problems.join('\n      ')}`); fail++; }
         else { console.log(`  \x1b[32m✓\x1b[0m ${c.name}`); pass++; }
     } catch (err) {
-        console.log(`  \x1b[31m✗\x1b[0m ${c.name}\n      ${err.message.split('\n')[0]}`);
+        const extra = jsErrors.length ? `\n      خطأ جافاسكربت: ${jsErrors.join(' | ')}` : '';
+        console.log(`  \x1b[31m✗\x1b[0m ${c.name}\n      ${err.message.split('\n')[0]}${extra}`);
         fail++;
     } finally {
         await ctx.close();

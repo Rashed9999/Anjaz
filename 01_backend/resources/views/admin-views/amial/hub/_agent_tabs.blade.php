@@ -150,6 +150,27 @@
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const get = async (u) => (await fetch(u, {headers: {'Accept': 'application/json'}})).json();
+    const $ = (id) => document.getElementById(id);
+
+    // **كانتا مستعمَلتين وغير معرَّفتين.** شيفرةُ «إقفال اليوم» كانت تنادي
+    // `$` و`post` ولا وجود لهما في هذا الملفّ، فيُلقى «$ is not defined»
+    // عند التحميل — **فيموت باقي الملفّ معه**، ومعه تبويب التوازن كلّه.
+    // ولم يكشفه فحصُ المعرّفات (يفحص وجود العناصر لا وجود الدوالّ)، ولا
+    // فحصُ التركيب (الصياغة سليمة). كشفه المتصفّح وحده.
+    const post = async (u, body) => {
+        const r = await fetch(u, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify(body || {}),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.message || ('خطأ ' + r.status));
+        return j;
+    };
 
     // ===== بطاقات الشبكة =====
     async function loadNetwork() {
