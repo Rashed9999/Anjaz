@@ -31,7 +31,7 @@ class AgentCashMovement extends Model
     ];
 
     protected $fillable = [
-        'branch_id', 'shift_id', 'staff_id', 'direction', 'reason', 'amount',
+        'branch_id', 'shift_id', 'is_drawer', 'staff_id', 'direction', 'reason', 'amount',
         'balance_before', 'balance_after', 'reference',
         'actor_user_id', 'customer_user_id', 'note', 'created_at',
     ];

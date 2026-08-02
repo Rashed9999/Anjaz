@@ -64,9 +64,35 @@
             data-bs-target="#ct-dep-pane" data-testid="ct-mode-deposit">⬇️ إيداع</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="pill"
             data-bs-target="#ct-wdr-pane" data-testid="ct-mode-withdraw">⬆️ سحب برمز العميل</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="pill"
+            data-bs-target="#ct-stm-pane" data-testid="ct-mode-statements">🧾 كشوفاتي</button></li>
     </ul>
 
     <div class="tab-content" id="ct-panes" style="display:none">
+
+    {{-- ============ كشوفاتي ============
+         **الإقرار الماليّ يبقى عند صاحبه.** كان الصرّاف يُغلق درجه فيختفي
+         ما رفعه من أمامه: لا يعرف أقُبل الفرق أم ما زال معلَّقاً، ولا
+         يستطيع أن يُري أحداً ما سلّمه. --}}
+    <div class="tab-pane fade" id="ct-stm-pane">
+        <div class="card p-3">
+            <div class="d-flex align-items-center mb-3">
+                <h6 class="mb-0">كشوفُ ورديّاتي المرفوعة إلى إدارة الشركة</h6>
+                <button class="btn btn-sm btn-outline-primary ms-auto" id="ct-stm-load">تحديث</button>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light"><tr>
+                        <th>الكشف</th><th>فُتحت</th><th>إيداعات</th><th>سحوبات</th>
+                        <th>المعدود</th><th>الفرق</th><th>قرار الإدارة</th><th></th>
+                    </tr></thead>
+                    <tbody id="ct-stm-tbody">
+                        <tr><td colspan="8" class="text-center text-muted py-4">اضغط «تحديث»</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
     {{-- ═══ سحب: رمزٌ واحد، لا رقم هاتفٍ ولا مبلغٍ يُدخله الصرّاف ═══ --}}
     <div class="tab-pane fade" id="ct-wdr-pane">
         <div class="row g-3">
@@ -300,6 +326,50 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     $('ct-deposit').addEventListener('click', () => operate('deposit'));
+
+    // ── كشوفاتي: ما رفعتُه إلى إدارة الشركة ──────────────────────
+    const REVIEW_BADGE = {
+        balanced: 'bg-light text-dark border', pending: 'bg-danger',
+        accepted: 'bg-success', investigating: 'bg-warning text-dark', resolved: 'bg-secondary',
+    };
+
+    async function loadMyStatements() {
+        const tb = $('ct-stm-tbody');
+        tb.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3">جارٍ التحميل…</td></tr>';
+        const r = await fetch(root + '/my-statements', {headers: {'Accept': 'application/json'}});
+        const j = await r.json();
+        const rows = (j.meta && j.meta.rows) || [];
+
+        tb.innerHTML = rows.length ? rows.map(x => `
+            <tr>
+                <td class="font-monospace" dir="ltr">${esc(x.statement_no)}</td>
+                <td class="small">${esc(x.opened_at ?? '')}</td>
+                <td class="money">${fmt(x.deposits_total)} <span class="text-muted small">(${x.deposits_count})</span></td>
+                <td class="money">${fmt(x.withdrawals_total)} <span class="text-muted small">(${x.withdrawals_count})</span></td>
+                <td class="money">${x.counted_cash === null ? '<span class="text-muted">لم تُغلق</span>' : fmt(x.counted_cash)}</td>
+                <td class="money ${x.variance && Number(x.variance) !== 0 ? 'text-danger fw-bold' : ''}">
+                    ${x.variance === null ? '—' : fmt(x.variance)}</td>
+                <td><span class="badge ${REVIEW_BADGE[x.review_status] || 'bg-secondary'}">${esc(x.review_label ?? '')}</span>
+                    ${x.review_note ? `<div class="small text-muted">${esc(x.review_note)}</div>` : ''}</td>
+                <td><button class="btn btn-sm btn-primary" data-stm="${x.id}">الكشف</button></td>
+            </tr>`).join('')
+            : '<tr><td colspan="8" class="text-center text-muted py-4">لا ورديّات بعد</td></tr>';
+    }
+
+    $('ct-stm-load').addEventListener('click', loadMyStatements);
+
+    $('ct-stm-tbody').addEventListener('click', async (e) => {
+        const b = e.target.closest('button[data-stm]');
+        if (!b) return;
+        $('stm-body').innerHTML = '<div class="text-muted">جارٍ التحميل…</div>';
+        new bootstrap.Modal($('stm-modal')).show();
+        const r = await fetch(root + '/my-statements/' + b.dataset.stm,
+            {headers: {'Accept': 'application/json'}});
+        const j = await r.json();
+        if (!j.success) { $('stm-body').innerHTML = `<div class="alert alert-danger mb-0">${esc(j.message)}</div>`; return; }
+        $('stm-title').textContent = 'كشف تسوية — ' + j.meta.statement_no;
+        $('stm-body').innerHTML = renderStatement(j.meta);
+    });
 
     // ── السحب برمز العميل ────────────────────────────────────────
     let wdCode = null;

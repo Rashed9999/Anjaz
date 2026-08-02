@@ -57,6 +57,7 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff) 
         Route::post('/shifts/{id}/close', [$staff, 'closeShift'])->where('id', '[0-9]+')->name('shifts.close');
 
         // ملفُّ التسوية لا يُغلق بنفسه: قرارُ الفرق يُنسب إلى إنسان.
+        Route::get('/shifts/{id}/statement', [$staff, 'shiftStatement'])->where('id', '[0-9]+')->name('shifts.statement');
         Route::post('/shifts/{id}/review', [$staff, 'reviewShift'])->where('id', '[0-9]+')->name('shifts.review');
 
         // ملفّ الموظّف الموحَّد + سجلّ عمليات الشركة.
@@ -64,6 +65,19 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff) 
     });
 
     Route::get('/operations', [$staff, 'operations'])->name('operations');
+
+    // ── كشوف الصرّاف: قراءةٌ لا عمليّة ────────────────────────────────
+    //
+    // **وهي خارج بادئة `counter` عمداً.** حارسُ الشبّاك يمنع أيّ مسارٍ فيه
+    // معرّفٌ من المتصفّح، لأنّ مسارات الشبّاك **تُحرّك مالاً**: معرّفٌ يُغيَّر
+    // يعني صرّافاً يعمل على درجٍ ليس درجه.
+    //
+    // وهذه قراءةُ مستندٍ يملكه صاحبه، والمعرّف يُفحص ملكيّةً قبل أيّ ردّ
+    // (`myStatement` تردّ ٤٠٤ لورديّةِ زميل). فلا تُوضع تحت الحارس
+    // فتُضعفه، ولا تُخفى منه بحيلةٍ في شكل الرابط.
+    Route::get('/my-statements', [$counter, 'myStatements'])->name('counter.statements');
+    Route::get('/my-statements/{id}', [$counter, 'myStatement'])
+        ->where('id', '[0-9]+')->name('counter.statement');
 
     // ── إدارة الشركة: فروعٌ ونقدٌ وتقارير ─────────────────────────────
     Route::get('/overview', [$c, 'overview'])->name('overview');

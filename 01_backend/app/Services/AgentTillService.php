@@ -111,6 +111,8 @@ class AgentTillService
 
             $movement = AgentCashMovement::create([
                 'branch_id' => $branch->id,
+                // خزنة الفرع. ولا درج بلا ورديّة مفتوحة.
+                'is_drawer' => false,
                 'direction' => $direction,
                 'reason' => $reason,
                 'amount' => $amount,

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Agent;
 use App\Http\Controllers\Controller;
 use App\Models\Agent\AgentStaff;
 use App\Services\AgentShiftService;
+use App\Services\AgentShiftStatementService;
 use App\Services\AgentStaffProfileService;
 use App\Services\AuditService;
 use App\Services\AgentStaffService;
@@ -193,6 +194,32 @@ class AgentStaffController extends Controller
                 $actor->visibleBranchIds(),
                 $request->only(['branch_id', 'staff_id', 'reason', 'from', 'to']),
             ),
+        ]);
+    }
+
+    /**
+     * كشفُ تسوية ورديّةٍ كما رفعه صاحبها — تقرؤه الإدارة قبل أن تقرّر.
+     *
+     * **وهو نفسُ المستند الذي يراه الصرّاف حرفيّاً.** فلو بُني للإدارة
+     * كشفٌ آخر لصار الخلاف على أيّ الرقمين صحيح بدل الخلاف على الفرق.
+     */
+    public function shiftStatement(Request $request, int $shiftId): JsonResponse
+    {
+        $actor = $this->actor($request);
+
+        $shift = \App\Models\Agent\AgentShift::find($shiftId);
+
+        if (!$shift || !in_array((int) $shift->branch_id, $actor->visibleBranchIds(), true)) {
+            return response()->json(['success' => false, 'message' => 'الورديّة خارج نطاقك'], 404);
+        }
+
+        if ($actor->isTeller() && (int) $shift->staff_id !== (int) $actor->id) {
+            return response()->json(['success' => false, 'message' => 'هذه ورديّة زميلك'], 403);
+        }
+
+        return response()->json([
+            'success' => true,
+            'meta' => app(AgentShiftStatementService::class)->build($shift),
         ]);
     }
 

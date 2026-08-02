@@ -140,6 +140,7 @@ class AgentShiftService
                 AgentCashMovement::create([
                     'branch_id' => $branch->id,
                     'shift_id' => $locked->id,
+                    'is_drawer' => true,      // فرقُ عدّ الدرج لا الخزنة
                     'staff_id' => $locked->staff_id,
                     'direction' => bccomp($variance, '0', 4) > 0 ? 'in' : 'out',
                     'reason' => 'count_adjustment',
@@ -248,6 +249,7 @@ class AgentShiftService
             return AgentCashMovement::create([
                 'branch_id' => $locked->branch_id,
                 'shift_id' => $locked->id,
+                'is_drawer' => true,          // نقدٌ في يد الصرّاف
                 'staff_id' => $locked->staff_id,
                 'direction' => $direction,
                 'reason' => $reason,
@@ -294,15 +296,21 @@ class AgentShiftService
                     'تسليم من درج ورديّة #' . $shift->id);
             }
 
-            // العهدة تُعدَّل بالتوريد وإلّا صار المتوقَّع عند الإغلاق خاطئاً
-            // بمقدار كلّ ما ورد أو سُلِّم أثناء الورديّة.
-            $fresh = $shift->fresh();
-            $fresh->opening_float = $direction === 'to_drawer'
-                ? bcadd((string) $fresh->opening_float, $amount, 4)
-                : bcsub((string) $fresh->opening_float, $amount, 4);
-            $fresh->save();
-
-            return $fresh->fresh();
+            // **العهدة لا تُعدَّل.**
+            //
+            // كانت تُزاد بالتوريد وتُنقص بالتسليم — علاجاً لصيغةٍ قديمة
+            // للمتوقَّع كانت تجمع ثلاثة أعمدةٍ لا تشمل التوريد. فكان
+            // المجموع يصحّ والعمود يكذب: صرّافٌ سحب عهدةً خمسين ألفاً
+            // ثمّ استلم مئةً يُسجَّل أنّه سحب مئةً وخمسين.
+            //
+            // ويظهر الكذب أوّل ما يُطلب **كشفٌ مفصَّل**: سطرُ «العهدة
+            // الافتتاحيّة» يقول ما لم يقع، وسطرُ التوريد يختفي، ولا
+            // يُعرف متى دخل المال ولا بيد من.
+            //
+            // والعهدة واقعةٌ تاريخيّة: ما استلمه الصرّاف أوّل ورديّته.
+            // والمتوقَّع يُحسب الآن من سجلّ الحركة (AgentShift::expectedCash)
+            // فيشمل التوريد بلا تزويرٍ في أيّ عمود.
+            return $shift->fresh();
         });
     }
 
@@ -383,6 +391,7 @@ class AgentShiftService
         AgentCashMovement::create([
             'branch_id' => $branch->id,
             'shift_id' => $shiftId,
+            'is_drawer' => false,     // خزنة الفرع لا درج الصرّاف
             'staff_id' => $actor->id,
             'direction' => $direction,
             'reason' => $reason,

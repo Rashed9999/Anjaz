@@ -13,6 +13,7 @@ use App\Services\CustomerWithdrawService;
 use Illuminate\Support\Facades\DB;
 use App\Services\AgentCounterService;
 use App\Services\AgentShiftService;
+use App\Services\AgentShiftStatementService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -380,6 +381,64 @@ class AgentCounterController extends Controller
             'success' => true,
             'message' => 'تمّ التوريد',
             'shift' => $this->shifts->state($fresh),
+        ]);
+    }
+
+    /**
+     * كشوفُ الصرّاف نفسه — ما رفعه إلى إدارة شركته.
+     *
+     * **كان يُغلق درجه فيختفي ما رفعه من أمامه.** لا يعرف أقُبل الفرق أم
+     * ما زال معلَّقاً، ولا يستطيع أن يُري أحداً ما سلّمه. والإقرار الماليّ
+     * يبقى عند صاحبه كما يبقى عند من رُفع إليه.
+     */
+    public function myStatements(Request $request): JsonResponse
+    {
+        $staff = $this->requireStaff($request);
+
+        $rows = AgentShift::where('staff_id', $staff->id)
+            ->orderByDesc('id')->limit(60)->get();
+
+        return response()->json([
+            'success' => true,
+            'meta' => [
+                'rows' => $rows->map(fn (AgentShift $s) => [
+                    'id' => (int) $s->id,
+                    'statement_no' => 'SHIFT-' . $s->id,
+                    'opened_at' => $s->opened_at?->toDateTimeString(),
+                    'closed_at' => $s->closed_at?->toDateTimeString(),
+                    'status' => $s->status,
+                    'deposits_total' => (string) $s->deposits_total,
+                    'deposits_count' => (int) $s->deposits_count,
+                    'withdrawals_total' => (string) $s->withdrawals_total,
+                    'withdrawals_count' => (int) $s->withdrawals_count,
+                    'counted_cash' => $s->counted_cash === null ? null : (string) $s->counted_cash,
+                    'variance' => $s->variance === null ? null : (string) $s->variance,
+                    'review_status' => $s->review_status,
+                    'review_label' => AgentShift::REVIEW_LABELS[$s->review_status] ?? $s->review_status,
+                    'review_note' => $s->review_note,
+                ])->values()->all(),
+            ],
+        ]);
+    }
+
+    /**
+     * كشفُ ورديّةٍ واحدةٍ بتفاصيله المالية كلّها.
+     *
+     * والمعرّف يُفحص ولا يُبنى عليه استعلام: الصرّاف يفتح ورديّاته هو.
+     */
+    public function myStatement(Request $request, int $id): JsonResponse
+    {
+        $staff = $this->requireStaff($request);
+
+        $shift = AgentShift::find($id);
+
+        if (!$shift || (int) $shift->staff_id !== (int) $staff->id) {
+            return response()->json(['success' => false, 'message' => 'الورديّة ليست ورديّتك'], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'meta' => app(AgentShiftStatementService::class)->build($shift),
         ]);
     }
 

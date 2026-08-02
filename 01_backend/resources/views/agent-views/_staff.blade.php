@@ -512,7 +512,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td>${reviewCell(s)}</td>
                 <td class="text-nowrap">${s.status === 'open'
                         ? `<button class="btn btn-sm btn-outline-danger" data-close="${s.id}">إغلاق بالنيابة</button>`
-                        : reviewButtons(s)}</td>
+                        : `<button class="btn btn-sm btn-primary" data-stm="${s.id}">الكشف</button> ` + reviewButtons(s)}</td>
             </tr>`).join('')
             : '<tr><td colspan="12" class="text-center text-muted py-4">لا ورديّات</td></tr>';
     }
@@ -546,6 +546,22 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     $('sh-tbody').addEventListener('click', async (e) => {
+        // كشفُ التسوية يُقرأ قبل القرار: رقمٌ بلا ما يفسّره لا يُبنى عليه
+        // اتّهامٌ ولا براءة.
+        const stm = e.target.closest('button[data-stm]');
+        if (stm) {
+            $('stm-body').innerHTML = '<div class="text-muted">جارٍ التحميل…</div>';
+            new bootstrap.Modal($('stm-modal')).show();
+            const j = await get(`/staff/shifts/${stm.dataset.stm}/statement`);
+            if (!j.success) {
+                $('stm-body').innerHTML = `<div class="alert alert-danger mb-0">${esc(j.message)}</div>`;
+                return;
+            }
+            $('stm-title').textContent = 'كشف تسوية — ' + j.meta.statement_no;
+            $('stm-body').innerHTML = renderStatement(j.meta);
+            return;
+        }
+
         // الزرّ يُحسم أوّلاً — وأزرار المراجعة قبل زرّ الإغلاق بالنيابة.
         const rev = e.target.closest('button[data-review]');
         if (rev) {
