@@ -48,6 +48,10 @@ class AgentStaffController extends Controller
             'branch_id' => 'nullable|integer',
             'phone' => 'nullable|string|max:20',
             'max_txn_amount' => 'nullable|numeric|min:0',
+            'daily_limit' => 'nullable|numeric|min:0',
+            'daily_count_limit' => 'nullable|integer|min:0',
+            'daily_hours_expected' => 'nullable|numeric|min:0|max:24',
+            'overtime_policy' => 'nullable|string|in:no,auto,approved',
         ]);
 
         try {
@@ -62,6 +66,29 @@ class AgentStaffController extends Controller
             // وإخفاؤه في جدولٍ طويلٍ يجعل أوّل سؤالٍ للدعم «ما رمزي؟».
             'message' => "أُنشئ الحساب. رمز الدخول: {$staff->username} — سلّمه للموظّف مع كلمة السرّ",
             'username' => $staff->username,
+        ]);
+    }
+
+    /** تعديلُ حدود موظّفٍ ودوامه — بعد تعيينه. */
+    public function updateLimits(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'max_txn_amount' => 'nullable|numeric|min:0',
+            'daily_limit' => 'nullable|numeric|min:0',
+            'daily_count_limit' => 'nullable|integer|min:0',
+            'daily_hours_expected' => 'nullable|numeric|min:0|max:24',
+            'overtime_policy' => 'nullable|string|in:no,auto,approved',
+        ]);
+
+        try {
+            $staff = $this->staff->updateLimits($this->actor($request), $id, $request->all());
+        } catch (DomainException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'حُدّثت حدود ' . $staff->name . ' ودوامُه',
         ]);
     }
 

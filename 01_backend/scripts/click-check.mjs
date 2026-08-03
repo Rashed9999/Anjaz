@@ -153,6 +153,8 @@ const STAFF_ROW = {
     id: 9, name: 'محمد علي', username: 'MKL-001', role: 'teller', role_label: 'صرّاف (شبّاك)',
     branch: 'فرع المكلا', phone: '967700000009', max_txn_amount: 0,
     last_login_at: '2026-08-01 16:09:35', is_active: true, has_open_shift: false,
+    daily_limit: '500000', daily_count_limit: 0,
+    daily_hours_expected: '8.00', overtime_policy: 'approved',
     whatsapp: null,
 };
 
@@ -476,6 +478,28 @@ const CASES = [
                 `/غير محسوبة/.test(document.getElementById('pr-body').textContent)`],
             ['ولا تُعرَض درجةٌ خضراء',
                 `!document.querySelector('#pr-body .alert-success')`],
+        ],
+    },
+
+    // ── حدود الموظّف ودوامه ─────────────────────────────────────────
+    {
+        page: 'staff',
+        name: 'زرّ «حدود ودوام» يفتح النافذة بقيمها الحاليّة ويحفظ',
+        steps: [
+            ['click', 'button[data-do="limits"]'],
+            ['fill', '#lm-hours', '9'],
+            ['click', '#lm-save'],
+        ],
+        expectNav: null,
+        dom: [
+            // **النافذة تفتح بالقيم الحاليّة لا فارغة.** وفارغةً يُصفّر
+            // الحفظُ كلَّ ما لم يُعدَّل — فمن جاء ليغيّر ساعةً يمحو حدوداً.
+            ['الحدّ اليوميّ الحاليّ مملوء',
+                `document.getElementById('lm-daily').value === '500000'`],
+            ['وسياسة الإضافيّ الحاليّة مختارة',
+                `document.getElementById('lm-ot').value === 'approved'`],
+            ['ووصل الحفظ إلى الخادم',
+                `window.__calls.some(c => c.method === 'POST' && c.url.includes('/staff/9/limits'))`],
         ],
     },
 

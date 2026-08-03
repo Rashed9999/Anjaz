@@ -577,6 +577,70 @@ class AgentWorkTimeTest extends TestCase
     }
 
     // ══════════════════════════════════════════════════════════════════
+    // ضبطُ الحدود والدوام من الشاشة
+    // ══════════════════════════════════════════════════════════════════
+
+    /** @test */
+    public function hiring_sets_the_limits_and_the_schedule_at_once(): void
+    {
+        $s = app(AgentStaffService::class)->hire($this->hq, [
+            'name' => 'صرّاف جديد', 'role' => AgentStaff::ROLE_TELLER,
+            'branch_id' => $this->branch->id, 'password' => 'newbie12',
+            'max_txn_amount' => '50000', 'daily_limit' => '400000',
+            'daily_count_limit' => 30, 'daily_hours_expected' => '7.5',
+            'overtime_policy' => 'no',
+        ]);
+
+        $this->assertSame(0, bccomp('400000', (string) $s->daily_limit, 4));
+        $this->assertSame(30, (int) $s->daily_count_limit);
+        $this->assertSame(0, bccomp('7.5', (string) $s->daily_hours_expected, 2));
+        $this->assertSame('no', $s->overtime_policy);
+    }
+
+    /**
+     * @test
+     *
+     * **رفعُ حدٍّ قرارٌ ماليّ** — ويُسجَّل بدرجة `high`. ومن رفع حدَّ
+     * صرّافٍ قبل عمليّةٍ كبيرة بدقائق هو أوّل ما يُبحث عنه في تحقيق.
+     */
+    public function raising_a_limit_is_audited_as_a_financial_decision(): void
+    {
+        app(AgentStaffService::class)->updateLimits($this->hq, (int) $this->teller->id, [
+            'max_txn_amount' => '900000', 'daily_limit' => '0',
+            'daily_count_limit' => 0, 'daily_hours_expected' => '8',
+            'overtime_policy' => 'approved',
+        ]);
+
+        $row = DB::table('audit_decisions')->where('action', 'agent.staff.limits')
+            ->orderByDesc('id')->first();
+
+        $this->assertNotNull($row, 'رُفع حدٌّ بلا أثرٍ في سجلّ التدقيق');
+        // `high` تُطبَّع إلى `warning`: العمود محصورٌ بأربع قيم، وقيمةٌ خارجها
+        // كانت تُسقط سطر التدقيق كلَّه بصمت.
+        $this->assertSame('warning', $row->severity);
+    }
+
+    /** @test */
+    public function a_teller_cannot_raise_their_own_limits(): void
+    {
+        $this->expectException(\DomainException::class);
+
+        app(AgentStaffService::class)->updateLimits($this->teller, (int) $this->teller->id, [
+            'max_txn_amount' => '9000000',
+        ]);
+    }
+
+    /** @test */
+    public function an_impossible_schedule_is_refused(): void
+    {
+        $this->expectException(\DomainException::class);
+
+        app(AgentStaffService::class)->updateLimits($this->hq, (int) $this->teller->id, [
+            'daily_hours_expected' => '30',
+        ]);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
     // النطاق
     // ══════════════════════════════════════════════════════════════════
 

@@ -35,6 +35,19 @@ class AuditService
      *   action, decision_code, reason, severity, context,
      *   transaction_id, idempotency_key, zone_code
      */
+    /** الشدّات المقبولة في العمود — وما يُرادفها ممّا يُكتب عادةً. */
+    private const SEVERITY_MAP = [
+        'low' => 'info', 'debug' => 'info', 'info' => 'info',
+        'medium' => 'notice', 'notice' => 'notice',
+        'high' => 'warning', 'warn' => 'warning', 'warning' => 'warning',
+        'critical' => 'critical', 'severe' => 'critical', 'fatal' => 'critical',
+    ];
+
+    private function normalizeSeverity(?string $value): string
+    {
+        return self::SEVERITY_MAP[mb_strtolower(trim((string) $value))] ?? 'info';
+    }
+
     public function record(array $payload): ?string
     {
         try {
@@ -59,7 +72,18 @@ class AuditService
                 'transaction_id' => $payload['transaction_id'] ?? null,
                 'idempotency_key' => $payload['idempotency_key'] ?? null,
                 'zone_code' => $payload['zone_code'] ?? null,
-                'severity' => $payload['severity'] ?? 'info',
+                // **الشدّة تُطبَّع ولا تُمرَّر كما جاءت.**
+                //
+                // العمود محصورٌ بأربع قيم، وقيمةٌ خارجها تُسقط الإدراج
+                // كلَّه — و`catch` أدناه يبتلع الاستثناء. فالنتيجة أنّ
+                // **سطر التدقيق يُفقد بصمت** بسبب كلمة.
+                //
+                // ووقع هذا فعلاً: ثلاثة مواضع كتبت `high` و`medium`،
+                // فكان رفعُ حدِّ صرّافٍ وقرارُ موافقةٍ يمرّان بلا أثر —
+                // وهما بالضبط ما يُبحث عنه في أيّ تحقيق.
+                //
+                // وفقدُ سطرٍ لأجل كلمة أسوأ من الكلمة: فتُترجَم.
+                'severity' => $this->normalizeSeverity($payload['severity'] ?? null),
             ];
 
             // AMIAL-INSIDER-001: سلسلة تجزئة — كل سجل يحمل بصمة سابقه.

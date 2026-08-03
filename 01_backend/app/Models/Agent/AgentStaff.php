@@ -38,6 +38,10 @@ class AgentStaff extends AuthUser implements Authenticatable
         'agent_user_id', 'branch_id', 'username', 'name', 'phone',
         'password', 'role', 'is_active', 'max_txn_amount', 'created_by',
         'daily_limit', 'daily_count_limit', 'capabilities',
+        // **وهذه كانت ناقصةً فكان `hire()` يتجاهلها بصمت.** الهجرة أضافت
+        // الأعمدة، والخدمة تمرّرها، و`create()` تُسقط ما ليس في القائمة
+        // بلا خطأ — فيُعيَّن الموظّف بدوامٍ صفر ولا يعرف أحدٌ لماذا.
+        'daily_hours_expected', 'weekly_hours_expected', 'overtime_policy',
     ];
 
     protected $hidden = ['password'];
@@ -47,6 +51,8 @@ class AgentStaff extends AuthUser implements Authenticatable
         'max_txn_amount' => 'decimal:4',
         'daily_limit' => 'decimal:4',
         'daily_count_limit' => 'integer',
+        'daily_hours_expected' => 'decimal:2',
+        'weekly_hours_expected' => 'decimal:2',
         'last_login_at' => 'datetime',
     ];
 

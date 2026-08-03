@@ -86,6 +86,14 @@ class AgentStaffService
                 'role' => $role,
                 'is_active' => true,
                 'max_txn_amount' => (string) ($data['max_txn_amount'] ?? '0'),
+                // **الحدود والدوام تُضبط عند التعيين لا بعده.**
+                // فحسابٌ يُنشأ بلا حدٍّ ثمّ «يُضبط لاحقاً» يعمل بلا حدٍّ
+                // إلى أن يتذكّره أحد — وأوّل ما يُنسى هو ما لا يُطلب.
+                'daily_limit' => (string) ($data['daily_limit'] ?? '0'),
+                'daily_count_limit' => (int) ($data['daily_count_limit'] ?? 0),
+                'daily_hours_expected' => (string) ($data['daily_hours_expected'] ?? '0'),
+                'overtime_policy' => in_array(($data['overtime_policy'] ?? ''),
+                    ['no', 'auto', 'approved'], true) ? $data['overtime_policy'] : 'approved',
                 'created_by' => $actor->id,
             ]);
 
@@ -166,6 +174,10 @@ class AgentStaffService
                 'branch_id' => $s->branch_id ? (int) $s->branch_id : null,
                 'is_active' => (bool) $s->is_active,
                 'max_txn_amount' => (string) $s->max_txn_amount,
+                'daily_limit' => (string) $s->daily_limit,
+                'daily_count_limit' => (int) $s->daily_count_limit,
+                'daily_hours_expected' => (string) $s->daily_hours_expected,
+                'overtime_policy' => (string) $s->overtime_policy,
                 'last_login_at' => $s->last_login_at?->toDateTimeString(),
                 // الورديّة المفتوحة تُعرَض مع الموظّف: موظّفٌ يُعطَّل وورديّته
                 // مفتوحة يترك درجاً بلا جرد.
@@ -178,6 +190,73 @@ class AgentStaffService
                     'alerts_enabled' => (bool) $w->alerts_enabled,
                 ] : null,
             ])->all();
+    }
+
+    /**
+     * تعديلُ حدود موظّفٍ ودوامه.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ولا تُعدَّل الأدوار ولا الفروع من هنا.**
+     *
+     * فنقلُ صرّافٍ إلى فرعٍ آخر وله ورديّةٌ مفتوحة يترك درجاً في فرعٍ
+     * ومسؤولاً في آخر. وترقيةُ صرّافٍ إلى مدير تمنحه رؤية فروعٍ لم يكن
+     * يراها. وكلاهما قرارٌ له أثرٌ مالـيّ يحتاج مساره الخاصّ — لا حقلاً
+     * في نافذة «تعديل الحدود».
+     *
+     * @param array<string, mixed> $data
+     */
+    public function updateLimits(AgentStaff $actor, int $staffId, array $data): AgentStaff
+    {
+        $this->assertCanManageStaff($actor);
+        $staff = $this->findInScope($actor, $staffId);
+
+        $num = function ($v, string $label): string {
+            $v = (string) ($v ?? '0');
+
+            if (!is_numeric($v) || bccomp($v, '0', 4) < 0) {
+                throw new DomainException("{$label} لا يكون سالباً");
+            }
+
+            return $v;
+        };
+
+        $hours = $num($data['daily_hours_expected'] ?? '0', 'ساعات الدوام');
+
+        // أربعٌ وعشرون ساعةً في اليوم حدٌّ فيزيائيّ لا سياسة: قيمةٌ فوقها
+        // تجعل «الإضافيّ» سالباً أبداً فلا يظهر شيء.
+        if (bccomp($hours, '24', 2) > 0) {
+            throw new DomainException('ساعات الدوام اليوميّة لا تتجاوز ٢٤');
+        }
+
+        $staff->fill([
+            'max_txn_amount' => $num($data['max_txn_amount'] ?? '0', 'حدّ العمليّة'),
+            'daily_limit' => $num($data['daily_limit'] ?? '0', 'الحدّ اليوميّ'),
+            'daily_count_limit' => max(0, (int) ($data['daily_count_limit'] ?? 0)),
+            'daily_hours_expected' => $hours,
+            'overtime_policy' => in_array(($data['overtime_policy'] ?? ''),
+                ['no', 'auto', 'approved'], true) ? $data['overtime_policy'] : $staff->overtime_policy,
+        ])->save();
+
+        $this->audit->record([
+            'actor_type' => 'agent',
+            'actor_user_id' => $actor->agent_user_id,
+            'action' => 'agent.staff.limits',
+            // **رفعُ حدٍّ قرارٌ ماليّ.** ومن رفع حدَّ صرّافٍ قبل عمليّةٍ
+            // كبيرة بدقائق هو أوّل ما يُبحث عنه في أيّ تحقيق.
+            'severity' => 'high',
+            'subject_type' => 'agent_staff',
+            'subject_id' => $staff->id,
+            'metadata' => [
+                'by_staff_id' => $actor->id,
+                'max_txn_amount' => (string) $staff->max_txn_amount,
+                'daily_limit' => (string) $staff->daily_limit,
+                'daily_count_limit' => (int) $staff->daily_count_limit,
+                'daily_hours_expected' => (string) $staff->daily_hours_expected,
+                'overtime_policy' => $staff->overtime_policy,
+            ],
+        ]);
+
+        return $staff->fresh();
     }
 
     /** تعطيل موظّف أو إعادته. */

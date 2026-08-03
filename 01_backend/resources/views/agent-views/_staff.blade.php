@@ -113,6 +113,52 @@
     </div></div>
 </div>
 
+{{-- ============ حدود الموظّف ودوامه ============
+
+     **ولا دورَ ولا فرعَ في هذه النافذة عمداً.** فنقلُ صرّافٍ إلى فرعٍ
+     آخر وله ورديّةٌ مفتوحة يترك درجاً في فرعٍ ومسؤولاً في آخر، وترقيتُه
+     إلى مدير تمنحه رؤية فروعٍ لم يكن يراها. وكلاهما قرارٌ له أثرٌ ماليّ
+     يحتاج مساره الخاصّ — لا حقلاً في نافذة «تعديل الحدود». --}}
+<div class="modal fade" id="lm-modal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title" id="lm-title">حدود ودوام</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="alert alert-info py-2 small">
+                رفعُ حدٍّ <strong>قرارٌ ماليّ</strong> يُسجَّل باسمك في سجلّ التدقيق —
+                ومن رفع حدَّ صرّافٍ قبل عمليّةٍ كبيرة بدقائق هو أوّل ما يُبحث عنه
+                في أيّ تحقيق.
+            </div>
+
+            <div class="mb-2"><label class="form-label">حدّ العملية الواحدة (٠ = بلا حدّ)</label>
+                <input class="form-control" id="lm-op" type="number" min="0" dir="ltr"></div>
+            <div class="row g-2 mb-2">
+                <div class="col-6"><label class="form-label">الحدّ اليوميّ</label>
+                    <input class="form-control" id="lm-daily" type="number" min="0" dir="ltr"></div>
+                <div class="col-6"><label class="form-label">عدد العمليّات يوميّاً</label>
+                    <input class="form-control" id="lm-count" type="number" min="0" dir="ltr"></div>
+            </div>
+            <hr>
+            <div class="row g-2 mb-2">
+                <div class="col-6"><label class="form-label">ساعات الدوام يوميّاً</label>
+                    <input class="form-control" id="lm-hours" type="number" min="0" max="24"
+                           step="0.5" dir="ltr">
+                    <div class="form-text">٠ = غير مضبوط، ولا يُقاس إضافيّ.</div></div>
+                <div class="col-6"><label class="form-label">الوقت الإضافيّ</label>
+                    <select class="form-select" id="lm-ot">
+                        <option value="approved">بموافقة المدير</option>
+                        <option value="auto">يُحتسب تلقائياً</option>
+                        <option value="no">لا وقت إضافيّ</option>
+                    </select></div>
+            </div>
+            <div class="text-danger small" id="lm-err"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" id="lm-save">حفظ</button>
+        </div>
+    </div></div>
+</div>
+
 {{-- ============ ربط واتساب الموظّف ============
 
      **نقطتا النهاية كانتا مبنيّتين ومُختبَرتين، ولا زرّ لهما.** وهي حالةُ
@@ -177,6 +223,32 @@
             <div class="mb-2"><label class="form-label">حدّ العملية الواحدة (٠ = بلا حدّ خاصّ)</label>
                 <input class="form-control" id="st-limit" type="number" min="0" value="0" dir="ltr">
                 <div class="form-text">صرّافٌ جديد يُعطى حدّاً منخفضاً حتى يُوثَق به.</div></div>
+
+            {{-- **حدُّ العمليّة الواحدة وحده لا يحمي شيئاً.** من حدُّه نصف
+                 مليون يمرّر مليوناً في عمليّتين — وهو النمط الذي تبحث عنه
+                 قواعد غسل الأموال. فالحدّ اليوميّ وعددُ العمليّات هما ما
+                 يُوقف التقسيم. --}}
+            <div class="row g-2 mb-2">
+                <div class="col-6"><label class="form-label">الحدّ اليوميّ (٠ = بلا حدّ)</label>
+                    <input class="form-control" id="st-daily" type="number" min="0" value="0" dir="ltr"></div>
+                <div class="col-6"><label class="form-label">عدد العمليّات يوميّاً (٠ = بلا حدّ)</label>
+                    <input class="form-control" id="st-count" type="number" min="0" value="0" dir="ltr"></div>
+            </div>
+
+            {{-- الدوام: من غير ساعاتٍ متوقَّعة لا يُقاس وقتٌ إضافيّ أصلاً،
+                 لأنّ «الإضافيّ» يُقاس على متوقَّعٍ معلوم. --}}
+            <div class="row g-2 mb-2">
+                <div class="col-6"><label class="form-label">ساعات الدوام يوميّاً</label>
+                    <input class="form-control" id="st-hours" type="number" min="0" max="24"
+                           step="0.5" value="8" dir="ltr">
+                    <div class="form-text">٠ = غير مضبوط، ولا يُحتسب إضافيّ.</div></div>
+                <div class="col-6"><label class="form-label">الوقت الإضافيّ</label>
+                    <select class="form-select" id="st-ot">
+                        <option value="approved">بموافقة المدير (موصى به)</option>
+                        <option value="auto">يُحتسب تلقائياً</option>
+                        <option value="no">لا وقت إضافيّ</option>
+                    </select></div>
+            </div>
             <div class="text-danger small" id="st-err"></div>
         </div>
         <div class="modal-footer">
@@ -265,6 +337,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td class="text-nowrap">
                     <button class="btn btn-sm btn-primary" data-do="profile" data-id="${s.id}" data-name="${esc(s.name)}">الملفّ</button>
                     <button class="btn btn-sm btn-outline-secondary" data-do="pass" data-id="${s.id}">كلمة سرّ</button>
+                    <button class="btn btn-sm btn-outline-info" data-do="limits" data-id="${s.id}"
+                            data-name="${esc(s.name)}" data-op="${esc(s.max_txn_amount)}"
+                            data-daily="${esc(s.daily_limit)}" data-count="${esc(s.daily_count_limit)}"
+                            data-hours="${esc(s.daily_hours_expected)}"
+                            data-ot="${esc(s.overtime_policy)}">حدود ودوام</button>
                     <button class="btn btn-sm btn-outline-success" data-do="wa" data-id="${s.id}"
                             data-name="${esc(s.name)}" data-phone="${esc((s.whatsapp && s.whatsapp.number) || s.phone || '')}"
                             data-linked="${s.whatsapp ? 1 : 0}">واتساب</button>
@@ -305,6 +382,10 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             if (b.dataset.do === 'wa') {
                 openWa(b.dataset);
+                return;
+            }
+            if (b.dataset.do === 'limits') {
+                openLimits(b.dataset);
                 return;
             }
             if (b.dataset.do === 'toggle') {
@@ -371,6 +452,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 phone: $('st-phone').value || null,
                 password: $('st-pass').value,
                 max_txn_amount: $('st-limit').value || 0,
+                daily_limit: $('st-daily').value || 0,
+                daily_count_limit: $('st-count').value || 0,
+                daily_hours_expected: $('st-hours').value || 0,
+                overtime_policy: $('st-ot').value,
             });
             bootstrap.Modal.getInstance($('st-modal')).hide();
             // الرمز والعنوان وكلمة السرّ معاً — وهي الثلاثة التي يحتاجها
@@ -382,6 +467,39 @@ document.addEventListener('DOMContentLoaded', function () {
             $('st-name').value = $('st-pass').value = $('st-phone').value = '';
             loadStaff();
         } catch (e) { $('st-err').textContent = e.message; }
+    });
+
+    // ── حدود الموظّف ودوامه ─────────────────────────────────────────
+    let lmStaffId = null;
+
+    function openLimits(d) {
+        lmStaffId = d.id;
+        $('lm-title').textContent = 'حدود ودوام — ' + (d.name || '');
+        $('lm-err').textContent = '';
+        // القيم الحاليّة تُملأ من الصفّ: نافذةٌ تفتح فارغةً تجعل الحفظ
+        // يُصفّر ما لم يُعدَّل.
+        $('lm-op').value = Math.round(Number(d.op || 0));
+        $('lm-daily').value = Math.round(Number(d.daily || 0));
+        $('lm-count').value = Number(d.count || 0);
+        $('lm-hours').value = Number(d.hours || 0);
+        $('lm-ot').value = d.ot || 'approved';
+        new bootstrap.Modal($('lm-modal')).show();
+    }
+
+    $('lm-save').addEventListener('click', async () => {
+        $('lm-err').textContent = '';
+        try {
+            const j = await post(`/staff/${lmStaffId}/limits`, {
+                max_txn_amount: $('lm-op').value || 0,
+                daily_limit: $('lm-daily').value || 0,
+                daily_count_limit: $('lm-count').value || 0,
+                daily_hours_expected: $('lm-hours').value || 0,
+                overtime_policy: $('lm-ot').value,
+            });
+            bootstrap.Modal.getInstance($('lm-modal')).hide();
+            alert(j.message);
+            loadStaff();
+        } catch (e) { $('lm-err').textContent = e.message; }
     });
 
     // ── ربط واتساب ──────────────────────────────────────────────────────

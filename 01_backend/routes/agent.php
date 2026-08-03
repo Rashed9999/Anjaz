@@ -55,6 +55,7 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff, 
         Route::post('/', [$staff, 'store'])->name('store');
         Route::post('/{id}/active', [$staff, 'setActive'])->where('id', '[0-9]+')->name('active');
         Route::post('/{id}/password', [$staff, 'resetPassword'])->where('id', '[0-9]+')->name('password');
+        Route::post('/{id}/limits', [$staff, 'updateLimits'])->where('id', '[0-9]+')->name('limits');
         Route::get('/shifts', [$staff, 'shifts'])->name('shifts');
         Route::post('/shifts/{id}/close', [$staff, 'closeShift'])->where('id', '[0-9]+')->name('shifts.close');
 
