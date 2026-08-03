@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  AMIAL-DOMAIN-001 — مانفست الإصدار: يُغلق الاتّصال غير المشفَّر.
+
+  ملفّ `main` يحمل `usesCleartextTraffic="true"` — وهو ضروريٌّ اليوم لأنّ
+  الخادم بلا شهادة. وهذا الملفّ **يستبدل تلك السمة في بناء الإصدار وحده**
+  عبر دامج المانفست (`tools:replace`).
+
+  ولا يكفي `network_security_config` وحده: بعض مكتبات الشبكة تقرأ السمة
+  مباشرةً بدل ضبط النظام. فتُغلَق من البابين.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
+    <application
+        android:usesCleartextTraffic="false"
+        tools:replace="android:usesCleartextTraffic" />
+</manifest>

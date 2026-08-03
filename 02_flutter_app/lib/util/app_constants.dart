@@ -6,14 +6,30 @@ class AppConstants {
   static const String appName = 'Amyal Pay';
   static const String appNameAr = 'أميال باي';
   static const String appTagline = 'دفع سريع وآمن';
-  // عنوان الـ backend. مرّره وقت البناء دون تعديل الكود:
-  //   flutter run --dart-define=BASE_URL=https://api.your-domain.com
-  // أو عدّل القيمة الافتراضية أدناه قبل الإطلاق.
-  // AMIAL-PILOT: اتصال مباشر بـ IP الخادم (يتجاوز DNS كلياً — بعض شبكات
-  // الجوال تفشل في ترجمة sslip.io بينما كروم ينجح عبر DNS الآمن الخاص به).
-  // يتطلب في Coolify: Ports Mappings = 8081:80 على تطبيق anjaz.
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-DOMAIN-001 — عنوان الخادم: **موضعٌ واحد في التطبيق كلّه.**
+  //
+  // مرّره وقت البناء دون تعديل الشيفرة:
+  //   flutter build apk --dart-define=BASE_URL=https://amialpay.com
+  //
+  // **ولماذا بقي العنوان الرقميّ افتراضاً؟**
+  //
+  // لأنّ تبديله قبل أن يعمل النطاق يُعطّل التطبيق على كلّ جهازٍ يُبنى له:
+  // اسمٌ لا يُترجَم لا يُنتج رسالةً مفهومة بل «تعذّر الاتّصال» في كلّ
+  // شاشة. فالافتراضُ يبقى على ما **يعمل الآن**، والتحوّل يقع ببناءٍ
+  // واحدٍ يوم يصير النطاق جاهزاً — لا قبله.
+  //
+  // خطواتُ التحوّل بالترتيب في: docs/التحوّل-إلى-النطاق.md
+  static const String productionDomain = 'https://amialpay.com';
+
   static const String baseUrl =
       String.fromEnvironment('BASE_URL', defaultValue: 'http://169.58.24.224:8081');
+
+  /// أهو اتّصالٌ مشفَّر؟
+  ///
+  /// **يُقاس من العنوان نفسه لا من رايةٍ منفصلة.** فرايةٌ تُضبط بيدٍ
+  /// تكذب أوّل ما يُنسى تحديثُها — وهذه تصدق دائماً.
+  static bool get isSecureBackend => baseUrl.startsWith('https://');
   static const bool demo = false;
   static const double appVersion = 0.7; //flutter version 3.38.5
   static const String customerPhoneCheckUri = '/api/v1/customer/auth/check-phone';
