@@ -98,6 +98,20 @@ class PdfSurfaceGuardTest extends TestCase
             $types = substr_count($code, "'Content-Type' => 'application/pdf'");
             $lengths = substr_count($code, "'Content-Length'");
 
+            // **و`response()->file()` تُعلن الطول أيضاً — بل أوثق.**
+            //
+            // كان هذا الحارس يعدّ النصّ `'Content-Length'` وحده، فأسقط
+            // تحويلاً إلى `BinaryFileResponse` هو **أقوى** ممّا يطلبه:
+            // الطول يُحسب من الملفّ الذي تُرسله هي نفسها، فلا يفترق
+            // المعلَن عن المُرسَل أبداً. أمّا الترويسة المكتوبة بيدٍ فتُحسب
+            // بنداءٍ ثانٍ إلى القرص — ولو تغيّر الملفّ بين النداءين
+            // لاختلفا، وذلك **هو العطل نفسه** الذي بُني هذا الحارس لمنعه.
+            //
+            // فالحارس لا يُضعَّف بل يُعلَّم الآليّة الأصحّ. وعقدُه الحقيقيّ
+            // — أن يساوي المعلَنُ المُرسَل — يُقاس تشغيلاً في
+            // `ReceiptDownloadIntegrityTest`, لا نصّاً هنا.
+            $lengths += substr_count($code, 'response()->file(');
+
             if ($lengths < $types) {
                 $offenders[] = "$short ($types استجابة، $lengths طولاً)";
             }

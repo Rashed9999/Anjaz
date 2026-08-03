@@ -101,12 +101,7 @@ class ReceiptController extends Controller
         if ($path && Storage::disk('local')->exists($path)) {
             $receipt->incrementDownloadCount();
 
-            return response(Storage::disk('local')->get($path), 200, [
-                'Content-Type' => 'application/pdf',
-                'Content-Length' => (string) Storage::disk('local')->size($path),
-                'Content-Disposition' => "inline; filename=\"{$receipt->receipt_number}.pdf\"",
-                'Cache-Control' => 'private, max-age=86400',
-            ]);
+            return $this->pdfResponse($path, $receipt->receipt_number);
         }
 
         // لا ملف بعد — ولّده الآن **بشكل متزامن** واحفظه للمرّات القادمة.
@@ -117,12 +112,7 @@ class ReceiptController extends Controller
             if ($path && Storage::disk('local')->exists($path)) {
                 $receipt->incrementDownloadCount();
 
-                return response(Storage::disk('local')->get($path), 200, [
-                    'Content-Type' => 'application/pdf',
-                    'Content-Length' => (string) Storage::disk('local')->size($path),
-                    'Content-Disposition' => "inline; filename=\"{$receipt->receipt_number}.pdf\"",
-                    'Cache-Control' => 'private, max-age=86400',
-                ]);
+                return $this->pdfResponse($path, $receipt->receipt_number);
             }
         } catch (\Throwable $e) {
             // AMIAL-PDF-VISIBILITY-001: كان تحذيراً بنصّ الرسالة وحدها.
@@ -142,6 +132,38 @@ class ReceiptController extends Controller
 
         // آخر ملاذ: مسار الفاتورة القديم (تصيير في الذاكرة بلا تخزين).
         return $this->invoice($request, $id);
+    }
+
+    /**
+     * ردُّ ملفّ PDF من القرص — لا من ذاكرة PHP.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **كان يُقرأ الملفّ كاملاً إلى نصٍّ ثمّ يُردّ.** ولذلك ثلاثة عيوب،
+     * ثالثُها هو الذي كان يقطع الاتّصال:
+     *
+     * ١. مئةُ كيلوبايت في ذاكرة PHP لكلّ تنزيلٍ متزامن.
+     * ٢. `Content-Length` يُحسب بنداءٍ ثانٍ إلى القرص — فلو تغيّر الملفّ
+     *    بين النداءين لاختلف المعلَن عن المُرسَل، والعميل ينتظر بايتاتٍ
+     *    لا تأتي **فيُبلغ «انقطع الاتّصال أثناء الاستقبال»** بالضبط.
+     * ٣. ولا يستفيد من `sendfile` في nginx.
+     *
+     * و`BinaryFileResponse` تحسب الطول من الملفّ الذي سترسله هي نفسها،
+     * فلا يفترقان أبداً — وتُرسله على دفعاتٍ بلا تحميله كلّه.
+     */
+    private function pdfResponse(string $path, string $receiptNumber): \Symfony\Component\HttpFoundation\Response
+    {
+        $absolute = Storage::disk('local')->path($path);
+
+        return response()->file($absolute, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => "inline; filename=\"{$receiptNumber}.pdf\"",
+            'Cache-Control' => 'private, max-age=86400',
+            // **لا يُضغط PDF.** هو مضغوطٌ أصلاً، وضغطُه في طبقةٍ وسيطة
+            // يجعل الطولَ المعلَن يفارق المُرسَل — وهو نفس العطل من بابٍ آخر.
+            'Content-Encoding' => 'identity',
+            // يمنع وسيطاً من محاولة تخمين النوع فيُفسد الترويسات.
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     /**

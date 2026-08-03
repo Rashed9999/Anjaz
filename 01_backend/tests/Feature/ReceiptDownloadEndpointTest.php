@@ -64,7 +64,13 @@ class ReceiptDownloadEndpointTest extends TestCase
         // ليست تجميلاً بل شرط قبول.
         $this->assertSame('application/pdf', $response->headers->get('Content-Type'));
 
-        $bytes = (string) $response->getContent();
+        // **`getContent()` تُعيد فراغاً لردٍّ متدفّق.**
+        //
+        // وصار الردّ `BinaryFileResponse` (يُرسل الملفّ على دفعاتٍ بلا
+        // تحميله في ذاكرة PHP، ويُعلن طولاً محسوباً من الملفّ نفسه). فما
+        // تغيّر هو **طريقة قراءة الجسم في الاختبار** لا الجسمُ نفسه —
+        // والعقد المفحوص هنا كما هو: أن يبدأ بـ`%PDF`.
+        $bytes = (string) $response->streamedContent();
         $this->assertStringStartsWith('%PDF', $bytes);
         $this->assertGreaterThan(1000, strlen($bytes));
     }

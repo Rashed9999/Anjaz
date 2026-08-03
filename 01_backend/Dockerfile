@@ -85,6 +85,21 @@ RUN mkdir -p storage/logs storage/framework/{cache/data,sessions,views} \
  && chmod -R 775 storage bootstrap/cache \
  && chown -R www-data:www-data storage bootstrap/cache
 
+# ══════════════════════════════════════════════════════════════════════
+# AMIAL-PDF-TRUNCATION-001 — مجلّدات nginx المؤقّتة مملوكةً لـwww-data.
+#
+# **العطل: «Connection closed while receiving data» على تنزيل PDF.**
+#
+# nginx يعمل بمستخدم `www-data`، وأيّ ردٍّ يتجاوز مخازن FastCGI يُكتب إلى
+# `fastcgi_temp`. وهذه المجلّدات لم تكن تُنشأ ولا تُملَّك في هذه الصورة —
+# فتفشل الكتابة **بعد إرسال الترويسات**، وتُقطع الاستجابة في منتصفها.
+#
+# ولا يظهر في سجلّ Laravel شيء: التطبيق أنهى عمله بنجاح، والقطع بعده.
+RUN mkdir -p /var/lib/nginx/tmp/{fastcgi,proxy,client_body,scgi,uwsgi} \
+             /var/cache/nginx \
+ && chown -R www-data:www-data /var/lib/nginx /var/cache/nginx \
+ && chmod -R 755 /var/lib/nginx /var/cache/nginx
+
 # تثبيت الحزم (بلا dev packages لبيئة الإنتاج/الديمو)
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
