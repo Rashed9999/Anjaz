@@ -268,7 +268,14 @@ class AgentStaffPortalTest extends TestCase
             'customer_id' => $customer->id, 'amount' => '50000',
         ])->assertStatus(422);
 
-        $this->assertStringContainsString('حدّك للعملية', $r->json('message'));
+        // **يُتحقَّق من السلوك لا من الصياغة.** كان يُطابَق نصٌّ حرفيّ،
+        // فسقط الاختبار حين تحسّنت الرسالة — والسلوك لم يتغيّر بحرف.
+        // والمعنى المقصود ثلاثة: أنّ العمليّة مُنعت، وأنّ الحدّ قيل
+        // بالرقم (وإلّا جرّب الصرّاف مبالغ حتى يمرّ أحدها)، وأنّ له
+        // مخرجاً بموافقة مديره بدل أن يقسّم المبلغ.
+        $this->assertStringContainsString('20,000', $r->json('message'));
+        $this->assertStringContainsString('موافقة مديرك', $r->json('message'));
+        $this->assertTrue((bool) $r->json('needs_approval'));
     }
 
     // ── الجرد ──────────────────────────────────────────────────────────

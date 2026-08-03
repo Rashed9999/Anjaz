@@ -158,14 +158,16 @@ class AgentCounterController extends Controller
 
         $amount = (string) $request->input('amount');
 
-        // حدّ الموظّف يُفحص قبل كلّ شيء: شركةٌ تضع لصرّافٍ جديدٍ حدّاً منخفضاً
-        // تتوقّع أن يُمنع، لا أن يُسجَّل ويُراجَع لاحقاً.
-        if (bccomp((string) $staff->max_txn_amount, '0', 4) > 0
-            && bccomp($amount, (string) $staff->max_txn_amount, 4) > 0) {
+        // ── الصلاحية قبل الحدّ ──────────────────────────────────────────
+        //
+        // والفرق بينهما ليس لفظيّاً: الحدّ يُتجاوز بموافقة مدير، والصلاحية
+        // لا تُتجاوز بشيء. فمن لا يملك «سحب» لا يصرف ولو وافق مديرُه.
+        if (!$staff->hasCapability($op)) {
             return response()->json([
                 'success' => false,
-                'message' => 'المبلغ يتجاوز حدّك للعملية الواحدة (' . $staff->max_txn_amount . ') — حوّله إلى مدير الفرع',
-            ], 422);
+                'message' => 'حسابك لا يملك صلاحية ' . ($op === 'deposit' ? 'الإيداع' : 'السحب')
+                    . ' — راجع إدارة شركتك',
+            ], 403);
         }
 
         $branch = AgentBranch::find($shift->branch_id);
@@ -173,6 +175,46 @@ class AgentCounterController extends Controller
 
         if (!$branch || !$customer) {
             return response()->json(['success' => false, 'message' => 'الفرع أو العميل غير موجود'], 404);
+        }
+
+        // ── الحدود: تُفحص كلُّها، وتُتجاوز بموافقةٍ مستهلَكة ─────────────
+        //
+        // **وحدُّ العمليّة الواحدة وحده لا يحمي شيئاً.** من حدُّه نصف مليون
+        // يمرّر مليوناً في عمليّتين — وهو النمط الذي تبحث عنه قواعد غسل
+        // الأموال. فالحدّ اليوميّ وعددُ العمليّات هما ما يُوقف التقسيم.
+        $breach = $this->limitBreach($staff, $amount);
+
+        if ($breach !== null) {
+            // موافقةٌ من المدير تُستهلَك **مرّةً واحدة**: موافقةٌ تُستعمل
+            // مرّتين تعني أنّه وافق على مليونٍ فمرّ مليونان باسمه.
+            $approval = app(\App\Services\AgentTellerRequestService::class)
+                ->consumeFor($staff, $op, $amount);
+
+            if (!$approval) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $breach,
+                    'needs_approval' => true,
+                ], 422);
+            }
+        }
+
+        // ── إشاراتُ الخطر: تمنع الحمراء وحدها ───────────────────────────
+        //
+        // ولا تُفحص للعرض فقط: عميلٌ محظورٌ يُمنع هنا، لا يُرصَد غداً في
+        // تقرير. والصفراء تُعرَض على الشاشة قبل الضغط ولا تُوقف الفرع.
+        $risk = app(\App\Services\AgentTellerRiskService::class)
+            ->assess($customer, $amount, $op, $staff);
+
+        if ($risk['blocked']) {
+            $first = collect($risk['flags'])
+                ->firstWhere('level', \App\Services\AgentTellerRiskService::BLOCK);
+
+            return response()->json([
+                'success' => false,
+                'message' => ($first['title'] ?? 'العمليّة ممنوعة') . ' — ' . ($first['advice'] ?? ''),
+                'flags' => $risk['flags'],
+            ], 422);
         }
 
         try {
@@ -191,6 +233,40 @@ class AgentCounterController extends Controller
         ]);
     }
 
+
+    /**
+     * أيُّ حدٍّ خُرق — أو `null` إن لم يُخرق شيء.
+     *
+     * ويردّ **نصّاً يفهمه الصرّاف**: «تجاوزتَ الحدّ» بلا رقمٍ تجعله يجرّب
+     * مبالغ حتى يمرّ أحدها — وهي أسوأ طريقةٍ لاكتشاف حدّ.
+     */
+    private function limitBreach(\App\Models\Agent\AgentStaff $staff, string $amount): ?string
+    {
+        $perOp = bcadd((string) ($staff->max_txn_amount ?? '0'), '0', 4);
+
+        // صفرٌ تعني «بلا حدّ خاصّ» لا «ممنوع» — وقلبُها يُقفل كلّ شبّاك.
+        if (bccomp($perOp, '0', 4) > 0 && bccomp($amount, $perOp, 4) > 0) {
+            return 'المبلغ يتجاوز حدّ عمليّتك الواحدة (' . number_format((float) $perOp, 0)
+                . ' ر.ي) — اطلب موافقة مديرك، ولا تقسّم العمليّة';
+        }
+
+        $limits = app(\App\Services\AgentTellerWorkspaceService::class)->limits($staff);
+
+        if ($limits['daily'] !== null
+            && bccomp(bcadd($limits['daily_used'], $amount, 4), $limits['daily'], 4) > 0) {
+            return 'العمليّة تتجاوز حدّك اليوميّ — استهلكتَ '
+                . number_format((float) $limits['daily_used'], 0) . ' من '
+                . number_format((float) $limits['daily'], 0)
+                . ' ر.ي. اطلب موافقة مديرك';
+        }
+
+        if ($limits['count_limit'] !== null && $limits['count_used'] >= $limits['count_limit']) {
+            return 'بلغتَ حدّ عدد عمليّاتك اليوم (' . $limits['count_limit']
+                . ') — اطلب موافقة مديرك';
+        }
+
+        return null;
+    }
 
     // ── السحب برمز العملية ───────────────────────────────────────────
     //
@@ -293,14 +369,48 @@ class AgentCounterController extends Controller
 
         $amount = (string) $req->amount;
 
-        // حدّ الموظّف يُفحص هنا أيضاً: الرمز صادرٌ من العميل، والحدّ على من
-        // يدفع لا على من يطلب.
-        if (bccomp((string) $staff->max_txn_amount, '0', 4) > 0
-            && bccomp($amount, (string) $staff->max_txn_amount, 4) > 0) {
+        // ══════════════════════════════════════════════════════════════
+        // **البابُ الثاني للسحب — ويُحرَس كالأوّل** (القاعدة الرابعة).
+        //
+        // للسحب مدخلان: هذا (برمز العميل) وذاك (`operate`). وحارسٌ على
+        // أحدهما وحده ليس حارساً: من يجد بابه مغلقاً يدخل من الآخر.
+        // ══════════════════════════════════════════════════════════════
+        if (!$staff->hasCapability('withdraw')) {
             return response()->json([
                 'success' => false,
-                'message' => 'المبلغ يتجاوز حدّك للعملية الواحدة — حوّله إلى مدير الفرع',
-            ], 422);
+                'message' => 'حسابك لا يملك صلاحية السحب — راجع إدارة شركتك',
+            ], 403);
+        }
+
+        $breach = $this->limitBreach($staff, $amount);
+
+        if ($breach !== null) {
+            $approval = app(\App\Services\AgentTellerRequestService::class)
+                ->consumeFor($staff, 'withdraw', $amount);
+
+            if (!$approval) {
+                return response()->json([
+                    'success' => false, 'message' => $breach, 'needs_approval' => true,
+                ], 422);
+            }
+        }
+
+        $customerForRisk = \App\Models\User::find($req->customer_user_id);
+
+        if ($customerForRisk) {
+            $risk = app(\App\Services\AgentTellerRiskService::class)
+                ->assess($customerForRisk, $amount, 'withdraw', $staff);
+
+            if ($risk['blocked']) {
+                $first = collect($risk['flags'])
+                    ->firstWhere('level', \App\Services\AgentTellerRiskService::BLOCK);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => ($first['title'] ?? 'العمليّة ممنوعة') . ' — ' . ($first['advice'] ?? ''),
+                    'flags' => $risk['flags'],
+                ], 422);
+            }
         }
 
         $branch = AgentBranch::find($shift->branch_id);

@@ -169,8 +169,23 @@
                     </label>
                 </div>
 
+                {{-- ٤) إشاراتُ الخطر — **قبل الضغط لا بعده**.
+
+                     كشفُ الاحتيال في المشروع يعمل، لكنّه يعمل بعد وقوع
+                     العمليّة: يرصد ويُصعّد ويفتح تحقيقاً. وذلك نافعٌ
+                     للمحقّق، عديمُ النفع للصرّاف الذي كان يستطيع أن يسأل
+                     سؤالاً واحداً قبل أن يصرف. --}}
+                <div id="ct-flags" class="mb-2"></div>
+
                 <button class="btn btn-success btn-lg w-100" id="ct-deposit" data-testid="ct-deposit">
                     ⬇️ إيداع — العميل يسلّمك نقداً
+                </button>
+
+                {{-- يظهر حين يمنع حدٌّ العمليّة: الرفض وحده يدفع الصرّاف
+                     إلى تقسيم المبلغ، والتقسيم هو النمط الذي تُدان به
+                     قواعد غسل الأموال. --}}
+                <button class="btn btn-outline-warning w-100 mt-2" id="ct-ask" style="display:none">
+                    ✋ اطلب موافقة مديرك على هذا المبلغ
                 </button>
 
                 <div id="ct-result" class="mt-3"></div>
@@ -268,6 +283,8 @@ document.addEventListener('DOMContentLoaded', function () {
     $('ct-find').addEventListener('click', async () => {
         const phone = $('ct-phone').value.trim();
         const box = $('ct-customer');
+        // ١٦) البحثُ يُسجَّل: أخطرُ ما يفعله موظّفٌ فاسد لا يُحرّك ريالاً.
+        if (window.wsLogEvent) window.wsLogEvent('customer_searched');
         box.innerHTML = '<div class="text-muted small">جارٍ البحث…</div>';
         customerId = null;
         $('ct-op').style.display = 'none';
@@ -285,17 +302,102 @@ document.addEventListener('DOMContentLoaded', function () {
         // الخطأ تُعيد `undefined` بهدوء فتسقط الشاشة على `c.name` بلا رسالةٍ
         // مفهومة للصرّاف الواقف أمام عميل.
         const c = (j.meta && j.meta.customer) || j.customer;
+
+        // ٥) بطاقةُ العميل السريعة — ما يُعين على القرار وحده.
+        // **ولا رصيد فيها**: عرضُه يجعل كلّ موظّفٍ في كلّ فرعٍ يرى ثروةَ
+        // كلّ من يمرّ به، وهي بياناتٌ لا يحتاجها لأداء العمليّة.
+        const chip = (t, tone) => `<span class="badge bg-${tone} me-1">${esc(t)}</span>`;
+        const young = c.account_age_days !== null && Number(c.account_age_days) < 30;
+
         box.innerHTML = `
             <div class="border rounded p-3">
-                <div class="fw-bold fs-5">${esc(c.name)}</div>
-                <div class="text-muted" dir="ltr">${esc(c.phone)}</div>
-                <div class="mt-2"><span class="badge bg-${c.can_transact ? 'success' : 'danger'}">${esc(c.status_label)}</span></div>
+                <div class="d-flex gap-3 align-items-start">
+                    ${c.photo
+                        ? `<img src="${esc(c.photo)}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:50%">`
+                        : `<div class="bg-light rounded-circle d-flex align-items-center justify-content-center"
+                                 style="width:56px;height:56px">👤</div>`}
+                    <div class="flex-grow-1">
+                        <div class="fw-bold fs-5">${esc(c.name)}</div>
+                        <div class="text-muted" dir="ltr">${esc(c.phone)}</div>
+                        <div class="mt-2">
+                            ${chip(c.status_label, c.can_transact ? 'success' : 'danger')}
+                            ${chip(c.kyc_verified ? '✅ موثَّق' : '⚠️ غير موثَّق',
+                                   c.kyc_verified ? 'success' : 'warning text-dark')}
+                            ${young ? chip('🆕 حسابٌ عمرُه ' + c.account_age_days + ' يوماً', 'warning text-dark') : ''}
+                            ${Number(c.open_reports) > 0
+                                ? chip('🚩 ' + c.open_reports + ' بلاغاً مفتوحاً', 'danger') : ''}
+                        </div>
+                        ${c.last_operation
+                            ? `<div class="small text-muted mt-2">
+                                 آخر عمليّة: ${esc(c.last_operation.kind)}
+                                 ${fmt(c.last_operation.amount)} — ${esc(c.last_operation.at)}</div>`
+                            : '<div class="small text-muted mt-2">لا عمليّات سابقة في شبابيكنا</div>'}
+                    </div>
+                </div>
             </div>`;
+
+        if (window.wsLogEvent) window.wsLogEvent('customer_viewed', {customer_id: c.id});
 
         if (c.can_transact) {
             customerId = c.id;
             $('ct-op').style.display = '';
+            $('ct-flags').innerHTML = '';
+            $('ct-ask').style.display = 'none';
         }
+    });
+
+    // ── ٤) الإشارات تُحدَّث والصرّاف يكتب المبلغ ────────────────────
+    //
+    // **لا عند الضغط.** إشارةٌ تظهر بعد الضغط تصل متأخّرةً بخطوةٍ كاملة:
+    // الصرّاف يكون قد قال للعميل «تمّ» في نفسه. وتأخيرُ نصف ثانية يمنع
+    // نداءً لكلّ رقمٍ يُكتب.
+    let assessTimer = null;
+    let lastFlags = [];
+
+    $('ct-amount').addEventListener('input', () => {
+        clearTimeout(assessTimer);
+        assessTimer = setTimeout(refreshFlags, 500);
+    });
+
+    async function refreshFlags() {
+        const amount = $('ct-amount').value;
+        if (!customerId || !amount || Number(amount) <= 0) {
+            $('ct-flags').innerHTML = '';
+            $('ct-ask').style.display = 'none';
+            lastFlags = [];
+            return;
+        }
+
+        if (!window.wsAssess) return;   // مساحة العمل غير محمَّلة
+
+        let m;
+        try { m = await window.wsAssess(customerId, amount, 'deposit'); }
+        catch (e) { return; }           // فشلُ الفحص لا يُوقف الصرّاف
+
+        lastFlags = m.flags || [];
+
+        $('ct-flags').innerHTML = lastFlags.map(f => {
+            const tone = f.level === 'block' ? 'danger'
+                       : (f.level === 'warn' ? 'warning' : 'secondary');
+            return `<div class="alert alert-${tone} py-2 mb-1 small">
+                <strong>${f.icon} ${esc(f.title)}</strong>
+                <div>${esc(f.advice)}</div></div>`;
+        }).join('');
+
+        if (lastFlags.length && window.wsLogEvent) {
+            window.wsLogEvent('risk_flag_shown', {customer_id: customerId});
+        }
+
+        // الحدّ يُعرَض مع طريقٍ للخروج منه — لا رفضاً مسدوداً.
+        const needsApproval = lastFlags.some(f => f.key === 'over_limit' || f.key === 'over_daily');
+        $('ct-ask').style.display = needsApproval ? '' : 'none';
+
+        $('ct-deposit').disabled = m.blocked === true;
+    }
+
+    $('ct-ask').addEventListener('click', () => {
+        if (window.wsOpenRequest) window.wsOpenRequest($('ct-amount').value, 'deposit');
+        else alert('اطلب موافقة مديرك من لوحة الشبّاك');
     });
 
     $('ct-phone').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('ct-find').click(); });
@@ -305,6 +407,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!customerId) { alert('ابحث عن العميل أوّلاً'); return; }
         const amount = $('ct-amount').value;
         if (!amount || Number(amount) <= 0) { alert('أدخل مبلغاً'); return; }
+
+        // ١٦) «تابع رغم إشارة الخطر» — السطر الذي يُبحث عنه في كلّ تحقيق.
+        if (lastFlags.length && window.wsLogEvent) {
+            window.wsLogEvent('risk_flag_overridden', {customer_id: customerId});
+        }
 
         busy = true;
         // كان هنا `$('ct-withdraw').disabled` — وزرُّ السحب هذا أُزيل حين

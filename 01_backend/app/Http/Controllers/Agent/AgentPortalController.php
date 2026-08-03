@@ -331,11 +331,39 @@ class AgentPortalController extends Controller
         // وعرضُ الرصيد يجعل كلّ موظّفٍ في كلّ فرعٍ يرى ثروة كلّ من يمرّ به —
         // وهي بياناتٌ لا يحتاجها لأداء العملية، والسحب يُرفض من نفسه إن لم
         // يكفِ الرصيد.
+        // ── بطاقةُ العميل السريعة (AMIAL-TELLER-WS-001) ─────────────────
+        //
+        // **وما يُضاف هنا محسوبٌ بميزان: ما يُعين على القرار وحده.**
+        //
+        // فالصرّاف يقرّر ثلاثة أشياء: أيَخدمه؟ وهل هو من يدّعي؟ وهل في
+        // العمليّة ما يستدعي سؤالاً؟ فيُعطى ما يجيب هذه الثلاثة: الحالة،
+        // ودرجةُ التوثيق، وقِدَمُ الحساب، وآخرُ عمليّة، والبلاغات.
+        //
+        // **ولا يُعطى الرصيد** — وهذا قرارٌ سابقٌ يُبقى عليه: عرضُه يجعل
+        // كلّ موظّفٍ في كلّ فرعٍ يرى ثروة كلّ من يمرّ به، وهي بياناتٌ لا
+        // يحتاجها لأداء العملية. والسحب يُرفض من نفسه إن لم يكفِ الرصيد.
+        $lastOp = \Illuminate\Support\Facades\DB::table('agent_cash_movements')
+            ->where('customer_user_id', $customer->id)
+            ->orderByDesc('id')->first(['reason', 'amount', 'created_at']);
+
+        $reports = 0;
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('aml_alerts')) {
+            // **الأعمدة تُقرأ من المخطّط.** كتبتُ `user_id` أوّلاً وهو
+            // عمودٌ لا وجود له — والجدول يربط بـ`subject_type`/`subject_id`.
+            // وخطأٌ كهذا يردّ ٥٠٠ على بحثٍ عن عميل، فيقف الشبّاك كلّه.
+            $reports = (int) \Illuminate\Support\Facades\DB::table('aml_alerts')
+                ->where('subject_type', 'user')
+                ->where('subject_id', (string) $customer->id)
+                ->whereIn('status', ['open', 'pending', 'investigating'])->count();
+        }
+
         return $this->ok([
             'customer' => [
                 'id' => (int) $customer->id,
                 'name' => trim((string) ($customer->f_name . ' ' . $customer->l_name)) ?: '—',
                 'phone' => (string) $customer->phone,
+                'account_number' => $customer->account_number,
                 'status' => $status['status'],
                 'status_label' => $status['label'],
                 'severity' => $status['severity'],
@@ -345,6 +373,22 @@ class AgentPortalController extends Controller
                     \App\Services\CustomerStatusResolver::DECEASED,
                     \App\Services\CustomerStatusResolver::FROZEN,
                 ], true),
+
+                'kyc_verified' => (bool) $customer->is_kyc_verified,
+                // **صورةُ العميل تُعرَض إن وُجدت.** والتحقّق من الوجه أوّل
+                // ما يُسأل عنه حين يُنكِر صاحبُ الحساب عمليّةً وقعت باسمه.
+                'photo' => $customer->image
+                    ? asset('storage/profile/' . $customer->image) : null,
+                // حسابٌ عمرُه ساعات ويسحب مليوناً ليس كحسابٍ عمرُه سنتان.
+                'member_since' => $customer->created_at?->toDateString(),
+                'account_age_days' => $customer->created_at
+                    ? (int) $customer->created_at->diffInDays(now()) : null,
+                'last_operation' => $lastOp ? [
+                    'kind' => $lastOp->reason === 'customer_deposit' ? 'إيداع' : 'سحب',
+                    'amount' => (string) $lastOp->amount,
+                    'at' => (string) $lastOp->created_at,
+                ] : null,
+                'open_reports' => $reports,
             ],
         ]);
     }

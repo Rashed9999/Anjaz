@@ -167,6 +167,56 @@ class AgentAlertService
         $this->sendToHeadOffice((int) $row->agent_user_id, $body);
     }
 
+    /**
+     * بلاغُ طوارئ من شبّاك — يصل الإدارة فوراً.
+     *
+     * **وهو التنبيه الوحيد هنا الذي لا يُسكَت.** «إيقاف التنبيهات» يُسكت
+     * فروق الورديّات ونقد الخزنة وقرارات التسوية — ولا يُسكت هذا. فمديرٌ
+     * أوقف تنبيهاته الشهر الماضي لا يجوز أن يفوته سطوٌ على فرعه اليوم.
+     */
+    public function panicRaised(
+        \App\Models\Agent\AgentPanicAlert $alert,
+        AgentStaff $staff,
+        ?AgentBranch $branch,
+    ): void {
+        $body = "🚨🚨 *بلاغ طوارئ من الشبّاك* 🚨🚨\n\n"
+            . (\App\Models\Agent\AgentPanicAlert::KIND_LABELS[$alert->kind] ?? $alert->kind) . "\n\n"
+            . '🏬 ' . ($branch?->name ?? '—') . "\n"
+            . "👤 {$staff->name} ({$staff->username})\n"
+            . '🕐 ' . $alert->created_at?->format('Y-m-d H:i:s') . "\n"
+            . '🔖 ' . $alert->alert_number . "\n"
+            . ($alert->note ? '📝 ' . $alert->note . "\n" : '')
+            . "\n📍 " . ($alert->geo_state === 'ok'
+                ? "الموقع: https://maps.google.com/?q={$alert->lat},{$alert->lng}"
+                : (\App\Models\Agent\AgentPanicAlert::GEO_LABELS[$alert->geo_state] ?? 'الموقع غير متاح'))
+            . "\n\n📌 اتّصل بالفرع الآن.";
+
+        // **يُتجاوز `alerts_enabled` هنا وحده** — انظر التوثيق أعلاه.
+        foreach ($this->panicRecipients($staff) as $target) {
+            $this->send($target, $body, respectMute: false);
+        }
+    }
+
+    /**
+     * من يُبلَّغ ببلاغ الطوارئ: إدارةُ الشركة، ومديرو الفرع نفسه.
+     *
+     * ولا يُبلَّغ زملاؤه الصرّافون: أحدُهم قد يكون الطرف الآخر في البلاغ.
+     *
+     * @return iterable<AgentStaff>
+     */
+    private function panicRecipients(AgentStaff $staff): iterable
+    {
+        return AgentStaff::where('agent_user_id', $staff->agent_user_id)
+            ->where('is_active', true)
+            ->where('id', '!=', $staff->id)
+            ->where(fn ($q) => $q
+                ->where('role', AgentStaff::ROLE_HEAD_OFFICE)
+                ->orWhere(fn ($w) => $w
+                    ->where('role', AgentStaff::ROLE_BRANCH_MANAGER)
+                    ->where('branch_id', $staff->branch_id)))
+            ->get();
+    }
+
     // ══════════════════════════════════════════════════════════════════
     // التوصيل
     // ══════════════════════════════════════════════════════════════════
@@ -210,14 +260,20 @@ class AgentAlertService
      * قبول تسوية؛ واستثناءٌ من مزوّد واتساب يعني أنّ انقطاع شبكةٍ عندهم
      * يمنع صرّافاً في المكلا من إقفال درجه.
      */
-    private function send(AgentStaff $staff, string $body): void
+    private function send(AgentStaff $staff, string $body, bool $respectMute = true): void
     {
         try {
             $link = WhatsappLinkedDevice::where('agent_staff_id', $staff->id)
                 ->where('status', WhatsappLinkedDevice::STATUS_ACTIVE)
                 ->first();
 
-            if (!$link || !$link->alerts_enabled) {
+            if (!$link) {
+                return;
+            }
+
+            // الإسكات يُحترم في كلّ شيء **إلّا الطوارئ**: مديرٌ أوقف
+            // تنبيهاته الشهر الماضي لا يفوته سطوٌ على فرعه اليوم.
+            if ($respectMute && !$link->alerts_enabled) {
                 return;
             }
 

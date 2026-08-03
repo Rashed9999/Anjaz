@@ -125,7 +125,10 @@ const FAKE_ROWS = [
 //
 // يُبنى من `_counter.blade.php` وحدَه: جافاسكربته مكتفٍ بذاته وكلّ عناصره
 // في ملفّه، فلا حاجة إلى بقيّة اللوحة.
-const COUNTER_HTML = bladeToHtml('resources/views/agent-views/_counter.blade.php', {
+// **يُبنى مع `_workspace` معاً.** جافاسكربت الشبّاك صار ينادي
+// `window.wsAssess` و`wsLogEvent` و`wsOpenRequest` — وهي في مساحة العمل.
+// وفحصُ الشبّاك وحدَه يعني فحصَ شاشةٍ لا وجود لها في اللوحة.
+const COUNTER_HTML = bladeToHtml('resources/views/agent-views/_counter_ws.blade.php', {
     "url('agent')": 'http://amial.test/agent',
 });
 
@@ -226,6 +229,41 @@ const DASH_HTML = bladeToHtml('resources/views/agent-views/dashboard.blade.php',
 
 const REPORT = {"period": {"from": "2026-07-04", "to": "2026-08-02", "days": 30, "prev_from": "2026-06-04", "prev_to": "2026-07-03"}, "agent": {"name": "البسيري للصرافة", "phone": "967771500001"}, "summary": {"volume": {"value": "630000", "previous": "500000", "change_pct": 26.0, "is_new": false}, "deposits": {"value": "480000", "previous": "400000", "change_pct": 20.0, "is_new": false}, "withdrawals": {"value": "150000", "previous": "100000", "change_pct": 50.0, "is_new": false}, "commission": {"value": "6300", "previous": "5000", "change_pct": 26.0, "is_new": false}, "fees": {"value": "12600", "previous": "10000", "change_pct": 26.0, "is_new": false}, "operations": {"value": "17", "previous": "14", "change_pct": 21.4, "is_new": false}, "customers": 11, "avg_ticket": "37058.8235"}, "daily": [{"date": "2026-08-01", "label": "08-01", "deposits": "40000", "withdrawals": "10000", "volume": "50000", "count": 1, "net_cash": "30000"}, {"date": "2026-08-02", "label": "08-02", "deposits": "45000", "withdrawals": "12000", "volume": "57000", "count": 2, "net_cash": "33000"}, {"date": "2026-08-03", "label": "08-03", "deposits": "50000", "withdrawals": "14000", "volume": "64000", "count": 3, "net_cash": "36000"}, {"date": "2026-08-04", "label": "08-04", "deposits": "55000", "withdrawals": "16000", "volume": "71000", "count": 4, "net_cash": "39000"}, {"date": "2026-08-05", "label": "08-05", "deposits": "60000", "withdrawals": "18000", "volume": "78000", "count": 5, "net_cash": "42000"}], "by_branch": [{"id": 1, "name": "فرع المكلا", "code": "MKL", "city": "حضرموت", "is_active": true, "deposits": "380000", "deposits_count": 9, "withdrawals": "120000", "withdrawals_count": 4, "volume": "500000", "commission": "5000", "fees": "10000", "shifts": 6, "shortage_total": "8000", "overage_total": "1500", "cash_on_hand": "2000000", "idle": false}, {"id": 2, "name": "فرع سيحوت", "code": "SHT", "city": "المهرة", "is_active": true, "deposits": "0", "deposits_count": 0, "withdrawals": "0", "withdrawals_count": 0, "volume": "0", "commission": "0", "fees": "0", "shifts": 0, "shortage_total": "0", "overage_total": "0", "cash_on_hand": "0", "idle": true}], "by_staff": [{"id": 9, "name": "محمد علي", "username": "MKL-001", "branch": "فرع المكلا", "deposits": "380000", "withdrawals": "120000", "volume": "500000", "operations": 13, "shifts_closed": 6, "accuracy_pct": 66.7, "shortage_count": 2, "shortage_total": "8000", "overage_count": 1, "overage_total": "1500"}], "variances": {"rows": [{"shift_id": 4, "date": "2026-08-01", "branch": "فرع المكلا", "staff": "محمد علي", "variance": "-5000", "kind": "shortage", "review_status": "pending", "review_label": "بانتظار مراجعة الإدارة", "note": "فرقٌ في العدّ"}], "shortage_count": 2, "shortage_total": "8000", "overage_count": 1, "overage_total": "1500"}, "settlements": {"expected_days": 30, "filed": 28, "missing": 2, "on_time": 26, "late": 2, "accepted": 27, "rejected": 1, "on_time_pct": 92.9, "rows": [{"date": "2026-08-01", "status": "accepted", "status_label": "قُبلت ونُفّذ التحويل", "window_state": "on_time", "conversion": "topup", "conversion_label": "يسلّم نقداً ويستلم رصيداً إلكترونيّاً", "conversion_amount": "260000", "deposits_total": "380000", "withdrawals_total": "120000"}]}, "generated_at": "2026-08-02 23:15:00"};
 
+// ── مساحةُ عمل الصرّاف ─────────────────────────────────────────────
+const WORKSPACE = {
+    staff: {id: 9, name: 'محمد علي', username: 'MKL-001', role: 'teller',
+            role_label: 'صرّاف (شبّاك)', branch: 'فرع المكلا', branch_code: 'MKL'},
+    kpis: {drawer_cash: '50000', drawer_known: true, branch_emoney: '900000',
+           branch_safe: '2000000', safe_known: true, customers_served: 3,
+           deposits_total: '120000', deposits_count: 4,
+           withdrawals_total: '30000', withdrawals_count: 1,
+           commission_today: '1200', pending_requests: 0, risk_alerts: 1},
+    permissions: [
+        {key: 'deposit', label: 'إيداع نقديّ للعميل', allowed: true},
+        {key: 'withdraw', label: 'صرف سحبٍ برمز العميل', allowed: true},
+        {key: 'adjust_balance', label: 'تعديل رصيدٍ يدويّاً', allowed: false},
+    ],
+    // **`null` تعني «بلا حدّ خاصّ» لا صفراً** — وهي الحالة التي يجب أن
+    // تُختبَر: قلبُ قراءتها يجعل الصرّاف يظنّ نفسه ممنوعاً من كلّ شيء.
+    limits: {per_operation: null, daily: '500000', daily_used: '150000',
+             daily_remaining: '350000', count_limit: null, count_used: 5,
+             count_remaining: null, rejected_today: 0},
+    systems: [
+        {key: 'database', label: 'قاعدة البيانات', state: 'ok', note: '2 مِلّي'},
+        {key: 'printer', label: 'الطابعة', state: 'not_integrated', note: 'لا يتّصل به النظام'},
+    ],
+    announcements: [{id: 1, severity: 'warning', icon: '⚠️', title: 'صيانة الليلة',
+                     body: 'من ١٢ إلى ١', at: '2026-08-03 09:00:00'}],
+    recent_customers: [{id: 42, name: 'راشد معرابي', phone: '783545525',
+                        last_at: '2026-08-03 09:00:00', ops: 3}],
+    requests: [],
+    day_log: {shift_open: true, shift_id: 7, opened_at: '2026-08-03 08:00:00',
+              minutes_on_shift: 125, last_activity_at: '2026-08-03 09:50:00',
+              last_login_at: '2026-08-03 07:58:00'},
+    panic: {has_open: false, number: null, status_label: null, geo_possible: false},
+    server_time: '2026-08-03 10:05:00', server_ms: Date.now(),
+};
+
 // كلّ نداءٍ يُسجَّل، لأنّ سؤال هذا الفحص ليس «هل ظهر خطأ» بل **هل وصل
 // الطلب أصلاً**. وزرُّ الإيداع الميّت كان يسقط قبل أيّ نداء.
 const STUBS = `
@@ -282,11 +320,31 @@ window.fetch = async (url, opts) => {
     }});
     if (u.includes('/staff/shifts')) return _json({data: []});
 
+    // مساحةُ عمل الصرّاف — حمولةٌ كاملةُ الشكل: حمولةٌ ناقصةُ المفاتيح
+    // تُسقط الشيفرة بخطأٍ ليس من صنعها فيضيع الفحص في مطاردة وهم.
+    if (u.includes('/teller/workspace')) return _json({success: true, meta: ${JSON.stringify(WORKSPACE)}});
+    if (u.includes('/teller/assess')) return _json({success: true, meta: window.__blocked
+        ? {blocked: true, flags: [{level: 'block', key: 'customer_status', icon: '🔴',
+             title: 'العميل محظور', advice: 'لا تُنفَّذ عمليّة'}]}
+        : {blocked: false, flags: [{level: 'warn', key: 'over_limit', icon: '🟠',
+             title: 'المبلغ فوق حدّ عمليّتك (50,000)', advice: 'اطلب موافقة مديرك'}]}});
+    if (u.includes('/teller/requests')) return _json({success: true, meta: {rows: []}});
+    // **لا علامة اقتباس خلفيّة في هذا التعليق** — النصّ كلّه داخل قالبٍ
+    // نصّيّ، وواحدةٌ منها تُنهيه فيصير ما بعده شيفرةً تُنفَّذ.
+    // ومسارُ الطلب المفرد يُطابَق بنهايته لا باحتوائه: احتواءُ الجمع
+    // يبتلعه دائماً مهما رُتّبت الشروط.
+    if (u.split('?')[0].endsWith('/teller/request')) return _json({success: true, message: 'أُرسل الطلب إلى مديرك'});
+    if (u.includes('/teller/panic')) return _json({success: true, message: 'أُرسل البلاغ — رقمه PNC-TEST'});
+    if (u.includes('/teller/event')) return _json({success: true});
+
     if (u.includes('/counter/state')) return _json(${JSON.stringify(SHIFT_OPEN)});
     if (u.includes('/counter/customer')) return _json({
         success: true,
         meta: {customer: {id: 42, name: 'راشد محمد عوض معرابي', phone: '783545525',
-                          can_transact: true, status_label: 'نشط', severity: 'success'}},
+                          can_transact: true, status_label: 'نشط', severity: 'success',
+                          kyc_verified: true, photo: null, member_since: '2024-01-01',
+                          account_age_days: 900, open_reports: 2,
+                          last_operation: {kind: 'إيداع', amount: '5000', at: '2026-08-01 10:00:00'}}},
     });
     if (u.includes('/counter/deposit')) return _json({
         success: true, message: 'أُودع 2,000 ر.ي',
@@ -438,6 +496,114 @@ const CASES = [
         ],
     },
 
+    // ── ١٨/٣/٦/٨) مساحةُ عمل الصرّاف ────────────────────────────────
+    {
+        page: 'counter',
+        name: 'مساحة العمل تُحمَّل: مؤشّرات وحدود وصلاحيات وتعاميم',
+        steps: [],
+        waitFor: '#ws[data-boot="1"]',
+        expectNav: null,
+        dom: [
+            ['وصل نداءُ مساحة العمل',
+                `window.__calls.some(c => c.url.includes('/teller/workspace'))`],
+            ['المؤشّرات مرسومة',
+                `/عملاء خدمتَهم اليوم/.test(document.getElementById('ws-kpis').textContent)`],
+            ['والحدّ المتبقّي معروضٌ بالرقم',
+                `/350,000/.test(document.getElementById('ws-limits').textContent)`],
+            ['وما بلا حدٍّ يُقال «بلا حدّ خاصّ» لا صفراً',
+                `/بلا حدّ خاصّ/.test(document.getElementById('ws-limits').textContent)`],
+            ['الصلاحيات المرفوضة تُعرَض مرفوضةً',
+                `/❌/.test(document.getElementById('ws-perms').textContent)`],
+            ['وتعميم الإدارة ظاهر',
+                `/صيانة الليلة/.test(document.getElementById('ws-announce').textContent)`],
+            ['والطابعة تُقال «غير مربوطة» لا خضراء',
+                `/لا يتّصل به النظام/.test(document.getElementById('ws-systems').textContent)`],
+            ['وفتحُ الشاشة سُجّل في التدقيق',
+                `window.__calls.some(c => c.method === 'POST' && c.url.includes('/teller/event'))`],
+        ],
+    },
+    {
+        // ٤) الإشارة تظهر **وهو يكتب** — لا بعد أن يضغط.
+        page: 'counter',
+        name: 'إشارة الخطر تظهر أثناء كتابة المبلغ ويظهر معها طريقُ الخروج',
+        steps: [
+            ['fill', '#ct-phone', '783545525'],
+            ['click', '#ct-find'],
+            ['fill', '#ct-amount', '90000'],
+            ['wait', 900],
+        ],
+        expectNav: null,
+        dom: [
+            ['وصل نداءُ الفحص قبل أيّ تنفيذ',
+                `window.__calls.some(c => c.url.includes('/teller/assess'))`],
+            ['ولم يُنفَّذ إيداعٌ أصلاً',
+                `!window.__calls.some(c => c.url.includes('/counter/deposit'))`],
+            ['الإشارة معروضة',
+                `/فوق حدّ عمليّتك/.test(document.getElementById('ct-flags').textContent)`],
+            ['وزرّ طلب الموافقة ظهر بدل الرفض المسدود',
+                `document.getElementById('ct-ask').style.display !== 'none'`],
+        ],
+    },
+    {
+        page: 'counter',
+        name: 'الإشارة الحمراء تُعطّل زرّ الإيداع نفسه',
+        init: 'window.__blocked = true;',
+        steps: [
+            ['fill', '#ct-phone', '783545525'],
+            ['click', '#ct-find'],
+            ['fill', '#ct-amount', '5000'],
+            ['wait', 900],
+        ],
+        expectNav: null,
+        dom: [
+            ['زرّ الإيداع معطَّل', `document.getElementById('ct-deposit').disabled === true`],
+            ['والسبب مكتوب', `/محظور/.test(document.getElementById('ct-flags').textContent)`],
+        ],
+    },
+    {
+        // ١٧) الرفض وحده يدفع إلى التقسيم — فالطلب هو الطريق.
+        page: 'counter',
+        name: 'زرّ «اطلب موافقة مديرك» يفتح النافذة ويُرسل الطلب فعلاً',
+        steps: [
+            ['fill', '#ct-phone', '783545525'],
+            ['click', '#ct-find'],
+            ['fill', '#ct-amount', '90000'],
+            ['wait', 900],
+            ['click', '#ct-ask'],
+            ['fill', '#ws-req-reason', 'العميل تاجرٌ معروف ومعه فاتورة موثّقة'],
+            ['click', '#ws-req-send'],
+        ],
+        expectNav: null,
+        dom: [
+            // **بلا تعبيرٍ نمطيّ هنا.** هذه السلسلة قالبٌ نصّيّ، و`\\/` فيه
+            // تصير `/` — فينقلب `/…/` إلى تعليقِ سطرٍ يبتلع بقيّة الشرط،
+            // فيُقرأ التحقُّق «لم يصل الطلب» والطلبُ واصل. وقد وقع هذا
+            // مرّتين في هذه الجلسة وحدها.
+            ['وصل الطلب إلى الخادم',
+                `window.__calls.some(c => c.method === 'POST'
+                    && c.url.split('?')[0].endsWith('/teller/request'))`],
+            ['والمبلغ نُقل إلى النافذة تلقائياً',
+                `document.getElementById('ws-req-amount').value === '90000'`],
+        ],
+    },
+    {
+        // ١٣) زرّ الطوارئ — والموقع لا يُنتظر أكثر من ثلاث ثوانٍ.
+        page: 'counter',
+        name: 'زرّ الطوارئ يُرسل البلاغ ولا ينتظر موقعاً على اتّصالٍ غير مشفَّر',
+        steps: [
+            ['click', '#ws-panic'],
+            ['click', '#ws-panic-send'],
+            ['wait', 600],
+        ],
+        expectNav: null,
+        dom: [
+            ['وصل البلاغ إلى الخادم',
+                `window.__calls.some(c => c.method === 'POST' && c.url.includes('/teller/panic'))`],
+            ['وقيل للموظّف أنّ الموقع لن يُرسَل ولماذا',
+                `/غير مشفَّر/.test(document.getElementById('ws-panic-note').textContent)`],
+        ],
+    },
+
     // ── شبّاك الصرّاف ────────────────────────────────────────────────
     {
         // العطل الذي أدخل هذه الحالة: سطرٌ يقرأ `$('ct-withdraw').disabled`
@@ -583,6 +749,7 @@ for (const c of CASES) {
     });
 
     if (target.init) await page.addInitScript(target.init);
+    if (c.init) await page.addInitScript(c.init);
     await page.addInitScript(STUBS);
 
     const jsErrors = [];
@@ -595,9 +762,15 @@ for (const c of CASES) {
         await page.goto(target.url, { waitUntil: 'domcontentloaded' });
         await page.waitForSelector(target.ready, { timeout: 5000 });
 
+        // شرطُ جهوزيّةٍ خاصٌّ بالحالة: شاشةٌ تُحمَّل بنداءٍ لا تكون جاهزةً
+        // بمجرّد ظهور هيكلها. وانتظارُ زمنٍ ثابتٍ بدلاً منه يجعل الفحص
+        // يمرّ على آلةٍ سريعة ويسقط على بطيئة — وهو أسوأ من ألّا يوجد.
+        if (c.waitFor) await page.waitForSelector(c.waitFor, { timeout: 5000 });
+
         for (const [action, sel, val] of (c.steps || [])) {
             if (action === 'fill') await page.fill(sel, val);
             else if (action === 'print') await page.evaluate(() => window.print());
+            else if (action === 'wait') await page.waitForTimeout(Number(sel) || 300);
             else await page.click(sel);
             await page.waitForTimeout(250);
         }

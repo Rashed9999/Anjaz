@@ -3,6 +3,7 @@
 use App\Http\Controllers\Agent\AgentCounterController;
 use App\Http\Controllers\Agent\AgentPortalController;
 use App\Http\Controllers\Agent\AgentStaffController;
+use App\Http\Controllers\Agent\AgentTellerController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -21,12 +22,13 @@ use Illuminate\Support\Facades\Route;
 $c = AgentPortalController::class;
 $counter = AgentCounterController::class;
 $staff = AgentStaffController::class;
+$teller = AgentTellerController::class;
 
 // عامّ: الدخول وحده.
 Route::get('/login', [$c, 'loginPage'])->name('login');
 Route::post('/login', [$c, 'login'])->name('login.submit');
 
-Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff) {
+Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff, $teller) {
     Route::get('/logout', [$c, 'logout'])->name('logout');
     Route::post('/logout', [$c, 'logout'])->name('logout.post');
 
@@ -69,6 +71,22 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff) 
     });
 
     Route::get('/operations', [$staff, 'operations'])->name('operations');
+
+    // ── مساحةُ عمل الصرّاف (AMIAL-TELLER-WS-001) ───────────────────────
+    //
+    // **ولا معرّفَ فرعٍ ولا معرّفَ موظّفٍ في أيٍّ منها**: النطاق من هويّة
+    // الداخل. وطلبُ موافقةٍ يحمل معرّف طالبه من المتصفّح يعني صرّافاً
+    // يطلب باسم زميله.
+    Route::prefix('teller')->name('teller.')->group(function () use ($teller) {
+        Route::get('/workspace', [$teller, 'workspace'])->name('workspace');
+        Route::get('/assess', [$teller, 'assess'])->name('assess');
+        Route::post('/request', [$teller, 'submitRequest'])->name('request');
+        Route::get('/requests', [$teller, 'pendingRequests'])->name('requests');
+        Route::post('/requests/{id}/decide', [$teller, 'decideRequest'])
+            ->where('id', '[0-9]+')->name('requests.decide');
+        Route::post('/panic', [$teller, 'panic'])->name('panic');
+        Route::post('/event', [$teller, 'logEvent'])->name('event');
+    });
 
     // ── كشوف الصرّاف: قراءةٌ لا عمليّة ────────────────────────────────
     //
