@@ -40,7 +40,10 @@ class AgentTellerRequestService
         $amount = bcadd((string) ($data['amount'] ?? '0'), '0', 4);
         $reason = trim((string) ($data['reason'] ?? ''));
 
-        if (bccomp($amount, '0', 4) <= 0) {
+        // طلبُ الوقت الإضافيّ ليس مبلغاً — يُقاس بالدقائق لا بالريالات.
+        $isOvertime = ($data['kind'] ?? '') === 'overtime';
+
+        if (!$isOvertime && bccomp($amount, '0', 4) <= 0) {
             throw new DomainException('المبلغ لا يكون صفراً');
         }
 
@@ -72,7 +75,7 @@ class AgentTellerRequestService
                 'branch_id' => $staff->branch_id,
                 'staff_id' => $staff->id,
                 'shift_id' => $shift?->id,
-                'kind' => in_array(($data['kind'] ?? ''), ['over_limit', 'restricted_op'], true)
+                'kind' => in_array(($data['kind'] ?? ''), ['over_limit', 'restricted_op', 'overtime'], true)
                     ? $data['kind'] : 'over_limit',
                 'operation' => in_array(($data['operation'] ?? ''), ['deposit', 'withdraw'], true)
                     ? $data['operation'] : 'deposit',
@@ -86,6 +89,12 @@ class AgentTellerRequestService
                     'per_operation' => (string) $staff->max_txn_amount,
                     'daily' => (string) $staff->daily_limit,
                     'daily_count' => (int) $staff->daily_count_limit,
+                    // للوقت الإضافيّ: **اليوم يُختم من الخادم لا من الطلب**.
+                    // ولو قُبل من المتصفّح لصار من يطلب موافقةً اليوم
+                    // يُقرّها على أيّ يومٍ في الشهر.
+                    'date' => in_array(($data['kind'] ?? ''), ['overtime'], true)
+                        ? now()->toDateString() : null,
+                    'expected_daily_hours' => (float) $staff->daily_hours_expected,
                 ],
                 'status' => AgentTellerRequest::STATUS_PENDING,
                 // مهلةٌ قصيرة: العميل واقفٌ على الشبّاك، وموافقةٌ تصل بعد

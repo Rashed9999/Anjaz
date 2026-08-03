@@ -72,16 +72,16 @@ class AgentTellerController extends Controller
     public function submitRequest(Request $request): JsonResponse
     {
         $request->validate([
-            'amount' => 'required|numeric|min:1',
+            'amount' => 'nullable|numeric|min:0',
             'reason' => 'required|string|max:500',
             'operation' => 'nullable|string|in:deposit,withdraw',
-            'kind' => 'nullable|string|in:over_limit,restricted_op',
+            'kind' => 'nullable|string|in:over_limit,restricted_op,overtime',
             'customer_id' => 'nullable|integer',
         ]);
 
         try {
             $row = $this->requests->submit($this->actor($request), [
-                'amount' => $request->input('amount'),
+                'amount' => $request->input('amount', '0'),
                 'reason' => $request->input('reason'),
                 'operation' => $request->input('operation', 'deposit'),
                 'kind' => $request->input('kind', 'over_limit'),
@@ -146,6 +146,83 @@ class AgentTellerController extends Controller
         return $this->ok(
             ['number' => $alert->alert_number],
             'أُرسل البلاغ إلى إدارتك — رقمه ' . $alert->alert_number,
+        );
+    }
+
+    // ── ساعاتُ الدوام (AMIAL-WORKTIME-001) ─────────────────────────────
+
+    /**
+     * كشفُ ساعاتي — يوميّاً وأسبوعيّاً وشهريّاً.
+     *
+     * **والصرّاف يرى كشفَه هو وحده.** ولا معرّفَ موظّفٍ في هذا المسار:
+     * النطاق من هويّة الداخل. أمّا كشوف الفريق فتُقرأ من تبويب
+     * الموظّفين — بفحص نطاقٍ صريح.
+     */
+    public function timesheet(Request $request): JsonResponse
+    {
+        $staff = $this->actor($request);
+
+        // مدىً افتراضيّ شهر: أطولُ منه يجعل الشاشة ثقيلةً بلا حاجة،
+        // وأقصرُ منه لا يُظهر «الشهريّ» الذي طُلب.
+        $to = $request->query('to') ?: now()->toDateString();
+        $from = $request->query('from') ?: now()->startOfMonth()->toDateString();
+
+        return $this->ok(app(\App\Services\AgentWorkTimeService::class)
+            ->summary($staff, (string) $from, (string) $to));
+    }
+
+    /**
+     * استراحة: بدايتُها ونهايتُها.
+     *
+     * **ولولا الاستراحة لما كان أمام الموظّف إلّا إغلاق ورديّته** — وذلك
+     * جردُ درجٍ كامل لأجل نصف ساعة غداء. فيبقى الدرج مفتوحاً ويُخصم
+     * الوقت.
+     */
+    public function toggleBreak(Request $request): JsonResponse
+    {
+        $request->validate(['action' => 'required|string|in:start,end']);
+
+        $staff = $this->actor($request);
+        $shift = $staff->openShift();
+
+        if (!$shift) {
+            return $this->error('لا ورديّة مفتوحة — الاستراحة داخل الورديّة لا خارجها', 422);
+        }
+
+        $wt = app(\App\Services\AgentWorkTimeService::class);
+        $start = $request->input('action') === 'start';
+
+        // **حالةُ الاستراحة تُقرأ من السجلّ لا من عمود.** فمن يضغط «ابدأ»
+        // مرّتين لا يُنشئ استراحتين، ومن يضغط «أنهِ» بلا بدايةٍ لا يُنشئ
+        // حدثاً معلَّقاً يقتطع من ورديّةٍ لاحقة.
+        $last = \App\Models\Agent\AgentWorkEvent::where('staff_id', $staff->id)
+            ->where('shift_id', $shift->id)
+            ->whereIn('event', [
+                \App\Models\Agent\AgentWorkEvent::BREAK_START,
+                \App\Models\Agent\AgentWorkEvent::BREAK_END,
+            ])->orderByDesc('id')->first();
+
+        $onBreak = $last && $last->event === \App\Models\Agent\AgentWorkEvent::BREAK_START;
+
+        if ($start && $onBreak) {
+            return $this->error('أنت في استراحةٍ بالفعل', 422);
+        }
+
+        if (!$start && !$onBreak) {
+            return $this->error('لا استراحةَ جارية', 422);
+        }
+
+        $wt->record(
+            $staff,
+            $start ? \App\Models\Agent\AgentWorkEvent::BREAK_START
+                   : \App\Models\Agent\AgentWorkEvent::BREAK_END,
+            (int) $shift->id,
+        );
+
+        return $this->ok(
+            ['on_break' => $start],
+            $start ? 'بدأت استراحتُك — درجُك يبقى مفتوحاً ولا تُنفَّذ عمليّات'
+                   : 'انتهت الاستراحة — أهلاً بعودتك',
         );
     }
 

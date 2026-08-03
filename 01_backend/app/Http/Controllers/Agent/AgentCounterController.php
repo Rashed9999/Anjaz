@@ -158,6 +158,20 @@ class AgentCounterController extends Controller
 
         $amount = (string) $request->input('amount');
 
+        // ── الاستراحة قبل كلّ شيء ───────────────────────────────────────
+        //
+        // **وليس المنعُ حمايةً للموظّف — بل للسجلّ.** من يضغط «استراحة»
+        // ويظلّ يعمل يخصم من ساعاته هو، ولا يفعله عاقل. والخطر عكسه:
+        // مديرٌ يُبقي صرّافه يعمل «خارج الدوام» فتجري العمليّات بلا
+        // ساعاتٍ تُنسب إليها — فيقول السجلّ إنّ الفرع مغلقٌ وهو يعمل.
+        if (app(\App\Services\AgentWorkTimeService::class)->isOnBreak($staff, (int) $shift->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'أنت في استراحة — أنهِ استراحتك قبل تنفيذ عمليّة. '
+                    . 'ولا تُنفَّذ عمليّةٌ بلا وقتٍ يُنسب إليها.',
+            ], 422);
+        }
+
         // ── الصلاحية قبل الحدّ ──────────────────────────────────────────
         //
         // والفرق بينهما ليس لفظيّاً: الحدّ يُتجاوز بموافقة مدير، والصلاحية
@@ -375,6 +389,13 @@ class AgentCounterController extends Controller
         // للسحب مدخلان: هذا (برمز العميل) وذاك (`operate`). وحارسٌ على
         // أحدهما وحده ليس حارساً: من يجد بابه مغلقاً يدخل من الآخر.
         // ══════════════════════════════════════════════════════════════
+        if (app(\App\Services\AgentWorkTimeService::class)->isOnBreak($staff, (int) $shift->id)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'أنت في استراحة — أنهِ استراحتك قبل تنفيذ عمليّة.',
+            ], 422);
+        }
+
         if (!$staff->hasCapability('withdraw')) {
             return response()->json([
                 'success' => false,

@@ -25,7 +25,25 @@ class AgentShiftService
     public function __construct(
         private readonly AuditService $audit,
         private readonly \App\Services\Whatsapp\AgentAlertService $alerts,
+        private readonly AgentWorkTimeService $worktime,
     ) {
+    }
+
+    /**
+     * ختمُ الدوام يُكتب **داخل** معاملة الورديّة — بخلاف التنبيه.
+     *
+     * والفرق مقصود: التنبيه رسالةٌ يجوز أن تضيع، والختمُ سطرٌ في سجلّ
+     * ساعاتٍ يُبنى عليه راتب. فورديّةٌ فُتحت بلا ختمِ فتحٍ تُنتج جلسةً
+     * بلا بداية — وذلك نقصٌ في أجرٍ لا رسالةٌ لم تصل.
+     */
+    private function stampWork(
+        AgentStaff $owner, string $event, int $shiftId, AgentStaff $actor,
+    ): void {
+        $this->worktime->record(
+            $owner, $event, $shiftId,
+            source: $actor->id === $owner->id ? 'portal' : 'manager',
+            actor: $actor,
+        );
     }
 
     /**
@@ -95,6 +113,9 @@ class AgentShiftService
                 'metadata' => ['staff_id' => $teller->id, 'branch_id' => $branch->id,
                     'opening_float' => $openingFloat],
             ]);
+
+            $this->stampWork($teller, \App\Models\Agent\AgentWorkEvent::SHIFT_OPEN,
+                (int) $shift->id, $teller);
 
             return $shift->fresh();
         });
@@ -208,6 +229,13 @@ class AgentShiftService
                     'variance' => $variance, 'closed_by' => $actor->id,
                 ],
             ]);
+
+            // الختمُ باسم **صاحب الورديّة** ومصدرُه من أغلقها. فمديرٌ
+            // يغلق ورديّةَ صرّافٍ غادر يُنهي ساعاتِ الصرّاف لا ساعاتِه هو،
+            // ويبقى في السجلّ أنّ الإغلاق لم يكن بيد صاحبه.
+            $owner = AgentStaff::find($locked->staff_id) ?? $actor;
+            $this->stampWork($owner, \App\Models\Agent\AgentWorkEvent::SHIFT_CLOSE,
+                (int) $locked->id, $actor);
 
             return $locked->fresh();
         });

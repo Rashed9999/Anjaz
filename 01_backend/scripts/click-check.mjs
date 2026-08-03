@@ -264,6 +264,36 @@ const WORKSPACE = {
     server_time: '2026-08-03 10:05:00', server_ms: Date.now(),
 };
 
+// ── كشف ساعات الدوام ───────────────────────────────────────────────
+const TIMESHEET = {
+    period: {from: '2026-08-01', to: '2026-08-31'},
+    staff: {id: 9, name: 'محمد علي', username: 'MKL-001',
+            daily_hours_expected: 8, overtime_policy: 'approved'},
+    totals: {worked: '14س', worked_minutes: 840, break: '45د',
+             unverified: '4س', unverified_minutes: 240, idle: '2س',
+             overtime: '2س 30د', overtime_minutes: 150, sessions: 2, days_worked: 2},
+    overtime: {policy: 'approved', occurred: '2س 30د', payable: '0د', pending: '2س 30د',
+               note: 'الإضافيّ لا يُقَرّ إلّا بموافقة المدير على يومه',
+               rows: [{date: '2026-08-03', overtime: '2س 30د', approved: false,
+                       label: '⏳ واقعٌ بلا موافقة'}]},
+    daily: [{date: '2026-08-03', worked: '8س', worked_minutes: 480, break: '45د',
+             unverified: '4س', unverified_minutes: 240, idle: '2س', sessions: 1,
+             expected: '8س', overtime: '2س 30د', overtime_minutes: 150, short_minutes: 0}],
+    weekly: [{key: '2026-08-03', worked: '14س', worked_minutes: 840,
+              unverified: '4س', idle: '2س', sessions: 2}],
+    monthly: [{key: '2026-08', worked: '14س', worked_minutes: 840,
+               unverified: '4س', idle: '2س', sessions: 2}],
+    sessions_list: [],
+    integrity: {ok: true, checked: 4, broken_at: null, reason: null},
+};
+
+// وسجلٌّ مكسور — لأنّ الحالتين تُعرَضان بشكلين، وفحصُ السليمة وحدها
+// يترك الإنذار الذي يهمّ بلا فحص.
+const TIMESHEET_BROKEN = {
+    ...TIMESHEET,
+    integrity: {ok: false, checked: 3, broken_at: 12, reason: 'محتوى الحدث تغيّر بعد كتابته'},
+};
+
 // كلّ نداءٍ يُسجَّل، لأنّ سؤال هذا الفحص ليس «هل ظهر خطأ» بل **هل وصل
 // الطلب أصلاً**. وزرُّ الإيداع الميّت كان يسقط قبل أيّ نداء.
 const STUBS = `
@@ -336,6 +366,9 @@ window.fetch = async (url, opts) => {
     if (u.split('?')[0].endsWith('/teller/request')) return _json({success: true, message: 'أُرسل الطلب إلى مديرك'});
     if (u.includes('/teller/panic')) return _json({success: true, message: 'أُرسل البلاغ — رقمه PNC-TEST'});
     if (u.includes('/teller/event')) return _json({success: true});
+    if (u.includes('/teller/break')) return _json({success: true, message: 'بدأت استراحتُك'});
+    if (u.includes('/teller/timesheet')) return _json({success: true,
+        meta: window.__chainBroken ? ${JSON.stringify(TIMESHEET_BROKEN)} : ${JSON.stringify(TIMESHEET)}});
 
     if (u.includes('/counter/state')) return _json(${JSON.stringify(SHIFT_OPEN)});
     if (u.includes('/counter/customer')) return _json({
@@ -601,6 +634,59 @@ const CASES = [
                 `window.__calls.some(c => c.method === 'POST' && c.url.includes('/teller/panic'))`],
             ['وقيل للموظّف أنّ الموقع لن يُرسَل ولماذا',
                 `/غير مشفَّر/.test(document.getElementById('ws-panic-note').textContent)`],
+        ],
+    },
+
+    // ── ساعاتُ الدوام ────────────────────────────────────────────────
+    {
+        page: 'counter',
+        name: 'زرّ «كشف ساعاتي» يفتح الكشف بيوميّه وأسبوعيّه وشهريّه',
+        steps: [['click', '#ws-sheet'], ['wait', 600]],
+        expectNav: null,
+        expectModal: '#ws-sheet-modal',
+        dom: [
+            ['وصل نداءُ الكشف',
+                `window.__calls.some(c => c.url.includes('/teller/timesheet'))`],
+            ['الإجماليّ بالساعات والدقائق لا بالكسور',
+                `/14س/.test(document.getElementById('ws-sheet-body').textContent)`],
+            ['واليوميّ مفصَّل', `/2026-08-03/.test(document.getElementById('ws-sheet-body').textContent)`],
+            ['والأسبوعيّ والشهريّ معروضان',
+                `/أسبوعيّاً/.test(document.getElementById('ws-sheet-body').textContent)
+                 && /شهريّاً/.test(document.getElementById('ws-sheet-body').textContent)`],
+            ['و«غير المؤكَّد» يُعرَض ولا يُخفى',
+                `/غير مؤكَّد/.test(document.getElementById('ws-sheet-body').textContent)`],
+            ['والإضافيّ الواقع بلا موافقة يُقال إنّه بلا موافقة',
+                `/بلا موافقة/.test(document.getElementById('ws-sheet-body').textContent)`],
+        ],
+    },
+    {
+        // **إنذارُ السلسلة المكسورة هو الحالة التي تهمّ.** وفحصُ السليمة
+        // وحدها يترك الإنذار بلا فحص — وهو ما يُبنى عليه القرار.
+        page: 'counter',
+        name: 'سجلٌّ مكسور: يُصرَّح به فوق الأرقام لا تحتها',
+        init: 'window.__chainBroken = true;',
+        steps: [['click', '#ws-sheet'], ['wait', 600]],
+        expectNav: null,
+        dom: [
+            ['الإنذار ظاهر',
+                `/غير سليم/.test(document.getElementById('ws-sheet-body').textContent)`],
+            ['ويقول ماذا يُفعل',
+                `/لا تُبنَ على هذه الأرقام قرارات/.test(document.getElementById('ws-sheet-body').textContent)`],
+            ['وهو **فوق** الجدول لا تحته',
+                `document.getElementById('ws-sheet-body').innerHTML.indexOf('غير سليم')
+                 < document.getElementById('ws-sheet-body').innerHTML.indexOf('<table')`],
+        ],
+    },
+    {
+        page: 'counter',
+        name: 'زرّ الاستراحة يرسل الطلب ويقلب حالته',
+        steps: [['click', '#ws-break'], ['wait', 400]],
+        expectNav: null,
+        dom: [
+            ['وصل نداءُ الاستراحة',
+                `window.__calls.some(c => c.method === 'POST' && c.url.includes('/teller/break'))`],
+            ['والزرّ صار «أنهِ الاستراحة»',
+                `/أنهِ الاستراحة/.test(document.getElementById('ws-break').textContent)`],
         ],
     },
 

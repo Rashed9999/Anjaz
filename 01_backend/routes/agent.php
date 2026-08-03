@@ -86,6 +86,10 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff, 
             ->where('id', '[0-9]+')->name('requests.decide');
         Route::post('/panic', [$teller, 'panic'])->name('panic');
         Route::post('/event', [$teller, 'logEvent'])->name('event');
+
+        // ساعاتُ الدوام — قراءةُ كشفي، واستراحةٌ داخل ورديّتي.
+        Route::get('/timesheet', [$teller, 'timesheet'])->name('timesheet');
+        Route::post('/break', [$teller, 'toggleBreak'])->name('break');
     });
 
     // ── كشوف الصرّاف: قراءةٌ لا عمليّة ────────────────────────────────

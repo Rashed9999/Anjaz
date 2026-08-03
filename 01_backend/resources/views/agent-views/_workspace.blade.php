@@ -39,7 +39,20 @@
                 <div id="ws-systems" class="small mb-3"></div>
 
                 <h6 class="mb-2">📋 يومك</h6>
-                <div id="ws-day" class="small mb-3"></div>
+                <div id="ws-day" class="small mb-2"></div>
+
+                {{-- AMIAL-WORKTIME-001 — الاستراحة والكشف.
+
+                     ولولا زرّ الاستراحة لما كان أمام الموظّف إلّا إغلاق
+                     ورديّته لأجل نصف ساعة غداء — وذلك جردُ درجٍ كامل. --}}
+                <div class="d-flex gap-2 mb-3">
+                    <button class="btn btn-sm btn-outline-warning flex-grow-1" id="ws-break">
+                        ☕ استراحة
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary flex-grow-1" id="ws-sheet">
+                        ⏱️ كشف ساعاتي
+                    </button>
+                </div>
 
                 {{-- زرّ الطوارئ في الأسفل عمداً: زرٌّ أحمر في أعلى الشاشة
                      يُضغط بالخطأ، وبلاغُ سطوٍ كاذب يُفقد البلاغ الحقيقيّ
@@ -64,6 +77,27 @@
         <div class="d-flex flex-wrap gap-1" id="ws-recent"></div>
         <div class="form-text">اضغط الاسم ليُملأ رقمُه في خانة البحث.</div>
     </div>
+</div>
+
+{{-- كشفُ ساعات الدوام (AMIAL-WORKTIME-001) --}}
+<div class="modal fade" id="ws-sheet-modal" tabindex="-1">
+    <div class="modal-dialog modal-xl"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">⏱️ كشف ساعاتي</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+            <div class="d-flex gap-2 mb-3 flex-wrap align-items-end">
+                <div><label class="form-label small mb-0">من</label>
+                    <input type="date" class="form-control form-control-sm" id="ws-sheet-from"></div>
+                <div><label class="form-label small mb-0">إلى</label>
+                    <input type="date" class="form-control form-control-sm" id="ws-sheet-to"></div>
+                <button class="btn btn-sm btn-primary" id="ws-sheet-load">عرض</button>
+                <button class="btn btn-sm btn-outline-warning ms-auto" id="ws-ot-ask">
+                    ✋ اطلب موافقة على وقتٍ إضافيّ اليوم
+                </button>
+            </div>
+            <div id="ws-sheet-body"><div class="text-muted">جارٍ التحميل…</div></div>
+        </div>
+    </div></div>
 </div>
 
 {{-- نافذة طلب الموافقة (١٧) --}}
@@ -365,6 +399,9 @@ document.addEventListener('DOMContentLoaded', function () {
             catch (e) { /* لا تُسقط الشاشة كلّها لأجل قائمة */ }
         }
 
+        onBreak = (m.day_log || {}).on_break === true;
+        renderBreak();
+
         $('ws').dataset.boot = '1';
         window.wsLogEvent('counter_opened');
     }
@@ -419,6 +456,134 @@ document.addEventListener('DOMContentLoaded', function () {
             $('ws-req-reason').value = '';
             load();
         } catch (e) { $('ws-req-err').textContent = e.message; }
+    });
+
+    // ── ساعاتُ الدوام (AMIAL-WORKTIME-001) ───────────────────────────
+    let onBreak = false;
+
+    function renderBreak() {
+        const b = $('ws-break');
+        b.className = onBreak
+            ? 'btn btn-sm btn-warning flex-grow-1'
+            : 'btn btn-sm btn-outline-warning flex-grow-1';
+        b.textContent = onBreak ? '▶️ أنهِ الاستراحة' : '☕ استراحة';
+    }
+
+    $('ws-break').addEventListener('click', async () => {
+        try {
+            const j = await post('/teller/break', {action: onBreak ? 'end' : 'start'});
+            onBreak = !onBreak;
+            renderBreak();
+            alert(j.message);
+        } catch (e) { alert(e.message); }
+    });
+
+    $('ws-sheet').addEventListener('click', () => {
+        const t = new Date();
+        // الشهرُ الجاري افتراضاً: هو المدى الذي يُسأل عنه فعلاً.
+        $('ws-sheet-to').value = t.toISOString().slice(0, 10);
+        $('ws-sheet-from').value = new Date(t.getFullYear(), t.getMonth(), 1)
+            .toISOString().slice(0, 10);
+        new bootstrap.Modal($('ws-sheet-modal')).show();
+        loadSheet();
+    });
+
+    $('ws-sheet-load').addEventListener('click', loadSheet);
+
+    async function loadSheet() {
+        const box = $('ws-sheet-body');
+        box.innerHTML = '<div class="text-muted">جارٍ التحميل…</div>';
+
+        let m;
+        try {
+            m = (await get(`/teller/timesheet?from=${$('ws-sheet-from').value}`
+                + `&to=${$('ws-sheet-to').value}`)).meta || {};
+        } catch (e) {
+            box.innerHTML = `<div class="alert alert-danger py-2 mb-0">${esc(e.message)}</div>`;
+            return;
+        }
+
+        const t = m.totals || {};
+        const ot = m.overtime || {};
+        const integ = m.integrity || {};
+
+        // **إنذارُ السلسلة فوق الأرقام لا تحتها.** رقمٌ من سجلٍّ مكسور
+        // لا يُقرأ قبل أن يُعرف أنّه مكسور.
+        const chain = integ.ok === false
+            ? `<div class="alert alert-danger py-2">
+                 <strong>⛔ سجلّ الدوام غير سليم — لا تُبنَ على هذه الأرقام قرارات.</strong>
+                 <div class="small">${esc(integ.reason || '')} (الحدث #${esc(integ.broken_at)})</div>
+                 <div class="small">أبلِغ إدارة أميال: عُدّل السجلّ خارج النظام.</div></div>`
+            : `<div class="alert alert-success py-2 small mb-2">
+                 ✅ سلسلةُ السجلّ سليمة — فُحص ${esc(integ.checked)} حدثاً</div>`;
+
+        const kpi = (label, val, sub, tone) => `<div class="col-6 col-md-3">
+            <div class="card p-2 border-${tone || 'light'}">
+                <div class="small text-muted">${esc(label)}</div>
+                <div class="fs-5 fw-bold">${esc(val ?? '—')}</div>
+                ${sub ? `<div class="small text-muted">${esc(sub)}</div>` : ''}
+            </div></div>`;
+
+        const rows = (m.daily || []).map(d => `<tr>
+            <td>${esc(d.date)}</td>
+            <td class="fw-bold">${esc(d.worked)}</td>
+            <td>${esc(d.break)}</td>
+            <td>${esc(d.expected ?? '—')}</td>
+            <td>${d.overtime && d.overtime !== '0د'
+                    ? `<span class="badge bg-info text-dark">${esc(d.overtime)}</span>` : '—'}</td>
+            <td>${d.unverified && d.unverified !== '0د'
+                    ? `<span class="badge bg-danger">${esc(d.unverified)}</span>` : '—'}</td>
+            <td>${esc(d.idle)}</td>
+            <td>${esc(d.sessions)}</td>
+        </tr>`).join('');
+
+        const period = (title, list) => `
+            <h6 class="mt-3">${title}</h6>
+            <div class="d-flex flex-wrap gap-2">
+                ${(list || []).map(w => `<span class="badge bg-secondary">
+                    ${esc(w.key)}: ${esc(w.worked)}</span>`).join('') || '<span class="text-muted">—</span>'}
+            </div>`;
+
+        box.innerHTML = chain
+            + '<div class="row g-2 mb-3">'
+            + kpi('إجمالي العمل', t.worked, `${esc(t.days_worked)} يوم`, 'success')
+            + kpi('الاستراحات', t.break)
+            + kpi('وقتٌ إضافيّ', t.overtime ?? '—',
+                  t.overtime ? `مُقَرّ ${esc(ot.payable || '0د')}` : 'لا دوامَ مضبوط')
+            + kpi('غير مؤكَّد', t.unverified, 'فوق سقف الورديّة',
+                  (t.unverified_minutes || 0) > 0 ? 'danger' : null)
+            + '</div>'
+            + (ot.note ? `<div class="alert alert-info py-2 small">${esc(ot.note)}</div>` : '')
+            // **حالةُ كلّ يومٍ إضافيّ تُعرَض بيومها.** ومجموعٌ وحده يقول
+            // «لك ساعتان معلّقتان» ولا يقول أيّ يومٍ ينتظر موافقة — فلا
+            // يعرف الموظّف عمّا يسأل مديره.
+            + ((ot.rows || []).length
+                ? `<div class="mb-2 d-flex flex-wrap gap-1">`
+                  + ot.rows.map(r => `<span class="badge bg-${r.approved ? 'success' : 'warning text-dark'}">
+                        ${esc(r.date)} · ${esc(r.overtime)} · ${esc(r.label)}</span>`).join('')
+                  + `</div>`
+                : '')
+            + `<div class="table-responsive"><table class="table table-sm table-hover">
+                 <thead class="table-light"><tr>
+                   <th>اليوم</th><th>عمل</th><th>استراحة</th><th>المتوقَّع</th>
+                   <th>إضافيّ</th><th>غير مؤكَّد</th><th>خمول</th><th>جلسات</th>
+                 </tr></thead><tbody>${rows || '<tr><td colspan="8" class="text-center text-muted py-3">لا أيّام في هذا المدى</td></tr>'}</tbody>
+               </table></div>`
+            + period('📅 أسبوعيّاً', m.weekly)
+            + period('🗓️ شهريّاً', m.monthly)
+            + '<div class="form-text mt-3">«غير مؤكَّد» ساعاتٌ تجاوزت سقف الورديّة — '
+            + 'تُعرَض ولا تُحذف، ويقرّرها مديرك. و«الخمول» فتراتٌ بلا عمليّات، '
+            + 'تُعرَض ولا تُخصَم.</div>';
+    }
+
+    $('ws-ot-ask').addEventListener('click', async () => {
+        const reason = prompt('سببُ الوقت الإضافيّ اليوم (عشرة أحرف فأكثر):');
+        if (!reason) return;
+        try {
+            const j = await post('/teller/request', {kind: 'overtime', amount: 0, reason: reason});
+            alert(j.message);
+            loadSheet();
+        } catch (e) { alert(e.message); }
     });
 
     // ── ١٣) الطوارئ ──────────────────────────────────────────────────

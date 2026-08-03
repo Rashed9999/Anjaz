@@ -433,6 +433,11 @@ class AgentTellerWorkspaceService
                 ? (int) $shift->opened_at->diffInMinutes(now()) : null,
             'last_activity_at' => $last ? (string) $last : null,
             'last_login_at' => $staff->last_login_at?->toDateTimeString(),
+            // حالةُ الاستراحة تُقرأ من السجلّ لا من عمود: من يُحدّث
+            // الصفحة أثناء استراحته يجب أن يجد الزرّ كما تركه.
+            'on_break' => $shift
+                ? app(AgentWorkTimeService::class)->isOnBreak($staff, (int) $shift->id)
+                : false,
         ];
     }
 

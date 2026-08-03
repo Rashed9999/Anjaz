@@ -47,6 +47,7 @@ class AgentTellerRequest extends Model
     public const KIND_LABELS = [
         'over_limit' => 'تجاوز الحدّ',
         'restricted_op' => 'عمليّة خارج الصلاحية',
+        'overtime' => 'وقتٌ إضافيّ',
     ];
 
     /**
