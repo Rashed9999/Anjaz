@@ -113,6 +113,11 @@ $app = Application::configure(basePath: dirname(__DIR__))
 
         $middleware->use([
             TrustProxies::class,
+            // **بعد `TrustProxies` مباشرةً وقبل الجلسة.**
+            // يقرأ `X-Forwarded-Proto` (فيلزم أن يكون الوسيط موثوقاً
+            // قبله)، ويكتب `session.secure` قبل أن تُبنى كوكي الجلسة
+            // في `StartSession` — والترتيب هنا ليس ذوقاً بل شرط عمل.
+            \App\Http\Middleware\HttpsPosture::class,
             HandleCors::class,
             PreventRequestsDuringMaintenance::class,
             ValidatePostSize::class,

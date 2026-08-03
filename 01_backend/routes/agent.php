@@ -118,6 +118,19 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff, 
     Route::get('/branches/{id}/report', [$c, 'dailyReport'])->where('id', '[0-9]+')->name('branch.report');
     Route::post('/branches/{id}/hours', [$c, 'setWorkingHours'])->where('id', '[0-9]+')->name('branch.hours');
     Route::get('/reports', [$c, 'reports'])->name('reports');
+
+    // ── الإعدادات (AMIAL-AGENT-SETTINGS-001) ──────────────────────────
+    //
+    // وفيها ما كان مبنيّاً بلا شاشة: ساعاتُ عمل الفرع لها نقطةُ نهاية منذ
+    // شهور ولا زرّ لها، وحدُّ تنبيه النقد المنخفض — الذي تُبنى عليه
+    // تنبيهات واتساب كلُّها — لم يكن يُضبط من أيّ مكان.
+    Route::get('/settings', [$c, 'settings'])->name('settings');
+    Route::post('/settings/password', [$c, 'changeMyPassword'])->name('settings.password');
+    Route::post('/branches/{id}/thresholds', [$c, 'setBranchThresholds'])
+        ->where('id', '[0-9]+')->name('branch.thresholds');
+    Route::post('/announcements', [$c, 'createAnnouncement'])->name('announcements.create');
+    Route::post('/announcements/{id}/toggle', [$c, 'toggleAnnouncement'])
+        ->where('id', '[0-9]+')->name('announcements.toggle');
     Route::get('/settlements', [$c, 'settlements'])->name('settlements');
 
     // التسوية اليوميّة مع أميال — نافذةٌ ليليّة يُقفل فيها اليوم.

@@ -81,6 +81,7 @@
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-reports" data-testid="ag-tab-reports">📊 التقارير</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-settle" data-testid="ag-tab-settle">🤝 التسويات</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-report" data-testid="ag-tab-report">📋 تقرير اليوم</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-settings" data-testid="ag-tab-settings">⚙️ الإعدادات</button></li>
         @endif
     </ul>
 
@@ -98,6 +99,10 @@
         @if($role !== 'teller')
             @include('agent-views._charts')
             @include('agent-views._reports')
+            {{-- الإعدادات للإدارة ومديري الفروع. والصرّاف لا يراها: ليس
+                 إخفاءَ واجهةٍ بل حدَّ صلاحية — نقاطُ النهاية نفسها تفحص
+                 الدور وتردّ ٤٠٣ لمن ليس له. --}}
+            @include('agent-views._settings')
         @endif
 
         {{-- ما دون هذا للإدارة ومديري الفروع. والصرّاف لا يراه: ليس

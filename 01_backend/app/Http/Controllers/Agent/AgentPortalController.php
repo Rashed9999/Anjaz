@@ -38,6 +38,7 @@ class AgentPortalController extends Controller
         private readonly AgentTillService $till,
         private readonly AgentCounterService $counter,
         private readonly AgentReportService $reports,
+        private readonly \App\Services\AuditService $audit,
     ) {
     }
 
@@ -519,6 +520,234 @@ class AgentPortalController extends Controller
         }
 
         return $this->ok(['working_hours' => $branch->working_hours], 'حُفظت ساعات العمل');
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-AGENT-SETTINGS-001 — الإعدادات
+    // ══════════════════════════════════════════════════════════════════
+
+    /**
+     * كلُّ ما يُضبَط في مكانٍ واحد.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ولماذا لم تكن موجودة؟** لأنّ كلّ إعدادٍ بُني مع ميزته وبقي عندها.
+     * فساعاتُ عمل الفرع لها نقطة نهاية منذ شهور **ولا زرّ لها في أيّ
+     * شاشة**، وحدُّ تنبيه النقد المنخفض — الذي تُبنى عليه تنبيهات واتساب
+     * كلُّها — لم يكن يُضبط من أيّ مكان.
+     *
+     * وهي حالةُ العطل المتكرّرة هنا: المنطق يعمل، والمسار مسجَّل، ولا
+     * شاشة تناديه. فالميزة موجودةٌ في الشيفرة وغائبةٌ عن المستعمل.
+     */
+    public function settings(Request $request): JsonResponse
+    {
+        $staff = $request->attributes->get('agent_staff');
+        $agent = $this->companyUser($request);
+
+        // **`companyUser` قد تُعيد `null`** — والقراءة منها بلا فحصٍ
+        // تُسقط الشاشة بـ٥٠٠ بدل أن تقول ما الخطب.
+        if (!$agent) {
+            return $this->error('تعذّر تحديد شركتك — أعد الدخول', 401);
+        }
+
+        $branches = AgentBranch::with('till')
+            ->where('agent_user_id', $agent->id)->orderBy('name')->get()
+            ->map(fn (AgentBranch $b) => [
+                'id' => (int) $b->id,
+                'name' => $b->name,
+                'code' => $b->code,
+                'city' => $b->city,
+                'is_active' => (bool) $b->is_active,
+                'working_hours' => $b->working_hours,
+                // «غير مضبوط» ليس صفراً: خزنةٌ حدُّها صفر لا تُنبِّه أبداً،
+                // ومن يقرأ «٠» يظنّ الحدّ مضبوطاً على الصفر عمداً.
+                'min_cash_alert' => (string) ($b->till->min_cash_alert ?? '0'),
+                'max_cash_on_hand' => (string) ($b->till->max_cash_on_hand ?? '0'),
+                'cash_on_hand' => (string) ($b->till->cash_on_hand ?? '0'),
+                'alerts_configured' => $b->till
+                    && bccomp((string) $b->till->min_cash_alert, '0', 4) > 0,
+            ])->all();
+
+        return $this->ok([
+            'company' => [
+                'name' => trim(($agent->f_name ?? '') . ' ' . ($agent->l_name ?? '')) ?: '—',
+                'phone' => $agent->phone,
+                'portal_url' => route('agent.login'),
+            ],
+            'me' => $staff instanceof AgentStaff ? [
+                'name' => $staff->name, 'username' => $staff->username,
+                'role_label' => $staff->roleLabel(),
+                'can_manage' => !$staff->isTeller(),
+            ] : null,
+            'branches' => $branches,
+            // **وضعيّة التشفير تُقاس من الطلب لا من متغيّر بيئة.**
+            // ومن يقرأها من `APP_URL` يستنتج أنّ التشفير يعمل ولو كان
+            // الخادم يردّ على HTTP وحده.
+            'security' => \App\Http\Middleware\HttpsPosture::describe($request),
+            'announcements' => \App\Models\Agent\AgentAnnouncement::where('agent_user_id', $agent->id)
+                ->orderByDesc('id')->limit(20)->get()
+                ->map(fn ($a) => [
+                    'id' => (int) $a->id, 'title' => $a->title, 'body' => $a->body,
+                    'severity' => $a->severity, 'audience' => $a->audience,
+                    'is_active' => (bool) $a->is_active,
+                    'at' => $a->created_at?->toDateTimeString(),
+                ])->all(),
+        ]);
+    }
+
+    /**
+     * حدود خزنة الفرع — الحدّ الأدنى للتنبيه والسقف الأعلى.
+     *
+     * **والأدنى هو ما تُبنى عليه تنبيهات واتساب كلُّها.** وبقاؤه صفراً
+     * يعني أنّ «نقد فرعك منخفض» لن يُرسَل أبداً — تنبيهٌ مبنيٌّ يعمل على
+     * عتبةٍ لا يضبطها أحد.
+     */
+    public function setBranchThresholds(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'min_cash_alert' => 'required|numeric|min:0',
+            'max_cash_on_hand' => 'required|numeric|min:0',
+        ]);
+
+        $staff = $request->attributes->get('agent_staff');
+
+        if ($staff instanceof AgentStaff && $staff->isTeller()) {
+            return $this->error('ضبطُ حدود الخزنة من صلاحية الإدارة', 403);
+        }
+
+        $branch = $this->authorizedBranch($request, $id);
+        $min = (string) $request->input('min_cash_alert');
+        $max = (string) $request->input('max_cash_on_hand');
+
+        // سقفٌ دون حدّ التنبيه يجعل الخزنة «منخفضةً وممتلئة» معاً — وهي
+        // حالةٌ لا معنى لها تُنتج تنبيهين متناقضين في الدقيقة نفسها.
+        if (bccomp($max, '0', 4) > 0 && bccomp($max, $min, 4) < 0) {
+            return $this->error('السقف الأعلى لا يكون دون حدّ التنبيه', 422);
+        }
+
+        $till = app(\App\Services\AgentTillService::class)->tillFor($branch);
+        $till->forceFill(['min_cash_alert' => $min, 'max_cash_on_hand' => $max])->save();
+
+        $this->audit->record([
+            'actor_type' => 'agent',
+            'actor_user_id' => $branch->agent_user_id,
+            'action' => 'agent.branch.thresholds',
+            'severity' => 'notice',
+            'subject_type' => 'agent_branch',
+            'subject_id' => (string) $branch->id,
+            'context' => ['min_cash_alert' => $min, 'max_cash_on_hand' => $max],
+        ]);
+
+        return $this->ok(
+            ['min_cash_alert' => $min, 'max_cash_on_hand' => $max],
+            'حُفظت حدود خزنة ' . $branch->name,
+        );
+    }
+
+    /** تعميمٌ من إدارة الشركة إلى شبابيكها. */
+    public function createAnnouncement(Request $request): JsonResponse
+    {
+        $request->validate([
+            'title' => 'required|string|max:160',
+            'body' => 'required|string|max:2000',
+            'severity' => 'nullable|string|in:info,warning,critical',
+            'audience' => 'nullable|string|in:all,tellers,managers',
+            'ends_at' => 'nullable|date',
+        ]);
+
+        $staff = $request->attributes->get('agent_staff');
+
+        if ($staff instanceof AgentStaff && $staff->isTeller()) {
+            return $this->error('التعاميم من صلاحية الإدارة', 403);
+        }
+
+        $agent = $this->companyUser($request);
+
+        if (!$agent) {
+            return $this->error('تعذّر تحديد شركتك — أعد الدخول', 401);
+        }
+
+        $row = \App\Models\Agent\AgentAnnouncement::create([
+            // **يُختم بشركة الكاتب من جلسته لا من طلبه.** ومعرّفٌ يأتي
+            // من المتصفّح يعني تعميماً يُكتب في شركةٍ منافسة.
+            'agent_user_id' => $agent->id,
+            'audience' => $request->input('audience', 'all'),
+            'severity' => $request->input('severity', 'info'),
+            'title' => (string) $request->input('title'),
+            'body' => (string) $request->input('body'),
+            'is_active' => true,
+            'starts_at' => now(),
+            'ends_at' => $request->input('ends_at'),
+            'created_by_staff_id' => $staff instanceof AgentStaff ? $staff->id : null,
+        ]);
+
+        return $this->ok(['id' => (int) $row->id], 'نُشر التعميم — يظهر في شبابيكك الآن');
+    }
+
+    public function toggleAnnouncement(Request $request, int $id): JsonResponse
+    {
+        $staff = $request->attributes->get('agent_staff');
+
+        if ($staff instanceof AgentStaff && $staff->isTeller()) {
+            return $this->error('التعاميم من صلاحية الإدارة', 403);
+        }
+
+        $agent = $this->companyUser($request);
+
+        $row = $agent ? \App\Models\Agent\AgentAnnouncement::where('id', $id)
+            ->where('agent_user_id', $agent->id)->first() : null;
+
+        if (!$row) {
+            return $this->error('التعميم خارج نطاقك', 404);
+        }
+
+        $row->forceFill(['is_active' => !$row->is_active])->save();
+
+        return $this->ok(['is_active' => (bool) $row->is_active],
+            $row->is_active ? 'أُعيد نشر التعميم' : 'أُوقف التعميم');
+    }
+
+    /**
+     * تغييرُ الموظّف كلمةَ سرّه.
+     *
+     * **ولم تكن موجودة.** كان يستطيع المديرُ أن يُبدّل كلمة سرّ غيره ولا
+     * يستطيع أحدٌ أن يُبدّل كلمة سرّه هو — فمن ظنّ أنّ كلمته عُرفت يطلب
+     * من مديره أن يُبدّلها، **فيصير مديرُه يعرفها**.
+     */
+    public function changeMyPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'current' => 'required|string',
+            'password' => 'required|string|min:6|confirmed',
+        ]);
+
+        $staff = $request->attributes->get('agent_staff');
+
+        if (!$staff instanceof AgentStaff) {
+            return $this->error('هذه الخاصيّة لحسابات الموظّفين — ادخل برمز موظّف', 422);
+        }
+
+        // **الحاليّة تُطلب.** ومن غيرها يكفي أن يترك الموظّف شاشته مفتوحة
+        // دقيقةً ليُقفل حسابُه عليه بكلمةٍ لا يعرفها.
+        if (!\Illuminate\Support\Facades\Hash::check(
+            (string) $request->input('current'), (string) $staff->password
+        )) {
+            return $this->error('كلمة السرّ الحاليّة غير صحيحة', 422);
+        }
+
+        $staff->forceFill([
+            'password' => \Illuminate\Support\Facades\Hash::make((string) $request->input('password')),
+        ])->save();
+
+        $this->audit->record([
+            'actor_type' => 'agent',
+            'actor_user_id' => $staff->agent_user_id,
+            'action' => 'agent.staff.self_password',
+            'severity' => 'notice',
+            'subject_type' => 'agent_staff',
+            'subject_id' => (string) $staff->id,
+        ]);
+
+        return $this->ok([], 'تغيّرت كلمة سرّك — استعملها في الدخول القادم');
     }
 
     // ── إدارة الفروع ────────────────────────────────────────────────────

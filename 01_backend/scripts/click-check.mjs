@@ -218,6 +218,11 @@ const PROFILE_UNRATED = {
 };
 
 // ── لوحة الوكيل الكاملة: التقارير والرسوم والطباعة ─────────────────
+const SETTINGS_URL = 'http://amial.test/agent/settings-tab';
+const SETTINGS_HTML = bladeToHtml('resources/views/agent-views/_settings.blade.php', {
+    "url('agent')": 'http://amial.test/agent',
+});
+
 const DASH_HTML = bladeToHtml('resources/views/agent-views/dashboard.blade.php', {
     "url('agent')": 'http://amial.test/agent',
     "route('agent.login')": 'http://amial.test/agent/login',
@@ -352,6 +357,24 @@ window.fetch = async (url, opts) => {
     }});
     if (u.includes('/staff/shifts')) return _json({data: []});
 
+    if (u.split('?')[0].endsWith('/settings')) return _json({success: true, meta: {
+        company: {name: 'البسيري للصرافة', phone: '967700000007',
+                  portal_url: 'http://amial.test/agent/login'},
+        me: {name: 'الإدارة', username: 'HQ-001', role_label: 'الإدارة العامّة', can_manage: true},
+        branches: [
+            {id: 1, name: 'فرع المكلا', code: 'MKL', city: 'حضرموت', is_active: true,
+             working_hours: null, min_cash_alert: '0', max_cash_on_hand: '0',
+             cash_on_hand: '500000', alerts_configured: false},
+        ],
+        // اتّصالٌ غير مشفَّر على عنوانٍ رقميّ — وهي حالةُ الإنتاج اليوم،
+        // وأهمّ ما يجب أن يُقال فيه الحلّ لا العطل وحده.
+        security: {secure: false, scheme: 'http', host: '169.58.24.224', host_is_ip: true,
+                   cookie_secure: false,
+                   headline: '🔓 الاتّصال غير مشفَّر — كلمات سرّ موظّفيك تمرّ نصّاً صريحاً'},
+        announcements: [],
+    }});
+    if (u.includes('/branches/1/thresholds')) return _json({success: true, message: 'حُفظت حدود فرع المكلا'});
+
     // مساحةُ عمل الصرّاف — حمولةٌ كاملةُ الشكل: حمولةٌ ناقصةُ المفاتيح
     // تُسقط الشيفرة بخطأٍ ليس من صنعها فيضيع الفحص في مطاردة وهم.
     if (u.includes('/teller/workspace')) return _json({success: true, meta: ${JSON.stringify(WORKSPACE)}});
@@ -478,6 +501,44 @@ const CASES = [
                 `/غير محسوبة/.test(document.getElementById('pr-body').textContent)`],
             ['ولا تُعرَض درجةٌ خضراء',
                 `!document.querySelector('#pr-body .alert-success')`],
+        ],
+    },
+
+    // ── الإعدادات ────────────────────────────────────────────────────
+    {
+        page: 'settings',
+        name: 'الإعدادات تُحمَّل: الأمان يُقال حلُّه، وحدُّ التنبيه يُقال إن كان غائباً',
+        steps: [['wait', 700]],
+        expectNav: null,
+        dom: [
+            ['وصل نداءُ الإعدادات',
+                `window.__calls.some(c => c.url.includes('/settings'))`],
+            // **العطل يُقال ومعه حلُّه.** «الاتّصال غير مشفَّر» وحدها
+            // تُخيف ولا تُرشد، فيقرؤها صاحب الشركة ولا يعرف ما يفعل.
+            ['يُقال إنّ الاتّصال غير مشفَّر',
+                `/غير مشفَّر/.test(document.getElementById('sg-security').textContent)`],
+            ['ويُقال إنّ العنوان الرقميّ لا تُصدَر له شهادة',
+                `/لا تُصدَر لعنوان رقميّ/.test(document.getElementById('sg-security').textContent)`],
+            ['وتُذكر الخطوة العمليّة في Coolify',
+                `/Domains/.test(document.getElementById('sg-security').textContent)`],
+            // حدٌّ صفريّ يجب أن يُقال «غائب» لا أن يُعرَض رقماً.
+            ['وحدُّ التنبيه الغائب يُقال صراحةً',
+                `/لن تصلك رسالة نقدٍ منخفض/.test(document.getElementById('sg-branches').textContent)`],
+        ],
+    },
+    {
+        page: 'settings',
+        name: 'زرّ «حفظ حدود الفرع» يرسل العتبة فعلاً',
+        steps: [
+            ['wait', 700],
+            ['fill', '[data-sg-branch="1"] [data-sg="min"]', '100000'],
+            ['click', 'button[data-sg-save="1"]'],
+            ['wait', 400],
+        ],
+        expectNav: null,
+        dom: [
+            ['وصل الحفظ إلى الخادم',
+                `window.__calls.some(c => c.method === 'POST' && c.url.includes('/branches/1/thresholds'))`],
         ],
     },
 
@@ -838,6 +899,9 @@ const PAGES = {
     'staff-wa-linked': { url: STAFF_URL, html: STAFF_HTML, ready: 'button[data-do="wa"]',
                          init: 'window.__waLinked = true;' },
     dashboard: { url: DASH_URL, html: DASH_HTML, ready: '#rp-load' },
+    // شاشةُ الإعدادات تُحمَّل عند فتح تبويبها لا عند تحميل الصفحة، فتُنادى
+    // `load()` هنا صراحةً — وهو ما يفعله `shown.bs.tab` في اللوحة.
+    settings: { url: SETTINGS_URL, html: SETTINGS_HTML, ready: '#sg-security' },
 };
 
 const browser = await chromium.launch({ args: ['--no-sandbox'] });
