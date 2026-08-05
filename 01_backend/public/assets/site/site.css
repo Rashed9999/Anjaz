@@ -452,6 +452,27 @@ a { color: var(--navy); }
     margin-bottom: 7px;
 }
 .portal span { font-size: 18px; line-height: 1.5; }
+a.portal {
+    text-decoration: none;
+    color: inherit;
+    transition: background .13s, transform .13s;
+}
+a.portal:hover { background: #eef2fb; transform: translateX(-2px); }
+.portal em {
+    margin-inline-start: auto;
+    align-self: center;
+    font-style: normal;
+    color: var(--navy);
+    font-weight: 700;
+}
 .portal b { display: block; font-size: 14px; color: var(--text); }
 .portal small { display: block; font-size: 12.3px; color: var(--text-3); direction: ltr; text-align: start; }
 .portal.muted { background: transparent; border: 1px dashed var(--border); }
+
+/* بابُ الإدارة في الترويسة — ظاهرٌ لا بارز: جمهورُه موظّفو أميال باي. */
+.nav-admin {
+    font-size: 13.5px !important;
+    color: var(--text-3) !important;
+    border: 1px solid var(--border);
+}
+.nav-admin:hover { color: var(--navy) !important; border-color: #c9d5f0; }
