@@ -52,7 +52,12 @@ return [
     |
     */
 
-    'url' => env('APP_URL', 'http://localhost'),
+    // AMIAL-APP-URL-SANITIZE-001 — يُنظَّف ويُتحقَّق منه قبل أن يُقرأ.
+    //
+    // بناءُ Coolify كاملاً (٦ دقائق) سقط بـ«Invalid URI: Scheme is
+    // malformed» — رسالةٌ لا تذكر `APP_URL` ولا القيمة التي أفسدته.
+    // التفصيل كلّه ومصفوفة القياس في `app/Support/AppUrl.php`.
+    'url' => \App\Support\AppUrl::resolve(env('APP_URL')),
 
     /*
     |--------------------------------------------------------------------------
