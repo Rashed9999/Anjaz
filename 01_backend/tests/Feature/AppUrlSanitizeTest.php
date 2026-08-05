@@ -180,4 +180,55 @@ class AppUrlSanitizeTest extends TestCase
         $this->assertSame('https://amialpay.com:8081',
             AppUrl::resolve(' https://amialpay.com:8081/ '));
     }
+
+    /**
+     * @test
+     *
+     * **المحارف غير المرئيّة — وهي التي أطالت التشخيص.**
+     *
+     * حقلُ لوحة النشر عرض `https://amialpay.com` سليماً تماماً، وصورةُ
+     * الشاشة كذلك، ورسالةُ Symfony كذلك. فلا شيء في السلسلة كلّها يُظهر
+     * مسافةً غير فاصلةٍ أو علامةَ اتّجاهٍ لصقت من صفحةِ ويب.
+     */
+    public function invisible_characters_are_cut_too(): void
+    {
+        $invisibles = [
+            "\u{00A0}" => 'مسافة غير فاصلة U+00A0',
+            "\u{200B}" => 'عرضٌ صفريّ U+200B',
+            "\u{200E}" => 'علامة اتّجاه U+200E (شائعة مع العربيّة)',
+            "\u{FEFF}" => 'BOM U+FEFF',
+            "\u{2028}" => 'فاصل سطر U+2028',
+        ];
+
+        foreach ($invisibles as $ch => $label) {
+            $this->assertSame('https://amialpay.com',
+                AppUrl::resolve($ch . 'https://amialpay.com'), "في البداية: {$label}");
+
+            $this->assertSame('https://amialpay.com',
+                AppUrl::resolve('https://amialpay.com' . $ch), "في النهاية: {$label}");
+        }
+    }
+
+    /**
+     * @test
+     *
+     * **وما بقي خفيّاً في الوسط يُعرَض بايتاً بايتاً.**
+     *
+     * فرسالةٌ تقول «القيمة [https://amialpay.com] غير صالحة» وهي تبدو
+     * صحيحةً تماماً تترك القارئ حيث كان.
+     */
+    public function the_message_makes_a_hidden_character_visible(): void
+    {
+        try {
+            AppUrl::resolve("htp\u{200B}s://amialpay.com");
+            $this->fail('قيمةٌ فاسدة مرّت');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('⟨U+200B⟩', $e->getMessage(),
+                'المحرف الخفيّ لم يُعرض — فالرسالة تُخفي ما جاءت لتكشفه');
+        }
+
+        $this->assertSame('a␠b', AppUrl::visualize('a b'));
+        $this->assertSame('https://amialpay.com', AppUrl::visualize('https://amialpay.com'),
+            'المطبوع العاديّ يُشوَّه — فتصير الرسالة غير مقروءة');
+    }
 }

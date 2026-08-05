@@ -52,6 +52,21 @@ class AppUrl
     public const FALLBACK = 'http://localhost';
 
     /**
+     * محارفٌ تُقصّ من الطرفين: بيضاء ظاهرة، وبيضاء **غير مرئيّة**.
+     *
+     * وهذه الثانية هي التي أطالت التشخيص: حقلُ Coolify يعرض
+     * `https://amialpay.com` سليماً تماماً، ومسافةٌ غير فاصلة (U+00A0)
+     * أو علامةُ ترتيبٍ لصقت من صفحةِ ويب لا تظهر في أيّ صورة. فتُقصّ
+     * صراحةً — ولا واحدةٌ منها تكون في عنوانٍ صحيح أبداً.
+     */
+    private const TRIM = " \t\n\r\0\x0B\"'"
+        . "\u{00A0}"   // مسافة غير فاصلة
+        . "\u{200B}\u{200C}\u{200D}"  // عرضٌ صفريّ
+        . "\u{200E}\u{200F}"          // علامتا الاتّجاه (شائعتان مع العربيّة)
+        . "\u{2028}\u{2029}"          // فاصلا سطرٍ وفقرة
+        . "\u{FEFF}";                 // علامة ترتيب البايتات
+
+    /**
      * يقصّ ما لا يكون في عنوانٍ صحيح أبداً.
      *
      * الفراغات وعلامات التنصيص (حزامُ أمانٍ ثانٍ بعد `Env::get`) والشرطة
@@ -59,13 +74,13 @@ class AppUrl
      */
     public static function clean(?string $raw): string
     {
-        $v = trim((string) $raw, " \t\n\r\0\x0B\"'");
+        $v = trim((string) $raw, self::TRIM);
 
         // البادئة المكرّرة: `APP_URL=https://…` مُلصَقاً في حقل القيمة.
         // وهي قصٌّ لا تخمين — الاسم يساوي المفتاح نفسه حرفاً بحرف.
         if (preg_match('/^APP_URL\s*=\s*/i', $v)) {
             $v = (string) preg_replace('/^APP_URL\s*=\s*/i', '', $v);
-            $v = trim($v, " \t\n\r\0\x0B\"'");
+            $v = trim($v, self::TRIM);
         }
 
         return rtrim($v, '/');
@@ -88,6 +103,33 @@ class AppUrl
     }
 
     /**
+     * يعرض المحارف غير المطبوعة كرموزٍ مرئيّة.
+     *
+     * **وهذه هي الفائدة كلّها.** رسالة Symfony عرضت العنوان فبدا سليماً
+     * تماماً — وهو ما أطال التشخيص. فمسافةٌ أو علامةُ اتّجاهٍ لصقت من
+     * صفحةِ ويب لا تُرى في أيّ رسالةٍ ولا في أيّ صورةِ شاشة، ولا في حقل
+     * لوحة النشر نفسه. فتُطبَع بايتاً بايتاً.
+     */
+    public static function visualize(string $s): string
+    {
+        $out = '';
+
+        foreach (preg_split('//u', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $ch) {
+            $cp = mb_ord($ch, 'UTF-8');
+
+            // مطبوعٌ عاديّ (ASCII مرئيّ) يُترك كما هو.
+            if ($cp !== false && $cp > 0x20 && $cp < 0x7F) {
+                $out .= $ch;
+                continue;
+            }
+
+            $out .= $cp === 0x20 ? '␠' : sprintf('⟨U+%04X⟩', (int) $cp);
+        }
+
+        return $out;
+    }
+
+    /**
      * القيمة التي تُسلَّم إلى `config('app.url')`.
      *
      * @throws \RuntimeException إن بقيت غير صالحةٍ بعد التنظيف.
@@ -95,7 +137,7 @@ class AppUrl
     public static function resolve(?string $raw): string
     {
         // غير مضبوطٍ أصلاً ⇒ الافتراضيّ. وهذا ليس خطأ ضبطٍ بل غيابُه.
-        if ($raw === null || trim($raw) === '') {
+        if ($raw === null || trim($raw, self::TRIM) === '') {
             return self::FALLBACK;
         }
 
@@ -114,6 +156,9 @@ class AppUrl
                 . " القيمة الحالية : [{$raw}]\n"
                 . " بعد التنظيف    : [{$clean}]\n"
                 . " المتوقَّع        : https://amialpay.com\n"
+                . "\n"
+                . " بايتاتها (لتظهر المحارف الخفيّة):\n"
+                . "   " . self::visualize($raw) . "\n"
                 . "\n"
                 . " الأشيع: لصقُ السطر كلّه في حقل «القيمة».\n"
                 . " حقل المفتاح: APP_URL   وحقل القيمة: https://amialpay.com\n"
