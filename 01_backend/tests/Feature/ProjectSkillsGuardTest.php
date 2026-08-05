@@ -121,6 +121,57 @@ class ProjectSkillsGuardTest extends TestCase
     /**
      * @test
      *
+     * **الاستدعاء مُلزَمٌ ببنية، لا بتذكُّر.**
+     *
+     * ══════════════════════════════════════════════════════════════
+     * **الثمن:** سبعَ عشرةَ مهارةً — ٢٧٠٠ سطر — واستُدعي منها اثنتان،
+     * وكلتاهما بعد أن طالب بهما صاحبُ المشروع صراحةً.
+     *
+     * والسبب ليس نسياناً: المهارات اختياريّةٌ بحكم بنائها. يصل النموذجَ
+     * سطرُ وصفٍ لكلٍّ ويقرّر هو، ولا شيء يُلزمه. **واختياريٌّ = غيرُ
+     * موجود.**
+     *
+     * فيُحقن فهرسُها في كلّ رسالة (`UserPromptSubmit`)، ويُطلب تصريحٌ
+     * مكتوبٌ قبل كلّ تغيير (القاعدة الحادية عشرة). ونزعُ أيٍّ منهما يُعيد
+     * المهارات إلى الرفّ.
+     */
+    public function invoking_the_skills_is_bound_by_structure_not_memory(): void
+    {
+        $root = dirname(base_path());
+
+        // ١) الـhook موجودٌ ويعمل.
+        $hook = $root . '/.claude/hooks/skills-index.sh';
+
+        $this->assertFileExists($hook, 'فهرسُ المهارات لم يعد يُحقن — فتعود اختياريّة');
+        $this->assertTrue(is_executable($hook), 'الـhook غير قابلٍ للتنفيذ');
+
+        $out = (string) shell_exec(escapeshellarg($hook) . ' 2>/dev/null');
+
+        $this->assertStringContainsString('amial-impact', $out,
+            'الفهرس لا يذكر المهارة الإلزاميّة عند التعديل');
+        $this->assertStringContainsString('amial-completeness', $out,
+            'الفهرس لا يذكر المهارة الإلزاميّة قبل قول «تمّ»');
+
+        // ٢) ومسجَّلٌ على كلّ رسالة لا على بدء الجلسة وحده.
+        //    (بدءُ الجلسة يُقرأ مرّةً ثمّ يُنسى تحت طول المحادثة.)
+        $settings = json_decode(
+            file_get_contents($root . '/.claude/settings.json'), true);
+
+        $this->assertArrayHasKey('UserPromptSubmit', $settings['hooks'] ?? [],
+            'الفهرس لم يعد يُحقن في كلّ رسالة — فيُنسى مع طول الجلسة');
+
+        // ٣) والقاعدة الحادية عشرة تطلب التصريح المكتوب.
+        $claude = file_get_contents(base_path('CLAUDE.md'));
+
+        $this->assertStringContainsString('القاعدة الحادية عشرة', $claude,
+            'قاعدةُ التصريح بالمهارات أُزيلت من CLAUDE.md');
+        $this->assertStringContainsString('الصمت ليس جواباً', $claude,
+            'لم يعد يُطلب تصريحٌ صريحٌ بعدم الانطباق — والصمتُ لا يُراجَع');
+    }
+
+    /**
+     * @test
+     *
      * **والتعارضاتُ المقيسة تبقى مكتوبةً حتى تُحسم.**
      *
      * سبعةٌ منها تناقض ما هو مبنيٌّ اليوم (GetX مقابل Riverpod، وغيابُ نمط
