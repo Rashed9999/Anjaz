@@ -31,7 +31,38 @@ class EnsureDemoStaff extends Command
     {
         $this->ensureAdmin();
         $this->ensureAgent();
+        $this->healOrphanAdmins();
         return self::SUCCESS;
+    }
+
+    /**
+     * AMIAL-OPERATOR-RBAC-004 — شبكةُ الأمان تُشغَّل في كلّ إقلاع فعلاً.
+     *
+     * **وكانت مكتوبةً «تُشغَّل في كلّ إقلاع» وهي داخل فرعٍ واحد.**
+     *
+     * جلست داخل `if ($admin)` — أي مسارِ «الأدمن التجريبيّ موجودٌ سلفاً»
+     * وحده. فعلى الإقلاع الذي يُبذَر فيه غيرُه من حسابات الإدارة — وهو
+     * أوّلُ إقلاعٍ على قاعدةٍ جديدة، وأكثرُ الأوقات إنتاجاً لحساباتٍ بلا
+     * دور — يُؤخذ الفرعُ الآخر ولا تعمل الشبكة إطلاقاً.
+     *
+     * والقياس: `admin@amyal.pay` من `DemoDataSeeder` بقي **بلا دور** بعد
+     * تشغيل الأمر كاملاً — يدخل اللوحة ويُردّ ٤٠٣ على واحدٍ وأربعين
+     * مساراً، ولا يقرأ رقماً ماليّاً واحداً.
+     *
+     * فصارت خطوةً مستقلّةً في `handle()`: لا تتبع وجودَ حسابٍ بعينه ولا
+     * نجاحَ خطوةٍ قبلها.
+     */
+    private function healOrphanAdmins(): void
+    {
+        try {
+            $healed = app(PlatformRoleService::class)->healAdminsWithoutRoles();
+
+            if ($healed > 0) {
+                $this->info("✓ أُسند دور مدير المنصّة لـ{$healed} حساب إدارةٍ كان بلا دور");
+            }
+        } catch (\Throwable $e) {
+            $this->error('❌ تعذّر شفاء حسابات الإدارة بلا دور: ' . $e->getMessage());
+        }
     }
 
     private function ensureAdmin(): void
@@ -57,15 +88,9 @@ class EnsureDemoStaff extends Command
                 // الأدوار فلا دورَ له — فيرى ٤٠٣ على ٤١ مساراً بلا تفسير.
                 app(PlatformRoleService::class)->ensureHasSomeRole($admin);
 
-                // **وشبكةُ أمانٍ تشغيليّة:** تشفي كلّ حساب إدارةٍ بلا دور،
-                // لا حساب العرض وحده. فالهجرة تُسند مرّةً لمن كان قائماً،
-                // ومن أُنشئ بعدها — من اللوحة أو بيدٍ على القاعدة — يبقى
-                // مقفلاً عليه ٤١ مساراً. وهذا يُشغَّل في كلّ إقلاع.
-                $healed = app(PlatformRoleService::class)->healAdminsWithoutRoles();
-                if ($healed > 0) {
-                    $this->info("✓ أُسند دور مدير المنصّة لـ{$healed} حساب إدارةٍ كان بلا دور");
-                }
-
+                // وشبكةُ الأمان لكلّ حسابات الإدارة انتقلت إلى
+                // `healOrphanAdmins()` في `handle()` — فهي لا تخصّ هذا
+                // الفرع، وبقاؤها هنا كان يُعطّلها في المسار الآخر.
                 $this->info("✓ أدمن تجريبي مضمون — جوال {$admin->phone} / " . self::PASSWORD);
                 return;
             }
