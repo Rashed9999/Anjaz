@@ -25,11 +25,6 @@ import 'package:amyal_pay/features/merchant/screens/cashier_shift_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_expenses_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/credit_customers_screen.dart';
-import 'package:amyal_pay/features/agent/screens/agent_cash_in_screen.dart';
-import 'package:amyal_pay/features/agent/screens/agent_cash_out_screen.dart';
-import 'package:amyal_pay/features/agent/screens/agent_float_screen.dart';
-import 'package:amyal_pay/features/agent/screens/agent_transactions_screen.dart';
-import 'package:amyal_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amyal_pay/features/barcode/screens/continuous_scanner_screen.dart';
 
 /// CRITICAL-001 (Phase 2) — شاشات Home متمايزة.
@@ -262,79 +257,6 @@ class MerchantRetailHomeScreen extends StatelessWidget {
             padding: const EdgeInsets.only(top: 16),
             child: _UpgradeBanner(),
           ) : const SizedBox.shrink()),
-        ]),
-      ),
-    );
-  }
-}
-
-// =========================================================================
-// 3) Home للـ Agent
-// =========================================================================
-class AgentHomeScreen extends StatelessWidget {
-  const AgentHomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final access = Get.find<AccessController>();
-
-    return Scaffold(
-      backgroundColor: AmyalColors.background,
-      appBar: AppBar(
-        title: Obx(() => Text('الوكيل: ${access.userName.value ?? ''}')),
-        actions: [
-          IconButton(icon: const Icon(Icons.menu),
-              onPressed: () => Get.to(() => const MyServicesScreen())),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          _GreetingCard(subtitle: 'لوحة الوكيل — عمليات النقد'),
-          const SizedBox(height: 20),
-
-          // عمليتان رئيسيتان
-          Row(children: [
-            Expanded(child: _BigActionButton(
-              icon: Icons.arrow_downward, label: 'شحن', subtitle: 'Cash In',
-              color: Colors.green.shade700,
-              onTap: () => Get.to(() => const AgentCashInScreen()),
-            )),
-            const SizedBox(width: 12),
-            Expanded(child: _BigActionButton(
-              icon: Icons.arrow_upward, label: 'سحب', subtitle: 'Cash Out',
-              color: Colors.orange.shade700,
-              onTap: () => Get.to(() => const AgentCashOutScreen()),
-            )),
-          ]),
-          const SizedBox(height: 14),
-          GridView.count(
-            crossAxisCount: 2, shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 1.3,
-            children: [
-              AccessGate(feature: 'agent_float', child: _MiniAction(
-                icon: Icons.account_balance, label: 'السيولة',
-                color: AmyalColors.primary,
-                onTap: () => Get.to(() => const AgentFloatScreen()),
-              )),
-              AccessGate(feature: 'agent_commissions', child: _MiniAction(
-                icon: Icons.payments, label: 'العمولات',
-                color: AmyalColors.yellowDark,
-                onTap: () => Get.to(() => const AgentTransactionsScreen()),
-              )),
-              AccessGate(feature: 'agent_reports', child: _MiniAction(
-                icon: Icons.bar_chart, label: 'تقرير اليوم',
-                color: Colors.green.shade700,
-                onTap: () => Get.to(() => const AgentTransactionsScreen()),
-              )),
-              _MiniAction(
-                icon: Icons.receipt_long, label: 'الإيصالات',
-                color: Colors.indigo,
-                onTap: () => Get.to(() => const ReceiptsListScreen()),
-              ),
-            ],
-          ),
         ]),
       ),
     );

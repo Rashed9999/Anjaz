@@ -7,7 +7,7 @@ import 'package:amyal_pay/features/access/screens/role_based_home_screens.dart';
 import 'package:amyal_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
 import 'package:amyal_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
 import 'package:amyal_pay/features/wholesale/screens/wholesale_screens.dart';
-import 'package:amyal_pay/features/admin/screens/admin_dashboard_screen.dart';
+import 'package:amyal_pay/features/access/screens/web_portal_notice_screen.dart';
 
 /// CRITICAL-001 — Home Dispatcher.
 ///
@@ -18,7 +18,7 @@ import 'package:amyal_pay/features/admin/screens/admin_dashboard_screen.dart';
 ///   - Pharmacy → PharmacyDashboardScreen
 ///   - Quick Sale → MerchantQuickSaleHomeScreen
 ///   - Retail/Wholesale → MerchantRetailHomeScreen
-///   - Agent → AgentHomeScreen
+///   - Agent/Admin → WebPortalNoticeScreen (لوحتاهما على المتصفّح)
 ///   - User → الـ Home الأصلي (existing)
 class HomeDispatcherScreen extends StatefulWidget {
   /// Home الأصلي (للمستخدم العادي) — يُمرَّر من الخارج.
@@ -96,14 +96,15 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
         return _placeholderScreen('قطاع المطاعم قريباً');
       }
 
-      // Agent → Agent Home
+      // AMIAL-WEB-ONLY-PORTALS-001: الوكيل والأدمن لوحتاهما على المتصفّح.
+      // يُفحصان هنا أيضاً لا في RoleRouter وحده — لهذه الشاشة مدخلان:
+      // بعد الدخول مباشرةً، وعند العودة إليها لاحقاً بحسابٍ محفوظ.
+      // (القاعدة الرابعة: ميزةٌ لها مدخلان تُختبَر من مدخليها.)
       if (_access.isAgent) {
-        return const AgentHomeScreen();
+        return const WebPortalNoticeScreen(role: 'agent');
       }
-
-      // Admin → Admin Dashboard
       if (_access.isAdmin) {
-        return const AdminDashboardScreen();
+        return const WebPortalNoticeScreen(role: 'admin');
       }
 
       // User أو Distributor → الـ Home الأصلي

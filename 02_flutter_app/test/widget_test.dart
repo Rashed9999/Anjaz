@@ -14,7 +14,7 @@ import 'package:amyal_pay/features/auth/screens/role_router.dart';
 import 'package:amyal_pay/features/home/screens/nav_bar_screen.dart';
 import 'package:amyal_pay/features/merchant/screens/merchant_dashboard_screen.dart';
 import 'package:amyal_pay/features/access/screens/home_dispatcher_screen.dart';
-import 'package:amyal_pay/features/agent/screens/agent_dashboard_screen.dart';
+import 'package:amyal_pay/features/access/screens/web_portal_notice_screen.dart';
 
 void main() {
   const fast = Timeout(Duration(seconds: 30));
@@ -49,8 +49,18 @@ void main() {
       }
     }, timeout: fast);
 
-    test('الوكيل → لوحة الوكيل', () {
-      expect(RoleRouter.homeForRole('agent'), isA<AgentDashboardScreen>());
+    // AMIAL-WEB-ONLY-PORTALS-001 — والخطر الذي يحرسه هذا الاختبار ليس
+    // «أين يذهب الوكيل» بل **أن يذهب حيث لا يجب**: حذفُ الحالة من
+    // `switch` لا يُنتج خطأ ترجمة، بل يُسقط الدور إلى `default` = شاشة
+    // العميل. فيهبط موظّف الصرافة في محفظةٍ ليست له بلا رسالة. لذلك
+    // يُتحقّق من النوع الصحيح **ومن نفي شاشة العميل معاً**.
+    test('الوكيل والأدمن → شاشة الإحالة للمتصفّح، لا شاشة العميل', () {
+      for (final role in ['agent', 'admin']) {
+        final home = RoleRouter.homeForRole(role);
+        expect(home, isA<WebPortalNoticeScreen>(), reason: 'الدور: $role');
+        expect(home, isNot(isA<NavBarScreen>()), reason: 'الدور: $role');
+        expect((home as WebPortalNoticeScreen).role, equals(role));
+      }
     }, timeout: fast);
   });
 }

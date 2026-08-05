@@ -13,9 +13,6 @@ import 'package:amyal_pay/features/receipts/controllers/receipts_controller.dart
 import 'package:amyal_pay/features/receipts/domain/repositories/receipts_repo.dart';
 import 'package:amyal_pay/features/family_fund/controllers/funds_controller.dart';
 import 'package:amyal_pay/features/family_fund/domain/repositories/funds_repo.dart';
-import 'package:amyal_pay/features/agent/controllers/agent_controller.dart';
-import 'package:amyal_pay/features/agent/controllers/agent_portal_controller.dart';
-import 'package:amyal_pay/features/agent/domain/repositories/agent_repo.dart';
 import 'package:amyal_pay/features/auth/controllers/unified_auth_controller.dart';
 import 'package:amyal_pay/features/bill_pay/controllers/bill_pay_controller.dart';
 import 'package:amyal_pay/features/bill_pay/domain/repositories/bill_pay_repo.dart';
@@ -52,17 +49,11 @@ import 'package:amyal_pay/features/pharmacy/controllers/pharmacy_controller.dart
 import 'package:amyal_pay/features/pharmacy/domain/repositories/pharmacy_repo.dart';
 import 'package:amyal_pay/features/access/controllers/access_controller.dart';
 import 'package:amyal_pay/features/access/domain/repositories/access_repo.dart';
-import 'package:amyal_pay/features/admin/controllers/admin_controller.dart';
-import 'package:amyal_pay/features/admin/controllers/whatsapp_settings_controller.dart';
-import 'package:amyal_pay/features/admin/controllers/settings_center_controller.dart';
-import 'package:amyal_pay/features/admin/domain/repositories/admin_repo.dart';
 import 'package:amyal_pay/features/barcode/domain/repositories/barcode_repo.dart';
 import 'package:amyal_pay/features/wholesale/controllers/wholesale_controller.dart';
 import 'package:amyal_pay/features/wholesale/domain/repositories/wholesale_repo.dart';
 import 'package:amyal_pay/features/plans/controllers/plans_controller.dart';
 import 'package:amyal_pay/features/plans/domain/repositories/plans_repo.dart';
-import 'package:amyal_pay/features/admin/controllers/subscriptions_controller.dart';
-import 'package:amyal_pay/features/admin/domain/repositories/subscriptions_repo.dart';
 import 'package:amyal_pay/features/branches/controllers/branches_controller.dart';
 import 'package:amyal_pay/features/branches/controllers/pos_rbac_controller.dart';
 import 'package:amyal_pay/features/branches/domain/repositories/branches_repo.dart';
@@ -222,12 +213,6 @@ Future<Map<String, Map<String, String>>> init() async {
   Get.lazyPut(() => UnifiedAuthRepo(apiClient: Get.find()));
   Get.lazyPut(() => UnifiedAuthController(repo: Get.find()), fenix: true);
 
-  // ====== AMYAL v1.6: Agent App ======
-  Get.lazyPut(() => AgentRepo(apiClient: Get.find()));
-  Get.lazyPut(() => AgentController(repo: Get.find()), fenix: true);
-  // AMIAL-AGENT-PORTAL-001 — لوحة الوكيل
-  Get.lazyPut(() => AgentPortalController(repo: Get.find()), fenix: true);
-
   // ====== AMYAL v1.6: Merchant App ======
   Get.lazyPut(() => MerchantRepo(apiClient: Get.find()));
   Get.lazyPut(() => MerchantController(repo: Get.find()), fenix: true);
@@ -269,16 +254,6 @@ Future<Map<String, Map<String, String>>> init() async {
   Get.put(AccessRepo(apiClient: Get.find()), permanent: true);
   Get.put(AccessController(repo: Get.find()), permanent: true);
 
-  // CRITICAL-001-ADMIN — لوحة الإدارة
-  Get.lazyPut(() => AdminRepo(apiClient: Get.find()));
-  Get.lazyPut(() => AdminController(repo: Get.find()), fenix: true);
-
-  // AMIAL-WHATSAPP-OTP-001 — إعدادات قناة واتساب (لوحة الأدمن)
-  Get.lazyPut(() => WhatsappSettingsController(repo: Get.find()), fenix: true);
-
-  // AMIAL-SETTINGS-CENTER-001 — مركز الإعدادات الموحّد
-  Get.lazyPut(() => SettingsCenterController(repo: Get.find()), fenix: true);
-
   // AMIAL-BARCODE-001 — Continuous Scanner (موحّد لكل القطاعات)
   Get.lazyPut(() => BarcodeRepo(apiClient: Get.find()));
 
@@ -289,10 +264,6 @@ Future<Map<String, Map<String, String>>> init() async {
   // CRITICAL-001-PLANS — الخطط + الاستخدام
   Get.lazyPut(() => PlansRepo(apiClient: Get.find()));
   Get.lazyPut(() => PlansController(repo: Get.find()), fenix: true);
-
-  // CRITICAL-001-SUBS — إدارة الاشتراكات (للأدمن)
-  Get.lazyPut(() => SubscriptionsRepo(apiClient: Get.find()));
-  Get.lazyPut(() => SubscriptionsController(repo: Get.find()), fenix: true);
 
   // P1-BRANCHES — إدارة الفروع
   Get.lazyPut(() => BranchesRepo(apiClient: Get.find()));
