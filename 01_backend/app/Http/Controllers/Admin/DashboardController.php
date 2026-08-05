@@ -58,20 +58,19 @@ class DashboardController extends Controller
         $data['top_customers'] = $topCustomers;
         $data['top_transactions'] = $topTransactions;
 
-        $balance = self::getBalanceStat();
+        // AMIAL-DASH-TRUTH-001 — الأرقام تُحسب في خدمةٍ واحدةٍ صحيحة.
+        //
+        // ما كان هنا يعرض على المدير ثلاثة أرقامٍ كاذبة:
+        //   • «حجم السنة» = أعلى مستخدمٍ في كلّ شهر (groupBy ثمّ first)
+        //   • وحدودُ الشهر `Y-m-30` — فبراير تاريخٌ لا يوجد، و٧ أشهرٍ
+        //     يسقط يومُها الأخير صامتاً
+        //   • و«أرباح الرسوم» ربحُ من يفتح اللوحة (Auth::id) لا المنصّة
+        //
+        // والتفصيل والقياس في `AdminDashboardService`.
+        $dash = app(\App\Services\AdminDashboardService::class);
 
-
-        $transaction = [];
-        for ($i = 1; $i <= 12; $i++) {
-            $from = date('Y-' . $i . '-01');
-            $to = date('Y-' . $i . '-30');
-            $transaction[$i] = $this->transaction->where(['ref_trans_id' => 0])
-                ->whereBetween('created_at', [$from, $to])
-                ->select([DB::raw("SUM(debit) as total_credit")])
-                ->orderBy("total_credit", 'desc')
-                ->groupBy('user_id')
-                ->first()->total_credit ?? 0;
-        }
+        $balance = $dash->balances();
+        $transaction = $dash->monthlyVolume();
 
         // AMIAL-ADMIN-DASH-002: عدّادات حقيقية للوحة (عملاء/وكلاء/تجار + اليوم)
         $data['counts'] = [
@@ -79,10 +78,7 @@ class DashboardController extends Controller
             'agents' => $this->user->where('type', 1)->count(),
             'merchants' => $this->user->where('type', 4)->count(),
         ];
-        $data['today'] = [
-            'tx_count' => $this->transaction->whereDate('created_at', today())->count(),
-            'tx_volume' => (float) $this->transaction->whereDate('created_at', today())->sum('debit'),
-        ];
+        $data['today'] = $dash->today();
 
         return view('admin-views.dashboard', compact('balance', 'transaction', 'data'));
     }
@@ -98,7 +94,10 @@ class DashboardController extends Controller
             ->sum('current_balance');
 
         $totalBalance = $this->transaction->where('user_id', Helpers::get_admin_id())->where('transaction_type', CASH_IN)->sum('credit');
-        $chargeEarned = $this->eMoney->with('user')->where('user_id', Auth::id())->first()->charge_earned ?? 0;
+        // AMIAL-DASH-TRUTH-001: كان `Auth::id()` — ربحُ من يفتح الصفحة لا
+        // المنصّة، وبقيّةُ الدالّة تستعمل `get_admin_id()`. هويّتان في دالّة.
+        // ويُحسب الآن من مصدره (`transactions.charge`) لا من عمودٍ مخزَّن.
+        $chargeEarned = app(\App\Services\AdminDashboardService::class)->feesEarned();
         $pendingBalance = $this->eMoney->with('user')->sum('pending_balance');
 
         $balance = [];
