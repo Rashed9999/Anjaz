@@ -51,7 +51,7 @@
                 // الرابط هو ما يُريه المدير العنوان ليمرّره لها.
                 ['🏦 بوّابة الوكيل (شركات الصرافة)', route('agent.login'), null, '_blank'],
                 ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), null],
-                ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), null],
+                ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), 'platform.money.move'],
                 ['🪪 لوحة التحقق (الحسابات الجديدة)', route('admin.amial.hub.verification'), null],
             ],
         ],
@@ -62,11 +62,11 @@
             'links' => [
                 ['📚 مركز الدفتر (ميزان المراجعة)', route('admin.amial.ledger.page'), 'platform.audit.view'],
                 ['📊 كشف المعاملات (فلاتر + تصدير)', route('admin.transaction.index'), null],
-                ['🧾 تسويات الوكلاء', route('admin.amial.hub.settlements'), null],
-                ['🤝 تسويات الشركاء (الموافقة المزدوجة)', route('admin.amial.partner-settlements.page'), null],
-                ['🏦 رصيد المنصّة (إنشاء/شحن)', route('admin.emoney.index'), null],
+                ['🧾 تسويات الوكلاء', route('admin.amial.hub.settlements'), 'platform.money.move'],
+                ['🤝 تسويات الشركاء (الموافقة المزدوجة)', route('admin.amial.partner-settlements.page'), 'platform.money.move'],
+                ['🏦 رصيد المنصّة (إنشاء/شحن)', route('admin.emoney.index'), 'platform.money.move'],
                 ['💸 مصاريف المنصّة', route('admin.expense.index'), null],
-                ['📈 التحكّم بالرسوم والأرباح', route('admin.amial.fees.index'), null],
+                ['📈 التحكّم بالرسوم والأرباح', route('admin.amial.fees.index'), 'platform.fees.update'],
             ],
         ],
         [

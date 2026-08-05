@@ -29,9 +29,19 @@
         </div>
         <div class="d-flex gap-2">
             <a href="{{ route('admin.transaction.index') }}" class="btn btn-sm btn-outline-secondary">{{ translate('كشف المعاملات') }}</a>
-            <a href="{{ route('admin.amial.hub.finance') }}" class="btn btn-sm text-white" style="background:var(--blue)" data-testid="btn-finance">
-                {{ translate('المركز المالي') }}
-            </a>
+            {{-- AMIAL-OPERATOR-RBAC-003: بطاقاتُ لوحة القيادة بابٌ ثانٍ.
+
+                 القائمة الجانبيّة كانت تفحص الصلاحية، وهذا الزرّ لا يفحص —
+                 فبقي «المركز المالي» ظاهراً لموظّف الدعم ويردّ ٤٠٣ حين
+                 يضغطه. وزرٌّ يُعرَض ثمّ يُمنع يجعل المستعمل يظنّ النظام
+                 معطَّلاً بدل أن يعرف أنّ الفعل ليس له.
+
+                 (القاعدة الرابعة: ميزةٌ لها مدخلان تُحرَس من مدخليها.) --}}
+            @if (auth('user')->user()?->hasPlatformPermission('platform.money.move'))
+                <a href="{{ route('admin.amial.hub.finance') }}" class="btn btn-sm text-white" style="background:var(--blue)" data-testid="btn-finance">
+                    {{ translate('المركز المالي') }}
+                </a>
+            @endif
         </div>
     </div>
 

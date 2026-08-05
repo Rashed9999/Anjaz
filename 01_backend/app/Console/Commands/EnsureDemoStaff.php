@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\EMoney;
 use App\Models\User;
+use App\Services\PlatformRoleService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -52,6 +53,19 @@ class EnsureDemoStaff extends Command
                     $admin->two_factor_enabled = 0;
                 }
                 $admin->save();
+                // AMIAL-OPERATOR-RBAC-002: حسابٌ قائمٌ قد يكون أُنشئ بعد هجرة
+                // الأدوار فلا دورَ له — فيرى ٤٠٣ على ٤١ مساراً بلا تفسير.
+                app(PlatformRoleService::class)->ensureHasSomeRole($admin);
+
+                // **وشبكةُ أمانٍ تشغيليّة:** تشفي كلّ حساب إدارةٍ بلا دور،
+                // لا حساب العرض وحده. فالهجرة تُسند مرّةً لمن كان قائماً،
+                // ومن أُنشئ بعدها — من اللوحة أو بيدٍ على القاعدة — يبقى
+                // مقفلاً عليه ٤١ مساراً. وهذا يُشغَّل في كلّ إقلاع.
+                $healed = app(PlatformRoleService::class)->healAdminsWithoutRoles();
+                if ($healed > 0) {
+                    $this->info("✓ أُسند دور مدير المنصّة لـ{$healed} حساب إدارةٍ كان بلا دور");
+                }
+
                 $this->info("✓ أدمن تجريبي مضمون — جوال {$admin->phone} / " . self::PASSWORD);
                 return;
             }
@@ -73,6 +87,10 @@ class EnsureDemoStaff extends Command
                 $admin->zone_code = 'SOUTH';
             }
             $admin->save();
+
+            // **الإسناد جزءٌ من الإنشاء لا خطوةٌ بعده.**
+            // فحسابُ إدارةٍ بلا دورٍ يُقفل عليه ٤١ مساراً بلا رسالة.
+            app(PlatformRoleService::class)->ensureHasSomeRole($admin);
 
             $this->info("✓ أدمن تجريبي جاهز — {$email} / " . self::PASSWORD);
         } catch (\Throwable $e) {

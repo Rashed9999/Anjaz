@@ -287,7 +287,9 @@ Route::prefix('agents')->name('agents.')->group(function () {
     Route::post('/{userId}/suspend', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'suspend'])->name('suspend');
     Route::put('/{userId}/limits', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'updateLimits'])->name('limits');
 });
-Route::prefix('settlements')->name('settlements.')->group(function () {
+// AMIAL-OPERATOR-RBAC-003: اعتمادُ تسويةٍ تحريكُ مالٍ حقيقيّ.
+Route::prefix('settlements')->name('settlements.')->middleware('platform:platform.money.move')
+    ->group(function () {
     Route::get('/pending', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'pendingSettlements'])->name('pending');
     Route::post('/{ulid}/approve', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'approveSettlement'])->name('approve');
 });
@@ -303,7 +305,11 @@ Route::prefix('merchants')->name('merchants.')->group(function () {
 
 // ============ AMIAL-FEE-ENGINE-001 (v2.12) ============
 // لوحة تحكم نسب الأرباح/الرسوم
-Route::prefix('fees')->name('fees.')->group(function () {
+//
+// AMIAL-OPERATOR-RBAC-003: نسبةُ ربحٍ تُغيَّر مرّةً يبقى أثرُها على كلّ
+// عمليّةٍ بعدها. فلا تُترك لكلّ من دخل اللوحة — لمدير المنصّة وحده.
+Route::prefix('fees')->name('fees.')->middleware('platform:platform.fees.update')
+    ->group(function () {
     Route::get('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webIndex'])->name('index');
     Route::get('/create', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webCreate'])->name('create');
     Route::get('/profit', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webProfit'])->name('profit');
@@ -334,7 +340,10 @@ Route::prefix('hub')->name('hub.')->group(function () {
     Route::get('/customers', [$hc, 'customers'])->name('customers');
     Route::get('/agents', [$hc, 'agents'])->name('agents');
     Route::get('/merchants', [$hc, 'merchants'])->name('merchants');
-    Route::get('/finance', [$hc, 'finance'])->name('finance');
+    // AMIAL-OPERATOR-RBAC-003: الصفحة لا الفعلَ وحده — صفحةٌ تعرض أرصدة
+    // المنصّة وحركتها تُسرّب ما لا يجوز، وإن كان زرُّها محروساً.
+    Route::get('/finance', [$hc, 'finance'])
+        ->middleware('platform:platform.money.move')->name('finance');
 
     // JSON قوائم
     Route::get('/{slug}/users.json', [$hc, 'usersJson'])
@@ -379,9 +388,13 @@ Route::prefix('hub')->name('hub.')->group(function () {
     Route::post('/agents/daily/unlock', [$asc, 'dailyUnlock'])->name('agents.daily.unlock');
 
     // المالية
-    Route::post('/finance/topup', [$hc, 'adminTopup'])->name('finance.topup');
-    Route::get('/finance/stats.json', [$hc, 'financeStats'])->name('finance.stats');
-    Route::get('/finance/feed.json', [$hc, 'financeFeed'])->name('finance.feed');
+    // AMIAL-OPERATOR-RBAC-003: شحنُ محفظة وكيلٍ من المنصّة.
+    Route::post('/finance/topup', [$hc, 'adminTopup'])
+        ->middleware('platform:platform.money.move')->name('finance.topup');
+    Route::get('/finance/stats.json', [$hc, 'financeStats'])
+        ->middleware('platform:platform.money.move')->name('finance.stats');
+    Route::get('/finance/feed.json', [$hc, 'financeFeed'])
+        ->middleware('platform:platform.money.move')->name('finance.feed');
 
     // لوحة الاشتراكات (الباقات) — حقيقية عبر SubscriptionService
     Route::get('/subscriptions', [$hc, 'subscriptions'])->name('subscriptions');
@@ -411,12 +424,18 @@ Route::prefix('hub')->name('hub.')->group(function () {
     Route::get('/verification/list.json', [$hc, 'verificationJson'])->name('verification.list');
 
     // لوحة التسويات — تسويات الوكلاء (اعتماد/رفض مع دفتر القيود)
-    Route::get('/settlements', [$hc, 'settlements'])->name('settlements');
-    Route::get('/settlements/list.json', [$hc, 'settlementsJson'])->name('settlements.list');
+    Route::get('/settlements', [$hc, 'settlements'])
+        ->middleware('platform:platform.money.move')->name('settlements');
+    // والـJSON كذلك: حراسةُ الصفحة وحدها تترك البيانات مفتوحةً لمن يعرف
+    // عنوانها — وهو أوّل ما يُجرَّب.
+    Route::get('/settlements/list.json', [$hc, 'settlementsJson'])
+        ->middleware('platform:platform.money.move')->name('settlements.list');
     Route::post('/settlements/{ulid}/approve', [$hc, 'settlementApprove'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('settlements.approve');
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware('platform:platform.money.move')->name('settlements.approve');
     Route::post('/settlements/{ulid}/reject', [$hc, 'settlementReject'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('settlements.reject');
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware('platform:platform.money.move')->name('settlements.reject');
 
     // لوحة الموظفين — طاقم نقاط بيع التجّار (تفعيل/تعطيل)
     Route::get('/staff', [$hc, 'staff'])->name('staff');

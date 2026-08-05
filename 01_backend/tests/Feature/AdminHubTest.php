@@ -20,6 +20,9 @@ class AdminHubTest extends TestCase
     {
         parent::setUp();
         $this->admin = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770009001']);
+        // AMIAL-OPERATOR-RBAC-003: أدمنٌ بلا دورٍ لا يصل مسارات المال —
+        // وهو ما يقع في الإنتاج أيضاً. فالمُثبِّت يعكس الواقع لا يتجاوزه.
+        app(\App\Services\PlatformRoleService::class)->ensureHasSomeRole($this->admin);
         EMoney::create([
             'user_id' => $this->admin->id, 'current_balance' => '1000000.0000',
             'held_balance' => '0.0000', 'pending_balance' => '0.0000',
