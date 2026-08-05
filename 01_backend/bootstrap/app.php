@@ -210,6 +210,48 @@ $app = Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-CLOCK-GUARD-002 — صفحةُ ٤١٩ لا تُخزَّن.
+        //
+        // **العطل الذي أدخل هذا — وهو عطلٌ في الحارس نفسه.**
+        //
+        // صفحة ٤١٩ تقيس فارق الساعة، وتفعل ذلك بطبع وقت الخادم **داخل
+        // HTML**: `data-server-ms="{{ now()->valueOf() }}"`. ثمّ يقارنه
+        // جافاسكربت بساعة المتصفّح.
+        //
+        // وبلا ترويسةٍ تمنع التخزين، يحتفظ المتصفّح بالصفحة. فتُعرَض بعد
+        // يومين ووقتُ الخادم فيها مجمّدٌ عند لحظة أوّل عرض — فتُعلن فارقاً
+        // قدرُه يومان، **ويكبر يوماً كلّ يوم**.
+        //
+        // ووقع ذلك فعلاً: أعلنت الصفحة تأخّراً قدره ٤٤ ساعة، فأرسلتُ صاحب
+        // المشروع يُصلح ساعة خادمه — وكانت مضبوطةً ومزامَنة:
+        //
+        //     System clock synchronized: yes
+        //     NTP service: active
+        //
+        // **وحارسٌ يكذب أسوأ من غيابه**: لا يُطمئن فحسب، بل يُرسل من
+        // يصدّقه خلف عطلٍ لا وجود له.
+        // ══════════════════════════════════════════════════════════════
+        // ويُستعمل `respond` لا `render`: Laravel يحوّل
+        // `TokenMismatchException` إلى `HttpException` **قبل** مطابقة
+        // معالجات `render`، فلا يُطابقها معالجٌ مكتوبٌ على الصنف الأصليّ —
+        // يمرّ بلا خطأٍ ولا أثر. (كتبتُه أوّلاً كذلك، فقاسَ الردُّ
+        // `no-cache, private` ولم يتغيّر.)
+        //
+        // و`no-cache` ليست `no-store`: الأولى تعني «تحقّق قبل الاستعمال»،
+        // والمتصفّح يحتفظ بالنسخة ويستعملها حين يتعذّر التحقّق. والثانية
+        // تمنع الاحتفاظ أصلاً — وهي المطلوبة لصفحةٍ قياسُها مطبوعٌ فيها.
+        $exceptions->respond(function ($response, \Throwable $e, $request) {
+            if ($response->getStatusCode() === 419) {
+                $response->headers->set('Cache-Control',
+                    'no-store, no-cache, must-revalidate, max-age=0');
+                $response->headers->set('Pragma', 'no-cache');
+                $response->headers->set('Expires', '0');
+            }
+
+            return $response;
+        });
+
         $exceptions->render(function (\App\Exceptions\InsufficientBalanceException $e, $request) {
             if ($request->expectsJson() || $request->is('api/*')) {
                 return new \Illuminate\Http\JsonResponse($e->toApiArray(), 402);
