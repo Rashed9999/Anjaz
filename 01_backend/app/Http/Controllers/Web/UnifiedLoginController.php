@@ -60,21 +60,55 @@ class UnifiedLoginController extends Controller
     /** أقصى محاولاتٍ في الدقيقة. */
     private const MAX_ATTEMPTS = 10;
 
+    /**
+     * ══════════════════════════════════════════════════════════════
+     * **صفحةُ الدخول تُعرَض دائماً. ولا تُحوَّل أبداً.**
+     *
+     * كانت تُحوّل من له جلسةٌ إلى لوحته — «لا يُعرض له نموذجٌ يملؤه بلا
+     * داعٍ». وهي نيّةٌ حسنةٌ صنعت فخّاً:
+     *
+     * جرّب صاحبُ المشروع الدخول برمز صرّافٍ مرّة، فبقيت جلسةُ البوّابة في
+     * متصفّحه. ومن حينها كلُّ ضغطةٍ على «تسجيل الدخول» في الموقع ترميه
+     * إلى بوّابة الوكيل فوراً — **ولا يرى النموذج إطلاقاً**، ولا سبيل له
+     * إلى لوحة الإدارة من الموقع مهما فعل.
+     *
+     * وأخبرني بالعطل **أربع مرّات**، وشرحتُ في ثلاثٍ منها أنّ التوجيه
+     * سليم — وكان سليماً في الشيفرة، خاطئاً في أثره. فالردّ ٣٠٢ صحيح،
+     * والزرُّ يعمل، ولا خطأ في أيّ سجلّ. (القاعدة التاسعة: قياسُ ما بعد
+     * الضغطة ليس «هل ظهر خطأ» بل «أين ذهبت».)
+     *
+     * **وزرُّ دخولٍ لا يُري نموذج الدخول ليس زرَّ دخول.** فمن له جلسةٌ
+     * يرى النموذج ومعه شريطٌ يقول من هو، وبابان: يُتابع إلى لوحته، أو
+     * يدخل بحسابٍ آخر.
+     */
     public function show(Request $request)
     {
-        // من كان داخلاً فعلاً لا يُعرض له نموذجٌ يملؤه بلا داعٍ.
-        if (Auth::guard('agent_staff')->check()) {
-            return redirect()->route('agent.dashboard');
-        }
+        $current = null;
 
-        if (Auth::guard('user')->check() && (int) Auth::guard('user')->user()->type === ADMIN_TYPE) {
-            return redirect()->route('admin.dashboard');
+        if (Auth::guard('agent_staff')->check()) {
+            $staff = Auth::guard('agent_staff')->user();
+            $current = [
+                'name'  => $staff->name ?: $staff->username,
+                'where' => 'بوّابة شركات الصرافة',
+                'go'    => route('agent.dashboard'),
+                'out'   => route('agent.logout'),
+            ];
+        } elseif (Auth::guard('user')->check()
+            && (int) Auth::guard('user')->user()->type === ADMIN_TYPE) {
+            $admin = Auth::guard('user')->user();
+            $current = [
+                'name'  => trim(($admin->f_name ?? '') . ' ' . ($admin->l_name ?? '')) ?: $admin->phone,
+                'where' => 'لوحة الإدارة',
+                'go'    => route('admin.dashboard'),
+                'out'   => route('admin.auth.logout'),
+            ];
         }
 
         return view('site.login', [
             'needsCaptcha' => $this->needsCaptcha($request),
             'adminHost'    => PortalHost::admin(),
             'agentHost'    => PortalHost::agent(),
+            'current'      => $current,
         ]);
     }
 

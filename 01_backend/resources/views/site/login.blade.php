@@ -21,7 +21,30 @@
 
 <div class="auth-card">
     <a class="logo" href="{{ route('site.home') }}"><span class="mark">🏦</span> أميال باي</a>
-    <div class="sub">بوّابة الويب — لشركات الصرافة وإدارة المنصّة</div>
+    <div class="sub">بوّابة الويب — بابٌ واحدٌ يفتح على لوحتك</div>
+
+    {{-- **من له جلسةٌ يرى النموذج، لا يُحوَّل عنه.**
+
+         كانت الصفحة تُحوّل من له جلسةٍ إلى لوحته. فمن جرّب الدخول برمز
+         صرّافٍ مرّةً بقيت جلستُه، وصارت كلُّ ضغطةٍ على «تسجيل الدخول» في
+         الموقع ترميه إلى بوّابة الوكيل — ولا يرى النموذج إطلاقاً، ولا
+         سبيل له إلى لوحةٍ أخرى.
+
+         فيُقال له من هو، ويُترك له البابان. --}}
+    @if (!empty($current))
+        <div class="alert alert-info" style="text-align:start">
+            <div style="margin-bottom:10px">
+                أنت داخلٌ الآن باسم <strong>{{ $current['name'] }}</strong>
+                في {{ $current['where'] }}.
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <a class="btn btn-primary" style="padding:8px 16px;font-size:14px"
+                   href="{{ $current['go'] }}">تابِع إلى لوحتك</a>
+                <a class="btn btn-ghost" style="padding:8px 16px;font-size:14px"
+                   href="{{ $current['out'] }}">خروج ودخولٌ بحسابٍ آخر</a>
+            </div>
+        </div>
+    @endif
 
     @if ($errors->any())
         <div class="alert alert-error">
@@ -39,8 +62,12 @@
             <input class="input" id="username" name="username" type="text"
                    value="{{ old('username') }}" required autofocus
                    autocomplete="username" inputmode="text" dir="ltr"
-                   placeholder="MKL-014">
-            <div class="hint">الصرّاف يدخل برمزه، وصاحب الشركة والإدارة بالهاتف.</div>
+                   placeholder="MKL-014  أو  9677xxxxxxxx">
+            {{-- كان المثال رمزَ صرّافٍ وحده، والسطرُ يبدأ بـ«الصرّاف» —
+                 فقرأها الأدمن بوّابةَ وكيلٍ وظنّ أنّه في المكان الخطأ. --}}
+            <div class="hint">
+                موظّف الصرافة برمزه · صاحب الشركة والإدارة برقم الهاتف.
+            </div>
         </div>
 
         <div class="field">

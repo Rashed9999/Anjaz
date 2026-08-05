@@ -393,15 +393,60 @@ class SiteAndUnifiedLoginTest extends TestCase
     /**
      * @test
      *
-     * من كان داخلاً لا يُعرض له نموذجٌ يملؤه بلا داعٍ.
+     * **صفحةُ الدخول تُعرَض دائماً — ولا تُحوَّل ولو كانت هناك جلسة.**
+     *
+     * ══════════════════════════════════════════════════════════════
+     * **وهذا الاختبار كان يُثبّت العطل لا يمنعه.**
+     *
+     * كان اسمُه «من كان داخلاً يُرسَل إلى لوحته»، ويؤكّد التحويل. وهو ما
+     * صنع الفخّ: من جرّب الدخول برمز صرّافٍ مرّةً بقيت جلستُه، فصارت كلُّ
+     * ضغطةٍ على «تسجيل الدخول» في الموقع ترميه إلى بوّابة الوكيل — ولا
+     * يرى النموذج إطلاقاً، ولا سبيل له إلى لوحةٍ أخرى.
+     *
+     * وأخبرني صاحبُ المشروع بالعطل أربع مرّات. والردّ ٣٠٢ صحيح، والزرّ
+     * يعمل، ولا خطأ في أيّ سجلّ — فبقي الاختبار أخضرَ والعطل قائم.
+     *
+     * **واختبارٌ يُثبّت سلوكاً خاطئاً أسوأ من غيابه:** يجعل الإصلاح يبدو
+     * كسراً.
      */
-    public function an_already_signed_in_user_is_sent_to_their_panel(): void
+    public function the_login_page_is_always_shown_even_with_a_live_session(): void
     {
         $company = $this->makeCompany('967771900005');
         $hq = app(AgentStaffService::class)->ensureHeadOfficeAccount($company, 'hq123456');
 
         Auth::guard('agent_staff')->login($hq);
 
-        $this->get('/login')->assertRedirect(route('agent.dashboard'));
+        $html = $this->get('/login')->assertOk()->getContent();
+
+        // النموذج نفسه — لا تحويل.
+        $this->assertStringContainsString('name="password"', $html,
+            'نموذج الدخول لا يظهر لمن له جلسة — فلا سبيل له إلى حسابٍ آخر');
+
+        // ويُقال له من هو، ويُترك له البابان.
+        $this->assertStringContainsString('أنت داخلٌ الآن', $html);
+        $this->assertStringContainsString(route('agent.dashboard'), $html,
+            'لا بابَ يُتابع به إلى لوحته');
+        $this->assertStringContainsString(route('agent.logout'), $html,
+            'لا بابَ يخرج به ليدخل بحسابٍ آخر');
+    }
+
+    /**
+     * @test
+     *
+     * **والصفحة لا تُقرأ «بوّابة وكيل».**
+     *
+     * كان المثالُ في الحقل رمزَ صرّافٍ وحده (`MKL-014`) والسطرُ تحته يبدأ
+     * بـ«الصرّاف يدخل برمزه» — فقرأها الأدمن بوّابةَ وكيلٍ وظنّ أنّه في
+     * المكان الخطأ. وهو ما قاله أربع مرّات.
+     */
+    public function the_login_page_does_not_read_as_the_agent_portal(): void
+    {
+        $html = $this->get('/login')->assertOk()->getContent();
+
+        $this->assertStringContainsString('9677', $html,
+            'المثال في الحقل رمزُ صرّافٍ وحده — فتُقرأ الصفحة بوّابةَ وكيل');
+
+        $this->assertStringNotContainsString('الصرّاف يدخل برمزه', $html,
+            'السطر ما زال يبدأ بالصرّاف — فيظنّ غيرُه أنّها ليست له');
     }
 }
