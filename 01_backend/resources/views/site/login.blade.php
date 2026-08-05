@@ -69,14 +69,30 @@
         <button class="btn btn-primary btn-block btn-lg" type="submit">دخول</button>
     </form>
 
+    {{-- **البوّابات تُعرَض ولا تُختار.**
+
+         حقلٌ واحدٌ يقبل الجميع، والوجهةُ تُقرأ من الحساب. وهذه القائمة
+         إخبارٌ لا اختيار: تقول للداخل أين سيصل قبل أن يصل، فلا يظنّ أنّه
+         في المكان الخطأ. ولو كانت اختياراً لَحرَست لا شيء — ما يأتي من
+         المتصفّح يمكن تغييره. (القاعدة الثامنة.) --}}
+    <div class="portals">
+        <div class="portals-t">إلى أين يقودك حسابك</div>
+        <div class="portal"><span>🏪</span>
+            <div><b>شركات الصرافة وموظّفوها</b>
+                <small>{{ $agentHost ?? 'بوّابة الوكيل' }}</small></div>
+        </div>
+        <div class="portal"><span>🛡️</span>
+            <div><b>موظّفو أميال باي</b>
+                <small>{{ $adminHost ?? 'لوحة الإدارة' }} — والدورُ يُقرّر ما تراه</small></div>
+        </div>
+        <div class="portal muted"><span>📱</span>
+            <div><b>العملاء والتجّار</b>
+                <small>تطبيق أميال باي — لا على المتصفّح</small></div>
+        </div>
+    </div>
+
     <div class="auth-foot">
-        <div>
-            <strong>عميل أو تاجر؟</strong>
-            خدماتُك كلّها في تطبيق أميال باي — لا على المتصفّح.
-        </div>
-        <div style="margin-top:8px">
-            <a href="{{ route('site.home') }}">العودة إلى الموقع</a>
-        </div>
+        <a href="{{ route('site.home') }}">العودة إلى الموقع</a>
     </div>
 </div>
 

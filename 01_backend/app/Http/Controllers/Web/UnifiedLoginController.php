@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\Agent\AgentStaff;
 use App\Services\AgentStaffService;
+use App\Support\PortalHost;
 use App\Models\User;
 use Gregwar\Captcha\CaptchaBuilder;
 use Gregwar\Captcha\PhraseBuilder;
@@ -72,6 +73,8 @@ class UnifiedLoginController extends Controller
 
         return view('site.login', [
             'needsCaptcha' => $this->needsCaptcha($request),
+            'adminHost'    => PortalHost::admin(),
+            'agentHost'    => PortalHost::agent(),
         ]);
     }
 
@@ -210,7 +213,27 @@ class UnifiedLoginController extends Controller
 
         $staff->forceFill(['last_login_at' => now()])->save();
 
-        return redirect()->route('agent.dashboard');
+        return $this->toPortal($request, route('agent.dashboard'), PortalHost::agent());
+    }
+
+    /**
+     * ينقل إلى اللوحة على **مضيفها** حين يكون الفصل مفعّلاً.
+     *
+     * وبلا هذا يدخل الصرّاف من `amialpay.com/login` فيُنقل إلى
+     * `amialpay.com/agent` — ثمّ يردّه وسيطُ المضيف إلى
+     * `agent.amialpay.com/agent`، **وقد ضاعت جلستُه في الطريق**: الكوكي
+     * لا تُشارَك بين المضيفَين عمداً. فيرى شاشة الدخول من جديدٍ ولا يفهم
+     * لماذا. فيُرسَل من البداية إلى حيث ستكون جلسته.
+     */
+    private function toPortal(Request $request, string $url, ?string $host)
+    {
+        if ($host === null || mb_strtolower($request->getHost()) === $host) {
+            return redirect($url);
+        }
+
+        $path = (string) parse_url($url, PHP_URL_PATH);
+
+        return redirect()->away($request->getScheme() . '://' . $host . $path);
     }
 
     private function enterAgentCompany(Request $request, User $user, string $key)
@@ -232,7 +255,7 @@ class UnifiedLoginController extends Controller
         $request->session()->regenerate();
         RateLimiter::clear($key);
 
-        return redirect()->route('admin.dashboard');
+        return $this->toPortal($request, route('admin.dashboard'), PortalHost::admin());
     }
 
     // ══════════════════════════════════════════════════════════════

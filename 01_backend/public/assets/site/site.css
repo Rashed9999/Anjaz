@@ -428,3 +428,30 @@ a { color: var(--navy); }
     .section { padding: 48px 0; }
     .cta-band { padding: 36px 22px; }
 }
+
+/* ── بوّابات صفحة الدخول: إخبارٌ لا اختيار ─────────────────────── */
+
+.portals {
+    margin-top: 24px;
+    border-top: 1px solid var(--border);
+    padding-top: 18px;
+}
+.portals-t {
+    font-size: 12.5px;
+    color: var(--text-3);
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+.portal {
+    display: flex;
+    gap: 11px;
+    align-items: flex-start;
+    padding: 9px 11px;
+    border-radius: 10px;
+    background: #f7f9fd;
+    margin-bottom: 7px;
+}
+.portal span { font-size: 18px; line-height: 1.5; }
+.portal b { display: block; font-size: 14px; color: var(--text); }
+.portal small { display: block; font-size: 12.3px; color: var(--text-3); direction: ltr; text-align: start; }
+.portal.muted { background: transparent; border: 1px dashed var(--border); }

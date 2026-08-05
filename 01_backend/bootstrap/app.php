@@ -92,6 +92,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware) {
+        // AMIAL-PORTAL-HOSTS-001 — قبل كلّ شيء: من طرق بابَ بوّابةٍ على
+        // مضيفٍ ليس مضيفَها يُنقل إليه. ومطفأٌ ما لم يُضبط المتغيّران.
+        $middleware->prepend(\App\Http\Middleware\PortalHostRedirect::class);
+
         // AMIAL-DEVOPS-001 — حرج: بلا هذا، PerUserRateLimit و
         // SecuritySentinelService (يعتمدان على $request->ip() في عدّة
         // مواضع) سيريان كل الطلبات قادمة من IP واحد (عنوان الـ reverse
