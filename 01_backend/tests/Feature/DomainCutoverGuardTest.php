@@ -110,9 +110,46 @@ class DomainCutoverGuardTest extends TestCase
             }
         }
 
-        $this->assertSame(['lib/util/app_constants.dart'], $hits,
-            "عنوان الخادم مزروعٌ خارج موضعه الوحيد: " . implode('، ', $hits)
+        // بعد التحوّل لم يبقَ في التطبيق عنوانٌ رقميّ أصلاً — ولا حتّى في
+        // `app_constants.dart`. فلا يُشترط وجودُه في موضعٍ واحد بل **غيابُه
+        // من كلّ موضع**: الشرطُ صار أضيق لا أوسع.
+        $this->assertSame([], $hits,
+            "عنوان خادمٍ رقميٌّ مزروعٌ في: " . implode('، ', $hits)
             . "\nوكلّ موضعٍ يُنسى يبقى ينادي الخادم القديم بعد إيقافه.");
+    }
+
+    /**
+     * @test
+     *
+     * **الافتراضيّ نطاقٌ مشفَّر — لا عنوانٌ يُمرَّر وقت البناء.**
+     *
+     * وهذا ما يمنع أخطر صمتٍ في الملفّ: نسخةُ الإصدار تمنع الاتّصال غير
+     * المشفَّر عمداً، فبناءٌ نُسي فيه `--dart-define` يُنتج تطبيقاً يُثبَّت
+     * ويفتح ويسقط في **كلّ** شاشةٍ بـ«تعذّر الاتّصال» — بلا خطأٍ في أيّ
+     * سجلّ، ولا شيء يدلّ على السبب.
+     *
+     * فالافتراضيّ نفسه يعمل، والتمريرُ يصير اختياراً لا شرطاً.
+     */
+    public function the_default_backend_address_is_the_secure_domain(): void
+    {
+        $root = $this->flutterRoot();
+
+        if ($root === null) {
+            $this->markTestSkipped('تطبيق فلاتر غير موجودٍ في هذا النشر — لم يُفحص');
+        }
+
+        $code = file_get_contents($root . '/lib/util/app_constants.dart');
+
+        $this->assertMatchesRegularExpression(
+            "~String\.fromEnvironment\(\s*'BASE_URL'\s*,\s*defaultValue:\s*productionDomain\s*\)~",
+            $code,
+            'الافتراضيّ ليس النطاق المعتمَد — فبناءٌ بلا --dart-define يُنتج نسخةً لا تتّصل.');
+
+        // ونفيٌ صريح: لا HTTP في الافتراضيّ مهما تغيّرت صياغته.
+        if (preg_match("~static const String baseUrl =(.+?);~s", $code, $m)) {
+            $this->assertStringNotContainsString('http://', $m[1],
+                'الافتراضيّ يتّصل نصّاً صريحاً — كلماتُ سرّ العملاء تمرّ مكشوفة.');
+        }
     }
 
     /**
