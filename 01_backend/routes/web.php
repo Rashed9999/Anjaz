@@ -26,19 +26,39 @@ Route::group(['prefix' => 'agent', 'as' => 'agent.'], function () {
 });
 
 
-// AMIAL-ROOT-DOOR-001 — الجذر كان بلا مسارٍ إطلاقاً.
+// ══════════════════════════════════════════════════════════════════
+// AMIAL-SITE-001 — الموقع العامّ.
 //
-// فمن كتب `amialpay.com` رأى «404 NOT FOUND» بالإنجليزيّة على صفحةٍ
-// بيضاء. وكان هنا `/home` وحده — ومن يكتب اسم نطاقٍ لا يكتب `/home`.
+// الجذر كان بلا مسارٍ إطلاقاً، فمن كتب `amialpay.com` رأى «404 NOT
+// FOUND». ثمّ صار صفحةَ أبوابٍ مؤقّتة، وهو الآن موقعٌ كامل.
 //
 // وقالبُ `landing/` الموروث من 6cash محذوفٌ منذ تنظيفٍ سابق، فمتحكّمه
-// (`LandingPageController`) ميّتٌ لا يُوصَل — وتوصيلُه اليوم يُنتج 500
-// لا صفحة. فصفحةٌ خاصّةٌ بنا: ثلاثة أبوابٍ صريحة، بلا قاعدة بياناتٍ ولا
-// شبكةٍ خارجيّة، فتعمل حتّى والقاعدة متوقّفة.
-Route::view('/', 'home')->name('root');
+// (`LandingPageController`) ميّتٌ لا يُوصَل — وتوصيلُه يُنتج 500 لا صفحة.
+//
+// **ولا شيء هنا يمسّ قاعدة البيانات.** الموقع أوّلُ ما يراه الزائر،
+// فيعمل والقاعدة متوقّفة — وإلّا صار عطلٌ داخليّ «الشركة كلّها لا تعمل»
+// في نظر من يمرّ. ولذلك `Route::view` لا متحكّمٌ يستعلم.
+//
+// واسمُ القالب هو اسمُ المسار بعد `site.` — فلا جدولُ ترجمةٍ بينهما
+// يُنسى تحديثُه فيُشير مسارٌ إلى قالبٍ آخر بلا خطأٍ ظاهر.
+// ══════════════════════════════════════════════════════════════════
+foreach (['home', 'personal', 'business', 'exchange', 'about',
+          'security', 'faq', 'contact', 'terms', 'privacy'] as $page) {
+    Route::view($page === 'home' ? '/' : "/{$page}", "site.{$page}")
+        ->name("site.{$page}");
+}
+
+// AMIAL-UNIFIED-WEB-LOGIN-001 — بابٌ واحد يفتح على مسار صاحبه.
+// والبابان القديمان يبقيان: التطبيق والاختبارات وروابط الناس تعتمد عليهما.
+Route::get('/login', [\App\Http\Controllers\Web\UnifiedLoginController::class, 'show'])
+    ->name('login');
+Route::post('/login', [\App\Http\Controllers\Web\UnifiedLoginController::class, 'submit'])
+    ->name('login.submit');
+Route::get('/login/captcha', [\App\Http\Controllers\Web\UnifiedLoginController::class, 'captcha'])
+    ->name('login.captcha');
 
 Route::get('/home', function () {
-    return redirect()->route('root');
+    return redirect()->route('site.home');
 });
 
 Route::get('authentication-failed', function () {
