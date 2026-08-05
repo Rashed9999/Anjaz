@@ -26,8 +26,19 @@ Route::group(['prefix' => 'agent', 'as' => 'agent.'], function () {
 });
 
 
-Route::get('/home', function() {
-    return redirect(\route('admin.auth.login'));
+// AMIAL-ROOT-DOOR-001 — الجذر كان بلا مسارٍ إطلاقاً.
+//
+// فمن كتب `amialpay.com` رأى «404 NOT FOUND» بالإنجليزيّة على صفحةٍ
+// بيضاء. وكان هنا `/home` وحده — ومن يكتب اسم نطاقٍ لا يكتب `/home`.
+//
+// وقالبُ `landing/` الموروث من 6cash محذوفٌ منذ تنظيفٍ سابق، فمتحكّمه
+// (`LandingPageController`) ميّتٌ لا يُوصَل — وتوصيلُه اليوم يُنتج 500
+// لا صفحة. فصفحةٌ خاصّةٌ بنا: ثلاثة أبوابٍ صريحة، بلا قاعدة بياناتٍ ولا
+// شبكةٍ خارجيّة، فتعمل حتّى والقاعدة متوقّفة.
+Route::view('/', 'home')->name('root');
+
+Route::get('/home', function () {
+    return redirect()->route('root');
 });
 
 Route::get('authentication-failed', function () {
