@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:amyal_pay/features/shared/widgets/scanner_shell.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/barcode/domain/repositories/barcode_repo.dart';
 
@@ -196,26 +197,14 @@ class _ContinuousScannerScreenState extends State<ContinuousScannerScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(children: [
-        // ==== 1) Camera View ====
-        MobileScanner(
-          controller: _scannerCtrl,
-          onDetect: _onDetect,
-          errorBuilder: (ctx, err, child) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Icon(Icons.camera_alt_outlined, color: Colors.white, size: 64),
-                const SizedBox(height: 16),
-                Text('فشل تشغيل الكاميرا',
-                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Text(err.errorDetails?.message ?? 'تحقّق من صلاحية الكاميرا',
-                    style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
-              ]),
-            ),
-          ),
-        ),
+      // AMIAL-SCANNER-SHELL-001 — كان هنا `errorBuilder` **يقول ولا يفعل**:
+      // يعرض «تحقّق من صلاحية الكاميرا» بلا زرٍّ يفتحها، ويطبع رسالةَ
+      // النظام الخام. ومن رُفض إذنُه نهائيّاً يقرأ النصيحةَ ولا يملك
+      // تنفيذها — فيبقى الجهازُ معطّلاً وهو يقرأ ما يجب فعله.
+      body: ScannerShell(
+        controller: _scannerCtrl,
+        onDetect: _onDetect,
+        overlay: Stack(children: [
 
         // ==== 2) إطار المسح + Flash overlay عند النجاح ====
         AnimatedBuilder(
@@ -272,6 +261,7 @@ class _ContinuousScannerScreenState extends State<ContinuousScannerScreen>
           child: _buildCartPanel(),
         )),
       ]),
+      ),
     );
   }
 

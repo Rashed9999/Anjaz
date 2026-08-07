@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:amyal_pay/features/shared/widgets/scanner_shell.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-QR-001 (v1.8)
@@ -144,12 +145,19 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           ),
         ],
       ),
-      body: Stack(
+      // AMIAL-SCANNER-SHELL-001 — النقصُ نفسُه كان هنا: `MobileScanner`
+      // بلا `errorBuilder`. وهذه شاشةُ مسحِ رمزِ التاجر — فسوادُها
+      // الصامتُ يقف بالعميل عند الصندوق بلا ما يدلّه.
+      //
+      // و«اختر رمزاً من المعرض» يصير هنا **طريقَ الخروج** حين تُرفض
+      // الكاميرا: صورةٌ محفوظةٌ للرمز تُقرأ بلا كاميرا إطلاقاً.
+      body: ScannerShell(
+        controller: _controller,
+        onDetect: _onDetect,
+        onManualEntry: _pickFromGallery,
+        manualEntryLabel: 'اختر رمزاً من معرض الصور',
+        overlay: Stack(
         children: [
-          MobileScanner(
-            controller: _controller,
-            onDetect: _onDetect,
-          ),
           // إطار توجيهي
           Center(
             child: Container(
@@ -202,6 +210,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }
