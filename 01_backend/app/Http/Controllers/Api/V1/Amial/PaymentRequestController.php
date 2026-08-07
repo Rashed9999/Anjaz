@@ -104,8 +104,88 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
         ]);
     }
 
+    /**
+     * AMIAL-MERCHANT-PAY-002 — البحثُ عن فاتورةٍ برقم حساب التاجر ورقمها.
+     *
+     * POST /amial/merchant/invoice/lookup {merchant_phone|merchant_user_id, invoice_no}
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ولمَ يُطلب الاثنان ورقمُ الفاتورة وحده فريد؟**
+     *
+     * لأنّ الرقم يُكتب بيدٍ عند صندوق، وحرفٌ يُخطأ يقع على فاتورةِ تاجرٍ
+     * آخر — فيدفع العميلُ لمن لا يعرفه ويرى اسماً غريباً بعد أن يُخصم
+     * ماله. فمطابقةُ التاجر تجعل الخطأ **رسالةً** لا **دفعةً**.
+     *
+     * وهذا الطريقُ للحالة التي لا تعمل فيها الكاميرا: إضاءةٌ ضعيفة، أو
+     * شاشةٌ مكسورة، أو رمزٌ مطبوعٌ بهت. ومن لا طريقَ له إلّا الكاميرا
+     * يقف عاجزاً عند الصندوق.
+     */
+    public function lookupInvoice(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'merchant_user_id' => 'required_without:merchant_phone|integer',
+            'merchant_phone' => 'required_without:merchant_user_id|string|max:32',
+            'invoice_no' => 'required|string|max:16',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $merchant = $request->filled('merchant_user_id')
+            ? \App\Models\User::find((int) $request->input('merchant_user_id'))
+            : \App\Models\User::whereIn('phone', \App\Support\Phone::variants((string) $request->input('merchant_phone')))->first();
+
+        if (!$merchant) {
+            return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود — تحقّق من رقم الحساب', 404);
+        }
+
+        $req = $this->service->findByCode(trim((string) $request->input('invoice_no')));
+
+        if (!$req) {
+            return $this->error('INVOICE_NOT_FOUND', 'لا توجد فاتورة بهذا الرقم', 404);
+        }
+
+        // **والمطابقةُ هي الحارس:** رقمٌ صحيحٌ لتاجرٍ آخر يُردّ برسالةٍ
+        // تقول ذلك، لا بفاتورةٍ تُدفع.
+        if ((int) $req->requester_user_id !== (int) $merchant->id) {
+            return $this->error('INVOICE_MERCHANT_MISMATCH',
+                'رقم الفاتورة لا يخصّ هذا التاجر — تأكّد من الرقمين', 422);
+        }
+
+        return $this->ok([
+            'request' => $req,
+            'invoice_no' => $req->short_code,
+            'requester' => [
+                'name' => trim(($merchant->f_name ?? '') . ' ' . ($merchant->l_name ?? '')),
+                'phone' => $merchant->phone,
+            ],
+            'is_active' => $req->isActive(),
+            'is_self' => $request->user()->id === (int) $req->requester_user_id,
+        ]);
+    }
+
+    /**
+     * AMIAL-MERCHANT-PAY-002 — **ورمزُ المعاملات على هذا الباب أيضاً.**
+     *
+     * وموضعُه هنا في المتحكّم لا في `PaymentRequestService::pay`، لأنّ
+     * تلك الدالّة لها **أربعةُ منادين**: هذا المتحكّم، وبوتُ واتساب
+     * (`WhatsappBotService:748`)، ومسارُ الوقود، والاختبارات. واشتراطُ
+     * PIN داخلها يكسر البوتَ والوقود معاً.
+     *
+     * **وبوتُ واتساب يبقى بلا PIN عمداً وأقولُها صراحةً:** طلبُ رمزٍ سرّيّ
+     * في محادثةِ واتساب يعني كتابتَه نصّاً في سجلٍّ يبقى على الهاتفين وعند
+     * المزوّد — وذاك أسوأ ممّا يُصلحه. حمايتُه جلسةُ رقمٍ موثَّق، ويلزمه
+     * قرارٌ منفصل.
+     */
     public function pay(Request $request, string $code): JsonResponse
     {
+        $v = Validator::make($request->all(), [
+            'pin' => 'required|string|min:4|max:4',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        if (!\App\CentralLogics\Helpers::pin_check($request->user()->id, (string) $request->input('pin'))) {
+            return $this->error('PIN_INVALID', 'رمز الحماية غير صحيح', 403);
+        }
+
         $req = $this->service->findByCode($code);
         if (!$req) return $this->error('NOT_FOUND', 'الطلب غير موجود', 404);
 
@@ -170,8 +250,24 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
      * من وصله رابط. أمّا من وصله الطلبُ في قائمته فلا يملك رمزاً يكتبه،
      * فيبقى يراه ولا يستطيع دفعه.
      */
+    /**
+     * **وهذا بابٌ ثانٍ إلى المال نفسِه — فيُقفل معه.**
+     *
+     * (القاعدة الرابعة.) وحاجزٌ على بابٍ واحدٍ من بابين ليس حاجزاً: من
+     * يعرف العنوانَ الآخر يمرّ منه، **وأوّلُ ما يُجرَّب هو العنوانُ الذي
+     * لا يُذكر في التوثيق.**
+     */
     public function payById(Request $request, int $id): JsonResponse
     {
+        $v = Validator::make($request->all(), [
+            'pin' => 'required|string|min:4|max:4',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        if (!\App\CentralLogics\Helpers::pin_check($request->user()->id, (string) $request->input('pin'))) {
+            return $this->error('PIN_INVALID', 'رمز الحماية غير صحيح', 403);
+        }
+
         $req = PaymentRequest::find($id);
         if (!$req) return $this->error('NOT_FOUND', 'الطلب غير موجود', 404);
 

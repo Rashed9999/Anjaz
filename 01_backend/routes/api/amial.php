@@ -287,6 +287,11 @@ Route::middleware(['auth:api'])->group(function () {
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'list'])->name('list');
         Route::get('/code/{code}', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'showByCode'])
             ->where('code', '[A-Z0-9]{6,8}')->name('show-by-code');
+        // AMIAL-MERCHANT-PAY-002 — الدفعُ برقم حساب التاجر ورقم الفاتورة،
+        // لمن لا تعمل كاميرتُه. قراءةٌ لا حركة ⇒ بلا مفتاح تفرّد.
+        Route::post('/invoice/lookup', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'lookupInvoice'])
+            ->withoutMiddleware('amial.idempotency')
+            ->middleware('amial.rate-limit:invoice_lookup,60,1')->name('invoice.lookup');
         Route::post('/code/{code}/pay', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'pay'])
             ->where('code', '[A-Z0-9]{6,8}')
             ->middleware('amial.rate-limit:payment_request_pay,30,1')->name('pay');

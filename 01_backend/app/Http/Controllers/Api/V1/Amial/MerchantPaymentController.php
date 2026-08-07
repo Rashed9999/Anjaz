@@ -61,10 +61,25 @@ class MerchantPaymentController extends Controller
             'note' => 'sometimes|nullable|string|max:255',
             'idempotency_key' => 'sometimes|nullable|string|max:100',
             'sale_ulid' => 'sometimes|nullable|string|max:40',
+            'pin' => 'required|string|min:4|max:4',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
         $customer = $request->user();
+
+        // AMIAL-MERCHANT-PAY-002 — **ورمزُ المعاملات هنا كما هو في التحويل.**
+        //
+        // قِيس قبل الإضافة: `customer/send-money` يشترط PIN، و**دفعُ التاجر
+        // لم يكن يشترطه**. أي أنّ دفعَ مالٍ في متجرٍ كان محميّاً أقلَّ من
+        // إرساله لصديق — ومن أخذ هاتفاً مفتوحاً يدفع به بلا حاجز.
+        //
+        // **وموضعُ الفحص هنا لا في `merchant_payment_transaction`:**
+        // تلك الدالّة يناديها `FuelStationService` و`SplitBillService`
+        // بمساراتٍ لها حواجزُها، فاشتراطُ PIN داخلها يكسرهما. (تحليلُ
+        // الأثر قبل التعديل — لا بعده.)
+        if (!\App\CentralLogics\Helpers::pin_check($customer->id, (string) $request->input('pin'))) {
+            return $this->error('PIN_INVALID', 'رمز الحماية غير صحيح', 403);
+        }
         $channel = $request->input('channel', 'qr');
 
         // حلّ التاجر

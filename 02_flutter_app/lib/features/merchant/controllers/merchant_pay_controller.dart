@@ -53,6 +53,7 @@ class MerchantPayController extends GetxController implements GetxService {
     String channel = 'qr',
     int? posUserId,
     String? note,
+    required String pin,
   }) async {
     try {
       isSubmitting.value = true;
@@ -66,6 +67,7 @@ class MerchantPayController extends GetxController implements GetxService {
         channel: channel,
         posUserId: posUserId,
         note: note,
+        pin: pin,
         idempotencyKey: _idempotencyKey,
       );
 

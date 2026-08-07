@@ -24,6 +24,7 @@ class MerchantPayRepo extends GetxService {
     String channel = 'qr',
     int? posUserId,
     String? note,
+    required String pin,
     required String idempotencyKey,
   }) {
     return apiClient.postData(
@@ -35,6 +36,7 @@ class MerchantPayRepo extends GetxService {
         'channel': channel,
         'pos_user_id': ?posUserId,
         if (note != null && note.isNotEmpty) 'note': note,
+        'pin': pin,
       },
       idempotencyKey: idempotencyKey,
     );

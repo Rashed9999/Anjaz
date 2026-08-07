@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/merchant/controllers/merchant_controller.dart';
 import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
+import 'package:amyal_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-MERCHANT-APP-001 (v1.6)
@@ -92,17 +94,32 @@ class _MerchantAcceptPaymentScreenState
                 ),
                 child: Column(
                   children: [
-                    // QR حقيقي يحمل بيانات طلب الدفع (AMIAL-QR-001 v1.8)
+                    // AMIAL-MERCHANT-PAY-002 — **الصيغة التي يفهمها القارئ.**
+                    //
+                    // كان يُبنى `amyalpay://pay?request_id=…` — وهي صيغةٌ
+                    // **لا يعرفها أحد**: `AmialQrPayload.parse` يفهم
+                    // `{"t":"amial_pr","code":…}` وهويّةً بحقل `phone`
+                    // وأرقاماً مجرّدة، ولا شيء غيرها. فكان العميلُ يمسح
+                    // رمزَ التاجر فيقرأ «هذا الرمز ليس رمز دفع في أميال
+                    // باي» — وهو الرمزُ الذي أصدره النظامُ نفسُه.
                     QrDisplayWidget(
-                      data: 'amyalpay://pay?request_id=${ctrl.lastPaymentRequestId.value}'
-                          '&amount=${ctrl.lastPaymentAmount.value}',
+                      data: jsonEncode({
+                        't': 'amial_pr',
+                        'code': ctrl.lastPaymentRequestId.value,
+                      }),
                       size: 180,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'رقم الطلب: ${ctrl.lastPaymentRequestId.value}',
+                      'رقم الفاتورة: ${ctrl.lastPaymentRequestId.value}',
                       style: const TextStyle(
-                          fontSize: 11, color: AmyalColors.textMuted),
+                          fontSize: 13, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'يستطيع العميل الدفع بمسح الرمز، أو بإدخال رقم حسابك ورقم الفاتورة',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 10, color: AmyalColors.textMuted),
                     ),
                     const SizedBox(height: 4),
                     const Text(
@@ -113,6 +130,37 @@ class _MerchantAcceptPaymentScreenState
                 ),
               ),
             const SizedBox(height: 20),
+            // AMIAL-MERCHANT-PAY-002 — **ما بعد الفاتورة: ثلاثةُ طرق.**
+            //
+            // كان الخيارُ واحداً: «تمّ» ثمّ الرجوع. فمن أراد إيصالاً أو
+            // فاتورةً ثانيةً يخرج ويعيد كلّ الخطوات. والصندوقُ لا ينتظر.
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.receipt_long, size: 18),
+                  label: const Text('الإيصال'),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Get.to(() => const ReceiptsListScreen());
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.add_circle_outline, size: 18),
+                  label: const Text('فاتورة جديدة'),
+                  onPressed: () {
+                    // **يبقى في الشاشة ويُفرّغ الحقول** — لا يخرج ويعود.
+                    Navigator.pop(ctx);
+                    _amountCtrl.clear();
+                    _phoneCtrl.clear();
+                    setState(() {});
+                  },
+                ),
+              ),
+            ]),
+            const SizedBox(height: 8),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(

@@ -222,6 +222,20 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
 //
 // الصلاحيّة `platform.settings.update`: فتحُ بابِ تحقّقٍ أو إقفالُه ضبطُ
 // منصّةٍ لا خدمةُ عملاء — وموظّفُ الدعم لا يملكها.
+// AMIAL-MERCHANT-PAY-002 — مركز فواتير التجّار.
+// يُقرأ من `payment_requests` نفسِه الذي يكتب فيه التطبيق — جذرٌ واحدٌ
+// يُقرأ من زاويتين، لا حقيقتان تفترقان.
+Route::prefix('invoices')->name('invoices.')->middleware('platform:platform.money.move')
+    ->group(function () {
+        $ic = App\Http\Controllers\Admin\MerchantInvoiceCenterController::class;
+        Route::get('/', [$ic, 'page'])->name('page');
+        Route::get('/stats', [$ic, 'stats'])->name('stats');
+        Route::get('/rows', [$ic, 'rows'])->name('rows');
+        Route::get('/export', [$ic, 'export'])->name('export');
+        Route::get('/{id}', [$ic, 'show'])->where('id', '[0-9]+')->name('show');
+        Route::post('/{id}/cancel', [$ic, 'cancel'])->where('id', '[0-9]+')->name('cancel');
+    });
+
 Route::prefix('otp')->name('otp.')->middleware('platform:platform.settings.update')
     ->group(function () {
         $oc = App\Http\Controllers\Admin\OtpCenterController::class;

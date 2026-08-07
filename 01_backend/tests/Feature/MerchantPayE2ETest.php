@@ -34,6 +34,8 @@ class MerchantPayE2ETest extends TestCase
 {
     use RefreshDatabase;
 
+    private const PIN = '1234';
+
     private function wallet(int $userId, string $balance): void
     {
         EMoney::create([
@@ -49,9 +51,14 @@ class MerchantPayE2ETest extends TestCase
             'type' => 2, 'phone' => $phone, 'zone_code' => 'SOUTH',
             'is_kyc_verified' => 1, 'is_active' => 1,
         ]);
+
+        // **ورمزُ المعاملات صار شرطاً** — `transaction_pin` لا كلمة السرّ.
+        DB::table('users')->where('id', $u->id)
+            ->update(['transaction_pin' => \Illuminate\Support\Facades\Hash::make(self::PIN)]);
+
         $this->wallet($u->id, $balance);
 
-        return $u;
+        return $u->fresh();
     }
 
     private function merchant(string $phone = '967770007002', string $balance = '0.0000'): User
@@ -83,6 +90,7 @@ class MerchantPayE2ETest extends TestCase
         return $this->actingAs($customer, 'api')
             ->postJson('/api/v1/amial/merchant/pay', $body + [
                 'idempotency_key' => 'E2E-' . uniqid(),
+                'pin' => self::PIN,
             ]);
     }
 
@@ -175,7 +183,7 @@ class MerchantPayE2ETest extends TestCase
         // `$request->header('Idempotency-Key')`، وأنّ التطبيق يرسلها
         // ترويسةً في `api_client.dart:115`. **فالعطلُ كان في اختباري.**
         $key = 'E2E-FIXED-KEY-001';
-        $body = ['merchant_user_id' => $m->id, 'amount' => '500'];
+        $body = ['merchant_user_id' => $m->id, 'amount' => '500', 'pin' => self::PIN];
 
         $first = $this->actingAs($c, 'api')
             ->withHeaders(['Idempotency-Key' => $key])
@@ -222,6 +230,7 @@ class MerchantPayE2ETest extends TestCase
             'merchant_user_id' => $m->id,
             'amount' => '500',
             'idempotency_key' => 'E2E-BODY-KEY-001',
+            'pin' => self::PIN,
         ];
 
         $first = $this->actingAs($c, 'api')
