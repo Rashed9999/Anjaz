@@ -53,14 +53,54 @@ class OtpPolicy
     /**
      * أرقامُ العرض، موحَّدةً إلى أرقامٍ فقط.
      *
+     * ══════════════════════════════════════════════════════════════
+     * **الجدولُ أوّلاً، والمتغيّرُ بذرةٌ لا حكم.**
+     *
+     * AMIAL-OTP-CENTER-001: انتقلت الأرقام إلى `otp_demo_numbers` كي
+     * تُدار من شاشةٍ لا بنشرٍ كامل. ولو أُلغي المتغيّرُ دفعةً واحدة
+     * لأُقفلت حساباتُ العرض على الخوادم القائمة التي تعمل بقيمته الآن.
+     *
+     * فإن كان الجدولُ فارغاً يُقرأ المتغيّر — وإن امتلأ فهو وحده الحكم.
+     * **وإفراغُ الجدول من الشاشة يُقفل الباب فعلاً**، ولا يعود المتغيّرُ
+     * يفتحه (وإلّا لصار زرُّ الإقفال كاذباً).
+     *
      * @return array<int,string>
      */
     public function demoNumbers(): array
     {
-        return array_values(array_filter(array_map(
-            fn ($n) => $this->digits((string) $n),
-            (array) config('amial.otp.demo_numbers', [])
-        )));
+        return \Illuminate\Support\Facades\Cache::remember(
+            'amial.otp.demo_numbers', 60,
+            function () {
+                try {
+                    if (\Illuminate\Support\Facades\Schema::hasTable('otp_demo_numbers')) {
+                        $rows = \Illuminate\Support\Facades\DB::table('otp_demo_numbers')
+                            ->pluck('phone', 'is_active');
+
+                        // الجدولُ مأهولٌ ⇒ هو الحكم، ولو كانت كلُّها معطَّلة.
+                        if (\Illuminate\Support\Facades\DB::table('otp_demo_numbers')->exists()) {
+                            return \Illuminate\Support\Facades\DB::table('otp_demo_numbers')
+                                ->where('is_active', true)
+                                ->pluck('phone')
+                                ->map(fn ($n) => $this->digits((string) $n))
+                                ->filter()->values()->all();
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // قبل الهجرات أو عند تعذّر القاعدة — تُقرأ البذرة.
+                }
+
+                return array_values(array_filter(array_map(
+                    fn ($n) => $this->digits((string) $n),
+                    (array) config('amial.otp.demo_numbers', [])
+                )));
+            }
+        );
+    }
+
+    /** تُنسى النسخة المحفوظة بعد أيّ تعديلٍ من الشاشة. */
+    public static function forget(): void
+    {
+        \Illuminate\Support\Facades\Cache::forget('amial.otp.demo_numbers');
     }
 
     /**

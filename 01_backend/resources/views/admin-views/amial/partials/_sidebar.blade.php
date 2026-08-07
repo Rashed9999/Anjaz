@@ -53,6 +53,8 @@
                 ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), null],
                 ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), 'platform.money.move'],
                 ['🪪 لوحة التحقق (الحسابات الجديدة)', route('admin.amial.hub.verification'), null],
+                // AMIAL-OTP-CENTER-001 — القاعدة ١٢: يُوصل إليه من هنا.
+                ['🔐 مركز التحقّق (OTP وبوّابات الإرسال)', route('admin.amial.otp.page'), 'platform.settings.update'],
             ],
         ],
         [

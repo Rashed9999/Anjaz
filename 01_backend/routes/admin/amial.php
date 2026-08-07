@@ -218,6 +218,25 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
         Route::get('/reconciliation-runs', [$lc, 'reconciliationRuns'])->name('reconciliation-runs');
     });
 
+// ============ AMIAL-OTP-CENTER-001 — مركز التحقّق ============
+//
+// الصلاحيّة `platform.settings.update`: فتحُ بابِ تحقّقٍ أو إقفالُه ضبطُ
+// منصّةٍ لا خدمةُ عملاء — وموظّفُ الدعم لا يملكها.
+Route::prefix('otp')->name('otp.')->middleware('platform:platform.settings.update')
+    ->group(function () {
+        $oc = App\Http\Controllers\Admin\OtpCenterController::class;
+
+        Route::get('/', [$oc, 'page'])->name('page');
+        Route::get('/stats', [$oc, 'stats'])->name('stats');
+        Route::get('/numbers', [$oc, 'numbers'])->name('numbers');
+        Route::get('/export', [$oc, 'export'])->name('export');
+
+        Route::post('/numbers', [$oc, 'store'])->name('numbers.store');
+        Route::post('/numbers/{id}/toggle', [$oc, 'toggle'])->where('id', '[0-9]+')->name('numbers.toggle');
+        Route::post('/close-door', [$oc, 'closeDoor'])->name('close-door');
+        Route::post('/test-send', [$oc, 'testSend'])->name('test-send');
+    });
+
 // ============ AMIAL-SETTLEMENT-PANEL-001 — تسويات الشركاء ============
 //
 // غير `settlements` أدناه: تلك تسويات الوكلاء (`AgentSettlement`). هذه
