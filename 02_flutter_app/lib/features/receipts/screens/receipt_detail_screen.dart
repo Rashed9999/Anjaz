@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:amyal_pay/features/receipts/controllers/receipts_controller.dart';
 import 'package:amyal_pay/data/api/secure_storage_helper.dart';
 import 'package:amyal_pay/helper/pdf_downloader_helper.dart';
+import 'package:amyal_pay/features/shared/utils/operation_status.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/favorite_number/controllers/amial_favorites_controller.dart';
 import 'package:amyal_pay/features/favorite_number/widgets/amial_favorite_star.dart';
@@ -221,6 +222,9 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                         fontSize: 11.5,
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    // AMIAL-OP-STATUS-001: حالة العملية الحقيقية
+                    OperationStatus.of(r.opStatus).chip(fontSize: 11),
                   ],
                 ),
               ),

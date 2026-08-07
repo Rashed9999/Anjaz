@@ -4,6 +4,7 @@ import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amyal_pay/features/receipts/controllers/receipts_controller.dart';
 import 'package:amyal_pay/features/receipts/domain/models/receipt_models.dart';
 import 'package:amyal_pay/features/receipts/screens/receipt_detail_screen.dart';
+import 'package:amyal_pay/features/shared/utils/operation_status.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 
 /// AMIAL-RECEIPTS-001 (v0.9-D)
@@ -164,25 +165,12 @@ class _ReceiptListTile extends StatelessWidget {
               fontSize: 14,
             ),
           ),
-          // AMIAL-FIX(RECEIPT-STATUS): كانت الشارة تعرض حالة توليد PDF الداخلية
-          // («جارٍ التحضير» لكل العمليات، و«فشل» لعمليات ناجحة). الآن تعرض
-          // حالة العملية نفسها بصياغة تناسب نوعها (تم التحويل/تم الدفع/…).
-          Container(
-            margin: const EdgeInsets.only(top: 2),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: receipt.isVoided
-                  ? AmyalColors.red.withValues(alpha: 0.15)
-                  : Colors.green.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              receipt.operationStatusLabel,
-              style: TextStyle(
-                fontSize: 9,
-                color: receipt.isVoided ? AmyalColors.red : Colors.green.shade700,
-              ),
-            ),
+          // AMIAL-OP-STATUS-001: نعرض حالة العملية الحقيقية (مكتملة/ملغية/قيد
+          // المراجعة/قيد التحضير) لا حالة توليد الـPDF الداخلية — فالإيصال لا
+          // يُصدَر إلا بعد اكتمال العملية. الشارة موحّدة اللون عبر كل الشاشات.
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: OperationStatus.of(receipt.opStatus).chip(fontSize: 9),
           ),
         ],
       ),

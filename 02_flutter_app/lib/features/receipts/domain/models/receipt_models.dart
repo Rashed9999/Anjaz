@@ -15,7 +15,8 @@ class AmyalReceipt {
   final String fee;
   final String netAmount;
   final String direction; // debit | credit
-  final String status;    // pending_pdf | pdf_generated | pdf_failed | voided
+  final String status;    // pending_pdf | pdf_generated | pdf_failed | voided (حالة الـPDF)
+  final String opStatus;  // completed | cancelled | under_review | pending (حالة العملية)
   final String? pdfStoragePath;
   final Map<String, dynamic>? metadata;
   final String zoneCode;
@@ -38,6 +39,7 @@ class AmyalReceipt {
     required this.netAmount,
     required this.direction,
     required this.status,
+    this.opStatus = 'completed',
     this.pdfStoragePath,
     this.metadata,
     required this.zoneCode,
@@ -62,6 +64,7 @@ class AmyalReceipt {
       netAmount: json['net_amount']?.toString() ?? '0',
       direction: json['direction'] ?? 'debit',
       status: json['status'] ?? 'pending_pdf',
+      opStatus: json['op_status']?.toString() ?? 'completed',
       pdfStoragePath: json['pdf_storage_path'],
       metadata: json['metadata'] is Map ? Map<String, dynamic>.from(json['metadata']) : null,
       zoneCode: json['zone_code'] ?? 'SOUTH',
