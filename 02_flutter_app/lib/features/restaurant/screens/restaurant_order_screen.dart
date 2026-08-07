@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-RESTAURANT-001 — محرّر طلب المطعم.
 ///
@@ -40,7 +40,7 @@ class _RestaurantOrderScreenState extends State<RestaurantOrderScreen> {
       s + ((double.tryParse('${it['qty'] ?? it['quantity']}') ?? 0) * (double.tryParse('${it['price']}') ?? 0)));
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _addItem() async {
     final name = TextEditingController();
@@ -143,14 +143,14 @@ class _RestaurantOrderScreenState extends State<RestaurantOrderScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Text(widget.tableLabel != null ? 'طلب — ${widget.tableLabel}' : 'طلب سفري'),
-        backgroundColor: AmyalColors.primary, foregroundColor: Colors.white,
+        backgroundColor: AmialColors.primary, foregroundColor: Colors.white,
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _busy ? null : _addItem,
-        backgroundColor: AmyalColors.primary, icon: const Icon(Icons.add), label: const Text('صنف'),
+        backgroundColor: AmialColors.primary, icon: const Icon(Icons.add), label: const Text('صنف'),
       ),
       body: Column(children: [
         Container(
@@ -160,15 +160,15 @@ class _RestaurantOrderScreenState extends State<RestaurantOrderScreen> {
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: AmyalColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-              child: Text(_statusLabel(_status), style: const TextStyle(color: AmyalColors.primary, fontWeight: FontWeight.bold)),
+              decoration: BoxDecoration(color: AmialColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+              child: Text(_statusLabel(_status), style: const TextStyle(color: AmialColors.primary, fontWeight: FontWeight.bold)),
             ),
-            Text('${_total.toStringAsFixed(0)} ر.ي', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+            Text('${_total.toStringAsFixed(0)} ر.ي', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AmialColors.primary)),
           ]),
         ),
         Expanded(
           child: _items.isEmpty
-              ? const Center(child: Text('أضِف أصناف الطلب', style: TextStyle(color: AmyalColors.textSecondary)))
+              ? const Center(child: Text('أضِف أصناف الطلب', style: TextStyle(color: AmialColors.textSecondary)))
               : ListView.separated(
                   padding: const EdgeInsets.all(12),
                   itemCount: _items.length,
@@ -184,8 +184,8 @@ class _RestaurantOrderScreenState extends State<RestaurantOrderScreen> {
                         subtitle: Text('${q.toStringAsFixed(0)} × ${p.toStringAsFixed(0)} ر.ي'),
                         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
                           Text('${(q * p).toStringAsFixed(0)} ر.ي',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary)),
-                          IconButton(icon: const Icon(Icons.close, size: 18, color: AmyalColors.red),
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
+                          IconButton(icon: const Icon(Icons.close, size: 18, color: AmialColors.red),
                               onPressed: _status == 'closed' ? null : () { setState(() => _items.removeAt(i)); if (_orderId != null) _persist(); }),
                         ]),
                       ),

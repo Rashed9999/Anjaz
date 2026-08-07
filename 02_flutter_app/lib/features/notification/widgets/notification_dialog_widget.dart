@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/features/notification/domain/models/notification_model.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_image_widget.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/features/notification/domain/models/notification_model.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_image_widget.dart';
 
 class NotificationDialogWidget extends StatelessWidget {
   final Notifications notificationModel;

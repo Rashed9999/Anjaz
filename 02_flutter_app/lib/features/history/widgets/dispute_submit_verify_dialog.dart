@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_button_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_password_field_widget.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/history/controllers/report_dispute_controller.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_button_widget.dart';
+import 'package:amial_pay/common/widgets/custom_password_field_widget.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/history/controllers/report_dispute_controller.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
 
 class DisputeSubmitVerifyDialog extends StatefulWidget {
   final String? inputComment;

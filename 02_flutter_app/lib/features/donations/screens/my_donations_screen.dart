@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/donations/controllers/donations_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/donations/controllers/donations_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-DONATIONS-001 (v1.2)
 class MyDonationsScreen extends StatefulWidget {
@@ -23,29 +23,29 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تبرعاتي'),
       ),
       body: RefreshIndicator(
         onRefresh: () => Get.find<DonationsController>().loadMyDonations(),
-        color: AmyalColors.primary,
+        color: AmialColors.primary,
         child: Obx(() {
           final ctrl = Get.find<DonationsController>();
           if (ctrl.isLoading.value && ctrl.myDonations.isEmpty) {
-            return const Center(child: CircularProgressIndicator(color: AmyalColors.primary));
+            return const Center(child: CircularProgressIndicator(color: AmialColors.primary));
           }
           if (ctrl.myDonations.isEmpty) {
             return ListView(
               children: [
                 SizedBox(height: MediaQuery.of(context).size.height * 0.15),
-                Icon(Icons.volunteer_activism, size: 80, color: AmyalColors.textMuted.withValues(alpha: 0.5)),
+                Icon(Icons.volunteer_activism, size: 80, color: AmialColors.textMuted.withValues(alpha: 0.5)),
                 const SizedBox(height: 16),
                 const Center(child: Text('لم تتبرع بعد')),
                 const SizedBox(height: 8),
                 const Center(
                   child: Text('ابدأ بمساهمة صغيرة في حملة تختارها',
-                      style: TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+                      style: TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
                 ),
               ],
             );
@@ -62,12 +62,12 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow.withValues(alpha: 0.2),
+                  color: AmialColors.yellow.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.favorite, color: AmyalColors.primary, size: 32),
+                    const Icon(Icons.favorite, color: AmialColors.primary, size: 32),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -76,7 +76,7 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
                           Text('${totalAmount.toStringAsFixed(2)} ر.ي',
                               style: const TextStyle(
                                   fontSize: 20, fontWeight: FontWeight.bold,
-                                  color: AmyalColors.primary)),
+                                  color: AmialColors.primary)),
                           Text('في $count تبرع — جزاك الله خيراً',
                               style: const TextStyle(fontSize: 12)),
                         ],
@@ -94,8 +94,8 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
                     children: [
                       const CircleAvatar(
                         radius: 20,
-                        backgroundColor: AmyalColors.background,
-                        child: Icon(Icons.favorite, color: AmyalColors.primary),
+                        backgroundColor: AmialColors.background,
+                        child: Icon(Icons.favorite, color: AmialColors.primary),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -108,12 +108,12 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
                             if (d.organization != null)
                               Text(d.organization!.nameAr,
                                   style: const TextStyle(
-                                      fontSize: 11, color: AmyalColors.textSecondary)),
+                                      fontSize: 11, color: AmialColors.textSecondary)),
                             if (d.donatedAt != null)
                               Text(
                                   '${d.donatedAt!.year}-${d.donatedAt!.month.toString().padLeft(2, '0')}-${d.donatedAt!.day.toString().padLeft(2, '0')}',
                                   style: const TextStyle(
-                                      fontSize: 10, color: AmyalColors.textMuted)),
+                                      fontSize: 10, color: AmialColors.textMuted)),
                           ],
                         ),
                       ),
@@ -123,10 +123,10 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
                           Text('${d.amount} ر.ي',
                               style: const TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: AmyalColors.primary)),
+                                  color: AmialColors.primary)),
                           if (d.isAnonymous)
                             const Icon(Icons.visibility_off,
-                                size: 14, color: AmyalColors.textMuted),
+                                size: 14, color: AmialColors.textMuted),
                         ],
                       ),
                     ],

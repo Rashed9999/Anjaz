@@ -2,8 +2,8 @@ import 'dart:convert';
 
 import 'package:get/get_connect/http/src/response/response.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/util/app_constants.dart' show AppConstants;
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/util/app_constants.dart' show AppConstants;
 
 class FavNumberRepo{
   final ApiClient apiClient;

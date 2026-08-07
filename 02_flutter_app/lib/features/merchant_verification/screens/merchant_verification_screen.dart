@@ -2,8 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/merchant_verification/controllers/merchant_verification_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/merchant_verification/controllers/merchant_verification_controller.dart';
 
 /// AMIAL-MERCHANT-VERIFY-001 — شاشة توثيق التاجر.
 class MerchantVerificationScreen extends StatefulWidget {
@@ -85,7 +85,7 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: AmyalColors.red));
+        SnackBar(content: Text(m), backgroundColor: AmialColors.red));
 
   String _docLabel(String key) => {
     'id_card_front': 'وجه الهوية الأمامي',
@@ -99,8 +99,8 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
 
   Color _statusColor(String? s) => switch (s) {
     'verified' => Colors.green,
-    'pending_review' => AmyalColors.yellowDark,
-    'rejected' => AmyalColors.red,
+    'pending_review' => AmialColors.yellowDark,
+    'rejected' => AmialColors.red,
     'resubmission_required' => Colors.orange,
     'verification_suspended' => Colors.grey,
     _ => Colors.blueGrey,
@@ -119,7 +119,7 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('توثيق المتجر'),
       ),
@@ -197,7 +197,7 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
                   : const Icon(Icons.send),
               label: Text(profileStatus == 'resubmission_required' ? 'إعادة تقديم' : 'تقديم الطلب'),
               style: FilledButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 minimumSize: const Size.fromHeight(52),
               ),
             )),
@@ -229,12 +229,12 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
           const SizedBox(height: 8),
           if (req != null)
             Text(req['business_name']?.toString() ?? '',
-                style: const TextStyle(fontSize: 16, color: AmyalColors.primary)),
+                style: const TextStyle(fontSize: 16, color: AmialColors.primary)),
           const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             decoration: BoxDecoration(
-              color: tier == 'gold' ? AmyalColors.yellow : AmyalColors.primary,
+              color: tier == 'gold' ? AmialColors.yellow : AmialColors.primary,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
@@ -297,7 +297,7 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
         // العنوان
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-            if (required) const Text('*', style: TextStyle(color: AmyalColors.red, fontWeight: FontWeight.bold)),
+            if (required) const Text('*', style: TextStyle(color: AmialColors.red, fontWeight: FontWeight.bold)),
             const SizedBox(width: 4),
             Text(_docLabel(key), style: const TextStyle(fontWeight: FontWeight.bold)),
           ]),
@@ -310,12 +310,12 @@ class _MerchantVerificationScreenState extends State<MerchantVerificationScreen>
         const SizedBox(width: 8),
         // الأزرار
         IconButton(
-          icon: const Icon(Icons.photo_library, color: AmyalColors.primary),
+          icon: const Icon(Icons.photo_library, color: AmialColors.primary),
           onPressed: () => _pickImage(key),
           tooltip: 'من المعرض',
         ),
         IconButton(
-          icon: const Icon(Icons.camera_alt, color: AmyalColors.primary),
+          icon: const Icon(Icons.camera_alt, color: AmialColors.primary),
           onPressed: () => _captureImage(key),
           tooltip: 'بالكاميرا',
         ),

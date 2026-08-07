@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/merchant_controller.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_accept_payment_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_refund_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_transactions_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/inventory_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/profit_report_screen.dart';
-import 'package:amyal_pay/features/suppliers/screens/suppliers_screen.dart';
-import 'package:amyal_pay/features/access/widgets/access_gate.dart';
-import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/split_bill_create_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
-import 'package:amyal_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
-import 'package:amyal_pay/features/notification/screens/notifications_center_screen.dart';
-import 'package:amyal_pay/features/notification/controllers/notifications_center_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/merchant_controller.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_accept_payment_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_transactions_screen.dart';
+import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
+import 'package:amial_pay/features/merchant/screens/inventory_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
+import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
+import 'package:amial_pay/features/suppliers/screens/suppliers_screen.dart';
+import 'package:amial_pay/features/access/widgets/access_gate.dart';
+import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
+import 'package:amial_pay/features/merchant/screens/split_bill_create_screen.dart';
+import 'package:amial_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
+import 'package:amial_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
+import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
+import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-MERCHANT-APP-001 (v1.6)
 class MerchantDashboardScreen extends StatefulWidget {
@@ -38,10 +38,10 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       body: RefreshIndicator(
         onRefresh: () => Get.find<MerchantController>().loadProfile(),
-        color: AmyalColors.primary,
+        color: AmialColors.primary,
         child: Obx(() {
           final ctrl = Get.find<MerchantController>();
           final merchant = ctrl.merchant.value;
@@ -53,7 +53,7 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AmyalColors.primary, Color(0xFF1D4FB8)],
+                    colors: [AmialColors.primary, Color(0xFF1D4FB8)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -100,7 +100,7 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                                   if (merchant?.verified == true) ...[
                                     const SizedBox(width: 4),
                                     const Icon(Icons.verified,
-                                        color: AmyalColors.yellow, size: 16),
+                                        color: AmialColors.yellow, size: 16),
                                   ],
                                 ],
                               ),
@@ -163,15 +163,15 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: AmyalColors.yellow.withValues(alpha: 0.2),
+                        color: AmialColors.yellow.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AmyalColors.yellowDark),
+                        border: Border.all(color: AmialColors.yellowDark),
                       ),
                       child: Row(children: [
                         Container(
                           width: 40, height: 40,
                           decoration: BoxDecoration(
-                            color: AmyalColors.yellowDark,
+                            color: AmialColors.yellowDark,
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(Icons.verified_user, color: Colors.white, size: 22),
@@ -183,7 +183,7 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                           Text('احصل على شارة موثَّق وزِد ثقة عملائك',
                               style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
                         ])),
-                        const Icon(Icons.chevron_left, color: AmyalColors.yellowDark),
+                        const Icon(Icons.chevron_left, color: AmialColors.yellowDark),
                       ]),
                     ),
                   ),
@@ -197,7 +197,7 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                     Expanded(
                       child: _ActionCard(
                         icon: Icons.qr_code,
-                        color: AmyalColors.primary,
+                        color: AmialColors.primary,
                         label: 'استلام دفعة',
                         onTap: () =>
                             Get.to(() => const MerchantAcceptPaymentScreen()),
@@ -224,14 +224,14 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AmyalColors.border),
+                    border: Border.all(color: AmialColors.border),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Row(
                         children: [
-                          Icon(Icons.bar_chart, color: AmyalColors.primary),
+                          Icon(Icons.bar_chart, color: AmialColors.primary),
                           SizedBox(width: 8),
                           Text('إحصاءات اليوم',
                               style: TextStyle(
@@ -257,14 +257,14 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                         label: 'الصافي',
                         value: '${ctrl.stats.value.todayNet} ر.ي',
                         icon: Icons.account_balance_wallet,
-                        color: AmyalColors.primary,
+                        color: AmialColors.primary,
                       ),
                       const Divider(height: 24),
                       _StatRow(
                         label: 'عدد العمليات',
                         value: '${ctrl.stats.value.todayTransactionsCount}',
                         icon: Icons.receipt_long,
-                        color: AmyalColors.yellow,
+                        color: AmialColors.yellow,
                       ),
                     ],
                   ),
@@ -295,14 +295,14 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                   margin: const EdgeInsets.all(16),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AmyalColors.yellow.withValues(alpha: 0.2),
+                    color: AmialColors.yellow.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                        color: AmyalColors.yellow.withValues(alpha: 0.5)),
+                        color: AmialColors.yellow.withValues(alpha: 0.5)),
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.warning_amber, color: AmyalColors.primary),
+                      Icon(Icons.warning_amber, color: AmialColors.primary),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -429,7 +429,7 @@ class _ActionCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AmyalColors.border),
+          border: Border.all(color: AmialColors.border),
         ),
         child: Column(
           children: [
@@ -487,10 +487,10 @@ class _LinkTile extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: AmyalColors.border),
+        side: const BorderSide(color: AmialColors.border),
       ),
       child: ListTile(
-        leading: Icon(icon, color: AmyalColors.primary),
+        leading: Icon(icon, color: AmialColors.primary),
         title: Text(label, style: const TextStyle(fontSize: 13)),
         trailing: const Icon(Icons.chevron_left, size: 20),
         onTap: onTap,
@@ -546,9 +546,9 @@ class _NotificationBellState extends State<_NotificationBell> {
                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
                 decoration: BoxDecoration(
-                  color: AmyalColors.red,
+                  color: AmialColors.red,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AmyalColors.primary, width: 1),
+                  border: Border.all(color: AmialColors.primary, width: 1),
                 ),
                 child: Text(
                   n > 99 ? '99+' : '$n',

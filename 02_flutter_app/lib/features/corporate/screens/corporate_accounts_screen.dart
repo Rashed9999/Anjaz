@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/features/corporate/screens/corporate_account_detail_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/corporate/screens/corporate_account_detail_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-CORPORATE-ACCOUNTS-001 — «حسابات الشركات» (B2B، الباقة المؤسسية).
 ///
@@ -102,19 +102,19 @@ class _CorporateAccountsScreenState extends State<CorporateAccountsScreen> {
       );
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('حسابات الشركات'),
-        backgroundColor: AmyalColors.primary, foregroundColor: Colors.white,
+        backgroundColor: AmialColors.primary, foregroundColor: Colors.white,
       ),
       floatingActionButton: _error == null
           ? FloatingActionButton.extended(
-              onPressed: _createDialog, backgroundColor: AmyalColors.primary,
+              onPressed: _createDialog, backgroundColor: AmialColors.primary,
               icon: const Icon(Icons.add_business), label: const Text('شركة جديدة'))
           : null,
       body: _loading
@@ -122,7 +122,7 @@ class _CorporateAccountsScreenState extends State<CorporateAccountsScreen> {
           : _error != null
               ? Center(child: Padding(padding: const EdgeInsets.all(24),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.workspace_premium, size: 56, color: AmyalColors.yellowDark),
+                    const Icon(Icons.workspace_premium, size: 56, color: AmialColors.yellowDark),
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -132,7 +132,7 @@ class _CorporateAccountsScreenState extends State<CorporateAccountsScreen> {
                   child: ListView(padding: const EdgeInsets.all(16), children: [
                     Container(
                       padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(color: AmyalColors.primary, borderRadius: BorderRadius.circular(16)),
+                      decoration: BoxDecoration(color: AmialColors.primary, borderRadius: BorderRadius.circular(16)),
                       child: Column(children: [
                         const Text('إجمالي المستحقّ على الشركات', style: TextStyle(color: Colors.white70, fontSize: 12)),
                         const SizedBox(height: 6),
@@ -159,15 +159,15 @@ class _CorporateAccountsScreenState extends State<CorporateAccountsScreen> {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         leading: CircleAvatar(
-          backgroundColor: AmyalColors.primary.withValues(alpha: 0.1),
-          child: const Icon(Icons.business, color: AmyalColors.primary)),
+          backgroundColor: AmialColors.primary.withValues(alpha: 0.1),
+          child: const Icon(Icons.business, color: AmialColors.primary)),
         title: Text('${a['company_name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text('${a['account_code']}  •  المتاح: ${_fmt(a['available'])} ر.ي'
             '${suspended ? '  •  موقوف' : ''}', style: const TextStyle(fontSize: 11)),
         trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text('${_fmt(bal)} ر.ي', style: TextStyle(
-              fontWeight: FontWeight.bold, color: bal > 0 ? AmyalColors.red : const Color(0xFF2E7D32))),
-          const Icon(Icons.chevron_left, color: AmyalColors.textMuted, size: 18),
+              fontWeight: FontWeight.bold, color: bal > 0 ? AmialColors.red : const Color(0xFF2E7D32))),
+          const Icon(Icons.chevron_left, color: AmialColors.textMuted, size: 18),
         ]),
         onTap: () async {
           await Get.to(() => CorporateAccountDetailScreen(accountId: a['id'] as int));

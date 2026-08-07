@@ -1,6 +1,6 @@
 import 'package:uuid/uuid.dart';
 
-/// AMYAL-SECURITY-002 (v0.7-C)
+/// AMIAL-SECURITY-002 (v0.7-C)
 ///
 /// IdempotencyKeyGenerator — يولّد مفتاح idempotency لكل عملية مالية.
 ///

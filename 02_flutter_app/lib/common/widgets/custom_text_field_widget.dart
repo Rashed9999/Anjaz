@@ -2,12 +2,12 @@ import 'package:country_code_picker/country_code_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/code_picker_widget.dart';
-import 'package:amyal_pay/features/transaction_money/widgets/field_item_widget.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/amial_form.dart';
+import 'package:amial_pay/common/widgets/code_picker_widget.dart';
+import 'package:amial_pay/features/transaction_money/widgets/field_item_widget.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/amial_form.dart';
 
 
 class CustomTextFieldWidget extends StatefulWidget {
@@ -155,7 +155,7 @@ class CustomTextFieldState extends State<CustomTextFieldWidget> {
           focusedBorder : OutlineInputBorder(
             borderRadius: BorderRadius.circular(widget.borderRadius ?? 14),
             borderSide: BorderSide(
-                color: widget.focusedBorderColor ?? AmyalColors.primary, width: 1.5),
+                color: widget.focusedBorderColor ?? AmialColors.primary, width: 1.5),
           ),
 
           enabledBorder : OutlineInputBorder(
@@ -167,12 +167,12 @@ class CustomTextFieldState extends State<CustomTextFieldWidget> {
 
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(widget.borderRadius ?? 14),
-            borderSide: const BorderSide(color: AmyalColors.red, width: 1.5),
+            borderSide: const BorderSide(color: AmialColors.red, width: 1.5),
           ),
 
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(widget.borderRadius ?? 14),
-            borderSide: const BorderSide(color: AmyalColors.red, width: 1.5),
+            borderSide: const BorderSide(color: AmialColors.red, width: 1.5),
           ),
 
           filled: true,

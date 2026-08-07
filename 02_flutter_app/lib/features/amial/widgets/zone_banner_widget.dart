@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/amyal/controllers/amyal_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/amial/controllers/amial_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
-/// AMYAL-ZONE-001 (v0.7-D)
+/// AMIAL-ZONE-001 (v0.7-D)
 ///
 /// ZoneBannerWidget — يعرض banner أعلى الشاشة لو المستخدم في read-only mode
 /// (خارج SOUTH).
@@ -32,7 +32,7 @@ class ZoneBannerWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final ctrl = Get.find<AmyalController>();
+      final ctrl = Get.find<AmialController>();
       final policy = ctrl.sessionPolicy.value;
 
       // لا banner لو لا policy بعد أو المستخدم يقدر يعامل
@@ -47,9 +47,9 @@ class ZoneBannerWidget extends StatelessWidget {
         margin: margin,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: AmyalColors.yellow.withValues(alpha: 0.95),
+          color: AmialColors.yellow.withValues(alpha: 0.95),
           border: Border(
-            bottom: BorderSide(color: AmyalColors.yellowDark, width: 1),
+            bottom: BorderSide(color: AmialColors.yellowDark, width: 1),
           ),
         ),
         child: SafeArea(
@@ -61,7 +61,7 @@ class ZoneBannerWidget extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: AmyalColors.primary,
+                    color: AmialColors.primary,
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -80,7 +80,7 @@ class ZoneBannerWidget extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.bold,
-                          color: AmyalColors.primary,
+                          color: AmialColors.primary,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -88,7 +88,7 @@ class ZoneBannerWidget extends StatelessWidget {
                         message,
                         style: TextStyle(
                           fontSize: 12,
-                          color: AmyalColors.primary.withValues(alpha: 0.85),
+                          color: AmialColors.primary.withValues(alpha: 0.85),
                         ),
                       ),
                     ],

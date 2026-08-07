@@ -43,7 +43,7 @@
 <body>
 
 <h1>كشف حساب عميل</h1>
-<div class="subtitle">أميال باي — Amyal Pay</div>
+<div class="subtitle">أميال باي — Amial Pay</div>
 
 <div class="header">
     <div class="right">
@@ -147,7 +147,7 @@
 <div class="footer">
     <div>هذا الكشف صادر تلقائياً من نظام أميال باي</div>
     <div style="margin-top:4px">للتحقّق من صحة هذا المستند، تواصل مع الإدارة برقم العميل: {{ $account->id }}</div>
-    <div style="margin-top:4px; color:#FECA1E; font-weight:bold">Amyal Pay © {{ now()->year }}</div>
+    <div style="margin-top:4px; color:#FECA1E; font-weight:bold">Amial Pay © {{ now()->year }}</div>
 </div>
 
 </body>

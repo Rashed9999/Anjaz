@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/bill_pay/controllers/bill_pay_controller.dart';
-import 'package:amyal_pay/features/bill_pay/domain/models/bill_pay_models.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/common/widgets/amial_result_sheet.dart';
+import 'package:amial_pay/features/bill_pay/controllers/bill_pay_controller.dart';
+import 'package:amial_pay/features/bill_pay/domain/models/bill_pay_models.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/common/widgets/amial_result_sheet.dart';
 
 /// AMIAL-BILL-PAY-001 (v0.9-D)
 ///
 /// نموذج الدفع — يعرض المنتجات (لو fixed) أو حقل مبلغ متغير.
 class BillPayFormScreen extends StatefulWidget {
-  final AmyalBillProvider provider;
-  final AmyalBillService service;
+  final AmialBillProvider provider;
+  final AmialBillService service;
   const BillPayFormScreen({super.key, required this.provider, required this.service});
 
   @override
@@ -22,7 +22,7 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _subscriberCtrl = TextEditingController();
   final _amountCtrl = TextEditingController();
-  AmyalBillProduct? _selectedProduct;
+  AmialBillProduct? _selectedProduct;
 
   @override
   void initState() {
@@ -50,7 +50,7 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
         ? _selectedProduct!.fixedAmount!
         : _amountCtrl.text.trim();
 
-    // AMYAL-DS-001: ورقة النتيجة الموحّدة (جارٍ الدفع → نجاح/فشل) بدل
+    // AMIAL-DS-001: ورقة النتيجة الموحّدة (جارٍ الدفع → نجاح/فشل) بدل
     // AlertDialog + SnackBar المتفرّقين.
     final done = await AmialResultSheet.run<bool>(
       context,
@@ -89,7 +89,7 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Text(widget.service.displayNameAr),
       ),
@@ -106,17 +106,17 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AmyalColors.yellow.withValues(alpha: 0.2),
+                    color: AmialColors.yellow.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline, color: AmyalColors.primary, size: 18),
+                      const Icon(Icons.info_outline, color: AmialColors.primary, size: 18),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           widget.provider.displayNameAr,
-                          style: const TextStyle(fontSize: 13, color: AmyalColors.primary),
+                          style: const TextStyle(fontSize: 13, color: AmialColors.primary),
                         ),
                       ),
                     ],
@@ -166,7 +166,7 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
                             }
                           });
                         },
-                        selectedColor: AmyalColors.primary,
+                        selectedColor: AmialColors.primary,
                         labelStyle: TextStyle(
                           color: isSelected ? Colors.white : Colors.black87,
                           fontSize: 12,
@@ -206,7 +206,7 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
                   const SizedBox(height: 8),
                   Text(
                     'الرسوم: ${AmialMoney.fmt(_selectedProduct!.feeAmount)} ر.ي',
-                    style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary),
+                    style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary),
                   ),
                 ],
 
@@ -215,7 +215,7 @@ class _BillPayFormScreenState extends State<BillPayFormScreen> {
                 ElevatedButton(
                   onPressed: ctrl.isSubmitting.value ? null : _submit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
+                    backgroundColor: AmialColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),

@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/features/withdraw/controllers/customer_withdraw_controller.dart';
-import 'package:amyal_pay/features/withdraw/screens/withdraw_history_screen.dart';
-import 'package:amyal_pay/features/withdraw/screens/withdraw_pending_screen.dart';
-import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
-import 'package:amyal_pay/features/shared/widgets/amial_numpad.dart';
-import 'package:amyal_pay/helper/amial_errors.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/common/widgets/amial_button.dart';
-import 'package:amyal_pay/common/widgets/amial_quick_amounts.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/features/withdraw/controllers/customer_withdraw_controller.dart';
+import 'package:amial_pay/features/withdraw/screens/withdraw_history_screen.dart';
+import 'package:amial_pay/features/withdraw/screens/withdraw_pending_screen.dart';
+import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
+import 'package:amial_pay/features/shared/widgets/amial_numpad.dart';
+import 'package:amial_pay/helper/amial_errors.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/common/widgets/amial_button.dart';
+import 'package:amial_pay/common/widgets/amial_quick_amounts.dart';
 
 /// AMIAL-CUSTOMER-WITHDRAW-001 — شاشة «سحب الأموال» (تصميم أميال):
 /// بطاقة الرصيد المتاح + المبلغ + مبالغ سريعة + طريقة السحب (وكيل/بنك)
@@ -91,14 +91,14 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+        SnackBar(content: Text(m), backgroundColor: AmialColors.red),
       );
 
   @override
   Widget build(BuildContext context) {
     final entered = double.tryParse(_amountCtrl.text.trim()) ?? 0;
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('سحب الأموال'),
         actions: [
@@ -119,7 +119,7 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AmyalColors.primary,
+                color: AmialColors.primary,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -166,7 +166,7 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
                     style: const TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
-                        color: AmyalColors.primary),
+                        color: AmialColors.primary),
                     decoration: const InputDecoration(
                       border: InputBorder.none,
                       hintText: '0',
@@ -190,7 +190,7 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
                             style: const TextStyle(fontWeight: FontWeight.bold)),
                         backgroundColor: Colors.white,
                         side: BorderSide(
-                            color: AmyalColors.primary.withValues(alpha: 0.3)),
+                            color: AmialColors.primary.withValues(alpha: 0.3)),
                         onPressed: () => _setQuick(a),
                       ))
                   .toList(),
@@ -242,12 +242,12 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
                 const SizedBox(height: 6),
                 // الرسوم تُحدَّد من الخادم عند التأكيد (حسب شرائح الرسوم)
                 _summaryRow('رسوم التحويل', 'تُعرض عند التأكيد',
-                    valueColor: AmyalColors.textMuted, small: true),
+                    valueColor: AmialColors.textMuted, small: true),
               ]),
             ),
             const SizedBox(height: 16),
 
-            // AMYAL-DS-001: مبالغ سريعة بضغطة (كالمراجع الاحترافية).
+            // AMIAL-DS-001: مبالغ سريعة بضغطة (كالمراجع الاحترافية).
             AmialQuickAmounts(
               values: const [1000, 2000, 5000, 10000, 20000, 50000],
               onPick: (v) {
@@ -269,14 +269,14 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AmyalColors.yellow.withValues(alpha: 0.18),
+                color: AmialColors.yellow.withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                    color: AmyalColors.yellow.withValues(alpha: 0.6)),
+                    color: AmialColors.yellow.withValues(alpha: 0.6)),
               ),
               child: Row(children: [
                 const Icon(Icons.verified_user_outlined,
-                    color: AmyalColors.yellowDark, size: 20),
+                    color: AmialColors.yellowDark, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -319,29 +319,29 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
           color: selected
-              ? AmyalColors.yellow.withValues(alpha: 0.25)
+              ? AmialColors.yellow.withValues(alpha: 0.25)
               : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: selected ? AmyalColors.yellowDark : AmyalColors.border,
+            color: selected ? AmialColors.yellowDark : AmialColors.border,
             width: selected ? 1.5 : 1,
           ),
         ),
         child: Column(children: [
           Icon(icon,
               size: 26,
-              color: comingSoon ? AmyalColors.textMuted : AmyalColors.primary),
+              color: comingSoon ? AmialColors.textMuted : AmialColors.primary),
           const SizedBox(height: 6),
           Text(label,
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: comingSoon
-                      ? AmyalColors.textMuted
-                      : AmyalColors.primary)),
+                      ? AmialColors.textMuted
+                      : AmialColors.primary)),
           if (comingSoon)
             const Text('قريباً',
-                style: TextStyle(fontSize: 10, color: AmyalColors.textMuted)),
+                style: TextStyle(fontSize: 10, color: AmialColors.textMuted)),
         ]),
       ),
     );
@@ -354,9 +354,9 @@ class _WithdrawRequestScreenState extends State<WithdrawRequestScreen> {
           style: TextStyle(
               fontSize: small ? 12 : 14,
               fontWeight: FontWeight.w600,
-              color: valueColor ?? AmyalColors.primary)),
+              color: valueColor ?? AmialColors.primary)),
       Text(label,
-          style: const TextStyle(fontSize: 13, color: AmyalColors.textSecondary)),
+          style: const TextStyle(fontSize: 13, color: AmialColors.textSecondary)),
     ]);
   }
 }

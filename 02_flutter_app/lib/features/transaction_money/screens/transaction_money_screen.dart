@@ -2,28 +2,28 @@ import 'package:country_code_picker/country_code_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
-import 'package:amyal_pay/common/models/contact_model.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/custom_asset_image_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_button_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_image_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_ink_well_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_text_field_widget.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/auth/domain/models/user_short_data_model.dart';
-import 'package:amyal_pay/features/favorite_number/screens/favorite_number_screen.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/features/transaction_money/controllers/contact_controller.dart';
-import 'package:amyal_pay/features/transaction_money/controllers/transaction_controller.dart';
-import 'package:amyal_pay/features/transaction_money/screens/transaction_balance_input_screen.dart';
-import 'package:amyal_pay/features/transaction_money/widgets/contact_list_widget.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/helper/phone_cheker_helper.dart';
-import 'package:amyal_pay/helper/transaction_type.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/common/models/contact_model.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/custom_asset_image_widget.dart';
+import 'package:amial_pay/common/widgets/custom_button_widget.dart';
+import 'package:amial_pay/common/widgets/custom_image_widget.dart';
+import 'package:amial_pay/common/widgets/custom_ink_well_widget.dart';
+import 'package:amial_pay/common/widgets/custom_text_field_widget.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/auth/domain/models/user_short_data_model.dart';
+import 'package:amial_pay/features/favorite_number/screens/favorite_number_screen.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/features/transaction_money/controllers/contact_controller.dart';
+import 'package:amial_pay/features/transaction_money/controllers/transaction_controller.dart';
+import 'package:amial_pay/features/transaction_money/screens/transaction_balance_input_screen.dart';
+import 'package:amial_pay/features/transaction_money/widgets/contact_list_widget.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/helper/phone_cheker_helper.dart';
+import 'package:amial_pay/helper/transaction_type.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/util/styles.dart';
 
 import '../../camera_verification/screens/camera_screen.dart';
 
@@ -77,7 +77,7 @@ class _TransactionMoneyScreenState extends State<TransactionMoneyScreen> {
 
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.transactionType!.tr), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
+      appBar: AppBar(title: Text(widget.transactionType!.tr), backgroundColor: AmialColors.primary, foregroundColor: Colors.white, elevation: 0),
 
       body: GetBuilder<ContactController>(builder: (contactController) => Column(children: [
         Expanded(child: ModalProgressHUD(

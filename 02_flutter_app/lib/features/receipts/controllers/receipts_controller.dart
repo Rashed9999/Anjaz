@@ -1,15 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/receipts/domain/models/receipt_models.dart';
-import 'package:amyal_pay/features/receipts/domain/repositories/receipts_repo.dart';
+import 'package:amial_pay/features/receipts/domain/models/receipt_models.dart';
+import 'package:amial_pay/features/receipts/domain/repositories/receipts_repo.dart';
 
 /// AMIAL-RECEIPTS-001 (v0.9-D)
 class ReceiptsController extends GetxController implements GetxService {
   final ReceiptsRepo repo;
   ReceiptsController({required this.repo});
 
-  final RxList<AmyalReceipt> receipts = <AmyalReceipt>[].obs;
-  final Rx<AmyalReceipt?> selectedReceipt = Rx<AmyalReceipt?>(null);
+  final RxList<AmialReceipt> receipts = <AmialReceipt>[].obs;
+  final Rx<AmialReceipt?> selectedReceipt = Rx<AmialReceipt?>(null);
   final RxBool isLoading = false.obs;
   final RxBool isLoadingMore = false.obs;
   final RxString lastError = ''.obs;
@@ -36,7 +36,7 @@ class ReceiptsController extends GetxController implements GetxService {
         final meta = (r.body['meta'] ?? {}) as Map;
         final items = meta['items'] as List? ?? [];
         final newReceipts = items
-            .map((j) => AmyalReceipt.fromJson(Map<String, dynamic>.from(j)))
+            .map((j) => AmialReceipt.fromJson(Map<String, dynamic>.from(j)))
             .toList();
 
         receipts.addAll(newReceipts);
@@ -64,7 +64,7 @@ class ReceiptsController extends GetxController implements GetxService {
       final r = await repo.show(id);
       if (r.statusCode == 200 && r.body is Map) {
         final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
-        selectedReceipt.value = AmyalReceipt.fromJson(meta);
+        selectedReceipt.value = AmialReceipt.fromJson(meta);
         lastError.value = '';
       } else {
         lastError.value = _msg(r) ?? 'Failed to load';

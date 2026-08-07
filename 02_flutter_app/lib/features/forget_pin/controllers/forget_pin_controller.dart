@@ -1,11 +1,11 @@
 import 'package:phone_numbers_parser/phone_numbers_parser.dart';
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/auth/domain/models/user_short_data_model.dart';
-import 'package:amyal_pay/features/forget_pin/domain/reposotories/forget_pin_repo.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/auth/domain/models/user_short_data_model.dart';
+import 'package:amial_pay/features/forget_pin/domain/reposotories/forget_pin_repo.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/helper/route_helper.dart';
+import 'package:amial_pay/helper/route_helper.dart';
 
 class ForgetPinController extends GetxController implements GetxService{
   final ForgetPinRepo forgetPinRepo;

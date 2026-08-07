@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/helper/custom_extension_helper.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/helper/custom_extension_helper.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 import 'custom_button_widget.dart';
 
@@ -82,7 +82,7 @@ class CustomDialogWidget extends StatelessWidget {
                 visible: isSingleButton,
                 child:  Padding(
                   padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeLarge),
-                  child: CustomButtonWidget(buttonText: 'ok'.tr , onTap: () => Navigator.pop(context), color: AmyalColors.primary),
+                  child: CustomButtonWidget(buttonText: 'ok'.tr , onTap: () => Navigator.pop(context), color: AmialColors.primary),
                 ),
               ),
 

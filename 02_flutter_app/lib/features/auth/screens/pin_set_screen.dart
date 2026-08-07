@@ -1,18 +1,18 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/custom_large_widget.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/camera_verification/controllers/camera_screen_controller.dart';
-import 'package:amyal_pay/features/auth/controllers/create_account_controller.dart';
-import 'package:amyal_pay/features/setting/controllers/edit_profile_controller.dart';
-import 'package:amyal_pay/features/verification/controllers/verification_controller.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/common/models/signup_body_model.dart';
-import 'package:amyal_pay/helper/phone_cheker_helper.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/features/auth/widgets/pin_field_widget.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/custom_large_widget.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/camera_verification/controllers/camera_screen_controller.dart';
+import 'package:amial_pay/features/auth/controllers/create_account_controller.dart';
+import 'package:amial_pay/features/setting/controllers/edit_profile_controller.dart';
+import 'package:amial_pay/features/verification/controllers/verification_controller.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/common/models/signup_body_model.dart';
+import 'package:amial_pay/helper/phone_cheker_helper.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/features/auth/widgets/pin_field_widget.dart';
 
 class PinSetScreen extends StatefulWidget {
   final SignUpBodyModel signUpBody;
@@ -30,7 +30,7 @@ class _PinSetScreenState extends State<PinSetScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("setup_pin".tr), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
+      appBar: AppBar(title: Text("setup_pin".tr), backgroundColor: AmialColors.primary, foregroundColor: Colors.white, elevation: 0),
       body: SafeArea(child: Column(children: [
 
         Expanded(child: SingleChildScrollView(

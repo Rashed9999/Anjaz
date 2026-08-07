@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
-import 'package:amyal_pay/features/amyal/domain/models/amyal_models.dart';
-import 'package:amyal_pay/features/amyal/domain/repositories/amyal_repo.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/amial/domain/models/amial_models.dart';
+import 'package:amial_pay/features/amial/domain/repositories/amial_repo.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
-/// AMYAL-RECOVERY-001 (v0.7-D)
+/// AMIAL-RECOVERY-001 (v0.7-D)
 ///
 /// AccountRecoveryScreen — wizard 3 خطوات لـ self-service phone change:
 ///   Step 1: إدخال الرقم الجديد
@@ -32,7 +32,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
   int _step = 0; // 0..2
   bool _loading = false;
   String? _error;
-  AmyalRecoveryRequest? _request;
+  AmialRecoveryRequest? _request;
 
   @override
   void dispose() {
@@ -50,12 +50,12 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
       _error = null;
     });
     try {
-      final r = await Get.find<AmyalRepo>().initiateSelfRecovery(
+      final r = await Get.find<AmialRepo>().initiateSelfRecovery(
         newPhone: _phoneCtrl.text.trim(),
       );
       if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
         setState(() {
-          _request = AmyalRecoveryRequest.fromJson(
+          _request = AmialRecoveryRequest.fromJson(
             (r.body['meta'] ?? {}) as Map<String, dynamic>,
           );
           _step = 1;
@@ -80,7 +80,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
       _error = null;
     });
     try {
-      final r = await Get.find<AmyalRepo>().verifyRecoveryOtp(
+      final r = await Get.find<AmialRepo>().verifyRecoveryOtp(
         ulid: _request!.requestUlid,
         otpOld: _otpOldCtrl.text,
         otpNew: _otpNewCtrl.text,
@@ -108,7 +108,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
       _error = null;
     });
     try {
-      final r = await Get.find<AmyalRepo>().completeRecovery(
+      final r = await Get.find<AmialRepo>().completeRecovery(
         ulid: _request!.requestUlid,
         pin: _pinCtrl.text,
       );
@@ -132,11 +132,11 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
       builder: (_) => AlertDialog(
         backgroundColor: Colors.white,
         icon: const Icon(Icons.check_circle,
-            color: AmyalColors.primary, size: 56),
+            color: AmialColors.primary, size: 56),
         title: const Text(
           'تم قبول طلبك',
           textAlign: TextAlign.center,
-          style: TextStyle(color: AmyalColors.primary),
+          style: TextStyle(color: AmialColors.primary),
         ),
         content: const Text(
           'سيتم تطبيق التغيير بعد 24 ساعة من المراجعة الأمنية. '
@@ -159,7 +159,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('استرداد الحساب'),
       ),
@@ -175,16 +175,16 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AmyalColors.red.withValues(alpha: 0.1),
-                  border: Border.all(color: AmyalColors.red),
+                  color: AmialColors.red.withValues(alpha: 0.1),
+                  border: Border.all(color: AmialColors.red),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.warning_amber, color: AmyalColors.red),
+                    const Icon(Icons.warning_amber, color: AmialColors.red),
                     const SizedBox(width: 8),
                     Expanded(child: Text(_error!,
-                        style: const TextStyle(color: AmyalColors.red))),
+                        style: const TextStyle(color: AmialColors.red))),
                   ],
                 ),
               ),
@@ -206,7 +206,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: active ? AmyalColors.primary : AmyalColors.border,
+                  color: active ? AmialColors.primary : AmialColors.border,
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -222,7 +222,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
                 ['الرقم الجديد', 'OTP', 'تأكيد PIN'][i],
                 style: TextStyle(
                   fontSize: 11,
-                  color: active ? AmyalColors.primary : AmyalColors.textMuted,
+                  color: active ? AmialColors.primary : AmialColors.textMuted,
                   fontWeight: active ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
@@ -259,7 +259,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
           const SizedBox(height: 8),
           const Text(
             'سنرسل رمز تحقق إلى رقمك القديم والجديد. تحتاج كلا الرمزين لإكمال العملية.',
-            style: TextStyle(color: AmyalColors.textSecondary),
+            style: TextStyle(color: AmialColors.textSecondary),
           ),
           const SizedBox(height: 24),
           TextFormField(
@@ -351,7 +351,7 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
         const SizedBox(height: 8),
         const Text(
           'أدخل رمز PIN الخاص بحسابك لإتمام العملية.',
-          style: TextStyle(color: AmyalColors.textSecondary),
+          style: TextStyle(color: AmialColors.textSecondary),
         ),
         const SizedBox(height: 24),
         PinCodeTextField(
@@ -383,16 +383,16 @@ class _AccountRecoveryScreenState extends State<AccountRecoveryScreen> {
         borderRadius: BorderRadius.circular(8),
         fieldHeight: 48,
         fieldWidth: 40,
-        activeColor: AmyalColors.primary,
-        selectedColor: AmyalColors.primary,
-        inactiveColor: AmyalColors.border,
+        activeColor: AmialColors.primary,
+        selectedColor: AmialColors.primary,
+        inactiveColor: AmialColors.border,
         activeFillColor: Colors.white,
         selectedFillColor: Colors.white,
         inactiveFillColor: Colors.white,
       );
 
   ButtonStyle _buttonStyle() => ElevatedButton.styleFrom(
-        backgroundColor: AmyalColors.primary,
+        backgroundColor: AmialColors.primary,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(vertical: 14),
         shape:

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// AMIAL-UNIFY-UI-001 — «الدعم» بهوية أميال (كانت شاشة 6cash بأنماط قديمة).
@@ -15,7 +15,7 @@ class SupportScreen extends StatelessWidget {
     final email = cfg?.companyEmail;
 
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Text('24_support'.tr),
       ),
@@ -28,11 +28,11 @@ class SupportScreen extends StatelessWidget {
               width: 96,
               height: 96,
               decoration: BoxDecoration(
-                color: AmyalColors.primary.withValues(alpha: 0.08),
+                color: AmialColors.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.headset_mic_rounded,
-                  size: 46, color: AmyalColors.primary),
+                  size: 46, color: AmialColors.primary),
             ),
           ),
           const SizedBox(height: 18),
@@ -46,7 +46,7 @@ class SupportScreen extends StatelessWidget {
           Text('feel_free_to_contact'.tr,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                  fontSize: 14, color: AmyalColors.textSecondary)),
+                  fontSize: 14, color: AmialColors.textSecondary)),
           const SizedBox(height: 28),
           if (phone != null && phone.isNotEmpty)
             _contactCard(
@@ -76,7 +76,7 @@ class SupportScreen extends StatelessWidget {
               ),
               child: Text('feel_free_to_contact'.tr,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: AmyalColors.textSecondary)),
+                  style: const TextStyle(color: AmialColors.textSecondary)),
             ),
         ],
       ),
@@ -96,10 +96,10 @@ class SupportScreen extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: filled ? AmyalColors.primary : Colors.white,
+          color: filled ? AmialColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-              color: filled ? AmyalColors.primary : AmyalColors.border),
+              color: filled ? AmialColors.primary : AmialColors.border),
           boxShadow: [
             BoxShadow(
                 color: Colors.black.withValues(alpha: 0.04),
@@ -114,11 +114,11 @@ class SupportScreen extends StatelessWidget {
             decoration: BoxDecoration(
               color: filled
                   ? Colors.white.withValues(alpha: 0.18)
-                  : AmyalColors.primary.withValues(alpha: 0.08),
+                  : AmialColors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon,
-                color: filled ? Colors.white : AmyalColors.primary),
+                color: filled ? Colors.white : AmialColors.primary),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -132,11 +132,11 @@ class SupportScreen extends StatelessWidget {
                   textDirection: TextDirection.ltr,
                   style: TextStyle(
                       fontSize: 12,
-                      color: filled ? Colors.white70 : AmyalColors.textSecondary)),
+                      color: filled ? Colors.white70 : AmialColors.textSecondary)),
             ]),
           ),
           Icon(Icons.chevron_left_rounded,
-              color: filled ? Colors.white70 : AmyalColors.textMuted),
+              color: filled ? Colors.white70 : AmialColors.textMuted),
         ]),
       ),
     );

@@ -1,6 +1,6 @@
-import 'package:amyal_pay/features/setting/controllers/edit_profile_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
+import 'package:amial_pay/features/setting/controllers/edit_profile_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/images.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 

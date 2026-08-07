@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_refund_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_refund_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-CASHIER-001 — تقرير المبيعات اليومي.
 class CashierReportScreen extends StatefulWidget {
@@ -50,12 +50,12 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
     final fullyRefunded = s['fully_refunded'] == true;
     final refunded = double.tryParse((s['refunded_total'] ?? '0').toString()) ?? 0;
     return Card(
-      color: AmyalColors.cardSurface,
+      color: AmialColors.cardSurface,
       child: ListTile(
         dense: true,
         leading: Icon(
           fullyRefunded ? Icons.replay_circle_filled : Icons.receipt_long_outlined,
-          color: fullyRefunded ? AmyalColors.red : AmyalColors.primary,
+          color: fullyRefunded ? AmialColors.red : AmialColors.primary,
         ),
         title: Text('${_n(s['total_amount'])} ر.ي — ${_methodLabel(s['payment_method']?.toString())}',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
@@ -65,16 +65,16 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
             if ((s['customer_name'] ?? '').toString().isNotEmpty) s['customer_name'].toString(),
             if (refunded > 0) 'مسترجَع: ${_n(s['refunded_total'])} ر.ي',
           ].join(' · '),
-          style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary),
+          style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary),
         ),
         trailing: fullyRefunded
             ? const Text('مسترجَع كاملاً',
-                style: TextStyle(fontSize: 11, color: AmyalColors.red))
+                style: TextStyle(fontSize: 11, color: AmialColors.red))
             : TextButton.icon(
                 onPressed: () => _openRefund((s['sale_ulid'] ?? '').toString()),
                 icon: const Icon(Icons.replay_rounded, size: 16),
                 label: const Text('استرجاع', style: TextStyle(fontSize: 12)),
-                style: TextButton.styleFrom(foregroundColor: AmyalColors.red),
+                style: TextButton.styleFrom(foregroundColor: AmialColors.red),
               ),
       ),
     );
@@ -86,14 +86,14 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
         margin: const EdgeInsets.all(4),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AmyalColors.cardSurface,
+          color: AmialColors.cardSurface,
           borderRadius: BorderRadius.circular(8),
           border: Border(bottom: BorderSide(color: color, width: 3)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+            Text(label, style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
             const SizedBox(height: 6),
             Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
           ],
@@ -128,19 +128,19 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
         const Spacer(),
         if (peak != null && maxT > 0)
           Text('الذروة: ${_hourLabel(peak)} • ${_n(r['peak_hour_total'])} ر.ي',
-              style: const TextStyle(fontSize: 12, color: AmyalColors.yellowDark, fontWeight: FontWeight.bold)),
+              style: const TextStyle(fontSize: 12, color: AmialColors.yellowDark, fontWeight: FontWeight.bold)),
       ]),
       const SizedBox(height: 10),
       if (maxT <= 0)
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 8),
-          child: Text('لا مبيعات اليوم بعد', style: TextStyle(color: AmyalColors.textSecondary, fontSize: 13)),
+          child: Text('لا مبيعات اليوم بعد', style: TextStyle(color: AmialColors.textSecondary, fontSize: 13)),
         )
       else ...[
         // مخطط أعمدة لكل 24 ساعة
         Container(
           padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: AmyalColors.cardSurface, borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(color: AmialColors.cardSurface, borderRadius: BorderRadius.circular(10)),
           child: SizedBox(
             height: 92,
             child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: byHour.map((h) {
@@ -155,13 +155,13 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
                     Container(
                       height: (t > 0 && barH < 3) ? 3 : barH,
                       decoration: BoxDecoration(
-                        color: isPeak ? AmyalColors.yellowDark : AmyalColors.primary.withValues(alpha: t > 0 ? 0.85 : 0.0),
+                        color: isPeak ? AmialColors.yellowDark : AmialColors.primary.withValues(alpha: t > 0 ? 0.85 : 0.0),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                     const SizedBox(height: 3),
                     if (hh % 6 == 0)
-                      Text('$hh', style: const TextStyle(fontSize: 8, color: AmyalColors.textMuted)),
+                      Text('$hh', style: const TextStyle(fontSize: 8, color: AmialColors.textMuted)),
                   ]),
                 ),
               );
@@ -181,16 +181,16 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
                     child: LinearProgressIndicator(
                       value: maxT > 0 ? amt(h) / maxT : 0,
                       minHeight: 8,
-                      backgroundColor: AmyalColors.border,
+                      backgroundColor: AmialColors.border,
                       valueColor: AlwaysStoppedAnimation(
-                          (peak == h['hour']) ? AmyalColors.yellowDark : AmyalColors.primary),
+                          (peak == h['hour']) ? AmialColors.yellowDark : AmialColors.primary),
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text('${_n(h['total'])} ر.ي', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                 const SizedBox(width: 6),
-                Text('(${h['count']})', style: const TextStyle(fontSize: 11, color: AmyalColors.textSecondary)),
+                Text('(${h['count']})', style: const TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
               ]),
             )),
       ],
@@ -200,7 +200,7 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تقرير اليوم'),
       ),
@@ -223,29 +223,29 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
           return ListView(
             padding: const EdgeInsets.all(12),
             children: [
-              Text('تاريخ: ${r['date'] ?? ''}', style: const TextStyle(color: AmyalColors.textSecondary)),
+              Text('تاريخ: ${r['date'] ?? ''}', style: const TextStyle(color: AmialColors.textSecondary)),
               const SizedBox(height: 8),
               Row(children: [
-                _card('الإيراد الفعلي', '${_n(r['realized_revenue'])} ر.ي', AmyalColors.primary),
-                _card('عدد المبيعات', '${r['sales_count'] ?? 0}', AmyalColors.yellowDark),
+                _card('الإيراد الفعلي', '${_n(r['realized_revenue'])} ر.ي', AmialColors.primary),
+                _card('عدد المبيعات', '${r['sales_count'] ?? 0}', AmialColors.yellowDark),
               ]),
               Row(children: [
                 _card('نقد', '${_n(byMethod['cash'])} ر.ي', Colors.green),
-                _card('أميال باي', '${_n(byMethod['amial_pay'])} ر.ي', AmyalColors.primary),
+                _card('أميال باي', '${_n(byMethod['amial_pay'])} ر.ي', AmialColors.primary),
               ]),
               Row(children: [
-                _card('أجل اليوم', '${_n(byMethod['credit'])} ر.ي', AmyalColors.textSecondary),
-                _card('إجمالي الأجل المستحق', '${_n(r['outstanding_credit_total'])} ر.ي', AmyalColors.red),
+                _card('أجل اليوم', '${_n(byMethod['credit'])} ر.ي', AmialColors.textSecondary),
+                _card('إجمالي الأجل المستحق', '${_n(r['outstanding_credit_total'])} ر.ي', AmialColors.red),
               ]),
               const SizedBox(height: 16),
               if (top.isNotEmpty) ...[
                 const Text('الأكثر مبيعاً', style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 ...top.map((p) => Card(
-                      color: AmyalColors.cardSurface,
+                      color: AmialColors.cardSurface,
                       child: ListTile(
                         dense: true,
-                        leading: const Icon(Icons.star_outline, color: AmyalColors.yellowDark),
+                        leading: const Icon(Icons.star_outline, color: AmialColors.yellowDark),
                         title: Text((p['name'] ?? '').toString()),
                         trailing: Text('×${p['qty'] ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold)),
                       ),
@@ -271,7 +271,7 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
                   child: Text('لا مبيعات مسجّلة لهذا اليوم',
-                      style: TextStyle(color: AmyalColors.textSecondary, fontSize: 13)),
+                      style: TextStyle(color: AmialColors.textSecondary, fontSize: 13)),
                 )
               else
                 ...c.sales.map(_saleRow),

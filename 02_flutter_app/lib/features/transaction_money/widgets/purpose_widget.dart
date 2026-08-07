@@ -3,16 +3,16 @@ import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_instance/src/extension_instance.dart';
 import 'package:get/get_state_manager/src/simple/get_state.dart';
 import 'package:get/get_utils/src/extensions/internacionalization.dart';
-import 'package:amyal_pay/common/widgets/custom_image_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_ink_well_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_loader_widget.dart';
-import 'package:amyal_pay/features/language/controllers/localization_controller.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/features/transaction_money/controllers/transaction_controller.dart';
-import 'package:amyal_pay/features/transaction_money/domain/models/hex_color_model.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_image_widget.dart';
+import 'package:amial_pay/common/widgets/custom_ink_well_widget.dart';
+import 'package:amial_pay/common/widgets/custom_loader_widget.dart';
+import 'package:amial_pay/features/language/controllers/localization_controller.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/features/transaction_money/controllers/transaction_controller.dart';
+import 'package:amial_pay/features/transaction_money/domain/models/hex_color_model.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/util/styles.dart';
 
 class PurposeWidget extends StatelessWidget {
   const PurposeWidget({

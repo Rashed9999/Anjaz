@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:amyal_pay/common/enums/dispute_time_type_enum.dart';
+import 'package:amial_pay/common/enums/dispute_time_type_enum.dart';
 
 ConfigModel configModelFromJson(String str) => ConfigModel.fromJson(json.decode(str));
 

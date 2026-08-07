@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/amial_money.dart';
 
-/// AMYAL-DS-001 — شريحة «مبلغ سريع» موحّدة (كما في المراجع الاحترافية).
+/// AMIAL-DS-001 — شريحة «مبلغ سريع» موحّدة (كما في المراجع الاحترافية).
 ///
 /// تُستخدم أعلى/أسفل حقل المبلغ في كل الشاشات المالية ليملأ المستخدم
 /// المبلغ بضغطة واحدة بدل الكتابة.
@@ -38,15 +38,15 @@ class AmialQuickAmounts extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: AmyalColors.primary.withValues(alpha: 0.06),
+            color: AmialColors.primary.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(10),
             border:
-                Border.all(color: AmyalColors.primary.withValues(alpha: 0.18)),
+                Border.all(color: AmialColors.primary.withValues(alpha: 0.18)),
           ),
           child: Text(
             AmialMoney.fmt(v),
             style: const TextStyle(
-              color: AmyalColors.primary,
+              color: AmialColors.primary,
               fontWeight: FontWeight.w600,
               fontSize: 13,
             ),

@@ -1,5 +1,5 @@
 /// AMIAL-RECEIPTS-001 (v0.9-D Flutter)
-class AmyalReceipt {
+class AmialReceipt {
   final int id;
   final String receiptNumber;
   /// AMIAL-TXN-NO-001: رقم العملية الرسمي (15 خانة) من الخادم — لا يُلفَّق محلياً.
@@ -23,7 +23,7 @@ class AmyalReceipt {
   final DateTime? issuedAt;
   final DateTime? pdfGeneratedAt;
 
-  AmyalReceipt({
+  AmialReceipt({
     required this.id,
     required this.receiptNumber,
     this.transactionNo,
@@ -47,8 +47,8 @@ class AmyalReceipt {
     this.pdfGeneratedAt,
   });
 
-  factory AmyalReceipt.fromJson(Map<String, dynamic> json) {
-    return AmyalReceipt(
+  factory AmialReceipt.fromJson(Map<String, dynamic> json) {
+    return AmialReceipt(
       id: json['id'] ?? 0,
       receiptNumber: json['receipt_number'] ?? '',
       transactionNo: json['transaction_no']?.toString(),

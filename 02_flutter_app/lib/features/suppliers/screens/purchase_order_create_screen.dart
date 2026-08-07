@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
-import 'package:amyal_pay/features/suppliers/controllers/suppliers_controller.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/features/suppliers/controllers/suppliers_controller.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SUPPLIERS-004 — إنشاء أمر شراء:
 /// اختيار المورد → إضافة بنود (من منتجات المخزون أو حرّة) بكمية وتكلفة
@@ -80,7 +80,7 @@ class _PurchaseOrderCreateScreenState
               shrinkWrap: true,
               itemCount: cash.products.length,
               separatorBuilder: (_, _) =>
-                  const Divider(height: 1, color: AmyalColors.border),
+                  const Divider(height: 1, color: AmialColors.border),
               itemBuilder: (_, i) {
                 final p = cash.products[i];
                 return ListTile(
@@ -180,13 +180,13 @@ class _PurchaseOrderCreateScreenState
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+        SnackBar(content: Text(m), backgroundColor: AmialColors.red),
       );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('أمر شراء جديد'),
       ),
@@ -206,7 +206,7 @@ class _PurchaseOrderCreateScreenState
                     : const Icon(Icons.save_outlined, size: 18),
                 label: Text('حفظ الأمر (${AmialMoney.yer(_total)})'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AmyalColors.primary,
+                  backgroundColor: AmialColors.primary,
                   minimumSize: const Size.fromHeight(52),
                 ),
               ),
@@ -279,7 +279,7 @@ class _PurchaseOrderCreateScreenState
                 child: const Center(
                     child: Text('أضف بنوداً من المخزون أو بنوداً حرّة',
                         style: TextStyle(
-                            fontSize: 12, color: AmyalColors.textMuted))),
+                            fontSize: 12, color: AmialColors.textMuted))),
               )
             else
               ..._lines.asMap().entries.map((e) => _lineCard(e.key, e.value)),
@@ -321,7 +321,7 @@ class _PurchaseOrderCreateScreenState
             IconButton(
               visualDensity: VisualDensity.compact,
               icon: const Icon(Icons.delete_outline,
-                  size: 18, color: AmyalColors.red),
+                  size: 18, color: AmialColors.red),
               onPressed: () => setState(() => _lines.removeAt(index)),
             ),
             const Spacer(),
@@ -392,7 +392,7 @@ class _PurchaseOrderCreateScreenState
                 style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
-                    color: AmyalColors.primary)),
+                    color: AmialColors.primary)),
           ]),
         ]),
       ),

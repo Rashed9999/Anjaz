@@ -9,14 +9,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:amyal_pay/features/access/controllers/access_controller.dart';
-import 'package:amyal_pay/features/access/domain/repositories/access_repo.dart';
-import 'package:amyal_pay/features/access/screens/role_based_home_screens.dart';
-import 'package:amyal_pay/features/merchant/controllers/merchant_controller.dart';
-import 'package:amyal_pay/features/merchant/domain/repositories/merchant_repo.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_dashboard_screen.dart';
-import 'package:amyal_pay/features/access/screens/web_portal_notice_screen.dart';
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/access/domain/repositories/access_repo.dart';
+import 'package:amial_pay/features/access/screens/role_based_home_screens.dart';
+import 'package:amial_pay/features/merchant/controllers/merchant_controller.dart';
+import 'package:amial_pay/features/merchant/domain/repositories/merchant_repo.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_dashboard_screen.dart';
+import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
 class _MockAccessRepo extends Mock implements AccessRepo {}
 class _MockMerchantRepo extends Mock implements MerchantRepo {}

@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Schema;
  *
  * حسابات تجريبية للأدمن والوكيل (لتجربة لوحة الإدارة وشاشات الوكيل):
  *
- *   الأدمن  — تبويب «أدمن»: admin@amyalpay.com / Pass@2026  (بلا 2FA)
+ *   الأدمن  — تبويب «أدمن»: admin@amialpay.com / Pass@2026  (بلا 2FA)
  *   الوكيل  — تبويب «وكيل»: رقم الوكيل AG-001 / الجوال 777900001 / Pass@2026
  *             رمز OTP التجريبي = قيمة AMIAL_DEMO_OTP (مثلاً 123456)
  *
@@ -45,7 +45,7 @@ class EnsureDemoStaff extends Command
      * أوّلُ إقلاعٍ على قاعدةٍ جديدة، وأكثرُ الأوقات إنتاجاً لحساباتٍ بلا
      * دور — يُؤخذ الفرعُ الآخر ولا تعمل الشبكة إطلاقاً.
      *
-     * والقياس: `admin@amyal.pay` من `DemoDataSeeder` بقي **بلا دور** بعد
+     * والقياس: `admin@amial.pay` من `DemoDataSeeder` بقي **بلا دور** بعد
      * تشغيل الأمر كاملاً — يدخل اللوحة ويُردّ ٤٠٣ على واحدٍ وأربعين
      * مساراً، ولا يقرأ رقماً ماليّاً واحداً.
      *
@@ -68,7 +68,7 @@ class EnsureDemoStaff extends Command
     private function ensureAdmin(): void
     {
         try {
-            $email = 'admin@amyalpay.com';
+            $email = 'admin@amialpay.com';
             $admin = User::where('type', ADMIN_TYPE)->where('email', $email)->first();
             if ($admin) {
                 // AMIAL-FIX(ADMIN-LOGIN): «ضمان» يعني بيانات دخول معلومة دوماً.

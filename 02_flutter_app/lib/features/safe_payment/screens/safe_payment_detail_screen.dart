@@ -1,14 +1,14 @@
-import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/amial_money.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/safe_payment/controllers/safe_payment_controller.dart';
-import 'package:amyal_pay/features/safe_payment/domain/models/safe_payment_models.dart';
-import 'package:amyal_pay/features/safe_payment/widgets/delivery_code_card.dart';
-import 'package:amyal_pay/features/safe_payment/widgets/dispute_sheet.dart';
-import 'package:amyal_pay/features/safe_payment/widgets/evidence_gallery.dart';
-import 'package:amyal_pay/features/safe_payment/widgets/evidence_picker_sheet.dart';
-import 'package:amyal_pay/features/safe_payment/widgets/trust_card.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/safe_payment/controllers/safe_payment_controller.dart';
+import 'package:amial_pay/features/safe_payment/domain/models/safe_payment_models.dart';
+import 'package:amial_pay/features/safe_payment/widgets/delivery_code_card.dart';
+import 'package:amial_pay/features/safe_payment/widgets/dispute_sheet.dart';
+import 'package:amial_pay/features/safe_payment/widgets/evidence_gallery.dart';
+import 'package:amial_pay/features/safe_payment/widgets/evidence_picker_sheet.dart';
+import 'package:amial_pay/features/safe_payment/widgets/trust_card.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
 class SafePaymentDetailScreen extends StatefulWidget {
@@ -70,7 +70,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
               }
             },
             style: ElevatedButton.styleFrom(
-                backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+                backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
             child: const Text('تأكيد'),
           ),
         ],
@@ -97,7 +97,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-                backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+                backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
             child: const Text('تأكيد'),
           ),
         ],
@@ -109,7 +109,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(success ? 'تم بنجاح' : Get.find<SafePaymentController>().lastError.value),
-        backgroundColor: success ? Colors.green.shade700 : AmyalColors.red,
+        backgroundColor: success ? Colors.green.shade700 : AmialColors.red,
       ),
     );
   }
@@ -117,7 +117,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تفاصيل الطلب'),
       ),
@@ -125,14 +125,14 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
         final ctrl = Get.find<SafePaymentController>();
         final payment = ctrl.selectedPayment.value;
         if (ctrl.isLoading.value || payment == null) {
-          return const Center(child: CircularProgressIndicator(color: AmyalColors.primary));
+          return const Center(child: CircularProgressIndicator(color: AmialColors.primary));
         }
         final actions = ctrl.availableActions.value;
         final isBuyer = ctrl.yourRole.value == 'buyer';
 
         return RefreshIndicator(
           onRefresh: () => ctrl.loadDetail(widget.ulid),
-          color: AmyalColors.primary,
+          color: AmialColors.primary,
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -140,13 +140,13 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow.withValues(alpha: 0.2),
+                  color: AmialColors.yellow.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
                   children: [
                     Icon(payment.isDisputed ? Icons.warning : Icons.shield,
-                        color: AmyalColors.primary, size: 28),
+                        color: AmialColors.primary, size: 28),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -157,7 +157,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
                                   fontWeight: FontWeight.bold, fontSize: 16)),
                           Text(payment.arabicStatusLabel,
                               style: const TextStyle(
-                                  fontSize: 12, color: AmyalColors.primary)),
+                                  fontSize: 12, color: AmialColors.primary)),
                         ],
                       ),
                     ),
@@ -172,18 +172,18 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AmyalColors.border),
+                  border: Border.all(color: AmialColors.border),
                 ),
                 child: Column(
                   children: [
                     const Text('المبلغ',
                         style: TextStyle(
-                            fontSize: 12, color: AmyalColors.textSecondary)),
+                            fontSize: 12, color: AmialColors.textSecondary)),
                     Text(
                       AmialMoney.yer(payment.amount),
                       style: const TextStyle(
                           fontSize: 28, fontWeight: FontWeight.bold,
-                          color: AmyalColors.primary),
+                          color: AmialColors.primary),
                     ),
                     if (double.parse(payment.heldAmount) > 0) ...[
                       const SizedBox(height: 8),
@@ -191,7 +191,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AmyalColors.yellow.withValues(alpha: 0.3),
+                          color: AmialColors.yellow.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text('محجوز: '+AmialMoney.yer(payment.heldAmount),
@@ -202,7 +202,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
                       const SizedBox(height: 4),
                       Text('رسوم الخدمة: '+AmialMoney.yer(payment.platformFee),
                           style: const TextStyle(
-                              fontSize: 10, color: AmyalColors.textMuted)),
+                              fontSize: 10, color: AmialColors.textMuted)),
                     ],
                   ],
                 ),
@@ -255,7 +255,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
                     const Text('شروط التسليم:',
                         style: TextStyle(
                             fontSize: 12, fontWeight: FontWeight.w600,
-                            color: AmyalColors.textSecondary)),
+                            color: AmialColors.textSecondary)),
                     Text(payment.deliveryTerms!,
                         style: const TextStyle(fontSize: 12)),
                   ],
@@ -290,7 +290,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
   /// تأكيده أو بعد انتهاء العملية، لأن رمزاً مستهلكاً على الشاشة يوهم بأن
   /// هناك خطوة باقية.
   List<Widget> _buildDeliveryCodeBlock(
-      SafePaymentController ctrl, AmyalSafePayment payment, bool isBuyer) {
+      SafePaymentController ctrl, AmialSafePayment payment, bool isBuyer) {
     if (payment.isTerminal || ctrl.deliveryCodeVerified.value) {
       if (!ctrl.deliveryCodeVerified.value) return const [];
       return [
@@ -370,7 +370,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
   }
 
   List<Widget> _buildEvidenceBlock(
-      SafePaymentController ctrl, AmyalSafePayment payment, bool isBuyer) {
+      SafePaymentController ctrl, AmialSafePayment payment, bool isBuyer) {
     final target = _evidenceTarget(payment.status, isBuyer);
 
     return [
@@ -383,7 +383,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
           icon: const Icon(Icons.add_a_photo_outlined, size: 19),
           label: Text(target.label),
           style: OutlinedButton.styleFrom(
-            foregroundColor: AmyalColors.primary,
+            foregroundColor: AmialColors.primary,
             minimumSize: const Size(double.infinity, 46),
           ),
         ),
@@ -437,7 +437,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
     );
   }
 
-  List<Widget> _buildActions(SafePaymentController ctrl, AmyalSafePaymentActions a) {
+  List<Widget> _buildActions(SafePaymentController ctrl, AmialSafePaymentActions a) {
     final widgets = <Widget>[];
     final ulid = widget.ulid;
 
@@ -448,7 +448,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
       ));
     }
     if (a.sellerReject) {
-      widgets.add(_actionButton('رفض الطلب', Icons.cancel, AmyalColors.red, () {
+      widgets.add(_actionButton('رفض الطلب', Icons.cancel, AmialColors.red, () {
         _showReasonDialog(
           title: 'رفض الطلب',
           hint: 'سبب الرفض...',
@@ -457,7 +457,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
       }));
     }
     if (a.sellerMarkInDelivery) {
-      widgets.add(_actionButton('بدء التسليم', Icons.local_shipping, AmyalColors.primary,
+      widgets.add(_actionButton('بدء التسليم', Icons.local_shipping, AmialColors.primary,
         () => _confirmAction('تأكيد بدء التسليم', 'هل بدأت تسليم السلعة؟',
           () => ctrl.sellerMarkInDelivery(ulid)),
       ));
@@ -492,7 +492,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
       }));
     }
     if (a.buyerDispute) {
-      widgets.add(_actionButton('فتح نزاع', Icons.warning, AmyalColors.red, _openDispute));
+      widgets.add(_actionButton('فتح نزاع', Icons.warning, AmialColors.red, _openDispute));
     }
 
     if (widgets.isEmpty) {
@@ -500,7 +500,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
         padding: const EdgeInsets.all(12),
         alignment: Alignment.center,
         child: const Text('لا توجد إجراءات متاحة في هذه المرحلة',
-            style: TextStyle(color: AmyalColors.textMuted, fontSize: 12)),
+            style: TextStyle(color: AmialColors.textMuted, fontSize: 12)),
       ));
     }
 
@@ -562,7 +562,7 @@ class _StagesStrip extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AmyalColors.border),
+        border: Border.all(color: AmialColors.border),
       ),
       child: Column(children: [
         const Align(
@@ -580,7 +580,7 @@ class _StagesStrip extends StatelessWidget {
                 child: Container(
                   height: 3,
                   color: i <= current
-                      ? AmyalColors.primary
+                      ? AmialColors.primary
                       : const Color(0xFFE5E7EB),
                 ),
               ),
@@ -594,18 +594,18 @@ class _StagesStrip extends StatelessWidget {
                       ? const Color(0xFFE3EAE6)
                       : i == current
                           ? (current == 2
-                              ? AmyalColors.primary
-                              : AmyalColors.yellow)
+                              ? AmialColors.primary
+                              : AmialColors.yellow)
                           : const Color(0xFFF0F1F3),
                 ),
                 child: Icon(
                   i < current ? Icons.check : icons[i],
                   size: 20,
                   color: i < current
-                      ? AmyalColors.primary
+                      ? AmialColors.primary
                       : i == current
-                          ? (current == 2 ? Colors.white : AmyalColors.primary)
-                          : AmyalColors.textMuted,
+                          ? (current == 2 ? Colors.white : AmialColors.primary)
+                          : AmialColors.textMuted,
                 ),
               ),
               const SizedBox(height: 6),
@@ -615,8 +615,8 @@ class _StagesStrip extends StatelessWidget {
                       fontWeight:
                           i == current ? FontWeight.bold : FontWeight.normal,
                       color: i <= current
-                          ? AmyalColors.primary
-                          : AmyalColors.textMuted)),
+                          ? AmialColors.primary
+                          : AmialColors.textMuted)),
             ]),
           ],
         ]),
@@ -637,7 +637,7 @@ class _Section extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AmyalColors.border),
+        border: Border.all(color: AmialColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -648,7 +648,7 @@ class _Section extends StatelessWidget {
                 style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
-                    color: AmyalColors.textSecondary)),
+                    color: AmialColors.textSecondary)),
           ),
           ...children,
         ],
@@ -668,7 +668,7 @@ class _DetailRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          SizedBox(width: 80, child: Text(label, style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary))),
+          SizedBox(width: 80, child: Text(label, style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary))),
           Expanded(child: Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))),
         ],
       ),
@@ -677,7 +677,7 @@ class _DetailRow extends StatelessWidget {
 }
 
 class _TimelineItem extends StatelessWidget {
-  final AmyalSafePaymentEvent event;
+  final AmialSafePaymentEvent event;
   const _TimelineItem({required this.event});
 
   @override
@@ -689,7 +689,7 @@ class _TimelineItem extends StatelessWidget {
           Container(
             width: 8, height: 8,
             decoration: const BoxDecoration(
-              color: AmyalColors.primary,
+              color: AmialColors.primary,
               shape: BoxShape.circle,
             ),
           ),
@@ -702,10 +702,10 @@ class _TimelineItem extends StatelessWidget {
                     style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
                 if (event.note != null && event.note!.isNotEmpty)
                   Text(event.note!,
-                      style: const TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+                      style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
                 if (event.createdAt != null)
                   Text(_fmt(event.createdAt!),
-                      style: const TextStyle(fontSize: 10, color: AmyalColors.textMuted)),
+                      style: const TextStyle(fontSize: 10, color: AmialColors.textMuted)),
               ],
             ),
           ),

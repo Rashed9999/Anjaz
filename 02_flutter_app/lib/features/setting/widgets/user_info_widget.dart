@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_image_widget.dart';
-import 'package:amyal_pay/features/setting/widgets/profile_qr_code_bottomsheet_widget.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_image_widget.dart';
+import 'package:amial_pay/features/setting/widgets/profile_qr_code_bottomsheet_widget.dart';
 
 import 'profile_shimmer_widget.dart';
 

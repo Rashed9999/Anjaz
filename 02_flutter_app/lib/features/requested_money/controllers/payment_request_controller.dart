@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/requested_money/domain/repositories/payment_request_repo.dart';
+import 'package:amial_pay/features/requested_money/domain/repositories/payment_request_repo.dart';
 
 /// AMIAL-PAYMENT-REQUESTS-001 — Controller.
 class PaymentRequestController extends GetxController implements GetxService {

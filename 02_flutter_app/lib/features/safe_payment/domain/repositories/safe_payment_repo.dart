@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/data/api/idempotency_key_generator.dart';
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/data/api/idempotency_key_generator.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
 class SafePaymentRepo extends GetxService {
@@ -13,11 +13,11 @@ class SafePaymentRepo extends GetxService {
   Future<Response> list({String role = 'all', String? status, int page = 1}) async {
     final query = StringBuffer('?role=$role&page=$page');
     if (status != null) query.write('&status=$status');
-    return apiClient.getData('${AppConstants.amyalSafePayments}$query');
+    return apiClient.getData('${AppConstants.amialSafePayments}$query');
   }
 
   Future<Response> show(String ulid) async {
-    return apiClient.getData('${AppConstants.amyalSafePayments}/$ulid');
+    return apiClient.getData('${AppConstants.amialSafePayments}/$ulid');
   }
 
   Future<Response> create({
@@ -29,7 +29,7 @@ class SafePaymentRepo extends GetxService {
     List<String>? attachments,
   }) async {
     return apiClient.postData(
-      AppConstants.amyalSafePayments,
+      AppConstants.amialSafePayments,
       {
         'seller_phone': sellerPhone,
         'title': title,
@@ -78,10 +78,10 @@ class SafePaymentRepo extends GetxService {
 
   /// أسباب النزاع من الخادم — إضافة سبب لا تستحقّ إصدار تطبيق.
   Future<Response> disputeReasons() =>
-      apiClient.getData('${AppConstants.amyalSafePayments}/dispute-reasons');
+      apiClient.getData('${AppConstants.amialSafePayments}/dispute-reasons');
 
   Future<Response> evidence(String ulid) =>
-      apiClient.getData('${AppConstants.amyalSafePayments}/$ulid/evidence');
+      apiClient.getData('${AppConstants.amialSafePayments}/$ulid/evidence');
 
   /// رفع أدلّة حقيقية (ملفات) — البائع للشحن والتسليم، والمشتري للنزاع.
   Future<Response> uploadEvidence({
@@ -91,7 +91,7 @@ class SafePaymentRepo extends GetxService {
     String? note,
   }) {
     return apiClient.postMultipartData(
-      '${AppConstants.amyalSafePayments}/$ulid/evidence',
+      '${AppConstants.amialSafePayments}/$ulid/evidence',
       {'stage': stage, 'note': ?note},
       // الخادم يقرأ files[] — المفتاح نفسه لكل ملفّ.
       files.map((f) => MultipartBody('files[]', f)).toList(),
@@ -104,7 +104,7 @@ class SafePaymentRepo extends GetxService {
 
   Future<Response> _action(String ulid, String path, Map<String, dynamic> body, String idemPrefix) {
     return apiClient.postData(
-      '${AppConstants.amyalSafePayments}/$ulid/$path',
+      '${AppConstants.amialSafePayments}/$ulid/$path',
       body,
       idempotencyKey: IdempotencyKeyGenerator.forFinancialAction(idemPrefix),
     );

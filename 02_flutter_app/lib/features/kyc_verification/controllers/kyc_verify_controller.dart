@@ -2,10 +2,10 @@ import 'dart:io';
 
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/features/kyc_verification/domain/reposotories/kyc_verify_repo.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/helper/file_validation_helper.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/features/kyc_verification/domain/reposotories/kyc_verify_repo.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/helper/file_validation_helper.dart';
 import '../../../data/api/api_client.dart';
 
 class KycVerifyController extends GetxController implements GetxService{

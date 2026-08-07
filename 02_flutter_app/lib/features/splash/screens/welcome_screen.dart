@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/auth/domain/models/user_short_data_model.dart';
-import 'package:amyal_pay/helper/route_helper.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/custom_logo_widget.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/auth/domain/models/user_short_data_model.dart';
+import 'package:amial_pay/helper/route_helper.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/custom_logo_widget.dart';
 
 /// AMIAL-UNIFY-UI-001 — «مرحباً» بهوية أميال (كانت شاشة 6cash بأنماط قديمة).
 class WelcomeScreen extends StatefulWidget {
@@ -34,7 +34,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.primary,
+      backgroundColor: AmialColors.primary,
       body: SafeArea(
         child: Center(
           child: Column(
@@ -70,7 +70,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               const SizedBox(height: 40),
               const SizedBox(
                 width: 26, height: 26,
-                child: CircularProgressIndicator(color: AmyalColors.yellow, strokeWidth: 2.5),
+                child: CircularProgressIndicator(color: AmialColors.yellow, strokeWidth: 2.5),
               ),
             ],
           ),

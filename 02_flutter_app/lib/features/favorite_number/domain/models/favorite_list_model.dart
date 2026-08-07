@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:amyal_pay/features/favorite_number/domain/enums/fav_type.dart';
+import 'package:amial_pay/features/favorite_number/domain/enums/fav_type.dart';
 
 FavouriteListModel favouriteListModelFromJson(String str) => FavouriteListModel.fromJson(json.decode(str));
 

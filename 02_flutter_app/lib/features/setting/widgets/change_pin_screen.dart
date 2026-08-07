@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/features/shared/widgets/amial_numpad.dart';
-import 'package:amyal_pay/features/shared/widgets/amial_pin_dots.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/util/secure_screen.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/features/shared/widgets/amial_numpad.dart';
+import 'package:amial_pay/features/shared/widgets/amial_pin_dots.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/secure_screen.dart';
 
 /// AMIAL-PIN-UI-002 — تغيير رمز المعاملات.
 ///
@@ -138,7 +138,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
   Widget build(BuildContext context) {
     return GetBuilder<ProfileController>(builder: (controller) {
       return Scaffold(
-        backgroundColor: AmyalColors.background,
+        backgroundColor: AmialColors.background,
         body: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -149,7 +149,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                   alignment: Alignment.centerLeft,
                   child: IconButton(
                     icon: const Icon(Icons.arrow_back_rounded,
-                        color: AmyalColors.textSecondary),
+                        color: AmialColors.textSecondary),
                     onPressed: controller.isLoading ? null : _back,
                   ),
                 ),
@@ -165,8 +165,8 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 3),
                       decoration: BoxDecoration(
                         color: done
-                            ? AmyalColors.primary
-                            : AmyalColors.primary.withValues(alpha: 0.18),
+                            ? AmialColors.primary
+                            : AmialColors.primary.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     );
@@ -179,11 +179,11 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                   width: 76,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AmyalColors.primary.withValues(alpha: 0.1),
+                    color: AmialColors.primary.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(Icons.password_rounded,
-                      color: AmyalColors.primary, size: 34),
+                      color: AmialColors.primary, size: 34),
                 ),
                 const SizedBox(height: 16),
 
@@ -192,13 +192,13 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                     style: const TextStyle(
                         fontSize: 19,
                         fontWeight: FontWeight.bold,
-                        color: AmyalColors.textPrimary)),
+                        color: AmialColors.textPrimary)),
                 const SizedBox(height: 6),
                 Text(_hint,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                         fontSize: 13, height: 1.6,
-                        color: AmyalColors.textSecondary)),
+                        color: AmialColors.textSecondary)),
                 const SizedBox(height: 26),
 
                 AmialPinDots(controller: _active, error: _error.isNotEmpty),
@@ -211,7 +211,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                           child: SizedBox(
                             width: 20, height: 20,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: AmyalColors.primary),
+                                strokeWidth: 2, color: AmialColors.primary),
                           ),
                         )
                       : _error.isEmpty
@@ -220,7 +220,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                               child: Text(_error,
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                      color: AmyalColors.red, fontSize: 13)),
+                                      color: AmialColors.red, fontSize: 13)),
                             ),
                 ),
                 const SizedBox(height: 8),
@@ -244,11 +244,11 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AmyalColors.border),
+                    border: Border.all(color: AmialColors.border),
                   ),
                   child: const Row(children: [
                     Icon(Icons.info_outline_rounded,
-                        size: 17, color: AmyalColors.textMuted),
+                        size: 17, color: AmialColors.textMuted),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -256,7 +256,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
                         'مرور الدخول. تغييره هنا لا يغيّر كلمة مرورك.',
                         style: TextStyle(
                             fontSize: 11.5, height: 1.6,
-                            color: AmyalColors.textSecondary),
+                            color: AmialColors.textSecondary),
                       ),
                     ),
                   ]),

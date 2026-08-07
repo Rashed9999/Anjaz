@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/util/styles.dart';
 import '../../util/dimensions.dart';
 
 class CustomDropDownButtonWidget extends StatefulWidget {

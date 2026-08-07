@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-MERCHANT-AUDIT-001 — «سجلّ التدقيق» للتاجر (باقة التاجر برو فأعلى).
 ///
@@ -47,9 +47,9 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
   }
 
   Color _sevColor(String s) => switch (s) {
-        'critical' => AmyalColors.red,
-        'warning' => AmyalColors.yellowDark,
-        _ => AmyalColors.primary,
+        'critical' => AmialColors.red,
+        'warning' => AmialColors.yellowDark,
+        _ => AmialColors.primary,
       };
 
   String _dt(String? iso) {
@@ -63,7 +63,7 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('سجلّ التدقيق'),
       ),
@@ -73,7 +73,7 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
               ? Center(child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.workspace_premium, size: 56, color: AmyalColors.yellowDark),
+                    const Icon(Icons.workspace_premium, size: 56, color: AmialColors.yellowDark),
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -84,7 +84,7 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
                   child: _entries.isEmpty
                       ? ListView(children: const [
                           SizedBox(height: 120),
-                          Icon(Icons.verified_user_outlined, size: 64, color: AmyalColors.textMuted),
+                          Icon(Icons.verified_user_outlined, size: 64, color: AmialColors.textMuted),
                           SizedBox(height: 12),
                           Center(child: Text('لا قيود بعد')),
                         ])

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
-import 'package:amyal_pay/features/shared/widgets/scanner_shell.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/features/shared/widgets/scanner_shell.dart';
 
 /// AMIAL-CASHIER-BARCODE-001 — مسح باركود المنتجات في الكاشير.
 ///
@@ -66,7 +66,7 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
     } else if (result == 'not_found') {
       await _quickCreate(code);
     } else {
-      setState(() => _show('تعذّر البحث', AmyalColors.red));
+      setState(() => _show('تعذّر البحث', AmialColors.red));
     }
     _busy = false;
   }
@@ -86,7 +86,7 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('باركود جديد — أضِف المنتج'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('الباركود: $barcode', style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+          Text('الباركود: $barcode', style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
           const SizedBox(height: 8),
           TextField(controller: name, decoration: const InputDecoration(labelText: 'اسم المنتج *')),
           TextField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -97,7 +97,7 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تخطّي')),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary),
+            style: FilledButton.styleFrom(backgroundColor: AmialColors.primary),
             onPressed: () {
               if (name.text.trim().isEmpty || double.tryParse(price.text.trim()) == null) return;
               Navigator.pop(ctx, true);
@@ -109,7 +109,7 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
     );
 
     if (ok != true) {
-      if (mounted) setState(() => _show('تُخطّي الباركود', AmyalColors.textMuted));
+      if (mounted) setState(() => _show('تُخطّي الباركود', AmialColors.textMuted));
       return;
     }
 
@@ -127,7 +127,7 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
         _show('✓ أُنشئ وأُضيف', Colors.green);
       });
     } else {
-      setState(() => _show(c.lastError.value, AmyalColors.red));
+      setState(() => _show(c.lastError.value, AmialColors.red));
     }
   }
 
@@ -157,9 +157,9 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
     if (result == 'added') {
       setState(() { _addedCount++; _show('✓ أُضيف للسلّة', Colors.green); });
     } else if (result == 'not_found') {
-      setState(() => _show('لا يوجد منتج بهذا الباركود', AmyalColors.red));
+      setState(() => _show('لا يوجد منتج بهذا الباركود', AmialColors.red));
     } else {
-      setState(() => _show(c.lastError.value.isEmpty ? 'تعذّر البحث' : c.lastError.value, AmyalColors.red));
+      setState(() => _show(c.lastError.value.isEmpty ? 'تعذّر البحث' : c.lastError.value, AmialColors.red));
     }
   }
 
@@ -189,7 +189,7 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
           child: Container(
             width: 260, height: 160,
             decoration: BoxDecoration(
-              border: Border.all(color: AmyalColors.yellow, width: 3),
+              border: Border.all(color: AmialColors.yellow, width: 3),
               borderRadius: BorderRadius.circular(12),
             ),
           ),
@@ -207,7 +207,7 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 Text('أُضيف: $_addedCount صنف', style: const TextStyle(color: Colors.white)),
                 FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: AmyalColors.yellow, foregroundColor: Colors.black),
+                  style: FilledButton.styleFrom(backgroundColor: AmialColors.yellow, foregroundColor: Colors.black),
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.check),
                   label: const Text('تم — للسلّة'),

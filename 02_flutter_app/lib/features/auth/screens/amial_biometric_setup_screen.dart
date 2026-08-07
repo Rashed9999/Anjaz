@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:amyal_pay/data/api/secure_storage_helper.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/secure_storage_helper.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-BIO-001 — «تفعيل الدخول السريع» (بصمة الإصبع/الوجه).
 ///
@@ -74,17 +74,17 @@ class _AmialBiometricSetupScreenState extends State<AmialBiometricSetupScreen> {
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+        SnackBar(content: Text(m), backgroundColor: AmialColors.red),
       );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        foregroundColor: AmyalColors.primary,
-        title: const Text('Amyal Pay',
+        foregroundColor: AmialColors.primary,
+        title: const Text('Amial Pay',
             style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         leading: IconButton(
@@ -112,21 +112,21 @@ class _AmialBiometricSetupScreenState extends State<AmialBiometricSetupScreen> {
               ],
             ),
             child: const Icon(Icons.fingerprint,
-                size: 84, color: AmyalColors.primary),
+                size: 84, color: AmialColors.primary),
           ),
           const SizedBox(height: 28),
           const Text('تفعيل الدخول السريع',
               style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: AmyalColors.primary)),
+                  color: AmialColors.primary)),
           const SizedBox(height: 12),
           const Text(
             'استمتع بوصول آمن وفوري إلى حسابك باستخدام بصمة الإصبع أو بصمة '
             'الوجه. لا حاجة لإدخال كلمة المرور في كل مرة.',
             textAlign: TextAlign.center,
             style: TextStyle(
-                fontSize: 14, color: AmyalColors.textSecondary, height: 1.7),
+                fontSize: 14, color: AmialColors.textSecondary, height: 1.7),
           ),
           const SizedBox(height: 28),
 
@@ -151,7 +151,7 @@ class _AmialBiometricSetupScreenState extends State<AmialBiometricSetupScreen> {
             label: const Text('تفعيل الآن',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
+              backgroundColor: AmialColors.primary,
               minimumSize: const Size.fromHeight(56),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(18)),
@@ -162,7 +162,7 @@ class _AmialBiometricSetupScreenState extends State<AmialBiometricSetupScreen> {
             onPressed: () => Get.back(result: false),
             child: const Text('تخطى الآن',
                 style: TextStyle(
-                    color: AmyalColors.primary,
+                    color: AmialColors.primary,
                     fontSize: 15,
                     fontWeight: FontWeight.w600)),
           ),
@@ -170,7 +170,7 @@ class _AmialBiometricSetupScreenState extends State<AmialBiometricSetupScreen> {
           const Text(
             'بياناتك الحيوية مشفرة بالكامل على جهازك، ولا تتم مشاركتها مع أي جهة خارجية.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 11, color: AmyalColors.textMuted),
+            style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
           ),
         ]),
       ),
@@ -185,13 +185,13 @@ class _AmialBiometricSetupScreenState extends State<AmialBiometricSetupScreen> {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(children: [
-        Icon(icon, color: AmyalColors.primary, size: 26),
+        Icon(icon, color: AmialColors.primary, size: 26),
         const SizedBox(height: 8),
         Text(label,
             style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: AmyalColors.primary)),
+                color: AmialColors.primary)),
       ]),
     );
   }

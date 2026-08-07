@@ -6,10 +6,10 @@ import 'package:get/get.dart';
 import 'package:get/get_connect/http/src/request/request.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/common/models/error_model.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/data/api/idempotency_key_generator.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/common/models/error_model.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/data/api/idempotency_key_generator.dart';
 
 class ApiClient extends GetxService {
    String appBaseUrl = AppConstants.baseUrl ;
@@ -121,14 +121,14 @@ class ApiClient extends GetxService {
       return const Response(statusCode: -1, statusText: 'you are using vpn');
     }{
       try {
-        // AMYAL-SECURITY-002 (v0.7-C): debug logs آمنة
+        // AMIAL-SECURITY-002 (v0.7-C): debug logs آمنة
         if (kDebugMode) {
           debugPrint('====> POST $uri');
           debugPrint('====> Body keys: ${body is Map ? body.keys.toList() : "<non-map>"}');
           // لا نلوغ token أو body الكامل (قد يحتوي PIN/OTP)
         }
 
-        // AMYAL-SECURITY-002: Idempotency-Key + Zone hint
+        // AMIAL-SECURITY-002: Idempotency-Key + Zone hint
         final requestHeaders = Map<String, String>.from(headers ?? _mainHeaders!);
 
         // AMIAL-PILOT-IDEM-002 — **ولا يُترك المفتاح لاجتهاد كلّ نداء.**
@@ -149,7 +149,7 @@ class ApiClient extends GetxService {
         requestHeaders['Idempotency-Key'] = effectiveKey;
 
         requestHeaders['X-Amial-Zone'] = 'SOUTH';
-        requestHeaders['X-Amyal-Client-Version'] = '0.7.0';
+        requestHeaders['X-Amial-Client-Version'] = '0.7.0';
 
         http.Response response0 = await http.post(
           Uri.parse(appBaseUrl+uri),
@@ -178,7 +178,7 @@ class ApiClient extends GetxService {
        return const Response(statusCode: -1, statusText: 'you are using vpn');
      }{
        try {
-         // AMYAL-SECURITY-002 (v0.7-C): logs آمنة
+         // AMIAL-SECURITY-002 (v0.7-C): logs آمنة
          if (kDebugMode) {
            debugPrint('====> Multipart POST $uri (${multipartBody!.length} files)');
          }

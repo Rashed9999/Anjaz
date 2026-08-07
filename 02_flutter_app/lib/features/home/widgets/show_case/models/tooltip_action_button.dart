@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/features/home/widgets/show_case/models/action_button_icon.dart';
-import 'package:amyal_pay/features/home/widgets/show_case/showcaseview.dart';
+import 'package:amial_pay/features/home/widgets/show_case/models/action_button_icon.dart';
+import 'package:amial_pay/features/home/widgets/show_case/showcaseview.dart';
 
 
 class TooltipActionButton {

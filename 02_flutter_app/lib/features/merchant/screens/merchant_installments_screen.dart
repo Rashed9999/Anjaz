@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-INSTALLMENTS-001 — «البيع بالتقسيط» (باقة التاجر برو فأعلى).
 ///
@@ -52,7 +52,7 @@ class _MerchantInstallmentsScreenState extends State<MerchantInstallmentsScreen>
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   List<int> get _durations =>
       ((_plan['durations'] ?? [3, 6, 12]) as List).map((e) => int.tryParse('$e') ?? 0).where((e) => e > 0).toList();
@@ -79,7 +79,7 @@ class _MerchantInstallmentsScreenState extends State<MerchantInstallmentsScreen>
             const Text('شروط التقسيط', textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            SwitchListTile(value: active, activeColor: AmyalColors.primary,
+            SwitchListTile(value: active, activeColor: AmialColors.primary,
                 contentPadding: EdgeInsets.zero, title: const Text('تفعيل البيع بالتقسيط'),
                 onChanged: (v) => setLocal(() => active = v)),
             _num(down, 'الدفعة الأولى % (ضمان الجدّية)'),
@@ -93,17 +93,17 @@ class _MerchantInstallmentsScreenState extends State<MerchantInstallmentsScreen>
             TextField(controller: durations,
                 decoration: const InputDecoration(labelText: 'المدد المتاحة (أشهر، مفصولة بفاصلة)',
                     hintText: '3، 6، 12', border: OutlineInputBorder())),
-            SwitchListTile(value: kyc, activeColor: AmyalColors.primary,
+            SwitchListTile(value: kyc, activeColor: AmialColors.primary,
                 contentPadding: EdgeInsets.zero, title: const Text('اشتراط توثيق الهوية (KYC)'),
                 subtitle: const Text('ضمان هوية العميل', style: TextStyle(fontSize: 11)),
                 onChanged: (v) => setLocal(() => kyc = v)),
-            SwitchListTile(value: guarantor, activeColor: AmyalColors.primary,
+            SwitchListTile(value: guarantor, activeColor: AmialColors.primary,
                 contentPadding: EdgeInsets.zero, title: const Text('اشتراط كفيل مسجّل'),
                 subtitle: const Text('ضمان إضافي', style: TextStyle(fontSize: 11)),
                 onChanged: (v) => setLocal(() => guarantor = v)),
             const SizedBox(height: 14),
             FilledButton(onPressed: () => Navigator.pop(ctx, true),
-                style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(50)),
+                style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(50)),
                 child: const Text('حفظ الشروط')),
           ]),
         ),
@@ -203,13 +203,13 @@ class _MerchantInstallmentsScreenState extends State<MerchantInstallmentsScreen>
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(color: AmyalColors.primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(color: AmialColors.primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(12)),
                   child: Column(children: [
                     _qRow('الدفعة الأولى (تُحصَّل الآن)', '${quote!['down_payment']} ر.ي', bold: true),
                     _qRow('المبلغ المموّل', '${quote!['financed_amount']} ر.ي'),
                     _qRow('هامش المرابحة', '${quote!['markup_amount']} ر.ي'),
                     const Divider(),
-                    _qRow('القسط الشهري', '${quote!['monthly_amount']} ر.ي', bold: true, color: AmyalColors.primary),
+                    _qRow('القسط الشهري', '${quote!['monthly_amount']} ر.ي', bold: true, color: AmialColors.primary),
                     _qRow('إجمالي ما يدفعه العميل', '${quote!['grand_total']} ر.ي'),
                   ]),
                 ),
@@ -228,22 +228,22 @@ class _MerchantInstallmentsScreenState extends State<MerchantInstallmentsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('البيع بالتقسيط'),
-          backgroundColor: AmyalColors.primary, foregroundColor: Colors.white,
+          backgroundColor: AmialColors.primary, foregroundColor: Colors.white,
           actions: _error == null && !_loading
               ? [IconButton(onPressed: _editTerms, icon: const Icon(Icons.tune), tooltip: 'الشروط')]
               : null),
       floatingActionButton: _error == null && !_loading
           ? FloatingActionButton.extended(onPressed: _newContract,
-              backgroundColor: AmyalColors.primary, icon: const Icon(Icons.add), label: const Text('عقد جديد'))
+              backgroundColor: AmialColors.primary, icon: const Icon(Icons.add), label: const Text('عقد جديد'))
           : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(child: Padding(padding: const EdgeInsets.all(24),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.workspace_premium, size: 56, color: AmyalColors.yellowDark),
+                    const Icon(Icons.workspace_premium, size: 56, color: AmialColors.yellowDark),
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -270,13 +270,13 @@ class _MerchantInstallmentsScreenState extends State<MerchantInstallmentsScreen>
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
       child: Row(children: [
         Icon(active ? Icons.check_circle : Icons.pause_circle_outline,
-            color: active ? const Color(0xFF2E7D32) : AmyalColors.textSecondary),
+            color: active ? const Color(0xFF2E7D32) : AmialColors.textSecondary),
         const SizedBox(width: 8),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(active ? 'التقسيط مُفعّل' : 'التقسيط غير مُفعّل',
               style: const TextStyle(fontWeight: FontWeight.bold)),
           Text('دفعة أولى ${_plan['down_payment_percent'] ?? '-'}% • هامش ${_plan['markup_percent'] ?? '0'}% • مدد: ${_durations.join('، ')}',
-              style: const TextStyle(fontSize: 11, color: AmyalColors.textSecondary)),
+              style: const TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
         ])),
         TextButton(onPressed: _editTerms, child: const Text('تعديل')),
       ]),
@@ -286,12 +286,12 @@ class _MerchantInstallmentsScreenState extends State<MerchantInstallmentsScreen>
   Widget _contractTile(Map<String, dynamic> c) {
     final statusLabel = {'active': 'نشط', 'completed': 'مكتمل', 'defaulted': 'متعثّر', 'cancelled': 'ملغى'}[c['status']] ?? c['status'];
     final statusColor = c['status'] == 'completed' ? const Color(0xFF2E7D32)
-        : c['status'] == 'defaulted' ? AmyalColors.red : AmyalColors.primary;
+        : c['status'] == 'defaulted' ? AmialColors.red : AmialColors.primary;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
       child: ListTile(
-        leading: const CircleAvatar(backgroundColor: Color(0x1A0D47A1), child: Icon(Icons.handshake, color: AmyalColors.primary)),
+        leading: const CircleAvatar(backgroundColor: Color(0x1A0D47A1), child: Icon(Icons.handshake, color: AmialColors.primary)),
         title: Text('${c['item_name']?.toString().isNotEmpty == true ? c['item_name'] : 'عقد #${c['id']}'} — ${c['months']} أشهر',
             style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text('متبقٍّ: ${c['remaining']} من ${c['total_payable']} ر.ي • قسط ${c['monthly_amount']}',
@@ -315,7 +315,7 @@ class _MerchantInstallmentsScreenState extends State<MerchantInstallmentsScreen>
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text(v, style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.normal, color: color)),
-          Text(k, style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+          Text(k, style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
         ]),
       );
 }

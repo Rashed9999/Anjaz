@@ -43,7 +43,7 @@
                     {{ translate('اتركه فارغاً إن أردت الحفظ دون تغيير المفتاح المحفوظ.') }}
                 </p>
                 <textarea name="push_notification_service_file_content" class="form-control" rows="10"
-                          dir="ltr" spellcheck="false" placeholder='{"type":"service_account","project_id":"amyal-pay", ...}'></textarea>
+                          dir="ltr" spellcheck="false" placeholder='{"type":"service_account","project_id":"amial-pay", ...}'></textarea>
 
                 <label class="form-label fw-bold mt-3">{{ translate('مفتاح الخادم القديم (اختياري)') }}</label>
                 <input name="push_notification_key" type="text" class="form-control" dir="ltr"

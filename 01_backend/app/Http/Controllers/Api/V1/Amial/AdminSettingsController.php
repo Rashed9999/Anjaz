@@ -189,7 +189,7 @@ class AdminSettingsController extends AmialApiController // AMIAL-FIX-007
         return array_merge([
             'whatsapp_number' => '967777000000',
             'phone_number' => '+967777000000',
-            'support_email' => 'support@amyalpay.com',
+            'support_email' => 'support@amialpay.com',
         ], $values);
     }
 

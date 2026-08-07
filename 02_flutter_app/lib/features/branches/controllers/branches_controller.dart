@@ -1,7 +1,7 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/features/branches/domain/repositories/branches_repo.dart';
-import 'package:amyal_pay/features/plans/screens/my_usage_screen.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/branches/domain/repositories/branches_repo.dart';
+import 'package:amial_pay/features/plans/screens/my_usage_screen.dart';
 
 /// P1-BRANCHES — متحكّم الفروع.
 class BranchesController extends GetxController implements GetxService {

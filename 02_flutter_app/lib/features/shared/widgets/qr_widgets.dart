@@ -3,8 +3,8 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:amyal_pay/features/shared/widgets/scanner_shell.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/shared/widgets/scanner_shell.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-QR-001 (v1.8)
 ///
@@ -32,7 +32,7 @@ class QrDisplayWidget extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AmyalColors.border),
+            border: Border.all(color: AmialColors.border),
           ),
           child: QrImageView(
             data: data,
@@ -41,18 +41,18 @@ class QrDisplayWidget extends StatelessWidget {
             backgroundColor: Colors.white,
             eyeStyle: const QrEyeStyle(
               eyeShape: QrEyeShape.square,
-              color: AmyalColors.primary,
+              color: AmialColors.primary,
             ),
             dataModuleStyle: const QrDataModuleStyle(
               dataModuleShape: QrDataModuleShape.square,
-              color: AmyalColors.primary,
+              color: AmialColors.primary,
             ),
           ),
         ),
         if (caption != null) ...[
           const SizedBox(height: 8),
           Text(caption!,
-              style: const TextStyle(fontSize: 12, color: AmyalColors.textMuted)),
+              style: const TextStyle(fontSize: 12, color: AmialColors.textMuted)),
         ],
       ],
     );
@@ -115,14 +115,14 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('لم يُعثر على رمز QR في هذه الصورة'),
-          backgroundColor: AmyalColors.red,
+          backgroundColor: AmialColors.red,
         ));
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('تعذّرت قراءة الصورة — جرّب صورة أوضح'),
-          backgroundColor: AmyalColors.red,
+          backgroundColor: AmialColors.red,
         ));
       }
     }
@@ -164,7 +164,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
               width: 250,
               height: 250,
               decoration: BoxDecoration(
-                border: Border.all(color: AmyalColors.yellow, width: 3),
+                border: Border.all(color: AmialColors.yellow, width: 3),
                 borderRadius: BorderRadius.circular(16),
               ),
             ),
@@ -199,7 +199,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                 icon: const Icon(Icons.photo_library_outlined, size: 20),
                 label: const Text('اختر رمزاً من معرض الصور'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AmyalColors.yellow,
+                  backgroundColor: AmialColors.yellow,
                   foregroundColor: const Color(0xFF053391),
                   padding: const EdgeInsets.symmetric(
                       horizontal: 20, vertical: 12),

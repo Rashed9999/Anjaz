@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/merchant/controllers/customer_credit_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/customer_credit_controller.dart';
 
 /// AMIAL-CUSTOMER-CREDIT-001 — كشف حساب عميل + تسجيل سداد/مرتجع.
 class CreditCustomerStatementScreen extends StatefulWidget {
@@ -37,7 +37,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Text(widget.customer['customer_name'] ?? 'كشف حساب'),
       ),
@@ -82,14 +82,14 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
 
   Widget _balanceCard(Map account, double closing) {
     final cls = account['classification'] ?? 'bronze';
-    final clsColor = cls == 'gold' ? AmyalColors.yellowDark
+    final clsColor = cls == 'gold' ? AmialColors.yellowDark
         : cls == 'silver' ? Colors.grey.shade400 : Colors.brown.shade400;
     final lim = double.tryParse('${account['credit_limit'] ?? 0}') ?? 0;
     final util = lim > 0 ? ((closing / lim) * 100).clamp(0, 200).toDouble() : 0.0;
 
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: AmyalColors.primary, borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(color: AmialColors.primary, borderRadius: BorderRadius.circular(16)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
         Row(children: [
           Container(
@@ -112,7 +112,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
               value: (util / 100).clamp(0, 1).toDouble(),
               backgroundColor: Colors.white24,
               valueColor: AlwaysStoppedAnimation(
-                util < 60 ? Colors.green : util < 90 ? AmyalColors.yellow : AmyalColors.red,
+                util < 60 ? Colors.green : util < 90 ? AmialColors.yellow : AmialColors.red,
               ),
               minHeight: 8,
             ),
@@ -158,7 +158,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
     return Row(children: [
       Expanded(child: _statCard('مدين (-)', totals['credit'] ?? '0', Colors.green.shade700)),
       const SizedBox(width: 8),
-      Expanded(child: _statCard('دائن (+)', totals['debit'] ?? '0', AmyalColors.red)),
+      Expanded(child: _statCard('دائن (+)', totals['debit'] ?? '0', AmialColors.red)),
     ]);
   }
 
@@ -201,11 +201,11 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
       Row(children: [
         Expanded(child: OutlinedButton.icon(
           onPressed: () => _downloadPdf(account),
-          icon: const Icon(Icons.picture_as_pdf, color: AmyalColors.red),
+          icon: const Icon(Icons.picture_as_pdf, color: AmialColors.red),
           label: const Text('تحميل كشف PDF'),
           style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: AmyalColors.red),
-            foregroundColor: AmyalColors.red,
+            side: const BorderSide(color: AmialColors.red),
+            foregroundColor: AmialColors.red,
           ),
         )),
       ]),
@@ -222,7 +222,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
     Get.snackbar(
       'الرابط جاهز',
       'افتح الرابط في المتصفّح لتحميل PDF (تم نسخه)',
-      backgroundColor: AmyalColors.yellow.withValues(alpha: 0.2),
+      backgroundColor: AmialColors.yellow.withValues(alpha: 0.2),
       duration: const Duration(seconds: 4),
       snackPosition: SnackPosition.BOTTOM,
     );
@@ -240,7 +240,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
     final icon = type == 'sale' ? Icons.shopping_cart
         : type == 'payment' ? Icons.payments
         : type == 'return' ? Icons.undo : Icons.tune;
-    final color = isNegative ? Colors.green.shade700 : AmyalColors.red;
+    final color = isNegative ? Colors.green.shade700 : AmialColors.red;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -261,7 +261,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
             Text('${m['reference_number']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
           if (m['due_date'] != null)
             Text('استحقاق: ${m['due_date'].toString().substring(0, 10)}',
-                style: TextStyle(color: AmyalColors.yellowDark, fontSize: 11)),
+                style: TextStyle(color: AmialColors.yellowDark, fontSize: 11)),
           if (m['note'] != null && '${m['note']}'.isNotEmpty)
             Text('${m['note']}', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
         ])),
@@ -304,7 +304,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
             } else {
               if (noteCtrl.text.isEmpty) {
                 Get.snackbar('تنبيه', 'التعديل اليدوي يحتاج سبباً',
-                    backgroundColor: AmyalColors.red.withValues(alpha: 0.1));
+                    backgroundColor: AmialColors.red.withValues(alpha: 0.1));
                 return;
               }
               ok = await c.recordAdjustment(cid, amountCtrl.text, noteCtrl.text);
@@ -312,7 +312,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
             if (ok) {
               Get.back(result: true);
             } else {
-              Get.snackbar('فشل', c.lastError.value, backgroundColor: AmyalColors.red.withValues(alpha: 0.1));
+              Get.snackbar('فشل', c.lastError.value, backgroundColor: AmialColors.red.withValues(alpha: 0.1));
             }
           },
           child: c.isSubmitting.value

@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_pop_scope_widget.dart';
-import 'package:amyal_pay/features/language/controllers/localization_controller.dart';
-import 'package:amyal_pay/features/onboarding/controllers/on_boarding_controller.dart';
-import 'package:amyal_pay/helper/route_helper.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_small_button_widget.dart';
-import 'package:amyal_pay/features/onboarding/widgets/indicator_widget.dart';
+import 'package:amial_pay/common/widgets/custom_pop_scope_widget.dart';
+import 'package:amial_pay/features/language/controllers/localization_controller.dart';
+import 'package:amial_pay/features/onboarding/controllers/on_boarding_controller.dart';
+import 'package:amial_pay/helper/route_helper.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_small_button_widget.dart';
+import 'package:amial_pay/features/onboarding/widgets/indicator_widget.dart';
 
 
 class OnBoardingScreen extends StatefulWidget {

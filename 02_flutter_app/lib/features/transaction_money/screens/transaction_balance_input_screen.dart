@@ -1,26 +1,26 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/models/config_model.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/features/transaction_money/controllers/contact_controller.dart';
-import 'package:amyal_pay/features/transaction_money/controllers/transaction_controller.dart';
-import 'package:amyal_pay/features/transaction_money/domain/models/purpose_model.dart';
-import 'package:amyal_pay/common/models/contact_model.dart';
-import 'package:amyal_pay/features/transaction_money/domain/models/withdraw_model.dart';
-import 'package:amyal_pay/features/transaction_money/widgets/transaction_charge_widget.dart';
-import 'package:amyal_pay/helper/email_checker_helper.dart';
-import 'package:amyal_pay/helper/price_converter_helper.dart';
-import 'package:amyal_pay/helper/transaction_type.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/custom_loader_widget.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/features/transaction_money/screens/transaction_confirmation_screen.dart';
-import 'package:amyal_pay/features/transaction_money/widgets/input_box_widget.dart';
-import 'package:amyal_pay/features/transaction_money/widgets/purpose_widget.dart';
+import 'package:amial_pay/common/models/config_model.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/features/transaction_money/controllers/contact_controller.dart';
+import 'package:amial_pay/features/transaction_money/controllers/transaction_controller.dart';
+import 'package:amial_pay/features/transaction_money/domain/models/purpose_model.dart';
+import 'package:amial_pay/common/models/contact_model.dart';
+import 'package:amial_pay/features/transaction_money/domain/models/withdraw_model.dart';
+import 'package:amial_pay/features/transaction_money/widgets/transaction_charge_widget.dart';
+import 'package:amial_pay/helper/email_checker_helper.dart';
+import 'package:amial_pay/helper/price_converter_helper.dart';
+import 'package:amial_pay/helper/transaction_type.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/custom_loader_widget.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/features/transaction_money/screens/transaction_confirmation_screen.dart';
+import 'package:amial_pay/features/transaction_money/widgets/input_box_widget.dart';
+import 'package:amial_pay/features/transaction_money/widgets/purpose_widget.dart';
 import '../widgets/field_item_widget.dart';
 import '../widgets/for_person_widget.dart';
 import '../widgets/next_button_widget.dart';
@@ -89,7 +89,7 @@ class _TransactionBalanceInputScreenState extends State<TransactionBalanceInputS
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-          appBar: AppBar(title: Text(widget.transactionType!.tr), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
+          appBar: AppBar(title: Text(widget.transactionType!.tr), backgroundColor: AmialColors.primary, foregroundColor: Colors.white, elevation: 0),
 
           body: GetBuilder<TransactionMoneyController>(
               builder: (transactionMoneyController) {

@@ -69,7 +69,7 @@ class UnifiedAuthTest extends TestCase
         $this->assertNotEmpty($response->json('meta.token'));
     }
 
-    /** @test AMYAL-SEC-LOGIN-001: الدخول الثاني يُرجع «آخر تسجيل دخول» في الـ meta */
+    /** @test AMIAL-SEC-LOGIN-001: الدخول الثاني يُرجع «آخر تسجيل دخول» في الـ meta */
     public function second_login_returns_last_login_meta()
     {
         \Illuminate\Support\Facades\Artisan::call('passport:install', ['--no-interaction' => true]);

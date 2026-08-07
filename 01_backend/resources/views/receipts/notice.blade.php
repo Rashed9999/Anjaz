@@ -129,7 +129,7 @@
                 <img src="{{ $logoData }}" width="128"
                      style="width:128px;height:auto;margin-bottom:6px;" alt="أميال باي">
             @endif
-            {{-- الشعار نفسه يحمل «أميال» و«AMYAL PAY» و«دفع سريع وآمن»،
+            {{-- الشعار نفسه يحمل «أميال» و«AMIAL PAY» و«دفع سريع وآمن»،
                  فتكرارها نصّاً تحته حشو يزاحم عنوان المستند. --}}
             @if(!empty($supportPhone) || !empty($supportSite))
                 <div class="contact">

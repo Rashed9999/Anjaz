@@ -1,33 +1,33 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/data/api/idempotency_key_generator.dart';
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/data/api/idempotency_key_generator.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
-/// AMYAL-LEGAL/ZONE/RECOVERY-001 (v0.7-D)
+/// AMIAL-LEGAL/ZONE/RECOVERY-001 (v0.7-D)
 ///
-/// Repository موحد لكل Amyal endpoints الجديدة.
+/// Repository موحد لكل Amial endpoints الجديدة.
 /// يفصل العميل HTTP عن الـ Controllers (clean architecture).
-class AmyalRepo extends GetxService {
+class AmialRepo extends GetxService {
   final ApiClient apiClient;
-  AmyalRepo({required this.apiClient});
+  AmialRepo({required this.apiClient});
 
   // ============ Zone Policy ============
 
   /// GET /api/v1/amial/policy/session
   Future<Response> getSessionPolicy() async {
-    return await apiClient.getData(AppConstants.amyalPolicySession);
+    return await apiClient.getData(AppConstants.amialPolicySession);
   }
 
   // ============ Legal Terms ============
 
   /// GET /api/v1/amial/legal/status
   Future<Response> getLegalStatus() async {
-    return await apiClient.getData(AppConstants.amyalLegalStatus);
+    return await apiClient.getData(AppConstants.amialLegalStatus);
   }
 
   /// GET /api/v1/amial/legal/current
   Future<Response> getCurrentTerms() async {
-    return await apiClient.getData(AppConstants.amyalLegalCurrent);
+    return await apiClient.getData(AppConstants.amialLegalCurrent);
   }
 
   /// POST /api/v1/amial/legal/accept
@@ -37,7 +37,7 @@ class AmyalRepo extends GetxService {
     String? deviceId,
   }) async {
     return await apiClient.postData(
-      AppConstants.amyalLegalAccept,
+      AppConstants.amialLegalAccept,
       {
         'version': version,
         'locale': locale,
@@ -52,7 +52,7 @@ class AmyalRepo extends GetxService {
   /// POST /api/v1/amial/recovery/initiate-self
   Future<Response> initiateSelfRecovery({required String newPhone}) async {
     return await apiClient.postData(
-      AppConstants.amyalRecoveryInitiateSelf,
+      AppConstants.amialRecoveryInitiateSelf,
       {'new_phone': newPhone},
       idempotencyKey:
           IdempotencyKeyGenerator.forFinancialAction('recovery_initiate_self'),
@@ -66,7 +66,7 @@ class AmyalRepo extends GetxService {
     String? userNotes,
   }) async {
     return await apiClient.postData(
-      AppConstants.amyalRecoveryInitiateLost,
+      AppConstants.amialRecoveryInitiateLost,
       {
         'new_phone': newPhone,
         'identification_documents': identificationDocuments,
@@ -84,7 +84,7 @@ class AmyalRepo extends GetxService {
     required String otpNew,
   }) async {
     return await apiClient.postData(
-      '${AppConstants.amyalRecoveryVerifyOtp}$ulid/verify-otp',
+      '${AppConstants.amialRecoveryVerifyOtp}$ulid/verify-otp',
       {'otp_old': otpOld, 'otp_new': otpNew},
       // OTP verify ليست عملية مالية، لكن idempotency يحميها من double-submit
       idempotencyKey:
@@ -98,7 +98,7 @@ class AmyalRepo extends GetxService {
     required String pin,
   }) async {
     return await apiClient.postData(
-      '${AppConstants.amyalRecoveryComplete}$ulid/complete',
+      '${AppConstants.amialRecoveryComplete}$ulid/complete',
       {'pin': pin},
       idempotencyKey:
           IdempotencyKeyGenerator.forFinancialAction('recovery_complete'),
@@ -107,6 +107,6 @@ class AmyalRepo extends GetxService {
 
   /// GET /api/v1/amial/recovery/{ulid}
   Future<Response> getRecoveryStatus(String ulid) async {
-    return await apiClient.getData('${AppConstants.amyalRecoveryShow}$ulid');
+    return await apiClient.getData('${AppConstants.amialRecoveryShow}$ulid');
   }
 }

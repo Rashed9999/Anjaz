@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-GIFT-CARDS-001 — «بطاقات الهدايا» (باقة الأعمال فأعلى).
 ///
@@ -43,7 +43,7 @@ class _MerchantGiftCardsScreenState extends State<MerchantGiftCardsScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _issue() async {
     final amount = TextEditingController();
@@ -87,10 +87,10 @@ class _MerchantGiftCardsScreenState extends State<MerchantGiftCardsScreen> {
   void _showCode(String code, String balance) => showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Row(children: [Icon(Icons.card_giftcard, color: AmyalColors.primary), SizedBox(width: 8), Text('البطاقة جاهزة')]),
+          title: const Row(children: [Icon(Icons.card_giftcard, color: AmialColors.primary), SizedBox(width: 8), Text('البطاقة جاهزة')]),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
             SelectableText(code, textDirection: TextDirection.ltr,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 22, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 22, fontWeight: FontWeight.bold, color: AmialColors.primary)),
             const SizedBox(height: 6),
             Text('الرصيد: $balance ر.ي'),
           ]),
@@ -131,10 +131,10 @@ class _MerchantGiftCardsScreenState extends State<MerchantGiftCardsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
-      appBar: AppBar(title: const Text('بطاقات الهدايا'), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+      backgroundColor: AmialColors.background,
+      appBar: AppBar(title: const Text('بطاقات الهدايا'), backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
       floatingActionButton: _error == null
-          ? FloatingActionButton.extended(onPressed: _issue, backgroundColor: AmyalColors.primary,
+          ? FloatingActionButton.extended(onPressed: _issue, backgroundColor: AmialColors.primary,
               icon: const Icon(Icons.add), label: const Text('بطاقة جديدة'))
           : null,
       body: _loading
@@ -142,7 +142,7 @@ class _MerchantGiftCardsScreenState extends State<MerchantGiftCardsScreen> {
           : _error != null
               ? Center(child: Padding(padding: const EdgeInsets.all(24),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.workspace_premium, size: 56, color: AmyalColors.yellowDark),
+                    const Icon(Icons.workspace_premium, size: 56, color: AmialColors.yellowDark),
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                   ])))
@@ -160,7 +160,7 @@ class _MerchantGiftCardsScreenState extends State<MerchantGiftCardsScreen> {
   Widget _card(Map<String, dynamic> c) {
     final status = '${c['status']}';
     final active = status == 'active';
-    final color = status == 'void' ? AmyalColors.red : status == 'depleted' ? AmyalColors.textSecondary : const Color(0xFF2E7D32);
+    final color = status == 'void' ? AmialColors.red : status == 'depleted' ? AmialColors.textSecondary : const Color(0xFF2E7D32);
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),

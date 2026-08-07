@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/features/access/widgets/access_gate.dart';
-import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_receipt_screen.dart';
-import 'package:amyal_pay/features/payments/screens/amial_qr_collect_screen.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/access/widgets/access_gate.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_receipt_screen.dart';
+import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-POS-002 — «تأكيد الدفع» (التصميم 37):
 /// بطاقة الإجمالي المطلوب سداده + اختيار وسيلة واحدة:
@@ -135,12 +135,12 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             const SizedBox(height: 10),
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: AmyalColors.background, borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: AmialColors.background, borderRadius: BorderRadius.circular(8)),
               child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 Text('نقداً: ${AmialMoney.yer(cash)}',
                     style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
                 Text('محفظةً: ${AmialMoney.yer(wallet)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
               ]),
             ),
           ]),
@@ -205,7 +205,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           const Padding(padding: EdgeInsets.all(14),
               child: Text('اختر الشركة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
           ...list.map((a) => ListTile(
-                leading: const Icon(Icons.business, color: AmyalColors.primary),
+                leading: const Icon(Icons.business, color: AmialColors.primary),
                 title: Text('${a['company_name']}'),
                 subtitle: Text('المتاح: ${a['available']} ر.ي'),
                 onTap: () => Navigator.pop(ctx, a),
@@ -320,7 +320,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             const SizedBox(height: 6),
             Text('سيُقيَّد ${AmialMoney.yer(widget.total)} على حساب العميل في دفتر الديون',
                 style: const TextStyle(
-                    fontSize: 12, color: AmyalColors.textSecondary)),
+                    fontSize: 12, color: AmialColors.textSecondary)),
             const SizedBox(height: 16),
             TextField(
               controller: name,
@@ -362,13 +362,13 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                 if (name.text.trim().isEmpty || phone.text.trim().isEmpty) {
                   ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
                       content: Text('اسم العميل ورقمه مطلوبان'),
-                      backgroundColor: AmyalColors.red));
+                      backgroundColor: AmialColors.red));
                   return;
                 }
                 Navigator.pop(ctx, true);
               },
               style: FilledButton.styleFrom(
-                  backgroundColor: AmyalColors.primary,
+                  backgroundColor: AmialColors.primary,
                   minimumSize: const Size.fromHeight(52)),
               child: const Text('تسجيل البيع الآجل'),
             ),
@@ -387,13 +387,13 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red),
+        SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red),
       );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تأكيد الدفع'),
       ),
@@ -406,7 +406,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  AmyalColors.yellow.withValues(alpha: 0.25),
+                  AmialColors.yellow.withValues(alpha: 0.25),
                   Colors.white,
                 ],
                 begin: Alignment.topCenter,
@@ -414,24 +414,24 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
               ),
               borderRadius: BorderRadius.circular(18),
               border:
-                  Border.all(color: AmyalColors.yellow.withValues(alpha: 0.6)),
+                  Border.all(color: AmialColors.yellow.withValues(alpha: 0.6)),
             ),
             child: Column(children: [
               const Text('إجمالي المطلوب سداده',
                   style: TextStyle(
-                      fontSize: 13, color: AmyalColors.textSecondary)),
+                      fontSize: 13, color: AmialColors.textSecondary)),
               const SizedBox(height: 8),
               if (_discount > 0)
                 Text(AmialMoney.yer(widget.total),
                     style: const TextStyle(
                         fontSize: 16,
-                        color: AmyalColors.textMuted,
+                        color: AmialColors.textMuted,
                         decoration: TextDecoration.lineThrough)),
               Text(AmialMoney.yer(_net),
                   style: const TextStyle(
                       fontSize: 34,
                       fontWeight: FontWeight.bold,
-                      color: AmyalColors.primary)),
+                      color: AmialColors.primary)),
               if (_discount > 0)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
@@ -449,23 +449,23 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             child: _discount > 0
                 ? TextButton.icon(
                     onPressed: _busy ? null : _clearDiscount,
-                    icon: const Icon(Icons.close, size: 18, color: AmyalColors.red),
-                    label: const Text('إزالة الخصم', style: TextStyle(color: AmyalColors.red)),
+                    icon: const Icon(Icons.close, size: 18, color: AmialColors.red),
+                    label: const Text('إزالة الخصم', style: TextStyle(color: AmialColors.red)),
                   )
                 : OutlinedButton.icon(
                     onPressed: _busy ? null : _applyDiscount,
                     icon: const Icon(Icons.local_offer_outlined, size: 18),
                     label: const Text('تطبيق خصم / كوبون'),
                     style: OutlinedButton.styleFrom(
-                        foregroundColor: AmyalColors.primary,
-                        side: const BorderSide(color: AmyalColors.primary)),
+                        foregroundColor: AmialColors.primary,
+                        side: const BorderSide(color: AmialColors.primary)),
                   ),
           )),
           const SizedBox(height: 10),
 
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: const [
             Text('الرجاء تحديد خيار واحد',
-                style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+                style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
             Text('اختر وسيلة الدفع',
                 style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
           ]),
@@ -516,7 +516,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             label: const Text('تأكيد ومعالجة الدفع',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
+              backgroundColor: AmialColors.primary,
               minimumSize: const Size.fromHeight(56),
               shape:
                   RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -526,7 +526,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           TextButton(
             onPressed: () => Get.back(),
             child: const Text('إلغاء العملية',
-                style: TextStyle(color: AmyalColors.textSecondary)),
+                style: TextStyle(color: AmialColors.textSecondary)),
           ),
         ],
       ),
@@ -560,8 +560,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: selected && !disabled
-                  ? AmyalColors.primary
-                  : AmyalColors.border,
+                  ? AmialColors.primary
+                  : AmialColors.border,
               width: selected && !disabled ? 1.6 : 1,
             ),
           ),
@@ -571,7 +571,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow,
+                  color: AmialColors.yellow,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Text('موصى به',
@@ -586,10 +586,10 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 15,
-                      color: disabled ? AmyalColors.textMuted : Colors.black87)),
+                      color: disabled ? AmialColors.textMuted : Colors.black87)),
               Text(subtitle,
                   style: const TextStyle(
-                      fontSize: 11, color: AmyalColors.textMuted)),
+                      fontSize: 11, color: AmialColors.textMuted)),
             ]),
             const SizedBox(width: 12),
             Container(
@@ -597,7 +597,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
               width: 46,
               decoration: BoxDecoration(
                 color: selected && !disabled
-                    ? AmyalColors.primary
+                    ? AmialColors.primary
                     : const Color(0xFFE9EEF6),
                 borderRadius: BorderRadius.circular(14),
               ),
@@ -605,7 +605,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                   size: 22,
                   color: selected && !disabled
                       ? Colors.white
-                      : AmyalColors.primary),
+                      : AmialColors.primary),
             ),
           ]),
         ),

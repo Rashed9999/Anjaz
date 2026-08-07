@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SCANNER-SHELL-001 — غلافُ الماسح: الكاميرا تعمل، أو **تقول لماذا لا**.
 ///
@@ -217,7 +217,7 @@ class _ScannerShellState extends State<ScannerShell> with WidgetsBindingObserver
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 64, color: AmyalColors.yellow),
+            Icon(icon, size: 64, color: AmialColors.yellow),
             const SizedBox(height: 16),
             Text(title,
                 textAlign: TextAlign.center,

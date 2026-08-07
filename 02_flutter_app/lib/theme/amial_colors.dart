@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 
-/// AMYAL-BRANDING-001
+/// AMIAL-BRANDING-001
 ///
-/// ألوان البراند الرسمية لـ Amyal Pay.
+/// ألوان البراند الرسمية لـ Amial Pay.
 /// مستخرجة بكسل-بكسل من الشعار الرسمي.
 ///
 /// **استخدم هذه الـ class مباشرة في الـ widgets:**
-///   color: AmyalColors.primary
+///   color: AmialColors.primary
 ///
 /// **لا تنسخ القيم في widgets**: لو تغير اللون، نغيّره هنا فقط.
-class AmyalColors {
-  AmyalColors._(); // private constructor — لا instantiation
+class AmialColors {
+  AmialColors._(); // private constructor — لا instantiation
 
   /// الأزرق الملكي الرئيسي — من نص «أميال» في الشعار الرسمي.
   /// AMIAL-BRANDING-003: عودة لألوان الشعار (ذهبي + أزرق + أحمر)

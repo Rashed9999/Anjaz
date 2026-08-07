@@ -25,9 +25,9 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/features/home/widgets/show_case/layout_overlays.dart';
-import 'package:amyal_pay/features/home/widgets/show_case/models/tooltip_action_button.dart';
-import 'package:amyal_pay/features/home/widgets/show_case/shape_clipper.dart';
+import 'package:amial_pay/features/home/widgets/show_case/layout_overlays.dart';
+import 'package:amial_pay/features/home/widgets/show_case/models/tooltip_action_button.dart';
+import 'package:amial_pay/features/home/widgets/show_case/shape_clipper.dart';
 
 import 'enum.dart';
 import 'get_position.dart';

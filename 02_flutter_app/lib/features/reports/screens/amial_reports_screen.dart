@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/features/history/controllers/transaction_history_controller.dart';
-import 'package:amyal_pay/features/history/domain/models/transaction_model.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/helper/date_converter_helper.dart';
-import 'package:amyal_pay/helper/pdf_downloader_helper.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/common/widgets/amial_donut_chart.dart';
-import 'package:amyal_pay/common/widgets/amial_form.dart';
-import 'package:amyal_pay/features/reports/screens/amial_account_statement_screen.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/history/controllers/transaction_history_controller.dart';
+import 'package:amial_pay/features/history/domain/models/transaction_model.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
+import 'package:amial_pay/helper/pdf_downloader_helper.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/common/widgets/amial_donut_chart.dart';
+import 'package:amial_pay/common/widgets/amial_form.dart';
+import 'package:amial_pay/features/reports/screens/amial_account_statement_screen.dart';
 
 /// AMIAL-REPORTS-001 — شاشة «التقارير»:
 /// أنواع التقارير (المصروفات / الإيرادات / كشف الحساب) مع اختيار الفترة،
@@ -116,13 +116,13 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('لا توجد عمليات في هذه الفترة'),
-            backgroundColor: AmyalColors.red));
+            backgroundColor: AmialColors.red));
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('تعذّر تنزيل الكشف — حاول مجدداً'),
-            backgroundColor: AmyalColors.red));
+            backgroundColor: AmialColors.red));
       }
     } finally {
       if (mounted) setState(() => _downloading = false);
@@ -155,7 +155,7 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
   Widget build(BuildContext context) {
     // AMIAL-DS-002: ترويسة خفيفة موحّدة بدل AppBar أزرق صلب.
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       body: SafeArea(
         child: Column(children: [
           AmialScreenHeader(
@@ -201,13 +201,13 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
               const Padding(
                 padding: EdgeInsets.all(40),
                 child: Center(
-                    child: CircularProgressIndicator(color: AmyalColors.primary)),
+                    child: CircularProgressIndicator(color: AmialColors.primary)),
               )
             else if (_error.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.all(24),
                 child: Column(children: [
-                  Text(_error, style: const TextStyle(color: AmyalColors.red)),
+                  Text(_error, style: const TextStyle(color: AmialColors.red)),
                   const SizedBox(height: 8),
                   TextButton(onPressed: _load, child: const Text('إعادة المحاولة')),
                 ]),
@@ -227,7 +227,7 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
               _summaryCard(
                   'الصافي',
                   _totalCredit - _totalDebit,
-                  AmyalColors.primary,
+                  AmialColors.primary,
                   Icons.account_balance_wallet_outlined),
               const SizedBox(height: 20),
 
@@ -249,13 +249,13 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
   // ============ Widgets ============
 
   Widget _sectionTitle(IconData icon, String text) => Row(children: [
-        Icon(icon, size: 18, color: AmyalColors.textSecondary),
+        Icon(icon, size: 18, color: AmialColors.textSecondary),
         const SizedBox(width: 8),
         Text(text,
             style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 13,
-                color: AmyalColors.textSecondary)),
+                color: AmialColors.textSecondary)),
       ]);
 
   Widget _typeChip(String label, _ReportType t, IconData icon) {
@@ -267,21 +267,21 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: selected ? AmyalColors.primary : Colors.white,
+            color: selected ? AmialColors.primary : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-                color: selected ? AmyalColors.primary : AmyalColors.border),
+                color: selected ? AmialColors.primary : AmialColors.border),
           ),
           child: Column(children: [
             Icon(icon,
                 size: 18,
-                color: selected ? Colors.white : AmyalColors.primary),
+                color: selected ? Colors.white : AmialColors.primary),
             const SizedBox(height: 4),
             Text(label,
                 style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
-                    color: selected ? Colors.white : AmyalColors.primary)),
+                    color: selected ? Colors.white : AmialColors.primary)),
           ]),
         ),
       ),
@@ -293,8 +293,8 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
     return ChoiceChip(
       label: Text(label, style: const TextStyle(fontSize: 12)),
       selected: selected,
-      selectedColor: AmyalColors.primary,
-      labelStyle: TextStyle(color: selected ? Colors.white : AmyalColors.primary),
+      selectedColor: AmialColors.primary,
+      labelStyle: TextStyle(color: selected ? Colors.white : AmialColors.primary),
       backgroundColor: Colors.white,
       onSelected: (_) {
         setState(() => _period = p);
@@ -321,7 +321,7 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(label,
                 style: const TextStyle(
-                    fontSize: 11, color: AmyalColors.textSecondary)),
+                    fontSize: 11, color: AmialColors.textSecondary)),
             Text(AmialMoney.yer(value),
                 style: TextStyle(
                     fontSize: 16, fontWeight: FontWeight.bold, color: color)),
@@ -340,7 +340,7 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
         padding: EdgeInsets.all(24),
         child: Center(
             child: Text('لا توجد عمليات في هذه الفترة',
-                style: TextStyle(color: AmyalColors.textMuted))),
+                style: TextStyle(color: AmialColors.textMuted))),
       );
     }
     final barColor = debit ? const Color(0xFFDC0A0B) : const Color(0xFF2E7D32);
@@ -418,7 +418,7 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(children: [
-            const Icon(Icons.receipt_long, color: AmyalColors.primary),
+            const Icon(Icons.receipt_long, color: AmialColors.primary),
             const SizedBox(width: 10),
             Expanded(
               child: Text('كشف حساب رسمي يشمل ${_txs.length} عملية في الفترة المحدّدة',
@@ -437,7 +437,7 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
                 : const Icon(Icons.picture_as_pdf_outlined),
             label: const Text('تنزيل كشف الحساب PDF'),
             style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
+              backgroundColor: AmialColors.primary,
               minimumSize: const Size.fromHeight(50),
             ),
           ),

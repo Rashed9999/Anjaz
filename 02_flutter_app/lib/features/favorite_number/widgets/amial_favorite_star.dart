@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/favorite_number/controllers/amial_favorites_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/favorite_number/controllers/amial_favorites_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-FAVORITES-001 — نجمة المفضّلة.
 ///
@@ -48,7 +48,7 @@ class AmialFavoriteStar extends StatelessWidget {
         icon: Icon(
           isFav ? Icons.star_rounded : Icons.star_border_rounded,
           size: size,
-          color: isFav ? AmyalColors.yellowDark : AmyalColors.textMuted,
+          color: isFav ? AmialColors.yellowDark : AmialColors.textMuted,
         ),
         onPressed: () async {
           final result = await c.toggle(

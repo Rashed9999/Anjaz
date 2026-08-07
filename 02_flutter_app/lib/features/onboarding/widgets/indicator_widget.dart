@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/onboarding/controllers/on_boarding_controller.dart';
+import 'package:amial_pay/features/onboarding/controllers/on_boarding_controller.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 class IndicatorWidget extends StatelessWidget {

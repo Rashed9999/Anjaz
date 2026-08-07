@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/safe_payment/controllers/safe_payment_controller.dart';
-import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/common/widgets/amial_result_sheet.dart';
+import 'package:amial_pay/features/safe_payment/controllers/safe_payment_controller.dart';
+import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/common/widgets/amial_result_sheet.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
 class CreateSafePaymentScreen extends StatefulWidget {
@@ -39,7 +39,7 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.shield, color: AmyalColors.primary, size: 48),
+        icon: const Icon(Icons.shield, color: AmialColors.primary, size: 48),
         title: const Text('تأكيد العملية'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -52,12 +52,12 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AmyalColors.yellow.withValues(alpha: 0.2),
+                color: AmialColors.yellow.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: const Text(
                 'المال محجوز ولا يصل للبائع إلا بعد تأكيد استلامك للسلعة',
-                style: TextStyle(fontSize: 11, color: AmyalColors.primary),
+                style: TextStyle(fontSize: 11, color: AmialColors.primary),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -71,7 +71,7 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
+              backgroundColor: AmialColors.primary,
               foregroundColor: Colors.white,
             ),
             child: const Text('تأكيد ودفع'),
@@ -86,7 +86,7 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
     if (!await askAmialPin(title: 'تأكيد الدفع الآمن')) return;
     if (!mounted) return;
 
-    // AMYAL-DS-001: ورقة النتيجة الموحّدة (جارٍ الحجز → نجاح/فشل).
+    // AMIAL-DS-001: ورقة النتيجة الموحّدة (جارٍ الحجز → نجاح/فشل).
     final ctrl = Get.find<SafePaymentController>();
     final done = await AmialResultSheet.run<bool>(
       context,
@@ -124,7 +124,7 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('طلب دفع آمن جديد'),
       ),
@@ -141,19 +141,19 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AmyalColors.yellow.withValues(alpha: 0.2),
+                    color: AmialColors.yellow.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AmyalColors.yellow),
+                    border: Border.all(color: AmialColors.yellow),
                   ),
                   child: const Row(
                     children: [
-                      Icon(Icons.shield, color: AmyalColors.primary, size: 24),
+                      Icon(Icons.shield, color: AmialColors.primary, size: 24),
                       SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           'حماية لأموالك: المبلغ محجوز حتى تستلم السلعة وتؤكد رضاك',
                           style: TextStyle(
-                              fontSize: 12, color: AmyalColors.primary),
+                              fontSize: 12, color: AmialColors.primary),
                         ),
                       ),
                     ],
@@ -261,7 +261,7 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
                   label: const Text('إنشاء + حجز المبلغ',
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
+                    backgroundColor: AmialColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
@@ -271,7 +271,7 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
                 const Center(
                   child: Text(
                     'يمكنك إلغاء الطلب وسحب أموالك قبل بدء التسليم',
-                    style: TextStyle(fontSize: 11, color: AmyalColors.textMuted),
+                    style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
                   ),
                 ),
               ],

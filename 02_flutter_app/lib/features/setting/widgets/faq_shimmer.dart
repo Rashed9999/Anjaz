@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:amyal_pay/util/dimensions.dart';
+import 'package:amial_pay/util/dimensions.dart';
 class FaqShimmer extends StatelessWidget {
   const FaqShimmer({super.key});
 

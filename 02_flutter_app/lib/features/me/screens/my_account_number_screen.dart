@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
-import 'package:amyal_pay/features/me/domain/me_repo.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
+import 'package:amial_pay/features/me/domain/me_repo.dart';
 
 /// AMIAL-ME-001 — شاشة "رقم حسابي" مع نسخ + مشاركة.
 class MyAccountNumberScreen extends StatefulWidget {
@@ -42,7 +42,7 @@ class _MyAccountNumberScreenState extends State<MyAccountNumberScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('رقم حسابي'),
       ),
@@ -93,24 +93,24 @@ class _MyAccountNumberScreenState extends State<MyAccountNumberScreen> {
                 padding: const EdgeInsets.all(28),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [AmyalColors.primary, AmyalColors.primaryDark],
+                    colors: [AmialColors.primary, AmialColors.primaryDark],
                     begin: Alignment.topLeft, end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Column(children: [
                   Row(children: [
-                    const Icon(Icons.account_balance_wallet, color: AmyalColors.yellow, size: 26),
+                    const Icon(Icons.account_balance_wallet, color: AmialColors.yellow, size: 26),
                     const SizedBox(width: 8),
                     const Text('رقم حساب أميال باي', style: TextStyle(color: Colors.white70, fontSize: 13)),
                     const Spacer(),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: AmyalColors.yellow,
+                        color: AmialColors.yellow,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Text('AMYAL',
+                      child: const Text('AMIAL',
                           style: TextStyle(color: Colors.black87, fontSize: 10, fontWeight: FontWeight.bold)),
                     ),
                   ]),
@@ -149,7 +149,7 @@ class _MyAccountNumberScreenState extends State<MyAccountNumberScreen> {
                     icon: const Icon(Icons.copy),
                     label: const Text('نسخ'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: AmyalColors.yellow,
+                      backgroundColor: AmialColors.yellow,
                       foregroundColor: Colors.black87,
                       minimumSize: const Size.fromHeight(52),
                     ),
@@ -163,8 +163,8 @@ class _MyAccountNumberScreenState extends State<MyAccountNumberScreen> {
                     label: const Text('مشاركة'),
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size.fromHeight(52),
-                      side: const BorderSide(color: AmyalColors.primary),
-                      foregroundColor: AmyalColors.primary,
+                      side: const BorderSide(color: AmialColors.primary),
+                      foregroundColor: AmialColors.primary,
                     ),
                   ),
                 ),
@@ -184,7 +184,7 @@ class _MyAccountNumberScreenState extends State<MyAccountNumberScreen> {
                     const Spacer(),
                     const Text('استخدامات رقم الحساب', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                     const SizedBox(width: 8),
-                    Icon(Icons.info_outline, color: AmyalColors.primary, size: 20),
+                    Icon(Icons.info_outline, color: AmialColors.primary, size: 20),
                   ]),
                   const SizedBox(height: 12),
                   _bulletItem('استقبل تحويلات داخلية برقم حسابك بدل الهاتف.'),
@@ -206,7 +206,7 @@ class _MyAccountNumberScreenState extends State<MyAccountNumberScreen> {
         Container(
           margin: const EdgeInsets.only(top: 7),
           width: 6, height: 6,
-          decoration: const BoxDecoration(color: AmyalColors.yellow, shape: BoxShape.circle),
+          decoration: const BoxDecoration(color: AmialColors.yellow, shape: BoxShape.circle),
         ),
         const SizedBox(width: 10),
         Expanded(

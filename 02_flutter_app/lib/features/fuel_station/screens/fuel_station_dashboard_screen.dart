@@ -1,20 +1,20 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_services_hub_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/fuel_station/controllers/fuel_station_controller.dart';
-import 'package:amyal_pay/features/fuel_station/screens/fuel_sale_screen.dart';
-import 'package:amyal_pay/features/fuel_station/screens/fuel_settings_screen.dart';
-import 'package:amyal_pay/features/fuel_station/screens/fuel_companies_screen.dart';
-import 'package:amyal_pay/features/fuel_station/screens/fuel_shifts_screen.dart';
-import 'package:amyal_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
-import 'package:amyal_pay/features/fuel_station/screens/fuel_cashier_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/receipt_settings_screen.dart';
-import 'package:amyal_pay/features/access/controllers/access_controller.dart';
-import 'package:amyal_pay/features/access/widgets/access_gate.dart';
-import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_settings_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_companies_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_shifts_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_cashier_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
+import 'package:amial_pay/features/merchant/screens/receipt_settings_screen.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/access/widgets/access_gate.dart';
+import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 
 /// AMIAL-FUEL-001 — لوحة محطة الوقود.
 /// نقطة الدخول الرئيسية: تعرض إحصائيات اليوم + 4 أزرار رئيسية.
@@ -59,7 +59,7 @@ class _FuelStationDashboardScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('محطة الوقود'),
         actions: [
@@ -92,7 +92,7 @@ class _FuelStationDashboardScreenState
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [AmyalColors.primary, Color(0xFF021A55)],
+                      colors: [AmialColors.primary, Color(0xFF021A55)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -104,7 +104,7 @@ class _FuelStationDashboardScreenState
                         width: 56,
                         height: 56,
                         decoration: BoxDecoration(
-                          color: AmyalColors.yellow,
+                          color: AmialColors.yellow,
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: const Icon(
@@ -167,7 +167,7 @@ class _FuelStationDashboardScreenState
                         children: [
                           const Icon(
                             Icons.today,
-                            color: AmyalColors.primary,
+                            color: AmialColors.primary,
                             size: 18,
                           ),
                           const Text(
@@ -186,7 +186,7 @@ class _FuelStationDashboardScreenState
                             child: _statBox(
                               'الإجمالي',
                               '${_fmt(d?['total_amount'])} ر.ي',
-                              AmyalColors.primary,
+                              AmialColors.primary,
                               Icons.attach_money,
                             ),
                           ),
@@ -195,7 +195,7 @@ class _FuelStationDashboardScreenState
                             child: _statBox(
                               'اللترات',
                               _fmt(d?['total_liters']),
-                              AmyalColors.yellowDark,
+                              AmialColors.yellowDark,
                               Icons.local_gas_station,
                             ),
                           ),
@@ -272,7 +272,7 @@ class _FuelStationDashboardScreenState
                 icon: Icons.point_of_sale,
                 label: 'كاشير الوقود',
                 subtitle: 'بيع سريع باللوحة الرقمية — بالريال أو باللتر',
-                color: AmyalColors.primary,
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const FuelCashierScreen()),
               ),
               const SizedBox(height: 10),
@@ -296,7 +296,7 @@ class _FuelStationDashboardScreenState
                   icon: Icons.storefront,
                   label: 'كاشير المتجر',
                   subtitle: 'بيع سلع المحطة (زيوت، إضافات، مقتنيات)',
-                  color: AmyalColors.yellowDark,
+                  color: AmialColors.yellowDark,
                   onTap: () => Get.to(() => const CashierPosScreen()),
                 ),
               ),
@@ -409,7 +409,7 @@ class _FuelStationDashboardScreenState
                 'الذروة: ${_hourLabel(peak)} • ${_fmt(d['peak_hour_total'])} ر.ي',
                 style: const TextStyle(
                   fontSize: 11.5,
-                  color: AmyalColors.yellowDark,
+                  color: AmialColors.yellowDark,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -419,7 +419,7 @@ class _FuelStationDashboardScreenState
         if (maxT <= 0)
           const Text(
             'لا مبيعات اليوم بعد',
-            style: TextStyle(color: AmyalColors.textSecondary, fontSize: 12),
+            style: TextStyle(color: AmialColors.textSecondary, fontSize: 12),
           )
         else
           SizedBox(
@@ -441,8 +441,8 @@ class _FuelStationDashboardScreenState
                           height: (t > 0 && barH < 3) ? 3 : barH,
                           decoration: BoxDecoration(
                             color: isPeak
-                                ? AmyalColors.yellowDark
-                                : AmyalColors.primary.withValues(
+                                ? AmialColors.yellowDark
+                                : AmialColors.primary.withValues(
                                     alpha: t > 0 ? 0.85 : 0.0,
                                   ),
                             borderRadius: BorderRadius.circular(2),
@@ -454,7 +454,7 @@ class _FuelStationDashboardScreenState
                             '$hh',
                             style: const TextStyle(
                               fontSize: 8,
-                              color: AmyalColors.textMuted,
+                              color: AmialColors.textMuted,
                             ),
                           ),
                       ],
@@ -485,13 +485,13 @@ class _FuelStationDashboardScreenState
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AmyalColors.border),
+              border: Border.all(color: AmialColors.border),
             ),
             child: Row(
               children: [
                 const Icon(
                   Icons.play_circle_outline,
-                  color: AmyalColors.primary,
+                  color: AmialColors.primary,
                   size: 28,
                 ),
                 const SizedBox(width: 12),
@@ -501,7 +501,7 @@ class _FuelStationDashboardScreenState
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
-                const Icon(Icons.chevron_left, color: AmyalColors.textMuted),
+                const Icon(Icons.chevron_left, color: AmialColors.textMuted),
               ],
             ),
           ),
@@ -594,7 +594,7 @@ class _FuelStationDashboardScreenState
                     style: const TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
-                      color: AmyalColors.primary,
+                      color: AmialColors.primary,
                       fontFeatures: [FontFeature.tabularFigures()],
                     ),
                   ),
@@ -602,7 +602,7 @@ class _FuelStationDashboardScreenState
                     'مدّة المناوبة (ساعة : دقيقة : ثانية)',
                     style: TextStyle(
                       fontSize: 11,
-                      color: AmyalColors.textMuted,
+                      color: AmialColors.textMuted,
                     ),
                   ),
                 ],
@@ -623,7 +623,7 @@ class _FuelStationDashboardScreenState
                   child: _shiftStat(
                     'مبيعات العدّادات',
                     '$liters لتر',
-                    AmyalColors.primary,
+                    AmialColors.primary,
                   ),
                 ),
               ],
@@ -634,7 +634,7 @@ class _FuelStationDashboardScreenState
               icon: const Icon(Icons.lock_outline, size: 18),
               label: const Text('إغلاق وتسوية المناوبة'),
               style: FilledButton.styleFrom(
-                backgroundColor: AmyalColors.yellowDark,
+                backgroundColor: AmialColors.yellowDark,
                 foregroundColor: Colors.black87,
                 minimumSize: const Size.fromHeight(46),
               ),
@@ -659,7 +659,7 @@ class _FuelStationDashboardScreenState
             label,
             style: const TextStyle(
               fontSize: 11,
-              color: AmyalColors.textSecondary,
+              color: AmialColors.textSecondary,
             ),
           ),
           const SizedBox(height: 4),
@@ -726,7 +726,7 @@ class _FuelStationDashboardScreenState
           decoration: BoxDecoration(
             color: isFree
                 ? Colors.white.withValues(alpha: 0.15)
-                : AmyalColors.yellow,
+                : AmialColors.yellow,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
@@ -764,7 +764,7 @@ class _FuelStationDashboardScreenState
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: AmyalColors.primary.withValues(alpha: 0.35),
+            color: AmialColors.primary.withValues(alpha: 0.35),
           ),
         ),
         child: Row(
@@ -773,10 +773,10 @@ class _FuelStationDashboardScreenState
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: AmyalColors.primary.withValues(alpha: 0.10),
+                color: AmialColors.primary.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.apps, color: AmyalColors.primary),
+              child: const Icon(Icons.apps, color: AmialColors.primary),
             ),
             const SizedBox(width: 12),
             const Expanded(
@@ -792,13 +792,13 @@ class _FuelStationDashboardScreenState
                     'كل الخدمات — المفتوحة لك أوّلاً، وما يفتحه ترقية الباقة أسفلها',
                     style: TextStyle(
                       fontSize: 11.5,
-                      color: AmyalColors.textMuted,
+                      color: AmialColors.textMuted,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_left, color: AmyalColors.textMuted),
+            const Icon(Icons.chevron_left, color: AmialColors.textMuted),
           ],
         ),
       ),
@@ -819,7 +819,7 @@ class _FuelStationDashboardScreenState
         decoration: BoxDecoration(
           color: const Color(0xFFEDEFF3),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AmyalColors.border),
+          border: Border.all(color: AmialColors.border),
         ),
         child: Row(
           children: [
@@ -851,21 +851,21 @@ class _FuelStationDashboardScreenState
                       const Icon(
                         Icons.lock,
                         size: 15,
-                        color: AmyalColors.textMuted,
+                        color: AmialColors.textMuted,
                       ),
                     ],
                   ),
                   Text(
                     subtitle,
                     style: const TextStyle(
-                      color: AmyalColors.textMuted,
+                      color: AmialColors.textMuted,
                       fontSize: 12,
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.workspace_premium, color: AmyalColors.yellowDark),
+            const Icon(Icons.workspace_premium, color: AmialColors.yellowDark),
           ],
         ),
       ),
@@ -938,7 +938,7 @@ class _FuelStationDashboardScreenState
         ),
         child: Column(
           children: [
-            Icon(icon, color: AmyalColors.primary, size: 24),
+            Icon(icon, color: AmialColors.primary, size: 24),
             const SizedBox(height: 6),
             Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
           ],

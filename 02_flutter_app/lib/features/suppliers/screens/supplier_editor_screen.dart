@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/suppliers/controllers/suppliers_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/suppliers/controllers/suppliers_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SUPPLIERS-003 — «إضافة مورد جديد» (التصميم 53):
 /// المعلومات الأساسية (اسم/شخص التواصل/الفئة) + بيانات الاتصال
@@ -65,13 +65,13 @@ class _SupplierEditorScreenState extends State<SupplierEditorScreen> {
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+        SnackBar(content: Text(m), backgroundColor: AmialColors.red),
       );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('إضافة مورد جديد'),
       ),
@@ -90,7 +90,7 @@ class _SupplierEditorScreenState extends State<SupplierEditorScreen> {
             label: const Text('حفظ المورد',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
+              backgroundColor: AmialColors.primary,
               minimumSize: const Size.fromHeight(54),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
@@ -104,7 +104,7 @@ class _SupplierEditorScreenState extends State<SupplierEditorScreen> {
           const Text(
             'أدخل تفاصيل المورد لبدء التعاملات المالية وإدارة المخزون.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: AmyalColors.textSecondary),
+            style: TextStyle(fontSize: 12, color: AmialColors.textSecondary),
           ),
           const SizedBox(height: 14),
 
@@ -116,7 +116,7 @@ class _SupplierEditorScreenState extends State<SupplierEditorScreen> {
               alignment: Alignment.centerRight,
               child: Text('الفئة',
                   style: TextStyle(
-                      fontSize: 12, color: AmyalColors.textSecondary)),
+                      fontSize: 12, color: AmialColors.textSecondary)),
             ),
             const SizedBox(height: 6),
             Wrap(
@@ -127,7 +127,7 @@ class _SupplierEditorScreenState extends State<SupplierEditorScreen> {
                 return ChoiceChip(
                   label: Text(cat, style: const TextStyle(fontSize: 12)),
                   selected: selected,
-                  selectedColor: AmyalColors.primary,
+                  selectedColor: AmialColors.primary,
                   backgroundColor: const Color(0xFFF0F1F3),
                   labelStyle: TextStyle(
                       color: selected ? Colors.white : Colors.black87),
@@ -156,7 +156,7 @@ class _SupplierEditorScreenState extends State<SupplierEditorScreen> {
             const Text(
               'يُسجَّل كدين حالي عليك للمورد ويظهر في كشف حركاته.',
               textAlign: TextAlign.right,
-              style: TextStyle(fontSize: 11, color: AmyalColors.textMuted),
+              style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
             ),
           ]),
           const SizedBox(height: 80),
@@ -178,7 +178,7 @@ class _SupplierEditorScreenState extends State<SupplierEditorScreen> {
               style:
                   const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           const SizedBox(width: 8),
-          Icon(icon, size: 18, color: AmyalColors.yellowDark),
+          Icon(icon, size: 18, color: AmialColors.yellowDark),
         ]),
         const SizedBox(height: 10),
         ...children,
@@ -196,7 +196,7 @@ class _SupplierEditorScreenState extends State<SupplierEditorScreen> {
         Text(label,
             textAlign: TextAlign.right,
             style: const TextStyle(
-                fontSize: 12, color: AmyalColors.textSecondary)),
+                fontSize: 12, color: AmialColors.textSecondary)),
         const SizedBox(height: 6),
         TextField(
           controller: ctrl,
@@ -207,16 +207,16 @@ class _SupplierEditorScreenState extends State<SupplierEditorScreen> {
           decoration: InputDecoration(
             hintText: hint,
             hintStyle:
-                const TextStyle(fontSize: 13, color: AmyalColors.textMuted),
+                const TextStyle(fontSize: 13, color: AmialColors.textMuted),
             filled: true,
             fillColor: const Color(0xFFF9FAFB),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AmyalColors.border),
+              borderSide: const BorderSide(color: AmialColors.border),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AmyalColors.border),
+              borderSide: const BorderSide(color: AmialColors.border),
             ),
           ),
         ),

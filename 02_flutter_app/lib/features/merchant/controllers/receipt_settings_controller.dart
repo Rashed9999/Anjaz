@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 
 /// AMIAL-RECEIPT-SETTINGS-001 — تحميل/حفظ إعدادات فاتورة التاجر وتخزينها مؤقتاً.
 ///

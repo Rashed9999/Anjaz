@@ -1,7 +1,7 @@
 
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/features/home/domain/models/websitelink_model.dart';
-import 'package:amyal_pay/features/home/domain/reposotories/websitelink_repo.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/features/home/domain/models/websitelink_model.dart';
+import 'package:amial_pay/features/home/domain/reposotories/websitelink_repo.dart';
 import 'package:get/get.dart';
 
 class WebsiteLinkController extends GetxController implements GetxService{

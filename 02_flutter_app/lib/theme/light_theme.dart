@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/theme/custom_theme_colors.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/theme/custom_theme_colors.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 // AMIAL-BRANDING-003: ألوان هوية أميال باي = أزرق الشعار + أصفر الشعار.
-// موحّدة تماماً مع AmyalColors (primary/yellow) ليتطابق النظامان عبر كل الشاشات.
+// موحّدة تماماً مع AmialColors (primary/yellow) ليتطابق النظامان عبر كل الشاشات.
 const Color _primaryColor = Color(0xFF053391);   // أزرق الشعار (بطاقة الرصيد/الأزرار)
 const Color _secondaryColor = Color(0xFFFECA1E); // أصفر الشعار (إبرازات/أزرار ثانوية)
 const Color _onSecondaryColor = Color(0xFF053391); // نصّ/أيقونة أزرق على الأصفر
@@ -13,7 +13,7 @@ ThemeData light = ThemeData(
   fontFamily: 'Rubik',
   primaryColor:  _primaryColor,
   primaryColorLight: const Color(0xFF1D4FB8),
-  scaffoldBackgroundColor: AmyalColors.background,
+  scaffoldBackgroundColor: AmialColors.background,
 
   // AMIAL-DS-003 — سمة شريط العنوان: مصدر واحد لـ134 شاشة.
   //
@@ -25,7 +25,7 @@ ThemeData light = ThemeData(
   // المحافظ المهنية تجعل الشريط جزءاً من الصفحة لا كتلة فوقها: نفس خلفية
   // الصفحة، عنوان داكن، بلا ظلّ. تغييره لاحقاً = هذا الموضع وحده.
   appBarTheme: const AppBarTheme(
-    backgroundColor: AmyalColors.background,
+    backgroundColor: AmialColors.background,
     foregroundColor: Color(0xFF1A2433),
     surfaceTintColor: Colors.transparent,
     elevation: 0,

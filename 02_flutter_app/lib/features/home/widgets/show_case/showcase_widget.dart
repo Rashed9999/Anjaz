@@ -21,8 +21,8 @@
  */
 
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/features/home/widgets/show_case/models/tooltip_action_button.dart';
-import 'package:amyal_pay/features/home/widgets/show_case/models/tooltip_action_config.dart';
+import 'package:amial_pay/features/home/widgets/show_case/models/tooltip_action_button.dart';
+import 'package:amial_pay/features/home/widgets/show_case/models/tooltip_action_config.dart';
 
 import 'showcaseview.dart';
 

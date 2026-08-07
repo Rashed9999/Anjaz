@@ -8,7 +8,7 @@
  * المستلم يفتحه ويدفعه — يحوّل المال من محفظته لمحفظة الطالب.
  *
  *   request_ulid: 26 char ULID (مرجع داخلي)
- *   short_code:   6 char (لتقصير الرابط amyal.pay/req/XYZ123)
+ *   short_code:   6 char (لتقصير الرابط amial.pay/req/XYZ123)
  *   recipient:    nullable — قد يكون عاماً (مع أيّ شخص يفتح الرابط)
  */
 

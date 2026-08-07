@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/data/api/idempotency_key_generator.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/data/api/idempotency_key_generator.dart';
 
 /// AMIAL-TRANSFER-V2 — عميل مسار التحويل الجديد:
 /// تحقّق من المستلم (بالاسم المقنَّع) → initiate بنافذة تراجع → إلغاء/حالة.

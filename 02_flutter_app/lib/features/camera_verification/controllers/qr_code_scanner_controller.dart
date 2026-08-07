@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:get/get.dart';
 import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart';
-import 'package:amyal_pay/common/models/contact_model.dart';
-import 'package:amyal_pay/features/favorite_number/controllers/fav_number_controller.dart';
-import 'package:amyal_pay/features/transaction_money/domain/models/contact_tag_model.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/helper/transaction_type.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/features/payments/domain/amial_qr_payload.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_pay_screen.dart';
-import 'package:amyal_pay/features/transaction_money/screens/transaction_balance_input_screen.dart';
+import 'package:amial_pay/common/models/contact_model.dart';
+import 'package:amial_pay/features/favorite_number/controllers/fav_number_controller.dart';
+import 'package:amial_pay/features/transaction_money/domain/models/contact_tag_model.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/helper/transaction_type.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/features/payments/domain/amial_qr_payload.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_pay_screen.dart';
+import 'package:amial_pay/features/transaction_money/screens/transaction_balance_input_screen.dart';
 
 class QrCodeScannerController extends GetxController implements GetxService{
 

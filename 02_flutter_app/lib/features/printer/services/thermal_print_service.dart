@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
-import 'package:amyal_pay/features/printer/widgets/thermal_receipt_widget.dart';
+import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
 
 /// AMIAL-THERMAL-PRINT-001 — إعداد الطابعة الحرارية المحفوظ.
 class ThermalPrinterConfig {

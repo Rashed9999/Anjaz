@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/amyal/controllers/amyal_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/amial/controllers/amial_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
-/// AMYAL-LEGAL-001 (v0.7-D)
+/// AMIAL-LEGAL-001 (v0.7-D)
 ///
 /// شاشة سياسة الاستخدام الإلزامية.
 /// تُعرض:
@@ -44,7 +44,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
     super.initState();
     // تحميل النص الحالي
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Get.find<AmyalController>().loadCurrentTerm();
+      Get.find<AmialController>().loadCurrentTerm();
     });
     _scrollController.addListener(_onScroll);
   }
@@ -68,7 +68,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
   bool get _canAccept => _scrolledEnough && _checkboxChecked;
 
   Future<void> _onAcceptPressed() async {
-    final ctrl = Get.find<AmyalController>();
+    final ctrl = Get.find<AmialController>();
     final ok = await ctrl.acceptCurrentTerm();
     if (!mounted) return;
 
@@ -83,7 +83,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
           content: Text(ctrl.lastError.value.isNotEmpty
               ? ctrl.lastError.value
               : 'فشل القبول، حاول مرة أخرى'),
-          backgroundColor: AmyalColors.red,
+          backgroundColor: AmialColors.red,
         ),
       );
     }
@@ -94,10 +94,10 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
     return PopScope(
       canPop: !widget.mandatory,
       child: Scaffold(
-        backgroundColor: AmyalColors.background,
+        backgroundColor: AmialColors.background,
         appBar: AppBar(
-          backgroundColor: AmyalColors.yellow,
-          foregroundColor: AmyalColors.primary,
+          backgroundColor: AmialColors.yellow,
+          foregroundColor: AmialColors.primary,
           automaticallyImplyLeading: !widget.mandatory,
           title: const Text(
             'سياسة الاستخدام',
@@ -105,10 +105,10 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
           ),
         ),
         body: Obx(() {
-          final ctrl = Get.find<AmyalController>();
+          final ctrl = Get.find<AmialController>();
           if (ctrl.isLoading.value && ctrl.currentTerm.value == null) {
             return const Center(
-              child: CircularProgressIndicator(color: AmyalColors.primary),
+              child: CircularProgressIndicator(color: AmialColors.primary),
             );
           }
 
@@ -121,7 +121,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.error_outline,
-                        size: 64, color: AmyalColors.red),
+                        size: 64, color: AmialColors.red),
                     const SizedBox(height: 16),
                     Text(
                       ctrl.lastError.value.isNotEmpty
@@ -146,7 +146,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                color: AmyalColors.yellow.withValues(alpha: 0.3),
+                color: AmialColors.yellow.withValues(alpha: 0.3),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -155,7 +155,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AmyalColors.primary,
+                        color: AmialColors.primary,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -163,7 +163,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                       'الإصدار ${term.version} — ${term.locale.toUpperCase()}',
                       style: TextStyle(
                         fontSize: 12,
-                        color: AmyalColors.textSecondary,
+                        color: AmialColors.textSecondary,
                       ),
                     ),
                   ],
@@ -183,15 +183,15 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                           margin: const EdgeInsets.only(bottom: 16),
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: AmyalColors.yellow.withValues(alpha: 0.15),
-                            border: Border.all(color: AmyalColors.yellow),
+                            color: AmialColors.yellow.withValues(alpha: 0.15),
+                            border: Border.all(color: AmialColors.yellow),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Icon(Icons.info_outline,
-                                  color: AmyalColors.primary, size: 20),
+                                  color: AmialColors.primary, size: 20),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Column(
@@ -201,7 +201,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                                       'ما الجديد في هذا الإصدار؟',
                                       style: TextStyle(
                                           fontWeight: FontWeight.bold,
-                                          color: AmyalColors.primary),
+                                          color: AmialColors.primary),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(term.changelog!),
@@ -229,16 +229,16 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  color: AmyalColors.background,
+                  color: AmialColors.background,
                   child: Row(
                     children: [
                       const Icon(Icons.arrow_downward,
-                          size: 16, color: AmyalColors.textSecondary),
+                          size: 16, color: AmialColors.textSecondary),
                       const SizedBox(width: 8),
                       Text(
                         'الرجاء قراءة السياسة كاملة',
                         style: TextStyle(
-                            fontSize: 12, color: AmyalColors.textSecondary),
+                            fontSize: 12, color: AmialColors.textSecondary),
                       ),
                     ],
                   ),
@@ -269,7 +269,7 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                         onChanged: _scrolledEnough
                             ? (v) => setState(() => _checkboxChecked = v ?? false)
                             : null,
-                        activeColor: AmyalColors.primary,
+                        activeColor: AmialColors.primary,
                         contentPadding: EdgeInsets.zero,
                         title: const Text(
                           'قرأت ووافقت على شروط الاستخدام',
@@ -281,9 +281,9 @@ class _TermsAcceptanceScreenState extends State<TermsAcceptanceScreen> {
                         onPressed:
                             _canAccept && !ctrl.isLoading.value ? _onAcceptPressed : null,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AmyalColors.primary,
+                          backgroundColor: AmialColors.primary,
                           foregroundColor: Colors.white,
-                          disabledBackgroundColor: AmyalColors.textMuted,
+                          disabledBackgroundColor: AmialColors.textMuted,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),

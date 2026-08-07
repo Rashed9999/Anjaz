@@ -1,8 +1,8 @@
-import 'package:amyal_pay/common/widgets/custom_asset_image_widget.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/common/widgets/custom_asset_image_widget.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:flutter/material.dart';
 
 /// AMIAL-PROFILE-UI-001 — أيقونة صفّ في «حسابي».
@@ -59,7 +59,7 @@ class ProfileRowIcon extends StatelessWidget {
     }
 
     final bool danger = image != null && _destructive.contains(image);
-    final Color color = danger ? AmyalColors.red : AmyalColors.primary;
+    final Color color = danger ? AmialColors.red : AmialColors.primary;
 
     return Container(
       width: 38,
@@ -104,7 +104,7 @@ class MenuItem extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: rubikRegular.copyWith(
               fontSize: Dimensions.fontSizeLarge - 1,
-              color: danger ? AmyalColors.red : null,
+              color: danger ? AmialColors.red : null,
             ),
           ),
         ),
@@ -112,7 +112,7 @@ class MenuItem extends StatelessWidget {
 
         Icon(Icons.arrow_forward_ios_rounded,
             size: Dimensions.radiusSizeDefault,
-            color: AmyalColors.textMuted),
+            color: AmialColors.textMuted),
       ]),
     );
   }

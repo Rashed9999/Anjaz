@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
-import 'package:amyal_pay/common/widgets/rotation_transition_widget.dart';
+import 'package:amial_pay/common/widgets/rotation_transition_widget.dart';
 
 
 class DialogHelper {

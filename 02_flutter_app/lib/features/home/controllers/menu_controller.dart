@@ -1,7 +1,7 @@
-import 'package:amyal_pay/features/receipts/screens/receipts_list_screen.dart';
-import 'package:amyal_pay/features/home/screens/amial_customer_home_screen.dart';
-import 'package:amyal_pay/features/notification/screens/notifications_center_screen.dart';
-import 'package:amyal_pay/features/setting/screens/profile_screen.dart';
+import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
+import 'package:amial_pay/features/home/screens/amial_customer_home_screen.dart';
+import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
+import 'package:amial_pay/features/setting/screens/profile_screen.dart';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';

@@ -1,13 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/setting/domain/models/profile_model.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/setting/controllers/edit_profile_controller.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/features/camera_verification/controllers/camera_screen_controller.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/setting/domain/models/profile_model.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/setting/controllers/edit_profile_controller.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/features/camera_verification/controllers/camera_screen_controller.dart';
 
 /// AMIAL-PROFILE-EDIT-001 — «تعديل بياناتي» (أُعيد تصميمها بأسلوب أميال باي).
 ///
@@ -49,7 +49,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _save(EditProfileController c) async {
     if (!_formKey.currentState!.validate()) return;
@@ -78,7 +78,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final phone = Get.find<ProfileController>().userInfo?.phone ?? '';
     return GetBuilder<EditProfileController>(builder: (c) {
       return Scaffold(
-        backgroundColor: AmyalColors.background,
+        backgroundColor: AmialColors.background,
         appBar: AppBar(
           title: const Text('تعديل بياناتي'),
         ),
@@ -92,10 +92,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   final picked = cam.getImage;
                   return CircleAvatar(
                     radius: 56,
-                    backgroundColor: AmyalColors.primary.withValues(alpha: 0.1),
+                    backgroundColor: AmialColors.primary.withValues(alpha: 0.1),
                     backgroundImage: picked != null ? FileImage(File(picked.path)) : null,
                     child: picked == null
-                        ? const Icon(Icons.person, size: 56, color: AmyalColors.primary)
+                        ? const Icon(Icons.person, size: 56, color: AmialColors.primary)
                         : null,
                   );
                 }),
@@ -105,7 +105,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     onTap: () => Get.find<AuthController>().requestCameraPermission(fromEditProfile: true),
                     child: Container(
                       padding: const EdgeInsets.all(8),
-                      decoration: const BoxDecoration(color: AmyalColors.primary, shape: BoxShape.circle),
+                      decoration: const BoxDecoration(color: AmialColors.primary, shape: BoxShape.circle),
                       child: const Icon(Icons.camera_alt_outlined, size: 18, color: Colors.white),
                     ),
                   ),
@@ -146,7 +146,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.save),
               label: Text(c.isLoading ? 'جارٍ الحفظ…' : 'حفظ البيانات'),
-              style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(52)),
+              style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(52)),
             ),
           ]),
         ),
@@ -183,9 +183,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: selected ? AmyalColors.primary : Colors.white,
+            color: selected ? AmialColors.primary : Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: selected ? AmyalColors.primary : AmyalColors.border),
+            border: Border.all(color: selected ? AmialColors.primary : AmialColors.border),
           ),
           child: Text(label, textAlign: TextAlign.center,
               style: TextStyle(color: selected ? Colors.white : Colors.black87, fontWeight: FontWeight.w600)),

@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:amyal_pay/helper/amial_crash_reporter.dart';
+import 'package:amial_pay/helper/amial_crash_reporter.dart';
 
 /// AMIAL-CRASH-002 — ما يُرفع إلى خوادم Google، وما لا يجوز أن يغادر الجهاز.
 ///

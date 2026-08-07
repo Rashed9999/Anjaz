@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-PROFIT-001 — «تقارير الربحية» (التصميم 48):
 /// بطاقة إجمالي الأرباح + هامش الربح وإجمالي المبيعات + اتجاه أشرطة يومي
@@ -43,7 +43,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تقارير الربحية'),
         actions: [
@@ -54,7 +54,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
         final report = c.profitReport.value;
         if (c.isLoadingProfit.value && report == null) {
           return const Center(
-              child: CircularProgressIndicator(color: AmyalColors.primary));
+              child: CircularProgressIndicator(color: AmialColors.primary));
         }
         final totals = report?['totals'] ?? {};
         final daily = (report?['daily'] as List?) ?? [];
@@ -64,7 +64,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
 
         return RefreshIndicator(
           onRefresh: () => c.loadProfitReport(days: _days),
-          color: AmyalColors.primary,
+          color: AmialColors.primary,
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -79,11 +79,11 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                       label: Text('آخر $d يوم',
                           style: const TextStyle(fontSize: 12)),
                       selected: selected,
-                      selectedColor: AmyalColors.primary,
+                      selectedColor: AmialColors.primary,
                       backgroundColor: Colors.white,
                       labelStyle: TextStyle(
                           color:
-                              selected ? Colors.white : AmyalColors.primary),
+                              selected ? Colors.white : AmialColors.primary),
                       onSelected: (_) {
                         setState(() => _days = d);
                         c.loadProfitReport(days: d);
@@ -120,14 +120,14 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                     const Spacer(),
                     const Text('إجمالي الأرباح',
                         style: TextStyle(
-                            fontSize: 13, color: AmyalColors.textSecondary)),
+                            fontSize: 13, color: AmialColors.textSecondary)),
                   ]),
                   const SizedBox(height: 10),
                   Text(AmialMoney.yer(totals['profit']),
                       style: const TextStyle(
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
-                          color: AmyalColors.primary)),
+                          color: AmialColors.primary)),
                   const Divider(height: 28),
                   Row(children: [
                     Expanded(
@@ -136,15 +136,15 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                             style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
-                                color: AmyalColors.yellowDark)),
+                                color: AmialColors.yellowDark)),
                         const Text('هامش الربح',
                             style: TextStyle(
                                 fontSize: 11,
-                                color: AmyalColors.textMuted)),
+                                color: AmialColors.textMuted)),
                       ]),
                     ),
                     Container(
-                        height: 34, width: 1, color: AmyalColors.border),
+                        height: 34, width: 1, color: AmialColors.border),
                     Expanded(
                       child: Column(children: [
                         FittedBox(
@@ -156,11 +156,11 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                         const Text('إجمالي المبيعات',
                             style: TextStyle(
                                 fontSize: 11,
-                                color: AmyalColors.textMuted)),
+                                color: AmialColors.textMuted)),
                       ]),
                     ),
                     Container(
-                        height: 34, width: 1, color: AmyalColors.border),
+                        height: 34, width: 1, color: AmialColors.border),
                     Expanded(
                       child: Column(children: [
                         FittedBox(
@@ -173,7 +173,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                         const Text('التكلفة',
                             style: TextStyle(
                                 fontSize: 11,
-                                color: AmyalColors.textMuted)),
+                                color: AmialColors.textMuted)),
                       ]),
                     ),
                   ]),
@@ -200,7 +200,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                 child: daily.isEmpty
                     ? const Center(
                         child: Text('لا بيانات',
-                            style: TextStyle(color: AmyalColors.textMuted)))
+                            style: TextStyle(color: AmialColors.textMuted)))
                     : Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: daily.map<Widget>((e) {
@@ -224,7 +224,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                                       child: Container(
                                         decoration: BoxDecoration(
                                           color: isMax
-                                              ? AmyalColors.primary
+                                              ? AmialColors.primary
                                               : const Color(0xFFDCE5F2),
                                           borderRadius:
                                               BorderRadius.circular(6),
@@ -236,7 +236,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                                   Text(label,
                                       style: const TextStyle(
                                           fontSize: 9,
-                                          color: AmyalColors.textMuted)),
+                                          color: AmialColors.textMuted)),
                                 ],
                               ),
                             ),
@@ -259,7 +259,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                   padding: EdgeInsets.all(24),
                   child: Center(
                       child: Text('لا مبيعات بمنتجات في هذه الفترة',
-                          style: TextStyle(color: AmyalColors.textMuted))),
+                          style: TextStyle(color: AmialColors.textMuted))),
                 )
               else
                 ...products.map((p) {
@@ -283,7 +283,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                                   fontSize: 15,
                                   color: positive
                                       ? const Color(0xFF2E7D32)
-                                      : AmyalColors.red)),
+                                      : AmialColors.red)),
                           const Spacer(),
                           Expanded(
                             flex: 2,
@@ -303,12 +303,12 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                             Text('الإيراد: ${AmialMoney.yer(revenue)}',
                                 style: const TextStyle(
                                     fontSize: 11,
-                                    color: AmyalColors.textSecondary)),
+                                    color: AmialColors.textSecondary)),
                             Text(
                                 'الكمية المباعة: ${AmialMoney.fmt(p['qty'])}',
                                 style: const TextStyle(
                                     fontSize: 11,
-                                    color: AmyalColors.textSecondary)),
+                                    color: AmialColors.textSecondary)),
                           ],
                         ),
                       ]),
@@ -320,7 +320,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
               const Text(
                 'التكلفة محسوبة من «سعر التكلفة» الحالي لكل منتج — حدّثه من إدارة المخزون لدقة أعلى.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11, color: AmyalColors.textMuted),
+                style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
               ),
             ],
           ),

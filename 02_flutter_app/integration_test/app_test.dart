@@ -19,8 +19,8 @@ import 'package:get/get.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:amyal_pay/helper/get_di.dart' as di;
-import 'package:amyal_pay/main.dart';
+import 'package:amial_pay/helper/get_di.dart' as di;
+import 'package:amial_pay/main.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();

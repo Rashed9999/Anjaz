@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_text_field_widget.dart';
-import 'package:amyal_pay/common/widgets/text_field_title.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/common/widgets/custom_text_field_widget.dart';
+import 'package:amial_pay/common/widgets/text_field_title.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 class PinFieldWidget extends StatefulWidget {
   final TextEditingController pinController;
@@ -44,11 +44,11 @@ class _PinFieldWidgetState extends State<PinFieldWidget> {
             child: Container(
               width: 76, height: 76,
               decoration: BoxDecoration(
-                color: AmyalColors.primary.withValues(alpha: 0.08),
+                color: AmialColors.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.lock_outline_rounded,
-                  size: 36, color: AmyalColors.primary),
+                  size: 36, color: AmialColors.primary),
             ),
           ),
 
@@ -61,7 +61,7 @@ class _PinFieldWidgetState extends State<PinFieldWidget> {
                 widget.isRegistration ?  'set_your_pin'.tr : 'set_new_4_digit_pin'.tr,
                 textAlign: TextAlign.center,
                 style: rubikMedium.copyWith(
-                  color: AmyalColors.primary,
+                  color: AmialColors.primary,
                   fontSize: Dimensions.fontSizeExtraLarge,
                 ),
               ),
@@ -75,7 +75,7 @@ class _PinFieldWidgetState extends State<PinFieldWidget> {
                 "create_4_digit_pin_for_for_future_login".tr,
                 textAlign: TextAlign.center,
                 style: rubikLight.copyWith(
-                  color: AmyalColors.textSecondary,
+                  color: AmialColors.textSecondary,
                   fontSize: Dimensions.fontSizeDefault,
                 ),
               ),

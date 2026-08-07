@@ -1,11 +1,11 @@
 
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/common/widgets/custom_asset_image_widget.dart';
-import 'package:amyal_pay/features/language/controllers/localization_controller.dart';
-import 'package:amyal_pay/common/models/language_model.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_ink_well_widget.dart';
+import 'package:amial_pay/common/widgets/custom_asset_image_widget.dart';
+import 'package:amial_pay/features/language/controllers/localization_controller.dart';
+import 'package:amial_pay/common/models/language_model.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_ink_well_widget.dart';
 
 class LanguageWidget extends StatelessWidget {
   final LanguageModel languageModel;

@@ -2,10 +2,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:amyal_pay/features/transaction_money/domain/amial_transfer_api.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/helper/route_helper.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/transaction_money/domain/amial_transfer_api.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/route_helper.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-TRANSFER-V2 — شاشة التحويل بعد التنفيذ:
 /// نافذة تراجع (عدّاد تنازلي + زر «تراجع عن التحويل») ثم حالة «تم التسليم».
@@ -99,7 +99,7 @@ class _AmialTransferHoldingScreenState
         padding: const EdgeInsets.all(24),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.warning_amber_rounded,
-              color: AmyalColors.red, size: 44),
+              color: AmialColors.red, size: 44),
           const SizedBox(height: 12),
           const Text('التراجع عن التحويل؟',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -107,13 +107,13 @@ class _AmialTransferHoldingScreenState
           const Text(
             'سيُلغى التحويل ويعود المبلغ كاملاً (مع الرسوم) إلى محفظتك فوراً.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: AmyalColors.textSecondary),
+            style: TextStyle(fontSize: 13, color: AmialColors.textSecondary),
           ),
           const SizedBox(height: 18),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, false),
             style: FilledButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 minimumSize: const Size.fromHeight(50)),
             child: const Text('لا، أكمل التحويل'),
           ),
@@ -121,8 +121,8 @@ class _AmialTransferHoldingScreenState
           OutlinedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: OutlinedButton.styleFrom(
-                foregroundColor: AmyalColors.red,
-                side: const BorderSide(color: AmyalColors.red),
+                foregroundColor: AmialColors.red,
+                side: const BorderSide(color: AmialColors.red),
                 minimumSize: const Size.fromHeight(50)),
             child: const Text('نعم، تراجع واسترد المبلغ'),
           ),
@@ -149,13 +149,13 @@ class _AmialTransferHoldingScreenState
       if (mounted) {
         setState(() => _phase = _Phase.holding);
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(msg), backgroundColor: AmyalColors.red));
+            SnackBar(content: Text(msg), backgroundColor: AmialColors.red));
       }
     } catch (_) {
       if (mounted) {
         setState(() => _phase = _Phase.holding);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('خطأ في الشبكة'), backgroundColor: AmyalColors.red));
+            content: Text('خطأ في الشبكة'), backgroundColor: AmialColors.red));
       }
     }
   }
@@ -193,7 +193,7 @@ class _AmialTransferHoldingScreenState
         if (!didPop) Get.offAllNamed(RouteHelper.getNavBarRoute());
       },
       child: Scaffold(
-        backgroundColor: AmyalColors.background,
+        backgroundColor: AmialColors.background,
         body: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -207,10 +207,10 @@ class _AmialTransferHoldingScreenState
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: cancelled
-                      ? AmyalColors.red.withValues(alpha: 0.1)
+                      ? AmialColors.red.withValues(alpha: 0.1)
                       : holding
-                          ? AmyalColors.yellow.withValues(alpha: 0.3)
-                          : AmyalColors.primary,
+                          ? AmialColors.yellow.withValues(alpha: 0.3)
+                          : AmialColors.primary,
                   shape: BoxShape.circle,
                 ),
                 child: holding
@@ -218,9 +218,9 @@ class _AmialTransferHoldingScreenState
                         style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
-                            color: AmyalColors.primary))
+                            color: AmialColors.primary))
                     : Icon(cancelled ? Icons.replay_rounded : Icons.check_rounded,
-                        color: cancelled ? AmyalColors.red : Colors.white,
+                        color: cancelled ? AmialColors.red : Colors.white,
                         size: 52),
               ),
               const SizedBox(height: 20),
@@ -234,7 +234,7 @@ class _AmialTransferHoldingScreenState
                 style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: AmyalColors.primary),
+                    color: AmialColors.primary),
               ),
               const SizedBox(height: 8),
               Text(
@@ -245,7 +245,7 @@ class _AmialTransferHoldingScreenState
                         : 'وصل المبلغ إلى ${widget.recipientName}.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                    fontSize: 13, color: AmyalColors.textSecondary, height: 1.6),
+                    fontSize: 13, color: AmialColors.textSecondary, height: 1.6),
               ),
               const SizedBox(height: 24),
 
@@ -289,8 +289,8 @@ class _AmialTransferHoldingScreenState
                       : const Icon(Icons.replay_rounded, size: 20),
                   label: Text('تراجع عن التحويل (${_fmt(_remaining)})'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AmyalColors.red,
-                    side: const BorderSide(color: AmyalColors.red),
+                    foregroundColor: AmialColors.red,
+                    side: const BorderSide(color: AmialColors.red),
                     minimumSize: const Size.fromHeight(52),
                   ),
                 ),
@@ -300,7 +300,7 @@ class _AmialTransferHoldingScreenState
                   icon: const Icon(Icons.share, size: 18),
                   label: const Text('مشاركة الإيصال'),
                   style: FilledButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
+                    backgroundColor: AmialColors.primary,
                     minimumSize: const Size.fromHeight(52),
                   ),
                 ),
@@ -310,7 +310,7 @@ class _AmialTransferHoldingScreenState
                 icon: const Icon(Icons.home_outlined, size: 20),
                 label: const Text('العودة للرئيسية'),
                 style: TextButton.styleFrom(
-                    foregroundColor: AmyalColors.primary,
+                    foregroundColor: AmialColors.primary,
                     minimumSize: const Size.fromHeight(48)),
               ),
             ]),
@@ -330,12 +330,12 @@ class _AmialTransferHoldingScreenState
               style: TextStyle(
                   fontSize: small ? 11 : 14,
                   fontWeight: bold ? FontWeight.bold : FontWeight.w600,
-                  color: bold ? AmyalColors.primary : Colors.black87),
+                  color: bold ? AmialColors.primary : Colors.black87),
               overflow: TextOverflow.ellipsis),
         ),
         Text(label,
             style: const TextStyle(
-                fontSize: 13, color: AmyalColors.textSecondary)),
+                fontSize: 13, color: AmialColors.textSecondary)),
       ]),
     );
   }

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/access/controllers/access_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/wholesale/controllers/wholesale_controller.dart';
-import 'package:amyal_pay/features/wholesale/screens/wholesale_screens_secondary.dart';
-import 'package:amyal_pay/features/barcode/screens/continuous_scanner_screen.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_screens_secondary.dart';
+import 'package:amial_pay/features/barcode/screens/continuous_scanner_screen.dart';
 
 // =========================================================================
 // 1) Dashboard
@@ -33,7 +33,7 @@ class _WholesaleDashboardScreenState extends State<WholesaleDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('الجملة'),
       ),
@@ -57,7 +57,7 @@ class _WholesaleDashboardScreenState extends State<WholesaleDashboardScreen> {
                 ),
                 child: Row(children: [
                   Container(width: 50, height: 50,
-                      decoration: BoxDecoration(color: AmyalColors.yellow, borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(color: AmialColors.yellow, borderRadius: BorderRadius.circular(12)),
                       child: const Icon(Icons.warehouse, color: Colors.black87, size: 28)),
                   const SizedBox(width: 12),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -78,10 +78,10 @@ class _WholesaleDashboardScreenState extends State<WholesaleDashboardScreen> {
               return Column(children: [
                 Row(children: [
                   Expanded(child: _statBox('${d?['today']?['invoices_count'] ?? 0}',
-                      'فواتير اليوم', AmyalColors.primary, Icons.receipt)),
+                      'فواتير اليوم', AmialColors.primary, Icons.receipt)),
                   const SizedBox(width: 6),
                   Expanded(child: _statBox('${d?['today']?['total_amount'] ?? 0}',
-                      'مبيعات اليوم', AmyalColors.yellowDark, Icons.attach_money)),
+                      'مبيعات اليوم', AmialColors.yellowDark, Icons.attach_money)),
                 ]),
                 const SizedBox(height: 8),
                 Row(children: [
@@ -111,7 +111,7 @@ class _WholesaleDashboardScreenState extends State<WholesaleDashboardScreen> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
                   child: Row(children: [
-                    const Icon(Icons.account_balance, color: AmyalColors.primary),
+                    const Icon(Icons.account_balance, color: AmialColors.primary),
                     const SizedBox(width: 8),
                     Expanded(child: Text('إجمالي المستحقّات: ${d?['total_receivable'] ?? '0'} ر.ي',
                         style: const TextStyle(fontWeight: FontWeight.bold))),
@@ -124,7 +124,7 @@ class _WholesaleDashboardScreenState extends State<WholesaleDashboardScreen> {
 
             // الإجراء الأساسي
             _bigAction(Icons.receipt_long, 'فاتورة جديدة', 'إنشاء فاتورة بيع',
-                AmyalColors.primary, () => Get.to(() => const WholesaleInvoiceCreateScreen())),
+                AmialColors.primary, () => Get.to(() => const WholesaleInvoiceCreateScreen())),
 
             const SizedBox(height: 10),
             Row(children: [
@@ -189,7 +189,7 @@ class _WholesaleDashboardScreenState extends State<WholesaleDashboardScreen> {
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
       child: Column(children: [
-        Icon(icon, color: AmyalColors.primary, size: 22),
+        Icon(icon, color: AmialColors.primary, size: 22),
         const SizedBox(height: 4),
         Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
       ]),
@@ -219,12 +219,12 @@ class _WholesaleProductsScreenState extends State<WholesaleProductsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('المنتجات'),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AmyalColors.primary,
+        backgroundColor: AmialColors.primary,
         onPressed: _addProductDialog,
         icon: const Icon(Icons.add),
         label: const Text('منتج جديد'),
@@ -257,8 +257,8 @@ class _WholesaleProductsScreenState extends State<WholesaleProductsScreen> {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
       child: Row(children: [
         Container(width: 40, height: 40,
-            decoration: BoxDecoration(color: AmyalColors.yellow.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
-            child: const Icon(Icons.inventory_2, color: AmyalColors.yellowDark)),
+            decoration: BoxDecoration(color: AmialColors.yellow.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
+            child: const Icon(Icons.inventory_2, color: AmialColors.yellowDark)),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(p['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -266,7 +266,7 @@ class _WholesaleProductsScreenState extends State<WholesaleProductsScreen> {
             Text(p['barcode'], style: TextStyle(color: Colors.grey.shade600, fontSize: 11, fontFamily: 'monospace')),
           Text('${stock.toStringAsFixed(0)} ${p['unit'] ?? ''} • ${p['base_price']} ر.ي',
               style: TextStyle(
-                color: isLow ? AmyalColors.red : Colors.green.shade700,
+                color: isLow ? AmialColors.red : Colors.green.shade700,
                 fontSize: 12, fontWeight: FontWeight.bold,
               )),
         ])),
@@ -309,7 +309,7 @@ class _WholesaleProductsScreenState extends State<WholesaleProductsScreen> {
               Navigator.pop(ctx);
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red));
+              SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red));
             }
           },
           child: const Text('إضافة'),
@@ -342,7 +342,7 @@ class _WholesaleCustomersScreenState extends State<WholesaleCustomersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('العملاء'),
         actions: [
@@ -355,7 +355,7 @@ class _WholesaleCustomersScreenState extends State<WholesaleCustomersScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AmyalColors.primary,
+        backgroundColor: AmialColors.primary,
         onPressed: _addCustomerDialog,
         icon: const Icon(Icons.add),
         label: const Text('عميل جديد'),
@@ -394,16 +394,16 @@ class _WholesaleCustomersScreenState extends State<WholesaleCustomersScreen> {
           Row(children: [
             if (balance > 0) Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: AmyalColors.red.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(color: AmialColors.red.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
               child: Text('عليه: ${balance.toStringAsFixed(0)} ر.ي',
-                  style: const TextStyle(color: AmyalColors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                  style: const TextStyle(color: AmialColors.red, fontSize: 11, fontWeight: FontWeight.bold)),
             ),
             const SizedBox(width: 6),
             if (limit > 0) Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(color: AmyalColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(color: AmialColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
               child: Text('حدّ: ${limit.toStringAsFixed(0)}',
-                  style: const TextStyle(color: AmyalColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+                  style: const TextStyle(color: AmialColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
             ),
           ]),
         ]),
@@ -451,7 +451,7 @@ class _WholesaleCustomersScreenState extends State<WholesaleCustomersScreen> {
               Navigator.pop(ctx);
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red));
+              SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red));
             }
           },
           child: const Text('إضافة'),
@@ -507,12 +507,12 @@ class _WholesaleInvoiceCreateScreenState extends State<WholesaleInvoiceCreateScr
   Future<void> _submit() async {
     if (c.selectedCustomer.value == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('اختر عميلاً أوّلاً'), backgroundColor: AmyalColors.red));
+        const SnackBar(content: Text('اختر عميلاً أوّلاً'), backgroundColor: AmialColors.red));
       return;
     }
     if (c.cart.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('السلّة فارغة'), backgroundColor: AmyalColors.red));
+        const SnackBar(content: Text('السلّة فارغة'), backgroundColor: AmialColors.red));
       return;
     }
     final ok = await c.createInvoice(paymentType: _paymentType);
@@ -529,7 +529,7 @@ class _WholesaleInvoiceCreateScreenState extends State<WholesaleInvoiceCreateScr
               style: const TextStyle(fontFamily: 'monospace', fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Text('${inv?['total_amount']} ر.ي',
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AmialColors.primary)),
         ]),
         actions: [
           FilledButton(onPressed: () { Navigator.pop(context); Get.back(); }, child: const Text('إغلاق')),
@@ -537,14 +537,14 @@ class _WholesaleInvoiceCreateScreenState extends State<WholesaleInvoiceCreateScr
       ));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(c.lastError.value), backgroundColor: AmyalColors.red));
+        content: Text(c.lastError.value), backgroundColor: AmialColors.red));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('فاتورة جديدة'),
         actions: [
@@ -564,17 +564,17 @@ class _WholesaleInvoiceCreateScreenState extends State<WholesaleInvoiceCreateScr
               child: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: cust != null ? AmyalColors.primary.withValues(alpha: 0.08) : Colors.grey.shade100,
+                  color: cust != null ? AmialColors.primary.withValues(alpha: 0.08) : Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(children: [
-                  Icon(cust != null ? Icons.person : Icons.person_add, color: AmyalColors.primary),
+                  Icon(cust != null ? Icons.person : Icons.person_add, color: AmialColors.primary),
                   const SizedBox(width: 10),
                   Expanded(child: Text(
                     cust?['full_name'] ?? 'اختر العميل *',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: cust != null ? AmyalColors.primary : Colors.grey.shade700,
+                      color: cust != null ? AmialColors.primary : Colors.grey.shade700,
                     ),
                   )),
                   if (cust != null && (double.tryParse('${cust['credit_limit']}') ?? 0) > 0)
@@ -624,7 +624,7 @@ class _WholesaleInvoiceCreateScreenState extends State<WholesaleInvoiceCreateScr
               const Text('الإجمالي:', style: TextStyle(color: Colors.grey)),
               const Spacer(),
               Text('${c.cartSubtotal.toStringAsFixed(0)} ر.ي',
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmialColors.primary)),
             ]),
             const SizedBox(height: 8),
             Row(children: [
@@ -639,7 +639,7 @@ class _WholesaleInvoiceCreateScreenState extends State<WholesaleInvoiceCreateScr
                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.check),
               label: const Text('إنشاء الفاتورة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-              style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(48)),
+              style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(48)),
             ),
           ]),
         )),
@@ -662,7 +662,7 @@ class _WholesaleInvoiceCreateScreenState extends State<WholesaleInvoiceCreateScr
             onPressed: () => c.removeFromCart(item['product_id'])),
         const SizedBox(width: 4),
         Text('${(qty * price).toStringAsFixed(0)} ر.ي',
-            style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+            style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
         const Spacer(),
         Text('× $qty', style: const TextStyle(color: Colors.grey)),
         const SizedBox(width: 8),
@@ -680,12 +680,12 @@ class _WholesaleInvoiceCreateScreenState extends State<WholesaleInvoiceCreateScr
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? AmyalColors.primary : Colors.white,
+          color: selected ? AmialColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: selected ? AmyalColors.primary : Colors.grey.shade300),
+          border: Border.all(color: selected ? AmialColors.primary : Colors.grey.shade300),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: selected ? Colors.white : AmyalColors.primary, size: 18),
+          Icon(icon, color: selected ? Colors.white : AmialColors.primary, size: 18),
           Text(label, style: TextStyle(color: selected ? Colors.white : Colors.black, fontSize: 12)),
         ]),
       ),

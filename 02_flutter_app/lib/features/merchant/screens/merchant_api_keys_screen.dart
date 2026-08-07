@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
 /// AMIAL-API-ACCESS-001 — «مفاتيح API» (الباقة المؤسسية).
 ///
@@ -50,7 +50,7 @@ class _MerchantApiKeysScreenState extends State<MerchantApiKeysScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _generate() async {
     final label = TextEditingController();
@@ -86,24 +86,24 @@ class _MerchantApiKeysScreenState extends State<MerchantApiKeysScreen> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: const Row(children: [
-          Icon(Icons.vpn_key, color: AmyalColors.primary), SizedBox(width: 8), Text('مفتاحك الجديد'),
+          Icon(Icons.vpn_key, color: AmialColors.primary), SizedBox(width: 8), Text('مفتاحك الجديد'),
         ]),
         content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: AmyalColors.background, borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: AmialColors.background, borderRadius: BorderRadius.circular(8)),
             child: SelectableText(full, textDirection: TextDirection.ltr,
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 13, fontWeight: FontWeight.bold)),
           ),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: AmyalColors.red.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: AmialColors.red.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
             child: const Row(children: [
-              Icon(Icons.warning_amber, color: AmyalColors.red, size: 18),
+              Icon(Icons.warning_amber, color: AmialColors.red, size: 18),
               SizedBox(width: 6),
               Expanded(child: Text('احفظ المفتاح الآن — لن يظهر مجدداً بعد الإغلاق.',
-                  style: TextStyle(fontSize: 12, color: AmyalColors.red, fontWeight: FontWeight.w600))),
+                  style: TextStyle(fontSize: 12, color: AmialColors.red, fontWeight: FontWeight.w600))),
             ]),
           ),
         ]),
@@ -132,7 +132,7 @@ class _MerchantApiKeysScreenState extends State<MerchantApiKeysScreen> {
         content: const Text('سيتوقّف أي تكامل يستخدم هذا المفتاح فوراً. متابعة؟'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-          FilledButton(style: FilledButton.styleFrom(backgroundColor: AmyalColors.red),
+          FilledButton(style: FilledButton.styleFrom(backgroundColor: AmialColors.red),
               onPressed: () => Navigator.pop(ctx, true), child: const Text('حذف')),
         ],
       ),
@@ -145,19 +145,19 @@ class _MerchantApiKeysScreenState extends State<MerchantApiKeysScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('مفاتيح API'),
-          backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+          backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
       floatingActionButton: _error == null
           ? FloatingActionButton.extended(onPressed: _generate,
-              backgroundColor: AmyalColors.primary, icon: const Icon(Icons.add), label: const Text('مفتاح جديد'))
+              backgroundColor: AmialColors.primary, icon: const Icon(Icons.add), label: const Text('مفتاح جديد'))
           : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(child: Padding(padding: const EdgeInsets.all(24),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.workspace_premium, size: 56, color: AmyalColors.yellowDark),
+                    const Icon(Icons.workspace_premium, size: 56, color: AmialColors.yellowDark),
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -180,17 +180,17 @@ class _MerchantApiKeysScreenState extends State<MerchantApiKeysScreen> {
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const Row(children: [
-            Icon(Icons.api, color: AmyalColors.primary, size: 20), SizedBox(width: 6),
+            Icon(Icons.api, color: AmialColors.primary, size: 20), SizedBox(width: 6),
             Text('واجهة الشركاء', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           ]),
           const SizedBox(height: 8),
           const Text('أرسل الطلب مع ترويسة X-Api-Key لجلب مبيعاتك:',
-              style: TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+              style: TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
           const SizedBox(height: 8),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: AmyalColors.background, borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(color: AmialColors.background, borderRadius: BorderRadius.circular(8)),
             child: SelectableText('GET $_endpoint\nX-Api-Key: amk_...',
                 textDirection: TextDirection.ltr,
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
@@ -215,19 +215,19 @@ class _MerchantApiKeysScreenState extends State<MerchantApiKeysScreen> {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: (active ? AmyalColors.primary : AmyalColors.textSecondary).withValues(alpha: 0.12),
-          child: Icon(Icons.vpn_key, color: active ? AmyalColors.primary : AmyalColors.textSecondary, size: 20),
+          backgroundColor: (active ? AmialColors.primary : AmialColors.textSecondary).withValues(alpha: 0.12),
+          child: Icon(Icons.vpn_key, color: active ? AmialColors.primary : AmialColors.textSecondary, size: 20),
         ),
         title: Text('${k['label'] ?? 'مفتاح'}', style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${k['masked'] ?? ''}', textDirection: TextDirection.ltr,
               style: const TextStyle(fontFamily: 'monospace', fontSize: 11)),
           Text(lastUsed == null ? 'لم يُستخدم بعد' : 'آخر استخدام: ${_shortDate(lastUsed)}',
-              style: const TextStyle(fontSize: 10, color: AmyalColors.textSecondary)),
+              style: const TextStyle(fontSize: 10, color: AmialColors.textSecondary)),
         ]),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          Switch(value: active, activeColor: AmyalColors.primary, onChanged: (_) => _toggle(k['id'] as int)),
-          IconButton(icon: const Icon(Icons.delete_outline, size: 20, color: AmyalColors.red),
+          Switch(value: active, activeColor: AmialColors.primary, onChanged: (_) => _toggle(k['id'] as int)),
+          IconButton(icon: const Icon(Icons.delete_outline, size: 20, color: AmialColors.red),
               onPressed: () => _delete(k['id'] as int)),
         ]),
       ),

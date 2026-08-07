@@ -1,7 +1,7 @@
 
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
 
 class CustomSmallButtonWidget extends StatelessWidget {
   final String? text;

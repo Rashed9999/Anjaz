@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/access/controllers/access_controller.dart';
-import 'package:amyal_pay/features/access/widgets/access_gate.dart';
-import 'package:amyal_pay/features/access/screens/role_based_home_screens.dart';
-import 'package:amyal_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
-import 'package:amyal_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
-import 'package:amyal_pay/features/wholesale/screens/wholesale_screens.dart';
-import 'package:amyal_pay/features/access/screens/web_portal_notice_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/access/widgets/access_gate.dart';
+import 'package:amial_pay/features/access/screens/role_based_home_screens.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
+import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
+import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
 
 /// CRITICAL-001 — Home Dispatcher.
 ///
@@ -50,7 +50,7 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
       // 1) ما زال يُحمَّل
       if (_access.isLoading.value && !_access.isLoaded.value) {
         return const Scaffold(
-          backgroundColor: AmyalColors.background,
+          backgroundColor: AmialColors.background,
           body: Center(child: CircularProgressIndicator()),
         );
       }
@@ -114,7 +114,7 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
 
   Widget _placeholderScreen(String title) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Text(title),
       ),
@@ -122,7 +122,7 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.construction, size: 80, color: AmyalColors.yellowDark),
+            const Icon(Icons.construction, size: 80, color: AmialColors.yellowDark),
             const SizedBox(height: 16),
             Text(title, textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),

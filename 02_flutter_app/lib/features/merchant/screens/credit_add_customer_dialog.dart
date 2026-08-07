@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/merchant/controllers/customer_credit_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/customer_credit_controller.dart';
 
 /// AMIAL-CUSTOMER-CREDIT-001 — حوار إضافة عميل ائتماني.
 class CreditAddCustomerDialog extends StatefulWidget {
@@ -72,7 +72,7 @@ class _CreditAddCustomerDialogState extends State<CreditAddCustomerDialog> {
               ? const SizedBox.shrink()
               : Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(c.lastError.value, style: TextStyle(color: AmyalColors.red, fontSize: 12)),
+                  child: Text(c.lastError.value, style: TextStyle(color: AmialColors.red, fontSize: 12)),
                 )),
         ]),
       ),
@@ -80,7 +80,7 @@ class _CreditAddCustomerDialogState extends State<CreditAddCustomerDialog> {
         TextButton(onPressed: () => Get.back(result: false), child: const Text('إلغاء')),
         Obx(() => FilledButton(
           onPressed: c.isSubmitting.value ? null : _submit,
-          style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary),
+          style: FilledButton.styleFrom(backgroundColor: AmialColors.primary),
           child: c.isSubmitting.value
               ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : const Text('حفظ'),
@@ -92,7 +92,7 @@ class _CreditAddCustomerDialogState extends State<CreditAddCustomerDialog> {
   Future<void> _submit() async {
     if (_nameCtrl.text.trim().isEmpty || _phoneCtrl.text.trim().isEmpty) {
       Get.snackbar('تنبيه', 'الاسم ورقم الهاتف مطلوبان',
-          backgroundColor: AmyalColors.red.withValues(alpha: 0.1));
+          backgroundColor: AmialColors.red.withValues(alpha: 0.1));
       return;
     }
     final data = <String, dynamic>{

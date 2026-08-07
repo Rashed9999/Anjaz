@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-LOYALTY-001 — «برنامج الولاء» (باقة الأعمال فأعلى).
 ///
@@ -73,7 +73,7 @@ class _MerchantLoyaltyScreenState extends State<MerchantLoyaltyScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _save() async {
     final r = await _api.postData('/api/v1/amial/merchant/loyalty/program', {
@@ -141,26 +141,26 @@ class _MerchantLoyaltyScreenState extends State<MerchantLoyaltyScreen> {
                   decoration: const InputDecoration(labelText: 'هاتف العميل', border: OutlineInputBorder()))),
               const SizedBox(width: 8),
               IconButton.filled(onPressed: doLookup, icon: const Icon(Icons.search),
-                  style: IconButton.styleFrom(backgroundColor: AmyalColors.primary)),
+                  style: IconButton.styleFrom(backgroundColor: AmialColors.primary)),
             ]),
             if (info != null) ...[
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                    color: AmyalColors.primary.withValues(alpha: 0.06),
+                    color: AmialColors.primary.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(14)),
                 child: Column(children: [
                   Text('${info!['points_balance'] ?? '0'} نقطة',
-                      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AmialColors.primary)),
                   Text('≈ ${info!['estimated_value'] ?? '0'} ر.ي',
-                      style: const TextStyle(color: AmyalColors.textSecondary)),
+                      style: const TextStyle(color: AmialColors.textSecondary)),
                 ]),
               ),
               const SizedBox(height: 12),
               FilledButton.icon(onPressed: doRedeem, icon: const Icon(Icons.redeem),
                   label: const Text('استبدال بخصم'),
-                  style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(48))),
+                  style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(48))),
             ],
           ]),
         );
@@ -171,12 +171,12 @@ class _MerchantLoyaltyScreenState extends State<MerchantLoyaltyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('برنامج الولاء'),
-          backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+          backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
       floatingActionButton: _error == null && !_loading
           ? FloatingActionButton.extended(onPressed: _lookup,
-              backgroundColor: AmyalColors.primary, icon: const Icon(Icons.person_search),
+              backgroundColor: AmialColors.primary, icon: const Icon(Icons.person_search),
               label: const Text('رصيد عميل'))
           : null,
       body: _loading
@@ -184,7 +184,7 @@ class _MerchantLoyaltyScreenState extends State<MerchantLoyaltyScreen> {
           : _error != null
               ? Center(child: Padding(padding: const EdgeInsets.all(24),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.workspace_premium, size: 56, color: AmyalColors.yellowDark),
+                    const Icon(Icons.workspace_premium, size: 56, color: AmialColors.yellowDark),
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -200,7 +200,7 @@ class _MerchantLoyaltyScreenState extends State<MerchantLoyaltyScreen> {
                     if (_accounts.isEmpty)
                       const Padding(padding: EdgeInsets.symmetric(vertical: 24),
                           child: Center(child: Text('لا عملاء بعد — تُكتسب النقاط مع كل بيع بعميل معروف',
-                              textAlign: TextAlign.center, style: TextStyle(color: AmyalColors.textSecondary)))),
+                              textAlign: TextAlign.center, style: TextStyle(color: AmialColors.textSecondary)))),
                     ..._accounts.map(_accountTile),
                   ]),
                 ),
@@ -212,11 +212,11 @@ class _MerchantLoyaltyScreenState extends State<MerchantLoyaltyScreen> {
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
-            const Icon(Icons.card_giftcard, color: AmyalColors.primary),
+            const Icon(Icons.card_giftcard, color: AmialColors.primary),
             const SizedBox(width: 8),
             const Expanded(child: Text('إعداد البرنامج',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-            Switch(value: _active, activeColor: AmyalColors.primary,
+            Switch(value: _active, activeColor: AmialColors.primary,
                 onChanged: (v) => setState(() => _active = v)),
           ]),
           const SizedBox(height: 8),
@@ -228,7 +228,7 @@ class _MerchantLoyaltyScreenState extends State<MerchantLoyaltyScreen> {
           const SizedBox(height: 14),
           FilledButton.icon(onPressed: _save, icon: const Icon(Icons.save),
               label: const Text('حفظ الإعداد'),
-              style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(48))),
+              style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(48))),
         ]),
       );
 
@@ -244,8 +244,8 @@ class _MerchantLoyaltyScreenState extends State<MerchantLoyaltyScreen> {
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
         child: ListTile(
           leading: CircleAvatar(
-            backgroundColor: AmyalColors.yellow.withValues(alpha: 0.25),
-            child: const Icon(Icons.stars, color: AmyalColors.yellowDark),
+            backgroundColor: AmialColors.yellow.withValues(alpha: 0.25),
+            child: const Icon(Icons.stars, color: AmialColors.yellowDark),
           ),
           title: Text('${a['customer_name']?.toString().isNotEmpty == true ? a['customer_name'] : a['customer_phone']}',
               style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -253,8 +253,8 @@ class _MerchantLoyaltyScreenState extends State<MerchantLoyaltyScreen> {
               style: const TextStyle(fontSize: 11)),
           trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('${a['points_balance']}',
-                style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary, fontSize: 16)),
-            const Text('نقطة', style: TextStyle(fontSize: 10, color: AmyalColors.textSecondary)),
+                style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary, fontSize: 16)),
+            const Text('نقطة', style: TextStyle(fontSize: 10, color: AmialColors.textSecondary)),
           ]),
         ),
       );

@@ -9,14 +9,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/common/models/contact_model.dart';
-import 'package:amyal_pay/features/auth/controllers/unified_auth_controller.dart';
-import 'package:amyal_pay/features/auth/domain/reposotories/auth_repo.dart';
-import 'package:amyal_pay/features/transaction_money/controllers/transaction_controller.dart';
-import 'package:amyal_pay/features/transaction_money/domain/reposotories/transaction_repo.dart';
-import 'package:amyal_pay/features/receipts/controllers/receipts_controller.dart';
-import 'package:amyal_pay/features/receipts/domain/repositories/receipts_repo.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/common/models/contact_model.dart';
+import 'package:amial_pay/features/auth/controllers/unified_auth_controller.dart';
+import 'package:amial_pay/features/auth/domain/reposotories/auth_repo.dart';
+import 'package:amial_pay/features/transaction_money/controllers/transaction_controller.dart';
+import 'package:amial_pay/features/transaction_money/domain/reposotories/transaction_repo.dart';
+import 'package:amial_pay/features/receipts/controllers/receipts_controller.dart';
+import 'package:amial_pay/features/receipts/domain/repositories/receipts_repo.dart';
 
 /// ApiClient مزيّف: يُرجع استجابة ناجحة معلّبة حسب مسار الطلب.
 class _FakeApiClient implements ApiClient {

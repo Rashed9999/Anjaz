@@ -1,26 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/features/home/widgets/set_governorate_sheet.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/favorite_number/screens/amial_favorites_screen.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/features/requested_money/screens/payment_request_create_screen.dart';
-import 'package:amyal_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
-import 'package:amyal_pay/features/withdraw/screens/withdraw_request_screen.dart';
-import 'package:amyal_pay/features/receipts/screens/receipts_list_screen.dart';
-import 'package:amyal_pay/features/notification/screens/notifications_center_screen.dart';
-import 'package:amyal_pay/features/notification/controllers/notifications_center_controller.dart';
-import 'package:amyal_pay/features/setting/screens/profile_screen.dart';
-import 'package:amyal_pay/features/setting/screens/qr_code_download_or_share_screen.dart';
-import 'package:amyal_pay/features/me/screens/my_services_screen.dart';
-import 'package:amyal_pay/features/transaction_money/controllers/contact_controller.dart';
-import 'package:amyal_pay/features/transaction_money/screens/amial_send_money_screen.dart';
-import 'package:amyal_pay/features/reports/screens/amial_reports_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_pay_screen.dart';
-import 'package:amyal_pay/common/widgets/amial_pattern_background.dart';
+import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/home/widgets/set_governorate_sheet.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/favorite_number/screens/amial_favorites_screen.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
+import 'package:amial_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
+import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
+import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
+import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
+import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
+import 'package:amial_pay/features/setting/screens/profile_screen.dart';
+import 'package:amial_pay/features/setting/screens/qr_code_download_or_share_screen.dart';
+import 'package:amial_pay/features/me/screens/my_services_screen.dart';
+import 'package:amial_pay/features/transaction_money/controllers/contact_controller.dart';
+import 'package:amial_pay/features/transaction_money/screens/amial_send_money_screen.dart';
+import 'package:amial_pay/features/reports/screens/amial_reports_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_pay_screen.dart';
+import 'package:amial_pay/common/widgets/amial_pattern_background.dart';
 
 /// AMIAL-CUSTOMER-HOME-002 — الرئيسية بتصميم «المحفظة».
 ///
@@ -167,10 +167,10 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
     // AMIAL-PATTERN-001: نقشة هوية خفيفة خلف الترويسة وبطاقة الرصيد —
     // كانت الخلفية لوناً مسطّحاً بلا أي عمق أو انتماء بصري.
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       body: AmialPatternBackground(
         child: RefreshIndicator(
-        color: AmyalColors.primary,
+        color: AmialColors.primary,
         onRefresh: _load,
         child: ListView(
           padding: EdgeInsets.zero,
@@ -348,7 +348,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         children: [
           _circleBtn(
             child: const Icon(Icons.person_outline_rounded,
-                color: AmyalColors.primary, size: 24),
+                color: AmialColors.primary, size: 24),
             onTap: () => Get.to(() => const ProfileScreen()),
           ),
           const SizedBox(width: 8),
@@ -357,7 +357,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
           // ما بُنيت لأجله. والترويسة موضعها الطبيعي في المحافظ المهنية.
           _circleBtn(
             child: const Icon(Icons.star_border_rounded,
-                color: AmyalColors.primary, size: 24),
+                color: AmialColors.primary, size: 24),
             onTap: () => Get.to(() => const AmialFavoritesScreen()),
           ),
           Expanded(
@@ -371,7 +371,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                 Text(
                   _name.isEmpty ? 'محفظتي وعملياتي' : 'أهلاً، $_name',
                   style: const TextStyle(
-                      fontSize: 12, color: AmyalColors.textSecondary),
+                      fontSize: 12, color: AmialColors.textSecondary),
                 ),
               ],
             ),
@@ -384,14 +384,14 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
               } catch (_) {}
               return Stack(clipBehavior: Clip.none, children: [
                 const Icon(Icons.notifications_none_rounded,
-                    color: AmyalColors.primary, size: 24),
+                    color: AmialColors.primary, size: 24),
                 if (unread > 0)
                   Positioned(
                     top: -2, left: -2,
                     child: Container(
                       width: 9, height: 9,
                       decoration: const BoxDecoration(
-                          color: AmyalColors.red, shape: BoxShape.circle),
+                          color: AmialColors.red, shape: BoxShape.circle),
                     ),
                   ),
               ]);
@@ -442,7 +442,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: AmyalColors.primary.withValues(alpha: 0.28),
+            color: AmialColors.primary.withValues(alpha: 0.28),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -507,7 +507,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                       const SizedBox(width: 6),
                       const Text('ر.ي',
                           style: TextStyle(
-                              color: AmyalColors.yellow,
+                              color: AmialColors.yellow,
                               fontSize: 15,
                               fontWeight: FontWeight.w700)),
                     ],
@@ -623,7 +623,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-              color: AmyalColors.primary.withValues(alpha: 0.18)),
+              color: AmialColors.primary.withValues(alpha: 0.18)),
         ),
         child: Row(
           children: [
@@ -631,11 +631,11 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: AmyalColors.primary.withValues(alpha: 0.08),
+                color: AmialColors.primary.withValues(alpha: 0.08),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.person_add_alt_1_rounded,
-                  color: AmyalColors.primary, size: 22),
+                  color: AmialColors.primary, size: 22),
             ),
             const SizedBox(width: 12),
             const Expanded(
@@ -650,12 +650,12 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                   SizedBox(height: 2),
                   Text('أرسل أول تحويل ليظهر المستلِم هنا للمرّات القادمة',
                       style: TextStyle(
-                          fontSize: 11.5, color: AmyalColors.textSecondary)),
+                          fontSize: 11.5, color: AmialColors.textSecondary)),
                 ],
               ),
             ),
             const Icon(Icons.chevron_left_rounded,
-                color: AmyalColors.textMuted),
+                color: AmialColors.textMuted),
           ],
         ),
       ),
@@ -674,10 +674,10 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
               shape: BoxShape.circle,
               color: Colors.white,
               border: Border.all(
-                  color: AmyalColors.primary.withValues(alpha: 0.45)),
+                  color: AmialColors.primary.withValues(alpha: 0.45)),
             ),
             child: const Icon(Icons.add_rounded,
-                color: AmyalColors.primary, size: 26),
+                color: AmialColors.primary, size: 26),
           ),
           const SizedBox(height: 6),
           const Text('إرسال',
@@ -734,7 +734,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 24),
             child: Center(
-                child: CircularProgressIndicator(color: AmyalColors.primary)),
+                child: CircularProgressIndicator(color: AmialColors.primary)),
           )
         else if (_recent.isEmpty)
           Container(
@@ -746,10 +746,10 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
             ),
             child: const Column(children: [
               Icon(Icons.receipt_long_outlined,
-                  size: 34, color: AmyalColors.textMuted),
+                  size: 34, color: AmialColors.textMuted),
               SizedBox(height: 8),
               Text('لا توجد عمليات بعد',
-                  style: TextStyle(color: AmyalColors.textSecondary)),
+                  style: TextStyle(color: AmialColors.textSecondary)),
             ]),
           )
         else
@@ -844,7 +844,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                            fontSize: 10.5, color: AmyalColors.textMuted),
+                            fontSize: 10.5, color: AmialColors.textMuted),
                       ),
                     ),
                   ]),
@@ -865,7 +865,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                 const SizedBox(height: 3),
                 Text(dateText.split('  •  ').first,
                     style: const TextStyle(
-                        fontSize: 10, color: AmyalColors.textMuted)),
+                        fontSize: 10, color: AmialColors.textMuted)),
               ],
             ),
           ],
@@ -951,7 +951,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(s.icon, size: 30, color: AmyalColors.primary),
+            Icon(s.icon, size: 30, color: AmialColors.primary),
             const SizedBox(height: 9),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -991,7 +991,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
 
     if (voided) {
       label = 'ملغاة';
-      color = AmyalColors.textMuted;
+      color = AmialColors.textMuted;
     } else {
       color = const Color(0xFF16A34A);
       label = switch (type) {
@@ -1040,7 +1040,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
             onTap: onTrailing,
             child: Text(trailing,
                 style: const TextStyle(
-                    color: AmyalColors.primary,
+                    color: AmialColors.primary,
                     fontWeight: FontWeight.w600,
                     fontSize: 12.5)),
           ),

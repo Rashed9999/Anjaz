@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/no_data_widget.dart';
-import 'package:amyal_pay/features/favorite_number/controllers/fav_number_controller.dart';
-import 'package:amyal_pay/features/favorite_number/domain/models/favorite_list_model.dart';
-import 'package:amyal_pay/features/favorite_number/screens/add_fav_number_screen.dart';
-import 'package:amyal_pay/features/favorite_number/widgets/fav_num_limit_reached_dialog_widget.dart';
-import 'package:amyal_pay/features/favorite_number/widgets/fav_number_list_item_widget.dart';
-import 'package:amyal_pay/features/transaction_money/controllers/contact_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/no_data_widget.dart';
+import 'package:amial_pay/features/favorite_number/controllers/fav_number_controller.dart';
+import 'package:amial_pay/features/favorite_number/domain/models/favorite_list_model.dart';
+import 'package:amial_pay/features/favorite_number/screens/add_fav_number_screen.dart';
+import 'package:amial_pay/features/favorite_number/widgets/fav_num_limit_reached_dialog_widget.dart';
+import 'package:amial_pay/features/favorite_number/widgets/fav_number_list_item_widget.dart';
+import 'package:amial_pay/features/transaction_money/controllers/contact_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 
 class FavoriteNumberScreen extends StatefulWidget {
@@ -47,7 +47,7 @@ class _FavoriteNumberScreenState extends State<FavoriteNumberScreen> {
             inAsyncCall: contactController.isContactListLoading,
             progressIndicator: CircularProgressIndicator(color: Theme.of(context).primaryColor),
             child: Scaffold(
-              appBar: AppBar(title: Text('favorite_number'.tr), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
+              appBar: AppBar(title: Text('favorite_number'.tr), backgroundColor: AmialColors.primary, foregroundColor: Colors.white, elevation: 0),
               body: Skeletonizer(
                 enabled: favNumberController.favouriteListModel == null,
                 child: Column(children: [

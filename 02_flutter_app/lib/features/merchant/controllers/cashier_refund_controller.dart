@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/domain/repositories/cashier_refund_repo.dart';
+import 'package:amial_pay/features/merchant/domain/repositories/cashier_refund_repo.dart';
 
 /// AMIAL-CASHIER-REFUND-001 — متحكّم المرتجعات.
 class CashierRefundController extends GetxController implements GetxService {

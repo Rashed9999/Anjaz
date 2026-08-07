@@ -1,6 +1,6 @@
 import 'package:azlistview/azlistview.dart';
 import 'package:flutter_contacts/contact.dart';
-import 'package:amyal_pay/features/favorite_number/domain/models/favorite_list_model.dart';
+import 'package:amial_pay/features/favorite_number/domain/models/favorite_list_model.dart';
 
 class ContactTagModel extends ISuspensionBean{
   final Contact? contact;

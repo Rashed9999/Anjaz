@@ -1,37 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/screens/inventory_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/access/controllers/access_controller.dart';
-import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
+import 'package:amial_pay/features/merchant/screens/inventory_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 // شاشات الخدمات
-import 'package:amyal_pay/features/merchant/screens/profit_report_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_staff_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_audit_log_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_excel_export_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_currencies_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_api_keys_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_backup_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_loyalty_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_promotions_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_installments_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_gift_cards_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_shift_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_expenses_screen.dart';
-import 'package:amyal_pay/features/branches/screens/branches_management_screen.dart';
-import 'package:amyal_pay/features/corporate/screens/corporate_accounts_screen.dart';
+import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_excel_export_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_currencies_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_api_keys_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_backup_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_loyalty_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_promotions_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_installments_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_gift_cards_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_shift_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_expenses_screen.dart';
+import 'package:amial_pay/features/branches/screens/branches_management_screen.dart';
+import 'package:amial_pay/features/corporate/screens/corporate_accounts_screen.dart';
 // AMIAL-SERVICES-CATALOG-002 — شاشات كانت مبنيّة بلا مدخل من «خدماتي»
-import 'package:amyal_pay/features/merchant/screens/offline_sales_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_refund_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_products_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/receipt_settings_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/split_bill_create_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/inventory_audit_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/stock_alerts_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/credit_customers_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_report_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_transactions_screen.dart';
+import 'package:amial_pay/features/merchant/screens/offline_sales_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart';
+import 'package:amial_pay/features/merchant/screens/receipt_settings_screen.dart';
+import 'package:amial_pay/features/merchant/screens/split_bill_create_screen.dart';
+import 'package:amial_pay/features/merchant/screens/inventory_audit_screen.dart';
+import 'package:amial_pay/features/merchant/screens/stock_alerts_screen.dart';
+import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
+import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_transactions_screen.dart';
 
 /// AMIAL-MERCHANT-SERVICES-HUB-001 — «مركز خدمات التاجر».
 ///
@@ -46,7 +46,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final access = Get.find<AccessController>();
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('خدمات التاجر'),
       ),
@@ -95,7 +95,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.only(bottom: 10),
                 child: Text('اضغط أي خدمة لترى ما تفعله وباقتها',
-                    style: TextStyle(fontSize: 11.5, color: AmyalColors.textMuted)),
+                    style: TextStyle(fontSize: 11.5, color: AmialColors.textMuted)),
               ),
               _grid(context, access, upgradable),
               const SizedBox(height: 22),
@@ -109,7 +109,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
                 child: Text(
                     'هذه الخدمات مصمَّمة لنشاطات غير ${access.businessTypeLabel.value ?? 'نشاطك'} '
                     '— لا تفتحها ترقية الباقة.',
-                    style: const TextStyle(fontSize: 11.5, color: AmyalColors.textMuted)),
+                    style: const TextStyle(fontSize: 11.5, color: AmialColors.textMuted)),
               ),
               _grid(context, access, foreign),
             ],
@@ -160,14 +160,14 @@ class MerchantServicesHubScreen extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AmyalColors.primary, Color(0xFF1D4FB8)],
+          colors: [AmialColors.primary, Color(0xFF1D4FB8)],
           begin: Alignment.topRight, end: Alignment.bottomLeft,
         ),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          const Icon(Icons.workspace_premium, color: AmyalColors.yellow, size: 26),
+          const Icon(Icons.workspace_premium, color: AmialColors.yellow, size: 26),
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -179,7 +179,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
           TextButton(
             onPressed: () => Get.to(() => const PlansCatalogScreen()),
             style: TextButton.styleFrom(
-              backgroundColor: AmyalColors.yellow,
+              backgroundColor: AmialColors.yellow,
               foregroundColor: Colors.black,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             ),
@@ -193,7 +193,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
             value: total == 0 ? 0 : unlocked / total,
             minHeight: 8,
             backgroundColor: Colors.white24,
-            valueColor: const AlwaysStoppedAnimation(AmyalColors.yellow),
+            valueColor: const AlwaysStoppedAnimation(AmialColors.yellow),
           ),
         ),
         const SizedBox(height: 6),
@@ -207,7 +207,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
   // هاتفٍ ضيّق — التقطه اختبار الترتيب عند عرض 400. وExpanded يجعل النصّ
   // يقصّ نفسه بدل أن يدفع الصفّ خارج الشاشة.
   Widget _sectionTitle(String title, IconData icon) => Row(children: [
-        Icon(icon, size: 18, color: AmyalColors.primary),
+        Icon(icon, size: 18, color: AmialColors.primary),
         const SizedBox(width: 8),
         Expanded(
           child: Text(title,
@@ -230,24 +230,24 @@ class MerchantServicesHubScreen extends StatelessWidget {
           color: locked ? const Color(0xFFEDEFF3) : Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-              color: locked ? AmyalColors.border : AmyalColors.primary.withValues(alpha: 0.30)),
+              color: locked ? AmialColors.border : AmialColors.primary.withValues(alpha: 0.30)),
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Stack(alignment: Alignment.topRight, clipBehavior: Clip.none, children: [
             Container(
               width: 46, height: 46,
               decoration: BoxDecoration(
-                color: locked ? Colors.grey.shade300 : AmyalColors.primary.withValues(alpha: 0.10),
+                color: locked ? Colors.grey.shade300 : AmialColors.primary.withValues(alpha: 0.10),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(s.icon, size: 24, color: locked ? Colors.grey.shade600 : AmyalColors.primary),
+              child: Icon(s.icon, size: 24, color: locked ? Colors.grey.shade600 : AmialColors.primary),
             ),
             if (locked)
               Positioned(top: -4, right: -4,
                   child: Container(
                     padding: const EdgeInsets.all(3),
                     decoration: BoxDecoration(
-                        color: foreign ? Colors.grey.shade500 : AmyalColors.yellowDark,
+                        color: foreign ? Colors.grey.shade500 : AmialColors.yellowDark,
                         shape: BoxShape.circle),
                     child: Icon(foreign ? Icons.block : Icons.lock,
                         size: 11, color: Colors.white),
@@ -258,11 +258,11 @@ class MerchantServicesHubScreen extends StatelessWidget {
               textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   fontSize: 13, fontWeight: FontWeight.w600,
-                  color: locked ? Colors.grey.shade700 : AmyalColors.textPrimary)),
+                  color: locked ? Colors.grey.shade700 : AmialColors.textPrimary)),
           const SizedBox(height: 1),
           Text(_categoryOf(s.code),
               maxLines: 1, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 9.5, color: AmyalColors.textMuted)),
+              style: const TextStyle(fontSize: 9.5, color: AmialColors.textMuted)),
           const SizedBox(height: 2),
           Text(
               foreign
@@ -275,7 +275,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
                   color: foreign
                       ? Colors.grey.shade600
                       : locked
-                          ? AmyalColors.yellowDark
+                          ? AmialColors.yellowDark
                           : const Color(0xFF2E7D32))),
         ]),
       ),
@@ -302,10 +302,10 @@ class MerchantServicesHubScreen extends StatelessWidget {
             Container(
               width: 52, height: 52,
               decoration: BoxDecoration(
-                color: (locked ? AmyalColors.yellowDark : AmyalColors.primary).withValues(alpha: 0.12),
+                color: (locked ? AmialColors.yellowDark : AmialColors.primary).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(s.icon, color: locked ? AmyalColors.yellowDark : AmyalColors.primary),
+              child: Icon(s.icon, color: locked ? AmialColors.yellowDark : AmialColors.primary),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -322,7 +322,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
                       color: foreign
                           ? Colors.grey.shade600
                           : locked
-                              ? AmyalColors.yellowDark
+                              ? AmialColors.yellowDark
                               : const Color(0xFF2E7D32)),
                   const SizedBox(width: 4),
                   Text(
@@ -336,14 +336,14 @@ class MerchantServicesHubScreen extends StatelessWidget {
                           color: foreign
                               ? Colors.grey.shade600
                               : locked
-                                  ? AmyalColors.yellowDark
+                                  ? AmialColors.yellowDark
                                   : const Color(0xFF2E7D32))),
                 ]),
               ]),
             ),
           ]),
           const SizedBox(height: 16),
-          Text(s.desc, style: const TextStyle(fontSize: 14, height: 1.6, color: AmyalColors.textSecondary)),
+          Text(s.desc, style: const TextStyle(fontSize: 14, height: 1.6, color: AmialColors.textSecondary)),
           const SizedBox(height: 22),
           // خدمةٌ لنشاطٍ آخر: لا زرّ ترقية. زرٌّ لا يُوصل إلى شيء أسوأ من
           // غيابه — يدفع صاحب المحطة إلى شراء باقةٍ أعلى لن تفتحها له.
@@ -371,7 +371,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
               icon: const Icon(Icons.workspace_premium),
               label: Text('الترقية إلى باقة ${s.planLabel}'),
               style: FilledButton.styleFrom(
-                backgroundColor: AmyalColors.yellowDark,
+                backgroundColor: AmialColors.yellowDark,
                 minimumSize: const Size.fromHeight(52),
               ),
             )
@@ -381,7 +381,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
               icon: const Icon(Icons.arrow_back),
               label: const Text('افتح الخدمة'),
               style: FilledButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 minimumSize: const Size.fromHeight(52),
               ),
             )
@@ -389,11 +389,11 @@ class MerchantServicesHubScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AmyalColors.background,
+                color: AmialColors.background,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Row(children: [
-                Icon(Icons.info_outline, color: AmyalColors.primary, size: 20),
+                Icon(Icons.info_outline, color: AmialColors.primary, size: 20),
                 SizedBox(width: 10),
                 Expanded(child: Text('تعمل هذه الخدمة تلقائياً داخل الكاشير — لا تحتاج فتح شاشة.',
                     style: TextStyle(fontSize: 13))),

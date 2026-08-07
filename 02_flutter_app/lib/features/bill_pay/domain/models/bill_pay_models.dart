@@ -1,15 +1,15 @@
 /// AMIAL-BILL-PAY-001 (v0.9-D Flutter)
 library;
 
-class AmyalBillProvider {
+class AmialBillProvider {
   final int id;
   final String code;
   final String name;
   final String displayNameAr;
   final bool isActive;
-  final List<AmyalBillService> services;
+  final List<AmialBillService> services;
 
-  AmyalBillProvider({
+  AmialBillProvider({
     required this.id,
     required this.code,
     required this.name,
@@ -18,22 +18,22 @@ class AmyalBillProvider {
     required this.services,
   });
 
-  factory AmyalBillProvider.fromJson(Map<String, dynamic> j) {
+  factory AmialBillProvider.fromJson(Map<String, dynamic> j) {
     final servicesList = j['services'] as List? ?? [];
-    return AmyalBillProvider(
+    return AmialBillProvider(
       id: j['id'] ?? 0,
       code: j['code'] ?? '',
       name: j['name'] ?? '',
       displayNameAr: j['display_name_ar'] ?? j['name'] ?? '',
       isActive: j['is_active'] == true || j['is_active'] == 1,
       services: servicesList
-          .map((s) => AmyalBillService.fromJson(Map<String, dynamic>.from(s)))
+          .map((s) => AmialBillService.fromJson(Map<String, dynamic>.from(s)))
           .toList(),
     );
   }
 }
 
-class AmyalBillService {
+class AmialBillService {
   final int id;
   final int providerId;
   final String code;
@@ -42,7 +42,7 @@ class AmyalBillService {
   final bool isActive;
   final bool requiresAccountNumber;
 
-  AmyalBillService({
+  AmialBillService({
     required this.id,
     required this.providerId,
     required this.code,
@@ -52,7 +52,7 @@ class AmyalBillService {
     required this.requiresAccountNumber,
   });
 
-  factory AmyalBillService.fromJson(Map<String, dynamic> j) => AmyalBillService(
+  factory AmialBillService.fromJson(Map<String, dynamic> j) => AmialBillService(
     id: j['id'] ?? 0,
     providerId: j['provider_id'] ?? 0,
     code: j['code'] ?? '',
@@ -63,7 +63,7 @@ class AmyalBillService {
   );
 }
 
-class AmyalBillProduct {
+class AmialBillProduct {
   final int id;
   final int serviceId;
   final String productCode;
@@ -74,7 +74,7 @@ class AmyalBillProduct {
   final String? maxAmount;
   final String feeAmount;
 
-  AmyalBillProduct({
+  AmialBillProduct({
     required this.id,
     required this.serviceId,
     required this.productCode,
@@ -86,7 +86,7 @@ class AmyalBillProduct {
     required this.feeAmount,
   });
 
-  factory AmyalBillProduct.fromJson(Map<String, dynamic> j) => AmyalBillProduct(
+  factory AmialBillProduct.fromJson(Map<String, dynamic> j) => AmialBillProduct(
     id: j['id'] ?? 0,
     serviceId: j['service_id'] ?? 0,
     productCode: j['product_code'] ?? '',
@@ -102,7 +102,7 @@ class AmyalBillProduct {
   bool get isVariable => amountType == 'variable';
 }
 
-class AmyalBillOrder {
+class AmialBillOrder {
   final int id;
   final String orderUlid;
   final int userId;
@@ -116,7 +116,7 @@ class AmyalBillOrder {
   final DateTime? completedAt;
   final DateTime? createdAt;
 
-  AmyalBillOrder({
+  AmialBillOrder({
     required this.id,
     required this.orderUlid,
     required this.userId,
@@ -131,7 +131,7 @@ class AmyalBillOrder {
     this.createdAt,
   });
 
-  factory AmyalBillOrder.fromJson(Map<String, dynamic> j) => AmyalBillOrder(
+  factory AmialBillOrder.fromJson(Map<String, dynamic> j) => AmialBillOrder(
     id: j['id'] ?? 0,
     orderUlid: j['order_ulid'] ?? '',
     userId: j['user_id'] ?? 0,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-CORPORATE-ACCOUNTS-001 — تفاصيل حساب شركة: الرصيد، الأعضاء، الحركات،
 /// وإجراءات (شراء على الحساب / سداد / إضافة عضو).
@@ -54,7 +54,7 @@ class _CorporateAccountDetailScreenState extends State<CorporateAccountDetailScr
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _amountDialog(String title, String endpoint, String okMsg) async {
     final amt = TextEditingController();
@@ -136,10 +136,10 @@ class _CorporateAccountDetailScreenState extends State<CorporateAccountDetailScr
   Widget build(BuildContext context) {
     final bal = double.tryParse('${_account['current_balance'] ?? 0}') ?? 0;
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Text('${_account['company_name'] ?? 'حساب شركة'}'),
-        backgroundColor: AmyalColors.primary, foregroundColor: Colors.white,
+        backgroundColor: AmialColors.primary, foregroundColor: Colors.white,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -152,12 +152,12 @@ class _CorporateAccountDetailScreenState extends State<CorporateAccountDetailScr
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
                   child: Column(children: [
                     Text('${_account['account_code'] ?? ''}',
-                        style: const TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+                        style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
                     const SizedBox(height: 8),
                     Text('${_fmt(bal)} ر.ي',
                         style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold,
-                            color: bal > 0 ? AmyalColors.red : const Color(0xFF2E7D32))),
-                    const Text('المستحقّ على الشركة', style: TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+                            color: bal > 0 ? AmialColors.red : const Color(0xFF2E7D32))),
+                    const Text('المستحقّ على الشركة', style: TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
                     const Divider(height: 24),
                     Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
                       _stat('حدّ الائتمان', '${_fmt(_account['credit_limit'])}'),
@@ -171,7 +171,7 @@ class _CorporateAccountDetailScreenState extends State<CorporateAccountDetailScr
                     onPressed: () => _amountDialog('شراء على الحساب', 'charge', 'تم تسجيل الشراء'),
                     icon: const Icon(Icons.add_shopping_cart, size: 18),
                     label: const Text('شراء'),
-                    style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(48)),
+                    style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(48)),
                   )),
                   const SizedBox(width: 10),
                   Expanded(child: FilledButton.icon(
@@ -188,12 +188,12 @@ class _CorporateAccountDetailScreenState extends State<CorporateAccountDetailScr
                   const Text('الأعضاء المخوّلون', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   TextButton.icon(onPressed: _addMemberDialog, icon: const Icon(Icons.person_add, size: 18), label: const Text('إضافة')),
                 ]),
-                if (_members.isEmpty) const Text('لا أعضاء بعد', style: TextStyle(fontSize: 12, color: AmyalColors.textMuted)),
+                if (_members.isEmpty) const Text('لا أعضاء بعد', style: TextStyle(fontSize: 12, color: AmialColors.textMuted)),
                 ..._members.map((m) => Card(
                   margin: const EdgeInsets.only(bottom: 6),
                   child: ListTile(
                     dense: true,
-                    leading: const Icon(Icons.badge_outlined, color: AmyalColors.primary),
+                    leading: const Icon(Icons.badge_outlined, color: AmialColors.primary),
                     title: Text('${m['member_name']}'),
                     subtitle: Text([
                       if ((m['identifier'] ?? '').toString().isNotEmpty) 'معرّف: ${m['identifier']}',
@@ -206,7 +206,7 @@ class _CorporateAccountDetailScreenState extends State<CorporateAccountDetailScr
                 // الحركات
                 const Text('كشف الحساب', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                 const SizedBox(height: 6),
-                if (_movements.isEmpty) const Text('لا حركات', style: TextStyle(fontSize: 12, color: AmyalColors.textMuted)),
+                if (_movements.isEmpty) const Text('لا حركات', style: TextStyle(fontSize: 12, color: AmialColors.textMuted)),
                 ..._movements.map(_movementRow),
               ]),
             ),
@@ -214,13 +214,13 @@ class _CorporateAccountDetailScreenState extends State<CorporateAccountDetailScr
   }
 
   Widget _stat(String k, String v) => Column(children: [
-        Text('$v ر.ي', style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary)),
-        Text(k, style: const TextStyle(fontSize: 11, color: AmyalColors.textSecondary)),
+        Text('$v ر.ي', style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
+        Text(k, style: const TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
       ]);
 
   Widget _movementRow(Map<String, dynamic> m) {
     final isCharge = m['type'] == 'charge' || m['type'] == 'adjustment';
-    final color = isCharge ? AmyalColors.red : const Color(0xFF2E7D32);
+    final color = isCharge ? AmialColors.red : const Color(0xFF2E7D32);
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),

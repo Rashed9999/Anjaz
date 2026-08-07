@@ -1,12 +1,12 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/models/contact_model.dart';
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/features/favorite_number/domain/enums/fav_type.dart';
-import 'package:amyal_pay/features/favorite_number/domain/models/favorite_list_model.dart';
-import 'package:amyal_pay/features/favorite_number/domain/repositories/fav_number_repo.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/features/transaction_money/controllers/contact_controller.dart';
-import 'package:amyal_pay/features/transaction_money/screens/transaction_balance_input_screen.dart';
+import 'package:amial_pay/common/models/contact_model.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/features/favorite_number/domain/enums/fav_type.dart';
+import 'package:amial_pay/features/favorite_number/domain/models/favorite_list_model.dart';
+import 'package:amial_pay/features/favorite_number/domain/repositories/fav_number_repo.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/features/transaction_money/controllers/contact_controller.dart';
+import 'package:amial_pay/features/transaction_money/screens/transaction_balance_input_screen.dart';
 
 class FavNumberController extends GetxController implements GetxService{
   final FavNumberRepo favNumberRepo;

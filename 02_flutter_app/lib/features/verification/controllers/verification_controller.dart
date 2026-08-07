@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
 import 'package:get/get.dart';
 
 class VerificationController extends GetxController implements GetxService{

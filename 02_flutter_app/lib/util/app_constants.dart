@@ -1,9 +1,9 @@
-import 'package:amyal_pay/common/models/language_model.dart';
+import 'package:amial_pay/common/models/language_model.dart';
 import 'images.dart';
 
 class AppConstants {
-  // AMYAL-BRANDING-001
-  static const String appName = 'Amyal Pay';
+  // AMIAL-BRANDING-001
+  static const String appName = 'Amial Pay';
   static const String appNameAr = 'أميال باي';
   static const String appTagline = 'دفع سريع وآمن';
   // ══════════════════════════════════════════════════════════════════
@@ -90,71 +90,71 @@ class AppConstants {
   static const String createReportDispute = '/api/v1/customer/dispute/create';
 
   // ============================================================
-  // AMYAL Endpoints (v0.7-A backend)
+  // AMIAL Endpoints (v0.7-A backend)
   // ============================================================
 
   // Zone Policy
-  static const String amyalPolicySession = '/api/v1/amial/policy/session';
+  static const String amialPolicySession = '/api/v1/amial/policy/session';
 
   // Legal Terms
-  static const String amyalLegalStatus = '/api/v1/amial/legal/status';
-  static const String amyalLegalCurrent = '/api/v1/amial/legal/current';
-  static const String amyalLegalAccept = '/api/v1/amial/legal/accept';
+  static const String amialLegalStatus = '/api/v1/amial/legal/status';
+  static const String amialLegalCurrent = '/api/v1/amial/legal/current';
+  static const String amialLegalAccept = '/api/v1/amial/legal/accept';
 
   // Account Recovery
-  static const String amyalRecoveryInitiateSelf = '/api/v1/amial/recovery/initiate-self';
-  static const String amyalRecoveryInitiateLost = '/api/v1/amial/recovery/initiate-lost';
-  static const String amyalRecoveryVerifyOtp = '/api/v1/amial/recovery/'; // + {ulid}/verify-otp
-  static const String amyalRecoveryComplete = '/api/v1/amial/recovery/';  // + {ulid}/complete
-  static const String amyalRecoveryShow = '/api/v1/amial/recovery/';      // + {ulid}
+  static const String amialRecoveryInitiateSelf = '/api/v1/amial/recovery/initiate-self';
+  static const String amialRecoveryInitiateLost = '/api/v1/amial/recovery/initiate-lost';
+  static const String amialRecoveryVerifyOtp = '/api/v1/amial/recovery/'; // + {ulid}/verify-otp
+  static const String amialRecoveryComplete = '/api/v1/amial/recovery/';  // + {ulid}/complete
+  static const String amialRecoveryShow = '/api/v1/amial/recovery/';      // + {ulid}
 
   // ============================================================
-  // AMYAL v0.9 Endpoints
+  // AMIAL v0.9 Endpoints
   // ============================================================
 
   // AMIAL-RECEIPTS-001
-  static const String amyalReceiptsList = '/api/v1/amial/receipts';
-  static const String amyalReceiptShow = '/api/v1/amial/receipts/';        // + {id}
-  static const String amyalReceiptDownload = '/api/v1/amial/receipts/';    // + {id}/download
-  static const String amyalReceiptVerifyPublic = '/v/';                    // + {code}
+  static const String amialReceiptsList = '/api/v1/amial/receipts';
+  static const String amialReceiptShow = '/api/v1/amial/receipts/';        // + {id}
+  static const String amialReceiptDownload = '/api/v1/amial/receipts/';    // + {id}/download
+  static const String amialReceiptVerifyPublic = '/v/';                    // + {code}
 
   // AMIAL-FUND-FAMILY-001
-  static const String amyalFundsList = '/api/v1/amial/funds';
-  static const String amyalFundsCreate = '/api/v1/amial/funds';
-  static const String amyalFundShow = '/api/v1/amial/funds/';              // + {ulid}
-  static const String amyalFundInvite = '/api/v1/amial/funds/';            // + {ulid}/invite
-  static const String amyalFundContribute = '/api/v1/amial/funds/';        // + {ulid}/contribute
-  static const String amyalFundPropose = '/api/v1/amial/funds/';           // + {ulid}/propose-disbursement
-  static const String amyalFundTransactions = '/api/v1/amial/funds/';      // + {ulid}/transactions
-  static const String amyalFundApproveDisb = '/api/v1/amial/funds/disbursements/';  // + {ulid}/approve
-  static const String amyalFundRejectDisb = '/api/v1/amial/funds/disbursements/';   // + {ulid}/reject
-  static const String amyalFundAcceptInvite = '/api/v1/amial/funds/memberships/';   // + {id}/accept
+  static const String amialFundsList = '/api/v1/amial/funds';
+  static const String amialFundsCreate = '/api/v1/amial/funds';
+  static const String amialFundShow = '/api/v1/amial/funds/';              // + {ulid}
+  static const String amialFundInvite = '/api/v1/amial/funds/';            // + {ulid}/invite
+  static const String amialFundContribute = '/api/v1/amial/funds/';        // + {ulid}/contribute
+  static const String amialFundPropose = '/api/v1/amial/funds/';           // + {ulid}/propose-disbursement
+  static const String amialFundTransactions = '/api/v1/amial/funds/';      // + {ulid}/transactions
+  static const String amialFundApproveDisb = '/api/v1/amial/funds/disbursements/';  // + {ulid}/approve
+  static const String amialFundRejectDisb = '/api/v1/amial/funds/disbursements/';   // + {ulid}/reject
+  static const String amialFundAcceptInvite = '/api/v1/amial/funds/memberships/';   // + {id}/accept
 
   // AMIAL-BILL-PAY-001
-  static const String amyalBillProviders = '/api/v1/amial/bill-pay/providers';
-  static const String amyalBillProducts = '/api/v1/amial/bill-pay/services/';       // + {id}/products
-  static const String amyalBillPay = '/api/v1/amial/bill-pay/pay';
-  static const String amyalBillOrders = '/api/v1/amial/bill-pay/orders';
-  static const String amyalBillOrderShow = '/api/v1/amial/bill-pay/orders/';        // + {ulid}
+  static const String amialBillProviders = '/api/v1/amial/bill-pay/providers';
+  static const String amialBillProducts = '/api/v1/amial/bill-pay/services/';       // + {id}/products
+  static const String amialBillPay = '/api/v1/amial/bill-pay/pay';
+  static const String amialBillOrders = '/api/v1/amial/bill-pay/orders';
+  static const String amialBillOrderShow = '/api/v1/amial/bill-pay/orders/';        // + {ulid}
 
   // AMIAL-SAFE-PAYMENT-001 (v1.1)
-  static const String amyalSafePayments = '/api/v1/amial/safe-payments';
-  static const String amyalSafePaymentShow = '/api/v1/amial/safe-payments/';        // + {ulid}
-  static const String amyalSafePaymentSellerAccept = '/api/v1/amial/safe-payments/';// + {ulid}/seller-accept
-  static const String amyalSafePaymentSellerReject = '/api/v1/amial/safe-payments/';// + {ulid}/seller-reject
-  static const String amyalSafePaymentSellerInDelivery = '/api/v1/amial/safe-payments/';
-  static const String amyalSafePaymentSellerDelivered = '/api/v1/amial/safe-payments/';
-  static const String amyalSafePaymentBuyerConfirm = '/api/v1/amial/safe-payments/';
-  static const String amyalSafePaymentBuyerCancel = '/api/v1/amial/safe-payments/';
-  static const String amyalSafePaymentBuyerDispute = '/api/v1/amial/safe-payments/';
+  static const String amialSafePayments = '/api/v1/amial/safe-payments';
+  static const String amialSafePaymentShow = '/api/v1/amial/safe-payments/';        // + {ulid}
+  static const String amialSafePaymentSellerAccept = '/api/v1/amial/safe-payments/';// + {ulid}/seller-accept
+  static const String amialSafePaymentSellerReject = '/api/v1/amial/safe-payments/';// + {ulid}/seller-reject
+  static const String amialSafePaymentSellerInDelivery = '/api/v1/amial/safe-payments/';
+  static const String amialSafePaymentSellerDelivered = '/api/v1/amial/safe-payments/';
+  static const String amialSafePaymentBuyerConfirm = '/api/v1/amial/safe-payments/';
+  static const String amialSafePaymentBuyerCancel = '/api/v1/amial/safe-payments/';
+  static const String amialSafePaymentBuyerDispute = '/api/v1/amial/safe-payments/';
 
   // AMIAL-DONATIONS-001 (v1.2)
-  static const String amyalDonationsCategories = '/api/v1/amial/donations/categories';
-  static const String amyalDonationsOrgs = '/api/v1/amial/donations/organizations';
-  static const String amyalDonationsCampaigns = '/api/v1/amial/donations/campaigns';
-  static const String amyalDonationCampaignShow = '/api/v1/amial/donations/campaigns/'; // + {ulid}
-  static const String amyalDonationsDonate = '/api/v1/amial/donations/donate';
-  static const String amyalDonationsMy = '/api/v1/amial/donations/my-donations';
+  static const String amialDonationsCategories = '/api/v1/amial/donations/categories';
+  static const String amialDonationsOrgs = '/api/v1/amial/donations/organizations';
+  static const String amialDonationsCampaigns = '/api/v1/amial/donations/campaigns';
+  static const String amialDonationCampaignShow = '/api/v1/amial/donations/campaigns/'; // + {ulid}
+  static const String amialDonationsDonate = '/api/v1/amial/donations/donate';
+  static const String amialDonationsMy = '/api/v1/amial/donations/my-donations';
 
 
   // Shared Key

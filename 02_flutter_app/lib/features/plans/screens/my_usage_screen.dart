@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/plans/controllers/plans_controller.dart';
-import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/plans/controllers/plans_controller.dart';
+import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 
 /// CRITICAL-001-USAGE — شاشة "استخدامي".
 ///
@@ -31,7 +31,7 @@ class _MyUsageScreenState extends State<MyUsageScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('استخدامي'),
         actions: [
@@ -75,7 +75,7 @@ class _MyUsageScreenState extends State<MyUsageScreen> {
                 max: _toInt(monthOps['max']),
                 isUnlimited: monthOps['is_unlimited'] == true,
                 percentage: monthOps['percentage'],
-                color: AmyalColors.primary,
+                color: AmialColors.primary,
               ),
 
               // المنتجات
@@ -109,7 +109,7 @@ class _MyUsageScreenState extends State<MyUsageScreen> {
                 icon: const Icon(Icons.workspace_premium),
                 label: const Text('عرض كل الخطط'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AmyalColors.yellowDark,
+                  backgroundColor: AmialColors.yellowDark,
                   minimumSize: const Size.fromHeight(50),
                 ),
               ),
@@ -131,7 +131,7 @@ class _MyUsageScreenState extends State<MyUsageScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AmyalColors.primary, Color(0xFF1E40AF)],
+          colors: [AmialColors.primary, Color(0xFF1E40AF)],
           begin: Alignment.topRight, end: Alignment.bottomLeft,
         ),
         borderRadius: BorderRadius.circular(14),
@@ -139,7 +139,7 @@ class _MyUsageScreenState extends State<MyUsageScreen> {
       child: Row(children: [
         Container(width: 50, height: 50,
             decoration: BoxDecoration(
-              color: AmyalColors.yellow,
+              color: AmialColors.yellow,
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(Icons.workspace_premium, color: Colors.black87, size: 28)),
@@ -234,7 +234,7 @@ class _MyUsageScreenState extends State<MyUsageScreen> {
             icon: const Icon(Icons.upgrade, size: 16),
             label: const Text('رقّ خطّتك لإلغاء القفل'),
             style: TextButton.styleFrom(
-              foregroundColor: AmyalColors.yellowDark,
+              foregroundColor: AmialColors.yellowDark,
               padding: EdgeInsets.zero, minimumSize: const Size(0, 30),
             ),
           ),
@@ -320,7 +320,7 @@ class UsageLimitDialog {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(children: [
           Icon(isBlocked ? Icons.lock : Icons.block,
-              color: AmyalColors.red, size: 28),
+              color: AmialColors.red, size: 28),
           const SizedBox(width: 8),
           const Expanded(child: Text('وصلت إلى الحدّ')),
         ]),
@@ -337,9 +337,9 @@ class UsageLimitDialog {
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               const SizedBox(height: 4),
               if (!isBlocked) Text('$current / $max',
-                  style: const TextStyle(color: AmyalColors.red, fontSize: 18, fontWeight: FontWeight.bold))
+                  style: const TextStyle(color: AmialColors.red, fontSize: 18, fontWeight: FontWeight.bold))
               else const Text('غير متاحة في خطّتك الحالية',
-                  style: TextStyle(color: AmyalColors.red, fontSize: 14)),
+                  style: TextStyle(color: AmialColors.red, fontSize: 14)),
               Text('الخطّة: $currentPlanLabel',
                   style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
             ]),
@@ -353,9 +353,9 @@ class UsageLimitDialog {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AmyalColors.yellow.withValues(alpha: 0.2),
+                color: AmialColors.yellow.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AmyalColors.yellowDark, width: 1.5),
+                border: Border.all(color: AmialColors.yellowDark, width: 1.5),
               ),
               child: Row(children: [
                 const Text('⬆️', style: TextStyle(fontSize: 24)),

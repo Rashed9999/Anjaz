@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-EXPENSES-001 — «المصروفات» (باقة الأعمال فأعلى).
 ///
@@ -52,7 +52,7 @@ class _MerchantExpensesScreenState extends State<MerchantExpensesScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _edit({Map<String, dynamic>? existing}) async {
     final isEdit = existing != null;
@@ -84,7 +84,7 @@ class _MerchantExpensesScreenState extends State<MerchantExpensesScreen> {
           ),
           const SizedBox(height: 14),
           FilledButton(onPressed: () => Navigator.pop(ctx, true),
-              style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(50)),
+              style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(50)),
               child: Text(isEdit ? 'حفظ' : 'تسجيل')),
         ]),
       )),
@@ -107,10 +107,10 @@ class _MerchantExpensesScreenState extends State<MerchantExpensesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
-      appBar: AppBar(title: const Text('المصروفات'), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+      backgroundColor: AmialColors.background,
+      appBar: AppBar(title: const Text('المصروفات'), backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
       floatingActionButton: _error == null
-          ? FloatingActionButton.extended(onPressed: () => _edit(), backgroundColor: AmyalColors.primary,
+          ? FloatingActionButton.extended(onPressed: () => _edit(), backgroundColor: AmialColors.primary,
               icon: const Icon(Icons.add), label: const Text('مصروف'))
           : null,
       body: _loading
@@ -118,7 +118,7 @@ class _MerchantExpensesScreenState extends State<MerchantExpensesScreen> {
           : _error != null
               ? Center(child: Padding(padding: const EdgeInsets.all(24),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.workspace_premium, size: 56, color: AmyalColors.yellowDark),
+                    const Icon(Icons.workspace_premium, size: 56, color: AmialColors.yellowDark),
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                   ])))
@@ -161,14 +161,14 @@ class _MerchantExpensesScreenState extends State<MerchantExpensesScreen> {
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
         child: ListTile(
-          leading: CircleAvatar(backgroundColor: AmyalColors.red.withValues(alpha: 0.1),
-              child: const Icon(Icons.receipt, color: AmyalColors.red, size: 20)),
+          leading: CircleAvatar(backgroundColor: AmialColors.red.withValues(alpha: 0.1),
+              child: const Icon(Icons.receipt, color: AmialColors.red, size: 20)),
           title: Text('${e['title']}', style: const TextStyle(fontWeight: FontWeight.bold)),
           subtitle: Text('${_cats[e['category']] ?? e['category']} • ${e['spent_on']}', style: const TextStyle(fontSize: 11)),
           trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-            Text('${e['amount']} ر.ي', style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.red)),
-            IconButton(icon: const Icon(Icons.edit, size: 18, color: AmyalColors.primary), onPressed: () => _edit(existing: e)),
-            IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: AmyalColors.red), onPressed: () => _delete(e['id'] as int)),
+            Text('${e['amount']} ر.ي', style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.red)),
+            IconButton(icon: const Icon(Icons.edit, size: 18, color: AmialColors.primary), onPressed: () => _edit(existing: e)),
+            IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: AmialColors.red), onPressed: () => _delete(e['id'] as int)),
           ]),
         ),
       );

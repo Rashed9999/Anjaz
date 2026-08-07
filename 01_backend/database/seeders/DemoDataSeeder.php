@@ -16,12 +16,12 @@ use Illuminate\Support\Str;
  *   مدير النظام (أدمن) — **يدخل بالجوال لا بالبريد**:
  *     الجوال:    967700000000   ← وهذا ما يُكتب في نموذج الدخول
  *     كلمة السر: Admin@2026
- *     البريد:    admin@amyal.pay  (للتعريف — ولا يُقبل في الدخول)
+ *     البريد:    admin@amial.pay  (للتعريف — ولا يُقبل في الدخول)
  *
  *   ونموذج `admin/auth/login` فيه حقلُ `phone` وحده، ولا حقلَ بريدٍ
  *   فيه أصلاً. وكانت هذه البانة تدلّ على البريد، فيُجرَّب ويُرفض
  *   بـ«Credentials does not match» — ورسالةٌ لا تدلّ على سببها.
- *   والقياس:  967700000000 => يدخل ✔ / admin@amyal.pay => يُرفض ✘
+ *   والقياس:  967700000000 => يدخل ✔ / admin@amial.pay => يُرفض ✘
  *
  *   عميل تجريبي 1:
  *     الهاتف:   777100001
@@ -94,7 +94,7 @@ class DemoDataSeeder extends Seeder
     private function createAdmin(): User
     {
         return User::updateOrCreate(
-            ['email' => 'admin@amyal.pay'],
+            ['email' => 'admin@amial.pay'],
             [
                 'f_name'   => 'مدير',
                 'l_name'   => 'النظام',

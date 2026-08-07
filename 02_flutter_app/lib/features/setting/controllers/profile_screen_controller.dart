@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/setting/controllers/theme_controller.dart';
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/features/auth/domain/models/user_short_data_model.dart';
-import 'package:amyal_pay/features/setting/domain/models/profile_model.dart';
-import 'package:amyal_pay/features/setting/domain/reposotories/profile_repo.dart';
-import 'package:amyal_pay/features/transaction_money/controllers/bootom_slider_controller.dart';
-import 'package:amyal_pay/helper/dialog_helper.dart';
-import 'package:amyal_pay/helper/phone_cheker_helper.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/common/widgets/custom_dialog_widget.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/setting/controllers/theme_controller.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/features/auth/domain/models/user_short_data_model.dart';
+import 'package:amial_pay/features/setting/domain/models/profile_model.dart';
+import 'package:amial_pay/features/setting/domain/reposotories/profile_repo.dart';
+import 'package:amial_pay/features/transaction_money/controllers/bootom_slider_controller.dart';
+import 'package:amial_pay/helper/dialog_helper.dart';
+import 'package:amial_pay/helper/phone_cheker_helper.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/common/widgets/custom_dialog_widget.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 
 class ProfileController extends GetxController implements GetxService {
@@ -205,8 +205,8 @@ class ProfileController extends GetxController implements GetxService {
           onTapFalseText: 'no'.tr,
           onTapTrueText: 'yes'.tr,
           isFailed: true,
-          trueButtonColor: AmyalColors.red,
-          falseButtonColor: AmyalColors.textMuted,
+          trueButtonColor: AmialColors.red,
+          falseButtonColor: AmialColors.textMuted,
           onTapFalse: () => Get.back(),
           onTapTrue: () {
             Get.find<AuthController>().removeBiometricPin().then((_) {

@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/fuel_station/domain/repositories/fuel_station_repo.dart';
-import 'package:amyal_pay/features/plans/screens/my_usage_screen.dart';
+import 'package:amial_pay/features/fuel_station/domain/repositories/fuel_station_repo.dart';
+import 'package:amial_pay/features/plans/screens/my_usage_screen.dart';
 
 /// AMIAL-FUEL-001 — متحكّم محطة الوقود.
 class FuelStationController extends GetxController implements GetxService {

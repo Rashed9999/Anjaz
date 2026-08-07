@@ -3,9 +3,9 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
-import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
+import 'package:amial_pay/features/requested_money/controllers/payment_request_controller.dart';
 
 /// AMIAL-QR-COLLECT-001 — استلام الدفع بـ QR لأي قطاع (طلب دفع فوري).
 ///
@@ -143,7 +143,7 @@ class _AmialQrCollectScreenState extends State<AmialQrCollectScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Text(widget.title),
       ),
@@ -168,7 +168,7 @@ class _AmialQrCollectScreenState extends State<AmialQrCollectScreen> {
       ]);
 
   Widget _errorView() => Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.error_outline, color: AmyalColors.red, size: 56),
+        const Icon(Icons.error_outline, color: AmialColors.red, size: 56),
         const SizedBox(height: 12),
         Text(_error, textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -178,7 +178,7 @@ class _AmialQrCollectScreenState extends State<AmialQrCollectScreen> {
           icon: const Icon(Icons.refresh),
           label: const Text('إعادة المحاولة'),
           style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary, minimumSize: const Size(220, 48)),
+              backgroundColor: AmialColors.primary, minimumSize: const Size(220, 48)),
         ),
         const SizedBox(height: 8),
         TextButton(onPressed: () => Get.back(), child: const Text('رجوع')),
@@ -189,10 +189,10 @@ class _AmialQrCollectScreenState extends State<AmialQrCollectScreen> {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Text('${_fmt(widget.amount)} ر.ي',
           style: const TextStyle(
-              fontSize: 30, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+              fontSize: 30, fontWeight: FontWeight.bold, color: AmialColors.primary)),
       const SizedBox(height: 4),
       const Text('اطلب من العميل مسح الرمز والدفع',
-          style: TextStyle(fontSize: 13, color: AmyalColors.textSecondary)),
+          style: TextStyle(fontSize: 13, color: AmialColors.textSecondary)),
       const SizedBox(height: 18),
       QrDisplayWidget(
         data: _qrPayload,
@@ -203,7 +203,7 @@ class _AmialQrCollectScreenState extends State<AmialQrCollectScreen> {
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: AmyalColors.yellow.withValues(alpha: 0.18),
+          color: AmialColors.yellow.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(30),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -211,7 +211,7 @@ class _AmialQrCollectScreenState extends State<AmialQrCollectScreen> {
           const SizedBox(width: 10),
           Text('بانتظار دفع العميل… (${remain ~/ 60}:${(remain % 60).toString().padLeft(2, '0')})',
               style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600, color: AmyalColors.primary)),
+                  fontSize: 13, fontWeight: FontWeight.w600, color: AmialColors.primary)),
         ]),
       ),
       const SizedBox(height: 24),
@@ -220,8 +220,8 @@ class _AmialQrCollectScreenState extends State<AmialQrCollectScreen> {
         icon: const Icon(Icons.close),
         label: const Text('إلغاء الطلب'),
         style: OutlinedButton.styleFrom(
-            foregroundColor: AmyalColors.red,
-            side: const BorderSide(color: AmyalColors.red),
+            foregroundColor: AmialColors.red,
+            side: const BorderSide(color: AmialColors.red),
             minimumSize: const Size(220, 48)),
       ),
     ]);

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/features/setting/domain/models/faq_category.dart';
-import 'package:amyal_pay/features/setting/domain/models/faq_model.dart';
-import 'package:amyal_pay/features/setting/domain/reposotories/faq_repo.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/features/setting/domain/models/faq_category.dart';
+import 'package:amial_pay/features/setting/domain/models/faq_model.dart';
+import 'package:amial_pay/features/setting/domain/reposotories/faq_repo.dart';
 import 'package:get/get.dart';
 
 class FaqController extends GetxController implements GetxService {

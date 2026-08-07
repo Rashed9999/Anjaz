@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/printer/services/thermal_print_service.dart';
-import 'package:amyal_pay/features/printer/widgets/thermal_receipt_widget.dart';
-import 'package:amyal_pay/features/merchant/controllers/receipt_settings_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
+import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
+import 'package:amial_pay/features/merchant/controllers/receipt_settings_controller.dart';
 
 /// AMIAL-THERMAL-PRINT-001 — «إعدادات الطابعة الحرارية».
 ///
@@ -80,12 +80,12 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('إعدادات الطابعة'),
         actions: [
@@ -102,7 +102,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           ),
           child: Row(children: [
             Icon(_btOn ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-                color: _btOn ? const Color(0xFF2E7D32) : AmyalColors.red),
+                color: _btOn ? const Color(0xFF2E7D32) : AmialColors.red),
             const SizedBox(width: 10),
             Expanded(child: Text(_btOn ? 'البلوتوث مفعّل' : 'البلوتوث مغلق — فعّله من إعدادات الهاتف',
                 style: const TextStyle(fontWeight: FontWeight.w600))),
@@ -124,22 +124,22 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AmyalColors.primary.withValues(alpha: 0.4), width: 1.5),
+              border: Border.all(color: AmialColors.primary.withValues(alpha: 0.4), width: 1.5),
             ),
             child: Row(children: [
-              const Icon(Icons.print, color: AmyalColors.primary, size: 28),
+              const Icon(Icons.print, color: AmialColors.primary, size: 28),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(cfg.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                   Text('${cfg.mac}  •  ورق ${cfg.paperMm}مم',
                       textDirection: TextDirection.ltr,
-                      style: const TextStyle(fontSize: 11, color: AmyalColors.textSecondary)),
+                      style: const TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
                 ]),
               ),
               IconButton(
                 onPressed: () async { await _svc.clearConfig(); if (mounted) setState(() {}); },
-                icon: const Icon(Icons.delete_outline, color: AmyalColors.red),
+                icon: const Icon(Icons.delete_outline, color: AmialColors.red),
                 tooltip: 'إزالة',
               ),
             ]),
@@ -168,7 +168,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
             child: const Row(children: [
-              Icon(Icons.info_outline, color: AmyalColors.textMuted),
+              Icon(Icons.info_outline, color: AmialColors.textMuted),
               SizedBox(width: 10),
               Expanded(child: Text('لا توجد طابعات مقترنة. اقترن بالطابعة من إعدادات بلوتوث الهاتف أولاً، ثم اضغط تحديث.',
                   style: TextStyle(fontSize: 13))),
@@ -181,15 +181,15 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
             color: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: selected ? AmyalColors.primary : AmyalColors.border),
+              side: BorderSide(color: selected ? AmialColors.primary : AmialColors.border),
             ),
             child: ListTile(
-              leading: Icon(Icons.print, color: selected ? AmyalColors.primary : Colors.grey.shade600),
+              leading: Icon(Icons.print, color: selected ? AmialColors.primary : Colors.grey.shade600),
               title: Text(d.name.isEmpty ? 'طابعة' : d.name),
               subtitle: Text(d.macAdress, textDirection: TextDirection.ltr, style: const TextStyle(fontSize: 11)),
               trailing: selected
-                  ? const Icon(Icons.check_circle, color: AmyalColors.primary)
-                  : const Icon(Icons.radio_button_unchecked, color: AmyalColors.textMuted),
+                  ? const Icon(Icons.check_circle, color: AmialColors.primary)
+                  : const Icon(Icons.radio_button_unchecked, color: AmialColors.textMuted),
               onTap: () => _select(d),
             ),
           );
@@ -203,7 +203,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
               : const Icon(Icons.receipt_long),
           label: Text(_testing ? 'جارٍ الطباعة…' : 'طباعة تجريبية'),
-          style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(52)),
+          style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(52)),
         ),
       ]),
     );
@@ -224,9 +224,9 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            color: selected ? AmyalColors.primary : Colors.white,
+            color: selected ? AmialColors.primary : Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: selected ? AmyalColors.primary : AmyalColors.border),
+            border: Border.all(color: selected ? AmialColors.primary : AmialColors.border),
           ),
           child: Text(label, textAlign: TextAlign.center,
               style: TextStyle(color: selected ? Colors.white : Colors.black87, fontWeight: FontWeight.w600)),

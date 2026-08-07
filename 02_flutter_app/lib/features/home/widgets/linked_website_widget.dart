@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/features/home/controllers/websitelink_controller.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_image_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_ink_well_widget.dart';
-import 'package:amyal_pay/common/screens/web_screen.dart';
-import 'package:amyal_pay/features/home/widgets/web_site_shimmer_widget.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/features/home/controllers/websitelink_controller.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_image_widget.dart';
+import 'package:amial_pay/common/widgets/custom_ink_well_widget.dart';
+import 'package:amial_pay/common/screens/web_screen.dart';
+import 'package:amial_pay/features/home/widgets/web_site_shimmer_widget.dart';
 
 class LinkedWebsiteWidget extends StatelessWidget {
   const LinkedWebsiteWidget({super.key});

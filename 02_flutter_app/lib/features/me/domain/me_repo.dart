@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 
 /// AMIAL-ME-001 — بيانات المستخدم.
 class MeRepo extends GetxService {

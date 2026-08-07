@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/donations/controllers/donations_controller.dart';
-import 'package:amyal_pay/features/donations/domain/models/donation_models.dart';
-import 'package:amyal_pay/features/donations/screens/campaign_detail_screen.dart';
-import 'package:amyal_pay/features/donations/screens/campaigns_list_screen.dart';
-import 'package:amyal_pay/features/donations/screens/my_donations_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/donations/controllers/donations_controller.dart';
+import 'package:amial_pay/features/donations/domain/models/donation_models.dart';
+import 'package:amial_pay/features/donations/screens/campaign_detail_screen.dart';
+import 'package:amial_pay/features/donations/screens/campaigns_list_screen.dart';
+import 'package:amial_pay/features/donations/screens/my_donations_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-DONATIONS-001 (v1.2)
 ///
@@ -32,7 +32,7 @@ class _DonationsHomeScreenState extends State<DonationsHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('إحسان — التبرعات'),
         actions: [
@@ -52,7 +52,7 @@ class _DonationsHomeScreenState extends State<DonationsHomeScreen> {
             ctrl.loadCampaigns(),
           ]);
         },
-        color: AmyalColors.primary,
+        color: AmialColors.primary,
         child: Obx(() {
           final ctrl = Get.find<DonationsController>();
           return ListView(
@@ -64,7 +64,7 @@ class _DonationsHomeScreenState extends State<DonationsHomeScreen> {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [AmyalColors.primary, Color(0xFF1D4FB8)],
+                    colors: [AmialColors.primary, Color(0xFF1D4FB8)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -120,7 +120,7 @@ class _DonationsHomeScreenState extends State<DonationsHomeScreen> {
                   padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
                   child: Row(
                     children: [
-                      Icon(Icons.star, color: AmyalColors.yellow, size: 18),
+                      Icon(Icons.star, color: AmialColors.yellow, size: 18),
                       SizedBox(width: 4),
                       Text('حملات مميزة',
                           style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
@@ -151,14 +151,14 @@ class _DonationsHomeScreenState extends State<DonationsHomeScreen> {
                 const Center(
                     child: Padding(
                   padding: EdgeInsets.all(40),
-                  child: CircularProgressIndicator(color: AmyalColors.primary),
+                  child: CircularProgressIndicator(color: AmialColors.primary),
                 ))
               else if (ctrl.campaigns.isEmpty)
                 const Center(
                     child: Padding(
                   padding: EdgeInsets.all(40),
                   child: Text('لا توجد حملات نشطة حالياً',
-                      style: TextStyle(color: AmyalColors.textMuted)),
+                      style: TextStyle(color: AmialColors.textMuted)),
                 ))
               else
                 ...ctrl.campaigns.map((c) => _CampaignListItem(campaign: c)),
@@ -173,7 +173,7 @@ class _DonationsHomeScreenState extends State<DonationsHomeScreen> {
 }
 
 class _CategoryChip extends StatelessWidget {
-  final AmyalCharityCategory category;
+  final AmialCharityCategory category;
   final VoidCallback onTap;
   const _CategoryChip({required this.category, required this.onTap});
 
@@ -190,16 +190,16 @@ class _CategoryChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AmyalColors.border),
+            border: Border.all(color: AmialColors.border),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               CircleAvatar(
                 radius: 24,
-                backgroundColor: AmyalColors.yellow.withValues(alpha: 0.25),
+                backgroundColor: AmialColors.yellow.withValues(alpha: 0.25),
                 child: const Icon(Icons.favorite,
-                    color: AmyalColors.primary, size: 22),
+                    color: AmialColors.primary, size: 22),
               ),
               const SizedBox(height: 4),
               Text(
@@ -218,7 +218,7 @@ class _CategoryChip extends StatelessWidget {
 }
 
 class _FeaturedCard extends StatelessWidget {
-  final AmyalCharityCampaign campaign;
+  final AmialCharityCampaign campaign;
   const _FeaturedCard({required this.campaign});
 
   @override
@@ -233,7 +233,7 @@ class _FeaturedCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AmyalColors.border),
+            border: Border.all(color: AmialColors.border),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -249,12 +249,12 @@ class _FeaturedCard extends StatelessWidget {
                           fit: BoxFit.cover,
                         )
                       : null,
-                  color: AmyalColors.yellow.withValues(alpha: 0.25),
+                  color: AmialColors.yellow.withValues(alpha: 0.25),
                 ),
                 child: campaign.coverImageUrl == null
                     ? const Center(
                         child: Icon(Icons.volunteer_activism,
-                            size: 40, color: AmyalColors.primary))
+                            size: 40, color: AmialColors.primary))
                     : null,
               ),
               Padding(
@@ -272,14 +272,14 @@ class _FeaturedCard extends StatelessWidget {
                     const SizedBox(height: 6),
                     LinearProgressIndicator(
                       value: campaign.progressPercentage / 100,
-                      backgroundColor: AmyalColors.border,
-                      color: AmyalColors.primary,
+                      backgroundColor: AmialColors.border,
+                      color: AmialColors.primary,
                       minHeight: 6,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       '${campaign.progressPercentage.toStringAsFixed(1)}% — ${campaign.currentAmount} / ${campaign.targetAmount} ر.ي',
-                      style: const TextStyle(fontSize: 10, color: AmyalColors.textSecondary),
+                      style: const TextStyle(fontSize: 10, color: AmialColors.textSecondary),
                     ),
                   ],
                 ),
@@ -293,7 +293,7 @@ class _FeaturedCard extends StatelessWidget {
 }
 
 class _CampaignListItem extends StatelessWidget {
-  final AmyalCharityCampaign campaign;
+  final AmialCharityCampaign campaign;
   const _CampaignListItem({required this.campaign});
 
   @override
@@ -329,12 +329,12 @@ class _CampaignListItem extends StatelessWidget {
                     if (campaign.organization != null)
                       Text(campaign.organization!.nameAr,
                           style: const TextStyle(
-                              fontSize: 11, color: AmyalColors.textSecondary)),
+                              fontSize: 11, color: AmialColors.textSecondary)),
                     const SizedBox(height: 6),
                     LinearProgressIndicator(
                       value: campaign.progressPercentage / 100,
-                      backgroundColor: AmyalColors.border,
-                      color: AmyalColors.primary,
+                      backgroundColor: AmialColors.border,
+                      color: AmialColors.primary,
                       minHeight: 4,
                     ),
                     const SizedBox(height: 4),
@@ -347,7 +347,7 @@ class _CampaignListItem extends StatelessWidget {
                         Text(
                             '${campaign.progressPercentage.toStringAsFixed(0)}%',
                             style: const TextStyle(
-                                fontSize: 11, color: AmyalColors.textMuted)),
+                                fontSize: 11, color: AmialColors.textMuted)),
                       ],
                     ),
                   ],
@@ -362,7 +362,7 @@ class _CampaignListItem extends StatelessWidget {
 
   Widget _placeholder() => Container(
         width: 70, height: 70,
-        color: AmyalColors.yellow.withValues(alpha: 0.2),
-        child: const Icon(Icons.volunteer_activism, color: AmyalColors.primary),
+        color: AmialColors.yellow.withValues(alpha: 0.2),
+        child: const Icon(Icons.volunteer_activism, color: AmialColors.primary),
       );
 }

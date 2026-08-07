@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/pharmacy/domain/repositories/pharmacy_repo.dart';
-import 'package:amyal_pay/features/plans/screens/my_usage_screen.dart';
+import 'package:amial_pay/features/pharmacy/domain/repositories/pharmacy_repo.dart';
+import 'package:amial_pay/features/plans/screens/my_usage_screen.dart';
 
 /// AMIAL-PHARMACY-001 — متحكّم الصيدلية.
 class PharmacyController extends GetxController implements GetxService {

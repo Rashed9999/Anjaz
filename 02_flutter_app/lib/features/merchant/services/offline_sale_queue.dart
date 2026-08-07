@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 
 /// AMIAL-OFFLINE-POS-001 — طابور مبيعات دون اتصال.
 ///

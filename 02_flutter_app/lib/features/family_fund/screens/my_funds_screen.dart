@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/family_fund/controllers/funds_controller.dart';
-import 'package:amyal_pay/features/family_fund/domain/models/fund_models.dart';
-import 'package:amyal_pay/features/family_fund/screens/create_fund_screen.dart';
-import 'package:amyal_pay/features/family_fund/screens/fund_detail_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/family_fund/controllers/funds_controller.dart';
+import 'package:amial_pay/features/family_fund/domain/models/fund_models.dart';
+import 'package:amial_pay/features/family_fund/screens/create_fund_screen.dart';
+import 'package:amial_pay/features/family_fund/screens/fund_detail_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-FUND-FAMILY-001 (v0.9-D)
 class MyFundsScreen extends StatefulWidget {
@@ -23,13 +23,13 @@ class _MyFundsScreenState extends State<MyFundsScreen> {
     });
   }
 
-  Future<void> _acceptInvite(AmyalFundMembership m) async {
+  Future<void> _acceptInvite(AmialFundMembership m) async {
     final ok = await Get.find<FundsController>().acceptInvitation(m.membershipId);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(ok ? 'تم قبول الدعوة' : 'فشل قبول الدعوة'),
-        backgroundColor: ok ? Colors.green.shade700 : AmyalColors.red,
+        backgroundColor: ok ? Colors.green.shade700 : AmialColors.red,
       ),
     );
   }
@@ -37,12 +37,12 @@ class _MyFundsScreenState extends State<MyFundsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('الصناديق العائلية'),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AmyalColors.primary,
+        backgroundColor: AmialColors.primary,
         foregroundColor: Colors.white,
         onPressed: () async {
           final created = await Get.to<bool>(() => const CreateFundScreen());
@@ -55,25 +55,25 @@ class _MyFundsScreenState extends State<MyFundsScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () => Get.find<FundsController>().loadMyFunds(),
-        color: AmyalColors.primary,
+        color: AmialColors.primary,
         child: Obx(() {
           final ctrl = Get.find<FundsController>();
           if (ctrl.isLoading.value && ctrl.myMemberships.isEmpty) {
             return const Center(
-                child: CircularProgressIndicator(color: AmyalColors.primary));
+                child: CircularProgressIndicator(color: AmialColors.primary));
           }
           if (ctrl.myMemberships.isEmpty) {
             return ListView(
               children: [
                 SizedBox(height: MediaQuery.of(context).size.height * 0.15),
-                Icon(Icons.diversity_3, size: 80, color: AmyalColors.textMuted.withValues(alpha: 0.5)),
+                Icon(Icons.diversity_3, size: 80, color: AmialColors.textMuted.withValues(alpha: 0.5)),
                 const SizedBox(height: 16),
                 const Center(child: Text('لا توجد صناديق بعد', style: TextStyle(fontSize: 14))),
                 const SizedBox(height: 8),
                 const Center(
                   child: Text(
                     'أنشئ صندوقاً جديداً أو انتظر دعوة',
-                    style: TextStyle(color: AmyalColors.textSecondary, fontSize: 12),
+                    style: TextStyle(color: AmialColors.textSecondary, fontSize: 12),
                   ),
                 ),
               ],
@@ -115,13 +115,13 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: AmyalColors.textSecondary),
+          Icon(icon, size: 18, color: AmialColors.textSecondary),
           const SizedBox(width: 8),
           Text(title,
               style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
-                  color: AmyalColors.textSecondary)),
+                  color: AmialColors.textSecondary)),
         ],
       ),
     );
@@ -129,7 +129,7 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _InviteCard extends StatelessWidget {
-  final AmyalFundMembership membership;
+  final AmialFundMembership membership;
   final VoidCallback onAccept;
   const _InviteCard({required this.membership, required this.onAccept});
 
@@ -138,7 +138,7 @@ class _InviteCard extends StatelessWidget {
     final fund = membership.fund;
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
-      color: AmyalColors.yellow.withValues(alpha: 0.15),
+      color: AmialColors.yellow.withValues(alpha: 0.15),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -146,7 +146,7 @@ class _InviteCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.mail, color: AmyalColors.primary, size: 20),
+                const Icon(Icons.mail, color: AmialColors.primary, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -159,7 +159,7 @@ class _InviteCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: AmyalColors.primary,
+                    color: AmialColors.primary,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -173,7 +173,7 @@ class _InviteCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(fund.description!,
                   style: const TextStyle(
-                      fontSize: 12, color: AmyalColors.textSecondary)),
+                      fontSize: 12, color: AmialColors.textSecondary)),
             ],
             const SizedBox(height: 12),
             Row(
@@ -182,7 +182,7 @@ class _InviteCard extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: onAccept,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AmyalColors.primary,
+                      backgroundColor: AmialColors.primary,
                       foregroundColor: Colors.white,
                     ),
                     child: const Text('قبول'),
@@ -198,7 +198,7 @@ class _InviteCard extends StatelessWidget {
 }
 
 class _FundCard extends StatelessWidget {
-  final AmyalFundMembership membership;
+  final AmialFundMembership membership;
   const _FundCard({required this.membership});
 
   @override
@@ -218,8 +218,8 @@ class _FundCard extends StatelessWidget {
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: AmyalColors.yellow.withValues(alpha: 0.25),
-                child: const Icon(Icons.diversity_3, color: AmyalColors.primary),
+                backgroundColor: AmialColors.yellow.withValues(alpha: 0.25),
+                child: const Icon(Icons.diversity_3, color: AmialColors.primary),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -232,7 +232,7 @@ class _FundCard extends StatelessWidget {
                     Text(
                       'الرصيد: ${fund.balance} ر.ي',
                       style: const TextStyle(
-                          color: AmyalColors.primary, fontSize: 13),
+                          color: AmialColors.primary, fontSize: 13),
                     ),
                   ],
                 ),
@@ -245,8 +245,8 @@ class _FundCard extends StatelessWidget {
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       color: membership.isOwner
-                          ? AmyalColors.primary
-                          : AmyalColors.textSecondary,
+                          ? AmialColors.primary
+                          : AmialColors.textSecondary,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(membership.role,
@@ -255,7 +255,7 @@ class _FundCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   const Icon(Icons.chevron_left,
-                      size: 16, color: AmyalColors.textMuted),
+                      size: 16, color: AmialColors.textMuted),
                 ],
               ),
             ],

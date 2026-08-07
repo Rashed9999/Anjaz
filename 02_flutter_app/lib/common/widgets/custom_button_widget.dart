@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/common/widgets/custom_ink_well_widget.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/common/widgets/custom_ink_well_widget.dart';
 
 class CustomButtonWidget extends StatelessWidget {
   final Function? onTap;

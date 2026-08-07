@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/setting/controllers/theme_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
+import 'package:amial_pay/features/setting/controllers/theme_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
 import 'package:flutter/material.dart';
 class PersistentHeaderWidget extends StatefulWidget {
   final VoidCallback? onTap;

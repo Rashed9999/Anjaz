@@ -1,24 +1,24 @@
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/amyal/domain/models/amyal_models.dart';
-import 'package:amyal_pay/features/amyal/domain/repositories/amyal_repo.dart';
+import 'package:amial_pay/features/amial/domain/models/amial_models.dart';
+import 'package:amial_pay/features/amial/domain/repositories/amial_repo.dart';
 
-/// AMYAL-LEGAL/ZONE/RECOVERY-001 (v0.7-D)
+/// AMIAL-LEGAL/ZONE/RECOVERY-001 (v0.7-D)
 ///
-/// Controller موحد لـ Amyal features.
+/// Controller موحد لـ Amial features.
 /// يستخدم بواسطة:
 ///   - ZoneBannerWidget (يقرأ canTransact)
 ///   - TermsAcceptanceScreen (يقرأ legalStatus + يستدعي accept)
 ///   - AccountRecoveryScreens
-class AmyalController extends GetxController implements GetxService {
-  final AmyalRepo repo;
-  AmyalController({required this.repo});
+class AmialController extends GetxController implements GetxService {
+  final AmialRepo repo;
+  AmialController({required this.repo});
 
   // -------- Reactive state --------
 
-  final Rx<AmyalSessionPolicy?> sessionPolicy = Rx<AmyalSessionPolicy?>(null);
-  final Rx<AmyalLegalStatus?> legalStatus = Rx<AmyalLegalStatus?>(null);
-  final Rx<AmyalLegalTerm?> currentTerm = Rx<AmyalLegalTerm?>(null);
+  final Rx<AmialSessionPolicy?> sessionPolicy = Rx<AmialSessionPolicy?>(null);
+  final Rx<AmialLegalStatus?> legalStatus = Rx<AmialLegalStatus?>(null);
+  final Rx<AmialLegalTerm?> currentTerm = Rx<AmialLegalTerm?>(null);
   final RxBool isLoading = false.obs;
   final RxString lastError = ''.obs;
 
@@ -31,7 +31,7 @@ class AmyalController extends GetxController implements GetxService {
       final r = await repo.getSessionPolicy();
       if (r.statusCode == 200 && r.body is Map) {
         final meta = (r.body['meta'] ?? {}) as Map<String, dynamic>;
-        sessionPolicy.value = AmyalSessionPolicy.fromJson(meta);
+        sessionPolicy.value = AmialSessionPolicy.fromJson(meta);
         lastError.value = '';
       } else {
         lastError.value = _extractMessage(r) ?? 'Failed to load session policy';
@@ -55,7 +55,7 @@ class AmyalController extends GetxController implements GetxService {
       isLoading.value = true;
       final r = await repo.getLegalStatus();
       if (r.statusCode == 200 && r.body is Map) {
-        legalStatus.value = AmyalLegalStatus.fromJson(
+        legalStatus.value = AmialLegalStatus.fromJson(
           (r.body['meta'] ?? {}) as Map<String, dynamic>,
         );
         return true;
@@ -70,12 +70,12 @@ class AmyalController extends GetxController implements GetxService {
     }
   }
 
-  Future<AmyalLegalTerm?> loadCurrentTerm() async {
+  Future<AmialLegalTerm?> loadCurrentTerm() async {
     try {
       isLoading.value = true;
       final r = await repo.getCurrentTerms();
       if (r.statusCode == 200 && r.body is Map) {
-        currentTerm.value = AmyalLegalTerm.fromJson(
+        currentTerm.value = AmialLegalTerm.fromJson(
           (r.body['meta'] ?? {}) as Map<String, dynamic>,
         );
         return currentTerm.value;
@@ -106,7 +106,7 @@ class AmyalController extends GetxController implements GetxService {
       );
       if (r.statusCode == 200 && r.body is Map && (r.body['success'] == true)) {
         // تحديث الـ status فوراً
-        legalStatus.value = AmyalLegalStatus(
+        legalStatus.value = AmialLegalStatus(
           needsAcceptance: false,
           currentVersion: term.version,
           title: term.title,

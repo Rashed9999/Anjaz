@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/merchant_controller.dart';
-import 'package:amyal_pay/features/merchant/domain/models/merchant_models.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/merchant_controller.dart';
+import 'package:amial_pay/features/merchant/domain/models/merchant_models.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-MERCHANT-APP-001 (v1.6)
 class MerchantTransactionsScreen extends StatefulWidget {
@@ -26,24 +26,24 @@ class _MerchantTransactionsScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('المبيعات والعمليات'),
       ),
       body: RefreshIndicator(
         onRefresh: () => Get.find<MerchantController>().loadTransactions(),
-        color: AmyalColors.primary,
+        color: AmialColors.primary,
         child: Obx(() {
           final ctrl = Get.find<MerchantController>();
           if (ctrl.isLoading.value && ctrl.transactions.isEmpty) {
             return const Center(
-                child: CircularProgressIndicator(color: AmyalColors.primary));
+                child: CircularProgressIndicator(color: AmialColors.primary));
           }
           if (ctrl.transactions.isEmpty) {
             return ListView(
               children: const [
                 SizedBox(height: 100),
-                Icon(Icons.point_of_sale, size: 80, color: AmyalColors.textMuted),
+                Icon(Icons.point_of_sale, size: 80, color: AmialColors.textMuted),
                 SizedBox(height: 12),
                 Center(child: Text('لا توجد عمليات بعد')),
               ],
@@ -62,7 +62,7 @@ class _MerchantTransactionsScreenState
 }
 
 class _TransactionTile extends StatelessWidget {
-  final AmyalMerchantTransaction transaction;
+  final AmialMerchantTransaction transaction;
   const _TransactionTile({required this.transaction});
 
   @override
@@ -73,8 +73,8 @@ class _TransactionTile extends StatelessWidget {
     final statusColor = transaction.status == 'success'
         ? const Color(0xFF10B981)
         : transaction.status == 'pending'
-            ? AmyalColors.yellow
-            : AmyalColors.red;
+            ? AmialColors.yellow
+            : AmialColors.red;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -101,16 +101,16 @@ class _TransactionTile extends StatelessWidget {
                       transaction.customerName ??
                           transaction.customerPhoneMasked!,
                       style: const TextStyle(
-                          fontSize: 11, color: AmyalColors.textSecondary),
+                          fontSize: 11, color: AmialColors.textSecondary),
                     ),
                   if (transaction.posNumber != null)
                     Text('POS: ${transaction.posNumber}',
                         style: const TextStyle(
-                            fontSize: 10, color: AmyalColors.primary)),
+                            fontSize: 10, color: AmialColors.primary)),
                   Text(
                     _formatDate(transaction.createdAt),
                     style: const TextStyle(
-                        fontSize: 10, color: AmyalColors.textMuted),
+                        fontSize: 10, color: AmialColors.textMuted),
                   ),
                 ],
               ),

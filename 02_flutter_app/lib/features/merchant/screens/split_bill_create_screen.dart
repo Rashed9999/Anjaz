@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/split_bill_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/split_bill_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SPLIT-BILL-001 — التاجر/POS ينشئ فاتورة مقسّمة.
 class SplitBillCreateScreen extends StatefulWidget {
@@ -70,7 +70,7 @@ class _SplitBillCreateScreenState extends State<SplitBillCreateScreen> {
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: AmyalColors.red),
+      SnackBar(content: Text(msg), backgroundColor: AmialColors.red),
     );
   }
 
@@ -79,7 +79,7 @@ class _SplitBillCreateScreenState extends State<SplitBillCreateScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.receipt_long, color: AmyalColors.primary, size: 48),
+        icon: const Icon(Icons.receipt_long, color: AmialColors.primary, size: 48),
         title: const Text('تم إنشاء الفاتورة المقسّمة', textAlign: TextAlign.center),
         content: SizedBox(
           width: double.maxFinite,
@@ -90,14 +90,14 @@ class _SplitBillCreateScreenState extends State<SplitBillCreateScreen> {
                   style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               const Text('أُرسل لكل مشارك طلب دفع بحصته:',
-                  style: TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+                  style: TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
               const SizedBox(height: 8),
               ...participants.map((p) => ListTile(
                     dense: true,
                     leading: const Icon(Icons.person_outline, size: 20),
                     title: Text((p['customer_phone'] ?? '').toString(), style: const TextStyle(fontSize: 13)),
                     trailing: Text('${p['share_amount'] ?? ''} ر.ي',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
                   )),
             ],
           ),
@@ -120,7 +120,7 @@ class _SplitBillCreateScreenState extends State<SplitBillCreateScreen> {
     final ctrl = Get.find<SplitBillController>();
 
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تقسيم فاتورة'),
       ),
@@ -178,7 +178,7 @@ class _SplitBillCreateScreenState extends State<SplitBillCreateScreen> {
                         if (_phoneCtrls.length > 2)
                           IconButton(
                             onPressed: () => _removeParticipant(i),
-                            icon: const Icon(Icons.remove_circle_outline, color: AmyalColors.red),
+                            icon: const Icon(Icons.remove_circle_outline, color: AmialColors.red),
                           ),
                       ],
                     ),
@@ -196,7 +196,7 @@ class _SplitBillCreateScreenState extends State<SplitBillCreateScreen> {
               Obx(() => ElevatedButton(
                     onPressed: ctrl.isCreating.value ? null : _submit,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AmyalColors.primary,
+                      backgroundColor: AmialColors.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),

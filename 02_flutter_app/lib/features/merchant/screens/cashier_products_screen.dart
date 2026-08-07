@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-CASHIER-001 — إدارة كتالوج المنتجات (اختياري).
 /// يدعم: الكمية، التكلفة، سعر البيع، سعر العرض، تاريخ الإنتاج والانتهاء.
@@ -199,7 +199,7 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
       if (!mounted) return;
       if (!added) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red));
+            SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red));
       }
     }
   }
@@ -214,12 +214,12 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('المنتجات'),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AmyalColors.primary,
+        backgroundColor: AmialColors.primary,
         onPressed: _addDialog,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('إضافة', style: TextStyle(color: Colors.white)),
@@ -231,7 +231,7 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
         if (c.products.isEmpty) {
           return const Center(
               child: Text('لا منتجات بعد — أضف منتجاتك أو استخدم البيع بمبلغ حرّ',
-                  style: TextStyle(color: AmyalColors.textSecondary)));
+                  style: TextStyle(color: AmialColors.textSecondary)));
         }
         return ListView.separated(
           padding: const EdgeInsets.all(12),
@@ -243,17 +243,17 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
             final soon = _isExpiringSoon(expiry);
             final hasOffer = p['offer_price'] != null && (double.tryParse(p['offer_price'].toString()) ?? 0) > 0;
             return ListTile(
-              leading: const Icon(Icons.shopping_bag_outlined, color: AmyalColors.primary),
+              leading: const Icon(Icons.shopping_bag_outlined, color: AmialColors.primary),
               title: Text((p['name'] ?? '').toString()),
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    if (p['category'] != null) Text('${p['category']}  ', style: const TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
-                    Text('مخزون: ${p['quantity'] ?? 0}', style: const TextStyle(fontSize: 11, color: AmyalColors.textSecondary)),
+                    if (p['category'] != null) Text('${p['category']}  ', style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+                    Text('مخزون: ${p['quantity'] ?? 0}', style: const TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
                   ]),
                   if (expiry != null && expiry.isNotEmpty)
-                    Text('ينتهي: $expiry', style: TextStyle(fontSize: 11, color: soon ? AmyalColors.red : AmyalColors.textMuted, fontWeight: soon ? FontWeight.bold : FontWeight.normal)),
+                    Text('ينتهي: $expiry', style: TextStyle(fontSize: 11, color: soon ? AmialColors.red : AmialColors.textMuted, fontWeight: soon ? FontWeight.bold : FontWeight.normal)),
                 ],
               ),
               trailing: Column(
@@ -261,9 +261,9 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   if (hasOffer)
-                    Text('${p['price']}', style: const TextStyle(fontSize: 11, decoration: TextDecoration.lineThrough, color: AmyalColors.textMuted)),
+                    Text('${p['price']}', style: const TextStyle(fontSize: 11, decoration: TextDecoration.lineThrough, color: AmialColors.textMuted)),
                   Text('${hasOffer ? p['offer_price'] : p['price']} ر.ي',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
                 ],
               ),
             );

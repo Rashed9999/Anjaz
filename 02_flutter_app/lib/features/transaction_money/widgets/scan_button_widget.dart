@@ -1,10 +1,10 @@
 import 'package:dotted_border/dotted_border.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/util/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get_utils/src/extensions/internacionalization.dart';
-import 'package:amyal_pay/common/widgets/custom_ink_well_widget.dart';
+import 'package:amial_pay/common/widgets/custom_ink_well_widget.dart';
 
 class ScanButtonWidget extends StatelessWidget {
   final VoidCallback onTap;

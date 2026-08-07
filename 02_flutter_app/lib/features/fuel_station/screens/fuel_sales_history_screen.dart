@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/fuel_station/controllers/fuel_station_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
 
 /// AMIAL-FUEL-002 — سجل مبيعات الوقود + تنزيل PDF لإيصال أي عملية.
 class FuelSalesHistoryScreen extends StatefulWidget {
@@ -33,7 +33,7 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('سجل المبيعات'),
       ),
@@ -43,7 +43,7 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
           padding: const EdgeInsets.all(12),
           color: Colors.white,
           child: Row(children: [
-            const Icon(Icons.filter_alt, size: 18, color: AmyalColors.primary),
+            const Icon(Icons.filter_alt, size: 18, color: AmialColors.primary),
             const SizedBox(width: 8),
             Expanded(child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -88,7 +88,7 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
 
   Widget _filterChip(String value, String label, [Color? color]) {
     final selected = _filterMethod == value;
-    final defaultColor = color ?? AmyalColors.primary;
+    final defaultColor = color ?? AmialColors.primary;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () { if (mounted) { setState(() => _filterMethod = value); _applyFilter(); } }, // AMIAL-FIX-006
@@ -163,7 +163,7 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('${sale['total_amount']}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AmialColors.primary)),
             const Text('ر.ي', style: TextStyle(fontSize: 10, color: Colors.grey)),
           ]),
         ]),
@@ -206,11 +206,11 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
                 final url = c.receiptUrl(sale['sale_ulid']);
                 Clipboard.setData(ClipboardData(text: url));
                 Get.snackbar('الرابط نُسخ', 'افتح المتصفّح لتنزيل الإيصال',
-                    backgroundColor: AmyalColors.yellow.withValues(alpha: 0.3));
+                    backgroundColor: AmialColors.yellow.withValues(alpha: 0.3));
               },
-              icon: const Icon(Icons.picture_as_pdf, color: AmyalColors.red),
+              icon: const Icon(Icons.picture_as_pdf, color: AmialColors.red),
               label: const Text('تنزيل إيصال PDF'),
-              style: OutlinedButton.styleFrom(side: const BorderSide(color: AmyalColors.red), foregroundColor: AmyalColors.red),
+              style: OutlinedButton.styleFrom(side: const BorderSide(color: AmialColors.red), foregroundColor: AmialColors.red),
             )),
           ]),
           const SizedBox(height: 8),
@@ -225,7 +225,7 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text('$value', style: TextStyle(
           fontWeight: bold ? FontWeight.bold : FontWeight.w500,
-          color: bold ? AmyalColors.primary : Colors.black87,
+          color: bold ? AmialColors.primary : Colors.black87,
           fontSize: bold ? 16 : 14,
         )),
         Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),

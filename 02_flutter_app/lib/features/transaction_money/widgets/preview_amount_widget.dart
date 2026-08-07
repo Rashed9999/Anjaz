@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/helper/price_converter_helper.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/helper/price_converter_helper.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/util/styles.dart';
 
 class PreviewAmountWidget extends StatelessWidget {
   const PreviewAmountWidget({ super.key, required this.amountText, this.onTap, this.title });

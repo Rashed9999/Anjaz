@@ -1,7 +1,7 @@
 /// AMIAL-SAFE-PAYMENT-001 (v1.1) — Flutter models
 library;
 
-class AmyalSafePayment {
+class AmialSafePayment {
   final int id;
   final String paymentUlid;
   final int buyerUserId;
@@ -22,11 +22,11 @@ class AmyalSafePayment {
   final DateTime? buyerConfirmedAt;
   final DateTime? releasedAt;
   final DateTime? createdAt;
-  final AmyalUserMini? buyer;
-  final AmyalUserMini? seller;
-  final List<AmyalSafePaymentEvent>? events;
+  final AmialUserMini? buyer;
+  final AmialUserMini? seller;
+  final List<AmialSafePaymentEvent>? events;
 
-  AmyalSafePayment({
+  AmialSafePayment({
     required this.id,
     required this.paymentUlid,
     required this.buyerUserId,
@@ -52,7 +52,7 @@ class AmyalSafePayment {
     this.events,
   });
 
-  factory AmyalSafePayment.fromJson(Map<String, dynamic> j) => AmyalSafePayment(
+  factory AmialSafePayment.fromJson(Map<String, dynamic> j) => AmialSafePayment(
     id: j['id'] ?? 0,
     paymentUlid: j['payment_ulid'] ?? '',
     buyerUserId: j['buyer_user_id'] ?? 0,
@@ -73,10 +73,10 @@ class AmyalSafePayment {
     buyerConfirmedAt: _date(j['buyer_confirmed_at']),
     releasedAt: _date(j['released_at']),
     createdAt: _date(j['created_at']),
-    buyer: j['buyer'] is Map ? AmyalUserMini.fromJson(Map<String, dynamic>.from(j['buyer'])) : null,
-    seller: j['seller'] is Map ? AmyalUserMini.fromJson(Map<String, dynamic>.from(j['seller'])) : null,
+    buyer: j['buyer'] is Map ? AmialUserMini.fromJson(Map<String, dynamic>.from(j['buyer'])) : null,
+    seller: j['seller'] is Map ? AmialUserMini.fromJson(Map<String, dynamic>.from(j['seller'])) : null,
     events: (j['events'] as List?)
-        ?.map((e) => AmyalSafePaymentEvent.fromJson(Map<String, dynamic>.from(e)))
+        ?.map((e) => AmialSafePaymentEvent.fromJson(Map<String, dynamic>.from(e)))
         .toList(),
   );
 
@@ -109,15 +109,15 @@ class AmyalSafePayment {
   }
 }
 
-class AmyalUserMini {
+class AmialUserMini {
   final int id;
   final String? firstName;
   final String? lastName;
   final String? phone;
 
-  AmyalUserMini({required this.id, this.firstName, this.lastName, this.phone});
+  AmialUserMini({required this.id, this.firstName, this.lastName, this.phone});
 
-  factory AmyalUserMini.fromJson(Map<String, dynamic> j) => AmyalUserMini(
+  factory AmialUserMini.fromJson(Map<String, dynamic> j) => AmialUserMini(
     id: j['id'] ?? 0,
     firstName: j['f_name'],
     lastName: j['l_name'],
@@ -130,7 +130,7 @@ class AmyalUserMini {
   }
 }
 
-class AmyalSafePaymentEvent {
+class AmialSafePaymentEvent {
   final int id;
   final String eventType;
   final String? fromStatus;
@@ -140,7 +140,7 @@ class AmyalSafePaymentEvent {
   final String? note;
   final DateTime? createdAt;
 
-  AmyalSafePaymentEvent({
+  AmialSafePaymentEvent({
     required this.id,
     required this.eventType,
     this.fromStatus,
@@ -151,7 +151,7 @@ class AmyalSafePaymentEvent {
     this.createdAt,
   });
 
-  factory AmyalSafePaymentEvent.fromJson(Map<String, dynamic> j) => AmyalSafePaymentEvent(
+  factory AmialSafePaymentEvent.fromJson(Map<String, dynamic> j) => AmialSafePaymentEvent(
     id: j['id'] ?? 0,
     eventType: j['event_type'] ?? '',
     fromStatus: j['from_status'],
@@ -186,7 +186,7 @@ class AmyalSafePaymentEvent {
 ///
 /// لا يحمل الملفّ نفسه بل وصفه: الملفّ يُجلب عند الطلب برابط محميّ، لأن
 /// تحميل خمس صور لكل مرحلة مع كل فتح للشاشة يستهلك باقة المستخدم بلا داعٍ.
-class AmyalEvidenceItem {
+class AmialEvidenceItem {
   final int id;
   final String role; // buyer | seller | admin
   final String stage;
@@ -196,7 +196,7 @@ class AmyalEvidenceItem {
   final String fingerprint;
   final DateTime? uploadedAt;
 
-  AmyalEvidenceItem({
+  AmialEvidenceItem({
     required this.id,
     required this.role,
     required this.stage,
@@ -207,7 +207,7 @@ class AmyalEvidenceItem {
     this.uploadedAt,
   });
 
-  factory AmyalEvidenceItem.fromJson(Map<String, dynamic> j) => AmyalEvidenceItem(
+  factory AmialEvidenceItem.fromJson(Map<String, dynamic> j) => AmialEvidenceItem(
         id: j['id'] ?? 0,
         role: j['role']?.toString() ?? '',
         stage: j['stage']?.toString() ?? '',
@@ -240,7 +240,7 @@ class AmyalEvidenceItem {
 }
 
 /// AMIAL-SAFEPAY-TRUST-001 — سجلّ الطرف المقابل.
-class AmyalTrustSummary {
+class AmialTrustSummary {
   final String role;
   final int completedDeals;
   final int disputedDeals;
@@ -249,7 +249,7 @@ class AmyalTrustSummary {
   final String? memberSince;
   final String badge;
 
-  AmyalTrustSummary({
+  AmialTrustSummary({
     required this.role,
     required this.completedDeals,
     required this.disputedDeals,
@@ -259,7 +259,7 @@ class AmyalTrustSummary {
     required this.badge,
   });
 
-  factory AmyalTrustSummary.fromJson(Map<String, dynamic> j) => AmyalTrustSummary(
+  factory AmialTrustSummary.fromJson(Map<String, dynamic> j) => AmialTrustSummary(
         role: j['role']?.toString() ?? 'seller',
         completedDeals: int.tryParse('${j['completed_deals'] ?? 0}') ?? 0,
         disputedDeals: int.tryParse('${j['disputed_deals'] ?? 0}') ?? 0,
@@ -275,19 +275,19 @@ class AmyalTrustSummary {
 }
 
 /// سبب نزاع منظّم — يأتي من الخادم لا مطبوعاً في التطبيق.
-class AmyalDisputeReason {
+class AmialDisputeReason {
   final String code;
   final String label;
 
-  AmyalDisputeReason({required this.code, required this.label});
+  AmialDisputeReason({required this.code, required this.label});
 
-  factory AmyalDisputeReason.fromJson(Map<String, dynamic> j) => AmyalDisputeReason(
+  factory AmialDisputeReason.fromJson(Map<String, dynamic> j) => AmialDisputeReason(
         code: j['code']?.toString() ?? 'other',
         label: j['label']?.toString() ?? '',
       );
 }
 
-class AmyalSafePaymentActions {
+class AmialSafePaymentActions {
   final bool sellerAccept;
   final bool sellerReject;
   final bool sellerMarkInDelivery;
@@ -296,7 +296,7 @@ class AmyalSafePaymentActions {
   final bool buyerCancel;
   final bool buyerDispute;
 
-  AmyalSafePaymentActions({
+  AmialSafePaymentActions({
     required this.sellerAccept,
     required this.sellerReject,
     required this.sellerMarkInDelivery,
@@ -306,7 +306,7 @@ class AmyalSafePaymentActions {
     required this.buyerDispute,
   });
 
-  factory AmyalSafePaymentActions.fromJson(Map<String, dynamic> j) => AmyalSafePaymentActions(
+  factory AmialSafePaymentActions.fromJson(Map<String, dynamic> j) => AmialSafePaymentActions(
     sellerAccept: j['seller_accept'] == true,
     sellerReject: j['seller_reject'] == true,
     sellerMarkInDelivery: j['seller_mark_in_delivery'] == true,
@@ -316,7 +316,7 @@ class AmyalSafePaymentActions {
     buyerDispute: j['buyer_dispute'] == true,
   );
 
-  factory AmyalSafePaymentActions.empty() => AmyalSafePaymentActions(
+  factory AmialSafePaymentActions.empty() => AmialSafePaymentActions(
     sellerAccept: false, sellerReject: false, sellerMarkInDelivery: false,
     sellerMarkDelivered: false, buyerConfirm: false, buyerCancel: false, buyerDispute: false,
   );

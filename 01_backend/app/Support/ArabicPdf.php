@@ -49,7 +49,7 @@ class ArabicPdf
         ]);
 
         $mpdf->SetDirectionality('rtl');
-        $mpdf->SetTitle('Amyal Pay');
+        $mpdf->SetTitle('Amial Pay');
         // لا رأس/تذييل تلقائي — القالب يتحكّم بالتصميم كاملاً.
         $mpdf->WriteHTML($html);
 

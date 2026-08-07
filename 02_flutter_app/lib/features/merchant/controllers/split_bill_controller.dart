@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/domain/repositories/split_bill_repo.dart';
-import 'package:amyal_pay/data/api/idempotency_key_generator.dart';
+import 'package:amial_pay/features/merchant/domain/repositories/split_bill_repo.dart';
+import 'package:amial_pay/data/api/idempotency_key_generator.dart';
 
 /// AMIAL-SPLIT-BILL-001 — متحكّم تقسيم الفاتورة.
 class SplitBillController extends GetxController implements GetxService {

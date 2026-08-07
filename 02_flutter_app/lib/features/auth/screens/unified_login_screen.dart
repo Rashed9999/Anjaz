@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/auth/controllers/unified_auth_controller.dart';
-import 'package:amyal_pay/features/auth/screens/amial_registration_wizard_screen.dart';
-import 'package:amyal_pay/features/auth/screens/amial_biometric_setup_screen.dart';
+import 'package:amial_pay/features/auth/controllers/unified_auth_controller.dart';
+import 'package:amial_pay/features/auth/screens/amial_registration_wizard_screen.dart';
+import 'package:amial_pay/features/auth/screens/amial_biometric_setup_screen.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:amyal_pay/features/forget_pin/screens/forget_pin_screen.dart';
-import 'package:amyal_pay/features/amyal/screens/account_recovery_screen.dart';
-import 'package:amyal_pay/features/setting/screens/support_screen.dart';
-import 'package:amyal_pay/features/language/widgets/amial_language_switch.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/util/images.dart';
-import 'package:amyal_pay/common/widgets/amial_button.dart';
-import 'package:amyal_pay/util/secure_screen.dart';
-import 'package:amyal_pay/common/widgets/amial_build_stamp.dart';
+import 'package:amial_pay/features/forget_pin/screens/forget_pin_screen.dart';
+import 'package:amial_pay/features/amial/screens/account_recovery_screen.dart';
+import 'package:amial_pay/features/setting/screens/support_screen.dart';
+import 'package:amial_pay/features/language/widgets/amial_language_switch.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/common/widgets/amial_button.dart';
+import 'package:amial_pay/util/secure_screen.dart';
+import 'package:amial_pay/common/widgets/amial_build_stamp.dart';
 
 /// AMIAL-UNIFIED-AUTH-002 — شاشة دخول واحدة بقائمة نوع الحساب.
 ///
@@ -273,7 +273,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   void _error(String m) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+      SnackBar(content: Text(m), backgroundColor: AmialColors.red),
     );
   }
 
@@ -326,7 +326,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           ],
         AccountKind.admin => [
             _Demo('أدمن تجريبي', () {
-              _emailCtrl.text = 'admin@amyalpay.com';
+              _emailCtrl.text = 'admin@amialpay.com';
               _passwordCtrl.text = 'Pass@2026';
             }),
           ],
@@ -335,7 +335,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -390,10 +390,10 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AmyalColors.border),
+                border: Border.all(color: AmialColors.border),
               ),
               child: const Icon(Icons.headset_mic_outlined,
-                  size: 19, color: AmyalColors.primary),
+                  size: 19, color: AmialColors.primary),
             ),
           ),
         ],
@@ -417,7 +417,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           SizedBox(height: 3),
           Text('سجّل الدخول للمتابعة إلى محفظتك',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12.5, color: AmyalColors.textSecondary)),
+              style: TextStyle(fontSize: 12.5, color: AmialColors.textSecondary)),
         ],
       );
     }
@@ -425,7 +425,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       children: [
         Text(_dayGreeting,
             style: const TextStyle(
-                fontSize: 12.5, color: AmyalColors.textSecondary)),
+                fontSize: 12.5, color: AmialColors.textSecondary)),
         const SizedBox(height: 2),
         Text(u.name.isEmpty ? 'أهلاً بعودتك' : 'أهلاً، ${u.name}',
             textAlign: TextAlign.center,
@@ -440,7 +440,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap),
           child: const Text('لستَ أنت؟ تسجيل بحساب آخر',
-              style: TextStyle(fontSize: 11.5, color: AmyalColors.textMuted)),
+              style: TextStyle(fontSize: 11.5, color: AmialColors.textMuted)),
         ),
       ],
     );
@@ -473,7 +473,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap),
         child: const Text('نسيت كلمة المرور؟',
-            style: TextStyle(fontSize: 12.5, color: AmyalColors.primary)),
+            style: TextStyle(fontSize: 12.5, color: AmialColors.primary)),
       ),
     );
   }
@@ -510,7 +510,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('الدخول بدون إنترنت قيد التطوير — سيتوفّر قريباً'),
-        backgroundColor: AmyalColors.primary,
+        backgroundColor: AmialColors.primary,
       ),
     );
   }
@@ -521,7 +521,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     required VoidCallback onTap,
     bool enabled = true,
   }) {
-    final fg = enabled ? AmyalColors.primary : AmyalColors.textMuted;
+    final fg = enabled ? AmialColors.primary : AmialColors.textMuted;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
@@ -532,8 +532,8 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
               color: enabled
-                  ? AmyalColors.primary.withValues(alpha: 0.30)
-                  : AmyalColors.border),
+                  ? AmialColors.primary.withValues(alpha: 0.30)
+                  : AmialColors.border),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -560,14 +560,14 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           const Text('ليس لديك حساب؟ ',
-              style: TextStyle(fontSize: 13, color: AmyalColors.textSecondary)),
+              style: TextStyle(fontSize: 13, color: AmialColors.textSecondary)),
           InkWell(
             onTap: () => Get.to(() => const AmialRegistrationWizardScreen()),
             child: const Text('أنشئ حساباً جديداً',
                 style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: AmyalColors.primary)),
+                    color: AmialColors.primary)),
           ),
         ],
       ),
@@ -606,14 +606,14 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AmyalColors.border),
+                border: Border.all(color: AmialColors.border),
               ),
-              child: Icon(icon, size: 21, color: AmyalColors.primary),
+              child: Icon(icon, size: 21, color: AmialColors.primary),
             ),
             const SizedBox(height: 6),
             Text(label,
                 style: const TextStyle(
-                    fontSize: 11, color: AmyalColors.textSecondary)),
+                    fontSize: 11, color: AmialColors.textSecondary)),
           ],
         ),
       ),
@@ -627,7 +627,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AmyalColors.border),
+        border: Border.all(color: AmialColors.border),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<AccountKind>(
@@ -635,7 +635,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           isExpanded: true,
           borderRadius: BorderRadius.circular(14),
           icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: AmyalColors.primary),
+              color: AmialColors.primary),
           items: AccountKind.values.map((k) {
             return DropdownMenuItem<AccountKind>(
               value: k,
@@ -663,7 +663,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                                fontSize: 10.5, color: AmyalColors.textMuted)),
+                                fontSize: 10.5, color: AmialColors.textMuted)),
                       ],
                     ),
                   ),
@@ -727,7 +727,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             _field(
               controller: _emailCtrl,
               label: 'البريد الإلكتروني *',
-              hint: 'admin@amyalpay.com',
+              hint: 'admin@amialpay.com',
               icon: Icons.alternate_email,
               keyboard: TextInputType.emailAddress,
               ltr: true,
@@ -798,12 +798,12 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AmyalColors.yellow.withValues(alpha: 0.18),
+            color: AmialColors.yellow.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
             children: [
-              const Icon(Icons.sms, color: AmyalColors.primary, size: 30),
+              const Icon(Icons.sms, color: AmialColors.primary, size: 30),
               const SizedBox(height: 6),
               Text('تم إرسال رمز التحقق إلى $_maskedPhone',
                   textAlign: TextAlign.center,
@@ -840,7 +840,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     );
   }
 
-  /// AMIAL-LOGIN-UI-002: حدود موحّدة بنصف قطر 14 ولون AmyalColors.border —
+  /// AMIAL-LOGIN-UI-002: حدود موحّدة بنصف قطر 14 ولون AmialColors.border —
   /// كانت OutlineInputBorder الافتراضية (زوايا 4 ورمادي Material) فتختلف عن
   /// قائمة نوع الحساب فوقها مباشرةً.
   Widget _field({
@@ -869,10 +869,10 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         labelText: label,
         hintText: hint,
         prefixIcon: prefix == null
-            ? Icon(icon, color: AmyalColors.textMuted)
+            ? Icon(icon, color: AmialColors.textMuted)
             : Row(mainAxisSize: MainAxisSize.min, children: [
                 const SizedBox(width: 10),
-                Icon(icon, size: 20, color: AmyalColors.textMuted),
+                Icon(icon, size: 20, color: AmialColors.textMuted),
                 const SizedBox(width: 6),
                 prefix,
               ]),
@@ -881,11 +881,11 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         fillColor: Colors.white,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-        border: side(AmyalColors.border),
-        enabledBorder: side(AmyalColors.border),
-        focusedBorder: side(AmyalColors.primary, 1.4),
-        errorBorder: side(AmyalColors.red),
-        focusedErrorBorder: side(AmyalColors.red, 1.4),
+        border: side(AmialColors.border),
+        enabledBorder: side(AmialColors.border),
+        focusedBorder: side(AmialColors.primary, 1.4),
+        errorBorder: side(AmialColors.red),
+        focusedErrorBorder: side(AmialColors.red, 1.4),
       ),
       validator: validator,
     );
@@ -917,22 +917,22 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
-        color: AmyalColors.yellow.withValues(alpha: 0.12),
+        color: AmialColors.yellow.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AmyalColors.yellow.withValues(alpha: 0.5)),
+        border: Border.all(color: AmialColors.yellow.withValues(alpha: 0.5)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.vpn_key_rounded, size: 16, color: AmyalColors.primary),
+              const Icon(Icons.vpn_key_rounded, size: 16, color: AmialColors.primary),
               const SizedBox(width: 6),
               Text('بيانات تجريبية (${_kind.label}) — اضغط للتعبئة',
                   style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: AmyalColors.primary)),
+                      color: AmialColors.primary)),
             ],
           ),
           const SizedBox(height: 8),
@@ -946,20 +946,20 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
                         fontSize: 12.5,
                         fontWeight:
                             e.highlight ? FontWeight.bold : FontWeight.w500,
-                        color: e.highlight ? Colors.white : AmyalColors.primary)),
+                        color: e.highlight ? Colors.white : AmialColors.primary)),
                 backgroundColor:
-                    e.highlight ? AmyalColors.primary : Colors.white,
+                    e.highlight ? AmialColors.primary : Colors.white,
                 side: BorderSide(
                     color: e.highlight
-                        ? AmyalColors.primary
-                        : AmyalColors.primary.withValues(alpha: 0.35)),
+                        ? AmialColors.primary
+                        : AmialColors.primary.withValues(alpha: 0.35)),
                 onPressed: () {
                   e.onFill();
                   setState(() {});
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     content: Text('تم تعبئة بيانات: ${e.label}'),
                     duration: const Duration(milliseconds: 900),
-                    backgroundColor: AmyalColors.primary,
+                    backgroundColor: AmialColors.primary,
                   ));
                 },
               );
@@ -981,7 +981,7 @@ class _Demo {
 }
 
 // ============================================================
-// بادئات أرقام اليمن — AMYAL-UI-002
+// بادئات أرقام اليمن — AMIAL-UI-002
 // ============================================================
 /// AMIAL-LOGIN-UI-002 — قائمة بادئة الشبكة داخل حقل الهاتف.
 ///
@@ -1002,11 +1002,11 @@ class _NetworkPrefixPicker extends StatelessWidget {
         isDense: true,
         borderRadius: BorderRadius.circular(12),
         icon: const Icon(Icons.arrow_drop_down_rounded,
-            size: 20, color: AmyalColors.textMuted),
+            size: 20, color: AmialColors.textMuted),
         style: const TextStyle(
             fontSize: 14.5,
             fontWeight: FontWeight.w700,
-            color: AmyalColors.primary),
+            color: AmialColors.primary),
         items: prefixes
             .map((p) => DropdownMenuItem<String>(
                   value: p,
@@ -1022,7 +1022,7 @@ class _NetworkPrefixPicker extends StatelessWidget {
 }
 
 // ============================================================
-// آخر تسجيل دخول — AMYAL-SEC-LOGIN-001
+// آخر تسجيل دخول — AMIAL-SEC-LOGIN-001
 // ============================================================
 class _LastLoginNote extends StatelessWidget {
   const _LastLoginNote();
@@ -1043,13 +1043,13 @@ class _LastLoginNote extends StatelessWidget {
       margin: const EdgeInsets.only(top: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AmyalColors.primary.withValues(alpha: 0.04),
+        color: AmialColors.primary.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AmyalColors.primary.withValues(alpha: 0.12)),
+        border: Border.all(color: AmialColors.primary.withValues(alpha: 0.12)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.shield_outlined, size: 20, color: AmyalColors.primary),
+          const Icon(Icons.shield_outlined, size: 20, color: AmialColors.primary),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1059,16 +1059,16 @@ class _LastLoginNote extends StatelessWidget {
                     style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: AmyalColors.primary)),
+                        color: AmialColors.primary)),
                 const SizedBox(height: 2),
                 Text(
                   '🕒 ${_fmt(last.at)}'
                   '${last.zone.isNotEmpty ? '   •   📍 ${last.zone}' : ''}',
                   style: const TextStyle(
-                      fontSize: 11.5, color: AmyalColors.textSecondary),
+                      fontSize: 11.5, color: AmialColors.textSecondary),
                 ),
                 const Text('إن لم تكن أنت، غيّر كلمة مرورك فوراً.',
-                    style: TextStyle(fontSize: 10.5, color: AmyalColors.textMuted)),
+                    style: TextStyle(fontSize: 10.5, color: AmialColors.textMuted)),
               ],
             ),
           ),

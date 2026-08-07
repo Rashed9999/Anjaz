@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_large_widget.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/auth/controllers/create_account_controller.dart';
-import 'package:amyal_pay/features/verification/controllers/verification_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/common/widgets/custom_pin_code_field_widget.dart';
-import 'package:amyal_pay/common/widgets/demo_otp_hint_widget.dart';
-import 'package:amyal_pay/features/verification/widgets/information_view.dart';
-import 'package:amyal_pay/features/verification/widgets/timer_section.dart';
+import 'package:amial_pay/common/widgets/custom_large_widget.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/auth/controllers/create_account_controller.dart';
+import 'package:amial_pay/features/verification/controllers/verification_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/common/widgets/custom_pin_code_field_widget.dart';
+import 'package:amial_pay/common/widgets/demo_otp_hint_widget.dart';
+import 'package:amial_pay/features/verification/widgets/information_view.dart';
+import 'package:amial_pay/features/verification/widgets/timer_section.dart';
 
 class VerificationScreen extends StatefulWidget {
   final String? phoneNumber;

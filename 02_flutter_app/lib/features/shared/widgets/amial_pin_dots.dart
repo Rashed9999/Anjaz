@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-PIN-UI-002 — نقاط الرمز السري.
 ///
@@ -24,7 +24,7 @@ class AmialPinDots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = error ? AmyalColors.red : AmyalColors.primary;
+    final color = error ? AmialColors.red : AmialColors.primary;
 
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: controller,

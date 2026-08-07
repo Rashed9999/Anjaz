@@ -1,8 +1,8 @@
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/common/models/config_model.dart';
-import 'package:amyal_pay/features/splash/domain/reposotories/splash_repo.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/common/models/config_model.dart';
+import 'package:amial_pay/features/splash/domain/reposotories/splash_repo.dart';
 
 class SplashController extends GetxController implements GetxService{
    final SplashRepo splashRepo;

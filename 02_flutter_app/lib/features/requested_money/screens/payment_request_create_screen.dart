@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
-import 'package:amyal_pay/features/requested_money/screens/payment_request_show_screen.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/common/widgets/amial_button.dart';
-import 'package:amyal_pay/common/widgets/amial_quick_amounts.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/requested_money/controllers/payment_request_controller.dart';
+import 'package:amial_pay/features/requested_money/screens/payment_request_show_screen.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/common/widgets/amial_button.dart';
+import 'package:amial_pay/common/widgets/amial_quick_amounts.dart';
 
 /// AMIAL-PAYMENT-REQUESTS-001 — شاشة إنشاء طلب أموال.
 class PaymentRequestCreateScreen extends StatefulWidget {
@@ -86,14 +86,14 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+        SnackBar(content: Text(m), backgroundColor: AmialColors.red),
       );
 
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('طلب أموال'),
       ),
@@ -115,14 +115,14 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
                 keyboardType: TextInputType.number,
                 textAlign: TextAlign.right,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AmyalColors.primary),
+                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AmialColors.primary),
                 decoration: const InputDecoration(border: InputBorder.none, hintText: '0'),
                 onChanged: (_) => setState(() {}), // تحديث معاينة الطلب
               )),
             ]),
           ),
           const SizedBox(height: 10),
-          // AMYAL-DS-001: مبالغ سريعة بضغطة (المكوّن الموحّد).
+          // AMIAL-DS-001: مبالغ سريعة بضغطة (المكوّن الموحّد).
           AmialQuickAmounts(
             values: const [500, 1000, 2000, 5000, 10000, 20000],
             onPick: (v) {
@@ -208,7 +208,7 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
             onChanged: (v) => setState(() => _isRecurring = v),
             title: const Text('تكرار هذا الطلب', textAlign: TextAlign.right),
             subtitle: const Text('فواتير دورية', textAlign: TextAlign.right, style: TextStyle(fontSize: 12)),
-            activeThumbColor: AmyalColors.primary,
+            activeThumbColor: AmialColors.primary,
           ),
           if (_isRecurring) ...[
             const SizedBox(height: 8),
@@ -270,7 +270,7 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
               border: Border.all(color: const Color(0xFFFECA1E)),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text('AMYAL PAY',
+            child: const Text('AMIAL PAY',
                 style: TextStyle(
                     color: Color(0xFFFECA1E),
                     fontSize: 10,
@@ -334,7 +334,7 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
               child: Text(
                 _shareMethod == 'qr'
                     ? 'سيظهر رمز QR بعد الإنشاء'
-                    : '...amyal.pay/req/xxxxx — يظهر الرابط بعد الإنشاء',
+                    : '...amial.pay/req/xxxxx — يظهر الرابط بعد الإنشاء',
                 textDirection: TextDirection.ltr,
                 textAlign: TextAlign.left,
                 maxLines: 1,
@@ -357,12 +357,12 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: selected ? AmyalColors.primary : Colors.white,
+          color: selected ? AmialColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? AmyalColors.primary : Colors.grey.shade300, width: selected ? 2 : 1),
+          border: Border.all(color: selected ? AmialColors.primary : Colors.grey.shade300, width: selected ? 2 : 1),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: selected ? Colors.white : AmyalColors.primary),
+          Icon(icon, color: selected ? Colors.white : AmialColors.primary),
           const SizedBox(height: 4),
           Text(label, style: TextStyle(color: selected ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
         ]),
@@ -378,9 +378,9 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? AmyalColors.yellow : Colors.white,
+          color: selected ? AmialColors.yellow : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? AmyalColors.yellow : Colors.grey.shade300),
+          border: Border.all(color: selected ? AmialColors.yellow : Colors.grey.shade300),
         ),
         child: Text(label, textAlign: TextAlign.center,
             style: TextStyle(color: Colors.black87, fontWeight: selected ? FontWeight.bold : FontWeight.normal)),

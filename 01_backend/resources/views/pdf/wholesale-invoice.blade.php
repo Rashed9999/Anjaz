@@ -433,7 +433,7 @@
         <div class="stamp" style="border-color: #DC2626; color: #DC2626;">✗ فاتورة مُبطَلة</div>
     @endif
     <div style="margin-top: 8px;">
-        تمّ التوليد: {{ now()->format('Y-m-d H:i') }} • أُنشئت بواسطة Amyal Pay
+        تمّ التوليد: {{ now()->format('Y-m-d H:i') }} • أُنشئت بواسطة Amial Pay
     </div>
 </div>
 

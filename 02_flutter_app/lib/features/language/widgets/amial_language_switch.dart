@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/language/controllers/localization_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/features/language/controllers/localization_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
 /// AMIAL-I18N-002 — مبدّل اللغة المُصغّر.
 ///
@@ -37,7 +37,7 @@ class AmialLanguageSheet {
               width: 42,
               height: 4,
               decoration: BoxDecoration(
-                color: AmyalColors.border,
+                color: AmialColors.border,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -64,7 +64,7 @@ class AmialLanguageSheet {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: AmyalColors.primary
+                    color: AmialColors.primary
                         .withValues(alpha: selected ? 0.14 : 0.06),
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -75,8 +75,8 @@ class AmialLanguageSheet {
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
                       color: selected
-                          ? AmyalColors.primary
-                          : AmyalColors.textMuted,
+                          ? AmialColors.primary
+                          : AmialColors.textMuted,
                     ),
                   ),
                 ),
@@ -86,13 +86,13 @@ class AmialLanguageSheet {
                     fontSize: 15,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     color: selected
-                        ? AmyalColors.primary
+                        ? AmialColors.primary
                         : const Color(0xFF1A2433),
                   ),
                 ),
                 trailing: selected
                     ? const Icon(Icons.check_circle_rounded,
-                        color: AmyalColors.primary, size: 22)
+                        color: AmialColors.primary, size: 22)
                     : null,
               );
             }),
@@ -119,7 +119,7 @@ class AmialLanguageChip extends StatelessWidget {
           )
           .languageName;
 
-      final fg = onDark ? Colors.white : AmyalColors.primary;
+      final fg = onDark ? Colors.white : AmialColors.primary;
 
       return InkWell(
         onTap: () => AmialLanguageSheet.open(context),
@@ -129,12 +129,12 @@ class AmialLanguageChip extends StatelessWidget {
           decoration: BoxDecoration(
             color: onDark
                 ? Colors.white.withValues(alpha: 0.15)
-                : AmyalColors.primary.withValues(alpha: 0.07),
+                : AmialColors.primary.withValues(alpha: 0.07),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
                 color: onDark
                     ? Colors.white.withValues(alpha: 0.28)
-                    : AmyalColors.primary.withValues(alpha: 0.22)),
+                    : AmialColors.primary.withValues(alpha: 0.22)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,

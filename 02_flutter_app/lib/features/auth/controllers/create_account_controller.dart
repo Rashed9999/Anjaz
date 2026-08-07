@@ -1,7 +1,7 @@
 import 'package:country_code_picker/country_code_picker.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
 import 'package:get/get.dart';
 
 class CreateAccountController extends GetxController implements GetxService{

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/pharmacy/controllers/pharmacy_controller.dart';
-import 'package:amyal_pay/features/barcode/screens/continuous_scanner_screen.dart';
-import 'package:amyal_pay/features/payments/screens/amial_qr_collect_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/pharmacy/controllers/pharmacy_controller.dart';
+import 'package:amial_pay/features/barcode/screens/continuous_scanner_screen.dart';
+import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
 
 /// AMIAL-PHARMACY-001 — شاشة بيع الصيدلية (الجوهر).
 ///
@@ -73,7 +73,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
   Future<void> _submitSale() async {
     // فحص الوصفة
     if (c.cartRequiresPrescription && _prescriptionCtrl.text.trim().isEmpty) {
-      return _showSnack('السلّة تحتوي منتجات تستلزم وصفة طبية', AmyalColors.red);
+      return _showSnack('السلّة تحتوي منتجات تستلزم وصفة طبية', AmialColors.red);
     }
 
     // فحص الحساسية
@@ -121,7 +121,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
     if (ok) {
       _showSuccessDialog();
     } else {
-      _showSnack(c.lastError.value, AmyalColors.red);
+      _showSnack(c.lastError.value, AmialColors.red);
     }
   }
 
@@ -190,7 +190,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
       ]),
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
         Text('الإجمالي: ${sale['total_amount']} ر.ي',
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmialColors.primary)),
         const SizedBox(height: 4),
         Text('#${(sale['sale_ulid'] ?? '').toString().substring((sale['sale_ulid'] ?? '').toString().length - 8)}',
             style: TextStyle(color: Colors.grey.shade600, fontFamily: 'monospace')),
@@ -237,7 +237,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('بيع صيدلية'),
         actions: [
@@ -262,11 +262,11 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
               return Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AmyalColors.primary.withValues(alpha: 0.08),
+                  color: AmialColors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(children: [
-                  const CircleAvatar(radius: 18, backgroundColor: AmyalColors.primary,
+                  const CircleAvatar(radius: 18, backgroundColor: AmialColors.primary,
                       child: Icon(Icons.person, color: Colors.white, size: 18)),
                   const SizedBox(width: 10),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -295,7 +295,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
               IconButton.filled(
                 onPressed: _lookupCustomer,
                 icon: const Icon(Icons.search),
-                style: IconButton.styleFrom(backgroundColor: AmyalColors.primary),
+                style: IconButton.styleFrom(backgroundColor: AmialColors.primary),
               ),
             ]);
           }),
@@ -316,7 +316,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
                   : const Icon(Icons.search),
               isDense: true,
               filled: true,
-              fillColor: AmyalColors.background,
+              fillColor: AmialColors.background,
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
             ),
           ),
@@ -366,10 +366,10 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
           Container(
             width: 40, height: 40,
             decoration: BoxDecoration(
-              color: AmyalColors.yellow.withValues(alpha: 0.2),
+              color: AmialColors.yellow.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.medication, color: AmyalColors.yellowDark, size: 20),
+            child: const Icon(Icons.medication, color: AmialColors.yellowDark, size: 20),
           ),
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -388,12 +388,12 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
             Text('متوفر: ${stock.toStringAsFixed(0)} ${product['unit'] ?? ''}',
                 style: TextStyle(
                   fontSize: 11,
-                  color: outOfStock ? AmyalColors.red : (stock <= 5 ? Colors.orange : Colors.green),
+                  color: outOfStock ? AmialColors.red : (stock <= 5 ? Colors.orange : Colors.green),
                   fontWeight: FontWeight.bold,
                 )),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('$price', style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary, fontSize: 15)),
+            Text('$price', style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary, fontSize: 15)),
             const Text('ر.ي', style: TextStyle(fontSize: 10, color: Colors.grey)),
           ]),
         ]),
@@ -425,7 +425,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
             final qty = double.tryParse(qtyCtrl.text) ?? 0;
             if (qty <= 0) return;
             if (qty > stock) {
-              _showSnack('الكمية أكبر من المتوفر', AmyalColors.red);
+              _showSnack('الكمية أكبر من المتوفر', AmialColors.red);
               return;
             }
             c.addToCart(product, qty);
@@ -510,7 +510,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
         // الإجمالي + الدفع
         Row(children: [
           Text(c.cartTotal.toStringAsFixed(0),
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmialColors.primary)),
           const SizedBox(width: 4),
           const Text('ر.ي', style: TextStyle(fontSize: 12)),
           const Spacer(),
@@ -546,7 +546,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
               : const Icon(Icons.check),
           label: const Text('تأكيد البيع', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           style: FilledButton.styleFrom(
-            backgroundColor: AmyalColors.primary,
+            backgroundColor: AmialColors.primary,
             minimumSize: const Size.fromHeight(48),
           ),
         )),
@@ -562,12 +562,12 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: selected ? AmyalColors.primary : Colors.white,
+          color: selected ? AmialColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: selected ? AmyalColors.primary : Colors.grey.shade300),
+          border: Border.all(color: selected ? AmialColors.primary : Colors.grey.shade300),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: selected ? Colors.white : AmyalColors.primary, size: 18),
+          Icon(icon, color: selected ? Colors.white : AmialColors.primary, size: 18),
           Text(label, style: TextStyle(color: selected ? Colors.white : Colors.black, fontSize: 11)),
         ]),
       ),

@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/access/domain/repositories/access_repo.dart';
+import 'package:amial_pay/features/access/domain/repositories/access_repo.dart';
 
 /// CRITICAL-001 — Access Controller.
 ///

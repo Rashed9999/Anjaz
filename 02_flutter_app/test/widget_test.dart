@@ -9,12 +9,12 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/features/auth/screens/role_router.dart';
-import 'package:amyal_pay/features/home/screens/nav_bar_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_dashboard_screen.dart';
-import 'package:amyal_pay/features/access/screens/home_dispatcher_screen.dart';
-import 'package:amyal_pay/features/access/screens/web_portal_notice_screen.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/features/auth/screens/role_router.dart';
+import 'package:amial_pay/features/home/screens/nav_bar_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_dashboard_screen.dart';
+import 'package:amial_pay/features/access/screens/home_dispatcher_screen.dart';
+import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
 
 void main() {
   const fast = Timeout(Duration(seconds: 30));

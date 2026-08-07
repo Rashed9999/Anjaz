@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-MULTI-CURRENCY-001 — «العملات» (باقة التاجر برو فأعلى).
 ///
@@ -45,7 +45,7 @@ class _MerchantCurrenciesScreenState extends State<MerchantCurrenciesScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _editDialog({Map<String, dynamic>? existing}) async {
     final code = TextEditingController(text: existing?['code'] ?? '');
@@ -106,19 +106,19 @@ class _MerchantCurrenciesScreenState extends State<MerchantCurrenciesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('العملات'),
-          backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+          backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
       floatingActionButton: _error == null
           ? FloatingActionButton.extended(onPressed: () => _editDialog(),
-              backgroundColor: AmyalColors.primary, icon: const Icon(Icons.add), label: const Text('عملة جديدة'))
+              backgroundColor: AmialColors.primary, icon: const Icon(Icons.add), label: const Text('عملة جديدة'))
           : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(child: Padding(padding: const EdgeInsets.all(24),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.workspace_premium, size: 56, color: AmyalColors.yellowDark),
+                    const Icon(Icons.workspace_premium, size: 56, color: AmialColors.yellowDark),
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -128,7 +128,7 @@ class _MerchantCurrenciesScreenState extends State<MerchantCurrenciesScreen> {
                   child: ListView(padding: const EdgeInsets.all(12), children: [
                     const Padding(padding: EdgeInsets.all(8),
                         child: Text('العملة الأساس: الريال اليمني (ر.ي). أضِف عملات بأسعار صرفها لتظهر مكافئاتها على الفواتير.',
-                            style: TextStyle(fontSize: 12, color: AmyalColors.textSecondary))),
+                            style: TextStyle(fontSize: 12, color: AmialColors.textSecondary))),
                     if (_list.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 40),
                         child: Center(child: Text('لا عملات مضافة'))),
                     ..._list.map(_card),
@@ -144,16 +144,16 @@ class _MerchantCurrenciesScreenState extends State<MerchantCurrenciesScreen> {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: AmyalColors.primary.withValues(alpha: 0.1),
-          child: Text('${c['symbol'] ?? c['code']}', style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary, fontSize: 12)),
+          backgroundColor: AmialColors.primary.withValues(alpha: 0.1),
+          child: Text('${c['symbol'] ?? c['code']}', style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary, fontSize: 12)),
         ),
         title: Text('${c['code']} — ${c['name']}', style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text('1 ${c['code']} = ${c['rate_to_base']} ر.ي', style: const TextStyle(fontSize: 11)),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          IconButton(icon: const Icon(Icons.edit, size: 20, color: AmyalColors.primary),
+          IconButton(icon: const Icon(Icons.edit, size: 20, color: AmialColors.primary),
               onPressed: () => _editDialog(existing: c)),
-          Switch(value: active, activeColor: AmyalColors.primary, onChanged: (_) => _toggle(c['id'] as int)),
-          IconButton(icon: const Icon(Icons.delete_outline, size: 20, color: AmyalColors.red),
+          Switch(value: active, activeColor: AmialColors.primary, onChanged: (_) => _toggle(c['id'] as int)),
+          IconButton(icon: const Icon(Icons.delete_outline, size: 20, color: AmialColors.red),
               onPressed: () => _delete(c['id'] as int)),
         ]),
       ),

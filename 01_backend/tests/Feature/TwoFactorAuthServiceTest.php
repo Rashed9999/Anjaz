@@ -25,7 +25,7 @@ class TwoFactorAuthServiceTest extends TestCase
         config()->set('amial.encryption.blind_index_key', base64_encode(random_bytes(32)));
 
         $this->service = app(TwoFactorAuthService::class);
-        $this->admin = User::factory()->create(['email' => 'admin@amyal.test']);
+        $this->admin = User::factory()->create(['email' => 'admin@amial.test']);
     }
 
     /** @test */

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/theme/custom_theme_colors.dart';
+import 'package:amial_pay/theme/custom_theme_colors.dart';
 
 
 extension ContextInfo on BuildContext {

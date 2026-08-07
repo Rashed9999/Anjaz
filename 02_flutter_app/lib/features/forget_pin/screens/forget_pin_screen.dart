@@ -2,16 +2,16 @@ import 'package:country_code_picker/country_code_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:phone_numbers_parser/phone_numbers_parser.dart';
-import 'package:amyal_pay/common/widgets/custom_large_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_logo_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_text_field_widget.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/auth/controllers/create_account_controller.dart';
-import 'package:amyal_pay/features/forget_pin/controllers/forget_pin_controller.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/helper/phone_cheker_helper.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_large_widget.dart';
+import 'package:amial_pay/common/widgets/custom_logo_widget.dart';
+import 'package:amial_pay/common/widgets/custom_text_field_widget.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/auth/controllers/create_account_controller.dart';
+import 'package:amial_pay/features/forget_pin/controllers/forget_pin_controller.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/helper/phone_cheker_helper.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
 
 
 class ForgetPinScreen extends StatefulWidget {

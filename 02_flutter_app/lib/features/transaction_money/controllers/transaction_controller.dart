@@ -1,17 +1,17 @@
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:amyal_pay/common/models/contact_model.dart';
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/data/api/idempotency_key_generator.dart';
-import 'package:amyal_pay/features/auth/domain/reposotories/auth_repo.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/features/transaction_money/domain/models/contact_tag_model.dart';
-import 'package:amyal_pay/features/transaction_money/domain/models/purpose_model.dart';
-import 'package:amyal_pay/features/transaction_money/domain/models/withdraw_model.dart';
-import 'package:amyal_pay/features/transaction_money/domain/reposotories/transaction_repo.dart';
-import 'package:amyal_pay/features/transaction_money/screens/transaction_confirmation_screen.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/helper/route_helper.dart';
+import 'package:amial_pay/common/models/contact_model.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/data/api/idempotency_key_generator.dart';
+import 'package:amial_pay/features/auth/domain/reposotories/auth_repo.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/features/transaction_money/domain/models/contact_tag_model.dart';
+import 'package:amial_pay/features/transaction_money/domain/models/purpose_model.dart';
+import 'package:amial_pay/features/transaction_money/domain/models/withdraw_model.dart';
+import 'package:amial_pay/features/transaction_money/domain/reposotories/transaction_repo.dart';
+import 'package:amial_pay/features/transaction_money/screens/transaction_confirmation_screen.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/helper/route_helper.dart';
 
 class TransactionMoneyController extends GetxController implements GetxService {
   final TransactionRepo transactionRepo;

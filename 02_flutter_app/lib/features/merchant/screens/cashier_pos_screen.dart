@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_payment_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_scan_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/offline_sales_screen.dart';
-import 'package:amyal_pay/features/merchant/services/offline_sale_queue.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_payment_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_scan_screen.dart';
+import 'package:amial_pay/features/merchant/screens/offline_sales_screen.dart';
+import 'package:amial_pay/features/merchant/services/offline_sale_queue.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-POS-001 — «المبيعات» (التصميم 36):
 /// بحث + ماسح باركود + تصنيفات + شبكة منتجات ببطاقات وزر ذهبي (+)
@@ -94,7 +94,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 foregroundColor: Colors.white),
             child: const Text('متابعة للدفع'),
           ),
@@ -141,14 +141,14 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AmyalColors.primary.withValues(alpha: 0.08),
+                    color: AmialColors.primary.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text('$count صنف',
                       style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: AmyalColors.primary)),
+                          color: AmialColors.primary)),
                 ),
                 const Text('مراجعة الطلب',
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
@@ -169,7 +169,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  color: AmyalColors.primary.withValues(alpha: 0.06),
+                  color: AmialColors.primary.withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
@@ -179,7 +179,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                         style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
-                            color: AmyalColors.primary)),
+                            color: AmialColors.primary)),
                     const Text('الإجمالي المطلوب',
                         style: TextStyle(
                             fontSize: 14, fontWeight: FontWeight.w600)),
@@ -197,7 +197,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                     style:
                         TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AmyalColors.primary,
+                  backgroundColor: AmialColors.primary,
                   minimumSize: const Size.fromHeight(54),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
@@ -210,9 +210,9 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   Navigator.pop(ctx);
                 },
                 icon: const Icon(Icons.delete_sweep_outlined,
-                    size: 18, color: AmyalColors.red),
+                    size: 18, color: AmialColors.red),
                 label: const Text('إفراغ السلة',
-                    style: TextStyle(color: AmyalColors.red, fontSize: 13)),
+                    style: TextStyle(color: AmialColors.red, fontSize: 13)),
               ),
             ]);
           }),
@@ -225,7 +225,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('المبيعات'),
         actions: [
@@ -244,7 +244,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                       right: 6, top: 8,
                       child: Container(
                         padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(color: AmyalColors.red, shape: BoxShape.circle),
+                        decoration: const BoxDecoration(color: AmialColors.red, shape: BoxShape.circle),
                         child: Text('${_offline.pending.value}',
                             style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
                       ),
@@ -276,7 +276,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   height: 48,
                   width: 48,
                   decoration: BoxDecoration(
-                    color: AmyalColors.primary,
+                    color: AmialColors.primary,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(Icons.barcode_reader,
@@ -318,10 +318,10 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   child: ChoiceChip(
                     label: Text(cat, style: const TextStyle(fontSize: 12)),
                     selected: selected,
-                    selectedColor: AmyalColors.primary,
+                    selectedColor: AmialColors.primary,
                     backgroundColor: Colors.white,
                     labelStyle: TextStyle(
-                        color: selected ? Colors.white : AmyalColors.primary),
+                        color: selected ? Colors.white : AmialColors.primary),
                     onSelected: (_) => setState(() => _category = cat),
                   ),
                 );
@@ -334,11 +334,11 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
             child: c.isLoadingProducts.value && c.products.isEmpty
                 ? const Center(
                     child:
-                        CircularProgressIndicator(color: AmyalColors.primary))
+                        CircularProgressIndicator(color: AmialColors.primary))
                 : items.isEmpty
                     ? const Center(
                         child: Text('لا توجد منتجات مطابقة',
-                            style: TextStyle(color: AmyalColors.textMuted)))
+                            style: TextStyle(color: AmialColors.textMuted)))
                     : GridView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
                         gridDelegate:
@@ -363,7 +363,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Material(
-              color: AmyalColors.primary,
+              color: AmialColors.primary,
               borderRadius: BorderRadius.circular(30),
               child: InkWell(
                 onTap: _openCartReview,
@@ -376,7 +376,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 16, vertical: 10),
                       decoration: BoxDecoration(
-                        color: AmyalColors.yellow,
+                        color: AmialColors.yellow,
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: const Row(children: [
@@ -404,7 +404,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                         ]),
                     const SizedBox(width: 10),
                     const Icon(Icons.shopping_cart_outlined,
-                        color: AmyalColors.yellow),
+                        color: AmialColors.yellow),
                     const SizedBox(width: 8),
                   ]),
                 ),
@@ -424,7 +424,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AmyalColors.border),
+        border: Border.all(color: AmialColors.border),
       ),
       child: Row(children: [
         // مُبدّل الكمية (± أو حذف)
@@ -439,7 +439,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
               onTap: () => c.incLine(i),
               child: const Padding(
                 padding: EdgeInsets.all(6),
-                child: Icon(Icons.add, size: 18, color: AmyalColors.primary),
+                child: Icon(Icons.add, size: 18, color: AmialColors.primary),
               ),
             ),
             SizedBox(
@@ -457,7 +457,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                 child: Icon(
                     l.qty <= 1 ? Icons.delete_outline : Icons.remove,
                     size: 18,
-                    color: l.qty <= 1 ? AmyalColors.red : Colors.black87),
+                    color: l.qty <= 1 ? AmialColors.red : Colors.black87),
               ),
             ),
           ]),
@@ -468,7 +468,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
             style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
-                color: AmyalColors.primary)),
+                color: AmialColors.primary)),
         const Spacer(),
         // الاسم + سعر الوحدة
         Expanded(
@@ -481,7 +481,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                     fontWeight: FontWeight.w700, fontSize: 13.5)),
             Text('${AmialMoney.fmt(l.price)} ر.ي × ${l.qty}',
                 style: const TextStyle(
-                    fontSize: 11, color: AmyalColors.textMuted)),
+                    fontSize: 11, color: AmialColors.textMuted)),
           ]),
         ),
         const SizedBox(width: 10),
@@ -490,11 +490,11 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
           height: 42,
           width: 42,
           decoration: BoxDecoration(
-            color: AmyalColors.yellow.withValues(alpha: 0.18),
+            color: AmialColors.yellow.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Icons.inventory_2_outlined,
-              color: AmyalColors.yellowDark, size: 20),
+              color: AmialColors.yellowDark, size: 20),
         ),
       ]),
     );
@@ -527,7 +527,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: AmyalColors.primary,
+                    color: AmialColors.primary,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text('عرض',
@@ -543,18 +543,18 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   ),
                   child: const Text('نفد',
                       style:
-                          TextStyle(color: AmyalColors.red, fontSize: 9)),
+                          TextStyle(color: AmialColors.red, fontSize: 9)),
                 ),
               const Spacer(),
               Container(
                 height: 42,
                 width: 42,
                 decoration: BoxDecoration(
-                  color: AmyalColors.primary.withValues(alpha: 0.07),
+                  color: AmialColors.primary.withValues(alpha: 0.07),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.inventory_2_outlined,
-                    color: AmyalColors.primary, size: 20),
+                    color: AmialColors.primary, size: 20),
               ),
             ]),
             const Spacer(),
@@ -566,7 +566,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                     fontWeight: FontWeight.bold, fontSize: 13, height: 1.3)),
             Text('${p['category'] ?? ''}',
                 style: const TextStyle(
-                    fontSize: 10, color: AmyalColors.textMuted)),
+                    fontSize: 10, color: AmialColors.textMuted)),
             const SizedBox(height: 8),
             Row(children: [
               // زر الإضافة الذهبي
@@ -582,7 +582,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   height: 34,
                   width: 34,
                   decoration: BoxDecoration(
-                    color: out ? Colors.grey.shade300 : AmyalColors.yellow,
+                    color: out ? Colors.grey.shade300 : AmialColors.yellow,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(Icons.add,
@@ -596,13 +596,13 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   Text(AmialMoney.fmt(p['price']),
                       style: const TextStyle(
                           fontSize: 10,
-                          color: AmyalColors.textMuted,
+                          color: AmialColors.textMuted,
                           decoration: TextDecoration.lineThrough)),
                 Text(AmialMoney.yer(price),
                     style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
-                        color: AmyalColors.primary)),
+                        color: AmialColors.primary)),
               ]),
             ]),
           ],

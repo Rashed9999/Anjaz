@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get_state_manager/src/simple/get_state.dart';
-import 'package:amyal_pay/features/home/controllers/menu_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
+import 'package:amial_pay/features/home/controllers/menu_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
 
 class BottomItemWidget extends StatelessWidget {
   final String icon;

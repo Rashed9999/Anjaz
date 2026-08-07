@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/services/offline_sale_queue.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/services/offline_sale_queue.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-OFFLINE-POS-001 — «المبيعات دون اتصال».
 ///
@@ -32,7 +32,7 @@ class _OfflineSalesScreenState extends State<OfflineSalesScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _sync() async {
     setState(() => _syncing = true);
@@ -52,9 +52,9 @@ class _OfflineSalesScreenState extends State<OfflineSalesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('المبيعات دون اتصال'),
-          backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+          backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : Column(children: [
@@ -63,12 +63,12 @@ class _OfflineSalesScreenState extends State<OfflineSalesScreen> {
                 margin: const EdgeInsets.all(14),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: _items.isEmpty ? const Color(0xFF2E7D32).withValues(alpha: 0.08) : AmyalColors.yellow.withValues(alpha: 0.15),
+                  color: _items.isEmpty ? const Color(0xFF2E7D32).withValues(alpha: 0.08) : AmialColors.yellow.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(children: [
                   Icon(_items.isEmpty ? Icons.cloud_done : Icons.cloud_off,
-                      color: _items.isEmpty ? const Color(0xFF2E7D32) : AmyalColors.yellowDark, size: 30),
+                      color: _items.isEmpty ? const Color(0xFF2E7D32) : AmialColors.yellowDark, size: 30),
                   const SizedBox(width: 12),
                   Expanded(child: Text(
                     _items.isEmpty ? 'كل المبيعات مُزامَنة' : '${_items.length} عملية بانتظار المزامنة',
@@ -78,7 +78,7 @@ class _OfflineSalesScreenState extends State<OfflineSalesScreen> {
               ),
               Expanded(
                 child: _items.isEmpty
-                    ? const Center(child: Text('لا مبيعات معلّقة', style: TextStyle(color: AmyalColors.textSecondary)))
+                    ? const Center(child: Text('لا مبيعات معلّقة', style: TextStyle(color: AmialColors.textSecondary)))
                     : ListView.separated(
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                         itemCount: _items.length,
@@ -91,7 +91,7 @@ class _OfflineSalesScreenState extends State<OfflineSalesScreen> {
                             child: ListTile(
                               leading: const CircleAvatar(
                                 backgroundColor: Color(0x1AF59E0B),
-                                child: Icon(Icons.pending, color: AmyalColors.yellowDark)),
+                                child: Icon(Icons.pending, color: AmialColors.yellowDark)),
                               title: Text('${s['total']} ر.ي — $method', style: const TextStyle(fontWeight: FontWeight.bold)),
                               subtitle: Text('${((s['items'] ?? []) as List).length} صنف • بانتظار المزامنة',
                                   style: const TextStyle(fontSize: 11)),
@@ -110,7 +110,7 @@ class _OfflineSalesScreenState extends State<OfflineSalesScreen> {
                           ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.sync),
                       label: Text(_syncing ? 'جارٍ المزامنة…' : 'مزامنة الآن'),
-                      style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(52)),
+                      style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(52)),
                     ),
                   ),
                 ),

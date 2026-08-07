@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:amyal_pay/helper/amial_crash_reporter.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/helper/amial_crash_reporter.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-BUILD-STAMP-002 — بصمة البناء: أيّ نسخة يشغّلها هذا الجهاز فعلاً.
 ///
@@ -64,7 +64,7 @@ class _AmialBuildStampState extends State<AmialBuildStamp> {
           style: TextStyle(
             color: widget.onDark
                 ? Colors.white.withValues(alpha: 0.6)
-                : AmyalColors.textMuted,
+                : AmialColors.textMuted,
             fontSize: 11,
             fontWeight: FontWeight.w500,
           ),

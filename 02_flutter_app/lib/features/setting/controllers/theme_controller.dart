@@ -1,4 +1,4 @@
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/util/app_constants.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/suppliers/domain/repositories/suppliers_repo.dart';
-import 'package:amyal_pay/helper/amial_errors.dart';
+import 'package:amial_pay/features/suppliers/domain/repositories/suppliers_repo.dart';
+import 'package:amial_pay/helper/amial_errors.dart';
 
 /// AMIAL-SUPPLIERS-001 — متحكم الموردين وأوامر الشراء.
 class SuppliersController extends GetxController implements GetxService {

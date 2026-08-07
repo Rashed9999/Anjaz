@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/merchant_pay_controller.dart';
-import 'package:amyal_pay/features/payments/domain/amial_qr_payload.dart';
-import 'package:amyal_pay/features/payments/widgets/pin_prompt.dart';
-import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
-import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/common/widgets/amial_result_sheet.dart';
+import 'package:amial_pay/features/merchant/controllers/merchant_pay_controller.dart';
+import 'package:amial_pay/features/payments/domain/amial_qr_payload.dart';
+import 'package:amial_pay/features/payments/widgets/pin_prompt.dart';
+import 'package:amial_pay/features/requested_money/controllers/payment_request_controller.dart';
+import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/common/widgets/amial_result_sheet.dart';
 
 /// AMIAL-MERCHANT-PAY-001 — شاشة دفع العميل للتاجر (QR / POS).
 ///
@@ -86,7 +86,7 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
     if (phone == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('هذا الرمز ليس رمز دفع في أميال باي'),
-        backgroundColor: AmyalColors.red,
+        backgroundColor: AmialColors.red,
       ));
       return;
     }
@@ -131,19 +131,19 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
       content: Column(mainAxisSize: MainAxisSize.min, children: [
         if (invoiceNo.isNotEmpty)
           Text('فاتورة رقم $invoiceNo',
-              style: const TextStyle(fontSize: 13, color: AmyalColors.textMuted)),
+              style: const TextStyle(fontSize: 13, color: AmialColors.textMuted)),
         const SizedBox(height: 6),
         Text('$amount ر.ي',
-            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AmialColors.primary)),
         const SizedBox(height: 8),
         Text('إلى: ${requester['name'] ?? 'تاجر'}', style: const TextStyle(fontSize: 14)),
         if (req['note'] != null) ...[
           const SizedBox(height: 4),
-          Text('${req['note']}', style: const TextStyle(fontSize: 12, color: AmyalColors.textMuted)),
+          Text('${req['note']}', style: const TextStyle(fontSize: 12, color: AmialColors.textMuted)),
         ],
         const SizedBox(height: 8),
         const Text('سيُخصم المبلغ من محفظتك فوراً.',
-            style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+            style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
       ]),
       actions: [
         TextButton(onPressed: () => Get.back(result: false), child: const Text('إلغاء')),
@@ -227,7 +227,7 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
   }
 
   void _err(String m) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: AmialColors.red));
 
   void _refreshQuote() {
     final amount = _amountCtrl.text.trim();
@@ -246,7 +246,7 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
         subtitle: 'أدخل رمز الحماية لإتمام الدفع');
     if (pin == null || !mounted) return;
 
-    // AMYAL-DS-001: ورقة النتيجة الموحّدة (جارٍ التنفيذ → نجاح/فشل) بدل
+    // AMIAL-DS-001: ورقة النتيجة الموحّدة (جارٍ التنفيذ → نجاح/فشل) بدل
     // AlertDialog + SnackBar المتفرّقين — نفس النمط عبر كل العمليات المالية.
     final done = await AmialResultSheet.run<bool>(
       context,
@@ -287,7 +287,7 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
     final ctrl = Get.find<MerchantPayController>();
 
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('دفع تاجر'),
       ),
@@ -310,7 +310,7 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
                     suffixIcon: IconButton(
                       tooltip: 'مسح رمز التاجر',
                       icon: const Icon(Icons.qr_code_scanner_rounded,
-                          color: AmyalColors.primary),
+                          color: AmialColors.primary),
                       onPressed: _scanMerchantQr,
                     ),
                   ),
@@ -364,17 +364,17 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
                 return Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AmyalColors.cardSurface,
+                    color: AmialColors.cardSurface,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AmyalColors.border),
+                    border: Border.all(color: AmialColors.border),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('التاجر يستلم', style: TextStyle(color: AmyalColors.textSecondary)),
+                      const Text('التاجر يستلم', style: TextStyle(color: AmialColors.textSecondary)),
                       Text(
                         AmialMoney.yer(ctrl.quoteMerchantReceives.value),
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary),
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary),
                       ),
                     ],
                   ),
@@ -385,7 +385,7 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
               Obx(() => ElevatedButton(
                     onPressed: ctrl.isSubmitting.value ? null : _submit,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AmyalColors.primary,
+                      backgroundColor: AmialColors.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),

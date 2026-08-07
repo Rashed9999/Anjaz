@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/fuel_station/controllers/fuel_station_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
 
 /// AMIAL-FUEL-001 — شاشة بيع وقود (الجوهر).
 ///
@@ -164,7 +164,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
             _resultRow('اللترات', '${sale['liters']} لتر'),
             _resultRow('السعر للّتر', '${sale['price_per_liter']} ر.ي'),
             const Divider(),
-            _resultRow('الإجمالي', '${sale['total_amount']} ر.ي', bold: true, color: AmyalColors.primary),
+            _resultRow('الإجمالي', '${sale['total_amount']} ر.ي', bold: true, color: AmialColors.primary),
             const SizedBox(height: 8),
             if (sale['vehicle_plate'] != null)
               _resultRow('السيارة', '${sale['vehicle_plate']}'),
@@ -222,13 +222,13 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: AmyalColors.red, duration: const Duration(seconds: 2)),
+        SnackBar(content: Text(m), backgroundColor: AmialColors.red, duration: const Duration(seconds: 2)),
       );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('بيع وقود'),
       ),
@@ -325,7 +325,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
               const SizedBox(height: 6),
               const Text(
                 'يُخصم المبلغ من محفظة العميل فوراً ويُضاف لك (بعد الرسوم).',
-                style: TextStyle(fontSize: 11, color: AmyalColors.textMuted),
+                style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
               ),
             ],
 
@@ -346,7 +346,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
                   : const Icon(Icons.check_circle_outline),
               label: const Text('تأكيد البيع', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
               style: FilledButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 minimumSize: const Size.fromHeight(56),
               ),
             )),
@@ -369,13 +369,13 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
         width: 110,
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
-          color: selected ? AmyalColors.primary : Colors.white,
+          color: selected ? AmialColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? AmyalColors.primary : Colors.grey.shade300, width: selected ? 2 : 1),
+          border: Border.all(color: selected ? AmialColors.primary : Colors.grey.shade300, width: selected ? 2 : 1),
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Icon(Icons.local_gas_station,
-              color: selected ? AmyalColors.yellow : AmyalColors.primary, size: 32),
+              color: selected ? AmialColors.yellow : AmialColors.primary, size: 32),
           const SizedBox(height: 4),
           Text('مضخّة ${pump['pump_number']}',
               style: TextStyle(color: selected ? Colors.white : Colors.black87,
@@ -396,9 +396,9 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? AmyalColors.yellow : Colors.white,
+          color: selected ? AmialColors.yellow : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? AmyalColors.yellowDark : Colors.grey.shade300, width: selected ? 2 : 1),
+          border: Border.all(color: selected ? AmialColors.yellowDark : Colors.grey.shade300, width: selected ? 2 : 1),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Text(product['name'] ?? '',
@@ -419,12 +419,12 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: selected ? AmyalColors.primary : Colors.white,
+          color: selected ? AmialColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: selected ? AmyalColors.primary : Colors.grey.shade300, width: selected ? 2 : 1),
+          border: Border.all(color: selected ? AmialColors.primary : Colors.grey.shade300, width: selected ? 2 : 1),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: selected ? Colors.white : AmyalColors.primary),
+          Icon(icon, color: selected ? Colors.white : AmialColors.primary),
           const SizedBox(height: 2),
           Text(label, style: TextStyle(color: selected ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
         ]),
@@ -444,7 +444,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
           keyboardType: TextInputType.number,
           textAlign: TextAlign.right,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AmyalColors.primary),
+          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AmialColors.primary),
           decoration: InputDecoration(
             border: InputBorder.none,
             hintText: 'المبلغ',
@@ -470,7 +470,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
           controller: _litersCtrl,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           textAlign: TextAlign.right,
-          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AmyalColors.primary),
+          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: AmialColors.primary),
           decoration: InputDecoration(
             border: InputBorder.none,
             hintText: 'اللترات',
@@ -490,13 +490,13 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AmyalColors.yellow.withValues(alpha: 0.15),
+        color: AmialColors.yellow.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AmyalColors.yellow),
+        border: Border.all(color: AmialColors.yellow),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          const Icon(Icons.speed, color: AmyalColors.yellowDark, size: 20),
+          const Icon(Icons.speed, color: AmialColors.yellowDark, size: 20),
           const SizedBox(width: 8),
           const Expanded(child: Text('قراءة العدّاد (للمضخّة اليدوية)',
               style: TextStyle(fontWeight: FontWeight.bold))),
@@ -505,7 +505,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
         Text('القراءة قبل: ${_meterBefore.toStringAsFixed(2)}',
             style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
         Text('متوقّعة بعد: ${expected.toStringAsFixed(2)}',
-            style: TextStyle(color: AmyalColors.yellowDark, fontSize: 13)),
+            style: TextStyle(color: AmialColors.yellowDark, fontSize: 13)),
         const SizedBox(height: 8),
         TextField(
           controller: _meterAfterCtrl,
@@ -543,12 +543,12 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
         decoration: BoxDecoration(
-          color: selected ? AmyalColors.primary : Colors.white,
+          color: selected ? AmialColors.primary : Colors.white,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: selected ? AmyalColors.primary : Colors.grey.shade300, width: selected ? 2 : 1),
+          border: Border.all(color: selected ? AmialColors.primary : Colors.grey.shade300, width: selected ? 2 : 1),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: selected ? Colors.white : AmyalColors.primary, size: 22),
+          Icon(icon, color: selected ? Colors.white : AmialColors.primary, size: 22),
           const SizedBox(height: 4),
           Text(label, style: TextStyle(color: selected ? Colors.white : Colors.black87,
               fontWeight: FontWeight.bold, fontSize: 12)),
@@ -585,7 +585,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AmyalColors.primary,
+        color: AmialColors.primary,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -602,7 +602,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             const Text('الكمية', style: TextStyle(color: Colors.white70, fontSize: 12)),
             Text('${_computedLiters.toStringAsFixed(2)} لتر',
-                style: const TextStyle(color: AmyalColors.yellow, fontSize: 18, fontWeight: FontWeight.bold)),
+                style: const TextStyle(color: AmialColors.yellow, fontSize: 18, fontWeight: FontWeight.bold)),
           ]),
         ]),
       ]),

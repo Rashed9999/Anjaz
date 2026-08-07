@@ -6,14 +6,14 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:get/get.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:amyal_pay/features/camera_verification/controllers/qr_code_scanner_controller.dart';
-import 'package:amyal_pay/helper/dialog_helper.dart';
-import 'package:amyal_pay/helper/route_helper.dart';
-import 'package:amyal_pay/features/setting/screens/edit_profile_screen.dart';
+import 'package:amial_pay/features/camera_verification/controllers/qr_code_scanner_controller.dart';
+import 'package:amial_pay/helper/dialog_helper.dart';
+import 'package:amial_pay/helper/route_helper.dart';
+import 'package:amial_pay/features/setting/screens/edit_profile_screen.dart';
 
 import '../../../main.dart';
 import '../widgets/loader_dialog_widget.dart';
-import 'package:amyal_pay/features/auth/screens/amial_registration_wizard_screen.dart';
+import 'package:amial_pay/features/auth/screens/amial_registration_wizard_screen.dart';
 
 class CameraScreenController extends GetxController implements GetxService{
   bool _isBusy = false;

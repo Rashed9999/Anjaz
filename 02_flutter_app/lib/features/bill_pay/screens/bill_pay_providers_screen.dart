@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/bill_pay/controllers/bill_pay_controller.dart';
-import 'package:amyal_pay/features/bill_pay/domain/models/bill_pay_models.dart';
-import 'package:amyal_pay/features/bill_pay/screens/bill_pay_form_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/bill_pay/controllers/bill_pay_controller.dart';
+import 'package:amial_pay/features/bill_pay/domain/models/bill_pay_models.dart';
+import 'package:amial_pay/features/bill_pay/screens/bill_pay_form_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-BILL-PAY-001 (v0.9-D)
 class BillPayProvidersScreen extends StatefulWidget {
@@ -25,7 +25,7 @@ class _BillPayProvidersScreenState extends State<BillPayProvidersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('دفع الفواتير'),
       ),
@@ -33,13 +33,13 @@ class _BillPayProvidersScreenState extends State<BillPayProvidersScreen> {
         final ctrl = Get.find<BillPayController>();
         if (ctrl.isLoading.value && ctrl.providers.isEmpty) {
           return const Center(
-              child: CircularProgressIndicator(color: AmyalColors.primary));
+              child: CircularProgressIndicator(color: AmialColors.primary));
         }
         if (ctrl.providers.isEmpty) {
           return ListView(
             children: [
               SizedBox(height: MediaQuery.of(context).size.height * 0.2),
-              Icon(Icons.receipt_long, size: 80, color: AmyalColors.textMuted.withValues(alpha: 0.5)),
+              Icon(Icons.receipt_long, size: 80, color: AmialColors.textMuted.withValues(alpha: 0.5)),
               const SizedBox(height: 16),
               const Center(child: Text('لا توجد خدمات متاحة حالياً')),
             ],
@@ -56,7 +56,7 @@ class _BillPayProvidersScreenState extends State<BillPayProvidersScreen> {
                 style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: AmyalColors.textSecondary),
+                    color: AmialColors.textSecondary),
               ),
             );
             for (final svc in p.services.where((s) => s.isActive)) {
@@ -70,8 +70,8 @@ class _BillPayProvidersScreenState extends State<BillPayProvidersScreen> {
 }
 
 class _ServiceCard extends StatelessWidget {
-  final AmyalBillProvider provider;
-  final AmyalBillService service;
+  final AmialBillProvider provider;
+  final AmialBillService service;
   const _ServiceCard({required this.provider, required this.service});
 
   @override
@@ -88,9 +88,9 @@ class _ServiceCard extends StatelessWidget {
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: AmyalColors.yellow.withValues(alpha: 0.25),
+                backgroundColor: AmialColors.yellow.withValues(alpha: 0.25),
                 child: Icon(_iconForType(service.serviceType),
-                    color: AmyalColors.primary, size: 20),
+                    color: AmialColors.primary, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -99,7 +99,7 @@ class _ServiceCard extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                 ),
               ),
-              const Icon(Icons.chevron_left, color: AmyalColors.textMuted),
+              const Icon(Icons.chevron_left, color: AmialColors.textMuted),
             ],
           ),
         ),

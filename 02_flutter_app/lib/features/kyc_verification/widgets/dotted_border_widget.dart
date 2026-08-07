@@ -4,10 +4,10 @@ import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_instance/src/extension_instance.dart';
-import 'package:amyal_pay/common/widgets/custom_ink_well_widget.dart';
-import 'package:amyal_pay/features/kyc_verification/controllers/kyc_verify_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
+import 'package:amial_pay/common/widgets/custom_ink_well_widget.dart';
+import 'package:amial_pay/features/kyc_verification/controllers/kyc_verify_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/images.dart';
 
 class DottedBorderWidget extends StatelessWidget {
   final String? path;

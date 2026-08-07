@@ -142,7 +142,7 @@
 <body>
 
 <div class="header">
-    <div class="brand">AMYAL PAY</div>
+    <div class="brand">AMIAL PAY</div>
     <div class="tagline">دفع سريع وآمن</div>
 </div>
 
@@ -268,7 +268,7 @@
 </div>
 
 <div class="footer">
-    <strong>Amyal Pay</strong> — نظام دفع رقمي معتمد
+    <strong>Amial Pay</strong> — نظام دفع رقمي معتمد
     <br>
     هذا الإيصال صادر إلكترونياً ومحفوظ في سجلاتنا.
     <br>

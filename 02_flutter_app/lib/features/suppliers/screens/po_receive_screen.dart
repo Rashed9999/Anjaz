@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/suppliers/controllers/suppliers_controller.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/suppliers/controllers/suppliers_controller.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SUPPLIERS-005 — «استلام بضاعة» (التصميم 57):
 /// بنود الأمر: المطلوبة / تم استلام، وإدخال «الكمية الجديدة المستلمة»
@@ -76,14 +76,14 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+        SnackBar(content: Text(m), backgroundColor: AmialColors.red),
       );
 
   @override
   Widget build(BuildContext context) {
     final ro = widget.readOnly;
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Text(ro ? 'تفاصيل أمر الشراء' : 'استلام بضاعة'),
       ),
@@ -105,7 +105,7 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
                       style: TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w600)),
                   style: FilledButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
+                    backgroundColor: AmialColors.primary,
                     minimumSize: const Size.fromHeight(54),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16)),
@@ -115,7 +115,7 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
             ),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(color: AmyalColors.primary))
+              child: CircularProgressIndicator(color: AmialColors.primary))
           : _order == null
               ? const Center(child: Text('تعذّر تحميل الأمر'))
               : ListView(
@@ -140,7 +140,7 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
                             const Text('رقم أمر الشراء',
                                 style: TextStyle(
                                     fontSize: 12,
-                                    color: AmyalColors.textSecondary)),
+                                    color: AmialColors.textSecondary)),
                           ],
                         ),
                         const Divider(height: 20),
@@ -154,7 +154,7 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
                             const Text('المورد',
                                 style: TextStyle(
                                     fontSize: 12,
-                                    color: AmyalColors.textSecondary)),
+                                    color: AmialColors.textSecondary)),
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -164,11 +164,11 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
                             Text(AmialMoney.yer(_order!['total_amount']),
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold,
-                                    color: AmyalColors.primary)),
+                                    color: AmialColors.primary)),
                             const Text('إجمالي الأمر',
                                 style: TextStyle(
                                     fontSize: 12,
-                                    color: AmyalColors.textSecondary)),
+                                    color: AmialColors.textSecondary)),
                           ],
                         ),
                       ]),
@@ -197,7 +197,7 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
           border: Border.all(
               color: done
                   ? const Color(0xFF2E7D32).withValues(alpha: 0.4)
-                  : AmyalColors.border),
+                  : AmialColors.border),
         ),
         child: Column(children: [
           Row(children: [
@@ -217,7 +217,7 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text('تم استلام: ${_received(it)}',
                 style: const TextStyle(
-                    fontSize: 12, color: AmyalColors.textSecondary)),
+                    fontSize: 12, color: AmialColors.textSecondary)),
             Text('المطلوبة: ${_requested(it)}',
                 style: const TextStyle(
                     fontSize: 12,
@@ -254,19 +254,19 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
               const SizedBox(width: 8),
               const Text('الكمية الجديدة المستلمة',
                   style: TextStyle(
-                      fontSize: 11, color: AmyalColors.textMuted)),
+                      fontSize: 11, color: AmialColors.textMuted)),
               const Spacer(),
               // تم الاستلام بالكامل
               Row(children: [
                 Switch(
                   value: current >= remaining && current > 0,
-                  activeThumbColor: AmyalColors.primary,
+                  activeThumbColor: AmialColors.primary,
                   onChanged: (v) => setState(
                       () => _receiving[id] = v ? remaining : 0),
                 ),
                 const Text('بالكامل',
                     style: TextStyle(
-                        fontSize: 11, color: AmyalColors.textSecondary)),
+                        fontSize: 11, color: AmialColors.textSecondary)),
               ]),
             ]),
           ],

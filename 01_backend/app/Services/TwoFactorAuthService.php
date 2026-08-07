@@ -37,7 +37,7 @@ class TwoFactorAuthService
     private const PERIOD = 30; // seconds
     private const WINDOW_TOLERANCE = 1; // ±1 step
     private const ALGORITHM = 'sha1';
-    private const ISSUER = 'Amyal Pay';
+    private const ISSUER = 'Amial Pay';
     private const MAX_FAILED_ATTEMPTS = 5;
     private const LOCKOUT_MINUTES = 15;
 

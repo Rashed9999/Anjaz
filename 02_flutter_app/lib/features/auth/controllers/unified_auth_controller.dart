@@ -1,15 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/helper/amial_crash_reporter.dart';
-import 'package:amyal_pay/features/access/controllers/access_controller.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/features/auth/screens/role_router.dart';
-import 'package:amyal_pay/features/auth/screens/account_review_screen.dart';
-import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
-import 'package:amyal_pay/data/api/secure_storage_helper.dart';
+import 'package:amial_pay/helper/amial_crash_reporter.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/auth/screens/role_router.dart';
+import 'package:amial_pay/features/auth/screens/account_review_screen.dart';
+import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
+import 'package:amial_pay/data/api/secure_storage_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:amyal_pay/features/auth/controllers/session_guard.dart';
+import 'package:amial_pay/features/auth/controllers/session_guard.dart';
 
 /// AMIAL-UNIFIED-AUTH-001 (v1.5)
 class UnifiedAuthRepo {
@@ -209,7 +209,7 @@ class UnifiedAuthController extends GetxController implements GetxService {
     );
   }
 
-  // AMYAL-SEC-LOGIN-001: حفظ «آخر تسجيل دخول» محلياً — يعود من الخادم في الـ meta
+  // AMIAL-SEC-LOGIN-001: حفظ «آخر تسجيل دخول» محلياً — يعود من الخادم في الـ meta
   // (وقت + IP لآخر دخول سابق). نعرضه في شاشة الدخول التالية ليكتشف المستخدم أي
   // دخول غير مصرّح به. مفاتيح prefs ثابتة.
   static const String _kLastLoginAt = 'amial_last_login_at';

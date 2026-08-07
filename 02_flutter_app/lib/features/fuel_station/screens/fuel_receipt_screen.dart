@@ -8,12 +8,12 @@ import 'package:path_provider/path_provider.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:amyal_pay/features/merchant/controllers/receipt_settings_controller.dart';
-import 'package:amyal_pay/features/payments/widgets/amial_invoice_card.dart';
-import 'package:amyal_pay/features/printer/services/thermal_print_service.dart';
-import 'package:amyal_pay/features/printer/widgets/thermal_receipt_widget.dart';
-import 'package:amyal_pay/features/printer/screens/printer_settings_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/receipt_settings_controller.dart';
+import 'package:amial_pay/features/payments/widgets/amial_invoice_card.dart';
+import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
+import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
+import 'package:amial_pay/features/printer/screens/printer_settings_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-FUEL-RECEIPT-001 — فاتورة بيع الوقود بمقاس حراري 80مم.
 ///
@@ -129,7 +129,7 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
             action: SnackBarAction(
                 label: 'إعداد', textColor: Colors.white,
                 onPressed: () => Get.to(() => const PrinterSettingsScreen())),
-            backgroundColor: AmyalColors.primary,
+            backgroundColor: AmialColors.primary,
           ));
         }
       }
@@ -180,12 +180,12 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('فاتورة البيع'),
         leading: IconButton(
@@ -250,8 +250,8 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
                 icon: const Icon(Icons.print_outlined, size: 20),
                 label: const Text('طباعة'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AmyalColors.primary,
-                  side: const BorderSide(color: AmyalColors.primary),
+                  foregroundColor: AmialColors.primary,
+                  side: const BorderSide(color: AmialColors.primary),
                   minimumSize: const Size.fromHeight(50),
                 ),
               ),
@@ -282,7 +282,7 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
             label: const Text('عملية جديدة',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
+              backgroundColor: AmialColors.primary,
               minimumSize: const Size.fromHeight(54),
             ),
           ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/common/widgets/custom_asset_image_widget.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_asset_image_widget.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
 
 class GenderCardWidget extends StatelessWidget {
   final String? text;

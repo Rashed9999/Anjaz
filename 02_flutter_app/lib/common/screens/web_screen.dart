@@ -2,12 +2,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_dialog_widget.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/helper/dialog_helper.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/common/widgets/custom_loader_widget.dart';
-import 'package:amyal_pay/features/home/screens/nav_bar_screen.dart';
+import 'package:amial_pay/common/widgets/custom_dialog_widget.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/helper/dialog_helper.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/common/widgets/custom_loader_widget.dart';
+import 'package:amial_pay/features/home/screens/nav_bar_screen.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 

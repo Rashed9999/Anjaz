@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/features/home/widgets/show_case/showcaseview.dart';
+import 'package:amial_pay/features/home/widgets/show_case/showcaseview.dart';
 
 
 class TooltipActionConfig {

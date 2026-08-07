@@ -7,10 +7,10 @@ import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
 
 /// AMIAL-MYQR-002 — «رمز QR الخاص بي» بتصميم موحّد:
 /// بطاقة أميال (شعار + اسم صاحب الحساب + رمز QR + رقم الجوال + رقم الحساب)
@@ -105,14 +105,14 @@ class _QrCodeDownloadOrShareScreenState
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+        SnackBar(content: Text(m), backgroundColor: AmialColors.red),
       );
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('رمز الاستلام الخاص بي'),
       ),
@@ -140,7 +140,7 @@ class _QrCodeDownloadOrShareScreenState
                   padding: const EdgeInsets.symmetric(vertical: 18),
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [AmyalColors.primary, Color(0xFF1D4FB8)],
+                      colors: [AmialColors.primary, Color(0xFF1D4FB8)],
                       begin: Alignment.topRight,
                       end: Alignment.bottomLeft,
                     ),
@@ -166,7 +166,7 @@ class _QrCodeDownloadOrShareScreenState
                     style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
-                        color: AmyalColors.primary)),
+                        color: AmialColors.primary)),
                 const SizedBox(height: 14),
 
                 // رمز QR داخل إطار ذهبي
@@ -175,7 +175,7 @@ class _QrCodeDownloadOrShareScreenState
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: AmyalColors.yellow, width: 2),
+                    border: Border.all(color: AmialColors.yellow, width: 2),
                   ),
                   // AMIAL-QR-FIX-002: كان SvgPicture.string(widget.qrCode) —
                   // و qrCode القادم من الخادم فارغ، فتُحفظ وتُشارَك صورة بلا
@@ -206,14 +206,14 @@ class _QrCodeDownloadOrShareScreenState
                     'امسح الرمز عبر تطبيق أميال باي لتحويل الأموال لهذا الحساب فوراً',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        fontSize: 12, color: AmyalColors.textSecondary),
+                        fontSize: 12, color: AmialColors.textSecondary),
                   ),
                 ),
                 // شريط ذهبي سفلي
                 Container(
                   height: 10,
                   decoration: const BoxDecoration(
-                    color: AmyalColors.yellow,
+                    color: AmialColors.yellow,
                     borderRadius:
                         BorderRadius.vertical(bottom: Radius.circular(24)),
                   ),
@@ -237,7 +237,7 @@ class _QrCodeDownloadOrShareScreenState
                     : const Icon(Icons.download_rounded, size: 20),
                 label: const Text('تنزيل الصورة'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AmyalColors.primary,
+                  backgroundColor: AmialColors.primary,
                   minimumSize: const Size.fromHeight(52),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
@@ -251,8 +251,8 @@ class _QrCodeDownloadOrShareScreenState
                 icon: const Icon(Icons.share_rounded, size: 20),
                 label: const Text('مشاركة'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AmyalColors.primary,
-                  side: const BorderSide(color: AmyalColors.yellowDark),
+                  foregroundColor: AmialColors.primary,
+                  side: const BorderSide(color: AmialColors.yellowDark),
                   minimumSize: const Size.fromHeight(52),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
@@ -276,9 +276,9 @@ class _QrCodeDownloadOrShareScreenState
       const SizedBox(width: 8),
       Text('· $label',
           style:
-              const TextStyle(fontSize: 12, color: AmyalColors.textMuted)),
+              const TextStyle(fontSize: 12, color: AmialColors.textMuted)),
       const SizedBox(width: 4),
-      Icon(icon, size: 16, color: AmyalColors.yellowDark),
+      Icon(icon, size: 16, color: AmialColors.yellowDark),
     ]);
   }
 }

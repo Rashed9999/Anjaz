@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/features/shared/widgets/amial_numpad.dart';
-import 'package:amyal_pay/features/shared/widgets/amial_pin_dots.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/util/secure_screen.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/shared/widgets/amial_numpad.dart';
+import 'package:amial_pay/features/shared/widgets/amial_pin_dots.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/secure_screen.dart';
 
 /// AMIAL-PIN-GATE-001
 ///
@@ -64,7 +64,7 @@ class _AmialPinInputScreenState extends State<_AmialPinInputScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Text(widget.title),
         leading: IconButton(
@@ -83,11 +83,11 @@ class _AmialPinInputScreenState extends State<_AmialPinInputScreen> {
               width: 84,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: AmyalColors.primary.withValues(alpha: 0.1),
+                color: AmialColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.lock_outline_rounded,
-                  color: AmyalColors.primary, size: 40),
+                  color: AmialColors.primary, size: 40),
             ),
             const SizedBox(height: 20),
             const Text(
@@ -184,7 +184,7 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       // AMIAL-PIN-UI-002: بلا AppBar ملوّن — شاشة قفل، لا صفحة محتوى.
       body: SafeArea(
         child: SingleChildScrollView(
@@ -196,7 +196,7 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
               alignment: Alignment.centerLeft,
               child: IconButton(
                 icon: const Icon(Icons.close_rounded,
-                    color: AmyalColors.textSecondary),
+                    color: AmialColors.textSecondary),
                 onPressed: () => Get.back(result: false),
               ),
             ),
@@ -206,11 +206,11 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
               width: 84,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: AmyalColors.primary.withValues(alpha: 0.1),
+                color: AmialColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.lock_outline_rounded,
-                  color: AmyalColors.primary, size: 40),
+                  color: AmialColors.primary, size: 40),
             ),
             const SizedBox(height: 18),
             Text(
@@ -225,7 +225,7 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
             const Text(
               'أدخل رمزك السري للمتابعة',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13.5, color: AmyalColors.textSecondary),
+              style: TextStyle(fontSize: 13.5, color: AmialColors.textSecondary),
             ),
             const SizedBox(height: 26),
 
@@ -245,13 +245,13 @@ class _AmialPinGateScreenState extends State<_AmialPinGateScreen> {
               const SizedBox(height: 12),
               Text(_error,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: AmyalColors.red, fontSize: 13)),
+                  style: const TextStyle(color: AmialColors.red, fontSize: 13)),
             ],
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _checking ? null : _verify,
               style: ElevatedButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 15),
               ),

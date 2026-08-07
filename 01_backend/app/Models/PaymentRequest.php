@@ -61,7 +61,7 @@ class PaymentRequest extends Model
     /** الرابط الكامل المعروض للمشاركة. */
     public function publicUrl(): string
     {
-        $base = config('app.public_url', 'https://amyal.pay');
+        $base = config('app.public_url', 'https://amial.pay');
         return "{$base}/req/{$this->short_code}";
     }
 }

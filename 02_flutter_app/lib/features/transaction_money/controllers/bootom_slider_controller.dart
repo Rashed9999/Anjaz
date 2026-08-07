@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/helper/route_helper.dart';
+import 'package:amial_pay/helper/route_helper.dart';
 
 class BottomSliderController extends GetxController implements GetxService {
   bool _isPinCompleted = false;

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-import 'package:amyal_pay/features/payments/widgets/pin_prompt.dart';
-import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
-import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/payments/widgets/pin_prompt.dart';
+import 'package:amial_pay/features/requested_money/controllers/payment_request_controller.dart';
+import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-REQUEST-DIRECT-001 — «الطلبات الواردة»: ما طُلب منك، فتوافق أو ترفض.
 ///
@@ -36,7 +36,7 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('طلبات واردة')),
       body: Obx(() {
         if (c.isLoading.value && c.incoming.isEmpty) {
@@ -88,11 +88,11 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AmyalColors.border),
+        border: Border.all(color: AmialColors.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          const Icon(Icons.call_received, color: AmyalColors.primary, size: 20),
+          const Icon(Icons.call_received, color: AmialColors.primary, size: 20),
           const SizedBox(width: 8),
           Expanded(
             child: Text('$from يطلب منك',
@@ -103,7 +103,7 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
         // AMIAL-RTL-SIGN-001: المبالغ تُلفّ باتجاه لاتينيّ داخل واجهة عربية.
         AmialLtrNumber('$amount ر.ي',
             style: const TextStyle(
-                fontSize: 24, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                fontSize: 24, fontWeight: FontWeight.bold, color: AmialColors.primary)),
         if (note.isNotEmpty) ...[
           const SizedBox(height: 6),
           Text(note, style: TextStyle(fontSize: 12.5, color: Colors.grey.shade700)),
@@ -116,8 +116,8 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
               icon: const Icon(Icons.close, size: 18),
               label: const Text('رفض'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: AmyalColors.red,
-                side: const BorderSide(color: AmyalColors.red),
+                foregroundColor: AmialColors.red,
+                side: const BorderSide(color: AmialColors.red),
                 minimumSize: const Size.fromHeight(46),
               ),
             ),
@@ -129,7 +129,7 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
               icon: const Icon(Icons.check, size: 18),
               label: const Text('ادفع'),
               style: FilledButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 minimumSize: const Size.fromHeight(46),
               ),
             ),
@@ -183,7 +183,7 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: AmyalColors.red),
+            style: FilledButton.styleFrom(backgroundColor: AmialColors.red),
             child: const Text('رفض'),
           ),
         ],
@@ -200,6 +200,6 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
   void _snack(String m, {required bool ok}) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(m),
-        backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red,
+        backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red,
       ));
 }

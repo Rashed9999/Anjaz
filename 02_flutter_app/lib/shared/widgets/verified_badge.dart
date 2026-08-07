@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-VERIFIED-BADGE-001 — شارة موثَّق موحّدة.
 ///
@@ -95,7 +95,7 @@ class VerifiedBadge extends StatelessWidget {
       case 'gold':
         return _BadgeConfig(
           icon: Icons.workspace_premium,
-          background: AmyalColors.yellow,
+          background: AmialColors.yellow,
           iconColor: const Color(0xFF5C4400),
           textColor: const Color(0xFF5C4400),
           label: 'موثّق ذهبي',
@@ -103,7 +103,7 @@ class VerifiedBadge extends StatelessWidget {
       case 'premium':
         return _BadgeConfig(
           icon: Icons.verified,
-          background: AmyalColors.yellowDark,
+          background: AmialColors.yellowDark,
           iconColor: Colors.white,
           textColor: Colors.white,
           label: 'موثّق محسّن',
@@ -112,7 +112,7 @@ class VerifiedBadge extends StatelessWidget {
       default:
         return _BadgeConfig(
           icon: Icons.verified,
-          background: AmyalColors.primary,
+          background: AmialColors.primary,
           iconColor: Colors.white,
           textColor: Colors.white,
           label: 'موثّق',

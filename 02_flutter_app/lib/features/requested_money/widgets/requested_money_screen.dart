@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:amyal_pay/features/requested_money/controllers/requested_money_controller.dart';
-import 'package:amyal_pay/features/setting/domain/models/requested_money_model.dart';
-import 'package:amyal_pay/features/requested_money/domain/models/withdraw_histroy_model.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/common/widgets/no_data_widget.dart';
-import 'package:amyal_pay/features/requested_money/screens/requested_money_list_screen.dart';
-import 'package:amyal_pay/features/requested_money/widgets/requested_money_card.dart';
+import 'package:amial_pay/features/requested_money/controllers/requested_money_controller.dart';
+import 'package:amial_pay/features/setting/domain/models/requested_money_model.dart';
+import 'package:amial_pay/features/requested_money/domain/models/withdraw_histroy_model.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/common/widgets/no_data_widget.dart';
+import 'package:amial_pay/features/requested_money/screens/requested_money_list_screen.dart';
+import 'package:amial_pay/features/requested_money/widgets/requested_money_card.dart';
 
 class RequestedMoneyScreen extends StatefulWidget {
   final ScrollController? scrollController;

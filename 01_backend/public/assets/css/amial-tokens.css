@@ -1,0 +1,136 @@
+/*
+ * AMIAL-TOKENS-001 — توكِنز الهويّة، مشتقّةً من مصدرٍ واحد.
+ *
+ * ══════════════════════════════════════════════════════════════════════
+ * العطل الذي وُلد منه هذا الملفّ — مقيسٌ لا مفترَض:
+ *
+ *   التطبيق (amial_colors.dart) : primary   #053391 · background #F2F3F7
+ *   لوحة الإدارة (app.blade.php) : sidebar   #0f2b46 · background #f4f6fa
+ *
+ * ليسا تدرّجاً من لونٍ واحد — هما أزرقان مختلفان لعلامةٍ واحدة. ولوحة
+ * الإدارة لم تكن تقرأ نظام ألوان إطلاقاً: أربعة عشر سطر CSS محشوّة داخل
+ * القالب، تُنسخ ولا تُشتق.
+ *
+ * ══════════════════════════════════════════════════════════════════════
+ * والمصدر الآن واحد: amial_colors.dart.
+ *
+ * القيم هنا منسوخة منه حرفياً، وحارسٌ يقرأ الملفّين ويسقط إن اختلفا —
+ * فلا يعود يقع أن يُغيَّر لونٌ في سطحٍ ويُنسى في الآخر. (والنسخُ بلا
+ * حارسٍ هو ما أنتج الأزرقين أصلاً.)
+ */
+
+:root {
+    /* ═══ العلامة ═══ */
+    --amial-primary:        #053391;   /* الأزرق الملكي — من نصّ «أميال» */
+    --amial-primary-dark:   #021F5C;
+    --amial-primary-light:  #1D4FB8;
+
+    --amial-yellow:         #FECA1E;   /* الذهبي — أزرار التأكيد */
+    --amial-yellow-dark:    #CFA300;
+    --amial-yellow-light:   #FFE680;
+
+    --amial-red:            #DC0A0B;   /* التحذيرات والأخطاء فقط */
+
+    /* ═══ الأسطح ═══ */
+    --amial-background:     #F2F3F7;
+    --amial-surface:        #FFFFFF;
+    --amial-border:         #E5E7EB;
+
+    /* ═══ النصّ ═══ */
+    --amial-text:           #1A2433;
+    --amial-text-secondary: #5F6B7C;
+    --amial-text-muted:     #8B97A8;
+
+    /* ═══ المسافات ═══ */
+    --amial-radius:         .75rem;
+    --amial-radius-sm:      .5rem;
+    --amial-shadow:         0 2px 10px rgba(5, 51, 145, .06);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   لوحة الإدارة — تُبنى على التوكِنز لا على قيمٍ مكتوبة في القالب
+   ══════════════════════════════════════════════════════════════════════ */
+
+body {
+    background: var(--amial-background);
+    color: var(--amial-text);
+}
+
+.amial-sidebar {
+    min-height: 100vh;
+    /* كان #0f2b46 — أزرقٌ ثانٍ لا علاقة له بالعلامة. صار تدرّجَ الأساس. */
+    background: var(--amial-primary-dark);
+    color: #cfe0f2;
+}
+
+.amial-sidebar a {
+    color: #cfe0f2;
+    text-decoration: none;
+}
+
+.amial-sidebar a:hover,
+.amial-sidebar li.active > a {
+    color: #fff;
+    background: var(--amial-primary);
+    border-radius: var(--amial-radius-sm);
+}
+
+.amial-sidebar .nav-link {
+    padding: .55rem .8rem;
+    display: block;
+}
+
+.amial-brand {
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: #fff;
+}
+
+/* أيقونات Tio غير محمّلة — إخفاءٌ آمن */
+.nav-icon { display: none; }
+
+.stat-card {
+    border: 0;
+    border-radius: var(--amial-radius);
+    box-shadow: var(--amial-shadow);
+}
+
+/* ── الأزرار على لون العلامة ─────────────────────────────────────── */
+
+.btn-primary {
+    --bs-btn-bg: var(--amial-primary);
+    --bs-btn-border-color: var(--amial-primary);
+    --bs-btn-hover-bg: var(--amial-primary-dark);
+    --bs-btn-hover-border-color: var(--amial-primary-dark);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--amial-primary);
+    --bs-btn-border-color: var(--amial-primary);
+    --bs-btn-hover-bg: var(--amial-primary);
+    --bs-btn-hover-border-color: var(--amial-primary);
+}
+
+.text-primary { color: var(--amial-primary) !important; }
+.bg-primary   { background-color: var(--amial-primary) !important; }
+
+a { color: var(--amial-primary); }
+a:hover { color: var(--amial-primary-dark); }
+
+/* ── جداولُ اللوحات ──────────────────────────────────────────────── */
+
+.card {
+    border-radius: var(--amial-radius);
+    border-color: var(--amial-border);
+}
+
+.table > :not(caption) > * > * {
+    border-bottom-color: var(--amial-border);
+}
+
+code {
+    color: var(--amial-primary-dark);
+    background: rgba(5, 51, 145, .05);
+    padding: .1rem .35rem;
+    border-radius: .25rem;
+}

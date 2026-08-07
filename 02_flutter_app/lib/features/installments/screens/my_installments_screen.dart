@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/async_state_view.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/async_state_view.dart';
+import 'package:amial_pay/helper/amial_money.dart';
 
 /// AMIAL-INSTALLMENTS-001 — «أقساطي» (جهة العميل).
 ///
@@ -45,7 +45,7 @@ class _MyInstallmentsScreenState extends State<MyInstallmentsScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _pay(Map<String, dynamic> c) async {
     final amountCtrl = TextEditingController(text: '${c['monthly_amount'] ?? ''}');
@@ -81,9 +81,9 @@ class _MyInstallmentsScreenState extends State<MyInstallmentsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('أقساطي'),
-          backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+          backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
       body: AsyncStateView(
         loading: _loading,
         error: _error,
@@ -110,24 +110,24 @@ class _MyInstallmentsScreenState extends State<MyInstallmentsScreen> {
           Expanded(child: Text('${c['item_name']?.toString().isNotEmpty == true ? c['item_name'] : 'عقد #${c['id']}'}',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
           Text(done ? 'مكتمل' : '${c['months']} أشهر',
-              style: TextStyle(color: done ? const Color(0xFF2E7D32) : AmyalColors.textSecondary,
+              style: TextStyle(color: done ? const Color(0xFF2E7D32) : AmialColors.textSecondary,
                   fontWeight: FontWeight.bold, fontSize: 12)),
         ]),
         const SizedBox(height: 10),
         ClipRRect(borderRadius: BorderRadius.circular(6),
             child: LinearProgressIndicator(value: progress, minHeight: 8,
-                backgroundColor: AmyalColors.background, color: AmyalColors.primary)),
+                backgroundColor: AmialColors.background, color: AmialColors.primary)),
         const SizedBox(height: 8),
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('سُدّد: ${AmialMoney.fmt(paid)} ر.ي', style: const TextStyle(fontSize: 12)),
           Text('متبقٍّ: ${AmialMoney.fmt(c['remaining'])} ر.ي',
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AmialColors.primary)),
         ]),
         if (!done) ...[
           const SizedBox(height: 10),
           FilledButton.icon(onPressed: () => _pay(c), icon: const Icon(Icons.account_balance_wallet),
               label: Text('سداد قسط (${AmialMoney.fmt(c['monthly_amount'])} ر.ي)'),
-              style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(46))),
+              style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(46))),
         ],
       ]),
     );

@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SIGNATURE-PAD-001
 ///
@@ -75,7 +75,7 @@ class SignaturePadState extends State<SignaturePadWidget> {
             onPressed: clear,
             icon: const Icon(Icons.refresh, size: 18),
             label: const Text('مسح التوقيع'),
-            style: TextButton.styleFrom(foregroundColor: AmyalColors.primary),
+            style: TextButton.styleFrom(foregroundColor: AmialColors.primary),
           ),
         ),
       ],

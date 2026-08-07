@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:amyal_pay/features/auth/widgets/governorate_picker.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/auth/widgets/signature_pad_widget.dart';
-import 'package:amyal_pay/features/auth/screens/unified_login_screen.dart';
-import 'package:amyal_pay/common/widgets/amial_button.dart';
+import 'package:amial_pay/features/auth/widgets/governorate_picker.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/auth/widgets/signature_pad_widget.dart';
+import 'package:amial_pay/features/auth/screens/unified_login_screen.dart';
+import 'package:amial_pay/common/widgets/amial_button.dart';
 
 /// AMIAL-REG-WIZARD-001
 ///
@@ -107,7 +107,7 @@ class _AmialRegistrationWizardScreenState
   void _snack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: AmyalColors.red));
+        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: AmialColors.red));
   }
 
   // منتقي تاريخ بسيط (بلا حزمة) — يكتب النتيجة yyyy-MM-dd في الحقل
@@ -455,7 +455,7 @@ class _AmialRegistrationWizardScreenState
                     child: Container(
                       width: 38, height: 38,
                       decoration: BoxDecoration(
-                        color: AmyalColors.background,
+                        color: AmialColors.background,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(Icons.arrow_forward,
@@ -467,7 +467,7 @@ class _AmialRegistrationWizardScreenState
                       style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: AmyalColors.textMuted)),
+                          color: AmialColors.textMuted)),
                 ],
               ),
             ),
@@ -482,7 +482,7 @@ class _AmialRegistrationWizardScreenState
                       height: 4,
                       margin: EdgeInsets.only(left: i == 8 ? 0 : 4),
                       decoration: BoxDecoration(
-                        color: done ? AmyalColors.primary : const Color(0xFFE6E9EF),
+                        color: done ? AmialColors.primary : const Color(0xFFE6E9EF),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -815,21 +815,21 @@ class _AmialRegistrationWizardScreenState
         _sectionNote('يرجى قراءة الإقرارات والموافقة عليها.'),
         CheckboxListTile(
           value: _agreeTerms,
-          activeColor: AmyalColors.primary,
+          activeColor: AmialColors.primary,
           controlAffinity: ListTileControlAffinity.leading,
           title: const Text('أوافق على شروط الخدمة والأحكام.'),
           onChanged: (v) => setState(() => _agreeTerms = v ?? false),
         ),
         CheckboxListTile(
           value: _agreePolicy,
-          activeColor: AmyalColors.primary,
+          activeColor: AmialColors.primary,
           controlAffinity: ListTileControlAffinity.leading,
           title: const Text('أوافق على سياسة الخصوصية.'),
           onChanged: (v) => setState(() => _agreePolicy = v ?? false),
         ),
         CheckboxListTile(
           value: _declareAccuracy,
-          activeColor: AmyalColors.primary,
+          activeColor: AmialColors.primary,
           controlAffinity: ListTileControlAffinity.leading,
           title: const Text(
               'أقرّ بأن جميع المعلومات والوثائق المقدّمة صحيحة، وأتحمّل المسؤولية القانونية.'),
@@ -851,7 +851,7 @@ class _AmialRegistrationWizardScreenState
         TextButton(
           onPressed: _submitting ? null : _sendOtp,
           child: const Text('إعادة إرسال الرمز',
-              style: TextStyle(color: AmyalColors.primary)),
+              style: TextStyle(color: AmialColors.primary)),
         ),
       ]);
 
@@ -875,14 +875,14 @@ class _AmialRegistrationWizardScreenState
                 ],
               ),
               child: const Icon(Icons.verified_user_outlined,
-                  color: AmyalColors.primary, size: 56),
+                  color: AmialColors.primary, size: 56),
             ),
             const SizedBox(height: 24),
             const Text('طلبك قيد المراجعة',
                 style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: AmyalColors.primary)),
+                    color: AmialColors.primary)),
             const SizedBox(height: 12),
             const Text(
               'نحن حالياً نتحقق من الوثائق التي قمت برفعها لضمان أمان حسابك. '
@@ -897,9 +897,9 @@ class _AmialRegistrationWizardScreenState
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow.withValues(alpha: 0.25),
+                  color: AmialColors.yellow.withValues(alpha: 0.25),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AmyalColors.yellowDark),
+                  border: Border.all(color: AmialColors.yellowDark),
                 ),
                 child: Column(children: [
                   Text(
@@ -913,7 +913,7 @@ class _AmialRegistrationWizardScreenState
                     _merchantNumber ?? _agentNumber ?? '',
                     style: const TextStyle(
                         fontSize: 22, fontWeight: FontWeight.bold,
-                        color: AmyalColors.primary, fontFamily: 'monospace'),
+                        color: AmialColors.primary, fontFamily: 'monospace'),
                   ),
                 ]),
               ),
@@ -930,7 +930,7 @@ class _AmialRegistrationWizardScreenState
               child: Column(children: [
                 _reviewStep(
                   icon: Icons.check,
-                  iconBg: AmyalColors.primary,
+                  iconBg: AmialColors.primary,
                   iconColor: Colors.white,
                   title: 'تم رفع الوثائق بنجاح',
                   subtitle: 'اكتملت الخطوة',
@@ -939,8 +939,8 @@ class _AmialRegistrationWizardScreenState
                 ),
                 _reviewStep(
                   icon: Icons.hourglass_bottom_rounded,
-                  iconBg: AmyalColors.yellow,
-                  iconColor: AmyalColors.primary,
+                  iconBg: AmialColors.yellow,
+                  iconColor: AmialColors.primary,
                   title: 'جاري مراجعة البيانات',
                   subtitle: 'بانتظار الموافقة',
                   done: false,
@@ -949,7 +949,7 @@ class _AmialRegistrationWizardScreenState
                 _reviewStep(
                   icon: Icons.account_balance_wallet_outlined,
                   iconBg: const Color(0xFFF0F1F3),
-                  iconColor: AmyalColors.textMuted,
+                  iconColor: AmialColors.textMuted,
                   title: 'تفعيل المحفظة بالكامل',
                   subtitle: 'الخطوة النهائية',
                   done: false,
@@ -964,7 +964,7 @@ class _AmialRegistrationWizardScreenState
               child: ElevatedButton(
                 onPressed: () => Get.offAll(() => const UnifiedLoginScreen()),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AmyalColors.primary,
+                  backgroundColor: AmialColors.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   shape: RoundedRectangleBorder(
@@ -995,10 +995,10 @@ class _AmialRegistrationWizardScreenState
                 style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
-                    color: dimmed ? AmyalColors.textMuted : Colors.black87)),
+                    color: dimmed ? AmialColors.textMuted : Colors.black87)),
             Text(subtitle,
                 style: const TextStyle(
-                    fontSize: 11, color: AmyalColors.textMuted)),
+                    fontSize: 11, color: AmialColors.textMuted)),
             const SizedBox(height: 18),
           ]),
         ),

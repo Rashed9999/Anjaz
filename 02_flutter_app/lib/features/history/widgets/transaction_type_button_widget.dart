@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_ink_well_widget.dart';
-import 'package:amyal_pay/features/history/controllers/transaction_history_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_ink_well_widget.dart';
+import 'package:amial_pay/features/history/controllers/transaction_history_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
 
 class TransactionTypeButtonWidget extends StatelessWidget {
   final String text;

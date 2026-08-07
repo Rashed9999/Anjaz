@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/fuel_station/controllers/fuel_station_controller.dart';
-import 'package:amyal_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
-import 'package:amyal_pay/features/fuel_station/screens/fuel_receipt_screen.dart';
-import 'package:amyal_pay/features/fuel_station/screens/fuel_qr_collect_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_receipt_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_qr_collect_screen.dart';
 
 /// AMIAL-FUEL-CASHIER-001 — كاشير محطة الوقود (تصميم #103).
 ///
@@ -129,7 +129,7 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
           ),
           const SizedBox(height: 6),
           const Text('يُخصم من محفظة العميل فوراً ويُضاف لك بعد الرسوم.',
-              style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
@@ -178,12 +178,12 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: AmialColors.red));
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Obx(() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(c.station.value?['station_name'] ?? 'كاشير المحطة',
@@ -215,7 +215,7 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
           Container(
             decoration: BoxDecoration(
               color: Colors.white, borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AmyalColors.border),
+              border: Border.all(color: AmialColors.border),
             ),
             child: Row(children: [
               _modeTab('by_amount', 'بالريال'),
@@ -230,7 +230,7 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
             child: Column(children: [
               Text(_mode == 'by_amount' ? 'المبلغ المطلوب تعبئته' : 'الكمية باللتر',
-                  style: const TextStyle(color: AmyalColors.textMuted, fontSize: 12)),
+                  style: const TextStyle(color: AmialColors.textMuted, fontSize: 12)),
               const SizedBox(height: 6),
               Text(
                 _mode == 'by_amount'
@@ -238,7 +238,7 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
                     // «ر.ي» في كل شاشة أخرى، ويُقرأ على أنه عملة أجنبية.
                     ? '${_fmt(_enteredValue)} ر.ي'
                     : '${_fmt(_enteredValue)} L',
-                style: const TextStyle(fontSize: 34, fontWeight: FontWeight.bold, color: AmyalColors.primary),
+                style: const TextStyle(fontSize: 34, fontWeight: FontWeight.bold, color: AmialColors.primary),
               ),
               const SizedBox(height: 4),
               // القيمة المقابلة (لتر ↔ ريال)
@@ -246,7 +246,7 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
                 _mode == 'by_amount'
                     ? '≈ ${_fmt(_liters)} لتر'
                     : '≈ ${_fmt(_amount)} ر.ي',
-                style: const TextStyle(color: AmyalColors.textSecondary, fontSize: 13),
+                style: const TextStyle(color: AmialColors.textSecondary, fontSize: 13),
               ),
             ]),
           ),
@@ -291,7 +291,7 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
                 : const Icon(Icons.qr_code_2),
             label: const Text('استلام بـ QR (العميل يمسح ويدفع)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
             style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(54)),
+              backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(54)),
           )),
           const SizedBox(height: 8),
           Row(children: [
@@ -337,12 +337,12 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white, borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AmyalColors.border),
+          border: Border.all(color: AmialColors.border),
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          const Icon(Icons.expand_more, size: 18, color: AmyalColors.textMuted),
+          const Icon(Icons.expand_more, size: 18, color: AmialColors.textMuted),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(label, style: const TextStyle(fontSize: 10, color: AmyalColors.textMuted)),
+            Text(label, style: const TextStyle(fontSize: 10, color: AmialColors.textMuted)),
             Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
           ]),
         ]),
@@ -357,12 +357,12 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: sel ? AmyalColors.primary : Colors.transparent,
+          color: sel ? AmialColors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
         ),
         alignment: Alignment.center,
         child: Text(label, style: TextStyle(
-          color: sel ? Colors.white : AmyalColors.textSecondary,
+          color: sel ? Colors.white : AmialColors.textSecondary,
           fontWeight: FontWeight.bold)),
       ),
     ));
@@ -398,7 +398,7 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
             child: k == '<'
                 ? const Icon(Icons.backspace_outlined, size: 20)
                 : Text(k, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold,
-                    color: k == 'C' ? AmyalColors.red : AmyalColors.textPrimary)),
+                    color: k == 'C' ? AmialColors.red : AmialColors.textPrimary)),
           ),
         ),
       ))).toList()),
@@ -415,15 +415,15 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
         Container(
           height: 36, width: 36, alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: AmyalColors.yellow.withValues(alpha: 0.3), shape: BoxShape.circle),
-          child: const Icon(Icons.local_gas_station, size: 18, color: AmyalColors.primary),
+            color: AmialColors.yellow.withValues(alpha: 0.3), shape: BoxShape.circle),
+          child: const Icon(Icons.local_gas_station, size: 18, color: AmialColors.primary),
         ),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('تعبئة — ${_fmt(double.tryParse('${s['liters'] ?? 0}') ?? 0)} لتر',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           Text(method == 'cash' ? 'نقد' : (method == 'amial_pay' ? 'أميال باي' : 'حساب شركة'),
-              style: const TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+              style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
         ])),
         Text('${_fmt(double.tryParse('${s['total_amount'] ?? 0}') ?? 0)} ر.ي',
             style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -437,7 +437,7 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
         const Padding(padding: EdgeInsets.all(12),
             child: Text('اختر المضخّة', style: TextStyle(fontWeight: FontWeight.bold))),
         ...c.pumps.map((p) => ListTile(
-          leading: const Icon(Icons.local_gas_station, color: AmyalColors.primary),
+          leading: const Icon(Icons.local_gas_station, color: AmialColors.primary),
           title: Text('مضخّة #${p['pump_number']}'),
           subtitle: Text(p['pump_type'] == 'mechanical' ? 'يدوية' : 'إلكترونية'),
           selected: _pump?['id'] == p['id'],
@@ -453,7 +453,7 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
         const Padding(padding: EdgeInsets.all(12),
             child: Text('اختر نوع الوقود', style: TextStyle(fontWeight: FontWeight.bold))),
         ...c.products.map((p) => ListTile(
-          leading: const Icon(Icons.oil_barrel, color: AmyalColors.yellowDark),
+          leading: const Icon(Icons.oil_barrel, color: AmialColors.yellowDark),
           title: Text('${p['name']}'),
           trailing: Text('${p['price_per_liter']} ر.ي/لتر'),
           selected: _product?['id'] == p['id'],

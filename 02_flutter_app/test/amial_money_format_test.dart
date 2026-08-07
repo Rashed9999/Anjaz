@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/amial_money.dart';
 
 /// AMIAL-MONEY-002 — عرض المبالغ: آخر خطوة قبل عين المستخدم.
 ///

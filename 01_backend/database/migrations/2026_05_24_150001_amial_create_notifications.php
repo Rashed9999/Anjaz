@@ -33,7 +33,7 @@ return new class extends Migration
             // أيقونة بصرية (اسم أو URL) للعرض في الـ UI
             $table->string('icon', 80)->nullable();
 
-            // deep-link اختياري (e.g. amyal://credit/customers/123)
+            // deep-link اختياري (e.g. amial://credit/customers/123)
             $table->string('action_url', 255)->nullable();
 
             // بيانات تتعلق بالإشعار (مرجع عملية، مبلغ، إلخ)

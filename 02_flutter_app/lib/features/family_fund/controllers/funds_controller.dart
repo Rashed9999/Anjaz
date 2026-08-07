@@ -1,18 +1,18 @@
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/family_fund/domain/models/fund_models.dart';
-import 'package:amyal_pay/features/family_fund/domain/repositories/funds_repo.dart';
-import 'package:amyal_pay/helper/amial_errors.dart';
+import 'package:amial_pay/features/family_fund/domain/models/fund_models.dart';
+import 'package:amial_pay/features/family_fund/domain/repositories/funds_repo.dart';
+import 'package:amial_pay/helper/amial_errors.dart';
 
 /// AMIAL-FUND-FAMILY-001 (v0.9-D)
 class FundsController extends GetxController implements GetxService {
   final FundsRepo repo;
   FundsController({required this.repo});
 
-  final RxList<AmyalFundMembership> myMemberships = <AmyalFundMembership>[].obs;
-  final Rx<AmyalFund?> selectedFund = Rx<AmyalFund?>(null);
+  final RxList<AmialFundMembership> myMemberships = <AmialFundMembership>[].obs;
+  final Rx<AmialFund?> selectedFund = Rx<AmialFund?>(null);
   final RxString selectedFundRole = ''.obs;
-  final RxList<AmyalFundTransaction> selectedFundTransactions = <AmyalFundTransaction>[].obs;
+  final RxList<AmialFundTransaction> selectedFundTransactions = <AmialFundTransaction>[].obs;
   // AMIAL-DESIGN-16: أعضاء الصندوق مع مساهماتهم (يرجعها show أصلاً)
   final RxList<Map<String, dynamic>> selectedFundMembers = <Map<String, dynamic>>[].obs;
 
@@ -27,7 +27,7 @@ class FundsController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map) {
         final items = ((r.body['meta'] ?? {})['items'] as List? ?? []);
         myMemberships.value = items
-            .map((j) => AmyalFundMembership.fromJson(Map<String, dynamic>.from(j)))
+            .map((j) => AmialFundMembership.fromJson(Map<String, dynamic>.from(j)))
             .toList();
         lastError.value = '';
       } else {
@@ -98,7 +98,7 @@ class FundsController extends GetxController implements GetxService {
       final r = await repo.show(ulid);
       if (r.statusCode == 200 && r.body is Map) {
         final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
-        selectedFund.value = AmyalFund.fromJson(Map<String, dynamic>.from(meta['fund'] ?? {}));
+        selectedFund.value = AmialFund.fromJson(Map<String, dynamic>.from(meta['fund'] ?? {}));
         selectedFundRole.value = (meta['role'] ?? '').toString();
         final mem = meta['members'] as List? ?? [];
         selectedFundMembers.value = mem
@@ -107,7 +107,7 @@ class FundsController extends GetxController implements GetxService {
             .toList();
         final txs = meta['recent_transactions'] as List? ?? [];
         selectedFundTransactions.value = txs
-            .map((j) => AmyalFundTransaction.fromJson(Map<String, dynamic>.from(j)))
+            .map((j) => AmialFundTransaction.fromJson(Map<String, dynamic>.from(j)))
             .toList();
         lastError.value = '';
         return true;

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_asset_image_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_button_widget.dart';
-import 'package:amyal_pay/features/favorite_number/controllers/fav_number_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_asset_image_widget.dart';
+import 'package:amial_pay/common/widgets/custom_button_widget.dart';
+import 'package:amial_pay/features/favorite_number/controllers/fav_number_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/util/styles.dart';
 
 class FavNumLimitReachedDialogWidget extends StatelessWidget {
   const FavNumLimitReachedDialogWidget({super.key});

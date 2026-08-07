@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:scroll_to_index/scroll_to_index.dart';
-import 'package:amyal_pay/features/setting/controllers/faq_controller.dart';
-import 'package:amyal_pay/features/setting/widgets/custom_fag_expansion_tile.dart';
-import 'package:amyal_pay/features/setting/widgets/empty_fag_widget.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/setting/widgets/faq_shimmer.dart';
+import 'package:amial_pay/features/setting/controllers/faq_controller.dart';
+import 'package:amial_pay/features/setting/widgets/custom_fag_expansion_tile.dart';
+import 'package:amial_pay/features/setting/widgets/empty_fag_widget.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/setting/widgets/faq_shimmer.dart';
 
 class FaqScreen extends StatefulWidget {
   final String title;
@@ -48,7 +48,7 @@ class _FaqScreenState extends State<FaqScreen>  with SingleTickerProviderStateMi
   Widget build(BuildContext context) {
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
+      appBar: AppBar(title: Text(widget.title), backgroundColor: AmialColors.primary, foregroundColor: Colors.white, elevation: 0),
       body: GetBuilder<FaqController>(builder: (faqController) {
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 

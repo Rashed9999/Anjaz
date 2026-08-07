@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/show_custom_bottom_sheet.dart';
-import 'package:amyal_pay/features/favorite_number/controllers/fav_number_controller.dart';
-import 'package:amyal_pay/features/favorite_number/domain/models/favorite_list_model.dart';
-import 'package:amyal_pay/features/favorite_number/screens/add_fav_number_screen.dart';
-import 'package:amyal_pay/features/favorite_number/widgets/fav_num_delete_bottom_sheet_widget.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/show_custom_bottom_sheet.dart';
+import 'package:amial_pay/features/favorite_number/controllers/fav_number_controller.dart';
+import 'package:amial_pay/features/favorite_number/domain/models/favorite_list_model.dart';
+import 'package:amial_pay/features/favorite_number/screens/add_fav_number_screen.dart';
+import 'package:amial_pay/features/favorite_number/widgets/fav_num_delete_bottom_sheet_widget.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
 
 class FavNumberListItemWidget extends StatelessWidget {
   final String? label;

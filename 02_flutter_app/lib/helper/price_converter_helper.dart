@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_instance/src/extension_instance.dart';
-import 'package:amyal_pay/common/models/config_model.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/common/models/config_model.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/util/app_constants.dart';
 class PriceConverterHelper {
   static String convertPrice(double price, {double? discount, String? discountType}) {
     if(discount != null && discountType != null){

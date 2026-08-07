@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/merchant/controllers/cashier_refund_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_refund_controller.dart';
 
 /// AMIAL-CASHIER-REFUND-001 — شاشة إنشاء مرتجع.
 ///
@@ -123,13 +123,13 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+        SnackBar(content: Text(m), backgroundColor: AmialColors.red),
       );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('مرتجع مبيعات'),
       ),
@@ -179,11 +179,11 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AmyalColors.yellow.withValues(alpha: 0.3),
+                      color: AmialColors.yellow.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Text('قابل للمرتجع',
-                        style: TextStyle(color: AmyalColors.yellowDark, fontWeight: FontWeight.bold, fontSize: 11)),
+                        style: TextStyle(color: AmialColors.yellowDark, fontWeight: FontWeight.bold, fontSize: 11)),
                   ),
                   Text('#${sale['sale_ulid'].toString().substring(sale['sale_ulid'].toString().length - 8)}',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -218,7 +218,7 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
                   keyboardType: TextInputType.number,
                   textAlign: TextAlign.right,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmyalColors.primary),
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmialColors.primary),
                   decoration: InputDecoration(
                     border: InputBorder.none,
                     hintText: 'الحد الأقصى ${remaining.toStringAsFixed(0)} ر.ي',
@@ -235,7 +235,7 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AmyalColors.primary,
+                color: AmialColors.primary,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -278,7 +278,7 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
                   : const Icon(Icons.check_circle_outline),
               label: const Text('تأكيد عملية المرتجع', style: TextStyle(fontSize: 16)),
               style: FilledButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 minimumSize: const Size.fromHeight(54),
               ),
             )),
@@ -315,7 +315,7 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text('$value', style: TextStyle(
           fontWeight: bold ? FontWeight.bold : FontWeight.w500,
-          color: red ? AmyalColors.red : Colors.black87,
+          color: red ? AmialColors.red : Colors.black87,
         )),
         Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
       ]),
@@ -345,7 +345,7 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           ),
           IconButton(
-            icon: const Icon(Icons.add_circle, color: AmyalColors.primary),
+            icon: const Icon(Icons.add_circle, color: AmialColors.primary),
             onPressed: current < originalQty ? () => setState(() => _returnQty[index] = current + 1) : null,
           ),
         ]),
@@ -386,13 +386,13 @@ class _CashierRefundScreenState extends State<CashierRefundScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: selected ? AmyalColors.primary : Colors.grey.shade200, width: selected ? 2 : 1),
+          border: Border.all(color: selected ? AmialColors.primary : Colors.grey.shade200, width: selected ? 2 : 1),
         ),
         child: Row(children: [
           Icon(selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-              color: selected ? AmyalColors.primary : Colors.grey),
+              color: selected ? AmialColors.primary : Colors.grey),
           const SizedBox(width: 12),
-          Icon(icon, color: selected ? AmyalColors.primary : Colors.grey.shade600),
+          Icon(icon, color: selected ? AmialColors.primary : Colors.grey.shade600),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),

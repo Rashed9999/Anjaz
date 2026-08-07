@@ -5,10 +5,10 @@ import 'package:get/get.dart';
 import 'package:open_file/open_file.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:amyal_pay/common/models/notification_body.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/helper/notification_helper.dart';
-import 'package:amyal_pay/main.dart';
+import 'package:amial_pay/common/models/notification_body.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/helper/notification_helper.dart';
+import 'package:amial_pay/main.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class PdfDownloaderHelper {

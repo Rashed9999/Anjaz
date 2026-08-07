@@ -1,8 +1,8 @@
 import 'package:get/get.dart';
 import 'package:uuid/uuid.dart';
-import 'package:amyal_pay/features/merchant/domain/repositories/cashier_repo.dart';
-import 'package:amyal_pay/features/merchant/services/offline_sale_queue.dart';
-import 'package:amyal_pay/features/plans/screens/my_usage_screen.dart';
+import 'package:amial_pay/features/merchant/domain/repositories/cashier_repo.dart';
+import 'package:amial_pay/features/merchant/services/offline_sale_queue.dart';
+import 'package:amial_pay/features/plans/screens/my_usage_screen.dart';
 
 /// عنصر في سلة الكاشير (حالة محلية فقط — لا جدول خادم).
 class CartLine {

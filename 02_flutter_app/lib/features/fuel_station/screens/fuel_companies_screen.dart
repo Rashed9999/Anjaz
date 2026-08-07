@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/fuel_station/controllers/fuel_station_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
 
 /// AMIAL-FUEL-002 — إدارة شركات الوقود + البطاقات + السداد.
 class FuelCompaniesScreen extends StatefulWidget {
@@ -25,12 +25,12 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('حسابات الشركات'),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AmyalColors.primary,
+        backgroundColor: AmialColors.primary,
         onPressed: _addCompanyDialog,
         icon: const Icon(Icons.add),
         label: const Text('شركة جديدة'),
@@ -79,10 +79,10 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
           Container(
             width: 44, height: 44,
             decoration: BoxDecoration(
-              color: AmyalColors.primary.withValues(alpha: 0.1),
+              color: AmialColors.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.business, color: AmyalColors.primary),
+            child: const Icon(Icons.business, color: AmialColors.primary),
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -98,7 +98,7 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('${balance.toStringAsFixed(0)} ر.ي',
               style: TextStyle(fontWeight: FontWeight.bold,
-                  color: isWarning ? AmyalColors.red : AmyalColors.primary, fontSize: 16)),
+                  color: isWarning ? AmialColors.red : AmialColors.primary, fontSize: 16)),
           Text('الدَّيْن الحالي', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
         ]),
         if (limit > 0) ...[
@@ -109,7 +109,7 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
               value: percent.clamp(0, 1),
               minHeight: 6,
               backgroundColor: Colors.grey.shade200,
-              color: isWarning ? AmyalColors.red : Colors.green,
+              color: isWarning ? AmialColors.red : Colors.green,
             ),
           ),
           const SizedBox(height: 2),
@@ -126,7 +126,7 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
             onPressed: () => _showCardsSheet(company),
             icon: const Icon(Icons.credit_card, size: 16),
             label: const Text('البطاقات', style: TextStyle(fontSize: 12)),
-            style: OutlinedButton.styleFrom(side: const BorderSide(color: AmyalColors.primary)),
+            style: OutlinedButton.styleFrom(side: const BorderSide(color: AmialColors.primary)),
           )),
           const SizedBox(width: 6),
           Expanded(child: FilledButton.icon(
@@ -182,7 +182,7 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
               Navigator.pop(ctx);
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
+              SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red),
             );
             }
           },
@@ -200,7 +200,7 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
       title: Text('سداد ${company['company_name']}'),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
         Text('الدَّيْن الحالي: ${company['current_balance']} ر.ي',
-            style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.red)),
+            style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.red)),
         const SizedBox(height: 12),
         TextField(
           controller: amount,
@@ -226,7 +226,7 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
                   backgroundColor: Colors.green.shade100, colorText: Colors.green.shade800);
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
+                SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red),
               );
             }
           },
@@ -290,14 +290,14 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AmyalColors.background,
+        color: AmialColors.background,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(children: [
         Container(
           width: 40, height: 40,
           decoration: BoxDecoration(
-            color: card['is_active'] == true ? AmyalColors.primary : Colors.grey,
+            color: card['is_active'] == true ? AmialColors.primary : Colors.grey,
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Icon(Icons.credit_card, color: Colors.white, size: 20),
@@ -364,7 +364,7 @@ class _FuelCompaniesScreenState extends State<FuelCompaniesScreen> {
               Navigator.pop(ctx);
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
+              SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red),
             );
             }
           },

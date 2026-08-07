@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_text_field_widget.dart';
-import 'package:amyal_pay/common/widgets/text_field_title.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/helper/email_checker_helper.dart';
-import 'package:amyal_pay/util/dimensions.dart';
+import 'package:amial_pay/common/widgets/custom_text_field_widget.dart';
+import 'package:amial_pay/common/widgets/text_field_title.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/helper/email_checker_helper.dart';
+import 'package:amial_pay/util/dimensions.dart';
 
 class SignUpInputWidget extends StatefulWidget {
   final TextEditingController? occupationController, fNameController,lNameController,emailController;

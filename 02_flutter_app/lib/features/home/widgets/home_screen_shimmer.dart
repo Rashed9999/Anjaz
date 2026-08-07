@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/features/home/widgets/app_bar_shimmer_widget.dart';
-import 'package:amyal_pay/features/home/widgets/banner_shimmer_widget.dart';
-import 'package:amyal_pay/features/home/widgets/web_site_shimmer_widget.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/features/home/widgets/app_bar_shimmer_widget.dart';
+import 'package:amial_pay/features/home/widgets/banner_shimmer_widget.dart';
+import 'package:amial_pay/features/home/widgets/web_site_shimmer_widget.dart';
 class HomeScreenShimmer extends StatelessWidget {
   const HomeScreenShimmer({super.key});
 

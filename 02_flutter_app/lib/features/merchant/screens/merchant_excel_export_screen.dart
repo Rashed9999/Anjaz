@@ -6,8 +6,8 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-MERCHANT-EXCEL-001 — تصدير دفتر التاجر إلى Excel (باقة الأعمال فأعلى).
 ///
@@ -100,7 +100,7 @@ class _MerchantExcelExportScreenState extends State<MerchantExcelExportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تصدير Excel'),
       ),
@@ -116,7 +116,7 @@ class _MerchantExcelExportScreenState extends State<MerchantExcelExportScreen> {
             const SizedBox(height: 8),
             const Text('يشمل الحركات المالية للمتجر بصيغة جدول قابل للتحليل.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+                style: TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
             const SizedBox(height: 28),
             _body(),
             if (_msg.isNotEmpty) ...[
@@ -124,7 +124,7 @@ class _MerchantExcelExportScreenState extends State<MerchantExcelExportScreen> {
               Text(_msg, textAlign: TextAlign.center,
                   style: TextStyle(
                       fontSize: 13,
-                      color: _state == _S.locked || _state == _S.failed ? AmyalColors.red : AmyalColors.primary,
+                      color: _state == _S.locked || _state == _S.failed ? AmialColors.red : AmialColors.primary,
                       fontWeight: FontWeight.w600)),
             ],
           ]),
@@ -151,14 +151,14 @@ class _MerchantExcelExportScreenState extends State<MerchantExcelExportScreen> {
               backgroundColor: const Color(0xFF1D6F42), minimumSize: const Size(240, 52)),
         );
       case _S.locked:
-        return const Icon(Icons.workspace_premium, size: 40, color: AmyalColors.yellowDark);
+        return const Icon(Icons.workspace_premium, size: 40, color: AmialColors.yellowDark);
       default:
         return FilledButton.icon(
           onPressed: _start,
           icon: const Icon(Icons.file_download_outlined),
           label: const Text('تصدير الآن'),
           style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary, minimumSize: const Size(240, 52)),
+              backgroundColor: AmialColors.primary, minimumSize: const Size(240, 52)),
         );
     }
   }

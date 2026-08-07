@@ -1,4 +1,4 @@
-import 'package:amyal_pay/helper/date_converter_helper.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 
 import 'dart:convert';
 

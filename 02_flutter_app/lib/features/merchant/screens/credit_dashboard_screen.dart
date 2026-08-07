@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/merchant/controllers/customer_credit_controller.dart';
-import 'package:amyal_pay/features/merchant/screens/credit_customers_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/customer_credit_controller.dart';
+import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart';
 
 /// AMIAL-CUSTOMER-CREDIT-001 — Dashboard نظام الديون للتاجر.
 class CreditDashboardScreen extends StatefulWidget {
@@ -25,7 +25,7 @@ class _CreditDashboardScreenState extends State<CreditDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('إدارة العملاء (الديون)'),
       ),
@@ -52,22 +52,22 @@ class _CreditDashboardScreenState extends State<CreditDashboardScreen> {
               _bigCard(
                 title: 'إجمالي الديون المستحقّة',
                 value: '${d['total_due']} ر.ي',
-                color: AmyalColors.primary,
+                color: AmialColors.primary,
                 textColor: Colors.white,
               ),
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(child: _smallCard('عملاء مدينون', '${d['debtors_count']}',
-                    AmyalColors.yellow, Colors.black87)),
+                    AmialColors.yellow, Colors.black87)),
                 const SizedBox(width: 12),
                 Expanded(child: _smallCard('تجاوزوا الحد', '${d['over_limit_count']}',
-                    AmyalColors.red, Colors.white)),
+                    AmialColors.red, Colors.white)),
               ]),
               const SizedBox(height: 20),
               const Text('تصنيف العملاء',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              _clsRow('ذهبي ⭐', byCls['gold'] ?? 0, AmyalColors.yellowDark),
+              _clsRow('ذهبي ⭐', byCls['gold'] ?? 0, AmialColors.yellowDark),
               _clsRow('فضّي', byCls['silver'] ?? 0, Colors.grey.shade600),
               _clsRow('برونزي', byCls['bronze'] ?? 0, Colors.brown.shade400),
               const SizedBox(height: 24),
@@ -76,7 +76,7 @@ class _CreditDashboardScreenState extends State<CreditDashboardScreen> {
                 icon: const Icon(Icons.people),
                 label: const Text('عرض كل العملاء'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: AmyalColors.primary,
+                  backgroundColor: AmialColors.primary,
                   minimumSize: const Size.fromHeight(50),
                 ),
               ),

@@ -1,5 +1,5 @@
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
 import 'package:flutter/material.dart';
 
 class ProfileHeader extends StatelessWidget {

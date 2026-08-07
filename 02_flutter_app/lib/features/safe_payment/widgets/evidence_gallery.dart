@@ -5,10 +5,10 @@ import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/features/safe_payment/domain/models/safe_payment_models.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/safe_payment/domain/models/safe_payment_models.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
 /// AMIAL-SAFEPAY-EVIDENCE-001 — معرض الأدلّة.
 ///
@@ -24,13 +24,13 @@ import 'package:amyal_pay/util/app_constants.dart';
 class EvidenceGallery extends StatelessWidget {
   const EvidenceGallery({super.key, required this.evidence});
 
-  final Map<String, List<AmyalEvidenceItem>> evidence;
+  final Map<String, List<AmialEvidenceItem>> evidence;
 
   /// ترتيب المراحل بترتيب وقوعها لا بترتيب حروفها.
   static const _order = ['created', 'in_delivery', 'delivered', 'dispute', 'admin_review'];
 
   static String fileUrl(int id) =>
-      '${Get.find<ApiClient>().appBaseUrl}${AppConstants.amyalSafePayments}/evidence/$id/file';
+      '${Get.find<ApiClient>().appBaseUrl}${AppConstants.amialSafePayments}/evidence/$id/file';
 
   static Map<String, String> authHeaders() =>
       {'Authorization': 'Bearer ${Get.find<ApiClient>().token}'};
@@ -48,15 +48,15 @@ class EvidenceGallery extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AmyalColors.border),
+          border: Border.all(color: AmialColors.border),
         ),
         child: const Row(children: [
-          Icon(Icons.photo_library_outlined, size: 18, color: AmyalColors.textMuted),
+          Icon(Icons.photo_library_outlined, size: 18, color: AmialColors.textMuted),
           SizedBox(width: 10),
           Expanded(
             child: Text(
               'لا توجد أدلّة بعد. الصور المرفوعة في وقتها تحسم النزاع لصاحبها.',
-              style: TextStyle(fontSize: 11.5, height: 1.6, color: AmyalColors.textMuted),
+              style: TextStyle(fontSize: 11.5, height: 1.6, color: AmialColors.textMuted),
             ),
           ),
         ]),
@@ -68,7 +68,7 @@ class EvidenceGallery extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AmyalColors.border),
+        border: Border.all(color: AmialColors.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Padding(
@@ -77,7 +77,7 @@ class EvidenceGallery extends StatelessWidget {
               style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
-                  color: AmyalColors.textSecondary)),
+                  color: AmialColors.textSecondary)),
         ),
         for (final stage in stages) ...[
           const SizedBox(height: 8),
@@ -85,18 +85,18 @@ class EvidenceGallery extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: AmyalColors.primary.withValues(alpha: 0.08),
+                color: AmialColors.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Text(AmyalEvidenceItem.stageLabel(stage),
+              child: Text(AmialEvidenceItem.stageLabel(stage),
                   style: const TextStyle(
                       fontSize: 10.5,
                       fontWeight: FontWeight.bold,
-                      color: AmyalColors.primary)),
+                      color: AmialColors.primary)),
             ),
             const SizedBox(width: 6),
             Text('${evidence[stage]!.length}',
-                style: const TextStyle(fontSize: 10.5, color: AmyalColors.textMuted)),
+                style: const TextStyle(fontSize: 10.5, color: AmialColors.textMuted)),
           ]),
           const SizedBox(height: 8),
           SizedBox(
@@ -121,8 +121,8 @@ class EvidenceGallery extends StatelessWidget {
 class _EvidenceThumb extends StatelessWidget {
   const _EvidenceThumb({required this.item, required this.all, required this.index});
 
-  final AmyalEvidenceItem item;
-  final List<AmyalEvidenceItem> all;
+  final AmialEvidenceItem item;
+  final List<AmialEvidenceItem> all;
   final int index;
 
   @override
@@ -149,7 +149,7 @@ class _EvidenceThumb extends StatelessWidget {
                     height: 78,
                     color: const Color(0xFFF0F1F3),
                     child: const Icon(Icons.picture_as_pdf_outlined,
-                        size: 30, color: AmyalColors.red),
+                        size: 30, color: AmialColors.red),
                   )
                 : Image.network(
                     EvidenceGallery.fileUrl(item.id),
@@ -176,19 +176,19 @@ class _EvidenceThumb extends StatelessWidget {
                       height: 78,
                       color: const Color(0xFFF0F1F3),
                       child: const Icon(Icons.broken_image_outlined,
-                          size: 24, color: AmyalColors.textMuted),
+                          size: 24, color: AmialColors.textMuted),
                     ),
                   ),
           ),
           const SizedBox(height: 3),
           Text(item.roleLabel,
-              style: const TextStyle(fontSize: 9.5, color: AmyalColors.textMuted)),
+              style: const TextStyle(fontSize: 9.5, color: AmialColors.textMuted)),
         ]),
       ),
     );
   }
 
-  static Future<void> _openPdf(BuildContext context, AmyalEvidenceItem item) async {
+  static Future<void> _openPdf(BuildContext context, AmialEvidenceItem item) async {
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
         const SnackBar(content: Text('جارٍ فتح الملف…'), duration: Duration(seconds: 1)));
@@ -215,7 +215,7 @@ class _EvidenceThumb extends StatelessWidget {
 class EvidenceViewerScreen extends StatefulWidget {
   const EvidenceViewerScreen({super.key, required this.items, required this.initialIndex});
 
-  final List<AmyalEvidenceItem> items;
+  final List<AmialEvidenceItem> items;
   final int initialIndex;
 
   @override
@@ -273,7 +273,7 @@ class _EvidenceViewerScreenState extends State<EvidenceViewerScreen> {
           color: const Color(0xFF141414),
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('رفعه: ${item.roleLabel} — ${AmyalEvidenceItem.stageLabel(item.stage)}',
+            Text('رفعه: ${item.roleLabel} — ${AmialEvidenceItem.stageLabel(item.stage)}',
                 style: const TextStyle(color: Colors.white, fontSize: 12.5)),
             const SizedBox(height: 3),
             if (item.uploadedAt != null)

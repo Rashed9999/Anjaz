@@ -1,12 +1,12 @@
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/common/controllers/share_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/common/controllers/share_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_small_button_widget.dart';
-import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/common/widgets/custom_small_button_widget.dart';
+import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 
 class ProfileQRCodeBottomSheetWidget extends StatelessWidget {
@@ -60,7 +60,7 @@ class ProfileQRCodeBottomSheetWidget extends StatelessWidget {
               return const Center(
                 child: Padding(
                   padding: EdgeInsets.all(40),
-                  child: CircularProgressIndicator(color: AmyalColors.primary),
+                  child: CircularProgressIndicator(color: AmialColors.primary),
                 ),
               );
             }
@@ -72,7 +72,7 @@ class ProfileQRCodeBottomSheetWidget extends StatelessWidget {
                   padding: const EdgeInsets.all(24),
                   child: Column(children: [
                     const Icon(Icons.qr_code_2_rounded,
-                        size: 40, color: AmyalColors.textMuted),
+                        size: 40, color: AmialColors.textMuted),
                     const SizedBox(height: 10),
                     const Text('تعذّر توليد الرمز — بيانات الحساب غير متاحة',
                         textAlign: TextAlign.center),

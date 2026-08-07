@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-GOVERNORATES-001 — قائمة المحافظات اليمنية.
 ///
@@ -151,7 +151,7 @@ class _GovernoratePickerState extends State<GovernoratePicker> {
           );
         }).toList(),
         onChanged: _loading ? null : widget.onChanged,
-        style: const TextStyle(fontSize: 14, color: AmyalColors.textPrimary),
+        style: const TextStyle(fontSize: 14, color: AmialColors.textPrimary),
       ),
     );
   }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/branches/controllers/branches_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/branches/controllers/branches_controller.dart';
 
 /// P1-BRANCHES — شاشة إدارة الفروع.
 ///
@@ -29,7 +29,7 @@ class _BMSState extends State<BranchesManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('الفروع'),
       ),
@@ -51,7 +51,7 @@ class _BMSState extends State<BranchesManagementScreen> {
         }),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AmyalColors.primary,
+        backgroundColor: AmialColors.primary,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: const Text('فرع جديد'),
@@ -88,7 +88,7 @@ class _BMSState extends State<BranchesManagementScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isCurrent ? AmyalColors.yellow : Colors.transparent,
+          color: isCurrent ? AmialColors.yellow : Colors.transparent,
           width: 2,
         ),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8)],
@@ -103,13 +103,13 @@ class _BMSState extends State<BranchesManagementScreen> {
             Container(width: 50, height: 50,
               decoration: BoxDecoration(
                 color: isActive
-                  ? AmyalColors.primary.withValues(alpha: 0.1)
+                  ? AmialColors.primary.withValues(alpha: 0.1)
                   : Colors.grey.shade200,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 isDefault ? Icons.star : Icons.store,
-                color: isActive ? AmyalColors.primary : Colors.grey,
+                color: isActive ? AmialColors.primary : Colors.grey,
                 size: 26,
               ),
             ),
@@ -118,7 +118,7 @@ class _BMSState extends State<BranchesManagementScreen> {
               Row(children: [
                 Expanded(child: Text(b['name']?.toString() ?? '',
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
-                if (isDefault) _badge('افتراضي', AmyalColors.yellowDark),
+                if (isDefault) _badge('افتراضي', AmialColors.yellowDark),
                 if (isCurrent) ...[
                   const SizedBox(width: 4),
                   _badge('نشط', Colors.green),
@@ -159,12 +159,12 @@ class _BMSState extends State<BranchesManagementScreen> {
     showModalBottomSheet(context: context, builder: (ctx) => SafeArea(
       child: Wrap(children: [
         ListTile(
-          leading: const Icon(Icons.edit, color: AmyalColors.primary),
+          leading: const Icon(Icons.edit, color: AmialColors.primary),
           title: const Text('تعديل'),
           onTap: () { Navigator.pop(ctx); _showEditDialog(b); },
         ),
         if (b['is_default'] != true) ListTile(
-          leading: const Icon(Icons.star, color: AmyalColors.yellowDark),
+          leading: const Icon(Icons.star, color: AmialColors.yellowDark),
           title: const Text('تعيين كافتراضي'),
           onTap: () async {
             Navigator.pop(ctx);

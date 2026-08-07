@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/merchant/controllers/customer_credit_controller.dart';
-import 'package:amyal_pay/features/merchant/screens/credit_customer_statement_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/credit_add_customer_dialog.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/customer_credit_controller.dart';
+import 'package:amial_pay/features/merchant/screens/credit_customer_statement_screen.dart';
+import 'package:amial_pay/features/merchant/screens/credit_add_customer_dialog.dart';
 
 /// AMIAL-CUSTOMER-CREDIT-001 — قائمة عملاء الديون.
 class CreditCustomersScreen extends StatefulWidget {
@@ -40,7 +40,7 @@ class _CreditCustomersScreenState extends State<CreditCustomersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('عملاء الديون'),
       ),
@@ -49,7 +49,7 @@ class _CreditCustomersScreenState extends State<CreditCustomersScreen> {
           final ok = await Get.dialog<bool>(const CreditAddCustomerDialog());
           if (ok == true) c.loadCustomers(search: _searchCtrl.text, filter: _filter.isEmpty ? null : _filter);
         },
-        backgroundColor: AmyalColors.yellow,
+        backgroundColor: AmialColors.yellow,
         foregroundColor: Colors.black87,
         icon: const Icon(Icons.person_add),
         label: const Text('إضافة عميل'),
@@ -117,7 +117,7 @@ class _CreditCustomersScreenState extends State<CreditCustomersScreen> {
         label: Text(label),
         selected: selected,
         onSelected: (_) => _applyFilter(value),
-        selectedColor: AmyalColors.primary,
+        selectedColor: AmialColors.primary,
         labelStyle: TextStyle(color: selected ? Colors.white : Colors.black87, fontWeight: FontWeight.w600),
         backgroundColor: Colors.white,
       ),
@@ -130,7 +130,7 @@ class _CreditCustomersScreenState extends State<CreditCustomersScreen> {
     final util = lim > 0 ? ((bal / lim) * 100).clamp(0, 200).toDouble() : 0.0;
     final overLimit = lim > 0 && bal > lim;
     final cls = cust['classification'] ?? 'bronze';
-    final clsColor = cls == 'gold' ? AmyalColors.yellowDark
+    final clsColor = cls == 'gold' ? AmialColors.yellowDark
         : cls == 'silver' ? Colors.grey.shade600
         : Colors.brown.shade400;
 
@@ -140,9 +140,9 @@ class _CreditCustomersScreenState extends State<CreditCustomersScreen> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AmyalColors.cardSurface,
+          color: AmialColors.cardSurface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: overLimit ? AmyalColors.red.withValues(alpha: 0.4) : Colors.transparent),
+          border: Border.all(color: overLimit ? AmialColors.red.withValues(alpha: 0.4) : Colors.transparent),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Row(children: [
@@ -169,7 +169,7 @@ class _CreditCustomersScreenState extends State<CreditCustomersScreen> {
             Text('${bal.toStringAsFixed(0)} ر.ي',
                 style: TextStyle(
                     fontSize: 18, fontWeight: FontWeight.bold,
-                    color: bal > 0 ? AmyalColors.red : Colors.green.shade700)),
+                    color: bal > 0 ? AmialColors.red : Colors.green.shade700)),
           ]),
           if (lim > 0) ...[
             const SizedBox(height: 8),
@@ -177,13 +177,13 @@ class _CreditCustomersScreenState extends State<CreditCustomersScreen> {
               value: (util / 100).clamp(0, 1).toDouble(),
               backgroundColor: Colors.grey.shade200,
               valueColor: AlwaysStoppedAnimation(
-                util < 60 ? Colors.green : util < 90 ? AmyalColors.yellow : AmyalColors.red,
+                util < 60 ? Colors.green : util < 90 ? AmialColors.yellow : AmialColors.red,
               ),
               minHeight: 6,
             ),
             const SizedBox(height: 4),
             Text('استهلاك ${util.toStringAsFixed(0)}%${overLimit ? ' — تجاوز' : ''}',
-                style: TextStyle(fontSize: 11, color: overLimit ? AmyalColors.red : Colors.grey.shade600)),
+                style: TextStyle(fontSize: 11, color: overLimit ? AmialColors.red : Colors.grey.shade600)),
           ],
         ]),
       ),

@@ -19,7 +19,7 @@ use Illuminate\Support\Str;
 
 /**
  * AMIAL-WA-002 — القلب المنطقي للـ WhatsApp Bot (نسخة كاملة مُحدَّثة وفق
- * AMYAL PAY WHATSAPP BOT SPECIFICATION v1.0).
+ * AMIAL PAY WHATSAPP BOT SPECIFICATION v1.0).
  *
  * التحديثات الجوهرية عن v1:
  *   - Section 4: بوّابة "ربط الحساب" — لا تنفيذ أمر واحد بلا جلسة موثوقة

@@ -1,26 +1,26 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/data/api/idempotency_key_generator.dart';
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/data/api/idempotency_key_generator.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
 /// AMIAL-DONATIONS-001 (v1.2)
 class DonationsRepo extends GetxService {
   final ApiClient apiClient;
   DonationsRepo({required this.apiClient});
 
-  Future<Response> categories() => apiClient.getData(AppConstants.amyalDonationsCategories);
-  Future<Response> organizations() => apiClient.getData(AppConstants.amyalDonationsOrgs);
+  Future<Response> categories() => apiClient.getData(AppConstants.amialDonationsCategories);
+  Future<Response> organizations() => apiClient.getData(AppConstants.amialDonationsOrgs);
 
   Future<Response> campaigns({String? categoryCode, bool? featured}) {
     final params = <String>[];
     if (categoryCode != null) params.add('category=$categoryCode');
     if (featured == true) params.add('featured=1');
     final query = params.isEmpty ? '' : '?${params.join('&')}';
-    return apiClient.getData('${AppConstants.amyalDonationsCampaigns}$query');
+    return apiClient.getData('${AppConstants.amialDonationsCampaigns}$query');
   }
 
   Future<Response> campaignShow(String ulid) =>
-      apiClient.getData('${AppConstants.amyalDonationCampaignShow}$ulid');
+      apiClient.getData('${AppConstants.amialDonationCampaignShow}$ulid');
 
   Future<Response> donate({
     required String campaignUlid,
@@ -29,7 +29,7 @@ class DonationsRepo extends GetxService {
     String? message,
   }) {
     return apiClient.postData(
-      AppConstants.amyalDonationsDonate,
+      AppConstants.amialDonationsDonate,
       {
         'campaign_ulid': campaignUlid,
         'amount': amount,
@@ -40,5 +40,5 @@ class DonationsRepo extends GetxService {
     );
   }
 
-  Future<Response> myDonations() => apiClient.getData(AppConstants.amyalDonationsMy);
+  Future<Response> myDonations() => apiClient.getData(AppConstants.amialDonationsMy);
 }

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/withdraw/controllers/customer_withdraw_controller.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/withdraw/controllers/customer_withdraw_controller.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-WD-HISTORY-001 — «سجل طلبات السحب»:
 /// بحث برقم العملية + تصفية (الكل/قيد الانتظار/المكتملة/الملغية) + بطاقات
@@ -64,11 +64,11 @@ class _WithdrawHistoryScreenState extends State<WithdrawHistoryScreen> {
       case 'pending':
         return ('قيد الانتظار', const Color(0xFFB8860B), const Color(0xFFFBF3D9));
       case 'cancelled':
-        return ('ملغي', AmyalColors.red, const Color(0xFFFDE7E7));
+        return ('ملغي', AmialColors.red, const Color(0xFFFDE7E7));
       case 'expired':
-        return ('منتهي', AmyalColors.textMuted, const Color(0xFFEFEFEF));
+        return ('منتهي', AmialColors.textMuted, const Color(0xFFEFEFEF));
       default:
-        return (st, AmyalColors.textMuted, const Color(0xFFEFEFEF));
+        return (st, AmialColors.textMuted, const Color(0xFFEFEFEF));
     }
   }
 
@@ -87,7 +87,7 @@ class _WithdrawHistoryScreenState extends State<WithdrawHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('سجل طلبات السحب'),
       ),
@@ -95,7 +95,7 @@ class _WithdrawHistoryScreenState extends State<WithdrawHistoryScreen> {
         final items = _visible;
         return RefreshIndicator(
           onRefresh: () => c.loadHistory(status: 'all'),
-          color: AmyalColors.primary,
+          color: AmialColors.primary,
           child: Column(children: [
             // ====== البحث ======
             Padding(
@@ -131,10 +131,10 @@ class _WithdrawHistoryScreenState extends State<WithdrawHistoryScreen> {
                     child: ChoiceChip(
                       label: Text(f.$2, style: const TextStyle(fontSize: 12)),
                       selected: selected,
-                      selectedColor: AmyalColors.primary,
+                      selectedColor: AmialColors.primary,
                       backgroundColor: Colors.white,
                       labelStyle: TextStyle(
-                          color: selected ? Colors.white : AmyalColors.primary),
+                          color: selected ? Colors.white : AmialColors.primary),
                       onSelected: (_) => setState(() => _filter = f.$1),
                     ),
                   );
@@ -147,14 +147,14 @@ class _WithdrawHistoryScreenState extends State<WithdrawHistoryScreen> {
               child: c.isLoadingHistory.value
                   ? const Center(
                       child:
-                          CircularProgressIndicator(color: AmyalColors.primary))
+                          CircularProgressIndicator(color: AmialColors.primary))
                   : items.isEmpty
                       ? ListView(children: const [
                           SizedBox(height: 120),
                           Center(
                               child: Text('لا توجد طلبات سحب',
                                   style:
-                                      TextStyle(color: AmyalColors.textMuted))),
+                                      TextStyle(color: AmialColors.textMuted))),
                         ])
                       : ListView.separated(
                           padding: const EdgeInsets.all(16),
@@ -193,7 +193,7 @@ class _WithdrawHistoryScreenState extends State<WithdrawHistoryScreen> {
           const Spacer(),
           Text('#WD-${r['op_code'] ?? r['id']}',
               style: const TextStyle(
-                  fontSize: 12, color: AmyalColors.textMuted)),
+                  fontSize: 12, color: AmialColors.textMuted)),
           const SizedBox(width: 10),
           CircleAvatar(
             radius: 18,
@@ -215,8 +215,8 @@ class _WithdrawHistoryScreenState extends State<WithdrawHistoryScreen> {
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: st == 'cancelled' || st == 'expired'
-                    ? AmyalColors.textMuted
-                    : AmyalColors.primary,
+                    ? AmialColors.textMuted
+                    : AmialColors.primary,
                 decoration: st == 'cancelled' || st == 'expired'
                     ? TextDecoration.lineThrough
                     : null,
@@ -224,7 +224,7 @@ class _WithdrawHistoryScreenState extends State<WithdrawHistoryScreen> {
           const Spacer(),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             const Text('التاريخ والوقت',
-                style: TextStyle(fontSize: 10, color: AmyalColors.textMuted)),
+                style: TextStyle(fontSize: 10, color: AmialColors.textMuted)),
             Text(_fmtDate(r['created_at'] ?? r['expires_at']),
                 style: const TextStyle(fontSize: 12)),
           ]),

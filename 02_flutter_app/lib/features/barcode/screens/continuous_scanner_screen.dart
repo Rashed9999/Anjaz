@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:amyal_pay/features/shared/widgets/scanner_shell.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/barcode/domain/repositories/barcode_repo.dart';
+import 'package:amial_pay/features/shared/widgets/scanner_shell.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/barcode/domain/repositories/barcode_repo.dart';
 
 /// AMIAL-BARCODE-001 — شاشة المسح المستمر.
 ///
@@ -272,7 +272,7 @@ class _ContinuousScannerScreenState extends State<ContinuousScannerScreen>
       child: Container(
         width: 250, height: 180,
         decoration: BoxDecoration(
-          border: Border.all(color: AmyalColors.yellow, width: 3),
+          border: Border.all(color: AmialColors.yellow, width: 3),
           borderRadius: BorderRadius.circular(16),
         ),
       ),
@@ -305,7 +305,7 @@ class _ContinuousScannerScreenState extends State<ContinuousScannerScreen>
           borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
         ),
         child: const Row(children: [
-          Icon(Icons.qr_code_scanner, color: AmyalColors.primary),
+          Icon(Icons.qr_code_scanner, color: AmialColors.primary),
           SizedBox(width: 10),
           Expanded(child: Text('وجّه الكاميرا نحو الباركود', style: TextStyle(fontSize: 14))),
         ]),
@@ -337,14 +337,14 @@ class _ContinuousScannerScreenState extends State<ContinuousScannerScreen>
               Text('${_cart.length} صنف',
                   style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
               Text('${_total.toStringAsFixed(0)} ر.ي',
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmialColors.primary)),
             ])),
             FilledButton.icon(
               onPressed: _finish,
               icon: const Icon(Icons.check),
               label: const Text('إنهاء المسح'),
               style: FilledButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               ),
             ),
@@ -379,11 +379,11 @@ class _ContinuousScannerScreenState extends State<ContinuousScannerScreen>
           margin: const EdgeInsets.symmetric(horizontal: 6),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: AmyalColors.primary.withValues(alpha: 0.1),
+            color: AmialColors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Text('${item.quantity}',
-              style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+              style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
         ),
         InkWell(
           onTap: () => _changeQuantity(i, 1),
@@ -398,7 +398,7 @@ class _ContinuousScannerScreenState extends State<ContinuousScannerScreen>
           Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               maxLines: 1, overflow: TextOverflow.ellipsis),
           Text('${(item.unitPrice * item.quantity).toStringAsFixed(0)} ر.ي',
-              style: TextStyle(color: AmyalColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
+              style: TextStyle(color: AmialColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
         ])),
       ]),
     );
@@ -454,7 +454,7 @@ class _ScanFeedback {
   );
   factory _ScanFeedback.notFound(String barcode) => _ScanFeedback(
     message: 'باركود غير موجود: $barcode',
-    color: AmyalColors.red,
+    color: AmialColors.red,
     icon: Icons.error_outline,
   );
   factory _ScanFeedback.duplicate(String msg) => _ScanFeedback(

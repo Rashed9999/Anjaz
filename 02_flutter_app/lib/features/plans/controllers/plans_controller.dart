@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/plans/domain/repositories/plans_repo.dart';
+import 'package:amial_pay/features/plans/domain/repositories/plans_repo.dart';
 
 /// CRITICAL-001-PLANS — متحكّم الخطط.
 class PlansController extends GetxController implements GetxService {

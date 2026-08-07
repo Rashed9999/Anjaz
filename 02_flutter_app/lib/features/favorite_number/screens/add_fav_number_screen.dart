@@ -1,24 +1,24 @@
 import 'package:country_code_picker/country_code_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/custom_button_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_text_field_widget.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/auth/domain/models/user_short_data_model.dart';
-import 'package:amyal_pay/features/camera_verification/controllers/qr_code_scanner_controller.dart';
-import 'package:amyal_pay/features/favorite_number/controllers/fav_number_controller.dart';
-import 'package:amyal_pay/features/favorite_number/domain/enums/fav_type.dart';
-import 'package:amyal_pay/features/favorite_number/domain/models/favorite_list_model.dart';
-import 'package:amyal_pay/features/favorite_number/screens/search_contact_screen.dart';
-import 'package:amyal_pay/features/favorite_number/widgets/fav_type_item_widget.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/features/transaction_money/controllers/contact_controller.dart';
-import 'package:amyal_pay/features/transaction_money/domain/models/contact_tag_model.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/helper/phone_cheker_helper.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/custom_button_widget.dart';
+import 'package:amial_pay/common/widgets/custom_text_field_widget.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/auth/domain/models/user_short_data_model.dart';
+import 'package:amial_pay/features/camera_verification/controllers/qr_code_scanner_controller.dart';
+import 'package:amial_pay/features/favorite_number/controllers/fav_number_controller.dart';
+import 'package:amial_pay/features/favorite_number/domain/enums/fav_type.dart';
+import 'package:amial_pay/features/favorite_number/domain/models/favorite_list_model.dart';
+import 'package:amial_pay/features/favorite_number/screens/search_contact_screen.dart';
+import 'package:amial_pay/features/favorite_number/widgets/fav_type_item_widget.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/features/transaction_money/controllers/contact_controller.dart';
+import 'package:amial_pay/features/transaction_money/domain/models/contact_tag_model.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/helper/phone_cheker_helper.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
 
 class AddFavNumberScreen extends StatefulWidget {
   final FavouriteModel? favNumber;
@@ -62,7 +62,7 @@ class _AddFavNumberScreenState extends State<AddFavNumberScreen> {
     final bool isEdit = widget.favNumber != null;
 
     return Scaffold(
-      appBar: AppBar(title: Text(isEdit ? 'edit_favorite_number'.tr : 'favorite_number'.tr), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
+      appBar: AppBar(title: Text(isEdit ? 'edit_favorite_number'.tr : 'favorite_number'.tr), backgroundColor: AmialColors.primary, foregroundColor: Colors.white, elevation: 0),
       body: Padding(
         padding: const EdgeInsets.all(Dimensions.paddingSizeLarge),
         child: Form(key: _formKey, child: Column(children: [

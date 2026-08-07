@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/safe_payment/controllers/safe_payment_controller.dart';
-import 'package:amyal_pay/features/safe_payment/domain/models/safe_payment_models.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/safe_payment/controllers/safe_payment_controller.dart';
+import 'package:amial_pay/features/safe_payment/domain/models/safe_payment_models.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SAFEPAY-DISPUTE-001 — فتح النزاع بسبب منظّم.
 ///
@@ -104,7 +104,7 @@ class _DisputeSheetState extends State<DisputeSheet> {
                   width: 42,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AmyalColors.border,
+                    color: AmialColors.border,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -115,13 +115,13 @@ class _DisputeSheetState extends State<DisputeSheet> {
                   style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
-                      color: AmyalColors.textPrimary)),
+                      color: AmialColors.textPrimary)),
               const SizedBox(height: 6),
               const Text(
                 'المبلغ محجوز ولن يصل البائع حتى تُحسم المراجعة. اختر السبب '
                 'الأقرب واشرح ما حدث.',
                 style: TextStyle(
-                    fontSize: 12.5, height: 1.7, color: AmyalColors.textSecondary),
+                    fontSize: 12.5, height: 1.7, color: AmialColors.textSecondary),
               ),
               const SizedBox(height: 16),
 
@@ -135,14 +135,14 @@ class _DisputeSheetState extends State<DisputeSheet> {
               if (reasons.isEmpty)
                 const Text(
                   'تعذّر جلب قائمة الأسباب — اشرح المشكلة نصّاً وسنراجعها.',
-                  style: TextStyle(fontSize: 11.5, color: AmyalColors.textMuted),
+                  style: TextStyle(fontSize: 11.5, color: AmialColors.textMuted),
                 )
               else
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    for (final AmyalDisputeReason r in reasons)
+                    for (final AmialDisputeReason r in reasons)
                       ChoiceChip(
                         label: Text(r.label, style: const TextStyle(fontSize: 12)),
                         selected: _code == r.code,
@@ -152,11 +152,11 @@ class _DisputeSheetState extends State<DisputeSheet> {
                                   _code = r.code;
                                   _error = null;
                                 }),
-                        selectedColor: AmyalColors.primary.withValues(alpha: 0.12),
+                        selectedColor: AmialColors.primary.withValues(alpha: 0.12),
                         labelStyle: TextStyle(
                           color: _code == r.code
-                              ? AmyalColors.primary
-                              : AmyalColors.textSecondary,
+                              ? AmialColors.primary
+                              : AmialColors.textSecondary,
                           fontWeight:
                               _code == r.code ? FontWeight.bold : FontWeight.normal,
                         ),
@@ -203,7 +203,7 @@ class _DisputeSheetState extends State<DisputeSheet> {
               if (_error != null) ...[
                 const SizedBox(height: 8),
                 Text(_error!,
-                    style: const TextStyle(color: AmyalColors.red, fontSize: 12.5)),
+                    style: const TextStyle(color: AmialColors.red, fontSize: 12.5)),
               ],
 
               const SizedBox(height: 14),
@@ -220,7 +220,7 @@ class _DisputeSheetState extends State<DisputeSheet> {
                       : const Icon(Icons.gavel_rounded),
                   label: Text(_busy ? 'جارٍ الفتح…' : 'فتح النزاع'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.red,
+                    backgroundColor: AmialColors.red,
                     foregroundColor: Colors.white,
                   ),
                 ),

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/safe_payment/controllers/safe_payment_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/safe_payment/controllers/safe_payment_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SAFEPAY-CODE-001 — رمز تأكيد التسليم في الواجهة.
 ///
@@ -26,11 +26,11 @@ class BuyerDeliveryCodeCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AmyalColors.yellowDark.withValues(alpha: 0.5), width: 1.4),
+        border: Border.all(color: AmialColors.yellowDark.withValues(alpha: 0.5), width: 1.4),
       ),
       child: Column(children: [
         const Row(children: [
-          Icon(Icons.pin_rounded, color: AmyalColors.yellowDark, size: 20),
+          Icon(Icons.pin_rounded, color: AmialColors.yellowDark, size: 20),
           SizedBox(width: 8),
           Text('رمز تأكيد الاستلام',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
@@ -40,7 +40,7 @@ class BuyerDeliveryCodeCard extends StatelessWidget {
           alignment: Alignment.centerRight,
           child: Text(
             'أعطِ هذا الرمز للبائع لحظة استلامك — لن يستطيع تأكيد التسليم بدونه.',
-            style: TextStyle(fontSize: 11.5, height: 1.6, color: AmyalColors.textSecondary),
+            style: TextStyle(fontSize: 11.5, height: 1.6, color: AmialColors.textSecondary),
           ),
         ),
         const SizedBox(height: 14),
@@ -72,12 +72,12 @@ class BuyerDeliveryCodeCard extends StatelessWidget {
                   fontSize: 30,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 5,
-                  color: AmyalColors.primary,
+                  color: AmialColors.primary,
                 ),
               ),
               const SizedBox(height: 4),
               const Text('اضغط للنسخ',
-                  style: TextStyle(fontSize: 10, color: AmyalColors.textMuted)),
+                  style: TextStyle(fontSize: 10, color: AmialColors.textMuted)),
             ]),
           ),
         ),
@@ -86,17 +86,17 @@ class BuyerDeliveryCodeCard extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: AmyalColors.red.withValues(alpha: 0.06),
+            color: AmialColors.red.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(8),
           ),
           child: const Row(children: [
-            Icon(Icons.warning_amber_rounded, size: 17, color: AmyalColors.red),
+            Icon(Icons.warning_amber_rounded, size: 17, color: AmialColors.red),
             SizedBox(width: 8),
             Expanded(
               child: Text(
                 'لا تُعطِ الرمز قبل أن تفتح الطرد وتتأكّد من محتواه. '
                 'إعطاؤه يعني إقرارك بالاستلام.',
-                style: TextStyle(fontSize: 11, height: 1.6, color: AmyalColors.red),
+                style: TextStyle(fontSize: 11, height: 1.6, color: AmialColors.red),
               ),
             ),
           ]),
@@ -150,7 +150,7 @@ class _SellerDeliveryCodeEntryState extends State<SellerDeliveryCodeEntry> {
     if (ok) _code.clear();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(ok ? 'تم تأكيد التسليم برمز المشتري ✓' : ctrl.lastError.value),
-      backgroundColor: ok ? Colors.green.shade700 : AmyalColors.red,
+      backgroundColor: ok ? Colors.green.shade700 : AmialColors.red,
     ));
   }
 
@@ -161,11 +161,11 @@ class _SellerDeliveryCodeEntryState extends State<SellerDeliveryCodeEntry> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AmyalColors.border),
+        border: Border.all(color: AmialColors.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         const Row(children: [
-          Icon(Icons.password_rounded, color: AmyalColors.primary, size: 20),
+          Icon(Icons.password_rounded, color: AmialColors.primary, size: 20),
           SizedBox(width: 8),
           Text('تأكيد التسليم بالرمز',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
@@ -174,7 +174,7 @@ class _SellerDeliveryCodeEntryState extends State<SellerDeliveryCodeEntry> {
         const Text(
           'اطلب من المشتري رمز الاستلام الظاهر في تطبيقه وأدخله هنا. '
           'التسليم المؤكَّد برمز لا يُنازَع فيه.',
-          style: TextStyle(fontSize: 11.5, height: 1.6, color: AmyalColors.textSecondary),
+          style: TextStyle(fontSize: 11.5, height: 1.6, color: AmialColors.textSecondary),
         ),
         const SizedBox(height: 12),
         Row(children: [
@@ -203,7 +203,7 @@ class _SellerDeliveryCodeEntryState extends State<SellerDeliveryCodeEntry> {
             child: ElevatedButton(
               onPressed: _busy || _code.text.trim().length < 4 ? null : _submit,
               style: ElevatedButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 foregroundColor: Colors.white,
               ),
               child: _busy
@@ -217,7 +217,7 @@ class _SellerDeliveryCodeEntryState extends State<SellerDeliveryCodeEntry> {
         ]),
         const Text(
           'ثلاث محاولات فقط — بعدها يلزم تدخّل الدعم.',
-          style: TextStyle(fontSize: 10.5, color: AmyalColors.textMuted),
+          style: TextStyle(fontSize: 10.5, color: AmialColors.textMuted),
         ),
       ]),
     );

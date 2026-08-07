@@ -1,12 +1,12 @@
 {
-    "name": "amyalpay/backend",
+    "name": "amialpay/backend",
     "type": "project",
-    "description": "Amyal Pay - Yemeni fintech wallet (refactored from Cash6). AMIAL-* features layered on top.",
+    "description": "Amial Pay - Yemeni fintech wallet (refactored from Cash6). AMIAL-* features layered on top.",
     "keywords": [
         "fintech",
         "wallet",
         "laravel",
-        "amyal-pay"
+        "amial-pay"
     ],
     "license": "proprietary",
     "require": {

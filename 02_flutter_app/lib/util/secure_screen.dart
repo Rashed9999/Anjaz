@@ -19,7 +19,7 @@ import 'package:flutter/services.dart';
 class SecureScreen {
   SecureScreen._();
 
-  static const MethodChannel _ch = MethodChannel('amyal_pay/secure_screen');
+  static const MethodChannel _ch = MethodChannel('amial_pay/secure_screen');
 
   static Future<void> enable() => _invoke('enable');
   static Future<void> disable() => _invoke('disable');

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/theme/amial_spacing.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/theme/amial_spacing.dart';
 
-/// AMYAL-DS-001 — الزرّ الموحّد لأميال.
+/// AMIAL-DS-001 — الزرّ الموحّد لأميال.
 ///
 /// نوع واحد لكل الأزرار عبر التطبيق ليتوحّد الارتفاع والزوايا والحالة
 /// (تحميل/تعطيل). بدل تكرار `ElevatedButton.styleFrom(...)` في كل شاشة.
@@ -35,19 +35,19 @@ class AmialButton extends StatelessWidget {
     late final BorderSide side;
     switch (kind) {
       case AmialButtonKind.primary:
-        bg = AmyalColors.primary;
+        bg = AmialColors.primary;
         fg = Colors.white;
         side = BorderSide.none;
         break;
       case AmialButtonKind.secondary:
-        bg = AmyalColors.yellow;
-        fg = AmyalColors.primary;
+        bg = AmialColors.yellow;
+        fg = AmialColors.primary;
         side = BorderSide.none;
         break;
       case AmialButtonKind.outline:
         bg = Colors.transparent;
-        fg = AmyalColors.primary;
-        side = const BorderSide(color: AmyalColors.primary, width: 1.4);
+        fg = AmialColors.primary;
+        side = const BorderSide(color: AmialColors.primary, width: 1.4);
         break;
       case AmialButtonKind.dark:
         bg = const Color(0xFF14171A);

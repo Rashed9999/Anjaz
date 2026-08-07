@@ -1,17 +1,17 @@
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/safe_payment/domain/models/safe_payment_models.dart';
-import 'package:amyal_pay/features/safe_payment/domain/repositories/safe_payment_repo.dart';
+import 'package:amial_pay/features/safe_payment/domain/models/safe_payment_models.dart';
+import 'package:amial_pay/features/safe_payment/domain/repositories/safe_payment_repo.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
 class SafePaymentController extends GetxController implements GetxService {
   final SafePaymentRepo repo;
   SafePaymentController({required this.repo});
 
-  final RxList<AmyalSafePayment> payments = <AmyalSafePayment>[].obs;
-  final Rx<AmyalSafePayment?> selectedPayment = Rx<AmyalSafePayment?>(null);
-  final Rx<AmyalSafePaymentActions> availableActions =
-      AmyalSafePaymentActions.empty().obs;
+  final RxList<AmialSafePayment> payments = <AmialSafePayment>[].obs;
+  final Rx<AmialSafePayment?> selectedPayment = Rx<AmialSafePayment?>(null);
+  final Rx<AmialSafePaymentActions> availableActions =
+      AmialSafePaymentActions.empty().obs;
   final RxString yourRole = ''.obs; // buyer | seller
 
   final RxBool isLoading = false.obs;
@@ -25,13 +25,13 @@ class SafePaymentController extends GetxController implements GetxService {
   final RxBool deliveryCodeVerified = false.obs;
 
   /// أدلّة العملية مجموعةً بالمرحلة.
-  final RxMap<String, List<AmyalEvidenceItem>> evidence =
-      <String, List<AmyalEvidenceItem>>{}.obs;
+  final RxMap<String, List<AmialEvidenceItem>> evidence =
+      <String, List<AmialEvidenceItem>>{}.obs;
 
-  final Rx<AmyalTrustSummary?> counterpartyTrust = Rx<AmyalTrustSummary?>(null);
+  final Rx<AmialTrustSummary?> counterpartyTrust = Rx<AmialTrustSummary?>(null);
 
   /// أسباب النزاع — تُجلب مرّة وتبقى.
-  final RxList<AmyalDisputeReason> disputeReasons = <AmyalDisputeReason>[].obs;
+  final RxList<AmialDisputeReason> disputeReasons = <AmialDisputeReason>[].obs;
 
   Future<void> loadList({String role = 'all', String? status}) async {
     try {
@@ -40,7 +40,7 @@ class SafePaymentController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map) {
         final items = ((r.body['meta'] ?? {})['items'] as List? ?? []);
         payments.value = items
-            .map((j) => AmyalSafePayment.fromJson(Map<String, dynamic>.from(j)))
+            .map((j) => AmialSafePayment.fromJson(Map<String, dynamic>.from(j)))
             .toList();
         lastError.value = '';
       } else {
@@ -60,17 +60,17 @@ class SafePaymentController extends GetxController implements GetxService {
       final r = await repo.show(ulid);
       if (r.statusCode == 200 && r.body is Map) {
         final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
-        selectedPayment.value = AmyalSafePayment.fromJson(
+        selectedPayment.value = AmialSafePayment.fromJson(
             Map<String, dynamic>.from(meta['payment'] ?? {}));
         yourRole.value = (meta['your_role'] ?? '').toString();
-        availableActions.value = AmyalSafePaymentActions.fromJson(
+        availableActions.value = AmialSafePaymentActions.fromJson(
             Map<String, dynamic>.from(meta['can_actions'] ?? {}));
 
         deliveryCode.value = (meta['delivery_code'] ?? '').toString();
         deliveryCodeVerified.value = meta['delivery_code_verified'] == true;
 
         counterpartyTrust.value = meta['counterparty_trust'] is Map
-            ? AmyalTrustSummary.fromJson(
+            ? AmialTrustSummary.fromJson(
                 Map<String, dynamic>.from(meta['counterparty_trust']))
             : null;
 
@@ -169,7 +169,7 @@ class SafePaymentController extends GetxController implements GetxService {
       final r = await repo.disputeReasons();
       if (r.statusCode == 200 && r.body is Map && r.body['data'] is List) {
         disputeReasons.value = (r.body['data'] as List)
-            .map((j) => AmyalDisputeReason.fromJson(Map<String, dynamic>.from(j)))
+            .map((j) => AmialDisputeReason.fromJson(Map<String, dynamic>.from(j)))
             .toList();
       }
     } catch (_) {
@@ -196,12 +196,12 @@ class SafePaymentController extends GetxController implements GetxService {
       return;
     }
 
-    final parsed = <String, List<AmyalEvidenceItem>>{};
+    final parsed = <String, List<AmialEvidenceItem>>{};
     raw.forEach((stage, items) {
       if (items is! List) return;
       parsed['$stage'] = items
           .whereType<Map>()
-          .map((j) => AmyalEvidenceItem.fromJson(Map<String, dynamic>.from(j)))
+          .map((j) => AmialEvidenceItem.fromJson(Map<String, dynamic>.from(j)))
           .toList();
     });
 

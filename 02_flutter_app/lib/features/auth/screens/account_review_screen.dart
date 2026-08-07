@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/auth/screens/unified_login_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/auth/screens/unified_login_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-VERIFY-GATE — شاشة حالة الحساب غير المعتمد.
 ///
@@ -24,7 +24,7 @@ class AccountReviewScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -38,8 +38,8 @@ class AccountReviewScreen extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: _rejected
-                        ? AmyalColors.red.withValues(alpha: 0.12)
-                        : AmyalColors.yellow.withValues(alpha: 0.25),
+                        ? AmialColors.red.withValues(alpha: 0.12)
+                        : AmialColors.yellow.withValues(alpha: 0.25),
                     borderRadius: BorderRadius.circular(30),
                   ),
                   child: Icon(
@@ -47,7 +47,7 @@ class AccountReviewScreen extends StatelessWidget {
                         ? Icons.gpp_bad_outlined
                         : Icons.hourglass_top_rounded,
                     size: 60,
-                    color: _rejected ? AmyalColors.red : AmyalColors.primary,
+                    color: _rejected ? AmialColors.red : AmialColors.primary,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -56,7 +56,7 @@ class AccountReviewScreen extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: AmyalColors.primary,
+                    color: AmialColors.primary,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -64,7 +64,7 @@ class AccountReviewScreen extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     'مرحباً $userName',
-                    style: const TextStyle(color: AmyalColors.textSecondary),
+                    style: const TextStyle(color: AmialColors.textSecondary),
                   ),
                 ],
                 const SizedBox(height: 16),
@@ -77,7 +77,7 @@ class AccountReviewScreen extends StatelessWidget {
                           'ساعة عمل، وستصلك رسالة فور اعتماد الحساب.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: AmyalColors.textSecondary,
+                    color: AmialColors.textSecondary,
                     height: 1.7,
                     fontSize: 14,
                   ),
@@ -90,7 +90,7 @@ class AccountReviewScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AmyalColors.border),
+                    border: Border.all(color: AmialColors.border),
                   ),
                   child: Column(
                     children: [
@@ -129,7 +129,7 @@ class AccountReviewScreen extends StatelessWidget {
                     onPressed: () =>
                         Get.offAll(() => const UnifiedLoginScreen()),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AmyalColors.primary,
+                      backgroundColor: AmialColors.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 15),
                       shape: RoundedRectangleBorder(
@@ -143,7 +143,7 @@ class AccountReviewScreen extends StatelessWidget {
                   'يمكنك تسجيل الدخول لاحقاً للتحقّق من حالة حسابك.',
                   style: TextStyle(
                     fontSize: 12,
-                    color: AmyalColors.textMuted,
+                    color: AmialColors.textMuted,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -169,14 +169,14 @@ class AccountReviewScreen extends StatelessWidget {
       bg = Colors.green.withValues(alpha: 0.15);
       fg = Colors.green.shade700;
     } else if (failed) {
-      bg = AmyalColors.red.withValues(alpha: 0.15);
-      fg = AmyalColors.red;
+      bg = AmialColors.red.withValues(alpha: 0.15);
+      fg = AmialColors.red;
     } else if (active) {
-      bg = AmyalColors.yellow.withValues(alpha: 0.3);
-      fg = AmyalColors.primary;
+      bg = AmialColors.yellow.withValues(alpha: 0.3);
+      fg = AmialColors.primary;
     } else {
       bg = const Color(0xFFF0F1F3);
-      fg = AmyalColors.textMuted;
+      fg = AmialColors.textMuted;
     }
     return Row(
       children: [
@@ -193,7 +193,7 @@ class AccountReviewScreen extends StatelessWidget {
             title,
             style: TextStyle(
               fontWeight: FontWeight.w600,
-              color: dimmed ? AmyalColors.textMuted : AmyalColors.textPrimary,
+              color: dimmed ? AmialColors.textMuted : AmialColors.textPrimary,
             ),
           ),
         ),
@@ -206,7 +206,7 @@ class AccountReviewScreen extends StatelessWidget {
         child: Container(
           height: 20,
           width: 2,
-          color: AmyalColors.border,
+          color: AmialColors.border,
         ),
       );
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SHIFT-CLOSE-001 — «إقفال الوردية» (باقة الأعمال فأعلى).
 ///
@@ -51,7 +51,7 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _open() async {
     final floatCtrl = TextEditingController(text: '0');
@@ -110,7 +110,7 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
 
   void _showResult(Map<String, dynamic> s) {
     final variance = double.tryParse('${s['variance']}') ?? 0;
-    final color = variance == 0 ? const Color(0xFF2E7D32) : AmyalColors.red;
+    final color = variance == 0 ? const Color(0xFF2E7D32) : AmialColors.red;
     final label = variance == 0 ? 'مطابق تماماً' : variance > 0 ? 'زيادة' : 'عجز';
     showDialog(context: context, builder: (ctx) => AlertDialog(
       title: Row(children: [Icon(variance == 0 ? Icons.check_circle : Icons.warning, color: color), const SizedBox(width: 8), const Text('تقرير Z')]),
@@ -129,14 +129,14 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
-      appBar: AppBar(title: const Text('إقفال الوردية'), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+      backgroundColor: AmialColors.background,
+      appBar: AppBar(title: const Text('إقفال الوردية'), backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(child: Padding(padding: const EdgeInsets.all(24),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.workspace_premium, size: 56, color: AmyalColors.yellowDark),
+                    const Icon(Icons.workspace_premium, size: 56, color: AmialColors.yellowDark),
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                   ])))
@@ -148,16 +148,16 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
 
   Widget _noShift() => Column(children: [
         const SizedBox(height: 40),
-        const Icon(Icons.point_of_sale, size: 64, color: AmyalColors.textSecondary),
+        const Icon(Icons.point_of_sale, size: 64, color: AmialColors.textSecondary),
         const SizedBox(height: 12),
         const Text('لا توجد وردية مفتوحة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 6),
         const Text('ابدأ وردية بتحديد النقد الافتتاحي في الدرج',
-            textAlign: TextAlign.center, style: TextStyle(color: AmyalColors.textSecondary)),
+            textAlign: TextAlign.center, style: TextStyle(color: AmialColors.textSecondary)),
         const SizedBox(height: 20),
         FilledButton.icon(onPressed: _open, icon: const Icon(Icons.play_arrow),
             label: const Text('بدء وردية'),
-            style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size(220, 52))),
+            style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size(220, 52))),
       ]);
 
   Widget _openShift() => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -165,7 +165,7 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
           child: Column(children: [
-            const Row(children: [Icon(Icons.receipt_long, color: AmyalColors.primary), SizedBox(width: 8),
+            const Row(children: [Icon(Icons.receipt_long, color: AmialColors.primary), SizedBox(width: 8),
               Text('تقرير X — لحظي', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))]),
             const Divider(height: 24),
             _row('الرصيد الافتتاحي', '${_shift!['opening_float']} ر.ي'),
@@ -173,8 +173,8 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
             const SizedBox(height: 6),
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: AmyalColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10)),
-              child: _row('المتوقّع في الدرج الآن', '${_x?['expected_cash'] ?? '0'} ر.ي', bold: true, color: AmyalColors.primary),
+              decoration: BoxDecoration(color: AmialColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(10)),
+              child: _row('المتوقّع في الدرج الآن', '${_x?['expected_cash'] ?? '0'} ر.ي', bold: true, color: AmialColors.primary),
             ),
           ]),
         ),
@@ -188,7 +188,7 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
         padding: const EdgeInsets.symmetric(vertical: 5),
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text(v, style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.normal, color: color, fontSize: bold ? 16 : 14)),
-          Text(k, style: const TextStyle(fontSize: 13, color: AmyalColors.textSecondary)),
+          Text(k, style: const TextStyle(fontSize: 13, color: AmialColors.textSecondary)),
         ]),
       );
 }

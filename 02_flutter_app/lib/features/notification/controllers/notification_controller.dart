@@ -1,7 +1,7 @@
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/features/notification/domain/models/notification_model.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/features/notification/domain/models/notification_model.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/notification/domain/reposotories/notification_repo.dart';
+import 'package:amial_pay/features/notification/domain/reposotories/notification_repo.dart';
 
 class NotificationController extends GetxController implements GetxService {
   final NotificationRepo notificationRepo;

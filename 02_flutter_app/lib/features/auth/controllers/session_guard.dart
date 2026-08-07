@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/helper/route_helper.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/helper/route_helper.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SESSION-GUARD-001 — إغلاق الجلسة عند مغادرة التطبيق.
 ///
@@ -128,7 +128,7 @@ class SessionGuard with WidgetsBindingObserver {
             'تم إغلاق الجلسة تلقائياً لحمايتك — سجّل الدخول للمتابعة',
             textAlign: TextAlign.center,
           ),
-          backgroundColor: AmyalColors.primary,
+          backgroundColor: AmialColors.primary,
           duration: Duration(seconds: 4),
           behavior: SnackBarBehavior.floating,
         ),

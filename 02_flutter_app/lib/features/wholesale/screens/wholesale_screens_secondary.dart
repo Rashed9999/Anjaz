@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/wholesale/controllers/wholesale_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
 
 // =========================================================================
 // قائمة الفواتير
@@ -26,7 +26,7 @@ class _State extends State<WholesaleInvoicesListScreenImpl> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('الفواتير'),
         actions: [
@@ -60,7 +60,7 @@ class _State extends State<WholesaleInvoicesListScreenImpl> {
     final (Color color, String label) = switch(status) {
       'paid' => (Colors.green, 'مدفوعة'),
       'partial_paid' => (Colors.orange, 'جزئية'),
-      'issued' => (AmyalColors.primary, 'قيد السداد'),
+      'issued' => (AmialColors.primary, 'قيد السداد'),
       'overdue' => (Colors.red, 'متأخّرة'),
       'voided' => (Colors.grey, 'مُبطَلة'),
       _ => (Colors.grey, status),
@@ -92,7 +92,7 @@ class _State extends State<WholesaleInvoicesListScreenImpl> {
           const SizedBox(height: 4),
           Row(children: [
             Text('${inv['total_amount']} ر.ي',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: AmialColors.primary)),
             const Spacer(),
             if (balance > 0)
               Text('متبقّي: ${balance.toStringAsFixed(0)}',
@@ -127,7 +127,7 @@ class _WholesaleInvoiceDetailsState extends State<WholesaleInvoiceDetailsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تفاصيل الفاتورة'),
         actions: [
@@ -144,7 +144,7 @@ class _WholesaleInvoiceDetailsState extends State<WholesaleInvoiceDetailsScreen>
               if (!ok) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   content: Text(c.lastError.value),
-                  backgroundColor: AmyalColors.red,
+                  backgroundColor: AmialColors.red,
                 ));
               }
             },
@@ -211,7 +211,7 @@ class _WholesaleInvoiceDetailsState extends State<WholesaleInvoiceDetailsScreen>
                 if (double.parse('${inv['tax_amount']}') > 0)
                   _totalRow('الضريبة (${inv['tax_rate']}%)', '+ ${inv['tax_amount']}'),
                 const Divider(),
-                _totalRow('الإجمالي', '${inv['total_amount']}', bold: true, color: AmyalColors.primary),
+                _totalRow('الإجمالي', '${inv['total_amount']}', bold: true, color: AmialColors.primary),
                 if (double.parse('${inv['paid_amount']}') > 0)
                   _totalRow('المدفوع', '${inv['paid_amount']}', color: Colors.green),
                 if (balance > 0)
@@ -253,7 +253,7 @@ class _WholesaleInvoiceDetailsState extends State<WholesaleInvoiceDetailsScreen>
               icon: const Icon(Icons.payments),
               label: Text('تسجيل تحصيل (${balance.toStringAsFixed(0)} ر.ي)'),
               style: FilledButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 minimumSize: const Size.fromHeight(48),
               ),
             ),
@@ -312,7 +312,7 @@ class _WholesaleInvoiceDetailsState extends State<WholesaleInvoiceDetailsScreen>
             if (ok) Navigator.pop(ctx);
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(ok ? 'تم التحصيل' : c.lastError.value),
-              backgroundColor: ok ? Colors.green : AmyalColors.red,
+              backgroundColor: ok ? Colors.green : AmialColors.red,
             ));
           },
           child: const Text('تسجيل'),
@@ -344,7 +344,7 @@ class _AgingState extends State<WholesaleAgingReportScreenImpl> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تقرير تقادم الديون'),
       ),
@@ -367,7 +367,7 @@ class _AgingState extends State<WholesaleAgingReportScreenImpl> {
                 decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
                 child: Column(children: [
                   Text('${r['total_receivable']?.toStringAsFixed?.call(0) ?? r['total_receivable']} ر.ي',
-                      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AmialColors.primary)),
                   const Text('إجمالي المستحقّات'),
                 ]),
               ),
@@ -387,7 +387,7 @@ class _AgingState extends State<WholesaleAgingReportScreenImpl> {
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
                   child: Row(children: [
                     Text('${m['total']?.toStringAsFixed?.call(0) ?? m['total']} ر.ي',
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.red)),
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.red)),
                     const Spacer(),
                     Text('${m['invoices_count']} فاتورة', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
                     const SizedBox(width: 8),
@@ -446,7 +446,7 @@ class _StatementState extends State<WholesaleCustomerStatementScreenImpl> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Text(widget.customer['full_name'] ?? 'كشف حساب'),
       ),
@@ -464,7 +464,7 @@ class _StatementState extends State<WholesaleCustomerStatementScreenImpl> {
             child: Row(children: [
               Expanded(child: _summaryBox('إجمالي الفواتير',
                   '${summary['total_invoiced']?.toStringAsFixed?.call(0) ?? summary['total_invoiced']}',
-                  AmyalColors.primary)),
+                  AmialColors.primary)),
               const SizedBox(width: 6),
               Expanded(child: _summaryBox('إجمالي المدفوع',
                   '${summary['total_paid']?.toStringAsFixed?.call(0) ?? summary['total_paid']}',
@@ -472,7 +472,7 @@ class _StatementState extends State<WholesaleCustomerStatementScreenImpl> {
               const SizedBox(width: 6),
               Expanded(child: _summaryBox('الرصيد',
                   '${summary['closing_balance']?.toStringAsFixed?.call(0) ?? summary['closing_balance']}',
-                  AmyalColors.red)),
+                  AmialColors.red)),
             ]),
           ),
           Expanded(child: ListView.builder(
@@ -503,7 +503,7 @@ class _StatementState extends State<WholesaleCustomerStatementScreenImpl> {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
       child: Row(children: [
         Icon(isInvoice ? Icons.receipt : Icons.payments,
-            color: isInvoice ? AmyalColors.red : Colors.green, size: 20),
+            color: isInvoice ? AmialColors.red : Colors.green, size: 20),
         const SizedBox(width: 8),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(e['description'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
@@ -511,7 +511,7 @@ class _StatementState extends State<WholesaleCustomerStatementScreenImpl> {
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text(isInvoice ? '+ ${e['debit']}' : '- ${e['credit']}',
-              style: TextStyle(color: isInvoice ? AmyalColors.red : Colors.green,
+              style: TextStyle(color: isInvoice ? AmialColors.red : Colors.green,
                   fontWeight: FontWeight.bold, fontSize: 13)),
           Text('رصيد: ${e['running_balance']}',
               style: TextStyle(color: Colors.grey.shade600, fontSize: 10)),

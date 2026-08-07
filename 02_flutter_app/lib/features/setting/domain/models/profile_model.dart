@@ -1,7 +1,7 @@
 
 import 'dart:convert';
 
-import 'package:amyal_pay/features/setting/domain/enums/kyc_verificaiton.dart';
+import 'package:amial_pay/features/setting/domain/enums/kyc_verificaiton.dart';
 
 ProfileModel userInfoFromJson(String str) => ProfileModel.fromJson(json.decode(str));
 

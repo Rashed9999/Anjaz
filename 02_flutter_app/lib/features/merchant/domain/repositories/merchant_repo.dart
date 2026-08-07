@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/data/api/idempotency_key_generator.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/data/api/idempotency_key_generator.dart';
 
 /// AMIAL-MERCHANT-APP-001 (v1.6)
 class MerchantRepo extends GetxService {

@@ -1,14 +1,14 @@
 /// AMIAL-DONATIONS-001 (v1.2) — Flutter models
 library;
 
-class AmyalCharityCategory {
+class AmialCharityCategory {
   final int id;
   final String code;
   final String nameAr;
   final String? icon;
   final int sortOrder;
 
-  AmyalCharityCategory({
+  AmialCharityCategory({
     required this.id,
     required this.code,
     required this.nameAr,
@@ -16,7 +16,7 @@ class AmyalCharityCategory {
     required this.sortOrder,
   });
 
-  factory AmyalCharityCategory.fromJson(Map<String, dynamic> j) => AmyalCharityCategory(
+  factory AmialCharityCategory.fromJson(Map<String, dynamic> j) => AmialCharityCategory(
     id: j['id'] ?? 0,
     code: j['code'] ?? '',
     nameAr: j['name_ar'] ?? '',
@@ -25,7 +25,7 @@ class AmyalCharityCategory {
   );
 }
 
-class AmyalCharityOrganization {
+class AmialCharityOrganization {
   final int id;
   final String orgUlid;
   final String nameAr;
@@ -37,7 +37,7 @@ class AmyalCharityOrganization {
   final int totalDonors;
   final String verificationStatus;
 
-  AmyalCharityOrganization({
+  AmialCharityOrganization({
     required this.id,
     required this.orgUlid,
     required this.nameAr,
@@ -50,8 +50,8 @@ class AmyalCharityOrganization {
     required this.verificationStatus,
   });
 
-  factory AmyalCharityOrganization.fromJson(Map<String, dynamic> j) =>
-      AmyalCharityOrganization(
+  factory AmialCharityOrganization.fromJson(Map<String, dynamic> j) =>
+      AmialCharityOrganization(
         id: j['id'] ?? 0,
         orgUlid: j['org_ulid'] ?? '',
         nameAr: j['name_ar'] ?? '',
@@ -67,7 +67,7 @@ class AmyalCharityOrganization {
   bool get isVerified => verificationStatus == 'verified';
 }
 
-class AmyalCharityCampaign {
+class AmialCharityCampaign {
   final int id;
   final String campaignUlid;
   final int orgId;
@@ -87,11 +87,11 @@ class AmyalCharityCampaign {
   final String status;
   final int donorCount;
   final bool isFeatured;
-  final AmyalCharityOrganization? organization;
-  final AmyalCharityCategory? category;
-  final List<AmyalRecentDonation>? recentDonations;
+  final AmialCharityOrganization? organization;
+  final AmialCharityCategory? category;
+  final List<AmialRecentDonation>? recentDonations;
 
-  AmyalCharityCampaign({
+  AmialCharityCampaign({
     required this.id,
     required this.campaignUlid,
     required this.orgId,
@@ -116,9 +116,9 @@ class AmyalCharityCampaign {
     this.recentDonations,
   });
 
-  factory AmyalCharityCampaign.fromJson(Map<String, dynamic> j) {
+  factory AmialCharityCampaign.fromJson(Map<String, dynamic> j) {
     final imgs = j['gallery_images'];
-    return AmyalCharityCampaign(
+    return AmialCharityCampaign(
       id: j['id'] ?? 0,
       campaignUlid: j['campaign_ulid'] ?? '',
       orgId: j['org_id'] ?? 0,
@@ -139,13 +139,13 @@ class AmyalCharityCampaign {
       donorCount: j['donor_count'] ?? 0,
       isFeatured: j['is_featured'] == true || j['is_featured'] == 1,
       organization: j['organization'] is Map
-          ? AmyalCharityOrganization.fromJson(Map<String, dynamic>.from(j['organization']))
+          ? AmialCharityOrganization.fromJson(Map<String, dynamic>.from(j['organization']))
           : null,
       category: j['category'] is Map
-          ? AmyalCharityCategory.fromJson(Map<String, dynamic>.from(j['category']))
+          ? AmialCharityCategory.fromJson(Map<String, dynamic>.from(j['category']))
           : null,
       recentDonations: (j['recent_donations'] as List?)
-          ?.map((d) => AmyalRecentDonation.fromJson(Map<String, dynamic>.from(d)))
+          ?.map((d) => AmialRecentDonation.fromJson(Map<String, dynamic>.from(d)))
           .toList(),
     );
   }
@@ -166,20 +166,20 @@ class AmyalCharityCampaign {
   }
 }
 
-class AmyalRecentDonation {
+class AmialRecentDonation {
   final String amount;
   final DateTime? donatedAt;
   final String donorName;
   final String? message;
 
-  AmyalRecentDonation({
+  AmialRecentDonation({
     required this.amount,
     this.donatedAt,
     required this.donorName,
     this.message,
   });
 
-  factory AmyalRecentDonation.fromJson(Map<String, dynamic> j) => AmyalRecentDonation(
+  factory AmialRecentDonation.fromJson(Map<String, dynamic> j) => AmialRecentDonation(
     amount: j['amount']?.toString() ?? '0',
     donatedAt: j['donated_at'] != null ? DateTime.tryParse(j['donated_at']) : null,
     donorName: j['donor_name'] ?? 'متبرع',
@@ -187,7 +187,7 @@ class AmyalRecentDonation {
   );
 }
 
-class AmyalDonation {
+class AmialDonation {
   final int id;
   final String donationUlid;
   final int campaignId;
@@ -199,10 +199,10 @@ class AmyalDonation {
   final String? donorMessage;
   final String status;
   final DateTime? donatedAt;
-  final AmyalCharityCampaign? campaign;
-  final AmyalCharityOrganization? organization;
+  final AmialCharityCampaign? campaign;
+  final AmialCharityOrganization? organization;
 
-  AmyalDonation({
+  AmialDonation({
     required this.id,
     required this.donationUlid,
     required this.campaignId,
@@ -218,7 +218,7 @@ class AmyalDonation {
     this.organization,
   });
 
-  factory AmyalDonation.fromJson(Map<String, dynamic> j) => AmyalDonation(
+  factory AmialDonation.fromJson(Map<String, dynamic> j) => AmialDonation(
     id: j['id'] ?? 0,
     donationUlid: j['donation_ulid'] ?? '',
     campaignId: j['campaign_id'] ?? 0,
@@ -231,10 +231,10 @@ class AmyalDonation {
     status: j['status'] ?? 'completed',
     donatedAt: j['donated_at'] != null ? DateTime.tryParse(j['donated_at']) : null,
     campaign: j['campaign'] is Map
-        ? AmyalCharityCampaign.fromJson(Map<String, dynamic>.from(j['campaign']))
+        ? AmialCharityCampaign.fromJson(Map<String, dynamic>.from(j['campaign']))
         : null,
     organization: j['organization'] is Map
-        ? AmyalCharityOrganization.fromJson(Map<String, dynamic>.from(j['organization']))
+        ? AmialCharityOrganization.fromJson(Map<String, dynamic>.from(j['organization']))
         : null,
   );
 

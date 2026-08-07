@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
-import 'package:amyal_pay/features/receipts/controllers/receipts_controller.dart';
-import 'package:amyal_pay/features/receipts/domain/models/receipt_models.dart';
-import 'package:amyal_pay/features/receipts/screens/receipt_detail_screen.dart';
-import 'package:amyal_pay/features/shared/utils/operation_status.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
+import 'package:amial_pay/features/receipts/controllers/receipts_controller.dart';
+import 'package:amial_pay/features/receipts/domain/models/receipt_models.dart';
+import 'package:amial_pay/features/receipts/screens/receipt_detail_screen.dart';
+import 'package:amial_pay/features/shared/utils/operation_status.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-RECEIPTS-001 (v0.9-D)
 ///
@@ -49,19 +49,19 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('الإيصالات'),
       ),
       body: RefreshIndicator(
         onRefresh: () => Get.find<ReceiptsController>().loadReceipts(refresh: true),
-        color: AmyalColors.primary,
+        color: AmialColors.primary,
         child: Obx(() {
           final ctrl = Get.find<ReceiptsController>();
 
           if (ctrl.isLoading.value && ctrl.receipts.isEmpty) {
             return const Center(
-              child: CircularProgressIndicator(color: AmyalColors.primary),
+              child: CircularProgressIndicator(color: AmialColors.primary),
             );
           }
 
@@ -70,14 +70,14 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
               children: [
                 SizedBox(height: MediaQuery.of(context).size.height * 0.2),
                 Icon(Icons.receipt_long_outlined,
-                    size: 80, color: AmyalColors.textMuted.withValues(alpha: 0.5)),
+                    size: 80, color: AmialColors.textMuted.withValues(alpha: 0.5)),
                 const SizedBox(height: 16),
                 Text(
                   ctrl.lastError.value.isNotEmpty
                       ? ctrl.lastError.value
                       : 'لا توجد إيصالات بعد',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: AmyalColors.textSecondary, fontSize: 14),
+                  style: TextStyle(color: AmialColors.textSecondary, fontSize: 14),
                 ),
                 const SizedBox(height: 12),
                 Center(
@@ -94,13 +94,13 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
             controller: _scrollController,
             padding: const EdgeInsets.symmetric(vertical: 8),
             itemCount: ctrl.receipts.length + (ctrl.hasMore.value ? 1 : 0),
-            separatorBuilder: (_, _) => const Divider(height: 1, color: AmyalColors.border),
+            separatorBuilder: (_, _) => const Divider(height: 1, color: AmialColors.border),
             itemBuilder: (context, index) {
               if (index >= ctrl.receipts.length) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 16),
                   child: Center(
-                      child: CircularProgressIndicator(color: AmyalColors.primary)),
+                      child: CircularProgressIndicator(color: AmialColors.primary)),
                 );
               }
               return _ReceiptListTile(receipt: ctrl.receipts[index]);
@@ -113,21 +113,21 @@ class _ReceiptsListScreenState extends State<ReceiptsListScreen> {
 }
 
 class _ReceiptListTile extends StatelessWidget {
-  final AmyalReceipt receipt;
+  final AmialReceipt receipt;
   const _ReceiptListTile({required this.receipt});
 
   @override
   Widget build(BuildContext context) {
     final isCredit = receipt.direction == 'credit';
-    final amountColor = isCredit ? Colors.green.shade700 : AmyalColors.red;
+    final amountColor = isCredit ? Colors.green.shade700 : AmialColors.red;
     final iconData = _iconForType(receipt.receiptType);
 
     return ListTile(
       tileColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: CircleAvatar(
-        backgroundColor: AmyalColors.yellow.withValues(alpha: 0.25),
-        child: Icon(iconData, color: AmyalColors.primary, size: 20),
+        backgroundColor: AmialColors.yellow.withValues(alpha: 0.25),
+        child: Icon(iconData, color: AmialColors.primary, size: 20),
       ),
       title: Text(
         receipt.arabicTypeLabel,
@@ -140,14 +140,14 @@ class _ReceiptListTile extends StatelessWidget {
             receipt.receiptNumber,
             style: TextStyle(
               fontSize: 11,
-              color: AmyalColors.textMuted,
+              color: AmialColors.textMuted,
               fontFamily: 'monospace',
             ),
           ),
           if (receipt.issuedAt != null)
             Text(
               _formatDate(receipt.issuedAt!),
-              style: TextStyle(fontSize: 11, color: AmyalColors.textSecondary),
+              style: TextStyle(fontSize: 11, color: AmialColors.textSecondary),
             ),
         ],
       ),

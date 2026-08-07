@@ -1,18 +1,18 @@
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/donations/domain/models/donation_models.dart';
-import 'package:amyal_pay/features/donations/domain/repositories/donations_repo.dart';
+import 'package:amial_pay/features/donations/domain/models/donation_models.dart';
+import 'package:amial_pay/features/donations/domain/repositories/donations_repo.dart';
 
 /// AMIAL-DONATIONS-001 (v1.2)
 class DonationsController extends GetxController implements GetxService {
   final DonationsRepo repo;
   DonationsController({required this.repo});
 
-  final RxList<AmyalCharityCategory> categories = <AmyalCharityCategory>[].obs;
-  final RxList<AmyalCharityCampaign> campaigns = <AmyalCharityCampaign>[].obs;
-  final RxList<AmyalCharityCampaign> featuredCampaigns = <AmyalCharityCampaign>[].obs;
-  final Rx<AmyalCharityCampaign?> selectedCampaign = Rx<AmyalCharityCampaign?>(null);
-  final RxList<AmyalDonation> myDonations = <AmyalDonation>[].obs;
+  final RxList<AmialCharityCategory> categories = <AmialCharityCategory>[].obs;
+  final RxList<AmialCharityCampaign> campaigns = <AmialCharityCampaign>[].obs;
+  final RxList<AmialCharityCampaign> featuredCampaigns = <AmialCharityCampaign>[].obs;
+  final Rx<AmialCharityCampaign?> selectedCampaign = Rx<AmialCharityCampaign?>(null);
+  final RxList<AmialDonation> myDonations = <AmialDonation>[].obs;
   final RxString selectedCategoryCode = ''.obs;
 
   final RxBool isLoading = false.obs;
@@ -26,7 +26,7 @@ class DonationsController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map) {
         final items = ((r.body['meta'] ?? {})['categories'] as List? ?? []);
         categories.value = items
-            .map((j) => AmyalCharityCategory.fromJson(Map<String, dynamic>.from(j)))
+            .map((j) => AmialCharityCategory.fromJson(Map<String, dynamic>.from(j)))
             .toList();
       }
     } catch (e) {
@@ -44,7 +44,7 @@ class DonationsController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map) {
         final items = ((r.body['meta'] ?? {})['items'] as List? ?? []);
         campaigns.value = items
-            .map((j) => AmyalCharityCampaign.fromJson(Map<String, dynamic>.from(j)))
+            .map((j) => AmialCharityCampaign.fromJson(Map<String, dynamic>.from(j)))
             .toList();
         lastError.value = '';
       } else {
@@ -64,7 +64,7 @@ class DonationsController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map) {
         final items = ((r.body['meta'] ?? {})['items'] as List? ?? []);
         featuredCampaigns.value = items
-            .map((j) => AmyalCharityCampaign.fromJson(Map<String, dynamic>.from(j)))
+            .map((j) => AmialCharityCampaign.fromJson(Map<String, dynamic>.from(j)))
             .toList();
       }
     } catch (e) {
@@ -78,7 +78,7 @@ class DonationsController extends GetxController implements GetxService {
       final r = await repo.campaignShow(ulid);
       if (r.statusCode == 200 && r.body is Map) {
         final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
-        selectedCampaign.value = AmyalCharityCampaign.fromJson(
+        selectedCampaign.value = AmialCharityCampaign.fromJson(
             Map<String, dynamic>.from(meta['campaign'] ?? {}));
         return true;
       }
@@ -130,7 +130,7 @@ class DonationsController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map) {
         final items = ((r.body['meta'] ?? {})['items'] as List? ?? []);
         myDonations.value = items
-            .map((j) => AmyalDonation.fromJson(Map<String, dynamic>.from(j)))
+            .map((j) => AmialDonation.fromJson(Map<String, dynamic>.from(j)))
             .toList();
       }
     } catch (e) {

@@ -1,42 +1,42 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/withdraw/screens/withdraw_request_screen.dart';
-import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
-import 'package:amyal_pay/features/me/screens/my_account_number_screen.dart';
-import 'package:amyal_pay/features/installments/screens/my_installments_screen.dart';
-import 'package:amyal_pay/features/gift_cards/screens/my_gift_cards_screen.dart';
-import 'package:amyal_pay/features/notification/screens/notifications_center_screen.dart';
-import 'package:amyal_pay/features/notification/controllers/notifications_center_controller.dart';
-import 'package:amyal_pay/features/me/domain/me_repo.dart';
-import 'package:amyal_pay/features/requested_money/screens/payment_request_create_screen.dart';
-import 'package:amyal_pay/features/requested_money/screens/incoming_requests_screen.dart';
-import 'package:amyal_pay/features/receipts/screens/receipts_list_screen.dart';
-import 'package:amyal_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
-import 'package:amyal_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
-import 'package:amyal_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
-import 'package:amyal_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
-import 'package:amyal_pay/features/wholesale/screens/wholesale_screens.dart';
-import 'package:amyal_pay/features/plans/screens/plans_catalog_screen.dart';
-import 'package:amyal_pay/features/plans/screens/my_usage_screen.dart';
-import 'package:amyal_pay/features/branches/screens/branches_management_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_services_hub_screen.dart';
-import 'package:amyal_pay/features/printer/screens/printer_settings_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/receipt_settings_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
+import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
+import 'package:amial_pay/features/me/screens/my_account_number_screen.dart';
+import 'package:amial_pay/features/installments/screens/my_installments_screen.dart';
+import 'package:amial_pay/features/gift_cards/screens/my_gift_cards_screen.dart';
+import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
+import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
+import 'package:amial_pay/features/me/domain/me_repo.dart';
+import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
+import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
+import 'package:amial_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
+import 'package:amial_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
+import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
+import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
+import 'package:amial_pay/features/plans/screens/my_usage_screen.dart';
+import 'package:amial_pay/features/branches/screens/branches_management_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
+import 'package:amial_pay/features/printer/screens/printer_settings_screen.dart';
+import 'package:amial_pay/features/merchant/screens/receipt_settings_screen.dart';
 // ملاحظة: access_gate.dart يُصدّر أيضاً BusinessTypeSelectionScreen المستخدَمة
 // في لافتة «اختر نوع نشاطك» — فلا يُحذف الاستيراد حتى لو لم يُستخدم AccessGate.
-import 'package:amyal_pay/features/access/widgets/access_gate.dart';
-import 'package:amyal_pay/features/access/controllers/access_controller.dart';
-import 'package:amyal_pay/features/family_fund/screens/my_funds_screen.dart';
-import 'package:amyal_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
-import 'package:amyal_pay/shared/widgets/verified_badge.dart';
-import 'package:amyal_pay/features/credit/screens/my_credits_screen.dart';
-import 'package:amyal_pay/features/donations/screens/donations_home_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
-import 'package:amyal_pay/features/requested_money/screens/requested_money_list_screen.dart';
-import 'package:amyal_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
-import 'package:amyal_pay/common/widgets/amial_form.dart';
-import 'package:amyal_pay/features/reports/screens/amial_account_statement_screen.dart';
+import 'package:amial_pay/features/access/widgets/access_gate.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/family_fund/screens/my_funds_screen.dart';
+import 'package:amial_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
+import 'package:amial_pay/shared/widgets/verified_badge.dart';
+import 'package:amial_pay/features/credit/screens/my_credits_screen.dart';
+import 'package:amial_pay/features/donations/screens/donations_home_screen.dart';
+import 'package:amial_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/requested_money_list_screen.dart';
+import 'package:amial_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
+import 'package:amial_pay/common/widgets/amial_form.dart';
+import 'package:amial_pay/features/reports/screens/amial_account_statement_screen.dart';
 
 /// AMIAL-MY-SERVICES — نقطة وصول موحّدة لميزات أميال باي الجديدة.
 ///
@@ -68,7 +68,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
   Widget build(BuildContext context) {
     // AMIAL-DS-002: ترويسة خفيفة موحّدة بدل AppBar أزرق صلب.
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       body: SafeArea(
         child: Column(children: [
           const AmialScreenHeader(title: 'خدماتي'),
@@ -90,7 +90,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [AmyalColors.primary, AmyalColors.primaryDark],
+                    colors: [AmialColors.primary, AmialColors.primaryDark],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -100,7 +100,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                   Container(
                     width: 50, height: 50,
                     decoration: BoxDecoration(
-                      color: AmyalColors.yellow,
+                      color: AmialColors.yellow,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.account_balance_wallet, color: Colors.black87, size: 26),
@@ -157,18 +157,18 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AmyalColors.yellow.withValues(alpha: 0.2),
+                    color: AmialColors.yellow.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AmyalColors.yellow),
+                    border: Border.all(color: AmialColors.yellow),
                   ),
                   child: Row(children: [
-                    const Icon(Icons.business, color: AmyalColors.yellowDark, size: 28),
+                    const Icon(Icons.business, color: AmialColors.yellowDark, size: 28),
                     const SizedBox(width: 10),
                     const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('اختر نوع نشاطك التجاري', style: TextStyle(fontWeight: FontWeight.bold)),
                       Text('لرؤية الميزات المناسبة لنوع عملك', style: TextStyle(fontSize: 12)),
                     ])),
-                    const Icon(Icons.arrow_back_ios, size: 16, color: AmyalColors.yellowDark),
+                    const Icon(Icons.arrow_back_ios, size: 16, color: AmialColors.yellowDark),
                   ]),
                 ),
               ),
@@ -189,7 +189,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
               _notificationCard(),
               if (access.has('receive'))
                 _serviceCard(icon: Icons.qr_code_2, label: 'رقم حسابي', subtitle: 'مشاركة + نسخ',
-                    color: AmyalColors.primary, onTap: () => Get.to(() => const MyAccountNumberScreen())),
+                    color: AmialColors.primary, onTap: () => Get.to(() => const MyAccountNumberScreen())),
               if (access.has('receipts'))
                 _serviceCard(icon: Icons.receipt_long, label: 'إيصالاتي', subtitle: 'سجل كامل بـ PDF',
                     color: Colors.indigo, onTap: () => Get.to(() => const ReceiptsListScreen())),
@@ -198,13 +198,13 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                     color: Colors.green, onTap: () => Get.to(() => const WithdrawRequestScreen())),
               if (access.has('payment_requests'))
                 _serviceCard(icon: Icons.request_quote, label: 'طلب أموال', subtitle: 'يصل لمن تطلب منه',
-                    color: AmyalColors.yellowDark, onTap: () => Get.to(() => const PaymentRequestCreateScreen())),
+                    color: AmialColors.yellowDark, onTap: () => Get.to(() => const PaymentRequestCreateScreen())),
               // AMIAL-REQUEST-DIRECT-001: الطلبات الواردة — كانت القائمة مبنيّة
               // في المتحكّم والخلفية معاً، ولا شاشة تقرؤها. فمن طُلب منه مالٌ
               // لم يكن يراه أبداً.
               if (access.has('payment_requests'))
                 _serviceCard(icon: Icons.inbox, label: 'طلبات واردة', subtitle: 'وافق أو ارفض',
-                    color: AmyalColors.primary, onTap: () => Get.to(() => const IncomingRequestsScreen())),
+                    color: AmialColors.primary, onTap: () => Get.to(() => const IncomingRequestsScreen())),
               if (access.has('safe_pay'))
                 _serviceCard(icon: Icons.shield, label: 'الدفع الآمن', subtitle: 'حماية للبيع/الشراء',
                     color: Colors.green.shade700, onTap: () => Get.to(() => const MySafePaymentsScreen())),
@@ -216,7 +216,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
               _serviceCard(icon: Icons.account_balance_wallet_outlined,
                   label: 'كشف حساب',
                   subtitle: 'مدين ودائن ورصيد',
-                  color: AmyalColors.primary,
+                  color: AmialColors.primary,
                   onTap: () => Get.to(() => const AmialAccountStatementScreen())),
               _serviceCard(icon: Icons.receipt_long_outlined, label: 'فواتيري الآجلة',
                   subtitle: 'ما عليك من دين',
@@ -251,7 +251,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                     color: Colors.amber.shade800, onTap: () => Get.to(() => const BillPayProvidersScreen())),
               if (isMerchant)
                 _serviceCard(icon: Icons.grid_view_rounded, label: 'خدمات التاجر', subtitle: 'كل الميزات وباقاتها',
-                    color: AmyalColors.primary, onTap: () => Get.to(() => const MerchantServicesHubScreen())),
+                    color: AmialColors.primary, onTap: () => Get.to(() => const MerchantServicesHubScreen())),
               if (isMerchant)
                 _serviceCard(icon: Icons.storefront, label: 'إعدادات المتجر', subtitle: 'الاسم والشعار والفاتورة',
                     color: const Color(0xFF00695C), onTap: () => Get.to(() => const ReceiptSettingsScreen())),
@@ -332,10 +332,10 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
             Container(
               width: 48, height: 48,
               decoration: BoxDecoration(
-                color: AmyalColors.primary.withValues(alpha: 0.09),
+                color: AmialColors.primary.withValues(alpha: 0.09),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: AmyalColors.primary, size: 24),
+              child: Icon(icon, color: AmialColors.primary, size: 24),
             ),
             const SizedBox(height: 10),
             Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
@@ -367,10 +367,10 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
               Container(
                 width: 48, height: 48,
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow.withValues(alpha: 0.15),
+                  color: AmialColors.yellow.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.notifications_outlined, color: AmyalColors.yellowDark, size: 24),
+                child: const Icon(Icons.notifications_outlined, color: AmialColors.yellowDark, size: 24),
               ),
               Obx(() {
                 final n = notif.unreadCount.value;
@@ -381,7 +381,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                     constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                     decoration: BoxDecoration(
-                      color: AmyalColors.red,
+                      color: AmialColors.red,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: Colors.white, width: 1.5),
                     ),
@@ -409,7 +409,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
 
   void _comingSoon(String name) {
     Get.snackbar('قريباً', '$name سيتاح قريباً',
-        backgroundColor: AmyalColors.yellow.withValues(alpha: 0.2),
+        backgroundColor: AmialColors.yellow.withValues(alpha: 0.2),
         snackPosition: SnackPosition.BOTTOM);
   }
 }

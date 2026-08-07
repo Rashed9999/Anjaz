@@ -1,16 +1,16 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_pop_scope_widget.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/camera_verification/screens/camera_screen.dart';
-import 'package:amyal_pay/features/favorite_number/controllers/fav_number_controller.dart';
-import 'package:amyal_pay/features/history/controllers/transaction_history_controller.dart';
-import 'package:amyal_pay/features/home/controllers/menu_controller.dart';
-import 'package:amyal_pay/features/home/domain/enums/nav_bar_page_enum.dart';
-import 'package:amyal_pay/features/home/widgets/show_case/showcaseview.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/auth/controllers/session_guard.dart';
+import 'package:amial_pay/common/widgets/custom_pop_scope_widget.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/camera_verification/screens/camera_screen.dart';
+import 'package:amial_pay/features/favorite_number/controllers/fav_number_controller.dart';
+import 'package:amial_pay/features/history/controllers/transaction_history_controller.dart';
+import 'package:amial_pay/features/home/controllers/menu_controller.dart';
+import 'package:amial_pay/features/home/domain/enums/nav_bar_page_enum.dart';
+import 'package:amial_pay/features/home/widgets/show_case/showcaseview.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/auth/controllers/session_guard.dart';
 
 class NavBarScreen extends StatefulWidget {
   final String? selectedPage;
@@ -85,7 +85,7 @@ class _NavBarScreenState extends State<NavBarScreen> {
           // ولا في أي شاشة تُضاف لاحقاً. المظهر العائم محفوظ لأن للكبسولة
           // هوامش جانبية وسفلية تُظهر خلفية الصفحة حولها.
           builder : (context) => Scaffold(
-            backgroundColor: AmyalColors.background,
+            backgroundColor: AmialColors.background,
             extendBody: false,
             body: PageStorage(bucket: bucket, child: menuController.screen[menuController.currentTabIndex]),
 

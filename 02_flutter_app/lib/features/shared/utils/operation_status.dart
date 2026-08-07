@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-OP-STATUS-001 — شارة حالة العملية الموحّدة عبر كل الشاشات.
 ///
@@ -22,7 +22,7 @@ class OperationStatus {
       case 'completed':
         return const OperationStatus('مكتملة', Color(0xFF2E7D32), Color(0xFFE3F3E5));
       case 'cancelled':
-        return const OperationStatus('ملغية', AmyalColors.red, Color(0xFFFDE7E7));
+        return const OperationStatus('ملغية', AmialColors.red, Color(0xFFFDE7E7));
       case 'under_review':
         return const OperationStatus('قيد المراجعة', Color(0xFF1D4FB8), Color(0xFFE4ECFB));
       case 'pending':

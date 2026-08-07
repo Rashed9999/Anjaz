@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
-import 'package:amyal_pay/common/widgets/amial_build_stamp.dart';
+import 'package:amial_pay/common/widgets/amial_build_stamp.dart';
 
-import 'package:amyal_pay/features/shared/widgets/amial_numpad.dart';
-import 'package:amyal_pay/features/shared/widgets/amial_pin_dots.dart';
-import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
-import 'package:amyal_pay/features/safe_payment/domain/models/safe_payment_models.dart';
-import 'package:amyal_pay/features/safe_payment/widgets/trust_card.dart';
-import 'package:amyal_pay/features/safe_payment/widgets/delivery_code_card.dart';
+import 'package:amial_pay/features/shared/widgets/amial_numpad.dart';
+import 'package:amial_pay/features/shared/widgets/amial_pin_dots.dart';
+import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
+import 'package:amial_pay/features/safe_payment/domain/models/safe_payment_models.dart';
+import 'package:amial_pay/features/safe_payment/widgets/trust_card.dart';
+import 'package:amial_pay/features/safe_payment/widgets/delivery_code_card.dart';
 
 /// AMIAL-SMOKE-001 — الودجات تُبنى فعلاً، لا تُحلَّل فقط.
 ///
@@ -213,7 +213,7 @@ void main() {
     testWidgets('سجلّ الثقة يُبنى لحساب جديد بلا صفقات', (tester) async {
       // الحساب الجديد أخطر حالة: كل الأرقام صفر، وأي قسمة عليها تنهار.
       await tester.pumpWidget(wrap(TrustCard(
-        trust: AmyalTrustSummary.fromJson(const {
+        trust: AmialTrustSummary.fromJson(const {
           'role': 'seller',
           'completed_deals': 0,
           'disputed_deals': 0,
@@ -230,7 +230,7 @@ void main() {
 
     testWidgets('سجلّ الثقة يُبنى لحساب بسجلّ', (tester) async {
       await tester.pumpWidget(wrap(TrustCard(
-        trust: AmyalTrustSummary.fromJson(const {
+        trust: AmialTrustSummary.fromJson(const {
           'role': 'seller',
           'completed_deals': 14,
           'disputed_deals': 1,

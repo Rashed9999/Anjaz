@@ -111,13 +111,13 @@ class AdminSettingsCenterTest extends TestCase
 
         $this->postJson('/api/v1/amial/admin/settings/contact', [
             'whatsapp_number' => '967711222333',
-            'support_email' => 'help@amyalpay.com',
+            'support_email' => 'help@amialpay.com',
         ])->assertOk()->assertJsonPath('meta.contact.whatsapp_number', '967711222333');
 
         // الـ endpoint العام (بدون auth) يعكس القيم الجديدة + الافتراضي لما لم يُحدَّث
         $this->getJson('/api/v1/amial/support-contact')->assertOk()
             ->assertJsonPath('meta.contact.whatsapp_number', '967711222333')
-            ->assertJsonPath('meta.contact.support_email', 'help@amyalpay.com')
+            ->assertJsonPath('meta.contact.support_email', 'help@amialpay.com')
             ->assertJsonPath('meta.contact.phone_number', '+967777000000');
     }
 

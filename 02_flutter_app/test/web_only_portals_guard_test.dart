@@ -17,10 +17,10 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/features/auth/screens/role_router.dart';
-import 'package:amyal_pay/features/home/screens/nav_bar_screen.dart';
-import 'package:amyal_pay/features/access/screens/web_portal_notice_screen.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/features/auth/screens/role_router.dart';
+import 'package:amial_pay/features/home/screens/nav_bar_screen.dart';
+import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
 
 void main() {
   const fast = Timeout(Duration(seconds: 30));
@@ -42,8 +42,8 @@ void main() {
         for (final f in d.listSync(recursive: true).whereType<File>()) {
           if (!f.path.endsWith('.dart')) continue;
           final src = f.readAsStringSync();
-          if (src.contains('package:amyal_pay/features/admin/') ||
-              src.contains('package:amyal_pay/features/agent/')) {
+          if (src.contains('package:amial_pay/features/admin/') ||
+              src.contains('package:amial_pay/features/agent/')) {
             offenders.add(f.path);
           }
         }

@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-CHART-001 — مخطّط حلقي بقيمة في المركز.
 ///
@@ -34,7 +34,7 @@ class AmialDonutChart extends StatelessWidget {
   /// لوحة الشرائح — ألوان متمايزة بوضوح حتى لمن لديه عمى ألوان جزئي،
   /// وتبدأ بلون البراند.
   static const List<Color> palette = [
-    AmyalColors.primary,
+    AmialColors.primary,
     Color(0xFF16A34A),
     Color(0xFFE08A00),
     Color(0xFF7C3AED),
@@ -61,7 +61,7 @@ class AmialDonutChart extends StatelessWidget {
               children: [
                 Text(centerLabel,
                     style: const TextStyle(
-                        fontSize: 12, color: AmyalColors.textSecondary)),
+                        fontSize: 12, color: AmialColors.textSecondary)),
                 const SizedBox(height: 3),
                 Text(centerValue,
                     style: const TextStyle(

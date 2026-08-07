@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/suppliers/controllers/suppliers_controller.dart';
-import 'package:amyal_pay/features/suppliers/screens/supplier_editor_screen.dart';
-import 'package:amyal_pay/features/suppliers/screens/purchase_order_create_screen.dart';
-import 'package:amyal_pay/features/suppliers/screens/po_receive_screen.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/suppliers/controllers/suppliers_controller.dart';
+import 'package:amial_pay/features/suppliers/screens/supplier_editor_screen.dart';
+import 'package:amial_pay/features/suppliers/screens/purchase_order_create_screen.dart';
+import 'package:amial_pay/features/suppliers/screens/po_receive_screen.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SUPPLIERS-002 — «إدارة الموردين» (التصميم 68) + «أوامر الشراء» (67):
 /// إجماليات (المديونية / أوامر نشطة) + تبويبا الموردين وأوامر الشراء،
@@ -45,7 +45,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Text('المديونية الحالية: ${AmialMoney.yer(s['current_debt'])}',
               style: const TextStyle(
-                  fontSize: 13, color: AmyalColors.textSecondary)),
+                  fontSize: 13, color: AmialColors.textSecondary)),
           const SizedBox(height: 12),
           TextField(
             controller: amount,
@@ -65,7 +65,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 foregroundColor: Colors.white),
             child: const Text('تسجيل السداد'),
           ),
@@ -83,7 +83,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
   void _snack(String m, {bool ok = false}) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(m),
-        backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red,
+        backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red,
       ));
 
   (String, Color, Color) _poBadge(String st) => switch (st) {
@@ -95,19 +95,19 @@ class _SuppliersScreenState extends State<SuppliersScreen>
             const Color(0xFFE3F3E5)
           ),
         'completed' => ('مكتمل', const Color(0xFF2E7D32), const Color(0xFFE3F3E5)),
-        'cancelled' => ('ملغي', AmyalColors.red, const Color(0xFFFDE7E7)),
-        _ => (st, AmyalColors.textMuted, const Color(0xFFEFEFEF)),
+        'cancelled' => ('ملغي', AmialColors.red, const Color(0xFFFDE7E7)),
+        _ => (st, AmialColors.textMuted, const Color(0xFFEFEFEF)),
       };
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('إدارة الموردين'),
         bottom: TabBar(
           controller: _tabs,
-          indicatorColor: AmyalColors.yellow,
+          indicatorColor: AmialColors.yellow,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           tabs: const [
@@ -118,7 +118,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'sup-add',
-        backgroundColor: AmyalColors.primary,
+        backgroundColor: AmialColors.primary,
         foregroundColor: Colors.white,
         onPressed: () async {
           if (_tabs.index == 0) {
@@ -137,7 +137,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
       body: Obx(() {
         if (c.isLoading.value && c.suppliers.isEmpty && c.orders.isEmpty) {
           return const Center(
-              child: CircularProgressIndicator(color: AmyalColors.primary));
+              child: CircularProgressIndicator(color: AmialColors.primary));
         }
         return Column(children: [
           // ====== الإجماليات ======
@@ -158,7 +158,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
                   'أوامر شراء نشطة',
                   '${c.totals.value['active_po_count'] ?? 0} طلب',
                   Icons.shopping_cart_outlined,
-                  AmyalColors.yellowDark,
+                  AmialColors.yellowDark,
                 ),
               ),
             ]),
@@ -196,7 +196,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text(label,
               style: const TextStyle(
-                  fontSize: 10, color: AmyalColors.textMuted)),
+                  fontSize: 10, color: AmialColors.textMuted)),
           FittedBox(
             child: Text(value,
                 style: TextStyle(
@@ -213,11 +213,11 @@ class _SuppliersScreenState extends State<SuppliersScreen>
     if (c.suppliers.isEmpty) {
       return const Center(
           child: Text('لا موردون بعد — أضف أول مورد',
-              style: TextStyle(color: AmyalColors.textMuted)));
+              style: TextStyle(color: AmialColors.textMuted)));
     }
     return RefreshIndicator(
       onRefresh: () => c.loadAll(),
-      color: AmyalColors.primary,
+      color: AmialColors.primary,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
         itemCount: c.suppliers.length,
@@ -235,10 +235,10 @@ class _SuppliersScreenState extends State<SuppliersScreen>
               Row(children: [
                 CircleAvatar(
                   radius: 20,
-                  backgroundColor: AmyalColors.primary.withValues(alpha: 0.1),
+                  backgroundColor: AmialColors.primary.withValues(alpha: 0.1),
                   child: Text('${s['name']}'.isNotEmpty ? '${s['name']}'[0] : '؟',
                       style: const TextStyle(
-                          color: AmyalColors.primary,
+                          color: AmialColors.primary,
                           fontWeight: FontWeight.bold)),
                 ),
                 const Spacer(),
@@ -249,7 +249,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
                   if ('${s['contact_person'] ?? ''}'.isNotEmpty)
                     Text('${s['contact_person']}',
                         style: const TextStyle(
-                            fontSize: 11, color: AmyalColors.textMuted)),
+                            fontSize: 11, color: AmialColors.textMuted)),
                 ]),
               ]),
               const SizedBox(height: 10),
@@ -259,11 +259,11 @@ class _SuppliersScreenState extends State<SuppliersScreen>
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                         color: debt > 0
-                            ? AmyalColors.red
+                            ? AmialColors.red
                             : const Color(0xFF2E7D32))),
                 const Text('المديونية الحالية',
                     style: TextStyle(
-                        fontSize: 12, color: AmyalColors.textSecondary)),
+                        fontSize: 12, color: AmialColors.textSecondary)),
               ]),
               const SizedBox(height: 10),
               Row(children: [
@@ -279,7 +279,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
                     icon: const Icon(Icons.add_shopping_cart, size: 16),
                     label: const Text('طلب شراء'),
                     style: FilledButton.styleFrom(
-                        backgroundColor: AmyalColors.primary,
+                        backgroundColor: AmialColors.primary,
                         minimumSize: const Size(0, 42)),
                   ),
                 ),
@@ -290,8 +290,8 @@ class _SuppliersScreenState extends State<SuppliersScreen>
                     icon: const Icon(Icons.payments_outlined, size: 16),
                     label: const Text('سداد'),
                     style: OutlinedButton.styleFrom(
-                        foregroundColor: AmyalColors.yellowDark,
-                        side: const BorderSide(color: AmyalColors.yellowDark),
+                        foregroundColor: AmialColors.yellowDark,
+                        side: const BorderSide(color: AmialColors.yellowDark),
                         minimumSize: const Size(0, 42)),
                   ),
                 ),
@@ -307,11 +307,11 @@ class _SuppliersScreenState extends State<SuppliersScreen>
     if (c.orders.isEmpty) {
       return const Center(
           child: Text('لا أوامر شراء بعد',
-              style: TextStyle(color: AmyalColors.textMuted)));
+              style: TextStyle(color: AmialColors.textMuted)));
     }
     return RefreshIndicator(
       onRefresh: () => c.loadAll(),
-      color: AmyalColors.primary,
+      color: AmialColors.primary,
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
         itemCount: c.orders.length,
@@ -349,7 +349,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
                           fontWeight: FontWeight.bold, fontSize: 14)),
                   Text('${o['supplier']?['name'] ?? ''}',
                       style: const TextStyle(
-                          fontSize: 12, color: AmyalColors.textMuted)),
+                          fontSize: 12, color: AmialColors.textMuted)),
                 ]),
               ]),
               const SizedBox(height: 8),
@@ -357,10 +357,10 @@ class _SuppliersScreenState extends State<SuppliersScreen>
                 Text(AmialMoney.yer(o['total_amount']),
                     style: const TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: AmyalColors.primary)),
+                        color: AmialColors.primary)),
                 Text('${o['created_at'] ?? ''}'.split('T').first,
                     style: const TextStyle(
-                        fontSize: 11, color: AmyalColors.textMuted)),
+                        fontSize: 11, color: AmialColors.textMuted)),
               ]),
               const SizedBox(height: 10),
               Row(children: [
@@ -375,7 +375,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
                       icon: const Icon(Icons.check_circle_outline, size: 16),
                       label: const Text('اعتماد'),
                       style: FilledButton.styleFrom(
-                          backgroundColor: AmyalColors.primary,
+                          backgroundColor: AmialColors.primary,
                           minimumSize: const Size(0, 40)),
                     ),
                   ),
@@ -388,8 +388,8 @@ class _SuppliersScreenState extends State<SuppliersScreen>
                         _snack(ok ? 'أُلغي الأمر' : c.lastError.value, ok: ok);
                       },
                       style: OutlinedButton.styleFrom(
-                          foregroundColor: AmyalColors.red,
-                          side: const BorderSide(color: AmyalColors.red),
+                          foregroundColor: AmialColors.red,
+                          side: const BorderSide(color: AmialColors.red),
                           minimumSize: const Size(0, 40)),
                       child: const Text('إلغاء'),
                     ),
@@ -407,7 +407,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
                           ? 'استلام البضاعة'
                           : 'استكمال الاستلام'),
                       style: FilledButton.styleFrom(
-                          backgroundColor: AmyalColors.yellowDark,
+                          backgroundColor: AmialColors.yellowDark,
                           minimumSize: const Size(0, 40)),
                     ),
                   )
@@ -423,8 +423,8 @@ class _SuppliersScreenState extends State<SuppliersScreen>
                       icon: const Icon(Icons.receipt_long_outlined, size: 16),
                       label: const Text('عرض التفاصيل'),
                       style: OutlinedButton.styleFrom(
-                          foregroundColor: AmyalColors.primary,
-                          side: const BorderSide(color: AmyalColors.border),
+                          foregroundColor: AmialColors.primary,
+                          side: const BorderSide(color: AmialColors.border),
                           minimumSize: const Size(0, 40)),
                     ),
                   ),

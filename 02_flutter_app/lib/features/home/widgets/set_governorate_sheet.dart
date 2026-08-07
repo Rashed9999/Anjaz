@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/features/auth/widgets/governorate_picker.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/auth/widgets/governorate_picker.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-COVERAGE-002 — تحديد محافظة الإقامة.
 ///
@@ -166,7 +166,7 @@ class _SetGovernorateSheetState extends State<SetGovernorateSheet> {
                   width: 42,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: AmyalColors.border,
+                    color: AmialColors.border,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -177,13 +177,13 @@ class _SetGovernorateSheetState extends State<SetGovernorateSheet> {
                   style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
-                      color: AmyalColors.textPrimary)),
+                      color: AmialColors.textPrimary)),
               const SizedBox(height: 6),
               const Text(
                 'نستعملها لعرض الوكلاء والتجّار القريبين منك. لا تُغيّر رصيدك '
                 'ولا صلاحياتك، ولا تُشارَك مع أحد.',
                 style: TextStyle(
-                    fontSize: 12.5, height: 1.7, color: AmyalColors.textSecondary),
+                    fontSize: 12.5, height: 1.7, color: AmialColors.textSecondary),
               ),
               const SizedBox(height: 16),
 
@@ -201,7 +201,7 @@ class _SetGovernorateSheetState extends State<SetGovernorateSheet> {
                       ? 'جارٍ تحديد موقعك…'
                       : 'إعادة المحاولة بالموقع'),
                   style: OutlinedButton.styleFrom(
-                      foregroundColor: AmyalColors.primary),
+                      foregroundColor: AmialColors.primary),
                 ),
               ),
 
@@ -250,7 +250,7 @@ class _SetGovernorateSheetState extends State<SetGovernorateSheet> {
                 const SizedBox(height: 10),
                 Text(_error!,
                     style: const TextStyle(
-                        color: AmyalColors.red, fontSize: 12.5, height: 1.6)),
+                        color: AmialColors.red, fontSize: 12.5, height: 1.6)),
               ],
 
               const SizedBox(height: 16),
@@ -259,7 +259,7 @@ class _SetGovernorateSheetState extends State<SetGovernorateSheet> {
                 child: ElevatedButton(
                   onPressed: _saving || _code == null ? null : _save,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
+                    backgroundColor: AmialColors.primary,
                     foregroundColor: Colors.white,
                   ),
                   child: _saving

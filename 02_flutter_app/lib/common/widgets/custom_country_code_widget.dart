@@ -1,7 +1,7 @@
 import 'package:country_code_picker/country_code_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
 class CustomCountryCodeWidget extends StatelessWidget {
   final ValueChanged<CountryCode> onChanged;
   final ValueChanged<CountryCode?>? onInit;

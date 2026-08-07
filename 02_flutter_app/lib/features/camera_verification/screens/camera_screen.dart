@@ -2,11 +2,11 @@ import 'package:camera/camera.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/auth/screens/amial_registration_wizard_screen.dart';
-import 'package:amyal_pay/features/camera_verification/controllers/camera_screen_controller.dart';
-import 'package:amyal_pay/features/camera_verification/widgets/camera_instruction_widget.dart';
-import 'package:amyal_pay/features/setting/screens/edit_profile_screen.dart';
-import 'package:amyal_pay/helper/route_helper.dart';
+import 'package:amial_pay/features/auth/screens/amial_registration_wizard_screen.dart';
+import 'package:amial_pay/features/camera_verification/controllers/camera_screen_controller.dart';
+import 'package:amial_pay/features/camera_verification/widgets/camera_instruction_widget.dart';
+import 'package:amial_pay/features/setting/screens/edit_profile_screen.dart';
+import 'package:amial_pay/helper/route_helper.dart';
 import 'dart:ui' as ui;
 
 

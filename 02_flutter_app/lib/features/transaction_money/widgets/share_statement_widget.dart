@@ -3,15 +3,15 @@ import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_instance/src/extension_instance.dart';
 import 'package:get/get_utils/src/extensions/internacionalization.dart';
 import 'package:screenshot/screenshot.dart';
-import 'package:amyal_pay/common/controllers/share_controller.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/common/models/contact_model.dart';
-import 'package:amyal_pay/helper/custom_extension_helper.dart';
-import 'package:amyal_pay/helper/price_converter_helper.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_logo_widget.dart';
+import 'package:amial_pay/common/controllers/share_controller.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/common/models/contact_model.dart';
+import 'package:amial_pay/helper/custom_extension_helper.dart';
+import 'package:amial_pay/helper/price_converter_helper.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_logo_widget.dart';
 
 class ShareStatementWidget extends StatefulWidget {
   final String? amount;

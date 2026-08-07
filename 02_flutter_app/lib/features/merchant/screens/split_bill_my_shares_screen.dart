@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/split_bill_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amial_pay/features/merchant/controllers/split_bill_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/amial_money.dart';
 
 /// AMIAL-SPLIT-BILL-001 — حصص العميل المعلّقة في الفواتير المقسّمة + دفعها.
 class SplitBillMySharesScreen extends StatefulWidget {
@@ -34,7 +34,7 @@ class _SplitBillMySharesScreenState extends State<SplitBillMySharesScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
             child: const Text('ادفع'),
           ),
         ],
@@ -47,7 +47,7 @@ class _SplitBillMySharesScreenState extends State<SplitBillMySharesScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(ok ? 'تم دفع حصتك بنجاح' : (ctrl.lastError.value.isNotEmpty ? ctrl.lastError.value : 'فشل الدفع')),
-      backgroundColor: ok ? Colors.green : AmyalColors.red,
+      backgroundColor: ok ? Colors.green : AmialColors.red,
     ));
   }
 
@@ -56,7 +56,7 @@ class _SplitBillMySharesScreenState extends State<SplitBillMySharesScreen> {
     final ctrl = Get.find<SplitBillController>();
 
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('حصصي في الفواتير'),
       ),
@@ -70,9 +70,9 @@ class _SplitBillMySharesScreenState extends State<SplitBillMySharesScreen> {
             return ListView(
               children: const [
                 SizedBox(height: 120),
-                Icon(Icons.check_circle_outline, size: 64, color: AmyalColors.textMuted),
+                Icon(Icons.check_circle_outline, size: 64, color: AmialColors.textMuted),
                 SizedBox(height: 12),
-                Center(child: Text('لا توجد حصص معلّقة', style: TextStyle(color: AmyalColors.textSecondary))),
+                Center(child: Text('لا توجد حصص معلّقة', style: TextStyle(color: AmialColors.textSecondary))),
               ],
             );
           }
@@ -87,10 +87,10 @@ class _SplitBillMySharesScreenState extends State<SplitBillMySharesScreen> {
               final isPaying = ctrl.payingParticipantId.value == id;
 
               return Card(
-                color: AmyalColors.cardSurface,
+                color: AmialColors.cardSurface,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
-                  side: const BorderSide(color: AmyalColors.border),
+                  side: const BorderSide(color: AmialColors.border),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(14),
@@ -109,19 +109,19 @@ class _SplitBillMySharesScreenState extends State<SplitBillMySharesScreen> {
                           ),
                           Text(AmialMoney.yer(share['share_amount'] ?? ''),
                               style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 16, color: AmyalColors.primary)),
+                                  fontWeight: FontWeight.bold, fontSize: 16, color: AmialColors.primary)),
                         ],
                       ),
                       const SizedBox(height: 4),
                       Text('إجمالي الفاتورة: ${AmialMoney.yer(bill['total_amount'] ?? '')}',
-                          style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+                          style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
                       const SizedBox(height: 10),
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: isPaying ? null : () => _confirmPay(Map<String, dynamic>.from(share)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AmyalColors.primary,
+                            backgroundColor: AmialColors.primary,
                             foregroundColor: Colors.white,
                           ),
                           child: isPaying

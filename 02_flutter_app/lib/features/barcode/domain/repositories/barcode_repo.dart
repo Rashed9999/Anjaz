@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 
 /// AMIAL-BARCODE-001 — Repo للبحث السريع بالباركود.
 class BarcodeRepo extends GetxService {

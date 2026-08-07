@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/features/safe_payment/domain/models/safe_payment_models.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/safe_payment/domain/models/safe_payment_models.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SAFEPAY-TRUST-001 — سجلّ الطرف المقابل.
 ///
@@ -12,16 +12,16 @@ import 'package:amyal_pay/theme/amyal_colors.dart';
 class TrustCard extends StatelessWidget {
   const TrustCard({super.key, required this.trust, required this.counterpartyName});
 
-  final AmyalTrustSummary trust;
+  final AmialTrustSummary trust;
   final String counterpartyName;
 
   @override
   Widget build(BuildContext context) {
     final (Color color, IconData icon) = switch (true) {
       _ when trust.isTrusted => (const Color(0xFF2E7D32), Icons.verified_rounded),
-      _ when trust.isRisky => (AmyalColors.red, Icons.report_gmailerrorred_rounded),
-      _ when trust.isNew => (AmyalColors.textMuted, Icons.person_outline_rounded),
-      _ => (AmyalColors.primary, Icons.history_rounded),
+      _ when trust.isRisky => (AmialColors.red, Icons.report_gmailerrorred_rounded),
+      _ when trust.isNew => (AmialColors.textMuted, Icons.person_outline_rounded),
+      _ => (AmialColors.primary, Icons.history_rounded),
     };
 
     final roleLabel = trust.role == 'buyer' ? 'كمشترٍ' : 'كبائع';
@@ -57,24 +57,24 @@ class TrustCard extends StatelessWidget {
           const Text(
             'لا سجلّ سابق لهذا الطرف في الدفع الآمن. هذا لا يعني سوءاً — لكنه '
             'يعني أن الأدلّة ورمز التسليم هما حمايتك الوحيدة هنا.',
-            style: TextStyle(fontSize: 11.5, height: 1.7, color: AmyalColors.textSecondary),
+            style: TextStyle(fontSize: 11.5, height: 1.7, color: AmialColors.textSecondary),
           )
         else
           Row(children: [
             _stat('أتمّ', '${trust.completedDeals}', const Color(0xFF2E7D32)),
             _divider(),
             _stat('نزاعات', '${trust.disputedDeals}',
-                trust.disputedDeals > 0 ? AmyalColors.red : AmyalColors.textSecondary),
+                trust.disputedDeals > 0 ? AmialColors.red : AmialColors.textSecondary),
             _divider(),
             _stat('نسبة النزاع', '${trust.disputeRate}٪',
-                trust.isRisky ? AmyalColors.red : AmyalColors.textSecondary),
+                trust.isRisky ? AmialColors.red : AmialColors.textSecondary),
           ]),
 
         if (trust.memberSince != null) ...[
           const SizedBox(height: 8),
           Text('عضو منذ ${trust.memberSince}',
               textDirection: TextDirection.ltr,
-              style: const TextStyle(fontSize: 10.5, color: AmyalColors.textMuted)),
+              style: const TextStyle(fontSize: 10.5, color: AmialColors.textMuted)),
         ],
 
         if (trust.isRisky) ...[
@@ -82,13 +82,13 @@ class TrustCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(9),
             decoration: BoxDecoration(
-              color: AmyalColors.red.withValues(alpha: 0.06),
+              color: AmialColors.red.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Text(
               'نسبة نزاعات مرتفعة. وثّق كل خطوة بالصور، ولا تُفرج عن المبلغ '
               'قبل التأكّد من السلعة.',
-              style: TextStyle(fontSize: 11, height: 1.6, color: AmyalColors.red),
+              style: TextStyle(fontSize: 11, height: 1.6, color: AmialColors.red),
             ),
           ),
         ],
@@ -103,10 +103,10 @@ class TrustCard extends StatelessWidget {
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: color)),
           const SizedBox(height: 2),
           Text(label,
-              style: const TextStyle(fontSize: 10.5, color: AmyalColors.textMuted)),
+              style: const TextStyle(fontSize: 10.5, color: AmialColors.textMuted)),
         ]),
       );
 
   Widget _divider() =>
-      Container(width: 1, height: 28, color: AmyalColors.border);
+      Container(width: 1, height: 28, color: AmialColors.border);
 }

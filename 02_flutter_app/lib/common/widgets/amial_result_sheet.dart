@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/theme/amial_spacing.dart';
-import 'package:amyal_pay/common/widgets/amial_button.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/theme/amial_spacing.dart';
+import 'package:amial_pay/common/widgets/amial_button.dart';
 
-/// AMYAL-DS-001 — ورقة النتيجة الموحّدة (Processing → Success / Failure).
+/// AMIAL-DS-001 — ورقة النتيجة الموحّدة (Processing → Success / Failure).
 ///
 /// نمط احترافي واحد لكل العمليات المالية (تحويل/سحب/دفع تاجر/شحن): تظهر ورقة
 /// سفلية بيضاء بزوايا علوية ناعمة، تُظهر «جارٍ التنفيذ...» ثم تتحوّل تلقائياً إلى
@@ -133,7 +133,7 @@ class _ResultSheetBodyState<T> extends State<_ResultSheetBody<T>> {
             height: 4,
             margin: const EdgeInsets.only(bottom: AmialSpacing.lg),
             decoration: BoxDecoration(
-              color: AmyalColors.border,
+              color: AmialColors.border,
               borderRadius: BorderRadius.circular(4),
             ),
           ),
@@ -154,7 +154,7 @@ class _ResultSheetBodyState<T> extends State<_ResultSheetBody<T>> {
           icon: const _ProcessingIcon(),
           title: widget.processingTitle,
           subtitle: widget.processingSubtitle,
-          titleColor: AmyalColors.textPrimary,
+          titleColor: AmialColors.textPrimary,
         );
       case _Phase.success:
         return _content(
@@ -163,7 +163,7 @@ class _ResultSheetBodyState<T> extends State<_ResultSheetBody<T>> {
               color: Color(0xFF1B9E4B), icon: Icons.check_rounded),
           title: widget.successTitle,
           subtitle: widget.successSubtitle,
-          titleColor: AmyalColors.textPrimary,
+          titleColor: AmialColors.textPrimary,
           button: AmialButton(
             label: widget.successButton,
             kind: AmialButtonKind.dark,
@@ -177,10 +177,10 @@ class _ResultSheetBodyState<T> extends State<_ResultSheetBody<T>> {
         return _content(
           key: const ValueKey('failure'),
           icon: const _StatusBadge(
-              color: AmyalColors.red, icon: Icons.close_rounded),
+              color: AmialColors.red, icon: Icons.close_rounded),
           title: widget.failureTitle,
           subtitle: msg,
-          titleColor: AmyalColors.red,
+          titleColor: AmialColors.red,
           button: AmialButton(
             label: 'حسناً',
             kind: AmialButtonKind.outline,
@@ -216,7 +216,7 @@ class _ResultSheetBodyState<T> extends State<_ResultSheetBody<T>> {
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 13.5, color: AmyalColors.textSecondary),
+            style: const TextStyle(fontSize: 13.5, color: AmialColors.textSecondary),
           ),
         ],
         if (button != null) ...[
@@ -244,9 +244,9 @@ class _ProcessingIcon extends StatelessWidget {
             width: 72,
             height: 72,
             child: CircularProgressIndicator(
-                strokeWidth: 3, color: AmyalColors.primary),
+                strokeWidth: 3, color: AmialColors.primary),
           ),
-          Icon(Icons.send_rounded, size: 30, color: AmyalColors.primary),
+          Icon(Icons.send_rounded, size: 30, color: AmialColors.primary),
         ],
       ),
     );

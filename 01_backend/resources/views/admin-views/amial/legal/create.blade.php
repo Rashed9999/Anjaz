@@ -50,7 +50,7 @@
                 <div class="mb-3">
                     <label class="form-label required-mark">{{ translate('Title') }}</label>
                     <input type="text" name="title" class="form-control" required maxlength="255"
-                           placeholder="{{ translate('e.g., Amyal Pay Terms of Use - v1.0') }}"
+                           placeholder="{{ translate('e.g., Amial Pay Terms of Use - v1.0') }}"
                            value="{{ old('title') }}">
                 </div>
 

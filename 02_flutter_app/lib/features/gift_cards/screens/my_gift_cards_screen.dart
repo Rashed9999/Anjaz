@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/async_state_view.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/async_state_view.dart';
 
 /// AMIAL-GIFT-CARDS-001 — «بطاقات هديتي» (جهة العميل).
 ///
@@ -47,8 +47,8 @@ class _MyGiftCardsScreenState extends State<MyGiftCardsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
-      appBar: AppBar(title: const Text('بطاقات هديتي'), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+      backgroundColor: AmialColors.background,
+      appBar: AppBar(title: const Text('بطاقات هديتي'), backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
       body: AsyncStateView(
         loading: _loading,
         error: _error,
@@ -68,7 +68,7 @@ class _MyGiftCardsScreenState extends State<MyGiftCardsScreen> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: active ? [AmyalColors.primary, const Color(0xFF1D4FB8)] : [AmyalColors.textSecondary, AmyalColors.textMuted],
+          colors: active ? [AmialColors.primary, const Color(0xFF1D4FB8)] : [AmialColors.textSecondary, AmialColors.textMuted],
           begin: Alignment.topLeft, end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),

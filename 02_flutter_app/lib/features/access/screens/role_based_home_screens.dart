@@ -1,31 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/access/controllers/access_controller.dart';
-import 'package:amyal_pay/features/access/widgets/access_gate.dart';
-import 'package:amyal_pay/features/me/screens/my_services_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/access/widgets/access_gate.dart';
+import 'package:amial_pay/features/me/screens/my_services_screen.dart';
 // الشاشات الفعلية للربط
-import 'package:amyal_pay/features/merchant/screens/cashier_pos_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_products_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_report_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_staff_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_audit_log_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_excel_export_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/receipt_settings_screen.dart';
-import 'package:amyal_pay/features/corporate/screens/corporate_accounts_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_currencies_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_api_keys_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_backup_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_loyalty_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_promotions_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_installments_screen.dart';
-import 'package:amyal_pay/features/restaurant/screens/restaurant_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_gift_cards_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_shift_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_expenses_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/credit_dashboard_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/credit_customers_screen.dart';
-import 'package:amyal_pay/features/barcode/screens/continuous_scanner_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_excel_export_screen.dart';
+import 'package:amial_pay/features/merchant/screens/receipt_settings_screen.dart';
+import 'package:amial_pay/features/corporate/screens/corporate_accounts_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_currencies_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_api_keys_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_backup_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_loyalty_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_promotions_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_installments_screen.dart';
+import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_gift_cards_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_shift_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_expenses_screen.dart';
+import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
+import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart';
+import 'package:amial_pay/features/barcode/screens/continuous_scanner_screen.dart';
 
 /// CRITICAL-001 (Phase 2) — شاشات Home متمايزة.
 ///
@@ -43,7 +43,7 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
     final access = Get.find<AccessController>();
 
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Obx(() => Text(access.userName.value ?? 'مرحباً')),
         actions: [
@@ -66,7 +66,7 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
             icon: Icons.point_of_sale,
             label: 'بيع جديد',
             subtitle: 'سجّل عملية بيع',
-            color: AmyalColors.primary,
+            color: AmialColors.primary,
             onTap: () => Get.to(() => const CashierPosScreen()),
           ),
           const SizedBox(height: 14),
@@ -74,7 +74,7 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
             icon: Icons.receipt_long,
             label: 'الديون',
             subtitle: 'سجّل من عليه دين',
-            color: AmyalColors.yellowDark,
+            color: AmialColors.yellowDark,
             onTap: () => Get.to(() => const CreditDashboardScreen()),
           )),
           const SizedBox(height: 14),
@@ -102,7 +102,7 @@ class MerchantRetailHomeScreen extends StatelessWidget {
     final access = Get.find<AccessController>();
 
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Obx(() => Text(access.userName.value ?? 'متجري')),
         actions: [
@@ -121,7 +121,7 @@ class MerchantRetailHomeScreen extends StatelessWidget {
             icon: Icons.point_of_sale,
             label: 'الكاشير',
             subtitle: 'بيع جديد + سلّة',
-            color: AmyalColors.primary,
+            color: AmialColors.primary,
             onTap: () => Get.to(() => const CashierPosScreen()),
           ),
           const SizedBox(height: 14),
@@ -149,7 +149,7 @@ class MerchantRetailHomeScreen extends StatelessWidget {
               )),
               AccessGate(feature: 'debts', child: _MiniAction(
                 icon: Icons.account_balance_wallet, label: 'الديون',
-                color: AmyalColors.yellowDark,
+                color: AmialColors.yellowDark,
                 onTap: () => Get.to(() => const CreditDashboardScreen()),
               )),
               AccessGate(feature: 'barcode', child: _MiniAction(
@@ -176,7 +176,7 @@ class MerchantRetailHomeScreen extends StatelessWidget {
               )),
               AccessGate(feature: 'employees', child: _MiniAction(
                 icon: Icons.badge, label: 'الموظفون',
-                color: AmyalColors.primary,
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantStaffScreen()),
               )),
               AccessGate(feature: 'excel_export', child: _MiniAction(
@@ -186,12 +186,12 @@ class MerchantRetailHomeScreen extends StatelessWidget {
               )),
               AccessGate(feature: 'audit_log', child: _MiniAction(
                 icon: Icons.fact_check, label: 'سجلّ التدقيق',
-                color: AmyalColors.primary,
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantAuditLogScreen()),
               )),
               _MiniAction(
                 icon: Icons.receipt_long, label: 'إعدادات الفاتورة',
-                color: AmyalColors.yellowDark,
+                color: AmialColors.yellowDark,
                 onTap: () => Get.to(() => const ReceiptSettingsScreen()),
               ),
               AccessGate(feature: 'promotions', child: _MiniAction(
@@ -231,17 +231,17 @@ class MerchantRetailHomeScreen extends StatelessWidget {
               )),
               AccessGate(feature: 'corporate_accounts', child: _MiniAction(
                 icon: Icons.business_center, label: 'حسابات الشركات',
-                color: AmyalColors.primary,
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const CorporateAccountsScreen()),
               )),
               AccessGate(feature: 'multi_currency', child: _MiniAction(
                 icon: Icons.currency_exchange, label: 'العملات',
-                color: AmyalColors.primary,
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantCurrenciesScreen()),
               )),
               AccessGate(feature: 'api_access', child: _MiniAction(
                 icon: Icons.api, label: 'مفاتيح API',
-                color: AmyalColors.primary,
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantApiKeysScreen()),
               )),
               AccessGate(feature: 'advanced_backup', child: _MiniAction(
@@ -278,7 +278,7 @@ class _GreetingCard extends StatelessWidget {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [AmyalColors.primary, Color(0xFF021A55)],
+          colors: [AmialColors.primary, Color(0xFF021A55)],
           begin: Alignment.topLeft, end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
@@ -293,7 +293,7 @@ class _GreetingCard extends StatelessWidget {
           if (access.businessTypeLabel.value != null) Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: AmyalColors.yellow,
+              color: AmialColors.yellow,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(access.businessTypeLabel.value ?? '',
@@ -387,7 +387,7 @@ class _UpgradeBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [AmyalColors.yellow, AmyalColors.yellow.withValues(alpha: 0.7)]),
+        gradient: LinearGradient(colors: [AmialColors.yellow, AmialColors.yellow.withValues(alpha: 0.7)]),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(children: [

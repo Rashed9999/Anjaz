@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
 
 void showCustomSnackBarHelper(String? message, {bool isError = true, bool isIcon = false, bool isVpn = false, Duration? duration}) {
   if(isVpn) {

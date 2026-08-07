@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/features/transaction_money/controllers/contact_controller.dart';
-import 'package:amyal_pay/features/transaction_money/domain/amial_transfer_api.dart';
-import 'package:amyal_pay/features/transaction_money/screens/amial_transfer_holding_screen.dart';
-import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/helper/phone_cheker_helper.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/common/widgets/amial_quick_amounts.dart';
-import 'package:amyal_pay/common/widgets/amial_form.dart';
-import 'package:amyal_pay/features/setting/screens/support_screen.dart';
-import 'package:amyal_pay/features/favorite_number/screens/search_contact_screen.dart';
-import 'package:amyal_pay/features/transaction_money/domain/models/contact_tag_model.dart';
-import 'package:amyal_pay/common/models/contact_model.dart';
-import 'package:amyal_pay/features/transaction_money/domain/enums/suggest_type_enum.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/features/transaction_money/controllers/contact_controller.dart';
+import 'package:amial_pay/features/transaction_money/domain/amial_transfer_api.dart';
+import 'package:amial_pay/features/transaction_money/screens/amial_transfer_holding_screen.dart';
+import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/helper/phone_cheker_helper.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/common/widgets/amial_quick_amounts.dart';
+import 'package:amial_pay/common/widgets/amial_form.dart';
+import 'package:amial_pay/features/setting/screens/support_screen.dart';
+import 'package:amial_pay/features/favorite_number/screens/search_contact_screen.dart';
+import 'package:amial_pay/features/transaction_money/domain/models/contact_tag_model.dart';
+import 'package:amial_pay/common/models/contact_model.dart';
+import 'package:amial_pay/features/transaction_money/domain/enums/suggest_type_enum.dart';
 
 /// AMIAL-SEND-V2 — شاشة تحويل الأموال بتصميم أميال (التصميم 15 من ملف
 /// الشاشات): بطاقة الرصيد + رقم المستلِم + المبلغ + ملاحظة + «المحوَّل لهم
@@ -227,31 +227,31 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
           const SizedBox(height: 20),
           CircleAvatar(
             radius: 32,
-            backgroundColor: AmyalColors.primary.withValues(alpha: 0.1),
+            backgroundColor: AmialColors.primary.withValues(alpha: 0.1),
             child: Text(maskedName.isNotEmpty ? maskedName[0] : '؟',
                 style: const TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: AmyalColors.primary)),
+                    color: AmialColors.primary)),
           ),
           const SizedBox(height: 12),
           const Text('تأكد من المستلم قبل الإرسال',
-              style: TextStyle(fontSize: 13, color: AmyalColors.textSecondary)),
+              style: TextStyle(fontSize: 13, color: AmialColors.textSecondary)),
           const SizedBox(height: 4),
           Text(maskedName,
               style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: AmyalColors.primary)),
+                  color: AmialColors.primary)),
           Text(maskedPhone,
               textDirection: TextDirection.ltr,
               style: const TextStyle(
-                  fontSize: 13, color: AmyalColors.textSecondary)),
+                  fontSize: 13, color: AmialColors.textSecondary)),
           const SizedBox(height: 18),
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AmyalColors.background,
+              color: AmialColors.background,
               borderRadius: BorderRadius.circular(14),
             ),
             child: Column(children: [
@@ -264,18 +264,18 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
           ),
           const SizedBox(height: 12),
           Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
-            Icon(Icons.replay_rounded, size: 14, color: AmyalColors.textMuted),
+            Icon(Icons.replay_rounded, size: 14, color: AmialColors.textMuted),
             SizedBox(width: 6),
             Flexible(
               child: Text('يمكنك التراجع عن التحويل خلال دقيقة بعد التنفيذ',
-                  style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+                  style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
             ),
           ]),
           const SizedBox(height: 16),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
+              backgroundColor: AmialColors.primary,
               minimumSize: const Size.fromHeight(52),
             ),
             child: const Text('تأكيد التحويل',
@@ -285,7 +285,7 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('إلغاء',
-                style: TextStyle(color: AmyalColors.textSecondary)),
+                style: TextStyle(color: AmialColors.textSecondary)),
           ),
           SizedBox(height: MediaQuery.of(ctx).viewInsets.bottom),
         ]),
@@ -299,9 +299,9 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
           style: TextStyle(
               fontSize: bold ? 16 : 14,
               fontWeight: bold ? FontWeight.bold : FontWeight.w600,
-              color: bold ? AmyalColors.primary : Colors.black87)),
+              color: bold ? AmialColors.primary : Colors.black87)),
       Text(label,
-          style: const TextStyle(fontSize: 13, color: AmyalColors.textSecondary)),
+          style: const TextStyle(fontSize: 13, color: AmialColors.textSecondary)),
     ]);
   }
 
@@ -309,7 +309,7 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
   Widget build(BuildContext context) {
     // AMIAL-DS-002: ترويسة خفيفة بدل AppBar أزرق صلب — كما في المرجع.
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       body: SafeArea(
         child: Column(children: [
           AmialScreenHeader(
@@ -347,11 +347,11 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
                       height: 48,
                       width: 48,
                       decoration: BoxDecoration(
-                        color: AmyalColors.primary.withValues(alpha: 0.08),
+                        color: AmialColors.primary.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(Icons.account_balance_wallet_outlined,
-                          color: AmyalColors.primary),
+                          color: AmialColors.primary),
                     ),
                     const Spacer(),
                     Column(
@@ -365,7 +365,7 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
                           style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
-                              color: AmyalColors.primary),
+                              color: AmialColors.primary),
                         ),
                       ],
                     ),
@@ -432,10 +432,10 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
                               CircleAvatar(
                                 radius: 26,
                                 backgroundColor:
-                                    AmyalColors.primary.withValues(alpha: 0.12),
+                                    AmialColors.primary.withValues(alpha: 0.12),
                                 child: Text(initial,
                                     style: const TextStyle(
-                                        color: AmyalColors.primary,
+                                        color: AmialColors.primary,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 18)),
                               ),
@@ -479,7 +479,7 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
                       // غريب — بينما بقية التطبيق «ر.ي» بلون البراند.
                       const Text('ر.ي',
                           style: TextStyle(
-                              color: AmyalColors.textSecondary,
+                              color: AmialColors.textSecondary,
                               fontWeight: FontWeight.w700,
                               fontSize: 16)),
                       const SizedBox(width: 12),
@@ -494,7 +494,7 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
                           style: const TextStyle(
                               fontSize: 36,
                               fontWeight: FontWeight.bold,
-                              color: AmyalColors.primary),
+                              color: AmialColors.primary),
                           decoration: const InputDecoration(
                             hintText: '0',
                             border: InputBorder.none,
@@ -513,7 +513,7 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
             ),
             const SizedBox(height: 10),
 
-            // AMYAL-DS-001: مبالغ سريعة — كانت غائبة عن أكثر شاشة استخداماً.
+            // AMIAL-DS-001: مبالغ سريعة — كانت غائبة عن أكثر شاشة استخداماً.
             AmialQuickAmounts(
               values: const [1000, 2000, 5000, 10000, 20000, 50000],
               onPick: (v) {
@@ -546,7 +546,7 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
               label: const Text('تأكيد وإرسال',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 15),
                 minimumSize: const Size.fromHeight(54),

@@ -34,7 +34,7 @@ use Illuminate\Support\Str;
  */
 class UnifiedAuthService
 {
-    // AMYAL-SEC-LOGIN-001: قفل مؤقّت بعد 5 محاولات فاشلة لمدة دقيقة (كما هو
+    // AMIAL-SEC-LOGIN-001: قفل مؤقّت بعد 5 محاولات فاشلة لمدة دقيقة (كما هو
     // معيار المحافظ). عند بلوغ الحدّ: يُسجَّل حدث في سجلّ التدقيق ويُرسَل إشعار
     // أمني للمستخدم. (كان مرفوعاً إلى 50 أثناء التجربة — أُعيد للسلوك الآمن.)
     private const MAX_FAILED_ATTEMPTS_WINDOW = 5;
@@ -348,7 +348,7 @@ class UnifiedAuthService
      */
     private function issueToken(User $user, string $role, Request $request, array $extraMeta = [], ?string $identifier = null): array
     {
-        $tokenName = "amyal-{$role}";
+        $tokenName = "amial-{$role}";
         $token = $user->createToken($tokenName);
 
         // AMIAL-FIX(POST-LOGIN): تسجيل الجهاز (UserLogHistory) — بدونه يرفض
@@ -356,7 +356,7 @@ class UnifiedAuthService
         // فارغة. نُكرّر منطق 6cash: تعطيل الأجهزة القديمة ثمّ تفعيل الحالي.
         $this->registerDevice($user, $request);
 
-        // AMYAL-SEC-LOGIN-001: التقاط «آخر تسجيل دخول» السابق قبل تسجيل الحالي،
+        // AMIAL-SEC-LOGIN-001: التقاط «آخر تسجيل دخول» السابق قبل تسجيل الحالي،
         // ليعرضه التطبيق للمستخدم (شعور بالأمان + كشف أي دخول غير مصرّح).
         $lastLogin = $this->previousLogin($user->id);
 
@@ -364,7 +364,7 @@ class UnifiedAuthService
         $this->recordSuccess($role, $user->id, $request, $identifier);
 
         if ($lastLogin !== null) {
-            // AMYAL-ZONE-LABEL-001: «الموقع» من نظام المناطق الجاهز بدل
+            // AMIAL-ZONE-LABEL-001: «الموقع» من نظام المناطق الجاهز بدل
             // GeoIP — منطقة الحساب مستقرّة ومعيّنة عند KYC.
             //
             // AMIAL-COVERAGE-002: تُفضَّل المحافظة على اسم المنطقة. «الجنوب»
@@ -391,7 +391,7 @@ class UnifiedAuthService
     }
 
     /**
-     * AMYAL-SEC-LOGIN-001: آخر تسجيل دخول ناجح سابق للمستخدم (وقت + IP).
+     * AMIAL-SEC-LOGIN-001: آخر تسجيل دخول ناجح سابق للمستخدم (وقت + IP).
      * تُقرأ من unified_login_attempts قبل إدراج الدخول الحالي. أيّ خطأ → null.
      */
     private function previousLogin(int $userId): ?array
@@ -481,7 +481,7 @@ class UnifiedAuthService
         $newCount = $current + 1;
         Cache::put($key, $newCount, now()->addMinutes(self::FAILED_ATTEMPTS_LOCKOUT_MINUTES));
 
-        // AMYAL-SEC-LOGIN-001: عند بلوغ الحدّ بالضبط → حدث قفل (سجلّ تدقيق + إشعار
+        // AMIAL-SEC-LOGIN-001: عند بلوغ الحدّ بالضبط → حدث قفل (سجلّ تدقيق + إشعار
         // أمني) مرّة واحدة، لا في كلّ محاولة لاحقة محظورة.
         if ($newCount === self::MAX_FAILED_ATTEMPTS_WINDOW) {
             $this->onAccountLocked($role, $identifier, $request, $userId);
@@ -530,7 +530,7 @@ class UnifiedAuthService
     }
 
     /**
-     * AMYAL-SEC-LOGIN-001: يُستدعى عند بلوغ حدّ المحاولات الفاشلة. يُسجّل حدثاً في
+     * AMIAL-SEC-LOGIN-001: يُستدعى عند بلوغ حدّ المحاولات الفاشلة. يُسجّل حدثاً في
      * سجلّ التدقيق (سلسلة تجزئة غير قابلة للعبث) ويُرسل إشعاراً أمنياً للمستخدم إن
      * أمكن التعرّف عليه. كلا الجانبين «أفضل جهد» — لا يكسران مسار الدخول أبداً.
      */

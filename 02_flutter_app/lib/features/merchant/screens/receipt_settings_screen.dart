@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:amyal_pay/features/merchant/controllers/receipt_settings_controller.dart';
-import 'package:amyal_pay/features/payments/widgets/amial_invoice_card.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/receipt_settings_controller.dart';
+import 'package:amial_pay/features/payments/widgets/amial_invoice_card.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-RECEIPT-SETTINGS-001 — «إعدادات الفاتورة والطباعة».
 ///
@@ -106,12 +106,12 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('إعدادات الفاتورة والطباعة'),
       ),
@@ -148,7 +148,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                 Expanded(child: SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('إظهار الشعار', style: TextStyle(fontSize: 13)),
-                  value: _showLogo, activeColor: AmyalColors.primary,
+                  value: _showLogo, activeColor: AmialColors.primary,
                   onChanged: (v) => setState(() => _showLogo = v),
                 )),
               ]),
@@ -158,14 +158,14 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('إظهار الهاتف'),
-                value: _showPhone, activeColor: AmyalColors.primary,
+                value: _showPhone, activeColor: AmialColors.primary,
                 onChanged: (v) => setState(() => _showPhone = v),
               ),
               _field('العنوان', _address),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text('إظهار العنوان'),
-                value: _showAddress, activeColor: AmyalColors.primary,
+                value: _showAddress, activeColor: AmialColors.primary,
                 onChanged: (v) => setState(() => _showAddress = v),
               ),
               const SizedBox(height: 8),
@@ -185,7 +185,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                         : const Icon(Icons.save),
                     label: const Text('حفظ الإعدادات'),
                     style: FilledButton.styleFrom(
-                        backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(52)),
+                        backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(52)),
                   )),
             ]),
     );
@@ -211,12 +211,12 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
           padding: const EdgeInsets.symmetric(vertical: 14),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: sel ? AmyalColors.primary : Colors.white,
+            color: sel ? AmialColors.primary : Colors.white,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: sel ? AmyalColors.primary : AmyalColors.border),
+            border: Border.all(color: sel ? AmialColors.primary : AmialColors.border),
           ),
           child: Text(label, style: TextStyle(
-              fontWeight: FontWeight.bold, color: sel ? Colors.white : AmyalColors.textPrimary)),
+              fontWeight: FontWeight.bold, color: sel ? Colors.white : AmialColors.textPrimary)),
         ),
       ),
     );

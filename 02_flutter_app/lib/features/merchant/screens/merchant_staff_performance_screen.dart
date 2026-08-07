@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/async_state_view.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/async_state_view.dart';
 
 /// AMIAL-STAFF-PERFORMANCE-001 — «أداء الموظفين».
 ///
@@ -66,7 +66,7 @@ class _MerchantStaffPerformanceScreenState extends State<MerchantStaffPerformanc
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('أداء الموظفين'),
       ),
@@ -85,13 +85,13 @@ class _MerchantStaffPerformanceScreenState extends State<MerchantStaffPerformanc
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     decoration: BoxDecoration(
-                      color: sel ? AmyalColors.primary : Colors.white,
+                      color: sel ? AmialColors.primary : Colors.white,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: sel ? AmyalColors.primary : AmyalColors.border),
+                      border: Border.all(color: sel ? AmialColors.primary : AmialColors.border),
                     ),
                     child: Text('$d يوم', textAlign: TextAlign.center,
                         style: TextStyle(
-                            color: sel ? Colors.white : AmyalColors.textPrimary,
+                            color: sel ? Colors.white : AmialColors.textPrimary,
                             fontWeight: FontWeight.bold, fontSize: 13)),
                   ),
                 ),
@@ -127,13 +127,13 @@ class _MerchantStaffPerformanceScreenState extends State<MerchantStaffPerformanc
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [AmyalColors.primary, Color(0xFF1D4FB8)],
+            colors: [AmialColors.primary, Color(0xFF1D4FB8)],
             begin: Alignment.topRight, end: Alignment.bottomLeft,
           ),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(children: [
-          const Icon(Icons.groups, color: AmyalColors.yellow, size: 30),
+          const Icon(Icons.groups, color: AmialColors.yellow, size: 30),
           const SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -160,9 +160,9 @@ class _MerchantStaffPerformanceScreenState extends State<MerchantStaffPerformanc
         Row(children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: AmyalColors.primary.withValues(alpha: 0.1),
+            backgroundColor: AmialColors.primary.withValues(alpha: 0.1),
             child: Text(medal.isNotEmpty ? medal : '${rank + 1}',
-                style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -175,17 +175,17 @@ class _MerchantStaffPerformanceScreenState extends State<MerchantStaffPerformanc
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                     decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(6)),
-                    child: const Text('معطّل', style: TextStyle(fontSize: 10, color: AmyalColors.textSecondary)),
+                    child: const Text('معطّل', style: TextStyle(fontSize: 10, color: AmialColors.textSecondary)),
                   ),
               ]),
               Text('نقطة بيع: ${s['pos_number'] ?? ''}',
-                  style: const TextStyle(fontSize: 11, color: AmyalColors.textSecondary)),
+                  style: const TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
             ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('${_money(s['sales_total'])} ر.ي',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AmyalColors.primary)),
-            Text('${s['sales_count'] ?? 0} عملية', style: const TextStyle(fontSize: 11, color: AmyalColors.textSecondary)),
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AmialColors.primary)),
+            Text('${s['sales_count'] ?? 0} عملية', style: const TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
           ]),
         ]),
         const SizedBox(height: 10),
@@ -193,8 +193,8 @@ class _MerchantStaffPerformanceScreenState extends State<MerchantStaffPerformanc
           borderRadius: BorderRadius.circular(4),
           child: LinearProgressIndicator(
             value: ratio, minHeight: 6,
-            backgroundColor: AmyalColors.border,
-            valueColor: AlwaysStoppedAnimation(rank == 0 ? AmyalColors.yellowDark : AmyalColors.primary),
+            backgroundColor: AmialColors.border,
+            valueColor: AlwaysStoppedAnimation(rank == 0 ? AmialColors.yellowDark : AmialColors.primary),
           ),
         ),
         const SizedBox(height: 10),
@@ -210,7 +210,7 @@ class _MerchantStaffPerformanceScreenState extends State<MerchantStaffPerformanc
   Widget _miniStat(String label, String value) => Expanded(
         child: Column(children: [
           Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          Text(label, style: const TextStyle(fontSize: 10, color: AmyalColors.textSecondary)),
+          Text(label, style: const TextStyle(fontSize: 10, color: AmialColors.textSecondary)),
         ]),
       );
 
@@ -218,10 +218,10 @@ class _MerchantStaffPerformanceScreenState extends State<MerchantStaffPerformanc
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
         child: Row(children: [
-          const Icon(Icons.info_outline, size: 18, color: AmyalColors.textMuted),
+          const Icon(Icons.info_outline, size: 18, color: AmialColors.textMuted),
           const SizedBox(width: 8),
           Expanded(child: Text('مبيعات سجّلها التاجر مباشرةً (بلا موظف): ${_money(_unattributed)} ر.ي',
-              style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary))),
+              style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary))),
         ]),
       );
 }

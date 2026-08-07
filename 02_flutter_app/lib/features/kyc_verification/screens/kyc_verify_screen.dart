@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/kyc_verification/controllers/kyc_verify_controller.dart';
-import 'package:amyal_pay/features/kyc_verification/widgets/dotted_border_widget.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_button_widget.dart';
-import 'package:amyal_pay/common/widgets/custom_drop_down_button_widget.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/common/widgets/custom_text_field_widget.dart';
+import 'package:amial_pay/features/kyc_verification/controllers/kyc_verify_controller.dart';
+import 'package:amial_pay/features/kyc_verification/widgets/dotted_border_widget.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_button_widget.dart';
+import 'package:amial_pay/common/widgets/custom_drop_down_button_widget.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/common/widgets/custom_text_field_widget.dart';
 import '../../../util/dimensions.dart';
 
 class KycVerifyScreen extends StatefulWidget {

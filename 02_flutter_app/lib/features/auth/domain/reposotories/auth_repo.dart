@@ -4,10 +4,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/data/api/secure_storage_helper.dart';
-import 'package:amyal_pay/features/auth/domain/models/user_short_data_model.dart';
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/data/api/secure_storage_helper.dart';
+import 'package:amial_pay/features/auth/domain/models/user_short_data_model.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
 
 class AuthRepo extends GetxService{
@@ -102,7 +102,7 @@ class AuthRepo extends GetxService{
      return await apiClient.postData(AppConstants.customerPinVerify,{'pin': pin});
    }
 
-   /// AMYAL-SECURITY-002 (v0.7-C): token الآن في secure storage بدل SP.
+   /// AMIAL-SECURITY-002 (v0.7-C): token الآن في secure storage بدل SP.
    ///
    /// **توافق للخلف:** SecureStorageHelper يقوم migration تلقائي
    /// من SP لأول مستخدم يستخدم التطبيق بعد التحديث.

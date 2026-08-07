@@ -1,16 +1,16 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
 /// AMIAL-BILL-PAY-001 (v0.9-D)
 class BillPayRepo extends GetxService {
   final ApiClient apiClient;
   BillPayRepo({required this.apiClient});
 
-  Future<Response> listProviders() async => apiClient.getData(AppConstants.amyalBillProviders);
+  Future<Response> listProviders() async => apiClient.getData(AppConstants.amialBillProviders);
 
   Future<Response> listProducts(int serviceId) async {
-    return apiClient.getData('${AppConstants.amyalBillProducts}$serviceId/products');
+    return apiClient.getData('${AppConstants.amialBillProducts}$serviceId/products');
   }
 
   /// **حاسم:** الـ idempotencyKey محفوظ في الـ controller للـ retry —
@@ -24,7 +24,7 @@ class BillPayRepo extends GetxService {
     required String idempotencyKey,
   }) async {
     return apiClient.postData(
-      AppConstants.amyalBillPay,
+      AppConstants.amialBillPay,
       {
         'service_id': serviceId,
         'product_id': ?productId,
@@ -36,9 +36,9 @@ class BillPayRepo extends GetxService {
     );
   }
 
-  Future<Response> listOrders() async => apiClient.getData(AppConstants.amyalBillOrders);
+  Future<Response> listOrders() async => apiClient.getData(AppConstants.amialBillOrders);
 
   Future<Response> showOrder(String ulid) async {
-    return apiClient.getData('${AppConstants.amyalBillOrderShow}$ulid');
+    return apiClient.getData('${AppConstants.amialBillOrderShow}$ulid');
   }
 }

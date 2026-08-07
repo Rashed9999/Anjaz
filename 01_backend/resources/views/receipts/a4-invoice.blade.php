@@ -197,7 +197,7 @@
         <td class="brand-block">
             <div class="brand">أميال باي</div>
             <div class="biz">{{ $businessName }}</div>
-            <div class="tagline">نظام دفع رقمي معتمد — AMYAL PAY</div>
+            <div class="tagline">نظام دفع رقمي معتمد — AMIAL PAY</div>
         </td>
         <td class="doc-title-block">
             <div class="doc-title">فاتورة رسمية</div>
@@ -332,7 +332,7 @@
 </table>
 
 <div class="legal">
-    <strong>أميال باي — Amyal Pay</strong> · فاتورة صادرة إلكترونياً ومحفوظة في السجلات الرسمية.
+    <strong>أميال باي — Amial Pay</strong> · فاتورة صادرة إلكترونياً ومحفوظة في السجلات الرسمية.
     <br>
     يمكن التحقق من صحة هذه الفاتورة عبر مسح رمز QR أعلاه · support@amialpay.com
 </div>

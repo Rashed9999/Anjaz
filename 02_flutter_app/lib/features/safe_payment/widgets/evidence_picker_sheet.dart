@@ -3,8 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:amyal_pay/features/safe_payment/domain/repositories/safe_payment_repo.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/safe_payment/domain/repositories/safe_payment_repo.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SAFEPAY-EVIDENCE-001 — رفع الأدلّة.
 ///
@@ -156,7 +156,7 @@ class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
                 child: Container(
                   width: 42, height: 4,
                   decoration: BoxDecoration(
-                    color: AmyalColors.border,
+                    color: AmialColors.border,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -167,13 +167,13 @@ class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
                   style: const TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
-                      color: AmyalColors.textPrimary)),
+                      color: AmialColors.textPrimary)),
               const SizedBox(height: 6),
               Text(widget.hint,
                   style: const TextStyle(
                       fontSize: 12.5,
                       height: 1.7,
-                      color: AmyalColors.textSecondary)),
+                      color: AmialColors.textSecondary)),
               const SizedBox(height: 14),
 
               // التحذير قبل الرفع لا بعده.
@@ -182,7 +182,7 @@ class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF8E1),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AmyalColors.yellowDark.withValues(alpha: 0.4)),
+                  border: Border.all(color: AmialColors.yellowDark.withValues(alpha: 0.4)),
                 ),
                 child: const Row(children: [
                   Icon(Icons.lock_outline_rounded, size: 18, color: Color(0xFFCFA300)),
@@ -227,8 +227,8 @@ class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                     color: _files.length >= _max
-                        ? AmyalColors.yellowDark
-                        : AmyalColors.textSecondary,
+                        ? AmialColors.yellowDark
+                        : AmialColors.textSecondary,
                   )),
 
               if (_files.isNotEmpty) ...[
@@ -280,7 +280,7 @@ class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
               if (_error != null) ...[
                 const SizedBox(height: 6),
                 Text(_error!,
-                    style: const TextStyle(color: AmyalColors.red, fontSize: 12.5)),
+                    style: const TextStyle(color: AmialColors.red, fontSize: 12.5)),
               ],
 
               const SizedBox(height: 14),
@@ -296,7 +296,7 @@ class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
                       : const Icon(Icons.upload_rounded),
                   label: Text(_busy ? 'جارٍ الرفع…' : 'رفع الأدلّة'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
+                    backgroundColor: AmialColors.primary,
                     foregroundColor: Colors.white,
                   ),
                 ),

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/safe_payment/controllers/safe_payment_controller.dart';
-import 'package:amyal_pay/features/safe_payment/domain/models/safe_payment_models.dart';
-import 'package:amyal_pay/features/safe_payment/screens/create_safe_payment_screen.dart';
-import 'package:amyal_pay/features/safe_payment/screens/safe_payment_detail_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amial_pay/features/safe_payment/controllers/safe_payment_controller.dart';
+import 'package:amial_pay/features/safe_payment/domain/models/safe_payment_models.dart';
+import 'package:amial_pay/features/safe_payment/screens/create_safe_payment_screen.dart';
+import 'package:amial_pay/features/safe_payment/screens/safe_payment_detail_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/amial_money.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
 class MySafePaymentsScreen extends StatefulWidget {
@@ -38,12 +38,12 @@ class _MySafePaymentsScreenState extends State<MySafePaymentsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('الدفع الآمن'),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: AmyalColors.yellow,
+          indicatorColor: AmialColors.yellow,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           tabs: const [
@@ -54,7 +54,7 @@ class _MySafePaymentsScreenState extends State<MySafePaymentsScreen>
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AmyalColors.primary,
+        backgroundColor: AmialColors.primary,
         foregroundColor: Colors.white,
         onPressed: () async {
           final ok = await Get.to<bool>(() => const CreateSafePaymentScreen());
@@ -65,19 +65,19 @@ class _MySafePaymentsScreenState extends State<MySafePaymentsScreen>
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        color: AmyalColors.primary,
+        color: AmialColors.primary,
         child: Obx(() {
           final ctrl = Get.find<SafePaymentController>();
           if (ctrl.isLoading.value && ctrl.payments.isEmpty) {
             return const Center(
-                child: CircularProgressIndicator(color: AmyalColors.primary));
+                child: CircularProgressIndicator(color: AmialColors.primary));
           }
           if (ctrl.payments.isEmpty) {
             return ListView(
               children: [
                 SizedBox(height: MediaQuery.of(context).size.height * 0.15),
                 Icon(Icons.shield_outlined,
-                    size: 80, color: AmyalColors.textMuted.withValues(alpha: 0.5)),
+                    size: 80, color: AmialColors.textMuted.withValues(alpha: 0.5)),
                 const SizedBox(height: 16),
                 const Center(
                   child: Text('لا توجد عمليات دفع آمن',
@@ -90,7 +90,7 @@ class _MySafePaymentsScreenState extends State<MySafePaymentsScreen>
                     child: Text(
                       'الدفع الآمن يحمي مالك في عمليات الشراء — الأموال محجوزة حتى تأكيد الاستلام',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: AmyalColors.textSecondary, fontSize: 12),
+                      style: TextStyle(color: AmialColors.textSecondary, fontSize: 12),
                     ),
                   ),
                 ),
@@ -101,7 +101,7 @@ class _MySafePaymentsScreenState extends State<MySafePaymentsScreen>
             padding: const EdgeInsets.only(top: 8, bottom: 80),
             itemCount: ctrl.payments.length,
             separatorBuilder: (_, _) =>
-                const Divider(height: 1, color: AmyalColors.border),
+                const Divider(height: 1, color: AmialColors.border),
             itemBuilder: (context, i) => _PaymentTile(payment: ctrl.payments[i]),
           );
         }),
@@ -117,7 +117,7 @@ class _MySafePaymentsScreenState extends State<MySafePaymentsScreen>
 }
 
 class _PaymentTile extends StatelessWidget {
-  final AmyalSafePayment payment;
+  final AmialSafePayment payment;
   const _PaymentTile({required this.payment});
 
   @override
@@ -146,7 +146,7 @@ class _PaymentTile extends StatelessWidget {
           if (payment.createdAt != null)
             Text(
               _fmtRelative(payment.createdAt!),
-              style: const TextStyle(fontSize: 10, color: AmyalColors.textMuted),
+              style: const TextStyle(fontSize: 10, color: AmialColors.textMuted),
             ),
         ],
       ),
@@ -179,7 +179,7 @@ class _PaymentTile extends StatelessWidget {
       case 'funded':
       case 'in_delivery':
       case 'delivered':
-        return _StatusVisual(Icons.local_shipping, AmyalColors.primary);
+        return _StatusVisual(Icons.local_shipping, AmialColors.primary);
       case 'released_to_seller':
         return _StatusVisual(Icons.check_circle, Colors.green.shade700);
       case 'refunded_to_buyer':
@@ -190,7 +190,7 @@ class _PaymentTile extends StatelessWidget {
       case 'partially_refunded':
         return _StatusVisual(Icons.handshake, Colors.amber.shade700);
       default:
-        return _StatusVisual(Icons.shield, AmyalColors.primary);
+        return _StatusVisual(Icons.shield, AmialColors.primary);
     }
   }
 

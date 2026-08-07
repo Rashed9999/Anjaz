@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/domain/repositories/customer_credit_repo.dart';
+import 'package:amial_pay/features/merchant/domain/repositories/customer_credit_repo.dart';
 
 /// AMIAL-CUSTOMER-CREDIT-001 — متحكّم نظام الديون.
 class CustomerCreditController extends GetxController implements GetxService {

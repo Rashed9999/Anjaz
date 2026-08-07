@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/donations/controllers/donations_controller.dart';
-import 'package:amyal_pay/features/donations/domain/models/donation_models.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/donations/controllers/donations_controller.dart';
+import 'package:amial_pay/features/donations/domain/models/donation_models.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-DONATIONS-001 (v1.2)
 class CampaignDetailScreen extends StatefulWidget {
@@ -22,7 +22,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
     });
   }
 
-  Future<void> _openDonateSheet(AmyalCharityCampaign campaign) async {
+  Future<void> _openDonateSheet(AmialCharityCampaign campaign) async {
     final amountCtrl = TextEditingController();
     final messageCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -52,7 +52,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                     Row(
                       children: [
                         const Icon(Icons.volunteer_activism,
-                            color: AmyalColors.primary, size: 24),
+                            color: AmialColors.primary, size: 24),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -69,7 +69,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
 
                     // Quick amounts
                     const Text('مبالغ مقترحة:',
-                        style: TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+                        style: TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -81,13 +81,13 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
-                            color: AmyalColors.yellow.withValues(alpha: 0.2),
+                            color: AmialColors.yellow.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AmyalColors.yellow),
+                            border: Border.all(color: AmialColors.yellow),
                           ),
                           child: Text('$amt ر.ي',
                               style: const TextStyle(
-                                  color: AmyalColors.primary,
+                                  color: AmialColors.primary,
                                   fontWeight: FontWeight.w600)),
                         ),
                       )).toList(),
@@ -124,7 +124,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                           'لن يظهر اسمك في قائمة المتبرعين العامة',
                           style: TextStyle(fontSize: 11)),
                       value: isAnonymous,
-                      activeColor: AmyalColors.primary,
+                      activeColor: AmialColors.primary,
                       onChanged: (v) => setSheetState(() => isAnonymous = v ?? false),
                       controlAffinity: ListTileControlAffinity.leading,
                       dense: true,
@@ -158,7 +158,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                             style: TextStyle(
                                 fontSize: 15, fontWeight: FontWeight.w600)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AmyalColors.primary,
+                          backgroundColor: AmialColors.primary,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
@@ -197,7 +197,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تفاصيل الحملة'),
       ),
@@ -205,7 +205,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
         final ctrl = Get.find<DonationsController>();
         final campaign = ctrl.selectedCampaign.value;
         if (ctrl.isLoading.value || campaign == null) {
-          return const Center(child: CircularProgressIndicator(color: AmyalColors.primary));
+          return const Center(child: CircularProgressIndicator(color: AmialColors.primary));
         }
 
         return Column(
@@ -242,7 +242,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                             ),
                             if (campaign.organization?.isVerified == true)
                               const Icon(Icons.verified,
-                                  color: AmyalColors.primary, size: 20),
+                                  color: AmialColors.primary, size: 20),
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -251,7 +251,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                         if (campaign.organization != null)
                           Text('بواسطة ${campaign.organization!.nameAr}',
                               style: const TextStyle(
-                                  fontSize: 12, color: AmyalColors.textSecondary)),
+                                  fontSize: 12, color: AmialColors.textSecondary)),
 
                         const SizedBox(height: 16),
 
@@ -261,7 +261,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AmyalColors.border),
+                            border: Border.all(color: AmialColors.border),
                           ),
                           child: Column(
                             children: [
@@ -276,12 +276,12 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                                         style: const TextStyle(
                                             fontSize: 20,
                                             fontWeight: FontWeight.bold,
-                                            color: AmyalColors.primary),
+                                            color: AmialColors.primary),
                                       ),
                                       Text('من ${campaign.targetAmount} ر.ي',
                                           style: const TextStyle(
                                               fontSize: 11,
-                                              color: AmyalColors.textMuted)),
+                                              color: AmialColors.textMuted)),
                                     ],
                                   ),
                                   Column(
@@ -294,7 +294,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                                       Text('${campaign.donorCount} متبرع',
                                           style: const TextStyle(
                                               fontSize: 11,
-                                              color: AmyalColors.textMuted)),
+                                              color: AmialColors.textMuted)),
                                     ],
                                   ),
                                 ],
@@ -302,8 +302,8 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                               const SizedBox(height: 8),
                               LinearProgressIndicator(
                                 value: campaign.progressPercentage / 100,
-                                backgroundColor: AmyalColors.border,
-                                color: AmyalColors.primary,
+                                backgroundColor: AmialColors.border,
+                                color: AmialColors.primary,
                                 minHeight: 8,
                               ),
                               if (campaign.daysRemaining != null) ...[
@@ -311,14 +311,14 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                                 Row(
                                   children: [
                                     const Icon(Icons.schedule,
-                                        size: 14, color: AmyalColors.textMuted),
+                                        size: 14, color: AmialColors.textMuted),
                                     const SizedBox(width: 4),
                                     Text(
                                       campaign.daysRemaining! > 0
                                           ? 'متبقي ${campaign.daysRemaining} يوم'
                                           : 'انتهت',
                                       style: const TextStyle(
-                                          fontSize: 11, color: AmyalColors.textMuted),
+                                          fontSize: 11, color: AmialColors.textMuted),
                                     ),
                                   ],
                                 ),
@@ -342,13 +342,13 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: AmyalColors.yellow.withValues(alpha: 0.2),
+                              color: AmialColors.yellow.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
                               children: [
                                 const Icon(Icons.groups,
-                                    color: AmyalColors.primary),
+                                    color: AmialColors.primary),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
@@ -367,11 +367,11 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                           Row(
                             children: [
                               const Icon(Icons.location_on,
-                                  size: 16, color: AmyalColors.textMuted),
+                                  size: 16, color: AmialColors.textMuted),
                               const SizedBox(width: 4),
                               Text(campaign.locationAr!,
                                   style: const TextStyle(
-                                      fontSize: 12, color: AmyalColors.textSecondary)),
+                                      fontSize: 12, color: AmialColors.textSecondary)),
                             ],
                           ),
                         ],
@@ -401,7 +401,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border(top: BorderSide(color: AmyalColors.border)),
+                  border: Border(top: BorderSide(color: AmialColors.border)),
                 ),
                 child: ElevatedButton.icon(
                   onPressed: () => _openDonateSheet(campaign),
@@ -409,7 +409,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                   label: const Text('تبرع الآن',
                       style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
+                    backgroundColor: AmialColors.primary,
                     foregroundColor: Colors.white,
                     minimumSize: const Size(double.infinity, 50),
                   ),
@@ -424,17 +424,17 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
   Widget _placeholderBanner() {
     return Container(
       height: 200,
-      color: AmyalColors.yellow.withValues(alpha: 0.25),
+      color: AmialColors.yellow.withValues(alpha: 0.25),
       child: const Center(
         child: Icon(Icons.volunteer_activism,
-            size: 64, color: AmyalColors.primary),
+            size: 64, color: AmialColors.primary),
       ),
     );
   }
 }
 
 class _DonorTile extends StatelessWidget {
-  final AmyalRecentDonation donation;
+  final AmialRecentDonation donation;
   const _DonorTile({required this.donation});
 
   @override
@@ -445,14 +445,14 @@ class _DonorTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AmyalColors.border),
+        border: Border.all(color: AmialColors.border),
       ),
       child: Row(
         children: [
           const CircleAvatar(
             radius: 16,
-            backgroundColor: AmyalColors.background,
-            child: Icon(Icons.person, color: AmyalColors.primary, size: 18),
+            backgroundColor: AmialColors.background,
+            child: Icon(Icons.person, color: AmialColors.primary, size: 18),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -465,13 +465,13 @@ class _DonorTile extends StatelessWidget {
                   Text(donation.message!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+                      style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
               ],
             ),
           ),
           Text('${donation.amount} ر.ي',
               style: const TextStyle(
-                  fontSize: 12, color: AmyalColors.primary, fontWeight: FontWeight.bold)),
+                  fontSize: 12, color: AmialColors.primary, fontWeight: FontWeight.bold)),
         ],
       ),
     );

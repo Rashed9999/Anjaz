@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/family_fund/controllers/funds_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/amial_result_sheet.dart';
+import 'package:amial_pay/features/family_fund/controllers/funds_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/amial_result_sheet.dart';
 
 /// AMIAL-FUND-FAMILY-001 (v0.9-D)
 class CreateFundScreen extends StatefulWidget {
@@ -30,7 +30,7 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    // AMYAL-DS-001: ورقة النتيجة الموحّدة.
+    // AMIAL-DS-001: ورقة النتيجة الموحّدة.
     final ctrl = Get.find<FundsController>();
     final done = await AmialResultSheet.run<bool>(
       context,
@@ -63,7 +63,7 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('صندوق عائلي جديد'),
       ),
@@ -83,7 +83,7 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
                 const SizedBox(height: 8),
                 const Text(
                   'سيتم تعيينك كـ owner، ويمكنك دعوة الأعضاء بأرقامهم.',
-                  style: TextStyle(color: AmyalColors.textSecondary, fontSize: 12),
+                  style: TextStyle(color: AmialColors.textSecondary, fontSize: 12),
                 ),
                 const SizedBox(height: 24),
 
@@ -136,7 +136,7 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
                 const SizedBox(height: 16),
 
                 Card(
-                  color: AmyalColors.yellow.withValues(alpha: 0.15),
+                  color: AmialColors.yellow.withValues(alpha: 0.15),
                   child: SwitchListTile(
                     title: const Text('موافقة المالك للصرف'),
                     subtitle: const Text(
@@ -144,7 +144,7 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
                       style: TextStyle(fontSize: 11),
                     ),
                     value: _requireApproval,
-                    activeThumbColor: AmyalColors.primary,
+                    activeThumbColor: AmialColors.primary,
                     onChanged: (v) => setState(() => _requireApproval = v),
                   ),
                 ),
@@ -154,7 +154,7 @@ class _CreateFundScreenState extends State<CreateFundScreen> {
                 ElevatedButton(
                   onPressed: ctrl.isSubmitting.value ? null : _submit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
+                    backgroundColor: AmialColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),

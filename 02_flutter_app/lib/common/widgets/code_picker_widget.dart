@@ -1,9 +1,9 @@
 import 'package:country_code_picker/country_code_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_selection_dialog.dart';
-import 'package:amyal_pay/features/language/controllers/localization_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
+import 'package:amial_pay/common/widgets/custom_selection_dialog.dart';
+import 'package:amial_pay/features/language/controllers/localization_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
 
 class CodePickerWidget extends StatefulWidget {
   final ValueChanged<CountryCode>? onChanged;

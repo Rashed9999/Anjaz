@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/features/withdraw/controllers/customer_withdraw_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/features/withdraw/controllers/customer_withdraw_controller.dart';
 
 /// AMIAL-CUSTOMER-WITHDRAW-001 — شاشة الطلب المعلّق.
 ///
@@ -96,27 +96,27 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
               ],
             ),
             child: const Icon(Icons.warning_amber_rounded,
-                color: AmyalColors.red, size: 40),
+                color: AmialColors.red, size: 40),
           ),
           const SizedBox(height: 16),
           const Text('هل أنت متأكد من إلغاء العملية؟',
               style: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
-                  color: AmyalColors.primary)),
+                  color: AmialColors.primary)),
           const SizedBox(height: 10),
           const Text(
             'بمجرد الإلغاء، لن يتمكن الوكيل من إتمام عملية السحب '
             'باستخدام هذا الرمز. سيعود المبلغ فوراً إلى محفظتك.',
             textAlign: TextAlign.center,
             style: TextStyle(
-                fontSize: 13, color: AmyalColors.textSecondary, height: 1.6),
+                fontSize: 13, color: AmialColors.textSecondary, height: 1.6),
           ),
           const SizedBox(height: 20),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, false),
             style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
+              backgroundColor: AmialColors.primary,
               minimumSize: const Size.fromHeight(52),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14)),
@@ -129,8 +129,8 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
             icon: const Icon(Icons.close, size: 18),
             label: const Text('نعم، إلغاء العملية'),
             style: OutlinedButton.styleFrom(
-              foregroundColor: AmyalColors.red,
-              side: BorderSide(color: AmyalColors.red.withValues(alpha: 0.4)),
+              foregroundColor: AmialColors.red,
+              side: BorderSide(color: AmialColors.red.withValues(alpha: 0.4)),
               minimumSize: const Size.fromHeight(52),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14)),
@@ -139,10 +139,10 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
           const SizedBox(height: 12),
           const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(Icons.verified_user_outlined,
-                size: 14, color: AmyalColors.textMuted),
+                size: 14, color: AmialColors.textMuted),
             SizedBox(width: 6),
             Text('عملية آمنة ومحمية من قبل أميال باي',
-                style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+                style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
           ]),
         ]),
       ),
@@ -171,7 +171,7 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+        SnackBar(content: Text(m), backgroundColor: AmialColors.red),
       );
 
   String _fmtDur(Duration d) {
@@ -183,7 +183,7 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تفاصيل السحب'),
         leading: IconButton(
@@ -216,7 +216,7 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: AmyalColors.primary,
+                color: AmialColors.primary,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Column(children: [
@@ -267,14 +267,14 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: expired ? AmyalColors.red.withValues(alpha: 0.1) : AmyalColors.yellow.withValues(alpha: 0.2),
+                color: expired ? AmialColors.red.withValues(alpha: 0.1) : AmialColors.yellow.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: expired ? AmyalColors.red : AmyalColors.yellowDark),
+                border: Border.all(color: expired ? AmialColors.red : AmialColors.yellowDark),
               ),
               child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                 Icon(
                   expired ? Icons.timer_off : Icons.timer,
-                  color: expired ? AmyalColors.red : AmyalColors.yellowDark,
+                  color: expired ? AmialColors.red : AmialColors.yellowDark,
                 ),
                 const SizedBox(width: 10),
                 Text(
@@ -282,7 +282,7 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: expired ? AmyalColors.red : AmyalColors.yellowDark,
+                    color: expired ? AmialColors.red : AmialColors.yellowDark,
                   ),
                 ),
               ]),
@@ -299,9 +299,9 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
               child: Column(children: [
                 _row('مبلغ السحب', AmialMoney.yer(amount)),
                 const Divider(height: 24),
-                _row('رسوم العملية', AmialMoney.yer(fee), color: AmyalColors.red),
+                _row('رسوم العملية', AmialMoney.yer(fee), color: AmialColors.red),
                 const Divider(height: 24),
-                _row('الإجمالي المخصوم', AmialMoney.yer(total), bold: true, color: AmyalColors.primary, size: 18),
+                _row('الإجمالي المخصوم', AmialMoney.yer(total), bold: true, color: AmialColors.primary, size: 18),
               ]),
             ),
             const SizedBox(height: 24),
@@ -315,8 +315,8 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
                   label: const Text('نسخ الرقم'),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size.fromHeight(50),
-                    side: const BorderSide(color: AmyalColors.primary),
-                    foregroundColor: AmyalColors.primary,
+                    side: const BorderSide(color: AmialColors.primary),
+                    foregroundColor: AmialColors.primary,
                   ),
                 ),
               ),
@@ -327,7 +327,7 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
                   icon: const Icon(Icons.close, size: 18),
                   label: const Text('إلغاء'),
                   style: FilledButton.styleFrom(
-                    backgroundColor: AmyalColors.red,
+                    backgroundColor: AmialColors.red,
                     minimumSize: const Size.fromHeight(50),
                   ),
                 )),

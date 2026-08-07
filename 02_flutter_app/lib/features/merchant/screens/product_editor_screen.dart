@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-INVENTORY-002 — «إضافة/تعديل منتج» (التصميم 45):
 /// المعلومات الأساسية (اسم + باركود + فئة) → المخزون والتواريخ (عدّاد كمية +
@@ -147,7 +147,7 @@ class _ProductEditorScreenState extends State<ProductEditorScreen> {
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: AmyalColors.red),
+        SnackBar(content: Text(m), backgroundColor: AmialColors.red),
       );
 
   Future<void> _pickDate(bool production) async {
@@ -165,7 +165,7 @@ class _ProductEditorScreenState extends State<ProductEditorScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Text(_isEdit ? 'تعديل منتج' : 'إضافة منتج جديد'),
       ),
@@ -185,7 +185,7 @@ class _ProductEditorScreenState extends State<ProductEditorScreen> {
                 style:
                     const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
+              backgroundColor: AmialColors.primary,
               minimumSize: const Size.fromHeight(54),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
@@ -223,7 +223,7 @@ class _ProductEditorScreenState extends State<ProductEditorScreen> {
                 return ChoiceChip(
                   label: Text(cat, style: const TextStyle(fontSize: 12)),
                   selected: selected,
-                  selectedColor: AmyalColors.primary,
+                  selectedColor: AmialColors.primary,
                   backgroundColor: const Color(0xFFF0F1F3),
                   labelStyle: TextStyle(
                       color: selected ? Colors.white : Colors.black87),
@@ -273,7 +273,7 @@ class _ProductEditorScreenState extends State<ProductEditorScreen> {
               const Spacer(),
               const Text('الكمية المتوفرة',
                   style: TextStyle(
-                      fontSize: 13, color: AmyalColors.textSecondary)),
+                      fontSize: 13, color: AmialColors.textSecondary)),
             ]),
             const SizedBox(height: 14),
             Row(children: [
@@ -303,7 +303,7 @@ class _ProductEditorScreenState extends State<ProductEditorScreen> {
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(
-                      color: AmyalColors.yellowDark, width: 1),
+                      color: AmialColors.yellowDark, width: 1),
                 ),
               ),
             ),
@@ -321,7 +321,7 @@ class _ProductEditorScreenState extends State<ProductEditorScreen> {
               style:
                   const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           const SizedBox(width: 8),
-          Icon(icon, size: 18, color: AmyalColors.yellowDark),
+          Icon(icon, size: 18, color: AmialColors.yellowDark),
         ]),
       );
 
@@ -341,21 +341,21 @@ class _ProductEditorScreenState extends State<ProductEditorScreen> {
         child: Text(t,
             textAlign: TextAlign.right,
             style: const TextStyle(
-                fontSize: 12, color: AmyalColors.textSecondary)),
+                fontSize: 12, color: AmialColors.textSecondary)),
       );
 
   InputDecoration _input(String hint) => InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(fontSize: 13, color: AmyalColors.textMuted),
+        hintStyle: const TextStyle(fontSize: 13, color: AmialColors.textMuted),
         filled: true,
         fillColor: const Color(0xFFF9FAFB),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AmyalColors.border),
+          borderSide: const BorderSide(color: AmialColors.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AmyalColors.border),
+          borderSide: const BorderSide(color: AmialColors.border),
         ),
       );
 
@@ -382,11 +382,11 @@ class _ProductEditorScreenState extends State<ProductEditorScreen> {
           decoration: BoxDecoration(
             color: const Color(0xFFF9FAFB),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AmyalColors.border),
+            border: Border.all(color: AmialColors.border),
           ),
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             const Icon(Icons.calendar_month_outlined,
-                size: 16, color: AmyalColors.textMuted),
+                size: 16, color: AmialColors.textMuted),
             const SizedBox(width: 6),
             Text(
               value == null
@@ -395,7 +395,7 @@ class _ProductEditorScreenState extends State<ProductEditorScreen> {
               style: TextStyle(
                   fontSize: 12,
                   color: value == null
-                      ? AmyalColors.textMuted
+                      ? AmialColors.textMuted
                       : Colors.black87),
             ),
           ]),

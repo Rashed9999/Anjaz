@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/fuel_station/controllers/fuel_station_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
 
 /// AMIAL-FUEL-001 — شاشة إعدادات المحطة.
 /// تابات: 1) المضخّات 2) الأنواع والأسعار 3) بيانات المحطة
@@ -32,12 +32,12 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
     return DefaultTabController(
       length: 4,
       child: Scaffold(
-        backgroundColor: AmyalColors.background,
+        backgroundColor: AmialColors.background,
         appBar: AppBar(
           title: const Text('إعدادات المحطة'),
           bottom: const TabBar(
             isScrollable: true,
-            indicatorColor: AmyalColors.yellow,
+            indicatorColor: AmialColors.yellow,
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
             tabs: [
@@ -87,8 +87,8 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
     final dir = (h['direction'] ?? 'same').toString();
     final delta = double.tryParse('${h['delta']}') ?? 0;
     final Color color = dir == 'up'
-        ? AmyalColors.red
-        : (dir == 'down' ? Colors.green.shade700 : AmyalColors.textMuted);
+        ? AmialColors.red
+        : (dir == 'down' ? Colors.green.shade700 : AmialColors.textMuted);
     final IconData icon = dir == 'up'
         ? Icons.arrow_upward
         : (dir == 'down' ? Icons.arrow_downward : Icons.remove);
@@ -103,7 +103,7 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AmyalColors.border),
+        border: Border.all(color: AmialColors.border),
       ),
       child: Row(
         children: [
@@ -125,14 +125,14 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 2),
                 Text('${h['old_price']} ← ${h['new_price']} ر.ي/لتر',
-                    style: const TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+                    style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
                 if ((h['changed_by'] ?? '').toString().isNotEmpty || whenStr.isNotEmpty)
                   Text(
                     [
                       if ((h['changed_by'] ?? '').toString().isNotEmpty) 'بواسطة ${h['changed_by']}',
                       if (whenStr.isNotEmpty) whenStr,
                     ].join(' · '),
-                    style: const TextStyle(fontSize: 11, color: AmyalColors.textMuted),
+                    style: const TextStyle(fontSize: 11, color: AmialColors.textMuted),
                   ),
               ],
             ),
@@ -153,9 +153,9 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
         return const Center(child: CircularProgressIndicator());
       }
       return Scaffold(
-        backgroundColor: AmyalColors.background,
+        backgroundColor: AmialColors.background,
         floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: AmyalColors.primary,
+          backgroundColor: AmialColors.primary,
           onPressed: _addPumpDialog,
           icon: const Icon(Icons.add),
           label: const Text('مضخّة جديدة'),
@@ -191,11 +191,11 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
         Container(
           width: 50, height: 50,
           decoration: BoxDecoration(
-            color: isActive ? AmyalColors.primary.withValues(alpha: 0.1) : Colors.grey.shade200,
+            color: isActive ? AmialColors.primary.withValues(alpha: 0.1) : Colors.grey.shade200,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(Icons.local_gas_station,
-              color: isActive ? AmyalColors.primary : Colors.grey, size: 26),
+              color: isActive ? AmialColors.primary : Colors.grey, size: 26),
         ),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -207,7 +207,7 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: isMechanical
-                    ? AmyalColors.yellow.withValues(alpha: 0.3)
+                    ? AmialColors.yellow.withValues(alpha: 0.3)
                     : Colors.blue.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -304,7 +304,7 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
                 Navigator.pop(ctx);
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
+                SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red),
               );
               }
             },
@@ -322,9 +322,9 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
         return const Center(child: CircularProgressIndicator());
       }
       return Scaffold(
-        backgroundColor: AmyalColors.background,
+        backgroundColor: AmialColors.background,
         floatingActionButton: FloatingActionButton.extended(
-          backgroundColor: AmyalColors.yellowDark,
+          backgroundColor: AmialColors.yellowDark,
           foregroundColor: Colors.white,
           onPressed: _addProductDialog,
           icon: const Icon(Icons.add),
@@ -357,10 +357,10 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
           Container(
             width: 50, height: 50,
             decoration: BoxDecoration(
-              color: AmyalColors.yellow.withValues(alpha: 0.2),
+              color: AmialColors.yellow.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.local_gas_station, color: AmyalColors.yellowDark, size: 24),
+            child: const Icon(Icons.local_gas_station, color: AmialColors.yellowDark, size: 24),
           ),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -372,7 +372,7 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('${product['price_per_liter']} ر.ي',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AmialColors.primary)),
             Text('للّتر', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
           ]),
           const SizedBox(width: 4),
@@ -415,7 +415,7 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
               Navigator.pop(ctx);
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
+              SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red),
             );
             }
           },
@@ -463,7 +463,7 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
               Navigator.pop(ctx);
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
+              SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red),
             );
             }
           },
@@ -502,13 +502,13 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: Text(ok ? 'تم الحفظ' : c.lastError.value),
-                backgroundColor: ok ? Colors.green : AmyalColors.red,
+                backgroundColor: ok ? Colors.green : AmialColors.red,
               ));
             },
             icon: const Icon(Icons.save),
             label: const Text('حفظ البيانات'),
             style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
+              backgroundColor: AmialColors.primary,
               minimumSize: const Size.fromHeight(50),
             ),
           ),
@@ -526,7 +526,7 @@ class _FuelSettingsScreenState extends State<FuelSettingsScreen> {
         textAlign: TextAlign.right,
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: Icon(icon, color: AmyalColors.primary),
+          prefixIcon: Icon(icon, color: AmialColors.primary),
           filled: true, fillColor: Colors.white,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
         ),

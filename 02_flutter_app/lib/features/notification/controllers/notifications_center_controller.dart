@@ -1,5 +1,5 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/notification/domain/reposotories/notifications_center_repo.dart';
+import 'package:amial_pay/features/notification/domain/reposotories/notifications_center_repo.dart';
 
 /// AMIAL-NOTIFICATIONS-001 — متحكّم مركز الإشعارات.
 class NotificationsCenterController extends GetxController implements GetxService {

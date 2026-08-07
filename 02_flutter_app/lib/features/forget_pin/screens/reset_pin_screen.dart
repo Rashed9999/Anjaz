@@ -1,7 +1,7 @@
-import 'package:amyal_pay/common/widgets/custom_large_widget.dart';
-import 'package:amyal_pay/features/auth/widgets/pin_field_widget.dart';
-import 'package:amyal_pay/features/forget_pin/controllers/forget_pin_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
+import 'package:amial_pay/common/widgets/custom_large_widget.dart';
+import 'package:amial_pay/features/auth/widgets/pin_field_widget.dart';
+import 'package:amial_pay/features/forget_pin/controllers/forget_pin_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 

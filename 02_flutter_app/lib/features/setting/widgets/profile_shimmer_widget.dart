@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:amyal_pay/util/dimensions.dart';
+import 'package:amial_pay/util/dimensions.dart';
 
 class ProfileShimmerWidget extends StatelessWidget {
   const ProfileShimmerWidget({super.key});

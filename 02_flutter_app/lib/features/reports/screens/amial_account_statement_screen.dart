@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/common/widgets/amial_form.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/helper/pdf_downloader_helper.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/common/widgets/amial_form.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/pdf_downloader_helper.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:http/http.dart' as http;
-import 'package:amyal_pay/data/api/secure_storage_helper.dart';
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/data/api/secure_storage_helper.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
 /// AMIAL-STATEMENT-001 — كشف حساب المحفظة.
 ///
@@ -94,7 +94,7 @@ class _AmialAccountStatementScreenState
       locale: const Locale('ar'),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(primary: AmyalColors.primary),
+          colorScheme: const ColorScheme.light(primary: AmialColors.primary),
         ),
         child: child!,
       ),
@@ -168,7 +168,7 @@ class _AmialAccountStatementScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       body: SafeArea(
         child: Column(children: [
           AmialScreenHeader(
@@ -199,11 +199,11 @@ class _AmialAccountStatementScreenState
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AmyalColors.border),
+            border: Border.all(color: AmialColors.border),
           ),
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             const Icon(Icons.calendar_today_rounded,
-                size: 14, color: AmyalColors.primary),
+                size: 14, color: AmialColors.primary),
             const SizedBox(width: 8),
             Text('${_d(_from)}  —  ${_d(_to)}',
                 textDirection: TextDirection.ltr,
@@ -220,16 +220,16 @@ class _AmialAccountStatementScreenState
   Widget _body() {
     if (_loading) {
       return const Center(
-          child: CircularProgressIndicator(color: AmyalColors.primary));
+          child: CircularProgressIndicator(color: AmialColors.primary));
     }
     if (_error.isNotEmpty) {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const Icon(Icons.cloud_off_rounded,
-              size: 40, color: AmyalColors.textMuted),
+              size: 40, color: AmialColors.textMuted),
           const SizedBox(height: 10),
           Text(_error,
-              style: const TextStyle(color: AmyalColors.textSecondary)),
+              style: const TextStyle(color: AmialColors.textSecondary)),
           const SizedBox(height: 10),
           TextButton(onPressed: _load, child: const Text('إعادة المحاولة')),
         ]),
@@ -239,7 +239,7 @@ class _AmialAccountStatementScreenState
       return const Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.receipt_long_outlined,
-              size: 44, color: AmyalColors.textMuted),
+              size: 44, color: AmialColors.textMuted),
           SizedBox(height: 10),
           Text('لا توجد حركات في هذه الفترة',
               style: TextStyle(
@@ -248,7 +248,7 @@ class _AmialAccountStatementScreenState
                   color: Color(0xFF1A2433))),
           SizedBox(height: 4),
           Text('غيّر الفترة من زرّ التاريخ أعلاه',
-              style: TextStyle(fontSize: 12, color: AmyalColors.textSecondary)),
+              style: TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
         ]),
       );
     }
@@ -260,7 +260,7 @@ class _AmialAccountStatementScreenState
           margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: AmyalColors.yellow.withValues(alpha: 0.18),
+            color: AmialColors.yellow.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(10),
           ),
           child: const Text(
@@ -316,7 +316,7 @@ class _AmialAccountStatementScreenState
 
     return Container(
       decoration: const BoxDecoration(
-        color: AmyalColors.primary,
+        color: AmialColors.primary,
         borderRadius: BorderRadius.vertical(top: Radius.circular(13)),
       ),
       child: Row(children: [
@@ -371,20 +371,20 @@ class _AmialAccountStatementScreenState
         cell(
           debit > 0
               ? txt(AmialMoney.yer('$debit'),
-                  color: AmyalColors.red, w: FontWeight.bold)
-              : txt('—', color: AmyalColors.textMuted),
+                  color: AmialColors.red, w: FontWeight.bold)
+              : txt('—', color: AmialColors.textMuted),
           _wAmount,
         ),
         cell(
           credit > 0
               ? txt(AmialMoney.yer('$credit'),
                   color: const Color(0xFF16A34A), w: FontWeight.bold)
-              : txt('—', color: AmyalColors.textMuted),
+              : txt('—', color: AmialColors.textMuted),
           _wAmount,
         ),
         cell(
           txt(AmialMoney.yer('${r['balance'] ?? 0}'),
-              w: FontWeight.bold, color: AmyalColors.primary),
+              w: FontWeight.bold, color: AmialColors.primary),
           _wBalance,
         ),
       ]),
@@ -397,7 +397,7 @@ class _AmialAccountStatementScreenState
           child: Column(children: [
             Text(label,
                 style: const TextStyle(
-                    fontSize: 10, color: AmyalColors.textSecondary)),
+                    fontSize: 10, color: AmialColors.textSecondary)),
             const SizedBox(height: 2),
             Text(AmialMoney.yer(value),
                 maxLines: 1,
@@ -414,10 +414,10 @@ class _AmialAccountStatementScreenState
         border: Border(top: BorderSide(color: Color(0xFFE6E9EF))),
       ),
       child: Row(children: [
-        item('افتتاحي', _openingBalance, AmyalColors.textSecondary),
-        item('مدين', _totalDebit, AmyalColors.red),
+        item('افتتاحي', _openingBalance, AmialColors.textSecondary),
+        item('مدين', _totalDebit, AmialColors.red),
         item('دائن', _totalCredit, const Color(0xFF16A34A)),
-        item('ختامي', _closingBalance, AmyalColors.primary),
+        item('ختامي', _closingBalance, AmialColors.primary),
       ]),
     );
   }

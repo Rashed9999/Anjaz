@@ -23,9 +23,9 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/features/home/widgets/show_case/models/tooltip_action_config.dart';
-import 'package:amyal_pay/features/home/widgets/show_case/widget/action_widget.dart';
-import 'package:amyal_pay/features/home/widgets/show_case/widget/tooltip_slide_transition.dart';
+import 'package:amial_pay/features/home/widgets/show_case/models/tooltip_action_config.dart';
+import 'package:amial_pay/features/home/widgets/show_case/widget/action_widget.dart';
+import 'package:amial_pay/features/home/widgets/show_case/widget/tooltip_slide_transition.dart';
 
 import 'enum.dart';
 import 'get_position.dart';

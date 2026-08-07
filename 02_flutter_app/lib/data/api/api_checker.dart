@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/models/error_model.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/helper/route_helper.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/common/models/error_model.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/helper/route_helper.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
 
 class ApiChecker {
   static void checkApi(Response response) {

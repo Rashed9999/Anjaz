@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/fuel_station/controllers/fuel_station_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
 
 /// AMIAL-FUEL-002 — إدارة النوبات (فتح/إغلاق) + العجز والفائض.
 class FuelShiftsScreen extends StatefulWidget {
@@ -28,7 +28,7 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('النوبات والعجز/الفائض'),
       ),
@@ -73,7 +73,7 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
           border: Border.all(color: Colors.grey.shade300),
         ),
         child: Column(children: [
-          Icon(Icons.event_available, size: 40, color: AmyalColors.primary),
+          Icon(Icons.event_available, size: 40, color: AmialColors.primary),
           const SizedBox(height: 8),
           const Text('لا توجد نوبة مفتوحة',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
@@ -139,7 +139,7 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
           icon: const Icon(Icons.stop_circle),
           label: const Text('إغلاق النوبة'),
           style: FilledButton.styleFrom(
-            backgroundColor: AmyalColors.yellow,
+            backgroundColor: AmialColors.yellow,
             foregroundColor: Colors.black87,
             minimumSize: const Size.fromHeight(48),
           ),
@@ -179,7 +179,7 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
               Navigator.pop(ctx);
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
+              SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red),
             );
             }
           },
@@ -217,9 +217,9 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow.withValues(alpha: 0.15),
+                  color: AmialColors.yellow.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AmyalColors.yellow),
+                  border: Border.all(color: AmialColors.yellow),
                 ),
                 child: Text(
                   'النقد الافتتاحي: ${shift['opening_cash']} ر.ي\n'
@@ -300,7 +300,7 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
                   _showVarianceResult();
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red),
+                    SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red),
                   );
                 }
               },
@@ -331,7 +331,7 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
       title = '⬆️ فائض ${variance.toStringAsFixed(0)} ر.ي';
       icon = Icons.trending_up;
     } else {
-      bgColor = AmyalColors.red;
+      bgColor = AmialColors.red;
       title = '⬇️ عجز ${(-variance).toStringAsFixed(0)} ر.ي';
       icon = Icons.trending_down;
     }
@@ -394,7 +394,7 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
       varColor = Colors.blue;
       varText = '+${variance.toStringAsFixed(0)} فائض';
     } else {
-      varColor = AmyalColors.red;
+      varColor = AmialColors.red;
       varText = '${variance.toStringAsFixed(0)} عجز';
     }
 

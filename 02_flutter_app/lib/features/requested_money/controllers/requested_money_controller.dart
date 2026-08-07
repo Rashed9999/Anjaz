@@ -1,11 +1,11 @@
-import 'package:amyal_pay/data/api/api_checker.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/setting/domain/models/requested_money_model.dart';
-import 'package:amyal_pay/features/requested_money/domain/models/withdraw_histroy_model.dart';
-import 'package:amyal_pay/features/requested_money/domain/reposotories/requested_money_repo.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/features/setting/domain/models/requested_money_model.dart';
+import 'package:amial_pay/features/requested_money/domain/models/withdraw_histroy_model.dart';
+import 'package:amial_pay/features/requested_money/domain/reposotories/requested_money_repo.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
 
 
 class RequestedMoneyController extends GetxController implements GetxService {

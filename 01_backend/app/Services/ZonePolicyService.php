@@ -30,7 +30,7 @@ class ZonePolicyService
     public const VALID_ZONES = ['SOUTH', 'NORTH', 'MIDDLE', 'OTHER', 'UNKNOWN'];
 
     /**
-     * AMYAL-ZONE-LABEL-001: الاسم العربي لرمز المنطقة — مصدر موحّد لكل الأماكن
+     * AMIAL-ZONE-LABEL-001: الاسم العربي لرمز المنطقة — مصدر موحّد لكل الأماكن
      * (كان تعيين SOUTH ناقصاً في EnforcesFinancialPolicy فيظهر «SOUTH» حرفياً).
      */
     public static function zoneNameAr(?string $zone): string

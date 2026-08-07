@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-DS-002 — نظام النماذج الموحّد.
 ///
@@ -96,9 +96,9 @@ class _AmialFormFieldState extends State<AmialFormField> {
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: hasError
-                      ? AmyalColors.red
+                      ? AmialColors.red
                       : _focused
-                          ? AmyalColors.primary
+                          ? AmialColors.primary
                           : Colors.transparent,
                   width: 1.5,
                 ),
@@ -111,7 +111,7 @@ class _AmialFormFieldState extends State<AmialFormField> {
                     style: const TextStyle(
                       fontSize: 12.5,
                       fontWeight: FontWeight.bold,
-                      color: AmyalColors.primary,
+                      color: AmialColors.primary,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -154,7 +154,7 @@ class _AmialFormFieldState extends State<AmialFormField> {
                         hintStyle: const TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w400,
-                            color: AmyalColors.textMuted),
+                            color: AmialColors.textMuted),
                       ),
                     ),
                 ],
@@ -165,7 +165,7 @@ class _AmialFormFieldState extends State<AmialFormField> {
                 padding: const EdgeInsets.only(top: 5, right: 6),
                 child: Text(state.errorText!,
                     style: const TextStyle(
-                        fontSize: 11.5, color: AmyalColors.red)),
+                        fontSize: 11.5, color: AmialColors.red)),
               ),
           ],
         );
@@ -209,7 +209,7 @@ class AmialSelectField extends StatelessWidget {
           children: [
             if (onTap != null)
               const Icon(Icons.keyboard_arrow_down_rounded,
-                  color: AmyalColors.textMuted, size: 22),
+                  color: AmialColors.textMuted, size: 22),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -218,7 +218,7 @@ class AmialSelectField extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 12.5,
                           fontWeight: FontWeight.bold,
-                          color: AmyalColors.primary)),
+                          color: AmialColors.primary)),
                   const SizedBox(height: 2),
                   Text(value,
                       maxLines: 1,
@@ -258,9 +258,9 @@ class AmialFieldAction extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(AmialFormTokens.radius),
-          border: Border.all(color: AmyalColors.border),
+          border: Border.all(color: AmialColors.border),
         ),
-        child: Icon(icon, size: 22, color: AmyalColors.primary),
+        child: Icon(icon, size: 22, color: AmialColors.primary),
       ),
     );
     return tooltip == null ? btn : Tooltip(message: tooltip!, child: btn);
@@ -393,7 +393,7 @@ class AmialActionRow extends StatelessWidget {
     required this.icon,
     required this.title,
     this.subtitle,
-    this.color = AmyalColors.primary,
+    this.color = AmialColors.primary,
     required this.onTap,
   });
 
@@ -413,7 +413,7 @@ class AmialActionRow extends StatelessWidget {
           child: Row(
             children: [
               const Icon(Icons.chevron_left_rounded,
-                  color: AmyalColors.textMuted, size: 22),
+                  color: AmialColors.textMuted, size: 22),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -429,7 +429,7 @@ class AmialActionRow extends StatelessWidget {
                           textAlign: TextAlign.end,
                           style: const TextStyle(
                               fontSize: 11.5,
-                              color: AmyalColors.textSecondary)),
+                              color: AmialColors.textSecondary)),
                     ],
                   ],
                 ),
@@ -479,7 +479,7 @@ class AmialActionSheet {
                 width: 42,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: AmyalColors.border,
+                  color: AmialColors.border,
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),

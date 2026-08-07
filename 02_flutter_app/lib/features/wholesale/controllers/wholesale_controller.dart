@@ -1,11 +1,11 @@
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/helper/pdf_downloader_helper.dart';
-import 'package:amyal_pay/features/wholesale/domain/repositories/wholesale_repo.dart';
-import 'package:amyal_pay/features/plans/screens/my_usage_screen.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/helper/pdf_downloader_helper.dart';
+import 'package:amial_pay/features/wholesale/domain/repositories/wholesale_repo.dart';
+import 'package:amial_pay/features/plans/screens/my_usage_screen.dart';
 
 /// AMIAL-WHOLESALE-001 — متحكّم الجملة.
 class WholesaleController extends GetxController implements GetxService {

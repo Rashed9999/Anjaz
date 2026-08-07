@@ -1,7 +1,7 @@
 /// AMIAL-FUND-FAMILY-001 (v0.9-D Flutter)
 library;
 
-class AmyalFund {
+class AmialFund {
   final int id;
   final String fundUlid;
   final String name;
@@ -14,7 +14,7 @@ class AmyalFund {
   final bool requireOwnerApprovalForDisbursement;
   final String? targetAmount; // AMIAL-FUND-002: المبلغ المستهدف
 
-  AmyalFund({
+  AmialFund({
     required this.id,
     required this.fundUlid,
     required this.name,
@@ -28,7 +28,7 @@ class AmyalFund {
     this.targetAmount,
   });
 
-  factory AmyalFund.fromJson(Map<String, dynamic> j) => AmyalFund(
+  factory AmialFund.fromJson(Map<String, dynamic> j) => AmialFund(
     id: j['id'] ?? 0,
     fundUlid: j['fund_ulid'] ?? '',
     name: j['name'] ?? '',
@@ -45,15 +45,15 @@ class AmyalFund {
   bool get isActive => status == 'active';
 }
 
-class AmyalFundMembership {
+class AmialFundMembership {
   final int membershipId;
   final String role;        // owner, admin, member, viewer
   final String status;      // active, invited, declined, removed
   final String totalContributed;
   final String totalDisbursed;
-  final AmyalFund? fund;
+  final AmialFund? fund;
 
-  AmyalFundMembership({
+  AmialFundMembership({
     required this.membershipId,
     required this.role,
     required this.status,
@@ -62,13 +62,13 @@ class AmyalFundMembership {
     this.fund,
   });
 
-  factory AmyalFundMembership.fromJson(Map<String, dynamic> j) => AmyalFundMembership(
+  factory AmialFundMembership.fromJson(Map<String, dynamic> j) => AmialFundMembership(
     membershipId: j['membership_id'] ?? 0,
     role: j['role'] ?? 'member',
     status: j['status'] ?? 'invited',
     totalContributed: j['total_contributed']?.toString() ?? '0',
     totalDisbursed: j['total_disbursed']?.toString() ?? '0',
-    fund: j['fund'] is Map ? AmyalFund.fromJson(Map<String, dynamic>.from(j['fund'])) : null,
+    fund: j['fund'] is Map ? AmialFund.fromJson(Map<String, dynamic>.from(j['fund'])) : null,
   );
 
   bool get isOwner => role == 'owner';
@@ -78,7 +78,7 @@ class AmyalFundMembership {
   bool get canApproveDisbursement => isActive && role == 'owner';
 }
 
-class AmyalFundTransaction {
+class AmialFundTransaction {
   final int id;
   final String txUlid;
   final int fundId;
@@ -95,7 +95,7 @@ class AmyalFundTransaction {
   final String? actorName;
   final String? beneficiaryName;
 
-  AmyalFundTransaction({
+  AmialFundTransaction({
     required this.id,
     required this.txUlid,
     required this.fundId,
@@ -112,7 +112,7 @@ class AmyalFundTransaction {
     this.beneficiaryName,
   });
 
-  factory AmyalFundTransaction.fromJson(Map<String, dynamic> j) => AmyalFundTransaction(
+  factory AmialFundTransaction.fromJson(Map<String, dynamic> j) => AmialFundTransaction(
     id: j['id'] ?? 0,
     txUlid: j['tx_ulid'] ?? '',
     fundId: j['fund_id'] ?? 0,

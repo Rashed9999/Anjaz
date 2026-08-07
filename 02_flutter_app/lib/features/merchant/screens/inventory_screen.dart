@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
-import 'package:amyal_pay/features/merchant/screens/product_editor_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/stock_alerts_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/inventory_audit_screen.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/features/merchant/screens/product_editor_screen.dart';
+import 'package:amial_pay/features/merchant/screens/stock_alerts_screen.dart';
+import 'package:amial_pay/features/merchant/screens/inventory_audit_screen.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-INVENTORY-001 — «إدارة المخزون» (التصميم 42/54):
 /// ملخص (إجمالي المنتجات/قيمة المخزون/تنبيهات النقص) + بحث + تصنيفات +
@@ -78,7 +78,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('إدارة المخزون'),
         actions: [
@@ -95,7 +95,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'inv-add',
-        backgroundColor: AmyalColors.primary,
+        backgroundColor: AmialColors.primary,
         foregroundColor: Colors.white,
         onPressed: () async {
           final saved =
@@ -116,7 +116,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
         return RefreshIndicator(
           onRefresh: () => c.loadProducts(),
-          color: AmyalColors.primary,
+          color: AmialColors.primary,
           child: CustomScrollView(slivers: [
             SliverToBoxAdapter(
               child: Padding(
@@ -126,13 +126,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   Row(children: [
                     Expanded(
                       child: _statCard('إجمالي المنتجات',
-                          '${c.products.length}', AmyalColors.primary,
+                          '${c.products.length}', AmialColors.primary,
                           Icons.inventory_2_outlined),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: _statCard('قيمة المخزون',
-                          AmialMoney.yer(totalValue), AmyalColors.yellowDark,
+                          AmialMoney.yer(totalValue), AmialColors.yellowDark,
                           Icons.payments_outlined),
                     ),
                     const SizedBox(width: 10),
@@ -182,12 +182,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             label: Text(cat,
                                 style: const TextStyle(fontSize: 12)),
                             selected: selected,
-                            selectedColor: AmyalColors.primary,
+                            selectedColor: AmialColors.primary,
                             backgroundColor: Colors.white,
                             labelStyle: TextStyle(
                                 color: selected
                                     ? Colors.white
-                                    : AmyalColors.primary),
+                                    : AmialColors.primary),
                             onSelected: (_) =>
                                 setState(() => _category = cat),
                           ),
@@ -204,14 +204,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
               const SliverFillRemaining(
                 child: Center(
                     child:
-                        CircularProgressIndicator(color: AmyalColors.primary)),
+                        CircularProgressIndicator(color: AmialColors.primary)),
               )
             else if (items.isEmpty)
               const SliverFillRemaining(
                 hasScrollBody: false,
                 child: Center(
                     child: Text('لا توجد منتجات — أضف أول منتج',
-                        style: TextStyle(color: AmyalColors.textMuted))),
+                        style: TextStyle(color: AmialColors.textMuted))),
               )
             else
               SliverPadding(
@@ -248,7 +248,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
         const SizedBox(height: 2),
         Text(label,
             style:
-                const TextStyle(fontSize: 10, color: AmyalColors.textMuted)),
+                const TextStyle(fontSize: 10, color: AmialColors.textMuted)),
       ]),
     );
   }
@@ -273,7 +273,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
           // قائمة الإجراءات
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert,
-                size: 20, color: AmyalColors.textMuted),
+                size: 20, color: AmialColors.textMuted),
             onSelected: (v) async {
               if (v == 'edit') {
                 final saved = await Get.to<bool>(
@@ -300,7 +300,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               const SizedBox(height: 2),
               Text('${p['category'] ?? ''}',
                   style: const TextStyle(
-                      fontSize: 11, color: AmyalColors.textMuted)),
+                      fontSize: 11, color: AmialColors.textMuted)),
               const SizedBox(height: 8),
               Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                 Container(
@@ -319,13 +319,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 const SizedBox(width: 8),
                 Text('المخزون: ${qty.toStringAsFixed(0)}',
                     style: const TextStyle(
-                        fontSize: 11, color: AmyalColors.textSecondary)),
+                        fontSize: 11, color: AmialColors.textSecondary)),
                 const Spacer(),
                 if (hasOffer) ...[
                   Text(AmialMoney.fmt(p['price']),
                       style: const TextStyle(
                           fontSize: 11,
-                          color: AmyalColors.textMuted,
+                          color: AmialColors.textMuted,
                           decoration: TextDecoration.lineThrough)),
                   const SizedBox(width: 6),
                 ],
@@ -333,7 +333,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: AmyalColors.primary)),
+                        color: AmialColors.primary)),
               ]),
             ]),
           ),

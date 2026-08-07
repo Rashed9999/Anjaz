@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:amyal_pay/features/payments/domain/amial_qr_payload.dart';
+import 'package:amial_pay/features/payments/domain/amial_qr_payload.dart';
 
 /// AMIAL-QR-UNIFIED-001 — تحليل رموز أميال باي.
 ///

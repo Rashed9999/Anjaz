@@ -2,7 +2,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/util/dimensions.dart';
+import 'package:amial_pay/util/dimensions.dart';
 
 const Duration _kExpand = Duration(milliseconds: 200);
 

@@ -14,8 +14,8 @@ class ContactConstants {
   static const String phoneNumber = '+967777000000';
 
   // ============ Email ============
-  static const String supportEmail = 'support@amyalpay.com';
-  static const String salesEmail = 'sales@amyalpay.com';
+  static const String supportEmail = 'support@amialpay.com';
+  static const String salesEmail = 'sales@amialpay.com';
 
   // ============ روابط جاهزة ============
 

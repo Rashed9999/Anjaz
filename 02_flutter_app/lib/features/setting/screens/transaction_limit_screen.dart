@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_asset_image_widget.dart';
-import 'package:amyal_pay/common/models/config_model.dart';
-import 'package:amyal_pay/features/setting/domain/models/profile_model.dart';
-import 'package:amyal_pay/helper/custom_extension_helper.dart';
-import 'package:amyal_pay/helper/price_converter_helper.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/no_data_widget.dart';
+import 'package:amial_pay/common/widgets/custom_asset_image_widget.dart';
+import 'package:amial_pay/common/models/config_model.dart';
+import 'package:amial_pay/features/setting/domain/models/profile_model.dart';
+import 'package:amial_pay/helper/custom_extension_helper.dart';
+import 'package:amial_pay/helper/price_converter_helper.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/no_data_widget.dart';
 
 
 class TransactionLimitScreen extends StatefulWidget {
@@ -47,9 +47,9 @@ class _TransactionLimitScreenState extends State<TransactionLimitScreen> with Ti
               child: TabBar(
                 indicatorSize: TabBarIndicatorSize.tab,
                 dividerColor: Colors.transparent,
-                labelColor: AmyalColors.primary,
-                unselectedLabelColor: AmyalColors.textMuted,
-                indicatorColor: AmyalColors.primary,
+                labelColor: AmialColors.primary,
+                unselectedLabelColor: AmialColors.textMuted,
+                indicatorColor: AmialColors.primary,
                 labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 controller: tabController,
                 tabs: tabItem.map((e) => Tab(text: e.tr)).toList(),

@@ -1,5 +1,5 @@
-import 'package:amyal_pay/common/models/language_model.dart';
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/common/models/language_model.dart';
+import 'package:amial_pay/util/app_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';

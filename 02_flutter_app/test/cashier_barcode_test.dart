@@ -7,8 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
-import 'package:amyal_pay/features/merchant/domain/repositories/cashier_repo.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/features/merchant/domain/repositories/cashier_repo.dart';
 
 class _MockCashierRepo extends Mock implements CashierRepo {}
 

@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amial_pay/util/app_constants.dart';
 
-/// AMYAL-SECURITY-002 (v0.7-C)
+/// AMIAL-SECURITY-002 (v0.7-C)
 ///
 /// SecureStorageHelper — التخزين الآمن للبيانات الحساسة.
 ///

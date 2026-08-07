@@ -83,7 +83,7 @@ return [
     |
     */
 
-    // AMYAL-LANG-001: العربية لغة أساسية والإنجليزية ثانوية اختيارية.
+    // AMIAL-LANG-001: العربية لغة أساسية والإنجليزية ثانوية اختيارية.
     'locale' => env('APP_LOCALE', 'ar'),
 
     'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),

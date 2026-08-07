@@ -1,11 +1,11 @@
-import 'package:amyal_pay/features/setting/domain/models/profile_model.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/features/camera_verification/controllers/camera_screen_controller.dart';
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/common/models/response_model.dart';
-import 'package:amyal_pay/features/auth/domain/reposotories/auth_repo.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/features/setting/domain/models/profile_model.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/features/camera_verification/controllers/camera_screen_controller.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/common/models/response_model.dart';
+import 'package:amial_pay/features/auth/domain/reposotories/auth_repo.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
 import 'package:get/get.dart';
 
 class EditProfileController extends GetxController implements GetxService{

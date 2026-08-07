@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/merchant_controller.dart';
-import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
-import 'package:amyal_pay/features/receipts/screens/receipts_list_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/merchant_controller.dart';
+import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
+import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-MERCHANT-APP-001 (v1.6)
 ///
@@ -53,7 +53,7 @@ class _MerchantAcceptPaymentScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(ctrl.lastError.value),
-            backgroundColor: AmyalColors.red),
+            backgroundColor: AmialColors.red),
       );
     }
   }
@@ -70,14 +70,14 @@ class _MerchantAcceptPaymentScreenState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.qr_code_2, size: 80, color: AmyalColors.primary),
+            const Icon(Icons.qr_code_2, size: 80, color: AmialColors.primary),
             const SizedBox(height: 16),
             const Text('تم إنشاء طلب الدفع',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Text('المبلغ: ${ctrl.lastPaymentAmount.value} ر.ي',
                 style: const TextStyle(
-                    fontSize: 16, color: AmyalColors.primary)),
+                    fontSize: 16, color: AmialColors.primary)),
             const SizedBox(height: 16),
             if (_directPhone)
               const Text(
@@ -89,14 +89,14 @@ class _MerchantAcceptPaymentScreenState
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AmyalColors.background,
+                  color: AmialColors.background,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
                   children: [
                     // AMIAL-MERCHANT-PAY-002 — **الصيغة التي يفهمها القارئ.**
                     //
-                    // كان يُبنى `amyalpay://pay?request_id=…` — وهي صيغةٌ
+                    // كان يُبنى `amialpay://pay?request_id=…` — وهي صيغةٌ
                     // **لا يعرفها أحد**: `AmialQrPayload.parse` يفهم
                     // `{"t":"amial_pr","code":…}` وهويّةً بحقل `phone`
                     // وأرقاماً مجرّدة، ولا شيء غيرها. فكان العميلُ يمسح
@@ -119,7 +119,7 @@ class _MerchantAcceptPaymentScreenState
                     const Text(
                       'يستطيع العميل الدفع بمسح الرمز، أو بإدخال رقم حسابك ورقم الفاتورة',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 10, color: AmyalColors.textMuted),
+                      style: TextStyle(fontSize: 10, color: AmialColors.textMuted),
                     ),
                     const SizedBox(height: 4),
                     const Text(
@@ -169,7 +169,7 @@ class _MerchantAcceptPaymentScreenState
                   Get.back();
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AmyalColors.primary,
+                  backgroundColor: AmialColors.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
@@ -185,7 +185,7 @@ class _MerchantAcceptPaymentScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('استلام دفعة'),
       ),
@@ -236,7 +236,7 @@ class _MerchantAcceptPaymentScreenState
                     'بدلاً من توليد QR للمسح',
                     style: TextStyle(fontSize: 11)),
                 value: _directPhone,
-                activeColor: AmyalColors.primary,
+                activeColor: AmialColors.primary,
                 onChanged: (v) => setState(() => _directPhone = v ?? false),
                 controlAffinity: ListTileControlAffinity.leading,
                 dense: true,
@@ -278,7 +278,7 @@ class _MerchantAcceptPaymentScreenState
                         fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
+                    backgroundColor: AmialColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),

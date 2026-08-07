@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_products_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_scan_screen.dart';
-import 'package:amyal_pay/features/merchant/screens/cashier_report_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_scan_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-CASHIER-001 — شاشة البيع: سلة + اختيار طريقة الدفع (نقد/أجل/أميال باي).
 class CashierSaleScreen extends StatefulWidget {
@@ -62,12 +62,12 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
               onTap: () => Navigator.pop(ctx, 'cash'),
             ),
             ListTile(
-              leading: const Icon(Icons.schedule, color: AmyalColors.yellowDark),
+              leading: const Icon(Icons.schedule, color: AmialColors.yellowDark),
               title: const Text('أجل (دَين على العميل)'),
               onTap: () => Navigator.pop(ctx, 'credit'),
             ),
             ListTile(
-              leading: const Icon(Icons.qr_code_2, color: AmyalColors.primary),
+              leading: const Icon(Icons.qr_code_2, color: AmialColors.primary),
               title: const Text('أميال باي (QR)'),
               subtitle: const Text('العميل يدفع من تطبيقه'),
               onTap: () => Navigator.pop(ctx, 'amial_pay'),
@@ -101,7 +101,7 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        icon: const Icon(Icons.qr_code_2, color: AmyalColors.primary, size: 48),
+        icon: const Icon(Icons.qr_code_2, color: AmialColors.primary, size: 48),
         title: const Text('بانتظار دفع العميل', textAlign: TextAlign.center),
         content: Text(
           'اطلب من العميل دفع ${total.toStringAsFixed(2)} ر.ي عبر مسح QR التاجر. '
@@ -194,12 +194,12 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context)
-      .showSnackBar(SnackBar(content: Text(m), backgroundColor: AmyalColors.red));
+      .showSnackBar(SnackBar(content: Text(m), backgroundColor: AmialColors.red));
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('الكاشير'),
         actions: [
@@ -243,7 +243,7 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
             child: Obx(() {
               if (c.products.isEmpty) {
                 return const Center(child: Text('لا منتجات — استخدم المبلغ الحرّ أو أضف منتجات',
-                    style: TextStyle(color: AmyalColors.textMuted, fontSize: 12)));
+                    style: TextStyle(color: AmialColors.textMuted, fontSize: 12)));
               }
               return ListView.separated(
                 scrollDirection: Axis.horizontal,
@@ -259,9 +259,9 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
                       width: 110,
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AmyalColors.cardSurface,
+                        color: AmialColors.cardSurface,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: AmyalColors.border),
+                        border: Border.all(color: AmialColors.border),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -271,7 +271,7 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
                               textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
                           const SizedBox(height: 4),
                           Text('${p['price'] ?? ''}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
                         ],
                       ),
                     ),
@@ -285,7 +285,7 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
           Expanded(
             child: Obx(() {
               if (c.cart.isEmpty) {
-                return const Center(child: Text('السلة فارغة', style: TextStyle(color: AmyalColors.textMuted)));
+                return const Center(child: Text('السلة فارغة', style: TextStyle(color: AmialColors.textMuted)));
               }
               return ListView.builder(
                 itemCount: c.cart.length,
@@ -300,7 +300,7 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
                         Text('${l.lineTotal.toStringAsFixed(2)} ر.ي',
                             style: const TextStyle(fontWeight: FontWeight.bold)),
                         IconButton(
-                          icon: const Icon(Icons.close, size: 18, color: AmyalColors.red),
+                          icon: const Icon(Icons.close, size: 18, color: AmialColors.red),
                           onPressed: () => c.removeLine(i),
                         ),
                       ],
@@ -314,8 +314,8 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
           Obx(() => Container(
                 padding: const EdgeInsets.all(16),
                 decoration: const BoxDecoration(
-                  color: AmyalColors.cardSurface,
-                  border: Border(top: BorderSide(color: AmyalColors.border)),
+                  color: AmialColors.cardSurface,
+                  border: Border(top: BorderSide(color: AmialColors.border)),
                 ),
                 child: Column(
                   children: [
@@ -324,7 +324,7 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
                       children: [
                         const Text('الإجمالي', style: TextStyle(fontSize: 16)),
                         Text('${_effectiveTotal().toStringAsFixed(2)} ر.ي',
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AmialColors.primary)),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -333,7 +333,7 @@ class _CashierSaleScreenState extends State<CashierSaleScreen> {
                       child: ElevatedButton(
                         onPressed: c.isSubmitting.value ? null : _choosePayment,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AmyalColors.primary,
+                          backgroundColor: AmialColors.primary,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                         ),

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-AUDIT-001 — «تدقيق المخزون / الجرد» (التصاميم 56/65):
 /// لكل منتج: الكمية المسجلة (الدفترية) مقابل «الكمية الفعلية» تُدخل بعدّاد،
@@ -84,7 +84,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 foregroundColor: Colors.white),
             child: const Text('اعتماد'),
           ),
@@ -116,13 +116,13 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
   void _snack(String m, {bool ok = false}) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(m),
-        backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red,
+        backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red,
       ));
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تدقيق المخزون'),
       ),
@@ -149,7 +149,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
                   style: const TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w600)),
               style: FilledButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 minimumSize: const Size.fromHeight(54),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16)),
@@ -171,12 +171,12 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
             child: Row(children: [
               Expanded(
-                child: _stat('إجمالي العناصر', '$total', AmyalColors.primary),
+                child: _stat('إجمالي العناصر', '$total', AmialColors.primary),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _stat('الفروقات المكتشفة', '$discovered',
-                    discovered > 0 ? AmyalColors.red : const Color(0xFF2E7D32)),
+                    discovered > 0 ? AmialColors.red : const Color(0xFF2E7D32)),
               ),
             ]),
           ),
@@ -206,7 +206,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
             child: c.isLoadingProducts.value && c.products.isEmpty
                 ? const Center(
                     child:
-                        CircularProgressIndicator(color: AmyalColors.primary))
+                        CircularProgressIndicator(color: AmialColors.primary))
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 6, 16, 16),
                     itemCount: items.length,
@@ -231,7 +231,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
             style: TextStyle(
                 fontSize: 20, fontWeight: FontWeight.bold, color: color)),
         Text(label,
-            style: const TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+            style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
       ]),
     );
   }
@@ -246,7 +246,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
     final (label, fg, bg) = diff == 0
         ? ('مطابق', const Color(0xFF2E7D32), const Color(0xFFE3F3E5))
         : diff < 0
-            ? ('$diff نقص', AmyalColors.red, const Color(0xFFFDE7E7))
+            ? ('$diff نقص', AmialColors.red, const Color(0xFFFDE7E7))
             : ('+$diff زيادة', const Color(0xFF2E7D32), const Color(0xFFE3F3E5));
 
     return Container(
@@ -257,7 +257,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
         border: Border.all(
             color: touched && diff != 0
                 ? fg.withValues(alpha: 0.5)
-                : AmyalColors.border),
+                : AmialColors.border),
       ),
       child: Column(children: [
         Row(children: [
@@ -285,7 +285,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
                 Text('SKU: ${p['barcode']}',
                     textDirection: TextDirection.ltr,
                     style: const TextStyle(
-                        fontSize: 10, color: AmyalColors.textMuted)),
+                        fontSize: 10, color: AmialColors.textMuted)),
             ]),
           ),
         ]),
@@ -336,14 +336,14 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
           ),
           const SizedBox(width: 6),
           const Text('الكمية الفعلية',
-              style: TextStyle(fontSize: 10, color: AmyalColors.textMuted)),
+              style: TextStyle(fontSize: 10, color: AmialColors.textMuted)),
           const Spacer(),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text('$book',
                 style: const TextStyle(
                     fontSize: 16, fontWeight: FontWeight.bold)),
             const Text('الكمية المسجلة',
-                style: TextStyle(fontSize: 10, color: AmyalColors.textMuted)),
+                style: TextStyle(fontSize: 10, color: AmialColors.textMuted)),
           ]),
         ]),
       ]),

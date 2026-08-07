@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/restaurant/screens/restaurant_order_screen.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/restaurant/screens/restaurant_order_screen.dart';
+import 'package:amial_pay/helper/amial_money.dart';
 
 /// AMIAL-RESTAURANT-001 — لوحة المطعم: الطاولات + شاشة المطبخ.
 class RestaurantScreen extends StatefulWidget {
@@ -59,7 +59,7 @@ class _RestaurantScreenState extends State<RestaurantScreen> with SingleTickerPr
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Map<String, dynamic>? _orderForTable(int tableId) {
     for (final o in _orders) { if (o['table_id'] == tableId) return o; }
@@ -108,10 +108,10 @@ class _RestaurantScreenState extends State<RestaurantScreen> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('المطعم'),
-        backgroundColor: AmyalColors.primary, foregroundColor: Colors.white,
+        backgroundColor: AmialColors.primary, foregroundColor: Colors.white,
         bottom: _error == null ? TabBar(controller: _tab, indicatorColor: Colors.white, tabs: const [
           Tab(text: 'الطاولات', icon: Icon(Icons.table_restaurant)),
           Tab(text: 'المطبخ', icon: Icon(Icons.soup_kitchen)),
@@ -121,7 +121,7 @@ class _RestaurantScreenState extends State<RestaurantScreen> with SingleTickerPr
         ],
       ),
       floatingActionButton: _error == null && _tab.index == 0
-          ? FloatingActionButton.extended(onPressed: _addTable, backgroundColor: AmyalColors.primary,
+          ? FloatingActionButton.extended(onPressed: _addTable, backgroundColor: AmialColors.primary,
               icon: const Icon(Icons.add), label: const Text('طاولة'))
           : null,
       body: _loading
@@ -129,7 +129,7 @@ class _RestaurantScreenState extends State<RestaurantScreen> with SingleTickerPr
           : _error != null
               ? Center(child: Padding(padding: const EdgeInsets.all(24),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.restaurant, size: 56, color: AmyalColors.yellowDark),
+                    const Icon(Icons.restaurant, size: 56, color: AmialColors.yellowDark),
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                   ])))
@@ -160,16 +160,16 @@ class _RestaurantScreenState extends State<RestaurantScreen> with SingleTickerPr
           : _openOrder(tableId: t['id'] as int, label: '${t['label']}'),
       child: Container(
         decoration: BoxDecoration(
-          color: occupied ? AmyalColors.red.withValues(alpha: 0.1) : const Color(0xFF2E7D32).withValues(alpha: 0.08),
+          color: occupied ? AmialColors.red.withValues(alpha: 0.1) : const Color(0xFF2E7D32).withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: occupied ? AmyalColors.red : const Color(0xFF2E7D32), width: 1.2),
+          border: Border.all(color: occupied ? AmialColors.red : const Color(0xFF2E7D32), width: 1.2),
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.table_restaurant, size: 30, color: occupied ? AmyalColors.red : const Color(0xFF2E7D32)),
+          Icon(Icons.table_restaurant, size: 30, color: occupied ? AmialColors.red : const Color(0xFF2E7D32)),
           const SizedBox(height: 6),
           Text('${t['label']}', style: const TextStyle(fontWeight: FontWeight.bold)),
           Text(occupied ? 'مشغولة' : 'متاحة',
-              style: TextStyle(fontSize: 11, color: occupied ? AmyalColors.red : const Color(0xFF2E7D32))),
+              style: TextStyle(fontSize: 11, color: occupied ? AmialColors.red : const Color(0xFF2E7D32))),
           if (occupied && order != null)
             Text('${AmialMoney.fmt(order['total'])} ر.ي', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
         ]),
@@ -188,7 +188,7 @@ class _RestaurantScreenState extends State<RestaurantScreen> with SingleTickerPr
 
   Widget _kitchenCard(Map<String, dynamic> o) {
     final status = '${o['status']}';
-    final color = status == 'ready' ? const Color(0xFF2E7D32) : status == 'preparing' ? AmyalColors.yellowDark : AmyalColors.primary;
+    final color = status == 'ready' ? const Color(0xFF2E7D32) : status == 'preparing' ? AmialColors.yellowDark : AmialColors.primary;
     final items = (o['items'] ?? []) as List;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -213,7 +213,7 @@ class _RestaurantScreenState extends State<RestaurantScreen> with SingleTickerPr
             )),
         if (o['notes'] != null && '${o['notes']}'.isNotEmpty)
           Padding(padding: const EdgeInsets.only(top: 4),
-              child: Text('ملاحظة: ${o['notes']}', style: const TextStyle(fontSize: 11, color: AmyalColors.textSecondary))),
+              child: Text('ملاحظة: ${o['notes']}', style: const TextStyle(fontSize: 11, color: AmialColors.textSecondary))),
         const SizedBox(height: 8),
         if (status != 'ready')
           FilledButton.icon(

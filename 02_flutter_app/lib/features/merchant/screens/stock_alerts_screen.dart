@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
-import 'package:amyal_pay/features/merchant/screens/product_editor_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amial_pay/features/merchant/screens/product_editor_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-STOCK-ALERTS-001 — «تنبيهات المخزون» (التصاميم 43/44):
 /// قائمة تنبيهات (نفاد/انخفاض) مع «إعادة التعبئة»، وضبط الحد الأدنى
@@ -74,7 +74,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تنبيهات المخزون'),
       ),
@@ -91,7 +91,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
 
         return RefreshIndicator(
           onRefresh: () => c.loadProducts(),
-          color: AmyalColors.primary,
+          color: AmialColors.primary,
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -105,7 +105,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
                 ),
                 child: SwitchListTile(
                   value: _enabled,
-                  activeThumbColor: AmyalColors.primary,
+                  activeThumbColor: AmialColors.primary,
                   contentPadding: EdgeInsets.zero,
                   title: const Text('تفعيل التنبيهات التلقائية',
                       textAlign: TextAlign.right,
@@ -143,7 +143,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
                             style: const TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
-                                color: AmyalColors.red)),
+                                color: AmialColors.red)),
                       ),
                     ],
                   ),
@@ -152,7 +152,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
                         p,
                         title: 'نفاد المخزون',
                         message: '${p['name']}: المخزون فارغ تماماً.',
-                        color: AmyalColors.red,
+                        color: AmialColors.red,
                         bg: const Color(0xFFFDE7E7),
                         icon: Icons.remove_shopping_cart_outlined,
                       )),
@@ -177,7 +177,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
                           size: 48, color: Color(0xFF2E7D32)),
                       SizedBox(height: 10),
                       Text('كل المنتجات فوق الحد الأدنى — لا تنبيهات',
-                          style: TextStyle(color: AmyalColors.textSecondary)),
+                          style: TextStyle(color: AmialColors.textSecondary)),
                     ]),
                   ),
                 const SizedBox(height: 22),
@@ -196,7 +196,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
                   'نقوم بمراقبة مستويات مخزونك بدقة تامة لتجنّب نفاد الكميات وضمان استمرارية مبيعاتك بكل سهولة.',
                   textAlign: TextAlign.center,
                   style:
-                      TextStyle(fontSize: 11, color: AmyalColors.textMuted),
+                      TextStyle(fontSize: 11, color: AmialColors.textMuted),
                 ),
               ],
             ],
@@ -246,7 +246,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
                 child: Text(message,
                     textAlign: TextAlign.right,
                     style: const TextStyle(
-                        fontSize: 12, color: AmyalColors.textSecondary)),
+                        fontSize: 12, color: AmialColors.textSecondary)),
               ),
             ]),
           ]),
@@ -316,7 +316,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
           ),
           const SizedBox(width: 8),
           const Text('وحدة',
-              style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
           const Spacer(),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Text(category,
@@ -324,7 +324,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
                     fontWeight: FontWeight.bold, fontSize: 13)),
             const Text('تنبيه عند الانخفاض عن',
                 style:
-                    TextStyle(fontSize: 10, color: AmyalColors.textMuted)),
+                    TextStyle(fontSize: 10, color: AmialColors.textMuted)),
           ]),
         ]),
       ),

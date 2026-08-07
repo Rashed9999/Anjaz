@@ -3,10 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/transaction_money/domain/models/withdraw_model.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_text_field_widget.dart';
+import 'package:amial_pay/features/transaction_money/domain/models/withdraw_model.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_text_field_widget.dart';
 
 class FieldItemWidget extends StatelessWidget {
   final MethodField? methodField;

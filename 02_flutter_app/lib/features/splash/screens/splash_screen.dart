@@ -2,17 +2,17 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/helper/route_helper.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/util/images.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/helper/route_helper.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -25,7 +25,7 @@ class _SplashScreenState extends State<SplashScreen>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late StreamSubscription<List<ConnectivityResult>> subscription;
 
-  // AMYAL-UI-001: خطوات إقلاع مرئية — تُظهر أن التطبيق «يعمل» أثناء التهيئة.
+  // AMIAL-UI-001: خطوات إقلاع مرئية — تُظهر أن التطبيق «يعمل» أثناء التهيئة.
   final ValueNotifier<int> _stepDone = ValueNotifier<int>(0);
 
   late final AnimationController _logoCtrl;
@@ -189,7 +189,7 @@ class _SplashScreenState extends State<SplashScreen>
                     const Text(
                       'أميال باي',
                       style: TextStyle(
-                        color: AmyalColors.primary,
+                        color: AmialColors.primary,
                         fontSize: 30,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 0.5,
@@ -199,7 +199,7 @@ class _SplashScreenState extends State<SplashScreen>
                     Text(
                       'دفع سريع وآمن',
                       style: TextStyle(
-                        color: AmyalColors.primary.withValues(alpha: 0.75),
+                        color: AmialColors.primary.withValues(alpha: 0.75),
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                       ),
@@ -217,7 +217,7 @@ class _SplashScreenState extends State<SplashScreen>
                 child: CircularProgressIndicator(
                   strokeWidth: 2.2,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    AmyalColors.primary.withValues(alpha: 0.55),
+                    AmialColors.primary.withValues(alpha: 0.55),
                   ),
                 ),
               ),

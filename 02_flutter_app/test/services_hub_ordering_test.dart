@@ -3,9 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:amyal_pay/features/access/controllers/access_controller.dart';
-import 'package:amyal_pay/features/access/domain/repositories/access_repo.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_services_hub_screen.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/access/domain/repositories/access_repo.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
 
 class _FakeAccessRepo extends Mock implements AccessRepo {}
 

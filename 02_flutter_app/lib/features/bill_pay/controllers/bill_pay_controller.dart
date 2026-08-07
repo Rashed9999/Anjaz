@@ -1,19 +1,19 @@
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/idempotency_key_generator.dart';
-import 'package:amyal_pay/features/bill_pay/domain/models/bill_pay_models.dart';
-import 'package:amyal_pay/features/bill_pay/domain/repositories/bill_pay_repo.dart';
+import 'package:amial_pay/data/api/idempotency_key_generator.dart';
+import 'package:amial_pay/features/bill_pay/domain/models/bill_pay_models.dart';
+import 'package:amial_pay/features/bill_pay/domain/repositories/bill_pay_repo.dart';
 
 /// AMIAL-BILL-PAY-001 (v0.9-D)
 class BillPayController extends GetxController implements GetxService {
   final BillPayRepo repo;
   BillPayController({required this.repo});
 
-  final RxList<AmyalBillProvider> providers = <AmyalBillProvider>[].obs;
-  final Rx<AmyalBillService?> selectedService = Rx<AmyalBillService?>(null);
-  final RxList<AmyalBillProduct> selectedServiceProducts = <AmyalBillProduct>[].obs;
-  final Rx<AmyalBillOrder?> lastOrder = Rx<AmyalBillOrder?>(null);
-  final RxList<AmyalBillOrder> orders = <AmyalBillOrder>[].obs;
+  final RxList<AmialBillProvider> providers = <AmialBillProvider>[].obs;
+  final Rx<AmialBillService?> selectedService = Rx<AmialBillService?>(null);
+  final RxList<AmialBillProduct> selectedServiceProducts = <AmialBillProduct>[].obs;
+  final Rx<AmialBillOrder?> lastOrder = Rx<AmialBillOrder?>(null);
+  final RxList<AmialBillOrder> orders = <AmialBillOrder>[].obs;
   final RxBool isLoading = false.obs;
   final RxBool isSubmitting = false.obs;
   final RxString lastError = ''.obs;
@@ -29,7 +29,7 @@ class BillPayController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map) {
         final items = ((r.body['meta'] ?? {})['providers'] as List? ?? []);
         providers.value = items
-            .map((j) => AmyalBillProvider.fromJson(Map<String, dynamic>.from(j)))
+            .map((j) => AmialBillProvider.fromJson(Map<String, dynamic>.from(j)))
             .toList();
         lastError.value = '';
       } else {
@@ -50,7 +50,7 @@ class BillPayController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map) {
         final items = ((r.body['meta'] ?? {})['products'] as List? ?? []);
         selectedServiceProducts.value = items
-            .map((j) => AmyalBillProduct.fromJson(Map<String, dynamic>.from(j)))
+            .map((j) => AmialBillProduct.fromJson(Map<String, dynamic>.from(j)))
             .toList();
         lastError.value = '';
       } else {
@@ -94,7 +94,7 @@ class BillPayController extends GetxController implements GetxService {
       if (r.body is Map) {
         final meta = (r.body['meta'] ?? {}) as Map;
         if (meta['order'] is Map) {
-          lastOrder.value = AmyalBillOrder.fromJson(Map<String, dynamic>.from(meta['order']));
+          lastOrder.value = AmialBillOrder.fromJson(Map<String, dynamic>.from(meta['order']));
         }
       }
 
@@ -123,7 +123,7 @@ class BillPayController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map) {
         final items = ((r.body['meta'] ?? {})['items'] as List? ?? []);
         orders.value = items
-            .map((j) => AmyalBillOrder.fromJson(Map<String, dynamic>.from(j)))
+            .map((j) => AmialBillOrder.fromJson(Map<String, dynamic>.from(j)))
             .toList();
       }
     } catch (e) {

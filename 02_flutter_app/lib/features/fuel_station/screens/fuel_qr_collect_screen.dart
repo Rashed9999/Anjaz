@@ -3,11 +3,11 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
-import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
-import 'package:amyal_pay/features/fuel_station/controllers/fuel_station_controller.dart';
-import 'package:amyal_pay/features/fuel_station/screens/fuel_receipt_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
+import 'package:amial_pay/features/requested_money/controllers/payment_request_controller.dart';
+import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_receipt_screen.dart';
 
 /// AMIAL-FUEL-QR-001 — استلام الدفع بـ QR (طلب دفع فوري).
 ///
@@ -173,7 +173,7 @@ class _FuelQrCollectScreenState extends State<FuelQrCollectScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('استلام الدفع — QR'),
       ),
@@ -199,7 +199,7 @@ class _FuelQrCollectScreenState extends State<FuelQrCollectScreen> {
       ]);
 
   Widget _errorView() => Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.error_outline, color: AmyalColors.red, size: 56),
+        const Icon(Icons.error_outline, color: AmialColors.red, size: 56),
         const SizedBox(height: 12),
         Text(_error, textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -209,7 +209,7 @@ class _FuelQrCollectScreenState extends State<FuelQrCollectScreen> {
           icon: const Icon(Icons.refresh),
           label: const Text('إعادة المحاولة'),
           style: FilledButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
+              backgroundColor: AmialColors.primary,
               minimumSize: const Size(220, 48)),
         ),
         const SizedBox(height: 8),
@@ -221,10 +221,10 @@ class _FuelQrCollectScreenState extends State<FuelQrCollectScreen> {
     return Column(mainAxisSize: MainAxisSize.min, children: [
       Text('${_fmt(widget.amount)} ر.ي',
           style: const TextStyle(
-              fontSize: 30, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+              fontSize: 30, fontWeight: FontWeight.bold, color: AmialColors.primary)),
       const SizedBox(height: 4),
       const Text('اطلب من العميل مسح الرمز والدفع',
-          style: TextStyle(fontSize: 13, color: AmyalColors.textSecondary)),
+          style: TextStyle(fontSize: 13, color: AmialColors.textSecondary)),
       const SizedBox(height: 18),
       QrDisplayWidget(
         data: _qrPayload,
@@ -236,7 +236,7 @@ class _FuelQrCollectScreenState extends State<FuelQrCollectScreen> {
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: AmyalColors.yellow.withValues(alpha: 0.18),
+          color: AmialColors.yellow.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(30),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -245,7 +245,7 @@ class _FuelQrCollectScreenState extends State<FuelQrCollectScreen> {
           const SizedBox(width: 10),
           Text('بانتظار دفع العميل… (${remain ~/ 60}:${(remain % 60).toString().padLeft(2, '0')})',
               style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w600, color: AmyalColors.primary)),
+                  fontSize: 13, fontWeight: FontWeight.w600, color: AmialColors.primary)),
         ]),
       ),
       const SizedBox(height: 24),
@@ -254,8 +254,8 @@ class _FuelQrCollectScreenState extends State<FuelQrCollectScreen> {
         icon: const Icon(Icons.close),
         label: const Text('إلغاء الطلب'),
         style: OutlinedButton.styleFrom(
-            foregroundColor: AmyalColors.red,
-            side: const BorderSide(color: AmyalColors.red),
+            foregroundColor: AmialColors.red,
+            side: const BorderSide(color: AmialColors.red),
             minimumSize: const Size(220, 48)),
       ),
     ]);

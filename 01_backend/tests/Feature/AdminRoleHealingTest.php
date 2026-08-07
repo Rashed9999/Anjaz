@@ -20,7 +20,7 @@ use Tests\TestCase;
  * جديدة، وأكثرُ الأوقات إنتاجاً لحساباتٍ بلا دور — لا تعمل إطلاقاً.
  *
  * والقياس الذي كشفه: بعد تشغيل الأمر كاملاً على قاعدةٍ مبذورة، بقي
- * `admin@amyal.pay` **بلا دور**. يدخل لوحة الإدارة، ويُردّ ٤٠٣ على واحدٍ
+ * `admin@amial.pay` **بلا دور**. يدخل لوحة الإدارة، ويُردّ ٤٠٣ على واحدٍ
  * وأربعين مساراً، ولا يقرأ رقماً ماليّاً واحداً — بلا رسالةٍ تقول لماذا.
  *
  * (القاعدة الرابعة: ميزةٌ لها مدخلان تُختبَر من مدخليها. والأمرُ هنا له
@@ -57,13 +57,13 @@ class AdminRoleHealingTest extends TestCase
      * **المسار الأوّل: الأدمن التجريبيّ يُنشأ الآن.**
      *
      * وهو المسار الذي كانت الشبكة معطَّلةً فيه تماماً. ولا وجود لـ
-     * `admin@amyalpay.com` هنا، فيؤخذ فرعُ الإنشاء.
+     * `admin@amialpay.com` هنا، فيؤخذ فرعُ الإنشاء.
      */
     public function an_orphan_admin_is_healed_even_when_the_demo_admin_is_created_fresh(): void
     {
         $orphan = $this->orphanAdmin('967770004001');
 
-        $this->assertNull(User::where('email', 'admin@amyalpay.com')->first(),
+        $this->assertNull(User::where('email', 'admin@amialpay.com')->first(),
             'الأدمن التجريبيّ موجودٌ سلفاً — فسيُؤخذ الفرعُ الآخر ولا يُختبر ما نريد');
 
         $this->artisan('amial:ensure-demo-staff')->assertSuccessful();
@@ -83,7 +83,7 @@ class AdminRoleHealingTest extends TestCase
     {
         // إقلاعٌ أوّل: يُنشئ الأدمن التجريبيّ.
         $this->artisan('amial:ensure-demo-staff')->assertSuccessful();
-        $this->assertNotNull(User::where('email', 'admin@amyalpay.com')->first());
+        $this->assertNotNull(User::where('email', 'admin@amialpay.com')->first());
 
         // ثمّ يظهر يتيمٌ بعده — من اللوحة أو بيدٍ على القاعدة.
         $orphan = $this->orphanAdmin('967770004002');

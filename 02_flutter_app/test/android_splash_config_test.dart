@@ -31,7 +31,7 @@ void main() {
       // بلا هذين يقع النظام على الافتراضي: أيقونة التطبيق التكيّفية،
       // وهامش الأمان فيها ثلث المساحة فتظهر صغيرة منزاحة.
       expect(xml, contains('@drawable/splash_icon'));
-      expect(xml, contains('@color/amyal_yellow'));
+      expect(xml, contains('@color/amial_yellow'));
     });
 
     test('الوضع الليلي له نفس الإعداد — وإلّا عاد العطل ليلاً', () {

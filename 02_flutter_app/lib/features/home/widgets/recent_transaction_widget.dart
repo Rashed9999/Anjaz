@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/history/controllers/transaction_history_controller.dart';
-import 'package:amyal_pay/features/history/domain/models/transaction_model.dart';
-import 'package:amyal_pay/features/history/widgets/transaction_list_widget.dart';
-import 'package:amyal_pay/features/home/controllers/menu_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
+import 'package:amial_pay/features/history/controllers/transaction_history_controller.dart';
+import 'package:amial_pay/features/history/domain/models/transaction_model.dart';
+import 'package:amial_pay/features/history/widgets/transaction_list_widget.dart';
+import 'package:amial_pay/features/home/controllers/menu_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
 
 class RecentTransactionWidget extends StatelessWidget {
   const RecentTransactionWidget({super.key});

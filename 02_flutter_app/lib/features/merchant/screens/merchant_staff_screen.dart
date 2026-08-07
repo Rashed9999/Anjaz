@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/features/access/widgets/access_gate.dart';
-import 'package:amyal_pay/features/merchant/screens/merchant_staff_performance_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/access/widgets/access_gate.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_staff_performance_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-MERCHANT-STAFF-001 — إدارة موظفي نقاط البيع (باقة الأعمال فأعلى).
 ///
@@ -67,7 +67,7 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _addDialog() async {
     final posCtrl = TextEditingController();
@@ -133,7 +133,7 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('الموظفون'),
         actions: [
@@ -147,7 +147,7 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
       floatingActionButton: _error == null
           ? FloatingActionButton.extended(
               onPressed: _addDialog,
-              backgroundColor: AmyalColors.primary,
+              backgroundColor: AmialColors.primary,
               icon: const Icon(Icons.person_add),
               label: const Text('موظف جديد'),
             )
@@ -158,7 +158,7 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
               ? Center(child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.workspace_premium, size: 56, color: AmyalColors.yellowDark),
+                    const Icon(Icons.workspace_premium, size: 56, color: AmialColors.yellowDark),
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -169,7 +169,7 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
                   child: _staff.isEmpty
                       ? ListView(children: const [
                           SizedBox(height: 120),
-                          Icon(Icons.group_outlined, size: 64, color: AmyalColors.textMuted),
+                          Icon(Icons.group_outlined, size: 64, color: AmialColors.textMuted),
                           SizedBox(height: 12),
                           Center(child: Text('لا يوجد موظفون بعد — أضِف أول موظف')),
                         ])
@@ -195,9 +195,9 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: (active ? AmyalColors.primary : AmyalColors.textMuted).withValues(alpha: 0.12),
+          backgroundColor: (active ? AmialColors.primary : AmialColors.textMuted).withValues(alpha: 0.12),
           child: Icon((isOps || isFin) ? Icons.manage_accounts : Icons.badge,
-              color: active ? AmyalColors.primary : AmyalColors.textMuted),
+              color: active ? AmialColors.primary : AmialColors.textMuted),
         ),
         title: Row(children: [
           Flexible(child: Text('${s['display_name'] ?? ''}',
@@ -206,9 +206,9 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
             const SizedBox(width: 6),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(color: AmyalColors.primary.withValues(alpha: 0.12),
+              decoration: BoxDecoration(color: AmialColors.primary.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6)),
-              child: Text(badge, style: const TextStyle(fontSize: 9, color: AmyalColors.primary, fontWeight: FontWeight.bold)),
+              child: Text(badge, style: const TextStyle(fontSize: 9, color: AmialColors.primary, fontWeight: FontWeight.bold)),
             ),
           ],
         ]),
@@ -218,7 +218,7 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
           AccessGate(
             anyOf: const ['operations_manager', 'financial_manager'],
             child: PopupMenuButton<String>(
-              icon: const Icon(Icons.admin_panel_settings_outlined, color: AmyalColors.primary),
+              icon: const Icon(Icons.admin_panel_settings_outlined, color: AmialColors.primary),
               tooltip: 'الأدوار الإدارية',
               onSelected: (v) {
                 switch (v) {
@@ -238,7 +238,7 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
           ),
           Switch(
             value: active,
-            activeColor: AmyalColors.primary,
+            activeColor: AmialColors.primary,
             onChanged: (_) => _toggle(s['id'] as int),
           ),
         ]),

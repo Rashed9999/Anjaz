@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/access/controllers/access_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/pharmacy/controllers/pharmacy_controller.dart';
-import 'package:amyal_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/pharmacy/controllers/pharmacy_controller.dart';
+import 'package:amial_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
 
 /// AMIAL-PHARMACY-001 — لوحة الصيدلية (Entry point).
 class PharmacyDashboardScreen extends StatefulWidget {
@@ -31,7 +31,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('الصيدلية'),
       ),
@@ -48,7 +48,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [AmyalColors.primary, Color(0xFF021A55)],
+                    colors: [AmialColors.primary, Color(0xFF021A55)],
                     begin: Alignment.topLeft, end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(14),
@@ -56,7 +56,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
                 child: Row(children: [
                   Container(
                     width: 50, height: 50,
-                    decoration: BoxDecoration(color: AmyalColors.yellow, borderRadius: BorderRadius.circular(12)),
+                    decoration: BoxDecoration(color: AmialColors.yellow, borderRadius: BorderRadius.circular(12)),
                     child: const Icon(Icons.local_pharmacy, color: Colors.black87, size: 28),
                   ),
                   const SizedBox(width: 12),
@@ -84,10 +84,10 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
                 child: Column(children: [
                   Row(children: [
                     Expanded(child: _statBox('${today?['sales_count'] ?? 0}', 'بيوع اليوم',
-                        AmyalColors.primary, Icons.receipt_long)),
+                        AmialColors.primary, Icons.receipt_long)),
                     const SizedBox(width: 6),
                     Expanded(child: _statBox('${today?['total_amount'] ?? 0}', 'الإجمالي (ر.ي)',
-                        AmyalColors.yellowDark, Icons.attach_money)),
+                        AmialColors.yellowDark, Icons.attach_money)),
                   ]),
                   const SizedBox(height: 8),
                   Row(children: [
@@ -120,7 +120,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
 
             // الإجراء الأساسي
             _bigAction(Icons.point_of_sale, 'بيع جديد', 'تسجيل عملية بيع',
-                AmyalColors.primary, () => Get.to(() => const PharmacySaleScreen())),
+                AmialColors.primary, () => Get.to(() => const PharmacySaleScreen())),
 
             const SizedBox(height: 10),
             Row(children: [
@@ -185,7 +185,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
       child: Column(children: [
-        Icon(icon, color: AmyalColors.primary, size: 22),
+        Icon(icon, color: AmialColors.primary, size: 22),
         const SizedBox(height: 4),
         Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
       ]),
@@ -217,7 +217,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('المنتجات'),
         actions: [
@@ -229,7 +229,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AmyalColors.primary,
+        backgroundColor: AmialColors.primary,
         onPressed: _addProductDialog,
         icon: const Icon(Icons.add),
         label: const Text('منتج جديد'),
@@ -268,8 +268,8 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
         child: Row(children: [
           Container(width: 40, height: 40,
-            decoration: BoxDecoration(color: AmyalColors.yellow.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
-            child: const Icon(Icons.medication, color: AmyalColors.yellowDark)),
+            decoration: BoxDecoration(color: AmialColors.yellow.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(8)),
+            child: const Icon(Icons.medication, color: AmialColors.yellowDark)),
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
@@ -284,7 +284,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
               Text(p['generic_name'], style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
             Text('${stock.toStringAsFixed(0)} ${p['unit'] ?? ''} • ${p['sale_price']} ر.ي',
                 style: TextStyle(
-                  color: isLow ? AmyalColors.red : Colors.green.shade700,
+                  color: isLow ? AmialColors.red : Colors.green.shade700,
                   fontSize: 12, fontWeight: FontWeight.bold,
                 )),
           ])),
@@ -354,7 +354,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
       decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(8)),
       child: Row(children: [
         Icon(isExpired ? Icons.dangerous : Icons.inventory,
-            color: isExpired ? Colors.red : (isExhausted ? Colors.grey : AmyalColors.primary), size: 22),
+            color: isExpired ? Colors.red : (isExhausted ? Colors.grey : AmialColors.primary), size: 22),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('#${b['batch_number']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
@@ -421,7 +421,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
               Navigator.pop(ctx);
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red));
+              SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red));
             }
           },
           child: const Text('إضافة'),
@@ -473,7 +473,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
               Navigator.pop(ctx);
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red));
+              SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red));
             }
           },
           child: const Text('إضافة'),
@@ -506,12 +506,12 @@ class _PharmacyCustomersScreenState extends State<PharmacyCustomersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('العملاء/المرضى'),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AmyalColors.primary,
+        backgroundColor: AmialColors.primary,
         onPressed: () => _customerDialog(null),
         icon: const Icon(Icons.add),
         label: const Text('عميل جديد'),
@@ -644,7 +644,7 @@ class _PharmacyCustomersScreenState extends State<PharmacyCustomersScreen> {
               Navigator.pop(ctx);
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(c.lastError.value), backgroundColor: AmyalColors.red));
+              SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red));
             }
           },
           child: Text(existing == null ? 'إضافة' : 'حفظ'),
@@ -677,7 +677,7 @@ class _PharmacyAlertsScreenState extends State<PharmacyAlertsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تنبيهات المخزون'),
         actions: [
@@ -797,7 +797,7 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('سجل المبيعات'),
       ),
@@ -844,7 +844,7 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
           Text('${items.length} عنصر', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
           const Spacer(),
           Text('${s['total_amount']} ر.ي',
-              style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary, fontSize: 15)),
+              style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary, fontSize: 15)),
         ]),
         if (customer != null) ...[
           const SizedBox(height: 6),

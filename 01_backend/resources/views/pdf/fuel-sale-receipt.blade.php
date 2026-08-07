@@ -63,7 +63,7 @@
             font-family: monospace; font-size: 14px; color: #053391;
             font-weight: bold; letter-spacing: 2px; margin-top: 6px;
         }
-        .amyal-brand { color: #FECA1E; font-weight: bold; margin-top: 8px; }
+        .amial-brand { color: #FECA1E; font-weight: bold; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -160,7 +160,7 @@
     <div>شكراً لزيارتكم</div>
     <div class="verification-code">{{ strtoupper(substr($sale->sale_ulid, -8)) }}</div>
     <div style="font-size:9px; margin-top:4px">رمز التحقّق</div>
-    <div class="amyal-brand">Amyal Pay © {{ now()->year }}</div>
+    <div class="amial-brand">Amial Pay © {{ now()->year }}</div>
 </div>
 
 </body>

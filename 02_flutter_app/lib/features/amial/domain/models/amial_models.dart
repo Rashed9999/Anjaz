@@ -1,9 +1,9 @@
-/// AMYAL-LEGAL-001 + AMYAL-ZONE-001 + AMYAL-RECOVERY-001 (v0.7-D)
+/// AMIAL-LEGAL-001 + AMIAL-ZONE-001 + AMIAL-RECOVERY-001 (v0.7-D)
 ///
-/// Domain models لـ Amyal API endpoints.
+/// Domain models لـ Amial API endpoints.
 library;
 
-class AmyalSessionPolicy {
+class AmialSessionPolicy {
   final String accountZone;
   final String? requestZone;
   final String allowedOperationalZone;
@@ -14,7 +14,7 @@ class AmyalSessionPolicy {
   final String? bannerMessage;
   final String policyVersion;
 
-  AmyalSessionPolicy({
+  AmialSessionPolicy({
     required this.accountZone,
     this.requestZone,
     required this.allowedOperationalZone,
@@ -26,9 +26,9 @@ class AmyalSessionPolicy {
     required this.policyVersion,
   });
 
-  factory AmyalSessionPolicy.fromJson(Map<String, dynamic> meta) {
+  factory AmialSessionPolicy.fromJson(Map<String, dynamic> meta) {
     final actions = meta['available_actions'] as Map<String, dynamic>? ?? {};
-    return AmyalSessionPolicy(
+    return AmialSessionPolicy(
       accountZone: meta['account_zone'] ?? 'UNKNOWN',
       requestZone: meta['request_zone'],
       allowedOperationalZone: meta['allowed_operational_zone'] ?? 'SOUTH',
@@ -42,7 +42,7 @@ class AmyalSessionPolicy {
   }
 }
 
-class AmyalLegalTerm {
+class AmialLegalTerm {
   final int id;
   final String version;
   final String locale;
@@ -51,7 +51,7 @@ class AmyalLegalTerm {
   final String? changelog;
   final String? effectiveAt;
 
-  AmyalLegalTerm({
+  AmialLegalTerm({
     required this.id,
     required this.version,
     required this.locale,
@@ -61,8 +61,8 @@ class AmyalLegalTerm {
     this.effectiveAt,
   });
 
-  factory AmyalLegalTerm.fromJson(Map<String, dynamic> meta) {
-    return AmyalLegalTerm(
+  factory AmialLegalTerm.fromJson(Map<String, dynamic> meta) {
+    return AmialLegalTerm(
       id: meta['id'] ?? 0,
       version: meta['version'] ?? '0.0',
       locale: meta['locale'] ?? 'ar',
@@ -74,19 +74,19 @@ class AmyalLegalTerm {
   }
 }
 
-class AmyalLegalStatus {
+class AmialLegalStatus {
   final bool needsAcceptance;
   final String? currentVersion;
   final String? title;
 
-  AmyalLegalStatus({
+  AmialLegalStatus({
     required this.needsAcceptance,
     this.currentVersion,
     this.title,
   });
 
-  factory AmyalLegalStatus.fromJson(Map<String, dynamic> meta) {
-    return AmyalLegalStatus(
+  factory AmialLegalStatus.fromJson(Map<String, dynamic> meta) {
+    return AmialLegalStatus(
       needsAcceptance: meta['needs_acceptance'] ?? false,
       currentVersion: meta['current_version'],
       title: meta['title'],
@@ -94,7 +94,7 @@ class AmyalLegalStatus {
   }
 }
 
-class AmyalRecoveryRequest {
+class AmialRecoveryRequest {
   final String requestUlid;
   final String requestType;
   final String status;
@@ -103,7 +103,7 @@ class AmyalRecoveryRequest {
   final String? reviewedAt;
   final String? adminNotesExcerpt;
 
-  AmyalRecoveryRequest({
+  AmialRecoveryRequest({
     required this.requestUlid,
     required this.requestType,
     required this.status,
@@ -113,8 +113,8 @@ class AmyalRecoveryRequest {
     this.adminNotesExcerpt,
   });
 
-  factory AmyalRecoveryRequest.fromJson(Map<String, dynamic> meta) {
-    return AmyalRecoveryRequest(
+  factory AmialRecoveryRequest.fromJson(Map<String, dynamic> meta) {
+    return AmialRecoveryRequest(
       requestUlid: meta['request_ulid'] ?? '',
       requestType: meta['request_type'] ?? '',
       status: meta['status'] ?? 'pending_otp',

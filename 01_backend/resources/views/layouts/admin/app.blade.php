@@ -8,16 +8,12 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'الإدارة') — {{ Helpers::get_business_settings('business_name') ?? 'Amial Pay' }}</title>
     <link href="{{ asset('assets/vendor/bootstrap/css/bootstrap.rtl.min.css') }}" rel="stylesheet">
-    <style>
-        body { background:#f4f6fa; }
-        .amial-sidebar { min-height:100vh; background:#0f2b46; color:#cfe0f2; }
-        .amial-sidebar a { color:#cfe0f2; text-decoration:none; }
-        .amial-sidebar a:hover, .amial-sidebar li.active > a { color:#fff; background:#17395c; border-radius:.5rem; }
-        .amial-sidebar .nav-link { padding:.55rem .8rem; display:block; }
-        .amial-brand { font-weight:700; font-size:1.15rem; color:#fff; }
-        .nav-icon { display:none; } /* أيقونات Tio غير محمّلة — إخفاء آمن */
-        .stat-card { border:0; border-radius:1rem; box-shadow:0 2px 10px rgba(0,0,0,.05); }
-    </style>
+    {{-- AMIAL-TOKENS-001 — الهويّة من مصدرٍ واحد.
+         كان هنا أربعةَ عشرَ سطرَ CSS محشوّةً في القالب، فيها أزرقٌ
+         (#0f2b46) لا علاقة له بأزرق العلامة في التطبيق (#053391)،
+         وخلفيّةٌ (#f4f6fa) غير خلفيّته (#F2F3F7). علامةٌ واحدةٌ
+         بهويّتين — والقيمُ تُنسخ ولا تُشتق. --}}
+    <link href="{{ asset('assets/css/amial-tokens.css') }}" rel="stylesheet">
     @stack('css_or_js')
 </head>
 <body>

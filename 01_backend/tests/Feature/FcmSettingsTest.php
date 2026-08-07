@@ -24,7 +24,7 @@ class FcmSettingsTest extends TestCase
     }
 
     /** مفتاح خدمة صالح الشكل — بمفتاح RSA مولّد فعلياً لا نصّ وهمي. */
-    private function serviceAccountJson(string $projectId = 'amyal-pay'): string
+    private function serviceAccountJson(string $projectId = 'amial-pay'): string
     {
         $res = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
         openssl_pkey_export($res, $pem);
@@ -66,7 +66,7 @@ class FcmSettingsTest extends TestCase
 
         $saved = json_decode((string) $this->stored(), true);
         $this->assertIsArray($saved);
-        $this->assertSame('amyal-pay', $saved['project_id']);
+        $this->assertSame('amial-pay', $saved['project_id']);
         $this->assertStringContainsString('BEGIN PRIVATE KEY', $saved['private_key']);
     }
 
@@ -81,7 +81,7 @@ class FcmSettingsTest extends TestCase
         $body = $this->actingAs($this->admin(), 'user')
             ->get('/admin/business-settings/fcm-index')
             ->assertOk()
-            ->assertSee('amyal-pay')
+            ->assertSee('amial-pay')
             ->getContent();
 
         $this->assertStringNotContainsString('BEGIN PRIVATE KEY', $body);
@@ -128,7 +128,7 @@ class FcmSettingsTest extends TestCase
     {
         // الخطأ المتوقّع من المستخدم: لصق google-services.json بدل ملف الخدمة.
         $wrong = json_encode([
-            'project_info' => ['project_id' => 'amyal-pay'],
+            'project_info' => ['project_id' => 'amial-pay'],
             'client' => [],
         ]);
 
@@ -144,9 +144,9 @@ class FcmSettingsTest extends TestCase
     {
         $bad = json_encode([
             'type' => 'service_account',
-            'project_id' => 'amyal-pay',
+            'project_id' => 'amial-pay',
             'private_key' => 'truncated-nonsense',
-            'client_email' => 'svc@amyal-pay.iam.gserviceaccount.com',
+            'client_email' => 'svc@amial-pay.iam.gserviceaccount.com',
         ]);
 
         $this->actingAs($this->admin(), 'user')

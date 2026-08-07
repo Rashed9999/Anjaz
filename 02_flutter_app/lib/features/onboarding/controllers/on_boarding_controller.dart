@@ -1,7 +1,7 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/models/on_boarding_model.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/util/images.dart';
+import 'package:amial_pay/common/models/on_boarding_model.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/util/images.dart';
 
 class OnBoardingController extends GetxController implements GetxService {
   int _page = 0;

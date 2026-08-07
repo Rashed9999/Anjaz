@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-BACKUP-001 — «النسخ الاحتياطي» (باقة التاجر برو فأعلى).
 ///
@@ -27,7 +27,7 @@ class _MerchantBackupScreenState extends State<MerchantBackupScreen> {
   String? _savedPath;
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _run() async {
     setState(() { _busy = true; _error = null; });
@@ -72,9 +72,9 @@ class _MerchantBackupScreenState extends State<MerchantBackupScreen> {
   Widget build(BuildContext context) {
     final counts = (_lastMeta?['counts'] ?? {}) as Map;
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('النسخ الاحتياطي'),
-          backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+          backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -83,22 +83,22 @@ class _MerchantBackupScreenState extends State<MerchantBackupScreen> {
             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               const Row(children: [
-                Icon(Icons.backup, color: AmyalColors.primary), SizedBox(width: 8),
+                Icon(Icons.backup, color: AmialColors.primary), SizedBox(width: 8),
                 Text('نسخة احتياطية كاملة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               ]),
               const SizedBox(height: 8),
               const Text('يُجمَّع كل بيانات متجرك في ملف JSON واحد: المنتجات، العملات، '
                   'حسابات الآجل وحركاتها، حسابات الشركات، وآخر ٥٠٠٠ عملية بيع.',
-                  style: TextStyle(fontSize: 13, color: AmyalColors.textSecondary, height: 1.5)),
+                  style: TextStyle(fontSize: 13, color: AmialColors.textSecondary, height: 1.5)),
             ]),
           ),
           const SizedBox(height: 16),
           if (_error != null)
             Container(
               padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: AmyalColors.red.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(color: AmialColors.red.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
               child: Row(children: [
-                const Icon(Icons.workspace_premium, color: AmyalColors.yellowDark),
+                const Icon(Icons.workspace_premium, color: AmialColors.yellowDark),
                 const SizedBox(width: 8),
                 Expanded(child: Text(_error!, style: const TextStyle(fontWeight: FontWeight.w600))),
               ]),
@@ -123,7 +123,7 @@ class _MerchantBackupScreenState extends State<MerchantBackupScreen> {
               onPressed: _share,
               icon: const Icon(Icons.share),
               label: const Text('مشاركة / حفظ الملف'),
-              style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(50)),
+              style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(50)),
             ),
             const SizedBox(height: 16),
           ],
@@ -134,7 +134,7 @@ class _MerchantBackupScreenState extends State<MerchantBackupScreen> {
                 : const Icon(Icons.cloud_download),
             label: Text(_busy ? 'جارٍ التجهيز…' : 'إنشاء نسخة احتياطية الآن'),
             style: FilledButton.styleFrom(
-                backgroundColor: _lastMeta != null ? AmyalColors.textSecondary : AmyalColors.primary,
+                backgroundColor: _lastMeta != null ? AmialColors.textSecondary : AmialColors.primary,
                 minimumSize: const Size.fromHeight(52)),
           ),
         ]),
@@ -145,8 +145,8 @@ class _MerchantBackupScreenState extends State<MerchantBackupScreen> {
   Widget _row(String label, dynamic value) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(label, style: const TextStyle(color: AmyalColors.textSecondary)),
-          Text('${value ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+          Text(label, style: const TextStyle(color: AmialColors.textSecondary)),
+          Text('${value ?? 0}', style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
         ]),
       );
 }

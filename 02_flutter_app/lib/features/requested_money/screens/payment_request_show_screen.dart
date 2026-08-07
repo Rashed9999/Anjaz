@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/theme/amial_spacing.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/common/widgets/amial_button.dart';
-import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/theme/amial_spacing.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/common/widgets/amial_button.dart';
+import 'package:amial_pay/features/requested_money/controllers/payment_request_controller.dart';
 
 /// AMIAL-PAYMENT-REQUESTS-001 — شاشة عرض طلب بعد إنشائه.
 class PaymentRequestShowScreen extends StatefulWidget {
@@ -40,7 +40,7 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
       actions: [
         TextButton(onPressed: () => Get.back(result: false), child: const Text('تراجع')),
         FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: AmyalColors.red),
+          style: FilledButton.styleFrom(backgroundColor: AmialColors.red),
           onPressed: () => Get.back(result: true),
           child: const Text('نعم، إلغاء'),
         ),
@@ -59,7 +59,7 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تم إنشاء الطلب'),
       ),
@@ -97,13 +97,13 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AmyalColors.primary,
+                color: AmialColors.primary,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(children: [
                 const Text('المبلغ المطلوب', style: TextStyle(color: Colors.white70)),
                 const SizedBox(height: 8),
-                // AMYAL-DS-001: تنسيق نقدي نظيف (كان يظهر «5000.0000» خام).
+                // AMIAL-DS-001: تنسيق نقدي نظيف (كان يظهر «5000.0000» خام).
                 Text(AmialMoney.yer(amount),
                     style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
                 if (note != null && note.isNotEmpty) ...[
@@ -115,7 +115,7 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: AmyalColors.yellow,
+                      color: AmialColors.yellow,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -145,7 +145,7 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Center(
-                      child: Icon(Icons.qr_code_2, size: 140, color: AmyalColors.primary),
+                      child: Icon(Icons.qr_code_2, size: 140, color: AmialColors.primary),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -176,7 +176,7 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
                       fontSize: 36,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 6,
-                      color: AmyalColors.primary,
+                      color: AmialColors.primary,
                     ),
                   ),
                 ),
@@ -219,8 +219,8 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
             if (id != null && req['status'] == 'pending')
               Obx(() => TextButton.icon(
                 onPressed: c.isSubmitting.value ? null : () => _cancel(id),
-                icon: const Icon(Icons.cancel, size: 18, color: AmyalColors.red),
-                label: const Text('إلغاء الطلب', style: TextStyle(color: AmyalColors.red)),
+                icon: const Icon(Icons.cancel, size: 18, color: AmialColors.red),
+                label: const Text('إلغاء الطلب', style: TextStyle(color: AmialColors.red)),
               )),
           ]),
         );

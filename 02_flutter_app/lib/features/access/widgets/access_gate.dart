@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
 
 /// CRITICAL-001 — AccessGate widget.
 ///
@@ -77,7 +77,7 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
       Get.back(result: true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(access.lastError.value), backgroundColor: AmyalColors.red),
+        SnackBar(content: Text(access.lastError.value), backgroundColor: AmialColors.red),
       );
     }
   }
@@ -87,7 +87,7 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
     return WillPopScope(
       onWillPop: () async => !widget.mandatory,
       child: Scaffold(
-        backgroundColor: AmyalColors.background,
+        backgroundColor: AmialColors.background,
         appBar: AppBar(
           title: const Text('نوع النشاط التجاري'),
           automaticallyImplyLeading: !widget.mandatory,
@@ -98,13 +98,13 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AmyalColors.yellow.withValues(alpha: 0.2),
+                color: AmialColors.yellow.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AmyalColors.yellow),
+                border: Border.all(color: AmialColors.yellow),
               ),
               child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
-                  Icon(Icons.info_outline, color: AmyalColors.yellowDark),
+                  Icon(Icons.info_outline, color: AmialColors.yellowDark),
                   SizedBox(width: 8),
                   Text('اختر نوع نشاطك التجاري',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
@@ -125,7 +125,7 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
               label: Text(_selected == null ? 'اختر نوعاً' : 'حفظ والمتابعة',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               style: FilledButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 minimumSize: const Size.fromHeight(52),
               ),
             ),

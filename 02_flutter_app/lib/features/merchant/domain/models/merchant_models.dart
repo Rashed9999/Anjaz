@@ -1,7 +1,7 @@
 /// AMIAL-MERCHANT-APP-001 (v1.6) — Merchant models
 library;
 
-class AmyalMerchant {
+class AmialMerchant {
   final int id;
   final int userId;
   final String? merchantNumber;
@@ -14,7 +14,7 @@ class AmyalMerchant {
   final bool verified;
   final String? verificationStatus;
 
-  AmyalMerchant({
+  AmialMerchant({
     required this.id,
     required this.userId,
     this.merchantNumber,
@@ -28,9 +28,9 @@ class AmyalMerchant {
     this.verificationStatus,
   });
 
-  factory AmyalMerchant.fromJson(Map<String, dynamic> j) {
+  factory AmialMerchant.fromJson(Map<String, dynamic> j) {
     final merchant = j['merchant'] is Map ? Map<String, dynamic>.from(j['merchant']) : <String, dynamic>{};
-    return AmyalMerchant(
+    return AmialMerchant(
       id: merchant['id'] ?? 0,
       userId: j['id'] ?? merchant['user_id'] ?? 0,
       merchantNumber: (merchant['merchant_number'] ?? j['merchant_number'])?.toString(),
@@ -48,7 +48,7 @@ class AmyalMerchant {
   String get displayName => storeName?.isNotEmpty == true ? storeName! : (merchantNumber ?? 'تاجر');
 }
 
-class AmyalMerchantTransaction {
+class AmialMerchantTransaction {
   final int id;
   final String transactionId;
   final String type; // received_payment, refund, qr_payment, pos_payment
@@ -61,7 +61,7 @@ class AmyalMerchantTransaction {
   final String status;
   final DateTime createdAt;
 
-  AmyalMerchantTransaction({
+  AmialMerchantTransaction({
     required this.id,
     required this.transactionId,
     required this.type,
@@ -75,8 +75,8 @@ class AmyalMerchantTransaction {
     required this.createdAt,
   });
 
-  factory AmyalMerchantTransaction.fromJson(Map<String, dynamic> j) {
-    return AmyalMerchantTransaction(
+  factory AmialMerchantTransaction.fromJson(Map<String, dynamic> j) {
+    return AmialMerchantTransaction(
       id: j['id'] ?? 0,
       transactionId: (j['transaction_id'] ?? j['ulid'] ?? '').toString(),
       type: (j['type'] ?? j['transaction_type'] ?? 'unknown').toString(),
@@ -114,7 +114,7 @@ class AmyalMerchantTransaction {
   bool get isIncoming => !type.contains('refund');
 }
 
-class AmyalMerchantDashboardStats {
+class AmialMerchantDashboardStats {
   final String todaySales;
   final String todayRefunds;
   final String todayNet;
@@ -122,7 +122,7 @@ class AmyalMerchantDashboardStats {
   final String balance;
   final String pendingSettlement;
 
-  AmyalMerchantDashboardStats({
+  AmialMerchantDashboardStats({
     required this.todaySales,
     required this.todayRefunds,
     required this.todayNet,
@@ -131,13 +131,13 @@ class AmyalMerchantDashboardStats {
     required this.pendingSettlement,
   });
 
-  factory AmyalMerchantDashboardStats.empty() => AmyalMerchantDashboardStats(
+  factory AmialMerchantDashboardStats.empty() => AmialMerchantDashboardStats(
         todaySales: '0', todayRefunds: '0', todayNet: '0',
         todayTransactionsCount: 0, balance: '0', pendingSettlement: '0',
       );
 
-  factory AmyalMerchantDashboardStats.fromJson(Map<String, dynamic> j) {
-    return AmyalMerchantDashboardStats(
+  factory AmialMerchantDashboardStats.fromJson(Map<String, dynamic> j) {
+    return AmialMerchantDashboardStats(
       todaySales: (j['today_sales'] ?? '0').toString(),
       todayRefunds: (j['today_refunds'] ?? '0').toString(),
       todayNet: (j['today_net'] ?? j['today_sales'] ?? '0').toString(),

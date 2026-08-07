@@ -1,5 +1,5 @@
-name: amyal_pay
-description: Amyal Pay - دفع سريع وآمن
+name: amial_pay
+description: Amial Pay - دفع سريع وآمن
 publish_to: 'none'
 version: 1.97.0+1970
 
@@ -63,7 +63,7 @@ dependencies:
   skeletonizer: ^2.1.2
   open_file: ^3.5.10
   flutter_currency_input_formatter: ^1.0.1
-  # AMYAL-BRANDING-001: UUID لـ Idempotency-Key (v0.7-C)
+  # AMIAL-BRANDING-001: UUID لـ Idempotency-Key (v0.7-C)
   uuid: ^4.5.1
   # AMIAL-THERMAL-PRINT-001: طباعة الإيصالات على طابعة حرارية (بلوتوث ESC/POS).
   # نطبع الإيصال كصورة raster (نولّد أوامر GS v 0 يدوياً عبر dart:ui) لدعم
@@ -87,7 +87,7 @@ dev_dependencies:
   # اختبارات E2E (integration_test/)
   integration_test:
     sdk: flutter
-  # AMYAL-BRANDING-001
+  # AMIAL-BRANDING-001
   flutter_launcher_icons: ^0.14.4
   flutter_native_splash: ^2.4.6
 
@@ -114,7 +114,7 @@ flutter:
         - asset: assets/font/Rubik-SemiBold.ttf
           weight: 600
 
-# AMYAL-BRANDING-001: native splash configuration
+# AMIAL-BRANDING-001: native splash configuration
 flutter_native_splash:
   color: "#FECA1E"
   image: assets/branding/splash_icon.png
@@ -127,7 +127,7 @@ flutter_native_splash:
   android: true
   web: false
 
-# AMYAL-BRANDING-001: launcher icons configuration
+# AMIAL-BRANDING-001: launcher icons configuration
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: true

@@ -177,7 +177,7 @@
   'Important:' => 'Important:',
   'Publishing a new version automatically supersedes the current version for the same locale. All existing users will be required to accept the new version before their next financial operation.' => 'Publishing a new version automatically supersedes the current version for the same locale. All existing users will be required to accept the new version before their next financial operation.',
   'Semver format e.g. 1.0, 2.1, 3.0.1' => 'Semver format e.g. 1.0, 2.1, 3.0.1',
-  'e.g., Amyal Pay Terms of Use - v1.0' => 'E.g., Amyal Pay Terms of Use - v1.0',
+  'e.g., Amial Pay Terms of Use - v1.0' => 'E.g., Amial Pay Terms of Use - v1.0',
   'Content (full policy text)' => 'Content (full policy text)',
   'Plain text or Markdown. The mobile app renders it as text. HTML is not rendered for security.' => 'Plain text or Markdown. The mobile app renders it as text. HTML is not rendered for security.',
   'Changelog (what changed in this version)' => 'Changelog (what changed in this version)',

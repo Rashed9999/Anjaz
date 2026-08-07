@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/favorite_number/controllers/amial_favorites_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amial_pay/features/favorite_number/controllers/amial_favorites_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/amial_money.dart';
 
 /// AMIAL-FAVORITES-001 — المفضّلة بكل أنواعها في شاشة واحدة.
 ///
@@ -45,7 +45,7 @@ class _AmialFavoritesScreenState extends State<AmialFavoritesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('المفضّلة')),
       body: Obx(() {
         if (_c.loading.value && _c.items.isEmpty) {
@@ -64,7 +64,7 @@ class _AmialFavoritesScreenState extends State<AmialFavoritesScreen> {
         final sections = _order.where(groups.containsKey).toList();
 
         return RefreshIndicator(
-          color: AmyalColors.primary,
+          color: AmialColors.primary,
           onRefresh: _c.loadAll,
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
@@ -82,7 +82,7 @@ class _AmialFavoritesScreenState extends State<AmialFavoritesScreen> {
                       style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
-                          color: AmyalColors.textSecondary),
+                          color: AmialColors.textSecondary),
                     ),
                   ),
                   ...list.map((f) => _tile(kind, f)),
@@ -110,12 +110,12 @@ class _AmialFavoritesScreenState extends State<AmialFavoritesScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AmyalColors.border),
+        border: Border.all(color: AmialColors.border),
       ),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: AmyalColors.background,
-          child: Icon(_iconFor(kind), color: AmyalColors.primary, size: 20),
+          backgroundColor: AmialColors.background,
+          child: Icon(_iconFor(kind), color: AmialColors.primary, size: 20),
         ),
         title: Text(f.label,
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
@@ -123,9 +123,9 @@ class _AmialFavoritesScreenState extends State<AmialFavoritesScreen> {
             ? null
             : Text(subtitle,
                 style: const TextStyle(
-                    fontSize: 12, color: AmyalColors.textSecondary)),
+                    fontSize: 12, color: AmialColors.textSecondary)),
         trailing: IconButton(
-          icon: const Icon(Icons.star_rounded, color: AmyalColors.yellowDark),
+          icon: const Icon(Icons.star_rounded, color: AmialColors.yellowDark),
           tooltip: 'إزالة من المفضّلة',
           onPressed: () => _c.remove(f.id),
         ),
@@ -137,21 +137,21 @@ class _AmialFavoritesScreenState extends State<AmialFavoritesScreen> {
         padding: const EdgeInsets.fromLTRB(28, 90, 28, 28),
         children: const [
           Icon(Icons.star_border_rounded,
-              size: 64, color: AmyalColors.textMuted),
+              size: 64, color: AmialColors.textMuted),
           SizedBox(height: 14),
           Text('لا مفضّلة بعد',
               textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: AmyalColors.textPrimary)),
+                  color: AmialColors.textPrimary)),
           SizedBox(height: 8),
           Text(
             'اضغط ⭐ بجانب أي رقم أو حساب أو تاجر أو عملية لتجدها هنا بسرعة '
             'في المرّة القادمة.',
             textAlign: TextAlign.center,
             style: TextStyle(
-                fontSize: 13, height: 1.8, color: AmyalColors.textSecondary),
+                fontSize: 13, height: 1.8, color: AmialColors.textSecondary),
           ),
         ],
       );

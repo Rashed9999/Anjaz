@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-PATTERN-001 — نقشة الهوية الخلفية.
 ///
@@ -55,7 +55,7 @@ class _ChevronPatternPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.6
       ..strokeCap = StrokeCap.round
-      ..color = AmyalColors.primary.withValues(alpha: 0.035 * intensity);
+      ..color = AmialColors.primary.withValues(alpha: 0.035 * intensity);
 
     // النقشة تغطّي أعلى الشاشة فقط ثم تتلاشى — كما في المراجع، حيث تظهر
     // خلف الترويسة وبطاقة الرصيد ولا تمتدّ خلف القوائم.

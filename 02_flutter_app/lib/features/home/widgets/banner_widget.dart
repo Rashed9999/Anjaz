@@ -1,13 +1,13 @@
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/home/controllers/banner_controller.dart';
-import 'package:amyal_pay/features/splash/controllers/splash_controller.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/images.dart';
-import 'package:amyal_pay/common/widgets/custom_image_widget.dart';
-import 'package:amyal_pay/common/screens/web_screen.dart';
-import 'package:amyal_pay/features/home/widgets/banner_shimmer_widget.dart';
+import 'package:amial_pay/features/home/controllers/banner_controller.dart';
+import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/common/widgets/custom_image_widget.dart';
+import 'package:amial_pay/common/screens/web_screen.dart';
+import 'package:amial_pay/features/home/widgets/banner_shimmer_widget.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 class BannerWidget extends StatelessWidget {

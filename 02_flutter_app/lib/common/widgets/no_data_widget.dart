@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get_utils/src/extensions/internacionalization.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-EMPTY-STATE-001 — الحالة الفارغة الموحّدة.
 ///
@@ -56,11 +56,11 @@ class NoDataFoundWidget extends StatelessWidget {
               width: 96,
               height: 96,
               decoration: BoxDecoration(
-                color: AmyalColors.primary.withValues(alpha: 0.07),
+                color: AmialColors.primary.withValues(alpha: 0.07),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon,
-                  size: 42, color: AmyalColors.primary.withValues(alpha: 0.55)),
+                  size: 42, color: AmialColors.primary.withValues(alpha: 0.55)),
             ),
             const SizedBox(height: Dimensions.paddingSizeLarge),
             Text(
@@ -78,7 +78,7 @@ class NoDataFoundWidget extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: rubikRegular.copyWith(
                   fontSize: Dimensions.fontSizeDefault,
-                  color: AmyalColors.textSecondary,
+                  color: AmialColors.textSecondary,
                   height: 1.5,
                 ),
               ),
@@ -88,8 +88,8 @@ class NoDataFoundWidget extends StatelessWidget {
               OutlinedButton(
                 onPressed: onAction,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AmyalColors.primary,
-                  side: const BorderSide(color: AmyalColors.primary, width: 1.3),
+                  foregroundColor: AmialColors.primary,
+                  side: const BorderSide(color: AmialColors.primary, width: 1.3),
                   padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),

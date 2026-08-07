@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/util/app_constants.dart';
-import 'package:amyal_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_constants.dart';
+import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 
 /// AMIAL-WEB-ONLY-PORTALS-001 — لوحتا الإدارة والوكيل خرجتا من التطبيق.
 ///
@@ -47,7 +47,7 @@ class WebPortalNoticeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Text(_title),
         automaticallyImplyLeading: false,
@@ -62,7 +62,7 @@ class WebPortalNoticeScreen extends StatelessWidget {
               Icon(
                 _isAdmin ? Icons.admin_panel_settings : Icons.storefront,
                 size: 78,
-                color: AmyalColors.primary,
+                color: AmialColors.primary,
               ),
               const SizedBox(height: 20),
               Text(
@@ -96,7 +96,7 @@ class WebPortalNoticeScreen extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AmyalColors.primary,
+                    color: AmialColors.primary,
                   ),
                 ),
               ),
@@ -108,7 +108,7 @@ class WebPortalNoticeScreen extends StatelessWidget {
                 label: const Text('فتح في المتصفّح'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 15),
-                  backgroundColor: AmyalColors.primary,
+                  backgroundColor: AmialColors.primary,
                   foregroundColor: Colors.white,
                 ),
               ),

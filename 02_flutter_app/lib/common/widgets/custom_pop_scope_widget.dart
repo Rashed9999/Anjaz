@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/common/widgets/custom_dialog_widget.dart';
-import 'package:amyal_pay/features/splash/screens/splash_screen.dart';
-import 'package:amyal_pay/helper/dialog_helper.dart';
+import 'package:amial_pay/common/widgets/custom_dialog_widget.dart';
+import 'package:amial_pay/features/splash/screens/splash_screen.dart';
+import 'package:amial_pay/helper/dialog_helper.dart';
 
 
 class CustomPopScopeWidget extends StatefulWidget {

@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 
 /// AMIAL-MERCHANT-VERIFY-001 — Repo توثيق التاجر.
 class MerchantVerificationRepo extends GetxService {

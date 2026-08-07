@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-PROMOTIONS-001 — «العروض والخصومات» (باقة ستارتر فأعلى).
 ///
@@ -45,7 +45,7 @@ class _MerchantPromotionsScreenState extends State<MerchantPromotionsScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   Future<void> _editDialog({Map<String, dynamic>? existing}) async {
     final isEdit = existing != null;
@@ -100,7 +100,7 @@ class _MerchantPromotionsScreenState extends State<MerchantPromotionsScreen> {
             const SizedBox(height: 16),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size.fromHeight(50)),
+              style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(50)),
               child: Text(isEdit ? 'حفظ' : 'إنشاء'),
             ),
           ]),
@@ -140,19 +140,19 @@ class _MerchantPromotionsScreenState extends State<MerchantPromotionsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('العروض والخصومات'),
-          backgroundColor: AmyalColors.primary, foregroundColor: Colors.white),
+          backgroundColor: AmialColors.primary, foregroundColor: Colors.white),
       floatingActionButton: _error == null
           ? FloatingActionButton.extended(onPressed: () => _editDialog(),
-              backgroundColor: AmyalColors.primary, icon: const Icon(Icons.add), label: const Text('عرض جديد'))
+              backgroundColor: AmialColors.primary, icon: const Icon(Icons.add), label: const Text('عرض جديد'))
           : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(child: Padding(padding: const EdgeInsets.all(24),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.workspace_premium, size: 56, color: AmyalColors.yellowDark),
+                    const Icon(Icons.workspace_premium, size: 56, color: AmialColors.yellowDark),
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
@@ -162,7 +162,7 @@ class _MerchantPromotionsScreenState extends State<MerchantPromotionsScreen> {
                   child: ListView(padding: const EdgeInsets.all(12), children: [
                     const Padding(padding: EdgeInsets.all(8),
                         child: Text('الخصومات التلقائية تُطبَّق عند بلوغ الحدّ الأدنى، والكوبونات تُطبَّق بإدخال رمزها في شاشة الدفع.',
-                            style: TextStyle(fontSize: 12, color: AmyalColors.textSecondary))),
+                            style: TextStyle(fontSize: 12, color: AmialColors.textSecondary))),
                     if (_list.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 40),
                         child: Center(child: Text('لا عروض — أنشئ عرضاً لزيادة مبيعاتك'))),
                     ..._list.map(_card),
@@ -182,9 +182,9 @@ class _MerchantPromotionsScreenState extends State<MerchantPromotionsScreen> {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: (active ? AmyalColors.primary : AmyalColors.textSecondary).withValues(alpha: 0.12),
+          backgroundColor: (active ? AmialColors.primary : AmialColors.textSecondary).withValues(alpha: 0.12),
           child: Icon(code.isEmpty ? Icons.local_offer : Icons.confirmation_number,
-              color: active ? AmyalColors.primary : AmyalColors.textSecondary, size: 20),
+              color: active ? AmialColors.primary : AmialColors.textSecondary, size: 20),
         ),
         title: Text('${p['name']} — $valueLabel', style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -192,13 +192,13 @@ class _MerchantPromotionsScreenState extends State<MerchantPromotionsScreen> {
           Text([
             if ((double.tryParse('${p['min_order_amount']}') ?? 0) > 0) 'حدّ أدنى ${p['min_order_amount']} ر.ي',
             if (limit != null) 'استُخدم ${p['used_count']}/$limit',
-          ].join(' • '), style: const TextStyle(fontSize: 10, color: AmyalColors.textSecondary)),
+          ].join(' • '), style: const TextStyle(fontSize: 10, color: AmialColors.textSecondary)),
         ]),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-          IconButton(icon: const Icon(Icons.edit, size: 20, color: AmyalColors.primary),
+          IconButton(icon: const Icon(Icons.edit, size: 20, color: AmialColors.primary),
               onPressed: () => _editDialog(existing: p)),
-          Switch(value: active, activeColor: AmyalColors.primary, onChanged: (_) => _toggle(p['id'] as int)),
-          IconButton(icon: const Icon(Icons.delete_outline, size: 20, color: AmyalColors.red),
+          Switch(value: active, activeColor: AmialColors.primary, onChanged: (_) => _toggle(p['id'] as int)),
+          IconButton(icon: const Icon(Icons.delete_outline, size: 20, color: AmialColors.red),
               onPressed: () => _delete(p['id'] as int)),
         ]),
       ),

@@ -1,6 +1,6 @@
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/features/home/domain/models/banner_model.dart';
-import 'package:amyal_pay/features/home/domain/reposotories/banner_repo.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/features/home/domain/models/banner_model.dart';
+import 'package:amial_pay/features/home/domain/reposotories/banner_repo.dart';
 import 'package:get/get.dart';
 
 class BannerController extends GetxController implements GetxService {

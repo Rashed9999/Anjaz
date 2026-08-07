@@ -1,7 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:amyal_pay/util/dimensions.dart';
+import 'package:amial_pay/util/dimensions.dart';
 
 class CustomPasswordFieldWidget extends StatefulWidget {
   final bool? isShowSuffixIcon;

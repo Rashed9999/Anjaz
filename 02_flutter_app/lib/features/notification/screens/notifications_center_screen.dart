@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/notification/controllers/notifications_center_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 
 /// AMIAL-NOTIFICATIONS-001 — شاشة مركز الإشعارات.
 class NotificationsCenterScreen extends StatefulWidget {
@@ -36,7 +36,7 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('الإشعارات'),
         actions: [
@@ -58,7 +58,7 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
             Switch(
               value: c.unreadOnly.value,
               onChanged: (_) => c.toggleUnreadOnly(),
-              activeThumbColor: AmyalColors.primary,
+              activeThumbColor: AmialColors.primary,
             ),
             const SizedBox(width: 8),
             const Text('غير المقروءة فقط'),
@@ -66,7 +66,7 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
-                color: c.unreadCount.value > 0 ? AmyalColors.red : Colors.grey.shade300,
+                color: c.unreadCount.value > 0 ? AmialColors.red : Colors.grey.shade300,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -150,7 +150,7 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
               Row(children: [
                 if (unread)
                   Container(width: 8, height: 8, margin: const EdgeInsets.only(left: 6),
-                      decoration: BoxDecoration(color: AmyalColors.red, shape: BoxShape.circle)),
+                      decoration: BoxDecoration(color: AmialColors.red, shape: BoxShape.circle)),
                 const Spacer(),
                 Text(n['title'] ?? '',
                     style: TextStyle(fontSize: 15, fontWeight: unread ? FontWeight.bold : FontWeight.w500)),
@@ -171,10 +171,10 @@ class _NotificationsCenterScreenState extends State<NotificationsCenterScreen> {
   Color _typeColor(String type) {
     if (type.contains('transfer')) return Colors.blue;
     if (type.contains('withdrawal')) return Colors.green;
-    if (type == 'credit_over_limit') return AmyalColors.red;
-    if (type.contains('credit')) return AmyalColors.yellowDark;
+    if (type == 'credit_over_limit') return AmialColors.red;
+    if (type.contains('credit')) return AmialColors.yellowDark;
     if (type == 'promo') return Colors.purple;
-    return AmyalColors.primary;
+    return AmialColors.primary;
   }
 
   IconData _resolveIcon(String key) {

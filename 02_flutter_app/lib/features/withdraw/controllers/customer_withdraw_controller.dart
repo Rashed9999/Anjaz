@@ -1,6 +1,6 @@
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/withdraw/domain/repositories/customer_withdraw_repo.dart';
-import 'package:amyal_pay/helper/amial_errors.dart';
+import 'package:amial_pay/features/withdraw/domain/repositories/customer_withdraw_repo.dart';
+import 'package:amial_pay/helper/amial_errors.dart';
 
 /// AMIAL-CUSTOMER-WITHDRAW-001 — متحكّم السحب من جهة العميل.
 class CustomerWithdrawController extends GetxController implements GetxService {

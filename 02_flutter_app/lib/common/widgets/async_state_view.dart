@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-UX-STATES-001 — عرض موحّد لحالات الشاشة (المعيار المهني).
 ///
@@ -51,13 +51,13 @@ class AsyncStateView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return const Center(child: CircularProgressIndicator(color: AmyalColors.primary));
+      return const Center(child: CircularProgressIndicator(color: AmialColors.primary));
     }
 
     if (error != null && error!.isNotEmpty) {
       return _centered(
         icon: lockedError ? Icons.workspace_premium : errorIcon,
-        iconColor: lockedError ? AmyalColors.yellowDark : AmyalColors.red,
+        iconColor: lockedError ? AmialColors.yellowDark : AmialColors.red,
         text: error!,
         showRetry: !lockedError && onRetry != null,
         onRetry: onRetry,
@@ -66,7 +66,7 @@ class AsyncStateView extends StatelessWidget {
 
     if (isEmpty) {
       // قابل للسحب للتحديث حتى في الحالة الفارغة.
-      final content = _centered(icon: emptyIcon, iconColor: AmyalColors.textSecondary, text: emptyText);
+      final content = _centered(icon: emptyIcon, iconColor: AmialColors.textSecondary, text: emptyText);
       return onRetry == null
           ? content
           : RefreshIndicator(
@@ -92,14 +92,14 @@ class AsyncStateView extends StatelessWidget {
           Icon(icon, size: 56, color: iconColor),
           const SizedBox(height: 14),
           Text(text, textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AmyalColors.textSecondary)),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AmialColors.textSecondary)),
           if (showRetry) ...[
             const SizedBox(height: 18),
             FilledButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
               label: const Text('إعادة المحاولة'),
-              style: FilledButton.styleFrom(backgroundColor: AmyalColors.primary, minimumSize: const Size(200, 46)),
+              style: FilledButton.styleFrom(backgroundColor: AmialColors.primary, minimumSize: const Size(200, 46)),
             ),
           ],
         ]),

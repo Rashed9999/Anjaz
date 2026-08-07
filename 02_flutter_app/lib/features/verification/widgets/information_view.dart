@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/auth/controllers/create_account_controller.dart';
-import 'package:amyal_pay/helper/string_parser.dart';
-import 'package:amyal_pay/util/dimensions.dart';
-import 'package:amyal_pay/util/styles.dart';
-import 'package:amyal_pay/common/widgets/custom_logo_widget.dart';
+import 'package:amial_pay/features/auth/controllers/create_account_controller.dart';
+import 'package:amial_pay/helper/string_parser.dart';
+import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/styles.dart';
+import 'package:amial_pay/common/widgets/custom_logo_widget.dart';
 
 class InformationView extends StatelessWidget {
   final String? phoneNumber;

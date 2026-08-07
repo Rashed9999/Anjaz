@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/controllers/merchant_controller.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/merchant/controllers/merchant_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-MERCHANT-APP-001 (v1.6)
 ///
@@ -46,7 +46,7 @@ class _MerchantRefundScreenState extends State<MerchantRefundScreen> {
               child: const Text('إلغاء')),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AmyalColors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: AmialColors.red),
             child: const Text('استرجاع', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -87,7 +87,7 @@ class _MerchantRefundScreenState extends State<MerchantRefundScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(ctrl.lastError.value),
-            backgroundColor: AmyalColors.red),
+            backgroundColor: AmialColors.red),
       );
     }
   }
@@ -95,7 +95,7 @@ class _MerchantRefundScreenState extends State<MerchantRefundScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('استرجاع مبلغ'),
       ),
@@ -109,12 +109,12 @@ class _MerchantRefundScreenState extends State<MerchantRefundScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow.withValues(alpha: 0.2),
+                  color: AmialColors.yellow.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.info_outline, color: AmyalColors.primary),
+                    Icon(Icons.info_outline, color: AmialColors.primary),
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -185,7 +185,7 @@ class _MerchantRefundScreenState extends State<MerchantRefundScreen> {
                       style:
                           TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.red,
+                    backgroundColor: AmialColors.red,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),

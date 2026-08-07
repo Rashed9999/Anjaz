@@ -1,18 +1,18 @@
-import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
+import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
+import 'package:amial_pay/helper/amial_money.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
 import 'package:share_plus/share_plus.dart';
-import 'package:amyal_pay/features/receipts/controllers/receipts_controller.dart';
-import 'package:amyal_pay/data/api/secure_storage_helper.dart';
-import 'package:amyal_pay/helper/pdf_downloader_helper.dart';
-import 'package:amyal_pay/features/shared/utils/operation_status.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/features/favorite_number/controllers/amial_favorites_controller.dart';
-import 'package:amyal_pay/features/favorite_number/widgets/amial_favorite_star.dart';
-import 'package:amyal_pay/util/arabic_number_words.dart';
+import 'package:amial_pay/features/receipts/controllers/receipts_controller.dart';
+import 'package:amial_pay/data/api/secure_storage_helper.dart';
+import 'package:amial_pay/helper/pdf_downloader_helper.dart';
+import 'package:amial_pay/features/shared/utils/operation_status.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/favorite_number/controllers/amial_favorites_controller.dart';
+import 'package:amial_pay/features/favorite_number/widgets/amial_favorite_star.dart';
+import 'package:amial_pay/util/arabic_number_words.dart';
 
 /// AMIAL-RECEIPTS-001 (v0.9-D)
 class ReceiptDetailScreen extends StatefulWidget {
@@ -107,7 +107,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
     // AMIAL-RECEIPT-TIME-001: كان يطبع DateTime خاماً
     // (2026-07-26 12:12:00.000) في رسالة يقرؤها متلقٍّ عاديّ.
     final shareText = '''
-إيصال Amyal Pay
+إيصال Amial Pay
 الرقم: ${receipt.receiptNumber}
 النوع: ${receipt.arabicTypeLabel}
 المبلغ: ${AmialMoney.fmt(receipt.amount)} ر.ي
@@ -122,7 +122,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تفاصيل الإيصال'),
         actions: [
@@ -155,7 +155,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
 
         if (ctrl.isLoading.value || r == null) {
           return const Center(
-              child: CircularProgressIndicator(color: AmyalColors.primary));
+              child: CircularProgressIndicator(color: AmialColors.primary));
         }
 
         final isCredit = r.direction == 'credit';
@@ -180,7 +180,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                     Text(
                       r.arabicTypeLabel,
                       style: const TextStyle(
-                        color: AmyalColors.textSecondary,
+                        color: AmialColors.textSecondary,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
@@ -192,7 +192,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                       style: TextStyle(
                         color: isCredit
                             ? const Color(0xFF16A34A)
-                            : AmyalColors.red,
+                            : AmialColors.red,
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
                       ),
@@ -218,7 +218,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                     Text(
                       isCredit ? 'مضاف لحسابك' : 'مخصوم من حسابك',
                       style: const TextStyle(
-                        color: AmyalColors.textMuted,
+                        color: AmialColors.textMuted,
                         fontSize: 11.5,
                       ),
                     ),
@@ -288,13 +288,13 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AmyalColors.border),
+                  border: Border.all(color: AmialColors.border),
                 ),
                 child: Column(
                   children: [
                     const Text(
                       'كود التحقق',
-                      style: TextStyle(fontSize: 12, color: AmyalColors.textSecondary),
+                      style: TextStyle(fontSize: 12, color: AmialColors.textSecondary),
                     ),
                     const SizedBox(height: 8),
                     SelectableText(
@@ -303,14 +303,14 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                         fontFamily: 'monospace',
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: AmyalColors.primary,
+                        color: AmialColors.primary,
                         letterSpacing: 2,
                       ),
                     ),
                     const SizedBox(height: 4),
                     const Text(
                       'استخدم هذا الكود للتحقق من صحة الإيصال',
-                      style: TextStyle(fontSize: 11, color: AmyalColors.textMuted),
+                      style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
                     ),
                   ],
                 ),
@@ -366,16 +366,16 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AmyalColors.border),
+          border: Border.all(color: AmialColors.border),
         ),
         child: Column(children: [
-          Icon(icon, size: 22, color: AmyalColors.primary),
+          Icon(icon, size: 22, color: AmialColors.primary),
           const SizedBox(height: 6),
           Text(label,
               style: const TextStyle(
                   fontSize: 11.5,
                   fontWeight: FontWeight.w600,
-                  color: AmyalColors.primary)),
+                  color: AmialColors.primary)),
         ]),
       ),
     );
@@ -433,7 +433,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
           SizedBox(
             width: 100,
             child: Text(label,
-                style: TextStyle(color: AmyalColors.textSecondary, fontSize: 13)),
+                style: TextStyle(color: AmialColors.textSecondary, fontSize: 13)),
           ),
           Expanded(
             child: SelectableText(
@@ -444,7 +444,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                     ? FontWeight.bold
                     : (monospace ? FontWeight.w600 : FontWeight.w500),
                 fontSize: bold ? 14.5 : (monospace ? 12 : 13),
-                color: bold ? AmyalColors.primary : null,
+                color: bold ? AmialColors.primary : null,
               ),
             ),
           ),
@@ -462,7 +462,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
               borderRadius: BorderRadius.circular(8),
               child: const Padding(
                 padding: EdgeInsets.all(4),
-                child: Icon(Icons.copy_rounded, size: 16, color: AmyalColors.primary),
+                child: Icon(Icons.copy_rounded, size: 16, color: AmialColors.primary),
               ),
             ),
         ],

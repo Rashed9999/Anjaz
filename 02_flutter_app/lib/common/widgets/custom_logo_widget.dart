@@ -1,6 +1,6 @@
 
 import 'package:flutter/material.dart';
-import 'package:amyal_pay/util/images.dart';
+import 'package:amial_pay/util/images.dart';
 
 class CustomLogoWidget extends StatelessWidget {
   final double? height,width;

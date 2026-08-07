@@ -1,18 +1,18 @@
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/merchant/domain/models/merchant_models.dart';
-import 'package:amyal_pay/features/merchant/domain/repositories/merchant_repo.dart';
+import 'package:amial_pay/features/merchant/domain/models/merchant_models.dart';
+import 'package:amial_pay/features/merchant/domain/repositories/merchant_repo.dart';
 
 /// AMIAL-MERCHANT-APP-001 (v1.6)
 class MerchantController extends GetxController implements GetxService {
   final MerchantRepo repo;
   MerchantController({required this.repo});
 
-  final Rx<AmyalMerchant?> merchant = Rx<AmyalMerchant?>(null);
-  final Rx<AmyalMerchantDashboardStats> stats =
-      AmyalMerchantDashboardStats.empty().obs;
-  final RxList<AmyalMerchantTransaction> transactions =
-      <AmyalMerchantTransaction>[].obs;
+  final Rx<AmialMerchant?> merchant = Rx<AmialMerchant?>(null);
+  final Rx<AmialMerchantDashboardStats> stats =
+      AmialMerchantDashboardStats.empty().obs;
+  final RxList<AmialMerchantTransaction> transactions =
+      <AmialMerchantTransaction>[].obs;
 
   final RxBool isLoading = false.obs;
   final RxBool isSubmitting = false.obs;
@@ -31,7 +31,7 @@ class MerchantController extends GetxController implements GetxService {
         final body = r.body as Map;
         final data = body['meta'] ?? body['data'] ?? body;
         if (data is Map) {
-          merchant.value = AmyalMerchant.fromJson(Map<String, dynamic>.from(data));
+          merchant.value = AmialMerchant.fromJson(Map<String, dynamic>.from(data));
         }
       }
       await _loadDailyStats();
@@ -49,7 +49,7 @@ class MerchantController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map) {
         final meta = (r.body as Map)['meta'];
         if (meta is Map) {
-          stats.value = AmyalMerchantDashboardStats.fromJson(
+          stats.value = AmialMerchantDashboardStats.fromJson(
               Map<String, dynamic>.from(meta));
         }
       }
@@ -107,7 +107,7 @@ class MerchantController extends GetxController implements GetxService {
       if (r.statusCode == 200 && r.body is Map) {
         final list = (r.body['data'] ?? r.body['meta']?['data'] ?? []) as List;
         transactions.value = list
-            .map((j) => AmyalMerchantTransaction.fromJson(
+            .map((j) => AmialMerchantTransaction.fromJson(
                 Map<String, dynamic>.from(j)))
             .toList();
       }

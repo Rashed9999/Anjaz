@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/util/contact_constants.dart';
-import 'package:amyal_pay/features/plans/controllers/plans_controller.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/contact_constants.dart';
+import 'package:amial_pay/features/plans/controllers/plans_controller.dart';
 
 /// CRITICAL-001-PLANS — شاشة كتالوج الخطط.
 ///
@@ -32,7 +32,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
   static const _planColors = {
     'free': Color(0xFF6B7280),          // رمادي
     'starter': Color(0xFF059669),       // أخضر
-    'business': AmyalColors.primary,    // أزرق
+    'business': AmialColors.primary,    // أزرق
     'merchant_pro': Color(0xFFF59E0B),  // برتقالي
     'enterprise': Color(0xFF7C3AED),    // بنفسجي
   };
@@ -69,7 +69,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('الخطط والاشتراكات'),
       ),
@@ -144,7 +144,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
         duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: active ? AmyalColors.primary : Colors.transparent,
+          color: active ? AmialColors.primary : Colors.transparent,
           borderRadius: BorderRadius.circular(26),
         ),
         child: Text(label, textAlign: TextAlign.center,
@@ -163,15 +163,15 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 9),
         decoration: BoxDecoration(
-          color: active ? AmyalColors.primary.withValues(alpha: 0.12) : Colors.white,
+          color: active ? AmialColors.primary.withValues(alpha: 0.12) : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: active ? AmyalColors.primary : AmyalColors.border),
+          border: Border.all(color: active ? AmialColors.primary : AmialColors.border),
         ),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(icon, size: 16, color: active ? AmyalColors.primary : Colors.grey.shade600),
+          Icon(icon, size: 16, color: active ? AmialColors.primary : Colors.grey.shade600),
           const SizedBox(width: 6),
           Text(label, style: TextStyle(
-              color: active ? AmyalColors.primary : Colors.grey.shade700,
+              color: active ? AmialColors.primary : Colors.grey.shade700,
               fontWeight: FontWeight.bold, fontSize: 13)),
         ]),
       ),
@@ -233,13 +233,13 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
         alignment: Alignment.bottomRight,
         padding: const EdgeInsets.only(right: 8, bottom: 10),
         child: const Text('قارن الباقات',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AmyalColors.primary)),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AmialColors.primary)),
       ),
       ...rows.map((r) {
         if (r.$1 == 'section') {
           return Container(
             width: _cmpLabelW, height: _cmpSecH,
-            color: AmyalColors.primary.withValues(alpha: 0.06),
+            color: AmialColors.primary.withValues(alpha: 0.06),
             alignment: Alignment.centerRight,
             padding: const EdgeInsets.only(right: 8),
             child: Text(r.$2, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
@@ -259,7 +259,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
 
   Widget _planColumn(Map<String, dynamic> plan, List<(String, String, String)> rows) {
     final code = plan['code']?.toString() ?? '';
-    final color = _planColors[code] ?? AmyalColors.primary;
+    final color = _planColors[code] ?? AmialColors.primary;
     final isCurrent = c.isCurrentPlan(code);
     final price = _annual ? plan['price_annual_sar'] : plan['price_monthly_sar'];
     final limits = (plan['limits'] ?? {}) as Map;
@@ -269,7 +269,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
       width: _cmpPlanW,
       decoration: BoxDecoration(
         border: Border(right: BorderSide(color: Colors.grey.shade200)),
-        color: isCurrent ? AmyalColors.yellow.withValues(alpha: 0.06) : null,
+        color: isCurrent ? AmialColors.yellow.withValues(alpha: 0.06) : null,
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         // ترويسة الباقة
@@ -291,7 +291,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
             const SizedBox(height: 4),
             isCurrent
                 ? const Text('باقتك', style: TextStyle(
-                    fontSize: 10, fontWeight: FontWeight.bold, color: AmyalColors.yellowDark))
+                    fontSize: 10, fontWeight: FontWeight.bold, color: AmialColors.yellowDark))
                 : InkWell(
                     onTap: () => _showContactDialog(plan),
                     child: Container(
@@ -306,7 +306,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
         ...rows.map((r) {
           if (r.$1 == 'section') {
             return Container(width: _cmpPlanW, height: _cmpSecH,
-                color: AmyalColors.primary.withValues(alpha: 0.06));
+                color: AmialColors.primary.withValues(alpha: 0.06));
           }
           Widget cell;
           if (r.$1 == 'limit') {
@@ -338,20 +338,20 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: isExpired ? Colors.red.shade50 : AmyalColors.yellow.withValues(alpha: 0.2),
+        color: isExpired ? Colors.red.shade50 : AmialColors.yellow.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: isExpired ? Colors.red : AmyalColors.yellowDark, width: 1),
+        border: Border.all(color: isExpired ? Colors.red : AmialColors.yellowDark, width: 1),
       ),
       child: Row(children: [
         Icon(isExpired ? Icons.warning_amber : Icons.workspace_premium,
-            color: isExpired ? Colors.red : AmyalColors.yellowDark, size: 18),
+            color: isExpired ? Colors.red : AmialColors.yellowDark, size: 18),
         const SizedBox(width: 8),
         Expanded(child: Text(
           isExpired
             ? 'انتهت خطّتك — تعمل الآن بحدود FREE'
             : 'خطّتك الحالية: ${_planLabel(cp['code'])}',
           style: TextStyle(
-            color: isExpired ? Colors.red.shade800 : AmyalColors.yellowDark,
+            color: isExpired ? Colors.red.shade800 : AmialColors.yellowDark,
             fontWeight: FontWeight.bold, fontSize: 13,
           ),
         )),
@@ -368,7 +368,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
 
   Widget _planCard(Map<String, dynamic> plan) {
     final code = plan['code']?.toString() ?? '';
-    final color = _planColors[code] ?? AmyalColors.primary;
+    final color = _planColors[code] ?? AmialColors.primary;
     final emoji = _planEmojis[code] ?? '📋';
     final isCurrent = c.isCurrentPlan(code);
     final isSuggested = widget.suggestedPlan == code;
@@ -387,7 +387,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isCurrent ? AmyalColors.yellow : (isSuggested ? color : Colors.transparent),
+          color: isCurrent ? AmialColors.yellow : (isSuggested ? color : Colors.transparent),
           width: isCurrent ? 3 : (isSuggested ? 2 : 0),
         ),
         boxShadow: [
@@ -431,7 +431,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AmyalColors.yellow,
+                  color: AmialColors.yellow,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Text('مُقترحة لك',
@@ -484,12 +484,12 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AmyalColors.yellow, width: 2),
+                  border: Border.all(color: AmialColors.yellow, width: 2),
                 ),
                 child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
-                  Icon(Icons.check_circle, color: AmyalColors.yellowDark, size: 18),
+                  Icon(Icons.check_circle, color: AmialColors.yellowDark, size: 18),
                   SizedBox(width: 6),
-                  Text('الخطّة الحالية', style: TextStyle(color: AmyalColors.yellowDark, fontWeight: FontWeight.bold)),
+                  Text('الخطّة الحالية', style: TextStyle(color: AmialColors.yellowDark, fontWeight: FontWeight.bold)),
                 ]),
               )
             : FilledButton.icon(
@@ -572,7 +572,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       title: Row(children: [
         Icon(isFree ? Icons.info : Icons.workspace_premium,
-            color: AmyalColors.primary),
+            color: AmialColors.primary),
         const SizedBox(width: 8),
         Expanded(child: Text(isFree ? 'الخطّة المجانية' : 'الترقية إلى ${plan['label']}')),
       ]),
@@ -581,12 +581,12 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AmyalColors.primary.withValues(alpha: 0.08),
+              color: AmialColors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(children: [
               Text('$price ر.ي', style: const TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
+                  fontSize: 24, fontWeight: FontWeight.bold, color: AmialColors.primary)),
               Text(_annual ? 'سنوياً' : 'شهرياً',
                   style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
             ]),
@@ -665,7 +665,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
               icon: Icons.phone,
               label: 'اتصال هاتفي',
               subtitle: ContactConstants.phoneNumber,
-              color: AmyalColors.primary,
+              color: AmialColors.primary,
               onTap: () async {
                 Navigator.pop(sheetCtx);
                 await _tryLaunch(ContactConstants.phoneUrl());
@@ -698,14 +698,14 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('تعذّر فتح التطبيق — تأكّد من تثبيته'),
-          backgroundColor: AmyalColors.red,
+          backgroundColor: AmialColors.red,
         ));
       }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: const Text('فشل التواصل — حاول لاحقاً'),
-        backgroundColor: AmyalColors.red,
+        backgroundColor: AmialColors.red,
       ));
     }
   }

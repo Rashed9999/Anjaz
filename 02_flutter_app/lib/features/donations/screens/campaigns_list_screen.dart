@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/donations/controllers/donations_controller.dart';
-import 'package:amyal_pay/features/donations/screens/campaign_detail_screen.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/donations/controllers/donations_controller.dart';
+import 'package:amial_pay/features/donations/screens/campaign_detail_screen.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-DONATIONS-001 (v1.2)
 class CampaignsListScreen extends StatefulWidget {
@@ -25,14 +25,14 @@ class _CampaignsListScreenState extends State<CampaignsListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('حملات التصنيف'),
       ),
       body: Obx(() {
         final ctrl = Get.find<DonationsController>();
         if (ctrl.isLoading.value && ctrl.campaigns.isEmpty) {
-          return const Center(child: CircularProgressIndicator(color: AmyalColors.primary));
+          return const Center(child: CircularProgressIndicator(color: AmialColors.primary));
         }
         if (ctrl.campaigns.isEmpty) {
           return const Center(child: Text('لا توجد حملات نشطة في هذا التصنيف'));
@@ -60,12 +60,12 @@ class _CampaignsListScreenState extends State<CampaignsListScreen> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                              fontSize: 11, color: AmyalColors.textSecondary)),
+                              fontSize: 11, color: AmialColors.textSecondary)),
                       const SizedBox(height: 8),
                       LinearProgressIndicator(
                         value: c.progressPercentage / 100,
-                        color: AmyalColors.primary,
-                        backgroundColor: AmyalColors.border,
+                        color: AmialColors.primary,
+                        backgroundColor: AmialColors.border,
                         minHeight: 4,
                       ),
                       const SizedBox(height: 4),
@@ -76,7 +76,7 @@ class _CampaignsListScreenState extends State<CampaignsListScreen> {
                               style: const TextStyle(fontSize: 11)),
                           Text('${c.donorCount} متبرع',
                               style: const TextStyle(
-                                  fontSize: 11, color: AmyalColors.textMuted)),
+                                  fontSize: 11, color: AmialColors.textMuted)),
                         ],
                       ),
                     ],

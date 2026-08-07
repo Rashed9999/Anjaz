@@ -1,9 +1,9 @@
 
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_checker.dart';
-import 'package:amyal_pay/features/history/controllers/transaction_history_controller.dart';
-import 'package:amyal_pay/features/history/domain/models/dispute_reason_model.dart';
-import 'package:amyal_pay/features/history/domain/reposotories/report_dispute_repo.dart';
+import 'package:amial_pay/data/api/api_checker.dart';
+import 'package:amial_pay/features/history/controllers/transaction_history_controller.dart';
+import 'package:amial_pay/features/history/domain/models/dispute_reason_model.dart';
+import 'package:amial_pay/features/history/domain/reposotories/report_dispute_repo.dart';
 
 class ReportDisputeController extends GetxController implements GetxService {
   final  ReportDisputeRepo reportDisputeRepo;

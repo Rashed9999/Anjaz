@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/features/family_fund/controllers/funds_controller.dart';
-import 'package:amyal_pay/features/family_fund/domain/models/fund_models.dart';
-import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
-import 'package:amyal_pay/helper/amial_money.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/features/family_fund/controllers/funds_controller.dart';
+import 'package:amial_pay/features/family_fund/domain/models/fund_models.dart';
+import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
+import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-FUND-FAMILY-001 (v0.9-D)
 class FundDetailScreen extends StatefulWidget {
@@ -91,7 +91,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                           if (success) Navigator.pop(ctx, true);
                         },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AmyalColors.primary,
+                    backgroundColor: AmialColors.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
@@ -131,7 +131,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text('أدخل رقم جوال العضو المسجّل في أميال باي.',
-                style: TextStyle(fontSize: 13, color: AmyalColors.textSecondary)),
+                style: TextStyle(fontSize: 13, color: AmialColors.textSecondary)),
             const SizedBox(height: 12),
             TextField(
               controller: phoneCtrl,
@@ -152,7 +152,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AmyalColors.primary,
+              backgroundColor: AmialColors.primary,
               foregroundColor: Colors.white,
             ),
             child: const Text('إرسال الدعوة'),
@@ -166,7 +166,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('أدخل رقم جوال صحيحاً'),
-            backgroundColor: AmyalColors.red));
+            backgroundColor: AmialColors.red));
       }
       return;
     }
@@ -180,7 +180,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
       content: Text(success
           ? 'أُرسلت الدعوة — سيظهر الصندوق لدى العضو ليقبلها'
           : ctrl.lastError.value),
-      backgroundColor: success ? const Color(0xFF2E7D32) : AmyalColors.red,
+      backgroundColor: success ? const Color(0xFF2E7D32) : AmialColors.red,
     ));
   }
 
@@ -193,7 +193,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
     if (members.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('لا يوجد أعضاء للصرف لهم'),
-          backgroundColor: AmyalColors.red));
+          backgroundColor: AmialColors.red));
       return;
     }
     int? beneficiaryId = (members.first['user'] as Map)['id'] as int?;
@@ -255,7 +255,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
               Navigator.pop(ctx, true);
             },
             style: ElevatedButton.styleFrom(
-                backgroundColor: AmyalColors.primary,
+                backgroundColor: AmialColors.primary,
                 foregroundColor: Colors.white),
             child: const Text('صرف'),
           ),
@@ -276,14 +276,14 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
       content: Text(success
           ? 'تم الصرف من الصندوق بنجاح'
           : (ctrl.lastError.value.isEmpty ? 'فشل الصرف' : ctrl.lastError.value)),
-      backgroundColor: success ? const Color(0xFF2E7D32) : AmyalColors.red,
+      backgroundColor: success ? const Color(0xFF2E7D32) : AmialColors.red,
     ));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('تفاصيل الصندوق'),
       ),
@@ -292,7 +292,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
         final fund = ctrl.selectedFund.value;
         if (ctrl.isLoading.value || fund == null) {
           return const Center(
-              child: CircularProgressIndicator(color: AmyalColors.primary));
+              child: CircularProgressIndicator(color: AmialColors.primary));
         }
 
         final canContribute = ['owner', 'admin', 'member'].contains(ctrl.selectedFundRole.value);
@@ -304,23 +304,23 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
               margin: const EdgeInsets.all(12),
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: AmyalColors.yellow,
+                color: AmialColors.yellow,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Column(
                 children: [
                   Text(fund.name,
                       style: const TextStyle(
-                          color: AmyalColors.primary,
+                          color: AmialColors.primary,
                           fontSize: 16,
                           fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   const Text('الرصيد',
-                      style: TextStyle(fontSize: 12, color: AmyalColors.primary)),
+                      style: TextStyle(fontSize: 12, color: AmialColors.primary)),
                   Text(
                     AmialMoney.yer(fund.balance),
                     style: const TextStyle(
-                      color: AmyalColors.primary,
+                      color: AmialColors.primary,
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                     ),
@@ -341,7 +341,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                             value: ratio,
                             minHeight: 10,
                             backgroundColor: Colors.white,
-                            color: AmyalColors.primary,
+                            color: AmialColors.primary,
                           ),
                         ),
                         const SizedBox(height: 6),
@@ -349,7 +349,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                           'الهدف: ${AmialMoney.yer(fund.targetAmount!)} — ${(ratio * 100).toStringAsFixed(0)}%',
                           style: const TextStyle(
                               fontSize: 12,
-                              color: AmyalColors.primary,
+                              color: AmialColors.primary,
                               fontWeight: FontWeight.w600),
                         ),
                       ]);
@@ -362,7 +362,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                         fund.description!,
                         style: TextStyle(
                           fontSize: 12,
-                          color: AmyalColors.primary.withValues(alpha: 0.7),
+                          color: AmialColors.primary.withValues(alpha: 0.7),
                         ),
                       ),
                     ),
@@ -381,7 +381,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                       icon: const Icon(Icons.add_circle_outline),
                       label: const Text('مساهمة'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AmyalColors.primary,
+                        backgroundColor: AmialColors.primary,
                         foregroundColor: Colors.white,
                         minimumSize: const Size(0, 48),
                       ),
@@ -396,8 +396,8 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                         icon: const Icon(Icons.person_add_alt, size: 18),
                         label: const Text('دعوة'),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AmyalColors.primary,
-                          side: const BorderSide(color: AmyalColors.primary),
+                          foregroundColor: AmialColors.primary,
+                          side: const BorderSide(color: AmialColors.primary),
                           minimumSize: const Size(0, 48),
                         ),
                       ),
@@ -410,8 +410,8 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                         icon: const Icon(Icons.outbox_outlined, size: 18),
                         label: const Text('صرف'),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: AmyalColors.yellowDark,
-                          side: const BorderSide(color: AmyalColors.yellowDark),
+                          foregroundColor: AmialColors.yellowDark,
+                          side: const BorderSide(color: AmialColors.yellowDark),
                           minimumSize: const Size(0, 48),
                         ),
                       ),
@@ -426,13 +426,13 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(children: const [
-                  Icon(Icons.groups_outlined, size: 18, color: AmyalColors.textSecondary),
+                  Icon(Icons.groups_outlined, size: 18, color: AmialColors.textSecondary),
                   SizedBox(width: 8),
                   Text('أفراد الصندوق',
                       style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
-                          color: AmyalColors.textSecondary)),
+                          color: AmialColors.textSecondary)),
                 ]),
               ),
               const SizedBox(height: 8),
@@ -468,7 +468,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                                   style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 12,
-                                      color: AmyalColors.primary)),
+                                      color: AmialColors.primary)),
                               Text('${(ratio * 100).toStringAsFixed(0)}%',
                                   style: const TextStyle(
                                       fontWeight: FontWeight.bold,
@@ -490,14 +490,14 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                                         padding: const EdgeInsets.symmetric(
                                             horizontal: 6, vertical: 1),
                                         decoration: BoxDecoration(
-                                          color: AmyalColors.primary
+                                          color: AmialColors.primary
                                               .withValues(alpha: 0.1),
                                           borderRadius: BorderRadius.circular(6),
                                         ),
                                         child: const Text('مسؤول',
                                             style: TextStyle(
                                                 fontSize: 9,
-                                                color: AmyalColors.primary)),
+                                                color: AmialColors.primary)),
                                       ),
                                     Text(name.isEmpty ? 'عضو' : name,
                                         style: const TextStyle(
@@ -513,7 +513,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                                     minHeight: 6,
                                     backgroundColor: const Color(0xFFF0EFEA),
                                     color: isOwner
-                                        ? AmyalColors.primary
+                                        ? AmialColors.primary
                                         : const Color(0xFFE6B84C),
                                   ),
                                 ),
@@ -524,10 +524,10 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
                           CircleAvatar(
                             radius: 16,
                             backgroundColor:
-                                AmyalColors.primary.withValues(alpha: 0.12),
+                                AmialColors.primary.withValues(alpha: 0.12),
                             child: Text(name.isNotEmpty ? name[0] : '؟',
                                 style: const TextStyle(
-                                    color: AmyalColors.primary,
+                                    color: AmialColors.primary,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13)),
                           ),
@@ -545,13 +545,13 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: const [
-                  Icon(Icons.history, size: 18, color: AmyalColors.textSecondary),
+                  Icon(Icons.history, size: 18, color: AmialColors.textSecondary),
                   SizedBox(width: 8),
                   Text('آخر الحركات',
                       style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 13,
-                          color: AmyalColors.textSecondary)),
+                          color: AmialColors.textSecondary)),
                 ],
               ),
             ),
@@ -560,12 +560,12 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
               child: ctrl.selectedFundTransactions.isEmpty
                   ? const Center(
                       child: Text('لا توجد حركات بعد',
-                          style: TextStyle(color: AmyalColors.textMuted)))
+                          style: TextStyle(color: AmialColors.textMuted)))
                   : ListView.separated(
                       padding: const EdgeInsets.all(12),
                       itemCount: ctrl.selectedFundTransactions.length,
                       separatorBuilder: (_, _) =>
-                          const Divider(height: 1, color: AmyalColors.border),
+                          const Divider(height: 1, color: AmialColors.border),
                       itemBuilder: (context, i) =>
                           _TxTile(tx: ctrl.selectedFundTransactions[i]),
                     ),
@@ -578,13 +578,13 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
 }
 
 class _TxTile extends StatelessWidget {
-  final AmyalFundTransaction tx;
+  final AmialFundTransaction tx;
   const _TxTile({required this.tx});
 
   @override
   Widget build(BuildContext context) {
     final isContribute = tx.txType == 'contribute';
-    final color = isContribute ? Colors.green.shade700 : AmyalColors.red;
+    final color = isContribute ? Colors.green.shade700 : AmialColors.red;
 
     return ListTile(
       tileColor: Colors.white,
@@ -608,7 +608,7 @@ class _TxTile extends StatelessWidget {
           if ((tx.actorName ?? '').isNotEmpty)
             Text('${isContribute ? 'ساهم' : 'صرفها'}: ${tx.actorName}',
                 style: const TextStyle(
-                    fontSize: 11, color: AmyalColors.textMuted)),
+                    fontSize: 11, color: AmialColors.textMuted)),
           if (tx.note != null && tx.note!.isNotEmpty)
             Text(tx.note!, style: const TextStyle(fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
           if (tx.isPending)
@@ -619,7 +619,7 @@ class _TxTile extends StatelessWidget {
           else if (tx.isRejected)
             const Padding(
               padding: EdgeInsets.only(top: 2),
-              child: Text('مرفوض', style: TextStyle(fontSize: 10, color: AmyalColors.red)),
+              child: Text('مرفوض', style: TextStyle(fontSize: 10, color: AmialColors.red)),
             ),
         ],
       ),

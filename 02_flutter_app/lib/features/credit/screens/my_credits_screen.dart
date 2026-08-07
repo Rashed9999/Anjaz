@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/data/api/api_client.dart';
-import 'package:amyal_pay/features/shared/widgets/amial_pin_gate.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-CUSTOMER-CREDIT-VIEW-001 — «فواتيري الآجلة».
 ///
@@ -59,7 +59,7 @@ class _MyCreditsScreenState extends State<MyCreditsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: const Text('فواتيري الآجلة'),
       ),
@@ -74,7 +74,7 @@ class _MyCreditsScreenState extends State<MyCreditsScreen> {
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      color: AmyalColors.primary,
+                      color: AmialColors.primary,
                       borderRadius: BorderRadius.circular(18),
                     ),
                     child: Column(children: [
@@ -91,7 +91,7 @@ class _MyCreditsScreenState extends State<MyCreditsScreen> {
                     Padding(
                       padding: const EdgeInsets.all(20),
                       child: Text(_error!, textAlign: TextAlign.center,
-                          style: const TextStyle(color: AmyalColors.red)),
+                          style: const TextStyle(color: AmialColors.red)),
                     ),
                   if (_accounts.isEmpty && _error == null)
                     const Padding(
@@ -119,19 +119,19 @@ class _MyCreditsScreenState extends State<MyCreditsScreen> {
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         leading: CircleAvatar(
-          backgroundColor: (settled ? const Color(0xFF2E7D32) : AmyalColors.primary).withValues(alpha: 0.1),
+          backgroundColor: (settled ? const Color(0xFF2E7D32) : AmialColors.primary).withValues(alpha: 0.1),
           child: Icon(Icons.storefront,
-              color: settled ? const Color(0xFF2E7D32) : AmyalColors.primary),
+              color: settled ? const Color(0xFF2E7D32) : AmialColors.primary),
         ),
         title: Text('${a['merchant_name'] ?? 'تاجر'}',
             style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(settled ? 'مسدّد' : 'مستحقّ عليك',
-            style: TextStyle(fontSize: 12, color: settled ? const Color(0xFF2E7D32) : AmyalColors.red)),
+            style: TextStyle(fontSize: 12, color: settled ? const Color(0xFF2E7D32) : AmialColors.red)),
         trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text('${_fmt(a['current_balance'])} ر.ي',
               style: TextStyle(fontWeight: FontWeight.bold,
-                  color: settled ? const Color(0xFF2E7D32) : AmyalColors.red)),
-          const Icon(Icons.chevron_left, color: AmyalColors.textMuted, size: 18),
+                  color: settled ? const Color(0xFF2E7D32) : AmialColors.red)),
+          const Icon(Icons.chevron_left, color: AmialColors.textMuted, size: 18),
         ]),
         onTap: () => Get.to(() => _CreditStatementScreen(
               accountId: a['account_id'] as int,
@@ -198,7 +198,7 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
         title: const Text('سداد الآجل'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Text('المستحقّ: ${_fmt(_balance)} ر.ي',
-              style: const TextStyle(fontWeight: FontWeight.bold, color: AmyalColors.red)),
+              style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.red)),
           const SizedBox(height: 12),
           TextField(
             controller: amtCtrl,
@@ -208,7 +208,7 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
           ),
           const SizedBox(height: 6),
           const Text('يُخصم من محفظتك ويُضاف للتاجر فوراً.',
-              style: TextStyle(fontSize: 11, color: AmyalColors.textMuted)),
+              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
         ]),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
@@ -238,7 +238,7 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmyalColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
 
   String _date(String? iso) {
     if (iso == null) return '';
@@ -250,7 +250,7 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AmyalColors.background,
+      backgroundColor: AmialColors.background,
       appBar: AppBar(
         title: Text(widget.merchantName),
       ),
@@ -264,8 +264,8 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
                   decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
                   child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                     Text('${_fmt(_balance)} ر.ي',
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmyalColors.red)),
-                    const Text('الرصيد المستحقّ', style: TextStyle(color: AmyalColors.textSecondary)),
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmialColors.red)),
+                    const Text('الرصيد المستحقّ', style: TextStyle(color: AmialColors.textSecondary)),
                   ]),
                 ),
                 if ((double.tryParse(_balance) ?? 0) > 0) ...[
@@ -289,7 +289,7 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
   Widget _movementRow(Map<String, dynamic> m) {
     final type = '${m['type']}';
     final isDebt = type == 'sale' || type == 'adjustment';
-    final color = isDebt ? AmyalColors.red : const Color(0xFF2E7D32);
+    final color = isDebt ? AmialColors.red : const Color(0xFF2E7D32);
     final sign = isDebt ? '+' : '−';
     return Container(
       margin: const EdgeInsets.only(bottom: 8),

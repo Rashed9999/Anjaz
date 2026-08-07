@@ -350,7 +350,7 @@ class WhatsappBillPayAndPaymentRequestTest extends TestCase
         $this->mockClient->shouldReceive('sendText')->once()
             ->withArgs(fn($p, $msg) => str_contains($msg, 'طلب دفع'));
 
-        $this->bot->handle(self::WA_NUMBER, "https://amyal.pay/req/{$req->short_code}");
+        $this->bot->handle(self::WA_NUMBER, "https://amial.pay/req/{$req->short_code}");
     }
 
     /** @test */
@@ -470,8 +470,8 @@ class WhatsappBillPayAndPaymentRequestTest extends TestCase
     public function intent_parser_extracts_code_from_url(): void
     {
         $parser = app(IntentParser::class);
-        $this->assertEquals('ABC234', $parser->extractPaymentRequestCode('https://amyal.pay/req/ABC234'));
-        $this->assertEquals('ABC234', $parser->extractPaymentRequestCode('شاهد طلبي: https://amyal.pay/req/abc234 شكراً'));
+        $this->assertEquals('ABC234', $parser->extractPaymentRequestCode('https://amial.pay/req/ABC234'));
+        $this->assertEquals('ABC234', $parser->extractPaymentRequestCode('شاهد طلبي: https://amial.pay/req/abc234 شكراً'));
     }
 
     /** @test */

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:amyal_pay/theme/amyal_colors.dart';
-import 'package:amyal_pay/common/widgets/custom_text_field_widget.dart';
-import 'package:amyal_pay/features/camera_verification/screens/camera_screen.dart';
-import 'package:amyal_pay/features/setting/controllers/profile_screen_controller.dart';
-import 'package:amyal_pay/features/transaction_money/controllers/contact_controller.dart';
-import 'package:amyal_pay/features/transaction_money/widgets/contact_list_widget.dart';
-import 'package:amyal_pay/helper/custom_snackbar_helper.dart';
-import 'package:amyal_pay/util/dimensions.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/common/widgets/custom_text_field_widget.dart';
+import 'package:amial_pay/features/camera_verification/screens/camera_screen.dart';
+import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
+import 'package:amial_pay/features/transaction_money/controllers/contact_controller.dart';
+import 'package:amial_pay/features/transaction_money/widgets/contact_list_widget.dart';
+import 'package:amial_pay/helper/custom_snackbar_helper.dart';
+import 'package:amial_pay/util/dimensions.dart';
 
 class SearchContactScreen extends StatefulWidget {
   const SearchContactScreen({super.key});
@@ -32,7 +32,7 @@ class _SearchContactScreenState extends State<SearchContactScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('favorite_number'.tr), backgroundColor: AmyalColors.primary, foregroundColor: Colors.white, elevation: 0),
+      appBar: AppBar(title: Text('favorite_number'.tr), backgroundColor: AmialColors.primary, foregroundColor: Colors.white, elevation: 0),
       body: GetBuilder<ContactController>(
         builder: (contactController) {
           return CustomScrollView(slivers: [

@@ -110,7 +110,7 @@ trait EnforcesFinancialPolicy
 
     private function zoneNameAr(string $zone): string
     {
-        // AMYAL-ZONE-LABEL-001: مصدر موحّد (كان SOUTH ناقصاً هنا فيظهر حرفياً).
+        // AMIAL-ZONE-LABEL-001: مصدر موحّد (كان SOUTH ناقصاً هنا فيظهر حرفياً).
         return \App\Services\ZonePolicyService::zoneNameAr($zone);
     }
 }
