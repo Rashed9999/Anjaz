@@ -100,10 +100,11 @@
         [
             'title' => 'الخدمات والعملاء',
             'icon' => '🧾',
-            'match' => ['admin/support-center*', 'admin/amial/surface*', 'admin/amial/charity*', 'admin/amial/hub/subscriptions*', 'admin/amial/hub/disputes*', 'admin/amial/hub/staff*', 'admin/amial/invoices*'],
+            'match' => ['admin/support-center*', 'admin/amial/surface*', 'admin/amial/charity*', 'admin/amial/hub/subscriptions*', 'admin/amial/hub/disputes*', 'admin/amial/hub/staff*', 'admin/amial/invoices*', 'admin/amial/catalog*'],
             'links' => [
                 ['🎧 مركز الدعم (بحث شامل + الأجهزة)', route('admin.support-center.index'), null],
                 ['🧾 فواتير التجّار ومدفوعاتها', route('admin.amial.invoices.page'), null],
+                ['📦 كتالوج المنتجات (الباركود)', route('admin.amial.catalog.page'), 'platform.settings.update'],
                 ['💎 لوحة الاشتراكات', route('admin.amial.hub.subscriptions'), null],
                 ['⚖️ لوحة النزاعات (دفع آمن)', route('admin.amial.hub.disputes'), null],
                 ['👔 لوحة الموظفين (نقاط البيع)', route('admin.amial.hub.staff'), null],

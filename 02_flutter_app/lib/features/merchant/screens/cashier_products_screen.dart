@@ -32,6 +32,11 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
     DateTime? production;
     DateTime? expiry;
 
+    // AMIAL-CATALOG-001 — حالةُ البحث في الكتالوج داخل الحوار.
+    bool catalogBusy = false;
+    String catalogNote = '';
+    Map<String, dynamic>? catalogFound;
+
     Future<DateTime?> pick(DateTime? init) => showDatePicker(
           context: context,
           initialDate: init ?? DateTime.now(),
@@ -54,14 +59,90 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
                 TextField(controller: offer, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'سعر العرض (اختياري)')),
                 TextField(controller: qty, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'الكمية (المخزون)')),
                 TextField(controller: category, decoration: const InputDecoration(labelText: 'التصنيف (اختياري)')),
+                // AMIAL-CATALOG-001 — **الباركود يملأ الاسم من الكتالوج.**
+                //
+                // فباركودُ EAN عالميٌّ بحكم تعريفه: علبةُ حليبٍ تحمل الرقمَ
+                // نفسَه عند كلّ تاجر. وإدخالُ اسمها عشرين مرّةً عند عشرين
+                // تاجراً عملٌ مكرّرٌ بلا سبب.
+                //
+                // **ولا يُدهَس ما كتبه التاجر:** إن كان الاسمُ مكتوباً
+                // يُترك، ويُعرض ما في الكتالوج كاقتراحٍ يضغطه إن شاء.
                 TextField(
                   controller: barcode,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'الباركود (اختياري)',
                     hintText: 'امسحه من شاشة البيع أو أدخله يدوياً',
+                    suffixIcon: catalogBusy
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                                width: 18, height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2)),
+                          )
+                        : IconButton(
+                            tooltip: 'ابحث في الكتالوج',
+                            icon: const Icon(Icons.travel_explore),
+                            onPressed: () async {
+                              final code = barcode.text.trim();
+                              if (code.isEmpty) return;
+
+                              setLocal(() { catalogBusy = true; catalogNote = ''; });
+
+                              final hit = await c.catalogLookup(code);
+
+                              setLocal(() {
+                                catalogBusy = false;
+
+                                if (hit == null) {
+                                  // **الغيابُ يُقال ولا يُترك صمتاً** — ومعه
+                                  // ما يجعل التاجر يُدخل الاسم راضياً.
+                                  catalogNote = 'غير موجود في الكتالوج — أدخل الاسم وسيفيد من بعدك';
+                                  catalogFound = null;
+                                  return;
+                                }
+
+                                catalogFound = hit;
+
+                                if (name.text.trim().isEmpty) {
+                                  name.text = '${hit['name'] ?? ''}';
+                                  if ((hit['category'] ?? '').toString().isNotEmpty &&
+                                      category.text.trim().isEmpty) {
+                                    category.text = '${hit['category']}';
+                                  }
+                                }
+
+                                catalogNote = (hit['is_verified'] == true)
+                                    ? '✓ موثّق — تبنّاه ${hit['adoption_count'] ?? 0} تاجراً'
+                                    : '⚠ مقترَح من تاجر آخر ولم يُراجَع بعد — تحقّق من الاسم';
+                              });
+                            },
+                          ),
                   ),
                 ),
+
+                if (catalogNote.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Row(children: [
+                      Expanded(
+                        child: Text(catalogNote,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: catalogFound == null
+                                    ? Colors.grey
+                                    : (catalogFound!['is_verified'] == true
+                                        ? Colors.green.shade700
+                                        : Colors.orange.shade800))),
+                      ),
+                      if (catalogFound != null && name.text.trim() != '${catalogFound!['name']}')
+                        TextButton(
+                          onPressed: () => setLocal(() => name.text = '${catalogFound!['name']}'),
+                          child: const Text('استعمل اسم الكتالوج', style: TextStyle(fontSize: 11)),
+                        ),
+                    ]),
+                  ),
+
                 const SizedBox(height: 8),
                 Row(children: [
                   Expanded(

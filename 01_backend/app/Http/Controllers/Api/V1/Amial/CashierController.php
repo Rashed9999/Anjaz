@@ -78,7 +78,27 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         [$merchant] = $ctx;
 
         $product = $this->cashier->addProduct($merchant, $v->validated());
-        return $this->ok(['product' => $product], 'PRODUCT_ADDED', 'تم إضافة المنتج');
+
+        // AMIAL-CATALOG-001 — **ما أدخله التاجر يُفيد من بعده.**
+        //
+        // ولا يُوقف الحفظَ أبداً: الكتالوجُ خدمةٌ جانبيّة، ومن ربط بيعَ
+        // متجرٍ بنجاح ميزةٍ مساعدةٍ أوقف المتجرَ لأجل اسمٍ في جدول.
+        // فالخدمةُ تبتلع أخطاءَها وتُرجع سبباً للعرض لا استثناءً.
+        $catalogNote = null;
+
+        if (!empty($v->validated()['barcode'])) {
+            $catalogNote = app(\App\Services\Catalog\ProductCatalogService::class)->suggest(
+                (string) $v->validated()['barcode'],
+                (string) $v->validated()['name'],
+                $merchant,
+                $v->validated()['category'] ?? null,
+            );
+        }
+
+        return $this->ok([
+            'product' => $product,
+            'catalog_note' => $catalogNote,
+        ], 'PRODUCT_ADDED', 'تم إضافة المنتج');
     }
 
     public function updateProduct(Request $request, int $id): JsonResponse

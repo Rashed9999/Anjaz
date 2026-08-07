@@ -120,6 +120,12 @@ Route::middleware(['auth:api'])->group(function () {
     });
 
     // AMIAL-BARCODE-001 — البحث السريع بالباركود (للـ continuous scanner)
+    // AMIAL-CATALOG-001 — الكتالوج المشترك: يملأ الحقول عند إنشاء صنف.
+    // وهو غيرُ `barcode/lookup` أدناه: ذاك يبحث في منتجات التاجر للبيع،
+    // وهذا في الكتالوج العامّ للإدخال. شاشتان ونداءان.
+    Route::get('/catalog/lookup', [\App\Http\Controllers\Api\V1\Amial\ProductCatalogController::class, 'lookup'])
+        ->middleware('amial.rate-limit:catalog_lookup,120,1')->name('amial.catalog.lookup');
+
     Route::get('/barcode/lookup', [\App\Http\Controllers\Api\V1\Amial\BarcodeLookupController::class, 'lookup'])
         ->middleware('amial.rate-limit:barcode_lookup,600,1') // 600/دقيقة (مسح سريع)
         ->name('amial.barcode.lookup');

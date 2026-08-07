@@ -145,6 +145,27 @@ class CashierController extends GetxController implements GetxService {
 
   /// يبحث عن منتج بالباركود ويضيفه للسلّة.
   /// يعيد: 'added' (نجح) | 'not_found' (باركود مجهول → اعرض إنشاء) | 'error'.
+  /// AMIAL-CATALOG-001 — يجلب اسم الصنف من الكتالوج المشترك.
+  ///
+  /// **ويُرجع الحالة مع الاسم**: «موثّق» غير «مقترَح»، ومن يرى اسماً بلا
+  /// بيان مصدره يحسبه مُراجَعاً. (القاعدة السابعة: الغياب يُقال.)
+  ///
+  /// يُرجع `null` حين لا يُوجد — ولا يُعدّ ذلك خطأً: أكثرُ الأصناف في
+  /// السوق اليمنيّ ليست في أيّ كتالوج بعد، **والتاجرُ الذي يُدخلها هو
+  /// من يبنيه.**
+  Future<Map<String, dynamic>?> catalogLookup(String barcode) async {
+    try {
+      final r = await repo.catalogLookup(barcode);
+      if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      }
+      // ٤٠٤ حالةٌ عاديّة — لا رسالةَ خطأ، ولا يُلوَّث `lastError`.
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<String> lookupAndAddByBarcode(String barcode) async {
     try {
       final r = await repo.lookupBarcode(barcode);

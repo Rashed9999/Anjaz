@@ -222,6 +222,22 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
 //
 // الصلاحيّة `platform.settings.update`: فتحُ بابِ تحقّقٍ أو إقفالُه ضبطُ
 // منصّةٍ لا خدمةُ عملاء — وموظّفُ الدعم لا يملكها.
+// AMIAL-CATALOG-001 — مركز كتالوج المنتجات (مفتوحٌ بمراجعة).
+// الصلاحيّة `platform.settings.update`: هذا ضبطُ بياناتٍ مرجعيّة لا
+// حركةُ مال — فلا تُطلب صلاحيّةُ المال ولا تُترك بلا حارس.
+Route::prefix('catalog')->name('catalog.')->middleware('platform:platform.settings.update')
+    ->group(function () {
+        $cc = App\Http\Controllers\Admin\ProductCatalogCenterController::class;
+        Route::get('/', [$cc, 'page'])->name('page');
+        Route::get('/stats', [$cc, 'stats'])->name('stats');
+        Route::get('/rows', [$cc, 'rows'])->name('rows');
+        Route::get('/export', [$cc, 'export'])->name('export');
+        Route::post('/', [$cc, 'store'])->name('store');
+        Route::post('/import', [$cc, 'import'])->name('import');
+        Route::get('/{id}', [$cc, 'show'])->where('id', '[0-9]+')->name('show');
+        Route::post('/{id}/review', [$cc, 'review'])->where('id', '[0-9]+')->name('review');
+    });
+
 // AMIAL-WA-LIMIT-001 — سقفُ المال عبر بوت واتساب.
 // الصلاحيّة `platform.money.move`: رفعُ السقف يُحرّك مالاً بالوكالة —
 // لا يُحرّكه بنفسه، لكنّه يسمح بحركةٍ كانت ممنوعة.

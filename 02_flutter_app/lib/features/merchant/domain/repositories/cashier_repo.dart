@@ -14,6 +14,15 @@ class CashierRepo extends GetxService {
   }
 
   // AMIAL-CASHIER-BARCODE-001 — بحث منتج بالباركود
+  /// AMIAL-CATALOG-001 — البحثُ في الكتالوج المشترك.
+  ///
+  /// **وهو غيرُ `lookupBarcode` أدناه**: ذاك يبحث في منتجات التاجر نفسِه
+  /// ليضيفها للسلّة عند البيع، وهذا في الكتالوج العامّ ليملأ الحقولَ عند
+  /// إنشاء صنفٍ جديد. شاشتان ونداءان — ولا يُخلطان.
+  Future<Response> catalogLookup(String barcode) {
+    return apiClient.getData('/api/v1/amial/catalog/lookup', query: {'barcode': barcode});
+  }
+
   Future<Response> lookupBarcode(String barcode) {
     return apiClient.getData('$_base/products/lookup', query: {'barcode': barcode});
   }
