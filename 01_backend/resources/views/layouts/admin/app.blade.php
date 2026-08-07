@@ -69,6 +69,11 @@
     </div>
 </div>
 <script src="{{ asset('assets/vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+{{-- AMIAL-PILOT-IDEM-002 — يُحمَّل **قبل** شيفرة الصفحات عمداً:
+     هي تُنادي fetch، فلا بدّ أن يكون اللفُّ قائماً قبل أوّل نداء.
+     ووسيطٌ بلا مفتاحٍ من العميل حمايتُه صفر — يُولّد مفتاحاً عشوائيّاً
+     لكلّ طلب، فتصير كلُّ ضغطةٍ عمليّةً جديدة. --}}
+<script src="{{ asset('assets/js/amial-idempotency.js') }}"></script>
 @stack('script')
 </body>
 </html>

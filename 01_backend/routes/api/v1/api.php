@@ -79,7 +79,7 @@ Route::middleware(['throttle:100,1'])->group(function () {
                 Route::post('cash-out', [TransactionController::class, 'cashOut'])->middleware(['amial.zone:cash_out', 'amial.idempotency']);
                 Route::post('request-money', [TransactionController::class, 'requestMoney'])->middleware(['amial.zone:request_money', 'amial.idempotency']);
                 Route::post('request-money/{slug}', [TransactionController::class, 'requestMoneyStatus'])->middleware('amial.idempotency');
-                Route::post('add-money', [TransactionController::class, 'addMoney'])->middleware('amial.zone:add_money');
+                Route::post('add-money', [TransactionController::class, 'addMoney'])->middleware(['amial.zone:add_money', 'amial.idempotency']);
                 Route::post('withdraw', [TransactionController::class, 'withdraw'])->middleware(['amial.zone:withdraw', 'amial.idempotency']);
                 Route::get('transaction-history', [TransactionController::class, 'transactionHistory']);
                 Route::get('transaction/download-pdf', [TransactionController::class, 'downloadTransaction']);
@@ -138,7 +138,7 @@ Route::middleware(['throttle:100,1'])->group(function () {
                 // AMIAL-ZONE-BOUNDARY-001: الوكيل يستلم نقداً هنا (إيداع)
                 Route::post('send-money', [AgentTransactionController::class, 'cashIn'])->middleware(['amial.zone:cash_in', 'amial.agent-location', 'amial.idempotency']);
                 Route::post('request-money', [AgentTransactionController::class, 'requestMoney'])->middleware(['amial.zone:request_money', 'amial.idempotency']);
-                Route::post('add-money', [AgentTransactionController::class, 'addMoney'])->middleware(['amial.zone:add_money', 'amial.agent-location']);
+                Route::post('add-money', [AgentTransactionController::class, 'addMoney'])->middleware(['amial.zone:add_money', 'amial.agent-location', 'amial.idempotency']);
                 Route::post('withdraw', [AgentTransactionController::class, 'withdraw'])->middleware(['amial.zone:withdraw', 'amial.agent-location', 'amial.idempotency']);
                 Route::get('transaction-history', [AgentTransactionController::class, 'transactionHistory']);
                 Route::get('transaction/download-pdf', [AgentTransactionController::class, 'downloadTransaction']);

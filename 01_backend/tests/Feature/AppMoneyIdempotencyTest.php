@@ -218,4 +218,128 @@ class AppMoneyIdempotencyTest extends TestCase
         $this->assertSame([], $missing,
             'مساراتٌ تُحرّك مالاً بلا مفتاح تفرّد: ' . implode(' · ', $missing));
     }
+
+    /**
+     * الكلماتُ التي تدلّ على مسارٍ يمسّ مالاً.
+     */
+    private const MONEY_WORDS = [
+        'send-money', 'withdraw', 'cash-out', 'cash-in', 'add-money', 'pay',
+        'transfer', 'settle', 'topup', 'payout', 'refund', 'credit', 'debit',
+        'deposit', 'collect', 'disburse', 'release', 'fund', 'donat',
+        'installment', 'charity',
+    ];
+
+    /**
+     * **استثناءاتٌ مُعلَنة — قراءةٌ عبر POST، لا حركةَ مال.**
+     *
+     * ومفتاحُ التفرّد يحفظ الردَّ أربعاً وعشرين ساعةً ويُعيده. فشمولُ هذه
+     * لا يمنع ضرراً بل **يُنتج كذباً**: اسمُ مستلِمٍ بعد تغيّره، أو حالةُ
+     * سحبٍ «معلّقة» بعد تنفيذه. (القاعدة السابعة: الغيابُ يُقال ولا يُخفى.)
+     *
+     * والاستثناءُ مكتوبٌ هنا لا متروكٌ صمتاً — فالمكتوبُ يُراجَع.
+     */
+    private const DECLARED_READS = [
+        'api/v1/amial/transfer/verify-recipient',
+        'api/v1/amial/agent/withdraw/lookup',
+        'api/v1/amial/merchant/installments/quote',
+        'api/v1/amial/merchant/quote',
+    ];
+
+    /**
+     * @test
+     *
+     * **ولا مسارَ مالٍ واحدٍ في المنصّة كلِّها بلا مفتاح تفرّد.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **وهذا الحارسُ يُعيد الحصرَ في كلّ تشغيل — ولا يقرأ قائمةً مكتوبة.**
+     *
+     * ولولا ذلك لكان حارساً يشيخ: قائمةُ تسعةٍ وثمانين مساراً تُكتب اليوم
+     * وتصير ناقصةً أوّلَ مسارٍ يُضاف غداً، **والحارسُ يمرّ وهو لا يعرف
+     * بوجوده**. فيُستخرج الحصرُ من جدول المسارات نفسِه بالكلمات المالية،
+     * ويسقط الحارسُ على أوّل مسارٍ جديدٍ بلا حماية.
+     *
+     * (القاعدة الثانية: حارسٌ لم يسقط ليس حارساً — وهذا يسقط وحده حين
+     * يُنسى الوسيط.)
+     * ══════════════════════════════════════════════════════════════════
+     */
+    public function no_money_route_in_the_whole_platform_lacks_the_key(): void
+    {
+        $missing = [];
+        $covered = 0;
+
+        foreach (\Illuminate\Support\Facades\Route::getRoutes() as $route) {
+            $methods = $route->methods();
+
+            if (!array_intersect(['POST', 'PUT', 'PATCH'], $methods)) {
+                continue;
+            }
+
+            $uri = $route->uri();
+
+            $isMoney = false;
+
+            foreach (self::MONEY_WORDS as $word) {
+                if (str_contains($uri, $word)) {
+                    $isMoney = true;
+                }
+            }
+
+            if (!$isMoney || in_array($uri, self::DECLARED_READS, true)) {
+                continue;
+            }
+
+            $has = false;
+
+            foreach ($route->gatherMiddleware() as $m) {
+                if (is_string($m) && (str_contains($m, 'EnforceIdempotency') || str_contains($m, 'amial.idempotency'))) {
+                    $has = true;
+                }
+            }
+
+            $has ? $covered++ : $missing[] = $uri;
+        }
+
+        // **ويُتأكَّد أنّ الحصر وجد شيئاً أصلاً.** فقائمةٌ فارغةٌ تُرضي
+        // `assertSame([], …)` وهي لا تفحص شيئاً — وذاك حارسٌ يُطمئن ولا يحرس.
+        $this->assertGreaterThan(80, $covered,
+            "الحصرُ وجد {$covered} مساراً فقط — القاعدةُ لا تلتقط المسارات");
+
+        $this->assertSame([], $missing,
+            'مسارُ مالٍ بلا مفتاح تفرّد: ' . implode(' · ', $missing));
+    }
+
+    /**
+     * @test
+     *
+     * **ولوحاتُ الويب تُرسل المفتاح — لا الخادمُ يُولّده لها.**
+     *
+     * فوسيطٌ بلا مفتاحٍ من العميل حمايتُه **صفر**: يُولّد مفتاحاً عشوائيّاً
+     * لكلّ طلب، فتصير كلُّ ضغطةٍ عمليّةً جديدة. وهذا هو الخطأ نفسُه الذي
+     * وقع في التطبيق، فلا يُعاد في اللوحة.
+     *
+     * (القاعدة ١٢: الوسيطُ المسجَّل ليس حمايةً حتّى يصل إليه مفتاح.)
+     */
+    public function the_admin_layout_ships_the_key_sender(): void
+    {
+        $this->assertFileExists(public_path('assets/js/amial-idempotency.js'),
+            'ملفُّ مفتاح التفرّد غير موجود — القالبُ يطلب ما لا وجود له');
+
+        $layout = file_get_contents(resource_path('views/layouts/admin/app.blade.php'));
+
+        $this->assertStringContainsString('amial-idempotency.js', $layout,
+            'اللوحةُ لا تُحمّل مُرسِلَ المفتاح — كلُّ ضغطتين عمليّتان');
+
+        // **ويُحمَّل قبل شيفرة الصفحات** — فلفُّ `fetch` بعد استعماله لا يلفّه.
+        $this->assertLessThan(
+            strpos($layout, "@stack('script')"),
+            strpos($layout, 'amial-idempotency.js'),
+            'مُرسِلُ المفتاح يُحمَّل بعد شيفرة الصفحات — فلا يلفّ نداءاتها',
+        );
+
+        $js = file_get_contents(public_path('assets/js/amial-idempotency.js'));
+
+        foreach (['Idempotency-Key', 'inFlight', 'POST'] as $part) {
+            $this->assertStringContainsString($part, $js, "ناقصٌ من المُرسِل: {$part}");
+        }
+    }
 }

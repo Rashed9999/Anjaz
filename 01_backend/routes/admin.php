@@ -154,7 +154,7 @@ Route::group(['as' => 'admin.'], function () {
         // AMIAL-CLEANUP: أُزيلت مجموعة مسارات addon (نظام إضافات 6cash — بلا وحدات)
 
         Route::group(['prefix' => 'merchant-config', 'as' => 'merchant-config.'], function () {
-            Route::post('merchant-payment-otp-verification-update', [BusinessSettingsController::class, 'merchantPaymentOtpUpdate'])->name('merchant-payment-otp-verification-update');
+            Route::post('merchant-payment-otp-verification-update', [BusinessSettingsController::class, 'merchantPaymentOtpUpdate'])->middleware('amial.idempotency')->name('merchant-payment-otp-verification-update');
             Route::post('settings-update', [BusinessSettingsController::class, 'merchantSettingUpdate'])->name('settings-update');
         });
 

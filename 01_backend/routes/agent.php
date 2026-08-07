@@ -35,7 +35,7 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff, 
     Route::get('/', [$c, 'dashboard'])->name('dashboard');
 
     // ── الشبّاك: لا معرّف فرعٍ في أيّ مسار ────────────────────────────
-    Route::prefix('counter')->name('counter.')->group(function () use ($counter, $c) {
+    Route::prefix('counter')->name('counter.')->middleware('amial.idempotency')->group(function () use ($counter, $c) {
         Route::get('/state', [$counter, 'state'])->name('state');
         Route::post('/shift/open', [$counter, 'openShift'])->name('shift.open');
         Route::post('/shift/close', [$counter, 'closeShift'])->name('shift.close');
@@ -135,12 +135,12 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff, 
 
     // التسوية اليوميّة مع أميال — نافذةٌ ليليّة يُقفل فيها اليوم.
     Route::get('/daily-settlement', [$c, 'dailySettlement'])->name('daily.settlement');
-    Route::post('/daily-settlement', [$c, 'submitDailySettlement'])->name('daily.settlement.submit');
-    Route::post('/settlements/payout', [$c, 'requestPayout'])->name('settlements.payout');
+    Route::post('/daily-settlement', [$c, 'submitDailySettlement'])->middleware('amial.idempotency')->name('daily.settlement.submit');
+    Route::post('/settlements/payout', [$c, 'requestPayout'])->middleware('amial.idempotency')->name('settlements.payout');
 
     Route::post('/branches', [$c, 'createBranch'])->name('branch.create');
-    Route::post('/branches/{id}/fund', [$c, 'fundBranch'])->where('id', '[0-9]+')->name('branch.fund');
-    Route::post('/branches/{id}/collect', [$c, 'collectBranch'])->where('id', '[0-9]+')->name('branch.collect');
+    Route::post('/branches/{id}/fund', [$c, 'fundBranch'])->where('id', '[0-9]+')->middleware('amial.idempotency')->name('branch.fund');
+    Route::post('/branches/{id}/collect', [$c, 'collectBranch'])->where('id', '[0-9]+')->middleware('amial.idempotency')->name('branch.collect');
     Route::get('/branch-settlement', [$c, 'branchSettlement'])->name('branch.settlement');
     Route::post('/branches/{id}/cash', [$c, 'moveCash'])->where('id', '[0-9]+')->name('branch.cash');
     Route::post('/branches/{id}/count', [$c, 'countTill'])->where('id', '[0-9]+')->name('branch.count');

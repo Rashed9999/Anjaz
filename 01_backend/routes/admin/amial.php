@@ -65,7 +65,7 @@ Route::get('/audit', [AuditDecisionsController::class, 'index'])->name('audit.in
 Route::get('/security-events', [SecurityEventsController::class, 'index'])->name('security-events.index');
 
 // ============ AMIAL-SAFE-PAYMENT-001 (v1.1) — Disputes resolution ============
-Route::prefix('safe-payments')->name('safe-payments.')->group(function () {
+Route::prefix('safe-payments')->name('safe-payments.')->middleware('amial.idempotency')->group(function () {
     Route::get('/', [AdminSafePaymentController::class, 'index'])->name('index');
     // AMIAL-SAFEPAY-EVIDENCE-001 — قبل مسار {ulid} كي لا يبتلعه
     Route::get('/evidence/{id}/file', [AdminSafePaymentController::class, 'evidenceFile'])
@@ -91,7 +91,7 @@ Route::prefix('surface')->name('surface.')->group(function () {
     Route::get('/rbac', [$sc, 'rbac'])->name('rbac');
 });
 
-Route::prefix('charity')->name('charity.')->group(function () {
+Route::prefix('charity')->name('charity.')->middleware('amial.idempotency')->group(function () {
     // AMIAL-CHARITY-ADMIN-UI-001: صفحة اللوحة (الواجهة)
     Route::view('/', 'admin-views.amial.charity.index')->name('page');
     // Organizations
@@ -242,7 +242,7 @@ Route::prefix('otp')->name('otp.')->middleware('platform:platform.settings.updat
 // غير `settlements` أدناه: تلك تسويات الوكلاء (`AgentSettlement`). هذه
 // تسويات الشركاء (`Settlement`) — وعليها بُنيت الموافقة المزدوجة، وكان
 // سطحها الوحيد الـAPI فبقي الضابط بلا شاشة تُظهره.
-Route::prefix('partner-settlements')->name('partner-settlements.')->group(function () {
+Route::prefix('partner-settlements')->name('partner-settlements.')->middleware('amial.idempotency')->group(function () {
     $st = App\Http\Controllers\Api\V1\Amial\SettlementController::class;
 
     Route::get('/', [$st, 'page'])->name('page');
@@ -309,7 +309,7 @@ Route::prefix('agents')->name('agents.')->group(function () {
     Route::put('/{userId}/limits', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'updateLimits'])->name('limits');
 });
 // AMIAL-OPERATOR-RBAC-003: اعتمادُ تسويةٍ تحريكُ مالٍ حقيقيّ.
-Route::prefix('settlements')->name('settlements.')->middleware('platform:platform.money.move')
+Route::prefix('settlements')->name('settlements.')->middleware(['platform:platform.money.move', 'amial.idempotency'])
     ->group(function () {
     Route::get('/pending', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'pendingSettlements'])->name('pending');
     Route::post('/{ulid}/approve', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'approveSettlement'])->name('approve');
@@ -354,7 +354,7 @@ Route::prefix('executive')->name('executive.')->group(function () {
 });
 
 // ============ AMIAL-ADMIN-HUB-001 — اللوحات المركزية الأربع ============
-Route::prefix('hub')->name('hub.')->group(function () {
+Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(function () {
     $hc = App\Http\Controllers\Admin\AdminHubController::class;
 
     // الصفحات

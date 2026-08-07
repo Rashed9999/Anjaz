@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:amyal_pay/data/api/api_checker.dart';
 import 'package:amyal_pay/common/models/error_model.dart';
 import 'package:amyal_pay/util/app_constants.dart';
+import 'package:amyal_pay/data/api/idempotency_key_generator.dart';
 
 class ApiClient extends GetxService {
    String appBaseUrl = AppConstants.baseUrl ;
@@ -96,6 +97,24 @@ class ApiClient extends GetxService {
     }
    }
 
+  /// AMIAL-PILOT-IDEM-002 — مفاتيحُ الطلبات المعلّقة.
+  ///
+  /// المفتاحُ حيٌّ ما دام الطلبُ بلا جواب. فإعادةُ الطلب نفسِه — بعنوانه
+  /// وجسده — تحمل المفتاح نفسَه، فيراها الخادمُ إعادةً لا عمليّةً ثانية.
+  final Map<String, String> _inFlightKeys = {};
+
+  /// هويّةُ الطلب: عنوانُه وجسدُه. فطلبان مختلفا الجسد عمليّتان مختلفتان
+  /// ولو تشابه عنوانُهما.
+  String _autoIdentity(String uri, dynamic body) {
+    String payload;
+    try {
+      payload = jsonEncode(body);
+    } catch (_) {
+      payload = body.toString();
+    }
+    return '$uri|$payload';
+  }
+
   Future<Response> postData(
       String uri, dynamic body, {Map<String, String>? headers, String? idempotencyKey}) async {
     if(await ApiChecker.isVpnActive()) {
@@ -111,9 +130,24 @@ class ApiClient extends GetxService {
 
         // AMYAL-SECURITY-002: Idempotency-Key + Zone hint
         final requestHeaders = Map<String, String>.from(headers ?? _mainHeaders!);
-        if (idempotencyKey != null && idempotencyKey.isNotEmpty) {
-          requestHeaders['Idempotency-Key'] = idempotencyKey;
-        }
+
+        // AMIAL-PILOT-IDEM-002 — **ولا يُترك المفتاح لاجتهاد كلّ نداء.**
+        //
+        // قِيس: ٩٧ نداءَ `postData` بلا مفتاح مقابل ٢٦ به. ووسيطُ الخادم
+        // يُولّد مفتاحاً عشوائيّاً حين لا يجد واحداً — **فالحمايةُ صفر
+        // بالضبط حيث لا يتذكّرها كاتبُ النداء.**
+        //
+        // فصار المفتاحُ يُولَّد هنا لمن لم يُمرّره: مفتاحٌ لكلّ (عنوان +
+        // جسد)، يبقى ما دام الطلبُ معلّقاً ويُتلَف حين يُجيب الخادم. ومن
+        // مرّره صراحةً فمفتاحُه أولى — لأنّه يعرف حدودَ النيّة البشريّة
+        // أكثرَ ممّا يعرفها هذا الموضع.
+        final String autoAction = _autoIdentity(uri, body);
+        final String effectiveKey = (idempotencyKey != null && idempotencyKey.isNotEmpty)
+            ? idempotencyKey
+            : _inFlightKeys.putIfAbsent(
+                autoAction, () => IdempotencyKeyGenerator.forFinancialAction('auto'));
+        requestHeaders['Idempotency-Key'] = effectiveKey;
+
         requestHeaders['X-Amial-Zone'] = 'SOUTH';
         requestHeaders['X-Amyal-Client-Version'] = '0.7.0';
 
@@ -123,9 +157,16 @@ class ApiClient extends GetxService {
           headers: requestHeaders,
         ).timeout(Duration(seconds: timeoutInSeconds));
         Response response = handleResponse(response0, uri);
+
+        // **أجاب الخادمُ ولو بالرفض ⇒ النيّةُ حُسمت، والمفتاحُ يُتلَف.**
+        // ولولا ذلك لعلق المستعملُ: الوسيطُ يُسجّل المفتاح `failed` عند
+        // أيّ ٤xx ثمّ يردّ ٤٠٩ على إعادته، فمن أخطأ رمزَه لا يُعيد أبداً.
+        _inFlightKeys.remove(autoAction);
         return response;
-        
+
       } catch (e) {
+        // **ولم يصل جواب: يبقى المفتاح.** لا نعلم أوصل الطلبُ أم لا،
+        // فتكون الإعادةُ إعادةً لا عمليّةً ثانية. و«لا نعلم» ليست صفراً.
         return Response(statusCode: 1, statusText: noInternetMessage);
       }
 
