@@ -222,6 +222,17 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
 //
 // الصلاحيّة `platform.settings.update`: فتحُ بابِ تحقّقٍ أو إقفالُه ضبطُ
 // منصّةٍ لا خدمةُ عملاء — وموظّفُ الدعم لا يملكها.
+// AMIAL-WA-LIMIT-001 — سقفُ المال عبر بوت واتساب.
+// الصلاحيّة `platform.money.move`: رفعُ السقف يُحرّك مالاً بالوكالة —
+// لا يُحرّكه بنفسه، لكنّه يسمح بحركةٍ كانت ممنوعة.
+Route::prefix('whatsapp')->name('whatsapp.')->middleware('platform:platform.money.move')
+    ->group(function () {
+        $wl = App\Http\Controllers\Admin\WhatsappLimitController::class;
+        Route::get('/limits', [$wl, 'page'])->name('limits.page');
+        Route::get('/limits/show', [$wl, 'show'])->name('limits.show');
+        Route::post('/limits', [$wl, 'save'])->name('limits.save');
+    });
+
 // AMIAL-MERCHANT-PAY-002 — مركز فواتير التجّار.
 // يُقرأ من `payment_requests` نفسِه الذي يكتب فيه التطبيق — جذرٌ واحدٌ
 // يُقرأ من زاويتين، لا حقيقتان تفترقان.

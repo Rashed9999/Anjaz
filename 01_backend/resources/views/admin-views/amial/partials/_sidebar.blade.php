@@ -127,10 +127,11 @@
         [
             'title' => 'الإعدادات والتشغيل',
             'icon' => '⚙️',
-            'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*'],
+            'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*'],
             'links' => [
                 ['🏢 إعدادات الأعمال (عام/رسوم/حدود)', route('admin.business-settings.business-setup'), null],
                 ['⚙️ مفاتيح سريعة (تشغيل/إيقاف)', route('admin.amial.hub.settings'), null],
+                ['💬 حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.money.move'],
                 // لوحتا المناطق: كلتاهما تُعيد تعيين المنطقة. تُجمعان هنا
                 // بأسماءٍ تقول الفرق — «النطاق والمخالفات» مقابل «توزيع
                 // المستخدمين» — بدل أن يُتركا «لوحة المناطق» و«إدارة المناطق».

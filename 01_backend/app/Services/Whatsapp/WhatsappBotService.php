@@ -50,7 +50,57 @@ class WhatsappBotService
         private readonly PaymentRequestService          $paymentRequestSvc,
         private readonly WhatsappPaymentRequestResolver  $payReqResolver,
         private readonly TransactionPinService           $pinSvc,
+        private readonly WhatsappMoneyLimit              $limit,
     ) {}
+
+    /**
+     * AMIAL-WA-LIMIT-001 — **سقفُ المال عبر البوت، من موضعٍ واحد.**
+     *
+     * وسقفٌ على مسارٍ من ثلاثةٍ ليس سقفاً: من بلغ الحدَّ في التحويل
+     * يُقسّمه على فواتير. فتمرّ المسارات الثلاثة كلُّها من هنا.
+     *
+     * ويُفحص **قبل تنفيذ العمليّة** لا بعده — فالمنعُ بعد الخصم ليس منعاً.
+     */
+    private function refuseIfOverLimit(string $phone, string $amount, string $kind): ?array
+    {
+        $why = $this->limit->refuse($amount);
+
+        if ($why === null) {
+            return null;
+        }
+
+        \Illuminate\Support\Facades\Log::info('WhatsApp money blocked by cap', [
+            'kind' => $kind, 'amount' => $amount, 'max' => $this->limit->max(),
+        ]);
+
+        // **ويُسجَّل المنعُ في التدقيق — لا في السجلّ النصّيّ وحده.**
+        //
+        // فشاشةُ الإدارة تعرض «عمليّات منعها السقف اليوم»، وعدّادٌ لا
+        // يمكن أن يتحرّك **مؤشّرٌ يكذب**: يُقرأ صفرُه «لم يُمنع أحد» وهو
+        // «لا أحصي». (القاعدة السابعة.)
+        try {
+            app(\App\Services\AuditService::class)->record([
+                'actor_type' => 'customer',
+                'actor_user_id' => null,
+                'subject_type' => 'setting',
+                'subject_id' => 0,
+                'action' => 'WA_LIMIT_BLOCKED',
+                'decision_code' => 'BLOCKED',
+                'severity' => 'info',
+                // **المفتاحُ `context` لا `data`** — `AuditService::record`
+                // يقرأ `$payload['context']`، فـ`data` تُبتلع صامتةً ويبقى
+                // صفُّ تدقيقٍ بلا تفصيل. كشفه اختبارٌ يقرأ الصفَّ نفسَه.
+                'context' => ['kind' => $kind, 'amount' => $amount, 'max' => $this->limit->max()],
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('[WA Bot] limit audit failed', ['error' => $e->getMessage()]);
+        }
+
+        $this->session->clear($phone);
+        $this->send($phone, $why);
+
+        return ['success' => false, 'message' => $why];
+    }
 
     /** هل رقم واتساب مربوط بحساب مُوثّق؟ (بوّابة auth قبل المعالجة الثقيلة). */
     public function isLinked(string $fromPhone): bool
@@ -403,6 +453,11 @@ class WhatsappBotService
             return ['success' => false, 'message' => 'لم يُعثَر على المستقبل'];
         }
 
+        // السقفُ قبل التنفيذ — لا بعد الخصم.
+        if ($blocked = $this->refuseIfOverLimit($phone, (string) $amount, 'transfer')) {
+            return $blocked;
+        }
+
         $this->auditTransfer($phone, $user->id, WhatsappAuditLog::EVENT_TRANSFER_ATTEMPT,
             WhatsappAuditLog::OUTCOME_SUCCESS, $amount);
 
@@ -624,6 +679,10 @@ class WhatsappBotService
             return ['success' => false, 'message' => 'تعذّر إيجاد الخدمة'];
         }
 
+        if ($blocked = $this->refuseIfOverLimit($phone, (string) $amount, 'bill_pay')) {
+            return $blocked;
+        }
+
         try {
             $order = $this->billPaySvc->createAndExecute(
                 user: $user, provider: $provider, service: $service,
@@ -742,6 +801,13 @@ class WhatsappBotService
         if (!$paymentRequest) {
             $this->session->clear($phone);
             return ['success' => false, 'message' => 'تعذّر إيجاد طلب الدفع'];
+        }
+
+        // **والمبلغُ يُقرأ من الفاتورة لا من الجلسة** (القاعدة السادسة):
+        // ما في الجلسة نصٌّ عُرض على المستعمل، وما في الفاتورة هو ما
+        // سيُخصم. ولو اختلفا لمرّ الفحصُ على رقمٍ غيرِ الذي يُدفع.
+        if ($blocked = $this->refuseIfOverLimit($phone, (string) $paymentRequest->amount, 'payment_request')) {
+            return $blocked;
         }
 
         try {

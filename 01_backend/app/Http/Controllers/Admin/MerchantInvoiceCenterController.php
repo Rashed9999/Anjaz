@@ -288,7 +288,8 @@ class MerchantInvoiceCenterController extends Controller
             'action' => 'MERCHANT_INVOICE_CANCELLED',
             'decision_code' => 'APPLIED',
             'severity' => 'warning',
-            'data' => [
+            // `context` لا `data` — وإلّا بقي صفُّ التدقيق بلا سبب.
+            'context' => [
                 'invoice_no' => $r->short_code,
                 'amount' => (string) $r->amount,
                 'reason' => $reason,
