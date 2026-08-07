@@ -197,7 +197,7 @@ class EnsureDemoStaff extends Command
                 ]
             );
 
-            $otpHint = config('app.amial_demo_otp') ?: '(اضبط AMIAL_DEMO_OTP)';
+            $otpHint = config('amial.otp.demo_code') ?: '(اضبط AMIAL_DEMO_OTP)';
             $this->info("✓ وكيل تجريبي جاهز — {$agentNumber} / {$phone} / " . self::PASSWORD . " — OTP: {$otpHint}");
         } catch (\Throwable $e) {
             $this->error('❌ فشل إنشاء الوكيل: ' . $e->getMessage());

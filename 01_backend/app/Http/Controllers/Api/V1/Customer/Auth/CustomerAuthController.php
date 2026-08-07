@@ -86,15 +86,9 @@ class CustomerAuthController extends Controller
                 ], 200);
             }
 
-            // AMIAL-DEMO-OTP: رمز واحد في كل المسارات.
-            // كان هنا رمزان مختلفان: هذا الموضع ينتج '1234' في غير الإنتاج،
-            // بينما RegisterController يقبل config('app.amial_demo_otp') أي
-            // '123456' — فيعبّئ التطبيق رمزاً ويقبل الخادم آخر. نستعمل الرمز
-            // المضبوط إن وُجد، وإلا نولّد عشوائياً كالمعتاد.
-            $configuredOtp = config('app.amial_demo_otp');
-            $otp = (is_string($configuredOtp) && $configuredOtp !== '')
-                ? $configuredOtp
-                : rand(1000, 9999);
+            // AMIAL-OTP-SPLIT-001: الرقمُ يحدّد الرمز، لا مفتاحٌ عامّ.
+            $policy = app(\App\Services\Otp\OtpPolicy::class);
+            $otp = $policy->codeFor($request['phone']);
 
             DB::table('phone_verifications')->updateOrInsert(['phone' => $request['phone']], [
                 'otp' => $otp,
@@ -111,11 +105,12 @@ class CustomerAuthController extends Controller
                 $response = SmsModule::send($request['phone'], $otp);
             }
 
-            // AMIAL-DEMO-OTP: بلا بوابة SMS لا يصل الرمز لأحد فيقف التسجيل نهائياً.
-            // نفصح عن الرمز في الاستجابة ليعبّئه التطبيق تلقائياً — ويختفي
-            // الإفصاح وحده متى أُفرغ AMIAL_DEMO_OTP مع بوابة SMS حقيقية.
-            $demoHint = (is_string($configuredOtp) && $configuredOtp !== '')
-                ? (string) $configuredOtp : null;
+            // AMIAL-OTP-SPLIT-001: **الإفصاح لأرقام العرض وحدها.**
+            //
+            // كان يُفصح عن الرمز لأيّ رقم — فيُلغى التحقّق من أصله: يصير
+            // «أثبت أنّك تملك الرقم» «انسخ ما أعطيناك». ولرقمٍ حقيقيّ
+            // يبقى `null` مهما كان `AMIAL_DEMO_OTP` مضبوطاً.
+            $demoHint = $policy->mayDisclose($request['phone']) ? (string) $otp : null;
 
             return response()->json([
                 'message' => 'Number is ready to register',
@@ -143,15 +138,8 @@ class CustomerAuthController extends Controller
 
         $phone = $request['phone'];
         try {
-            // AMIAL-DEMO-OTP: رمز واحد في كل المسارات.
-            // كان هنا رمزان مختلفان: هذا الموضع ينتج '1234' في غير الإنتاج،
-            // بينما RegisterController يقبل config('app.amial_demo_otp') أي
-            // '123456' — فيعبّئ التطبيق رمزاً ويقبل الخادم آخر. نستعمل الرمز
-            // المضبوط إن وُجد، وإلا نولّد عشوائياً كالمعتاد.
-            $configuredOtp = config('app.amial_demo_otp');
-            $otp = (is_string($configuredOtp) && $configuredOtp !== '')
-                ? $configuredOtp
-                : rand(1000, 9999);
+            // AMIAL-OTP-SPLIT-001: الرقمُ يحدّد الرمز، لا مفتاحٌ عامّ.
+            $otp = app(\App\Services\Otp\OtpPolicy::class)->codeFor($phone);
 
             DB::table('phone_verifications')->updateOrInsert(['phone' => $phone], [
                 'otp' => $otp,

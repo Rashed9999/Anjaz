@@ -32,7 +32,20 @@ class DemoOtpTest extends TestCase
         );
     }
 
+    /**
+     * AMIAL-OTP-SPLIT-001: **رقمُ عرضٍ معلوم، لا عشوائيّ.**
+     *
+     * كانت هذه الدالّة تُرجع رقماً عشوائيّاً، فتُثبّت الاختباراتُ أنّ
+     * `123456` يُقبل من **أيّ رقم** — أي توثّق الثغرة كأنّها عقد. وصار
+     * الرمزُ الثابت لأرقام العرض وحدها.
+     */
     private function phone(): string
+    {
+        return '967777100001';
+    }
+
+    /** رقمٌ حقيقيٌّ ليس في قائمة العرض — يُستعمل في اختبارات النفي. */
+    private function realPhone(): string
     {
         return '7' . random_int(10000000, 99999999);
     }
@@ -81,7 +94,7 @@ class DemoOtpTest extends TestCase
     {
         // البوابة الحقيقية: AMIAL_DEMO_OTP فارغاً يُعطّل الالتفاف تماماً،
         // فيعود النظام لاشتراط رمز حقيقي من بوابة SMS.
-        config(['app.amial_demo_otp' => '']);
+        config(['amial.otp.demo_code' => '']);
 
         $this->postJson('/api/v1/customer/auth/register', $this->payload($this->phone(), '123456'))
             ->assertJsonFragment(['code' => 'otp']);
