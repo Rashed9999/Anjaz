@@ -33,6 +33,7 @@
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lg-recon" data-testid="lg-tab-recon">🔗 مطابقة المحافظ <span class="badge bg-danger" id="lg-recon-count">0</span></button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lg-accounts" data-testid="lg-tab-accounts">📒 دليل الحسابات</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lg-entries" data-testid="lg-tab-entries">🔍 بحث القيود</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lg-runs" data-testid="lg-tab-runs">🌙 المصالحات الليليّة <span class="badge bg-secondary" id="lg-runs-count">—</span></button></li>
     </ul>
 
     <div class="tab-content">
@@ -54,6 +55,40 @@
                 </div>
                 <div id="lg-trial-summary" class="row g-3 mb-3"></div>
                 <div id="lg-trial-list"></div>
+            </div>
+        </div>
+
+
+        {{-- ============ AMIAL-RECON-NIGHTLY-001 — المصالحات الليليّة ============
+
+             القاعدة ١٢: بُني `reconciliation_runs` ولم يكن يُقرأ من أيّ
+             مكان. ومصالحةٌ لا يقرؤها أحدٌ هي «مبنيٌّ ولا يُوصَل إليه».
+
+             والسلسلةُ هي المقصود لا الليلةُ الأخيرة: رقمٌ واحدٌ لا يقول إن
+             كان الانحراف بدأ اليوم أم يكبر منذ أسبوع. --}}
+        <div class="tab-pane fade" id="lg-runs">
+            <div class="card p-3">
+                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                    <div>
+                        <strong>🌙 المصالحة الليليّة</strong>
+                        <div class="small text-muted">تعمل تلقائياً ٢:٠٠ صباحاً — المحافظ والدفتر وخزائن النقد</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" id="lg-runs-refresh" data-testid="lg-runs-refresh">⟳ تحديث</button>
+                </div>
+
+                {{-- **صمتُ الإنذار لا يعني السلامة.** ليلةٌ بلا صفٍّ تعني أنّ
+                     المهمّة لم تعمل — لا أنّ الحساب سليم. (القاعدة السابعة.) --}}
+                <div id="lg-runs-stale"></div>
+
+                <div id="lg-runs-blind" class="alert alert-warning py-2 small d-none">
+                    <strong>🔍 خارج التغطية:</strong>
+                    <span id="lg-runs-blind-list"></span>
+                    <div class="mt-1 text-muted">دَينٌ معلوم — ما ينقص فيها ليس ضياعَ مال.</div>
+                </div>
+
+                <div id="lg-runs-list" data-testid="lg-runs-list">
+                    <div class="text-muted py-4 text-center">…جارٍ التحميل</div>
+                </div>
             </div>
         </div>
 
@@ -140,6 +175,84 @@
         <div class="col-lg-3 col-md-4 col-6"><div class="card p-3 h-100 ${cls || ''}">
             <div class="small text-muted">${label}</div><div class="fs-5 fw-bold">${value}</div>
             ${sub ? `<div class="small text-muted">${sub}</div>` : ''}</div></div>`;
+
+
+    // ---------- AMIAL-RECON-NIGHTLY-001 — المصالحات الليليّة ----------
+    //
+    // القاعدة ١٢: الجدول بُني ولم يكن يُقرأ. والسلسلةُ هي المقصود لا
+    // الليلةُ الأخيرة — رقمٌ واحدٌ لا يقول إن كان الانحراف بدأ اليوم.
+    document.getElementById('lg-runs-refresh').onclick = loadRuns;
+
+    async function loadRuns() {
+        const box = document.getElementById('lg-runs-list');
+        box.innerHTML = '<div class="text-muted py-3 text-center">…جارٍ التحميل</div>';
+
+        const j = await get('/reconciliation-runs');
+        if (!j.success) {
+            box.innerHTML = '<div class="alert alert-warning">تعذّر جلب سجلّ المصالحات</div>';
+            return;
+        }
+
+        const m = j.meta, rows = m.rows || [];
+        document.getElementById('lg-runs-count').textContent = rows.length;
+
+        // **الغيابُ يُقال.** ليلةٌ بلا صفٍّ تعني أنّ المهمّة لم تعمل —
+        // لا أنّ الحساب سليم. (القاعدة السابعة.)
+        document.getElementById('lg-runs-stale').innerHTML = m.stale
+            ? `<div class="alert alert-danger py-2 small" data-testid="lg-runs-stale-warn">
+                 ⚠️ <strong>لم تجرِ مصالحةٌ منذ أكثر من ٣٠ ساعة.</strong>
+                 ${m.last_run_at ? 'آخرها: ' + esc(m.last_run_at) : 'ولا مصالحةَ مسجّلةٌ إطلاقاً.'}
+                 وصمتُ الإنذار هنا لا يعني السلامة — قد يعني أنّ المهمّة توقّفت.
+               </div>`
+            : `<div class="alert alert-success py-2 small">✅ آخرُ مصالحة: ${esc(m.last_run_at)}</div>`;
+
+        const blind = m.blind_spots || [];
+        const blindBox = document.getElementById('lg-runs-blind');
+        if (blind.length) {
+            blindBox.classList.remove('d-none');
+            document.getElementById('lg-runs-blind-list').innerHTML =
+                blind.map(b => esc(b.service)).join(' · ');
+        } else {
+            blindBox.classList.add('d-none');
+        }
+
+        if (!rows.length) {
+            box.innerHTML = '<div class="text-muted py-4 text-center">لا مصالحاتٍ مسجّلة بعد.</div>';
+            return;
+        }
+
+        const badge = st => st === 'clean'
+            ? '<span class="badge bg-success">لا فرق</span>'
+            : (st === 'failed'
+                ? '<span class="badge bg-dark">لم تكتمل</span>'
+                : '<span class="badge bg-danger">وُجد فرق</span>');
+
+        box.innerHTML = `
+            <div class="table-responsive"><table class="table table-sm align-middle">
+            <thead><tr>
+                <th>الليلة</th><th>الحالة</th>
+                <th class="text-end">محافظ</th><th class="text-end">فرقُ المحافظ</th>
+                <th class="text-end">صافي الدفتر</th>
+                <th class="text-end">خزائن</th><th class="text-end">فرقُ الخزائن</th>
+                <th class="text-end">المدّة</th>
+            </tr></thead><tbody>` +
+            rows.map(r => `
+                <tr class="${r.status === 'clean' ? '' : 'table-danger'}">
+                    <td>${esc(r.ran_at)}</td>
+                    <td>${badge(r.status)}</td>
+                    <td class="text-end">${r.wallets_checked}<span class="text-muted small"> / ${r.wallets_diverged}</span></td>
+                    <td class="text-end ${Number(r.wallets_gap) ? 'fw-bold text-danger' : 'text-muted'}">${num(r.wallets_gap)}</td>
+                    <td class="text-end ${Number(r.ledger_net) ? 'fw-bold text-danger' : 'text-muted'}">${num(r.ledger_net)}</td>
+                    <td class="text-end">${r.tills_checked}<span class="text-muted small"> / ${r.tills_diverged}</span></td>
+                    <td class="text-end ${Number(r.tills_gap) ? 'fw-bold text-danger' : 'text-muted'}">${num(r.tills_gap)}</td>
+                    <td class="text-end text-muted">${r.duration_ms}ms</td>
+                </tr>`).join('') +
+            '</tbody></table></div>';
+    }
+
+    // يُحمَّل عند فتح التبويب — لا عند فتح الصفحة، فالسجلّ قد يطول.
+    document.querySelector('[data-testid="lg-tab-runs"]')
+        .addEventListener('shown.bs.tab', loadRuns, {once: false});
 
     // ---------- ميزان المراجعة ----------
     document.getElementById('lg-btn-trial').onclick = loadTrial;

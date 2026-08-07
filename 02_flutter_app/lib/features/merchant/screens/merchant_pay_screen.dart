@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amyal_pay/features/merchant/controllers/merchant_pay_controller.dart';
 import 'package:amyal_pay/features/payments/domain/amial_qr_payload.dart';
+import 'package:amyal_pay/features/payments/widgets/pin_prompt.dart';
 import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
 import 'package:amyal_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
@@ -103,10 +104,23 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
       _err(pr.lastError.value.isEmpty ? 'الطلب غير موجود' : pr.lastError.value);
       return;
     }
+    await _confirmAndPay(data);
+  }
+
+  /// التأكيدُ والدفع — **نقطةٌ واحدةٌ يلتقي عندها الطريقان.**
+  ///
+  /// المسحُ وإدخالُ رقم الفاتورة يصلان هنا معاً، فلا يصير أحدُهما أسهلَ
+  /// من الآخر ولا يُنسى في أحدهما رمزُ الحماية. (نسختان من نافذة الدفع
+  /// تعني تحسيناً يبلغ واحدةً ويترك الأخرى.)
+  Future<void> _confirmAndPay(Map<String, dynamic> data) async {
+    final pr = Get.find<PaymentRequestController>();
     final req = (data['request'] ?? {}) as Map;
     final requester = (data['requester'] ?? {}) as Map;
     final isActive = data['is_active'] == true;
     final amount = '${req['amount'] ?? ''}';
+    // **ورقمُ الفاتورة يُعرض.** كان موجوداً في الخادم (`short_code`) ولا
+    // يُرى — فيدفع العميلُ بلا ما يربط دفعتَه بفاتورةٍ عند خلاف.
+    final invoiceNo = '${data['invoice_no'] ?? req['short_code'] ?? ''}';
     if (!isActive) {
       _err('الطلب غير صالح (مدفوع/ملغى/منتهٍ)');
       return;
@@ -115,6 +129,10 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
     final confirm = await Get.dialog<bool>(AlertDialog(
       title: const Text('تأكيد الدفع'),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
+        if (invoiceNo.isNotEmpty)
+          Text('فاتورة رقم $invoiceNo',
+              style: const TextStyle(fontSize: 13, color: AmyalColors.textMuted)),
+        const SizedBox(height: 6),
         Text('$amount ر.ي',
             style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: AmyalColors.primary)),
         const SizedBox(height: 8),
@@ -134,7 +152,13 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
     ));
     if (confirm != true || !mounted) return;
 
-    final ok = await pr.pay(code);
+    // **ثمّ الرمز — بعد الموافقة لا قبلها.** فمن رأى المبلغَ والتاجرَ
+    // ورفض لا يُطلب منه رمزٌ أصلاً.
+    final pin = await askPin(context,
+        subtitle: 'أدخل رمز الحماية لإتمام دفع $amount ر.ي');
+    if (pin == null || !mounted) return;
+
+    final ok = await pr.pay(code, pin: pin);
     if (!mounted) return;
     if (ok) {
       await Get.dialog(AlertDialog(
@@ -151,6 +175,57 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
     }
   }
 
+
+  /// AMIAL-MERCHANT-PAY-002 — الدفعُ برقم حساب التاجر ورقم الفاتورة.
+  ///
+  /// **ولمَ يلزم طريقٌ غيرُ الكاميرا:** إضاءةٌ ضعيفةٌ عند صندوق، أو شاشةُ
+  /// هاتفٍ مكسورة، أو رمزٌ مطبوعٌ بهت — ومن لا طريقَ له إلّا الكاميرا يقف
+  /// عاجزاً وقد جاء ليدفع.
+  Future<void> _payByInvoiceNo() async {
+    final phone = TextEditingController(text: _phoneCtrl.text.trim());
+    final inv = TextEditingController();
+
+    final go = await Get.dialog<bool>(AlertDialog(
+      title: const Text('الدفع برقم الفاتورة'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(
+          controller: phone,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(
+            labelText: 'رقم حساب التاجر', prefixIcon: Icon(Icons.store)),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: inv,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(
+            labelText: 'رقم الفاتورة', prefixIcon: Icon(Icons.receipt_long)),
+        ),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Get.back(result: false), child: const Text('إلغاء')),
+        FilledButton(onPressed: () => Get.back(result: true), child: const Text('عرض الفاتورة')),
+      ],
+    ));
+
+    if (go != true || !mounted) return;
+
+    final p = phone.text.trim(), n = inv.text.trim();
+    if (p.isEmpty || n.isEmpty) { _err('اكتب رقم الحساب ورقم الفاتورة'); return; }
+
+    final pr = Get.find<PaymentRequestController>();
+    final data = await pr.lookupInvoice(merchantPhone: p, invoiceNo: n);
+    if (!mounted) return;
+    if (data == null) {
+      _err(pr.lastError.value.isEmpty ? 'لم تُوجد الفاتورة' : pr.lastError.value);
+      return;
+    }
+
+    // **ثمّ نفسُ نافذة التأكيد ونفسُ الرمز.** فالطريقان يلتقيان عند
+    // الحاجز نفسِه — ولا يصير أحدهما أسهلَ من الآخر.
+    await _confirmAndPay(data);
+  }
+
   void _err(String m) => ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(m), backgroundColor: AmyalColors.red));
 
@@ -164,6 +239,12 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final ctrl = Get.find<MerchantPayController>();
+
+    // **والباب المباشر يحمل الرمزَ كما يحمله المسحُ.** فحاجزٌ على بابٍ
+    // من بابين ليس حاجزاً: من يعرف الطريقَ الآخر يمرّ منه.
+    final pin = await askPin(context,
+        subtitle: 'أدخل رمز الحماية لإتمام الدفع');
+    if (pin == null || !mounted) return;
 
     // AMYAL-DS-001: ورقة النتيجة الموحّدة (جارٍ التنفيذ → نجاح/فشل) بدل
     // AlertDialog + SnackBar المتفرّقين — نفس النمط عبر كل العمليات المالية.
@@ -184,6 +265,7 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
           channel: widget.channel,
           posUserId: widget.posUserId,
           note: _noteCtrl.text.trim(),
+          pin: pin,
         );
         if (!ok) {
           throw Exception(ctrl.lastError.value.isNotEmpty
@@ -235,7 +317,18 @@ class _MerchantPayScreenState extends State<MerchantPayScreen> {
                   validator: (v) =>
                       (v == null || v.trim().length < 6) ? 'أدخل رقم تاجر صحيح' : null,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
+                // **وزرٌّ لا يُوصل إليه ليس مبنيّاً** — فالطريقُ الثاني
+                // يظهر هنا لا في شيفرةٍ لا يبلغها أحد.
+                Align(
+                  alignment: AlignmentDirectional.centerStart,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.receipt_long, size: 18),
+                    label: const Text('لديّ رقم فاتورة'),
+                    onPressed: _payByInvoiceNo,
+                  ),
+                ),
+                const SizedBox(height: 4),
               ],
               TextFormField(
                 controller: _amountCtrl,

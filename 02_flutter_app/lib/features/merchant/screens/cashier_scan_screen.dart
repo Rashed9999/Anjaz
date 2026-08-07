@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
 import 'package:amyal_pay/features/merchant/controllers/cashier_controller.dart';
+import 'package:amyal_pay/features/shared/widgets/scanner_shell.dart';
 
 /// AMIAL-CASHIER-BARCODE-001 — مسح باركود المنتجات في الكاشير.
 ///
@@ -174,8 +175,15 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
           IconButton(icon: const Icon(Icons.cameraswitch), onPressed: () => _scanner.switchCamera()),
         ],
       ),
-      body: Stack(children: [
-        MobileScanner(controller: _scanner, onDetect: _onDetect),
+      // AMIAL-SCANNER-SHELL-001 — الكاميرا تعمل أو تقول لماذا لا.
+      // كان هنا `MobileScanner` عارياً بلا `errorBuilder`، فأيّ فشلٍ
+      // يُرسم سواداً صامتاً: لا رسالة ولا رمز خطأ ولا طريقَ خروج.
+      body: ScannerShell(
+        controller: _scanner,
+        onDetect: _onDetect,
+        onManualEntry: _manualEntry,
+        manualEntryLabel: 'أدخل الباركود يدويّاً',
+        overlay: Stack(children: [
         // إطار التوجيه
         Center(
           child: Container(
@@ -208,7 +216,8 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
             ]),
           ),
         ),
-      ]),
+        ]),
+      ),
     );
   }
 }

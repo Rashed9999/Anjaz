@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import 'package:amyal_pay/features/payments/widgets/pin_prompt.dart';
 import 'package:amyal_pay/features/requested_money/controllers/payment_request_controller.dart';
 import 'package:amyal_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amyal_pay/theme/amyal_colors.dart';
@@ -155,7 +156,12 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
 
     if (ok != true || !mounted) return;
 
-    final done = await c.payById(id);
+    // **البابُ الثالث إلى المال نفسِه.** ومن أقفل بابين وترك ثالثاً لم
+    // يُقفل شيئاً.
+    final pin = await askPin(context, subtitle: 'أدخل رمز الحماية لإتمام الدفع');
+    if (pin == null || !mounted) return;
+
+    final done = await c.payById(id, pin: pin);
     if (!mounted) return;
     _snack(done ? 'تم الدفع' : (c.lastError.value.isEmpty ? 'فشل الدفع' : c.lastError.value),
         ok: done);

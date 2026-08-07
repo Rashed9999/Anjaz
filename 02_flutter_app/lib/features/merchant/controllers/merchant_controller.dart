@@ -79,7 +79,13 @@ class MerchantController extends GetxController implements GetxService {
                   true)) {
         final meta = r.body['meta'] ?? r.body['data'] ?? {};
         if (meta is Map) {
-          lastPaymentRequestId.value = (meta['id'] ?? meta['transaction_id'] ?? '').toString();
+          // **الحقل الصحيح `short_code`.**
+          //
+          // كان يقرأ `meta['id']` والخادمُ يردّ `meta['short_code']` —
+          // فتُقرأ قيمةٌ غيرُ موجودة، ويصير رقمُ الفاتورة **نصّاً فارغاً**،
+          // ويُبنى الرمزُ حوله فلا يدلّ على شيء.
+          lastPaymentRequestId.value =
+              (meta['short_code'] ?? meta['request']?['short_code'] ?? '').toString();
         }
         lastPaymentAmount.value = amount;
         return true;

@@ -188,10 +188,18 @@ class RegistrationRolesTest extends TestCase
         \Illuminate\Support\Facades\DB::table('business_settings')->updateOrInsert(
             ['key' => 'phone_verification'], ['value' => '1', 'created_at' => now(), 'updated_at' => now()]);
 
-        $resp = $this->postJson('/api/v1/customer/auth/check-phone', ['phone' => '967771500006'])
+        // AMIAL-OTP-SPLIT-001: الإفصاح لأرقام العرض وحدها.
+        $resp = $this->postJson('/api/v1/customer/auth/check-phone', ['phone' => '967777100001'])
             ->assertOk()->json();
 
         $this->assertSame('active', $resp['otp']);
         $this->assertNotEmpty($resp['demo_otp']);
+
+        // **والنفي الحاسم:** رقمٌ حقيقيٌّ لا يُفصح عن رمزه.
+        $real = $this->postJson('/api/v1/customer/auth/check-phone', ['phone' => '967771500006'])
+            ->assertOk()->json();
+
+        $this->assertNull($real['demo_otp'] ?? null,
+            'أُفصح عن رمزِ رقمٍ حقيقيّ — فبطل التحقّق من أصله');
     }
 }

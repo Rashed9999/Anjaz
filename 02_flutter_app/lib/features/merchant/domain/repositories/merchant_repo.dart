@@ -23,14 +23,26 @@ class MerchantRepo extends GetxService {
     String? note,
     String? customerPhone,
   }) {
+    // AMIAL-MERCHANT-PAY-002 — **العنوان الصحيح: فاتورةٌ لا طلبُ صديق.**
+    //
+    // كان ينادي `/customer/request-money`، وهو مسارُ «اطلب مالاً من
+    // شخص»: يشترط `phone` إلزاميّاً، ويشترط أن يكون المستلِمُ عميلاً،
+    // **ولا يُنتج رمزاً قصيراً إطلاقاً.** فكان التاجرُ بلا رقم عميلٍ
+    // يتلقّى ٤٠٣ قبل أن يُنشأ شيء — ثمّ تُعرض عليه شاشةُ «تمّ إنشاء طلب
+    // الدفع» ورمزٌ فارغ.
+    //
+    // و`/amial/payment-requests` هو الجذرُ الصحيح: يردّ `short_code` —
+    // وهو **رقمُ الفاتورة** — ويُقرأ بـ`showByCode` من تطبيق العميل،
+    // ويظهر في «فواتير التجّار» بلوحة الإدارة.
     return apiClient.postData(
-      '$_customerBase/request-money',
+      '/api/v1/amial/payment-requests',
       {
         'amount': amount,
-        'description': ?note,
-        'phone': ?customerPhone,
+        'note': ?note,
+        'recipient_phone': ?customerPhone,
+        'share_method': 'qr',
       },
-      idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('merchant_request_payment'),
+      idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('merchant_invoice'),
     );
   }
 

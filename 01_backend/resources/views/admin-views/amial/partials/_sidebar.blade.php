@@ -53,6 +53,8 @@
                 ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), null],
                 ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), 'platform.money.move'],
                 ['🪪 لوحة التحقق (الحسابات الجديدة)', route('admin.amial.hub.verification'), null],
+                // AMIAL-OTP-CENTER-001 — القاعدة ١٢: يُوصل إليه من هنا.
+                ['🔐 مركز التحقّق (OTP وبوّابات الإرسال)', route('admin.amial.otp.page'), 'platform.settings.update'],
             ],
         ],
         [
@@ -98,9 +100,10 @@
         [
             'title' => 'الخدمات والعملاء',
             'icon' => '🧾',
-            'match' => ['admin/support-center*', 'admin/amial/surface*', 'admin/amial/charity*', 'admin/amial/hub/subscriptions*', 'admin/amial/hub/disputes*', 'admin/amial/hub/staff*'],
+            'match' => ['admin/support-center*', 'admin/amial/surface*', 'admin/amial/charity*', 'admin/amial/hub/subscriptions*', 'admin/amial/hub/disputes*', 'admin/amial/hub/staff*', 'admin/amial/invoices*'],
             'links' => [
                 ['🎧 مركز الدعم (بحث شامل + الأجهزة)', route('admin.support-center.index'), null],
+                ['🧾 فواتير التجّار ومدفوعاتها', route('admin.amial.invoices.page'), null],
                 ['💎 لوحة الاشتراكات', route('admin.amial.hub.subscriptions'), null],
                 ['⚖️ لوحة النزاعات (دفع آمن)', route('admin.amial.hub.disputes'), null],
                 ['👔 لوحة الموظفين (نقاط البيع)', route('admin.amial.hub.staff'), null],
@@ -124,10 +127,11 @@
         [
             'title' => 'الإعدادات والتشغيل',
             'icon' => '⚙️',
-            'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*'],
+            'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*'],
             'links' => [
                 ['🏢 إعدادات الأعمال (عام/رسوم/حدود)', route('admin.business-settings.business-setup'), null],
                 ['⚙️ مفاتيح سريعة (تشغيل/إيقاف)', route('admin.amial.hub.settings'), null],
+                ['💬 حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.money.move'],
                 // لوحتا المناطق: كلتاهما تُعيد تعيين المنطقة. تُجمعان هنا
                 // بأسماءٍ تقول الفرق — «النطاق والمخالفات» مقابل «توزيع
                 // المستخدمين» — بدل أن يُتركا «لوحة المناطق» و«إدارة المناطق».

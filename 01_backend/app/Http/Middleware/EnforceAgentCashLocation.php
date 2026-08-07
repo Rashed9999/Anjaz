@@ -80,7 +80,7 @@ class EnforceAgentCashLocation
                 'action' => 'AGENT_CASH_OUTSIDE_ZONE',
                 'decision_code' => 'BLOCKED',
                 'severity' => 'critical',
-                'data' => [
+                'context' => [
                     'governorate' => $governorate,
                     'latitude' => $lat,
                     'longitude' => $lng,

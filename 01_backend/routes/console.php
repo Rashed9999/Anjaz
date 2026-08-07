@@ -59,3 +59,21 @@ Schedule::command('amial:reconcile-fees')->everyMinute()->withoutOverlapping();
 Schedule::call(function () {
     app(\App\Services\CustomerWithdrawService::class)->expireStale();
 })->everyMinute()->name('amial-expire-withdrawals')->withoutOverlapping();
+
+// ============================================================
+// AMIAL-RECON-NIGHTLY-001 — المصالحة الليليّة
+// ============================================================
+//
+// **٢:٠٠ صباحاً** — بعد إغلاق الفروع ورفع تسويات الوكلاء (نافذتها
+// ٢٢:٠٠–٢٤:٠٠)، وقبل أن يبدأ يومٌ جديد. فمصالحةٌ تجري والشبابيك تعمل
+// تقيس رقماً يتحرّك تحتها.
+//
+// `withoutOverlapping` لأنّ فحص كلّ المحافظ يطول مع النموّ، ونسختان
+// متزامنتان تكتبان صفّين لليلةٍ واحدة.
+//
+// **وتُكتب حتّى حين لا فرق** — لأنّ صمت الإنذار لا يعني السلامة، قد
+// يعني أنّ المهمّة نفسَها توقّفت. (القاعدة السابعة.)
+Schedule::command('amial:reconcile-nightly')
+    ->dailyAt('02:00')
+    ->withoutOverlapping()
+    ->description('AMIAL-RECON: المصالحة الليليّة — المحافظ والدفتر والخزائن');

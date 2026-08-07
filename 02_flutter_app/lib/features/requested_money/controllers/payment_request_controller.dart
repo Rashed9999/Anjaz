@@ -85,11 +85,37 @@ class PaymentRequestController extends GetxController implements GetxService {
     }
   }
 
-  Future<bool> pay(String code) async {
+  /// AMIAL-MERCHANT-PAY-002 — البحث بفاتورةٍ عند رقم حساب تاجر.
+  Future<Map<String, dynamic>?> lookupInvoice({
+    String? merchantPhone,
+    int? merchantUserId,
+    required String invoiceNo,
+  }) async {
+    try {
+      lastError.value = '';
+      final r = await repo.lookupInvoice(
+        merchantPhone: merchantPhone,
+        merchantUserId: merchantUserId,
+        invoiceNo: invoiceNo,
+      );
+      if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      }
+      // **والرسالةُ تُنقل كما جاءت من الخادم** — «رقم الفاتورة لا يخصّ هذا
+      // التاجر» تُرشد، و«فشل» لا تُرشد.
+      lastError.value = (r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر جلب الفاتورة';
+      return null;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return null;
+    }
+  }
+
+  Future<bool> pay(String code, {required String pin}) async {
     try {
       isSubmitting.value = true;
       lastError.value = '';
-      final r = await repo.pay(code);
+      final r = await repo.pay(code, pin: pin);
       if (_ok(r)) return true;
       lastError.value = _msg(r) ?? 'فشل الدفع';
       return false;
@@ -102,11 +128,11 @@ class PaymentRequestController extends GetxController implements GetxService {
   }
 
   /// المستلم يوافق: يدفع الطلب من قائمته بلا رمز.
-  Future<bool> payById(int id) async {
+  Future<bool> payById(int id, {required String pin}) async {
     try {
       isSubmitting.value = true;
       lastError.value = '';
-      final r = await repo.payById(id);
+      final r = await repo.payById(id, pin: pin);
       if (_ok(r)) {
         incoming.removeWhere((e) => e['id'] == id);
         return true;

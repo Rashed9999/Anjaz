@@ -15,15 +15,20 @@ class TransactionRepo {
     return await apiClient.getData(AppConstants.customerPurposeUrl );
   }
 
-  Future<Response>  sendMoneyApi({required String? phoneNumber, required double amount,required String? purpose,required String? pin }) async {
-    return await apiClient.postData(AppConstants.customerSendMoney,{'phone': phoneNumber, 'amount': amount, 'purpose':purpose, 'pin': pin});
+  /// AMIAL-PILOT-IDEM-001 — **المفتاحُ يأتي من المتحكّم لا يُولَّد هنا.**
+  ///
+  /// فلو وُلِّد في المستودع لتغيَّر مع كلّ نداء، **ولصارت إعادةُ المحاولة
+  /// بعد انقطاعٍ تحويلاً ثانياً** — وهو بالضبط ما يحمي منه الوسيط.
+  /// المفتاحُ يُولَّد مرّةً لكلّ نيّةٍ بشريّة ويبقى حتّى تنجح.
+  Future<Response>  sendMoneyApi({required String? phoneNumber, required double amount,required String? purpose,required String? pin, String? idempotencyKey }) async {
+    return await apiClient.postData(AppConstants.customerSendMoney,{'phone': phoneNumber, 'amount': amount, 'purpose':purpose, 'pin': pin}, idempotencyKey: idempotencyKey);
   }
 
-  Future<Response>  requestMoneyApi({required String? phoneNumber, required double amount}) async {
-    return await apiClient.postData(AppConstants.customerRequestMoney,  {'phone' : phoneNumber, 'amount' : amount});
+  Future<Response>  requestMoneyApi({required String? phoneNumber, required double amount, String? idempotencyKey}) async {
+    return await apiClient.postData(AppConstants.customerRequestMoney,  {'phone' : phoneNumber, 'amount' : amount}, idempotencyKey: idempotencyKey);
   }
-  Future<Response>  cashOutApi({required String? phoneNumber, required double amount, required String? pin}) async {
-    return await apiClient.postData(AppConstants.customerCashOut, {'phone' : phoneNumber, 'amount' : amount, 'pin' : pin});
+  Future<Response>  cashOutApi({required String? phoneNumber, required double amount, required String? pin, String? idempotencyKey}) async {
+    return await apiClient.postData(AppConstants.customerCashOut, {'phone' : phoneNumber, 'amount' : amount, 'pin' : pin}, idempotencyKey: idempotencyKey);
   }
 
   // Future<Response>  checkCustomerNumber({required String phoneNumber}) async {
@@ -75,8 +80,8 @@ class TransactionRepo {
     return await apiClient.getData(AppConstants.withdrawMethodList);
   }
 
-  Future<Response>  withdrawRequest({required Map<String, String?>? placeBody}) async {
-    return await apiClient.postData(AppConstants.withdrawRequest, placeBody);
+  Future<Response>  withdrawRequest({required Map<String, String?>? placeBody, String? idempotencyKey}) async {
+    return await apiClient.postData(AppConstants.withdrawRequest, placeBody, idempotencyKey: idempotencyKey);
   }
 
 

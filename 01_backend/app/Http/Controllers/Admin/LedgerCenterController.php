@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\LedgerReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * AMIAL-LEDGER-CENTER-001 — مركز الدفتر (الفصل ١٧).
@@ -47,6 +48,41 @@ class LedgerCenterController extends Controller
     public function reconciliation(): JsonResponse
     {
         return $this->ok($this->reports->walletReconciliation());
+    }
+
+    /**
+     * AMIAL-RECON-NIGHTLY-001 — تاريخُ المصالحات الليليّة.
+     *
+     * **والقاعدة الثانية عشرة هي سببُ وجود هذه الدالّة:** بُني الجدول
+     * `reconciliation_runs` ولم يكن يُقرأ من أيّ مكان. ومصالحةٌ لا يقرؤها
+     * أحدٌ هي `مبنيٌّ ولا يُوصَل إليه` في أخطر موضع.
+     *
+     * **والسلسلةُ هي المقصود لا الليلةُ الأخيرة:** رقمٌ واحدٌ لا يقول إن
+     * كان الانحراف بدأ اليوم أم يكبر منذ أسبوع. ويقول الغيابُ نفسُه شيئاً:
+     * ليلةٌ بلا صفٍّ تعني أنّ المهمّة لم تعمل — لا أنّ الحساب سليم.
+     */
+    public function reconciliationRuns(Request $request): JsonResponse
+    {
+        $rows = DB::table('reconciliation_runs')
+            ->orderByDesc('ran_at')
+            ->limit(min((int) $request->get('limit', 30), 180))
+            ->get()
+            ->map(function ($r) {
+                $r->blind_spots = json_decode((string) $r->blind_spots, true) ?: [];
+
+                return $r;
+            });
+
+        $last = $rows->first();
+
+        return $this->ok([
+            'rows' => $rows,
+
+            // **متى فُحص آخرَ مرّة** — فصمتُ الإنذار وحده لا يكفي دليلاً.
+            'last_run_at'  => $last->ran_at ?? null,
+            'stale'        => !$last || \Illuminate\Support\Carbon::parse($last->ran_at)->lt(now()->subHours(30)),
+            'blind_spots'  => app(\App\Services\Reconciliation\ReconciliationService::class)->blindSpots(),
+        ]);
     }
 
     public function entries(Request $request): JsonResponse

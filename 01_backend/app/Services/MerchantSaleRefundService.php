@@ -39,6 +39,7 @@ class MerchantSaleRefundService
     public function __construct(
         private readonly CustomerCreditService $credit,
         private readonly NotificationService $notif,
+        private readonly LedgerService $ledger,
     ) {}
 
     /**
@@ -210,16 +211,43 @@ class MerchantSaleRefundService
         };
     }
 
-    /** نقدي: التاجر يخصم من رصيده (لا حركة على محفظة عميل). */
+    /**
+     * نقدي: أوراقٌ في يد التاجر — لا مالٌ إلكترونيّ، فلا قيد.
+     *
+     * AMIAL-LEDGER-REFUND-001: كان يُكتب هنا `'cash:no_wallet_movement'`
+     * في `ledger_entry_ulid` — نصٌّ ثابتٌ في خانةٍ اسمُها «قيد الدفتر».
+     * فمن يسأل «أيُّ المرتجعات رُحِّلت؟» بـ`WHERE ledger_entry_ulid IS NOT
+     * NULL` يحصل على مئةٍ بالمئة. **والغيابُ يُرى، والكذبُ لا.**
+     *
+     * فتُترك فارغةً، ويبقى `refund_method` هو من يقول لماذا: `cash` تعني
+     * نقداً ورقيّاً خارج دفتر المال الإلكترونيّ — كما في إعفاءَي «نقدٌ
+     * ورقيّ» المقرَّرَين في `LedgerCoverageGuardTest`.
+     */
     private function refundCash(MerchantRefund $refund, User $merchant): void
     {
-        // نخصم من رصيد التاجر (افتراض: استلم نقداً سابقاً، أعاد نقداً)
-        // الحقيقة: النقدي خارج النظام. نسجّل السجل فقط بلا حركة محفظة.
-        // إن أراد التاجر تتبّع النقد، يدخل قيد محاسبي يدوي.
-        $refund->update(['ledger_entry_ulid' => 'cash:no_wallet_movement']);
+        $refund->update(['ledger_entry_ulid' => null]);
     }
 
-    /** ائتمان محفظة العميل + خصم من محفظة التاجر. */
+    /**
+     * ائتمان محفظة العميل + خصم من محفظة التاجر — **وقيدٌ متوازنٌ معهما**.
+     *
+     * AMIAL-LEDGER-REFUND-001: كان يُحرّك المال ثمّ يكتب في خانة القيد
+     * **معرّفَ المرتجع نفسِه**. فلا قيدَ في الدفتر، والخانة ممتلئة.
+     *
+     * **والذي يضمن الذرّيّة هو `DB::transaction` لا ترتيبُ السطور.**
+     *
+     * كتبتُ هنا أوّلاً أنّ «القيد أوّلاً كي لا يتحرّك مالٌ إن سقط»، ثمّ
+     * أمتُّ الترتيب عمداً — فمرّ حارسُ الإرجاع كما هو. لأنّ `refund()`
+     * كلَّها داخل معاملةٍ واحدة: يسقط القيد فتُرجَع المحفظتان معه أيّاً
+     * كان الترتيب. فالترتيبُ هنا **اتّساقٌ مع `MerchantService`** لا آليّةُ
+     * أمان، والأمانُ في المعاملة.
+     *
+     * (والحارس `when_the_ledger_refuses_no_money_moves` يحرس المعاملة —
+     * فلو أُخرج شيءٌ من هذه الخدمة إلى مسارٍ خارجها لسقط.)
+     *
+     * وبمفتاح تفرّدٍ: إعادةُ المحاولة بعد انقطاعٍ لا تُنتج قيداً ثانياً
+     * («Never allow duplicated money»).
+     */
     private function refundToWallet(MerchantRefund $refund, User $merchant): void
     {
         $customerId = $refund->customer_user_id;
@@ -227,12 +255,28 @@ class MerchantSaleRefundService
             throw new RuntimeException('لا يوجد عميل مسجّل لإيداع الاسترداد');
         }
 
-        // خصم من التاجر، إضافة للعميل
-        $this->guard()->lockWalletsOrdered([$merchant->id, $customerId]);
-        $this->guard()->debit($merchant->id, (string)$refund->refund_amount, "refund:{$refund->refund_ulid}");
-        $this->guard()->credit($customerId, (string)$refund->refund_amount, "refund:{$refund->refund_ulid}");
+        $amount = (string) $refund->refund_amount;
 
-        $refund->update(['ledger_entry_ulid' => $refund->refund_ulid]);
+        $merchantWallet = $this->ledger->getOrCreateUserWallet($merchant->id);
+        $customerWallet = $this->ledger->getOrCreateUserWallet($customerId);
+
+        $entry = $this->ledger->post(
+            sourceType: 'refund_merchant_sale',
+            sourceId: $refund->refund_ulid,
+            description: "مرتجع بيع كاشير (بيع: {$refund->original_sale_ulid})",
+            lines: [
+                ['account' => $merchantWallet->account_code, 'direction' => 'debit',  'amount' => $amount],
+                ['account' => $customerWallet->account_code, 'direction' => 'credit', 'amount' => $amount],
+            ],
+            idempotencyKey: "refund_sale_{$refund->refund_ulid}",
+            createdByUserId: $refund->pos_user_id ?? $merchant->id,
+        );
+
+        $this->guard()->lockWalletsOrdered([$merchant->id, $customerId]);
+        $this->guard()->debit($merchant->id, $amount, "refund:{$refund->refund_ulid}");
+        $this->guard()->credit($customerId, $amount, "refund:{$refund->refund_ulid}");
+
+        $refund->update(['ledger_entry_ulid' => $entry->entry_ulid]);
     }
 
     /** خصم من دَيْن العميل (للبيوع الآجلة). */
@@ -257,9 +301,13 @@ class MerchantSaleRefundService
             referenceId: $refund->refund_ulid,
         );
 
+        // AMIAL-LEDGER-REFUND-001: كان `movement_ulid` يُكتب في خانة القيد
+        // — وهو معرّفٌ من **نظام الديون** لا من دفتر الأستاذ. فيبدو قيداً
+        // وليس بقيد. والحركةُ متتبَّعةٌ أصلاً بـ`credit_account_id` وبـ
+        // `reference_id` في نظام الديون، فلا يُفقد شيء بتفريغ الخانة.
         $refund->update([
             'credit_account_id' => $account->id,
-            'ledger_entry_ulid' => $movement->movement_ulid,
+            'ledger_entry_ulid' => null,
         ]);
     }
 

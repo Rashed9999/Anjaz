@@ -65,7 +65,7 @@ Route::get('/audit', [AuditDecisionsController::class, 'index'])->name('audit.in
 Route::get('/security-events', [SecurityEventsController::class, 'index'])->name('security-events.index');
 
 // ============ AMIAL-SAFE-PAYMENT-001 (v1.1) — Disputes resolution ============
-Route::prefix('safe-payments')->name('safe-payments.')->group(function () {
+Route::prefix('safe-payments')->name('safe-payments.')->middleware('amial.idempotency')->group(function () {
     Route::get('/', [AdminSafePaymentController::class, 'index'])->name('index');
     // AMIAL-SAFEPAY-EVIDENCE-001 — قبل مسار {ulid} كي لا يبتلعه
     Route::get('/evidence/{id}/file', [AdminSafePaymentController::class, 'evidenceFile'])
@@ -91,7 +91,7 @@ Route::prefix('surface')->name('surface.')->group(function () {
     Route::get('/rbac', [$sc, 'rbac'])->name('rbac');
 });
 
-Route::prefix('charity')->name('charity.')->group(function () {
+Route::prefix('charity')->name('charity.')->middleware('amial.idempotency')->group(function () {
     // AMIAL-CHARITY-ADMIN-UI-001: صفحة اللوحة (الواجهة)
     Route::view('/', 'admin-views.amial.charity.index')->name('page');
     // Organizations
@@ -214,6 +214,52 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
             ->where('id', '[0-9]+')->name('statement');
         Route::get('/reconciliation', [$lc, 'reconciliation'])->name('reconciliation');
         Route::get('/entries', [$lc, 'entries'])->name('entries');
+        // AMIAL-RECON-NIGHTLY-001: تاريخُ المصالحات — القاعدة ١٢.
+        Route::get('/reconciliation-runs', [$lc, 'reconciliationRuns'])->name('reconciliation-runs');
+    });
+
+// ============ AMIAL-OTP-CENTER-001 — مركز التحقّق ============
+//
+// الصلاحيّة `platform.settings.update`: فتحُ بابِ تحقّقٍ أو إقفالُه ضبطُ
+// منصّةٍ لا خدمةُ عملاء — وموظّفُ الدعم لا يملكها.
+// AMIAL-WA-LIMIT-001 — سقفُ المال عبر بوت واتساب.
+// الصلاحيّة `platform.money.move`: رفعُ السقف يُحرّك مالاً بالوكالة —
+// لا يُحرّكه بنفسه، لكنّه يسمح بحركةٍ كانت ممنوعة.
+Route::prefix('whatsapp')->name('whatsapp.')->middleware('platform:platform.money.move')
+    ->group(function () {
+        $wl = App\Http\Controllers\Admin\WhatsappLimitController::class;
+        Route::get('/limits', [$wl, 'page'])->name('limits.page');
+        Route::get('/limits/show', [$wl, 'show'])->name('limits.show');
+        Route::post('/limits', [$wl, 'save'])->name('limits.save');
+    });
+
+// AMIAL-MERCHANT-PAY-002 — مركز فواتير التجّار.
+// يُقرأ من `payment_requests` نفسِه الذي يكتب فيه التطبيق — جذرٌ واحدٌ
+// يُقرأ من زاويتين، لا حقيقتان تفترقان.
+Route::prefix('invoices')->name('invoices.')->middleware('platform:platform.money.move')
+    ->group(function () {
+        $ic = App\Http\Controllers\Admin\MerchantInvoiceCenterController::class;
+        Route::get('/', [$ic, 'page'])->name('page');
+        Route::get('/stats', [$ic, 'stats'])->name('stats');
+        Route::get('/rows', [$ic, 'rows'])->name('rows');
+        Route::get('/export', [$ic, 'export'])->name('export');
+        Route::get('/{id}', [$ic, 'show'])->where('id', '[0-9]+')->name('show');
+        Route::post('/{id}/cancel', [$ic, 'cancel'])->where('id', '[0-9]+')->name('cancel');
+    });
+
+Route::prefix('otp')->name('otp.')->middleware('platform:platform.settings.update')
+    ->group(function () {
+        $oc = App\Http\Controllers\Admin\OtpCenterController::class;
+
+        Route::get('/', [$oc, 'page'])->name('page');
+        Route::get('/stats', [$oc, 'stats'])->name('stats');
+        Route::get('/numbers', [$oc, 'numbers'])->name('numbers');
+        Route::get('/export', [$oc, 'export'])->name('export');
+
+        Route::post('/numbers', [$oc, 'store'])->name('numbers.store');
+        Route::post('/numbers/{id}/toggle', [$oc, 'toggle'])->where('id', '[0-9]+')->name('numbers.toggle');
+        Route::post('/close-door', [$oc, 'closeDoor'])->name('close-door');
+        Route::post('/test-send', [$oc, 'testSend'])->name('test-send');
     });
 
 // ============ AMIAL-SETTLEMENT-PANEL-001 — تسويات الشركاء ============
@@ -221,7 +267,7 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
 // غير `settlements` أدناه: تلك تسويات الوكلاء (`AgentSettlement`). هذه
 // تسويات الشركاء (`Settlement`) — وعليها بُنيت الموافقة المزدوجة، وكان
 // سطحها الوحيد الـAPI فبقي الضابط بلا شاشة تُظهره.
-Route::prefix('partner-settlements')->name('partner-settlements.')->group(function () {
+Route::prefix('partner-settlements')->name('partner-settlements.')->middleware('amial.idempotency')->group(function () {
     $st = App\Http\Controllers\Api\V1\Amial\SettlementController::class;
 
     Route::get('/', [$st, 'page'])->name('page');
@@ -288,7 +334,7 @@ Route::prefix('agents')->name('agents.')->group(function () {
     Route::put('/{userId}/limits', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'updateLimits'])->name('limits');
 });
 // AMIAL-OPERATOR-RBAC-003: اعتمادُ تسويةٍ تحريكُ مالٍ حقيقيّ.
-Route::prefix('settlements')->name('settlements.')->middleware('platform:platform.money.move')
+Route::prefix('settlements')->name('settlements.')->middleware(['platform:platform.money.move', 'amial.idempotency'])
     ->group(function () {
     Route::get('/pending', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'pendingSettlements'])->name('pending');
     Route::post('/{ulid}/approve', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'approveSettlement'])->name('approve');
@@ -333,7 +379,7 @@ Route::prefix('executive')->name('executive.')->group(function () {
 });
 
 // ============ AMIAL-ADMIN-HUB-001 — اللوحات المركزية الأربع ============
-Route::prefix('hub')->name('hub.')->group(function () {
+Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(function () {
     $hc = App\Http\Controllers\Admin\AdminHubController::class;
 
     // الصفحات

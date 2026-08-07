@@ -91,10 +91,15 @@ class RegisterController extends Controller
         $verify = null;
         if(Helpers::get_business_settings('phone_verification') == 1) {
             if($request->has('otp')) {
-                $demoOtp = config("app.amial_demo_otp");
-                // AMIAL-DEMO-OTP: رمز تجريبي موحّد للتسجيل (بلا بوابة SMS بعد) —
-                // يعمل فقط عند ضبط AMIAL_DEMO_OTP؛ الإنتاج يربط بوابة حقيقية.
-                if (is_string($demoOtp) && $demoOtp !== "" && hash_equals($demoOtp, (string) $request["otp"])) {
+                // AMIAL-OTP-SPLIT-001: الرمزُ الثابت **لأرقام العرض وحدها**.
+                //
+                // كان هذا الشرطُ يقبل `123456` من أيّ رقم ما دام المتغيّر
+                // مضبوطاً — فمن يعرف العنوان يسجّل باسم رقمٍ لا يملكه،
+                // ويصير صاحبَ محفظته. صار الرقمُ هو من يحدّد الطريق.
+                $policy = app(\App\Services\Otp\OtpPolicy::class);
+                $demoOtp = $policy->isDemo($phone) ? $policy->demoCode() : null;
+
+                if ($demoOtp !== null && hash_equals($demoOtp, (string) $request["otp"])) {
                     $verify = null; // مقبول تجريبياً — لا صفّ للحذف
                 } else {
                 $verify = $this->phoneVerification->where(["phone" => $phone, "otp" => $request["otp"]])->first();
@@ -344,10 +349,15 @@ class RegisterController extends Controller
         $verify = null;
         if(Helpers::get_business_settings('phone_verification') == 1) {
             if($request->has('otp')) {
-                $demoOtp = config("app.amial_demo_otp");
-                // AMIAL-DEMO-OTP: رمز تجريبي موحّد للتسجيل (بلا بوابة SMS بعد) —
-                // يعمل فقط عند ضبط AMIAL_DEMO_OTP؛ الإنتاج يربط بوابة حقيقية.
-                if (is_string($demoOtp) && $demoOtp !== "" && hash_equals($demoOtp, (string) $request["otp"])) {
+                // AMIAL-OTP-SPLIT-001: الرمزُ الثابت **لأرقام العرض وحدها**.
+                //
+                // كان هذا الشرطُ يقبل `123456` من أيّ رقم ما دام المتغيّر
+                // مضبوطاً — فمن يعرف العنوان يسجّل باسم رقمٍ لا يملكه،
+                // ويصير صاحبَ محفظته. صار الرقمُ هو من يحدّد الطريق.
+                $policy = app(\App\Services\Otp\OtpPolicy::class);
+                $demoOtp = $policy->isDemo($phone) ? $policy->demoCode() : null;
+
+                if ($demoOtp !== null && hash_equals($demoOtp, (string) $request["otp"])) {
                     $verify = null; // مقبول تجريبياً — لا صفّ للحذف
                 } else {
                 $verify = $this->phoneVerification->where(["phone" => $phone, "otp" => $request["otp"]])->first();

@@ -18,7 +18,28 @@ class PaymentRequestRepo extends GetxService {
 
   Future<Response> showByCode(String code) => apiClient.getData('$_base/code/$code');
 
-  Future<Response> pay(String code) => apiClient.postData('$_base/code/$code/pay', {});
+  /// AMIAL-MERCHANT-PAY-002 — **ورمز المعاملات يُرسَل مع الدفع.**
+  ///
+  /// قِيس قبل الإضافة: `customer/send-money` يشترط PIN، ودفعُ فاتورةٍ
+  /// لم يكن يشترطه. أي أنّ الدفعَ في متجرٍ كان محميّاً **أقلَّ من إرسال
+  /// مالٍ لصديق** — ومن أخذ هاتفاً مفتوحاً يدفع به بلا حاجز.
+  Future<Response> pay(String code, {required String pin}) =>
+      apiClient.postData('$_base/code/$code/pay', {'pin': pin});
+
+  /// AMIAL-MERCHANT-PAY-002 — البحث بفاتورةٍ حين لا تعمل الكاميرا.
+  ///
+  /// ويُرسل رقمُ الحساب مع رقم الفاتورة: حرفٌ يُخطأ يقع على فاتورة تاجرٍ
+  /// آخر، ومطابقةُ التاجر تجعل الخطأ رسالةً لا دفعة.
+  Future<Response> lookupInvoice({
+    String? merchantPhone,
+    int? merchantUserId,
+    required String invoiceNo,
+  }) =>
+      apiClient.postData('$_base/invoice/lookup', {
+        if (merchantPhone != null && merchantPhone.isNotEmpty) 'merchant_phone': merchantPhone,
+        'merchant_user_id': ?merchantUserId,
+        'invoice_no': invoiceNo,
+      });
 
   Future<Response> cancel(int id) => apiClient.postData('$_base/$id/cancel', {});
 
@@ -26,7 +47,10 @@ class PaymentRequestRepo extends GetxService {
   //
   // الدفع بالرمز القصير مسارُ من وصله رابط. أمّا من وصله الطلبُ في قائمته
   // فلا يملك رمزاً يكتبه — فيراه ولا يستطيع دفعه.
-  Future<Response> payById(int id) => apiClient.postData('$_base/$id/pay', {});
+  /// **وهذا بابٌ ثانٍ إلى المال نفسِه — فيحمل الرمزَ معه.**
+  /// (حاجزٌ على بابٍ واحدٍ من بابين ليس حاجزاً.)
+  Future<Response> payById(int id, {required String pin}) =>
+      apiClient.postData('$_base/$id/pay', {'pin': pin});
 
   Future<Response> decline(int id, {String? reason}) =>
       apiClient.postData('$_base/$id/decline', {

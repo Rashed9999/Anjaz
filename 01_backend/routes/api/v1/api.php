@@ -64,12 +64,23 @@ Route::middleware(['throttle:100,1'])->group(function () {
                 Route::put('update-fcm-token', [CustomerAuthController::class, 'updateFcmToken']);
                 Route::post('logout', [CustomerAuthController::class, 'logout']);
 
-                Route::post('send-money', [TransactionController::class, 'sendMoney'])->middleware('amial.zone:send_money');
-                Route::post('cash-out', [TransactionController::class, 'cashOut'])->middleware('amial.zone:cash_out');
-                Route::post('request-money', [TransactionController::class, 'requestMoney'])->middleware('amial.zone:request_money');
-                Route::post('request-money/{slug}', [TransactionController::class, 'requestMoneyStatus']);
-                Route::post('add-money', [TransactionController::class, 'addMoney'])->middleware('amial.zone:add_money');
-                Route::post('withdraw', [TransactionController::class, 'withdraw'])->middleware('amial.zone:withdraw');
+                // AMIAL-PILOT-IDEM-001 — **مفتاحُ التفرّد على كلّ ما يُحرّك مالاً.**
+                //
+                // قِيس لا افتُرض: أُرسل الطلبُ نفسُه مرّتين بمفتاحٍ واحدٍ إلى
+                // `customer/send-money` فوصل المستلِمَ **٢٠٠٠ والمبلغُ ١٠٠٠**،
+                // وسُجّلت أربعُ حركاتٍ بدل اثنتين، وردّ الخادمُ `200 success`
+                // في المرّتين. فانقطاعُ شبكةٍ بعد وصول الطلب وقبل وصول الردّ
+                // يُضاعف التحويل، والمرسِلُ لا يعلم.
+                //
+                // وكان الوسيطُ مبنيّاً ومستعملاً في مسارات `amial/*` وحدها،
+                // **وهذه المسارات — وهي التي يناديها التطبيق يوميّاً — بلا
+                // حماية.** (مبنيٌّ ولا يُوصَل إليه، في صورته المالية.)
+                Route::post('send-money', [TransactionController::class, 'sendMoney'])->middleware(['amial.zone:send_money', 'amial.idempotency']);
+                Route::post('cash-out', [TransactionController::class, 'cashOut'])->middleware(['amial.zone:cash_out', 'amial.idempotency']);
+                Route::post('request-money', [TransactionController::class, 'requestMoney'])->middleware(['amial.zone:request_money', 'amial.idempotency']);
+                Route::post('request-money/{slug}', [TransactionController::class, 'requestMoneyStatus'])->middleware('amial.idempotency');
+                Route::post('add-money', [TransactionController::class, 'addMoney'])->middleware(['amial.zone:add_money', 'amial.idempotency']);
+                Route::post('withdraw', [TransactionController::class, 'withdraw'])->middleware(['amial.zone:withdraw', 'amial.idempotency']);
                 Route::get('transaction-history', [TransactionController::class, 'transactionHistory']);
                 Route::get('transaction/download-pdf', [TransactionController::class, 'downloadTransaction']);
 
@@ -125,10 +136,10 @@ Route::middleware(['throttle:100,1'])->group(function () {
                 Route::delete('remove-account', [AgentController::class, 'removeAccount']);
 
                 // AMIAL-ZONE-BOUNDARY-001: الوكيل يستلم نقداً هنا (إيداع)
-                Route::post('send-money', [AgentTransactionController::class, 'cashIn'])->middleware(['amial.zone:cash_in', 'amial.agent-location']);
-                Route::post('request-money', [AgentTransactionController::class, 'requestMoney'])->middleware('amial.zone:request_money');
-                Route::post('add-money', [AgentTransactionController::class, 'addMoney'])->middleware(['amial.zone:add_money', 'amial.agent-location']);
-                Route::post('withdraw', [AgentTransactionController::class, 'withdraw'])->middleware(['amial.zone:withdraw', 'amial.agent-location']);
+                Route::post('send-money', [AgentTransactionController::class, 'cashIn'])->middleware(['amial.zone:cash_in', 'amial.agent-location', 'amial.idempotency']);
+                Route::post('request-money', [AgentTransactionController::class, 'requestMoney'])->middleware(['amial.zone:request_money', 'amial.idempotency']);
+                Route::post('add-money', [AgentTransactionController::class, 'addMoney'])->middleware(['amial.zone:add_money', 'amial.agent-location', 'amial.idempotency']);
+                Route::post('withdraw', [AgentTransactionController::class, 'withdraw'])->middleware(['amial.zone:withdraw', 'amial.agent-location', 'amial.idempotency']);
                 Route::get('transaction-history', [AgentTransactionController::class, 'transactionHistory']);
                 Route::get('transaction/download-pdf', [AgentTransactionController::class, 'downloadTransaction']);
 
