@@ -214,6 +214,8 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
             ->where('id', '[0-9]+')->name('statement');
         Route::get('/reconciliation', [$lc, 'reconciliation'])->name('reconciliation');
         Route::get('/entries', [$lc, 'entries'])->name('entries');
+        // AMIAL-RECON-NIGHTLY-001: تاريخُ المصالحات — القاعدة ١٢.
+        Route::get('/reconciliation-runs', [$lc, 'reconciliationRuns'])->name('reconciliation-runs');
     });
 
 // ============ AMIAL-SETTLEMENT-PANEL-001 — تسويات الشركاء ============
