@@ -1,9 +1,9 @@
-# AMYAL PAY — Branding Assets
+# AMIAL PAY — Branding Assets
 
 ## الألوان الرسمية (مأخوذة من الشعار مباشرة)
 
 ```dart
-class AmyalColors {
+class AmialColors {
   static const Color primary = Color(0xFF053391);   // أزرق ملكي عميق
   static const Color yellow = Color(0xFFFECA1E);    // ذهبي ساطع
   static const Color red = Color(0xFFDC0A0B);       // أحمر للتحذير
@@ -118,7 +118,7 @@ flutter pub run flutter_native_splash:create
 
 ```xml
 <application
-    android:label="Amyal Pay"
+    android:label="Amial Pay"
     android:icon="@mipmap/ic_launcher"
     android:roundIcon="@mipmap/ic_launcher_round"
     ...>
@@ -149,7 +149,7 @@ flutter pub run flutter_native_splash:create
 
 ### الأيقونة الصغيرة (48×48 mdpi)
 
-النص "أميال" + "AMYAL PAY" + "دفع سريع وآمن" مكدّس عمودياً → في 48×48 يبدو مزدحماً. على شاشات mdpi (نادرة الآن، معظم الأجهزة hdpi+)، النص يصبح غير قابل للقراءة. لكن:
+النص "أميال" + "AMIAL PAY" + "دفع سريع وآمن" مكدّس عمودياً → في 48×48 يبدو مزدحماً. على شاشات mdpi (نادرة الآن، معظم الأجهزة hdpi+)، النص يصبح غير قابل للقراءة. لكن:
 - معظم الأجهزة الحديثة hdpi+ (72px+) → النص واضح
 - الـ Adaptive Icon (Android 8+) يعرض الـ foreground في 67% من المساحة → الأيقونة الكبيرة الكاملة تظهر
 - Adaptive Icon هو الذي يُعرض في معظم launchers الحديثة

@@ -112,7 +112,7 @@ php artisan config:clear
 | صيدلية (Merchant Pro) | تاجر | AM-PHAR-003 / 777200003 / Pass@2026 |
 | محطة وقود (Enterprise) | تاجر | AM-FUEL-004 / 777200004 / Pass@2026 |
 | جملة (Merchant Pro) | تاجر | AM-WHOL-005 / 777200005 / Pass@2026 |
-| **أدمن** | أدمن | admin@amyalpay.com / Pass@2026 |
+| **أدمن** | أدمن | admin@amial.pay / Pass@2026 |
 | **وكيل** | وكيل | AG-001 / 777900001 / Pass@2026 — OTP: 123456 |
 
 كل الحسابات رمز PIN المعاملات فيها **1237**.

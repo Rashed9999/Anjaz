@@ -118,17 +118,62 @@ class BrandIdentityGuardTest extends TestCase
      *
      * **ولا «amyal» بالياء في الشيفرة.**
      *
-     * ويُستثنى معرّفُ التطبيق `com.amyalpay` وحده — تغييرُه يجعل جوجل
-     * بلاي تراه تطبيقاً آخر فلا تُحدَّث النسخُ المثبَّتة، **وهو قرارُ
-     * صاحب المشروع لا قرارُ شيفرة**. والاستثناءُ مكتوبٌ هنا لا متروكٌ
-     * صمتاً.
+     * ══════════════════════════════════════════════════════════════════
+     * **وهذا الحارسُ كان يدّعي أكثرَ ممّا يفحص — وهو ما حذّرت منه القاعدة
+     * الثانية بعينها.**
+     *
+     * كان يمسح `app` و`resources` و`routes` و`config` و`lib` وحدها،
+     * وامتداداتِ php/dart/js/css/md وحدها. **فجذرُ المستودع خارجَه،
+     * وYAML وShell وENV خارجَه.** ويمرّ باسمه الواسع بينما ٢٧ ملفّاً
+     * متتبَّعاً تحمل الكلمةَ بالياء.
+     *
+     * وثمنُه لم يكن إملائيّاً: `demo.sh` كان يطبع `admin@amyal.pay`
+     * **وبريدُ الأدمن في البذور `admin@amial.pay`** — بيانُ دخولٍ خاطئٌ
+     * يُعطى لمن يشغّل العرض التجريبيّ، ولا خطأ في أيّ سجلّ.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **والاستثناءاتُ الثلاثة مكتوبةٌ بسببها، لا متروكةٌ صمتاً:**
+     *
+     *   `com.amyalpay`  — معرّفُ التطبيق. تغييرُه يجعل جوجل بلاي تراه
+     *                     تطبيقاً آخر فلا تُحدَّث النسخُ المثبَّتة.
+     *   `amyal-pay`     — اسمُ مشروع Firebase. موردٌ حقيقيٌّ في حسابٍ
+     *                     خارجيّ، لا يتغيّر إلّا بإنشاء مشروعٍ جديد.
+     *   `amyal_webhook` — رمزُ تحقّق ويبهوك واتساب. **قيمةٌ مطابقةٌ لما
+     *                     في لوحة Meta**، وتغييرُها هنا يكسر الويبهوك.
+     *
+     * وثلاثتُها موردٌ خارجيّ لا إملاءٌ في شيفرة — والفرقُ بينهما هو ما
+     * كلّف هذا المشروع جولةً كاملة حين غيّرت إعادةُ تسميةٍ آليّة
+     * `projectId` إلى مشروعٍ لا وجود له.
      */
     public function no_amyal_spelling_remains_in_the_code(): void
     {
         $roots = [
             base_path('app'), base_path('resources'), base_path('routes'), base_path('config'),
+            base_path('database'), base_path('scripts'), base_path('assets'),
+            base_path('public/assets'),
             base_path('../02_flutter_app/lib'),
+            base_path('../02_flutter_app/android/app/src'),
+
+            // **وجذرُ المستودع نفسُه** — وفيه `codemagic.yaml` الذي يبني
+            // التطبيق، وكان خارج كلّ مسحٍ سابق.
+            base_path('..'),
         ];
+
+        // ملفّاتٌ تُقرأ أو تُشغَّل — لا صورٌ ولا حزم.
+        $exts = ['php', 'dart', 'js', 'css', 'md', 'yaml', 'yml', 'sh',
+                 'xml', 'json', 'kts', 'gradle', 'env', 'example', 'demo'];
+
+        // **وما لا يُمسح يُقال لماذا:**
+        //   `docs/` و`CHANGELOG` — سجلٌّ تاريخيٌّ يصف ما كان. تغييرُه
+        //     يُزوّر التاريخ، والاسمُ القديم فيه صحيحٌ في موضعه.
+        //   `vendor` و`node_modules` و`build` — ليست شيفرتَنا.
+        //   وهذا الملفُّ نفسُه — يذكر الكلمةَ في استثناءاته، فلو مسح
+        //     نفسَه لسقط أبداً. (حارسٌ يقتل نفسَه لا يحرس.)
+        //   `*_NOTES.md` — ملاحظاتُ جولاتٍ سابقة، تقتبس عناوينَ وثائقَ
+        //     كُتبت بالاسم القديم. وتغييرُ اقتباسٍ يُحرّفه.
+        $skip = ['/vendor/', '/node_modules/', '/.git/', '/build/', '/storage/',
+                 '/docs/', '/dist/', '/.dart_tool/', '/ios/Pods/',
+                 'CHANGELOG', 'CHANGES_', '_NOTES.md', 'BrandIdentityGuardTest.php'];
 
         $hits = [];
 
@@ -137,32 +182,84 @@ class BrandIdentityGuardTest extends TestCase
                 continue;
             }
 
-            $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root));
+            // **تُقلَّم المجلّداتُ أثناء النزول لا بعده.** فبلا تقليمٍ ينزل
+            // الماسحُ إلى `vendor` و`build` كاملَين ثمّ يرمي نتائجَهما —
+            // ثلاثون ثانيةً في كلّ فحص، وحارسٌ بطيءٌ يُعطَّل.
+            $prune = static function (\SplFileInfo $f) use ($skip): bool {
+                if (!$f->isDir()) {
+                    return true;
+                }
+
+                foreach ($skip as $s) {
+                    if (str_contains($f->getPathname(), rtrim($s, '/'))) {
+                        return false;
+                    }
+                }
+
+                return true;
+            };
+
+            $it = new \RecursiveIteratorIterator(
+                new \RecursiveCallbackFilterIterator(
+                    new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS),
+                    $prune,
+                ),
+                \RecursiveIteratorIterator::SELF_FIRST,
+            );
 
             foreach ($it as $f) {
                 if (!$f->isFile()) {
                     continue;
                 }
 
-                if (!in_array($f->getExtension(), ['php', 'dart', 'js', 'css', 'md'], true)) {
+                $path = $f->getPathname();
+
+                foreach ($skip as $s) {
+                    if (str_contains($path, $s)) {
+                        continue 2;
+                    }
+                }
+
+                // الامتدادُ أو اسمٌ بلا امتدادٍ يبدأ بنقطة (`.env.example`).
+                if (!in_array($f->getExtension(), $exts, true)) {
                     continue;
                 }
 
-                $src = file_get_contents($f->getPathname());
+                $src = file_get_contents($path);
 
-                // **اسمُ مشروع Firebase مستثنىً** — `amyal-pay` موردٌ
-                // حقيقيٌّ في حسابٍ خارجيّ، لا إملاءٌ في شيفرة. ولا يتغيّر
-                // إلّا بإنشاء مشروعٍ جديدٍ هناك.
-                $src = str_replace(['amyal-pay', 'com.amyalpay'], '', $src);
+                // **ثلاثةُ مواردَ خارجيّةٍ تُستثنى** — مذكورةٌ بأسبابها في
+                // توثيق هذه الدالّة أعلاه. وهي أسماءُ أشياءَ حقيقيّةٍ في
+                // حساباتٍ خارجيّة، لا إملاءٌ في شيفرة.
+                //
+                // **ورابعٌ مؤقّت:** `amyal-android-release` معرّفُ سير
+                // العمل في `codemagic.yaml`. وقد يكون مربوطاً في لوحة
+                // Codemagic عند صاحب المشروع، فتغييرُه من هنا قد يقطع
+                // بناءَه. **يُستثنى بعلمه لا صمتاً**، ويُرفع الاستثناءُ
+                // متى أكّد أنّ لا ربطَ يعتمد عليه.
+                $src = str_replace(
+                    ['amyal-pay', 'com.amyalpay', 'amyal_webhook', 'amyal-android-release'],
+                    '',
+                    $src,
+                );
 
                 if (stripos($src, 'amyal') !== false) {
-                    $hits[] = str_replace(base_path('..') . '/', '', $f->getPathname());
+                    // المساراتُ تُوحَّد ثمّ تُنزَع تكراراتُها: الجذورُ
+                    // متداخلة (`scripts` داخل `..`)، فالملفُّ الواحد
+                    // يُمسح مرّتين ويُذكر مرّتين في تقريرٍ يُقرأ.
+                    $hits[(string) realpath($path)] =
+                        str_replace(base_path('..') . '/', '', (string) realpath($path));
                 }
             }
         }
 
-        $this->assertSame([], $hits,
-            'بقيت «amyal» بالياء في: ' . implode(' · ', array_slice($hits, 0, 8)));
+        $hits = array_values($hits);
+        sort($hits);
+
+        $this->assertSame([], $hits, sprintf(
+            "بقيت «amyal» بالياء في %d ملفّاً:\n  %s",
+            count($hits),
+            implode("\n  ", array_slice($hits, 0, 12)),
+        ));
     }
 
     /**

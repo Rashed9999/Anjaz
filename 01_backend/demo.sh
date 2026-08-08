@@ -96,7 +96,7 @@ start)
     echo -e "${GREEN}║  API URL (هاتف):   http://${LOCAL_IP}:8000            ║${NC}"
     echo -e "${GREEN}╠══════════════════════════════════════════════════════╣${NC}"
     echo -e "${GREEN}║  حسابات الديمو:                                      ║${NC}"
-    echo -e "${GREEN}║    أدمن:    admin@amyal.pay / Admin@2026              ║${NC}"
+    echo -e "${GREEN}║    أدمن:    admin@amial.pay / Admin@2026              ║${NC}"
     echo -e "${GREEN}║    عميل 1:  777100001 / PIN: 1234                    ║${NC}"
     echo -e "${GREEN}║    عميل 2:  777100002 / PIN: 1234                    ║${NC}"
     echo -e "${GREEN}║    تاجر:    777200001 / PIN: 1234                    ║${NC}"
