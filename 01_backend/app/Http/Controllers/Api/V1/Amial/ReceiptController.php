@@ -54,6 +54,81 @@ class ReceiptController extends Controller
         ]);
     }
 
+    /**
+     * AMIAL-RECIPIENTS-001 — **المستلمون يُشتقّون من السجلّ، لا يُخزَّنون في الهاتف.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمن الذي دُفع:**
+     *
+     * كانت قائمة «تحويل سريع» تُقرأ من `SharedPreferences` وحدها. فمن
+     * أعاد تثبيت التطبيق — أو بدّل هاتفه — **بدأ من الصفر**: «لا مستلمين
+     * بعد» وهو يحوّل منذ شهور.
+     *
+     * ولا خطأ في أيّ سجلّ: القائمةُ فارغةٌ فتُعرض بطاقةُ الدعوة، وكأنّه
+     * مستعملٌ جديد.
+     *
+     * **والبياناتُ موجودةٌ أصلاً**: كلُّ تحويلٍ له إيصالٌ بـ
+     * `counterparty_user_id`. فاشتقاقُها من المصدر يُغني عن جدولٍ جديد
+     * **ويصحّح نفسه** — من حوّل أمس يظهر، ومن لم يعد يُحوَّل له ينزل.
+     * (القاعدة السادسة: الرقم يُحسب من مصدره لا من عمودٍ مخزَّن.)
+     *
+     * **ولا يُخلط بالمفضّلة**: تلك يختارها المستعمل بنفسه ولها جدولُها.
+     * وهذه تاريخُه — تُقترح ولا تُدار.
+     */
+    public function recentRecipients(Request $request): JsonResponse
+    {
+        $me = $request->user();
+
+        $rows = Receipt::query()
+            ->where('user_id', $me->id)
+            // **`debit` لا `out`.** العمودُ enum('debit','credit') — وكتبتُها
+            // `out` أوّلَ مرّة فكانت النقطةُ تردّ قائمةً فارغةً **أبداً**،
+            // بلا خطأٍ في أيّ سجلّ. أمسكها حارسٌ يقيس السلوك لا الوجود.
+            ->where('direction', 'debit')
+            ->whereNotNull('counterparty_user_id')
+            ->where('counterparty_user_id', '!=', $me->id)
+            // **`voided` لا `cancelled`.** والقيمةُ الخاطئة لا تُنتج خطأً:
+            // الشرطُ يمرّ على كلّ صفّ، فيظهر في القائمة من أُلغي تحويلُه.
+            ->where('status', '!=', 'voided')
+            // آخرُ تحويلٍ لكلّ طرف، وعددُ مرّاته — فالترتيبُ بالقرب لا
+            // بالكثرة وحدها: من حوّلتَ له أمس أقربُ ممّن حوّلتَ له عشراً
+            // قبل سنة.
+            ->selectRaw('counterparty_user_id, MAX(issued_at) as last_at, COUNT(*) as times')
+            ->groupBy('counterparty_user_id')
+            ->orderByDesc('last_at')
+            ->limit(12)
+            ->get();
+
+        $users = \App\Models\User::whereIn('id', $rows->pluck('counterparty_user_id'))
+            ->get(['id', 'f_name', 'l_name', 'phone', 'image'])
+            ->keyBy('id');
+
+        $items = $rows->map(function ($r) use ($users) {
+            $u = $users->get($r->counterparty_user_id);
+
+            if (! $u) {
+                return null;   // حسابٌ حُذف — لا يُقترح طرفٌ لا وجود له
+            }
+
+            return [
+                'user_id' => $u->id,
+                'name' => trim(($u->f_name ?? '') . ' ' . ($u->l_name ?? '')),
+                'phone' => $u->phone,
+                'image' => $u->image,
+                'last_at' => $r->last_at,
+                'times' => (int) $r->times,
+            ];
+        })->filter()->values();
+
+        return new JsonResponse([
+            'success' => true,
+            'code' => 'OK',
+            'message' => '',
+            'errors' => (object) [],
+            'meta' => ['items' => $items, 'total' => $items->count()],
+        ]);
+    }
+
     public function show(Request $request, int $id): JsonResponse
     {
         $receipt = Receipt::where('id', $id)

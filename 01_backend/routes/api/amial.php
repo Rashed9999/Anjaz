@@ -362,6 +362,13 @@ Route::middleware(['auth:api'])->group(function () {
 
     Route::prefix('receipts')->name('amial.receipts.')->group(function () {
         Route::get('/', [ReceiptController::class, 'index'])->name('index');
+
+        // AMIAL-RECIPIENTS-001 — مستلمو «تحويل سريع» مشتقّين من السجلّ.
+        // **قبل `/{id}`** — وإلّا ابتلعه القيد الرقميّ… لا، بل يمرّ لأنّ
+        // `{id}` مقيّدٌ بـ[0-9]+، لكنّ الترتيب يبقى الأوضح للقارئ.
+        Route::get('/recent-recipients', [ReceiptController::class, 'recentRecipients'])
+            ->name('recent-recipients');
+
         Route::get('/{id}', [ReceiptController::class, 'show'])
             ->where('id', '[0-9]+')->name('show');
         Route::get('/{id}/download', [ReceiptController::class, 'download'])

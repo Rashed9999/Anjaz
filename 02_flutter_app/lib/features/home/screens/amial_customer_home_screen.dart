@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
+import 'package:amial_pay/common/models/contact_model.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/home/widgets/set_governorate_sheet.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
@@ -47,6 +48,18 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   bool _hideBalance = false;
   bool _loading = true;
   List<Map<String, dynamic>> _recent = [];
+
+  /// AMIAL-RECIPIENTS-001 — **المستلمون من الخادم لا من الهاتف.**
+  ///
+  /// ══════════════════════════════════════════════════════════════════
+  /// كانت القائمة تُقرأ من `SharedPreferences` وحدها. فمن أعاد تثبيت
+  /// التطبيق — أو بدّل هاتفه — **بدأ من الصفر**: «لا مستلمين بعد» وهو
+  /// يحوّل منذ شهور. ولا خطأ في أيّ سجلّ: القائمةُ فارغةٌ فتُعرض بطاقةُ
+  /// الدعوة، وكأنّه مستعملٌ جديد.
+  ///
+  /// والبياناتُ موجودةٌ أصلاً في كلّ إيصال — فتُشتقّ من مصدرها.
+  /// (القاعدة السادسة.)
+  List<Map<String, dynamic>> _serverRecipients = [];
 
   // AMIAL-COVERAGE-001: تغطية الخدمة في محافظة المستخدم.
   // رسالة صادقة مشتقّة من وجود وكلاء وتجار فعليين، لا علَم سياسة: العميل
@@ -155,6 +168,21 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
     }
 
     try {
+      final rr = await Get.find<ApiClient>()
+          .getData('/api/v1/amial/receipts/recent-recipients');
+      final m = (rr.body is Map) ? (rr.body as Map)['meta'] : null;
+      final items = (m is Map) ? m['items'] : null;
+      if (items is List) {
+        _serverRecipients = items
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    } catch (_) {
+      // **والفشلُ يترك المحلّيَّ يعمل** — لا شاشةَ فارغةٍ على شبكةٍ منقطعة.
+    }
+
+    try {
       // «الإيصالات» = السجلّ الموحّد لكل النشاط (تحويلات + خدمات أميال)
       final api = Get.find<ApiClient>();
       final r = await api.getData('/api/v1/amial/receipts');
@@ -229,12 +257,22 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                   const SizedBox(height: 22),
                   _quickSendSection(),
                   const SizedBox(height: 22),
-                  _recentSection(),
-                  const SizedBox(height: 22),
+
+                  // AMIAL-HOME-006 — **الخدماتُ قبل السجلّ.**
+                  //
+                  // الشاشةُ الرئيسيّة تُفتح لِيُفعَل شيء، لا لِيُقرأ ما
+                  // مضى. وكان السجلُّ يسبق الخدمات، فيُمرَّر ستّةُ صفوفٍ
+                  // من عمليّاتٍ منتهية قبل بلوغ أوّل زرٍّ يعمل.
+                  //
+                  // و«آخرُ العمليّات» له بابُه في الشريط السفليّ («السجل»)
+                  // — فوجودُه هنا تذكيرٌ لا وجهة. أمّا الخدماتُ فلا باب
+                  // لها غير هذه الشاشة.
                   _sectionHeader('خدمات أميال',
                       trailing: '', onTrailing: null),
                   const SizedBox(height: 12),
                   _servicesGrid(),
+                  const SizedBox(height: 22),
+                  _recentSection(),
                 ],
               ),
             ),
@@ -626,10 +664,25 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
             onTrailing: () => Get.to(() => const AmialSendMoneyScreen())),
         const SizedBox(height: 12),
         GetBuilder<ContactController>(builder: (c) {
+          // **الخادمُ أوّلاً، والمحلّيُّ احتياطاً.**
+          //
+          // فالخادمُ يعرف تحويلاتِك كلَّها وينجو من إعادة التثبيت. أمّا
+          // المحلّيُّ فيغطّي الفتحةَ الأولى قبل وصول الردّ، والشبكةَ
+          // المنقطعة — فلا تُعرض «لا مستلمين» لمن له مستلمون.
           List recent = const [];
-          try {
-            recent = c.sendMoneySuggestList;
-          } catch (_) {}
+
+          if (_serverRecipients.isNotEmpty) {
+            recent = _serverRecipients
+                .map((m) => ContactModel(
+                      name: (m['name'] ?? '').toString(),
+                      phoneNumber: (m['phone'] ?? '').toString(),
+                    ))
+                .toList();
+          } else {
+            try {
+              recent = c.sendMoneySuggestList;
+            } catch (_) {}
+          }
           // AMIAL-HOME-005: عند غياب المستلمين كان يظهر زرّ «+» وحيد في صفّ
           // بعرض الشاشة، فيبدو القسم عاطلاً. الآن بطاقة دعوة كاملة العرض.
           if (recent.isEmpty) return _quickSendEmpty();
