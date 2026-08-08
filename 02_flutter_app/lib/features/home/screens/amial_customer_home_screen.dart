@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/home/widgets/set_governorate_sheet.dart';
@@ -53,7 +54,31 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   // يتوقّف هو السحب والدفع لانعدام الوكيل والتاجر. قول ذلك صراحةً أصدق من
   // خطأ غامض عند الضغط، ويصحّح نفسه يوم يُعتمد وكيل هناك.
   String? _coverageNotice;
+
+  /// AMIAL-COVERAGE-004 — **سطرٌ واحد، وتفصيلٌ عند الطلب، وإغلاقٌ يُحترم.**
+  ///
+  /// ══════════════════════════════════════════════════════════════════
+  /// **العطل الذي وُلد منه هذا:**
+  ///
+  /// كانت اللافتة تعرض النصَّ الكامل — ثلاثةَ أسطرٍ تأكل ثلثَ الشاشة
+  /// **في كلّ فتحة، إلى الأبد**، فوق الرصيد وقبل كلّ شيء. وصاحبُ
+  /// المشروع وصفها: «مزعجة جدّاً… انظر كيف وصلت».
+  ///
+  /// **والخبرُ ثابت**: محافظةٌ بلا وكلاء اليوم هي بلا وكلاء غداً. فإعادةُ
+  /// إخباره كلَّ صباحٍ ليست معلومةً — هي إزعاج. ومن يعتاد تجاوزَ لافتةٍ
+  /// يتجاوز التي بعدها، ولو كانت تحذيرَ احتيال.
+  String? _coverageShort;
   bool _coverageIsGap = false;
+  bool _coverageExpanded = false;
+
+  /// **والإغلاقُ يُحفظ بحالته لا بيومه.**
+  ///
+  /// فلو حُفظ «أُغلقت» وحدها لما عادت أبداً — ويوم يُعتمد وكيلٌ في
+  /// المحافظة لا يعلم به أحد. والمفتاحُ يحمل المحافظةَ وحالةَ التغطية،
+  /// فيعود الإشعارُ من نفسه متى تغيّر أحدُهما. (القاعدة السابعة: «أُغلق»
+  /// ليس «لم يعد صحيحاً».)
+  String _coverageKey = '';
+  bool _coverageDismissed = false;
   /// AMIAL-COVERAGE-002: الحساب بلا محافظة — اللافتة تصير زرّاً لا نصّاً.
   bool _needsGovernorate = false;
 
@@ -100,9 +125,17 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         _needsGovernorate = d['needs_governorate'] == true;
         _coverageIsGap = agents == 0 && merchants == 0;
         // لا نُزعج من تغطيته كاملة — الرسالة تظهر عند النقص فقط.
-        _coverageNotice = (_needsGovernorate || agents == 0 || merchants == 0)
-            ? (d['notice'] as String?)
+        final show = _needsGovernorate || agents == 0 || merchants == 0;
+        _coverageNotice = show ? (d['notice'] as String?) : null;
+
+        // **والقصيرُ يرتدّ إلى الطويل** إن كان الخادمُ نسخةً أقدم لا
+        // ترسله — فلافتةٌ فارغةٌ أسوأ من لافتةٍ طويلة.
+        _coverageShort = show
+            ? ((d['notice_short'] as String?) ?? _coverageNotice)
             : null;
+
+        _coverageKey = 'cov:${d['governorate_code'] ?? '?'}:$agents:$merchants';
+        _coverageDismissed = Get.find<SharedPreferences>().getString('coverage_dismissed') == _coverageKey;
       }
     } catch (_) {/* التغطية تحسينية — لا توقف الصفحة */}
 
@@ -185,7 +218,11 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _walletHero(),
-                  if (_coverageNotice != null) ...[
+                  // **واللافتةُ لا تُعرض لمن أغلقها** — إلّا إن تغيّرت
+                  // حالةُ التغطية، فيعود المفتاحُ مختلفاً وتعود معه.
+                  // ونقصُ المحافظة يُستثنى: تلك لافتةٌ لها فعلٌ ينتظره.
+                  if (_coverageNotice != null &&
+                      (_needsGovernorate || !_coverageDismissed)) ...[
                     const SizedBox(height: 14),
                     _coverageBanner(),
                   ],
@@ -213,6 +250,22 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
   // نبرة الرسالة مقصودة: «لا يوجد وكلاء قريبون» لا «ممنوع في منطقتك».
   // الأولى حقيقة يفهمها العميل ويتصرّف بناءً عليها، والثانية تُشعره بأنه
   // مطرود من خدمة يملك فيها رصيداً — وهو غير ممنوع أصلاً: يستقبل ويحوّل.
+  /// **الإغلاقُ يُكتب بحالته، فيعود متى تغيّرت.**
+  ///
+  /// ولا يُخفى الإغلاقُ صامتاً: يُقال للمستعمل أنّ الخبر يبقى في «حسابي»،
+  /// فمن أغلق بالخطأ لا يفقد المعلومةَ إلى الأبد. (نصيحةٌ بلا طريقٍ ليست
+  /// نصيحة — وإخفاءٌ بلا طريقِ رجوعٍ ليس إخفاءً، هو حذف.)
+  Future<void> _dismissCoverage() async {
+    setState(() => _coverageDismissed = true);
+
+    try {
+      await Get.find<SharedPreferences>()
+          .setString('coverage_dismissed', _coverageKey);
+    } catch (_) {
+      // الحفظُ تحسين: من تعذّر حفظُه يراها في الفتحة القادمة، ولا ينكسر شيء.
+    }
+  }
+
   Widget _coverageBanner() {
     final color = _coverageIsGap
         ? const Color(0xFFCFA300)
@@ -226,23 +279,55 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
         border: Border.all(color: color.withValues(alpha: 0.45)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
           Icon(
               _needsGovernorate
                   ? Icons.place_outlined
                   : _coverageIsGap
                       ? Icons.storefront_outlined
                       : Icons.info_outline,
-              size: 20,
+              size: 18,
               color: color),
           const SizedBox(width: 10),
+
+          // **السطرُ الواحد يُضغط فيتوسّع.** فالتفصيلُ متاحٌ لمن أراده،
+          // ولا يُفرَض على من قرأه أمس. (وكلُّ ما يُعرض يعمل.)
           Expanded(
-            child: Text(
-              _coverageNotice!,
-              style: const TextStyle(
-                  fontSize: 12.5, height: 1.7, color: Color(0xFF1A2433)),
+            child: InkWell(
+              onTap: () => setState(() => _coverageExpanded = !_coverageExpanded),
+              child: Row(children: [
+                Expanded(
+                  child: Text(
+                    _coverageExpanded
+                        ? _coverageNotice!
+                        : (_coverageShort ?? _coverageNotice!),
+                    maxLines: _coverageExpanded ? null : 1,
+                    overflow: _coverageExpanded
+                        ? TextOverflow.visible
+                        : TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 12.5, height: 1.6, color: Color(0xFF1A2433)),
+                  ),
+                ),
+                Icon(
+                    _coverageExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    size: 18,
+                    color: color),
+              ]),
             ),
           ),
+
+          // **والإغلاقُ حقٌّ لمن قرأ** — إلّا حين تنتظر اللافتةُ فعلاً منه.
+          if (!_needsGovernorate)
+            InkWell(
+              onTap: _dismissCoverage,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 6, left: 2),
+                child: Icon(Icons.close, size: 16, color: color),
+              ),
+            ),
         ]),
 
         // نصيحة بلا طريق ليست نصيحة. الزرّ هو الطريق.

@@ -77,6 +77,7 @@ class ServiceCoverageController extends Controller
                 'can_cash_out' => $agents > 0,
                 'can_pay_merchant' => $merchants > 0,
                 'notice' => $this->notice($name, $agents, $merchants),
+                'notice_short' => $this->noticeShort($name, $agents, $merchants),
                 'needs_governorate' => false,
             ],
         ]);
@@ -159,6 +160,34 @@ class ServiceCoverageController extends Controller
             ->where('is_kyc_verified', 1)
             ->where('residence_governorate', $governorateCode)
             ->count();
+    }
+
+    /**
+     * AMIAL-COVERAGE-004 — **سطرٌ واحد، والتفصيلُ عند الطلب.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * كانت اللافتة تعرض النصَّ الكامل — ثلاثةَ أسطرٍ تأكل ثلثَ الشاشة
+     * الرئيسيّة، **في كلّ فتحة، إلى الأبد**. والخبرُ ثابت: محافظةٌ بلا
+     * وكلاء اليوم هي بلا وكلاء غداً.
+     *
+     * فصار المعروضُ سطراً واحداً، والنصُّ الكامل يظهر بلمسة. **ومصدرُ
+     * النصّين واحدٌ هنا** — لا نسخةٌ في الخادم وأخرى في التطبيق تفترقان.
+     */
+    private function noticeShort(?string $name, int $agents, int $merchants): string
+    {
+        if ($agents > 0 && $merchants > 0) {
+            return "{$agents} وكيل و{$merchants} تاجر في {$name}";
+        }
+
+        if ($agents > 0) {
+            return "{$agents} وكيل في {$name} · لا تجار بعد";
+        }
+
+        if ($merchants > 0) {
+            return "{$merchants} تاجر في {$name} · لا وكلاء بعد";
+        }
+
+        return "لا وكلاء ولا تجار في {$name} بعد";
     }
 
     private function notice(?string $name, int $agents, int $merchants): string
