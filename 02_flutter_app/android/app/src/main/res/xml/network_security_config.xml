@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  AMYAL-BRANDING-001 (+ AMYAL-SECURITY-002 in v0.7-C)
+  AMIAL-BRANDING-001 (+ AMIAL-SECURITY-002 in v0.7-C)
 
   بسبب: usesCleartextTraffic="false" في AndroidManifest.
 

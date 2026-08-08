@@ -1,8 +1,8 @@
-# Amyal Pay — User App (Flutter)
+# Amial Pay — User App (Flutter)
 
 > Branded version of the original 6Cash user app.
 > Version: 0.7.0+70
-> Branch: AMYAL-BRANDING-001
+> Branch: AMIAL-BRANDING-001
 > Flutter SDK: 3.8.1+
 
 ---
@@ -10,12 +10,12 @@
 ## ما تغيّر في v0.7-B
 
 ### Branding
-- ✅ `pubspec.yaml` name: `six_cash` → `amyal_pay`
-- ✅ 1187 import تم تحديثه: `package:six_cash/` → `package:amyal_pay/`
-- ✅ App display name: `6Cash` → `Amyal Pay`
-- ✅ Android `applicationId`: `com.sixamtech.sixcash_user` → `com.amyalpay.app`
-- ✅ iOS `PRODUCT_BUNDLE_IDENTIFIER`: `com.sixamtech.cash` → `com.amyalpay.app`
-- ✅ MainActivity.kt نُقل من `com/u6amtech/efood_multivendor/` (leftover من food delivery app!) إلى `com/amyalpay/app/`
+- ✅ `pubspec.yaml` name: `six_cash` → `amial_pay`
+- ✅ 1187 import تم تحديثه: `package:six_cash/` → `package:amial_pay/`
+- ✅ App display name: `6Cash` → `Amial Pay`
+- ✅ Android `applicationId`: `com.sixamtech.sixcash_user` → `com.amialpay.app`
+- ✅ iOS `PRODUCT_BUNDLE_IDENTIFIER`: `com.sixamtech.cash` → `com.amialpay.app`
+- ✅ MainActivity.kt نُقل من `com/u6amtech/efood_multivendor/` (leftover من food delivery app!) إلى `com/amialpay/app/`
 - ✅ Launcher icons: Android 5 densities × 2 + Adaptive + iOS 15 sizes = 67 ملف
 - ✅ Splash screen يستخدم الشعار + خلفية صفراء `#FECA1E`
 - ✅ Notification icon أبيض شفاف + tint color أزرق
@@ -31,18 +31,18 @@
 
 ### Endpoints الجديدة
 في `lib/util/app_constants.dart` (للجاهزية مع backend v0.7-A):
-- `amyalPolicySession`
-- `amyalLegalStatus`, `amyalLegalCurrent`, `amyalLegalAccept`
-- `amyalRecoveryInitiateSelf`, `amyalRecoveryInitiateLost`, etc.
+- `amialPolicySession`
+- `amialLegalStatus`, `amialLegalCurrent`, `amialLegalAccept`
+- `amialRecoveryInitiateSelf`, `amialRecoveryInitiateLost`, etc.
 
 ### Colors API
-استخدم `AmyalColors` من `lib/theme/amyal_colors.dart`:
+استخدم `AmialColors` من `lib/theme/amial_colors.dart`:
 ```dart
-import 'package:amyal_pay/theme/amyal_colors.dart';
+import 'package:amial_pay/theme/amial_colors.dart';
 
 Container(
-  color: AmyalColors.yellow,
-  child: Text('مرحبا', style: TextStyle(color: AmyalColors.primary)),
+  color: AmialColors.yellow,
+  child: Text('مرحبا', style: TextStyle(color: AmialColors.primary)),
 )
 ```
 
@@ -72,7 +72,7 @@ Container(
 ### بناء سريع (Android Debug)
 
 ```bash
-cd amyal_pay_user_app
+cd amial_pay_user_app
 flutter pub get
 ./generate_native_assets.sh
 flutter build apk --debug
@@ -94,14 +94,14 @@ flutter build apk --release
 ### إعداد keystore حقيقي (مستقبلاً)
 
 ```bash
-keytool -genkey -v -keystore amyal-release.jks \
-  -keyalg RSA -keysize 2048 -validity 10000 -alias amyalpay
+keytool -genkey -v -keystore amial-release.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 -alias amialpay
 
 # ضع المسار في android/key.properties:
 cat > android/key.properties << EOF
-storeFile=../amyal-release.jks
+storeFile=../amial-release.jks
 storePassword=YOUR_PASSWORD
-keyAlias=amyalpay
+keyAlias=amialpay
 keyPassword=YOUR_PASSWORD
 EOF
 
@@ -119,15 +119,15 @@ EOF
 
 في `lib/util/app_constants.dart`:
 ```dart
-static const String baseUrl = 'https://your-amyal-pay-backend.com';
+static const String baseUrl = 'https://your-amial-pay-backend.com';
 ```
 
 ### 2) Firebase project
 
 الـ `main.dart` يستخدم Firebase project قديم (`gem-b5006`).
-لـ Amyal Pay الإنتاجي، أنشئ Firebase project جديد بـ:
-- Package: `com.amyalpay.app` (Android)
-- Bundle ID: `com.amyalpay.app` (iOS)
+لـ Amial Pay الإنتاجي، أنشئ Firebase project جديد بـ:
+- Package: `com.amialpay.app` (Android)
+- Bundle ID: `com.amialpay.app` (iOS)
 
 ثم استبدل القيم في `main.dart` و ضع:
 - `android/app/google-services.json`

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# AMYAL-BRANDING-001
+# AMIAL-BRANDING-001
 # Script: generate_native_assets.sh
 #
 # يولّد:
@@ -13,7 +13,7 @@
 
 set -e
 
-echo "=== Amyal Pay — Native Assets Generator ==="
+echo "=== Amial Pay — Native Assets Generator ==="
 
 # 1) flutter pub get لضمان الـ dependencies الجديدة (flutter_native_splash, flutter_launcher_icons)
 echo "[1/4] flutter pub get..."

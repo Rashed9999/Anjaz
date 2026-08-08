@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Amyal Pay</string>
+	<string>Amial Pay</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>Amyal Pay</string>
+	<string>Amial Pay</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -64,7 +64,7 @@
 	<false/>
 	<key>FirebaseAppDelegateProxyEnabled</key>
     <false/>
-	<!-- AMYAL-SECURITY-002 (v0.7-C): App Transport Security — TLS فقط -->
+	<!-- AMIAL-SECURITY-002 (v0.7-C): App Transport Security — TLS فقط -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

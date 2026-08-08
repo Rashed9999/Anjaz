@@ -11,7 +11,7 @@
   165dp — أي قريب من نسبته في سبلاش Flutter الذي يليه مباشرةً، فلا تقع
   قفزة في الحجم عند الانتقال.
 
-  وهو مسطَّح على @color/amyal_yellow لا شفّاف: في ملفّ الشعار رِمّ فاتح
+  وهو مسطَّح على @color/amial_yellow لا شفّاف: في ملفّ الشعار رِمّ فاتح
   رفيع عند حدّ المستطيل المستدير، يظهر على الخلفية الصفراء كإطار شبحيّ.
   استُبدل الرِمّ بلون الشعار ثم سُطِّح على لون الخلفية نفسه، فلم تبقَ
   حافة تُرى.
@@ -20,7 +20,7 @@
   الخمسة من assets/image/logo.png متى تغيّر الشعار.
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@color/amyal_yellow" />
+    <item android:drawable="@color/amial_yellow" />
     <item>
         <bitmap
             android:gravity="center"

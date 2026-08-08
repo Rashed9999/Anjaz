@@ -150,8 +150,10 @@ class BrandIdentityGuardTest extends TestCase
 
                 $src = file_get_contents($f->getPathname());
 
-                // معرّفُ التطبيق مستثنىً — قرارٌ معلَنٌ لا سهو.
-                $src = str_replace('com.amyalpay', '', $src);
+                // **اسمُ مشروع Firebase مستثنىً** — `amyal-pay` موردٌ
+                // حقيقيٌّ في حسابٍ خارجيّ، لا إملاءٌ في شيفرة. ولا يتغيّر
+                // إلّا بإنشاء مشروعٍ جديدٍ هناك.
+                $src = str_replace(['amyal-pay', 'com.amyalpay'], '', $src);
 
                 if (stripos($src, 'amyal') !== false) {
                     $hits[] = str_replace(base_path('..') . '/', '', $f->getPathname());
@@ -174,6 +176,83 @@ class BrandIdentityGuardTest extends TestCase
 
         $this->assertMatchesRegularExpression('/^name:\s*amial_pay\s*$/m', $pubspec,
             'اسمُ الحزمة ما زال amyal_pay');
+    }
+
+    /**
+     * @test
+     *
+     * **ومعرّفُ التطبيق واحدٌ في كلّ منصّة.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * `applicationId` و`namespace` في Gradle، و`package` في Kotlin،
+     * و`PRODUCT_BUNDLE_IDENTIFIER` في iOS، و`package_name` في
+     * `google-services.json` — **خمسةُ مواضعَ لقيمةٍ واحدة**. واختلافُ
+     * واحدٍ منها لا يُنتج خطأ تصريف: يُنتج تطبيقاً لا تصله إشعارات، أو
+     * بناءً يفشل بعد ستّ دقائق برسالةٍ لا تدلّ على موضعها.
+     */
+    public function the_application_id_is_identical_everywhere(): void
+    {
+        $gradle = file_get_contents($this->appFile('android/app/build.gradle.kts'));
+
+        if (!preg_match('/applicationId\s*=\s*"([^"]+)"/', $gradle, $m)) {
+            $this->fail('لا applicationId في build.gradle.kts');
+        }
+
+        $id = $m[1];
+
+        $this->assertStringStartsWith('com.amialpay', $id, 'معرّفُ التطبيق ما زال بالياء');
+
+        preg_match('/namespace\s*=\s*"([^"]+)"/', $gradle, $ns);
+        $this->assertSame($id, $ns[1] ?? '', 'namespace يخالف applicationId');
+
+        $kt = $this->appFile('android/app/src/main/kotlin/' . str_replace('.', '/', $id) . '/MainActivity.kt');
+        $this->assertFileExists($kt, "مجلّدُ Kotlin لا يطابق المعرّف — متوقَّع {$kt}");
+
+        $this->assertStringContainsString("package {$id}", file_get_contents($kt),
+            'حزمةُ Kotlin تخالف مسارَ مجلّدها');
+
+        $ios = file_get_contents($this->appFile('ios/Runner.xcodeproj/project.pbxproj'));
+        $this->assertStringNotContainsString('com.amyalpay', $ios, 'معرّفُ iOS ما زال بالياء');
+
+        $gs = json_decode(file_get_contents($this->appFile('android/app/google-services.json')), true);
+        $pkg = $gs['client'][0]['client_info']['android_client_info']['package_name'] ?? null;
+
+        $this->assertSame($id, $pkg,
+            'package_name في google-services.json يخالف applicationId — البناءُ يفشل والإشعاراتُ تتوقّف');
+    }
+
+    /**
+     * @test
+     *
+     * **واسمُ مشروع Firebase لا يُمَسّ بإعادة تسمية العلامة.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **وهذا حارسٌ وُلد من خطئي أنا:** أعدتُ التسمية آليّاً فغيّرتُ
+     * `projectId: 'amyal-pay'` إلى `'amial-pay'` في `firebase_options.dart`
+     * — **ومشروعُ Firebase اسمُه `amyal-pay`**. فصار الملفّان متعارضين،
+     * والتطبيقُ يُشير إلى مشروعٍ لا وجود له.
+     *
+     * فاسمُ المشروع ليس إملاءً في شيفرة: هو **اسمُ موردٍ حقيقيّ** في
+     * حسابٍ خارجيّ، ولا يتغيّر إلّا بإنشاء مشروعٍ جديدٍ في Firebase.
+     */
+    public function the_firebase_project_id_matches_the_real_project(): void
+    {
+        $dart = file_get_contents($this->appFile('lib/firebase_options.dart'));
+        $gs = json_decode(file_get_contents($this->appFile('android/app/google-services.json')), true);
+
+        $real = $gs['project_info']['project_id'] ?? null;
+
+        $this->assertNotNull($real, 'لا project_id في google-services.json');
+
+        preg_match("/projectId:\s*'([^']+)'/", $dart, $m);
+
+        $this->assertSame($real, $m[1] ?? '',
+            'projectId في Dart يخالف مشروع Firebase — التطبيقُ يُشير إلى مشروعٍ لا وجود له');
+
+        preg_match("/storageBucket:\s*'([^']+)'/", $dart, $b);
+
+        $this->assertSame($gs['project_info']['storage_bucket'] ?? '', $b[1] ?? '',
+            'storageBucket يخالف google-services.json');
     }
 
     /**

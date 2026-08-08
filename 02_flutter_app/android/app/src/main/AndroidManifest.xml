@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- AMYAL-BRANDING-001: package = com.amyalpay.app (في build.gradle.kts namespace) -->
+    <!-- AMIAL-BRANDING-001: package = com.amialpay.app (في build.gradle.kts namespace) -->
 
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.READ_CONTACTS"/>
@@ -14,7 +14,7 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_PRIVILEGED_PHONE_STATE" />
-    <!-- AMYAL-BRANDING-001: لاستلام إشعارات FCM -->
+    <!-- AMIAL-BRANDING-001: لاستلام إشعارات FCM -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <!-- AMIAL-GEO-ZONE-001: تحديد المحافظة عند التسجيل (اختياري تماماً —
@@ -77,7 +77,7 @@
     </queries>
 
     <application
-        android:label="Amyal Pay"
+        android:label="Amial Pay"
         android:name="${applicationName}"
         android:requestLegacyExternalStorage="true"
         android:extractNativeLibs="true"
@@ -100,10 +100,10 @@
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
 
-            <!-- AMYAL-BRANDING-001: notification channel + icon + color -->
+            <!-- AMIAL-BRANDING-001: notification channel + icon + color -->
             <meta-data
                 android:name="com.google.firebase.messaging.default_notification_channel_id"
-                android:value="amyal_pay_default" />
+                android:value="amial_pay_default" />
             <meta-data
                 android:name="com.google.firebase.messaging.default_notification_icon"
                 android:resource="@drawable/ic_notification" />

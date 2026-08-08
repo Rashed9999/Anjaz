@@ -4,10 +4,10 @@ import 'package:flutter/foundation.dart';
 /// AMIAL-FCM-001 — إعدادات Firebase الخاصّة بأميال باي.
 ///
 /// كانت القيم مكتوبة داخل `main.dart` وتشير إلى مشروع القالب `gem-b5006`
-/// (حزم `com.sixamtech.*`)، وحزمتنا `com.amyalpay.app` غير مسجّلة فيه أصلاً —
+/// (حزم `com.sixamtech.*`)، وحزمتنا `com.amialpay.app` غير مسجّلة فيه أصلاً —
 /// فلم يكن ممكناً وصول أي إشعار مهما فعلنا في الخادم.
 ///
-/// القيم أدناه مأخوذة من `android/app/google-services.json` لمشروع `amial-pay`.
+/// القيم أدناه مأخوذة من `android/app/google-services.json` لمشروع `amyal-pay` (اسمُ مشروع Firebase الحقيقيّ — لا يُغيَّر بإعادة تسمية العلامة).
 /// الملفان يجب أن يبقيا متطابقين؛ إن غيّرت أحدهما غيّر الآخر.
 ///
 /// ليست أسراراً: مفتاح `apiKey` هنا مُضمَّن داخل كل نسخة APK وقابل للاستخراج،
@@ -20,13 +20,13 @@ class AmialFirebaseOptions {
     apiKey: 'AIzaSyCQ6dEoXKoc2ftsSlW9AbcQk9AIBCC3seM',
     appId: '1:800292015506:android:d7aa73a0f29678353c054b',
     messagingSenderId: '800292015506',
-    projectId: 'amial-pay',
-    storageBucket: 'amial-pay.firebasestorage.app',
+    projectId: 'amyal-pay',
+    storageBucket: 'amyal-pay.firebasestorage.app',
   );
 
   /// يعيد الإعدادات المناسبة للمنصّة، أو `null` لمنصّة لم تُسجَّل بعد.
   ///
-  /// iOS غير مسجَّل في مشروع `amial-pay` حتى الآن؛ نعيد `null` كي يستعمل
+  /// iOS غير مسجَّل في مشروع `amyal-pay` حتى الآن؛ نعيد `null` كي يستعمل
   /// `Firebase.initializeApp()` ملف `GoogleService-Info.plist` بدلاً من أن
   /// يقلع بإعدادات أندرويد الخاطئة.
   static FirebaseOptions? forCurrentPlatform() {

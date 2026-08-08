@@ -1,4 +1,4 @@
-package com.amyalpay.app
+package com.amialpay.app
 
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -17,7 +17,7 @@ import io.flutter.plugin.common.MethodChannel
  */
 class MainActivity : FlutterFragmentActivity() {
 
-    private val secureChannel = "amyal_pay/secure_screen"
+    private val secureChannel = "amial_pay/secure_screen"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

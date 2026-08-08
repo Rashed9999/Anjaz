@@ -102,7 +102,7 @@ void main() {
       // بلا هذا يفشل قارئ الإصدار فتُخفي البصمةُ نفسها، فلا يبقى ما يُضغط
       // ويمرّ الاختبار على العدم.
       PackageInfo.setMockInitialValues(
-        appName: 'أميال باي', packageName: 'com.amyalpay.app',
+        appName: 'أميال باي', packageName: 'com.amialpay.app',
         version: '1.97.0', buildNumber: '1970', buildSignature: '',
       );
     });

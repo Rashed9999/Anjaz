@@ -25,7 +25,7 @@ except ImportError:
 SOURCE = 'assets/image/logo.png'
 OUT_DIR = 'android/app/src/main/res/drawable-{}'
 
-# نفس @color/amyal_yellow في colors.xml. أي اختلاف يُظهر حافةً حول الشعار.
+# نفس @color/amial_yellow في colors.xml. أي اختلاف يُظهر حافةً حول الشعار.
 SPLASH_BG = (0xFE, 0xCA, 0x1E)
 
 # أصفر الشعار نفسه — يحلّ محلّ الرِمّ الفاتح.

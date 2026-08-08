@@ -248,6 +248,34 @@ GetX مقابل Riverpod، وغيابُ نمط Repository، وصيغةُ ردّ 
    بديلٍ يعمل** وإلّا أُقفل التسجيل على الجميع.
 2. **ضبط الرسوم** — كلّ عمليات الوكيل مجّانية الآن.
 
+3. **🔴 تسجيل الحزمة الجديدة في Firebase** — `AMIAL-RENAME-002`
+
+   تغيّر معرّف التطبيق: `com.amyalpay.app` ← `com.amialpay.app`.
+
+   **والحزمة المسجّلة في مشروع Firebase (`amyal-pay`) ما زالت القديمة.**
+   فما دام ذلك قائماً:
+
+   - بناء أندرويد يفشل عند مُلحق google-services برسالة
+     `No matching client found for package name 'com.amialpay.app'`
+   - ولو تجاوزته، **لا يصل إشعارٌ واحد**: رمز FCM يُسجَّل تحت
+     `mobilesdk_app_id` المرتبط بالحزمة القديمة، فيرفضه الخادم.
+
+   **الخطوات — بيدك لا بيدي:**
+   1. Firebase Console ← مشروع `amyal-pay` ← Add app ← Android
+   2. اسم الحزمة: `com.amialpay.app`
+   3. نزّل `google-services.json` الجديد
+   4. استبدل به `02_flutter_app/android/app/google-services.json`
+   5. حدّث `apiKey` و`appId` في `lib/firebase_options.dart` من الملفّ الجديد
+
+   **واسم المشروع `amyal-pay` لا يُغيَّر** — هو مورد حقيقيّ في حسابك،
+   لا إملاء في شيفرة. (وحارس `BrandIdentityGuardTest` يمنع تغييره،
+   وقد وُلد من خطأ وقع فيه المساعد: غيّره آليّاً فأشار التطبيق إلى
+   مشروع لا وجود له.)
+
+   **وجوجل بلاي:** الحزمة الجديدة تطبيق جديد هناك. فإن كان القديم
+   منشوراً فالنسخ المثبّتة لن تُحدّث — وهذا مقبول قبل التجربة، ومكلف
+   بعدها.
+
 ### ~~HTTPS~~ ✅ ٥ أغسطس ٢٠٢٦
 
 `https://amialpay.com` — شهادة Let's Encrypt عبر Coolify، تجديدٌ تلقائيّ.

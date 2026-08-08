@@ -20,13 +20,13 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    // AMYAL-BRANDING-001
-    namespace = "com.amyalpay.app"
+    // AMIAL-BRANDING-001
+    namespace = "com.amialpay.app"
     compileSdk = flutter.compileSdkVersion
 
     defaultConfig {
-        applicationId = "com.amyalpay.app"
-        minSdk = 21  // AMYAL-BRANDING-001: ثابت 21 لـ secure storage + adaptive icons
+        applicationId = "com.amialpay.app"
+        minSdk = 21  // AMIAL-BRANDING-001: ثابت 21 لـ secure storage + adaptive icons
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -55,7 +55,7 @@ android {
 
     buildTypes {
         getByName("release") {
-            // AMYAL-BRANDING-001: release موقّع بـ debug keystore حتى يُولّد keystore حقيقي
+            // AMIAL-BRANDING-001: release موقّع بـ debug keystore حتى يُولّد keystore حقيقي
             // (وفق قرار المستخدم: توقيع release ليس أولوية الآن)
             signingConfig = signingConfigs.getByName("debug")
 
@@ -65,8 +65,8 @@ android {
         }
         getByName("debug") {
             // AMIAL-FCM-001: أُزيل applicationIdSuffix = ".debug".
-            // الحزمة المسجّلة في Firebase هي com.amyalpay.app فقط؛ ومع اللاحقة
-            // تصير حزمة نسخة التطوير com.amyalpay.app.debug فيفشل بناء debug
+            // الحزمة المسجّلة في Firebase هي com.amialpay.app فقط؛ ومع اللاحقة
+            // تصير حزمة نسخة التطوير com.amialpay.app.debug فيفشل بناء debug
             // بـ "No matching client found for package name" — ولو نجح لما وصلت
             // إشعارة واحدة أثناء الاختبار.
             versionNameSuffix = "-debug"
