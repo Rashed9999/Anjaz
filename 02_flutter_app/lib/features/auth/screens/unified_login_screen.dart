@@ -18,36 +18,48 @@ import 'package:amial_pay/common/widgets/amial_build_stamp.dart';
 /// AMIAL-UNIFIED-AUTH-002 — شاشة دخول واحدة بقائمة نوع الحساب.
 ///
 /// بدل أربعة تبويبات منفصلة، أصبحت الشاشة نموذجاً واحداً:
-///   • قائمة منسدلة تختار نوع الحساب (عميل / تاجر / نقطة بيع / وكيل / أدمن).
+///   • قائمة منسدلة تختار نوع الحساب (عميل / تاجر / نقطة بيع).
 ///   • الأساس دائماً: المُعرِّف + كلمة المرور — وتظهر حقول إضافية حسب النوع
-///     احتراماً لعقد الخادم (التاجر يحتاج رقم تاجر، نقطة البيع تحتاج رقمها،
-///     الوكيل يدخل برقم الوكيل ثم OTP، الأدمن بالبريد).
+///     احتراماً لعقد الخادم (التاجر يحتاج رقم تاجر، نقطة البيع تحتاج رقمها).
 ///   • صندوق «بيانات تجريبية» أسفل النموذج يُعبّئ الحقول بضغطة حسب النوع.
-enum AccountKind { customer, merchant, pos, agent, admin }
+///
+/// ══════════════════════════════════════════════════════════════════════
+/// **AMIAL-LOGIN-GATES-001 — ولا وكيلَ ولا أدمن هنا.**
+///
+/// كانت القائمة تعرض خمسة أنواع. وقِيس فوجد **صفرُ شاشةٍ للوكيل وصفرُ
+/// شاشةٍ للأدمن في التطبيق كلّه**: من دخل بأيّهما وصل إلى
+/// `WebPortalNoticeScreen` — لافتةٌ تقول «استعمل بوّابة الويب».
+///
+/// **فبابان يُفتحان على لافتة.** ولا يقف الضررُ عند الحيرة: يُدخل الوكيلُ
+/// رقمَه وكلمتَه في شاشةٍ لا تخدمه، ويرى الأدمنُ حقلَ بريدٍ يوحي بأنّ
+/// لوحة الإدارة في جيبه. والتطبيق للعميل والتاجر ونقطة البيع.
+///
+/// **ولم يُحذف شيءٌ من الخادم:** `loginAgentStep1` و`loginAdmin` تبقيان —
+/// بوّابتا الويب (`/agent/login` و`/admin/auth/login`) تستعملانهما.
+/// وإخفاءُ الواجهة ليس حمايةً، والحمايةُ حيث كانت: في الوسائط.
+///
+/// **ويبقى `RoleRouter` يوجّه دورَي agent/admin إلى لافتة الويب** — فجلسةٌ
+/// محفوظةٌ من نسخةٍ أقدم قد تحمل أحدَهما، ومن يُرقّي التطبيق لا يُترك
+/// أمام شاشةٍ بيضاء.
+enum AccountKind { customer, merchant, pos }
 
 extension _KindMeta on AccountKind {
   String get label => switch (this) {
         AccountKind.customer => 'عميل',
         AccountKind.merchant => 'تاجر',
         AccountKind.pos => 'نقطة بيع',
-        AccountKind.agent => 'وكيل',
-        AccountKind.admin => 'أدمن',
       };
 
   IconData get icon => switch (this) {
         AccountKind.customer => Icons.person,
         AccountKind.merchant => Icons.store,
         AccountKind.pos => Icons.point_of_sale,
-        AccountKind.agent => Icons.business_center,
-        AccountKind.admin => Icons.admin_panel_settings_outlined,
       };
 
   Color get color => switch (this) {
         AccountKind.customer => const Color(0xFF053391),
         AccountKind.merchant => const Color(0xFF1B9E4B),
         AccountKind.pos => const Color(0xFF0E7C7B),
-        AccountKind.agent => const Color(0xFFE08A00),
-        AccountKind.admin => const Color(0xFFB3261E),
       };
 
   /// وصف قصير يوضّح لمن هذا النوع.
@@ -55,8 +67,6 @@ extension _KindMeta on AccountKind {
         AccountKind.customer => 'محفظتك الشخصية: تحويل، فواتير، سحب',
         AccountKind.merchant => 'حساب المتجر الرئيسي',
         AccountKind.pos => 'دخول موظّف على نقطة بيع تابعة لتاجر',
-        AccountKind.agent => 'وكيل الإيداع والسحب النقدي',
-        AccountKind.admin => 'لوحة إدارة المنصّة',
       };
 }
 
@@ -76,15 +86,10 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   final _passwordCtrl = TextEditingController();
   final _merchantNumCtrl = TextEditingController();
   final _posNumCtrl = TextEditingController();
-  final _agentNumCtrl = TextEditingController();
-  final _emailCtrl = TextEditingController();
-  final _otpCtrl = TextEditingController();
 
   bool _obscure = true;
-  bool _otpStep = false;
   /// AMIAL-LOGIN-UI-002: بادئة الشبكة المختارة داخل حقل الهاتف.
   String _netPrefix = '77';
-  String _maskedPhone = '';
 
   /// AMIAL-LOGIN-UI-003: هوية آخر مستخدم على هذا الجهاز (اسم + رقم، بلا
   /// بيانات اعتماد) — تُستعمل للتحية وتعبئة الرقم.
@@ -120,17 +125,12 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     _passwordCtrl.dispose();
     _merchantNumCtrl.dispose();
     _posNumCtrl.dispose();
-    _agentNumCtrl.dispose();
-    _emailCtrl.dispose();
-    _otpCtrl.dispose();
     super.dispose();
   }
 
   void _switchKind(AccountKind k) {
     setState(() {
       _kind = k;
-      _otpStep = false;
-      _otpCtrl.clear();
     });
   }
 
@@ -173,27 +173,6 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         );
         break;
 
-      case AccountKind.agent:
-        final masked = await ctrl.loginAgentStep1(
-          agentNumber: _agentNumCtrl.text.trim(),
-          password: _passwordCtrl.text,
-        );
-        if (masked != null && mounted) {
-          setState(() {
-            _otpStep = true;
-            _maskedPhone = masked;
-          });
-          return; // ننتظر إدخال الرمز
-        }
-        ok = false;
-        break;
-
-      case AccountKind.admin:
-        ok = await ctrl.loginAdmin(
-          email: _emailCtrl.text.trim(),
-          password: _passwordCtrl.text,
-        );
-        break;
     }
 
     if (!mounted) return;
@@ -201,9 +180,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       // AMIAL-LOGIN-UI-003: نحفظ الاسم والرقم فقط — لا رمز سري ولا رمز وصول.
       await UnifiedAuthController.rememberLastUser(
         name: ctrl.displayName,
-        phone: _kind == AccountKind.admin
-            ? _emailCtrl.text.trim()
-            : _phoneCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
         kind: _kind.name,
       );
       ctrl.navigateToHomeForRole();
@@ -214,20 +191,6 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     }
   }
 
-  Future<void> _submitOtp() async {
-    if (_otpCtrl.text.trim().length != 6) {
-      _error('الرمز 6 أرقام');
-      return;
-    }
-    final ctrl = Get.find<UnifiedAuthController>();
-    final ok = await ctrl.loginAgentStep2(_otpCtrl.text.trim());
-    if (!mounted) return;
-    if (ok) {
-      ctrl.navigateToHomeForRole();
-    } else {
-      _error(ctrl.lastError.value.isNotEmpty ? ctrl.lastError.value : 'رمز غير صحيح');
-    }
-  }
 
   /// AMIAL-BIO-001: دخول ببصمة الإصبع (للعميل فقط).
   Future<void> _bioLogin() async {
@@ -315,18 +278,6 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             _Demo('📦 جملة', () {
               _merchantNumCtrl.text = 'AM-WHOL-005';
               _phoneCtrl.text = '777200005';
-              _passwordCtrl.text = 'Pass@2026';
-            }),
-          ],
-        AccountKind.agent => [
-            _Demo('وكيل تجريبي', () {
-              _agentNumCtrl.text = 'AG-001';
-              _passwordCtrl.text = 'Pass@2026';
-            }),
-          ],
-        AccountKind.admin => [
-            _Demo('أدمن تجريبي', () {
-              _emailCtrl.text = 'admin@amialpay.com';
               _passwordCtrl.text = 'Pass@2026';
             }),
           ],
@@ -681,9 +632,6 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
 
   // ===== الحقول: تتبدّل حسب النوع =====
   Widget _formFields() {
-    // خطوة رمز الوكيل تحلّ محلّ النموذج
-    if (_kind == AccountKind.agent && _otpStep) return _otpFields();
-
     return AnimatedSize(
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
@@ -713,32 +661,8 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             ),
             const SizedBox(height: 12),
           ],
-          if (_kind == AccountKind.agent) ...[
-            _field(
-              controller: _agentNumCtrl,
-              label: 'رقم الوكيل *',
-              icon: Icons.business_center,
-              validator: (v) =>
-                  (v == null || v.trim().length < 3) ? 'رقم وكيل غير صحيح' : null,
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (_kind == AccountKind.admin) ...[
-            _field(
-              controller: _emailCtrl,
-              label: 'البريد الإلكتروني *',
-              hint: 'admin@amialpay.com',
-              icon: Icons.alternate_email,
-              keyboard: TextInputType.emailAddress,
-              ltr: true,
-              validator: (v) =>
-                  (v == null || !v.contains('@')) ? 'بريد غير صحيح' : null,
-            ),
-            const SizedBox(height: 12),
-          ],
-
-          // ---- الهاتف: لكل الأنواع عدا الوكيل والأدمن ----
-          if (_kind != AccountKind.agent && _kind != AccountKind.admin) ...[
+          // ---- الهاتف: لكل الأنواع ----
+          ...[
             // AMIAL-LOGIN-UI-002: كانت بادئات الشبكات خمس رقاقات عائمة أسفل
             // الحقل بلا عنوان ولا سياق — تبدو أزراراً مبعثرة. صارت قائمة
             // داخل الحقل نفسه، كما في كل تطبيق يطلب رقم هاتف.
@@ -791,54 +715,6 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     );
   }
 
-  Widget _otpFields() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: AmialColors.yellow.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            children: [
-              const Icon(Icons.sms, color: AmialColors.primary, size: 30),
-              const SizedBox(height: 6),
-              Text('تم إرسال رمز التحقق إلى $_maskedPhone',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 12.5)),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        TextFormField(
-          controller: _otpCtrl,
-          keyboardType: TextInputType.number,
-          maxLength: 6,
-          textAlign: TextAlign.center,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          style: const TextStyle(
-              fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 8),
-          decoration: const InputDecoration(
-            labelText: 'رمز التحقق (6 أرقام)',
-            counterText: '',
-            filled: true,
-            fillColor: Colors.white,
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 8),
-        TextButton(
-          onPressed: () => setState(() {
-            _otpStep = false;
-            _otpCtrl.clear();
-          }),
-          child: const Text('رجوع'),
-        ),
-      ],
-    );
-  }
 
   /// AMIAL-LOGIN-UI-002: حدود موحّدة بنصف قطر 14 ولون AmialColors.border —
   /// كانت OutlineInputBorder الافتراضية (زوايا 4 ورمادي Material) فتختلف عن
@@ -892,20 +768,13 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   }
 
   Widget _primaryAction() {
-    final isOtp = _kind == AccountKind.agent && _otpStep;
     return Obx(() {
       final ctrl = Get.find<UnifiedAuthController>();
       final busy = ctrl.isSubmitting.value;
       return AmialButton(
-        label: busy
-            ? 'جارٍ تسجيل الدخول...'
-            : isOtp
-                ? 'تأكيد ودخول'
-                : _kind == AccountKind.agent
-                    ? 'إرسال رمز التحقق'
-                    : 'دخول',
+        label: busy ? 'جارٍ تسجيل الدخول...' : 'دخول',
         loading: busy,
-        onPressed: busy ? null : (isOtp ? _submitOtp : _submit),
+        onPressed: busy ? null : _submit,
       );
     });
   }
