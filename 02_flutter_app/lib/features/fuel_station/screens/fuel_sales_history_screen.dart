@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:open_file/open_file.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+
 import 'package:intl/intl.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
@@ -202,11 +206,47 @@ class _FuelSalesHistoryScreenState extends State<FuelSalesHistoryScreen> {
           const SizedBox(height: 16),
           Row(children: [
             Expanded(child: OutlinedButton.icon(
-              onPressed: () {
-                final url = c.receiptUrl(sale['sale_ulid']);
-                Clipboard.setData(ClipboardData(text: url));
-                Get.snackbar('الرابط نُسخ', 'افتح المتصفّح لتنزيل الإيصال',
+              // AMIAL-PDF-DOWNLOAD-001 — **يُنزّل فعلاً.**
+              //
+              // كان ينسخ نصّاً ويقول «افتح المتصفّح». والمنسوخُ مسارُ API
+              // نسبيٌّ خلف المصادقة — فلا هو رابطٌ كامل، ولا المتصفّحُ
+              // يملك رمزاً يفتحه به. زرٌّ يَعِد ولا يفي.
+              onPressed: () async {
+                final ulid = '${sale['sale_ulid'] ?? ''}';
+                if (ulid.isEmpty) {
+                  Get.snackbar('تعذّر', 'رقم العمليّة غير متاح',
+                      backgroundColor: AmialColors.red.withValues(alpha: 0.15));
+                  return;
+                }
+
+                Get.snackbar('جارٍ التنزيل…', 'يُجلب الإيصال من الخادم',
+                    duration: const Duration(seconds: 2),
                     backgroundColor: AmialColors.yellow.withValues(alpha: 0.3));
+
+                String? failure;
+                final path = await Get.find<ApiClient>().downloadFile(
+                  c.receiptUrl(ulid),
+                  fileName: 'amial_receipt_$ulid.pdf',
+                  onError: (r) => failure = r,
+                );
+
+                if (path == null) {
+                  Get.snackbar('تعذّر التنزيل', failure ?? 'سببٌ غير معروف',
+                      backgroundColor: AmialColors.red.withValues(alpha: 0.15));
+                  return;
+                }
+
+                // **ويُفتح بما في الجهاز.** فملفٌّ يُحفظ ولا يُفتح كأنّه
+                // لم يُنزَّل: لا يعرف الكاشيرُ أين ذهب.
+                final opened = await OpenFile.open(path, type: 'application/pdf');
+
+                if (opened.type != ResultType.done) {
+                  // ولا يبقى بلا مخرج: تُعرض المشاركة فيرسله واتساب أو يحفظه.
+                  await Share.shareXFiles(
+                    [XFile(path, mimeType: 'application/pdf')],
+                    text: 'إيصال أميال باي',
+                  );
+                }
               },
               icon: const Icon(Icons.picture_as_pdf, color: AmialColors.red),
               label: const Text('تنزيل إيصال PDF'),

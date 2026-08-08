@@ -200,15 +200,49 @@
             <div class="tagline">نظام دفع رقمي معتمد — AMIAL PAY</div>
         </td>
         <td class="doc-title-block">
-            <div class="doc-title">فاتورة رسمية</div>
-            <div class="doc-title-en">TAX / OFFICIAL INVOICE</div>
+            {{--
+                AMIAL-RECEIPT-TITLE-001 — **الوثيقة تُسمّى بما هي.**
+
+                كان العنوان ثابتاً «فاتورة رسمية / TAX / OFFICIAL INVOICE»
+                لكلّ إيصال. فتحويلُ مالٍ بين عميلين خرج بعنوان فاتورةٍ
+                ضريبيّة، وفيه عمودا «الكمّية» و«السعر» — و«تحويل أموال»
+                صنفاً واحداً بكمّية ١.
+
+                وليس هذا خطأ عرضٍ فحسب: **الفاتورة سندُ بيعٍ يُحتجّ به
+                ضريبيّاً**، والتحويلُ ليس بيعاً. ووثيقةٌ تُسمّي نفسَها
+                غيرَ ما هي تُربك المحاسب وقد تُسأل عنها المنصّة.
+
+                والعنوان الآن من `receipt_type` — المصدرِ نفسِه الذي
+                يُنشئ الإيصال، لا من ظنّ القالب.
+            --}}
+            @php
+                $docTitles = [
+                    'send_money'             => ['سند تحويل',        'TRANSFER VOUCHER'],
+                    'cash_out'               => ['سند صرف نقدي',     'CASH-OUT VOUCHER'],
+                    'fee_charge'             => ['سند رسوم',          'FEE VOUCHER'],
+                    'donation'               => ['سند تبرّع',         'DONATION VOUCHER'],
+                    'family_fund_contribute' => ['سند مساهمة',        'CONTRIBUTION VOUCHER'],
+                    'family_fund_disburse'   => ['سند صرف',           'DISBURSEMENT VOUCHER'],
+                ];
+
+                // **والافتراضيُّ فاتورة** — فالمبيعاتُ هي الأصل هنا، وما لم
+                // يُعرَف نوعُه يُسمّى فاتورةً كما كان. (لا يُغيَّر سلوكُ
+                // أنواعٍ لم تُقَس.)
+                [$docAr, $docEn] = $docTitles[$receipt->receipt_type ?? '']
+                    ?? ['فاتورة رسمية', 'TAX / OFFICIAL INVOICE'];
+
+                // وأعمدةُ الكمّية والسعر لا معنى لها في سند تحويل.
+                $isVoucher = isset($docTitles[$receipt->receipt_type ?? '']);
+            @endphp
+            <div class="doc-title">{{ $docAr }}</div>
+            <div class="doc-title-en">{{ $docEn }}</div>
         </td>
     </tr>
 </table>
 
 <table class="meta-bar">
     <tr>
-        <td width="34%"><span class="k">رقم الفاتورة:</span> <span class="v">{{ $receipt->receipt_number }}</span></td>
+        <td width="34%"><span class="k">{{ $isVoucher ? 'رقم السند:' : 'رقم الفاتورة:' }}</span> <span class="v">{{ $receipt->receipt_number }}</span></td>
         <td width="33%"><span class="k">تاريخ الإصدار:</span> <span class="v">{{ $receipt->issued_at?->format('Y-m-d') }}</span></td>
         <td width="33%"><span class="k">الوقت:</span> <span class="v">{{ $receipt->issued_at?->format('H:i') }}</span></td>
     </tr>
@@ -247,8 +281,11 @@
         <tr>
             <th class="num">#</th>
             <th>البيان / الوصف</th>
+            {{-- الكمّية والسعر أعمدةُ بيعٍ — تُحذف من السندات. --}}
+            @unless($isVoucher)
             <th class="num">الكمية</th>
             <th class="amt">السعر</th>
+            @endunless
             <th class="amt">الإجمالي</th>
         </tr>
     </thead>
@@ -258,8 +295,10 @@
                 <tr>
                     <td class="num">{{ $i + 1 }}</td>
                     <td>{{ $it['name'] ?? '—' }}</td>
+                    @unless($isVoucher)
                     <td class="num">{{ $it['qty'] ?? 1 }}</td>
                     <td class="amt">{{ number_format((float)($it['price'] ?? 0), 2) }}</td>
+                    @endunless
                     <td class="amt">{{ number_format((float)($it['total'] ?? 0), 2) }}</td>
                 </tr>
             @endforeach
@@ -283,8 +322,10 @@
                         @default {{ $receipt->receipt_type }}
                     @endswitch
                 </td>
+                @unless($isVoucher)
                 <td class="num">1</td>
                 <td class="amt">{{ number_format((float)$receipt->amount, 2) }}</td>
+                @endunless
                 <td class="amt">{{ number_format((float)$receipt->amount, 2) }}</td>
             </tr>
         @endif

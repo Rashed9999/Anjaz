@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:get/get_connect/http/src/request/request.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:amial_pay/data/api/api_checker.dart';
 import 'package:amial_pay/common/models/error_model.dart';
@@ -79,14 +80,32 @@ class ApiClient extends GetxService {
 
 
 
+   /// AMIAL-API-QUERY-001 — **المعايير تُرسَل، لا تُستقبَل وتُرمى.**
+   ///
+   /// ══════════════════════════════════════════════════════════════════
+   /// **العطل الذي أخفاه توقيعُ الدالّة نفسِه:**
+   ///
+   /// كانت تستقبل `query` ثمّ تبني `Uri.parse(appBaseUrl + uri)` **بلا
+   /// أثرٍ له**. فكلُّ نداءٍ يمرّر معايير يكتب سطراً سليماً، ويُصرَّف بلا
+   /// تحذير، ويصل الخادمَ **عارياً**.
+   ///
+   /// وثمنُه ثمانيةَ عشرَ نداءً في تسعة ملفّات:
+   ///
+   ///   • مسحُ باركود المنتج  ← الخادم بلا `barcode` ⇒ 422 ⇒ «تعذّر البحث»
+   ///   • كلُّ فلترٍ في الشاشات ← يُضغط الزرُّ ولا تتغيّر القائمة
+   ///   • ترقيمُ الصفحات       ← الصفحةُ الأولى دائماً
+   ///
+   /// **ولا خطأ في أيّ سجلّ**: الخادمُ يردّ ردّاً صحيحاً على سؤالٍ ناقص.
+   /// وهذا أخطرُ من الانهيار — الانهيارُ يُرى، وهذا يُقرأ كأنّه صواب.
    Future<Response> getData(String uri, {Map<String, dynamic>? query, Map<String, String>? headers}) async {
     if(await ApiChecker.isVpnActive()) {
       return const Response(statusCode: -1, statusText: 'you are using vpn');
     }else{
       try {
-        if (kDebugMode) debugPrint("====> GET $uri");
+        final full = _withQuery(appBaseUrl + uri, query);
+        if (kDebugMode) debugPrint("====> GET $full");
         http.Response response = await http.get(
-          Uri.parse(appBaseUrl+uri),
+          Uri.parse(full),
           headers: headers ?? _mainHeaders,
         ).timeout(Duration(seconds: timeoutInSeconds));
         return handleResponse(response, uri);
@@ -95,6 +114,85 @@ class ApiClient extends GetxService {
       }
 
     }
+   }
+
+   /// AMIAL-PDF-DOWNLOAD-001 — **تنزيلٌ حقيقيّ لملفٍّ محميٍّ بالمصادقة.**
+   ///
+   /// ══════════════════════════════════════════════════════════════════
+   /// **العطل الذي وُلدت منه:**
+   ///
+   /// زرُّ «تنزيل إيصال PDF» كان **ينسخ نصّاً** إلى الحافظة ويقول «افتح
+   /// المتصفّح». والمنسوخُ ليس رابطاً أصلاً — هو مسارُ API نسبيّ
+   /// (`/api/v1/…/receipt`) بلا نطاق. ولو كان كاملاً لما نفع: **المسار
+   /// خلف `Authenticate:api`**، والمتصفّحُ بلا رمزٍ فيردّ 401.
+   ///
+   /// فالزرُّ يَعِد بتنزيلٍ ولا يُنزّل، ويرسل صاحبَه إلى متصفّحٍ لا يملك
+   /// ما يفتح به. **زرٌّ يعمل ويفعل الشيء الخطأ** — ولا خطأ في أيّ سجلّ.
+   ///
+   /// والتنزيلُ هنا يحمل ترويسةَ المصادقة نفسَها التي تحملها بقيّةُ
+   /// النداءات، فيصل الملفُّ فعلاً.
+   ///
+   /// يُرجع مسارَ الملفّ على القرص، أو `null` مع سببٍ في [error].
+   Future<String?> downloadFile(
+     String uri, {
+     required String fileName,
+     Map<String, dynamic>? query,
+     void Function(String reason)? onError,
+   }) async {
+     try {
+       final full = _withQuery(appBaseUrl + uri, query);
+       if (kDebugMode) debugPrint('====> DOWNLOAD $full');
+
+       final res = await http
+           .get(Uri.parse(full), headers: _mainHeaders)
+           .timeout(Duration(seconds: timeoutInSeconds));
+
+       if (res.statusCode != 200) {
+         // **والسببُ يُقال بالرقم.** فرسالةٌ عامّة تُرسل صاحبَها يجرّب
+         // شبكتَه بينما العطلُ في جلسته المنتهية.
+         onError?.call(res.statusCode == 401 || res.statusCode == 403
+             ? 'انتهت الجلسة — سجّل الدخول ثمّ أعد المحاولة'
+             : 'تعذّر التنزيل من الخادم (${res.statusCode})');
+         return null;
+       }
+
+       if (res.bodyBytes.isEmpty) {
+         onError?.call('وصل ملفٌّ فارغ من الخادم');
+         return null;
+       }
+
+       final dir = await getTemporaryDirectory();
+       final path = '${dir.path}/$fileName';
+       await File(path).writeAsBytes(res.bodyBytes, flush: true);
+
+       return path;
+     } catch (e) {
+       onError?.call('تعذّر الاتّصال بالخادم');
+       return null;
+     }
+   }
+
+   /// يُلحق المعايير بالعنوان مع الحفاظ على ما فيه منها سلفاً.
+   ///
+   /// **والقيمُ الفارغة تُحذف** لا تُرسل فارغة: `?status=` تعني عند لارافيل
+   /// «حالةٌ نصُّها فارغ» لا «كلُّ الحالات» — فتردّ قائمةً خاوية، ويظنّ
+   /// المستعملُ أنّ لا بيانات. (القاعدة السابعة: «غير معروف» ليس صفراً.)
+   String _withQuery(String url, Map<String, dynamic>? query) {
+     if (query == null || query.isEmpty) return url;
+
+     final base = Uri.parse(url);
+     final merged = <String, String>{...base.queryParameters};
+
+     query.forEach((k, v) {
+       if (v == null) return;
+       final s = v is Iterable ? v.join(',') : v.toString();
+       if (s.isEmpty) return;
+       merged[k] = s;
+     });
+
+     if (merged.isEmpty) return url;
+
+     return base.replace(queryParameters: merged).toString();
    }
 
   /// AMIAL-PILOT-IDEM-002 — مفاتيحُ الطلبات المعلّقة.
