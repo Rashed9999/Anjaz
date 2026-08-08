@@ -7,9 +7,28 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:800292015506:android:cfa8d6ee2c73bffe3c054b",
+        "android_client_info": {
+          "package_name": "amialpay.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQ6dEoXKoc2ftsSlW9AbcQk9AIBCC3seM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:800292015506:android:d7aa73a0f29678353c054b",
         "android_client_info": {
-          "package_name": "com.amialpay.app"
+          "package_name": "com.amyalpay.app"
         }
       },
       "oauth_client": [],

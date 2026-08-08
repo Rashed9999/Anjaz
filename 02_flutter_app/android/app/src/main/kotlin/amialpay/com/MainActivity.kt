@@ -1,4 +1,4 @@
-package com.amialpay.app
+package amialpay.com
 
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterFragmentActivity

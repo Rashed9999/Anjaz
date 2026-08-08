@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- AMIAL-BRANDING-001: package = com.amialpay.app (في build.gradle.kts namespace) -->
+    <!-- AMIAL-BRANDING-001: package = amialpay.com (في build.gradle.kts namespace) -->
 
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.READ_CONTACTS"/>

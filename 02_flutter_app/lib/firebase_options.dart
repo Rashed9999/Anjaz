@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 /// AMIAL-FCM-001 — إعدادات Firebase الخاصّة بأميال باي.
 ///
 /// كانت القيم مكتوبة داخل `main.dart` وتشير إلى مشروع القالب `gem-b5006`
-/// (حزم `com.sixamtech.*`)، وحزمتنا `com.amialpay.app` غير مسجّلة فيه أصلاً —
+/// (حزم `com.sixamtech.*`)، وحزمتنا `amialpay.com` غير مسجّلة فيه أصلاً —
 /// فلم يكن ممكناً وصول أي إشعار مهما فعلنا في الخادم.
 ///
 /// القيم أدناه مأخوذة من `android/app/google-services.json` لمشروع `amyal-pay` (اسمُ مشروع Firebase الحقيقيّ — لا يُغيَّر بإعادة تسمية العلامة).
@@ -18,7 +18,7 @@ class AmialFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyCQ6dEoXKoc2ftsSlW9AbcQk9AIBCC3seM',
-    appId: '1:800292015506:android:d7aa73a0f29678353c054b',
+    appId: '1:800292015506:android:cfa8d6ee2c73bffe3c054b',
     messagingSenderId: '800292015506',
     projectId: 'amyal-pay',
     storageBucket: 'amyal-pay.firebasestorage.app',

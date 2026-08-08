@@ -200,7 +200,7 @@ class BrandIdentityGuardTest extends TestCase
 
         $id = $m[1];
 
-        $this->assertStringStartsWith('com.amialpay', $id, 'معرّفُ التطبيق ما زال بالياء');
+        $this->assertStringNotContainsString('amyal', $id, 'معرّفُ التطبيق ما زال بالياء');
 
         preg_match('/namespace\s*=\s*"([^"]+)"/', $gradle, $ns);
         $this->assertSame($id, $ns[1] ?? '', 'namespace يخالف applicationId');
@@ -214,11 +214,59 @@ class BrandIdentityGuardTest extends TestCase
         $ios = file_get_contents($this->appFile('ios/Runner.xcodeproj/project.pbxproj'));
         $this->assertStringNotContainsString('com.amyalpay', $ios, 'معرّفُ iOS ما زال بالياء');
 
+        // **والملفُّ قد يحمل أكثرَ من عميل** — القديمُ يبقى فيه بلا ضرر.
+        // فيُبحث عن العميل المطابق، لا يُقرأ الأوّلُ ويُفترض.
         $gs = json_decode(file_get_contents($this->appFile('android/app/google-services.json')), true);
-        $pkg = $gs['client'][0]['client_info']['android_client_info']['package_name'] ?? null;
 
-        $this->assertSame($id, $pkg,
-            'package_name في google-services.json يخالف applicationId — البناءُ يفشل والإشعاراتُ تتوقّف');
+        $packages = array_map(
+            fn ($c) => $c['client_info']['android_client_info']['package_name'] ?? '',
+            $gs['client'] ?? [],
+        );
+
+        $this->assertContains($id, $packages,
+            "لا عميلَ في google-services.json لحزمة «{$id}» — البناءُ يفشل عند مُلحق google-services. "
+            . 'المسجَّل: ' . implode(' · ', $packages));
+    }
+
+    /**
+     * @test
+     *
+     * **ومعرّفُ Firebase في Dart يخصّ حزمتَنا لا حزمةً أخرى.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **وهذا أصمتُ عطلٍ في السلسلة كلِّها.**
+     *
+     * `google-services.json` يحمل عميلين — القديمَ والجديد — ولكلٍّ
+     * `mobilesdk_app_id` مختلف. فلو بقي `appId` في Dart على القديم:
+     * البناءُ ينجح، والتطبيقُ يعمل، **ولا يصل إشعارٌ واحد** — لأنّ رمز
+     * FCM يُسجَّل تحت تطبيقٍ غير الذي يعمل. ولا خطأَ في أيّ سجلّ.
+     *
+     * وقد وقع فعلاً: بعد تغيير الحزمة بقي `appId` على `…3c054b`
+     * المرتبط بـ`com.amyalpay.app`. كُشف بالقياس لا بالتصريف.
+     */
+    public function the_firebase_app_id_belongs_to_our_package(): void
+    {
+        $gradle = file_get_contents($this->appFile('android/app/build.gradle.kts'));
+        preg_match('/applicationId\s*=\s*"([^"]+)"/', $gradle, $m);
+        $id = $m[1] ?? '';
+
+        $gs = json_decode(file_get_contents($this->appFile('android/app/google-services.json')), true);
+
+        $expected = null;
+
+        foreach ($gs['client'] ?? [] as $c) {
+            if (($c['client_info']['android_client_info']['package_name'] ?? '') === $id) {
+                $expected = $c['client_info']['mobilesdk_app_id'] ?? null;
+            }
+        }
+
+        $this->assertNotNull($expected, "لا عميلَ لحزمة «{$id}» في google-services.json");
+
+        $dart = file_get_contents($this->appFile('lib/firebase_options.dart'));
+        preg_match("/appId:\s*'([^']+)'/", $dart, $a);
+
+        $this->assertSame($expected, $a[1] ?? '',
+            'appId في Dart يخصّ عميلاً آخر — الإشعاراتُ لا تصل ولا خطأَ في أيّ سجلّ');
     }
 
     /**

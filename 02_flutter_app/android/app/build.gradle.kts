@@ -21,11 +21,11 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     // AMIAL-BRANDING-001
-    namespace = "com.amialpay.app"
+    namespace = "amialpay.com"
     compileSdk = flutter.compileSdkVersion
 
     defaultConfig {
-        applicationId = "com.amialpay.app"
+        applicationId = "amialpay.com"
         minSdk = 21  // AMIAL-BRANDING-001: ثابت 21 لـ secure storage + adaptive icons
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -65,8 +65,8 @@ android {
         }
         getByName("debug") {
             // AMIAL-FCM-001: أُزيل applicationIdSuffix = ".debug".
-            // الحزمة المسجّلة في Firebase هي com.amialpay.app فقط؛ ومع اللاحقة
-            // تصير حزمة نسخة التطوير com.amialpay.app.debug فيفشل بناء debug
+            // الحزمة المسجّلة في Firebase هي amialpay.com فقط؛ ومع اللاحقة
+            // تصير حزمة نسخة التطوير amialpay.com.debug فيفشل بناء debug
             // بـ "No matching client found for package name" — ولو نجح لما وصلت
             // إشعارة واحدة أثناء الاختبار.
             versionNameSuffix = "-debug"

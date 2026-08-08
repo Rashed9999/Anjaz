@@ -13,8 +13,8 @@
 - ✅ `pubspec.yaml` name: `six_cash` → `amial_pay`
 - ✅ 1187 import تم تحديثه: `package:six_cash/` → `package:amial_pay/`
 - ✅ App display name: `6Cash` → `Amial Pay`
-- ✅ Android `applicationId`: `com.sixamtech.sixcash_user` → `com.amialpay.app`
-- ✅ iOS `PRODUCT_BUNDLE_IDENTIFIER`: `com.sixamtech.cash` → `com.amialpay.app`
+- ✅ Android `applicationId`: `com.sixamtech.sixcash_user` → `amialpay.com`
+- ✅ iOS `PRODUCT_BUNDLE_IDENTIFIER`: `com.sixamtech.cash` → `amialpay.com`
 - ✅ MainActivity.kt نُقل من `com/u6amtech/efood_multivendor/` (leftover من food delivery app!) إلى `com/amialpay/app/`
 - ✅ Launcher icons: Android 5 densities × 2 + Adaptive + iOS 15 sizes = 67 ملف
 - ✅ Splash screen يستخدم الشعار + خلفية صفراء `#FECA1E`
@@ -126,8 +126,8 @@ static const String baseUrl = 'https://your-amial-pay-backend.com';
 
 الـ `main.dart` يستخدم Firebase project قديم (`gem-b5006`).
 لـ Amial Pay الإنتاجي، أنشئ Firebase project جديد بـ:
-- Package: `com.amialpay.app` (Android)
-- Bundle ID: `com.amialpay.app` (iOS)
+- Package: `amialpay.com` (Android)
+- Bundle ID: `amialpay.com` (iOS)
 
 ثم استبدل القيم في `main.dart` و ضع:
 - `android/app/google-services.json`
