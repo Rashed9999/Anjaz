@@ -1,0 +1,229 @@
+<!-- @dsCard group="الأساسات" name="الألوان" subtitle="13 توكِناً · بتباينٍ محسوب" -->
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>الألوان — أميال باي</title>
+<!--
+  مولَّدٌ آليّاً من 01_backend/public/assets/css/amial-tokens.css
+  لا يُحرَّر بيد. شغِّل: php design-system/build.php
+-->
+<style>
+:root {
+  --amial-primary: #053391;
+  --amial-primary-dark: #021F5C;
+  --amial-primary-light: #1D4FB8;
+  --amial-yellow: #FECA1E;
+  --amial-yellow-dark: #CFA300;
+  --amial-yellow-light: #FFE680;
+  --amial-red: #DC0A0B;
+  --amial-background: #F2F3F7;
+  --amial-surface: #FFFFFF;
+  --amial-border: #E5E7EB;
+  --amial-text: #1A2433;
+  --amial-text-secondary: #5F6B7C;
+  --amial-text-muted: #8B97A8;
+  --amial-radius: .75rem;
+  --amial-radius-sm: .5rem;
+  --amial-shadow: 0 2px 10px rgba(5, 51, 145, .06);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 28px;
+  background: var(--amial-background);
+  color: var(--amial-text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  line-height: 1.7;
+}
+h1 { font-size: 20px; margin: 0 0 4px; color: var(--amial-primary); }
+.sub { color: var(--amial-text-secondary); font-size: 13px; margin: 0 0 24px; }
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+.card {
+  background: var(--amial-surface);
+  border: 1px solid var(--amial-border);
+  border-radius: var(--amial-radius);
+  box-shadow: var(--amial-shadow);
+  overflow: hidden;
+}
+.meta { padding: 12px 14px; }
+.name { font-weight: 600; font-size: 13px; }
+.val  { font-family: ui-monospace, monospace; font-size: 12px; color: var(--amial-text-secondary); direction: ltr; text-align: right; }
+.note { font-size: 11px; color: var(--amial-text-muted); margin-top: 4px; }
+.sec  { margin: 30px 0 12px; font-size: 13px; font-weight: 700; color: var(--amial-text-secondary); }
+.warn {
+  background: #FFF4F4; border: 1px solid var(--amial-red);
+  border-radius: var(--amial-radius-sm);
+  padding: 14px 16px; margin: 0 0 22px; font-size: 13px;
+}
+.warn b { color: var(--amial-red); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--amial-surface); }
+th, td { text-align: right; padding: 9px 12px; border-bottom: 1px solid var(--amial-border); }
+th { font-size: 11px; color: var(--amial-text-muted); font-weight: 600; }
+</style>
+</head>
+<body>
+<h1>ألوان أميال باي</h1>
+<p class="sub">مستخرَجةٌ بكسل-بكسل من الشعار الرسميّ · مصدرُها الوحيد <code>amial_colors.dart</code> ومرآتُها <code>amial-tokens.css</code></p>
+<div class="sec">ألوان العلامة</div>
+<div class="grid">
+<div class="card">
+  <div style="background:#053391;height:74px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px 12px;color:#FFFFFF;font-size:11px">
+<span>نصٌّ فوقه</span><span style="opacity:.85">11.12:1</span>
+  </div>
+  <div class="meta">
+<div class="name">--amial-primary</div>
+<div class="val">#053391</div>
+<div class="note" style="color:#0a7f3f">التباين: AAA</div>
+
+  </div>
+</div>
+<div class="card">
+  <div style="background:#021F5C;height:74px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px 12px;color:#FFFFFF;font-size:11px">
+<span>نصٌّ فوقه</span><span style="opacity:.85">15.52:1</span>
+  </div>
+  <div class="meta">
+<div class="name">--amial-primary-dark</div>
+<div class="val">#021F5C</div>
+<div class="note" style="color:#0a7f3f">التباين: AAA</div>
+
+  </div>
+</div>
+<div class="card">
+  <div style="background:#1D4FB8;height:74px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px 12px;color:#FFFFFF;font-size:11px">
+<span>نصٌّ فوقه</span><span style="opacity:.85">7.34:1</span>
+  </div>
+  <div class="meta">
+<div class="name">--amial-primary-light</div>
+<div class="val">#1D4FB8</div>
+<div class="note" style="color:#0a7f3f">التباين: AAA</div>
+
+  </div>
+</div>
+<div class="card">
+  <div style="background:#FECA1E;height:74px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px 12px;color:#1A2433;font-size:11px">
+<span>نصٌّ فوقه</span><span style="opacity:.85">10.18:1</span>
+  </div>
+  <div class="meta">
+<div class="name">--amial-yellow</div>
+<div class="val">#FECA1E</div>
+<div class="note" style="color:#0a7f3f">التباين: AAA</div>
+<div class="note">الذهبي — أزرار التأكيد</div>
+  </div>
+</div>
+<div class="card">
+  <div style="background:#CFA300;height:74px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px 12px;color:#1A2433;font-size:11px">
+<span>نصٌّ فوقه</span><span style="opacity:.85">6.62:1</span>
+  </div>
+  <div class="meta">
+<div class="name">--amial-yellow-dark</div>
+<div class="val">#CFA300</div>
+<div class="note" style="color:#0a7f3f">التباين: AA</div>
+
+  </div>
+</div>
+<div class="card">
+  <div style="background:#FFE680;height:74px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px 12px;color:#1A2433;font-size:11px">
+<span>نصٌّ فوقه</span><span style="opacity:.85">12.56:1</span>
+  </div>
+  <div class="meta">
+<div class="name">--amial-yellow-light</div>
+<div class="val">#FFE680</div>
+<div class="note" style="color:#0a7f3f">التباين: AAA</div>
+
+  </div>
+</div>
+<div class="card">
+  <div style="background:#DC0A0B;height:74px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px 12px;color:#FFFFFF;font-size:11px">
+<span>نصٌّ فوقه</span><span style="opacity:.85">5.13:1</span>
+  </div>
+  <div class="meta">
+<div class="name">--amial-red</div>
+<div class="val">#DC0A0B</div>
+<div class="note" style="color:#0a7f3f">التباين: AA</div>
+<div class="note">التحذيرات والأخطاء فقط</div>
+  </div>
+</div>
+</div>
+<div class="sec">الأسطح</div>
+<div class="grid">
+<div class="card">
+  <div style="background:#F2F3F7;height:74px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px 12px;color:#1A2433;font-size:11px">
+<span>نصٌّ فوقه</span><span style="opacity:.85">14.09:1</span>
+  </div>
+  <div class="meta">
+<div class="name">--amial-background</div>
+<div class="val">#F2F3F7</div>
+<div class="note" style="color:#0a7f3f">التباين: AAA</div>
+
+  </div>
+</div>
+<div class="card">
+  <div style="background:#FFFFFF;height:74px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px 12px;color:#1A2433;font-size:11px">
+<span>نصٌّ فوقه</span><span style="opacity:.85">15.62:1</span>
+  </div>
+  <div class="meta">
+<div class="name">--amial-surface</div>
+<div class="val">#FFFFFF</div>
+<div class="note" style="color:#0a7f3f">التباين: AAA</div>
+
+  </div>
+</div>
+<div class="card">
+  <div style="background:#E5E7EB;height:74px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px 12px;color:#1A2433;font-size:11px">
+<span>نصٌّ فوقه</span><span style="opacity:.85">12.62:1</span>
+  </div>
+  <div class="meta">
+<div class="name">--amial-border</div>
+<div class="val">#E5E7EB</div>
+<div class="note" style="color:#0a7f3f">التباين: AAA</div>
+
+  </div>
+</div>
+</div>
+<div class="sec">النصّ</div>
+<div class="grid">
+<div class="card">
+  <div style="background:#1A2433;height:74px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px 12px;color:#FFFFFF;font-size:11px">
+<span>نصٌّ فوقه</span><span style="opacity:.85">15.62:1</span>
+  </div>
+  <div class="meta">
+<div class="name">--amial-text</div>
+<div class="val">#1A2433</div>
+<div class="note" style="color:#0a7f3f">التباين: AAA</div>
+
+  </div>
+</div>
+<div class="card">
+  <div style="background:#5F6B7C;height:74px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px 12px;color:#FFFFFF;font-size:11px">
+<span>نصٌّ فوقه</span><span style="opacity:.85">5.41:1</span>
+  </div>
+  <div class="meta">
+<div class="name">--amial-text-secondary</div>
+<div class="val">#5F6B7C</div>
+<div class="note" style="color:#0a7f3f">التباين: AA</div>
+
+  </div>
+</div>
+<div class="card">
+  <div style="background:#8B97A8;height:74px;display:flex;align-items:flex-end;justify-content:space-between;padding:8px 12px;color:#1A2433;font-size:11px">
+<span>نصٌّ فوقه</span><span style="opacity:.85">5.27:1</span>
+  </div>
+  <div class="meta">
+<div class="name">--amial-text-muted</div>
+<div class="val">#8B97A8</div>
+<div class="note" style="color:#0a7f3f">التباين: AA</div>
+
+  </div>
+</div>
+</div>
+<div class="sec">قراءةُ النصّ على الأسطح</div>
+<table>
+<tr><th>النصّ</th><th>على السطح</th><th>على الخلفيّة</th></tr>
+<tr><td>الأساسيّ <span class="val">#1A2433</span></td><td style="color:#0a7f3f">15.62:1 — AAA</td><td style="color:#0a7f3f">14.09:1 — AAA</td></tr>
+<tr><td>الثانويّ <span class="val">#5F6B7C</span></td><td style="color:#0a7f3f">5.41:1 — AA</td><td style="color:#0a7f3f">4.88:1 — AA</td></tr>
+<tr><td>الباهت <span class="val">#8B97A8</span></td><td style="color:#DC0A0B">2.96:1 — دون الحدّ</td><td style="color:#DC0A0B">2.67:1 — دون الحدّ</td></tr>
+</table>
+
+</body>
+</html>
