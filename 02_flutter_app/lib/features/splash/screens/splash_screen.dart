@@ -25,8 +25,12 @@ class _SplashScreenState extends State<SplashScreen>
     with WidgetsBindingObserver {
   late StreamSubscription<List<ConnectivityResult>> subscription;
 
-  // AMIAL-UI-001: خطوات إقلاع مرئية — تُظهر أن التطبيق «يعمل» أثناء التهيئة.
-  final ValueNotifier<int> _stepDone = ValueNotifier<int>(0);
+  // AMIAL-UI-001 كانت «خطوات إقلاع مرئية — تُظهر أن التطبيق يعمل أثناء
+  // التهيئة». وحلّت محلَّها حركةُ الشعار (AMIAL-SPLASH-C-001): ١٫٨ ثانية
+  // من الحركة تؤدّي الغرضَ نفسَه وأحسن.
+  //
+  // **وأُزيل عدّادُ الخطوات معها، ولم يُترك يُكتب ولا يُقرأ.** فحالةٌ تُحدَّث
+  // ولا تُعرض تُوهم القارئَ أنّ لها أثراً، ويُبنى عليها لاحقاً ما لا يظهر.
 
   // AMIAL-SPLASH-C-001 — حركةُ الشعار (النمط C) بدل التكبير البسيط.
   //
@@ -88,7 +92,6 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void dispose() {
     subscription.cancel();
-    _stepDone.dispose();
     super.dispose();
   }
 
@@ -97,31 +100,23 @@ class _SplashScreenState extends State<SplashScreen>
     // - لا تأخير صناعي (كانت ثانية كاملة فوق سبلاش النظام = «شاشتا شعار»).
     // - جلب الإعدادات بمهلة قصيرة، وسواء نجح أو فشل نُكمل (لا تعليق).
 
-    // خطوة 1: الاتصال (وصلنا هنا فالتطبيق حيّ)
-    _mark(1);
-
     try {
-      // خطوة 2: النسخة/الإعدادات البعيدة
+      // الإعدادات البعيدة
       await Get.find<SplashController>().getConfigData().timeout(
         const Duration(seconds: 5),
       );
     } catch (_) {
       // الخادم غير متاح أو بطيء — نُكمل بدل التعليق.
     }
-    _mark(2);
 
     try {
-      // خطوة 3: البيانات المحلية (اللغة/الثيم/الجلسة)
+      // البيانات المحلية (اللغة/الثيم/الجلسة)
       await Get.find<SplashController>().initSharedData();
     } catch (_) {
       /* تجاهل — بيانات محلية */
     }
-    _mark(3);
 
     if (!mounted) return;
-
-    // خطوة 4: جاهز
-    _mark(4);
 
     // AMIAL-STARTUP-FLOW-002: لا شاشة لغة عند الإقلاع إطلاقاً.
     // العربية هي لغة التطبيق الأساسية والإنجليزية ثانوية اختيارية — فسؤال
@@ -161,11 +156,6 @@ class _SplashScreenState extends State<SplashScreen>
 
     _navigated = true;
     Get.offNamed(RouteHelper.getUnifiedLoginRoute());
-  }
-
-  void _mark(int done) {
-    if (!mounted) return;
-    if (done > _stepDone.value) _stepDone.value = done;
   }
 
   @override
