@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -6,6 +8,7 @@ import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/common/widgets/amial_button.dart';
 import 'package:amial_pay/features/requested_money/controllers/payment_request_controller.dart';
+import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
 
 /// AMIAL-PAYMENT-REQUESTS-001 — شاشة عرض طلب بعد إنشائه.
 class PaymentRequestShowScreen extends StatefulWidget {
@@ -73,7 +76,6 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
         final publicUrl = (data['public_url'] ?? '').toString();
         final amount = req['amount']?.toString() ?? '0';
         final note = req['note']?.toString();
-        final shareMethod = (req['share_method'] ?? 'link').toString();
         final isRecurring = req['is_recurring'] == true;
         final period = req['recurring_period']?.toString();
         final id = req['id'] as int?;
@@ -128,34 +130,21 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
             ),
             const SizedBox(height: 20),
 
-            // رمز QR (محاكاة بصرية بدون مكتبة QR)
-            if (shareMethod == 'qr')
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(children: [
-                  Container(
-                    width: 180, height: 180,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.grey.shade300, width: 2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.qr_code_2, size: 140, color: AmialColors.primary),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'سيُولَّد رمز QR كامل قريباً',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                  ),
-                ]),
-              ),
-
+            // AMIAL-REQ-QR-001 — **حُذف هنا رمزُ QR مزيَّف.**
+            //
+            // ══════════════════════════════════════════════════════════
+            // كان في هذا الموضع `Icon(Icons.qr_code_2)` بحجم ١٤٠ داخل
+            // إطارٍ أبيض، وتحته «سيُولَّد رمز QR كامل قريباً» — **أيقونةٌ
+            // تتظاهر برمز**.
+            //
+            // وهي أسوأُ من غيابها: يعرضها التاجرُ على العميل، فيفتح
+            // العميلُ الماسحَ ويصوّبه فلا يُقرأ شيء. فيظنّ أنّ هاتفه
+            // معطوب أو أنّ التطبيق لا يعمل — **ولا خطأ في أيّ سجلّ**.
+            //
+            // والرمزُ الحقيقيّ أسفلُ، مع الرمز القصير، ويظهر دائماً لا
+            // بشرط `share_method == 'qr'`: من اختار «رابطاً» عند الإنشاء
+            // قد يقف أمامه زبونٌ يريد المسح.
+            // (المهارة: «No fake UI. Everything visible must function.»)
             const SizedBox(height: 16),
 
             // الرمز القصير
@@ -166,6 +155,33 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                // AMIAL-REQ-QR-001 — **الرمز المرئيّ: ما يُمسح فعلاً.**
+                //
+                // ══════════════════════════════════════════════════════
+                // كانت الشاشة تعرض الرمزَ القصير والرابطَ نصّاً، **ولا
+                // رمزَ QR إطلاقاً**. فالطالبُ يقول للدافع «امسح» ولا شيء
+                // يُمسح: يُملي عليه ستّةَ محارفَ أو يُرسل رابطاً.
+                //
+                // وشاشةُ محطّة الوقود كانت تعرضه منذ جولاتٍ بالحمولة
+                // نفسِها — فأُصلح مدخلٌ وتُرك الآخر. (القاعدة الرابعة:
+                // ميزةٌ لها مدخلان تُختبر من مدخليها.)
+                //
+                // والحمولةُ هي التي يفهمها ماسحُ التطبيق حرفاً بحرف:
+                // `{"t":"amial_pr","code":…}` — وأيُّ صيغةٍ غيرِها تُنتج
+                // رمزاً يُمسح ولا يقع شيء.
+                if (shortCode.isNotEmpty) ...[
+                  Center(
+                    child: QrDisplayWidget(
+                      data: jsonEncode({'t': 'amial_pr', 'code': shortCode}),
+                      size: 190,
+                      caption: 'يمسحه الدافع من «دفع لتاجر»',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                ],
+
                 const Text('الرمز القصير', textAlign: TextAlign.right,
                     style: TextStyle(color: Colors.grey, fontSize: 12)),
                 const SizedBox(height: 8),
@@ -228,3 +244,5 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
     );
   }
 }
+
+

@@ -12,4 +12,5 @@
 
     <!-- Notification color (used by FirebaseMessaging) -->
     <color name="notification_color">#053391</color>
+	<color name="ic_launcher_background">#FECA1E</color>
 </resources>

@@ -58,10 +58,29 @@ class PaymentRequest extends Model
         return $this->status === 'pending' && $this->expires_at?->isFuture() === true;
     }
 
-    /** الرابط الكامل المعروض للمشاركة. */
+    /**
+     * الرابط الكامل المعروض للمشاركة.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **AMIAL-REQ-URL-001 — كان يشير إلى نطاقٍ لا نملكه.**
+     *
+     * الافتراضيّ كان `https://amial.pay`، و`app.public_url` **غير معرَّفٍ
+     * في `config/app.php` إطلاقاً** — فالافتراضيّ هو ما يُستعمل دائماً.
+     * والنطاق المملوك `amialpay.com`.
+     *
+     * فكلُّ من شارك طلبَ دفعٍ أرسل رابطاً **لا يفتح شيئاً**، وقد يُسجّله
+     * غيرُنا غداً فيستقبل عملاءنا. ولا خطأ في أيّ سجلّ: الرابطُ يُنسخ
+     * ويُرسل ويبدو سليماً.
+     *
+     * والقيمةُ تُقرأ الآن من `app.url` — المضبوطِ في البيئة والمحروسِ
+     * بـ`AppUrlSanitizeTest` — فمصدرٌ واحدٌ لا اثنان يفترقان.
+     */
     public function publicUrl(): string
     {
-        $base = config('app.public_url', 'https://amial.pay');
+        $base = rtrim((string) config('app.public_url')
+            ?: (string) config('app.url')
+            ?: 'https://amialpay.com', '/');
+
         return "{$base}/req/{$this->short_code}";
     }
 }
