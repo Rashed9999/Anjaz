@@ -101,6 +101,7 @@ flutter:
     - assets/payment/
     - assets/svg/
     - assets/branding/
+    - assets/brand/
 
   fonts:
     - family: Rubik

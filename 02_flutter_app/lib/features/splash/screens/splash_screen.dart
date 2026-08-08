@@ -6,8 +6,8 @@ import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amial_pay/data/api/api_checker.dart';
 import 'package:amial_pay/helper/route_helper.dart';
+import 'package:amial_pay/features/splash/widgets/brand_splash_animation.dart';
 import 'package:amial_pay/util/app_constants.dart';
-import 'package:amial_pay/util/images.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -22,25 +22,34 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver {
   late StreamSubscription<List<ConnectivityResult>> subscription;
 
   // AMIAL-UI-001: خطوات إقلاع مرئية — تُظهر أن التطبيق «يعمل» أثناء التهيئة.
   final ValueNotifier<int> _stepDone = ValueNotifier<int>(0);
 
-  late final AnimationController _logoCtrl;
-  late final Animation<double> _logoScale;
+  // AMIAL-SPLASH-C-001 — حركةُ الشعار (النمط C) بدل التكبير البسيط.
+  //
+  // ══════════════════════════════════════════════════════════════════
+  // **وتوتّرٌ حقيقيٌّ حُسم هنا، لا أُخفيه:**
+  //
+  // مكتوبٌ في هذا الملفّ منذ AMIAL-STARTUP-FLOW-001: «لا تأخير صناعي —
+  // كانت ثانيةٌ كاملة فوق سبلاش النظام = شاشتا شعار». والمواصفةُ الجديدة
+  // تطلب حركةً مدّتها ١٫٨ ثانية.
+  //
+  // فالحلُّ ليس إلغاء أحدهما: **الانتقالُ يقع حين يجتمع الأمران** —
+  // انتهاءُ الحركة **و** جهوزيّةُ البيانات. فإن سبقت البياناتُ الحركةَ
+  // (وهو الغالب على شبكةٍ جيّدة) رأى المستعملُ الحركةَ كاملةً؛ وإن
+  // تأخّرت البياناتُ غطّت الحركةُ الانتظارَ بدل شاشةٍ جامدة.
+  //
+  // **والسقفُ ١٫٨ ثانية لا أكثر**: الحركةُ لا تُعاد ولا تُمدَّد، فلا
+  // يتحوّل «الانتظارُ المغطّى» إلى تأخيرٍ صناعيّ.
+  bool _dataReady = false;
+  bool _animationDone = false;
 
   @override
   void initState() {
     super.initState();
-
-    _logoCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    _logoScale = CurvedAnimation(parent: _logoCtrl, curve: Curves.easeOutBack);
-    _logoCtrl.forward();
 
     bool isFirstTime = true;
 
@@ -79,7 +88,6 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void dispose() {
     subscription.cancel();
-    _logoCtrl.dispose();
     _stepDone.dispose();
     super.dispose();
   }
@@ -136,6 +144,22 @@ class _SplashScreenState extends State<SplashScreen>
         await FirebaseMessaging.instance.requestPermission();
       } catch (_) {}
     }
+    _dataReady = true;
+    _goIfReady();
+  }
+
+  /// **ولا يُنتقل إلّا مرّةً واحدة.**
+  ///
+  /// فالبياناتُ والحركةُ تنتهيان في أيّ ترتيب، وكلاهما ينادي هذه الدالّة.
+  /// وبلا الحارس يُنادى `Get.offNamed` مرّتين فتُفتح شاشةُ الدخول فوق
+  /// نفسها. (زرٌّ يعمل ويفعل الشيء مرّتين.)
+  bool _navigated = false;
+
+  void _goIfReady() {
+    if (!mounted || _navigated) return;
+    if (!_dataReady || !_animationDone) return;
+
+    _navigated = true;
     Get.offNamed(RouteHelper.getUnifiedLoginRoute());
   }
 
@@ -149,7 +173,9 @@ class _SplashScreenState extends State<SplashScreen>
     // AMIAL-SPLASH: نفس أصفر الشعار في سبلاش النظام (#FECA1E) — كانت الخلفية
     // بيضاء افتراضياً فتظهر «شاشة بيضاء» بين سبلاش النظام وشاشة الدخول.
     return Scaffold(
-      backgroundColor: const Color(0xFFFECA1E),
+      // الخلفيّةُ من توكِنز العلامة لا رقماً مكتوباً — فلونٌ يُنسخ
+      // يعيش وحده ويفترق عن مصدره. (AMIAL-TOKENS-001)
+      backgroundColor: AmialColors.yellow,
       body: SafeArea(
         // AMIAL-SPLASH-006 — العمود يجب أن يملأ العرض صراحةً.
         //
@@ -168,58 +194,38 @@ class _SplashScreenState extends State<SplashScreen>
           child: Column(
             children: [
               const Spacer(flex: 3),
-              // ===== الشعار + الاسم + الشعار النصّي =====
-              ScaleTransition(
-                scale: _logoScale,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // AMIAL-SPLASH-003: الشعار محكوم بعرض الشاشة لا بارتفاع
-                    // ثابت. `height: 150` وحده يجعل العرض 218 نقطة مهما ضاقت
-                    // النافذة، فيُقصّ من الجانبين. الآن لا يتجاوز 62% من العرض
-                    // المتاح، ويصغر بدل أن يُقصّ.
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.sizeOf(context).width * 0.62,
-                        maxHeight: 150,
-                      ),
-                      child: Image.asset(Images.logo, fit: BoxFit.contain),
-                    ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'أميال باي',
-                      style: TextStyle(
-                        color: AmialColors.primary,
-                        fontSize: 30,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'دفع سريع وآمن',
-                      style: TextStyle(
-                        color: AmialColors.primary.withValues(alpha: 0.75),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
+
+              // AMIAL-SPLASH-C-001 — المراحل الستّ من الصور الأربع
+              // المفصولة من الشعار الأصليّ.
+              BrandSplashAnimation(
+                onCompleted: () {
+                  if (!mounted) return;
+                  setState(() => _animationDone = true);
+                  _goIfReady();
+                },
               ),
+
               const Spacer(flex: 2),
-              // AMIAL-SPLASH-002: كان هنا شريط تقدّم مع نصّ «جارٍ تحميل...»
-              // يظهر عدّة ثوانٍ — وهو يُشعر المستخدم بالبطء بدل أن يُخفيه،
-              // ولا يفعله أي تطبيق مصرفي. مؤشّر دائري صغير خافت يكفي.
+
+              // **والمؤشّرُ لا يظهر إلّا إن تأخّرت البيانات بعد الحركة.**
+              //
+              // فظهورُه أثناء الحركة يُفسد لحظةَ العلامة ويُشعر بالبطء —
+              // وهو الدرسُ المكتوب في AMIAL-SPLASH-002. أمّا بعدها فغيابُه
+              // يجعل الشاشةَ تبدو معلّقة، والمستعملُ لا يعرف أحيّةٌ هي.
               SizedBox(
-                width: 22,
                 height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    AmialColors.primary.withValues(alpha: 0.55),
-                  ),
-                ),
+                child: (_animationDone && !_dataReady)
+                    ? SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            AmialColors.primary.withValues(alpha: 0.55),
+                          ),
+                        ),
+                      )
+                    : null,
               ),
               const SizedBox(height: 46),
             ],
