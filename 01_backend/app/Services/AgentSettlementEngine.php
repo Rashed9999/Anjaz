@@ -58,6 +58,16 @@ use Illuminate\Support\Facades\DB;
  */
 class AgentSettlementEngine
 {
+    /**
+     * حاسبةُ فروق الورديّات — **مصدرٌ واحدٌ يشترك فيه هذا المحرّك
+     * و`AgentDailySettlementService`.** (AMIAL-TRUTH-001)
+     */
+    public function __construct(
+        private readonly \App\Services\Agent\ShiftVarianceCalculator $variance =
+            new \App\Services\Agent\ShiftVarianceCalculator(),
+    ) {
+    }
+
     /** لا فرق يُتجاهَل تحت هذا الحدّ — التسامح صفر عمداً في المال. */
     private const TOLERANCE = '0.0001';
 
@@ -245,41 +255,38 @@ class AgentSettlementEngine
     public function dailySettlement(User $agent, ?string $date = null): array
     {
         $date ??= now()->toDateString();
-        $from = $date . ' 00:00:00';
-        $to = $date . ' 23:59:59';
 
         $branchIds = AgentBranch::where('agent_user_id', $agent->id)
             ->pluck('id')->map(fn ($v) => (int) $v)->all();
 
-        $shifts = AgentShift::whereIn('branch_id', $branchIds)
-            ->whereBetween('opened_at', [$from, $to])->get();
-
-        $closed = $shifts->where('status', AgentShift::STATUS_CLOSED);
-
-        // **العجز والفائض يُعدّان منفصلَين ولا يُقاصّان.**
+        // AMIAL-TRUTH-001 — **الحسابُ من مصدرٍ واحد.**
         //
-        // فرعٌ نقص خمسةً وآخرُ زاد خمسةً ليسا «صفراً»: هما حادثتان تستحقّان
-        // سؤالين. والمقاصّة تُخفي الاثنين معاً.
-        $shortages = $closed->filter(fn ($s) => bccomp((string) $s->variance, '0', 4) < 0);
-        $overages = $closed->filter(fn ($s) => bccomp((string) $s->variance, '0', 4) > 0);
-
-        $sumVar = fn ($c) => (string) $c->reduce(
-            fn ($a, $s) => bcadd($a, ltrim((string) $s->variance, '-'), 4), '0');
+        // كانت أسطرُ العجز والفائض منسوخةً حرفاً بحرف في
+        // `AgentDailySettlementService::computeDay()`. وقِيس المحرّكان
+        // على البيانات نفسِها فتطابقا — **والخطرُ في الغد**: من يُصلح
+        // إشارةً أو شرطَ إغلاقٍ في واحدةٍ يترك الأخرى، فيرى المشرفُ
+        // عجزاً في «ملفّ الوكيل» وعجزاً آخرَ في «لوحة اليوم» ولا يعرف
+        // أيّهما الحقّ. (`amial-financial-truth`: لا تُكرَّر حساباتُ
+        // التسوية.)
+        //
+        // والتعليلُ الذي كان هنا محفوظٌ في الحاسبة: المغلقةُ وحدها
+        // تُحسب، والمجموعُ بالقيمة المطلقة، ولا مقاصّةَ بين نقصٍ وزيادة.
+        $v = $this->variance->forDay($branchIds, $date);
 
         return [
             'date' => $date,
-            'shifts_total' => $shifts->count(),
-            'shifts_closed' => $closed->count(),
-            'shifts_open' => $shifts->where('status', AgentShift::STATUS_OPEN)->count(),
+            'shifts_total' => $v['shifts_total'],
+            'shifts_closed' => $v['shifts_closed'],
+            'shifts_open' => $v['shifts_open'],
 
-            'shortage_count' => $shortages->count(),
-            'shortage_total' => $sumVar($shortages),
-            'overage_count' => $overages->count(),
-            'overage_total' => $sumVar($overages),
+            'shortage_count' => $v['shortage_count'],
+            'shortage_total' => $v['shortage_total'],
+            'overage_count' => $v['overage_count'],
+            'overage_total' => $v['overage_total'],
 
             // ورديّةٌ لم تُغلق تعني درجاً بلا شهادةِ إنسان — وهي حالةٌ
             // تُذكر، لا تُترك ضمن «لا فروق».
-            'unclosed_drawers' => $shifts->where('status', AgentShift::STATUS_OPEN)->count(),
+            'unclosed_drawers' => $v['shifts_open'],
 
             'position' => $this->position($agent),
         ];

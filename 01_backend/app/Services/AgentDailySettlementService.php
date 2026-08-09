@@ -51,6 +51,13 @@ class AgentDailySettlementService
         private readonly AgentNetworkService $network,
         private readonly AuditService $audit,
         private readonly \App\Services\Whatsapp\AgentAlertService $alerts,
+
+        /**
+         * حاسبةُ فروق الورديّات — **المصدرُ الواحد** الذي يشترك فيه
+         * هذا وَ`AgentSettlementEngine`. (AMIAL-TRUTH-001)
+         */
+        private readonly \App\Services\Agent\ShiftVarianceCalculator $variance =
+            new \App\Services\Agent\ShiftVarianceCalculator(),
     ) {
     }
 
@@ -141,18 +148,17 @@ class AgentDailySettlementService
         $wdr = bcadd((string) ($rows['customer_withdraw']->total ?? '0'), '0', 4);
 
         // ── الورديّات وفروقها ─────────────────────────────────────────
-        $shifts = AgentShift::whereIn('branch_id', $branchIds)
-            ->whereBetween('opened_at', [$from, $to])->get();
+        // AMIAL-TRUTH-001 — **الحسابُ من مصدرٍ واحد.**
+        //
+        // كانت هذه الأسطرُ منسوخةً حرفاً بحرف في
+        // `AgentSettlementEngine::dailySettlement()`، وكلتاهما تُقرأ في
+        // لوحةٍ إداريّةٍ واحدة. فاستُخرجتا إلى حاسبةٍ واحدة، والعقدُ
+        // الحيُّ يُثبّت تطابقَهما في `SettlementSingleTruthTest`.
+        $shifts = $this->variance->shiftsOfDay($branchIds, $date);
+        $v = $this->variance->summarise($shifts);
 
-        $closed = $shifts->where('status', AgentShift::STATUS_CLOSED);
-        $short = $closed->filter(fn ($s) => bccomp((string) $s->variance, '0', 4) < 0);
-        $over = $closed->filter(fn ($s) => bccomp((string) $s->variance, '0', 4) > 0);
-
-        $absSum = fn ($c) => (string) $c->reduce(
-            fn ($a, $s) => bcadd($a, ltrim((string) $s->variance, '-'), 4), '0');
-
-        $shortTotal = $absSum($short);
-        $overTotal = $absSum($over);
+        $shortTotal = $v['shortage_total'];
+        $overTotal = $v['overage_total'];
 
         // ── الرسوم والعمولة من الدفتر ─────────────────────────────────
         $refs = AgentCashMovement::whereIn('branch_id', $branchIds)
@@ -193,13 +199,14 @@ class AgentDailySettlementService
             $flags[] = "فائضُ اليوم {$overTotal} تجاوز الحدّ {$limit} — والفائض ليس خبراً سارّاً";
         }
 
-        $unclosed = $shifts->where('status', AgentShift::STATUS_OPEN)->count();
+        $unclosed = $v['shifts_open'];
         if ($unclosed > 0) {
             $suspicious++;
             $flags[] = "{$unclosed} ورديّة لم تُغلق — درجٌ بلا شهادة إنسان";
         }
 
-        $pending = $closed->where('review_status', AgentShift::REVIEW_PENDING)->count();
+        $pending = $shifts->where('status', AgentShift::STATUS_CLOSED)
+            ->where('review_status', AgentShift::REVIEW_PENDING)->count();
         if ($pending > 0) {
             $flags[] = "{$pending} فرقاً لم تراجعه إدارة شركتك بعد";
         }
@@ -213,9 +220,9 @@ class AgentDailySettlementService
             'fees_collected' => $fees,
             'agent_commission' => $commission,
 
-            'shortage_count' => $short->count(),
+            'shortage_count' => $v['shortage_count'],
             'shortage_total' => $shortTotal,
-            'overage_count' => $over->count(),
+            'overage_count' => $v['overage_count'],
             'overage_total' => $overTotal,
             'unclosed_shifts' => $unclosed,
             'pending_review' => $pending,
@@ -228,8 +235,8 @@ class AgentDailySettlementService
             'conversion_amount' => ltrim($netCash, '-'),
             'conversion_label' => AgentDailySettlement::CONVERSION_LABELS[$conversion],
 
-            'shifts_total' => $shifts->count(),
-            'shifts_closed' => $closed->count(),
+            'shifts_total' => $v['shifts_total'],
+            'shifts_closed' => $v['shifts_closed'],
             'branches' => count($branchIds),
         ];
     }
