@@ -29,14 +29,66 @@ class ReceiptController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user();
-        $type = $request->query('type');
 
         $query = Receipt::forUser($user->id)->orderByDesc('issued_at');
-        if ($type) {
+
+        if ($type = $request->query('type')) {
             $query->where('receipt_type', $type);
         }
 
-        $receipts = $query->paginate(20);
+        // ── بحثٌ وفلاتر ───────────────────────────────────────────────
+        //
+        // **الثمن الذي دُفع:** شاشةُ الإيصالات كانت قائمةً بلا بحثٍ ولا
+        // فلتر. ومن له مئةُ عمليّةٍ في الشهر يبحث عن تحويلٍ لشخصٍ بعينه
+        // **بالتمرير** — ولا يجده.
+        //
+        // والبحثُ الأوّل بالهاتف: هو ما يحفظه الناس، لا رقمُ الإيصال.
+
+        // اتّجاه الحركة — «الصادر» و«الوارد».
+        if (in_array($dir = $request->query('direction'), ['debit', 'credit'], true)) {
+            $query->where('direction', $dir);
+        }
+
+        // مدّة — بالتاريخ لا بعدد الصفحات.
+        if ($from = $request->query('from')) {
+            $query->whereDate('issued_at', '>=', $from);
+        }
+
+        if ($to = $request->query('to')) {
+            $query->whereDate('issued_at', '<=', $to);
+        }
+
+        // مدى المبلغ.
+        if (is_numeric($min = $request->query('min_amount'))) {
+            $query->where('amount', '>=', $min);
+        }
+
+        if (is_numeric($max = $request->query('max_amount'))) {
+            $query->where('amount', '<=', $max);
+        }
+
+        $q = trim((string) $request->query('q', ''));
+
+        if ($q !== '') {
+            // **الهاتفُ يُطابَق بصيغه كلِّها.** فمن يكتب `777123456` يجب أن
+            // يجد `+967777123456`، ومن ينسخ الرقم من جهات الاتصال يجده
+            // بصيغةٍ ثالثة. ومطابقةٌ حرفيّةٌ واحدة تُخرج «لا نتائج» على
+            // رقمٍ موجود — **وهو أسوأ من غياب البحث**: يُقنع الباحثَ أنّ
+            // العمليّة لم تقع.
+            $phoneDigits = preg_replace('/\D+/', '', $q);
+
+            $query->where(function ($w) use ($q, $phoneDigits, $user) {
+                $w->where('receipt_number', 'like', "%{$q}%")
+                    ->orWhere('reference_transaction_id', 'like', "%{$q}%")
+                    ->orWhere('verification_code', 'like', "%{$q}%");
+
+                // الطرفُ الآخر: بالاسم أو بالهاتف بكلّ صيغه.
+                $w->orWhereIn('counterparty_user_id',
+                    $this->matchingCounterparties($q, $phoneDigits, (int) $user->id));
+            });
+        }
+
+        $receipts = $query->paginate(20)->appends($request->query());
 
         return new JsonResponse([
             'success' => true,
@@ -52,6 +104,39 @@ class ReceiptController extends Controller
                 'items' => $receipts->items(),
             ],
         ]);
+    }
+
+    /**
+     * معرّفاتُ الأطراف التي يطابقها نصُّ البحث — **بالهاتف بكلّ صيغه**.
+     *
+     * ولا يُبحث في `users` مباشرةً من الاستعلام الرئيسيّ: المستعملُ يبحث
+     * عن **من عامله هو**، لا عن كلّ من في المنصّة. والحدُّ ٥٠ لأنّ من
+     * يكتب حرفين لا يريد ألفَ مطابقة.
+     *
+     * @return array<int,int>
+     */
+    private function matchingCounterparties(string $q, string $digits, int $userId): array
+    {
+        $users = \App\Models\User::query()
+            ->where('id', '!=', $userId)
+            ->where(function ($w) use ($q, $digits) {
+                $w->where('f_name', 'like', "%{$q}%")
+                    ->orWhere('l_name', 'like', "%{$q}%");
+
+                if ($digits !== '' && mb_strlen($digits) >= 3) {
+                    // الصيغُ الخمس من `Support\Phone` — ومن كتب جزءاً من
+                    // الرقم يُطابَق بـ`like` على الصيغة القانونيّة.
+                    foreach (\App\Support\Phone::variants($digits) as $v) {
+                        $w->orWhere('phone', $v);
+                    }
+
+                    $w->orWhere('phone', 'like', "%{$digits}%");
+                }
+            })
+            ->limit(50)->pluck('id')->all();
+
+        // **قائمةٌ فارغةٌ تعني «لا مطابق»** — ولا تُترك فتُلغي الشرط.
+        return $users ?: [0];
     }
 
     /**

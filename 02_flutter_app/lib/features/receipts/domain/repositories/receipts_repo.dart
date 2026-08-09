@@ -7,11 +7,30 @@ class ReceiptsRepo extends GetxService {
   final ApiClient apiClient;
   ReceiptsRepo({required this.apiClient});
 
-  Future<Response> list({String? type, int page = 1}) async {
-    final params = <String, String>{'page': page.toString()};
-    if (type != null) params['type'] = type;
-    final query = params.entries.map((e) => '${e.key}=${e.value}').join('&');
-    return apiClient.getData('${AppConstants.amialReceiptsList}?$query');
+  /// AMIAL-RECEIPTS-FILTER-001 — بحثٌ وفلاتر.
+  ///
+  /// **والقيمُ تُرمَّز**: بحثٌ بمسافةٍ أو `+` في رقم هاتف كان يكسر السلسلة
+  /// فيصل إلى الخادم ناقصاً — ولا خطأ، فقط «لا نتائج» على رقمٍ موجود.
+  Future<Response> list({
+    String? type,
+    int page = 1,
+    String? q,
+    String? direction,
+    String? from,
+    String? to,
+    String? minAmount,
+    String? maxAmount,
+  }) async {
+    return apiClient.getData(AppConstants.amialReceiptsList, query: {
+      'page': page.toString(),
+      if (type != null && type.isNotEmpty) 'type': type,
+      if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
+      if (direction != null && direction.isNotEmpty) 'direction': direction,
+      if (from != null && from.isNotEmpty) 'from': from,
+      if (to != null && to.isNotEmpty) 'to': to,
+      if (minAmount != null && minAmount.isNotEmpty) 'min_amount': minAmount,
+      if (maxAmount != null && maxAmount.isNotEmpty) 'max_amount': maxAmount,
+    });
   }
 
   Future<Response> show(int id) async {

@@ -16,6 +16,37 @@ class ReceiptsController extends GetxController implements GetxService {
   final RxInt currentPage = 1.obs;
   final RxBool hasMore = true.obs;
 
+  // ── الفلاتر — AMIAL-RECEIPTS-FILTER-001 ──────────────────────────────
+  //
+  // **الثمن الذي دُفع:** شاشةٌ بلا بحثٍ ولا فلتر. ومن له مئةُ عمليّةٍ في
+  // الشهر يبحث عن تحويلٍ لشخصٍ بعينه بالتمرير — ولا يجده.
+  final RxString query = ''.obs;
+  final RxString direction = ''.obs;   // '' | debit | credit
+  final RxString typeFilter = ''.obs;
+  final RxString fromDate = ''.obs;
+  final RxString toDate = ''.obs;
+  final RxString minAmount = ''.obs;
+  final RxString maxAmount = ''.obs;
+
+  /// **كم فلتراً مفعّل** — يُعرض على الزرّ فلا يُنسى فلترٌ يُخفي النتائج.
+  int get activeFilterCount => [
+        direction.value, typeFilter.value,
+        fromDate.value, toDate.value,
+        minAmount.value, maxAmount.value,
+      ].where((v) => v.isNotEmpty).length;
+
+  bool get hasAnyFilter => activeFilterCount > 0 || query.value.trim().isNotEmpty;
+
+  void clearFilters() {
+    query.value = '';
+    direction.value = '';
+    typeFilter.value = '';
+    fromDate.value = '';
+    toDate.value = '';
+    minAmount.value = '';
+    maxAmount.value = '';
+  }
+
   Future<void> loadReceipts({String? type, bool refresh = false}) async {
     if (refresh) {
       currentPage.value = 1;
@@ -31,7 +62,16 @@ class ReceiptsController extends GetxController implements GetxService {
         isLoadingMore.value = true;
       }
 
-      final r = await repo.list(type: type, page: currentPage.value);
+      final r = await repo.list(
+        type: type ?? (typeFilter.value.isEmpty ? null : typeFilter.value),
+        page: currentPage.value,
+        q: query.value,
+        direction: direction.value,
+        from: fromDate.value,
+        to: toDate.value,
+        minAmount: minAmount.value,
+        maxAmount: maxAmount.value,
+      );
       if (r.statusCode == 200 && r.body is Map) {
         final meta = (r.body['meta'] ?? {}) as Map;
         final items = meta['items'] as List? ?? [];

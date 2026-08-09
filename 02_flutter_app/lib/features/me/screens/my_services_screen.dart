@@ -10,6 +10,7 @@ import 'package:amial_pay/features/notification/screens/notifications_center_scr
 import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amial_pay/features/me/domain/me_repo.dart';
 import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/request_from_person_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amial_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
@@ -196,9 +197,17 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
               if (access.hasAny(const ['cash_out', 'wallet']))
                 _serviceCard(icon: Icons.arrow_downward, label: 'سحب نقدي', subtitle: 'عبر الوكيل',
                     color: Colors.green, onTap: () => Get.to(() => const WithdrawRequestScreen())),
+              // AMIAL-REQ-DIRECT-001 — **الطلبُ المباشر هو الأصل**.
+              //
+              // كان الزرُّ يقود إلى إنشاء رابطٍ ورمزِ QR — مسارُ تاجرٍ لا
+              // مسارُ شخصٍ يطلب من صديقه. فمن أراد أن يطلب من أخيه كان
+              // عليه أن يُنشئ رابطاً ثمّ ينسخه ثمّ يرسله في واتساب ثمّ
+              // ينتظر أن يفتحه: أربعُ خطواتٍ خارج التطبيق لأمرٍ يقع داخله.
+              //
+              // والرابطُ لم يُحذف — صار الخيارَ الثاني لمن يريد المشاركة.
               if (access.has('payment_requests'))
                 _serviceCard(icon: Icons.request_quote, label: 'طلب أموال', subtitle: 'يصل لمن تطلب منه',
-                    color: AmialColors.yellowDark, onTap: () => Get.to(() => const PaymentRequestCreateScreen())),
+                    color: AmialColors.yellowDark, onTap: () => _chooseRequestMethod(context)),
               // AMIAL-REQUEST-DIRECT-001: الطلبات الواردة — كانت القائمة مبنيّة
               // في المتحكّم والخلفية معاً، ولا شاشة تقرؤها. فمن طُلب منه مالٌ
               // لم يكن يراه أبداً.
@@ -300,6 +309,66 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
         ],
             ),
           ),
+        ]),
+      ),
+    );
+  }
+
+
+  /// AMIAL-REQ-DIRECT-001 — طريقتان لطلب المال، والأولى هي الأصل.
+  ///
+  /// **ولا تُعرض قائمةٌ بلا فرق**: كلُّ خيارٍ يقول متى يُستعمل، فمن يقرأ
+  /// «يصله إشعار» يعرف أنّه لا يحتاج واتساب.
+  void _chooseRequestMethod(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 12),
+          Container(width: 40, height: 4,
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 16),
+          const Text('كيف تريد أن تطلب؟',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+
+          ListTile(
+            key: const Key('req-method-person'),
+            leading: CircleAvatar(
+              backgroundColor: AmialColors.primary.withValues(alpha: 0.12),
+              child: Icon(Icons.person_rounded, color: AmialColors.primary),
+            ),
+            title: const Text('من شخص برقم هاتفه',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: const Text('يصله إشعار داخل التطبيق فيوافق أو يرفض'),
+            trailing: const Icon(Icons.chevron_left_rounded),
+            onTap: () {
+              Navigator.pop(ctx);
+              Get.to(() => const RequestFromPersonScreen());
+            },
+          ),
+          const Divider(height: 1, indent: 72),
+
+          ListTile(
+            key: const Key('req-method-link'),
+            leading: CircleAvatar(
+              backgroundColor: AmialColors.yellowDark.withValues(alpha: 0.15),
+              child: Icon(Icons.qr_code_2_rounded, color: AmialColors.yellowDark),
+            ),
+            title: const Text('رابط أو رمز QR'),
+            subtitle: const Text('للمشاركة مع أي شخص — حتى خارج التطبيق'),
+            trailing: const Icon(Icons.chevron_left_rounded),
+            onTap: () {
+              Navigator.pop(ctx);
+              Get.to(() => const PaymentRequestCreateScreen());
+            },
+          ),
+          const SizedBox(height: 12),
         ]),
       ),
     );
