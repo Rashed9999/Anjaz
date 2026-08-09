@@ -199,9 +199,47 @@ class LedgerService
     /**
      * إنشاء أو جلب حساب user wallet.
      */
+
+    /**
+     * **`firstOrCreate` ليس ذرّيّاً — وتحت الضغط يُخرج ٥٠٠.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * فهو `SELECT` ثمّ `INSERT` في خطوتين. وعمليّتان متزامنتان على حسابٍ
+     * لم يُنشأ بعدُ تُخفقان في القراءة معاً، ثمّ تُدرجان معاً، فتصطدم
+     * الثانيةُ بـ`1062 Duplicate entry` — **وتسقط العمليّةُ الماليّة كلُّها**
+     * على تصادمٍ لا علاقة له بها.
+     *
+     * وقِيس فوقع فعلاً: `Duplicate entry 'PLATFORM_FEE'`.
+     *
+     * **وخطرُه الحقيقيّ ليس حسابَ النظام** — ذاك يُنشأ مرّةً في عمر
+     * المنصّة. خطرُه `USER_WALLET_{id}`: **أوّلُ عمليّتين متزامنتين على
+     * مستخدمٍ جديد**، وهو بالضبط ما تكثر منه تجربةٌ يُسجَّل فيها مستعملون
+     * جدد ويُحوَّل إليهم في اللحظة نفسها.
+     *
+     * والعلاجُ أنّ التصادم **ليس خطأً بل جواب**: من سبقني أنشأه، فأقرؤه.
+     */
+    private function firstOrCreateAccount(array $key, array $attrs): LedgerAccount
+    {
+        try {
+            return LedgerAccount::firstOrCreate($key, $attrs);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            // **وقراءةٌ قافلة، لا عاديّة.** فالمستوى `REPEATABLE READ` يخدم
+            // القراءةَ العاديّة من لقطةِ بدء المعاملة، والصفُّ الذي أنشأه
+            // غيرُنا ليس فيها — فنقرأ فراغاً ونرمي الخطأ من جديد على صفٍّ
+            // موجود. والقراءةُ القافلة ترى آخرَ ما استقرّ.
+            $found = LedgerAccount::where($key)->lockForUpdate()->first();
+
+            if (! $found) {
+                throw $e;   // تصادمٌ على قيدٍ آخر — لا يُبتلع
+            }
+
+            return $found;
+        }
+    }
+
     public function getOrCreateUserWallet(int $userId, string $zoneCode = 'SOUTH'): LedgerAccount
     {
-        return LedgerAccount::firstOrCreate(
+        return $this->firstOrCreateAccount(
             ['account_code' => "USER_WALLET_{$userId}"],
             [
                 'account_type' => 'liability', // MERGE-FIX: محفظة المستخدم = التزام على المنصّة
@@ -276,7 +314,7 @@ class LedgerService
      */
     public function getOrCreateSystemAccount(string $code, string $type, string $name, string $normal = 'credit'): LedgerAccount
     {
-        return LedgerAccount::firstOrCreate(
+        return $this->firstOrCreateAccount(
             ['account_code' => $code],
             [
                 'account_type' => $type,

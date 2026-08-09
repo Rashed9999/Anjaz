@@ -51,6 +51,33 @@ use Illuminate\Support\Str;
  */
 trait TransactionTrait
 {
+
+    /**
+     * **إعادةُ المحاولة عند جمود القفل — لا رميُها في وجه المستعمل.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * قِيس تحت التوازي فظهر `SQLSTATE[40001] 1213 Deadlock found`. وهو
+     * **ليس عطلاً في الشيفرة**: محرّكُ InnoDB يكتشف دورةَ انتظارٍ بين
+     * معاملتين فيقتل إحداهما، **ويطلب صراحةً إعادةَ تشغيلها** — هذا نصُّ
+     * الرسالة: `try restarting transaction`.
+     *
+     * ومن لا يعيدها يُخرج ٥٠٠ لعميلٍ لم يخطئ، على تحويلٍ كان سينجح لو
+     * أُعيد بعد أجزاء من الثانية. والمالُ سليم — المعاملةُ رُدَّت كاملة —
+     * **والتجربةُ وحدَها هي التي تُكسر**.
+     *
+     * ولا يقع إلّا تحت ضغط: عمليّةٌ واحدةٌ في كلّ مرّةٍ لا تُنتج دورةَ
+     * انتظار. ولذلك لم تره ١٩٩٧ اختباراً.
+     *
+     * **وثلاثٌ لا أكثر:** الجمودُ يُحلّ في المحاولة الثانية غالباً، وما
+     * لا يُحلّ في الثالثة عطلٌ حقيقيٌّ يجب أن يظهر لا أن يُدفَن في حلقة.
+     *
+     * **وشرطُ سلامة الإعادة أنّ ما في المعاملة قابلٌ للإعادة.** وكانت
+     * المهامُّ تُرسَل من داخلها و`after_commit = false` — أي أنّ إشعار
+     * «تمّ التحويل» كان يُرسَل حتّى لو رُدَّت المعاملة. فصار `after_commit`
+     * مفعّلاً في `config/queue.php`: لا تُرسَل مهمّةٌ إلّا بعد أن يستقرّ
+     * المال. وبذلك صارت الإعادةُ آمنةً، وزال إشعارٌ لتحويلٍ لم يقع.
+     */
+    private const TX_ATTEMPTS = 3;
     use PostsToLedger;
     protected ?FinancialGuardService $_amialGuard = null;
     protected ?AuditService $_amialAudit = null;
@@ -434,7 +461,7 @@ trait TransactionTrait
             );
 
             return $primaryId;
-        });
+        }, self::TX_ATTEMPTS);
 
         // AMIAL-RECEIPTS-001 (v0.9-A): إصدار إيصالات بعد commit ناجح.
         // الإيصال ورقةٌ تُعاد طباعتها؛ القيد سجلٌّ لا يُعاد بناؤه — ولذلك
@@ -688,7 +715,7 @@ trait TransactionTrait
             );
 
             return $primaryId;
-        });
+        }, self::TX_ATTEMPTS);
 
         // AMIAL-RECEIPTS-001: receipt للعميل (الذي يسحب المال)
         if ($cashOutTxId) {
@@ -943,7 +970,7 @@ trait TransactionTrait
             );
 
             return $primaryId;
-        });
+        }, self::TX_ATTEMPTS);
 
         if ($txId) {
             $this->safeIssueReceipts([
@@ -1075,7 +1102,7 @@ trait TransactionTrait
             );
 
             return $primaryId;
-        });
+        }, self::TX_ATTEMPTS);
 
         if ($txId) {
             // AMIAL-AGENT-NETWORK-001 (v2.3): تتبع سيولة الوكيل
@@ -1262,7 +1289,7 @@ trait TransactionTrait
             );
 
             return $primaryId;
-        });
+        }, self::TX_ATTEMPTS);
 
         return $txId;
     }
@@ -1397,7 +1424,7 @@ trait TransactionTrait
                 charge: $charge,
                 sourceId: $primaryId,
             );
-        });
+        }, self::TX_ATTEMPTS);
     }
 
     /** ========= DISPUTE ========= */

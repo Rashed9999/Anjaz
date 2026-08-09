@@ -39,6 +39,33 @@ use Illuminate\Support\Str;
  */
 class AgentCounterService
 {
+
+    /**
+     * **إعادةُ المحاولة عند جمود القفل — لا رميُها في وجه المستعمل.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * قِيس تحت التوازي فظهر `SQLSTATE[40001] 1213 Deadlock found`. وهو
+     * **ليس عطلاً في الشيفرة**: محرّكُ InnoDB يكتشف دورةَ انتظارٍ بين
+     * معاملتين فيقتل إحداهما، **ويطلب صراحةً إعادةَ تشغيلها** — هذا نصُّ
+     * الرسالة: `try restarting transaction`.
+     *
+     * ومن لا يعيدها يُخرج ٥٠٠ لعميلٍ لم يخطئ، على تحويلٍ كان سينجح لو
+     * أُعيد بعد أجزاء من الثانية. والمالُ سليم — المعاملةُ رُدَّت كاملة —
+     * **والتجربةُ وحدَها هي التي تُكسر**.
+     *
+     * ولا يقع إلّا تحت ضغط: عمليّةٌ واحدةٌ في كلّ مرّةٍ لا تُنتج دورةَ
+     * انتظار. ولذلك لم تره ١٩٩٧ اختباراً.
+     *
+     * **وثلاثٌ لا أكثر:** الجمودُ يُحلّ في المحاولة الثانية غالباً، وما
+     * لا يُحلّ في الثالثة عطلٌ حقيقيٌّ يجب أن يظهر لا أن يُدفَن في حلقة.
+     *
+     * **وشرطُ سلامة الإعادة أنّ ما في المعاملة قابلٌ للإعادة.** وكانت
+     * المهامُّ تُرسَل من داخلها و`after_commit = false` — أي أنّ إشعار
+     * «تمّ التحويل» كان يُرسَل حتّى لو رُدَّت المعاملة. فصار `after_commit`
+     * مفعّلاً في `config/queue.php`: لا تُرسَل مهمّةٌ إلّا بعد أن يستقرّ
+     * المال. وبذلك صارت الإعادةُ آمنةً، وزال إشعارٌ لتحويلٍ لم يقع.
+     */
+    private const TX_ATTEMPTS = 3;
     use PostsToLedger;
 
     public function __construct(
@@ -131,6 +158,19 @@ class AgentCounterService
             sort($ids);
             EMoney::whereIn('user_id', $ids)->lockForUpdate()->get();
 
+            // **يُعاد فحصُ رصيد الفرع داخل القفل.** والفحصُ قبله لقطةٌ:
+            // شبّاكان في الفرع نفسه يقرآنها معاً فيمرّان على رصيدٍ يكفي
+            // واحداً. (قِيس بـ`scripts/load-test.php --scenario=counter-deposit`.)
+            $lockedBranch = (string) (EMoney::where('user_id', $branch->branch_user_id)
+                ->value('current_balance') ?? '0');
+
+            if (bccomp($lockedBranch, $net, 4) < 0) {
+                throw new DomainException(sprintf(
+                    'رصيد الفرع الإلكترونيّ %s ولا يكفي لإيداع %s — اطلب شحن رصيد من الوكيل الأمّ',
+                    $lockedBranch, $net,
+                ));
+            }
+
             EMoney::where('user_id', $branch->branch_user_id)->decrement('current_balance', $net);
             EMoney::where('user_id', $customer->id)->increment('current_balance', $net);
 
@@ -196,7 +236,7 @@ class AgentCounterService
                 'customer_balance' => (string) EMoney::where('user_id', $customer->id)
                     ->value('current_balance'),
             ];
-        });
+        }, self::TX_ATTEMPTS);
     }
 
 
@@ -311,6 +351,26 @@ class AgentCounterService
             // يكون شبّاكٌ آخر في الفرع نفسه أفرغ الدرج.
             $this->assertCashAvailable($branch, $shift, $amount);
 
+            // **ورصيدُ العميل كذلك.** والفحصُ الأوّل وقع قبل القفل، فهو
+            // لقطةٌ لا ضمان: شبّاكان يقرآنها معاً فيقول كلٌّ «يكفي».
+            //
+            // وقِيس هذا تحت التوازي — `scripts/load-test.php` — فمرّ ثمانيةُ
+            // شبابيكَ الفحصَ الأوّل على رصيدٍ يكفي اثنين. **والمالُ لم يضِع**:
+            // أمسكها الدفترُ فأعاد المعاملة. لكنّه أمسكها بـ`RuntimeException`
+            // إنجليزيّةٍ من عمقه — أي **خطأ ٥٠٠ في وجه ستّة موظّفين** حيث
+            // الصوابُ سطرٌ مفهوم: «رصيد العميل لا يكفي».
+            //
+            // فالحمايةُ كانت قائمةً والرسالةُ مفقودة. وهذا يُقاس بالضغط لا
+            // بالتتابع: عمليّةٌ واحدةٌ في كلّ مرّةٍ تمرّ أبداً.
+            $lockedBalance = (string) (EMoney::where('user_id', $customer->id)
+                ->value('current_balance') ?? '0');
+
+            if (bccomp($lockedBalance, $total, 4) < 0) {
+                throw new DomainException(
+                    "رصيد العميل {$lockedBalance} ولا يكفي لسحب {$amount} مع رسم {$q['fee']}",
+                );
+            }
+
             EMoney::where('user_id', $customer->id)->decrement('current_balance', $total);
             EMoney::where('user_id', $branch->branch_user_id)->increment('current_balance', $total);
 
@@ -370,7 +430,7 @@ class AgentCounterService
                 'customer_balance' => (string) EMoney::where('user_id', $customer->id)
                     ->value('current_balance'),
             ];
-        });
+        }, self::TX_ATTEMPTS);
     }
 
 
