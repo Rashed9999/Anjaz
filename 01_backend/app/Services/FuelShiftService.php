@@ -139,7 +139,20 @@ class FuelShiftService
             }
 
             // ===== 2) حساب expected_cash و variance =====
-            $expectedCash = MoneyService::add((string)$shift->opening_cash, $totalCash);
+            //
+            // **والمعادلةُ تشمل حركةَ النقد** — AMIAL-FUEL-VERTICAL-001 · ٧.
+            //
+            // كانت: الافتتاح + المبيعات النقديّة = المتوقَّع. **فكلُّ ريالٍ
+            // يخرج للمصروفات يظهر عجزاً** في وجه الكاشير: اشترى ماءً
+            // للمحطّة بألفين فيُطالَب بألفين آخرَ الوردية، أو يُسجَّل عليه
+            // فرقٌ يُقرأ ريبةً.
+            $cash = app(\App\Services\Fuel\FuelShiftCashService::class)->summarise($shift);
+
+            $expectedCash = MoneyService::add(
+                MoneyService::add((string) $shift->opening_cash, $totalCash),
+                $cash['net'],   // الداخل − الخارج (سالبٌ إن غلب الخارج)
+            );
+
             $variance = MoneyService::sub($actualCash, $expectedCash); // موجب = فائض، سالب = عجز
 
             // ===== 3) حدّث ملخّصات المضخّات =====

@@ -60,9 +60,12 @@
         [
             'title' => 'المال والدفتر',
             'icon' => '📚',
-            'match' => ['admin/amial/ledger*', 'admin/amial/partner-settlements*', 'admin/amial/fees*', 'admin/transaction*', 'admin/emoney*', 'admin/expense*'],
+            'match' => ['admin/amial/ledger*', 'admin/amial/fuel*', 'admin/amial/partner-settlements*', 'admin/amial/fees*', 'admin/transaction*', 'admin/emoney*', 'admin/expense*'],
             'links' => [
                 ['📚 مركز الدفتر (ميزان المراجعة)', route('admin.amial.ledger.page'), 'platform.audit.view'],
+                // AMIAL-FUEL-VERTICAL-001 — القاعدة ١٢: المسار المسجّل ليس
+                // ظهوراً؛ لا بدّ من رابطٍ يمرّ به المستعمل.
+                ['⛽ مركز محطات الوقود (فروقات المخزون)', route('admin.amial.fuel.page'), 'platform.audit.view'],
                 ['📊 كشف المعاملات (فلاتر + تصدير)', route('admin.transaction.index'), null],
                 ['🧾 تسويات الوكلاء', route('admin.amial.hub.settlements'), 'platform.money.move'],
                 ['🤝 تسويات الشركاء (الموافقة المزدوجة)', route('admin.amial.partner-settlements.page'), 'platform.money.move'],

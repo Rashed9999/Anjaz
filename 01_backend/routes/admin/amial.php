@@ -199,6 +199,22 @@ Route::prefix('customer')->name('customer.')->middleware('platform:platform.cust
         Route::post('/{id}/action', [$cc, 'act'])->where('id', '[0-9]+')->name('action');
     });
 
+// ============ AMIAL-FUEL-VERTICAL-001 — مركز محطات الوقود (المرحلة ٩) ============
+//
+// **رقابةٌ لا إدارة**: تُرى المحطّاتُ وخزّاناتُها وفروقاتُها، ولا يُدار
+// موظّفوها ولا تُعتمد أسعارُها — ذاك للتاجر. والصلاحيّة `platform.audit.view`
+// لأنّ قراءةَ فروقات المخزون من جنس التدقيق.
+Route::prefix('fuel')->name('fuel.')->middleware('platform:platform.audit.view')
+    ->group(function () {
+        $fc = App\Http\Controllers\Admin\FuelCenterController::class;
+
+        Route::get('/', [$fc, 'page'])->name('page');
+        Route::get('/stations', [$fc, 'stations'])->name('stations');
+        Route::get('/stations/{id}', [$fc, 'station'])
+            ->where('id', '[0-9]+')->name('station');
+        Route::get('/open-variances', [$fc, 'openVariances'])->name('open-variances');
+    });
+
 // ============ AMIAL-LEDGER-CENTER-001 — مركز الدفتر (الفصل ١٧) ============
 //
 // الصلاحية `platform.audit.view`: قراءة الدفتر اطّلاعٌ على حركة المال كلّها،

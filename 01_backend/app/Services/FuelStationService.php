@@ -99,17 +99,49 @@ class FuelStationService
         return $pump->fresh();
     }
 
-    /** ربط مضخّة بأنواع وقود (مع رقم الفوّهة). */
+    /**
+     * ربطُ مضخّةٍ بمسدساتها.
+     *
+     * **والاسمُ بقي `linkPumpToProducts` عمداً**: نقطةُ النهاية منشورةٌ
+     * والتطبيقُ يناديها، وتغييرُ العقد يكسر نسخةً تعمل في يد تاجر.
+     * والمحتوى صار مسدساتٍ لا صفوفَ جدولٍ وسيط.
+     *
+     * ويُقبل `tank_id` اختياريّاً — فمحطّةٌ لم تُعرّف خزّاناتها بعد تعمل،
+     * **ولتراتُها تظهر في «غير منسوبة» لا تختفي**.
+     *
+     * @param  array<int,array{fuel_product_id:int,nozzle_number?:int,tank_id?:int}>  $productLinks
+     */
     public function linkPumpToProducts(FuelPump $pump, array $productLinks): void
     {
-        // مثال productLinks: [['fuel_product_id' => 1, 'nozzle_number' => 1], ...]
-        $pump->products()->detach(); // ابدأ نظيفاً
-        foreach ($productLinks as $link) {
-            if (empty($link['fuel_product_id'])) continue;
-            $pump->products()->attach($link['fuel_product_id'], [
-                'nozzle_number' => $link['nozzle_number'] ?? 1,
-            ]);
-        }
+        DB::transaction(function () use ($pump, $productLinks) {
+            $keep = [];
+
+            foreach ($productLinks as $i => $link) {
+                if (empty($link['fuel_product_id'])) {
+                    continue;
+                }
+
+                $number = (int) ($link['nozzle_number'] ?? ($i + 1));
+
+                $nozzle = \App\Models\Fuel\FuelNozzle::updateOrCreate(
+                    ['pump_id' => $pump->id, 'nozzle_number' => $number],
+                    [
+                        'fuel_product_id' => (int) $link['fuel_product_id'],
+                        'tank_id' => $link['tank_id'] ?? null,
+                        'is_active' => true,
+                    ],
+                );
+
+                $keep[] = $nozzle->id;
+            }
+
+            // **لا يُحذف مسدسٌ له مبيعات**: حذفُه يقطع نسبةَ لتراتٍ ماضيةٍ
+            // إلى خزّانها، فتنقلب مصالحةُ الشهر الماضي بعد أن أُغلقت.
+            \App\Models\Fuel\FuelNozzle::where('pump_id', $pump->id)
+                ->whereNotIn('id', $keep ?: [0])
+                ->whereDoesntHave('sales')
+                ->delete();
+        });
     }
 
     // ============ أنواع الوقود + الأسعار ============
@@ -262,6 +294,17 @@ class FuelStationService
             throw new InvalidArgumentException('طريقة الدفع غير صحيحة');
         }
 
+        // ── المسدسُ والخزّان ─────────────────────────────────────────
+        //
+        // **بلا نسبةِ اللترات إلى خزّانها لا مصالحةَ مخزونٍ رطب.** والمسدسُ
+        // هو الرابط: نوعُ وقودٍ واحدٌ وخزّانٌ واحد.
+        //
+        // ويُقبل البيعُ بلا مسدسٍ محدَّد إن كان في المضخّة واحدٌ لهذا النوع
+        // — فالكاشيرُ يختار الوقود لا الفوّهة. وإن تعدّدت وجب التحديد،
+        // **ولا يُخمَّن**: تخمينٌ خاطئ يخصم من خزّانٍ ويُبقي آخر، فيظهر
+        // فائضٌ هنا وعجزٌ هناك ويبدو الأمرُ سرقة.
+        $nozzle = $this->resolveNozzle($pump, (int) $product->id, $data['nozzle_id'] ?? null);
+
         // قراءة العدّاد (للميكانيكية فقط)
         $meterBefore = $pump->isMechanical() ? (string) $pump->current_meter_reading : null;
         $meterAfter = null;
@@ -277,7 +320,7 @@ class FuelStationService
 
         return DB::transaction(function () use (
             $merchant, $posUserId, $pump, $product, $saleType, $liters, $pricePerLiter,
-            $totalAmount, $paymentMethod, $data, $meterBefore, $meterAfter, $shift,
+            $totalAmount, $paymentMethod, $data, $meterBefore, $meterAfter, $shift, $nozzle,
         ) {
             // ====== التعامل مع طرق الدفع ======
             $companyAccount = null;
@@ -349,6 +392,8 @@ class FuelStationService
                 // والنافذةُ الزمنيّة كانت تترك بيعةَ ما بين ورديّتين يتيمة.
                 'shift_id' => $shift->id,
                 'pump_id' => $pump->id,
+                'nozzle_id' => $nozzle?->id,
+                'tank_id' => $nozzle?->tank_id,
                 'fuel_product_id' => $product->id,
                 'sale_type' => $saleType,
                 'liters' => $liters,
@@ -372,8 +417,62 @@ class FuelStationService
                 $pump->update(['current_meter_reading' => $meterAfter]);
             }
 
+            // **وعدّادُ المسدس يتقدّم باللترات دائماً** — لا بقراءةٍ تُدخَل.
+            // فهو ما يُقارَن بالمبيعات في مصالحة المضخّة، والمضخّةُ ذاتُ
+            // مسدسين لها عدّادٌ واحدٌ لا يفرّق بين نوعين.
+            if ($nozzle) {
+                $nozzle->increment('current_meter_reading', (float) $liters);
+
+                if ($nozzle->tank_id) {
+                    app(\App\Services\Fuel\FuelTankService::class)
+                        ->deductForSale($nozzle->tank, (string) $liters);
+                }
+            }
+
             return $sale->fresh();
         });
+    }
+
+    /**
+     * يختار مسدسَ العمليّة.
+     *
+     * **ويرفض التخمينَ عند التعدّد.** مسدسان لنوعٍ واحدٍ في مضخّةٍ واحدة
+     * حالةٌ نادرةٌ لكنّها تقع، واختيارُ الأوّل صامتاً يخصم من خزّانٍ
+     * ويُبقي آخر — فيظهر فائضٌ هنا وعجزٌ هناك، ويُقرأ سرقةً.
+     *
+     * ويبقى `null` إن لم يُربط شيءٌ بعد: المحطّاتُ القائمة قبل هذه
+     * المرحلة تعمل، **ولتراتُها تظهر في «غير منسوبة» لا تختفي**.
+     */
+    private function resolveNozzle(FuelPump $pump, int $productId, $requested): ?\App\Models\Fuel\FuelNozzle
+    {
+        $q = \App\Models\Fuel\FuelNozzle::where('pump_id', $pump->id)
+            ->where('is_active', true);
+
+        if ($requested) {
+            $n = (clone $q)->where('id', (int) $requested)->first();
+
+            if (!$n) {
+                throw new InvalidArgumentException('المسدس غير موجود في هذه المضخّة');
+            }
+
+            if ((int) $n->fuel_product_id !== $productId) {
+                throw new InvalidArgumentException(
+                    'نوع وقود المسدس يخالف الوقود المختار — سيُخصم من خزّان خاطئ',
+                );
+            }
+
+            return $n;
+        }
+
+        $matches = (clone $q)->where('fuel_product_id', $productId)->get();
+
+        if ($matches->count() > 1) {
+            throw new InvalidArgumentException(
+                'في هذه المضخّة أكثر من مسدس لهذا الوقود — حدّد المسدس',
+            );
+        }
+
+        return $matches->first();
     }
 
     /** يحسب اللترات والإجمالي حسب نوع البيع. */

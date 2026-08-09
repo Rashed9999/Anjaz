@@ -11,7 +11,7 @@ class FuelSale extends Model
 
     protected $fillable = [
         'sale_ulid', 'merchant_user_id', 'pos_user_id',
-        'station_id', 'shift_id', 'pump_id', 'fuel_product_id',
+        'station_id', 'shift_id', 'pump_id', 'nozzle_id', 'tank_id', 'fuel_product_id',
         'sale_type', 'liters', 'price_per_liter', 'total_amount',
         'payment_method', 'paid_transaction_id',
         'company_account_id', 'company_card_id',
@@ -26,6 +26,8 @@ class FuelSale extends Model
         'station_id' => 'integer',
         'shift_id' => 'integer',
         'pump_id' => 'integer',
+        'nozzle_id' => 'integer',
+        'tank_id' => 'integer',
         'fuel_product_id' => 'integer',
         'company_account_id' => 'integer',
         'liters' => 'decimal:4',

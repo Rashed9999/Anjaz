@@ -4,7 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class FuelPump extends Model
 {
@@ -29,12 +30,24 @@ class FuelPump extends Model
         return $this->belongsTo(FuelStation::class, 'station_id');
     }
 
-    public function products(): BelongsToMany
+    /**
+     * **المسدساتُ صارت كياناً**، والجدولُ الوسيط `fuel_pump_products`
+     * أُلغي: كان يحمل رقمَ الفوّهة بلا عدّادٍ ولا خزّان، فلا تُنسب اللترات
+     * إلى مصدرها. (AMIAL-FUEL-VERTICAL-001 · المرحلة ١)
+     */
+    public function nozzles(): HasMany
     {
-        return $this->belongsToMany(
-            FuelProduct::class, 'fuel_pump_products',
-            'pump_id', 'fuel_product_id',
-        )->withPivot('nozzle_number');
+        return $this->hasMany(\App\Models\Fuel\FuelNozzle::class, 'pump_id');
+    }
+
+    /** أنواعُ الوقود المتاحة على هذه المضخّة — تُشتقّ من مسدساتها. */
+    public function products(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            FuelProduct::class,
+            \App\Models\Fuel\FuelNozzle::class,
+            'pump_id', 'id', 'id', 'fuel_product_id',
+        );
     }
 
     public function isMechanical(): bool

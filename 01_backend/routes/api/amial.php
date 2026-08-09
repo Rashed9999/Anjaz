@@ -692,6 +692,60 @@ Route::middleware(['auth:api'])->group(function () {
             // Receipt PDF
             Route::get('/sales/{ulid}/receipt', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'downloadReceipt'])
                 ->where('ulid', '[A-Z0-9]{26}')->name('sales.receipt');
+
+            // ══ AMIAL-FUEL-VERTICAL-001 · المراحل ١–٧ ══════════════════
+            //
+            // وكلُّ فعلٍ خلفَه صلاحيّةٌ تُفحص في المتحكّم بنطاقها وحدّها —
+            // إخفاءُ الزرّ ليس أماناً.
+            $FV = \App\Http\Controllers\Api\V1\Amial\FuelVerticalController::class;
+
+            // مركز العمليّات — الحالةُ الآن في نداءٍ واحد
+            Route::get('/ops', [$FV, 'operationsCenter'])->name('ops');
+
+            // الخزّانات والمسدسات
+            Route::get('/tanks', [$FV, 'tanks'])->name('tanks.index');
+            Route::post('/tanks', [$FV, 'addTank'])->name('tanks.add');
+            Route::post('/tanks/{id}/dip', [$FV, 'recordDip'])
+                ->where('id', '[0-9]+')->name('tanks.dip');
+            Route::post('/pumps/{pumpId}/nozzles', [$FV, 'addNozzle'])
+                ->where('pumpId', '[0-9]+')->name('nozzles.add');
+            Route::post('/nozzles/{id}/tank', [$FV, 'linkNozzleToTank'])
+                ->where('id', '[0-9]+')->name('nozzles.link-tank');
+
+            // التوريدات
+            Route::get('/deliveries', [$FV, 'deliveries'])->name('deliveries.index');
+            Route::post('/deliveries', [$FV, 'receiveDelivery'])->name('deliveries.receive');
+            Route::post('/deliveries/{id}/verify', [$FV, 'verifyDelivery'])
+                ->where('id', '[0-9]+')->name('deliveries.verify');
+            Route::post('/deliveries/{id}/post', [$FV, 'postDelivery'])
+                ->where('id', '[0-9]+')->name('deliveries.post');
+            Route::post('/suppliers', [$FV, 'addSupplier'])->name('suppliers.add');
+
+            // مصالحة المخزون الرطب
+            Route::get('/tanks/{id}/reconciliation', [$FV, 'reconciliationPreview'])
+                ->where('id', '[0-9]+')->name('recon.preview');
+            Route::post('/tanks/{id}/reconcile', [$FV, 'reconcile'])
+                ->where('id', '[0-9]+')->name('recon.run');
+            Route::get('/stock-variances', [$FV, 'variances'])->name('recon.index');
+            Route::post('/stock-variances/{id}/resolve', [$FV, 'resolveVariance'])
+                ->where('id', '[0-9]+')->name('recon.resolve');
+
+            // الأسعار — اقتراحٌ ثمّ اعتماد
+            Route::post('/prices/propose', [$FV, 'proposePrice'])->name('prices.propose');
+            Route::get('/prices/pending', [$FV, 'pendingPrices'])->name('prices.pending');
+            Route::post('/prices/{id}/approve', [$FV, 'approvePrice'])
+                ->where('id', '[0-9]+')->name('prices.approve');
+
+            // نقد الوردية
+            Route::get('/shifts/{id}/cash', [$FV, 'shiftCash'])
+                ->where('id', '[0-9]+')->name('shifts.cash');
+            Route::post('/shifts/{id}/cash', [$FV, 'recordCashMovement'])
+                ->where('id', '[0-9]+')->name('shifts.cash.add');
+
+            // الأدوار والصلاحيّات
+            Route::get('/me/permissions', [$FV, 'myPermissions'])->name('me.permissions');
+            Route::get('/roles', [$FV, 'roles'])->name('roles.index');
+            Route::post('/roles/seed', [$FV, 'seedRoles'])->name('roles.seed');
         });
 
         // AMIAL-PHARMACY-001 — قطاع الصيدليات
