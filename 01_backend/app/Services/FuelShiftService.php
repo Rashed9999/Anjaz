@@ -110,8 +110,15 @@ class FuelShiftService
 
         return DB::transaction(function () use ($shift, $closer, $actualCash, $pumpClosings, $varianceReason, $closingNotes) {
             // ===== 1) جمع كل المبيعات في فترة النوبة =====
-            $sales = FuelSale::where('station_id', $shift->station_id)
-                ->where('created_at', '>=', $shift->opened_at)
+            // **بالانتماء لا بالنافذة الزمنيّة.**
+            //
+            // كان الجمعُ `created_at >= opened_at` بلا حدٍّ أعلى، فبيعةٌ تقع
+            // بين ورديّتين تسقط من الاثنتين — **نقدٌ في الدرج بلا وردية**
+            // يظهر عجزاً في أوّل جردٍ بلا تفسير.
+            //
+            // والآن `shift_id` يُكتب لحظةَ البيع، والبيعُ يشترط ورديّةً
+            // مفتوحة. (AMIAL-FUEL-VERTICAL-001 · المرحلة ٠)
+            $sales = FuelSale::where('shift_id', $shift->id)
                 ->where('status', 'completed')
                 ->get();
 

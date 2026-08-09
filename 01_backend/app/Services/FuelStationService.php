@@ -6,6 +6,7 @@ use App\Models\FuelCompanyAccount;
 use App\Models\FuelProduct;
 use App\Models\FuelPump;
 use App\Models\FuelSale;
+use App\Models\FuelShift;
 use App\Models\FuelStation;
 use App\Models\User;
 use App\Traits\TransactionTrait;
@@ -219,6 +220,28 @@ class FuelStationService
             throw new RuntimeException('نوع الوقود غير موجود');
         }
 
+        // ── الوردية شرطُ البيع ────────────────────────────────────────
+        //
+        // **ولا نقطةَ بيعٍ في العالم تبيع خارج وردية.** فالنقدُ الذي يدخل
+        // الدرج بلا ورديّةٍ لا صاحبَ له: لا يُعدّ في إغلاق، ولا يُنسب إلى
+        // صرّاف، ويظهر عجزاً في أوّل جردٍ بلا تفسير.
+        //
+        // وكان البيعُ يمرّ بلا هذا الشرط، والأرقامُ تُجمَع بنافذةٍ زمنيّة —
+        // فبيعةٌ بين ورديّتين تسقط من الاثنتين.
+        //
+        // والزرُّ موجودٌ ومُوصَلٌ إليه: «الورديات ← فتح وردية»
+        // (`POST /fuel/shifts/open` · `fuel_shifts_screen.dart`).
+        $shift = FuelShift::where('station_id', $pump->station_id)
+            ->where('status', 'open')
+            ->first();
+
+        if (!$shift) {
+            throw new RuntimeException(
+                'لا توجد وردية مفتوحة في المحطة — افتح وردية قبل البيع '
+                . '(الورديات ← فتح وردية)',
+            );
+        }
+
         $saleType = $data['sale_type'] ?? null;
         if (!in_array($saleType, FuelSale::SALE_TYPES, true)) {
             throw new InvalidArgumentException('نوع البيع غير صحيح');
@@ -254,7 +277,7 @@ class FuelStationService
 
         return DB::transaction(function () use (
             $merchant, $posUserId, $pump, $product, $saleType, $liters, $pricePerLiter,
-            $totalAmount, $paymentMethod, $data, $meterBefore, $meterAfter,
+            $totalAmount, $paymentMethod, $data, $meterBefore, $meterAfter, $shift,
         ) {
             // ====== التعامل مع طرق الدفع ======
             $companyAccount = null;
@@ -322,6 +345,9 @@ class FuelStationService
                 'merchant_user_id' => $merchant->id,
                 'pos_user_id' => $posUserId,
                 'station_id' => $pump->station_id,
+                // **الانتماءُ يُكتب لحظةَ البيع لا يُستنتج بعده.**
+                // والنافذةُ الزمنيّة كانت تترك بيعةَ ما بين ورديّتين يتيمة.
+                'shift_id' => $shift->id,
                 'pump_id' => $pump->id,
                 'fuel_product_id' => $product->id,
                 'sale_type' => $saleType,

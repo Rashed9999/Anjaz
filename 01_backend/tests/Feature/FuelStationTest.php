@@ -36,6 +36,14 @@ class FuelStationTest extends TestCase
         $this->station = $this->svc->getOrCreateStation($this->merchant, [
             'station_name' => 'محطة العولقي',
         ]);
+
+        // **البيعُ يشترط ورديّةً مفتوحة** — AMIAL-FUEL-VERTICAL-001 المرحلة ٠.
+        //
+        // وكانت هذه الاختباراتُ تبيع بلا وردية، فتوثّق سلوكاً كان يترك
+        // نقداً في الدرج بلا صاحب. فتُفتح الورديّةُ هنا كما يفعل الصرّاف
+        // أوّلَ يومه، لا يُخفَّف الشرط.
+        app(\App\Services\FuelShiftService::class)
+            ->openShift($this->station, $this->merchant, '0');
     }
 
     /** @test */

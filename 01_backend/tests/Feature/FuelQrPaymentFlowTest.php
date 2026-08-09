@@ -59,6 +59,10 @@ class FuelQrPaymentFlowTest extends TestCase
         $pump = $this->fuel->addPump($station, ['pump_number' => 1]);
         $product = $this->fuel->addProduct($station, ['name' => 'بنزين', 'price_per_liter' => '500']);
 
+        // البيعُ يشترط ورديّةً مفتوحة — AMIAL-FUEL-VERTICAL-001 المرحلة ٠.
+        app(\App\Services\FuelShiftService::class)
+            ->openShift($station, $this->merchant, '0');
+
         // 1) التاجر ينشئ طلب دفع بمبلغ ثابت (كما يفعل كاشير الوقود لعرض QR)
         $request = $this->pr->create(
             requester: $this->merchant,
