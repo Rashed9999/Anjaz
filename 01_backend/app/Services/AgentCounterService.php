@@ -98,7 +98,7 @@ class AgentCounterService
     ): array {
         $this->assertOperable($branch, $customer, $amount);
 
-        $q = $this->quote('agent_deposit', $amount, (string) $branch->account?->zone_code);
+        $q = $this->quote('AGENT_DEPOSIT', $amount, (string) $branch->account?->zone_code);
 
         // العميل يسلّم `amount` نقداً ويستلم `amount - fee` في محفظته.
         //
@@ -273,7 +273,7 @@ class AgentCounterService
     ): array {
         $this->assertOperable($branch, $customer, $amount);
 
-        $q = $this->quote('agent_withdraw', $amount, (string) $branch->account?->zone_code);
+        $q = $this->quote('AGENT_WITHDRAW', $amount, (string) $branch->account?->zone_code);
 
         // العميل يطلب `amount` نقداً ويُخصم منه `amount + fee`.
         //

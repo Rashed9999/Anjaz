@@ -137,7 +137,11 @@ class AdminDashboardTruthTest extends TestCase
 
         $svc = app(AdminDashboardService::class);
 
-        $this->assertSame(20.0, $svc->feesEarned(), 'الأرباح ليست مجموع الرسوم');
+        // AMIAL-TRUTH-004 — **العقدُ صار أقوى**: سلسلةٌ بأربع منازل لا
+        // فاصلةٌ عائمة. والقيمةُ نفسُها (20)، والنوعُ هو ما تغيّر — فكلُّ
+        // مسارٍ ماليٍّ في هذا المشروع يعمل بـ`bcmath`، ورقمُ الإيرادات
+        // وحدَه كان يشذّ.
+        $this->assertSame('20.0000', $svc->feesEarned(), 'الأرباح ليست مجموع الرسوم');
 
         // **والاختبار الحاسم: الرقم لا يتغيّر بتغيّر الداخل.**
         $other = new User();

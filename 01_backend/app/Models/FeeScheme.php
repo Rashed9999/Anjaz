@@ -31,9 +31,33 @@ class FeeScheme extends Model
     ];
 
     /** الأكواد المعتمدة للعمليات. */
+    /**
+     * رموزُ الرسوم التي تُضبط من لوحة الإدارة.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **AMIAL-TRUTH-002 — ورمزٌ هنا بلا مستهلكٍ زرٌّ يكذب.**
+     *
+     * `FeeSchemeController` يتحقّق `in:CODES`، فهذه القائمةُ هي ما يستطيع
+     * الأدمنُ تسعيرَه. **وما ليس فيها لا يُسعَّر أبداً.**
+     *
+     * وقد كُشف بتدقيق `amial-financial-truth` أنّ `AgentCounterService`
+     * يطلب `'agent_deposit'` و`'agent_withdraw'` — **وليسا هنا**.
+     * والمطابقةُ في `FeeService::activeScheme()` نصّيّةٌ حرفيّة، فلا يجد
+     * مخطّطاً أبداً ويردّ صفراً.
+     *
+     * **وهذا هو سببُ ما في `CLAUDE.md`: «ضبط الرسوم — كلّ عمليات الوكيل
+     * مجّانية الآن».** لم يكن نقصَ ضبطٍ من صاحب المشروع: كان اسمين لا
+     * يلتقيان، والأدمنُ لا يملك حقلاً يكتبهما فيه.
+     *
+     * والحارسُ `FeeCodeReachabilityTest` يمسك الاتّجاهين: رمزٌ هنا بلا
+     * مستهلك، ورمزٌ يُطلب وليس هنا.
+     */
     public const CODES = [
         'SEND_MONEY', 'CASH_OUT', 'CASH_IN', 'MERCHANT_QR', 'MERCHANT_POS',
         'SAFE_PAYMENT', 'BILL_PAY', 'SPLIT_BILL', 'REFUND', 'FAMILY_FUND_CONTRIB',
+
+        // عمليّاتُ شبّاك الوكيل — تُطلب في `AgentCounterService::quote()`.
+        'AGENT_DEPOSIT', 'AGENT_WITHDRAW',
     ];
 
     public const FEE_TYPES = ['percent', 'fixed', 'percent_plus_fixed'];

@@ -79,7 +79,22 @@ class AdminDashboardService
      * ولا تُقرأ من `e_money.charge_earned`: ذاك عمودٌ مخزَّن، وقراءتُه
      * تُثبت أنّه يساوي نفسه. ولا من حساب الداخل — الرقم واحدٌ للمنصّة.
      */
-    public function feesEarned(?Carbon $from = null, ?Carbon $to = null): float
+    /**
+     * AMIAL-TRUTH-004 — **المال يُجمَع بدقّةٍ ثابتة لا بفاصلةٍ عائمة.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * كان الردُّ `(float)`. وكلُّ مسارٍ ماليٍّ آخرَ في هذا المشروع يعمل
+     * بـ`bcmath` بأربع منازل — **فرقمُ الإيرادات وحدَه كان يُحسب بقواعدَ
+     * أخرى**.
+     *
+     * و`DB::sum()` على عمود DECIMAL يردّ سلسلةً كاملةَ الدقّة؛ **والقالبُ
+     * هو من يفقدها**. فبقاؤها سلسلةً حتّى العرض يحفظها.
+     *
+     * ولا يظهر الفرقُ في ريالٍ واحد — يظهر بعد مئة ألف عمليّة، حين
+     * يُطلَب من الماليّة أن تُطابق فلا تُطابق بقروش. (والقالبُ يعرض
+     * `number_format` فلا يتغيّر ما يراه أحد.)
+     */
+    public function feesEarned(?Carbon $from = null, ?Carbon $to = null): string
     {
         $q = DB::table('transactions')->whereNotNull('charge');
 
@@ -91,7 +106,7 @@ class AdminDashboardService
             $q->where('created_at', '<=', $to);
         }
 
-        return (float) $q->sum('charge');
+        return bcadd((string) ($q->sum('charge') ?? '0'), '0', 4);
     }
 
     /**
@@ -104,22 +119,27 @@ class AdminDashboardService
     {
         $platformId = Helpers::get_admin_id();
 
-        $circulating = (float) DB::table('e_money')
-            ->where('user_id', '!=', $platformId)->sum('current_balance');
+        // **وكلُّ جمعٍ بـbcmath** — لا `(float)` ولا `+` على مال.
+        // فالجمعُ العائم يُنتج فرقاً لا يُفسَّر بعد مئة ألف عمليّة،
+        // ويُطلَب من الماليّة أن تُطابقه فلا تستطيع. (AMIAL-TRUTH-004)
+        $sum = static fn ($q): string => bcadd((string) ($q ?? '0'), '0', 4);
 
-        $pending = (float) DB::table('e_money')->sum('pending_balance');
+        $circulating = $sum(DB::table('e_money')
+            ->where('user_id', '!=', $platformId)->sum('current_balance'));
 
-        $treasury = (float) DB::table('e_money')
-            ->where('user_id', $platformId)->sum('current_balance');
+        $pending = $sum(DB::table('e_money')->sum('pending_balance'));
 
-        $toppedUp = (float) DB::table('transactions')
+        $treasury = $sum(DB::table('e_money')
+            ->where('user_id', $platformId)->sum('current_balance'));
+
+        $toppedUp = $sum(DB::table('transactions')
             ->where('user_id', $platformId)
             ->where('transaction_type', CASH_IN)
-            ->sum('credit');
+            ->sum('credit'));
 
         return [
             'total_balance'  => $toppedUp,
-            'used_balance'   => $circulating + $pending,
+            'used_balance'   => bcadd($circulating, $pending, 4),
             'unused_balance' => $treasury,
             'total_earned'   => $this->feesEarned(),
         ];

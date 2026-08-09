@@ -401,8 +401,31 @@ class WhatsappBotService
         $wallet  = EMoney::where('user_id', $user->id)->first();
         $balance = (string) ($wallet?->current_balance ?? '0');
 
-        $feeData = $this->feeSvc->calculate('send_money', $amount);
-        $fee     = (string) ($feeData['fee_amount'] ?? '0');
+        // AMIAL-TRUTH-003 — **الرسمُ نفسُه في كلّ قناة.**
+        //
+        // ══════════════════════════════════════════════════════════════
+        // **عطلان في سطرٍ واحد، وكلاهما يُنتج صفراً صامتاً:**
+        //
+        //   ① الرمزُ كان `'send_money'` بحروفٍ صغيرة، ومطابقةُ
+        //      `FeeService::activeScheme()` نصّيّةٌ حرفيّة والمخطّطُ
+        //      `'SEND_MONEY'`. فلا يُوجد مخطّطٌ أبداً ويردّ المحرّكُ
+        //      «لا رسم».
+        //
+        //   ② والمفتاحُ كان `fee_amount` والمحرّكُ يردّ `fee`. فحتّى لو
+        //      طابق الرمزُ لقرأ مفتاحاً غير موجودٍ فصار صفراً.
+        //
+        // **والأثرُ مالٌ لا عرض:** الرسمُ المحسوب يُمرَّر إلى
+        // `PendingTransferService::initiate(fee: …)` — وتلك **تستقبل ولا
+        // تحسب**. فكلُّ تحويلٍ عبر واتساب كان **مجّانيّاً تماماً**، ونفسُه
+        // في التطبيق يُرسَم. قناتان، ورسمان، لعمليّةٍ واحدة.
+        //
+        // ولا خطأ في أيّ سجلّ: الردُّ صحيحُ الشكل، والصفرُ يُقرأ «لا رسم
+        // على هذه العمليّة».
+        $feeData = $this->feeSvc->calculate('SEND_MONEY', $amount, [
+            'zone_code' => $user->zone_code ?? 'SOUTH',
+            'applies_to' => 'customer',
+        ]);
+        $fee     = (string) ($feeData['fee'] ?? '0');
         $total   = bcadd($amount, $fee, 4);
 
         if (bccomp($total, $balance, 2) > 0) {
