@@ -43,6 +43,12 @@ cat <<'EOF'
   شاشة فلاتر ................. amial-flutter
   لوحة أو شاشة إداريّة ........ amial-banking-ui · amial-dashboard
 
+  ── المهارات الأربع الجديدة (٢٠–٢٣) ──
+  ميزةٌ خاصّةٌ بصنف تاجر ....... amial-verticals
+  أيّ شاشةٍ في لوحة الإدارة .... amial-admin-command
+  أيّ حسابٍ ماليٍّ في واجهة ..... amial-financial-truth  (إلزاميّ مع المال)
+  أيّ مستندٍ يُطبع ............. amial-printing
+
 التعارضاتُ السبعة المقيسة مع الشيفرة القائمة (GetX/Repository/صيغة الردّ…)
 في `.claude/skills/README.md` — **لم تُحسم، فلا يُعمَل بها قبل قرارٍ صريح.**
 </amial-skills-index>
