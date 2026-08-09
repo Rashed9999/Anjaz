@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MerchantProfile;
 use App\Models\User;
+use App\Models\PosUser;
 use App\Support\Access\AccessConstants as A;
 use App\Support\Access\AccessPresets;
 
@@ -44,7 +45,29 @@ class FeatureAccessService
         $expiresAt = null;
         $notes = null;
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-ACTOR-001 — **موظّفُ نقطة البيع يرث صنفَ تاجره، لا يبدأ فارغاً.**
+        //
+        // كان هذا الشرطُ يقبل `ROLE_MERCHANT` وحده. وموظّفُ نقطة البيع
+        // دورُه `'pos'` — **وهو ليس في `ALL_ROLES` أصلاً**. فكان يرجع له:
+        //
+        //     business_type = null · plan = free · features = الأساس وحده
+        //
+        // أي أنّ كاشيرَ محطّة الوقود يفتح التطبيق فلا يجد ميزةَ وقودٍ
+        // واحدة — **والخادمُ يقول إنّه بلا صنفٍ وبلا اشتراك**. ولا خطأ
+        // في أيّ سجلّ: الردُّ ٢٠٠ وقائمةُ الميزات صحيحةُ الشكل، فارغةُ
+        // المعنى.
+        //
+        // **والفاعلُ يُصرَّح به الآن** (`actor`): مالكٌ أم موظّفُ نقطة
+        // بيع. فشاشةُ الإدارة غيرُ شاشة البيع، ولا يُبنى الفرقُ على تخمين
+        // التطبيق. (القاعدة الثامنة: الهويّة تحدّد النطاق.)
+        $actor = 'customer';
+        $posUser = null;
+        $ownerId = null;
+
         if ($role === A::ROLE_MERCHANT) {
+            $actor = 'owner';
+            $ownerId = $user->id;
             $merchantProfile = MerchantProfile::where('user_id', $user->id)->first();
             if ($merchantProfile) {
                 $businessType = $merchantProfile->business_type;
@@ -64,11 +87,65 @@ class FeatureAccessService
             }
         }
 
-        $features = $this->resolveFeatures($role, $verificationLevel, $businessType, $plan, $extraFeatures);
-        $limits = $role === A::ROLE_MERCHANT ? AccessPresets::planLimits($plan) : [];
+        // **وموظّفُ نقطة البيع: يرث ثمّ يُقيَّد.**
+        //
+        // يرث صنفَ التاجر وخطّتَه — فبلا الوراثة لا يرى كاشيرَ الوقود.
+        // ثمّ **تُقصُّ ميزاتُه بصلاحيّاته** المحفوظة في `pos_users.permissions`:
+        // فمن أُعطي البيعَ وحده لا يرى الأسعارَ ولا الورديّاتِ ولا التقارير.
+        //
+        // **وصلاحيّاتٌ فارغةٌ تعني البيعَ وحده لا كلَّ شيء** — فالافتراضيُّ
+        // الآمن في المال أضيقُ الدائرتين. (وموظّفٌ نُسي ضبطُه لا يفتح
+        // خزنةَ صاحبه.)
+        if ($role === self::ROLE_POS) {
+            $posUser = PosUser::where('user_id', $user->id)
+                ->where('is_active', true)
+                ->first();
+
+            if ($posUser) {
+                $actor = 'pos';
+                $ownerId = $posUser->merchant_user_id;
+
+                $merchantProfile = MerchantProfile::where('user_id', $ownerId)->first();
+
+                if ($merchantProfile) {
+                    $businessType = $merchantProfile->business_type;
+                    $plan = $merchantProfile->subscription_plan ?? A::PLAN_FREE;
+
+                    if ($plan !== A::PLAN_FREE
+                        && $merchantProfile->subscription_expires_at !== null
+                        && $merchantProfile->subscription_expires_at->isPast()) {
+                        $plan = A::PLAN_FREE;
+                    }
+                }
+            }
+        }
+
+        // الوراثةُ تُحسب بصنف التاجر وخطّته أيّاً كان الفاعل.
+        $inheritRole = in_array($actor, ['owner', 'pos'], true) ? A::ROLE_MERCHANT : $role;
+
+        $features = $this->resolveFeatures(
+            $inheritRole, $verificationLevel, $businessType, $plan, $extraFeatures);
+
+        if ($actor === 'pos') {
+            $features = $this->restrictToPosPermissions($features, $posUser);
+        }
+
+        $limits = in_array($actor, ['owner', 'pos'], true)
+            ? AccessPresets::planLimits($plan) : [];
 
         return [
             'role' => $role,
+
+            // **الفاعلُ مصرَّحٌ به** — لا يُستنتج في التطبيق من غياب حقل.
+            'actor' => $actor,
+            'merchant_user_id' => $ownerId,
+            'pos' => $posUser ? [
+                'id' => $posUser->id,
+                'pos_number' => $posUser->pos_number,
+                'display_name' => $posUser->display_name,
+                'permissions' => is_array($posUser->permissions) ? $posUser->permissions : [],
+            ] : null,
+
             'verification_level' => $verificationLevel,
             'business_type' => $businessType,
             'business_type_label' => $businessType ? (A::BUSINESS_TYPE_LABELS[$businessType] ?? null) : null,
@@ -80,6 +157,44 @@ class FeatureAccessService
             'features' => array_values($features),
             'limits' => $limits,
         ];
+    }
+
+    /**
+     * دورُ موظّف نقطة البيع — يُنشئه `MerchantStaffController` بهذه القيمة
+     * وليس في `ALL_ROLES`. يُثبَّت هنا بدل تكراره نصّاً.
+     */
+    private const ROLE_POS = 'pos';
+
+    /**
+     * ما يُسمح لموظّف نقطة البيع به من ميزات صاحبه.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **والافتراضيُّ أضيقُ الدائرتين.** فموظّفٌ بلا صلاحيّاتٍ مضبوطة يبيع
+     * ويطبع إيصالَه ولا شيءَ غير ذلك — لا أسعار، ولا ورديّات، ولا تقارير،
+     * ولا موظّفون. **ومن نُسي ضبطُه لا يفتح خزنةَ صاحبه.**
+     *
+     * (وهذه ليست واجهةً تُخفي أزراراً: القائمةُ تُحسب في الخادم، ونقاطُ
+     * النهاية تحرس نفسَها بوسائطها. الإخفاءُ راحةٌ للعين لا حماية.)
+     *
+     * @param  array<int,string>  $features
+     * @return array<int,string>
+     */
+    private function restrictToPosPermissions(array $features, ?PosUser $pos): array
+    {
+        $granted = ($pos && is_array($pos->permissions)) ? $pos->permissions : [];
+
+        // ما يبقى دائماً: البيعُ نفسُه وما لا يقوم بدونه.
+        $always = [
+            A::F_WALLET, A::F_NOTIFICATIONS, A::F_PROFILE,
+            A::F_RECEIPTS, A::F_CASHIER, A::F_FUEL_POS,
+            A::F_PHARMACY_POS, A::F_QUICK_SALE,
+        ];
+
+        return array_values(array_filter(
+            $features,
+            static fn (string $f): bool => in_array($f, $always, true)
+                || in_array($f, $granted, true),
+        ));
     }
 
     /**
