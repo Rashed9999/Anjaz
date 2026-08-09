@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_shift_cash_screen.dart';
 
 /// AMIAL-FUEL-002 — إدارة النوبات (فتح/إغلاق) + العجز والفائض.
 class FuelShiftsScreen extends StatefulWidget {
@@ -134,6 +135,25 @@ class _FuelShiftsScreenState extends State<FuelShiftsScreen> {
                 style: const TextStyle(color: Colors.white70, fontSize: 12, fontStyle: FontStyle.italic)),
           ),
         const SizedBox(height: 14),
+
+        // **حركةُ النقد قبل الإغلاق لا بعده** — AMIAL-FUEL-VERTICAL-001 · ٧.
+        //
+        // وبلا هذا الزرّ كان كلُّ ريالٍ يخرج للمصروفات يظهر عجزاً في وجه
+        // الكاشير: المتوقَّع يُحسب من الافتتاح والمبيعات وحدَها.
+        OutlinedButton.icon(
+          key: const Key('fuel-shift-cash-btn'),
+          onPressed: () => Get.to(
+              () => FuelShiftCashScreen(shiftId: (shift['id'] as num).toInt())),
+          icon: const Icon(Icons.account_balance_wallet_outlined),
+          label: const Text('مصروفات وحركة النقد'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: const BorderSide(color: Colors.white54),
+            minimumSize: const Size.fromHeight(44),
+          ),
+        ),
+        const SizedBox(height: 8),
+
         FilledButton.icon(
           onPressed: () => _closeShiftDialog(shift),
           icon: const Icon(Icons.stop_circle),

@@ -5,6 +5,7 @@ import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/access/screens/role_based_home_screens.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_owner_console_screen.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
 import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
@@ -66,9 +67,14 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
       }
 
       // 4) Route حسب الدور + business_type
-      // Merchant + fuel → Fuel Dashboard مباشرة
+      // Merchant + fuel → **لوحة المحطة** (AMIAL-FUEL-VERTICAL-001 · ٨)
+      //
+      // وكانت تقود إلى لوحةٍ واحدةٍ للجميع، فيرى الكاشيرُ ما يراه المالك.
+      // ولوحةُ المحطة تُبنى من صلاحيّات الداخل: المالكُ يرى الأقسام
+      // السبعة، والكاشيرُ يرى البيعَ وورديّتَه، وموظّفُ المخزون يرى
+      // الخزّاناتِ ولا يرى ريالاً.
       if (_access.isMerchant && _access.isFuel) {
-        return const FuelStationDashboardScreen();
+        return const FuelOwnerConsoleScreen();
       }
 
       // Merchant + pharmacy → Pharmacy Dashboard
