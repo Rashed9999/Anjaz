@@ -70,7 +70,7 @@ class BusinessSettingsController extends Controller
             'landing_page_logo' => 'nullable|image|max:'. $this->maxImageSizeKB .'|mimes:' . implode(',', array_column(IMAGE_EXTENSIONS, 'key')),
         ]);
 
-        if (env('APP_MODE') == 'demo') {
+        if (config('app.mode') == 'demo') {
             Toastr::info(translate('update_option_is_disable_for_demo'));
             return back();
         }
@@ -810,7 +810,7 @@ class BusinessSettingsController extends Controller
 
     public function mailConfigStatus(Request $request): RedirectResponse
     {
-        if (env('APP_MODE') == 'demo') {
+        if (config('app.mode') == 'demo') {
             Toastr::info(translate('update_option_is_disable_for_demo'));
             return back();
         }
@@ -841,7 +841,7 @@ class BusinessSettingsController extends Controller
 
     public function mailConfigUpdate(Request $request): RedirectResponse
     {
-        if (env('APP_MODE') == 'demo') {
+        if (config('app.mode') == 'demo') {
             Toastr::info(translate('update_option_is_disable_for_demo'));
             return back();
         }
@@ -868,7 +868,7 @@ class BusinessSettingsController extends Controller
 
     public function sendMail(Request $request): RedirectResponse|JsonResponse
     {
-        if (env('APP_MODE') == 'demo') {
+        if (config('app.mode') == 'demo') {
             Toastr::info(translate('update_option_is_disable_for_demo'));
             return back();
         }

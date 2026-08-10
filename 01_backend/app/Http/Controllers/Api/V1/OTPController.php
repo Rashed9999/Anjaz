@@ -21,7 +21,11 @@ class OTPController extends Controller
     public function checkOtp(Request $request): JsonResponse
     {
         try {
-            $otp = (env('APP_MODE') != 'live') ? '1234' : rand(1000, 9999);
+            // AMIAL-OTP-ENV-001 — `env()` تُرجع null بعد `config:cache`،
+            // فكان الرمزُ `1234` ثابتاً في الإنتاج. البابُ الواحد الآن هو
+            // `OtpPolicy`: رقمُ العرض يأخذ الثابت، والحقيقيُّ عشوائيّاً.
+            $otp = (string) app(\App\Services\Otp\OtpPolicy::class)
+                ->codeFor((string) $request->user()->phone);
 
             DB::table('phone_verifications')->updateOrInsert(['phone' => $request->user()->phone], [
                 'otp' => $otp,

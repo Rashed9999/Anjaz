@@ -53,7 +53,11 @@ class PasswordResetController extends Controller
                 ]], 403);
             }
 
-            $otp = env('APP_MODE') != LIVE ? '1234' : rand(1000, 9999);
+            // AMIAL-OTP-ENV-001 — انظر التفصيل في متحكّم العميل.
+            //
+            // **وهذا أخطرُ الثلاثة**: الوكيلُ يحمل سيولةً إلكترونيّةً ونقداً
+            // في خزنته، فاستيلاءٌ على حسابه ليس سرقةَ رصيدِ فرد.
+            $otp = (string) app(\App\Services\Otp\OtpPolicy::class)->codeFor((string) $request->phone);
 
             DB::table('password_resets')->updateOrInsert(['phone' => $request->phone], [
                 'token' => $otp,

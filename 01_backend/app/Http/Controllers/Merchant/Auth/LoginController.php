@@ -45,7 +45,7 @@ class LoginController extends Controller
 
     public function login(Request $request): View
     {
-        $ip = env('APP_MODE') == 'live' ? $request->ip() : '61.247.180.82';
+        $ip = config('app.mode') == 'live' ? $request->ip() : '61.247.180.82';
         $currentUserInfo = Location::get($ip);
 
         return view('merchant-views.auth.login', compact('currentUserInfo'));

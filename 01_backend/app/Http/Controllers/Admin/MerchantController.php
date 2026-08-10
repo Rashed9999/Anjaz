@@ -31,7 +31,7 @@ class MerchantController extends Controller
 
     public function index(Request $request): View
     {
-        $ip = env('APP_MODE') == 'live' ? $request->ip() : '61.247.180.82';
+        $ip = config('app.mode') == 'live' ? $request->ip() : '61.247.180.82';
         $currentUserInfo = Location::get($ip);
         return view('admin-views.merchant.index', compact('currentUserInfo'));
     }

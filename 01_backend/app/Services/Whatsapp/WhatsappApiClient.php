@@ -121,9 +121,9 @@ class WhatsappApiClient
     private function twilioSendText(string $to, string $body): bool
     {
         try {
-            $sid   = env('TWILIO_WA_SID', env('TWILIO_SID', ''));
-            $token = env('TWILIO_WA_TOKEN', env('TWILIO_TOKEN', ''));
-            $from  = env('TWILIO_WA_FROM', '');
+            $sid   = (string) config('amial.whatsapp.twilio_sid', '');
+            $token = (string) config('amial.whatsapp.twilio_token', '');
+            $from  = (string) config('amial.whatsapp.twilio_from', '');
 
             if (!$sid || !$token || !$from) return false;
 
@@ -143,8 +143,8 @@ class WhatsappApiClient
     private function dialogSendText(string $to, string $body): bool
     {
         try {
-            $apiKey  = env('DIALOG360_API_KEY', '');
-            $baseUrl = env('DIALOG360_BASE_URL', 'https://waba-v2.360dialog.io');
+            $apiKey  = (string) config('amial.whatsapp.dialog360_key', '');
+            $baseUrl = (string) config('amial.whatsapp.dialog360_base', 'https://waba-v2.360dialog.io');
             if (!$apiKey) return false;
 
             $response = Http::withHeaders(['D360-API-KEY' => $apiKey])
@@ -184,7 +184,7 @@ class WhatsappApiClient
         if (!empty(env('TWILIO_WA_FROM'))) {
             return 'twilio';
         }
-        if (!empty(env('DIALOG360_API_KEY'))) {
+        if (!empty(config('amial.whatsapp.dialog360_key'))) {
             return '360dialog';
         }
         return 'none';

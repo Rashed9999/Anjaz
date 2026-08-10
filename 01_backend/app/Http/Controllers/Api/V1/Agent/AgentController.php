@@ -252,7 +252,9 @@ class AgentController extends Controller
 
         $phone = $request['phone'];
         try {
-            $otp = env('APP_MODE') != LIVE ? '1234' : mt_rand(1000, 9999);
+            // AMIAL-OTP-ENV-001 — `env()` تُرجع null بعد `config:cache`
+            // فكان الرمزُ `1234` ثابتاً في الإنتاج. البابُ الواحد: OtpPolicy.
+            $otp = (string) app(\App\Services\Otp\OtpPolicy::class)->codeFor((string) $phone);
 
             DB::table('phone_verifications')->updateOrInsert(['phone' => $phone], [
                 'otp' => $otp,

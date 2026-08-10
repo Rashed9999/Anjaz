@@ -38,7 +38,7 @@ class RegistrationController extends Controller
                 'header_title' => null
             ],
         ];
-        $ip = env('APP_MODE') == 'live' ? $request->ip() : '61.247.180.82';
+        $ip = config('app.mode') == 'live' ? $request->ip() : '61.247.180.82';
         $currentUserInfo = Location::get($ip);
         $phone_verification = Helpers::get_business_settings('phone_verification');
 
@@ -96,10 +96,9 @@ class RegistrationController extends Controller
         $phoneVerification = Helpers::get_business_settings('phone_verification');
         if ($phoneVerification) {
             try {
-                $otp = mt_rand(1000, 9999);
-                if (env('APP_MODE') != LIVE) {
-                    $otp = '1234'; //hard coded
-                }
+                // AMIAL-OTP-ENV-001 — env() تُرجع null بعد config:cache،
+                // فكان الرمزُ 1234 ثابتاً في الإنتاج. البابُ الواحد: OtpPolicy.
+                $otp = (string) app(\App\Services\Otp\OtpPolicy::class)->codeFor((string) $phone);
 
                 DB::table('phone_verifications')->updateOrInsert(['phone' => $phone], [
                     'otp' => $otp,
@@ -207,10 +206,8 @@ class RegistrationController extends Controller
         ]);
 
         try {
-            $otp = mt_rand(1000, 9999);
-            if (env('APP_MODE') != LIVE) {
-                $otp = '1234';
-            }
+            // AMIAL-OTP-ENV-001 — انظر أعلاه.
+            $otp = (string) app(\App\Services\Otp\OtpPolicy::class)->codeFor((string) $request->phone);
             DB::table('phone_verifications')->updateOrInsert(['phone' => $request->phone], [
                 'otp' => $otp,
                 'created_at' => now(),
