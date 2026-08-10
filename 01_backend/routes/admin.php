@@ -208,7 +208,38 @@ Route::group(['as' => 'admin.'], function () {
             Route::get('index', [ExpenseController::class, 'index'])->name('index');
         });
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-WITHDRAW-DOOR-001 — **مالٌ يُحجز ولا بابَ لإخراجه.**
+        //
+        // كانت هذه المجموعةُ **فارغةً تماماً**. و`Admin\WithdrawController`
+        // مكتملٌ — فيه `index` و`status_update` — ولا مسارَ يقود إليه.
+        //
+        // وفي المقابل `POST /api/v1/customer/withdraw` **حيّ**: العميلُ
+        // يطلب سحباً فيُنقل مبلغُه من المتاح إلى المحجوز. ثمّ:
+        //
+        //   • لا مسارَ للإدارة يعتمد أو يرفض،
+        //   • ولا نقطةَ للعميل تُلغي (`Customer\WithdrawController` فيها
+        //     `list` وحدها).
+        //
+        // **فالمالُ يدخل الحجزَ ولا يخرج منه أبداً.** ولا خطأَ في أيّ
+        // سجلّ: الطلبُ يُنشأ بنجاح، والرصيدُ ينقص، والعميلُ ينتظر.
+        //
+        // وهو نمطُ العطل الأكثر تكراراً في المشروع بصورته الأقسى: ليست
+        // شاشةً لا يُوصل إليها، بل **بابَ خروجٍ للمال غيرَ موجود**.
+        //
+        // والصلاحيّة `platform.money.move`: اعتمادُ سحبٍ صرفٌ حقيقيّ من
+        // خزنة المنصّة، لا قراءةُ تدقيق.
         Route::group(['prefix' => 'withdraw', 'as' => 'withdraw.'], function () {
+            Route::get('/', [WithdrawController::class, 'index'])
+                ->middleware('platform:platform.audit.view')->name('index');
+            // **ومفتاحُ التفرّد إلزاميّ**: أمسك الحارسُ القائم
+            // (`AppMoneyIdempotencyTest`) هذا المسارَ لحظةَ تسجيله وقال
+            // «مسارُ مالٍ بلا مفتاح تفرّد» — قبل أن يصل إلى أحد. وهو
+            // مثالٌ على حارسٍ يعمل: منع عودةَ صنفٍ من العطل في مسارٍ لم
+            // يكن موجوداً يوم كُتب.
+            Route::post('status-update', [WithdrawController::class, 'status_update'])
+                ->middleware(['platform:platform.money.move', 'amial.idempotency'])
+                ->name('status-update');
         });
 
         Route::group(['prefix' => 'transfer', 'as' => 'transfer.'], function () {

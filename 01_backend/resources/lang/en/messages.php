@@ -435,4 +435,8 @@
   'شحن الرصيد عبر بوّابة الدفع غير متاح حالياً. لتغذية رصيدك تواصل مع الإدارة أو وكيلك.' => 'شحن الرصيد عبر بوّابة الدفع غير متاح حالياً. لتغذية رصيدك تواصل مع الإدارة أو وكيلك.',
   'رمز PIN غير صحيح' => 'رمز PIN غير صحيح',
   'المستلِم غير موجود — تحقّق من الرقم' => 'المستلِم غير موجود — تحقّق من الرقم',
+  'This request has already been processed' => 'This request has already been processed',
+  'Withdraw_request_denied' => 'Withdraw request denied',
+  'The request has been successfully updated' => 'The request has been successfully updated',
+  'Withdraw_request_accepted' => 'Withdraw request accepted',
 );

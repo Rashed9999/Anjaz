@@ -80,6 +80,30 @@ class WithdrawController extends Controller
             return back();
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-WITHDRAW-DOUBLE-001 — **طلبٌ يُبتّ فيه مرّتين يُعيد المال
+        // مرّتين.**
+        //
+        // لم يكن هنا فحصٌ واحدٌ لحالة الطلب. فضغطتان على «رفض» — أو
+        // تحديثُ الصفحة بعد الإرسال، أو موظّفان يفتحان القائمة نفسها —
+        // تُنفّذان المسار مرّتين:
+        //
+        //     pending_balance -= total   ← مرّتين، فيصير سالباً
+        //     current_balance += total   ← مرّتين، **فيُعاد المبلغ مرّتين**
+        //
+        // والمعاملةُ لا تحمي من هذا: كلٌّ منهما معاملةٌ صحيحةٌ بذاتها.
+        // والذي يمنعه فحصُ الحالة **داخل** المعاملة مع قفل الصفّ.
+        //
+        // ولا يظهر في أيّ سجلّ: عمليّتا رفضٍ ناجحتان، والدفترُ يستقبل
+        // قيدين، والرصيدُ زاد ضعفَ ما يجب — بلا خطأ.
+        //
+        // والفحصُ هنا **مبكّرٌ وودود**: يقول للموظّف إنّ الطلب بُتّ فيه
+        // بدل أن يصمت. والفحصُ الحقيقيّ داخل المعاملة أدناه.
+        if ($withdrawRequest->request_status !== 'pending') {
+            Toastr::warning(translate('This request has already been processed'));
+            return back();
+        }
+
         if ($request->request_status == 'deny'){
             $total = (string) ($withdrawRequest['amount'] + $withdrawRequest['admin_charge']);
 
@@ -90,8 +114,24 @@ class WithdrawController extends Controller
             // زال معلّقاً — فيسحب العميل المبلغ نفسه مرّتين.
             //
             // فصار الثلاثة (فكّ الحجز، ختم الطلب، القيد) في معاملة واحدة.
+            // **والرفضُ يُقال رسالةً لا ٥٠٠.**
+            //
+            // درسٌ مكتوبٌ في `CLAUDE.md`: «الحمايةُ كانت قائمةً والرسالةُ
+            // مفقودة — رفضٌ سليمٌ يخرج بـ٥٠٠ إنجليزيّ في وجه الموظّف».
+            try {
             DB::transaction(function () use ($withdrawRequest, $request, $total) {
-                $account = $this->eMoney->where(['user_id' => $withdrawRequest->user->id])->first();
+                // **الفحصُ داخل القفل لا قبله** — القاعدة الأولى في
+                // `CLAUDE.md`: «فحصٌ يقع خارج القفل لا يظهر إلّا بالتوازي».
+                // فالفحصُ أعلاه رسالةٌ للموظّف، وهذا هو الحارس.
+                $fresh = $this->withdrawRequest->where('id', $withdrawRequest->id)
+                    ->lockForUpdate()->first();
+
+                if (! $fresh || $fresh->request_status !== 'pending') {
+                    throw new \App\Exceptions\WithdrawAlreadyProcessedException();
+                }
+
+                $account = $this->eMoney->where(['user_id' => $withdrawRequest->user->id])
+                    ->lockForUpdate()->first();
                 $account->pending_balance -= $total;
                 $account->current_balance += $total;
                 $account->save();
@@ -107,6 +147,10 @@ class WithdrawController extends Controller
                     sourceId: (string) $withdrawRequest->id,
                 );
             });
+            } catch (\App\Exceptions\WithdrawAlreadyProcessedException $e) {
+                Toastr::warning(translate('This request has already been processed'));
+                return back();
+            }
         }
 
         if ($request->request_status == 'approve')
@@ -117,12 +161,37 @@ class WithdrawController extends Controller
                 return back();
             }
 
-            $this->accept_withdraw_transaction($withdrawRequest->user_id, $withdrawRequest['amount'], $withdrawRequest['admin_charge']);
+            // **وختمُ الطلب داخل معاملةٍ بقفل** — وإلّا فاعتمادان متزامنان
+            // يُحرّكان المال مرّتين. و`accept_withdraw_transaction` قافلةٌ
+            // في نفسها، لكنّ **ختمَ الطلب** كان خارج أيّ حماية: يُنفَّذ
+            // التحويلُ ثمّ يُكتب `approved` — ولا شيء يمنع تنفيذاً ثانياً
+            // بينهما.
+            //
+            // ولمّا كان التحويلُ نفسُه لا يُردّ بعد إتمامه، يُختم الطلبُ
+            // **أوّلاً** داخل قفل: من يظفر بالقفل يملك الحقّ في التنفيذ،
+            // والثاني يجد الحالةَ غيرَ `pending` فينسحب قبل أن يُحرّك ريالاً.
+            try {
+                DB::transaction(function () use ($withdrawRequest, $request) {
+                    $fresh = $this->withdrawRequest->where('id', $withdrawRequest->id)
+                        ->lockForUpdate()->first();
 
-            $withdrawRequest->request_status = $request->request_status == 'approve' ? 'approved' : 'denied';
-            $withdrawRequest->is_paid = 1;
-            $withdrawRequest->admin_note = $request->admin_note ?? null;
-            $withdrawRequest->save();
+                    if (! $fresh || $fresh->request_status !== 'pending') {
+                        throw new \App\Exceptions\WithdrawAlreadyProcessedException();
+                    }
+
+                    $withdrawRequest->request_status = 'approved';
+                    $withdrawRequest->is_paid = 1;
+                    $withdrawRequest->admin_note = $request->admin_note ?? null;
+                    $withdrawRequest->save();
+                });
+            } catch (\App\Exceptions\WithdrawAlreadyProcessedException $e) {
+                Toastr::warning(translate('This request has already been processed'));
+                return back();
+            }
+
+            // والتحويلُ بعد الختم: لو سقط، بقي الطلبُ مختوماً بلا مال —
+            // وهو خطأٌ **يُكتشف ويُصحَّح**، بخلاف مالٍ يخرج مرّتين.
+            $this->accept_withdraw_transaction($withdrawRequest->user_id, $withdrawRequest['amount'], $withdrawRequest['admin_charge']);
         }
 
         $type = $request->request_status == 'approve' ? 'withdraw_money_approved' : 'withdraw_money_denied';
