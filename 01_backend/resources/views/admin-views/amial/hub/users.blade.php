@@ -273,6 +273,44 @@
                     ${isAgents ? 'تحويل رصيد' : 'إعادة مبلغ'}</button>`;
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    //  زرّ المركز + قائمته — «فتح المركز ⋮»
+    //
+    //  والقائمةُ ليست زينة: **كلّ بندٍ يفتح المركز على تبويبه مباشرة**
+    //  (`#tab=money`)، فمن يفتح الملفّ من أجل التسويات لا يبدأ من الملفّ
+    //  الأساسيّ ثمّ يبحث عن التبويب. وما لا يملكه دورُه لن يظهر له داخل
+    //  المركز أصلاً — فالقائمةُ تعرض، والخادمُ يقرّر.
+    // ══════════════════════════════════════════════════════════════════
+
+    const CENTER_MENU = [
+        ['profile',      '👤 الملف الأساسي'],
+        ['money',        '💰 المركز المالي وكشف الحساب'],
+        ['settlements',  '🔄 التسويات'],
+        ['operations',   '📊 العمليات'],
+        ['risk',         '🚨 المخاطر'],
+        ['staff',        '👨‍💼 الموظفون (عرض فقط)'],
+        ['devices',      '📱 الأجهزة والجلسات'],
+        ['compliance',   '🛡️ التوثيق والامتثال'],
+        ['support',      '🎫 التذاكر'],
+        ['subscription', '⚙️ الاشتراك'],
+        ['audit',        '📝 سجل التدقيق'],
+    ];
+
+    function centerMenu(u) {
+        return `<div class="btn-group">
+            <button class="btn btn-sm btn-dark" data-act="center" data-id="${u.id}"
+                    data-testid="hub-open-center">فتح المركز</button>
+            <button class="btn btn-sm btn-dark dropdown-toggle dropdown-toggle-split"
+                    data-bs-toggle="dropdown" data-testid="hub-center-menu"
+                    aria-expanded="false"><span class="visually-hidden">أقسام المركز</span></button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                ${CENTER_MENU.map(([sec, label]) =>
+                    `<li><a class="dropdown-item" href="#" data-act="center-sec"
+                            data-id="${u.id}" data-sec="${sec}">${label}</a></li>`).join('')}
+            </ul>
+        </div>`;
+    }
+
     async function loadUsers() {
         const tbody = document.getElementById('users-tbody');
         tbody.innerHTML = `<tr><td colspan="${COLS}" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>`;
@@ -300,9 +338,7 @@
                 <td>${u.is_active ? '<span class="badge bg-success">نشِط</span>' : '<span class="badge bg-danger">مجمَّد</span>'}</td>
                 <td class="text-nowrap">
                     <button class="btn btn-sm btn-primary" data-act="open" data-id="${u.id}">التفاصيل</button>
-                    ${isMerchants ? `<button class="btn btn-sm btn-dark" data-act="center" data-id="${u.id}"
-                            title="الملف · المال · التسويات · العمليات · المخاطر · الأجهزة · التدقيق"
-                            data-testid="hub-open-center">فتح المركز</button>` : ''}
+                    ${isMerchants ? centerMenu(u) : ''}
                     ${transferControl(u)}
                     <button class="btn btn-sm ${u.is_active ? 'btn-outline-danger' : 'btn-outline-success'}"
                             data-act="toggle" data-id="${u.id}">${u.is_active ? 'تجميد' : 'فكّ التجميد'}</button>
@@ -314,6 +350,16 @@
         // الزرّ يُحسم أوّلاً. الصفّ نفسه يحمل data-act="open"، فلو بُحث عن
         // الصفّ قبل الزرّ لابتلع الصفُّ كلَّ ضغطةٍ على أزراره — وهو ما جعل
         // «تحويل رصيد» ينقل إلى صفحة الوكيل بدل فتح النافذة.
+        // بندُ القائمة `<a>` لا `<button>` — ويُحسم قبل كلّ شيء، وإلّا
+        // ابتلعه الصفُّ ونقل إلى صفحة الحساب بدل تبويب المركز.
+        const menuItem = e.target.closest('a[data-act="center-sec"]');
+        if (menuItem) {
+            e.preventDefault();
+            window.location.href = `{{ url('admin/amial/merchant-center') }}/`
+                + `${menuItem.dataset.id}#tab=${menuItem.dataset.sec}`;
+            return;
+        }
+
         const btn = e.target.closest('button[data-act]');
         // فتح صفحة التفاصيل: زر «التفاصيل»، أو الضغط على الصفّ خارج الأزرار
         const row = btn ? null : e.target.closest('tr[data-act="open"]');

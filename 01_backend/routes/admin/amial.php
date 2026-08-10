@@ -220,12 +220,26 @@ Route::prefix('fuel')->name('fuel.')->middleware('platform:platform.audit.view')
 // **أميال منصّة مالية لا ERP للتاجر.** فلا أصناف ولا مخزون ولا موردين
 // هنا — إلّا بإذن اطّلاع مؤقّت بسبب مكتوب وأجل، ويُسجَّل.
 //
-// والقراءات بـ`platform.customers.view`، والأفعال الخطِرة بصلاحيّاتها:
-// تجميدُ حسابٍ وإنهاءُ جلساتٍ وتعطيلُ موظّفٍ أمنيّاً بـ`platform.customers.freeze`،
-// وتغييرُ الباقة بـ`platform.settings.manage`.
+// ══════════════════════════════════════════════════════════════════════
+// **وصلاحيّاتُ فريق أميال نفسِه مقسومةٌ هنا** — AMIAL-OPERATOR-RBAC-003.
+//
+// «لا يجوز أن يستطيع كلّ موظّف في أميال رؤية كلّ شيء.» وكان المركزُ
+// كلُّه على صلاحيّتين: `customers.view` لكلّ قراءة و`audit.view` لكلّ
+// ما يمسّ المال. فصار:
+//
+//   دعم العملاء  → الملفّ · حالة الحساب · التذاكر · العمليّات الأساسيّة
+//   المالية      → الأرصدة · كشف الحساب · التسويات · العمولات
+//   المخاطر      → الإشارات · الأجهزة · التدقيق · التجميد الأمنيّ
+//   الامتثال     → التوثيق · الوثائق · المراجعات · القيود
+//   مدير النظام  → الكلّ — ومعه وحدَه تغييرُ الباقات
+//
+// **وصلاحيّةُ كلّ مسارٍ هنا هي نفسُها المكتوبة في
+// `MerchantCenterService::SECTIONS`** — ولو اختلفتا لظهر تبويبٌ لا
+// يُفتح، أو انفتح مسارٌ بلا تبويب. يمنعهما حارسٌ في المجموعة.
 Route::prefix('merchant-center')->name('merchant-center.')->group(function () {
     $mc = App\Http\Controllers\Admin\MerchantCenterController::class;
 
+    // القاعدة: من يرى ملفّ عميلٍ يرى ملفّ تاجر — وهي أدنى بوّابة.
     Route::middleware('platform:platform.customers.view')->group(function () use ($mc) {
         Route::get('/{id}', [$mc, 'page'])->where('id', '[0-9]+')->name('page');
         Route::get('/{id}/overview', [$mc, 'overview'])->where('id', '[0-9]+')->name('overview');
@@ -233,28 +247,53 @@ Route::prefix('merchant-center')->name('merchant-center.')->group(function () {
         Route::get('/{id}/operations/{type}', [$mc, 'operationsOfType'])
             ->where(['id' => '[0-9]+', 'type' => '[a-z_]+'])->name('operations.type');
         Route::get('/{id}/staff', [$mc, 'staff'])->where('id', '[0-9]+')->name('staff');
-        Route::get('/{id}/devices', [$mc, 'devices'])->where('id', '[0-9]+')->name('devices');
         Route::get('/{id}/support', [$mc, 'support'])->where('id', '[0-9]+')->name('support');
         Route::get('/{id}/subscription', [$mc, 'subscription'])->where('id', '[0-9]+')->name('subscription');
+        Route::post('/{id}/note', [$mc, 'addNote'])->where('id', '[0-9]+')->name('note');
     });
 
-    // المال والمخاطر والامتثال والتدقيق — من جنس التدقيق
-    Route::middleware('platform:platform.audit.view')->group(function () use ($mc) {
+    // ── المال: لفريق المالية ومدير النظام وحدهما ──
+    // «Customer Support لا يستطيع: تعديل التسويات · تعديل الأرصدة ·
+    //  تغيير العمولات» — وقراءتُها كذلك ليست من عمله.
+    Route::middleware('platform:platform.merchants.money')->group(function () use ($mc) {
         Route::get('/{id}/money', [$mc, 'money'])->where('id', '[0-9]+')->name('money');
         Route::get('/{id}/statement', [$mc, 'statement'])->where('id', '[0-9]+')->name('statement');
         Route::get('/{id}/settlements', [$mc, 'settlements'])->where('id', '[0-9]+')->name('settlements');
+    });
+
+    // ── المخاطر والأجهزة: لفريق المخاطر ──
+    Route::middleware('platform:platform.merchants.risk')->group(function () use ($mc) {
         Route::get('/{id}/risk', [$mc, 'risk'])->where('id', '[0-9]+')->name('risk');
+        Route::get('/{id}/devices', [$mc, 'devices'])->where('id', '[0-9]+')->name('devices');
+    });
+
+    // ── الامتثال والتوثيق: لفريق الامتثال ──
+    // «ولا أريد أن يكون هذا مختلطاً مع الاشتراكات.»
+    Route::middleware('platform:platform.merchants.compliance')->group(function () use ($mc) {
         Route::get('/{id}/compliance', [$mc, 'compliance'])->where('id', '[0-9]+')->name('compliance');
+    });
+
+    // ── سجلّ التدقيق: للمخاطر والامتثال والإشراف ──
+    Route::middleware('platform:platform.audit.view')->group(function () use ($mc) {
         Route::get('/{id}/audit', [$mc, 'auditTrail'])->where('id', '[0-9]+')->name('audit');
+    });
+
+    // ── إذن الاطّلاع التشغيليّ: البابُ الوحيد إلى تفاصيل التاجر ──
+    // ولا يملكه الدعم ولا المالية: فتحُ ERP التاجر قرارُ تحقيقٍ لا خدمة.
+    Route::middleware('platform:platform.merchants.investigate')->group(function () use ($mc) {
         Route::get('/{id}/operational-detail', [$mc, 'operationalDetail'])
             ->where('id', '[0-9]+')->name('operational-detail');
         Route::post('/{id}/access', [$mc, 'grantAccess'])->where('id', '[0-9]+')->name('access.grant');
         Route::delete('/{id}/access/{grantId}', [$mc, 'revokeAccess'])
             ->where(['id' => '[0-9]+', 'grantId' => '[0-9]+'])->name('access.revoke');
-        Route::post('/{id}/note', [$mc, 'addNote'])->where('id', '[0-9]+')->name('note');
     });
 
-    // الأفعال الأمنيّة
+    // ── التذاكر: عملُ الدعم ──
+    Route::middleware('platform:platform.tickets.manage')->group(function () use ($mc) {
+        Route::post('/{id}/ticket', [$mc, 'openTicket'])->where('id', '[0-9]+')->name('ticket');
+    });
+
+    // الأفعال الأمنيّة — «Risk يستطيع: التجميد الأمني»
     Route::middleware('platform:platform.customers.freeze')->group(function () use ($mc) {
         Route::post('/{id}/freeze', [$mc, 'toggleFreeze'])->where('id', '[0-9]+')->name('freeze');
         Route::post('/{id}/revoke-sessions', [$mc, 'revokeSessions'])

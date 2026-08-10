@@ -783,43 +783,18 @@ class SupportConsoleController extends Controller
             'description' => 'nullable|string|max:5000',
         ]);
 
-        $admin = $request->user();
+        // **بابٌ واحدٌ لا اثنان** — مركزُ التاجر يفتح التذاكر أيضاً، ونسخُ
+        // المنطق هناك يعني رقمَ تذكرةٍ يُولَّد بطريقتين. (AMIAL-MERCHANT-CENTER-002)
+        $subject = \App\Models\User::find($data['user_id']);
 
-        $ticket = DB::transaction(function () use ($data, $admin) {
-            $ticket = SupportTicket::create([
-                'ticket_number' => SupportTicket::nextTicketNumber(),
-                'user_id' => $data['user_id'],
-                'opened_by_admin_id' => $admin->id,
-                'transaction_ref' => $data['transaction_ref'] ?? null,
-                'category' => $data['category'] ?? 'other',
-                'priority' => $data['priority'] ?? 'normal',
-                'status' => 'open',
-                'subject' => $data['subject'],
-                'description' => $data['description'] ?? null,
-            ]);
+        try {
+            $ticket = app(\App\Services\Support\SupportTicketService::class)
+                ->open($request->user(), $subject, $data);
+        } catch (\DomainException $e) {
+            return $this->error('TICKET_INVALID', $e->getMessage(), 422);
+        }
 
-            SupportTicketEvent::create([
-                'ticket_id' => $ticket->id,
-                'admin_id' => $admin->id,
-                'event_type' => 'created',
-                'new_value' => 'open',
-                'note' => $ticket->subject,
-            ]);
-
-            return $ticket;
-        });
-
-        $this->audit->record([
-            'actor_type' => 'admin',
-            'actor_user_id' => $admin->id,
-            'subject_type' => 'support_ticket',
-            'subject_id' => (string) $ticket->id,
-            'action' => 'SUPPORT_TICKET_CREATED',
-            'decision_code' => 'OK',
-            'reason' => $ticket->subject,
-        ]);
-
-        return $this->ok(['ticket' => $ticket->fresh()], 'OK', 'تم فتح التذكرة', 201);
+        return $this->ok(['ticket' => $ticket], 'OK', 'تم فتح التذكرة', 201);
     }
 
     /** GET /admin/support/tickets/{id} — مع الخط الزمني الكامل */

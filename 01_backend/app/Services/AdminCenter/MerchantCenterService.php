@@ -13,6 +13,7 @@ use App\Models\SupportTicket;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\UserLogHistory;
+use App\Services\Support\SupportTicketService;
 use App\Support\Access\AccessConstants as A;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -41,20 +42,55 @@ class MerchantCenterService
 {
     public function __construct(private readonly MerchantAdminActionService $actions) {}
 
-    /** أقسامُ المركز — **يُبنى منها التبويبُ ولا يُكتب مرّتين**. */
+    /**
+     * أقسامُ المركز — **يُبنى منها التبويبُ ولا يُكتب مرّتين**.
+     *
+     * وصلاحيّةُ كلّ قسمٍ هنا هي **نفسُها** التي يطلبها مسارُه في
+     * `routes/admin/amial.php`. ولو اختلفتا لظهر التبويبُ ولم يُفتح —
+     * أو انفتح ولم يظهر. يمنعهما `MerchantCenterGuardTest`.
+     *
+     * AMIAL-OPERATOR-RBAC-003: كان القسمُ محميّاً بصلاحيّتين لا غير
+     * (`customers.view` لكلّ قراءة و`audit.view` لكلّ ما يمسّ المال)، فمن
+     * يفتح ملفّ تاجرٍ ليردّ على تذكرةٍ كان يقرأ تسوياته وعمولاته.
+     */
     public const SECTIONS = [
         'profile' => ['name' => 'الملف الأساسي', 'icon' => 'tio-user', 'permission' => 'platform.customers.view'],
-        'money' => ['name' => 'المركز المالي', 'icon' => 'tio-money', 'permission' => 'platform.audit.view'],
-        'settlements' => ['name' => 'التسويات', 'icon' => 'tio-refresh', 'permission' => 'platform.audit.view'],
+        'money' => ['name' => 'المركز المالي', 'icon' => 'tio-money', 'permission' => 'platform.merchants.money'],
+        'settlements' => ['name' => 'التسويات', 'icon' => 'tio-refresh', 'permission' => 'platform.merchants.money'],
         'operations' => ['name' => 'العمليات', 'icon' => 'tio-chart-bar-4', 'permission' => 'platform.customers.view'],
-        'risk' => ['name' => 'المخاطر', 'icon' => 'tio-warning', 'permission' => 'platform.audit.view'],
+        'risk' => ['name' => 'المخاطر', 'icon' => 'tio-warning', 'permission' => 'platform.merchants.risk'],
         'staff' => ['name' => 'الموظفون (عرض)', 'icon' => 'tio-group-equal', 'permission' => 'platform.customers.view'],
-        'devices' => ['name' => 'الأجهزة والجلسات', 'icon' => 'tio-devices', 'permission' => 'platform.customers.view'],
-        'subscription' => ['name' => 'الاشتراك', 'icon' => 'tio-receipt', 'permission' => 'platform.settings.manage'],
-        'compliance' => ['name' => 'الامتثال والتوثيق', 'icon' => 'tio-shield-check', 'permission' => 'platform.audit.view'],
+        'devices' => ['name' => 'الأجهزة والجلسات', 'icon' => 'tio-devices', 'permission' => 'platform.merchants.risk'],
+        'subscription' => ['name' => 'الاشتراك', 'icon' => 'tio-receipt', 'permission' => 'platform.customers.view'],
+        'compliance' => ['name' => 'الامتثال والتوثيق', 'icon' => 'tio-shield-check', 'permission' => 'platform.merchants.compliance'],
         'support' => ['name' => 'الدعم', 'icon' => 'tio-support', 'permission' => 'platform.customers.view'],
         'audit' => ['name' => 'سجل التدقيق', 'icon' => 'tio-history', 'permission' => 'platform.audit.view'],
     ];
+
+    /**
+     * أقسامُ هذا المشغّل وحده — **لا يُعرض تبويبٌ لا يُفتح**.
+     *
+     * والقاعدةُ التاسعة تقول: زرٌّ لم يُضغط ليس مبنيّاً. وأختُها هنا:
+     * **تبويبٌ يُعرض ثمّ يردّ ٤٠٣ أسوأ من غيابه** — يُخبر الموظّف أنّ
+     * هناك ما يُخفى عنه، ويُرسله يسأل عن عطلٍ لا وجود له.
+     *
+     * @return array<string, array{name:string, icon:string, permission:string}>
+     */
+    public function sectionsFor(User $admin): array
+    {
+        return array_filter(
+            self::SECTIONS,
+            fn (array $s) => $admin->hasPlatformPermission($s['permission']),
+        );
+    }
+
+    /** هل يملك هذا المشغّل قسماً بعينه؟ يُقرأ قبل بناء حمولة النظرة العامّة. */
+    public function maySee(User $admin, string $section): bool
+    {
+        $perm = self::SECTIONS[$section]['permission'] ?? null;
+
+        return $perm !== null && $admin->hasPlatformPermission($perm);
+    }
 
     public function merchant(int $id): User
     {
@@ -432,9 +468,14 @@ class MerchantCenterService
         $rows = SupportTicket::where('user_id', $m->id)
             ->orderByDesc('id')->limit(30)->get();
 
+        // `in_progress` لم تكن من `SupportTicket::STATUSES` قطّ — فتذكرةٌ
+        // «قيد التحقيق» أو «بانتظار العميل» كانت تُحسب مغلقة، والرقمُ
+        // المعروض أقلَّ من الحقيقة بلا أن يُخطئ شيء.
         return [
-            'open' => $rows->whereIn('status', ['open', 'in_progress'])->count(),
+            'open' => $rows->whereIn('status', SupportTicketService::OPEN_STATUSES)->count(),
             'total' => $rows->count(),
+            'categories' => SupportTicket::CATEGORIES,
+            'priorities' => SupportTicket::PRIORITIES,
             'rows' => $rows->map(fn (SupportTicket $t) => [
                 'number' => $t->ticket_number,
                 'subject' => $t->subject,

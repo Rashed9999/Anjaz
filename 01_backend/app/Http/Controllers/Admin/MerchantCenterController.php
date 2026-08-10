@@ -37,6 +37,7 @@ class MerchantCenterController extends Controller
         private readonly MerchantAdminActionService $actions,
         private readonly EntitlementService $entitlements,
         private readonly FeatureAccessService $access,
+        private readonly \App\Services\Support\SupportTicketService $tickets,
     ) {
     }
 
@@ -97,18 +98,50 @@ class MerchantCenterController extends Controller
     //  القراءات — قسمٌ لكلّ تبويب
     // ══════════════════════════════════════════════════════════════════
 
-    /** نظرةٌ واحدة: الملفّ + المال + النبض + المخاطر — **لا ستّة نداءات**. */
+    /**
+     * نظرةٌ واحدة: الملفّ + المال + النبض + المخاطر — **لا ستّة نداءات**.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **والعطلُ الذي كان هنا يستحقّ أن يُكتب:** هذه النقطةُ محميّةٌ
+     * بـ`platform.customers.view` — وهي أدنى صلاحيّةٍ في اللوحة — وكانت
+     * تُرجع `money()` و`risk()` **بلا فحص**. فموظّفُ الدعم الذي يفتح
+     * ملفّ تاجرٍ ليردّ على تذكرة كان يقرأ رصيده وتسوياته ودرجةَ مخاطره
+     * من نقطةٍ لا تطلب أيّاً من صلاحيّاتها.
+     *
+     * وحارسُ المسار كان سليماً — والتسريبُ في **الحمولة**. فحمايةُ الباب
+     * لا تكفي إن كان ما يخرج منه أوسعَ ممّا يحرسه.
+     *
+     * فصار كلُّ جزءٍ يُبنى بشرط قسمه، والغائبُ **يُقال غيابُه صراحةً**
+     * (القاعدة ٧: «غير معروف» ليس صفراً — وهنا: «ليس لك» ليس صفراً).
+     */
     public function overview(Request $request, int $id): JsonResponse
     {
-        return $this->read(function () use ($id) {
+        return $this->read(function () use ($request, $id) {
             $m = $this->center->merchant($id);
+            $admin = $request->user();
+
+            $sections = $this->center->sectionsFor($admin);
 
             return [
-                'sections' => MerchantCenterService::SECTIONS,
+                'sections' => $sections,
+                'my_roles' => $admin->platformRoleLabels(),
+                // **الأفعالُ تُقال للشاشة صراحةً** — لا تُستنتج من التبويبات.
+                // فمن يقرأ المخاطر ليس بالضرورة من يجمّد، ومن يرى الاشتراك
+                // ليس من يغيّر الباقة. وزرٌّ يُعرض ثمّ يردّ ٤٠٣ خدعةٌ لا حراسة.
+                'can' => [
+                    'freeze' => $admin->hasPlatformPermission('platform.customers.freeze'),
+                    'plan' => $admin->hasPlatformPermission('platform.settings.manage'),
+                    'ticket' => $admin->hasPlatformPermission('platform.tickets.manage'),
+                    'investigate' => $admin->hasPlatformPermission('platform.merchants.investigate'),
+                ],
                 'profile' => $this->center->profile($m),
-                'money' => $this->center->money($m),
+                'money' => $this->center->maySee($admin, 'money')
+                    ? $this->center->money($m)
+                    : ['restricted' => true, 'note' => 'المركز المالي لفريق المالية — دورُك لا يشمله'],
                 'pulse' => $this->center->pulse($m),
-                'risk' => $this->center->risk($m),
+                'risk' => $this->center->maySee($admin, 'risk')
+                    ? $this->center->risk($m)
+                    : ['restricted' => true, 'note' => 'قسم المخاطر لفريق المخاطر — دورُك لا يشمله'],
                 // **حدُّ المسؤوليّة يُقال في الشاشة نفسها** — لا في وثيقة.
                 'boundary' => [
                     'owned_by_merchant' => 'المنتجات · المخزون · الموردون · '
@@ -211,7 +244,23 @@ class MerchantCenterController extends Controller
         ]);
     }
 
-    /** التفصيلُ التشغيليّ — **يُرفض بلا إذنٍ سارٍ، ويقول كيف يُفتح**. */
+    /**
+     * التفصيلُ التشغيليّ — **يُرفض بلا إذنٍ سارٍ، ويقول كيف يُفتح**.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ولماذا ٤٢٣ لا ٤٠٣:** كانت هذه النقطةُ تردّ ٤٠٣ في حالتين
+     * مختلفتين تماماً — «دورُك لا يشمل التحقيق» (من الوسيط) و«دورُك
+     * يشمله ولا إذنَ سارياً» (من هنا). والرمزُ واحدٌ والمعنيان ضدّان:
+     * الأوّلُ بابٌ مغلقٌ لا يُطرق، والثاني بابٌ لك مفتاحُه ولم تفتحه بعد.
+     *
+     * وأثرُ الخلط عمليّ: موظّفُ المخاطر يرى «لا تملك صلاحية هذا الإجراء»
+     * فيذهب يطلب صلاحيّةً يملكها أصلاً، بدل أن يضغط «فتح إذن اطّلاع»
+     * وهو على بُعد زرٍّ منه. (وهو نفسُ درس صفحة ٤١٩ في `CLAUDE.md`:
+     * رسالةٌ لا تدلّ على سببها تُرسل من يصدّقها خلف عطلٍ لا وجود له.)
+     *
+     * فصارت **٤٢٣ Locked**: المورد قائمٌ وأنت أهلٌ له، وهو مقفولٌ حتّى
+     * يُفتح إذنٌ بسببٍ وأجل.
+     */
     public function operationalDetail(Request $request, int $id): JsonResponse
     {
         try {
@@ -222,8 +271,11 @@ class MerchantCenterController extends Controller
                 'success' => false,
                 'code' => 'ACCESS_GRANT_REQUIRED',
                 'message' => $e->getMessage(),
-                'meta' => ['scope' => MerchantDataAccessGrant::SCOPE_OPERATIONAL],
-            ], 403);
+                'meta' => [
+                    'scope' => MerchantDataAccessGrant::SCOPE_OPERATIONAL,
+                    'unlock' => 'اضغط «فتح إذن اطّلاع مؤقّت» في تبويب سجل التدقيق',
+                ],
+            ], 423);
         }
     }
 
@@ -460,5 +512,58 @@ class MerchantCenterController extends Controller
 
             return $this->ok([], 'أُضيفت الملاحظة إلى السجل');
         });
+    }
+
+    /**
+     * **فتحُ تذكرةٍ للتاجر من داخل مركزه** — AMIAL-MERCHANT-CENTER-002.
+     *
+     * كان القسمُ يعرض التذاكر ولا يفتح واحدة. فمن يقرأ شكوى تاجرٍ في
+     * المركز كان يخرج منه إلى شاشةٍ أخرى ويبحث عن الحساب مرّةً ثانية —
+     * وبينهما يضيع السياق الذي فتح المركزَ من أجله.
+     *
+     * **ولا يمرّ بـ`act()`**: سببُ الأفعال الخطِرة يُطلب لأنّها تغيّر
+     * شيئاً على التاجر، والتذكرةُ لا تغيّر عليه شيئاً — موضوعُها هو
+     * سببُها، ويُفحص طولُه في الخدمة. وطلبُ سببٍ فوق الموضوع يُنتج
+     * حقلين يُكتب فيهما الشيءُ نفسه.
+     */
+    public function openTicket(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'subject' => 'required|string|max:200',
+            'category' => 'nullable|string',
+            'priority' => 'nullable|string',
+            'description' => 'nullable|string|max:5000',
+            'transaction_ref' => 'nullable|string|max:40',
+        ]);
+
+        try {
+            $ticket = $this->tickets->open(
+                $request->user(),
+                $this->center->merchant($id),
+                $data,
+            );
+        } catch (DomainException $e) {
+            return $this->fail($e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $this->fail('تعذّر فتح التذكرة — حاول مرة أخرى', 500);
+        }
+
+        // **وتُسجَّل في سجلّ التاجر أيضاً** — فمن يقرأ تاريخ هذا الحساب
+        // يرى أنّ أميال فتحت له تذكرةً، لا أن يبحث عنها في نظامٍ آخر.
+        $this->actions->perform(
+            actor: $request->user(),
+            merchantUserId: $id,
+            action: 'ticket.open',
+            reason: $ticket->subject,
+            beforeState: [],
+            work: fn () => ['ticket' => $ticket->ticket_number],
+            request: $request,
+            target: 'ticket',
+            targetId: (string) $ticket->id,
+        );
+
+        return $this->ok(['ticket_number' => $ticket->ticket_number], 'فُتحت التذكرة ' . $ticket->ticket_number);
     }
 }

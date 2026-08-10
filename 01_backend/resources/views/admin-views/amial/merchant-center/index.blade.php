@@ -38,7 +38,8 @@
     <div class="modal-body">
       <p id="mc-reason-body" class="mb-3"></p>
       <div id="mc-reason-extra" class="mb-3"></div>
-      <label class="form-label">سبب الإجراء <span class="text-danger">*</span></label>
+      <label class="form-label"><span id="mc-reason-label">سبب الإجراء</span>
+        <span class="text-danger">*</span></label>
       <textarea class="form-control" id="mc-reason-text" rows="3"
                 data-testid="mc-reason" placeholder="مثال: تحقيق مخاطر — بلاغ رقم ..."></textarea>
       <div class="form-text">يُسجَّل في سجل التدقيق باسمك ووقتك وعنوانك — ولا يُحذف.</div>
@@ -83,6 +84,7 @@
         if (!r.ok || j.success === false) {
             const err = new Error(j.message || ('تعذّر الطلب (' + r.status + ')'));
             err.code = j.code; err.status = r.status; err.meta = j.meta;
+            err.unlock = (j.meta || {}).unlock;   // «كيف يُفتح» يصل مع الرفض لا بعده
             throw err;
         }
         return j.data;
@@ -90,11 +92,15 @@
 
     // ══ نافذة السبب — كلّ فعل يمرّ منها ══
     let pending = null;
-    function askReason(title, body, extraHtml, onConfirm) {
+    function askReason(title, body, extraHtml, onConfirm, labelText) {
         document.getElementById('mc-reason-title').textContent = title;
         document.getElementById('mc-reason-body').textContent = body;
         document.getElementById('mc-reason-extra').innerHTML = extraHtml || '';
         document.getElementById('mc-reason-text').value = '';
+        // نافذةٌ واحدةٌ لكلّ الأفعال، **وعنوانُ الحقل يتبع الفعل**: فتحُ
+        // تذكرةٍ موضوعُه هو سببُه، وحقلان يُكتب فيهما الشيءُ نفسه يُملأ
+        // أحدُهما بـ«.» ويُفقد المعنى.
+        document.getElementById('mc-reason-label').textContent = labelText || 'سبب الإجراء';
         pending = onConfirm;
         new bootstrap.Modal(document.getElementById('mc-reason-modal')).show();
     }
@@ -121,7 +127,21 @@
             CACHE.overview = d;
             renderHead(d);
             renderTabs(d.sections);
-            show('profile');
+
+            // **يُفتح على التبويب المطلوب** — من جاء من قائمة «فتح المركز ⋮»
+            // يريد التسويات، فلا يُنزَل على الملفّ ثمّ يبحث. وتبويبٌ خارج
+            // دوره يعود إلى أوّل ما يملك، لا إلى شاشةٍ فارغة.
+            const asked = (location.hash.match(/tab=([a-z_]+)/) || [])[1];
+            const keys = Object.keys(d.sections);
+            const start = (asked && keys.includes(asked)) ? asked : keys[0];
+
+            if (asked && !keys.includes(asked)) {
+                banner('قسم «' + esc(asked) + '» خارج دورك — فُتح ' + esc(d.sections[start].name), 'info');
+            }
+
+            document.querySelectorAll('#mc-tabs .nav-link').forEach(b =>
+                b.classList.toggle('active', b.getAttribute('data-sec') === start));
+            show(start);
         } catch (e) {
             document.getElementById('mc-head').innerHTML =
                 '<div class="alert alert-danger">' + esc(e.message) + '</div>';
@@ -129,9 +149,40 @@
     }
 
     function renderHead(d) {
-        const p = d.profile, r = d.risk, w = d.money.wallet;
-        const riskColor = r.level === 'high' || r.level === 'critical' ? 'danger'
-            : (r.level === 'medium' ? 'warning' : (r.assessed ? 'success' : 'secondary'));
+        const p = d.profile, r = d.risk, can = d.can || {};
+
+        // **دورٌ لا يرى المال يجب ألّا يرى فراغاً مكانه** (القاعدة ٧):
+        // «ليس لك» ليست صفراً، ولا شرطةً، ولا رصيداً فارغاً يُظنّ حقيقة.
+        const hasMoney = !!(d.money && !d.money.restricted && d.money.wallet);
+        const hasRisk = !!(r && !r.restricted);
+        const w = hasMoney ? d.money.wallet : null;
+
+        const riskColor = !hasRisk ? 'light'
+            : (r.level === 'high' || r.level === 'critical' ? 'danger'
+            : (r.level === 'medium' ? 'warning' : (r.assessed ? 'success' : 'secondary')));
+
+        const moneyBox = hasMoney
+            ? ('<div class="fs-3 fw-bold text-primary">'
+               + (w.exists ? fmt(w.current) + ' ر.ي' : '<span class="text-muted fs-6">لا محفظة</span>')
+               + '</div><div class="small text-muted">محجوز: ' + fmt(w.held)
+               + ' · معلّق: ' + fmt(w.pending) + '</div>')
+            : ('<div class="small text-muted" data-testid="mc-money-restricted">🔒 '
+               + esc((d.money && d.money.note) || 'المركز المالي خارج دورك') + '</div>');
+
+        const riskBadge = hasRisk
+            ? ('<span class="badge bg-' + riskColor + '">مخاطر: ' + esc(r.level_ar) + '</span> ')
+            : '<span class="badge bg-light text-dark" data-testid="mc-risk-restricted">مخاطر: خارج دورك</span> ';
+
+        // زرُّ التجميد لفريق المخاطر، والتذكرةُ للدعم — ولا يُعرض ما لا يُنفَّذ.
+        const actions = []
+            .concat(can.freeze ? ['<button class="btn btn-sm btn-outline-danger" data-act="freeze" data-testid="mc-freeze">'
+                + (p.status === 'active' ? 'تجميد الحساب' : 'فكّ التجميد') + '</button>',
+                '<button class="btn btn-sm btn-outline-warning" data-act="sessions" data-testid="mc-sessions">'
+                + 'إنهاء كل الجلسات</button>'] : [])
+            .concat(can.ticket ? ['<button class="btn btn-sm btn-outline-primary" data-act="ticket" data-testid="mc-ticket">'
+                + 'فتح تذكرة</button>'] : [])
+            .concat(['<button class="btn btn-sm btn-outline-secondary" data-act="note" data-testid="mc-note">'
+                + 'ملاحظة</button>']);
 
         document.getElementById('mc-head').innerHTML =
             '<div class="card"><div class="card-body">'
@@ -144,26 +195,20 @@
               + esc(p.status_ar) + '</span> '
             + '<span class="badge bg-info">' + esc(p.business_type_label) + '</span> '
             + '<span class="badge bg-primary">' + esc(p.plan_name) + '</span> '
-            + '<span class="badge bg-' + riskColor + '">مخاطر: ' + esc(r.level_ar) + '</span> '
+            + riskBadge
             + '<span class="badge bg-secondary">' + esc(p.kyc_status) + '</span>'
             + '</div></div>'
             + '<div class="ms-auto text-end">'
-            + '<div class="fs-3 fw-bold text-primary">'
-              + (w.exists ? fmt(w.current) + ' ر.ي' : '<span class="text-muted fs-6">لا محفظة</span>')
-            + '</div>'
-            + '<div class="small text-muted">محجوز: ' + fmt(w.held) + ' · معلّق: ' + fmt(w.pending) + '</div>'
-            + '<div class="btn-group mt-2">'
-            + '<button class="btn btn-sm btn-outline-danger" data-act="freeze" data-testid="mc-freeze">'
-              + (p.status === 'active' ? 'تجميد الحساب' : 'فكّ التجميد') + '</button>'
-            + '<button class="btn btn-sm btn-outline-warning" data-act="sessions" data-testid="mc-sessions">'
-              + 'إنهاء كل الجلسات</button>'
-            + '<button class="btn btn-sm btn-outline-secondary" data-act="note" data-testid="mc-note">'
-              + 'ملاحظة</button>'
-            + '</div></div></div>'
+            + moneyBox
+            + '<div class="btn-group mt-2">' + actions.join('') + '</div>'
+            + '</div></div>'
             + '<div class="alert alert-light border mt-3 mb-0 small">'
             + '<strong>حدّ المسؤولية:</strong> يملكه التاجر — ' + esc(d.boundary.owned_by_merchant)
             + ' · تملكه أميال — ' + esc(d.boundary.owned_by_amial)
             + '</div>'
+            + '<div class="small text-muted mt-2" data-testid="mc-my-roles">دورُك: '
+              + esc((d.my_roles || []).join(' · ') || 'بلا دور')
+              + ' — وما لا تراه ليس ناقصاً، هو خارج دورك.</div>'
             + '</div></div>';
     }
 
@@ -493,11 +538,18 @@
             loading(el);
             try {
                 const d = await req('/support');
+                CACHE.support = d;   // التصنيفات والأولويّات تُملأ منها نافذةُ الفتح
+                const canTicket = !!(CACHE.overview.can || {}).ticket;
                 el.innerHTML =
                     '<div class="row mb-3">'
                     + stat('تذاكر مفتوحة', d.open, d.open > 0 ? 'warning' : 'success')
                     + stat('إجمالي التذاكر', d.total, 'secondary')
                     + '</div>'
+                    + (canTicket
+                        ? '<button class="btn btn-primary mb-3" data-act="ticket"'
+                          + ' data-testid="mc-ticket-tab">فتح تذكرة جديدة</button>'
+                        : '<div class="alert alert-light border small mb-3">'
+                          + 'فتحُ التذاكر لفريق الدعم — دورُك لا يشمله</div>')
                     + card('التذاكر',
                         table(['الرقم','الموضوع','التصنيف','الأولوية','الحالة','التاريخ'],
                             d.rows.map(t => '<tr><td class="font-monospace small">'
@@ -600,7 +652,15 @@
                 + ' · صفوف مخزون سالب: ' + d.negative_stock_rows
                 + '<div class="mt-1">' + esc(d.note) + '</div></div>';
         } catch (e) {
-            box.innerHTML = '<div class="alert alert-secondary small">' + esc(e.message) + '</div>';
+            // **رفضٌ يقول كيف يُفتح**: ٤٢٣ تعني «لك الحقّ ولا إذن»، فيُعرض
+            // معها طريقُ الخروج. و٤٠٣ تعني «ليس من عملك»، فلا يُعرض زرٌّ
+            // يُضغط ليردّ ٤٠٣ مرّةً أخرى.
+            box.innerHTML = e.status === 423
+                ? ('<div class="alert alert-warning small">' + esc(e.message)
+                   + '<div class="mt-2">' + esc(e.unlock || '')
+                   + ' <button class="btn btn-sm btn-warning ms-2" data-act="grant"'
+                   + ' data-testid="mc-grant-inline">فتح إذن اطّلاع مؤقّت</button></div></div>')
+                : ('<div class="alert alert-secondary small">' + esc(e.message) + '</div>');
         }
     }
 
@@ -641,6 +701,48 @@
                     const d = await req('/revoke-sessions', 'POST', {reason});
                     banner('أُنهيت ' + d.revoked + ' جلسة', 'success');
                 });
+            return;
+        }
+
+        if (act === 'ticket') {
+            // **التذكرةُ تُفتح من هنا لا من شاشةٍ أخرى**: من يقرأ شكوى
+            // تاجرٍ في مركزه يفتحها وهو داخل السياق. وخروجُه للبحث عن
+            // الحساب مرّةً ثانية يُضيّع ما فتح المركز من أجله.
+            const cats = (CACHE.support && CACHE.support.categories) || ['other'];
+            const pris = (CACHE.support && CACHE.support.priorities) || ['normal'];
+            const CAT_AR = {
+                missing_transfer: 'تحويل لم يصل', wrong_recipient: 'مستلم خاطئ',
+                forgot_pin: 'نسي الرمز', fraud_suspect: 'اشتباه احتيال',
+                account_access: 'تعذّر الدخول', balance_issue: 'مشكلة رصيد', other: 'أخرى',
+            };
+            const PRI_AR = {low: 'منخفضة', normal: 'عادية', high: 'مرتفعة', urgent: 'عاجلة'};
+
+            askReason('فتح تذكرة دعم للتاجر',
+                'تُفتح باسمك وتظهر في قسم الدعم وفي سجل التدقيق.',
+                '<div class="row g-2">'
+                + '<div class="col-6"><label class="form-label small">التصنيف</label>'
+                + '<select class="form-select form-select-sm" id="mc-tkt-cat" data-testid="mc-tkt-cat">'
+                + cats.map(c => '<option value="' + c + '">' + esc(CAT_AR[c] || c) + '</option>').join('')
+                + '</select></div>'
+                + '<div class="col-6"><label class="form-label small">الأولوية</label>'
+                + '<select class="form-select form-select-sm" id="mc-tkt-pri" data-testid="mc-tkt-pri">'
+                + pris.map(p => '<option value="' + p + '"' + (p === 'normal' ? ' selected' : '') + '>'
+                    + esc(PRI_AR[p] || p) + '</option>').join('')
+                + '</select></div>'
+                + '<div class="col-12"><label class="form-label small">التفاصيل (اختياري)</label>'
+                + '<textarea class="form-control form-control-sm" id="mc-tkt-desc" rows="2"></textarea></div>'
+                + '</div>',
+                async subject => {
+                    const d = await req('/ticket', 'POST', {
+                        subject: subject,
+                        category: document.getElementById('mc-tkt-cat').value,
+                        priority: document.getElementById('mc-tkt-pri').value,
+                        description: document.getElementById('mc-tkt-desc').value.trim() || null,
+                    });
+                    banner('فُتحت التذكرة ' + d.ticket_number, 'success');
+                    show('support');
+                },
+                'موضوع التذكرة');
             return;
         }
 

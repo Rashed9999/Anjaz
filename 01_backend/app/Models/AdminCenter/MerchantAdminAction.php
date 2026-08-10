@@ -48,6 +48,7 @@ class MerchantAdminAction extends Model
         'access.grant' => 'فتح إذن اطّلاع',
         'access.revoke' => 'إلغاء إذن اطّلاع',
         'note.add' => 'إضافة ملاحظة',
+        'ticket.open' => 'فتح تذكرة دعم',
     ];
 
     public function actor(): BelongsTo

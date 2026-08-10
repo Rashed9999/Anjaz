@@ -37,8 +37,20 @@ class PlatformRoleService
     public const SUPPORT     = 'platform_support';
     public const MAINTENANCE = 'platform_maintenance';
 
+    // AMIAL-OPERATOR-RBAC-003 — الأدوار الوظيفيّة الثلاثة.
+    //
+    // «لا يجوز أن يستطيع كلّ موظّف في أميال رؤية كلّ شيء»: فالمالُ لفريق
+    // المالية، والإشاراتُ والتجميدُ لفريق المخاطر، والتوثيقُ لفريق الامتثال.
+    // وربطُ كلٍّ بصلاحيّاته في هجرة `2026_08_10_160000`.
+    public const FINANCE    = 'platform_finance';
+    public const RISK       = 'platform_risk';
+    public const COMPLIANCE = 'platform_compliance';
+
     /** رموز أدوار المنصّة كلّها — أدوار التجّار لها `merchant_user_id`. */
-    public const ALL = [self::ADMIN, self::SUPERVISOR, self::SUPPORT, self::MAINTENANCE];
+    public const ALL = [
+        self::ADMIN, self::SUPERVISOR, self::SUPPORT, self::MAINTENANCE,
+        self::FINANCE, self::RISK, self::COMPLIANCE,
+    ];
 
     /** معرّف دورٍ برمزه، أو `null` إن لم تُشغَّل هجرة الأدوار بعد. */
     public function roleId(string $code): ?int
