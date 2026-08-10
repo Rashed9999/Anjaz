@@ -215,6 +215,61 @@ Route::prefix('fuel')->name('fuel.')->middleware('platform:platform.audit.view')
         Route::get('/open-variances', [$fc, 'openVariances'])->name('open-variances');
     });
 
+// ============ AMIAL-MERCHANT-CENTER-001 — مركز التاجر (٣٦٠°) ============
+//
+// **أميال منصّة مالية لا ERP للتاجر.** فلا أصناف ولا مخزون ولا موردين
+// هنا — إلّا بإذن اطّلاع مؤقّت بسبب مكتوب وأجل، ويُسجَّل.
+//
+// والقراءات بـ`platform.customers.view`، والأفعال الخطِرة بصلاحيّاتها:
+// تجميدُ حسابٍ وإنهاءُ جلساتٍ وتعطيلُ موظّفٍ أمنيّاً بـ`platform.customers.freeze`،
+// وتغييرُ الباقة بـ`platform.settings.manage`.
+Route::prefix('merchant-center')->name('merchant-center.')->group(function () {
+    $mc = App\Http\Controllers\Admin\MerchantCenterController::class;
+
+    Route::middleware('platform:platform.customers.view')->group(function () use ($mc) {
+        Route::get('/{id}', [$mc, 'page'])->where('id', '[0-9]+')->name('page');
+        Route::get('/{id}/overview', [$mc, 'overview'])->where('id', '[0-9]+')->name('overview');
+        Route::get('/{id}/operations', [$mc, 'operations'])->where('id', '[0-9]+')->name('operations');
+        Route::get('/{id}/operations/{type}', [$mc, 'operationsOfType'])
+            ->where(['id' => '[0-9]+', 'type' => '[a-z_]+'])->name('operations.type');
+        Route::get('/{id}/staff', [$mc, 'staff'])->where('id', '[0-9]+')->name('staff');
+        Route::get('/{id}/devices', [$mc, 'devices'])->where('id', '[0-9]+')->name('devices');
+        Route::get('/{id}/support', [$mc, 'support'])->where('id', '[0-9]+')->name('support');
+        Route::get('/{id}/subscription', [$mc, 'subscription'])->where('id', '[0-9]+')->name('subscription');
+    });
+
+    // المال والمخاطر والامتثال والتدقيق — من جنس التدقيق
+    Route::middleware('platform:platform.audit.view')->group(function () use ($mc) {
+        Route::get('/{id}/money', [$mc, 'money'])->where('id', '[0-9]+')->name('money');
+        Route::get('/{id}/statement', [$mc, 'statement'])->where('id', '[0-9]+')->name('statement');
+        Route::get('/{id}/settlements', [$mc, 'settlements'])->where('id', '[0-9]+')->name('settlements');
+        Route::get('/{id}/risk', [$mc, 'risk'])->where('id', '[0-9]+')->name('risk');
+        Route::get('/{id}/compliance', [$mc, 'compliance'])->where('id', '[0-9]+')->name('compliance');
+        Route::get('/{id}/audit', [$mc, 'auditTrail'])->where('id', '[0-9]+')->name('audit');
+        Route::get('/{id}/operational-detail', [$mc, 'operationalDetail'])
+            ->where('id', '[0-9]+')->name('operational-detail');
+        Route::post('/{id}/access', [$mc, 'grantAccess'])->where('id', '[0-9]+')->name('access.grant');
+        Route::delete('/{id}/access/{grantId}', [$mc, 'revokeAccess'])
+            ->where(['id' => '[0-9]+', 'grantId' => '[0-9]+'])->name('access.revoke');
+        Route::post('/{id}/note', [$mc, 'addNote'])->where('id', '[0-9]+')->name('note');
+    });
+
+    // الأفعال الأمنيّة
+    Route::middleware('platform:platform.customers.freeze')->group(function () use ($mc) {
+        Route::post('/{id}/freeze', [$mc, 'toggleFreeze'])->where('id', '[0-9]+')->name('freeze');
+        Route::post('/{id}/revoke-sessions', [$mc, 'revokeSessions'])
+            ->where('id', '[0-9]+')->name('sessions.revoke');
+        Route::post('/{id}/devices/{deviceId}/toggle', [$mc, 'toggleDevice'])
+            ->where(['id' => '[0-9]+', 'deviceId' => '[0-9]+'])->name('device.toggle');
+        Route::post('/{id}/staff/{posId}/disable', [$mc, 'disableStaff'])
+            ->where(['id' => '[0-9]+', 'posId' => '[0-9]+'])->name('staff.disable');
+    });
+
+    Route::middleware('platform:platform.settings.manage')->group(function () use ($mc) {
+        Route::post('/{id}/plan', [$mc, 'changePlan'])->where('id', '[0-9]+')->name('plan');
+    });
+});
+
 // ============ AMIAL-ENTITLEMENTS-001 — مركز الباقات والقدرات ============
 //
 // **التسعيرُ يُجرَّب أكثر من مرّة في الشهور الأولى**، وكلُّ تجربةٍ بنشرةٍ

@@ -275,33 +275,12 @@ class AdminHubController extends Controller
             $salesTotal = (string) \App\Models\MerchantSale::where('merchant_user_id', $user->id)->sum('total_amount');
             $salesCount = \App\Models\MerchantSale::where('merchant_user_id', $user->id)->count();
 
-            // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — **البيعةُ بأسطرها أمام
-            // المراجع**. وكان المعروضُ عددَين مجموعَين: «٤٠٠ عمليّة بـ٢
-            // مليون» لا يُراجَع منها شيء ولا يُسأل عنها سؤال.
-            $recentSales = \App\Models\MerchantSale::where('merchant_user_id', $user->id)
-                ->with('lines')->orderByDesc('id')->limit(10)->get()
-                ->map(function ($s) {
-                    $cost = app(\App\Services\Retail\SaleLineService::class)->costOf($s->lines);
-
-                    return [
-                        'ulid' => $s->sale_ulid,
-                        'total' => (string) $s->total_amount,
-                        'method' => $s->payment_method,
-                        'status' => $s->status,
-                        'created_at' => optional($s->created_at)->format('Y-m-d H:i'),
-                        'known_cost' => $cost['cost'],
-                        // **«غير معروف» يُرسَل عدداً لا يُطوى في صفر.**
-                        'unknown_cost_lines' => $cost['unknown_lines'],
-                        'lines' => $s->lines->map(fn ($l) => [
-                            'name' => $l->name,
-                            'quantity' => (string) $l->quantity,
-                            'unit_price' => (string) $l->unit_price,
-                            'line_total' => (string) $l->line_total,
-                            'unit_cost' => $l->unit_cost !== null ? (string) $l->unit_cost : null,
-                            'cost_source' => $l->costSourceAr(),
-                        ])->values()->all(),
-                    ];
-                })->all();
+            // AMIAL-MERCHANT-CENTER-001 — **نُزع من هنا عرضُ أسطر المبيعة
+            // بأسماء أصنافها.** أميال منصّةٌ ماليّة لا ERP للتاجر: تعرف أنّه
+            // نفّذ كذا عمليّةً بكذا، ولا تحتاج اسمَ الصنف المباع.
+            //
+            // ومن احتاجه لتحقيقٍ يفتح إذناً مؤقّتاً بسببٍ مكتوب في
+            // **مركز التاجر ← سجل التدقيق** — ويُسجَّل استعمالُه.
 
             $payload['merchant'] = [
                 'store_name' => $store->store_name ?? null,
@@ -314,7 +293,6 @@ class AdminHubController extends Controller
                 'branches' => $branches,
                 'sales_total' => $salesTotal,
                 'sales_count' => $salesCount,
-                'recent_sales' => $recentSales,
             ];
         }
 

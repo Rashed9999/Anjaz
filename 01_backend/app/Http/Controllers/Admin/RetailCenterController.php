@@ -122,6 +122,7 @@ class RetailCenterController extends Controller
                     ->whereNull('last_counted_at')->count(),
             ])->all(),
 
+            // التحويلاتُ **بلا أصنافها** — والعالقُ في الطريق إشارةُ انضباط.
             'transfers' => StockTransfer::where('merchant_user_id', $id)
                 ->with(['fromLocation:id,name', 'toLocation:id,name'])
                 ->orderByDesc('id')->limit(20)->get()
@@ -147,16 +148,18 @@ class RetailCenterController extends Controller
                     'approved_at' => $c->approved_at?->format('Y-m-d H:i'),
                 ])->all(),
 
-            'wastes' => StockWaste::where('merchant_user_id', $id)
-                ->orderByDesc('id')->limit(20)->get()
-                ->map(fn (StockWaste $w) => [
-                    'name' => $w->name,
-                    'quantity' => (string) $w->quantity,
-                    'reason' => $w->reasonAr(),
-                    'cost' => $w->total_cost !== null ? (string) $w->total_cost : null,
-                    'status' => $w->status,
-                    'created_at' => $w->created_at?->format('Y-m-d'),
-                ])->all(),
+            // AMIAL-MERCHANT-CENTER-001 — **بلا أسماء أصناف**: أميال ترى
+            // أنّ هالكاً بقيمة كذا اعتُمد، ولا تحتاج «انتهت صلاحية اللبن».
+            'wastes_summary' => [
+                'pending' => StockWaste::where('merchant_user_id', $id)
+                    ->where('status', 'pending')->count(),
+                'approved_30d' => StockWaste::where('merchant_user_id', $id)
+                    ->where('status', 'approved')
+                    ->where('created_at', '>=', now()->subDays(30))->count(),
+                'cost_30d' => (string) StockWaste::where('merchant_user_id', $id)
+                    ->where('status', 'approved')
+                    ->where('created_at', '>=', now()->subDays(30))->sum('total_cost'),
+            ],
 
             'returns' => SaleReturn::where('merchant_user_id', $id)
                 ->withCount('items')->orderByDesc('id')->limit(20)->get()
@@ -168,14 +171,13 @@ class RetailCenterController extends Controller
                     'created_at' => $r->created_at?->format('Y-m-d'),
                 ])->all(),
 
-            'prices' => ProductPriceVersion::where('merchant_user_id', $id)
-                ->with('product:id,name')->orderByDesc('id')->limit(20)->get()
-                ->map(fn (ProductPriceVersion $v) => [
-                    'product' => $v->product->name ?? '—',
-                    'price' => (string) $v->price,
-                    'status' => $v->statusAr(),
-                    'effective_from' => $v->effective_from?->format('Y-m-d H:i'),
-                ])->all(),
+            // **تسعيرُ التاجر شأنُه** — يُعرض عدداً لا تفصيلاً.
+            'prices_summary' => [
+                'proposed' => ProductPriceVersion::where('merchant_user_id', $id)
+                    ->where('status', ProductPriceVersion::PROPOSED)->count(),
+                'changes_30d' => ProductPriceVersion::where('merchant_user_id', $id)
+                    ->where('created_at', '>=', now()->subDays(30))->count(),
+            ],
         ]);
     }
 
@@ -188,16 +190,18 @@ class RetailCenterController extends Controller
      */
     public function negativeStock(): JsonResponse
     {
+        // **إشارةٌ لا كشفُ أصناف**: المخزون السالب مؤشّرُ انضباطٍ يخصّ
+        // أميال (بيعٌ يتجاوز المسجَّل)، **واسمُ الصنف يخصّ التاجر**.
+        // فيُعرض العددُ لكلّ تاجر، ومن أراد التفصيل يفتح إذناً في مركز التاجر.
         $rows = ProductStock::where('on_hand', '<', 0)
-            ->with(['product:id,name,merchant_user_id', 'location:id,name,merchant_user_id'])
-            ->orderBy('on_hand')->limit(200)->get()
-            ->map(fn (ProductStock $s) => [
-                'product' => $s->product->name ?? '—',
-                'location' => $s->location->name ?? '—',
-                'merchant_user_id' => (int) ($s->location->merchant_user_id ?? 0),
-                'on_hand' => (string) $s->on_hand,
-                'last_counted_at' => $s->last_counted_at?->format('Y-m-d'),
-            ])->all();
+            ->with('location:id,merchant_user_id')
+            ->get()
+            ->groupBy(fn (ProductStock $s) => (int) ($s->location->merchant_user_id ?? 0))
+            ->map(fn ($group, $mid) => [
+                'merchant_user_id' => (int) $mid,
+                'rows' => $group->count(),
+                'never_counted' => $group->whereNull('last_counted_at')->count(),
+            ])->values()->all();
 
         return $this->ok(['rows' => $rows, 'count' => count($rows)]);
     }

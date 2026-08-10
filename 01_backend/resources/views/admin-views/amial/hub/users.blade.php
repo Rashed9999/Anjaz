@@ -204,6 +204,9 @@
     const root = document.getElementById('hub-root');
     const slug = root.dataset.slug;
     const isAgents = slug === 'agents';
+    // AMIAL-MERCHANT-CENTER-001 — زرُّ «فتح المركز» للتجّار وحدهم:
+    // مركزُ التاجر يعرض تسوياتٍ ومخاطرَ واشتراكاً، ولا معنى لها لعميل.
+    const isMerchants = slug === 'merchants';
     const csrf = document.querySelector('meta[name="csrf-token"]').content;
     const base = '{{ url('admin/amial/hub') }}';
 
@@ -297,6 +300,9 @@
                 <td>${u.is_active ? '<span class="badge bg-success">نشِط</span>' : '<span class="badge bg-danger">مجمَّد</span>'}</td>
                 <td class="text-nowrap">
                     <button class="btn btn-sm btn-primary" data-act="open" data-id="${u.id}">التفاصيل</button>
+                    ${isMerchants ? `<button class="btn btn-sm btn-dark" data-act="center" data-id="${u.id}"
+                            title="الملف · المال · التسويات · العمليات · المخاطر · الأجهزة · التدقيق"
+                            data-testid="hub-open-center">فتح المركز</button>` : ''}
                     ${transferControl(u)}
                     <button class="btn btn-sm ${u.is_active ? 'btn-outline-danger' : 'btn-outline-success'}"
                             data-act="toggle" data-id="${u.id}">${u.is_active ? 'تجميد' : 'فكّ التجميد'}</button>
@@ -311,6 +317,13 @@
         const btn = e.target.closest('button[data-act]');
         // فتح صفحة التفاصيل: زر «التفاصيل»، أو الضغط على الصفّ خارج الأزرار
         const row = btn ? null : e.target.closest('tr[data-act="open"]');
+        // AMIAL-MERCHANT-CENTER-001 — **«فتح المركز» غيرُ «التفاصيل»**:
+        // التفاصيل ملفُّ حسابٍ لأيّ دور، والمركزُ لوحةُ تاجرٍ كاملةً بأقسامها
+        // الإحدى عشرة وأفعالها. ويُحسم قبل الصفّ لئلّا يبتلع الصفُّ الضغطة.
+        if (btn && btn.dataset.act === 'center') {
+            window.location.href = `{{ url('admin/amial/merchant-center') }}/${btn.dataset.id}`;
+            return;
+        }
         if ((btn && btn.dataset.act === 'open') || row) {
             window.location.href = `${base}/account/${(btn || row).dataset.id}`;
             return;
