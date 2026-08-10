@@ -270,24 +270,60 @@ class CashierService
         });
     }
 
-    /** خصم المخزون للعناصر التي تحمل product_id (إن وُجدت). آمن: لا يخصم تحت الصفر. */
-    private function decrementStock(int $merchantId, array $items): void
+    /**
+     * خصمُ المخزون — **بحركةٍ في موقعٍ، لا بكتابةٍ على عمود**.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-RETAIL-VERTICAL-001 · المرحلة ٠.
+     *
+     * **ما كان:** `$product->update(['quantity' => $newQty])`.
+     *
+     *   ① **بلا موقع** — متجرٌ بثلاثة فروعٍ له رقمٌ واحد، فبيعٌ في عدن
+     *     ينقص مخزونَ المكلا.
+     *   ② **بلا حركة** — لا يُعرف من أين نقص، والجردُ يُخرج فرقاً بلا أثر.
+     *   ③ **والأخطر: كان يقصّ السالبَ إلى صفرٍ صامتاً.**
+     *
+     * والثالثةُ محوُ دليل: من باع خمساً وفي النظام ثلاث، سُجّلت بيعةُ
+     * خمسٍ وصار المخزونُ صفراً — **والحبّتان الوهميّتان تختفيان بلا أثر**.
+     * فيُقفَل الفرقُ قبل أن يُرى، ولا يعرف صاحبُ المتجر أنّ بياناته
+     * انحرفت أصلاً.
+     *
+     * **فصار السالبُ يُسجَّل ولا يُقَصّ.** والبيعةُ تمرّ — البضاعةُ خرجت
+     * من الرفّ فعلاً، ورفضُها بعد خروجها لا يُفيد أحداً — **لكنّ الرصيد
+     * السالب يبقى ظاهراً** حتّى يُصلحه جردٌ، وهو الإشارةُ التي كانت تُمحى.
+     */
+    private function decrementStock(int $merchantId, array $items, ?int $locationId = null): void
     {
+        $stock = app(\App\Services\Retail\StockService::class);
+        $location = $locationId
+            ? \App\Models\Retail\MerchantLocation::find($locationId)
+            : null;
+        $location ??= $stock->defaultLocation($merchantId);
+
         foreach ($items as $item) {
             $pid = $item['product_id'] ?? null;
             if (!$pid) continue;
+
             // AMIAL-FIX: التطبيق يرسل quantity — كان يُقرأ qty فقط فيخصم 1 دائماً
             $qty = (string)($item['quantity'] ?? $item['qty'] ?? 1);
+            if (bccomp($qty, '0', 3) <= 0) continue;
+
             $product = MerchantProduct::where('id', $pid)
                 ->where('merchant_user_id', $merchantId)
-                ->lockForUpdate()
                 ->first();
             if (!$product) continue;
-            $newQty = bcsub((string)$product->quantity, $qty, 3);
-            if (bccomp($newQty, '0', 3) < 0) {
-                $newQty = '0'; // لا مخزون سالب
-            }
-            $product->update(['quantity' => $newQty]);
+
+            $stock->move(
+                product: $product,
+                location: $location,
+                delta: '-' . $qty,
+                reason: 'sale',
+                unitCost: (string) ($item['cost_price'] ?? $product->cost_price ?? '0'),
+                sourceType: 'merchant_sale',
+                sourceId: $item['sale_id'] ?? null,
+                // **يُسمح بالسالب عمداً** — انظر شرح الدالّة أعلاه.
+                allowNegative: true,
+            );
         }
     }
 
