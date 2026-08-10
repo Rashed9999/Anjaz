@@ -2,10 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Retail\SaleLine;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * AMIAL-CASHIER-001 — سجل بيع واحد (نقد / أجل / أميال باي).
+ *
+ * AMIAL-RETAIL-VERTICAL-001 · المرحلة ١: **أسطرُه في `lines()`**، وعمودُ
+ * `items` مرآةٌ باقيةٌ للتوافق لا مصدرَ حقيقة.
  */
 class MerchantSale extends Model
 {
@@ -30,4 +35,10 @@ class MerchantSale extends Model
 
     public const METHODS = ['cash', 'credit', 'amial_pay', 'corporate', 'mixed'];
     public const STATUSES = ['completed', 'credit_unpaid', 'credit_paid', 'pending_payment'];
+
+    /** أسطرُ المبيعة — **مصدرُ الحقيقة** منذ المرحلة ١. */
+    public function lines(): HasMany
+    {
+        return $this->hasMany(SaleLine::class, 'sale_id');
+    }
 }

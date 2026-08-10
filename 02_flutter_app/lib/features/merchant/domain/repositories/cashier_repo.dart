@@ -54,6 +54,11 @@ class CashierRepo extends GetxService {
         query: date != null ? {'date': date} : null);
   }
 
+  /// AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — تفصيلُ بيعةٍ سطراً سطراً
+  /// بالتكلفة الملتقَطة والهامش لكلّ سطر.
+  Future<Response> saleDetail(String saleUlid) =>
+      apiClient.getData('$_base/sales/$saleUlid');
+
   /// AMIAL-PROFIT-001 — تقرير الربحية (إجماليات + اتجاه يومي + منتجات).
   Future<Response> profitReport({int days = 7}) =>
       apiClient.getData('$_base/profit-report?days=$days');

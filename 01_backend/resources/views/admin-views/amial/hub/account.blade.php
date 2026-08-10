@@ -98,6 +98,26 @@
 
             const branches = (m.branches || []).map(b => `<tr><td>${esc(b.name ?? '—')}</td><td>${esc(b.code ?? '—')}</td><td>${esc(b.city ?? '—')}</td><td>${b.is_active ? '<span class="badge bg-success">نشِط</span>' : '<span class="badge bg-secondary">مغلق</span>'}</td></tr>`).join('');
             html += card('الفروع', branches ? `<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>الفرع</th><th>الرمز</th><th>المدينة</th><th>الحالة</th></tr></thead><tbody>${branches}</tbody></table></div>` : '<span class="text-muted small">لا فروع</span>');
+
+            // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — آخر المبيعات **بأسطرها**.
+            // وتكلفةٌ غير معروفة تُكتب «—» ولا تُعرض صفراً (القاعدة ٧).
+            const sales = (m.recent_sales || []).map(s => {
+                const lines = (s.lines || []).map(l =>
+                    `<tr class="small"><td class="ps-4">${esc(l.name)}</td>` +
+                    `<td>${esc(l.quantity)} × ${fmt(l.unit_price)}</td>` +
+                    `<td>${fmt(l.line_total)}</td>` +
+                    `<td>${l.unit_cost === null ? '<span class="text-warning">غير معروفة</span>' : fmt(l.unit_cost)}</td>` +
+                    `<td class="text-muted">${esc(l.cost_source)}</td></tr>`).join('');
+                const warn = s.unknown_cost_lines > 0
+                    ? ` <span class="badge bg-warning text-dark">${s.unknown_cost_lines} سطراً بلا تكلفة</span>` : '';
+                return `<tr class="table-light"><td class="font-monospace small">${esc(s.ulid.slice(-8))}</td>` +
+                    `<td>${esc(s.method)}</td><td class="fw-bold">${fmt(s.total)} ر.ي</td>` +
+                    `<td>تكلفة: ${fmt(s.known_cost)}${warn}</td><td class="small">${esc(s.created_at ?? '')}</td></tr>` +
+                    (lines || '<tr class="small"><td colspan="5" class="ps-4 text-muted">بيعة بمبلغ حرّ — بلا أصناف</td></tr>');
+            }).join('');
+            html += card('آخر المبيعات بأسطرها (١٠)', sales
+                ? `<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>المرجع</th><th>الطريقة/الصنف</th><th>المبلغ</th><th>التكلفة</th><th>التاريخ</th></tr></thead><tbody>${sales}</tbody></table></div>`
+                : '<span class="text-muted small">لا مبيعات مسجّلة</span>');
         }
 
         // ===== إضافات الوكيل =====

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_refund_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_sale_detail_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-CASHIER-001 — تقرير المبيعات اليومي.
@@ -33,6 +34,12 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
     }
   }
 
+  /// AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — فتحُ تفصيل البيعة سطراً سطراً.
+  void _openSaleDetail(String saleUlid) {
+    if (saleUlid.isEmpty) return;
+    Get.to(() => CashierSaleDetailScreen(saleUlid: saleUlid));
+  }
+
   String _methodLabel(String? m) => switch (m) {
         'cash' => 'نقد',
         'credit' => 'أجل',
@@ -53,6 +60,10 @@ class _CashierReportScreenState extends State<CashierReportScreen> {
       color: AmialColors.cardSurface,
       child: ListTile(
         dense: true,
+        // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — **الصفُّ يُفتح**.
+        // صار للبيعة أسطرٌ بتكلفةٍ وربح، ولولا هذه الضغطة لبقيت جدولاً
+        // لا بابَ له (القاعدة ١٢).
+        onTap: () => _openSaleDetail((s['sale_ulid'] ?? '').toString()),
         leading: Icon(
           fullyRefunded ? Icons.replay_circle_filled : Icons.receipt_long_outlined,
           color: fullyRefunded ? AmialColors.red : AmialColors.primary,

@@ -243,13 +243,37 @@ class StockService
             ->update(['quantity' => $total]);
     }
 
-    /** المتاحُ للبيع في موقع — الموجودُ ناقصَ المحجوز. */
+    /**
+     * المتاحُ للبيع في موقع — الموجودُ ناقصَ المحجوز.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **و«لا صفَّ» ليست «صفراً»** (القاعدة ٧).
+     *
+     * صنفٌ أُنشئ بعد الهجرة بكمّيّةٍ في العمود القديم لا صفَّ مخزونٍ له
+     * حتّى أوّل حركة. وكانت الدالّةُ تردّ `'0'` — **فتقول «نفد» عن مئة
+     * حبّةٍ موجودة**، ثمّ تبيع منها مئةً حين تُطلب، لأنّ `openStockRow`
+     * يتبنّى الرقمَ القديم عند أوّل حركة.
+     *
+     * فتُجيب هنا بما **سيتبنّاه** أوّلُ تحرّك، بالقاعدة نفسِها حرفاً
+     * بحرف: الموقعُ الافتراضيّ وحدَه، لأنّ الرقمَ القديم عالميٌّ بلا موقع.
+     */
     public function available(int $productId, int $locationId): string
     {
         $s = ProductStock::where('product_id', $productId)
             ->where('location_id', $locationId)->first();
 
-        return $s ? $s->available() : '0';
+        if ($s) {
+            return $s->available();
+        }
+
+        $location = MerchantLocation::find($locationId);
+        if (! $location || ! $location->is_default) {
+            return '0';
+        }
+
+        $legacy = (string) (MerchantProduct::where('id', $productId)->value('quantity') ?? '0');
+
+        return bccomp($legacy, '0', 3) > 0 ? bcadd($legacy, '0', 3) : '0';
     }
 
     /**

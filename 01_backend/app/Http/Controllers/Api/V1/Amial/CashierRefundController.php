@@ -136,6 +136,19 @@ class CashierRefundController extends Controller
 
         return $this->ok([
             'sale' => $sale,
+            // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — **أسطرٌ لها معرّفات**،
+            // وبها يصير مرتجعُ صنفٍ واحدٍ من فاتورةٍ ممكناً. وكان المرتجع
+            // مبلغاً حرّاً لا يُنسب إلى صنف.
+            'lines' => $sale->lines()->get()->map(fn ($l) => [
+                'id' => $l->id,
+                'product_id' => $l->product_id,
+                'name' => $l->name,
+                'quantity' => (string) $l->quantity,
+                'unit_price' => (string) $l->unit_price,
+                'line_total' => (string) $l->line_total,
+                'returned_quantity' => (string) $l->returned_quantity,
+                'refundable_quantity' => $l->refundableQuantity(),
+            ])->values()->all(),
             'refunded_so_far' => \App\Services\MoneyService::normalize($refundedSoFar),
             'remaining' => \App\Services\MoneyService::normalize($remaining),
             'fully_refunded' => \App\Services\MoneyService::compare($remaining, '0') <= 0,

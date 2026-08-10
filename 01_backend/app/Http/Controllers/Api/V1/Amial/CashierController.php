@@ -139,7 +139,11 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             'items' => 'sometimes|array',
             'items.*.name' => 'sometimes|string|max:160',
             'items.*.qty' => 'sometimes|numeric|min:0',
+            // المطعمُ وغيرُه يرسلون `quantity` — والمفتاحان مقبولان عند
+            // العتبة ويُطبَّعان إلى شكلٍ واحد في `SaleLineService`.
+            'items.*.quantity' => 'sometimes|numeric|min:0',
             'items.*.price' => 'sometimes|numeric|min:0',
+            'items.*.discount' => 'sometimes|numeric|min:0',
             'items.*.product_id' => 'sometimes|nullable|integer',
             'customer.name' => 'sometimes|nullable|string|max:120',
             'customer.phone' => 'sometimes|nullable|string|max:32',
@@ -225,6 +229,64 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             $request->query('date'),
             (int) $request->query('limit', 100)
         ));
+    }
+
+    /**
+     * AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — GET /cashier/sales/{ulid}
+     * تفصيلُ بيعةٍ **سطراً سطراً** بالتكلفة الملتقَطة والهامش لكلّ سطر.
+     *
+     * **ولولا بابٌ كهذا لبقيت الأسطر جدولاً لا يُقرأ** — والقاعدةُ ١٢:
+     * ما لا يُوصل إليه ليس مبنيّاً.
+     */
+    public function showSale(Request $request, string $ulid): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $sale = \App\Models\MerchantSale::where('sale_ulid', $ulid)
+            ->where('merchant_user_id', $merchant->id)
+            ->with('lines')
+            ->first();
+        if (! $sale) return $this->error('NOT_FOUND', 'العملية غير موجودة', 404);
+
+        $summary = app(\App\Services\Retail\SaleLineService::class)->costOf($sale->lines);
+        $revenue = (string) $sale->total_amount;
+        $profit = \App\Services\MoneyService::sub($revenue, $summary['cost']);
+
+        return $this->ok([
+            'sale' => $sale->only([
+                'id', 'sale_ulid', 'total_amount', 'discount_amount', 'payment_method',
+                'status', 'customer_name', 'customer_phone', 'created_at',
+            ]),
+            'lines' => $sale->lines->map(fn ($l) => [
+                'id' => $l->id,
+                'product_id' => $l->product_id,
+                'name' => $l->name,
+                'quantity' => (string) $l->quantity,
+                'unit_price' => (string) $l->unit_price,
+                'line_discount' => (string) $l->line_discount,
+                'line_total' => (string) $l->line_total,
+                // **الفراغُ يُرسَل فراغاً** — والتطبيقُ يعرضه «غير معروفة»
+                // ولا يعرضه صفراً (القاعدة ٧).
+                'unit_cost' => $l->unit_cost !== null ? (string) $l->unit_cost : null,
+                'line_cost' => $l->line_cost !== null ? (string) $l->line_cost : null,
+                'line_profit' => $l->line_cost !== null
+                    ? bcsub((string) $l->line_total, (string) $l->line_cost, 4)
+                    : null,
+                'cost_source' => $l->cost_source,
+                'cost_source_ar' => $l->costSourceAr(),
+                'returned_quantity' => (string) $l->returned_quantity,
+                'refundable_quantity' => $l->refundableQuantity(),
+            ])->values()->all(),
+            'totals' => [
+                'revenue' => $revenue,
+                'known_cost' => $summary['cost'],
+                'gross_profit' => $profit,
+                'unknown_cost_lines' => $summary['unknown_lines'],
+                'unknown_cost_revenue' => $summary['unknown_revenue'],
+            ],
+        ]);
     }
 
     public function report(Request $request): JsonResponse

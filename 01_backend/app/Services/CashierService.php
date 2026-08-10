@@ -202,9 +202,16 @@ class CashierService
                 'zone_code' => $merchant->zone_code ?? 'SOUTH',
             ]);
 
+            // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — **الأسطرُ تُكتب جدولاً
+            // والتكلفةُ تُلتقَط الآن**، قبل أن يتغيّر سعرُ الشراء غداً.
+            //
+            // وتُكتب للبيع المعلّق أيضاً: البيعةُ سُجّلت وسطورُها جزءٌ منها؛
+            // والمؤجَّلُ هو **خصمُ المخزون** وحدَه.
+            app(\App\Services\Retail\SaleLineService::class)->writeLines($sale, $items);
+
             // خصم المخزون للعناصر المرتبطة بمنتج (product_id)، إن لم يكن بيعاً معلّقاً
             if ($status !== 'pending_payment') {
-                $this->decrementStock($merchant->id, $items);
+                $this->decrementStockForSale($sale->fresh());
             }
 
             // AMIAL-CUSTOMER-CREDIT-001 — ربط بيع الأجل بحساب العميل الائتماني
@@ -292,24 +299,22 @@ class CashierService
      * من الرفّ فعلاً، ورفضُها بعد خروجها لا يُفيد أحداً — **لكنّ الرصيد
      * السالب يبقى ظاهراً** حتّى يُصلحه جردٌ، وهو الإشارةُ التي كانت تُمحى.
      */
-    private function decrementStock(int $merchantId, array $items, ?int $locationId = null): void
+    private function decrementStockForSale(MerchantSale $sale, ?int $locationId = null): void
     {
         $stock = app(\App\Services\Retail\StockService::class);
         $location = $locationId
             ? \App\Models\Retail\MerchantLocation::find($locationId)
             : null;
-        $location ??= $stock->defaultLocation($merchantId);
+        $location ??= $stock->defaultLocation($sale->merchant_user_id);
 
-        foreach ($items as $item) {
-            $pid = $item['product_id'] ?? null;
-            if (!$pid) continue;
-
-            // AMIAL-FIX: التطبيق يرسل quantity — كان يُقرأ qty فقط فيخصم 1 دائماً
-            $qty = (string)($item['quantity'] ?? $item['qty'] ?? 1);
+        // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — **يُقرأ السطرُ لا الـJSON**.
+        // فالكمّيّةُ طُبّعت مرّةً عند الكتابة، ولا تُقرأ هنا بمفتاحين.
+        foreach ($sale->lines()->whereNotNull('product_id')->get() as $line) {
+            $qty = (string) $line->quantity;
             if (bccomp($qty, '0', 3) <= 0) continue;
 
-            $product = MerchantProduct::where('id', $pid)
-                ->where('merchant_user_id', $merchantId)
+            $product = MerchantProduct::where('id', $line->product_id)
+                ->where('merchant_user_id', $sale->merchant_user_id)
                 ->first();
             if (!$product) continue;
 
@@ -318,9 +323,10 @@ class CashierService
                 location: $location,
                 delta: '-' . $qty,
                 reason: 'sale',
-                unitCost: (string) ($item['cost_price'] ?? $product->cost_price ?? '0'),
+                // **التكلفةُ الملتقَطة في السطر** — لا القراءةُ الحاليّة.
+                unitCost: $line->unit_cost !== null ? (string) $line->unit_cost : null,
                 sourceType: 'merchant_sale',
-                sourceId: $item['sale_id'] ?? null,
+                sourceId: $sale->id,
                 // **يُسمح بالسالب عمداً** — انظر شرح الدالّة أعلاه.
                 allowNegative: true,
             );
@@ -346,7 +352,7 @@ class CashierService
                 'paid_transaction_id' => $txId,
                 'settled_at' => now(),
             ]);
-            $this->decrementStock($merchantId, $sale->items ?? []);
+            $this->decrementStockForSale($sale);
             return $sale->fresh();
         });
     }
@@ -381,7 +387,19 @@ class CashierService
 
     /**
      * تقرير ربحية لمدى أيام: الإجماليات (إيراد/تكلفة/ربح/هامش) +
-     * اتجاه يومي + تفصيل حسب المنتج (التكلفة من cost_price الحالي للمنتج).
+     * اتجاه يومي + تفصيل حسب المنتج.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — **التكلفةُ من السطر لا من
+     * المنتج**.
+     *
+     * وكان يُقرأ `cost_price` الحاليّ لكلّ منتج. فمن اشترى بـ٥٠٠ ثمّ
+     * بـ٦٠٠ **يُعاد حسابُ ربح الشهر الماضي بالسعر الجديد**: التقريرُ نفسُه
+     * يُطبع مرّتين بعددين، ولا خطأ في أيّ سجلّ.
+     *
+     * **وما لا تُعرف تكلفتُه لا يُحسب صفراً** (القاعدة ٧): يُعزَل في
+     * `unknown_cost` ويُقال عددُه وإيرادُه، فيعرف القارئ أنّ الهامش
+     * محسوبٌ على جزءٍ لا على الكلّ.
      */
     public function profitReport(User $merchant, int $days = 7): array
     {
@@ -391,18 +409,17 @@ class CashierService
         $sales = MerchantSale::where('merchant_user_id', $merchant->id)
             ->whereIn('status', ['completed', 'credit_unpaid', 'credit_paid'])
             ->where('created_at', '>=', $from)
+            ->with('lines')
             ->get(['id', 'total_amount', 'items', 'created_at']);
-
-        // خريطة تكلفة المنتجات الحالية
-        $costs = MerchantProduct::where('merchant_user_id', $merchant->id)
-            ->pluck('cost_price', 'id');
-        $names = MerchantProduct::where('merchant_user_id', $merchant->id)
-            ->pluck('name', 'id');
 
         $totalRevenue = '0';
         $totalCost = '0';
         $daily = [];   // date => [revenue, cost]
         $byProduct = []; // pid => [qty, revenue, cost, name]
+
+        $unknownLines = 0;
+        $unknownRevenue = '0';
+        $estimatedLines = 0;
 
         foreach ($sales as $sale) {
             $rev = (string) $sale->total_amount;
@@ -410,21 +427,26 @@ class CashierService
             $day = $sale->created_at->format('Y-m-d');
             $daily[$day]['revenue'] = bcadd($daily[$day]['revenue'] ?? '0', $rev, 4);
 
-            foreach ((array) $sale->items as $item) {
-                $pid = $item['product_id'] ?? null;
-                $qty = (string) ($item['quantity'] ?? $item['qty'] ?? 1);
-                $price = (string) ($item['price'] ?? 0);
-                $lineRev = bcmul($qty, $price, 4);
-                $cost = $pid !== null ? (string) ($costs[$pid] ?? '0') : '0';
-                $lineCost = bcmul($qty, $cost, 4);
+            foreach ($sale->lines as $line) {
+                $pid = $line->product_id;
+                $qty = (string) $line->quantity;
+                $lineRev = (string) $line->line_total;
 
-                $totalCost = bcadd($totalCost, $lineCost, 4);
-                $daily[$day]['cost'] = bcadd($daily[$day]['cost'] ?? '0', $lineCost, 4);
+                if ($line->line_cost === null) {
+                    $unknownLines++;
+                    $unknownRevenue = bcadd($unknownRevenue, $lineRev, 4);
+                    $lineCost = '0';
+                } else {
+                    $lineCost = (string) $line->line_cost;
+                    $totalCost = bcadd($totalCost, $lineCost, 4);
+                    $daily[$day]['cost'] = bcadd($daily[$day]['cost'] ?? '0', $lineCost, 4);
+                    if ($line->cost_source === \App\Models\Retail\SaleLine::COST_ESTIMATED) {
+                        $estimatedLines++;
+                    }
+                }
 
-                $key = $pid !== null ? (string) $pid : ('~' . ($item['name'] ?? '?'));
-                $byProduct[$key]['name'] = $pid !== null
-                    ? ($names[$pid] ?? ($item['name'] ?? '؟'))
-                    : ($item['name'] ?? '؟');
+                $key = $pid !== null ? (string) $pid : ('~' . $line->name);
+                $byProduct[$key]['name'] = $line->name;
                 $byProduct[$key]['qty'] = bcadd($byProduct[$key]['qty'] ?? '0', $qty, 3);
                 $byProduct[$key]['revenue'] = bcadd($byProduct[$key]['revenue'] ?? '0', $lineRev, 4);
                 $byProduct[$key]['cost'] = bcadd($byProduct[$key]['cost'] ?? '0', $lineCost, 4);
@@ -466,6 +488,15 @@ class CashierService
             ],
             'daily' => $series,
             'products' => $products,
+            // **الشفافيّةُ جزءٌ من الرقم لا حاشيةٌ له.**
+            'cost_coverage' => [
+                'unknown_cost_lines' => $unknownLines,
+                'unknown_cost_revenue' => $unknownRevenue,
+                'estimated_cost_lines' => $estimatedLines,
+                'note' => $unknownLines > 0
+                    ? "الهامش محسوب على ما عُرفت تكلفته؛ {$unknownLines} سطراً بلا تكلفة مُدخَلة"
+                    : null,
+            ],
         ];
     }
 
@@ -484,6 +515,7 @@ class CashierService
             ->whereBetween('created_at', [$day->copy()->startOfDay(), $day->copy()->endOfDay()])
             ->orderByDesc('id')
             ->limit(max(1, min($limit, 200)))
+            ->withCount('lines')
             ->get();
 
         $refunded = \App\Models\MerchantRefund::whereIn('original_sale_ulid', $sales->pluck('sale_ulid'))
@@ -502,7 +534,7 @@ class CashierService
                     'total_amount' => MoneyService::normalize((string) $s->total_amount),
                     'payment_method' => $s->payment_method,
                     'status' => $s->status,
-                    'items_count' => count($s->items ?? []),
+                    'items_count' => (int) ($s->lines_count ?? 0),
                     'customer_name' => $s->customer_name,
                     'refunded_total' => MoneyService::normalize($refundedTotal),
                     'fully_refunded' => MoneyService::compare(
@@ -512,6 +544,14 @@ class CashierService
                 ];
             })->values()->all(),
         ];
+    }
+
+    /** كمّيّةٌ صحيحةٌ تُخرج عدداً صحيحاً، والكسريّةُ تبقى كسراً. */
+    private function tidyQty(string $v): int|float
+    {
+        $f = (float) $v;
+
+        return floor($f) === $f ? (int) $f : $f;
     }
 
     // ============ التقرير اليومي ============
@@ -524,6 +564,7 @@ class CashierService
 
         $sales = MerchantSale::where('merchant_user_id', $merchant->id)
             ->whereBetween('created_at', [$from, $to])
+            ->with('lines')
             ->get();
 
         $byMethod = ['cash' => '0', 'credit' => '0', 'amial_pay' => '0'];
@@ -543,11 +584,17 @@ class CashierService
             $h = (int) Carbon::parse($sale->created_at)->format('G'); // 0..23 بتوقيت التطبيق
             $byHour[$h]['count']++;
             $byHour[$h]['total'] = MoneyService::add($byHour[$h]['total'], (string) $sale->total_amount);
-            foreach (($sale->items ?? []) as $item) {
-                $name = $item['name'] ?? null;
+            // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — **من السطر لا من الـJSON**.
+            //
+            // وكان يُقرأ `qty` وحدَه، والمطعمُ يرسل `quantity`: فبيعُ عشرين
+            // طبقاً كان يُعدّ **طبقاً واحداً** في «أكثر المبيعات». رقمٌ
+            // يُقرأ حقيقةً وهو خطأ، ولا خطأ في أيّ سجلّ.
+            foreach ($sale->lines as $line) {
+                $name = $line->name;
                 if (!$name) continue;
-                $qty = (int) ($item['qty'] ?? 1);
-                $topProducts[$name] = ($topProducts[$name] ?? 0) + $qty;
+                $topProducts[$name] = bcadd(
+                    (string) ($topProducts[$name] ?? '0'), (string) $line->quantity, 3
+                );
             }
         }
         arsort($topProducts);
@@ -576,7 +623,12 @@ class CashierService
             'by_method' => $byMethod,
             'outstanding_credit_total' => $outstandingCredit, // كل الأجل غير المسوّى
             'top_products' => array_slice(
-                array_map(fn ($k, $v) => ['name' => $k, 'qty' => $v], array_keys($topProducts), $topProducts),
+                array_map(
+                    // الكمّيّةُ عشريّةٌ في المخزن (كيلو، لتر) — وتُخرج صحيحةً
+                    // متى كانت صحيحة، فلا يقرأ الكاشيرُ «٢٫٠٠٠ علبة».
+                    fn ($k, $v) => ['name' => $k, 'qty' => $this->tidyQty($v)],
+                    array_keys($topProducts), $topProducts
+                ),
                 0, 5
             ),
             // AMIAL-REPORTS-HOURLY-001: تفصيل بالساعة + ساعة الذروة

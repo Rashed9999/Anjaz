@@ -300,6 +300,36 @@ class CashierController extends GetxController implements GetxService {
     }
   }
 
+  // ---- AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — تفصيل البيعة ----
+
+  final Rx<Map<String, dynamic>?> saleDetail = Rx<Map<String, dynamic>?>(null);
+  final RxBool isLoadingSaleDetail = false.obs;
+
+  /// **والخطأُ يُحمل لا يُبتلع.** شاشةٌ فارغةٌ بلا سبب تُقرأ «لا أصناف»،
+  /// والحقيقةُ انقطاعُ شبكةٍ أو بيعةٌ محذوفة.
+  final RxString saleDetailError = ''.obs;
+
+  Future<void> loadSaleDetail(String saleUlid) async {
+    saleDetailError.value = '';
+    saleDetail.value = null;
+    try {
+      isLoadingSaleDetail.value = true;
+      final r = await repo.saleDetail(saleUlid);
+      if (_ok(r)) {
+        saleDetail.value = Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      } else {
+        saleDetailError.value = _msg(r) ??
+            (r.statusCode == 0 || r.statusCode == null
+                ? 'تعذّر الاتصال بالخادم'
+                : 'تعذّر جلب تفاصيل العملية');
+      }
+    } catch (_) {
+      saleDetailError.value = 'تعذّر الاتصال بالخادم';
+    } finally {
+      isLoadingSaleDetail.value = false;
+    }
+  }
+
   bool _ok(Response r) =>
       (r.statusCode == 200 || r.statusCode == 201) &&
       r.body is Map &&

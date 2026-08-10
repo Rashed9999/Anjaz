@@ -616,6 +616,9 @@ Route::middleware(['auth:api'])->group(function () {
                 ->where('id', '[0-9]+')->name('show');
         });
         Route::prefix('cashier/sales')->name('cashier.sales.')->group(function () {
+            // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — تفصيلُ البيعة سطراً سطراً
+            Route::get('/{ulid}', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'showSale'])
+                ->where('ulid', '[A-Z0-9]{26}')->name('show');
             Route::get('/{ulid}/refundable', [\App\Http\Controllers\Api\V1\Amial\CashierRefundController::class, 'refundable'])
                 ->where('ulid', '[A-Z0-9]{26}')->name('refundable');
             Route::post('/{ulid}/refund', [\App\Http\Controllers\Api\V1\Amial\CashierRefundController::class, 'create'])
