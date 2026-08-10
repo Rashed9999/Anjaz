@@ -358,11 +358,11 @@ class MerchantSaleRefundService
     {
         // إن كان البيع amial_pay مع paid_transaction_id، حاول الوصول للعميل
         if ($sale->payment_method === 'amial_pay' && !empty($sale->customer_phone)) {
-            return User::where('phone', $sale->customer_phone)->value('id');
+            return User::whereIn('phone', \App\Support\Phone::variants((string) $sale->customer_phone))->value('id');
         }
         // الأجل: ابحث بالهاتف
         if (!empty($sale->customer_phone)) {
-            return User::where('phone', $sale->customer_phone)->value('id');
+            return User::whereIn('phone', \App\Support\Phone::variants((string) $sale->customer_phone))->value('id');
         }
         return null;
     }

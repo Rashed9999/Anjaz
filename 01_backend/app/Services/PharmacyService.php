@@ -176,7 +176,7 @@ class PharmacyService
     public function findCustomerByPhone(Pharmacy $pharmacy, string $phone): ?PharmacyCustomer
     {
         return PharmacyCustomer::where('pharmacy_id', $pharmacy->id)
-            ->where('phone', $phone)
+            ->whereIn('phone', \App\Support\Phone::variants($phone))
             ->where('is_active', true)
             ->first();
     }

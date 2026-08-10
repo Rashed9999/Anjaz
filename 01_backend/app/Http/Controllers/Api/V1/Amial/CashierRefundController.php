@@ -130,7 +130,7 @@ class CashierRefundController extends Controller
         if ($sale->payment_method === 'credit') {
             $availableMethods[] = 'credit_account';
         }
-        if (!empty($sale->customer_phone) && User::where('phone', $sale->customer_phone)->exists()) {
+        if (!empty($sale->customer_phone) && User::whereIn('phone', \App\Support\Phone::variants((string) $sale->customer_phone))->exists()) {
             $availableMethods[] = 'wallet';
         }
 

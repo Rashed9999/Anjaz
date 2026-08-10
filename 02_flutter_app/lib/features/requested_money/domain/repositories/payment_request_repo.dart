@@ -10,6 +10,14 @@ class PaymentRequestRepo extends GetxService {
 
   Future<Response> create(Map<String, dynamic> data) => apiClient.postData(_base, data);
 
+  /// AMIAL-REQUEST-DIRECT-002 — **«أهذا الرقم مشترك؟» قبل الإرسال.**
+  ///
+  /// كان الطالبُ يضغط «إرسال» ثمّ يكتشف أنّ ما أُنشئ رابطٌ عليه أن
+  /// يُوصله بيده. فتُسأل الخادمُ أثناء الكتابة، وتقول الشاشةُ ما سيحدث
+  /// **قبل** أن يحدث.
+  Future<Response> checkRecipient(String phone) =>
+      apiClient.postData('$_base/check-recipient', {'phone': phone});
+
   Future<Response> list({String direction = 'outgoing', String? status, int page = 1}) {
     final q = <String, dynamic>{'direction': direction, 'page': page.toString()};
     if (status != null && status.isNotEmpty) q['status'] = status;

@@ -38,6 +38,37 @@ class PaymentRequest extends Model
     public const STATUSES = ['pending', 'paid', 'cancelled', 'expired', 'declined'];
     public const PERIODS = ['daily', 'weekly', 'monthly'];
 
+    /**
+     * AMIAL-REQUEST-DIRECT-002 — **طريقةٌ ثالثة: مباشرةً إلى مشترك.**
+     *
+     * كانت الطريقتان `link` و`qr` — وكلتاهما تفترض أنّ الطالب يُخرج شيئاً
+     * من التطبيق ليُوصله بيده. وهي الطريقةُ الصحيحة لمن ليس مشتركاً،
+     * **والخطأُ أن تكون الطريقةَ الوحيدة**.
+     *
+     * فالمباشرُ يُعلَن في الصفّ نفسه: من يفتح طلباته يعرف أيُّها ذهب إلى
+     * صاحبه وأيُّها ينتظر أن يُشارَك بيده.
+     */
+    public const SHARE_DIRECT = 'direct';
+    public const SHARE_LINK = 'link';
+    public const SHARE_QR = 'qr';
+
+    public const SHARE_METHODS = [self::SHARE_DIRECT, self::SHARE_LINK, self::SHARE_QR];
+
+    /** أوصِلَ إلى حسابٍ في أميال، أم ينتظر مشاركةً يدويّة؟ */
+    public function isDirect(): bool
+    {
+        return $this->share_method === self::SHARE_DIRECT && $this->recipient_user_id !== null;
+    }
+
+    public function shareMethodAr(): string
+    {
+        return match ($this->share_method) {
+            self::SHARE_DIRECT => 'وصل إلى حسابه',
+            self::SHARE_QR => 'رمز QR',
+            default => 'رابط يُشارَك',
+        };
+    }
+
     public function requester(): BelongsTo
     {
         return $this->belongsTo(User::class, 'requester_user_id');

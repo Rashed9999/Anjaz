@@ -279,7 +279,7 @@ class MerchantStaffController extends Controller
         do {
             // بادئة اصطناعية 9009 لتفادي التصادم مع أرقام حقيقية
             $phone = '9009' . str_pad((string) $merchantId, 5, '0', STR_PAD_LEFT) . random_int(1000, 9999);
-        } while (User::where('phone', $phone)->exists());
+        } while (User::whereIn('phone', \App\Support\Phone::variants($phone))->exists());
         return $phone;
     }
 

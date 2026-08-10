@@ -85,7 +85,7 @@ class MerchantPaymentController extends Controller
         // حلّ التاجر
         $merchant = $request->filled('merchant_user_id')
             ? User::find($request->input('merchant_user_id'))
-            : User::where('phone', $request->input('merchant_phone'))->first();
+            : User::whereIn('phone', \App\Support\Phone::variants((string) $request->input('merchant_phone')))->first();
 
         if (!$merchant) {
             return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);

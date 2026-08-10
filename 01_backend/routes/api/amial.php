@@ -305,6 +305,12 @@ Route::middleware(['auth:api'])->group(function () {
         Route::post('/', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'create'])
             ->middleware('amial.rate-limit:payment_request_create,30,1')->name('create');
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'list'])->name('list');
+        // AMIAL-REQUEST-DIRECT-002 — «أهذا الرقم مشترك؟» تُنادى أثناء
+        // الكتابة، فتقول الشاشةُ قبل الإرسال أيصل الطلبُ أم يبقى رابطاً.
+        // قراءةٌ لا حركة ⇒ بلا مفتاح تفرّد، وبحدٍّ لأنّها تُنادى بكلّ حرف.
+        Route::post('/check-recipient', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'checkRecipient'])
+            ->withoutMiddleware('amial.idempotency')
+            ->middleware('amial.rate-limit:request_check_recipient,60,1')->name('check-recipient');
         Route::get('/code/{code}', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'showByCode'])
             ->where('code', '[A-Z0-9]{6,8}')->name('show-by-code');
         // AMIAL-MERCHANT-PAY-002 — الدفعُ برقم حساب التاجر ورقم الفاتورة،

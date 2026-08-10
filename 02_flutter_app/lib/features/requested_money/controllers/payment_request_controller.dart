@@ -17,6 +17,36 @@ class PaymentRequestController extends GetxController implements GetxService {
   final RxBool isLoading = false.obs;
   final RxString lastError = ''.obs;
 
+  /// AMIAL-REQUEST-DIRECT-002 — حالةُ الرقم المكتوب: مشترك أم لا.
+  ///
+  /// `null` = لم يُسأل بعد. والتمييزُ عن «غير مشترك» ضروريّ: الصمتُ ليس
+  /// جواباً، ولا يُعرض «سيُشارَك برابط» قبل أن يُسأل الخادم.
+  final Rx<Map<String, dynamic>?> recipientCheck = Rx<Map<String, dynamic>?>(null);
+  final RxBool isChecking = false.obs;
+
+  /// يسأل الخادم عن الرقم. لا يرمي، ولا يُعطّل الإنشاء إن فشل:
+  /// **تعذُّرُ السؤال لا يمنع الطلب** — الخادمُ يقرّر عند الإنشاء بأيّ حال.
+  Future<void> checkRecipient(String phone) async {
+    final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.length < 9) {
+      recipientCheck.value = null;
+      return;
+    }
+    try {
+      isChecking.value = true;
+      final r = await repo.checkRecipient(phone);
+      recipientCheck.value = _ok(r)
+          ? Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map)
+          : null;
+    } catch (_) {
+      recipientCheck.value = null;
+    } finally {
+      isChecking.value = false;
+    }
+  }
+
+  void clearRecipientCheck() => recipientCheck.value = null;
+
   Future<bool> create({
     required String amount,
     String? recipientPhone,

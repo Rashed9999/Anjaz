@@ -66,7 +66,7 @@ class AccountNumberService
 
         // هاتف
         if ($allowPhone) {
-            return User::where('phone', $identifier)->first();
+            return User::whereIn('phone', \App\Support\Phone::variants((string) $identifier))->first();
         }
         return null;
     }

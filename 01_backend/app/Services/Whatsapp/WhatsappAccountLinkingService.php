@@ -81,9 +81,9 @@ class WhatsappAccountLinkingService
         }
 
         $normalized = $this->normalizePhone($accountPhone);
-        $user = User::where('phone', $normalized)
-            ->orWhere('phone', '+' . $normalized)
-            ->first();
+        // AMIAL-REQUEST-DIRECT-002 — كان توحيداً يدويّاً نصفَ تامّ: صيغتان
+        // من أربع (تسقط `00967…` و`777…`). والأداةُ الواحدة تغطّيها كلَّها.
+        $user = User::whereIn('phone', \App\Support\Phone::variants($normalized))->first();
 
         if (!$user) {
             $this->audit($waNumber, null, WhatsappAuditLog::EVENT_LINK_FAILED,

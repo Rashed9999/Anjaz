@@ -31,7 +31,7 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
             'recipient_phone' => 'sometimes|nullable|string|max:32',
             'recipient_name' => 'sometimes|nullable|string|max:120',
             'note' => 'sometimes|nullable|string|max:255',
-            'share_method' => 'sometimes|nullable|in:link,qr',
+            'share_method' => 'sometimes|nullable|in:direct,link,qr',
             'is_recurring' => 'sometimes|nullable|boolean',
             'recurring_period' => 'sometimes|nullable|in:daily,weekly,monthly',
         ]);
@@ -56,7 +56,73 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
             'request' => $req,
             'short_code' => $req->short_code,
             'public_url' => $req->publicUrl(),
-        ], 'REQUEST_CREATED', 'تم إنشاء الطلب', 201);
+            // **الشاشةُ تُخبر بما وقع فعلاً**: أوصِل إلى حسابه، أم بقي
+            // رابطاً ينتظر مشاركةً بيده؟ ورسالةُ نجاحٍ واحدةٌ للحالتين
+            // تجعل الطالبَ يظنّ أنّ طلبه وصل وهو لم يصل.
+            'delivered' => $req->isDirect(),
+            'delivery_label' => $req->shareMethodAr(),
+        ], 'REQUEST_CREATED',
+            $req->isDirect() ? 'وصل الطلب إلى صاحبه' : 'أُنشئ الطلب — شاركه بالرابط',
+            201);
+    }
+
+    /**
+     * **هل هذا الرقم مشترك؟** — AMIAL-REQUEST-DIRECT-002.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * تُنادى **أثناء الكتابة** في خانة «من تطلب منه»، فتقول الشاشةُ قبل
+     * الإرسال: «مشترك — سيصله الطلب فوراً» أو «غير مشترك — يُشارَك
+     * برابط». ومن غيرها يضغط الطالبُ «إرسال» ثمّ يكتشف أنّ ما أُنشئ
+     * رابطٌ عليه أن يُوصله بيده.
+     *
+     * **ولا تُفصح عن شيء**: تُرجع نعم/لا والاسمَ الأوّل وحدَه. فمن يمسح
+     * أرقاماً بحثاً عمّن هو على أميال لا يحصل على أكثر ممّا يحصل عليه من
+     * محاولة الطلب نفسها — وقيّدها الحدُّ على أيّ حال.
+     */
+    public function checkRecipient(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), ['phone' => 'required|string|max:32']);
+
+        if ($v->fails()) {
+            return $this->validationError($v);
+        }
+
+        $phone = (string) $request->input('phone');
+
+        // **البابُ نفسُه الذي يستعمله الإنشاء** — وإلّا قالت الشاشةُ
+        // «غير مشترك» وربط الخادمُ الطلبَ بصاحبه. (وقع هذا فعلاً: قيّدتُ
+        // الفحصَ بـ`CUSTOMER_TYPE` والإنشاءُ لا يُقيّد.)
+        $user = $this->service->resolveRecipient($phone);
+
+        // **وطلبٌ من النفس يُقال قبل الإرسال لا بعده.**
+        if ($user && (int) $user->id === (int) $request->user()->id) {
+            return $this->ok([
+                'found' => false, 'is_self' => true,
+                'hint' => 'هذا رقمك أنت',
+            ]);
+        }
+
+        if (! $user) {
+            return $this->ok([
+                'found' => false, 'is_self' => false,
+                'hint' => 'غير مشترك في أميال — سيُنشأ رابطٌ تُشاركه معه',
+            ]);
+        }
+
+        // حسابٌ موقوف: **يُقال، ولا يُترك الطالب ينتظر جواباً لن يأتي.**
+        if (! $user->is_active) {
+            return $this->ok([
+                'found' => false, 'is_self' => false,
+                'hint' => 'الحساب موقوف حالياً — استعمل الرابط',
+            ]);
+        }
+
+        return $this->ok([
+            'found' => true,
+            'is_self' => false,
+            'name' => trim(($user->f_name ?? '') . ' ' . ($user->l_name ?? '')),
+            'hint' => 'مشترك في أميال — سيصله الطلب فوراً',
+        ]);
     }
 
     public function list(Request $request): JsonResponse

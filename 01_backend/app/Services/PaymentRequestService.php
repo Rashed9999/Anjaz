@@ -6,6 +6,7 @@ use App\CentralLogics\Helpers;
 
 use App\Models\PaymentRequest;
 use App\Models\User;
+use App\Support\Phone;
 use App\Traits\TransactionTrait;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
@@ -51,18 +52,50 @@ class PaymentRequestService
         if (!MoneyService::isPositive($amount)) {
             throw new InvalidArgumentException('المبلغ يجب أن يكون موجباً');
         }
-        if (!in_array($shareMethod, ['link', 'qr'], true)) {
+        if (!in_array($shareMethod, PaymentRequest::SHARE_METHODS, true)) {
             throw new InvalidArgumentException('share_method غير صحيح');
         }
         if ($isRecurring && !in_array($recurringPeriod, PaymentRequest::PERIODS, true)) {
             throw new InvalidArgumentException('فترة التكرار غير صحيحة');
         }
 
-        // اربط بالمستلم إن كان مسجّلاً
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-REQUEST-DIRECT-002 — **لماذا بقي «طلبُ المال» رابطاً.**
+        //
+        // كان السطر: `User::where('phone', $recipientPhone)->value('id')`
+        // — **تطابقٌ حرفيّ**. والرقمُ الواحد يصل بأربع صيغ:
+        // `+967777100001` و`967777100001` و`00967777100001` و`777100001`.
+        //
+        // فمن يكتب `777…` وحسابُ صاحبه مسجَّلٌ `+967777…` لا يُطابَق:
+        // يُرجع البحثُ `null`، ويُنشأ الطلبُ **بلا مستلم**، فلا إشعارَ
+        // يُرسَل ولا يظهر في «الطلبات الواردة» عند أحد — ولا يبقى للطالب
+        // إلّا الرابط.
+        //
+        // والميزةُ المباشرةُ كانت مبنيّةً كاملةً خلف هذا السطر. **مبنيٌّ
+        // ولا يُوصَل إليه** — ولا خطأَ في أيّ سجلّ: الطلبُ يُنشأ بنجاح،
+        // والاستجابةُ ٢٠٠، والرقمُ مكتوبٌ صحيحاً في `recipient_phone`.
+        //
+        // (وهو الدرسُ المكتوب في `OtpPolicy`: «مقارنةٌ حرفيّةٌ تجعل الحساب
+        // يعمل من شاشةٍ ويُرفض من أخرى» — وقع مرّتين.)
         $recipientId = null;
+
         if ($recipientPhone) {
-            $recipientId = User::where('phone', $recipientPhone)->value('id');
+            $recipientId = $this->resolveRecipient($recipientPhone)?->id;
+
+            // **ولا يطلب المرءُ من نفسه.** بلا هذا الفحص يُنشأ طلبٌ يظهر
+            // في صندوقَي الوارد والصادر معاً، ودفعُه يخصم ويودع في المحفظة
+            // نفسها — عمليّةٌ صافيها صفرٌ ورسمُها حقيقيّ.
+            if ($recipientId === (int) $requester->id) {
+                throw new InvalidArgumentException('لا يمكنك طلب مبلغ من نفسك');
+            }
         }
+
+        // **والطريقةُ تتبع الواقع لا النيّة**: من وصل طلبُه إلى حسابٍ في
+        // أميال فطلبُه «مباشر»، ومن لم يصل فرابطٌ يُشارَك. ولا يُترك
+        // للواجهة أن تُعلن «مباشر» ثمّ لا يصل شيء.
+        $shareMethod = $recipientId !== null && $shareMethod !== PaymentRequest::SHARE_QR
+            ? PaymentRequest::SHARE_DIRECT
+            : $shareMethod;
 
         $request = PaymentRequest::create([
             'request_ulid' => (string) Str::ulid(),
@@ -94,6 +127,27 @@ class PaymentRequestService
         $this->notifyRecipientOfNewRequest($request, $requester);
 
         return $request;
+    }
+
+    /**
+     * **مَن يستقبل الطلبَ لهذا الرقم — بابٌ واحدٌ للإنشاء وللفحص المسبق.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * وُلدت هذه الدالّة من عطلٍ صنعتُه أنا: كتبتُ نقطةَ فحصٍ تسأل «أهذا
+     * الرقم مشترك؟» وقيّدتُها بـ`type = CUSTOMER_TYPE`، بينما `create()`
+     * لا تُقيّد بشيء. فكانت الشاشةُ تقول «غير مشترك — يُشارَك برابط»
+     * والخادمُ يربط الطلبَ بصاحبه ويُشعره.
+     *
+     * **وهو نمطُ العطل نفسُه الذي أُصلحه هنا**: قاعدتان لسؤالٍ واحد.
+     * فصارت القاعدةُ في موضعٍ واحد، والسائلان يمرّان به.
+     *
+     * ولا يُستثنى إلّا حسابُ الإدارة: المنصّةُ ليست طرفاً يُطلب منه مال.
+     */
+    public function resolveRecipient(string $phone): ?User
+    {
+        return User::whereIn('phone', Phone::variants($phone))
+            ->where('type', '!=', ADMIN_TYPE)
+            ->first(['id', 'f_name', 'l_name', 'is_active', 'type']);
     }
 
     /**

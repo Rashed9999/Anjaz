@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -35,6 +37,8 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
 
   @override
   void dispose() {
+    // مؤقّتٌ حيٌّ بعد إغلاق الشاشة ينادي متحكّماً قد يكون ذهب.
+    _lookupTimer?.cancel();
     _amount.dispose();
     _recipientPhone.dispose();
     _recipientName.dispose();
@@ -68,12 +72,22 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
       _snack('رقم الهاتف غير مكتمل');
       return;
     }
+    // **ما قاله الخادمُ في الفحص يُحترم هنا** — ولا يُترك للمستعمل أن
+    // يضغط «إرسال» فيقرأ الرفضَ بعده.
+    if (c.recipientCheck.value?['is_self'] == true) {
+      _snack('لا يمكنك طلب مبلغ من نفسك');
+      return;
+    }
+
+    // الطريقةُ تتبع الحال: مشتركٌ ⇒ مباشر، وغيرُه ⇒ ما اختاره.
+    final direct = c.recipientCheck.value?['found'] == true;
+
     final ok = await c.create(
       amount: _amount.text.trim(),
       recipientPhone: phone,
       recipientName: _recipientName.text.trim().isEmpty ? null : _recipientName.text.trim(),
       note: _note.text.trim().isEmpty ? null : _note.text.trim(),
-      shareMethod: _shareMethod,
+      shareMethod: direct ? 'direct' : _shareMethod,
       isRecurring: _isRecurring,
       recurringPeriod: _isRecurring ? _period : null,
     );
@@ -88,6 +102,98 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(m), backgroundColor: AmialColors.red),
       );
+
+  // ══════════════════════════════════════════════════════════════════
+  //  AMIAL-REQUEST-DIRECT-002 — **الشاشةُ تقول ما سيحدث قبل أن يحدث.**
+  //
+  //  كان الطالبُ يكتب الرقم ويضغط «إرسال» ثمّ يكتشف — من شاشة النتيجة —
+  //  أنّ ما أُنشئ رابطٌ عليه أن يُوصله بيده. فصار السؤالُ أثناء الكتابة،
+  //  والجوابُ تحت الحقل مباشرةً.
+  //
+  //  **وبمهلة**: السؤالُ عند كلّ حرفٍ يُرسل تسعةَ طلباتٍ لرقمٍ واحد،
+  //  ويصطدم بحدّ المعدّل، ويُظهر إجاباتٍ متضاربةً تتسابق. فيُنتظر
+  //  نصفُ ثانيةٍ بعد آخر حرف.
+  // ══════════════════════════════════════════════════════════════════
+
+  Timer? _lookupTimer;
+
+  void _onPhoneChanged(String v) {
+    _lookupTimer?.cancel();
+    c.clearRecipientCheck();
+    setState(() {});   // معاينةُ الطلب تتبع الرقم
+
+    final digits = v.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.length < 9) return;
+
+    _lookupTimer = Timer(const Duration(milliseconds: 500),
+        () => c.checkRecipient(v.trim()));
+  }
+
+  /// حالةُ الرقم تحت الحقل — **والغيابُ يُقال لا يُترك فراغاً**.
+  Widget _recipientStatus() {
+    return Obx(() {
+      if (c.isChecking.value) {
+        return const Padding(
+          padding: EdgeInsets.symmetric(vertical: 4),
+          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+            Text('نتحقّق من الرقم…', style: TextStyle(fontSize: 11, color: Colors.grey)),
+            SizedBox(width: 8),
+            SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+          ]),
+        );
+      }
+
+      final r = c.recipientCheck.value;
+
+      if (r == null) {
+        // لم يُسأل بعد — لا يُدَّعى شيء. (القاعدة ٧: «غير معروف» ليس صفراً.)
+        return Text(
+          'اكتب الرقم كاملاً لنعرف إن كان على أميال',
+          textAlign: TextAlign.right,
+          style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+        );
+      }
+
+      final found = r['found'] == true;
+      final isSelf = r['is_self'] == true;
+      final name = (r['name'] ?? '').toString();
+      final hint = (r['hint'] ?? '').toString();
+
+      final color = isSelf
+          ? AmialColors.red
+          : (found ? Colors.green.shade700 : Colors.orange.shade800);
+      final icon = isSelf
+          ? Icons.block
+          : (found ? Icons.verified_user : Icons.link);
+
+      return Container(
+        margin: const EdgeInsets.only(top: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Row(children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (found && name.isNotEmpty)
+                  Text(name, textAlign: TextAlign.right,
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color)),
+                Text(hint, textAlign: TextAlign.right,
+                    style: TextStyle(fontSize: 11, color: color)),
+              ],
+            ),
+          ),
+        ]),
+      );
+    });
+  }
 
 
   @override
@@ -149,6 +255,7 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
                   hintText: 'رقم الهاتف +967...',
                   prefixIcon: Icon(Icons.phone, size: 20),
                 ),
+                onChanged: _onPhoneChanged,
               ),
               const Divider(height: 1),
               TextField(
@@ -163,12 +270,7 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
             ]),
           ),
           const SizedBox(height: 6),
-          Text(
-            'إن كان الرقم على أميال يصله الطلب فوراً ويوافق أو يرفض. '
-            'وإن لم يكن، تحصل على رابط ترسله له.',
-            textAlign: TextAlign.right,
-            style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-          ),
+          _recipientStatus(),
           const SizedBox(height: 20),
 
           // الملاحظة
@@ -189,16 +291,33 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
           ),
           const SizedBox(height: 20),
 
-          // طريقة المشاركة
-          const Text('طريقة المشاركة', textAlign: TextAlign.right,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Row(children: [
-            Expanded(child: _methodTile('link', Icons.link, 'رابط مباشر')),
-            const SizedBox(width: 8),
-            Expanded(child: _methodTile('qr', Icons.qr_code_2, 'رمز QR')),
-          ]),
-          const SizedBox(height: 20),
+          // ══════════════════════════════════════════════════════════
+          //  طريقةُ الإيصال — **لا تُعرض إلّا حين تكون هناك خيارات.**
+          //
+          //  كانت الشاشةُ تسأل «رابط أم QR؟» دائماً — حتّى حين يكون
+          //  المستلمُ مشتركاً معروفاً ولا حاجة لأيّهما. فصار السؤالُ
+          //  يظهر لغير المشترك وحدَه، ومع المشترك تُقال النتيجة لا
+          //  يُطلب اختيار.
+          // ══════════════════════════════════════════════════════════
+          Obx(() {
+            final found = c.recipientCheck.value?['found'] == true;
+
+            if (found) {
+              return const SizedBox.shrink();
+            }
+
+            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              const Text('طريقة المشاركة', textAlign: TextAlign.right,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 6),
+              Row(children: [
+                Expanded(child: _methodTile('link', Icons.link, 'رابط')),
+                const SizedBox(width: 8),
+                Expanded(child: _methodTile('qr', Icons.qr_code_2, 'رمز QR')),
+              ]),
+              const SizedBox(height: 20),
+            ]);
+          }),
 
           // التكرار
           SwitchListTile(
@@ -326,24 +445,43 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
             color: Colors.white.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(children: [
-            Icon(_shareMethod == 'qr' ? Icons.qr_code_2 : Icons.link,
-                color: const Color(0xFFFECA1E), size: 18),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _shareMethod == 'qr'
+          // **المعاينةُ تعرض ما سيقع فعلاً لا رابطاً دائماً.**
+          //
+          // كانت تعرض `amial.pay/req/xxxxx` حتّى حين يكون المستلم مشتركاً
+          // ولا رابطَ في الأمر — فتُرسّخ في ذهن الطالب أنّ «طلب المال»
+          // رابطٌ يُشارَك، وهي بالضبط الشكوى.
+          child: Obx(() {
+            final found = c.recipientCheck.value?['found'] == true;
+            final name = (c.recipientCheck.value?['name'] ?? '').toString();
+
+            final icon = found
+                ? Icons.send_rounded
+                : (_shareMethod == 'qr' ? Icons.qr_code_2 : Icons.link);
+
+            final text = found
+                ? 'يصل إلى ${name.isEmpty ? 'صاحب الرقم' : name} فوراً — يوافق أو يرفض'
+                : (_shareMethod == 'qr'
                     ? 'سيظهر رمز QR بعد الإنشاء'
-                    : '...amial.pay/req/xxxxx — يظهر الرابط بعد الإنشاء',
-                textDirection: TextDirection.ltr,
-                textAlign: TextAlign.left,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: Colors.white, fontSize: 12, fontFamily: 'monospace'),
+                    : '...amial.pay/req/xxxxx — يظهر الرابط بعد الإنشاء');
+
+            return Row(children: [
+              Icon(icon, color: const Color(0xFFFECA1E), size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  text,
+                  textDirection: found ? TextDirection.rtl : TextDirection.ltr,
+                  textAlign: found ? TextAlign.right : TextAlign.left,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontFamily: found ? null : 'monospace'),
+                ),
               ),
-            ),
-          ]),
+            ]);
+          }),
         ),
       ]),
     );

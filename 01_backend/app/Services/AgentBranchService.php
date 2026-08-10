@@ -81,7 +81,7 @@ class AgentBranchService
             throw new DomainException('هاتف الفرع إلزاميّ (٩ أرقام على الأقل)');
         }
 
-        if (User::where('phone', $phone)->exists()) {
+        if (User::whereIn('phone', \App\Support\Phone::variants((string) $phone))->exists()) {
             throw new DomainException('الهاتف مستعمل في حسابٍ آخر');
         }
 

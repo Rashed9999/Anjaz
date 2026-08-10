@@ -53,7 +53,7 @@ class SplitBillService
         // حل العملاء المسجّلين (v1: مسجّلون فقط)
         $users = [];
         foreach ($phones as $phone) {
-            $u = User::where('phone', $phone)->first();
+            $u = User::whereIn('phone', \App\Support\Phone::variants((string) $phone))->first();
             if (!$u) {
                 throw new InvalidArgumentException("الرقم غير مسجّل: {$phone}");
             }
