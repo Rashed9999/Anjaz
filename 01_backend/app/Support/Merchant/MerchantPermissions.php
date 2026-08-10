@@ -77,6 +77,46 @@ final class MerchantPermissions
 
     public const FUEL_COMPANY_MANAGE = 'fuel.company.manage';
 
+    // ══════════ التجزئة — AMIAL-RETAIL-VERTICAL-001 · المرحلة ٨ ══════════
+
+    public const RETAIL_PRODUCT_VIEW = 'retail.product.view';
+    public const RETAIL_PRODUCT_MANAGE = 'retail.product.manage';
+    public const RETAIL_CATALOG_MANAGE = 'retail.catalog.manage';
+
+    public const RETAIL_PRICE_VIEW = 'retail.price.view';
+    public const RETAIL_PRICE_PROPOSE = 'retail.price.propose';
+    public const RETAIL_PRICE_APPROVE = 'retail.price.approve';
+
+    /**
+     * **الخصمُ فعلٌ له حدّ** — و`max_amount` في `merchant_role_permissions`
+     * هو الحدّ نفسُه بلا بناءٍ جديد: «الكاشير حتّى ٥٠٠ والمدير حتّى ٥٠٠٠».
+     */
+    public const RETAIL_DISCOUNT_APPLY = 'retail.discount.apply';
+
+    public const RETAIL_STOCK_VIEW = 'retail.stock.view';
+    public const RETAIL_STOCK_ADJUST = 'retail.stock.adjust';
+
+    public const RETAIL_LOCATION_MANAGE = 'retail.location.manage';
+
+    public const RETAIL_TRANSFER_REQUEST = 'retail.transfer.request';
+    public const RETAIL_TRANSFER_APPROVE = 'retail.transfer.approve';
+    public const RETAIL_TRANSFER_SHIP = 'retail.transfer.ship';
+    public const RETAIL_TRANSFER_RECEIVE = 'retail.transfer.receive';
+
+    public const RETAIL_COUNT_START = 'retail.count.start';
+    public const RETAIL_COUNT_ENTER = 'retail.count.enter';
+    public const RETAIL_COUNT_APPROVE = 'retail.count.approve';
+
+    public const RETAIL_WASTE_RECORD = 'retail.waste.record';
+    public const RETAIL_WASTE_APPROVE = 'retail.waste.approve';
+
+    public const RETAIL_RETURN_CREATE = 'retail.return.create';
+    public const RETAIL_RETURN_APPROVE = 'retail.return.approve';
+
+    public const RETAIL_PURCHASE_VIEW = 'retail.purchase.view';
+    public const RETAIL_PURCHASE_MANAGE = 'retail.purchase.manage';
+    public const RETAIL_PURCHASE_RECEIVE = 'retail.purchase.receive';
+
     /**
      * كلُّ الأفعال مع مجموعتها واسمها — **مصدرٌ واحد**.
      *
@@ -143,6 +183,38 @@ final class MerchantPermissions
             self::FUEL_RECON_RESOLVE => $g('الوقود — المصالحة', 'إغلاق تحقيق فرق', true),
 
             self::FUEL_COMPANY_MANAGE => $g('الوقود — الآجل', 'إدارة حسابات الشركات', true),
+
+            self::RETAIL_PRODUCT_VIEW => $g('التجزئة — الأصناف', 'عرض الأصناف'),
+            self::RETAIL_PRODUCT_MANAGE => $g('التجزئة — الأصناف', 'إضافة وتعديل الأصناف', true),
+            self::RETAIL_CATALOG_MANAGE => $g('التجزئة — الأصناف', 'التصنيفات والعلامات والوحدات', true),
+
+            self::RETAIL_PRICE_VIEW => $g('التجزئة — الأسعار', 'عرض الأسعار'),
+            self::RETAIL_PRICE_PROPOSE => $g('التجزئة — الأسعار', 'اقتراح سعر'),
+            self::RETAIL_PRICE_APPROVE => $g('التجزئة — الأسعار', 'اعتماد سعر', true),
+            self::RETAIL_DISCOUNT_APPLY => $g('التجزئة — الأسعار', 'منح خصم على البيع', true),
+
+            self::RETAIL_STOCK_VIEW => $g('التجزئة — المخزون', 'عرض المخزون'),
+            self::RETAIL_STOCK_ADJUST => $g('التجزئة — المخزون', 'تعديل المخزون مباشرة', true),
+            self::RETAIL_LOCATION_MANAGE => $g('التجزئة — المخزون', 'إدارة المواقع والمستودعات', true),
+
+            self::RETAIL_TRANSFER_REQUEST => $g('التجزئة — التحويلات', 'طلب تحويل'),
+            self::RETAIL_TRANSFER_APPROVE => $g('التجزئة — التحويلات', 'اعتماد تحويل', true),
+            self::RETAIL_TRANSFER_SHIP => $g('التجزئة — التحويلات', 'إرسال تحويل', true),
+            self::RETAIL_TRANSFER_RECEIVE => $g('التجزئة — التحويلات', 'استلام تحويل'),
+
+            self::RETAIL_COUNT_START => $g('التجزئة — الجرد', 'فتح جرد'),
+            self::RETAIL_COUNT_ENTER => $g('التجزئة — الجرد', 'إدخال العدّ'),
+            self::RETAIL_COUNT_APPROVE => $g('التجزئة — الجرد', 'اعتماد الجرد وتسوية الفروق', true),
+
+            self::RETAIL_WASTE_RECORD => $g('التجزئة — الهالك', 'تسجيل هالك'),
+            self::RETAIL_WASTE_APPROVE => $g('التجزئة — الهالك', 'اعتماد الهالك', true),
+
+            self::RETAIL_RETURN_CREATE => $g('التجزئة — المرتجعات', 'إنشاء مرتجع'),
+            self::RETAIL_RETURN_APPROVE => $g('التجزئة — المرتجعات', 'اعتماد المرتجع', true),
+
+            self::RETAIL_PURCHASE_VIEW => $g('التجزئة — المشتريات', 'عرض أوامر الشراء'),
+            self::RETAIL_PURCHASE_MANAGE => $g('التجزئة — المشتريات', 'إنشاء واعتماد أوامر الشراء', true),
+            self::RETAIL_PURCHASE_RECEIVE => $g('التجزئة — المشتريات', 'استلام بضاعة'),
         ];
     }
 
@@ -273,6 +345,160 @@ final class MerchantPermissions
             ],
             'manager' => [
                 self::FUEL_SALE_CANCEL => ['scope' => 'station', 'limit' => '1000000'],
+            ],
+        ];
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  التجزئة — AMIAL-RETAIL-VERTICAL-001 · المرحلة ٨
+    // ══════════════════════════════════════════════════════════════════
+
+    /**
+     * الأدوارُ الثمانية بذرةً — **ولا محرّكَ جديد**.
+     *
+     * `MerchantPermissionService` بُني في جولة الوقود ويجيب ثلاثةَ أسئلة:
+     * أيملكها؟ أفي نطاقه؟ أتحت حدّه؟ — **وحدُّ الخصم هو `max_amount`
+     * نفسُه** بلا سطرٍ جديد.
+     *
+     * @return array<string,array{name:string,permissions:array<int,string>}>
+     */
+    public static function retailSeedRoles(): array
+    {
+        $core = [
+            self::RETAIL_PRODUCT_VIEW, self::RETAIL_PRICE_VIEW, self::RETAIL_STOCK_VIEW,
+        ];
+
+        return [
+            'owner' => [
+                'name' => 'مالك المتجر',
+                'permissions' => self::all(),
+            ],
+
+            'store_manager' => [
+                'name' => 'مدير المتجر',
+                'permissions' => array_merge($core, [
+                    self::STAFF_VIEW, self::STAFF_MANAGE, self::ROLE_VIEW,
+                    self::CASH_COUNT, self::CASH_MOVE,
+                    self::SHIFT_OPEN, self::SHIFT_CLOSE, self::SHIFT_APPROVE, self::SHIFT_VIEW_ALL,
+                    self::SETTLEMENT_VIEW,
+                    self::REPORT_SALES, self::REPORT_FINANCIAL, self::REPORT_STAFF,
+                    self::AUDIT_VIEW,
+                    self::RETAIL_PRODUCT_MANAGE, self::RETAIL_CATALOG_MANAGE,
+                    self::RETAIL_PRICE_PROPOSE,
+                    self::RETAIL_DISCOUNT_APPLY,
+                    self::RETAIL_TRANSFER_REQUEST, self::RETAIL_TRANSFER_APPROVE,
+                    self::RETAIL_TRANSFER_RECEIVE,
+                    self::RETAIL_COUNT_START, self::RETAIL_COUNT_ENTER, self::RETAIL_COUNT_APPROVE,
+                    self::RETAIL_WASTE_RECORD, self::RETAIL_WASTE_APPROVE,
+                    self::RETAIL_RETURN_CREATE, self::RETAIL_RETURN_APPROVE,
+                    self::RETAIL_PURCHASE_VIEW, self::RETAIL_PURCHASE_MANAGE,
+                ]),
+                // ولا: اعتمادَ سعرٍ، ولا تعديلَ مخزونٍ مباشراً، ولا إعداداتِ
+                // المنشأة — **تلك للمالك**. والتعديلُ المباشر خاصّةً: بابٌ
+                // يلتفّ على الجرد كلِّه.
+            ],
+
+            'accountant' => [
+                'name' => 'محاسب',
+                'permissions' => array_merge($core, [
+                    self::CASH_COUNT,
+                    self::SHIFT_VIEW_ALL,
+                    self::SETTLEMENT_VIEW, self::SETTLEMENT_REQUEST,
+                    self::LEDGER_VIEW, self::ADJUSTMENT_REQUEST,
+                    self::REPORT_SALES, self::REPORT_FINANCIAL, self::REPORT_STAFF,
+                    self::AUDIT_VIEW,
+                    self::RETAIL_PURCHASE_VIEW,
+                ]),
+                // **ولا تعديلَ عمليّةٍ مكتملة**: التصحيح بقيدٍ جديدٍ باعتماد.
+            ],
+
+            'inventory_manager' => [
+                'name' => 'مدير المخزون',
+                'permissions' => array_merge($core, [
+                    self::REPORT_SALES,
+                    self::RETAIL_PRODUCT_MANAGE, self::RETAIL_CATALOG_MANAGE,
+                    self::RETAIL_LOCATION_MANAGE,
+                    self::RETAIL_TRANSFER_REQUEST, self::RETAIL_TRANSFER_APPROVE,
+                    self::RETAIL_TRANSFER_SHIP, self::RETAIL_TRANSFER_RECEIVE,
+                    self::RETAIL_COUNT_START, self::RETAIL_COUNT_ENTER, self::RETAIL_COUNT_APPROVE,
+                    self::RETAIL_WASTE_RECORD, self::RETAIL_WASTE_APPROVE,
+                    self::RETAIL_PURCHASE_VIEW, self::RETAIL_PURCHASE_MANAGE,
+                    self::RETAIL_PURCHASE_RECEIVE,
+                ]),
+                // ولا مالَ إطلاقاً: لا دفتر، ولا تسوية، ولا خصم.
+            ],
+
+            'warehouse_staff' => [
+                'name' => 'موظف مستودع',
+                'permissions' => array_merge($core, [
+                    self::RETAIL_TRANSFER_REQUEST, self::RETAIL_TRANSFER_SHIP,
+                    self::RETAIL_TRANSFER_RECEIVE,
+                    self::RETAIL_COUNT_ENTER,
+                    self::RETAIL_WASTE_RECORD,
+                    self::RETAIL_PURCHASE_RECEIVE,
+                ]),
+                // **يُدخل العدّ ولا يعتمده**، ويُسجّل الهالك ولا يعتمده.
+            ],
+
+            'cashier' => [
+                'name' => 'كاشير',
+                'permissions' => array_merge($core, [
+                    self::SHIFT_OPEN, self::SHIFT_CLOSE,
+                    self::CASH_COUNT,
+                    self::RETAIL_DISCOUNT_APPLY,
+                    self::RETAIL_RETURN_CREATE,
+                ]),
+                // ولا: تعديلَ صنفٍ، ولا سعراً، ولا جرداً، ولا اعتماداً.
+            ],
+
+            'sales_rep' => [
+                'name' => 'مندوب مبيعات',
+                'permissions' => array_merge($core, [
+                    self::REPORT_SALES,
+                    self::RETAIL_DISCOUNT_APPLY,
+                    self::RETAIL_RETURN_CREATE,
+                ]),
+            ],
+
+            // **دورٌ فارغٌ عمداً** — يبنيه المالك من الصفر، ولا يُمنح شيئاً
+            // بحسن نيّة. (least privilege)
+            'custom' => [
+                'name' => 'دور مخصَّص',
+                'permissions' => [],
+            ],
+        ];
+    }
+
+    /**
+     * حدودُ التجزئة ونطاقاتُها.
+     *
+     * **وحدُّ الخصم هنا مبلغٌ لا نسبة.** والنسبةُ تبدو أوضح («٥٪») لكنّها
+     * تُقاس على إجماليٍّ يكتبه الكاشيرُ نفسُه: فيرفع الإجماليَّ ثمّ يخصم
+     * ٥٪ منه فيخرج بمبلغٍ أكبر ممّا نوى المالكُ السماحَ به. **والمبلغُ
+     * سقفٌ لا يُلتفّ عليه.**
+     *
+     * @return array<string,array<string,array{scope:string,limit?:string,approval?:string}>>
+     */
+    public static function retailSeedScopes(): array
+    {
+        return [
+            'cashier' => [
+                self::SHIFT_CLOSE => ['scope' => 'own'],
+                self::RETAIL_DISCOUNT_APPLY => ['scope' => 'own', 'limit' => '500'],
+                self::RETAIL_RETURN_CREATE => ['scope' => 'own', 'approval' => 'manager'],
+            ],
+            'sales_rep' => [
+                self::RETAIL_DISCOUNT_APPLY => ['scope' => 'own', 'limit' => '1000'],
+            ],
+            'store_manager' => [
+                // **`merchant` لا `store`**: قِيس أنّ `scope_type` قائمةٌ
+                // مغلقة (merchant/station/branch/shift/own)، وقيمةٌ خارجها
+                // تُبتر في القاعدة ثمّ يردّها `scopeMatches` رفضاً صامتاً —
+                // فيُمنع المديرُ من خصمٍ يملكه ولا يعرف لماذا.
+                self::RETAIL_DISCOUNT_APPLY => ['scope' => 'merchant', 'limit' => '5000'],
+            ],
+            'warehouse_staff' => [
+                self::RETAIL_WASTE_RECORD => ['scope' => 'own', 'approval' => 'manager'],
             ],
         ];
     }

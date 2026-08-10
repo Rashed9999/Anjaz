@@ -181,6 +181,21 @@ class CashierService
 
         $discountAmount = $discountAmount !== null ? MoneyService::normalize($discountAmount) : '0';
 
+        // ── AMIAL-RETAIL-VERTICAL-001 · المرحلة ٨ — **سقفُ الخصم** ─────
+        //
+        // كان `discount_amount` يُقبل كما يأتي: كاشيرٌ يخصم نصفَ الفاتورة
+        // لمن يعرفه، **ولا شيءَ يمنعه ولا أثرَ يدلّ عليه**.
+        //
+        // والمحرّكُ جاهزٌ منذ جولة الوقود: `max_amount` في منحة الدور.
+        // فلا يُبنى فحصٌ جديد — يُنادى القائم.
+        //
+        // **والسقفُ مبلغٌ لا نسبة**: النسبةُ تُقاس على إجماليٍّ يكتبه
+        // الكاشيرُ نفسُه، فيرفعه ثمّ يخصم منه «٥٪» فيخرج بأكثرَ ممّا نوى
+        // المالكُ السماحَ به.
+        if (MoneyService::isPositive($discountAmount)) {
+            $this->assertDiscountAllowed($merchant, $posUserId, $discountAmount);
+        }
+
         return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid) {
             $sale = MerchantSale::create([
                 'sale_ulid' => (string) Str::ulid(),
@@ -209,9 +224,20 @@ class CashierService
             // والمؤجَّلُ هو **خصمُ المخزون** وحدَه.
             app(\App\Services\Retail\SaleLineService::class)->writeLines($sale, $items);
 
-            // خصم المخزون للعناصر المرتبطة بمنتج (product_id)، إن لم يكن بيعاً معلّقاً
+            $fresh = $sale->fresh();
+
             if ($status !== 'pending_payment') {
-                $this->decrementStockForSale($sale->fresh());
+                // خصم المخزون للعناصر المرتبطة بمنتج (product_id)
+                $this->decrementStockForSale($fresh);
+            } else {
+                // AMIAL-RETAIL-VERTICAL-001 · المرحلة ٩ — **حجزٌ لا خصم**.
+                //
+                // الدفعُ بأميال باي غيرُ متزامن. وكان المخزونُ إمّا يُنقص
+                // فوراً — **فينقص لبيعةٍ لم تقع** — وإمّا لا يُمسّ فتُباع
+                // آخرُ حبّةٍ لزبونين معاً. والحجزُ يُبقيها موجودةً وغيرَ
+                // متاحة، حتّى ينجح الدفعُ أو تنتهي المهلة.
+                app(\App\Services\Retail\StockReservationService::class)
+                    ->holdForSale($fresh);
             }
 
             // AMIAL-CUSTOMER-CREDIT-001 — ربط بيع الأجل بحساب العميل الائتماني
@@ -352,7 +378,19 @@ class CashierService
                 'paid_transaction_id' => $txId,
                 'settled_at' => now(),
             ]);
-            $this->decrementStockForSale($sale);
+            // AMIAL-RETAIL-VERTICAL-001 · المرحلة ٩ — **الحجزُ يصير بيعاً**.
+            //
+            // ولا يُنادى `decrementStockForSale` هنا: البضاعةُ محجوزةٌ
+            // بالفعل، وخصمُها مرّةً أخرى يخصم ضعفَ ما بيع.
+            $reservations = app(\App\Services\Retail\StockReservationService::class);
+            $consumed = $reservations->consumeForSale($sale);
+
+            // **ولا حجزَ = بيعةٌ قديمةٌ سبقت المرحلة ٩** — تُخصم كما كانت،
+            // فلا يمرّ دفعٌ بلا خصمِ مخزون.
+            if ($consumed === 0) {
+                $this->decrementStockForSale($sale);
+            }
+
             return $sale->fresh();
         });
     }
@@ -544,6 +582,39 @@ class CashierService
                 ];
             })->values()->all(),
         ];
+    }
+
+    /**
+     * سقفُ الخصم — **يُفحص على مُنفِّذ البيعة لا على صاحب المتجر**.
+     *
+     * فالمالكُ يخصم ما شاء (`isOwner` يمرّ بلا قيد)، والموظّفُ محدودٌ
+     * بمنحة دوره. ومن لم يُسنَد إليه دورٌ بعد **لا يُمنع**: المتاجرُ
+     * القائمةُ تعمل اليوم بلا أدوار، وقلبُ ذلك يُوقف بيعاً يعمل.
+     */
+    private function assertDiscountAllowed(User $merchant, ?int $posUserId, string $discount): void
+    {
+        $actor = $posUserId
+            ? \App\Models\PosUser::where('id', $posUserId)->value('user_id')
+            : null;
+        $actorUser = $actor ? User::find($actor) : null;
+
+        if (! $actorUser || (int) $actorUser->id === (int) $merchant->id) {
+            return;   // البيعةُ من صاحب المتجر نفسِه
+        }
+
+        $perm = app(\App\Services\Merchant\MerchantPermissionService::class);
+
+        // **بلا أدوارٍ مُسنَدة لا يُمنع** — انظر شرح الدالّة.
+        if ($perm->effective($actorUser) === []) {
+            return;
+        }
+
+        $perm->assert(
+            $actorUser,
+            \App\Support\Merchant\MerchantPermissions::RETAIL_DISCOUNT_APPLY,
+            ['owner_user_id' => $actorUser->id],
+            $discount,
+        );
     }
 
     /** كمّيّةٌ صحيحةٌ تُخرج عدداً صحيحاً، والكسريّةُ تبقى كسراً. */

@@ -236,11 +236,33 @@ class MerchantPermissionService
      */
     public function seedFuelRoles(User $merchant): array
     {
-        $scopes = P::fuelSeedScopes();
+        return $this->seedRoles($merchant, P::fuelSeedRoles(), P::fuelSeedScopes());
+    }
+
+    /**
+     * الأدوارُ الثمانيةُ للتجزئة — **بالمحرّك نفسِه**.
+     *
+     * AMIAL-RETAIL-VERTICAL-001 · المرحلة ٨. ولا شيءَ جديدٌ هنا غير
+     * القائمة: البذرُ والنطاقُ والحدُّ كلُّها من جولة الوقود.
+     *
+     * @return array<int,MerchantRole>
+     */
+    public function seedRetailRoles(User $merchant): array
+    {
+        return $this->seedRoles($merchant, P::retailSeedRoles(), P::retailSeedScopes());
+    }
+
+    /**
+     * @param  array<string,array{name:string,permissions:array<int,string>}>  $roles
+     * @param  array<string,array<string,array{scope:string,limit?:string,approval?:string}>>  $scopes
+     * @return array<int,MerchantRole>
+     */
+    private function seedRoles(User $merchant, array $roles, array $scopes): array
+    {
         $out = [];
 
-        DB::transaction(function () use ($merchant, $scopes, &$out) {
-            foreach (P::fuelSeedRoles() as $code => $def) {
+        DB::transaction(function () use ($merchant, $roles, $scopes, &$out) {
+            foreach ($roles as $code => $def) {
                 $existing = MerchantRole::where('merchant_user_id', $merchant->id)
                     ->where('code', $code)->first();
 

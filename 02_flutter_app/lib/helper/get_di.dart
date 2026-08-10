@@ -46,6 +46,8 @@ import 'package:amial_pay/features/merchant_verification/controllers/merchant_ve
 import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
 import 'package:amial_pay/features/fuel_station/domain/repositories/fuel_vertical_repo.dart';
 import 'package:amial_pay/features/fuel_station/controllers/fuel_vertical_controller.dart';
+import 'package:amial_pay/features/retail/controllers/retail_vertical_controller.dart';
+import 'package:amial_pay/features/retail/domain/repositories/retail_vertical_repo.dart';
 import 'package:amial_pay/features/fuel_station/domain/repositories/fuel_station_repo.dart';
 import 'package:amial_pay/features/pharmacy/controllers/pharmacy_controller.dart';
 import 'package:amial_pay/features/pharmacy/domain/repositories/pharmacy_repo.dart';
@@ -250,6 +252,10 @@ Future<Map<String, Map<String, String>>> init() async {
   // AMIAL-FUEL-VERTICAL-001 · المرحلة ٨ — قطاع الوقود الكامل.
   Get.lazyPut(() => FuelVerticalRepo(apiClient: Get.find()));
   Get.lazyPut(() => FuelVerticalController(repo: Get.find()), fenix: true);
+
+  // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١٠ — قطاع التجزئة الكامل.
+  Get.lazyPut(() => RetailVerticalRepo(apiClient: Get.find()));
+  Get.lazyPut(() => RetailVerticalController(repo: Get.find()), fenix: true);
 
   // AMIAL-PHARMACY-001 — الصيدلية (Cashier متخصّص)
   Get.lazyPut(() => PharmacyRepo(apiClient: Get.find()));

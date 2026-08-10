@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:amial_pay/common/controllers/vertical_state_mixin.dart';
 import 'package:amial_pay/features/fuel_station/domain/repositories/fuel_vertical_repo.dart';
 
 /// AMIAL-FUEL-VERTICAL-001 · المرحلة ٨ — متحكّمُ القطاع.
@@ -12,22 +13,17 @@ import 'package:amial_pay/features/fuel_station/domain/repositories/fuel_vertica
 ///
 /// **والإخفاءُ ليس أماناً:** كلُّ فعلٍ يُفحص في الخادم ثانيةً. ما هنا هو
 /// ألّا نعرض بابًا يُغلق في وجه من يفتحه.
-class FuelVerticalController extends GetxController implements GetxService {
+class FuelVerticalController extends GetxController
+    with VerticalStateMixin
+    implements GetxService {
   final FuelVerticalRepo repo;
   FuelVerticalController({required this.repo});
 
   // ── الحالة ─────────────────────────────────────────────────────────
-  final RxBool isLoading = false.obs;
-  final RxBool isSubmitting = false.obs;
-  final RxString lastError = ''.obs;
-
-  /// **الحالاتُ الستّ** التي تفرضها `amial-flutter` — لا شاشةَ بحالتين.
-  final RxBool permissionDenied = false.obs;
-  final RxBool isOffline = false.obs;
-
-  final RxSet<String> permissions = <String>{}.obs;
-  final RxBool isOwner = false.obs;
-  final RxMap<String, dynamic> catalogue = <String, dynamic>{}.obs;
+  //
+  // **الحقولُ في `VerticalStateMixin`** — AMIAL-RETAIL-VERTICAL-001 ·
+  // المرحلة ١٠: عُمّمت لأنّه ليس فيها سطرٌ خاصٌّ بالوقود، والتجزئةُ
+  // تحتاجها حرفاً بحرف.
 
   final Rx<Map<String, dynamic>?> ops = Rx<Map<String, dynamic>?>(null);
   final RxList<Map<String, dynamic>> tanks = <Map<String, dynamic>>[].obs;
@@ -41,32 +37,11 @@ class FuelVerticalController extends GetxController implements GetxService {
 
   // ── أدوات ──────────────────────────────────────────────────────────
 
-  bool _ok(Response r) => r.statusCode == 200 && (r.body?['success'] == true);
+  bool _ok(Response r) => okOf(r);
 
-  String _msg(Response r) {
-    if (r.statusCode == 401 || r.statusCode == 403) {
-      return 'انتهت الجلسة أو لا تملك الصلاحية';
-    }
-    if (r.statusCode == null || r.statusCode == 0) {
-      return 'لا اتصال بالخادم — تحقّق من الشبكة';
-    }
-    final m = r.body is Map ? r.body['message'] : null;
-    return (m is String && m.trim().isNotEmpty) ? m : 'تعذّر إتمام العملية';
-  }
+  String _msg(Response r) => msgOf(r);
 
-  /// **يفحص كلّ نداء**: الشبكةُ المقطوعة ليست رفضَ صلاحيّة، ورفضُ
-  /// الصلاحيّة ليس عطلاً. وخلطُها يُرسل المستعملَ يصلح ما ليس معطوباً.
-  void _classify(Response r) {
-    isOffline.value = (r.statusCode == null || r.statusCode == 0);
-    permissionDenied.value = (r.statusCode == 403);
-  }
-
-  /// أيملك الفعل؟ — **يُسأل قبل رسم كلّ زرّ**.
-  bool can(String permission) =>
-      isOwner.value || permissions.contains(permission);
-
-  /// أيملك واحدةً من هذه؟ — لإظهار قسمٍ كامل.
-  bool canAny(List<String> perms) => perms.any(can);
+  void _classify(Response r) => classify(r);
 
   // ── الصلاحيّات ─────────────────────────────────────────────────────
 

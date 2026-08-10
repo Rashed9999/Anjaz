@@ -751,6 +751,95 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/roles/seed', [$FV, 'seedRoles'])->name('roles.seed');
         });
 
+        // ══ AMIAL-RETAIL-VERTICAL-001 · المراحل ٢–٩ ════════════════════
+        //
+        // وكلُّ فعلٍ خلفَه صلاحيّةٌ تُفحص في المتحكّم بنطاقها وحدّها —
+        // إخفاءُ الزرّ ليس أماناً.
+        Route::prefix('retail')->name('retail.')->group(function () {
+            $RV = \App\Http\Controllers\Api\V1\Amial\RetailVerticalController::class;
+
+            // مركز العمليّات — الحالةُ كلُّها في نداءٍ واحد
+            Route::get('/ops', [$RV, 'operationsCenter'])->name('ops');
+            Route::get('/me/permissions', [$RV, 'myPermissions'])->name('me.permissions');
+
+            // محرّك الأصناف
+            Route::get('/categories', [$RV, 'categories'])->name('categories.index');
+            Route::post('/categories', [$RV, 'addCategory'])->name('categories.add');
+            Route::get('/brands', [$RV, 'brands'])->name('brands.index');
+            Route::post('/brands', [$RV, 'addBrand'])->name('brands.add');
+            Route::get('/units', [$RV, 'units'])->name('units.index');
+            Route::post('/units', [$RV, 'addUnit'])->name('units.add');
+            Route::get('/scan', [$RV, 'scan'])->name('scan');
+            Route::post('/products/{id}/barcodes', [$RV, 'addBarcode'])
+                ->where('id', '[0-9]+')->name('products.barcodes.add');
+            Route::post('/products/{id}/variants', [$RV, 'generateVariants'])
+                ->where('id', '[0-9]+')->name('products.variants');
+
+            // المخزون والمواقع
+            Route::get('/locations', [$RV, 'locations'])->name('locations.index');
+            Route::post('/locations', [$RV, 'addLocation'])->name('locations.add');
+            Route::get('/products/{id}/stock', [$RV, 'productStock'])
+                ->where('id', '[0-9]+')->name('products.stock');
+            Route::get('/products/{id}/movements', [$RV, 'movements'])
+                ->where('id', '[0-9]+')->name('products.movements');
+            Route::get('/products/{id}/price-history', [$RV, 'priceHistory'])
+                ->where('id', '[0-9]+')->name('products.price-history');
+
+            // التحويلات — طلب ← اعتماد ← إرسال ← استلام
+            Route::get('/transfers', [$RV, 'transfers'])->name('transfers.index');
+            Route::post('/transfers', [$RV, 'requestTransfer'])->name('transfers.request');
+            Route::get('/transfers/{id}', [$RV, 'showTransfer'])
+                ->where('id', '[0-9]+')->name('transfers.show');
+            Route::post('/transfers/{id}/approve', [$RV, 'approveTransfer'])
+                ->where('id', '[0-9]+')->name('transfers.approve');
+            Route::post('/transfers/{id}/ship', [$RV, 'shipTransfer'])
+                ->where('id', '[0-9]+')->name('transfers.ship');
+            Route::post('/transfers/{id}/receive', [$RV, 'receiveTransfer'])
+                ->where('id', '[0-9]+')->name('transfers.receive');
+            Route::post('/transfers/{id}/cancel', [$RV, 'cancelTransfer'])
+                ->where('id', '[0-9]+')->name('transfers.cancel');
+
+            // الجرد
+            Route::get('/counts', [$RV, 'counts'])->name('counts.index');
+            Route::post('/counts', [$RV, 'openCount'])->name('counts.open');
+            Route::get('/counts/{id}', [$RV, 'countSheet'])
+                ->where('id', '[0-9]+')->name('counts.sheet');
+            Route::post('/counts/{id}/enter', [$RV, 'enterCount'])
+                ->where('id', '[0-9]+')->name('counts.enter');
+            Route::post('/counts/{id}/submit', [$RV, 'submitCount'])
+                ->where('id', '[0-9]+')->name('counts.submit');
+            Route::get('/counts/{id}/variances', [$RV, 'countVariances'])
+                ->where('id', '[0-9]+')->name('counts.variances');
+            Route::post('/counts/{id}/approve', [$RV, 'approveCount'])
+                ->where('id', '[0-9]+')->name('counts.approve');
+
+            // الهالك
+            Route::get('/wastes', [$RV, 'wastes'])->name('wastes.index');
+            Route::post('/wastes', [$RV, 'recordWaste'])->name('wastes.record');
+            Route::post('/wastes/{id}/approve', [$RV, 'approveWaste'])
+                ->where('id', '[0-9]+')->name('wastes.approve');
+            Route::post('/wastes/{id}/reject', [$RV, 'rejectWaste'])
+                ->where('id', '[0-9]+')->name('wastes.reject');
+
+            // المرتجعات بأسطرها
+            Route::get('/sales/{ulid}/returnable', [$RV, 'refundableLines'])
+                ->where('ulid', '[A-Z0-9]{26}')->name('returns.lines');
+            Route::post('/sales/{ulid}/returns', [$RV, 'createReturn'])
+                ->where('ulid', '[A-Z0-9]{26}')->name('returns.create');
+            Route::post('/returns/{id}/approve', [$RV, 'approveReturn'])
+                ->where('id', '[0-9]+')->name('returns.approve');
+
+            // الأسعار — اقتراحٌ ثمّ اعتماد
+            Route::post('/prices/propose', [$RV, 'proposePrice'])->name('prices.propose');
+            Route::get('/prices/pending', [$RV, 'pendingPrices'])->name('prices.pending');
+            Route::post('/prices/{id}/approve', [$RV, 'approvePrice'])
+                ->where('id', '[0-9]+')->name('prices.approve');
+
+            // الأدوار
+            Route::get('/roles', [$RV, 'roles'])->name('roles.index');
+            Route::post('/roles/seed', [$RV, 'seedRoles'])->name('roles.seed');
+        });
+
         // AMIAL-PHARMACY-001 — قطاع الصيدليات
         Route::prefix('pharmacy')->name('pharmacy.')->group(function () {
             Route::get('/dashboard', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'dashboard'])->name('dashboard');

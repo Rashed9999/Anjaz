@@ -7,6 +7,7 @@ import 'package:amial_pay/features/me/screens/my_services_screen.dart';
 // الشاشات الفعلية للربط
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart';
+import 'package:amial_pay/features/retail/screens/retail_ops_center_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
@@ -137,10 +138,13 @@ class MerchantRetailHomeScreen extends StatelessWidget {
                 color: Colors.blue.shade700,
                 onTap: () => Get.to(() => const CashierProductsScreen()),
               )),
+              // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١٠ — **زرُّ «المخزون»
+              // كان يفتح قائمةَ المنتجات**: عنوانٌ يَعِد بالمخزون ويُعطي
+              // الكتالوج، ولا مكانَ للمواقع ولا التحويلات ولا الجرد.
               AccessGate(feature: 'inventory', child: _MiniAction(
                 icon: Icons.warehouse, label: 'المخزون',
                 color: Colors.orange.shade800,
-                onTap: () => Get.to(() => const CashierProductsScreen()),
+                onTap: () => Get.to(() => const RetailOpsCenterScreen()),
               )),
               AccessGate(feature: 'customers', child: _MiniAction(
                 icon: Icons.people, label: 'العملاء',

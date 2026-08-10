@@ -215,6 +215,24 @@ Route::prefix('fuel')->name('fuel.')->middleware('platform:platform.audit.view')
         Route::get('/open-variances', [$fc, 'openVariances'])->name('open-variances');
     });
 
+// ============ AMIAL-RETAIL-VERTICAL-001 · المرحلة ١١ — مركز التجزئة ============
+//
+// رقابةٌ لا إدارة: لا تعتمد اللوحةُ جردَ تاجرٍ ولا هالكَه — ذاك له.
+// والصلاحيّة `platform.audit.view` لأنّ قراءة المخزون السالب وفروق الجرد
+// من جنس التدقيق.
+Route::prefix('retail')->name('retail.')->middleware('platform:platform.audit.view')
+    ->group(function () {
+        $rc = App\Http\Controllers\Admin\RetailCenterController::class;
+
+        Route::get('/', [$rc, 'page'])->name('page');
+        Route::get('/overview', [$rc, 'overview'])->name('overview');
+        Route::get('/merchants', [$rc, 'merchants'])->name('merchants');
+        Route::get('/merchants/{id}', [$rc, 'merchant'])
+            ->where('id', '[0-9]+')->name('merchant');
+        Route::get('/negative-stock', [$rc, 'negativeStock'])->name('negative-stock');
+        Route::get('/stuck-transfers', [$rc, 'stuckTransfers'])->name('stuck-transfers');
+    });
+
 // ============ AMIAL-LEDGER-CENTER-001 — مركز الدفتر (الفصل ١٧) ============
 //
 // الصلاحية `platform.audit.view`: قراءة الدفتر اطّلاعٌ على حركة المال كلّها،
