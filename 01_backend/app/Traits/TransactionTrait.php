@@ -586,6 +586,19 @@ trait TransactionTrait
         // AMIAL-ZONE-001 hotfix (v0.7-A.1): defense-in-depth zone/security check
         $this->assertFinancialEligibility($from_user_id);
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-AML-COVERAGE-001 — **الإعدادُ كان يَعِد بما لا يُنفَّذ.**
+        //
+        // `config('amial.aml.screened_types')` تُعلن خمسةَ أنواع، و
+        // `screenAml()` كانت تُنادى من **موضعٍ واحد** بـ`SEND_MONEY`
+        // مثبَّتاً. فأربعةٌ من الخمسة تمرّ بلا فحصٍ إطلاقاً، والإعدادُ
+        // يقول إنّها تُفحَص، ولوحةُ غسل الأموال تُبنى على هذا الوعد.
+        //
+        // **وأخطرُها هذا**: السحبُ النقديّ هو مخرجُ الغسل المعتاد —
+        // نقدٌ يدخل من وكيل، ثمّ تحويل، ثمّ نقدٌ يخرج من وكيلٍ آخر. وكان
+        // الطرفُ الأوسطُ وحدَه مفحوصاً.
+        $this->screenAml($from_user_id, $to_user_id, CASH_OUT, $amount);
+
         $cashOutTxId = DB::transaction(function () use ($from_user_id, $to_user_id, $amount, $charge, $total, $note, $idempotencyKey, $agentCommission, $adminPortion, $feeMeta) {
             // 1) خصم العميل
             $customerWallet = $this->guard()->debit(
@@ -837,6 +850,11 @@ trait TransactionTrait
         $net = MoneyService::sub($amount, $fee); // ما يصل للتاجر
 
         $this->assertFinancialEligibility($customer_user_id);
+
+        // AMIAL-AML-COVERAGE-001 — `pay_merchant` مُعلَنٌ في الإعداد ولم
+        // يكن مفحوصاً. وتاجرٌ صوريٌّ يقبض دفعاتٍ كبيرةً متكرّرةً هو أحدُ
+        // أشكال الغسل المعروفة، ولا يمرّ بـ`send_money` إطلاقاً.
+        $this->screenAml($customer_user_id, $merchant_user_id, 'pay_merchant', $amount);
 
         $txId = DB::transaction(function () use (
             $customer_user_id, $merchant_user_id, $amount, $fee, $net,
