@@ -7,6 +7,7 @@ import 'package:amial_pay/features/me/screens/my_services_screen.dart';
 // الشاشات الفعلية للربط
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart';
+import 'package:amial_pay/features/entitlements/screens/my_capabilities_screen.dart';
 import 'package:amial_pay/features/retail/screens/retail_ops_center_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
@@ -107,6 +108,14 @@ class MerchantRetailHomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: Obx(() => Text(access.userName.value ?? 'متجري')),
         actions: [
+          // AMIAL-ENTITLEMENTS-001 — **ملفّ خدماتي**: كلُّ ما في المنصّة
+          // بحالته لهذا الحساب، والمقفلُ يُعرض بسعر فتحه. وما يُخفى لا
+          // يُشترى — ولا يعرف التاجرُ أنّه موجودٌ أصلاً.
+          IconButton(
+            icon: const Icon(Icons.apps_rounded),
+            tooltip: 'خدماتي',
+            onPressed: () => Get.to(() => const MyCapabilitiesScreen()),
+          ),
           IconButton(icon: const Icon(Icons.menu),
               onPressed: () => Get.to(() => const MyServicesScreen())),
         ],

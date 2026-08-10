@@ -215,6 +215,31 @@ Route::prefix('fuel')->name('fuel.')->middleware('platform:platform.audit.view')
         Route::get('/open-variances', [$fc, 'openVariances'])->name('open-variances');
     });
 
+// ============ AMIAL-ENTITLEMENTS-001 — مركز الباقات والقدرات ============
+//
+// **التسعيرُ يُجرَّب أكثر من مرّة في الشهور الأولى**، وكلُّ تجربةٍ بنشرةٍ
+// تعني أنّك لن تجرّب. فالمصفوفةُ تُحرَّر من هنا وتُخزَّن فوق افتراضيّ
+// الشيفرة. والصلاحيّة `platform.settings.manage` — تغييرُ ما يُباع قرارُ
+// إدارةٍ لا قراءةُ تدقيق.
+Route::prefix('entitlements')->name('entitlements.')
+    ->middleware('platform:platform.settings.manage')
+    ->group(function () {
+        $ec = App\Http\Controllers\Admin\EntitlementCenterController::class;
+
+        Route::get('/', [$ec, 'page'])->name('page');
+        Route::get('/matrix', [$ec, 'matrix'])->name('matrix');
+        Route::post('/matrix', [$ec, 'setCell'])->name('matrix.set');
+        Route::delete('/matrix', [$ec, 'resetCell'])->name('matrix.reset');
+        Route::get('/health', [$ec, 'health'])->name('health');
+
+        Route::get('/merchants/{id}', [$ec, 'merchant'])
+            ->where('id', '[0-9]+')->name('merchant');
+        Route::post('/merchants/{id}/override', [$ec, 'setOverride'])
+            ->where('id', '[0-9]+')->name('merchant.override');
+        Route::delete('/merchants/{id}/override/{overrideId}', [$ec, 'removeOverride'])
+            ->where(['id' => '[0-9]+', 'overrideId' => '[0-9]+'])->name('merchant.override.remove');
+    });
+
 // ============ AMIAL-RETAIL-VERTICAL-001 · المرحلة ١١ — مركز التجزئة ============
 //
 // رقابةٌ لا إدارة: لا تعتمد اللوحةُ جردَ تاجرٍ ولا هالكَه — ذاك له.

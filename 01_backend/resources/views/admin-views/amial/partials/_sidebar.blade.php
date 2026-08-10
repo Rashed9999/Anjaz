@@ -67,6 +67,7 @@
                 // ظهوراً؛ لا بدّ من رابطٍ يمرّ به المستعمل.
                 ['⛽ مركز محطات الوقود (فروقات المخزون)', route('admin.amial.fuel.page'), 'platform.audit.view'],
                 ['🏪 مركز التجزئة (المخزون والجرد)', route('admin.amial.retail.page'), 'platform.audit.view'],
+                ['🎚️ الباقات والقدرات (ماذا تفتح كل باقة)', route('admin.amial.entitlements.page'), 'platform.settings.manage'],
                 ['📊 كشف المعاملات (فلاتر + تصدير)', route('admin.transaction.index'), null],
                 ['🧾 تسويات الوكلاء', route('admin.amial.hub.settlements'), 'platform.money.move'],
                 ['🤝 تسويات الشركاء (الموافقة المزدوجة)', route('admin.amial.partner-settlements.page'), 'platform.money.move'],

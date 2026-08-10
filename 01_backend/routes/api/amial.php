@@ -111,6 +111,16 @@ Route::middleware(['auth:api'])->group(function () {
         // CRITICAL-001 — Access endpoint (يقرأه AccessController في Flutter عند الدخول)
         Route::get('/access', [\App\Http\Controllers\Api\V1\Amial\AccessController::class, 'me'])->name('access');
 
+        // AMIAL-ENTITLEMENTS-001 — **ملفّ خدمات التاجر**.
+        //
+        // نداءٌ واحدٌ يردّ كلَّ قدرات المنصّة بحالة كلٍّ لهذا الحساب:
+        // متاحة · مقفلة بالباقة (وسعرُ فتحها) · مقفلة بالدور (ومن يمنحها)
+        // · بلغتْ حدَّها (وبالرقمين). ومنه تُرسم شاشةُ «خدماتي».
+        $EC = \App\Http\Controllers\Api\V1\Amial\EntitlementController::class;
+        Route::get('/entitlements', [$EC, 'me'])->name('entitlements');
+        Route::get('/entitlements/{code}', [$EC, 'show'])
+            ->where('code', '[a-z0-9_.]+')->name('entitlements.show');
+
         // AMIAL-KYC-DOCS-001 — الطرف الناقص: مكانٌ يرفع فيه العميل هويّته.
         //
         // كان زرّ «طلب تحديث الهوية» في لوحة الدعم يضع علامةً على المستخدم
@@ -131,6 +141,10 @@ Route::middleware(['auth:api'])->group(function () {
         ->name('amial.barcode.lookup');
 
     // CRITICAL-001-PLANS — كتالوج الخطط (شاشة الترقية)
+    // **جدول المقارنة مولَّدٌ من السجلّ** — وصفحةُ تسعيرٍ مكتوبةٌ بيدٍ
+    // تعِد بما لا يفتحه النظام.
+    Route::get('/plans/capabilities', [\App\Http\Controllers\Api\V1\Amial\EntitlementController::class, 'plans'])
+        ->name('plans.capabilities');
     Route::get('/plans', [\App\Http\Controllers\Api\V1\Amial\AccessController::class, 'plansCatalog'])
         ->name('amial.plans.catalog');
 
@@ -758,26 +772,32 @@ Route::middleware(['auth:api'])->group(function () {
         Route::prefix('retail')->name('retail.')->group(function () {
             $RV = \App\Http\Controllers\Api\V1\Amial\RetailVerticalController::class;
 
+            // AMIAL-ENTITLEMENTS-001 — **الباقة تُفحص هنا، والدور في المتحكّم**.
+            //
+            // ورقمان مختلفان لبابين مختلفين: ٤٠٢ لنقص الباقة (يذهب لصاحب
+            // المتجر ليرقّي) و٤٠٣ لنقص الدور (يذهب لمديره ليمنحه). وردُّ
+            // ٤٠٣ على نقص الباقة يُرسل التاجر يبحث عن دورٍ لن يجده.
+
             // مركز العمليّات — الحالةُ كلُّها في نداءٍ واحد
             Route::get('/ops', [$RV, 'operationsCenter'])->name('ops');
             Route::get('/me/permissions', [$RV, 'myPermissions'])->name('me.permissions');
 
             // محرّك الأصناف
-            Route::get('/categories', [$RV, 'categories'])->name('categories.index');
-            Route::post('/categories', [$RV, 'addCategory'])->name('categories.add');
-            Route::get('/brands', [$RV, 'brands'])->name('brands.index');
-            Route::post('/brands', [$RV, 'addBrand'])->name('brands.add');
-            Route::get('/units', [$RV, 'units'])->name('units.index');
-            Route::post('/units', [$RV, 'addUnit'])->name('units.add');
-            Route::get('/scan', [$RV, 'scan'])->name('scan');
+            Route::get('/categories', [$RV, 'categories'])->middleware('capability:retail.catalog')->name('categories.index');
+            Route::post('/categories', [$RV, 'addCategory'])->middleware('capability:retail.catalog')->name('categories.add');
+            Route::get('/brands', [$RV, 'brands'])->middleware('capability:retail.catalog')->name('brands.index');
+            Route::post('/brands', [$RV, 'addBrand'])->middleware('capability:retail.catalog')->name('brands.add');
+            Route::get('/units', [$RV, 'units'])->middleware('capability:retail.catalog')->name('units.index');
+            Route::post('/units', [$RV, 'addUnit'])->middleware('capability:retail.catalog')->name('units.add');
+            Route::get('/scan', [$RV, 'scan'])->middleware('capability:barcode')->name('scan');
             Route::post('/products/{id}/barcodes', [$RV, 'addBarcode'])
                 ->where('id', '[0-9]+')->name('products.barcodes.add');
-            Route::post('/products/{id}/variants', [$RV, 'generateVariants'])
+            Route::post('/products/{id}/variants', [$RV, 'generateVariants'])->middleware('capability:retail.variants')
                 ->where('id', '[0-9]+')->name('products.variants');
 
             // المخزون والمواقع
-            Route::get('/locations', [$RV, 'locations'])->name('locations.index');
-            Route::post('/locations', [$RV, 'addLocation'])->name('locations.add');
+            Route::get('/locations', [$RV, 'locations'])->middleware('capability:retail.locations')->name('locations.index');
+            Route::post('/locations', [$RV, 'addLocation'])->middleware('capability:retail.locations')->name('locations.add');
             Route::get('/products/{id}/stock', [$RV, 'productStock'])
                 ->where('id', '[0-9]+')->name('products.stock');
             Route::get('/products/{id}/movements', [$RV, 'movements'])
@@ -786,8 +806,8 @@ Route::middleware(['auth:api'])->group(function () {
                 ->where('id', '[0-9]+')->name('products.price-history');
 
             // التحويلات — طلب ← اعتماد ← إرسال ← استلام
-            Route::get('/transfers', [$RV, 'transfers'])->name('transfers.index');
-            Route::post('/transfers', [$RV, 'requestTransfer'])->name('transfers.request');
+            Route::get('/transfers', [$RV, 'transfers'])->middleware('capability:retail.transfers')->name('transfers.index');
+            Route::post('/transfers', [$RV, 'requestTransfer'])->middleware('capability:retail.transfers')->name('transfers.request');
             Route::get('/transfers/{id}', [$RV, 'showTransfer'])
                 ->where('id', '[0-9]+')->name('transfers.show');
             Route::post('/transfers/{id}/approve', [$RV, 'approveTransfer'])
@@ -800,8 +820,8 @@ Route::middleware(['auth:api'])->group(function () {
                 ->where('id', '[0-9]+')->name('transfers.cancel');
 
             // الجرد
-            Route::get('/counts', [$RV, 'counts'])->name('counts.index');
-            Route::post('/counts', [$RV, 'openCount'])->name('counts.open');
+            Route::get('/counts', [$RV, 'counts'])->middleware('capability:inventory_audit')->name('counts.index');
+            Route::post('/counts', [$RV, 'openCount'])->middleware('capability:inventory_audit')->name('counts.open');
             Route::get('/counts/{id}', [$RV, 'countSheet'])
                 ->where('id', '[0-9]+')->name('counts.sheet');
             Route::post('/counts/{id}/enter', [$RV, 'enterCount'])
@@ -814,8 +834,8 @@ Route::middleware(['auth:api'])->group(function () {
                 ->where('id', '[0-9]+')->name('counts.approve');
 
             // الهالك
-            Route::get('/wastes', [$RV, 'wastes'])->name('wastes.index');
-            Route::post('/wastes', [$RV, 'recordWaste'])->name('wastes.record');
+            Route::get('/wastes', [$RV, 'wastes'])->middleware('capability:retail.waste')->name('wastes.index');
+            Route::post('/wastes', [$RV, 'recordWaste'])->middleware('capability:retail.waste')->name('wastes.record');
             Route::post('/wastes/{id}/approve', [$RV, 'approveWaste'])
                 ->where('id', '[0-9]+')->name('wastes.approve');
             Route::post('/wastes/{id}/reject', [$RV, 'rejectWaste'])
@@ -830,14 +850,14 @@ Route::middleware(['auth:api'])->group(function () {
                 ->where('id', '[0-9]+')->name('returns.approve');
 
             // الأسعار — اقتراحٌ ثمّ اعتماد
-            Route::post('/prices/propose', [$RV, 'proposePrice'])->name('prices.propose');
-            Route::get('/prices/pending', [$RV, 'pendingPrices'])->name('prices.pending');
+            Route::post('/prices/propose', [$RV, 'proposePrice'])->middleware('capability:retail.price_versions')->name('prices.propose');
+            Route::get('/prices/pending', [$RV, 'pendingPrices'])->middleware('capability:retail.price_versions')->name('prices.pending');
             Route::post('/prices/{id}/approve', [$RV, 'approvePrice'])
                 ->where('id', '[0-9]+')->name('prices.approve');
 
             // الأدوار
-            Route::get('/roles', [$RV, 'roles'])->name('roles.index');
-            Route::post('/roles/seed', [$RV, 'seedRoles'])->name('roles.seed');
+            Route::get('/roles', [$RV, 'roles'])->middleware('capability:rbac')->name('roles.index');
+            Route::post('/roles/seed', [$RV, 'seedRoles'])->middleware('capability:rbac')->name('roles.seed');
         });
 
         // AMIAL-PHARMACY-001 — قطاع الصيدليات

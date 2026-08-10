@@ -207,6 +207,13 @@ $app = Application::configure(basePath: dirname(__DIR__))
 
             // AMIAL-MAINT-001 — حارس الميزات (لوحة الصيانة الأولية)
             'feature' => \App\Http\Middleware\RequireFeatureEnabled::class,
+
+            // AMIAL-ENTITLEMENTS-001 — **البوّابة الواحدة للباقات**.
+            //
+            // ولا تُخلط بـ`feature:` أعلاه: تلك مفتاحُ صيانةٍ للمنصّة كلّها
+            // («الخدمة متوقّفة مؤقتاً»)، وهذه **إذنُ اشتراكٍ لتاجرٍ بعينه**.
+            // واسمان متشابهان لمعنيين مختلفين أوقعا خلطاً من قبل.
+            'capability' => \App\Http\Middleware\EnsureCapability::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
