@@ -669,7 +669,32 @@ class Helpers
     {
         $emoney_user_id = strtolower($transaction_type) === ADMIN_CHARGE ? 1 : $user_id;
 
-        $emoney = EMoney::where('user_id', $emoney_user_id)->firstOrFail();
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-LEGACY-WALLET-001 — **قراءةٌ ثمّ كتابةٌ بلا قفل.**
+        //
+        // كان السطر `EMoney::where(...)->firstOrFail()` ثمّ `+=` ثمّ
+        // `save()`: ثلاثُ خطواتٍ تقرأ الرصيدَ وتحسبه وتكتبه. وعمليّتان
+        // متزامنتان على المحفظة نفسها تقرآن الرقمَ نفسَه، فتكتب الثانيةُ
+        // فوق الأولى — **ويختفي مبلغُ إحداهما** وسجلُّ الحركات يُظهر
+        // العمليّتين ناجحتين.
+        //
+        // وتُنادى هذه الدالّة من عشرة مواضع، منها توليدُ الرصيد
+        // الإلكترونيّ وتحويلُ الإدارة ومركزُ التمويل.
+        //
+        // **ولا تظهر في أيّ اختبار**: المجموعةُ كلُّها في عمليّةٍ واحدةٍ
+        // متتابعة، فلا أحدَ يتحرّك بين القراءة والكتابة. وهي القاعدةُ
+        // الأولى في `CLAUDE.md`: «فحصٌ يقع خارج القفل — لا يظهر إلّا
+        // بالتوازي».
+        //
+        // والمسارُ الجديد `FinancialGuardService` سليمٌ منذ يومه:
+        // `assertInTransaction()` ثمّ `lockWallet()`. وهذا يلحق به.
+        if (DB::transactionLevel() < 1) {
+            throw new \RuntimeException(
+                'updateEmoney: حركةُ المحفظة تُنفَّذ داخل معاملة — '
+                . 'القفلُ خارج المعاملة لا يعني شيئاً، ويُحرَّر فوراً.');
+        }
+
+        $emoney = EMoney::where('user_id', $emoney_user_id)->lockForUpdate()->firstOrFail();
 
         if (strtolower($transaction_type) === ADMIN_CHARGE) {
             $emoney->charge_earned += $charge;
