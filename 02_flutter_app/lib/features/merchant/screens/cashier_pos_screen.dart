@@ -355,58 +355,118 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
         ]);
       }),
 
-      // ====== شريط السلة العائم ======
-      bottomSheet: Obx(() {
+      // ====== شريط السلة ======
+      //
+      // **العطل الذي كان:** الشريطُ يملأ الشاشة كلَّها.
+      //
+      // و`Column` بلا `mainAxisSize.min` داخل `Row`: و`Scaffold.bottomSheet`
+      // يمنح ارتفاعاً فضفاضاً أقصاه الشاشة، فيأخذ العمودُ كلَّ ما مُنح —
+      // ويسحب معه الصفَّ والمادّةَ، **فيصير الشريطُ لوحةً زرقاء**.
+      //
+      // ولا خطأ في أيّ سجلّ: التخطيطُ صحيحٌ نحويّاً، والنتيجةُ شاشةٌ ممتلئة.
+      //
+      // وصار في `bottomNavigationBar` لا `bottomSheet`: الأوّلُ يُقيّد
+      // الارتفاع بمحتواه، والثاني ورقةٌ تُسحب — وهذا شريطُ فعلٍ لا ورقة.
+      bottomNavigationBar: Obx(() {
         if (c.cart.isEmpty) return const SizedBox.shrink();
+
         final count = c.cart.fold<int>(0, (s, l) => s + l.qty);
+
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Material(
-              color: AmialColors.primary,
-              borderRadius: BorderRadius.circular(30),
-              child: InkWell(
-                onTap: _openCartReview,
-                borderRadius: BorderRadius.circular(30),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  child: Row(children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: AmialColors.yellow,
-                        borderRadius: BorderRadius.circular(24),
+          minimum: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          child: Material(
+            color: AmialColors.primary,
+            borderRadius: BorderRadius.circular(18),
+            elevation: 8,
+            shadowColor: AmialColors.primary.withValues(alpha: 0.4),
+            child: InkWell(
+              key: const Key('cashier-cart-bar'),
+              onTap: _openCartReview,
+              borderRadius: BorderRadius.circular(18),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Row(
+                  // **`min` هنا هو الإصلاح** — والباقي شكل.
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ــ سلّةٌ بعدّادٍ عليها ــ
+                    Stack(clipBehavior: Clip.none, children: [
+                      Container(
+                        padding: const EdgeInsets.all(9),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.16),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.shopping_cart_rounded,
+                            color: Colors.white, size: 20),
                       ),
-                      child: const Row(children: [
-                        Text('مراجعة الطلب',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF053391))),
-                        SizedBox(width: 4),
-                        Icon(Icons.chevron_left,
-                            size: 18, color: Color(0xFF053391)),
-                      ]),
-                    ),
-                    const Spacer(),
-                    Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                      Positioned(
+                        top: -5, left: -5,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AmialColors.yellow,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AmialColors.primary, width: 2),
+                          ),
+                          child: Text('$count',
+                              style: const TextStyle(
+                                  color: Color(0xFF053391),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ]),
+
+                    const SizedBox(width: 12),
+
+                    // ــ الإجمالي: أكبرُ رقمٍ في الشريط ــ
+                    //
+                    // فهو ما يقوله الكاشيرُ للعميل، لا عددُ الأصناف.
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('$count منتجات',
+                          Text(AmialMoney.yer(c.cartTotal),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
-                                  fontSize: 14)),
-                          Text(AmialMoney.yer(c.cartTotal),
-                              style: const TextStyle(
-                                  color: Colors.white70, fontSize: 11)),
-                        ]),
-                    const SizedBox(width: 10),
-                    const Icon(Icons.shopping_cart_outlined,
-                        color: AmialColors.yellow),
+                                  fontSize: 18,
+                                  height: 1.1)),
+                          Text('$count صنفاً في السلة',
+                              style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.75),
+                                  fontSize: 11)),
+                        ],
+                      ),
+                    ),
+
                     const SizedBox(width: 8),
-                  ]),
+
+                    // ــ الفعلُ الظاهر ــ
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 11),
+                      decoration: BoxDecoration(
+                        color: AmialColors.yellow,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text('مراجعة الطلب',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: Color(0xFF053391))),
+                        SizedBox(width: 2),
+                        Icon(Icons.chevron_left_rounded,
+                            size: 20, color: Color(0xFF053391)),
+                      ]),
+                    ),
+                  ],
                 ),
               ),
             ),

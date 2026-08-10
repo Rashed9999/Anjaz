@@ -41,6 +41,15 @@ void main() {
         if (!d.existsSync()) continue;
         for (final f in d.listSync(recursive: true).whereType<File>()) {
           if (!f.path.endsWith('.dart')) continue;
+
+          // **الحارسُ لا يمسك نفسَه.** فهو يحمل السلسلتين اللتين يبحث
+          // عنهما، فيُدرج ملفَّه بين المخالفين ويسقط أبداً.
+          //
+          // وهذا عطلٌ في الحارس لا في المحروس: بقي ساقطاً ولم يره أحد
+          // لأنّ `verify.sh` لم يكن يشغّل اختبارات دارت إطلاقاً — فحارسٌ
+          // لا يُنفَّذ ليس حارساً.
+          if (f.path.endsWith('web_only_portals_guard_test.dart')) continue;
+
           final src = f.readAsStringSync();
           if (src.contains('package:amial_pay/features/admin/') ||
               src.contains('package:amial_pay/features/agent/')) {

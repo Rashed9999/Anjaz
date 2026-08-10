@@ -101,7 +101,17 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
   }
 
   /// تنزيل كشف الحساب PDF للفترة المحدّدة.
+  ///
+  /// **والرسالةُ تتبع السبب.** كانت تقول «لا توجد عمليات في هذه الفترة»
+  /// على شاشةٍ تعرض عشرين عمليّة — لأنّ الردّ `null` كان يُقرأ فراغاً
+  /// وهو كان رفضاً من شرطٍ يسأل متحكّماً آخر عن حالةٍ لم تُحمَّل.
   Future<void> _downloadStatement() async {
+    // **الفراغُ يُفحص هنا حيث تُعرف الحقيقة** — الشاشةُ تملك القائمة.
+    if (_txs.isEmpty) {
+      _snack('لا توجد عمليات في هذه الفترة — جرّب فترة أوسع');
+      return;
+    }
+
     setState(() => _downloading = true);
     try {
       final ctrl = Get.find<TransactionHistoryController>();
@@ -110,23 +120,29 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
         startDate: _startDate,
         endDate: _startDate != null ? DateTime.now() : null,
       );
+
       if (pdf != null) {
         await PdfDownloaderHelper.downloadAndOpenPdf(
             pdfData: pdf, baseFileName: 'Amial_Statement');
-      } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('لا توجد عمليات في هذه الفترة'),
-            backgroundColor: AmialColors.red));
+        return;
+      }
+
+      if (mounted) {
+        // سببُ الفشل من المتحكّم لا جملةٌ عامّة.
+        _snack(ctrl.downloadError.isNotEmpty
+            ? ctrl.downloadError
+            : 'تعذّر تنزيل الكشف — أعد المحاولة');
       }
     } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('تعذّر تنزيل الكشف — حاول مجدداً'),
-            backgroundColor: AmialColors.red));
-      }
+      if (mounted) _snack('تعذّر تنزيل الكشف — حاول مجدداً');
     } finally {
       if (mounted) setState(() => _downloading = false);
     }
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg), backgroundColor: AmialColors.red));
   }
 
   // ============ تجميع البيانات ============

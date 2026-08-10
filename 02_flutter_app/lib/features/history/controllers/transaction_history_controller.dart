@@ -104,31 +104,72 @@ class TransactionHistoryController extends GetxController implements GetxService
     update();
   }
 
+  /// آخرُ سببِ فشلٍ للتنزيل — **يُقرأ ولا يُخمَّن**.
+  ///
+  /// كانت الدالّة تردّ `null` في ثلاث حالاتٍ مختلفة، فتقرؤها الشاشةُ
+  /// كلَّها «لا توجد عمليات».
+  String downloadError = '';
+
+  /// AMIAL-STATEMENT-FIX-001 — تنزيلُ كشف الحساب.
+  ///
+  /// ══════════════════════════════════════════════════════════════════
+  /// **الثمن الذي دُفع:** شاشةُ التقارير تعرض «١٩٨٬١٠٠ إيرادات · ٢٠ عملية»
+  /// ثمّ يظهر شريطٌ أحمر: **«لا توجد عمليات في هذه الفترة»**.
+  ///
+  /// والسببُ سطرٌ واحد كان هنا:
+  ///
+  ///     if ((_transactionModel?.totalSize ?? 0) < 1) return null;
+  ///
+  /// **وهو يسأل متحكّماً آخرَ عن حالةٍ لم تُحمَّل قطّ.** فشاشةُ التقارير
+  /// تجلب عمليّاتِها بنفسها ولا تمرّ بـ`getTransactionData`، فيبقى
+  /// `_transactionModel` فارغاً — ويُرفض التنزيل قبل أن يُرسَل طلبٌ واحد.
+  ///
+  /// **ولا خطأ في أيّ سجلّ**: الردُّ `null`، والشاشةُ تُترجمه «لا عمليات»
+  /// وأمامها عشرون عمليّة.
+  ///
+  /// فصار القرارُ من **ردّ الخادم** لا من حالةِ متحكّمٍ آخر، والفشلُ
+  /// يُفرَّق عن الفراغ: من عطلت شبكتُه يرى شيئاً غيرَ ما يراه من لا
+  /// عمليّات له.
   Future<Uint8List?> downloadTransactionHistory({String transactionType = "all", String? balanceType, DateTime? startDate, DateTime? endDate}) async {
-
-    if((_transactionModel?.totalSize ?? 0) < 1) {
-      return null;
-    }
-
+    downloadError = '';
     _isLoading = true;
     update();
 
-    Uint8List? pdfBytes;
-    Response response = await transactionHistoryRepo.downloadTransactionHistory(transactionType: transactionType, balanceType: balanceType, startDate: startDate, endDate: endDate);
+    try {
+      final Response response = await transactionHistoryRepo.downloadTransactionHistory(
+        transactionType: transactionType,
+        balanceType: balanceType,
+        startDate: startDate,
+        endDate: endDate,
+      );
 
-    if(response.statusCode == 200 && response.body != null) {
-      pdfBytes = Uint8List.fromList(response.body!.codeUnits);
+      if (response.statusCode != 200 || response.body == null) {
+        // **الشبكةُ المقطوعة ليست فراغَ بيانات.**
+        downloadError = (response.statusCode == null || response.statusCode == 0)
+            ? 'لا اتصال بالخادم — تحقّق من الشبكة'
+            : 'تعذّر تنزيل الكشف من الخادم';
+        ApiChecker.checkApi(response);
+        return null;
+      }
 
-    }else {
-      ApiChecker.checkApi(response);
+      final bytes = Uint8List.fromList(response.body!.codeUnits);
+
+      if (bytes.isEmpty) {
+        // ملفٌّ فارغ: الخادمُ ردّ ٢٠٠ بلا محتوى — عطلٌ لا فراغُ بيانات.
+        downloadError = 'وصل ملفٌّ فارغ من الخادم — أعد المحاولة';
+        return null;
+      }
+
+      return bytes;
+    } catch (_) {
+      downloadError = 'تعذّر تنزيل الكشف — تحقّق من الشبكة';
+      return null;
+    } finally {
+      // **وكان يبقى `true` عند كلّ خروجٍ مبكّر** — فيعلق الزرّ في
+      // «جارٍ التنزيل» إلى أن تُغلق الشاشة.
+      _isLoading = false;
+      update();
     }
-
-    if(pdfBytes?.isEmpty ?? true) return null;
-
-    _isLoading = false;
-    update();
-
-    return pdfBytes;
   }
 
   void setIndex(int index, {bool reload = true}) {
