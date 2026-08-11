@@ -571,6 +571,20 @@ class AdminHubController extends Controller
                     'monthly_receive_limit' => '50000000',
                     'can_transfer_out' => true,
                 ]);
+
+                // ══════════════════════════════════════════════════════
+                // AMIAL-VERTICAL-BOOTSTRAP-001 — **القطاعُ يُبنى مع الحساب.**
+                //
+                // كان الملفُّ يُكتب `business_type = fuel` ولا يُنشأ صفُّ
+                // `fuel_stations`. فيدخل التاجرُ التطبيق، وتفتح «لوحة
+                // المحطة»، وتردّ: «لا توجد محطة مرتبطة بهذا الحساب».
+                //
+                // وهي رسالةٌ صحيحةٌ عديمةُ الفائدة: الحسابُ أُنشئ محطّةً
+                // قبل دقائق، ولا في التطبيق ما يُنشئها ولا في اللوحة زرّ.
+                // **بابٌ مسدود** — والإنشاءُ نجح والدخولُ نجح ولا خطأَ في
+                // أيّ سجلّ.
+                app(\App\Services\Vertical\VerticalBootstrapService::class)
+                    ->ensureFor($user);
             }
             return $user;
         });

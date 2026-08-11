@@ -66,11 +66,38 @@ class FuelVerticalController extends Controller
 
         $station = FuelStation::where('merchant_user_id', $merchantId)->first();
 
-        if (! $station) {
-            throw new DomainException('لا توجد محطة مرتبطة بهذا الحساب');
+        if ($station) {
+            return $station;
         }
 
-        return $station;
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-VERTICAL-BOOTSTRAP-001 — **حسابٌ يُنشأ «محطّة وقود» ولا
+        // محطّةَ له.**
+        //
+        // لوحةُ الإدارة تكتب `business_type = fuel` في ملفّ التاجر ولا
+        // تُنشئ صفَّ `fuel_stations`. فالتاجرُ يدخل التطبيق، وتفتح شاشةُ
+        // «لوحة المحطة»، وتردّ: **«لا توجد محطة مرتبطة بهذا الحساب»**.
+        //
+        // وهي رسالةٌ صحيحةٌ وعديمةُ الفائدة: الحسابُ أُنشئ محطّةً قبل
+        // دقائق، ولا شيءَ في التطبيق يُنشئ المحطّة، ولا في اللوحة زرٌّ
+        // يُنشئها. **بابٌ مسدود.**
+        //
+        // ولا خطأَ في أيّ سجلّ: الإنشاءُ نجح، والملفُّ صحيح، والدخولُ
+        // صحيح — والقطاعُ وحدَه بلا سجلّ.
+        //
+        // **وثلاثةُ متحكّماتٍ أخرى تُنشئ عند الحاجة** (`FuelStationController`
+        // و`PharmacyService` و`WholesaleService` كلُّها `getOrCreate`).
+        // وهذا وحدَه كان يرفض — سلوكان لقطاعٍ واحد.
+        //
+        // فصار يُنشئها كأخواته. **والمنبعُ أُصلح أيضاً** في
+        // `AdminHubController`: القطاعُ يُبنى مع الحساب لا عند أوّل فتح.
+        $merchant = User::find($merchantId);
+
+        if (! $merchant) {
+            throw new DomainException('الحساب غير موجود');
+        }
+
+        return app(\App\Services\FuelStationService::class)->getOrCreateStation($merchant);
     }
 
     private function ok(array $data = [], string $message = ''): JsonResponse

@@ -244,6 +244,15 @@ class RegisterController extends Controller
                     'zone_code' => 'SOUTH',
                     'subscription_plan' => \App\Support\Access\AccessConstants::PLAN_FREE,
                 ]);
+
+                // AMIAL-VERTICAL-BOOTSTRAP-001 — **البابُ الثاني.**
+                //
+                // الحساباتُ تُنشأ من ثلاثة أبواب: اللوحةُ، والتسجيلُ
+                // الذاتيّ هذا، وأمرُ حسابات العرض. وإصلاحُ بابٍ واحدٍ
+                // يترك البقيّةَ على العطل نفسه — فالقطاعُ يُبنى حيثما
+                // يُكتب `business_type`.
+                app(\App\Services\Vertical\VerticalBootstrapService::class)
+                    ->ensureFor($user);
             }
             if ($accountType === AGENT_TYPE) {
                 $loginNumbers['agent_number'] = $user->agent_number;

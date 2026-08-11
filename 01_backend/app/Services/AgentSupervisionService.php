@@ -200,6 +200,12 @@ class AgentSupervisionService
             }
 
             $out[$id] = [
+                // AMIAL-AGENT-NETWORK-DOOR-001 — **حالةُ التسجيل في الصفّ.**
+                //
+                // كانت `AdminAgentNetworkController` تُقدّم اعتماداً
+                // وإيقافاً وحدوداً — بمساراتٍ لا شاشةَ تناديها. وسببُ
+                // ذلك أنّ الصفّ لا يحمل الحالة، فلا يعرف الزرُّ ما يعرض.
+                'reg_status' => \App\Models\AgentProfile::where('user_id', $id)->value('status'),
                 'is_branch_account' => isset($parents[$id]),
                 'parent' => $parents[$id] ?? null,
                 'branches' => $mine->count(),

@@ -501,12 +501,35 @@ Route::prefix('zone')->name('zone.')->group(function () {
 });
 
 // ============ AMIAL-AGENT-NETWORK-001 (v2.4) ============
+//
+// AMIAL-AGENT-NETWORK-DOOR-001 — **كانت بلا صلاحيّةٍ إطلاقاً.**
+//
+// خمسةُ مساراتٍ مسجَّلةٌ منذ v2.4 بلا `platform:` واحد: فأيُّ حسابِ
+// إدارة — موظّفُ دعمٍ أو صيانة — يعتمد وكيلاً فيفتح له الشبّاك، أو
+// يُوقفه فيُغلق شبّاكه، أو يرفع حدَّه اليوميّ. وكلُّها قراراتُ مالٍ
+// ومخاطر.
+//
+// ولم يظهر ذلك لأنّ **لا شاشةَ تناديها**: مبنيٌّ ولا يُوصل إليه —
+// فالثغرةُ نامت مع الميزة. والآن وقد صار لها زرٌّ، صار لها حارس.
+//
+// والقراءةُ بـ`customers.view`، والقرارُ بـ`customers.freeze`: اعتمادُ
+// وكيلٍ وإيقافُه من جنس فتح الحساب وإغلاقه. والحدودُ بـ`money.move`:
+// رفعُ حدّ الإيداع اليوميّ يزيد ما يمرّ من مالٍ في اليوم.
 Route::prefix('agents')->name('agents.')->group(function () {
-    Route::get('/', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'index'])->name('index');
-    Route::get('/network-stats', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'networkStats'])->name('network-stats');
-    Route::post('/{userId}/approve', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'approve'])->name('approve');
-    Route::post('/{userId}/suspend', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'suspend'])->name('suspend');
-    Route::put('/{userId}/limits', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'updateLimits'])->name('limits');
+    $anc = App\Http\Controllers\Admin\AdminAgentNetworkController::class;
+
+    Route::middleware('platform:platform.customers.view')->group(function () use ($anc) {
+        Route::get('/', [$anc, 'index'])->name('index');
+        Route::get('/network-stats', [$anc, 'networkStats'])->name('network-stats');
+    });
+
+    Route::middleware('platform:platform.customers.freeze')->group(function () use ($anc) {
+        Route::post('/{userId}/approve', [$anc, 'approve'])->name('approve');
+        Route::post('/{userId}/suspend', [$anc, 'suspend'])->name('suspend');
+    });
+
+    Route::middleware('platform:platform.money.move')
+        ->put('/{userId}/limits', [$anc, 'updateLimits'])->name('limits');
 });
 // AMIAL-OPERATOR-RBAC-003: اعتمادُ تسويةٍ تحريكُ مالٍ حقيقيّ.
 Route::prefix('settlements')->name('settlements.')->middleware(['platform:platform.money.move', 'amial.idempotency'])

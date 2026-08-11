@@ -61,6 +61,19 @@ php artisan amial:ledger-backfill 2>&1 || {
     echo "    شغّله يدوياً: php artisan amial:ledger-backfill"
 }
 
+# ── AMIAL-VERTICAL-BOOTSTRAP-001: سجلّ القطاع للحسابات القائمة ─────────
+#
+# حسابُ محطّةٍ أُنشئ من اللوحة قبل هذا الإصلاح بلا صفٍّ في `fuel_stations`،
+# فيقرأ صاحبُه في التطبيق «لا توجد محطة مرتبطة بهذا الحساب» — والحسابُ
+# أُنشئ محطّةً. وإصلاحُ المنبع يحمي ما بعده ولا يشفي ما قبله.
+#
+# آمنُ التكرار: يمرّ على السليم بلا أن يمسّه.
+echo "🏭 تهيئة سجلّات القطاعات للحسابات القائمة..."
+php artisan amial:heal-verticals 2>&1 || {
+    echo "⚠️  فشلت تهيئة القطاعات — شاشاتُ المحطة/الصيدلية/الجملة قد ترفض."
+    echo "    شغّله يدوياً: php artisan amial:heal-verticals"
+}
+
 # ── AMIAL-PDF-DURABLE-001: مجلدات التخزين تُهيَّأ هنا لا في الصورة ─────
 #
 # `storage/app` مُثبَّت عليه volume دائم (amial_storage_prod). و volume

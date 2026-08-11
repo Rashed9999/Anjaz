@@ -155,6 +155,15 @@ class AgentNetworkApiTest extends TestCase
         $agent = $this->makeActiveAgent();
         $admin = User::factory()->create(['type' => 0]);
 
+        // AMIAL-AGENT-NETWORK-DOOR-001 — **الدورُ صار مطلوباً.**
+        //
+        // كانت مسارات الشبكة بلا `platform:` واحد: أيُّ حسابِ إدارةٍ
+        // يُوقف وكيلاً فيُغلق شبّاكه. فصار الإيقافُ يطلب
+        // `platform.customers.freeze` — وهذا الاختبارُ كان يمرّ بحسابٍ
+        // بلا دورٍ إطلاقاً، أي أنّه كان **يُثبت الثغرة** لا الميزة.
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($admin, \App\Services\PlatformRoleService::RISK);
+
         // مسار أدمن web — حارس admin يستخدم guard 'user'؛ نتجاوز CSRF
         $this->actingAs($admin, 'user')
             ->withoutMiddleware(\App\Http\Middleware\VerifyCsrfToken::class)

@@ -216,9 +216,11 @@
     const fmt = (n) => Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 2});
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-    async function post(url, body) {
+    // AMIAL-AGENT-NETWORK-DOOR-001 — الطريقةُ صارت مُعامِلاً: مسارُ حدود
+    // الوكيل `PUT`، ونداؤه بـ`POST` يردّ ٤٠٥ بلا رسالةٍ تدلّ على السبب.
+    async function post(url, body, method) {
         const r = await fetch(url, {
-            method: 'POST',
+            method: method || 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'},
             body: JSON.stringify(body || {}),
         });
@@ -311,6 +313,53 @@
         </div>`;
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    //  AMIAL-AGENT-NETWORK-DOOR-001 — **شبكةُ الوكلاء: مسارٌ بلا زرّ.**
+    //
+    //  `AdminAgentNetworkController` يُقدّم اعتمادَ تسجيلٍ وإيقافاً
+    //  وتعديلَ حدود — خمسةُ مساراتٍ مسجَّلةٌ منذ v2.4 **ولا شاشةَ
+    //  تناديها**. فالميزةُ مبنيّةٌ ولا يُوصل إليها، والاعتمادُ يقع بتحرير
+    //  القاعدة يدويّاً — حيث لا صلاحيّةَ ولا سجلّ.
+    //
+    //  والفرعُ لا يُعتمد ولا يُوقف من هنا: الأمُّ تُدير فروعَها
+    //  (القاعدة العاشرة) — ويُقال ذلك بدل إخفاء الزرّ صامتاً.
+    // ══════════════════════════════════════════════════════════════════
+
+    function networkMenu(u) {
+        const a = u.agent;
+        if (!a) return '';
+
+        if (a.is_branch_account) {
+            return `<span class="btn btn-sm btn-light disabled" title="الأمّ تدير فروعها">
+                        فرع — يُدار من الأمّ</span>`;
+        }
+
+        const st = a.reg_status || 'unknown';
+        const pending = st !== 'active';
+
+        return `<div class="btn-group">
+            <button class="btn btn-sm ${pending ? 'btn-success' : 'btn-outline-secondary'} dropdown-toggle"
+                    data-bs-toggle="dropdown" aria-expanded="false"
+                    data-testid="hub-network-menu">
+                ${pending ? 'بانتظار الاعتماد' : 'الشبكة'}
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                ${pending
+                    ? `<li><a class="dropdown-item text-success" href="#"
+                             data-act="net-approve" data-id="${u.id}">✅ اعتماد التسجيل</a></li>`
+                    : `<li><a class="dropdown-item text-danger" href="#"
+                             data-act="net-suspend" data-id="${u.id}">⛔ إيقاف الوكيل</a></li>`}
+                <li><a class="dropdown-item" href="#" data-act="net-limits"
+                       data-id="${u.id}"
+                       data-daily="${a.daily_cash_in_limit || ''}">📊 حدود الشبّاك</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><span class="dropdown-item-text small text-muted">
+                    الحالة: ${esc({active:'نشِط', suspended:'موقوف',
+                                   pending_approval:'بانتظار الاعتماد'}[st] || st)}</span></li>
+            </ul>
+        </div>`;
+    }
+
     async function loadUsers() {
         const tbody = document.getElementById('users-tbody');
         tbody.innerHTML = `<tr><td colspan="${COLS}" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>`;
@@ -339,6 +388,7 @@
                 <td class="text-nowrap">
                     <button class="btn btn-sm btn-primary" data-act="open" data-id="${u.id}">التفاصيل</button>
                     ${isMerchants ? centerMenu(u) : ''}
+                    ${isAgents ? networkMenu(u) : ''}
                     ${transferControl(u)}
                     <button class="btn btn-sm ${u.is_active ? 'btn-outline-danger' : 'btn-outline-success'}"
                             data-act="toggle" data-id="${u.id}">${u.is_active ? 'تجميد' : 'فكّ التجميد'}</button>
@@ -352,6 +402,42 @@
         // «تحويل رصيد» ينقل إلى صفحة الوكيل بدل فتح النافذة.
         // بندُ القائمة `<a>` لا `<button>` — ويُحسم قبل كلّ شيء، وإلّا
         // ابتلعه الصفُّ ونقل إلى صفحة الحساب بدل تبويب المركز.
+        // AMIAL-AGENT-NETWORK-DOOR-001 — أفعالُ الشبكة، وكلٌّ بتأكيدٍ يقول
+        // أثرَه. واعتمادُ وكيلٍ يفتح له الشبّاك، وإيقافُه يُغلقه فوراً.
+        const netItem = e.target.closest('a[data-act^="net-"]');
+        if (netItem) {
+            e.preventDefault();
+            const id = netItem.dataset.id;
+            const act = netItem.dataset.act;
+
+            try {
+                if (act === 'net-approve') {
+                    if (!confirm('اعتمادُ التسجيل يفتح الشبّاك لهذا الوكيل فوراً. متابعة؟')) return;
+                    const j = await post(`{{ url('admin/amial/agents') }}/${id}/approve`, {});
+                    alert(j.message || 'اعتُمد الوكيل'); loadUsers(); return;
+                }
+
+                if (act === 'net-suspend') {
+                    const reason = prompt('سبب الإيقاف (يُسجَّل):') || '';
+                    if (!reason.trim()) { alert('السببُ مطلوب — إيقافٌ بلا سبب لا يُراجَع'); return; }
+                    const j = await post(`{{ url('admin/amial/agents') }}/${id}/suspend`, {reason});
+                    alert(j.message || 'أُوقف الوكيل'); loadUsers(); return;
+                }
+
+                if (act === 'net-limits') {
+                    const cur = netItem.dataset.daily || '';
+                    const v = prompt('الحدّ اليوميّ للإيداع النقديّ (ريال):', cur);
+                    if (v === null) return;
+                    if (!/^\d+(\.\d+)?$/.test(v.trim())) { alert('أدخل رقماً صحيحاً'); return; }
+
+                    const j = await post(`{{ url('admin/amial/agents') }}/${id}/limits`,
+                        {daily_cash_in_limit: v.trim()}, 'PUT');
+                    alert(j.message || 'حُدّثت الحدود'); loadUsers(); return;
+                }
+            } catch (err) { alert(err.message); }
+            return;
+        }
+
         const menuItem = e.target.closest('a[data-act="center-sec"]');
         if (menuItem) {
             e.preventDefault();
