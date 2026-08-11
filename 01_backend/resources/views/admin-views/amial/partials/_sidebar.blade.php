@@ -133,7 +133,7 @@
         [
             'title' => 'الإعدادات والتشغيل',
             'icon' => '⚙️',
-            'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*'],
+            'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*', 'admin/amial/2fa*', 'admin/withdraw*'],
             'links' => [
                 ['🏢 إعدادات الأعمال (عام/رسوم/حدود)', route('admin.business-settings.business-setup'), null],
                 ['⚙️ مفاتيح سريعة (تشغيل/إيقاف)', route('admin.amial.hub.settings'), null],
@@ -147,6 +147,12 @@
                 ['📜 الشروط القانونية', route('admin.amial.legal.index'), null],
                 ['🩺 حالة التشغيل (الطوابير والمستندات)', route('admin.amial.ops.index'), 'platform.ops.view'],
                 ['🛠️ وضع الصيانة', url('admin/maintenance'), null],
+                // AMIAL-2FA-DOOR-001 — الميزةُ مبنيّةٌ منذ v1.8 بلا مدخل.
+                // **ولا صلاحيّةَ عليها**: كلُّ مديرٍ يؤمّن حسابَه هو.
+                ['🔐 المصادقة الثنائية لحسابي', route('admin.amial.2fa.page'), null],
+                // AMIAL-WITHDRAW-DOOR-001 — المسارُ سُجّل في الجولة السابقة
+                // والرابطُ أُجّل، فبقيت صفحةً لا يُوصل إليها.
+                ['💸 طلبات السحب (اعتماد ورفض)', route('admin.withdraw.index'), 'platform.audit.view'],
             ],
         ],
     ];

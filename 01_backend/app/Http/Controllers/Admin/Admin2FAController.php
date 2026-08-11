@@ -18,6 +18,18 @@ class Admin2FAController extends Controller
         private readonly TwoFactorAuthService $twoFactor,
     ) {}
 
+    /**
+     * **شاشةُ إدارة المصادقة الثنائية** — AMIAL-2FA-DOOR-001.
+     *
+     * كانت خمسُ نقاطٍ تعمل بلا شاشةٍ واحدة: لا مكانَ في اللوحة يفتحها،
+     * ولا زرَّ يبدأ الإعداد. فالميزةُ مبنيّةٌ منذ v1.8 **ولا يستطيع أحدٌ
+     * تفعيلها** إلّا بأداةٍ خارجيّة.
+     */
+    public function page(Request $request)
+    {
+        return view('admin-views.amial.security.two-factor');
+    }
+
     /** POST /admin/amial/2fa/setup */
     public function setup(Request $request): JsonResponse
     {

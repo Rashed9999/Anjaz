@@ -483,6 +483,8 @@ Route::prefix('kyc')->name('kyc.')->group(function () {
 
 // ============ AMIAL-2FA-001 (v1.8) ============
 Route::prefix('2fa')->name('2fa.')->group(function () {
+    // AMIAL-2FA-DOOR-001 — الشاشةُ التي لم تكن: خمسُ نقاطٍ تعمل بلا مدخل.
+    Route::get('/', [App\Http\Controllers\Admin\Admin2FAController::class, 'page'])->name('page');
     Route::get('/status', [App\Http\Controllers\Admin\Admin2FAController::class, 'status'])->name('status');
     Route::post('/setup', [App\Http\Controllers\Admin\Admin2FAController::class, 'setup'])->name('setup');
     Route::post('/confirm', [App\Http\Controllers\Admin\Admin2FAController::class, 'confirm'])->name('confirm');

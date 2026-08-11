@@ -100,6 +100,32 @@ class LoginController extends Controller
 
 
         if (auth('user')->attempt(['phone' => $request->phone, 'password' => $request->password, 'type' => ADMIN_TYPE], $request->remember)) {
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-2FA-DOOR-001 — **مصادقةٌ ثنائيّةٌ مبنيّةٌ ولا تُفرض.**
+            //
+            // `Admin2FAController` و`TwoFactorAuthService` مكتملان منذ
+            // v1.8: توليدُ سرٍّ ورمزُ QR ورموزُ استرداد وتأكيدٌ وتعطيل.
+            // والأعمدةُ الخمسةُ في `users`. **ولم يكن لها شاشةٌ واحدة،
+            // ولا سطرٌ واحدٌ يفحصها عند الدخول.**
+            //
+            // أي أنّ من فعّلها — لو استطاع — يدخل بكلمة المرور وحدها
+            // كأنّه لم يفعّلها. **حمايةٌ تُخزَّن ولا تُقرأ**، وهي أسوأ من
+            // غيابها: تُطمئن صاحبَها إلى بابٍ مفتوح.
+            //
+            // فصار الدخولُ يقف هنا لمن فعّلها: الجلسةُ تُعلَّق حتّى يمرّ
+            // الرمز. ومن لم يفعّلها يدخل كما كان — **ولا يُقفل الباب على
+            // أحدٍ بتغييرٍ صامت**.
+            $admin = auth('user')->user();
+
+            if ($admin && $admin->two_factor_enabled && $admin->two_factor_confirmed_at) {
+                auth('user')->logout();
+
+                $request->session()->put('amial.2fa.pending_user', $admin->id);
+                $request->session()->put('amial.2fa.remember', (bool) $request->remember);
+
+                return redirect()->route('admin.auth.two-factor');
+            }
+
             return redirect()->route('admin.dashboard');
         }
 

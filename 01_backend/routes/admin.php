@@ -39,6 +39,18 @@ Route::group(['as' => 'admin.'], function () {
         Route::get('login', [LoginController::class, 'login'])->name('login');
         Route::post('login', [LoginController::class, 'submit']);
         Route::get('logout', [LoginController::class, 'logout'])->name('logout');
+
+        // AMIAL-2FA-DOOR-001 — بوّابةُ الرمز الثاني.
+        //
+        // **خارج حارس `admin` عمداً**: الجلسةُ لم تُفتح بعد — المعرّفُ
+        // معلّقٌ في الجلسة بلا أيّ صلاحيّة حتّى يمرّ الرمز. ووضعُها خلف
+        // الحارس يعني أنّ من يصلها قد دخل أصلاً، فتصير الشاشةُ زينة.
+        Route::get('two-factor', [\App\Http\Controllers\Admin\Auth\TwoFactorChallengeController::class, 'show'])
+            ->name('two-factor');
+        Route::post('two-factor', [\App\Http\Controllers\Admin\Auth\TwoFactorChallengeController::class, 'verify'])
+            ->name('two-factor.verify');
+        Route::get('two-factor/cancel', [\App\Http\Controllers\Admin\Auth\TwoFactorChallengeController::class, 'cancel'])
+            ->name('two-factor.cancel');
     });
 
     Route::group(['middleware' => ['admin']], function () {
