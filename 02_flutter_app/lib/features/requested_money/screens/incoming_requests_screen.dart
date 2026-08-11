@@ -80,7 +80,13 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
   Widget _card(Map<String, dynamic> r) {
     final id = r['id'] as int?;
     final amount = '${r['amount'] ?? '0'}';
-    final from = (r['requester_name'] ?? r['requester_phone'] ?? 'مستخدم').toString();
+    // **`requester_name` لم يكن عموداً قطّ** — فكان كلُّ طلبٍ واردٍ يقول
+    // «مستخدم يطلب منك». والخادمُ يُرجع `requester_label` الآن.
+    final from = (r['requester_label'] ??
+            r['requester_name'] ??
+            r['requester_phone'] ??
+            'مستخدم أميال')
+        .toString();
     final note = (r['note'] ?? '').toString();
 
     return Container(

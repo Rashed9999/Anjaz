@@ -11,6 +11,7 @@ import 'package:amial_pay/util/dimensions.dart';
 import 'package:amial_pay/features/payments/domain/amial_qr_payload.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_pay_screen.dart';
 import 'package:amial_pay/features/transaction_money/screens/transaction_balance_input_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
 
 class QrCodeScannerController extends GetxController implements GetxService{
 
@@ -179,10 +180,18 @@ class TransactionSelect extends StatelessWidget {
           onTap: () =>  Get.off(()=>  TransactionBalanceInputScreen(transactionType: 'send_money',contactModel: contactModel)),
         ),
 
+        // AMIAL-REQUEST-DIRECT-003 — **المسحُ يقود إلى الطلب نفسِه.**
+        //
+        // كان يقود إلى مسارٍ ينشئ صفّاً في `request_money` — الجدولِ
+        // القديم — فلا يظهر الطلبُ في «طلبات واردة» ولا في «طلباتي»،
+        // ويصل إشعارُه إلى قائمةٍ أخرى. **صندوقان لا يلتقيان.**
+        //
+        // والرقمُ الممسوح يُمرَّر جاهزاً فيُفحص فوراً ويظهر اسمُ صاحبه.
         ListTile(
           title: Text('request_money'.tr),
           minVerticalPadding: 0,
-          onTap: () =>  Get.off(()=> TransactionBalanceInputScreen(transactionType: 'request_money',contactModel: contactModel)),
+          onTap: () => Get.off(() => PaymentRequestCreateScreen(
+              initialPhone: contactModel?.phoneNumber)),
         ),
       ],
     );

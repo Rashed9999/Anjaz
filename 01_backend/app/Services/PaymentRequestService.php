@@ -347,7 +347,59 @@ class PaymentRequestService
         }
         if ($status) $q->where('status', $status);
 
-        return $q->orderByDesc('id')->paginate($perPage, ['*'], 'page', $page);
+        $paginated = $q->with(['requester:id,f_name,l_name,phone', 'recipient:id,f_name,l_name,phone'])
+            ->orderByDesc('id')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // ══════════════════════════════════════════════════════════════
+        //  **اسمُ الطرف الآخر — AMIAL-REQUEST-DIRECT-003.**
+        //
+        //  كانت الصفوفُ تُرجَع خاماً من الجدول، وشاشةُ «الطلبات الواردة»
+        //  تقرأ `requester_name` — **وهو ليس عموداً**. فكان كلُّ طلبٍ
+        //  واردٍ يظهر باسم «مستخدم يطلب منك»: لا اسم، ولا رقم.
+        //
+        //  ومن يُطلب منه مالٌ ولا يعرف مَن يطلبه لا يوافق — فيبقى الطلبُ
+        //  معلّقاً، ويعود الطالبُ إلى واتساب. **وهكذا يعود الرابطُ من
+        //  بابٍ آخر.**
+        // ══════════════════════════════════════════════════════════════
+        $paginated->getCollection()->transform(function (PaymentRequest $r) {
+            $r->setAttribute('requester_label', $this->partyLabel(
+                $r->requester, null, null));
+
+            $r->setAttribute('recipient_label', $this->partyLabel(
+                $r->recipient, $r->recipient_name, $r->recipient_phone));
+
+            $r->setAttribute('requester_phone', $r->requester?->phone);
+
+            return $r;
+        });
+
+        return $paginated;
+    }
+
+    /**
+     * اسمُ طرفٍ كما يُعرض: حسابُه، ثمّ ما كُتب يدويّاً، ثمّ رقمُه.
+     * ولا يُرجَع فارغاً — «مستخدم» بلا هويّة لا يُوافَق عليها.
+     */
+    private function partyLabel(?User $user, ?string $typed, ?string $phone): string
+    {
+        if ($user) {
+            $name = trim(($user->f_name ?? '') . ' ' . ($user->l_name ?? ''));
+
+            if ($name !== '') {
+                return $name;
+            }
+
+            if (trim((string) $user->phone) !== '') {
+                return (string) $user->phone;
+            }
+        }
+
+        if (trim((string) $typed) !== '') {
+            return (string) $typed;
+        }
+
+        return trim((string) $phone) !== '' ? (string) $phone : 'مستخدم أميال';
     }
 
     /** ينتهي صلاحية الطلبات (يُستدعى من cron). */

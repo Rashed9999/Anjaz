@@ -61,9 +61,34 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
             // تجعل الطالبَ يظنّ أنّ طلبه وصل وهو لم يصل.
             'delivered' => $req->isDirect(),
             'delivery_label' => $req->shareMethodAr(),
+            // **الاسمُ يُرجَع مع النتيجة** — وإلّا قالت شاشةُ النجاح «وصل
+            // الطلب» ولم تقل إلى مَن. والطالبُ كتب رقماً لا اسماً، فلا
+            // شيء في يده يؤكّد أنّه أصاب الرقمَ الصحيح.
+            'recipient_label' => $this->recipientLabel($req),
         ], 'REQUEST_CREATED',
             $req->isDirect() ? 'وصل الطلب إلى صاحبه' : 'أُنشئ الطلب — شاركه بالرابط',
             201);
+    }
+
+    /**
+     * اسمُ المطلوب منه كما يُعرض: حسابُه أوّلاً، ثمّ ما كتبه الطالب،
+     * ثمّ رقمُه. ولا يُترك فارغاً — «وصل الطلب» بلا مستلَمٍ لا تُطمئن.
+     */
+    private function recipientLabel(\App\Models\PaymentRequest $req): string
+    {
+        if ($req->recipient_user_id) {
+            $u = \App\Models\User::find($req->recipient_user_id, ['f_name', 'l_name']);
+
+            $name = trim(($u->f_name ?? '') . ' ' . ($u->l_name ?? ''));
+
+            if ($name !== '') {
+                return $name;
+            }
+        }
+
+        return trim((string) $req->recipient_name) !== ''
+            ? (string) $req->recipient_name
+            : (string) $req->recipient_phone;
     }
 
     /**

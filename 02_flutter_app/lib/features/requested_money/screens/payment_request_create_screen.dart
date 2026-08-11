@@ -13,7 +13,11 @@ import 'package:amial_pay/common/widgets/amial_quick_amounts.dart';
 
 /// AMIAL-PAYMENT-REQUESTS-001 — شاشة إنشاء طلب أموال.
 class PaymentRequestCreateScreen extends StatefulWidget {
-  const PaymentRequestCreateScreen({super.key});
+  /// رقمٌ يأتي جاهزاً — من مسح رمز شخصٍ مثلاً. ويُفحص فوراً فيظهر اسمُه
+  /// قبل أن يكتب المستعملُ حرفاً.
+  final String? initialPhone;
+
+  const PaymentRequestCreateScreen({super.key, this.initialPhone});
 
   @override
   State<PaymentRequestCreateScreen> createState() => _PaymentRequestCreateScreenState();
@@ -25,6 +29,8 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
   final _recipientPhone = TextEditingController();
   final _recipientName = TextEditingController();
   final _note = TextEditingController();
+  /// **احتياطُ غير المشترك وحدَه.** لا يُقرأ إطلاقاً حين يكون صاحبُ الرقم
+  /// على أميال — `_submit` يرسل `direct` حينها، وقائمةُ الاختيار لا تُعرض.
   String _shareMethod = 'link';
   bool _isRecurring = false;
   String _period = 'monthly';
@@ -33,6 +39,18 @@ class _PaymentRequestCreateScreenState extends State<PaymentRequestCreateScreen>
   void initState() {
     super.initState();
     c = Get.find<PaymentRequestController>();
+
+    // **ولا يُترك الفحصُ السابق يلوّث شاشةً جديدة**: المتحكّم دائمٌ
+    // (`fenix`)، فبقاءُ `recipientCheck` من طلبٍ مضى يجعل الشاشةَ تعرض
+    // اسمَ شخصٍ لم يُكتب رقمُه بعد.
+    c.clearRecipientCheck();
+
+    final seed = widget.initialPhone?.trim() ?? '';
+
+    if (seed.isNotEmpty) {
+      _recipientPhone.text = seed;
+      WidgetsBinding.instance.addPostFrameCallback((_) => c.checkRecipient(seed));
+    }
   }
 
   @override

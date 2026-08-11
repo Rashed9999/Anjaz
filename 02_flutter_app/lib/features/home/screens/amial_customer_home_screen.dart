@@ -10,6 +10,8 @@ import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/favorite_number/screens/amial_favorites_screen.dart';
 import 'package:amial_pay/util/app_constants.dart';
 import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
+import 'package:amial_pay/features/requested_money/controllers/payment_request_controller.dart';
 import 'package:amial_pay/features/bill_pay/screens/bill_pay_providers_screen.dart';
 import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
@@ -199,7 +201,104 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
       }
     } catch (_) {/* دفاعي */}
 
+    // ══════════════════════════════════════════════════════════════════
+    //  AMIAL-REQUEST-DIRECT-003 — **ما طُلب منك يظهر في الرئيسيّة.**
+    //
+    //  كانت «طلبات واردة» خلف: المزيد ← خدماتي ← بطاقةٌ في شبكةٍ من ستّ
+    //  عشرة بطاقة. **ثلاثُ ضغطاتٍ ومعرفةٌ مسبقةٌ بمكانها** — ومن لا يعرف
+    //  أنّها هناك لا يبحث عنها.
+    //
+    //  فالطالبُ يرسل، والمطلوبُ منه لا يرى شيئاً، فيتّصل به الطالبُ في
+    //  واتساب ليقول «وافق على الطلب» — وهو بالضبط الخروجُ من التطبيق
+    //  الذي أُريد إنهاؤه. (والإشعارُ وحدَه لا يكفي: يُغلَق، ويُفوَّت،
+    //  ويصمت حين يكون التطبيق مفتوحاً.)
+    // ══════════════════════════════════════════════════════════════════
+    try {
+      await Get.find<PaymentRequestController>().loadList('incoming', status: 'pending');
+    } catch (_) {/* لافتةٌ تحسينيّة — لا توقف الصفحة */}
+
     if (mounted) setState(() => _loading = false);
+  }
+
+  /// AMIAL-REQUEST-DIRECT-003 — «فلانٌ يطلب منك ٥٠٠٠ ر.ي».
+  ///
+  /// **والصفرُ لا يُعرض**: لافتةٌ تقول «لا طلبات» كلَّ يومٍ تُدرَّب العينُ
+  /// على تجاهلها، فلا تُرى يوم يكون فيها طلب.
+  Widget _incomingRequestsBanner() {
+    final PaymentRequestController prc;
+
+    try {
+      prc = Get.find<PaymentRequestController>();
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
+
+    return Obx(() {
+      final list = prc.incoming;
+
+      if (list.isEmpty) return const SizedBox.shrink();
+
+      final first = list.first;
+      final from = (first['requester_label'] ?? first['requester_phone'] ?? 'أحدهم').toString();
+      final amount = '${first['amount'] ?? ''}';
+
+      return Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () async {
+              await Get.to(() => const IncomingRequestsScreen());
+              // العودةُ تُعيد القراءة: من دفع أو رفض لا تبقى لافتتُه.
+              await _load();
+            },
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF4D6),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFE9C46A)),
+              ),
+              child: Row(children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: const BoxDecoration(
+                      color: Color(0xFFE9A100), shape: BoxShape.circle),
+                  child: const Icon(Icons.call_received_rounded,
+                      color: Colors.white, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        list.length == 1
+                            ? '$from يطلب منك $amount ر.ي'
+                            : '${list.length} طلبات واردة تنتظر ردّك',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF6B4E00)),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text('اضغط لتوافق أو ترفض',
+                          style: TextStyle(fontSize: 11.5, color: Color(0xFF8A6A12))),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_left_rounded, color: Color(0xFF8A6A12)),
+              ]),
+            ),
+          ),
+        ),
+      );
+    });
   }
 
   void _openReceiveQr() {
@@ -254,6 +353,9 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
                     const SizedBox(height: 14),
                     _coverageBanner(),
                   ],
+                  // **لافتةُ الطلبات الواردة** — لا تُعرض إلّا حين يوجد
+                  // ما يُفعل، ولا تُغلَق: خلفها مالٌ ينتظر قراراً.
+                  _incomingRequestsBanner(),
                   const SizedBox(height: 22),
                   _quickSendSection(),
                   const SizedBox(height: 22),

@@ -15,54 +15,18 @@ class RequestedMoneyController extends GetxController implements GetxService {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
-  // ── AMIAL-REQ-DIRECT-001 — الطلبُ المباشر ────────────────────────────
-  bool _isRequesting = false;
-  bool get isRequesting => _isRequesting;
-
-  String _requestError = '';
-  String get requestError => _requestError;
-
-  /// يطلب مالاً من شخصٍ بهاتفه — **ويصله إشعارٌ ليوافق أو يرفض**.
-  ///
-  /// ولا يُنشأ رابطٌ ولا رمزُ QR: من يطلب من صديقه لا يريد أن يشارك صورةً،
-  /// يريد أن يصل الطلبُ إليه.
-  Future<bool> requestFromPerson({
-    required String phone,
-    required String amount,
-    String? note,
-  }) async {
-    _isRequesting = true;
-    _requestError = '';
-    update();
-
-    try {
-      final r = await requestedMoneyRepo.requestFromPerson(
-          phone: phone, amount: amount, note: note);
-
-      if (r.statusCode == 200) {
-        // القائمةُ تُحدَّث فوراً — الطلبُ يظهر في «طلباتي» بلا إعادة فتح.
-        await getOwnRequestedMoneyList(true);
-        return true;
-      }
-
-      // **رسالةُ الخادم تُعرض كما هي**: هي التي تقول «المستلِم غير موجود»
-      // أو «حساب المستلِم غير موثّق» — وجملةٌ عامّةٌ مكانها تُرسل الباحثَ
-      // يجرّب رقماً آخر بلا سبب.
-      final b = r.body;
-      _requestError = (b is Map && b['message'] is String && (b['message'] as String).trim().isNotEmpty)
-          ? b['message'] as String
-          : (r.statusCode == null || r.statusCode == 0
-              ? 'لا اتصال بالخادم — تحقّق من الشبكة'
-              : 'تعذّر إرسال الطلب');
-      return false;
-    } catch (_) {
-      _requestError = 'تعذّر إرسال الطلب — تحقّق من الشبكة';
-      return false;
-    } finally {
-      _isRequesting = false;
-      update();
-    }
-  }
+  // AMIAL-REQUEST-DIRECT-003 — **حُذف هنا `requestFromPerson`.**
+  //
+  // كان يُنشئ طلباً في جدولٍ آخر (`request_money`) غير جدول الطلبات
+  // (`payment_requests`) — **نظامان متوازيان لأمرٍ واحد**، ولكلٍّ صندوقُ
+  // واردٍ لا يرى الآخر: يُرسل الطلبُ من هنا فلا يظهر في «طلبات واردة»،
+  // ويُرسل من هناك فلا يظهر في «طلباتي».
+  //
+  // فبقي واحدٌ: `PaymentRequestController` — وهو الذي يعرف اسمَ المستلم
+  // قبل الإرسال، ويُشعره، ويقبل الدفعَ برمز الحماية.
+  //
+  // ونقطةُ النهاية القديمة `POST /customer/request-money` لم تُحذف من
+  // الخادم: نسخُ التطبيق المنشورةُ قبل هذا التغيير ما زالت تناديها.
 
   List<RequestedMoney> _requestedMoneyList = [];
   List<RequestedMoney> _ownRequestList = [];

@@ -10,6 +10,8 @@ import 'package:amial_pay/common/models/notification_body.dart';
 import 'package:amial_pay/features/home/controllers/menu_controller.dart';
 import 'package:amial_pay/features/notification/controllers/notification_controller.dart';
 import 'package:amial_pay/features/requested_money/screens/requested_money_list_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/features/requested_money/controllers/requested_money_controller.dart';
 import 'package:amial_pay/features/history/controllers/transaction_history_controller.dart';
@@ -64,6 +66,20 @@ class NotificationHelper {
             }else{
               menuItemController.selectHistoryPage();
             }
+
+          }else if(notificationBody.type == 'payment_request_received'){
+            // AMIAL-REQUEST-DIRECT-003 — **إشعارٌ يصل ولا يقود إلى شيء.**
+            //
+            // `payment_request_received` يُرسَل من `PaymentRequestService`
+            // منذ بُني الطلبُ المباشر، **ولم يكن له فرعٌ هنا إطلاقاً**:
+            // يرنّ الهاتفُ فيضغط المستلمُ الإشعار فلا يفتح شيء. فيبقى
+            // المالُ معلّقاً، ويعود الطالبُ إلى واتساب — ومنه إلى الرابط.
+            Get.to(()=> const IncomingRequestsScreen());
+
+          }else if(notificationBody.type == 'payment_request_declined'){
+            // ورفضُ الطلب يقود صاحبَه إلى طلباته المرسلة لا إلى قائمةٍ
+            // من النظام القديم لا يجد فيها طلبَه.
+            Get.to(()=> const OutgoingRequestsScreen());
 
           }else if(notificationBody.type == 'request_money'){
             Get.to(()=> const RequestedMoneyListScreen(requestType: RequestType.request));
@@ -202,6 +218,20 @@ class NotificationHelper {
               menuItemController.selectHistoryPage();
             }
 
+
+          }else if(notificationBody.type == 'payment_request_received'){
+            // AMIAL-REQUEST-DIRECT-003 — **إشعارٌ يصل ولا يقود إلى شيء.**
+            //
+            // `payment_request_received` يُرسَل من `PaymentRequestService`
+            // منذ بُني الطلبُ المباشر، **ولم يكن له فرعٌ هنا إطلاقاً**:
+            // يرنّ الهاتفُ فيضغط المستلمُ الإشعار فلا يفتح شيء. فيبقى
+            // المالُ معلّقاً، ويعود الطالبُ إلى واتساب — ومنه إلى الرابط.
+            Get.to(()=> const IncomingRequestsScreen());
+
+          }else if(notificationBody.type == 'payment_request_declined'){
+            // ورفضُ الطلب يقود صاحبَه إلى طلباته المرسلة لا إلى قائمةٍ
+            // من النظام القديم لا يجد فيها طلبَه.
+            Get.to(()=> const OutgoingRequestsScreen());
 
           }else if(notificationBody.type == 'request_money'){
             Get.to(()=> const RequestedMoneyListScreen(requestType: RequestType.request));
