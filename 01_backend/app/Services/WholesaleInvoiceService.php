@@ -123,9 +123,23 @@ class WholesaleInvoiceService
             }
             $afterDiscount = MoneyService::sub($subtotal, $discountAmount);
 
-            $taxRate = (float)($data['tax_rate'] ?? $business->default_tax_rate);
-            $taxAmount = $taxRate > 0
-                ? MoneyService::normalize((string)((float)$afterDiscount * $taxRate / 100))
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-WHOLESALE-FLOAT-001 — **ضريبةٌ وعمولةٌ تُحسبان بـfloat.**
+            //
+            // كان الحساب `(float)$afterDiscount * $taxRate / 100` ثمّ
+            // `normalize`. و`float` في PHP ثنائيٌّ مزدوجُ الدقّة: لا يمثّل
+            // الكسورَ العشريّة تمثيلاً تامّاً. فـ`0.1 + 0.2 !== 0.3`، و
+            // ضريبةُ ٥٪ على ١٬٢٣٤٬٥٦٧٫٨٩ تنحرف في الخانة الرابعة.
+            //
+            // والانحرافُ لا يظهر في فاتورة، **ويظهر في المجموع**: ألفُ
+            // فاتورةٍ تُراكم فرقاً يقف عنده مدقّقٌ ولا يجد له سبباً —
+            // والدفترُ متوازنٌ لأنّ الرقم الخطأ رُحّل مرّتين.
+            //
+            // و`MoneyService::mul` و`div` مبنيّتان على `bcmath` — دقّةٌ
+            // عشريّةٌ تامّة — وكانتا موجودتين، والحسابُ يتجاوزهما.
+            $taxRate = (string) ($data['tax_rate'] ?? $business->default_tax_rate);
+            $taxAmount = MoneyService::compare($taxRate, '0') > 0
+                ? MoneyService::div(MoneyService::mul($afterDiscount, $taxRate), '100')
                 : '0';
 
             $totalAmount = MoneyService::add($afterDiscount, $taxAmount);
@@ -149,9 +163,11 @@ class WholesaleInvoiceService
                     ->lockForUpdate()
                     ->first();
                 if ($salesRep) {
-                    $commissionRate = (float)$salesRep->default_commission_rate;
-                    $commissionAmount = MoneyService::normalize(
-                        (string)((float)$totalAmount * $commissionRate / 100)
+                    // AMIAL-WHOLESALE-FLOAT-001 — انظر أعلاه. والعمولةُ
+                    // أخطر: هي مالٌ يُدفع لمندوبٍ لا رقمٌ يُعرض.
+                    $commissionRate = (string) $salesRep->default_commission_rate;
+                    $commissionAmount = MoneyService::div(
+                        MoneyService::mul($totalAmount, $commissionRate), '100'
                     );
                 }
             }

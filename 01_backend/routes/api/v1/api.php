@@ -53,8 +53,16 @@ Route::middleware(['throttle:100,1'])->group(function () {
                 Route::delete('remove-account', [CustomerAuthController::class, 'removeAccount']);
                 Route::put('update-kyc-information', [CustomerAuthController::class, 'updateKycInformation']);
 
-                Route::post('check-otp', [OTPController::class, 'checkOtp']);
-                Route::post('verify-otp', [OTPController::class, 'verifyOtp']);
+                // AMIAL-OTP-BRUTEFORCE-001 — **حدٌّ خاصٌّ لا العامّ.**
+                //
+                // كان المساران تحت `throttle:100,1` العامّ: مئةُ محاولةٍ
+                // في الدقيقة على أربعة أرقام تستنفد المساحة كلَّها
+                // (١٠٠٠٠ احتمال) في ساعةٍ ونصف. والعدّادُ في الجدول
+                // يحمي رقماً واحداً، وهذا يحمي من يجرّب أرقاماً كثيرة.
+                Route::post('check-otp', [OTPController::class, 'checkOtp'])
+                    ->middleware('throttle:5,1');
+                Route::post('verify-otp', [OTPController::class, 'verifyOtp'])
+                    ->middleware('throttle:10,1');
 
                 Route::post('verify-pin', [CustomerAuthController::class, 'verifyPin']);
                 Route::post('change-pin', [CustomerAuthController::class, 'changePin']);
@@ -123,8 +131,16 @@ Route::middleware(['throttle:100,1'])->group(function () {
                 Route::get('get-requested-money', [AgentController::class, 'getRequestedMoney']);
                 Route::put('update-kyc-information', [CustomerAuthController::class, 'updateKycInformation']);
 
-                Route::post('check-otp', [OTPController::class, 'checkOtp']);
-                Route::post('verify-otp', [OTPController::class, 'verifyOtp']);
+                // AMIAL-OTP-BRUTEFORCE-001 — **حدٌّ خاصٌّ لا العامّ.**
+                //
+                // كان المساران تحت `throttle:100,1` العامّ: مئةُ محاولةٍ
+                // في الدقيقة على أربعة أرقام تستنفد المساحة كلَّها
+                // (١٠٠٠٠ احتمال) في ساعةٍ ونصف. والعدّادُ في الجدول
+                // يحمي رقماً واحداً، وهذا يحمي من يجرّب أرقاماً كثيرة.
+                Route::post('check-otp', [OTPController::class, 'checkOtp'])
+                    ->middleware('throttle:5,1');
+                Route::post('verify-otp', [OTPController::class, 'verifyOtp'])
+                    ->middleware('throttle:10,1');
 
                 Route::post('verify-pin', [AgentController::class, 'verifyPin']);
                 Route::post('change-pin', [AgentController::class, 'changePin']);

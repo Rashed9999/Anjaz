@@ -37,7 +37,7 @@ class BillPayController extends Controller
     {
         $service = BillService::find($serviceId);
         if (!$service || !$service->is_active) {
-            return $this->error('SERVICE_NOT_FOUND', 'Service not found or inactive', 404);
+            return $this->error('SERVICE_NOT_FOUND', 'الخدمة غير موجودة أو موقوفة', 404);
         }
 
         $products = BillServiceProduct::where('service_id', $serviceId)
@@ -65,15 +65,15 @@ class BillPayController extends Controller
         $provider = $service->provider;
 
         if ($product && $product->amount_type === 'fixed' && (string)$product->fixed_amount !== (string)$request->input('amount')) {
-            return $this->error('AMOUNT_MISMATCH', 'Amount does not match fixed product price', 422);
+            return $this->error('AMOUNT_MISMATCH', 'المبلغ لا يطابق سعر الخدمة الثابت', 422);
         }
         if ($product && $product->amount_type === 'variable') {
             $amt = (float)$request->input('amount');
             if ($product->min_amount && $amt < (float)$product->min_amount) {
-                return $this->error('AMOUNT_TOO_LOW', 'Amount below minimum', 422);
+                return $this->error('AMOUNT_TOO_LOW', 'المبلغ أقلّ من الحدّ الأدنى', 422);
             }
             if ($product->max_amount && $amt > (float)$product->max_amount) {
-                return $this->error('AMOUNT_TOO_HIGH', 'Amount above maximum', 422);
+                return $this->error('AMOUNT_TOO_HIGH', 'المبلغ أعلى من الحدّ الأقصى', 422);
             }
         }
 
@@ -109,7 +109,7 @@ class BillPayController extends Controller
             ->where('user_id', $request->user()->id)
             ->first();
 
-        if (!$order) return $this->error('NOT_FOUND', 'Order not found', 404);
+        if (!$order) return $this->error('NOT_FOUND', 'الطلب غير موجود', 404);
 
         return $this->ok(['order' => $order]);
     }

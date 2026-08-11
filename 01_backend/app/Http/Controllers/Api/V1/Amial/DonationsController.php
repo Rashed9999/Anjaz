@@ -75,7 +75,7 @@ class DonationsController extends Controller
             'category',
         ])->where('campaign_ulid', $ulid)->first();
 
-        if (!$campaign) return $this->error('NOT_FOUND', 'Campaign not found', 404);
+        if (!$campaign) return $this->error('NOT_FOUND', 'الحملة غير موجودة', 404);
 
         // increment view count (atomic, no race)
         CharityCampaign::where('id', $campaign->id)->increment('view_count');
@@ -114,7 +114,7 @@ class DonationsController extends Controller
         if ($v->fails()) return $this->validationError($v);
 
         $campaign = CharityCampaign::where('campaign_ulid', $request->input('campaign_ulid'))->first();
-        if (!$campaign) return $this->error('CAMPAIGN_NOT_FOUND', 'Campaign not found', 404);
+        if (!$campaign) return $this->error('CAMPAIGN_NOT_FOUND', 'الحملة غير موجودة', 404);
 
         try {
             $donation = $this->service->donate(

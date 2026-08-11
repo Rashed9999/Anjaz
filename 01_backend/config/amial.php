@@ -329,6 +329,15 @@ return [
     | و EnsureDemoStaff و EnsureDemoUsers) — لا نطاقٌ ولا بادئة.
     */
     'otp' => [
+        // AMIAL-OTP-BRUTEFORCE-001 — **عمرُ الرمز.**
+        //
+        // كان `created_at` يُكتب ولا يُقرأ: رمزٌ أُرسل قبل شهرٍ ولم
+        // يُستعمل ما زال يُقبل. ورسالةٌ قديمةٌ في هاتفٍ مسروقٍ تكفي.
+        //
+        // وعشرُ دقائق هي عرفُ المصارف: تكفي لوصول الرسالة وقراءتها،
+        // ولا تكفي لبقاء الرمز حيّاً في صندوق الوارد.
+        'lifetime_seconds' => (int) env('AMIAL_OTP_LIFETIME_SECONDS', 600),
+
         'demo_code' => env('AMIAL_DEMO_OTP', '123456'),
 
         'demo_numbers' => array_filter(array_map('trim', explode(',', (string) env(

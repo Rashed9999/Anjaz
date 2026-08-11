@@ -221,7 +221,7 @@ class ReceiptController extends Controller
             ->first();
 
         if (!$receipt) {
-            return $this->error('RECEIPT_NOT_FOUND', 'Receipt not found', 404);
+            return $this->error('RECEIPT_NOT_FOUND', 'الإيصال غير موجود', 404);
         }
 
         return new JsonResponse([
@@ -254,7 +254,7 @@ class ReceiptController extends Controller
             ->where('user_id', $request->user()->id)
             ->first();
         if (!$receipt) {
-            return $this->error('RECEIPT_NOT_FOUND', 'Receipt not found', 404);
+            return $this->error('RECEIPT_NOT_FOUND', 'الإيصال غير موجود', 404);
         }
 
         $path = $receipt->pdf_storage_path;
@@ -336,7 +336,7 @@ class ReceiptController extends Controller
             ->where('user_id', $request->user()->id)
             ->first();
         if (!$receipt) {
-            return $this->error('RECEIPT_NOT_FOUND', 'Receipt not found', 404);
+            return $this->error('RECEIPT_NOT_FOUND', 'الإيصال غير موجود', 404);
         }
 
         // العرض: 58مم≈164pt، 80مم≈226pt (72pt/بوصة، 25.4مم/بوصة)
@@ -387,7 +387,7 @@ class ReceiptController extends Controller
             ->where('user_id', $request->user()->id)
             ->first();
         if (!$receipt) {
-            return $this->error('RECEIPT_NOT_FOUND', 'Receipt not found', 404);
+            return $this->error('RECEIPT_NOT_FOUND', 'الإيصال غير موجود', 404);
         }
 
         // QR للتحقّق (SVG data-URI — بلا imagick)
@@ -415,7 +415,7 @@ class ReceiptController extends Controller
         }
 
         if (!class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
-            return $this->error('PDF_UNAVAILABLE', 'PDF engine not installed', 500);
+            return $this->error('PDF_UNAVAILABLE', 'خدمة إنشاء الملفّات غير مهيّأة حالياً — راسل الدعم', 500);
         }
 
         // AMIAL-FIX(PDF-FINAL): نخزّن ناتج التصيير مؤقّتاً (15 دقيقة) بمفتاح مرتبط
@@ -559,12 +559,12 @@ class ReceiptController extends Controller
         $code = preg_replace('/[\s\-]+/', '', strtoupper($code));
 
         if (!preg_match('/^([0-9]{16}|[A-Z2-9]{16})$/', $code)) {
-            return $this->error('INVALID_CODE', 'Verification code format invalid', 400);
+            return $this->error('INVALID_CODE', 'صيغة رمز التحقّق غير صحيحة', 400);
         }
 
         $result = $this->service->verifyByCode($code);
         if (!$result) {
-            return $this->error('RECEIPT_NOT_FOUND', 'No valid receipt for this code', 404);
+            return $this->error('RECEIPT_NOT_FOUND', 'لا إيصال صالح لهذا الرمز', 404);
         }
 
         return new JsonResponse([

@@ -515,6 +515,61 @@ class MerchantCenterController extends Controller
     }
 
     /**
+     * **تغييرُ درجة مخاطر التاجر** — AMIAL-RISK-TIER-DOOR-001.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * `MerchantAdminAction::ACTIONS` تُعلن `risk.tier => 'تغيير درجة
+     * المخاطر'` منذ بُني المركز — **ولا مسارَ لها**. فالفعلُ مُعرَّفٌ في
+     * سجلّ التدقيق ولا يستطيع أحدٌ أن يفعله.
+     *
+     * وله متحكّمٌ آخر (`AdminMerchantRiskController::setTier`) بمسارٍ
+     * `PUT /admin/amial/merchants/{id}/tier` — **ولا شاشةَ تناديه**.
+     * فسطحان لفعلٍ واحد، وكلاهما لا يُوصَل إليه.
+     *
+     * والصحيحُ أن يكون في المركز مع بقيّة الأفعال: بسببٍ إلزاميّ وسطرِ
+     * تدقيقٍ يحمل الدرجةَ قبل وبعد. **فرفعُ درجة تاجرٍ إلى «مرتفع» يشدّد
+     * فحصَه ويؤخّر تسوياته** — قرارٌ يُساءل عنه لا إعدادٌ يُقلَّب.
+     */
+    public function setRiskTier(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'level' => 'required|in:low,medium,high,critical',
+        ]);
+
+        return $this->act($request, function (string $reason) use ($request, $id, $data) {
+            $before = \App\Models\MerchantRiskProfile::where('merchant_user_id', $id)
+                ->value('risk_level');
+
+            $this->actions->perform(
+                actor: $request->user(),
+                merchantUserId: $id,
+                action: 'risk.tier',
+                reason: $reason,
+                // **«لم يُقيَّم» تُقال ولا تُكتب «منخفض»** (القاعدة ٧):
+                // سجلٌّ يقول «منخفض ← مرتفع» عن تاجرٍ لم يُقيَّم قطّ يصف
+                // انتقالاً لم يقع.
+                beforeState: ['risk_level' => $before ?? 'لم يُقيَّم'],
+                work: function () use ($id, $data, $request) {
+                    \App\Models\MerchantRiskProfile::updateOrCreate(
+                        ['merchant_user_id' => $id],
+                        // ولا عمودَ «من راجع» في الجدول — **ولا يُضاف**:
+                        // المراجعُ ووقتُه وسببُه في سطر التدقيق، وعمودٌ
+                        // ثانٍ يحمل الاسم يصير مصدراً ثانياً قد يفترق.
+                        ['risk_level' => $data['level'], 'last_reviewed_at' => now()],
+                    );
+
+                    return ['risk_level' => $data['level']];
+                },
+                request: $request,
+                target: 'risk_profile',
+                targetId: (string) $id,
+            );
+
+            return $this->ok([], 'تغيّرت درجة المخاطر — والأثر في سجل التدقيق');
+        });
+    }
+
+    /**
      * **فتحُ تذكرةٍ للتاجر من داخل مركزه** — AMIAL-MERCHANT-CENTER-002.
      *
      * كان القسمُ يعرض التذاكر ولا يفتح واحدة. فمن يقرأ شكوى تاجرٍ في

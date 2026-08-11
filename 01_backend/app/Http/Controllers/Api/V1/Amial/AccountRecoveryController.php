@@ -38,7 +38,7 @@ class AccountRecoveryController extends AmialApiController // AMIAL-FIX-007
             'new_phone' => 'required|string|min:6|max:20',
         ]);
         if ($validator->fails()) {
-            return $this->error('VALIDATION_FAILED', 'Invalid input', $validator->errors(), 422);
+            return $this->error('VALIDATION_FAILED', 'بيانات غير مكتملة أو غير صحيحة', $validator->errors(), 422);
         }
 
         try {
@@ -79,7 +79,7 @@ class AccountRecoveryController extends AmialApiController // AMIAL-FIX-007
             'user_notes' => 'sometimes|string|max:500',
         ]);
         if ($validator->fails()) {
-            return $this->error('VALIDATION_FAILED', 'Invalid input', $validator->errors(), 422);
+            return $this->error('VALIDATION_FAILED', 'بيانات غير مكتملة أو غير صحيحة', $validator->errors(), 422);
         }
 
         try {
@@ -118,7 +118,7 @@ class AccountRecoveryController extends AmialApiController // AMIAL-FIX-007
             ->first();
 
         if (!$req) {
-            return $this->error('RECOVERY_NOT_FOUND', 'Recovery request not found', [], 404);
+            return $this->error('RECOVERY_NOT_FOUND', 'طلب الاستعادة غير موجود', [], 404);
         }
 
         $validator = Validator::make($request->all(), [
@@ -126,7 +126,7 @@ class AccountRecoveryController extends AmialApiController // AMIAL-FIX-007
             'otp_new' => 'required|string|size:6',
         ]);
         if ($validator->fails()) {
-            return $this->error('VALIDATION_FAILED', 'Invalid input', $validator->errors(), 422);
+            return $this->error('VALIDATION_FAILED', 'بيانات غير مكتملة أو غير صحيحة', $validator->errors(), 422);
         }
 
         $ok = $this->service->verifyOtp(
@@ -156,14 +156,14 @@ class AccountRecoveryController extends AmialApiController // AMIAL-FIX-007
             ->first();
 
         if (!$req) {
-            return $this->error('RECOVERY_NOT_FOUND', 'Recovery request not found', [], 404);
+            return $this->error('RECOVERY_NOT_FOUND', 'طلب الاستعادة غير موجود', [], 404);
         }
 
         $validator = Validator::make($request->all(), [
             'pin' => 'required|string|min:4|max:6',
         ]);
         if ($validator->fails()) {
-            return $this->error('VALIDATION_FAILED', 'Invalid input', $validator->errors(), 422);
+            return $this->error('VALIDATION_FAILED', 'بيانات غير مكتملة أو غير صحيحة', $validator->errors(), 422);
         }
 
         $ok = $this->service->completeSelfServiceChange(
@@ -204,7 +204,7 @@ class AccountRecoveryController extends AmialApiController // AMIAL-FIX-007
             ->first();
 
         if (!$req) {
-            return $this->error('RECOVERY_NOT_FOUND', 'Recovery request not found', [], 404);
+            return $this->error('RECOVERY_NOT_FOUND', 'طلب الاستعادة غير موجود', [], 404);
         }
 
         return new JsonResponse([

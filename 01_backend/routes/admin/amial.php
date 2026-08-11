@@ -265,6 +265,10 @@ Route::prefix('merchant-center')->name('merchant-center.')->group(function () {
     Route::middleware('platform:platform.merchants.risk')->group(function () use ($mc) {
         Route::get('/{id}/risk', [$mc, 'risk'])->where('id', '[0-9]+')->name('risk');
         Route::get('/{id}/devices', [$mc, 'devices'])->where('id', '[0-9]+')->name('devices');
+        // AMIAL-RISK-TIER-DOOR-001 — `risk.tier` كان مُعلَناً في
+        // `MerchantAdminAction::ACTIONS` بلا مسارٍ يفعله.
+        Route::post('/{id}/risk-tier', [$mc, 'setRiskTier'])
+            ->where('id', '[0-9]+')->name('risk.tier');
     });
 
     // ── الامتثال والتوثيق: لفريق الامتثال ──

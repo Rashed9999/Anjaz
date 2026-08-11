@@ -317,6 +317,95 @@ class MerchantCenterGuardTest extends TestCase
     }
 
     // ══════════════════════════════════════════════════════════════════
+    //  ④·٢ فعلٌ مُعلَنٌ بلا مسارٍ ولا زرّ — AMIAL-RISK-TIER-DOOR-001
+    // ══════════════════════════════════════════════════════════════════
+
+    /**
+     * **كلُّ فعلٍ في `MerchantAdminAction::ACTIONS` له مسارٌ وزرّ.**
+     *
+     * وُلد هذا الحارس من `risk.tier`: كان مُعلَناً في قائمة الأفعال
+     * المعروفة منذ بُني المركز — يظهر اسمُه العربيّ في سجلّ التدقيق —
+     * **ولا مسارَ له ولا زرّ**. فالفعلُ مُعرَّفٌ ولا يستطيع أحدٌ أن يفعله.
+     *
+     * وهو نمطٌ خاصّ من «مبنيٌّ ولا يُوصَل إليه»: القائمةُ تَعِد بما لا
+     * يُنفَّذ، ومن يقرؤها يظنّ الميزة قائمة.
+     *
+     * والمستثنى يُكتب بسببه — لا يُسكَت عنه.
+     */
+    public function test_every_declared_admin_action_has_a_route_and_a_button(): void
+    {
+        // **خريطةٌ صريحةٌ لا استنتاجٌ من الاسم.**
+        //
+        // أوّلُ نسخةٍ اشتقّت اسمَ الزرّ من اسم الفعل (`sessions.revoke` ←
+        // `revoke`) فأبلغت عن ثمانيةِ أفعالٍ «بلا زرّ» وكلُّها موصولة —
+        // **حارسٌ يكذب في الاتّجاه الآخر**: يُرسل من يصدّقه يُصلح ما ليس
+        // مكسوراً. فصارت الخريطةُ مكتوبةً: فعلٌ ← مسارُه ← زرُّه.
+        //
+        // وقيمتُها أنّها تُكسر عمداً: من يحذف زرّاً أو مساراً يجد اسمه
+        // هنا فيقرّر — يُعيده أو يُدرجه في المستثنى بسبب.
+        $map = [
+            'account.freeze' => ['freeze', 'freeze'],
+            'account.unfreeze' => ['freeze', 'freeze'],   // الزرُّ نفسُه يقلب
+            'sessions.revoke' => ['sessions.revoke', 'sessions'],
+            'device.block' => ['device.toggle', 'device'],
+            'device.trust' => ['device.toggle', 'device'],
+            'staff.disable' => ['staff.disable', 'staff-disable'],
+            'plan.change' => ['plan', 'plan'],
+            'risk.tier' => ['risk.tier', 'risk-tier'],
+            'access.grant' => ['access.grant', 'grant'],
+            'access.revoke' => ['access.revoke', 'revoke-grant'],
+            'note.add' => ['note', 'note'],
+            'ticket.open' => ['ticket', 'ticket'],
+        ];
+
+        // مستثنىً بسببه — لا يُسكَت عنه:
+        $exempt = [
+            'kyc.approve' => 'يُكتب من لوحة مراجعة الهويّات',
+            'kyc.reject' => 'يُكتب من لوحة مراجعة الهويّات',
+            'capability.grant' => 'يُكتب من مركز الباقات والقدرات',
+            'capability.revoke' => 'يُكتب من مركز الباقات والقدرات',
+            'service.suspend' => 'مُعلَنٌ ولم يُبنَ بعد — تعليقُ خدمةٍ بعينها',
+            'service.resume' => 'مُعلَنٌ ولم يُبنَ بعد',
+        ];
+
+        $names = collect(Route::getRoutes())->map(fn ($r) => (string) $r->getName())
+            ->filter()->implode(' ');
+        $blade = file_get_contents(resource_path(
+            'views/admin-views/amial/merchant-center/index.blade.php'));
+
+        $problems = [];
+
+        foreach (array_keys(MerchantAdminAction::ACTIONS) as $action) {
+            if (isset($exempt[$action])) {
+                continue;
+            }
+
+            if (! isset($map[$action])) {
+                $problems[] = $action . ' — فعلٌ جديدٌ بلا خريطة: أضف مسارَه '
+                    . 'وزرَّه هنا، أو أدرِجه في المستثنى بسبب';
+                continue;
+            }
+
+            [$route, $button] = $map[$action];
+
+            if (! str_contains($names, 'merchant-center.' . $route)) {
+                $problems[] = $action . ' — لا مسارَ باسم merchant-center.' . $route;
+            }
+
+            if (! str_contains($blade, 'data-act="' . $button . '"')) {
+                $problems[] = $action . ' — لا زرَّ data-act="' . $button . '"';
+            }
+        }
+
+        $this->assertSame([], $problems, "\n"
+            . 'فعلٌ مُعلَنٌ في سجلّ التدقيق ولا يُنفَّذ:' . "\n  "
+            . implode("\n  ", $problems) . "\n\n"
+            . 'وقائمةُ الأفعال المعروفة تَعِد بما تُظهره في السجلّ. '
+            . 'فما لا مسارَ له ولا زرّ **معرَّفٌ ولا يفعله أحد** — '
+            . 'وهو ما وقع لـ`risk.tier` منذ بُني المركز.');
+    }
+
+    // ══════════════════════════════════════════════════════════════════
     //  ⑤ يُوصَل إليه — القاعدة ١٢
     // ══════════════════════════════════════════════════════════════════
 

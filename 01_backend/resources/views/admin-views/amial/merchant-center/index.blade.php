@@ -403,6 +403,23 @@
                         + kv('ذروة الحجم اليومي', fmt(d.peak_daily_volume))
                         + kv('إشارات غسل الأموال', d.aml_flags)
                         + kv('آخر مراجعة', d.last_reviewed_at || 'لم تُراجَع')
+                        + '</div>'
+                        // AMIAL-RISK-TIER-DOOR-001 — الفعلُ كان مُعلَناً في
+                        // سجلّ التدقيق بلا مسارٍ ولا زرّ. **وفعلٌ لا يُضغط
+                        // ليس مبنيّاً** (القاعدة التاسعة).
+                        + '<div class="mt-3 pt-3 border-top">'
+                        + '<div class="small text-muted mb-2">تغييرُ الدرجة يشدّد '
+                        + 'فحصَ التاجر ويؤخّر تسوياته — قرارٌ بسببٍ وأثر.</div>'
+                        + ['low','medium','high','critical'].map(function (lv) {
+                            const label = {low:'منخفض', medium:'متوسط',
+                                           high:'مرتفع', critical:'حرِج'}[lv];
+                            const on = d.level === lv;
+                            return '<button class="btn btn-sm me-1 '
+                                + (on ? 'btn-dark' : 'btn-outline-secondary')
+                                + '" data-act="risk-tier" data-level="' + lv + '"'
+                                + ' data-testid="mc-tier-' + lv + '"'
+                                + (on ? ' disabled' : '') + '>' + label + '</button>';
+                          }).join('')
                         + '</div></div>',
                         d.assessed ? '' : '<strong>«لم تُقيَّم» ليست «منخفضة»</strong> — '
                             + 'غياب التقييم ليس شهادة أمان.')
@@ -700,6 +717,21 @@
                 '', async reason => {
                     const d = await req('/revoke-sessions', 'POST', {reason});
                     banner('أُنهيت ' + d.revoked + ' جلسة', 'success');
+                });
+            return;
+        }
+
+        if (act === 'risk-tier') {
+            const lv = btn.getAttribute('data-level');
+            const label = {low:'منخفض', medium:'متوسط', high:'مرتفع', critical:'حرِج'}[lv];
+
+            askReason('تغيير درجة المخاطر إلى «' + label + '»',
+                'يُشدَّد فحصُ التاجر وقد تتأخّر تسوياته. والدرجةُ قبل وبعد '
+                + 'تُسجَّلان في سجل التدقيق باسمك.',
+                '', async reason => {
+                    await req('/risk-tier', 'POST', {level: lv, reason});
+                    banner('تغيّرت الدرجة — والأثر في سجل التدقيق', 'success');
+                    show('risk');
                 });
             return;
         }

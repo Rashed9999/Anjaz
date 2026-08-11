@@ -55,11 +55,11 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
     public function show(Request $request, string $ulid): JsonResponse
     {
         $payment = SafePayment::where('payment_ulid', $ulid)->first();
-        if (!$payment) return $this->error('NOT_FOUND', 'Safe payment not found', 404);
+        if (!$payment) return $this->error('NOT_FOUND', 'الدفعة الآمنة غير موجودة', 404);
 
         $user = $request->user();
         if ($payment->buyer_user_id !== $user->id && $payment->seller_user_id !== $user->id) {
-            return $this->error('FORBIDDEN', 'You are not party to this payment', 403);
+            return $this->error('FORBIDDEN', 'لستَ طرفاً في هذه الدفعة', 403);
         }
 
         $payment->load([
@@ -225,7 +225,7 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
     public function uploadEvidence(Request $request, string $ulid): JsonResponse
     {
         $payment = SafePayment::where('payment_ulid', $ulid)->first();
-        if (!$payment) return $this->error('NOT_FOUND', 'Safe payment not found', 404);
+        if (!$payment) return $this->error('NOT_FOUND', 'الدفعة الآمنة غير موجودة', 404);
 
         $user = $request->user();
         $role = match ((int) $user->id) {
@@ -269,7 +269,7 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
     public function listEvidence(Request $request, string $ulid): JsonResponse
     {
         $payment = SafePayment::where('payment_ulid', $ulid)->first();
-        if (!$payment) return $this->error('NOT_FOUND', 'Safe payment not found', 404);
+        if (!$payment) return $this->error('NOT_FOUND', 'الدفعة الآمنة غير موجودة', 404);
 
         $uid = (int) $request->user()->id;
         if ($uid !== (int) $payment->buyer_user_id && $uid !== (int) $payment->seller_user_id) {
@@ -377,7 +377,7 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
         \Closure $action, string $okCode, string $okMessage,
     ): JsonResponse {
         $payment = SafePayment::where('payment_ulid', $ulid)->first();
-        if (!$payment) return $this->error('NOT_FOUND', 'Safe payment not found', 404);
+        if (!$payment) return $this->error('NOT_FOUND', 'الدفعة الآمنة غير موجودة', 404);
 
         $partyId = $role === 'buyer' ? $payment->buyer_user_id : $payment->seller_user_id;
         if ($partyId !== $user->id) {

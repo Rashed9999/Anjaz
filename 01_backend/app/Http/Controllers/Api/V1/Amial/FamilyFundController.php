@@ -51,11 +51,11 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
     public function show(Request $request, string $ulid): JsonResponse
     {
         $fund = FamilyFund::where('fund_ulid', $ulid)->first();
-        if (!$fund) return $this->error('NOT_FOUND', 'Fund not found', 404);
+        if (!$fund) return $this->error('NOT_FOUND', 'الصندوق غير موجود', 404);
 
         $user = $request->user();
         if (!$fund->isMember($user->id) && $fund->owner_user_id !== $user->id) {
-            return $this->error('FORBIDDEN', 'Not a member of this fund', 403);
+            return $this->error('FORBIDDEN', 'لستَ عضواً في هذا الصندوق', 403);
         }
 
         $members = $fund->activeMembers()->with('user:id,f_name,l_name,phone')->get();
@@ -103,7 +103,7 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
     public function invite(Request $request, string $ulid): JsonResponse
     {
         $fund = FamilyFund::where('fund_ulid', $ulid)->first();
-        if (!$fund) return $this->error('NOT_FOUND', 'Fund not found', 404);
+        if (!$fund) return $this->error('NOT_FOUND', 'الصندوق غير موجود', 404);
 
         $v = Validator::make($request->all(), [
             'phone' => 'required|string|min:6|max:20',
@@ -128,7 +128,7 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
     public function acceptInvite(Request $request, int $membershipId): JsonResponse
     {
         $member = FamilyFundMember::find($membershipId);
-        if (!$member) return $this->error('NOT_FOUND', 'Invitation not found', 404);
+        if (!$member) return $this->error('NOT_FOUND', 'الدعوة غير موجودة', 404);
 
         try {
             $ok = $this->service->acceptInvitation($member, $request->user());
@@ -142,7 +142,7 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
     public function contribute(Request $request, string $ulid): JsonResponse
     {
         $fund = FamilyFund::where('fund_ulid', $ulid)->first();
-        if (!$fund) return $this->error('NOT_FOUND', 'Fund not found', 404);
+        if (!$fund) return $this->error('NOT_FOUND', 'الصندوق غير موجود', 404);
 
         $v = Validator::make($request->all(), [
             'amount' => 'required|numeric|min:0.01',
@@ -170,7 +170,7 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
     public function proposeDisbursement(Request $request, string $ulid): JsonResponse
     {
         $fund = FamilyFund::where('fund_ulid', $ulid)->first();
-        if (!$fund) return $this->error('NOT_FOUND', 'Fund not found', 404);
+        if (!$fund) return $this->error('NOT_FOUND', 'الصندوق غير موجود', 404);
 
         $v = Validator::make($request->all(), [
             'beneficiary_user_id' => 'required|integer|exists:users,id',
@@ -204,7 +204,7 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
     public function approveDisbursement(Request $request, string $ulid): JsonResponse
     {
         $tx = FamilyFundTransaction::where('tx_ulid', $ulid)->first();
-        if (!$tx) return $this->error('NOT_FOUND', 'Transaction not found', 404);
+        if (!$tx) return $this->error('NOT_FOUND', 'العملية غير موجودة', 404);
 
         try {
             $ok = $this->service->approveDisbursement($tx, $request->user());
@@ -218,7 +218,7 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
     public function rejectDisbursement(Request $request, string $ulid): JsonResponse
     {
         $tx = FamilyFundTransaction::where('tx_ulid', $ulid)->first();
-        if (!$tx) return $this->error('NOT_FOUND', 'Transaction not found', 404);
+        if (!$tx) return $this->error('NOT_FOUND', 'العملية غير موجودة', 404);
 
         $v = Validator::make($request->all(), [
             'reason' => 'required|string|min:5|max:500',
@@ -237,9 +237,9 @@ class FamilyFundController extends AmialApiController // AMIAL-FIX-007
     public function transactions(Request $request, string $ulid): JsonResponse
     {
         $fund = FamilyFund::where('fund_ulid', $ulid)->first();
-        if (!$fund) return $this->error('NOT_FOUND', 'Fund not found', 404);
+        if (!$fund) return $this->error('NOT_FOUND', 'الصندوق غير موجود', 404);
         if (!$fund->isMember($request->user()->id)) {
-            return $this->error('FORBIDDEN', 'Not a member', 403);
+            return $this->error('FORBIDDEN', 'لستَ عضواً في هذا الصندوق', 403);
         }
 
         $txs = FamilyFundTransaction::where('fund_id', $fund->id)
