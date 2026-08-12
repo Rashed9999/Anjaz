@@ -60,11 +60,11 @@ Route::group(['as' => 'admin.'], function () {
         Route::group(['prefix' => 'support-center', 'as' => 'support-center.'], function () {
             $sc = \App\Http\Controllers\Api\V1\Amial\SupportConsoleController::class;
             Route::get('/', fn () => view('admin-views.support.console'))->name('index');
-            Route::get('search', [$sc, 'search'])->name('search');
-            Route::get('ops-dashboard', [$sc, 'opsDashboard'])->name('ops-dashboard');
+            Route::get('search', [$sc, 'search'])->middleware('platform:platform.customers.view')->name('search');
+            Route::get('ops-dashboard', [$sc, 'opsDashboard'])->middleware('platform:platform.ops.view')->name('ops-dashboard');
             Route::get('customers/{id}', [$sc, 'customer'])->where('id', '[0-9]+')->middleware('platform:platform.customers.view')->name('customers.show');
             Route::get('customers/{id}/transactions', [$sc, 'customerTransactions'])->where('id', '[0-9]+')->middleware('platform:platform.transactions.view')->name('customers.transactions');
-            Route::get('transactions/{ref}', [$sc, 'transaction'])->name('transactions.show');
+            Route::get('transactions/{ref}', [$sc, 'transaction'])->middleware('platform:platform.transactions.view')->name('transactions.show');
             Route::post('customers/{id}/freeze', [$sc, 'freeze'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.freeze');
             Route::post('customers/{id}/reset-pin', [$sc, 'resetPin'])->where('id', '[0-9]+')->middleware('platform:platform.customers.reset_pin')->name('customers.reset-pin');
             Route::post('customers/{id}/revoke-sessions', [$sc, 'revokeSessions'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.revoke-sessions');
@@ -75,17 +75,17 @@ Route::group(['as' => 'admin.'], function () {
             Route::get('customers/{id}/devices', [$sc, 'devices'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.devices');
             Route::post('devices/{deviceRowId}/block', [$sc, 'blockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.block');
             Route::post('devices/{deviceRowId}/unblock', [$sc, 'unblockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.unblock');
-            Route::get('tickets', [$sc, 'tickets'])->name('tickets.index');
-            Route::post('tickets', [$sc, 'createTicket'])->name('tickets.create');
-            Route::get('tickets/{id}', [$sc, 'showTicket'])->where('id', '[0-9]+')->name('tickets.show');
-            Route::post('tickets/{id}/update', [$sc, 'updateTicket'])->where('id', '[0-9]+')->name('tickets.update');
-            Route::post('tickets/{id}/note', [$sc, 'addTicketNote'])->where('id', '[0-9]+')->name('tickets.note');
+            Route::get('tickets', [$sc, 'tickets'])->middleware('platform:platform.tickets.manage')->name('tickets.index');
+            Route::post('tickets', [$sc, 'createTicket'])->middleware('platform:platform.tickets.manage')->name('tickets.create');
+            Route::get('tickets/{id}', [$sc, 'showTicket'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.show');
+            Route::post('tickets/{id}/update', [$sc, 'updateTicket'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.update');
+            Route::post('tickets/{id}/note', [$sc, 'addTicketNote'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.note');
             // AMIAL-INSIDER-001: Maker-Checker + مراقبة الموظفين
-            Route::get('approvals', [$sc, 'approvalsList'])->name('approvals.index');
+            Route::get('approvals', [$sc, 'approvalsList'])->middleware('platform:platform.approvals.decide')->name('approvals.index');
             Route::post('approvals/{id}/approve', [$sc, 'approveRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.approve');
             Route::post('approvals/{id}/reject', [$sc, 'rejectRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.reject');
-            Route::get('insider/overview', [$sc, 'insiderOverview'])->name('insider.overview');
-            Route::post('insider/alerts/{id}/ack', [$sc, 'acknowledgeAlert'])->where('id', '[0-9]+')->name('insider.alerts.ack');
+            Route::get('insider/overview', [$sc, 'insiderOverview'])->middleware('platform:platform.audit.view')->name('insider.overview');
+            Route::post('insider/alerts/{id}/ack', [$sc, 'acknowledgeAlert'])->where('id', '[0-9]+')->middleware('platform:platform.audit.view')->name('insider.alerts.ack');
         });
 
         // AMIAL-MAINT-001 — لوحة «الصيانة الأولية» (تشغيل/إيقاف الميزات)
@@ -305,5 +305,3 @@ Route::group(['as' => 'admin.'], function () {
 
     });
 });
-
-
