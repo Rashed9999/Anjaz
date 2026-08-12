@@ -20,7 +20,10 @@
 <body class="auth-page">
 
 <div class="auth-card">
-    <a class="logo" href="{{ route('site.home') }}"><span class="mark">🏦</span> أميال باي</a>
+    <a class="logo" href="{{ route('site.home') }}" aria-label="أميال باي — الصفحة الرئيسية">
+        <img class="logo-image" src="{{ asset('branding/logo.png') }}" alt="شعار أميال باي">
+        <span class="logo-copy"><strong>أميال باي</strong><small>AMIAL PAY</small></span>
+    </a>
     <div class="sub">بوّابة الويب — بابٌ واحدٌ يفتح على لوحتك</div>
 
     {{-- **من له جلسةٌ يرى النموذج، لا يُحوَّل عنه.**
