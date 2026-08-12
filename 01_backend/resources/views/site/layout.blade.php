@@ -14,7 +14,8 @@
     <title>@yield('title', 'أميال باي') — أميال باي</title>
     <meta name="description" content="@yield('desc', 'أميال باي — المحفظة الإلكترونيّة ونقاط البيع وشبكة الصرافة في اليمن.')">
     <meta name="theme-color" content="#053391">
-    <link rel="stylesheet" href="{{ asset('assets/site/site.css') }}">
+    {{-- رقم الإصدار يمنع المتصفح من جمع HTML الجديد مع CSS قديم مخزّن. --}}
+    <link rel="stylesheet" href="{{ asset('assets/site/site.css') }}?v=amial-site-20260812-2">
     @stack('head')
 </head>
 <body>

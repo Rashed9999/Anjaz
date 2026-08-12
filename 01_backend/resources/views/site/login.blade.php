@@ -15,7 +15,7 @@
     <title>تسجيل الدخول — أميال باي</title>
     <meta name="robots" content="noindex">
     <meta name="theme-color" content="#053391">
-    <link rel="stylesheet" href="{{ asset('assets/site/site.css') }}">
+    <link rel="stylesheet" href="{{ asset('assets/site/site.css') }}?v=amial-site-20260812-2">
 </head>
 <body class="auth-page">
 
