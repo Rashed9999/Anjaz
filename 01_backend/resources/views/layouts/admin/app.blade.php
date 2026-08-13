@@ -70,6 +70,7 @@
      ووسيطٌ بلا مفتاحٍ من العميل حمايتُه صفر — يُولّد مفتاحاً عشوائيّاً
      لكلّ طلب، فتصير كلُّ ضغطةٍ عمليّةً جديدة. --}}
 <script src="{{ asset('assets/js/amial-idempotency.js') }}"></script>
+@include('partials._app_dialogs')
 @stack('script')
 </body>
 </html>
