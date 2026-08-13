@@ -261,10 +261,10 @@
             <div class="business-meta">الرقم الضريبي: {{ $business->tax_number }}</div>
         @endif
         @if($business->phone)
-            <div class="business-meta">📞 {{ $business->phone }}</div>
+            <div class="business-meta">هاتف: {{ $business->phone }}</div>
         @endif
         @if($business->address)
-            <div class="business-meta">📍 {{ $business->city ? $business->city.' — ' : '' }}{{ $business->address }}</div>
+            <div class="business-meta">العنوان: {{ $business->city ? $business->city.' — ' : '' }}{{ $business->address }}</div>
         @endif
     </div>
     <div class="header-left">
@@ -275,7 +275,7 @@
 </div>
 
 @if($days_overdue > 0)
-    <div class="overdue-warning">⚠ فاتورة متأخّرة — تجاوزت موعد الاستحقاق بـ {{ $days_overdue }} يوم</div>
+    <div class="overdue-warning">تنبيه: فاتورة متأخّرة — تجاوزت موعد الاستحقاق بـ {{ $days_overdue }} يوم</div>
 @endif
 
 {{-- ================= Customer + Dates ================= --}}
@@ -287,13 +287,13 @@
             <div class="meta-line">{{ $customer->company_name }}</div>
         @endif
         @if($customer->phone)
-            <div class="meta-line">📞 {{ $customer->phone }}</div>
+            <div class="meta-line">هاتف: {{ $customer->phone }}</div>
         @endif
         @if($customer->tax_number)
             <div class="meta-line">الرقم الضريبي: {{ $customer->tax_number }}</div>
         @endif
         @if($customer->address)
-            <div class="meta-line">📍 {{ $customer->city ? $customer->city.' — ' : '' }}{{ $customer->address }}</div>
+            <div class="meta-line">العنوان: {{ $customer->city ? $customer->city.' — ' : '' }}{{ $customer->address }}</div>
         @endif
     </div>
     <div class="info-box left">

@@ -12,6 +12,9 @@ import 'package:amial_pay/features/shared/utils/operation_status.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/favorite_number/controllers/amial_favorites_controller.dart';
 import 'package:amial_pay/features/favorite_number/widgets/amial_favorite_star.dart';
+import 'package:amial_pay/features/printer/screens/printer_settings_screen.dart';
+import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
+import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
 import 'package:amial_pay/util/arabic_number_words.dart';
 
 /// AMIAL-RECEIPTS-001 (v0.9-D)
@@ -32,7 +35,11 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
     });
   }
 
-  Future<void> _downloadPdf() async {
+  Future<void> _downloadPdf({
+    String route = 'download',
+    String label = 'المستند',
+    String fileSuffix = 'a4',
+  }) async {
     // AMIAL-FIX(PDF-FINAL): الخادم قد يُسقط الاتصال أثناء إرسال ملفّ يُولَّد لحظياً
     // عبر شبكة جوّال بطيئة («Connection closed while receiving data»). الحلّ
     // النهائي: إعادة المحاولة تلقائياً حتى 3 مرّات بمهلة أطول وتراجع تصاعدي —
@@ -40,10 +47,13 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(
-      const SnackBar(content: Text('جارٍ تحضير الإيصال...')),
+      SnackBar(content: Text('جارٍ تحضير $label...')),
     );
 
-    final url = Get.find<ReceiptsController>().getDownloadUrl(widget.receiptId);
+    final ctrl = Get.find<ReceiptsController>();
+    final url = route == 'download'
+        ? ctrl.getDownloadUrl(widget.receiptId)
+        : ctrl.getDocumentUrl(widget.receiptId, route);
     String? token;
     try {
       token = await SecureStorageHelper.instance.getToken();
@@ -76,7 +86,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
 
         await PdfDownloaderHelper.downloadAndOpenPdf(
           pdfData: resp.bodyBytes,
-          baseFileName: 'receipt_${widget.receiptId}',
+          baseFileName: 'amial_${widget.receiptId}_$fileSuffix',
         );
         return; // نجاح
       } catch (e) {
@@ -98,6 +108,213 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
       content: Text('تعذّر تحميل الإيصال بعد $maxAttempts محاولات. تحقّق من الاتصال وحاول لاحقاً.\n$lastError'),
       duration: const Duration(seconds: 4),
     ));
+  }
+
+  num _number(dynamic value) => num.tryParse('${value ?? 0}') ?? 0;
+
+  Future<void> _printDirect(dynamic receipt) async {
+    final descriptor = receipt.document;
+    if (descriptor == null || descriptor.thermalPrint.isEmpty) {
+      _snack('بيانات الطباعة غير متاحة حالياً');
+      return;
+    }
+
+    final service = Get.isRegistered<ThermalPrintService>()
+        ? Get.find<ThermalPrintService>()
+        : null;
+    if (service == null || service.config.value == null) {
+      _snack('اختر طابعة حرارية أولاً');
+      await Get.to(() => const PrinterSettingsScreen());
+      return;
+    }
+
+    final payload = descriptor.thermalPrint;
+    final settings = payload['settings'] is Map
+        ? Map<String, dynamic>.from(payload['settings'])
+        : <String, dynamic>{};
+    final issuedAt = DateTime.tryParse('${payload['issued_at'] ?? ''}');
+    PrintResult result;
+
+    if (descriptor.isMerchantInvoice) {
+      final rawLines = payload['lines'] is List ? payload['lines'] as List : const [];
+      final lines = rawLines.whereType<Map>().map((line) {
+        final item = Map<String, dynamic>.from(line);
+        return ThermalReceiptLine(
+          '${item['name'] ?? 'صنف'}',
+          _number(item['quantity']),
+          _number(item['unit_price']),
+          lineTotal: _number(item['line_total']),
+          details: item['details']?.toString(),
+        );
+      }).toList(growable: false);
+      result = await service.printSale(
+        settings: settings,
+        lines: lines,
+        total: _number(payload['total']),
+        paid: _number(payload['paid']),
+        subtotal: _number(payload['subtotal']),
+        discount: _number(payload['discount']),
+        tax: _number(payload['tax']),
+        balanceDue: _number(payload['balance_due']),
+        contextLines: payload['context_lines'] is List
+            ? (payload['context_lines'] as List).map((value) => '$value').toList(growable: false)
+            : const [],
+        invoiceNo: '${payload['document_number'] ?? ''}',
+        dateTime: issuedAt,
+      );
+    } else {
+      result = await service.printWidget(ThermalVoucherWidget(
+        title: '${payload['title'] ?? 'سند عملية مالية'}',
+        documentNumber: '${payload['document_number'] ?? ''}',
+        amount: _number(payload['amount']),
+        fee: _number(payload['fee']),
+        finalAmount: _number(payload['final_amount']),
+        finalLabel: '${payload['final_label'] ?? 'الإجمالي'}',
+        transactionNumber: '${payload['transaction_number'] ?? '—'}',
+        verificationCode: '${payload['verification_code'] ?? ''}',
+        fromName: payload['from_name']?.toString(),
+        toName: payload['to_name']?.toString(),
+        issuedAt: issuedAt,
+      ));
+    }
+
+    if (result.ok) {
+      final cfg = service.config.value!;
+      await Get.find<ReceiptsController>().recordPrint(
+        id: widget.receiptId,
+        format: 'thermal_${cfg.paperMm}',
+        printerName: cfg.name,
+      );
+    }
+    _snack(result.message, ok: result.ok);
+  }
+
+  void _snack(String message, {bool ok = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: ok ? const Color(0xFF087A55) : null,
+    ));
+  }
+
+  void _openDocumentSheet(dynamic receipt) {
+    final descriptor = receipt.document;
+    final title = descriptor?.title ?? 'مستند العملية';
+    final isInvoice = descriptor?.isMerchantInvoice == true;
+
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(
+              isInvoice
+                  ? 'نسخة رسمية A4 أو نسخة مهيأة لطابعة نقاط البيع'
+                  : 'سند مالي رسمي أو نسخة مختصرة للطباعة الحرارية',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            _documentOption(
+              icon: Icons.print_rounded,
+              title: 'طباعة مباشرة',
+              subtitle: Get.isRegistered<ThermalPrintService>() &&
+                      Get.find<ThermalPrintService>().config.value != null
+                  ? 'إرسال إلى الطابعة المحفوظة بمقاسها الحالي'
+                  : 'اختر طابعة بلوتوث 58 أو 80 مم أولاً',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _printDirect(receipt);
+              },
+            ),
+            _documentOption(
+              icon: Icons.description_outlined,
+              title: 'PDF A4',
+              subtitle: isInvoice ? 'فاتورة كاملة مع الأصناف والإجماليات' : 'سند كامل بأطراف العملية والرسوم والتحقق',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _downloadPdf(route: 'download', label: title, fileSuffix: 'a4');
+              },
+            ),
+            _documentOption(
+              icon: Icons.receipt_long_outlined,
+              title: 'PDF حراري 80 مم',
+              subtitle: 'تنزيل نسخة جاهزة للطباعة في نقاط البيع',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _downloadPdf(route: 'thermal?size=80', label: 'نسخة 80 مم', fileSuffix: '80mm');
+              },
+            ),
+            _documentOption(
+              icon: Icons.receipt_outlined,
+              title: 'PDF حراري 58 مم',
+              subtitle: 'تنزيل نسخة مضغوطة للطابعات الصغيرة',
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _downloadPdf(route: 'thermal?size=58', label: 'نسخة 58 مم', fileSuffix: '58mm');
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _documentOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(15),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F9FC),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: AmialColors.border),
+          ),
+          child: Row(children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF1FF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: AmialColors.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 2),
+                Text(subtitle, style: const TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
+              ],
+            )),
+            const Icon(Icons.chevron_left_rounded, color: AmialColors.textMuted),
+          ]),
+        ),
+      ),
+    );
   }
 
   Future<void> _shareReceipt() async {
@@ -323,9 +540,9 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
               Row(children: [
                 Expanded(
                   child: _receiptAction(
-                    icon: Icons.picture_as_pdf_outlined,
-                    label: 'تحميل PDF',
-                    onTap: _downloadPdf,
+                    icon: Icons.print_outlined,
+                    label: r.document?.isMerchantInvoice == true ? 'الفاتورة' : 'السند والطباعة',
+                    onTap: () => _openDocumentSheet(r),
                   ),
                 ),
                 const SizedBox(width: 10),

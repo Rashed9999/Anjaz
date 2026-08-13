@@ -23,29 +23,85 @@ class PaymentRequestController extends GetxController implements GetxService {
   /// جواباً، ولا يُعرض «سيُشارَك برابط» قبل أن يُسأل الخادم.
   final Rx<Map<String, dynamic>?> recipientCheck = Rx<Map<String, dynamic>?>(null);
   final RxBool isChecking = false.obs;
+  int _recipientLookupVersion = 0;
 
   /// يسأل الخادم عن الرقم. لا يرمي، ولا يُعطّل الإنشاء إن فشل:
   /// **تعذُّرُ السؤال لا يمنع الطلب** — الخادمُ يقرّر عند الإنشاء بأيّ حال.
-  Future<void> checkRecipient(String phone) async {
+  Future<bool> checkRecipient(String phone) async {
     final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.length < 9) {
+    if (digits.length != 8 && digits.length < 9) {
       recipientCheck.value = null;
-      return;
+      return false;
     }
+    final version = ++_recipientLookupVersion;
     try {
       isChecking.value = true;
+      lastError.value = '';
       final r = await repo.checkRecipient(phone);
-      recipientCheck.value = _ok(r)
-          ? Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map)
-          : null;
-    } catch (_) {
+      if (version != _recipientLookupVersion) return false;
+      if (_ok(r)) {
+        recipientCheck.value =
+            Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+        return recipientCheck.value?['found'] == true;
+      }
       recipientCheck.value = null;
+      lastError.value = _msg(r) ?? 'تعذّر التحقق من العميل';
+      return false;
+    } catch (_) {
+      if (version == _recipientLookupVersion) {
+        recipientCheck.value = null;
+        lastError.value = 'تعذّر الاتصال للتحقق من العميل';
+      }
+      return false;
     } finally {
-      isChecking.value = false;
+      if (version == _recipientLookupVersion) isChecking.value = false;
     }
   }
 
-  void clearRecipientCheck() => recipientCheck.value = null;
+  void clearRecipientCheck() {
+    _recipientLookupVersion++;
+    recipientCheck.value = null;
+    lastError.value = '';
+    isChecking.value = false;
+  }
+
+  /// إنشاء طلب مباشر بالرمز الذي صدر بعد معاينة بيانات العميل.
+  Future<bool> createDirect({
+    required String amount,
+    required int recipientId,
+    required String verificationToken,
+    String? note,
+  }) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.createDirect(
+        amount: amount,
+        recipientId: recipientId,
+        verificationToken: verificationToken,
+        note: note,
+      );
+      if (_ok(r)) {
+        currentRequest.value =
+            Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+        return true;
+      }
+      if (r.statusCode == 1) {
+        // ApiClient يحتفظ بمفتاح التفرّد عند انقطاع الجواب. إبقاء بيانات
+        // التأكيد يجعل الضغطة التالية تعيد الجسد نفسه، فيرجع الخادم النتيجة
+        // المحفوظة بدل إنشاء طلبٍ ثانٍ إن كان الأول قد وصل.
+        lastError.value = 'تعذّر الاتصال — أعد المحاولة للتحقق من حالة الطلب';
+        return false;
+      }
+      lastError.value = _msg(r) ?? 'تعذّر إرسال الطلب';
+      return false;
+    } catch (_) {
+      lastError.value = 'تعذّر الاتصال — أعد المحاولة للتحقق من حالة الطلب';
+      return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
 
   Future<bool> create({
     required String amount,
@@ -86,6 +142,7 @@ class PaymentRequestController extends GetxController implements GetxService {
   Future<void> loadList(String direction, {String? status}) async {
     try {
       isLoading.value = true;
+      lastError.value = '';
       final r = await repo.list(direction: direction, status: status);
       if (_ok(r)) {
         final list = (r.body['meta']?['requests'] ?? []) as List;
@@ -95,8 +152,12 @@ class PaymentRequestController extends GetxController implements GetxService {
         } else {
           outgoing.assignAll(mapped);
         }
+      } else {
+        lastError.value = _msg(r) ?? 'تعذّر تحميل الطلبات';
       }
-    } catch (_) {} finally {
+    } catch (_) {
+      lastError.value = 'تعذّر الاتصال لتحميل الطلبات';
+    } finally {
       isLoading.value = false;
     }
   }

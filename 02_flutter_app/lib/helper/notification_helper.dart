@@ -14,6 +14,7 @@ import 'package:amial_pay/features/requested_money/screens/incoming_requests_scr
 import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/features/requested_money/controllers/requested_money_controller.dart';
+import 'package:amial_pay/features/requested_money/controllers/payment_request_controller.dart';
 import 'package:amial_pay/features/history/controllers/transaction_history_controller.dart';
 import 'package:amial_pay/helper/route_helper.dart';
 import 'package:amial_pay/util/app_constants.dart';
@@ -128,6 +129,13 @@ class NotificationHelper {
       if(message.data['type'] == 'general'){
         Get.find<NotificationController>().getNotificationList(true);
 
+      }else if(message.data['type'] == 'payment_request_received'){
+        // الطلب الجديد ينتمي إلى payment_requests لا صندوق 6cash القديم.
+        Get.find<PaymentRequestController>().loadList('incoming', status: 'pending');
+
+      }else if(message.data['type'] == 'payment_request_declined'){
+        Get.find<PaymentRequestController>().loadList('outgoing');
+
       }else if(message.data['type'] == 'send_request_money' || message.data['type'] == 'denied_money'){
         Get.find<RequestedMoneyController>().getOwnRequestedMoneyList(true);
 
@@ -161,6 +169,12 @@ class NotificationHelper {
 
       if(message.data['type'] == 'general'){
         await Get.find<NotificationController>().getNotificationList(true);
+
+      }else if(message.data['type'] == 'payment_request_received'){
+        await Get.find<PaymentRequestController>().loadList('incoming', status: 'pending');
+
+      }else if(message.data['type'] == 'payment_request_declined'){
+        await Get.find<PaymentRequestController>().loadList('outgoing');
 
       }else if(message.data['type'] == 'send_request_money' || message.data['type'] == 'denied_money'){
         await Get.find<RequestedMoneyController>().getOwnRequestedMoneyList(true, isUpdate: false);

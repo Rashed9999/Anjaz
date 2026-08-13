@@ -5,7 +5,8 @@ namespace App\Services;
 use App\Jobs\GeneratePdfReceiptJob;
 use App\Models\Receipt;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * AMIAL-RECEIPTS-001
@@ -66,21 +67,113 @@ class ReceiptService
      */
     public function issueDualForTransfer(array $base): array
     {
+        $fee = (string) ($base['fee'] ?? '0');
+        $feeBearer = (string) ($base['fee_bearer'] ?? 'sender');
+
         $senderReceipt = $this->issueDebit(array_merge($base, [
             'user_id' => $base['from_user_id'],
             'counterparty_user_id' => $base['to_user_id'],
             'amount' => $base['amount'],
-            'fee' => $base['fee'] ?? '0',
+            'fee' => $feeBearer === 'sender' ? $fee : '0',
         ]));
 
         $receiverReceipt = $this->issueCredit(array_merge($base, [
             'user_id' => $base['to_user_id'],
             'counterparty_user_id' => $base['from_user_id'],
             'amount' => $base['amount'],
-            'fee' => '0', // المستلم لا يدفع رسوم
+            'fee' => $feeBearer === 'receiver' ? $fee : '0',
+            // بعض إيصالات credit القديمة تمرّر مبلغاً صافياً ورسمَ قناةٍ
+            // منفصلاً ولا يعني ذلك خصمه مرة ثانية. لذلك نصرّح بالصافي
+            // هنا فقط عندما يكون رسم التحويل نفسه على المستلم.
+            'net_amount' => $feeBearer === 'receiver'
+                ? MoneyService::sub((string) $base['amount'], $fee)
+                : (string) $base['amount'],
         ]));
 
         return [$senderReceipt, $receiverReceipt];
+    }
+
+    /**
+     * يربط إيصالَي الدفع بسجل البيع القطاعي بعد إنشاء السجل الموثوق.
+     *
+     * دفع المحفظة قد يكتمل قبل أن ينشئ الكاشير FuelSale/MerchantSale. عند
+     * اكتمال سجل البيع نربطه برقم المعاملة ونُبطل ملف PDF القديم فقط؛ لا
+     * نغيّر مبلغاً أو رصيداً أو قيداً مالياً. إعادة التوليد idempotent.
+     */
+    public function attachBusinessReference(
+        string $transactionId,
+        string $referenceType,
+        int $referenceId,
+        array $metadata = [],
+    ): int {
+        if ($transactionId === '' || $referenceId <= 0) {
+            return 0;
+        }
+
+        $receipts = Receipt::where('reference_transaction_id', $transactionId)->get();
+        foreach ($receipts as $receipt) {
+            $oldPath = $receipt->pdf_storage_path;
+            $mergedMetadata = array_merge(
+                is_array($receipt->metadata) ? $receipt->metadata : [],
+                $metadata,
+            );
+
+            $receipt->update([
+                'reference_type' => $referenceType,
+                'reference_id' => $referenceId,
+                'metadata' => $mergedMetadata ?: null,
+                'status' => 'pending_pdf',
+                'pdf_storage_path' => null,
+                'pdf_generated_at' => null,
+            ]);
+
+            // لا نحذف النسخة السابقة داخل معاملة البيع: إذا تراجعت المعاملة
+            // يجب أن يبقى المستند القديم قابلاً للتنزيل. الإبطال والتوليد
+            // يحدثان بعد نجاح commit فقط ولا يمسان القيود المالية.
+            $regenerate = function () use ($receipt, $oldPath): void {
+                try {
+                    if ($oldPath && Storage::disk('local')->exists($oldPath)) {
+                        Storage::disk('local')->delete($oldPath);
+                    }
+                    GeneratePdfReceiptJob::dispatch($receipt->id)->onQueue('receipts');
+                } catch (\Throwable $e) {
+                    // الطباعة طبقة لاحقة للمال: لا نعيد خطأً بعد commit فيظن
+                    // الكاشير أن البيع فشل ويكرره. تبقى النسخة قابلة لإعادة
+                    // الصف من حالة واضحة، ويُحفظ السبب في السجل.
+                    Receipt::whereKey($receipt->id)->update(['status' => 'pdf_failed']);
+                    \Illuminate\Support\Facades\Log::error('Receipt regeneration could not be queued', [
+                        'receipt_id' => $receipt->id,
+                        'exception' => get_class($e),
+                        'message' => $e->getMessage(),
+                    ]);
+                }
+            };
+
+            if (DB::transactionLevel() > 0) {
+                DB::afterCommit($regenerate);
+            } else {
+                $regenerate();
+            }
+        }
+
+        if ($receipts->isNotEmpty()) {
+            $this->audit->record([
+                'actor_type' => 'system',
+                'subject_type' => 'receipt',
+                'subject_id' => $transactionId,
+                'action' => 'RECEIPT_BUSINESS_REFERENCE_ATTACHED',
+                'decision_code' => 'DOCUMENT_SOURCE_LINKED',
+                'transaction_id' => $transactionId,
+                'severity' => 'info',
+                'context' => [
+                    'reference_type' => $referenceType,
+                    'reference_id' => $referenceId,
+                    'receipt_count' => $receipts->count(),
+                ],
+            ]);
+        }
+
+        return $receipts->count();
     }
 
     /**
@@ -90,9 +183,11 @@ class ReceiptService
     {
         $amount = (string)$data['amount'];
         $fee = (string)($data['fee'] ?? '0');
-        $netAmount = $data['direction'] === 'debit'
-            ? MoneyService::add($amount, $fee)  // المرسل يدفع amount+fee
-            : $amount;                          // المستلم يستلم amount
+        $netAmount = array_key_exists('net_amount', $data)
+            ? MoneyService::normalize((string) $data['net_amount'])
+            : ($data['direction'] === 'debit'
+                ? MoneyService::add($amount, $fee) // المرسل يدفع amount+fee
+                : $amount);                       // الائتمان القديم هو المبلغ الصافي
 
         $receipt = Receipt::create([
             'receipt_number' => $this->generateReceiptNumber($data['receipt_type']),

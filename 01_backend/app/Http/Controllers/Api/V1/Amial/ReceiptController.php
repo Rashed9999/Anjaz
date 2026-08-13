@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
 use App\Models\Receipt;
+use App\Services\AuditService;
+use App\Services\ReceiptDocumentService;
 use App\Services\ReceiptService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * AMIAL-RECEIPTS-001 (v0.9-A)
@@ -24,6 +25,8 @@ class ReceiptController extends Controller
 {
     public function __construct(
         private readonly ReceiptService $service,
+        private readonly ReceiptDocumentService $documents,
+        private readonly AuditService $audit,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -224,12 +227,15 @@ class ReceiptController extends Controller
             return $this->error('RECEIPT_NOT_FOUND', 'الإيصال غير موجود', 404);
         }
 
+        $payload = $receipt->toArray();
+        $payload['document'] = $this->documents->descriptor($receipt);
+
         return new JsonResponse([
             'success' => true,
             'code' => 'OK',
             'message' => 'Receipt details',
             'errors' => (object)[],
-            'meta' => $receipt->toArray(),
+            'meta' => $payload,
         ]);
     }
 
@@ -258,8 +264,11 @@ class ReceiptController extends Controller
         }
 
         $path = $receipt->pdf_storage_path;
-        if ($path && Storage::disk('local')->exists($path)) {
+        if ($path
+            && $this->documents->isCurrent($receipt)
+            && Storage::disk('local')->exists($path)) {
             $receipt->incrementDownloadCount();
+            $this->auditDocumentAccess($request, $receipt, 'standard_pdf');
 
             return $this->pdfResponse($path, $receipt->receipt_number);
         }
@@ -271,6 +280,7 @@ class ReceiptController extends Controller
             $path = $receipt->pdf_storage_path;
             if ($path && Storage::disk('local')->exists($path)) {
                 $receipt->incrementDownloadCount();
+                $this->auditDocumentAccess($request, $receipt, 'standard_pdf');
 
                 return $this->pdfResponse($path, $receipt->receipt_number);
             }
@@ -344,20 +354,13 @@ class ReceiptController extends Controller
         $widthMm = in_array($sizeMm, [58, 80], true) ? $sizeMm : 58;
         $width = (int) round($widthMm / 25.4 * 72);
 
-        // QR للتحقّق (SVG data-URI — بلا imagick)
-        $qrUrl = null;
-        try {
-            $verifyUrl = rtrim((string) config('app.url'), '/') . '/v/' . $receipt->verification_code;
-            $svg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(120)->margin(0)->generate($verifyUrl);
-            $qrUrl = 'data:image/svg+xml;base64,' . base64_encode($svg);
-        } catch (\Throwable $e) { /* بلا QR — نعرض الرمز نصّاً فقط */ }
+        $document = $this->documents->build($receipt);
+        $qrDataUri = $this->qrDataUri((string) $document['verification_url']);
 
         // AMIAL-FIX(PDF-RTL): mPDF بدل DomPDF — تشكيل الحروف العربية وترتيبها.
         $html = view('receipts.thermal', [
-            'receipt' => $receipt,
-            'user' => $receipt->user,
-            'counterparty' => $receipt->counterparty,
-            'qrUrl' => $qrUrl,
+            'document' => $document,
+            'qrDataUri' => $qrDataUri,
             'width' => $width,
             'widthMm' => $widthMm,
         ])->render();
@@ -368,6 +371,7 @@ class ReceiptController extends Controller
         ]);
 
         $receipt->incrementDownloadCount();
+        $this->auditDocumentAccess($request, $receipt, "thermal_{$widthMm}");
 
         return response($content, 200, [
             'Content-Type' => 'application/pdf',
@@ -390,56 +394,24 @@ class ReceiptController extends Controller
             return $this->error('RECEIPT_NOT_FOUND', 'الإيصال غير موجود', 404);
         }
 
-        // QR للتحقّق (SVG data-URI — بلا imagick)
-        $qrUrl = null;
-        try {
-            $verifyUrl = rtrim((string) config('app.url'), '/') . '/v/' . $receipt->verification_code;
-            $svg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')->size(120)->margin(0)->generate($verifyUrl);
-            $qrUrl = 'data:image/svg+xml;base64,' . base64_encode($svg);
-        } catch (\Throwable $e) { /* بلا QR — نعرض الرمز نصّاً فقط */ }
-
-        // اسم النشاط
-        $businessName = 'أميال باي';
-        try {
-            $bn = \App\CentralLogics\Helpers::get_business_settings('business_name');
-            if (is_string($bn) && $bn !== '') {
-                $businessName = $bn;
-            }
-        } catch (\Throwable $e) { /* افتراضي */ }
-
-        // بنود الفاتورة إن وُجدت في metadata.items
-        $items = [];
-        $md = $receipt->metadata;
-        if (is_array($md) && !empty($md['items']) && is_array($md['items'])) {
-            $items = $md['items'];
-        }
-
-        if (!class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
-            return $this->error('PDF_UNAVAILABLE', 'خدمة إنشاء الملفّات غير مهيّأة حالياً — راسل الدعم', 500);
-        }
+        $document = $this->documents->build($receipt);
+        $qrDataUri = $this->qrDataUri((string) $document['verification_url']);
 
         // AMIAL-FIX(PDF-FINAL): نخزّن ناتج التصيير مؤقّتاً (15 دقيقة) بمفتاح مرتبط
         // بآخر تعديل للإيصال. الإيصال ثابت المحتوى، فالتصيير مرّة واحدة يكفي —
         // وإن أسقط الخادمُ الاتصالَ أثناء الإرسال (شبكة بطيئة)، تصل محاولة
         // التطبيق التالية فوراً من الكاش بلا إعادة تصيير ثقيل.
-        $cacheKey = "receipt_pdf_a4:{$receipt->id}:" . (optional($receipt->updated_at)->timestamp ?? 0);
+        $cacheKey = "receipt_pdf_a4:v" . ReceiptDocumentService::DOCUMENT_VERSION
+            . ":{$receipt->id}:{$receipt->reference_type}:{$receipt->reference_id}";
         $content = Cache::get($cacheKey);
 
         if ($content === null) {
-            // AMIAL-FIX(PDF-RTL): كان DomPDF يعرض العربية أحرفاً منفصلة ومقلوبة
-            // (لا يدعم تشكيل الحروف ولا bidi). mPDF يشكّل ويصل ويعيد الترتيب.
-            $html = view('receipts.a4-invoice', [
-                'receipt' => $receipt,
-                'user' => $receipt->user,
-                'counterparty' => $receipt->counterparty,
-                'qrUrl' => $qrUrl,
-                'businessName' => $businessName,
-                'amountWords' => $this->amountInArabicWords((float) $receipt->net_amount),
-                'items' => $items,
+            $html = view($this->documents->a4View($document), [
+                'document' => $document,
+                'qrDataUri' => $qrDataUri,
             ])->render();
 
-            // هامش 0 هنا: القالب يضبط @page margin بنفسه — وإضافة هامش ثانٍ
-            // تُضاعفه فيفيض المحتوى إلى صفحة إضافية فارغة.
+            // القوالب الجديدة لا تضبط @page؛ ArabicPdf يفرض هامشاً واحداً.
             $content = \App\Support\ArabicPdf::render($html, ["format" => "A4", "margin" => 14]);
 
             try {
@@ -448,103 +420,96 @@ class ReceiptController extends Controller
         }
 
         $receipt->incrementDownloadCount();
+        $this->auditDocumentAccess($request, $receipt, 'a4');
+
+        $prefix = $document['kind'] === 'merchant_invoice' ? 'INV' : 'VOUCHER';
 
         return response($content, 200, [
             'Content-Type' => 'application/pdf',
             'Content-Length' => (string) strlen($content),
-            'Content-Disposition' => "inline; filename=\"INV-{$receipt->receipt_number}.pdf\"",
+            'Content-Disposition' => "inline; filename=\"{$prefix}-{$receipt->receipt_number}.pdf\"",
+            'Cache-Control' => 'private, max-age=900',
+            'Content-Encoding' => 'identity',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
-    /**
-     * يحوّل مبلغاً رقمياً إلى نص عربي (ريال يمني + فلوس).
-     * تغطية عملية حتى المليارات؛ الكسر يُقرّب لخانتين.
-     */
-    private function amountInArabicWords(float $amount): string
+    /** يسجّل نجاح الطباعة الفعلية من طابعة التطبيق، لا مجرد تنزيل ملف. */
+    public function recordPrint(Request $request, int $id): JsonResponse
     {
-        $whole = (int) floor($amount);
-        $fraction = (int) round(($amount - $whole) * 100);
-
-        $words = $this->intToArabicWords($whole) . ' ريال يمني';
-        if ($fraction > 0) {
-            $words .= ' و' . $this->intToArabicWords($fraction) . ' فلساً';
+        $receipt = Receipt::where('id', $id)
+            ->where('user_id', $request->user()->id)
+            ->first();
+        if (!$receipt) {
+            return $this->error('RECEIPT_NOT_FOUND', 'الإيصال غير موجود', 404);
         }
 
-        return 'فقط ' . $words . ' لا غير.';
+        $format = (string) $request->input('format', '');
+        if (!in_array($format, ['thermal_58', 'thermal_80'], true)) {
+            return $this->error('INVALID_PRINT_FORMAT', 'مقاس الطباعة غير مدعوم', 422);
+        }
+
+        $this->audit->record([
+            'actor_type' => 'user',
+            'actor_user_id' => $request->user()->id,
+            'subject_type' => 'receipt',
+            'subject_id' => $receipt->id,
+            'action' => 'FINANCIAL_DOCUMENT_PRINTED',
+            'decision_code' => 'THERMAL_PRINT_CONFIRMED',
+            'transaction_id' => $receipt->reference_transaction_id,
+            'zone_code' => $receipt->zone_code,
+            'severity' => 'info',
+            'context' => [
+                'receipt_number' => $receipt->receipt_number,
+                'format' => $format,
+                'copies' => 1,
+                'printer_name' => mb_substr((string) $request->input('printer_name', ''), 0, 80),
+                'ip' => $request->ip(),
+                'device' => mb_substr((string) $request->userAgent(), 0, 180),
+            ],
+        ]);
+
+        return new JsonResponse([
+            'success' => true,
+            'code' => 'PRINT_RECORDED',
+            'message' => 'تم تسجيل الطباعة',
+            'errors' => (object) [],
+            'meta' => (object) [],
+        ]);
     }
 
-    /** تحويل عدد صحيح إلى كلمات عربية. */
-    private function intToArabicWords(int $n): string
+    private function qrDataUri(string $url): ?string
     {
-        if ($n === 0) {
-            return 'صفر';
+        try {
+            $svg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')
+                ->size(150)->margin(0)->generate($url);
+            return 'data:image/svg+xml;base64,' . base64_encode($svg);
+        } catch (\Throwable) {
+            return null;
         }
+    }
 
-        $ones = ['', 'واحد', 'اثنان', 'ثلاثة', 'أربعة', 'خمسة', 'ستة', 'سبعة', 'ثمانية', 'تسعة',
-            'عشرة', 'أحد عشر', 'اثنا عشر', 'ثلاثة عشر', 'أربعة عشر', 'خمسة عشر',
-            'ستة عشر', 'سبعة عشر', 'ثمانية عشر', 'تسعة عشر'];
-        $tens = ['', '', 'عشرون', 'ثلاثون', 'أربعون', 'خمسون', 'ستون', 'سبعون', 'ثمانون', 'تسعون'];
-        $hundreds = ['', 'مئة', 'مئتان', 'ثلاثمئة', 'أربعمئة', 'خمسمئة', 'ستمئة', 'سبعمئة', 'ثمانمئة', 'تسعمئة'];
-        $scales = ['', 'ألف', 'مليون', 'مليار', 'تريليون'];
-
-        // معالجة كل مجموعة من 3 خانات
-        $groups = [];
-        while ($n > 0) {
-            $groups[] = $n % 1000;
-            $n = intdiv($n, 1000);
-        }
-
-        $parts = [];
-        for ($g = count($groups) - 1; $g >= 0; $g--) {
-            $val = $groups[$g];
-            if ($val === 0) {
-                continue;
-            }
-
-            $chunk = [];
-            $h = intdiv($val, 100);
-            $rem = $val % 100;
-            if ($h > 0) {
-                $chunk[] = $hundreds[$h];
-            }
-            if ($rem > 0) {
-                if ($rem < 20) {
-                    $chunk[] = $ones[$rem];
-                } else {
-                    $t = intdiv($rem, 10);
-                    $o = $rem % 10;
-                    if ($o > 0) {
-                        $chunk[] = $ones[$o] . ' و' . $tens[$t];
-                    } else {
-                        $chunk[] = $tens[$t];
-                    }
-                }
-            }
-
-            $chunkStr = implode(' و', $chunk);
-
-            // أسماء المقاييس (ألف/مليون...) — تبسيط عملي دون تصريف كامل
-            if ($g > 0) {
-                if ($g === 1) {
-                    // ألف/ألفان/آلاف
-                    if ($val === 1) {
-                        $chunkStr = 'ألف';
-                    } elseif ($val === 2) {
-                        $chunkStr = 'ألفان';
-                    } elseif ($val >= 3 && $val <= 10) {
-                        $chunkStr .= ' آلاف';
-                    } else {
-                        $chunkStr .= ' ألف';
-                    }
-                } else {
-                    $chunkStr .= ' ' . $scales[$g];
-                }
-            }
-
-            $parts[] = $chunkStr;
-        }
-
-        return implode(' و', $parts);
+    /** يسجّل إخراج المستند دون أن يلمس حقيقة المعاملة المالية. */
+    private function auditDocumentAccess(Request $request, Receipt $receipt, string $format): void
+    {
+        $this->audit->record([
+            'actor_type' => 'user',
+            'actor_user_id' => $request->user()?->id,
+            'subject_type' => 'receipt',
+            'subject_id' => $receipt->id,
+            'action' => 'FINANCIAL_DOCUMENT_RENDERED',
+            'decision_code' => 'DOCUMENT_DELIVERED',
+            'transaction_id' => $receipt->reference_transaction_id,
+            'zone_code' => $receipt->zone_code,
+            'severity' => 'info',
+            'context' => [
+                'receipt_number' => $receipt->receipt_number,
+                'format' => $format,
+                'copies' => 1,
+                'ip' => $request->ip(),
+                'device' => mb_substr((string) $request->userAgent(), 0, 180),
+            ],
+        ]);
     }
 
     /**

@@ -141,6 +141,17 @@ class MerchantPaymentController extends Controller
         if ($request->filled('sale_ulid')) {
             $linkedSale = app(\App\Services\CashierService::class)
                 ->linkPayment($request->input('sale_ulid'), (string)$txId, $merchant->id);
+            if ($linkedSale) {
+                app(\App\Services\ReceiptService::class)->attachBusinessReference(
+                    (string) $txId,
+                    'merchant_sale',
+                    (int) $linkedSale->id,
+                    [
+                        'merchant_vertical' => $profile->business_type ?? 'quick_sale',
+                        'sale_ulid' => $linkedSale->sale_ulid,
+                    ],
+                );
+            }
         }
 
         return $this->ok([

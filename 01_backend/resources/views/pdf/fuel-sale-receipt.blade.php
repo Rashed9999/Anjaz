@@ -123,9 +123,9 @@
             default => '',
         };
         $pmLabel = match($sale->payment_method) {
-            'cash' => '💵 نقدي',
-            'amial_pay' => '📱 أميال باي',
-            'company_card' => '🏢 بطاقة شركة',
+            'cash' => 'نقدي',
+            'amial_pay' => 'أميال باي',
+            'company_card' => 'بطاقة شركة',
             default => $sale->payment_method,
         };
     @endphp

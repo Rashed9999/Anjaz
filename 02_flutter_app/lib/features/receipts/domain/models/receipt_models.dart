@@ -22,6 +22,7 @@ class AmialReceipt {
   final String zoneCode;
   final DateTime? issuedAt;
   final DateTime? pdfGeneratedAt;
+  final ReceiptDocumentDescriptor? document;
 
   AmialReceipt({
     required this.id,
@@ -45,6 +46,7 @@ class AmialReceipt {
     required this.zoneCode,
     this.issuedAt,
     this.pdfGeneratedAt,
+    this.document,
   });
 
   factory AmialReceipt.fromJson(Map<String, dynamic> json) {
@@ -70,6 +72,9 @@ class AmialReceipt {
       zoneCode: json['zone_code'] ?? 'SOUTH',
       issuedAt: json['issued_at'] != null ? DateTime.tryParse(json['issued_at']) : null,
       pdfGeneratedAt: json['pdf_generated_at'] != null ? DateTime.tryParse(json['pdf_generated_at']) : null,
+      document: json['document'] is Map
+          ? ReceiptDocumentDescriptor.fromJson(Map<String, dynamic>.from(json['document']))
+          : null,
     );
   }
 
@@ -129,4 +134,62 @@ class AmialReceipt {
       default: return receiptType;
     }
   }
+}
+
+/// وصف المستند الذي يقرّره الخادم من حقيقة العملية، لا من تخمين التطبيق.
+class ReceiptDocumentDescriptor {
+  final String kind; // wallet_voucher | merchant_invoice
+  final String title;
+  final String? vertical;
+  final String? verticalLabel;
+  final String documentNumber;
+  final bool hasLineItems;
+  final Map<String, dynamic> thermalPrint;
+  final List<ReceiptDocumentFormat> formats;
+
+  const ReceiptDocumentDescriptor({
+    required this.kind,
+    required this.title,
+    this.vertical,
+    this.verticalLabel,
+    required this.documentNumber,
+    required this.hasLineItems,
+    required this.thermalPrint,
+    required this.formats,
+  });
+
+  factory ReceiptDocumentDescriptor.fromJson(Map<String, dynamic> json) {
+    final rawFormats = json['formats'] is List ? json['formats'] as List : const [];
+    return ReceiptDocumentDescriptor(
+      kind: json['kind']?.toString() ?? 'wallet_voucher',
+      title: json['title']?.toString() ?? 'سند عملية',
+      vertical: json['vertical']?.toString(),
+      verticalLabel: json['vertical_label']?.toString(),
+      documentNumber: json['document_number']?.toString() ?? '',
+      hasLineItems: json['has_line_items'] == true,
+      thermalPrint: json['thermal_print'] is Map
+          ? Map<String, dynamic>.from(json['thermal_print'])
+          : const <String, dynamic>{},
+      formats: rawFormats
+          .whereType<Map>()
+          .map((e) => ReceiptDocumentFormat.fromJson(Map<String, dynamic>.from(e)))
+          .toList(growable: false),
+    );
+  }
+
+  bool get isMerchantInvoice => kind == 'merchant_invoice';
+}
+
+class ReceiptDocumentFormat {
+  final String code;
+  final String label;
+  final String route;
+
+  const ReceiptDocumentFormat({required this.code, required this.label, required this.route});
+
+  factory ReceiptDocumentFormat.fromJson(Map<String, dynamic> json) => ReceiptDocumentFormat(
+        code: json['code']?.toString() ?? '',
+        label: json['label']?.toString() ?? '',
+        route: json['route']?.toString() ?? '',
+      );
 }

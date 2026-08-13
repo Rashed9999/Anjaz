@@ -1,0 +1,60 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Jobs\GeneratePdfReceiptJob;
+use App\Models\Receipt;
+use App\Models\User;
+use App\Services\ReceiptService;
+use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
+
+/** AMIAL-DOCUMENTS-001 - يختبر أثر ما بعد commit خارج معاملة الاختبار. */
+class ReceiptDocumentAfterCommitTest extends TestCase
+{
+    use DatabaseMigrations;
+
+    /** @test ربط سجل البيع يبطل النسخة المطبوعة ويعيد الطابور فقط. */
+    public function attaching_a_sale_invalidates_only_the_printed_copy(): void
+    {
+        Queue::fake();
+        Storage::fake('local');
+        $customer = User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => '967770071031']);
+        $merchant = User::factory()->create(['type' => MERCHANT_TYPE, 'phone' => '967770071032']);
+        $path = 'receipts/old.pdf';
+        Storage::disk('local')->put($path, '%PDF-old');
+
+        $receipt = Receipt::create([
+            'receipt_number' => '260813710031',
+            'verification_code' => '7300000000000001',
+            'receipt_type' => 'pos_payment',
+            'user_id' => $customer->id,
+            'counterparty_user_id' => $merchant->id,
+            'reference_transaction_id' => 'TX-LINK-DOC',
+            'amount' => '5000.0000',
+            'fee' => '0.0000',
+            'net_amount' => '5000.0000',
+            'direction' => 'debit',
+            'status' => 'pdf_generated',
+            'pdf_storage_path' => $path,
+            'metadata' => ['print_document_version' => '1'],
+            'zone_code' => 'SOUTH',
+            'issued_at' => now(),
+        ]);
+
+        $count = app(ReceiptService::class)->attachBusinessReference(
+            'TX-LINK-DOC', 'merchant_sale', 99, ['merchant_vertical' => 'retail'],
+        );
+
+        $fresh = $receipt->fresh();
+        $this->assertSame(1, $count);
+        $this->assertSame('merchant_sale', $fresh->reference_type);
+        $this->assertSame(99, $fresh->reference_id);
+        $this->assertSame('pending_pdf', $fresh->status);
+        $this->assertNull($fresh->pdf_storage_path);
+        Storage::disk('local')->assertMissing($path);
+        Queue::assertPushed(GeneratePdfReceiptJob::class);
+    }
+}

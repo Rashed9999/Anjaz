@@ -302,6 +302,12 @@ Route::middleware(['auth:api'])->group(function () {
 
     // -------- Payment Requests (AMIAL-PAYMENT-REQUESTS-001) --------
     Route::prefix('payment-requests')->name('amial.payment-requests.')->middleware('amial.idempotency')->group(function () {
+        // طلبُ عميلٍ مباشراً: لا رابطَ ولا QR، ومستلمٌ مؤكّد إلزامي.
+        Route::post('/direct', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'createDirect'])
+            ->middleware([
+                'amial.zone:request_money',
+                'amial.rate-limit:payment_request_create,30,1',
+            ])->name('create-direct');
         Route::post('/', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'create'])
             ->middleware('amial.rate-limit:payment_request_create,30,1')->name('create');
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'list'])->name('list');
@@ -333,7 +339,10 @@ Route::middleware(['auth:api'])->group(function () {
             ->where('id', '[0-9]+')->name('decline');
         Route::post('/{id}/pay', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'payById'])
             ->where('id', '[0-9]+')
-            ->middleware('amial.rate-limit:payment_request_pay,30,1')->name('pay-by-id');
+            ->middleware([
+                'amial.zone:send_money',
+                'amial.rate-limit:payment_request_pay,30,1',
+            ])->name('pay-by-id');
     });
 
     // -------- Legal Terms --------
@@ -399,6 +408,9 @@ Route::middleware(['auth:api'])->group(function () {
         // AMIAL-INVOICE-A4-001: فاتورة رسمية A4
         Route::get('/{id}/invoice', [ReceiptController::class, 'invoice'])
             ->where('id', '[0-9]+')->name('invoice');
+        Route::post('/{id}/print-event', [ReceiptController::class, 'recordPrint'])
+            ->middleware('amial.rate-limit:receipt_print,30,1')
+            ->where('id', '[0-9]+')->name('print-event');
     });
 
     // -------- AMIAL-FUND-FAMILY-001 (v0.9-B) --------

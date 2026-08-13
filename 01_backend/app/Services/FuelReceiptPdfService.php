@@ -2,9 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\FuelCompanyAccount;
 use App\Models\FuelSale;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Support\ArabicPdf;
 
 /**
  * AMIAL-FUEL-RECEIPT-001 — توليد PDF إيصال بيع وقود.
@@ -15,17 +14,17 @@ class FuelReceiptPdfService
     {
         $sale->loadMissing(['pump.station', 'product', 'companyAccount']);
 
-        $pdf = Pdf::loadView('pdf.fuel-sale-receipt', [
+        $html = view('pdf.fuel-sale-receipt', [
             'sale' => $sale,
             'pump' => $sale->pump,
             'product' => $sale->product,
             'station' => $sale->pump->station,
             'company' => $sale->companyAccount,
-        ]);
-        $pdf->setOption(['defaultFont' => 'DejaVu Sans']);
-        $pdf->setPaper('A5', 'portrait'); // إيصال A5 أصغر من A4
+        ])->render();
 
-        return $pdf->output();
+        // DomPDF يعكس العربية ويفصل حروفها؛ محرك المشروع العربي هو مصدر
+        // التصيير الوحيد لهذه الوثيقة أيضاً. القالب يضبط هامشه بنفسه.
+        return ArabicPdf::render($html, ['format' => 'A5', 'margin' => 0]);
     }
 
     public function suggestedFilename(FuelSale $sale): string
