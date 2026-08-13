@@ -18,12 +18,12 @@
      كلُّ مدى هنا `custom` بطرفيه المحسوبين.
 
      والحرّاس في `tests/Feature/AdminDashboardWidgetsTest.php`. --}}
-@section('title', translate('Dashboard'))
+@section('title', 'لوحة التحكم')
 
 @push('css_or_js')
 <style>
     .amdash { --blue:#053391; --blue2:#1D4FB8; --gold:#FECA1E; --ink:#1A2433; --muted:#8B97A8; }
-    .amdash .a-card { background:#fff; border:1px solid #eef1f5; border-radius:16px; }
+    .amdash .a-card { background:#fff; border:1px solid #e8edf5; border-radius:18px; box-shadow:0 4px 16px rgba(21,40,76,.035); }
     .amdash a.a-card { transition:.15s; }
     .amdash a.a-card:hover { border-color:#cfd9ea; transform:translateY(-2px); box-shadow:0 6px 18px rgba(5,51,145,.08); }
     .amdash .a-soft { width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px; }
@@ -39,6 +39,20 @@
     .amdash .a-denied { background:rgba(255,255,255,.12);border-radius:12px;font-size:11.5px;line-height:1.7; }
     .amdash .a-row-link { text-decoration:none;color:inherit;display:block; }
     .amdash .a-row-link:hover { background:#f7f9fc; }
+    .amdash .a-command { background:linear-gradient(180deg,#fff,#f8faff); border:1px solid #e5ebf5; border-radius:16px; }
+    .amdash .a-command a { text-decoration:none; color:var(--ink); border:1px solid #e9eef6; background:#fff; border-radius:12px; padding:10px 12px; font-size:12px; font-weight:700; display:flex; align-items:center; gap:7px; }
+    .amdash .a-command a:hover { border-color:#aac0e9; color:var(--blue); }
+    .amdash .a-source { color:rgba(255,255,255,.72); font-size:10px; line-height:1.5; }
+    @media (max-width: 767.98px) {
+        .amdash { padding:0 !important; }
+        .amdash .a-hero { border-radius:18px; }
+        .amdash .a-hero.p-4 { padding:20px !important; }
+        .amdash .a-kpi-val { font-size:18px; overflow-wrap:anywhere; }
+        .amdash .a-kpi-lbl { font-size:10.5px; line-height:1.45; }
+        .amdash .a-card.p-3 { padding:13px !important; }
+        .amdash .a-command .d-flex { gap:8px !important; }
+        .amdash .a-command a { flex:1 1 calc(50% - 4px); font-size:11px; }
+    }
 </style>
 @endpush
 
@@ -47,7 +61,11 @@
     /* AMIAL-DASH-WIDGETS-001 — سؤالٌ واحدٌ يُسأل مرّةً ويُستعمل في كلّ موضع.
        و`platform.money.move` هو نفسه حارسُ `/hub/finance` — فلا يُخترع
        هنا معيارٌ ثانٍ لنفس البيانات. */
-    $canMoney = (bool) auth('user')->user()?->hasPlatformPermission('platform.money.move');
+    $viewer = auth('user')->user();
+    $canMoney = (bool) $viewer?->hasPlatformPermission('platform.money.move');
+    $canCustomers = (bool) $viewer?->hasPlatformPermission('platform.customers.view');
+    $canTickets = (bool) $viewer?->hasPlatformPermission('platform.tickets.manage');
+    $canAudit = (bool) $viewer?->hasPlatformPermission('platform.audit.view');
 
     $year        = (int) now()->year;
     $yearVals    = collect($transaction)->map(fn ($v) => (float) $v);
@@ -65,7 +83,7 @@
 <div class="content container-fluid amdash" dir="rtl">
 
     {{-- ==== الترويسة ==== --}}
-    <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+    <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
         <div>
             <h4 class="fw-bold mb-1" style="color:var(--blue)">{{ translate('لوحة تحكم أميال باي') }}</h4>
             <span class="a-chip" style="background:#e7f6ec;color:#12694E">● {{ translate('جميع الأنظمة تعمل') }}</span>
@@ -88,6 +106,22 @@
             @endif
         </div>
     </div>
+
+    {{-- إجراءاتٌ موجهة لا أزرار زينة: لا يظهر ما لا يملكه الدور. --}}
+    <section class="a-command p-3 mb-3" aria-label="إجراءات سريعة">
+        <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+            <div>
+                <div class="fw-bold" style="font-size:13px;color:var(--ink)">مركز التشغيل</div>
+                <small class="text-muted" style="font-size:11px">انتقل مباشرةً إلى المراجعة أو الدعم أو السجل المالي.</small>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{{ route('admin.transaction.index') }}">↗ كشف العمليات</a>
+                @if ($canCustomers)<a href="{{ route('admin.amial.hub.customers') }}">👤 إدارة العملاء</a>@endif
+                @if ($canTickets)<a href="{{ route('admin.support-center.index') }}">🎧 مركز الدعم</a>@endif
+                @if ($canAudit)<a href="{{ route('admin.amial.ledger.page') }}">📚 ميزان المراجعة</a>@endif
+            </div>
+        </div>
+    </section>
 
     <div class="row g-3 mb-3">
         {{-- ==== نبض اليوم ==== --}}
@@ -137,6 +171,7 @@
                             {{ implode('، ', auth('user')->user()?->platformRoleLabels() ?: [translate('بلا دور')]) }}</span>
                     </div>
                 @endif
+                <div class="a-source mt-3">المصدر: صفوف العمليات الأصلية في سجل المعاملات. لا تشمل قيود الاستلام أو الرسوم التابعة.</div>
             </div>
         </div>
 

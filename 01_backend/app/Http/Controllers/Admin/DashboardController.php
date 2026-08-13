@@ -4,59 +4,22 @@ namespace App\Http\Controllers\Admin;
 
 use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
-use App\Models\EMoney;
-use App\Models\Transaction;
 use App\Models\User;
 use App\Traits\UploadSizeHelperTrait;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
     use UploadSizeHelperTrait;
 
-    public function __construct(
-        private User        $user,
-        private EMoney      $eMoney,
-        private Transaction $transaction
-    ) {}
+    public function __construct(private User $user) {}
 
     public function dashboard(Request $request): View
     {
         $data = [];
-
-        $topAgents = $this->transaction->with('user')
-            ->agent()
-            ->select(['user_id', DB::raw("(SUM(debit) + SUM(credit)) as total_transaction")])
-            ->orderBy("total_transaction", 'desc')
-            ->groupBy('user_id')
-            ->take(6)
-            ->get();
-
-        $topCustomers = $this->transaction->with('user')
-            ->customer()
-            ->select(['user_id', DB::raw("(SUM(debit) + SUM(credit)) as total_transaction")])
-            ->orderBy("total_transaction", 'desc')
-            ->groupBy('user_id')
-            ->take(4)
-            ->get();
-
-        $topTransactions = $this->transaction->with('user')
-            ->notAdmin()
-            ->where('ref_trans_id', null)
-            ->select(['user_id', DB::raw("(SUM(debit) + SUM(credit)) as total_transaction")])
-            ->orderBy("total_transaction", 'desc')
-            ->groupBy('user_id')
-            ->take(20)
-            ->get();
-
-        $data['top_agents'] = $topAgents;
-        $data['top_customers'] = $topCustomers;
-        $data['top_transactions'] = $topTransactions;
 
         // AMIAL-DASH-TRUTH-001 — الأرقام تُحسب في خدمةٍ واحدةٍ صحيحة.
         //
@@ -71,13 +34,12 @@ class DashboardController extends Controller
 
         $balance = $dash->balances();
         $transaction = $dash->monthlyVolume();
+        $leaders = $dash->leaderboards();
+        $data['top_agents'] = $leaders['agents'];
+        $data['top_customers'] = $leaders['customers'];
 
         // AMIAL-ADMIN-DASH-002: عدّادات حقيقية للوحة (عملاء/وكلاء/تجار + اليوم)
-        $data['counts'] = [
-            'customers' => $this->user->where('type', 2)->count(),
-            'agents' => $this->user->where('type', 1)->count(),
-            'merchants' => $this->user->where('type', 4)->count(),
-        ];
+        $data['counts'] = $dash->populationCounts();
         $data['today'] = $dash->today();
 
         return view('admin-views.dashboard', compact('balance', 'transaction', 'data'));
@@ -85,28 +47,8 @@ class DashboardController extends Controller
 
     public function getBalanceStat(): array
     {
-        $usedBalance = $this->eMoney->with('user')
-            ->where('user_id', '!=', Helpers::get_admin_id())
-            ->sum('current_balance');
-
-        $unusedBalance = $this->eMoney->with('user')
-            ->where('user_id', Helpers::get_admin_id())
-            ->sum('current_balance');
-
-        $totalBalance = $this->transaction->where('user_id', Helpers::get_admin_id())->where('transaction_type', CASH_IN)->sum('credit');
-        // AMIAL-DASH-TRUTH-001: كان `Auth::id()` — ربحُ من يفتح الصفحة لا
-        // المنصّة، وبقيّةُ الدالّة تستعمل `get_admin_id()`. هويّتان في دالّة.
-        // ويُحسب الآن من مصدره (`transactions.charge`) لا من عمودٍ مخزَّن.
-        $chargeEarned = app(\App\Services\AdminDashboardService::class)->feesEarned();
-        $pendingBalance = $this->eMoney->with('user')->sum('pending_balance');
-
-        $balance = [];
-        $balance['total_balance'] = $totalBalance;
-        $balance['used_balance'] = $usedBalance + $pendingBalance;
-        $balance['unused_balance'] = $unusedBalance;
-        $balance['total_earned'] = $chargeEarned;
-
-        return $balance;
+        // لا حسابٍ ثانٍ قد ينحرف عن لوحة التحكم؛ مصدر واحد للأرصدة.
+        return app(\App\Services\AdminDashboardService::class)->balances();
     }
 
     public function settings(): View

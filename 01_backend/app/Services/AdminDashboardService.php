@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\CentralLogics\Helpers;
+use App\Models\Transaction;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -49,6 +51,20 @@ use Illuminate\Support\Facades\DB;
 class AdminDashboardService
 {
     /**
+     * صفّ العملية الاقتصاديّة الأصلي فقط.
+     *
+     * السجلات التابعة (استلام، رسم، عكس...) تشير إلى الصف الأساسي عبر
+     * `ref_trans_id`. الإصدارات القديمة حفظت الأصل بـ 0 والجديدة بـ NULL،
+     * ولذلك ينبغي قبول الشكلين، لا اختيار أحدهما وإخفاء الآخر.
+     */
+    private function primaryTransactions()
+    {
+        return DB::table('transactions')->where(function ($query) {
+            $query->whereNull('ref_trans_id')->orWhere('ref_trans_id', '0');
+        });
+    }
+
+    /**
      * حجمُ العمليّات لكلّ شهرٍ في سنةٍ — **مجموعُ المنصّة لا أعلى مستخدم**.
      *
      * @return array<int,float> مفتاحُه رقم الشهر ١..١٢
@@ -64,8 +80,7 @@ class AdminDashboardService
             $from = Carbon::create($year, $m, 1)->startOfMonth();
             $to   = $from->copy()->endOfMonth();
 
-            $out[$m] = (float) DB::table('transactions')
-                ->where('ref_trans_id', 0)
+            $out[$m] = (float) $this->primaryTransactions()
                 ->whereBetween('created_at', [$from, $to])
                 ->sum('debit');   // بلا groupBy — المجموع لا أعلى صفّ
         }
@@ -145,13 +160,49 @@ class AdminDashboardService
         ];
     }
 
+    /**
+     * القوائم والترتيبات من العملية الأصلية، لا من كل قيودها المحاسبية.
+     *
+     * @return array{agents:\Illuminate\Support\Collection,customers:\Illuminate\Support\Collection}
+     */
+    public function leaderboards(): array
+    {
+        $primary = static fn () => Transaction::query()
+            ->with('user')
+            ->where(function ($query) {
+                $query->whereNull('ref_trans_id')->orWhere('ref_trans_id', '0');
+            });
+
+        $rank = static fn ($query, int $take) => $query
+            ->select(['user_id', DB::raw('SUM(debit) as total_transaction')])
+            ->orderByDesc('total_transaction')
+            ->groupBy('user_id')
+            ->take($take)
+            ->get();
+
+        return [
+            'agents' => $rank($primary()->agent(), 6),
+            'customers' => $rank($primary()->customer(), 4),
+        ];
+    }
+
+    /** @return array{customers:int,agents:int,merchants:int} */
+    public function populationCounts(): array
+    {
+        return [
+            'customers' => User::where('type', CUSTOMER_TYPE)->count(),
+            'agents' => User::where('type', AGENT_TYPE)->count(),
+            'merchants' => User::where('type', MERCHANT_TYPE)->count(),
+        ];
+    }
+
     /** عدّاداتُ اليوم — تُحسب من الحركة لا من عدّادٍ مخزَّن. */
     public function today(): array
     {
         return [
-            'tx_count'  => (int) DB::table('transactions')
+            'tx_count'  => (int) $this->primaryTransactions()
                 ->whereDate('created_at', today())->count(),
-            'tx_volume' => (float) DB::table('transactions')
+            'tx_volume' => (float) $this->primaryTransactions()
                 ->whereDate('created_at', today())->sum('debit'),
         ];
     }

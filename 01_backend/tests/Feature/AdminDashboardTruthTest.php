@@ -45,11 +45,11 @@ class AdminDashboardTruthTest extends TestCase
     /** عدّادٌ يضمن `transaction_id` فريداً — والعمود `UNIQUE NOT NULL`. */
     private int $seq = 0;
 
-    private function tx(int $userId, string $when, float $debit, float $charge = 0): void
+    private function tx(int $userId, string $when, float $debit, float $charge = 0, $reference = 0): void
     {
         DB::table('transactions')->insert([
             'user_id'          => $userId,
-            'ref_trans_id'     => 0,
+            'ref_trans_id'     => $reference,
             'transaction_type' => 'send_money',
             'debit'            => $debit,
             'credit'           => 0,
@@ -114,6 +114,41 @@ class AdminDashboardTruthTest extends TestCase
 
         $this->assertSame(777.0, $volume[3], 'اليوم ٣١ من آذار سقط');
         $this->assertSame(555.0, $volume[2], 'آخرُ يومٍ في فبراير سقط');
+    }
+
+    /**
+     * @test
+     *
+     * التنفيذ الحديث يترك `ref_trans_id` فارغاً في الصف الأصلي، أما القيود
+     * التابعة فتحتوي مرجع الصف. لا يجوز أن تخفي اللوحة العملية الحديثة أو
+     * أن تعد القيد التابع عملية ثانية.
+     */
+    public function modern_primary_rows_are_visible_and_linked_accounting_rows_are_not_counted_twice(): void
+    {
+        $a = $this->platformAdmin()->id;
+        $when = now()->toDateTimeString();
+
+        $this->tx($a, $when, 250, 0, null);
+        $this->tx($a, $when, 250, 0, 'TRUTH-1');
+
+        $service = app(AdminDashboardService::class);
+
+        $this->assertSame(250.0, $service->monthlyVolume()[(int) now()->month]);
+        $this->assertSame(1, $service->today()['tx_count']);
+        $this->assertSame(250.0, $service->today()['tx_volume']);
+    }
+
+    /** @test */
+    public function merchant_count_uses_the_canonical_merchant_type(): void
+    {
+        $this->platformAdmin();
+        User::factory()->count(3)->create(['type' => MERCHANT_TYPE]);
+        User::factory()->count(2)->create(['type' => CUSTOMER_TYPE]);
+
+        $counts = app(AdminDashboardService::class)->populationCounts();
+
+        $this->assertSame(3, $counts['merchants']);
+        $this->assertSame(2, $counts['customers']);
     }
 
     /**
