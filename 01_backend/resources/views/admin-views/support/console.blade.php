@@ -449,6 +449,18 @@
             tile('قيد التحقيق', (m.support.tickets_by_status && m.support.tickets_by_status.investigating) || 0);
     }
     setInterval(() => { if (document.querySelector('#tab-ops.active, #tab-ops.show')) loadOps(); }, 30000);
+
+    // روابط لوحة التحكم تقود إلى الطابور نفسه لا إلى أول تبويب عشوائياً.
+    // لا نقبل إلا تبويبات الشاشة الفعلية، ثم نحمل بيانات الطابور عند فتحه.
+    const requestedTab = new URLSearchParams(window.location.search).get('tab');
+    const tabLoaders = {tickets: loadTickets, approvals: loadApprovals, insider: loadInsider, ops: loadOps};
+    if (requestedTab && tabLoaders[requestedTab]) {
+        const trigger = document.querySelector(`[data-bs-target="#tab-${requestedTab}"]`);
+        if (trigger && window.bootstrap?.Tab) {
+            window.bootstrap.Tab.getOrCreateInstance(trigger).show();
+            tabLoaders[requestedTab]();
+        }
+    }
 })();
 </script>
 @endsection

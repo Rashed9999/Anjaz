@@ -21,6 +21,11 @@ class DashboardController extends Controller
     {
         $data = [];
 
+        $viewer = auth('user')->user();
+        $can = static fn (string $permission): bool => (bool) $viewer?->hasPlatformPermission($permission);
+        $canTransactions = $can('platform.transactions.view');
+        $canCustomers = $can('platform.customers.view');
+
         // AMIAL-DASH-TRUTH-001 — الأرقام تُحسب في خدمةٍ واحدةٍ صحيحة.
         //
         // ما كان هنا يعرض على المدير ثلاثة أرقامٍ كاذبة:
@@ -32,15 +37,21 @@ class DashboardController extends Controller
         // والتفصيل والقياس في `AdminDashboardService`.
         $dash = app(\App\Services\AdminDashboardService::class);
 
-        $balance = $dash->balances();
-        $transaction = $dash->monthlyVolume();
-        $leaders = $dash->leaderboards();
-        $data['top_agents'] = $leaders['agents'];
-        $data['top_customers'] = $leaders['customers'];
+        $balance = $can('platform.money.move') ? $dash->balances() : [];
+        $transaction = $canTransactions ? $dash->monthlyVolume() : [];
+        $leaders = ($canTransactions && $canCustomers) ? $dash->leaderboards() : [];
+        $data['top_agents'] = $leaders['agents'] ?? [];
+        $data['top_customers'] = $leaders['customers'] ?? [];
 
         // AMIAL-ADMIN-DASH-002: عدّادات حقيقية للوحة (عملاء/وكلاء/تجار + اليوم)
-        $data['counts'] = $dash->populationCounts();
-        $data['today'] = $dash->today();
+        $data['counts'] = $canCustomers ? $dash->populationCounts() : [];
+        $data['today'] = $canTransactions ? $dash->today() : null;
+        $data['attention'] = $dash->attentionQueue([
+            'kyc' => $can('platform.customers.freeze'),
+            'tickets' => $can('platform.tickets.manage'),
+            'approvals' => $can('platform.approvals.decide'),
+            'audit' => $can('platform.audit.view'),
+        ]);
 
         return view('admin-views.dashboard', compact('balance', 'transaction', 'data'));
     }

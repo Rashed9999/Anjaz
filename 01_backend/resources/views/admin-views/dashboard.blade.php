@@ -43,6 +43,17 @@
     .amdash .a-command a { text-decoration:none; color:var(--ink); border:1px solid #e9eef6; background:#fff; border-radius:12px; padding:10px 12px; font-size:12px; font-weight:700; display:flex; align-items:center; gap:7px; }
     .amdash .a-command a:hover { border-color:#aac0e9; color:var(--blue); }
     .amdash .a-source { color:rgba(255,255,255,.72); font-size:10px; line-height:1.5; }
+    .amdash .a-attention { min-height:76px; height:100%; display:flex; align-items:center; gap:10px; padding:12px; border:1px solid #e7edf6; border-radius:13px; text-decoration:none; color:var(--ink); background:#fff; }
+    .amdash a.a-attention:hover { transform:translateY(-1px); box-shadow:0 5px 16px rgba(21,40,76,.08); }
+    .amdash .a-attention-icon { width:34px; height:34px; flex:0 0 34px; display:grid; place-items:center; border-radius:10px; background:#f0f4fb; }
+    .amdash .a-attention strong,.amdash .a-attention small { display:block; }
+    .amdash .a-attention strong { font-size:14px; line-height:1.35; }
+    .amdash .a-attention small { margin-top:2px; color:var(--muted); font-size:10.5px; line-height:1.45; }
+    .amdash .a-attention-warning { border-color:#f4d889; }.amdash .a-attention-warning .a-attention-icon { background:#fff6df; }
+    .amdash .a-attention-danger { border-color:#f0b7bc; }.amdash .a-attention-danger .a-attention-icon { background:#fff0f1; }
+    .amdash .a-attention-success { border-color:#a9d9c1; }.amdash .a-attention-success .a-attention-icon { background:#eaf8ef; }
+    .amdash .a-attention-info .a-attention-icon { background:#edf4ff; }
+    .amdash .a-attention-muted { background:#f8fafc; border-style:dashed; }
     @media (max-width: 767.98px) {
         .amdash { padding:0 !important; }
         .amdash .a-hero { border-radius:18px; }
@@ -63,6 +74,7 @@
        هنا معيارٌ ثانٍ لنفس البيانات. */
     $viewer = auth('user')->user();
     $canMoney = (bool) $viewer?->hasPlatformPermission('platform.money.move');
+    $canTransactions = (bool) $viewer?->hasPlatformPermission('platform.transactions.view');
     $canCustomers = (bool) $viewer?->hasPlatformPermission('platform.customers.view');
     $canTickets = (bool) $viewer?->hasPlatformPermission('platform.tickets.manage');
     $canAudit = (bool) $viewer?->hasPlatformPermission('platform.audit.view');
@@ -95,7 +107,9 @@
             <a href="{{ route('admin.dashboard') }}" class="btn btn-sm btn-outline-secondary" data-testid="btn-refresh">
                 ⟳ {{ translate('تحديث') }}
             </a>
-            <a href="{{ route('admin.transaction.index') }}" class="btn btn-sm btn-outline-secondary">{{ translate('كشف المعاملات') }}</a>
+            @if ($canTransactions)
+                <a href="{{ route('admin.transaction.index') }}" class="btn btn-sm btn-outline-secondary">{{ translate('كشف المعاملات') }}</a>
+            @endif
             {{-- AMIAL-OPERATOR-RBAC-003: بطاقاتُ لوحة القيادة بابٌ ثانٍ.
                  وزرٌّ يُعرَض ثمّ يُمنع يجعل المستعمل يظنّ النظام معطَّلاً
                  بدل أن يعرف أنّ الفعل ليس له. --}}
@@ -115,7 +129,7 @@
                 <small class="text-muted" style="font-size:11px">انتقل مباشرةً إلى المراجعة أو الدعم أو السجل المالي.</small>
             </div>
             <div class="d-flex flex-wrap gap-2">
-                <a href="{{ route('admin.transaction.index') }}">↗ كشف العمليات</a>
+                @if ($canTransactions)<a href="{{ route('admin.transaction.index') }}">↗ كشف العمليات</a>@endif
                 @if ($canCustomers)<a href="{{ route('admin.amial.hub.customers') }}">👤 إدارة العملاء</a>@endif
                 @if ($canTickets)<a href="{{ route('admin.support-center.index') }}">🎧 مركز الدعم</a>@endif
                 @if ($canAudit)<a href="{{ route('admin.amial.ledger.page') }}">📚 ميزان المراجعة</a>@endif
@@ -123,22 +137,79 @@
         </div>
     </section>
 
+    @php
+        $attention = $data['attention'] ?? [];
+        $attentionItems = [
+            ['key' => 'kyc', 'label' => 'مستندات الهوية بانتظار المراجعة', 'icon' => '🪪', 'href' => route('admin.amial.kyc.page'), 'tone' => 'warning'],
+            ['key' => 'tickets', 'label' => 'تذاكر عالية الأولوية مفتوحة', 'icon' => '🎫', 'href' => route('admin.support-center.index', ['tab' => 'tickets']), 'tone' => 'danger'],
+            ['key' => 'approvals', 'label' => 'طلبات تنتظر اعتماداً ثانياً', 'icon' => '✅', 'href' => route('admin.support-center.index', ['tab' => 'approvals']), 'tone' => 'warning'],
+            ['key' => 'security', 'label' => 'تنبيهات أمان لم تُراجع', 'icon' => '🛡️', 'href' => route('admin.support-center.index', ['tab' => 'insider']), 'tone' => 'danger'],
+            ['key' => 'reconciliation', 'label' => 'آخر حالة للمطابقة المالية', 'icon' => '📚', 'href' => route('admin.amial.ledger.page'), 'tone' => 'info'],
+        ];
+        $visibleAttention = collect($attentionItems)->filter(fn ($item) => ($attention[$item['key']]['state'] ?? 'hidden') !== 'hidden');
+    @endphp
+
+    @if ($visibleAttention->isNotEmpty())
+        <section class="a-card p-3 mb-3" aria-label="يتطلب انتباهك" data-testid="attention-queue">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <div class="fw-bold" style="color:var(--ink)">يتطلب انتباهك</div>
+                    <small class="text-muted">قراءة مباشرة من طوابير التشغيل، وتظهر بحسب صلاحيتك.</small>
+                </div>
+                <span class="a-chip" style="background:#f0f4fb;color:var(--blue)">تحديث عند فتح الصفحة</span>
+            </div>
+            <div class="row g-2">
+                @foreach ($visibleAttention as $item)
+                    @php
+                        $entry = $attention[$item['key']] ?? [];
+                        $state = $entry['state'] ?? 'unavailable';
+                        $count = $entry['count'] ?? null;
+                        $isRecon = $item['key'] === 'reconciliation';
+                        $tone = $item['tone'];
+                        if ($isRecon && ($entry['status'] ?? null) === 'clean') $tone = 'success';
+                        if ($isRecon && in_array(($entry['status'] ?? null), ['diverged', 'failed'], true)) $tone = 'danger';
+                    @endphp
+                    <div class="col-12 col-md-6 col-xl">
+                        @if ($state === 'ready')
+                            <a class="a-attention a-attention-{{ $tone }}" href="{{ $item['href'] }}" data-attention="{{ $item['key'] }}">
+                                <span class="a-attention-icon">{{ $item['icon'] }}</span>
+                                <span>
+                                    <strong>{{ $isRecon ? (($entry['status'] ?? 'غير معروف') === 'clean' ? 'مطابقة سليمة' : (($entry['status'] ?? 'غير معروف') === 'diverged' ? 'فروقات تحتاج مراجعة' : 'فحص لم يكتمل')) : number_format((int) $count) }}</strong>
+                                    <small>{{ $item['label'] }}@if ($isRecon && !empty($entry['ran_at'])) — {{ \Illuminate\Support\Carbon::parse($entry['ran_at'])->format('Y-m-d H:i') }}@endif</small>
+                                </span>
+                            </a>
+                        @else
+                            <div class="a-attention a-attention-muted" data-attention="{{ $item['key'] }}" aria-live="polite">
+                                <span class="a-attention-icon">{{ $item['icon'] }}</span>
+                                <span><strong>{{ $state === 'unknown' ? 'غير معروف' : 'غير متاح' }}</strong><small>{{ $state === 'unknown' ? 'لم تُسجَّل جولة مطابقة بعد؛ ليس هذا دليلاً على السلامة.' : 'مصدر هذه المؤشرات غير مهيأ في هذه البيئة.' }}</small></span>
+                            </div>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+        </section>
+    @endif
+
     <div class="row g-3 mb-3">
         {{-- ==== نبض اليوم ==== --}}
         <div class="col-lg-5">
             <div class="a-hero p-4 h-100">
-                <a href="{{ $range($today, $today) }}" data-kpi="today">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <div style="opacity:.8;font-size:12px">{{ translate('حجم عمليات اليوم') }}</div>
-                            <div class="fw-bold mt-1" style="font-size:30px">
-                                {{ number_format((float) ($data['today']['tx_volume'] ?? 0), 0) }}
-                                <span style="font-size:15px;opacity:.8">ر.ي</span>
+                @if ($canTransactions)
+                    <a href="{{ $range($today, $today) }}" data-kpi="today">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <div style="opacity:.8;font-size:12px">{{ translate('حجم عمليات اليوم') }}</div>
+                                <div class="fw-bold mt-1" style="font-size:30px">
+                                    {{ number_format((float) ($data['today']['tx_volume'] ?? 0), 0) }}
+                                    <span style="font-size:15px;opacity:.8">ر.ي</span>
+                                </div>
                             </div>
+                            <span class="a-chip" style="background:rgba(255,255,255,.18)">⚡ {{ number_format($data['today']['tx_count'] ?? 0) }} {{ translate('عملية') }}</span>
                         </div>
-                        <span class="a-chip" style="background:rgba(255,255,255,.18)">⚡ {{ number_format($data['today']['tx_count'] ?? 0) }} {{ translate('عملية') }}</span>
-                    </div>
-                </a>
+                    </a>
+                @else
+                    <div class="a-denied p-3 text-center" data-testid="transactions-denied">🔒 ملخص العمليات لا يُتاح بصلاحيّتك.</div>
+                @endif
                 <hr style="border-color:rgba(255,255,255,.2)">
 
                 @if ($canMoney)
@@ -171,7 +242,7 @@
                             {{ implode('، ', auth('user')->user()?->platformRoleLabels() ?: [translate('بلا دور')]) }}</span>
                     </div>
                 @endif
-                <div class="a-source mt-3">المصدر: صفوف العمليات الأصلية في سجل المعاملات. لا تشمل قيود الاستلام أو الرسوم التابعة.</div>
+                <div class="a-source mt-3">@if ($canTransactions) المصدر: صفوف العمليات الأصلية في سجل المعاملات. لا تشمل قيود الاستلام أو الرسوم التابعة. @else الأرقام المحجوبة لا تُستبدل بصفر. @endif</div>
             </div>
         </div>
 
@@ -192,28 +263,29 @@
                         'href' => route('admin.amial.hub.finance')];
                 }
 
-                /* حجمُ السنة ليس رصيداً — هو حركةٌ يراها كلُّ دورٍ يملك
-                   `platform.transactions.view` (والأربعةُ تملكها). فلا
-                   يُحجب ما يُفتح كشفُه من القائمة الجانبيّة. */
-                $kpis[] = ['k' => 'year', 'lbl' => 'حجم السنة',
-                    'val' => number_format($yearTotal, 0),
-                    'ic' => '📊', 'bg' => '#eafaf1', 'fg' => '#12694E',
-                    'href' => $range($year . '-01-01', $year . '-12-31')];
+                if ($canTransactions) {
+                    $kpis[] = ['k' => 'year', 'lbl' => 'حجم السنة',
+                        'val' => number_format($yearTotal, 0),
+                        'ic' => '📊', 'bg' => '#eafaf1', 'fg' => '#12694E',
+                        'href' => $range($year . '-01-01', $year . '-12-31')];
+                }
 
-                $kpis[] = ['k' => 'customers', 'lbl' => 'العملاء',
-                    'val' => number_format($data['counts']['customers'] ?? 0),
-                    'ic' => '👤', 'bg' => '#f0ecff', 'fg' => '#5B2A9E',
-                    'href' => route('admin.amial.hub.customers')];
+                if ($canCustomers) {
+                    $kpis[] = ['k' => 'customers', 'lbl' => 'العملاء',
+                        'val' => number_format($data['counts']['customers'] ?? 0),
+                        'ic' => '👤', 'bg' => '#f0ecff', 'fg' => '#5B2A9E',
+                        'href' => route('admin.amial.hub.customers')];
 
-                $kpis[] = ['k' => 'agents', 'lbl' => 'الوكلاء',
-                    'val' => number_format($data['counts']['agents'] ?? 0),
-                    'ic' => '🏪', 'bg' => '#fdeef0', 'fg' => '#C0392B',
-                    'href' => route('admin.amial.hub.agents')];
+                    $kpis[] = ['k' => 'agents', 'lbl' => 'الوكلاء',
+                        'val' => number_format($data['counts']['agents'] ?? 0),
+                        'ic' => '🏪', 'bg' => '#fdeef0', 'fg' => '#C0392B',
+                        'href' => route('admin.amial.hub.agents')];
 
-                $kpis[] = ['k' => 'merchants', 'lbl' => 'التجار',
-                    'val' => number_format($data['counts']['merchants'] ?? 0),
-                    'ic' => '🛒', 'bg' => '#e8f7f6', 'fg' => '#0E7C7B',
-                    'href' => route('admin.amial.hub.merchants')];
+                    $kpis[] = ['k' => 'merchants', 'lbl' => 'التجار',
+                        'val' => number_format($data['counts']['merchants'] ?? 0),
+                        'ic' => '🛒', 'bg' => '#e8f7f6', 'fg' => '#0E7C7B',
+                        'href' => route('admin.amial.hub.merchants')];
+                }
             @endphp
             <div class="row g-3 h-100">
                 @foreach ($kpis as $k)
@@ -228,6 +300,9 @@
                         </a>
                     </div>
                 @endforeach
+                @if ($kpis === [])
+                    <div class="col-12"><div class="a-card p-3 text-muted">لا توجد مؤشرات متاحة لهذا الدور.</div></div>
+                @endif
             </div>
         </div>
     </div>
@@ -236,77 +311,79 @@
     <div class="row g-3">
         <div class="col-lg-7">
             <div class="a-card p-3 h-100">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="fw-bold" style="color:var(--ink)">{{ translate('حجم المعاملات') }} — {{ $year }}</span>
-                    <small class="text-muted">{{ translate('الإجمالي') }}: {{ number_format($yearTotal, 0) }} ر.ي</small>
-                </div>
-                @php
-                    $maxMonth   = max(1.0, (float) $yearVals->max());
-                    $monthNames = ['ينا','فبر','مار','أبر','ماي','يون','يول','أغس','سبت','أكت','نوف','ديس'];
-                @endphp
+                @if ($canTransactions)
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-bold" style="color:var(--ink)">{{ translate('حجم المعاملات') }} — {{ $year }}</span>
+                        <small class="text-muted">{{ translate('الإجمالي') }}: {{ number_format($yearTotal, 0) }} ر.ي</small>
+                    </div>
+                    @php
+                        $maxMonth   = max(1.0, (float) $yearVals->max());
+                        $monthNames = ['ينا','فبر','مار','أبر','ماي','يون','يول','أغس','سبت','أكت','نوف','ديس'];
+                    @endphp
 
-                @if ($yearTotal <= 0)
-                    {{-- حالةُ الفراغ تُقال. ورسمٌ بأعمدةٍ صفريّةٍ بلا كلمة
-                         يُقرأ «تعطّل القياس» لا «لا حركة بعد». --}}
-                    <div class="text-center text-muted py-5" data-testid="chart-empty">
-                        {{ translate('لا معاملات في') }} {{ $year }} {{ translate('حتى الآن') }}
-                    </div>
+                    @if ($yearTotal <= 0)
+                        <div class="text-center text-muted py-5" data-testid="chart-empty">
+                            {{ translate('لا معاملات في') }} {{ $year }} {{ translate('حتى الآن') }}
+                        </div>
+                    @else
+                        <div class="d-flex align-items-end justify-content-between" style="height:210px;gap:6px;border-bottom:1px solid #eef1f5;padding-bottom:6px">
+                            @for ($i = 1; $i <= 12; $i++)
+                                @php
+                                    $v     = (float) ($transaction[$i] ?? 0);
+                                    $h     = (int) round(($v / $maxMonth) * 170);
+                                    $isMax = $v > 0 && $v >= $maxMonth;
+                                    $mFrom = \Illuminate\Support\Carbon::create($year, $i, 1);
+                                    $mTo   = $mFrom->copy()->endOfMonth();
+                                @endphp
+                                <a class="a-col d-flex flex-column align-items-center flex-fill"
+                                   data-month="{{ $i }}"
+                                   href="{{ $range($mFrom->toDateString(), $mTo->toDateString()) }}"
+                                   title="{{ $monthNames[$i-1] }} — {{ number_format($v, 0) }} ر.ي">
+                                    <small class="text-muted" style="font-size:9px">{{ $v > 0 ? number_format($v / 1000, 0) . 'k' : '' }}</small>
+                                    <div class="a-bar" style="height:{{ max($h, $v > 0 ? 4 : 1) }}px;background:{{ $isMax ? 'var(--gold)' : 'linear-gradient(180deg,#1D4FB8,#053391)' }};opacity:{{ $v > 0 ? 1 : .12 }}"></div>
+                                    <small class="text-muted mt-1" style="font-size:10px">{{ $monthNames[$i-1] }}</small>
+                                </a>
+                            @endfor
+                        </div>
+                    @endif
                 @else
-                    <div class="d-flex align-items-end justify-content-between" style="height:210px;gap:6px;border-bottom:1px solid #eef1f5;padding-bottom:6px">
-                        @for ($i = 1; $i <= 12; $i++)
-                            @php
-                                $v     = (float) ($transaction[$i] ?? 0);
-                                $h     = (int) round(($v / $maxMonth) * 170);
-                                $isMax = $v > 0 && $v >= $maxMonth;
-                                /* آخرُ يومٍ يُحسب لا يُكتب — وهو العطل الذي
-                                   أسقط ٣١ آذار من كلّ حسابات اللوحة. */
-                                $mFrom = \Illuminate\Support\Carbon::create($year, $i, 1);
-                                $mTo   = $mFrom->copy()->endOfMonth();
-                            @endphp
-                            <a class="a-col d-flex flex-column align-items-center flex-fill"
-                               data-month="{{ $i }}"
-                               href="{{ $range($mFrom->toDateString(), $mTo->toDateString()) }}"
-                               title="{{ $monthNames[$i-1] }} — {{ number_format($v, 0) }} ر.ي">
-                                <small class="text-muted" style="font-size:9px">{{ $v > 0 ? number_format($v / 1000, 0) . 'k' : '' }}</small>
-                                <div class="a-bar" style="height:{{ max($h, $v > 0 ? 4 : 1) }}px;background:{{ $isMax ? 'var(--gold)' : 'linear-gradient(180deg,#1D4FB8,#053391)' }};opacity:{{ $v > 0 ? 1 : .12 }}"></div>
-                                <small class="text-muted mt-1" style="font-size:10px">{{ $monthNames[$i-1] }}</small>
-                            </a>
-                        @endfor
-                    </div>
+                    <div class="text-center text-muted py-5" data-testid="chart-denied">🔒 مخطط العمليات لا يُتاح بصلاحيّتك.</div>
                 @endif
             </div>
         </div>
 
         <div class="col-lg-5">
-            @php
-                $boards = [
-                    ['t' => '🏆 ' . translate('أعلى الوكلاء تعاملاً'),  'rows' => $data['top_agents'] ?? [],    'tid' => 'list-agents'],
-                    ['t' => '⭐ ' . translate('أعلى العملاء تعاملاً'), 'rows' => $data['top_customers'] ?? [], 'tid' => 'list-customers'],
-                ];
-            @endphp
-            @foreach ($boards as $b)
-                <div class="a-card mb-3">
-                    <div class="p-3 pb-2 fw-bold" style="color:var(--ink)">{{ $b['t'] }}</div>
-                    <div data-testid="{{ $b['tid'] }}">
-                        @forelse ($b['rows'] as $idx => $row)
-                            @php $uid = $row->user->id ?? null; @endphp
-                            {{-- صفٌّ يقود إلى ملفّ صاحبه. واسمٌ في قائمةٍ لا
-                                 يُفتح يترك المدير يبحث عنه يدويّاً في مركزٍ آخر. --}}
-                            <a class="a-row-link d-flex align-items-center justify-content-between px-3 py-2"
-                               style="border-top:1px solid #f3f5f8"
-                               @if ($uid) href="{{ route('admin.amial.hub.account', $uid) }}" @else href="{{ route('admin.amial.hub.customers') }}" @endif>
-                                <span class="d-flex align-items-center gap-2">
-                                    <span class="a-rank">{{ $idx + 1 }}</span>
-                                    <span>{{ $row->user->f_name ?? '—' }} {{ $row->user->l_name ?? '' }}</span>
-                                </span>
-                                <span class="fw-bold" style="color:var(--blue)">{{ number_format((float) ($row->total_transaction ?? 0), 0) }}</span>
-                            </a>
-                        @empty
-                            <div class="px-3 py-3 text-muted">{{ translate('لا بيانات بعد') }}</div>
-                        @endforelse
+            @if ($canTransactions && $canCustomers)
+                @php
+                    $boards = [
+                        ['t' => '🏆 ' . translate('أعلى الوكلاء تعاملاً'),  'rows' => $data['top_agents'] ?? [],    'tid' => 'list-agents'],
+                        ['t' => '⭐ ' . translate('أعلى العملاء تعاملاً'), 'rows' => $data['top_customers'] ?? [], 'tid' => 'list-customers'],
+                    ];
+                @endphp
+                @foreach ($boards as $b)
+                    <div class="a-card mb-3">
+                        <div class="p-3 pb-2 fw-bold" style="color:var(--ink)">{{ $b['t'] }}</div>
+                        <div data-testid="{{ $b['tid'] }}">
+                            @forelse ($b['rows'] as $idx => $row)
+                                @php $uid = $row->user->id ?? null; @endphp
+                                <a class="a-row-link d-flex align-items-center justify-content-between px-3 py-2"
+                                   style="border-top:1px solid #f3f5f8"
+                                   @if ($uid) href="{{ route('admin.amial.hub.account', $uid) }}" @else href="{{ route('admin.amial.hub.customers') }}" @endif>
+                                    <span class="d-flex align-items-center gap-2">
+                                        <span class="a-rank">{{ $idx + 1 }}</span>
+                                        <span>{{ $row->user->f_name ?? '—' }} {{ $row->user->l_name ?? '' }}</span>
+                                    </span>
+                                    <span class="fw-bold" style="color:var(--blue)">{{ number_format((float) ($row->total_transaction ?? 0), 0) }}</span>
+                                </a>
+                            @empty
+                                <div class="px-3 py-3 text-muted">{{ translate('لا بيانات بعد') }}</div>
+                            @endforelse
+                        </div>
                     </div>
-                </div>
-            @endforeach
+                @endforeach
+            @else
+                <div class="a-card p-4 h-100 text-center text-muted" data-testid="leaders-denied">🔒 القوائم الاسمية للحركة لا تُتاح بصلاحيّتك.</div>
+            @endif
         </div>
     </div>
 
