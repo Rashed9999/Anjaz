@@ -54,6 +54,11 @@
     .amdash .a-attention-success { border-color:#a9d9c1; }.amdash .a-attention-success .a-attention-icon { background:#eaf8ef; }
     .amdash .a-attention-info .a-attention-icon { background:#edf4ff; }
     .amdash .a-attention-muted { background:#f8fafc; border-style:dashed; }
+    .amdash .a-fin-map { background:linear-gradient(135deg,#0b2e7d,#0640a6); border-radius:18px; color:#fff; overflow:hidden; }
+    .amdash .a-fin-map a { color:#fff; text-decoration:none; }.amdash .a-fin-map a:hover { color:#fff; }
+    .amdash .a-fin-node { position:relative; min-height:88px; padding:13px; border:1px solid rgba(255,255,255,.16); border-radius:13px; background:rgba(255,255,255,.08); }
+    .amdash .a-fin-node strong,.amdash .a-fin-node small { display:block; }.amdash .a-fin-node strong { font-size:17px; }.amdash .a-fin-node small { font-size:10.5px; color:rgba(255,255,255,.75); line-height:1.45; }
+    .amdash .a-fin-arrow { color:rgba(255,255,255,.6); font-size:18px; }
     @media (max-width: 767.98px) {
         .amdash { padding:0 !important; }
         .amdash .a-hero { border-radius:18px; }
@@ -186,6 +191,24 @@
                         @endif
                     </div>
                 @endforeach
+            </div>
+        </section>
+    @endif
+
+    @if ($canMoney)
+        <section class="a-fin-map p-3 p-md-4 mb-3" aria-label="الخريطة المالية التنفيذية" data-testid="financial-map">
+            <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
+                <div>
+                    <div class="fw-bold">الخريطة المالية التنفيذية</div>
+                    <small style="color:rgba(255,255,255,.72)">لقطة تشغيلية قابلة للتتبع، وليست بديلاً عن ميزان المراجعة.</small>
+                </div>
+                @if ($canAudit)<a href="{{ route('admin.amial.ledger.page') }}" class="a-chip" style="background:rgba(255,255,255,.14)">فتح الدفتر ←</a>@endif
+            </div>
+            <div class="row g-2 align-items-stretch">
+                <div class="col-6 col-lg"><a class="a-fin-node" href="{{ route('admin.amial.hub.finance') }}"><small>تغذية المنصة</small><strong>{{ number_format((float) ($balance['total_balance'] ?? 0), 0) }} ر.ي</strong><small>المصدر: Cash In</small></a></div>
+                <div class="col-6 col-lg"><a class="a-fin-node" href="{{ route('admin.amial.hub.finance') }}"><small>أرصدة تشغيلية متداولة</small><strong>{{ number_format($circulating, 0) }} ر.ي</strong><small>المصدر: المحافظ الحالية والمعلّقة</small></a></div>
+                <div class="col-6 col-lg"><a class="a-fin-node" href="{{ route('admin.amial.hub.finance') }}"><small>خزينة المنصة</small><strong>{{ number_format($treasury, 0) }} ر.ي</strong><small>المصدر: محفظة المنصة</small></a></div>
+                <div class="col-6 col-lg"><a class="a-fin-node" href="{{ route('admin.amial.hub.finance') }}"><small>الرسوم المسجّلة</small><strong>{{ number_format((float) ($balance['total_earned'] ?? 0), 0) }} ر.ي</strong><small>المصدر: رسوم العمليات</small></a></div>
             </div>
         </section>
     @endif

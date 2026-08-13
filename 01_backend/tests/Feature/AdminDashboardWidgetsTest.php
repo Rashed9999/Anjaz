@@ -180,6 +180,8 @@ class AdminDashboardWidgetsTest extends TestCase
 
         $this->assertStringContainsString(number_format(8123456, 0), $html,
             'الأدمن نفسه لا يرى الخزينة — حُجب المال عن الجميع');
+        $this->assertStringContainsString('data-testid="financial-map"', $html,
+            'صاحب الصلاحية المالية لا يرى الخريطة التنفيذية لمصادر أرقامه');
     }
 
     /**
