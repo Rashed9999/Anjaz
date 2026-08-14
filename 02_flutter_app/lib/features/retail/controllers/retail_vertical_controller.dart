@@ -204,6 +204,15 @@ class RetailVerticalController extends GetxController
   Future<bool> addLocation(Map<String, dynamic> d) async =>
       await _run(() => repo.addLocation(d), (_) => true, submitting: true) ?? false;
 
+  /// AMIAL-VARIANTS-REACH-001 — توليدُ متغيّرات صنفٍ من محاوره.
+  ///
+  /// **المستودعُ كان يحمل النداءَ منذ بُني القطاع ولا شيءَ يناديه** — لا
+  /// متحكّمَ ولا شاشة. والخادمُ كاملٌ: ضربٌ ديكارتيّ للمحاور، وسقفُ ٢٠٠
+  /// متغيّرٍ في المرّة، وإعادةُ التوليد لا تكرّر ما وُلد.
+  Future<bool> generateVariants(int productId, Map<String, List<String>> axes) async =>
+      await _run(() => repo.generateVariants(productId, axes),
+          (_) => true, submitting: true) ?? false;
+
   Future<bool> requestTransfer(Map<String, dynamic> d) async =>
       await _run(() => repo.requestTransfer(d), (_) => true, submitting: true) ?? false;
 

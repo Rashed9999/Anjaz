@@ -592,7 +592,30 @@ Route::middleware(['auth:api'])->group(function () {
         Route::prefix('cashier')->name('cashier.')->group(function () {
             Route::get('/products', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'products'])->name('products');
             Route::get('/products/lookup', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'lookupBarcode'])->name('products.lookup');
-            Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'addProduct'])->name('products.add');
+            // ══════════════════════════════════════════════════════════
+            //  AMIAL-PRODUCT-QUOTA-001 — **حدُّ الأصناف يُفرَض عند بابه.**
+            //
+            //  **الثمن الذي دُفع:** قال صاحبُ المشروع: «لا تنسَ أنّ عدد
+            //  المنتجات مرتبطٌ بالباقات». وقِيس فوُجد أنّ كلَّ شيءٍ مبنيٌّ
+            //  **إلّا الفحص**:
+            //
+            //    · `PLAN_LIMITS` تقول: مجّانيّة ٠ · ناشئة ١٠٠ · نموّ ٣٠٠ ·
+            //      ما فوقها بلا حدّ.
+            //    · `EntitlementService::usageFor` تعدّ الأصناف فعلاً.
+            //    · `evaluate()` تُرجع `LIMIT_REACHED` عند البلوغ.
+            //    · `EnsureCapability` تردّ ٤٠٢ برسالةٍ فيها المستعمَل والحدّ
+            //      وسعرُ الباقة التالية.
+            //
+            //  **وبابُ الإنشاء لا يمرّ بشيءٍ من ذلك.** فتاجرٌ في الباقة
+            //  المجّانيّة يضيف ألفَ صنف، والباقاتُ المدفوعةُ لا تبيع شيئاً
+            //  لأنّ المجّانيّة تعطي كلَّ شيء. محرّكٌ كاملٌ بلا مفتاح.
+            //
+            //  **وعلى الإنشاء وحده**: تاجرٌ بلغ ١٠٠/١٠٠ يجب أن يبقى قادراً
+            //  على تعديل صنفٍ قائمٍ وتصحيح سعره — ومنعُه عقوبةٌ لا حدّ.
+            // ══════════════════════════════════════════════════════════
+            Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'addProduct'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_PRODUCTS)
+                ->name('products.add');
             Route::put('/products/{id}', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'updateProduct'])->name('products.update');
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'recordSale'])
                 ->middleware('amial.rate-limit:cashier_sale,120,1')->name('sales');

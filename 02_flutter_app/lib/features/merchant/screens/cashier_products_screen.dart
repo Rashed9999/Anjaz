@@ -1,3 +1,4 @@
+import 'package:amial_pay/features/retail/screens/product_variants_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
@@ -256,14 +257,31 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
                     Text('ينتهي: $expiry', style: TextStyle(fontSize: 11, color: soon ? AmialColors.red : AmialColors.textMuted, fontWeight: soon ? FontWeight.bold : FontWeight.normal)),
                 ],
               ),
-              trailing: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (hasOffer)
-                    Text('${p['price']}', style: const TextStyle(fontSize: 11, decoration: TextDecoration.lineThrough, color: AmialColors.textMuted)),
-                  Text('${hasOffer ? p['offer_price'] : p['price']} ر.ي',
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (hasOffer)
+                        Text('${p['price']}', style: const TextStyle(fontSize: 11, decoration: TextDecoration.lineThrough, color: AmialColors.textMuted)),
+                      Text('${hasOffer ? p['offer_price'] : p['price']} ر.ي',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
+                    ],
+                  ),
+                  // AMIAL-VARIANTS-REACH-001 — **المدخلُ الذي كان مفقوداً.**
+                  // الخادمُ والمستودعُ كانا يحملان توليدَ المتغيّرات، ولا
+                  // زرَّ في التطبيق يفتحه. (القاعدة ١٢.)
+                  IconButton(
+                    icon: const Icon(Icons.auto_awesome_motion,
+                        color: AmialColors.textMuted, size: 20),
+                    tooltip: 'متغيّرات (لون · مقاس)',
+                    onPressed: () => Get.to(() => ProductVariantsScreen(
+                          productId: (p['id'] as num).toInt(),
+                          productName: (p['name'] ?? '').toString(),
+                        )),
+                  ),
                 ],
               ),
             );
