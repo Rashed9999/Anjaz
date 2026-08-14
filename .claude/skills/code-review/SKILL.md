@@ -10,7 +10,7 @@ Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
 
 Both axes run as **parallel sub-agents** so they don't pollute each other's context, then this skill aggregates their findings.
 
-The issue tracker should have been provided to you — run `/setup-matt-pocock-skills` if `docs/agents/issue-tracker.md` is missing.
+**This repo has no issue tracker.** The Spec axis reads its spec from the owner's request in the conversation, the commit messages on the branch, and the rules in `01_backend/CLAUDE.md`; the Standards axis reads `CLAUDE.md` and `.claude/skills/`. Say which of the three you used — a Spec review with no spec named is a review of nothing.
 
 ## Process
 
