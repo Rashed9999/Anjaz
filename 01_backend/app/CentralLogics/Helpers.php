@@ -958,7 +958,21 @@ class Helpers
 
 function translate(string $key): string
 {
-    $local = session()->has('local') ? session('local') : 'en';
+    // ══════════════════════════════════════════════════════════════════
+    //  AMIAL-I18N-001 — **الافتراضُ عربيّ، لا إنجليزيّ.**
+    //
+    //  كان السطرُ: `session('local') : 'en'`. فأيُّ مديرٍ يفتح اللوحة بلا
+    //  أن يبدّل اللغة يقرأ إنجليزيّاً — وهو الحالُ الافتراضيُّ لكلّ
+    //  زيارةٍ أولى ولكلّ جلسةٍ جديدة.
+    //
+    //  ولذلك ظهرت «System Audit Log» و«Executive Dashboard» و«Payments
+    //  today» في لوحةٍ عربيّةٍ بالكامل: **العناوينُ مترجَمةٌ فعلاً**
+    //  (`translate()` منادىً في ٥١ موضعاً)، والافتراضُ وحدَه كان يقودها
+    //  إلى الإنجليزيّة.
+    //
+    //  **والتبديلُ يبقى**: من أراد الإنجليزيّة بدّلها من الشريط العلويّ،
+    //  فتُحفظ في الجلسة ويعمل هذا السطرُ بها.
+    $local = session()->has('local') ? session('local') : 'ar';
     App::setLocale($local);
     $path = base_path('resources/lang/' . $local . '/messages.php');
     $lang_array = file_exists($path) ? include($path) : [];

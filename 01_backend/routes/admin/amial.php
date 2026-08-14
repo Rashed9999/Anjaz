@@ -28,6 +28,28 @@ use Illuminate\Support\Facades\Route;
  *   Route::prefix('amial')->name('amial.')->group(base_path('routes/admin/amial.php'));
  */
 
+// ══════════════════════════════════════════════════════════════════════
+//  AMIAL-I18N-001 — **تبديلُ لغة اللوحة.**
+//
+//  اللوحةُ عربيّةٌ افتراضاً الآن، **والتبديلُ حقٌّ لا ميزة**: من يقرأ
+//  الإنجليزيّة أسرعَ يبدّل، ومن يشارك شاشتَه مع مورّدٍ أجنبيٍّ يبدّل.
+//
+//  ولا صلاحيّةَ عليه: **تفضيلُ عرضٍ لا فعلٌ إداريّ** — لا يقرأ بياناً
+//  ولا يكتبه، ولا يظهر في التدقيق. وحصرُه بصلاحيّةٍ يجعل من لا يملكها
+//  حبيسَ لغةٍ لا يقرؤها.
+// ══════════════════════════════════════════════════════════════════════
+Route::post('/locale', function (\Illuminate\Http\Request $request) {
+    $wanted = (string) $request->input('locale');
+
+    // **ولا تُقبل لغةٌ لا قاموسَ لها** — وإلّا فُرِّغت اللوحةُ من نصوصها
+    // بقيمةٍ يكتبها المتصفّح. (القاعدة الثامنة: ما يأتي من الطلب يُفحص.)
+    abort_unless(in_array($wanted, ['ar', 'en'], true), 422);
+
+    session(['local' => $wanted]);
+
+    return back();
+})->name('locale');
+
 // ============ Zone Management ============
 Route::prefix('zones')->name('zones.')->group(function () {
     Route::get('/', [ZoneManagementController::class, 'index'])->name('index');

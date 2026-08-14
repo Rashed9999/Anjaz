@@ -73,7 +73,20 @@
                     <button type="button" class="admin-mobile-toggle" data-admin-sidebar-open aria-label="فتح القائمة">☰</button>
                     <h4 class="m-0" data-testid="page-title">@yield('title', 'الإدارة')</h4>
                 </div>
-                <span class="text-muted small">{{ auth('user')->user()?->f_name ?? 'الإدارة' }}</span>
+                <div class="d-flex align-items-center gap-3">
+                    {{-- AMIAL-I18N-001 — مبدّلُ اللغة: عربيّ افتراضاً، وإنجليزيّ بضغطة. --}}
+                    @php($amialLocale = session('local', 'ar'))
+                    <form method="POST" action="{{ route('admin.amial.locale') }}" class="m-0">
+                        @csrf
+                        <input type="hidden" name="locale" value="{{ $amialLocale === 'ar' ? 'en' : 'ar' }}">
+                        <button type="submit" class="btn btn-sm btn-outline-secondary py-0 px-2"
+                                data-testid="locale-toggle"
+                                title="{{ $amialLocale === 'ar' ? 'Switch to English' : 'التبديل إلى العربيّة' }}">
+                            {{ $amialLocale === 'ar' ? 'EN' : 'ع' }}
+                        </button>
+                    </form>
+                    <span class="text-muted small">{{ auth('user')->user()?->f_name ?? 'الإدارة' }}</span>
+                </div>
             </header>
 
             @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif

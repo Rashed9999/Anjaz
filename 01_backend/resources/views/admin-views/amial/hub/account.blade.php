@@ -58,7 +58,8 @@
             <div class="col-md-4"><div class="card stat-card p-3 text-center">
                 <small class="text-muted">حالة الحساب</small>
                 <div class="fs-5 fw-bold ${u.is_active ? 'text-success' : 'text-danger'}">${u.is_active ? 'نشِط' : 'مجمَّد'}</div>
-                <button class="btn btn-sm mt-2 ${u.is_active ? 'btn-outline-danger' : 'btn-outline-success'}" id="btn-freeze">
+                <button class="btn btn-sm mt-2 ${u.is_active ? 'btn-outline-danger' : 'btn-outline-success'}" id="btn-freeze"
+                        data-frozen="${u.is_active ? '0' : '1'}">
                     ${u.is_active ? 'تجميد الحساب' : 'فكّ التجميد'}</button>
             </div></div>
             <div class="col-md-4"><div class="card stat-card p-3 text-center border-${rc}" style="border-width:2px">
@@ -139,10 +140,28 @@
         document.getElementById('acc-body').innerHTML = html;
 
         // أزرار التجميد
+        // AMIAL-UI-DIALOGS-002 — **نافذةُ المشروع لا نافذةُ المتصفّح.**
+        //
+        // كانت `prompt()` تفتح نافذةَ المتصفّح البيضاء («يعرض موقع
+        // amialpay.com»)، ثمّ يظهر النجاحُ في نافذة المشروع المصمَّمة —
+        // نافذتان مختلفتان في ضغطتين متتاليتين.
+        //
+        // **والإلغاءُ يُحترم**: `prompt()` كانت تُرجع `null` عند الإلغاء،
+        // و`|| ''` تحوّله إلى نصٍّ فارغ — فيُجمَّد الحسابُ بسببٍ فارغ
+        // **ولو ضغط المديرُ «إلغاء»**. وهو تجميدُ حسابٍ لم يُطلَب.
         const doFreeze = async () => {
-            const reason = prompt('سبب التجميد/فكّ التجميد (يُسجَّل في التدقيق):') || '';
-            try { const j = await post(`${base}/users/${id}/toggle-active`, {reason}); alert(j.message); load(); }
-            catch (err) { alert(err.message); }
+            const frozen = document.getElementById('btn-freeze')?.dataset.frozen === '1';
+
+            const reason = await amialDialog.request(
+                'اكتب سببَ ' + (frozen ? 'فكّ التجميد' : 'التجميد') + ' — يُسجَّل في التدقيق:',
+                { title: frozen ? 'فكّ تجميد الحساب' : 'تجميد الحساب',
+                  okLabel: frozen ? 'فكّ التجميد' : 'جمّد الحساب',
+                  danger: ! frozen });
+
+            if (reason === null) return;   // أُلغي — ولا يُنفَّذ شيء
+
+            try { const j = await post(`${base}/users/${id}/toggle-active`, {reason}); await amialDialog.show(j.message); load(); }
+            catch (err) { await amialDialog.show(err.message); }
         };
         document.getElementById('btn-freeze')?.addEventListener('click', doFreeze);
         document.getElementById('btn-freeze-risk')?.addEventListener('click', doFreeze);
