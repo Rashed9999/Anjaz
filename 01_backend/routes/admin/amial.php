@@ -117,6 +117,10 @@ Route::prefix('surface')->name('surface.')->group(function () {
     Route::get('/bill-providers', [$sc, 'billProviders'])->name('bill-providers');
     Route::post('/bill-providers/{id}/toggle', [$sc, 'toggleBillProvider'])->where('id', '[0-9]+')->name('bill-providers.toggle');
     Route::get('/funds', [$sc, 'funds'])->name('funds');
+    // AMIAL-FUND-DETAIL-001 — «أين اختفى المال ومن سحبه؟». والصلاحيّةُ
+    // `audit.view`: قراءةُ حركةِ صندوقٍ اطّلاعٌ على مالِ أُسرةٍ بعينها.
+    Route::get('/funds/{id}', [$sc, 'fundDetail'])->where('id', '[0-9]+')
+        ->middleware('platform:platform.audit.view')->name('funds.detail');
     Route::get('/payment-requests', [$sc, 'paymentRequests'])->name('payment-requests');
     Route::get('/rbac', [$sc, 'rbac'])->name('rbac');
 });
@@ -145,11 +149,23 @@ Route::prefix('charity')->name('charity.')->middleware('amial.idempotency')->gro
     Route::post('/campaigns/{ulid}/pause', [AdminCharityController::class, 'pauseCampaign'])
         ->where('ulid', '[A-Z0-9]{26}')->name('campaigns.pause');
 
+    // AMIAL-CHARITY-DONORS-001 — «يجب إظهار المتبرّعين». والجدولُ مكتوبٌ
+    // منذ بُنيت الحملات ولا نقطةَ تقرؤه للإدارة.
+    Route::get('/campaigns/{ulid}/donors', [AdminCharityController::class, 'campaignDonors'])
+        ->where('ulid', '[A-Z0-9]{26}')->name('campaigns.donors');
+
     // Settlements
     Route::get('/settlements', [AdminCharityController::class, 'indexSettlements'])->name('settlements.index');
     Route::post('/settlements/generate', [AdminCharityController::class, 'generateSettlement'])->name('settlements.generate');
     Route::post('/settlements/{ulid}/transferred', [AdminCharityController::class, 'markTransferred'])
         ->where('ulid', '[A-Z0-9]{26}')->name('settlements.transferred');
+
+    // AMIAL-CHARITY-PAYOUT-001 — «طريقة سحب المال … إلى محفظة أميال باي أو
+    // عبر وكيل». وهو الوحيد هنا الذي **يُحرّك مالاً** — فيُحرَس بصلاحيّة
+    // تحريك المال لا بصلاحيّة تحرير المحتوى.
+    Route::post('/settlements/{ulid}/payout', [AdminCharityController::class, 'payoutSettlement'])
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware('platform:platform.money.move')->name('settlements.payout');
 });
 
 // ============ AMIAL-AML-001 (v1.4) ============
@@ -744,6 +760,11 @@ Route::prefix('ops')->name('ops.')->group(function () {
     Route::post('/roles/{userId}', [OperatorRolesController::class, 'update'])
         ->where('userId', '[0-9]+')
         ->middleware('platform:platform.settings.update')->name('roles.update');
+
+    // AMIAL-OPERATOR-CREATE-001 — إنشاءُ موظّفِ منصّةٍ بأدواره.
+    // وبالصلاحيّة نفسِها: من يُسند الأدوار هو من يُنشئ من يحملها.
+    Route::post('/operators', [OperatorRolesController::class, 'store'])
+        ->middleware('platform:platform.settings.update')->name('operators.store');
 });
 
 // ============ AMIAL-SUPERVISION-001 — لوحة الإشراف ============

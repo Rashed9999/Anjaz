@@ -9,7 +9,14 @@
             <tbody>
             @forelse($funds as $f)
                 <tr>
-                    <td><b>{{ $f->name }}</b><br><small class="text-muted">{{ $f->fund_ulid }}</small></td>
+                    {{-- AMIAL-FUND-DETAIL-001 — **الاسمُ يُنقر فيفتح الحركة.**
+                         كان الصفُّ يعرض رصيداً بلا ما يفسّره، فمن سأل «أين
+                         اختفى المال» لم يجد باباً. --}}
+                    <td>
+                        <a href="{{ route('admin.amial.surface.funds.detail', $f->id) }}"
+                           data-testid="fund-open"><b>{{ $f->name }}</b></a>
+                        <br><small class="text-muted">{{ $f->fund_ulid }}</small>
+                    </td>
                     <td>{{ $f->members_count }}</td>
                     <td>{{ number_format((float) ($f->balance ?? 0), 0) }}</td>
                     <td>{{ $f->status ?? '—' }}</td>

@@ -8,6 +8,7 @@ use App\Models\BillPaymentOrder;
 use App\Models\FamilyFund;
 use App\Models\PaymentRequest;
 use App\Models\PosUser;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -40,6 +41,93 @@ class AdminSurfaceController extends Controller
         $funds = FamilyFund::withCount('members')
             ->orderByDesc('id')->paginate(25);
         return view('admin-views.amial.surface.funds', compact('funds'));
+    }
+
+    /**
+     * **صندوقُ عائلةٍ بحركته كاملةً — «أين اختفى المال ومن سحبه؟».**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمن الذي دُفع:** سأل صاحبُ المشروع سؤالاً يسأله كلُّ مستعمل:
+     * «مستخدمٌ يسأل: أين اختفى المال من الصندوق؟ مَن سحبه؟» — وشاشةُ
+     * الصناديق كانت خمسةَ أعمدة: الاسم · الأعضاء · **الرصيد** · الحالة ·
+     * تاريخ الإنشاء.
+     *
+     * **ورصيدٌ بلا حركةٍ لا يُجيب عن شيء.** يرى المديرُ ٧٥٠٠ ولا يعرف
+     * كيف صارت كذلك، ولا من أودع، ولا من سحب، ولا متى.
+     *
+     * **والبياناتُ كانت موجودةً كلُّها**: `family_fund_transactions` فيها
+     * `tx_type` و`amount` و`balance_before/after` و`beneficiary_user_id`
+     * و`approved_by_user_id`. **مبنيٌّ ولا يُوصَل إليه** — نمطُ العطل
+     * الأكثر تكراراً في هذا المشروع.
+     *
+     * و`balance_before/after` هما ما يجعل الجواب قاطعاً: كلُّ سطرٍ يقول
+     * الرصيدَ قبله وبعده، فالفجوةُ — إن وُجدت — تُرى بالعين.
+     */
+    public function fundDetail(int $id): View
+    {
+        $fund = FamilyFund::withCount('members')->findOrFail($id);
+
+        $members = DB::table('family_fund_members as m')
+            ->leftJoin('users as u', 'u.id', '=', 'm.user_id')
+            ->where('m.fund_id', $fund->id)
+            ->orderByDesc('m.total_contributed')
+            ->get([
+                'm.role', 'm.status', 'm.total_contributed', 'm.total_disbursed',
+                'm.joined_at', 'u.id as user_id', 'u.f_name', 'u.l_name', 'u.phone',
+            ]);
+
+        $txs = DB::table('family_fund_transactions as t')
+            ->leftJoin('users as u', 'u.id', '=', 't.user_id')
+            ->leftJoin('users as b', 'b.id', '=', 't.beneficiary_user_id')
+            ->leftJoin('users as a', 'a.id', '=', 't.approved_by_user_id')
+            ->where('t.fund_id', $fund->id)
+            ->orderByDesc('t.id')
+            ->paginate(50, [
+                't.tx_ulid', 't.tx_type', 't.amount', 't.balance_before', 't.balance_after',
+                't.note', 't.status', 't.created_at', 't.wallet_transaction_id',
+                'u.f_name as actor_f', 'u.l_name as actor_l', 'u.id as actor_id',
+                'b.f_name as ben_f', 'b.l_name as ben_l', 'b.id as ben_id',
+                'a.f_name as app_f', 'a.id as app_id',
+            ]);
+
+        // **الرقمُ يُحسب من مصدره** (القاعدة السادسة): مجموعُ الحركة لا
+        // عمودُ الرصيد. فلو اختلفا فذاك بعينه ما يبحث عنه من يسأل «أين
+        // اختفى المال».
+        $sums = DB::table('family_fund_transactions')
+            ->where('fund_id', $fund->id)
+            ->where('status', 'completed')
+            // **قيمُ `tx_type` تُقرأ من الـenum لا من الذاكرة.** كُتبت أوّلاً
+            // `contribution/deposit/topup` — ولا واحدةَ منها موجودة، فكان
+            // المجموعان صفرين والفجوةُ تساوي الرصيدَ كلَّه: شاشةٌ تتّهم كلَّ
+            // صندوقٍ سليمٍ بضياع ماله. (القاعدة الثالثة: يُقاس ثمّ يُقال.)
+            ->selectRaw("
+                SUM(CASE WHEN tx_type = 'contribute' THEN amount ELSE 0 END) as inflow,
+                SUM(CASE WHEN tx_type IN ('disburse_to_member','disburse_to_external')
+                    THEN amount ELSE 0 END) as outflow,
+                SUM(balance_after - balance_before) as net
+            ")->first();
+
+        $inflow = (string) ($sums->inflow ?? '0');
+        $outflow = (string) ($sums->outflow ?? '0');
+
+        // **والمحصّلةُ تُجمَع من فرق الرصيدين لا من تصنيف النوع.** فالإيداعُ
+        // والسحبُ عمودان للعرض، أمّا الميزانُ فيجب أن يشمل كلَّ صفٍّ —
+        // و`adjustment` نوعٌ رابعٌ لا يقع في أيّهما. ولو حُسب الميزانُ من
+        // النوعين وحدهما لاتُّهم كلُّ صندوقٍ فيه تسويةٌ بضياع ماله.
+        $derived = (string) ($sums->net ?? '0');
+        $stored = (string) ($fund->balance ?? '0');
+
+        return view('admin-views.amial.surface.fund-detail', [
+            'fund' => $fund,
+            'members' => $members,
+            'txs' => $txs,
+            'inflow' => $inflow,
+            'outflow' => $outflow,
+            'derived' => $derived,
+            'stored' => $stored,
+            // **والفرقُ يُقال صراحةً** — صفرٌ يعني «حُسب فتطابق»، لا «لم يُفحص».
+            'gap' => bccomp($derived, $stored, 4) === 0 ? null : bcsub($stored, $derived, 4),
+        ]);
     }
 
     public function paymentRequests(Request $request): View|StreamedResponse

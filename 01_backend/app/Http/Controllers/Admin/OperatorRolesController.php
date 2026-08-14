@@ -51,6 +51,90 @@ class OperatorRolesController extends Controller
         ]);
     }
 
+    /**
+     * **إنشاءُ موظّفِ منصّةٍ بأدواره في خطوةٍ واحدة.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمن الذي دُفع:** فتح صاحبُ المشروع «أدوار الموظّفين» فوجد
+     * جدولاً يُسند الأدوارَ **لحساباتٍ قائمةٍ فقط** — ولا سبيلَ إلى إنشاء
+     * موظّفٍ من هنا. وقال: «يجب إنشاء موظّف مع اختيار صلاحياته ورقم
+     * الهاتف وكلمة المرور».
+     *
+     * وكان البديلُ أن يُنشأ الحسابُ من «قائمة العملاء» بنوعِ إدارة — وهي
+     * شاشةٌ لا تعرف الأدوارَ أصلاً — ثمّ يُبحث عنه هنا ليُسنَد. **خطوتان
+     * في شاشتين، وبينهما حسابُ إدارةٍ حيٌّ بلا دور.**
+     *
+     * **والدورُ يُسند في المعاملة نفسِها**: حسابُ إدارةٍ يُنشأ ثمّ يسقط
+     * إسنادُ دوره يبقى قائماً بلا صلاحيّة — بابٌ مفتوحٌ بلا حارس.
+     */
+    public function store(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'f_name' => 'required|string|max:100',
+            'l_name' => 'nullable|string|max:100',
+            'phone' => 'required|string|min:6|max:20',
+            'email' => 'nullable|email|max:190',
+            // **ثمانيةٌ حدٌّ أدنى**: هذا حسابٌ يفتح لوحةَ الإدارة.
+            'password' => 'required|string|min:8',
+            'role_ids' => 'array',
+            'role_ids.*' => 'integer|exists:roles,id',
+        ]);
+
+        $phone = \App\CentralLogics\Helpers::filter_phone($data['phone']);
+
+        // **ولا يُنشأ حسابٌ برقمٍ مأخوذ** — وإلّا صار للرقم حسابان
+        // ودخولٌ لا يُعرف أيَّهما يفتح.
+        $taken = User::whereIn('phone', \App\Support\Phone::variants($phone))->exists();
+
+        if ($taken) {
+            // **الخطأُ يعود على الحقل نفسِه** لا في شريطٍ عامّ: `withErrors`
+            // يُعيد المدخلاتِ ويضع الرسالةَ تحت خانة الهاتف، فيصحّح من أخطأ
+            // رقماً واحداً بلا إعادة كتابة النموذج كلِّه.
+            return back()->withInput()
+                ->withErrors(['phone' => 'الرقم مستعملٌ في حسابٍ آخر']);
+        }
+
+        $operator = DB::transaction(function () use ($data, $phone, $request) {
+            $u = new User();
+            $u->f_name = $data['f_name'];
+            $u->l_name = $data['l_name'] ?? '';
+            $u->phone = $phone;
+            $u->email = $data['email'] ?? null;
+            $u->password = \Illuminate\Support\Facades\Hash::make($data['password']);
+            $u->type = 0;              // حسابُ إدارة
+            $u->is_active = 1;
+            $u->is_phone_verified = 1; // أدخله مديرٌ بنفسه، ولا OTP في هذا المسار
+            $u->save();
+
+            foreach (array_unique(array_map('intval', $data['role_ids'] ?? [])) as $roleId) {
+                DB::table('admin_user_roles')->insert([
+                    'user_id' => $u->id,
+                    'role_id' => $roleId,
+                    'granted_by_user_id' => $request->user()->id,
+                    'created_at' => now(), 'updated_at' => now(),
+                ]);
+            }
+
+            return $u;
+        });
+
+        // **وإنشاءُ حسابِ إدارةٍ يُسجَّل** — هو أخطرُ ما يُنشأ في المنصّة.
+        $this->audit->record([
+            'actor_type' => 'admin',
+            'actor_user_id' => $request->user()->id,
+            'subject_type' => 'user',
+            'subject_id' => (string) $operator->id,
+            'action' => 'ADMIN_OPERATOR_CREATED',
+            'decision_code' => 'OPERATOR_CREATED',
+            'reason' => 'إنشاءُ موظّف منصّةٍ من شاشة الأدوار',
+            'context' => ['roles' => $data['role_ids'] ?? [], 'phone' => $phone],
+            'severity' => 'warning',
+        ]);
+
+        return back()->with('success',
+            'أُنشئ الموظّف «' . $operator->f_name . '» — يدخل بالهاتف وكلمة المرور');
+    }
+
     public function update(Request $request, int $userId): RedirectResponse
     {
         $data = $request->validate([

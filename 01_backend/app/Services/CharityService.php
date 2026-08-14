@@ -325,4 +325,125 @@ class CharityService
 
         return $settlement;
     }
+
+    /**
+     * AMIAL-CHARITY-PAYOUT-001 — **صرفُ التسوية: العهدةُ تُدان فعلاً.**
+     *
+     * ══════════════════════════════════════════════════════════════
+     * كان الصرفُ حقلَ نصّ. `markSettlementTransferred` تكتب رقمَ حوالةٍ
+     * وتُدوّن تدقيقاً، **ولا تمسّ الدفتر**. و`CHARITY_ESCROW` — الذي
+     * يُدائَن في كلّ تبرّع — لم يكن يُدان في المشروع كلِّه، فالعهدةُ
+     * تكبر بلا سقفٍ والالتزامُ لا يُطفأ.
+     *
+     * وثلاثُ قنواتٍ يسألها من يتسلّم المال:
+     *
+     *  · `wallet` — إلى محفظة أميال باي: رصيدٌ يزيد فوراً، والقيدُ
+     *    مدين العهدة / دائن محفظة المستلم.
+     *  · `agent`  — الوكيل يدفع نقداً ورقيّاً من درجه ويأخذ رصيداً
+     *    إلكترونيّاً مقابله. نفسُ القيد، والمستلمُ حسابُ الوكيل.
+     *  · `bank`   — حوالةٌ بنكيّة: مدين العهدة / دائن حساب المنصّة
+     *    البنكيّ (أصلٌ ينقص).
+     *
+     * **والقيدُ يُربَط بالتسوية** (`payout_journal_entry_id`) — فبلا
+     * رابطٍ يبقى الصرفُ رقماً في شاشةٍ لا أثراً يُتتبَّع.
+     * ══════════════════════════════════════════════════════════════
+     *
+     * @param  'bank'|'wallet'|'agent'  $method
+     */
+    public function payoutSettlement(
+        CharitySettlement $settlement,
+        User $admin,
+        string $method,
+        string $reference,
+        ?User $recipient = null,
+        ?string $notes = null,
+    ): CharitySettlement {
+        if (!in_array($method, ['bank', 'wallet', 'agent'], true)) {
+            throw new \RuntimeException('قناةُ صرفٍ غير معروفة');
+        }
+        if ($settlement->status !== 'pending') {
+            throw new \RuntimeException('التسوية ليست معلَّقة');
+        }
+
+        $payable = MoneyService::normalize((string) $settlement->payable_amount);
+        if (bccomp($payable, '0', 4) <= 0) {
+            throw new \RuntimeException('مبلغُ التسوية صفرٌ — لا شيء يُصرَف');
+        }
+
+        // **المستلمُ يُطلب لِما يحتاجه، ويُرفض لِما لا يحتاجه.** ولو قُبل
+        // مستلمٌ مع الحوالة البنكيّة لظنّ من يقرأ الصفَّ أنّ محفظتَه
+        // شُحنت — ولم تُشحن.
+        if ($method !== 'bank' && !$recipient) {
+            throw new \RuntimeException('لا بدّ من تحديد المستلم لهذه القناة');
+        }
+        // **العمودُ `type` لا `user_type`.** كُتب `user_type` من الذاكرة فقرأ
+        // `null`، و`(int) null !== 1` صحيحٌ دائماً — فكان يرفض **كلَّ** وكيل.
+        // حارسٌ واحدٌ كشفه، ولا قراءةٌ كانت لتكشفه.
+        if ($method === 'agent' && $recipient && (int) $recipient->type !== AGENT_TYPE) {
+            throw new \RuntimeException('الحساب المحدَّد ليس وكيلاً');
+        }
+
+        return DB::transaction(function () use ($settlement, $admin, $method, $reference, $recipient, $notes, $payable) {
+            /** @var LedgerService $ledger */
+            $ledger = app(LedgerService::class);
+
+            $escrow = $ledger->getOrCreateSystemAccount(
+                'CHARITY_ESCROW', 'liability', 'عهدة التبرعات (قبل التسوية)', 'credit');
+
+            if ($method === 'bank') {
+                $creditAccount = $ledger->getOrCreateSystemAccount(
+                    'TREASURY_BANK', 'asset', 'حساب المنصّة البنكيّ', 'debit')->account_code;
+            } else {
+                // **الرصيدُ يُشحن قبل القيد وداخل نفس المعاملة** — فلو سقط
+                // القيد رُدّت الشحنة معه. والعكسُ يُنتج رصيداً بلا قيد.
+                app(FinancialGuardService::class)->credit(
+                    $recipient->id, $payable, 'charity_settlement_payout');
+
+                $creditAccount = $ledger->getOrCreateUserWallet($recipient->id)->account_code;
+            }
+
+            $entry = $ledger->post(
+                sourceType: 'charity_settlement',
+                sourceId: $settlement->settlement_ulid,
+                description: "صرفُ تسوية تبرّعات #{$settlement->id} عبر {$method}",
+                lines: [
+                    ['account' => $escrow->account_code, 'direction' => 'debit', 'amount' => $payable],
+                    ['account' => $creditAccount, 'direction' => 'credit', 'amount' => $payable],
+                ],
+                idempotencyKey: 'charity_payout:' . $settlement->settlement_ulid,
+                createdByUserId: $admin->id,
+                metadata: ['method' => $method, 'reference' => $reference],
+            );
+
+            $settlement->update([
+                'status' => 'transferred',
+                'transferred_at' => now(),
+                'bank_transfer_reference' => mb_substr($reference, 0, 100),
+                'transfer_notes' => $notes ? mb_substr($notes, 0, 500) : null,
+                'transferred_by_admin_id' => $admin->id,
+                'payout_method' => $method,
+                'payout_user_id' => $recipient?->id,
+                'payout_journal_entry_id' => $entry->id,
+            ]);
+
+            $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $admin->id,
+                'subject_type' => 'charity_settlement',
+                'subject_id' => (string) $settlement->id,
+                'action' => 'CHARITY_SETTLEMENT_PAID_OUT',
+                'decision_code' => 'PAID',
+                'severity' => 'warning',
+                'context' => [
+                    'method' => $method,
+                    'amount' => $payable,
+                    'recipient_user_id' => $recipient?->id,
+                    'reference' => $reference,
+                    'journal_entry_id' => $entry->id,
+                ],
+            ]);
+
+            return $settlement->refresh();
+        });
+    }
 }

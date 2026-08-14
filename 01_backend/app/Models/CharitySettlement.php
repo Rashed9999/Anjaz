@@ -28,6 +28,10 @@ class CharitySettlement extends Model
         'bank_transfer_reference', 'transfer_notes',
         'report_pdf_path',
         'generated_by_admin_id', 'transferred_by_admin_id',
+        // AMIAL-CHARITY-PAYOUT-001 — قناةُ الصرف ومَن قبض ورقمُ القيد.
+        // **وبلا هذه الأسطر تُبتلع القيمُ في `update()` بصمت**: يُدان
+        // الدفترُ ويُشحن الرصيد، وتبقى التسوية تقول «بنك» بلا مستلم.
+        'payout_method', 'payout_user_id', 'payout_journal_entry_id',
     ];
 
     protected $casts = [
