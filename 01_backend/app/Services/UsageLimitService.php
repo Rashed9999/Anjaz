@@ -254,11 +254,57 @@ class UsageLimitService
             $sector = $profile?->business_type ?? '';
         }
 
+        // ══════════════════════════════════════════════════════════════
+        //  AMIAL-PRODUCT-QUOTA-002 — **كلُّ قطاعٍ يُعدّ، و«غير معروف» ليس صفراً.**
+        //
+        //  **الثمن الذي دُفع:** قال صاحبُ المشروع «عدد المنتجات مرتبطٌ
+        //  بالباقات»، فوُضعت البوّابةُ على باب الكاشير. ثمّ كشفت مراجعةٌ
+        //  آليّةٌ أنّ ثلاثةَ أبوابٍ أُخَر بلا حدّ — **والأعمقُ أنّ هذا
+        //  العدّاد نفسَه لا يعرف إلّا قطاعين.**
+        //
+        //  و`default => 0` تعني: قطاعٌ لا يعرفه العدّادُ **يُقرأ بلا
+        //  منتجاتٍ فيمرّ أبداً**. فصفرٌ هنا يُقرأ «فحصنا فلم نجد»، وهو في
+        //  الحقيقة «لم نفحص» (القاعدة السابعة).
+        //
+        //  فصار كلُّ قطاعٍ يُعدّ من جدوله، و**المجهولُ يقع على الجدول
+        //  الأساسيّ** لا على صفرٍ صامت: تاجرٌ بقطاعٍ لم يُسجَّل بعدُ يُحاسَب
+        //  على أصنافه في `merchant_products` كأيّ تاجر.
+        // ══════════════════════════════════════════════════════════════
         return match ($sector) {
             'wholesale' => $this->countWholesaleProducts($merchant->id),
             'pharmacy' => $this->countPharmacyProducts($merchant->id),
-            default => 0,
+            'fuel', 'fuel_station' => $this->countFuelProducts($merchant->id),
+            default => $this->countCoreProducts($merchant->id),
         };
+    }
+
+    /** أصنافُ الوقود تحت محطّات التاجر كلِّها. */
+    private function countFuelProducts(int $merchantId): int
+    {
+        $stationIds = \App\Models\FuelStation::where('merchant_user_id', $merchantId)
+            ->pluck('id');
+
+        if ($stationIds->isEmpty()) {
+            return 0;
+        }
+
+        return \App\Models\FuelProduct::whereIn('station_id', $stationIds)
+            ->where('is_active', true)->count();
+    }
+
+    /**
+     * الجدولُ الأساسيّ — للتجزئة ولكلّ قطاعٍ لا جدولَ خاصَّ له.
+     *
+     * **والأبُ لا يُحسب مع أبنائه**: قميصٌ بأربعة ألوانٍ أربعةُ أصنافٍ لا
+     * خمسة — كما في `EntitlementService::usageFor` حرفاً بحرف، فالبابان
+     * يجب أن يُعطيا الرقمَ نفسَه.
+     */
+    private function countCoreProducts(int $merchantId): int
+    {
+        return \App\Models\MerchantProduct::where('merchant_user_id', $merchantId)
+            ->where('is_variant_parent', false)
+            ->where('is_active', true)
+            ->count();
     }
 
     private function countWholesaleProducts(int $merchantId): int

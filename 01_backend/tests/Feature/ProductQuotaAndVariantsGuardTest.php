@@ -202,6 +202,162 @@ class ProductQuotaAndVariantsGuardTest extends TestCase
     }
 
     // ══════════════════════════════════════════════════════════════════
+    //  ①ب الحدُّ على الأبواب الأربعة، والعدّادُ يعرف كلَّ قطاع
+    // ══════════════════════════════════════════════════════════════════
+
+    public function test_every_product_door_declares_a_limit(): void
+    {
+        // **أربعةُ أبوابٍ تُنشئ صنفاً** — كاشير · صيدليّة · جملة · وقود.
+        // وكان الرابعُ بلا حدٍّ إطلاقاً، فالباقةُ تُباع بحدٍّ يلتفّ عليه
+        // من يفتح محطّة. (كشفه محورُ المواصفة في مراجعةٍ آليّة.)
+        $routes = file_get_contents(base_path('routes/api/amial.php'));
+
+        foreach ([
+            'CashierController::class, \'addProduct\'' => 'capability:',
+            'PharmacyController::class, \'addProduct\'' => 'amial.usage:add_product',
+            'WholesaleController::class, \'addProduct\'' => 'amial.usage:add_product',
+            'FuelStationController::class, \'addProduct\'' => 'amial.usage:add_product',
+        ] as $needle => $guard) {
+            $at = mb_strpos($routes, $needle);
+            $this->assertNotFalse($at, "بابٌ مفقود: {$needle}");
+
+            $block = mb_substr($routes, $at, 320);
+            $this->assertStringContainsString($guard, $block,
+                "بابُ «{$needle}» بلا حدِّ باقة");
+        }
+    }
+
+    public function test_an_unknown_vertical_is_counted_not_read_as_zero(): void
+    {
+        // **«غير معروف» ليس صفراً** (القاعدة السابعة). كان `countProducts`
+        // يعرف قطاعين و`default => 0` — فقطاعٌ لا يعرفه العدّادُ يُقرأ
+        // «بلا منتجات» فيمرّ أبداً مهما أضاف.
+        $merchant = $this->merchant(A::PLAN_STARTER, '967771960020');
+
+        DB::table('merchant_profiles')->where('user_id', $merchant->id)
+            ->update(['business_type' => 'restaurant']);   // قطاعٌ بلا جدولٍ خاصّ
+
+        MerchantProduct::insert(array_map(fn ($i) => [
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'merchant_user_id' => $merchant->id,
+            'name' => 'صنف ' . $i, 'price' => '10.0000',
+            'is_variant_parent' => false, 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ], range(1, 7)));
+
+        $counted = (new \ReflectionClass(\App\Services\UsageLimitService::class))
+            ->getMethod('countProducts');
+        $counted->setAccessible(true);
+
+        $this->assertSame(7,
+            $counted->invoke(app(\App\Services\UsageLimitService::class), $merchant->refresh(), 'auto'),
+            'قطاعٌ لا جدولَ خاصَّ له يُعدّ صفراً — فحدُّ الباقة لا يُفرض عليه');
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  ①ج تبنّي صنفٍ من الكتالوج — الاتّفاق المسبق
+    // ══════════════════════════════════════════════════════════════════
+
+    private function catalogEntry(string $barcode, string $name = 'شاي ليبتون'): void
+    {
+        DB::table('product_catalog_entries')->insert([
+            'entry_ulid' => (string) \Illuminate\Support\Str::ulid(),
+            'barcode' => $barcode, 'name' => $name,
+            'category' => 'مشروبات', 'unit' => 'قطعة',
+            'status' => 'verified', 'adoption_count' => 0,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    public function test_a_merchant_adopts_a_catalog_item_in_one_press(): void
+    {
+        // «إضافة منتج مع باركود ومعلومات، ثمّ يستطيع التاجرُ **تحميلَه**
+        // إلى منتجاته بدل إضافته يدويّاً» — والنصفُ الناقصُ كان الضغطة.
+        $merchant = $this->merchant(A::PLAN_STARTER, '967771960021');
+        $this->catalogEntry('6281000900001');
+
+        $r = $this->actingAs($merchant, 'api')
+            ->postJson('/api/v1/amial/merchant/cashier/products/adopt', [
+                'barcode' => '6281000900001',
+                'price' => 350,
+                'quantity' => 12,
+            ])->assertCreated();
+
+        $product = MerchantProduct::where('merchant_user_id', $merchant->id)->first();
+
+        $this->assertNotNull($product, 'ضُغط التبنّي ولا صنفَ في القاعدة');
+        $this->assertSame('شاي ليبتون', $product->name, 'الاسمُ لم يأتِ من الكتالوج');
+        $this->assertSame('مشروبات', $product->category);
+        $this->assertSame('6281000900001', $product->barcode);
+
+        // **ويُقال من أين جاء** — اسمٌ لم يكتبه التاجرُ يستحقّ مصدراً.
+        $this->assertSame('شاي ليبتون', $r->json('meta.adopted_from.name'));
+
+        // **والعدّادُ يقيس النفعَ لا الكتابة** — كان يزيده الاقتراحُ وحدَه.
+        $this->assertSame(1, (int) DB::table('product_catalog_entries')
+            ->where('barcode', '6281000900001')->value('adoption_count'));
+    }
+
+    public function test_the_same_item_is_not_adopted_twice(): void
+    {
+        // ولولا هذا لأنتجت الضغطتان صنفين بالباركود نفسِه، فيُمسح فيُوجد
+        // اثنان ولا يُعرف أيُّهما يُباع.
+        $merchant = $this->merchant(A::PLAN_STARTER, '967771960022');
+        $this->catalogEntry('6281000900002');
+
+        $body = ['barcode' => '6281000900002', 'price' => 100];
+
+        $this->actingAs($merchant, 'api')
+            ->postJson('/api/v1/amial/merchant/cashier/products/adopt', $body)->assertCreated();
+
+        $this->actingAs($merchant, 'api')
+            ->postJson('/api/v1/amial/merchant/cashier/products/adopt', $body)
+            ->assertStatus(422);
+
+        $this->assertSame(1, MerchantProduct::where('merchant_user_id', $merchant->id)->count());
+    }
+
+    public function test_adopting_is_bound_by_the_plan_limit_too(): void
+    {
+        // **بابُ التبنّي بابُ إنشاءٍ أيضاً** — ولو تُرك بلا حدٍّ لصار طريقاً
+        // يلتفّ على الباقة بمسحِ باركود.
+        $limit = A::PLAN_LIMITS[A::PLAN_STARTER]['products'];
+        $merchant = $this->merchant(A::PLAN_STARTER, '967771960023');
+        $this->catalogEntry('6281000900003');
+
+        MerchantProduct::insert(array_map(fn ($i) => [
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'merchant_user_id' => $merchant->id,
+            'name' => 'صنف ' . $i, 'price' => '10.0000',
+            'is_variant_parent' => false, 'is_active' => true,
+            'created_at' => now(), 'updated_at' => now(),
+        ], range(1, $limit)));
+
+        $this->actingAs($merchant, 'api')
+            ->postJson('/api/v1/amial/merchant/cashier/products/adopt', [
+                'barcode' => '6281000900003', 'price' => 100,
+            ])->assertStatus(402);
+    }
+
+    public function test_the_app_offers_the_adopt_press(): void
+    {
+        // القاعدة ١٢: نقطةٌ بلا زرٍّ ليست ظهوراً.
+        $app = base_path('../02_flutter_app/lib');
+
+        $screen = file_get_contents($app . '/features/merchant/screens/cashier_products_screen.dart');
+        $this->assertStringContainsString("Key('catalog-adopt')", $screen,
+            'لا زرَّ تبنٍّ في شاشة الأصناف');
+        $this->assertStringContainsString('adoptFromCatalog', $screen);
+
+        foreach (['controllers/cashier_controller.dart',
+                  'domain/repositories/cashier_repo.dart'] as $f) {
+            $this->assertStringContainsString('adoptFromCatalog',
+                file_get_contents($app . '/features/merchant/' . $f),
+                "السلسلةُ مقطوعةٌ عند: {$f}");
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
     //  ② المتغيّرات — يُوصَل إليها من التطبيق
     // ══════════════════════════════════════════════════════════════════
 

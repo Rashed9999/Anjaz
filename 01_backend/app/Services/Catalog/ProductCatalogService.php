@@ -2,7 +2,9 @@
 
 namespace App\Services\Catalog;
 
+use App\Models\MerchantProduct;
 use App\Models\User;
+use App\Services\MoneyService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -88,6 +90,69 @@ class ProductCatalogService
             ->whereNull('deleted_at')
             ->whereIn('status', ['verified', 'proposed'])
             ->first();
+    }
+
+    /**
+     * AMIAL-CATALOG-ADOPT-001 — **يُتبنّى الصنفُ بضغطةٍ لا بإدخالٍ يدويّ.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الاتّفاقُ المسبق** كما قاله صاحبُ المشروع: «إضافة منتج مع باركود
+     * ومعلومات، ثمّ يستطيع التاجرُ **تحميلَه** إلى منتجاته بدل إضافته
+     * يدويّاً».
+     *
+     * وكان نصفُه مبنيّاً: `catalog/lookup` تملأ الحقولَ عند الإنشاء، فيبقى
+     * على التاجر أن يكتب السعرَ ويضغط حفظ. **والنصفُ الناقصُ هو الضغطة
+     * الواحدة** — ومعها العدّادُ الذي يقيس نفعَ الكتالوج.
+     *
+     * و`adoption_count` عمودٌ قائمٌ **يزيده اقتراحُ تاجرٍ ولا يزيده تبنٍّ**
+     * — فكان يقيس مَن كتب لا مَن انتفع.
+     *
+     * **والسعرُ من التاجر لا من الكتالوج**: الكتالوجُ بلا عمود سعرٍ عمداً،
+     * فرؤيةُ تاجرٍ سعرَ منافسه تسريبٌ تجاريّ. فيُطلب السعرُ في التبنّي.
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * @throws \DomainException إن لم يوجد الصنفُ أو كان عند التاجر أصلاً
+     */
+    public function adopt(User $merchant, string $barcode, array $overrides = []): MerchantProduct
+    {
+        $barcode = trim($barcode);
+        $entry = $this->find($barcode);
+
+        if (! $entry) {
+            // **ويُقال سببُ الرفض** — «غير موجود» على باركودٍ داخليٍّ
+            // تُرسل التاجرَ يعيد المسحَ ظانّاً أنّ الشبكة تعطّلت.
+            throw new \DomainException(
+                $this->rejectionReason($barcode) ?? 'لا يوجد هذا الصنف في الكتالوج',
+            );
+        }
+
+        // **ولا يُتبنّى مرّتين.** ولولا هذا لأنتجت الضغطتان صنفين بالباركود
+        // نفسِه، فيُمسح فيُوجد اثنان ولا يُعرف أيُّهما يُباع.
+        $existing = MerchantProduct::where('merchant_user_id', $merchant->id)
+            ->where('barcode', $barcode)->first();
+
+        if ($existing) {
+            throw new \DomainException('هذا الصنف عندك بالفعل: ' . $existing->name);
+        }
+
+        return DB::transaction(function () use ($merchant, $entry, $barcode, $overrides) {
+            $product = MerchantProduct::create([
+                'merchant_user_id' => $merchant->id,
+                'name' => $entry->name,
+                'category' => $entry->category,
+                'barcode' => $barcode,
+                'price' => MoneyService::normalize((string) ($overrides['price'] ?? 0)),
+                'cost_price' => MoneyService::normalize((string) ($overrides['cost_price'] ?? 0)),
+                'quantity' => (string) ($overrides['quantity'] ?? 0),
+                'is_active' => true,
+            ]);
+
+            // **العدّادُ يقيس النفعَ لا الكتابة.**
+            DB::table('product_catalog_entries')->where('id', $entry->id)
+                ->increment('adoption_count');
+
+            return $product->fresh();
+        });
     }
 
     /**

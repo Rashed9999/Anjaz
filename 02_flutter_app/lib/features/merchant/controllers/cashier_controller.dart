@@ -153,6 +153,28 @@ class CashierController extends GetxController implements GetxService {
   /// يُرجع `null` حين لا يُوجد — ولا يُعدّ ذلك خطأً: أكثرُ الأصناف في
   /// السوق اليمنيّ ليست في أيّ كتالوج بعد، **والتاجرُ الذي يُدخلها هو
   /// من يبنيه.**
+  /// AMIAL-CATALOG-ADOPT-001 — تبنّي صنفٍ من الكتالوج.
+  ///
+  /// **ويعيد سببَ الرفض لا `false` صامتة** — «تعذّرت الإضافة» تُرسل
+  /// التاجرَ يعيد المحاولة بلا تغيير.
+  Future<String?> adoptFromCatalog(Map<String, dynamic> data) async {
+    try {
+      final r = await repo.adoptFromCatalog(data);
+      final ok = (r.statusCode == 200 || r.statusCode == 201) &&
+          r.body is Map && r.body['success'] == true;
+
+      if (ok) {
+        await loadProducts();
+        return null;
+      }
+
+      return (r.body is Map ? r.body['message'] : null)?.toString()
+          ?? 'تعذّرت إضافة الصنف';
+    } catch (_) {
+      return 'لا اتصال بالخادم';
+    }
+  }
+
   Future<Map<String, dynamic>?> catalogLookup(String barcode) async {
     try {
       final r = await repo.catalogLookup(barcode);

@@ -101,6 +101,54 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         ], 'PRODUCT_ADDED', 'تم إضافة المنتج');
     }
 
+    /**
+     * AMIAL-CATALOG-ADOPT-001 — **تبنّي صنفٍ من الكتالوج العامّ.**
+     *
+     * POST /api/v1/amial/merchant/cashier/products/adopt
+     *
+     * الطلب : { barcode: "6281…", price: 500, cost_price?: 400, quantity?: 10 }
+     * الردّ  : 201 { product, adopted_from: { name, category, unit } }
+     * الأخطاء: NO_BARCODE(422) · ADOPT_FAILED(422) · PLAN_LIMIT_REACHED(402)
+     *
+     * والحدُّ يُفرض على المسار كإخوته — **فبابُ التبنّي بابُ إنشاءٍ أيضاً**،
+     * ولو تُرك بلا حدٍّ لصار طريقاً يلتفّ على الباقة بمسحِ باركود.
+     */
+    public function adoptFromCatalog(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'barcode' => 'required|string|max:64',
+            'price' => 'required|numeric|min:0',
+            'cost_price' => 'sometimes|nullable|numeric|min:0',
+            'quantity' => 'sometimes|nullable|numeric|min:0',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $catalog = app(\App\Services\Catalog\ProductCatalogService::class);
+
+        try {
+            $product = $catalog->adopt($merchant, (string) $v->validated()['barcode'], $v->validated());
+        } catch (\DomainException $e) {
+            return $this->error('ADOPT_FAILED', $e->getMessage(), 422);
+        }
+
+        $entry = $catalog->find((string) $v->validated()['barcode']);
+
+        return $this->ok([
+            'product' => $product,
+            // **يُقال من أين جاء** — فالتاجرُ يرى اسماً لم يكتبه ويستحقّ
+            // أن يعرف مصدرَه قبل أن يظنّه خطأً.
+            'adopted_from' => $entry ? [
+                'name' => $entry->name,
+                'category' => $entry->category,
+                'unit' => $entry->unit,
+            ] : null,
+        ], 'ADOPTED', 'أُضيف الصنف من الكتالوج', 201);
+    }
+
     public function updateProduct(Request $request, int $id): JsonResponse
     {
         $v = Validator::make($request->all(), [

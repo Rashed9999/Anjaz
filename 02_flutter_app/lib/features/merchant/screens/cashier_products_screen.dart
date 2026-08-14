@@ -142,6 +142,63 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
                           onPressed: () => setLocal(() => name.text = '${catalogFound!['name']}'),
                           child: const Text('استعمل اسم الكتالوج', style: TextStyle(fontSize: 11)),
                         ),
+
+                      // ══════════════════════════════════════════════════
+                      //  AMIAL-CATALOG-ADOPT-001 — **الضغطةُ الواحدة.**
+                      //
+                      //  الاتّفاقُ المسبق: «يستطيع التاجرُ تحميلَه إلى
+                      //  منتجاته بدل إضافته يدويّاً». وكان نصفُه مبنيّاً —
+                      //  البحثُ يملأ الاسمَ ثمّ يكتب التاجرُ الباقيَ ويحفظ.
+                      //  **والنصفُ الناقصُ هذا الزرّ.**
+                      //
+                      //  والسعرُ شرطُه: الكتالوجُ بلا سعرٍ عمداً (رؤيةُ سعرِ
+                      //  منافسٍ تسريبٌ تجاريّ)، فلا يُتبنّى صنفٌ بلا سعرٍ
+                      //  يُباع به.
+                      // ══════════════════════════════════════════════════
+                      if (catalogFound != null)
+                        FilledButton.icon(
+                          key: const Key('catalog-adopt'),
+                          icon: const Icon(Icons.download_for_offline, size: 16),
+                          label: const Text('أضِفه لمنتجاتي', style: TextStyle(fontSize: 11)),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AmialColors.primary,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          onPressed: catalogBusy
+                              ? null
+                              : () async {
+                                  final priceText = price.text.trim();
+
+                                  if (priceText.isEmpty ||
+                                      (double.tryParse(priceText) ?? 0) <= 0) {
+                                    setLocal(() => catalogNote =
+                                        'أدخل سعرَ البيع أوّلاً — الكتالوجُ بلا أسعار');
+                                    return;
+                                  }
+
+                                  setLocal(() => catalogBusy = true);
+
+                                  final err = await c.adoptFromCatalog({
+                                    'barcode': barcode.text.trim(),
+                                    'price': priceText,
+                                    if (cost.text.trim().isNotEmpty)
+                                      'cost_price': cost.text.trim(),
+                                    if (qty.text.trim().isNotEmpty)
+                                      'quantity': qty.text.trim(),
+                                  });
+
+                                  if (!ctx.mounted) return;
+
+                                  setLocal(() => catalogBusy = false);
+
+                                  if (err == null) {
+                                    Navigator.pop(ctx);
+                                    Get.snackbar('تمّ', 'أُضيف «${catalogFound!['name']}» من الكتالوج');
+                                  } else {
+                                    setLocal(() => catalogNote = err);
+                                  }
+                                },
+                        ),
                     ]),
                   ),
 

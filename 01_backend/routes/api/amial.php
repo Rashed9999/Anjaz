@@ -616,6 +616,13 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'addProduct'])
                 ->middleware('capability:' . \App\Support\Access\AccessConstants::F_PRODUCTS)
                 ->name('products.add');
+
+            // AMIAL-CATALOG-ADOPT-001 — **الاتّفاقُ المسبق**: يُمسح الباركودُ
+            // فيُضاف الصنفُ من الكتالوج العامّ بضغطة. **وهو بابُ إنشاءٍ
+            // فيُحرَس بحدّ الباقة نفسِه** — وإلّا صار طريقاً يلتفّ عليها.
+            Route::post('/products/adopt', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'adoptFromCatalog'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_PRODUCTS)
+                ->name('products.adopt');
             Route::put('/products/{id}', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'updateProduct'])->name('products.update');
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'recordSale'])
                 ->middleware('amial.rate-limit:cashier_sale,120,1')->name('sales');
@@ -707,7 +714,11 @@ Route::middleware(['auth:api'])->group(function () {
 
             // Products + Prices
             Route::get('/products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listProducts'])->name('products.index');
-            Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addProduct'])->name('products.add');
+            // AMIAL-PRODUCT-QUOTA-002 — **البابُ الرابع.** كان بلا حدٍّ
+            // إطلاقاً بينما إخوتُه الثلاثة محروسة — والباقةُ لا تُباع بحدٍّ
+            // يلتفّ عليه من يفتح محطّة.
+            Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addProduct'])
+                ->middleware('amial.usage:add_product')->name('products.add');
             Route::get('/price-history', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'priceHistory'])->name('price-history');
             Route::put('/products/{id}/price', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'updateProductPrice'])
                 ->where('id', '[0-9]+')->name('products.price');

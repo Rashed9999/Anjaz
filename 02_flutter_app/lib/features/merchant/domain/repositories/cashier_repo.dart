@@ -19,6 +19,11 @@ class CashierRepo extends GetxService {
   /// **وهو غيرُ `lookupBarcode` أدناه**: ذاك يبحث في منتجات التاجر نفسِه
   /// ليضيفها للسلّة عند البيع، وهذا في الكتالوج العامّ ليملأ الحقولَ عند
   /// إنشاء صنفٍ جديد. شاشتان ونداءان — ولا يُخلطان.
+  /// AMIAL-CATALOG-ADOPT-001 — يُضاف الصنفُ من الكتالوج بضغطةٍ واحدة.
+  Future<Response> adoptFromCatalog(Map<String, dynamic> data) {
+    return apiClient.postData('/api/v1/amial/merchant/cashier/products/adopt', data);
+  }
+
   Future<Response> catalogLookup(String barcode) {
     return apiClient.getData('/api/v1/amial/catalog/lookup', query: {'barcode': barcode});
   }
