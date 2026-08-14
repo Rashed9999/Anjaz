@@ -35,6 +35,10 @@ class DonationsController extends Controller
     {
         $query = CharityCampaign::with(['organization:id,name_ar,logo_url,verification_status', 'category'])
             ->acceptingDonations()
+            // AMIAL-CHARITY-META-001 — **العاجلُ قبل المميَّز.** ولو بقي
+            // `is_featured` وحده لصار «عاجل» علامةً حمراءَ لا أثرَ لها:
+            // تُرى ولا تُقدِّم الحملةَ سطراً واحداً.
+            ->orderByDesc('is_urgent')
             ->orderByDesc('is_featured')
             ->orderByDesc('id');
 
@@ -45,6 +49,10 @@ class DonationsController extends Controller
 
         if ($request->boolean('featured')) {
             $query->where('is_featured', true);
+        }
+
+        if ($request->boolean('urgent')) {
+            $query->where('is_urgent', true);
         }
 
         $items = $query->paginate(20);

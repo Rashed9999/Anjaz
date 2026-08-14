@@ -271,8 +271,8 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         $html = file_get_contents(base_path('resources/views/admin-views/amial/charity/index.blade.php'));
 
         foreach (['id="org-form"', 'id="camp-form"',
-                  'name="target_amount"', 'name="deadline_at"',
-                  'name="cover_image_url"', 'name="gallery_images"',
+                  'name="target_amount"', 'name="deadline_at"', 'name="start_at"',
+                  'data-testid="campaign-cover-file"', 'data-testid="campaign-gallery-file"',
                   'data-donors'] as $needle) {
             $this->assertStringContainsString($needle, $html, "شاشةُ التبرّعات بلا: {$needle}");
         }
@@ -302,6 +302,156 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         // **الإخفاءُ وعدٌ للمتبرّع لا زينةٌ في التطبيق.**
         $this->assertTrue((bool) $donors[0]['is_anonymous']);
         $this->assertNull($donors[0]['donor'] ?? null, 'اسمُ متبرّعٍ مجهولٍ ظهر للإدارة');
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  ①ب تفاصيلُ الحملة — تصنيفٌ وصورٌ وتواريخُ وعلامة عاجل
+    // ══════════════════════════════════════════════════════════════════
+
+    public function test_the_categories_exist_in_every_environment(): void
+    {
+        // **بذرةٌ لا يشغّلها النشرُ ليست مزروعة.** كان `CharityCategoriesSeeder`
+        // مسجَّلاً في `DatabaseSeeder` والجدولُ على الخادم الحيّ **صفر** —
+        // فخانةُ التصنيف الإلزاميّة تُقرأ «— لا تصنيفات مسجَّلة —» ولا
+        // تُنشأ حملةٌ أبداً. فنُقلت إلى هجرة.
+        $codes = CharityCategory::pluck('code')->all();
+
+        foreach (['medical', 'food', 'emergency', 'water', 'shelter',
+                  'education', 'orphans', 'general'] as $code) {
+            $this->assertContains($code, $codes, "تصنيفٌ مفقود: {$code}");
+        }
+    }
+
+    public function test_the_panel_can_read_the_categories(): void
+    {
+        // **وعطلٌ واحدٌ كان له سببان**: الجدولُ فارغ، **ولا مسارَ يقرؤه**.
+        // فلو زُرع الجدولُ وحدَه لبقيت الخانةُ فارغةً ولبدا أنّ الزرعَ فشل.
+        $body = $this->actingAs($this->admin, 'user')
+            ->getJson('/admin/amial/charity/categories')->assertOk()->json();
+
+        $cats = data_get($body, 'meta.categories', []);
+        $this->assertNotEmpty($cats, 'نقطةُ التصنيفات تردّ فارغةً');
+        $this->assertArrayHasKey('name_ar', $cats[0]);
+
+        // والشاشةُ تناديه بهذا الاسم بعينه.
+        $html = file_get_contents(base_path('resources/views/admin-views/amial/charity/index.blade.php'));
+        $this->assertStringContainsString('/categories', $html);
+    }
+
+    public function test_the_campaign_form_takes_images_from_the_device_not_a_url(): void
+    {
+        $html = file_get_contents(base_path('resources/views/admin-views/amial/charity/index.blade.php'));
+
+        foreach (['data-testid="campaign-cover-file"', 'data-testid="campaign-gallery-file"',
+                  'type="file"', '/uploads', 'FormData'] as $needle) {
+            $this->assertStringContainsString($needle, $html, "نموذجُ الحملة بلا: {$needle}");
+        }
+
+        // **ولا حقلَ رابطٍ مرئيّاً بعد اليوم** — الرابطُ يبقى مخفيّاً يملؤه
+        // الرفع. ولو بقي مرئيّاً لعاد من ينشئ حملةً يبحث عن مستضيف صور.
+        $this->assertStringNotContainsString(
+            'name="cover_image_url" type="url"', $html,
+            'ما زال النموذجُ يطلب لصقَ رابطٍ للغلاف',
+        );
+    }
+
+    public function test_uploading_an_image_returns_a_url_and_refuses_a_non_image(): void
+    {
+        // **ولا يُزيَّف القرصُ هنا.** `Helpers::upload` تكتب عبر
+        // `storage_path()` مباشرةً لا عبر واجهة القرص، فقرصٌ مزيَّفٌ يجعلها
+        // تكتب في مجلّدٍ لا وجود له وتسقط بـ٥٠٠ — عطلٌ في التزييف لا في
+        // الشيفرة. فتُكتب الصورةُ حقّاً ثمّ تُحذف.
+        $ok = $this->actingAs($this->admin, 'user')->post('/admin/amial/charity/uploads', [
+            'file' => \Illuminate\Http\UploadedFile::fake()->image('cover.jpg', 800, 600),
+        ])->assertCreated()->json();
+
+        $path = data_get($ok, 'meta.path');
+        $this->assertNotEmpty(data_get($ok, 'meta.url'), 'رُفعت الصورةُ بلا رابطٍ يُعاد');
+        $this->assertTrue(
+            \Illuminate\Support\Facades\Storage::disk('public')->exists($path),
+            'رُدَّ رابطٌ ولا ملفَّ خلفه',
+        );
+        \Illuminate\Support\Facades\Storage::disk('public')->delete($path);
+
+        // **وSVG يُرفض**: `image` وحدها تقبله، وهو يحمل نصّاً برمجيّاً
+        // يُنفَّذ في متصفّح من يفتحه.
+        $this->actingAs($this->admin, 'user')->postJson('/admin/amial/charity/uploads', [
+            'file' => \Illuminate\Http\UploadedFile::fake()->create('x.svg', 10, 'image/svg+xml'),
+        ])->assertStatus(422);
+    }
+
+    public function test_a_campaign_keeps_its_dates_and_its_urgent_flag(): void
+    {
+        $this->charity->verifyOrganization($this->org, $this->admin);
+
+        $body = $this->actingAs($this->admin, 'user')
+            ->postJson('/admin/amial/charity/organizations/' . $this->org->org_ulid . '/campaigns', [
+                'category_id' => CharityCategory::where('code', 'medical')->value('id'),
+                'title_ar' => 'علاجُ طفل',
+                'description_ar' => 'وصفٌ كافٍ',
+                'target_amount' => 5000,
+                'start_at' => now()->addDays(3)->toDateString(),
+                'deadline_at' => now()->addDays(40)->toDateString(),
+                'is_urgent' => 1,
+            ])->assertCreated()->json();
+
+        $campaign = CharityCampaign::where('campaign_ulid', data_get($body, 'meta.campaign.campaign_ulid'))->first();
+        $this->assertNotNull($campaign);
+
+        // **خارج `fillable` تُبتلع القيمةُ بصمت**: يُعلَّم المديرُ الحملةَ
+        // عاجلةً فتُحفظ عاديّة، ولا خطأَ في أيّ سجلّ.
+        $this->assertTrue((bool) $campaign->is_urgent, '«عاجل» أُرسلت ولم تُحفظ');
+        $this->assertNotNull($campaign->start_at, 'تاريخُ البداية أُرسل ولم يُحفظ');
+        $this->assertNotNull($campaign->deadline_at);
+    }
+
+    public function test_a_deadline_before_the_start_is_refused(): void
+    {
+        $this->charity->verifyOrganization($this->org, $this->admin);
+
+        // نافذةٌ مقلوبةٌ تُنتج حملةً منتهيةً قبل أن تبدأ.
+        $this->actingAs($this->admin, 'user')
+            ->postJson('/admin/amial/charity/organizations/' . $this->org->org_ulid . '/campaigns', [
+                'category_id' => CharityCategory::where('code', 'food')->value('id'),
+                'title_ar' => 'حملة', 'description_ar' => 'وصفٌ كافٍ',
+                'target_amount' => 1000,
+                'start_at' => now()->addDays(30)->toDateString(),
+                'deadline_at' => now()->addDays(5)->toDateString(),
+            ])->assertStatus(422);
+    }
+
+    public function test_the_app_puts_urgent_campaigns_first(): void
+    {
+        $this->charity->verifyOrganization($this->org, $this->admin);
+
+        $make = function (string $title, bool $urgent) {
+            $c = $this->charity->createCampaign($this->org, [
+                'category_id' => $this->category->id,
+                'title_ar' => $title, 'description_ar' => 'وصف',
+                'target_amount' => '1000.0000',
+                'is_urgent' => $urgent,
+            ], $this->admin);
+            return $this->charity->approveCampaign($c, $this->admin);
+        };
+
+        // **العاجلةُ تُنشأ أوّلاً عمداً.** ولو أُنشئت آخراً لتصدّرت بحكم
+        // `orderByDesc('id')` وحدَه — فيمرّ الحارسُ والفرزُ مكسور. جُرّب
+        // بالعكس فمرّ، فقُلب الترتيب. (حارسٌ يمرّ لسببٍ آخر ليس حارساً.)
+        $urgent = $make('عاجلة', true);
+        $make('عاديّة', false);
+
+        $donor = User::factory()->create(['zone_code' => 'SOUTH']);
+        $items = $this->actingAs($donor, 'api')
+            ->getJson('/api/v1/amial/donations/campaigns')->assertOk()
+            ->json('meta.items');
+
+        // **علامةٌ لا تُغيّر ترتيباً ليست عاجلة** — تُرى ولا تُقدِّم الحملةَ
+        // سطراً واحداً، فيقرأها المتبرّعُ زينةً.
+        $this->assertSame(
+            $urgent->campaign_ulid,
+            $items[0]['campaign_ulid'] ?? null,
+            'العاجلةُ ليست في الصدارة',
+        );
     }
 
     // ══════════════════════════════════════════════════════════════════

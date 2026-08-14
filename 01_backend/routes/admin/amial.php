@@ -140,6 +140,12 @@ Route::prefix('charity')->name('charity.')->middleware('amial.idempotency')->gro
     Route::post('/organizations/{ulid}/suspend', [AdminCharityController::class, 'suspendOrg'])
         ->where('ulid', '[A-Z0-9]{26}')->name('orgs.suspend');
 
+    // AMIAL-CHARITY-META-001 — التصنيفات. كانت الشاشةُ تناديه وهو معدوم.
+    Route::get('/categories', [AdminCharityController::class, 'categories'])->name('categories');
+
+    // AMIAL-CHARITY-UPLOAD-001 — رفعُ صورةٍ من الجهاز بدل لصق رابط.
+    Route::post('/uploads', [AdminCharityController::class, 'uploadImage'])->name('uploads');
+
     // Campaigns
     Route::get('/campaigns', [AdminCharityController::class, 'indexCampaigns'])->name('campaigns.index');
     Route::post('/organizations/{orgUlid}/campaigns', [AdminCharityController::class, 'createCampaign'])

@@ -51,10 +51,19 @@
                                 <input name="bank_account_number" class="form-control" dir="ltr"></div>
                             <div class="col-md-4"><label class="form-label small">صاحب الحساب</label>
                                 <input name="bank_account_holder" class="form-control"></div>
-                            <div class="col-md-6"><label class="form-label small">رابط الشعار</label>
-                                <input name="logo_url" type="url" class="form-control" dir="ltr" placeholder="https://…"></div>
-                            <div class="col-md-6"><label class="form-label small">رابط صورة الغلاف</label>
-                                <input name="cover_image_url" type="url" class="form-control" dir="ltr" placeholder="https://…"></div>
+                            {{-- AMIAL-CHARITY-UPLOAD-001 — من الجهاز هنا أيضاً.
+                                 فالشكوى واحدةٌ في النموذجين، ولا معنى لأن
+                                 يُرفع غلافُ الحملة ويُلصق شعارُ الجمعيّة. --}}
+                            <div class="col-md-6"><label class="form-label small">شعار الجمعية</label>
+                                <input type="file" id="org-logo-file" class="form-control"
+                                       accept="image/jpeg,image/png,image/webp" data-testid="org-logo-file">
+                                <input type="hidden" name="logo_url" id="org-logo-url">
+                                <div class="mt-2" id="org-logo-preview"></div></div>
+                            <div class="col-md-6"><label class="form-label small">صورة الغلاف</label>
+                                <input type="file" id="org-cover-file" class="form-control"
+                                       accept="image/jpeg,image/png,image/webp" data-testid="org-cover-file">
+                                <input type="hidden" name="cover_image_url" id="org-cover-url">
+                                <div class="mt-2" id="org-cover-preview"></div></div>
                         </div>
                         <button class="btn btn-primary mt-3" type="submit">إنشاء الجمعية</button>
                     </form>
@@ -92,21 +101,66 @@
                                 <input name="title_ar" class="form-control" required maxlength="200"></div>
                             <div class="col-12"><label class="form-label small">الوصف *</label>
                                 <textarea name="description_ar" class="form-control" rows="2" required maxlength="5000"></textarea></div>
-                            <div class="col-md-4"><label class="form-label small">تاريخ الانتهاء</label>
+                            {{-- AMIAL-CHARITY-META-001 — **بدايةٌ ونهاية.** كان
+                                 النموذجُ يسأل عن الانتهاء وحده، فحملةٌ تُجهَّز
+                                 مقدَّماً تُنشر ساعةَ اعتمادها لا ساعةَ موسمها. --}}
+                            <div class="col-md-3"><label class="form-label small">تاريخ البداية</label>
+                                <input name="start_at" type="date" class="form-control">
+                                <div class="form-text">فارغٌ = تبدأ فور الاعتماد.</div></div>
+                            <div class="col-md-3"><label class="form-label small">تاريخ الانتهاء</label>
                                 <input name="deadline_at" type="date" class="form-control">
                                 <div class="form-text">بعد الغد فأبعد.</div></div>
-                            <div class="col-md-4"><label class="form-label small">عدد المستفيدين</label>
+                            <div class="col-md-3"><label class="form-label small">عدد المستفيدين</label>
                                 <input name="beneficiary_count" type="number" min="1" class="form-control"></div>
-                            <div class="col-md-4"><label class="form-label small">الموقع</label>
+                            <div class="col-md-3"><label class="form-label small">الموقع</label>
                                 <input name="location_ar" class="form-control" maxlength="200"></div>
-                            <div class="col-md-6"><label class="form-label small">صورة الغلاف (رابط)</label>
-                                <input name="cover_image_url" type="url" class="form-control" dir="ltr" placeholder="https://…"></div>
-                            <div class="col-md-6"><label class="form-label small">صور إضافية (روابط، سطرٌ لكلٍّ)</label>
-                                <textarea name="gallery_images" class="form-control" rows="2" dir="ltr"
-                                          placeholder="https://…&#10;https://…"></textarea>
-                                <div class="form-text">عشرةٌ حدّاً أقصى.</div></div>
+
+                            {{-- **العلامات.** «عاجل» حكمٌ إداريّ يرفع الحملةَ في
+                                 ترتيب التطبيق ويضع عليها شارةً حمراء — لا وصفٌ
+                                 تكتبه الجمعيّةُ عن نفسها. --}}
+                            <div class="col-12">
+                                <div class="border rounded p-2 d-flex flex-wrap gap-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="1"
+                                               name="is_urgent" id="camp-urgent" data-testid="campaign-urgent">
+                                        <label class="form-check-label" for="camp-urgent">
+                                            <span class="badge bg-danger">عاجل</span>
+                                            <small class="text-muted d-block">يتصدّر قائمة التطبيق</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" value="1"
+                                               name="is_featured" id="camp-featured" data-testid="campaign-featured">
+                                        <label class="form-check-label" for="camp-featured">
+                                            <span class="badge bg-warning text-dark">مميّزة</span>
+                                            <small class="text-muted d-block">تظهر في شريط الواجهة</small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {{-- AMIAL-CHARITY-UPLOAD-001 — **من الجهاز لا برابط.**
+                                 مكتبُ جمعيّةٍ لا يملك مستضيفَ صور، فطلبُ رابطٍ
+                                 يعني حملةً بلا صورة — أو لا حملةَ أصلاً. --}}
+                            <div class="col-md-6">
+                                <label class="form-label small">صورة الغلاف</label>
+                                <input type="file" id="camp-cover-file" class="form-control"
+                                       accept="image/jpeg,image/png,image/webp"
+                                       data-testid="campaign-cover-file">
+                                <input type="hidden" name="cover_image_url" id="camp-cover-url">
+                                <div class="mt-2" id="camp-cover-preview"></div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label small">صور إضافية</label>
+                                <input type="file" id="camp-gallery-file" class="form-control" multiple
+                                       accept="image/jpeg,image/png,image/webp"
+                                       data-testid="campaign-gallery-file">
+                                <div class="form-text">عشرةٌ حدّاً أقصى · ٥ ميغابايت للصورة.</div>
+                                <div class="mt-2 d-flex flex-wrap gap-2" id="camp-gallery-preview"></div>
+                            </div>
                         </div>
-                        <button class="btn btn-primary mt-3" type="submit">إنشاء الحملة</button>
+                        <button class="btn btn-primary mt-3" type="submit"
+                                data-testid="campaign-submit">إنشاء الحملة</button>
                     </form>
                 </div>
             </div>
@@ -312,8 +366,29 @@
                 // وهدفٌ صفرٌ لا يُقسم عليه — تُقال «بلا هدف».
                 const pct = target > 0 ? Math.min(100, Math.round((cur / target) * 100)) : null;
 
+                // **العلاماتُ تُرى حيث تُتَّخذ القرارات** — ولوحةٌ تُخزّن
+                // «عاجل» ولا تعرضه تجعل المديرَ يعيد ضبطَ ما ضبطه.
+                const tags = [
+                    c.is_urgent ? '<span class="badge bg-danger">عاجل</span>' : '',
+                    c.is_featured ? '<span class="badge bg-warning text-dark">مميّزة</span>' : '',
+                    c.category?.name_ar
+                        ? `<span class="badge badge-soft-info">${esc(c.category.name_ar)}</span>` : '',
+                ].filter(Boolean).join(' ');
+
+                const window_ = [
+                    c.start_at ? `من ${esc(String(c.start_at).slice(0, 10))}` : '',
+                    c.deadline_at ? `إلى ${esc(String(c.deadline_at).slice(0, 10))}` : '',
+                ].filter(Boolean).join(' · ');
+
                 return `<tr>
-                    <td><b>${esc(c.title_ar ?? '')}</b>
+                    <td>
+                        ${c.cover_image_url
+                            ? `<img src="${esc(c.cover_image_url)}" alt="" loading="lazy"
+                                    style="width:56px;height:40px;object-fit:cover;border-radius:6px"
+                                    class="float-start ms-2">` : ''}
+                        <b>${esc(c.title_ar ?? '')}</b>
+                        <div class="mt-1">${tags || '<span class="text-muted small">بلا علامات</span>'}</div>
+                        ${window_ ? `<small class="text-muted d-block">${window_}</small>` : ''}
                         <small class="text-muted d-block text-monospace">${esc(c.campaign_ulid ?? '')}</small></td>
                     <td><small>${esc(c.organization?.name_ar ?? '—')}</small></td>
                     <td style="min-width:160px">
@@ -342,13 +417,18 @@
         try {
             const j = await api(`${base}/categories`);
             const cats = pick(j, 'categories', 'items');
+            const icons = {
+                emergency: '🚨', food: '🍚', medical: '🏥', water: '💧', home: '🏠',
+                school: '📚', child: '🧒', mosque: '🕌', heart: '❤️',
+            };
             document.getElementById('camp-cat').innerHTML = cats.map(c =>
-                `<option value="${c.id}">${esc(c.name_ar ?? c.name ?? c.slug)}</option>`).join('');
+                `<option value="${c.id}">${icons[c.icon] ?? '•'} ${esc(c.name_ar ?? c.code)}</option>`
+            ).join('');
         } catch (e) {
-            // **الغيابُ يُقال** — قائمةٌ فارغةٌ صامتةٌ تجعل الحقلَ الإلزاميّ
-            // غيرَ قابلٍ للتعبئة ولا يُعرف لماذا.
+            // **الغيابُ يُقال بسببه** — «لا تصنيفات» وحدها تُقرأ «الجدولُ
+            // فارغ»، وقد يكون المسارُ ساقطاً. والفرقُ يغيّر ما يُفعل.
             document.getElementById('camp-cat').innerHTML =
-                '<option value="">— لا تصنيفات مسجَّلة —</option>';
+                `<option value="">— تعذّر جلبُ التصنيفات: ${esc(e.message)} —</option>`;
         }
     }
 
@@ -474,10 +554,93 @@
     document.getElementById('org-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         try {
-            await api(`${base}/organizations`, {method: 'POST', body: JSON.stringify(formData(e.target))});
+            const d = formData(e.target);
+            Object.keys(d).forEach(k => { if (d[k] === '') delete d[k]; });
+            await api(`${base}/organizations`, {method: 'POST', body: JSON.stringify(d)});
             await amialDialog.show('أُنشئت الجمعية — اعتمدها لتظهر في التطبيق');
-            e.target.reset(); loadOrgs();
+            e.target.reset();
+            ['org-logo-preview', 'org-cover-preview'].forEach(id =>
+                document.getElementById(id).innerHTML = '');
+            loadOrgs();
         } catch (err) { await amialDialog.show(err.message); }
+    });
+
+    // ── AMIAL-CHARITY-UPLOAD-001: الصور من الجهاز ──────────────────
+    //
+    // **الرفعُ لا يمرّ بـ`api()`**: تلك تفرض `Content-Type: application/json`،
+    // ومع `FormData` يجب تركُ المتصفّح يضع `multipart/form-data` بحدوده —
+    // وإلّا وصل الملفُّ ولا يُقرأ، والرسالةُ «الصورة مطلوبة» على ملفٍّ أُرسل.
+    async function uploadOne(file) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const r = await fetch(`${base}/uploads`, {
+            method: 'POST',
+            headers: {'Accept': 'application/json', 'X-CSRF-TOKEN': csrf},
+            body: fd,
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || j.success === false) throw new Error(j.message || `تعذّر رفعُ ${file.name}`);
+        return (j.meta ?? j.data ?? j).url;
+    }
+
+    let galleryUrls = [];
+
+    /** صورةٌ واحدةٌ: تُرفع، ويُملأ الحقلُ المخفيّ، وتُعرض معاينتُها. */
+    function wireSingleUpload(fileId, urlId, previewId) {
+        document.getElementById(fileId).addEventListener('change', async (e) => {
+            const f = e.target.files[0];
+            const box = document.getElementById(previewId);
+            const hidden = document.getElementById(urlId);
+            if (!f) { box.innerHTML = ''; hidden.value = ''; return; }
+            box.innerHTML = '<span class="text-muted small">جارٍ الرفع…</span>';
+            try {
+                const url = await uploadOne(f);
+                hidden.value = url;
+                // **المعاينةُ إقرارُ وصول**: بلا صورةٍ تُرى، لا يعرف الرافعُ
+                // أوصلت أم لا حتّى تُنشر الحملةُ بلا غلاف.
+                box.innerHTML = `<img src="${esc(url)}" alt="" style="max-height:90px;border-radius:8px">`;
+            } catch (err) {
+                // **ويُفرَّغ الحقلُ عند الفشل** — رابطٌ قديمٌ باقٍ بعد رفعةٍ
+                // ساقطةٍ يحفظ صورةً غيرَ التي اختارها.
+                hidden.value = '';
+                e.target.value = '';
+                box.innerHTML = `<span class="text-danger small">${esc(err.message)}</span>`;
+            }
+        });
+    }
+
+    wireSingleUpload('camp-cover-file', 'camp-cover-url', 'camp-cover-preview');
+    wireSingleUpload('org-logo-file', 'org-logo-url', 'org-logo-preview');
+    wireSingleUpload('org-cover-file', 'org-cover-url', 'org-cover-preview');
+
+    document.getElementById('camp-gallery-file').addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        const box = document.getElementById('camp-gallery-preview');
+        if (!files.length) return;
+
+        if (galleryUrls.length + files.length > 10) {
+            box.innerHTML = '<span class="text-danger small">عشرةٌ حدّاً أقصى.</span>';
+            e.target.value = '';
+            return;
+        }
+
+        for (const f of files) {
+            const cell = document.createElement('div');
+            cell.className = 'small text-muted';
+            cell.textContent = `${f.name}…`;
+            box.appendChild(cell);
+            try {
+                const url = await uploadOne(f);
+                galleryUrls.push(url);
+                cell.className = '';
+                cell.innerHTML = `<img src="${esc(url)}" alt=""
+                     style="width:64px;height:64px;object-fit:cover;border-radius:6px">`;
+            } catch (err) {
+                cell.className = 'small text-danger';
+                cell.textContent = err.message;
+            }
+        }
+        e.target.value = '';
     });
 
     document.getElementById('camp-form').addEventListener('submit', async (e) => {
@@ -485,16 +648,25 @@
         const d = formData(e.target);
         const orgUlid = d.org_ulid; delete d.org_ulid;
 
-        // الصورُ سطرٌ لكلّ رابط — والخادمُ يريد مصفوفة.
-        d.gallery_images = String(d.gallery_images || '').split('\n')
-            .map(x => x.trim()).filter(Boolean);
-        if (!d.gallery_images.length) delete d.gallery_images;
+        // **الروابطُ تأتي من الرفع لا من حقلٍ نصّيّ.**
+        if (galleryUrls.length) d.gallery_images = galleryUrls;
+
+        // خانةُ التأشير تُرسل '1' حين تُؤشَّر ولا تُرسل أصلاً حين لا تُؤشَّر —
+        // فالغيابُ يُقال صراحةً `false` لئلّا يبقى ما أُلغي مؤشَّراً.
+        d.is_urgent = d.is_urgent ? 1 : 0;
+        d.is_featured = d.is_featured ? 1 : 0;
+
         Object.keys(d).forEach(k => { if (d[k] === '') delete d[k]; });
 
         try {
             await api(`${base}/organizations/${orgUlid}/campaigns`, {method: 'POST', body: JSON.stringify(d)});
             await amialDialog.show('أُنشئت الحملة — اعتمدها لتظهر في التطبيق');
-            e.target.reset(); loadCamps();
+            e.target.reset();
+            galleryUrls = [];
+            document.getElementById('camp-cover-url').value = '';
+            document.getElementById('camp-cover-preview').innerHTML = '';
+            document.getElementById('camp-gallery-preview').innerHTML = '';
+            loadCamps();
         } catch (err) { await amialDialog.show(err.message); }
     });
 

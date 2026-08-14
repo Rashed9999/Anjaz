@@ -87,6 +87,14 @@ class AmialCharityCampaign {
   final String status;
   final int donorCount;
   final bool isFeatured;
+
+  /// AMIAL-CHARITY-META-001 — «عاجل».
+  ///
+  /// وهي حكمٌ إداريّ لا تصنيف: حملةُ إغاثةٍ قد لا تكون عاجلة، وحملةُ
+  /// علاجٍ قد تكون. فتُقرأ من الخادم ولا تُستنتج من `category`.
+  final bool isUrgent;
+
+  final DateTime? startAt;
   final AmialCharityOrganization? organization;
   final AmialCharityCategory? category;
   final List<AmialRecentDonation>? recentDonations;
@@ -111,6 +119,8 @@ class AmialCharityCampaign {
     required this.status,
     required this.donorCount,
     required this.isFeatured,
+    this.isUrgent = false,
+    this.startAt,
     this.organization,
     this.category,
     this.recentDonations,
@@ -138,6 +148,9 @@ class AmialCharityCampaign {
       status: j['status'] ?? '',
       donorCount: j['donor_count'] ?? 0,
       isFeatured: j['is_featured'] == true || j['is_featured'] == 1,
+      // الخادمُ يردّ 1/0 من MySQL و true/false من الـcast — فيُقبل الوجهان.
+      isUrgent: j['is_urgent'] == true || j['is_urgent'] == 1,
+      startAt: j['start_at'] != null ? DateTime.tryParse(j['start_at']) : null,
       organization: j['organization'] is Map
           ? AmialCharityOrganization.fromJson(Map<String, dynamic>.from(j['organization']))
           : null,

@@ -126,6 +126,67 @@ class AdminCharityController extends Controller
         ]);
     }
 
+    /**
+     * AMIAL-CHARITY-META-001 — **تصنيفاتُ الحملات للوحة.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * وكان في الشاشة سببان لِـ«— لا تصنيفات مسجَّلة —»، لا سبب:
+     *   ① الجدولُ فارغ — بذرةٌ مسجَّلةٌ في `DatabaseSeeder` لا يشغّلها
+     *      النشر. (عولج بهجرة `2026_08_14_140000`.)
+     *   ② **ولا نقطةَ إداريّةٌ تقرؤه أصلاً** — الشاشةُ تنادي
+     *      `admin/amial/charity/categories` وهو مسارٌ لا وجود له، فكلُّ
+     *      نداءٍ يسقط ويُبتلع في `catch`.
+     *
+     * فلو زُرع الجدولُ وحدَه لبقيت الخانةُ فارغةً — **وعطلٌ واحدٌ له
+     * سببان يُصلَح أحدُهما فيبدو أنّ الإصلاح لم ينفع.**
+     * ══════════════════════════════════════════════════════════════════
+     */
+    public function categories(): JsonResponse
+    {
+        return $this->ok([
+            'categories' => \App\Models\CharityCategory::where('is_active', true)
+                ->orderBy('sort_order')->get(['id', 'code', 'name_ar', 'icon']),
+        ]);
+    }
+
+    /**
+     * AMIAL-CHARITY-UPLOAD-001 — **الصورةُ تُرفع من الجهاز لا تُلصق برابط.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمن الذي دُفع:** قال صاحبُ المشروع: «المفترض رفع صور من الجهاز
+     * وليس رابط». وكان النموذجُ يطلب `https://…` — أي أنّ من ينشئ حملةً
+     * لازمه أن يرفع الصورةَ في مكانٍ آخرَ أوّلاً ثمّ ينسخ رابطَها.
+     *
+     * **وهذا ليس نقصَ ميزةٍ بل بابٌ لا يُفتح**: لا أحدَ في مكتبِ جمعيّةٍ
+     * يملك مستضيفَ صور. فالنتيجةُ حملةٌ بلا صورة، أو لا حملةَ أصلاً.
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * يظهر في : لوحة الإدارة ← التبرّعات ← الحملات ← خانتا الصور
+     */
+    public function uploadImage(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            // **النوعُ يُقيَّد صراحةً**: `image` وحدها تقبل SVG، وSVG يحمل
+            // نصّاً برمجيّاً يُنفَّذ في متصفّح من يفتحه.
+            'file' => 'required|file|mimes:jpg,jpeg,png,webp|max:5120',
+        ], [], ['file' => 'الصورة']);
+        if ($v->fails()) return $this->validationError($v);
+
+        $stored = \App\CentralLogics\Helpers::upload(
+            'charity/', APPLICATION_IMAGE_FORMAT, $request->file('file'));
+
+        // **`upload` تُرجع `false` على ملفٍّ ليس صورةً** — ولو مُرّرت كما هي
+        // لصار الرابطُ `…/charity/` وظهرت صورةٌ مكسورةٌ بلا رسالة.
+        if (! $stored) {
+            return $this->error('UPLOAD_FAILED', 'تعذّر قراءةُ الصورة — جرّب صيغةً أخرى', 422);
+        }
+
+        return $this->ok([
+            'path' => 'charity/' . $stored,
+            'url' => asset('storage/charity/' . $stored),
+        ], 'UPLOADED', 'رُفعت الصورة', 201);
+    }
+
     public function createCampaign(Request $request, string $orgUlid): JsonResponse
     {
         $org = CharityOrganization::where('org_ulid', $orgUlid)->first();
@@ -142,8 +203,15 @@ class AdminCharityController extends Controller
             'location_ar' => 'sometimes|nullable|string|max:200',
             'cover_image_url' => 'sometimes|nullable|url',
             'gallery_images' => 'sometimes|nullable|array|max:10',
-            'deadline_at' => 'sometimes|nullable|date|after:tomorrow',
+            // AMIAL-CHARITY-META-001 — **بدايةٌ ونهاية، لا نهايةٌ وحدها.**
+            // كان النموذجُ يسأل عن تاريخ الانتهاء فقط، وحملةٌ بلا بدايةٍ
+            // تُنشر ساعةَ اعتمادها — فلا تُجهَّز حملةُ رمضانَ في شعبان.
+            'start_at' => 'sometimes|nullable|date',
+            'deadline_at' => 'sometimes|nullable|date|after:tomorrow|after:start_at',
             'is_featured' => 'sometimes|boolean',
+            // **«عاجل» حكمٌ إداريّ**: يرفع الحملةَ في ترتيب التطبيق ويضع
+            // عليها علامةً حمراء — فلا يُترك للجمعيّة تُعلنه عن نفسها.
+            'is_urgent' => 'sometimes|boolean',
         ]);
         if ($v->fails()) return $this->validationError($v);
 

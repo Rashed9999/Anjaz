@@ -52,6 +52,21 @@ class _CampaignsListScreenState extends State<CampaignsListScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // AMIAL-CHARITY-META-001 — العلامتان: «عاجل» والتصنيف.
+                      // والترتيبُ من الخادم يضع العاجلَ أوّلاً، فالشارةُ
+                      // تفسّر لماذا هذه الحملةُ في الصدارة.
+                      if (c.isUrgent || c.category != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Wrap(
+                            spacing: 6,
+                            children: [
+                              if (c.isUrgent) const _Tag('عاجل', Color(0xFFD32F2F)),
+                              if (c.category != null)
+                                _Tag(c.category!.nameAr, AmialColors.primary),
+                            ],
+                          ),
+                        ),
                       Text(c.titleAr,
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 14)),
@@ -89,4 +104,23 @@ class _CampaignsListScreenState extends State<CampaignsListScreen> {
       }),
     );
   }
+}
+
+/// شارةٌ صغيرةٌ ملوَّنة — «عاجل» أو اسمُ التصنيف.
+class _Tag extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _Tag(this.label, this.color);
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 10, fontWeight: FontWeight.bold, color: color)),
+      );
 }

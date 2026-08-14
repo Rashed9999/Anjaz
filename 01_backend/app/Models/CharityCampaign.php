@@ -23,7 +23,9 @@ class CharityCampaign extends Model
         'start_at', 'deadline_at',
         'status', 'approved_by_admin_id', 'approved_at',
         'rejection_reason', 'cancellation_reason',
-        'view_count', 'donor_count', 'is_featured',
+        // AMIAL-CHARITY-META-001 — «عاجل». وخارج `fillable` تُبتلع القيمةُ
+        // بصمت: يُعلَّم المديرُ الحملةَ عاجلةً فتُحفظ عاديّة.
+        'view_count', 'donor_count', 'is_featured', 'is_urgent',
         'zone_code',
     ];
 
@@ -39,6 +41,7 @@ class CharityCampaign extends Model
         'view_count' => 'integer',
         'donor_count' => 'integer',
         'is_featured' => 'boolean',
+        'is_urgent' => 'boolean',
     ];
 
     public function organization(): BelongsTo
