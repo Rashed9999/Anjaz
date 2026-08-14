@@ -13,9 +13,24 @@ class SupportConsoleWebTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** حسابُ إدارةٍ بدوره — لا بنوعه وحده. */
+    private function operator(string $phone): User
+    {
+        $u = User::factory()->create([
+            'type' => ADMIN_TYPE, 'role' => 'admin', 'phone' => $phone,
+        ]);
+
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($u, \App\Services\PlatformRoleService::ADMIN);
+
+        return $u->refresh();
+    }
+
     public function test_admin_sees_console_page(): void
     {
-        $admin = User::factory()->create(['type' => 0, 'phone' => '967770000010']);
+        // **نوعُ الحساب لا يفتح الشاشة** — نقاطُ الدعم صارت خلف صلاحيّةٍ
+        // منصّيّة، فحسابُ إدارةٍ بلا دورٍ يُردّ `PERMISSION_DENIED`.
+        $admin = $this->operator('967770000010');
 
         $this->actingAs($admin, 'user')
             ->get('/admin/support-center')
@@ -31,7 +46,7 @@ class SupportConsoleWebTest extends TestCase
 
     public function test_web_json_endpoints_work_with_session(): void
     {
-        $admin = User::factory()->create(['type' => 0, 'phone' => '967770000011']);
+        $admin = $this->operator('967770000011');
         $customer = User::factory()->create(['type' => 2, 'phone' => '967771555099']);
 
         $this->actingAs($admin, 'user')

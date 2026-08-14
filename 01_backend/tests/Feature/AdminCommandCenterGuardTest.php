@@ -361,8 +361,14 @@ class AdminCommandCenterGuardTest extends TestCase
         $src = (string) file_get_contents(self::SIDEBAR);
 
         foreach ([
+            // AMIAL-SIDEBAR-SPLIT-001 — **إدارةُ التاجر ≠ رقابةُ عمله.**
+            // فُصلت الثلاثُ إلى مجموعةِ رقابةٍ لأنّها شاشاتٌ عابرةٌ للتجّار
+            // تكشف نمطاً، لا إدارةَ تاجرٍ بعينه. **والقاعدةُ نفسُها محفوظة**:
+            // كلُّ موضوعٍ في مجموعةٍ واحدة — والمواضيعُ صارت اثنين لا واحداً.
             'التجّار' => ['admin.amial.hub.merchants', 'admin.amial.hub.subscriptions',
-                          'admin.amial.invoices.page', 'admin.amial.hub.staff',
+                          'admin.amial.invoices.page', 'admin.amial.catalog.page',
+                          'admin.amial.entitlements.page'],
+            'رقابة عمل التجّار' => ['admin.amial.hub.staff',
                           'admin.amial.fuel.page', 'admin.amial.retail.page'],
             'العملاء' => ['admin.amial.customer.page', 'admin.amial.hub.customers',
                           'admin.support-center.index', 'admin.amial.recovery.index'],

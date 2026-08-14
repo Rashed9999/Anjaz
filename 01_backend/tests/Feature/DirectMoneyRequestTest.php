@@ -42,9 +42,20 @@ class DirectMoneyRequestTest extends TestCase
 
     private function person(string $phone): User
     {
+        // **`type => 1` هو `AGENT_TYPE` لا العميل** — والعميلُ `2`.
+        // فكان الحارسُ يردّ «طلب المال المباشر متاح للعملاء النشطين فقط»
+        // ردّاً صحيحاً، ويُقرأ سقوطاً في الميزة. والثوابتُ تُكتب بأسمائها
+        // لا بأرقامها لهذا بعينه.
+        //
+        // و`is_kyc_verified` شرطٌ ثانٍ يفحصه المسار — وغيابُه يوقف الطلب
+        // بعد أن يمرّ فحصُ النوع.
         return User::factory()->create([
-            'phone' => $phone, 'type' => 1, 'role' => 'customer',
-            'is_active' => 1, 'zone_code' => 'SOUTH',
+            'phone' => $phone,
+            'type' => CUSTOMER_TYPE,
+            'role' => 'customer',
+            'is_active' => 1,
+            'is_kyc_verified' => 1,
+            'zone_code' => 'SOUTH',
         ]);
     }
 
@@ -266,7 +277,15 @@ class DirectMoneyRequestTest extends TestCase
 
         $this->assertTrue($r['found']);
         $this->assertNotEmpty($r['hint']);
-        $this->assertSame($them->f_name . ' ' . $them->l_name, trim($r['name']));
+
+        // **الاسمُ يُقنَّع عمداً** — واسمُ العائلة كاملاً يجعل مسحَ الأرقام
+        // كشفاً لدليل هواتف. فيكفي أن يتعرّف الطالبُ على من يعرفه:
+        // الاسمُ الأوّل كاملاً، والعائلةُ بحرفها الأوّل.
+        // (وللشقيقة `never_leaks_more_than_a_name` العقدُ نفسُه.)
+        $this->assertStringStartsWith($them->f_name, trim($r['name']));
+        $this->assertStringNotContainsString($them->l_name, trim($r['name']),
+            'اسمُ العائلة ظهر كاملاً — والفحصُ يصير دليلَ هواتف');
+        $this->assertSame($r['name'], $r['masked_name']);
     }
 
     public function test_an_unknown_number_is_answered_not_left_silent(): void
@@ -274,24 +293,28 @@ class DirectMoneyRequestTest extends TestCase
         // (القاعدة ٧) الغيابُ يُقال مع سببه — لا يُترك الحقلُ بلا جواب.
         $me = $this->person('+967711000011');
 
+        // **الغيابُ صار ٤٢٢ برسالةٍ صريحة** بدل ٢٠٠ بـ`found=false`:
+        // فطلبُ المال المباشر لا رابطَ احتياطيَّ فيه، والرسالةُ تقول لماذا
+        // وقف الطلبُ هنا. (وكان التلميحُ يعِد برابطٍ لم يعد يُعرض.)
         $r = $this->actingAs($me, 'api')
             ->postJson('/api/v1/amial/payment-requests/check-recipient', ['phone' => '733000000'])
-            ->assertOk()->json('meta');
+            ->assertStatus(422)->json();
 
-        $this->assertFalse($r['found']);
-        $this->assertStringContainsString('رابط', $r['hint']);
+        $this->assertSame('REQUEST_RECIPIENT_INVALID', $r['code']);
+        $this->assertNotEmpty($r['message']);
     }
 
     public function test_your_own_number_is_refused_before_you_press_send(): void
     {
         $me = $this->person('+967711000012');
 
+        // ورقمُك أنت يُرَدُّ برسالةٍ لا بحقلٍ صامت.
         $r = $this->actingAs($me, 'api')
             ->postJson('/api/v1/amial/payment-requests/check-recipient', ['phone' => '711000012'])
-            ->assertOk()->json('meta');
+            ->assertStatus(422)->json();
 
-        $this->assertTrue($r['is_self']);
-        $this->assertFalse($r['found']);
+        $this->assertSame('REQUEST_RECIPIENT_INVALID', $r['code']);
+        $this->assertNotEmpty($r['message']);
     }
 
     public function test_the_check_never_leaks_more_than_a_name(): void

@@ -32,6 +32,7 @@ class FuelQrPaymentFlowTest extends TestCase
 
         $this->merchant = User::factory()->create([
             'type' => 3, 'zone_code' => 'SOUTH', 'phone' => '+967777200004',
+        'is_active' => 1, 'is_kyc_verified' => 1,
         ]);
         MerchantProfile::create([
             'user_id' => $this->merchant->id, 'verification_status' => 'verified',
@@ -44,6 +45,7 @@ class FuelQrPaymentFlowTest extends TestCase
 
         $this->customer = User::factory()->create([
             'type' => 2, 'zone_code' => 'SOUTH', 'phone' => '+967771700001',
+        'is_active' => 1, 'is_kyc_verified' => 1,
         ]);
         EMoney::create([
             'user_id' => $this->customer->id, 'current_balance' => '50000.0000',

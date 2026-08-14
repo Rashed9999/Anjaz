@@ -27,8 +27,8 @@ class PaymentRequestsTest extends TestCase
         parent::setUp();
         $this->svc = app(PaymentRequestService::class);
 
-        $this->requester = User::factory()->create(['type' => 2, 'phone' => '+967700001', 'zone_code' => 'SOUTH']);
-        $this->payer = User::factory()->create(['type' => 2, 'phone' => '+967700002', 'zone_code' => 'SOUTH']);
+        $this->requester = User::factory()->create(['type' => 2, 'phone' => '+967700001', 'zone_code' => 'SOUTH', 'is_active' => 1, 'is_kyc_verified' => 1]);
+        $this->payer = User::factory()->create(['type' => 2, 'phone' => '+967700002', 'zone_code' => 'SOUTH', 'is_active' => 1, 'is_kyc_verified' => 1]);
 
         foreach ([$this->requester->id => '1000', $this->payer->id => '50000'] as $uid => $bal) {
             EMoney::create([
@@ -95,7 +95,7 @@ class PaymentRequestsTest extends TestCase
     /** @test */
     public function pay_rejects_wrong_recipient(): void
     {
-        $third = User::factory()->create(['type' => 2, 'phone' => '+967700003']);
+        $third = User::factory()->create(['type' => 2, 'phone' => '+967700003', 'is_active' => 1, 'is_kyc_verified' => 1]);
         EMoney::create([
             'user_id' => $third->id, 'current_balance' => '10000.0000',
             'held_balance' => '0.0000', 'pending_balance' => '0.0000',
@@ -129,7 +129,9 @@ class PaymentRequestsTest extends TestCase
 
         // محاولة دفع ثانية
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('مدفوع سابقاً');
+        // **النصُّ صار «هذا الطلب مدفوع أو غير صالح»**، والمطابقةُ تُشدّ إلى
+        // جذرِ المعنى لا إلى صياغةٍ كاملةٍ تتغيّر مع كلّ تحسينِ رسالة.
+        $this->expectExceptionMessage('مدفوع');
         $this->svc->pay($this->payer, $req);
     }
 

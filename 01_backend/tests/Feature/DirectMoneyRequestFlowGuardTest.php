@@ -248,7 +248,16 @@ class DirectMoneyRequestFlowGuardTest extends TestCase
 
         $this->assertSame('pending', PaymentRequest::findOrFail($id)->status);
         $this->assertSame(0, Transaction::count());
-        $this->assertSame(0, \App\Models\Ledger\LedgerJournalEntry::count());
+        // **«لا قيدَ لهذه الدفعة» لا «الدفترُ فارغ».**
+        //
+        // وضعُ رصيدٍ في محفظةٍ يُنشئ قيدَ **رصيدٍ افتتاحيّ** يفسّر من أين
+        // جاء المال — وهو واجبٌ لا خلل. فكان الحارسُ يعدّ الدفترَ كلَّه
+        // ويسقط على قيدٍ صحيح، **ويصف مساراً سليماً بالكسر**.
+        $this->assertSame(
+            0,
+            \App\Models\Ledger\LedgerJournalEntry::where('source_type', 'payment_request')->count(),
+            'دفعةٌ مرفوضةٌ تركت قيداً في الدفتر',
+        );
         $this->assertSame('0.0000', (string) EMoney::where(
             'user_id', $this->requester->id)->value('current_balance'));
         $this->assertSame('1000.0000', (string) EMoney::where(

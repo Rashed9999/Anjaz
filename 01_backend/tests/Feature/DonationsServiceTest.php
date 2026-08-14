@@ -41,7 +41,7 @@ class DonationsServiceTest extends TestCase
         ]);
         EMoney::create(['user_id' => $this->donor->id, 'current_balance' => '5000.0000']);
 
-        $category = CharityCategory::create([
+        $category = CharityCategory::updateOrCreate(['code' => 'food'], [
             'code' => 'food',
             'name_ar' => 'طعام',
             'sort_order' => 1,

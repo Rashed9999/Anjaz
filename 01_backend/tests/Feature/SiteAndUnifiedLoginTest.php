@@ -108,7 +108,13 @@ class SiteAndUnifiedLoginTest extends TestCase
                 }
 
                 if (str_starts_with($target, '/assets/')) {
-                    $this->assertFileExists(public_path(ltrim($target, '/')),
+                    // **بصمةُ النسخة تُنزع قبل الفحص.** الأصولُ تُطلب بـ
+                    // `?v=...` لكسر ذاكرة المتصفّح، والقرصُ لا يعرف الاستعلام
+                    // — فكان الحارسُ يبحث عن ملفٍّ اسمُه فيه `?v=` ولا يجده،
+                    // ويتّهم أصلاً موجوداً بالغياب.
+                    $file = strtok($target, '?');
+
+                    $this->assertFileExists(public_path(ltrim($file, '/')),
                         "أصلٌ مفقود: {$target} (في {$path})");
                     continue;
                 }
@@ -313,13 +319,16 @@ class SiteAndUnifiedLoginTest extends TestCase
      */
     public function the_captcha_appears_only_after_repeated_failures(): void
     {
-        $this->get('/login')->assertOk()->assertDontSee('اكتب ما في الصورة');
+        // **النصُّ المرصود هو ما في الصفحة فعلاً**: «رمز التحقق». وكان
+        // الحارسُ يبحث عن «اكتب ما في الصورة» — صياغةٌ لم تُستعمل قطّ في
+        // شاشة الدخول الموحّد، فيسقط وهو يصف سلوكاً سليماً.
+        $this->get('/login')->assertOk()->assertDontSee('رمز التحقق');
 
         for ($i = 0; $i < 3; $i++) {
             $this->post('/login', ['username' => 'NOPE-' . $i, 'password' => 'x-wrong-1']);
         }
 
-        $this->get('/login')->assertOk()->assertSee('اكتب ما في الصورة');
+        $this->get('/login')->assertOk()->assertSee('رمز التحقق');
     }
 
     /**
@@ -423,7 +432,10 @@ class SiteAndUnifiedLoginTest extends TestCase
             'نموذج الدخول لا يظهر لمن له جلسة — فلا سبيل له إلى حسابٍ آخر');
 
         // ويُقال له من هو، ويُترك له البابان.
-        $this->assertStringContainsString('أنت داخلٌ الآن', $html);
+        // **بلا حركةٍ زائدة**: الصفحة تكتب «أنت داخل الآن»، والحارسُ كان
+        // يطلب «داخلٌ». وفرقُ حركةٍ واحدةٍ يُسقط مطابقةً نصّيّةً ويصف
+        // سلوكاً سليماً بالكسر — فيُرصد النصُّ كما هو مكتوب.
+        $this->assertStringContainsString('أنت داخل الآن', $html);
         $this->assertStringContainsString(route('agent.dashboard'), $html,
             'لا بابَ يُتابع به إلى لوحته');
         $this->assertStringContainsString(route('agent.logout'), $html,

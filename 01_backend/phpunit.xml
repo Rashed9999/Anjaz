@@ -18,6 +18,12 @@
         </include>
     </coverage>
     <php>
+        <!-- AMIAL-GATE-BLINDSPOT-001 — **حدُّ الذاكرة يُوضع هنا لا في سطر
+             الأمر.** `artisan test` يشغّل phpunit في عمليّةٍ ابنة، فـ
+             `php -d memory_limit=...` يصيب الأبَ وحدَه والابنُ يبقى على
+             ٥١٢ ميغابايت. وقِيس: المجموعةُ تنهار عند ٥١٢، ولم يكن يُطبع
+             سطرُ نتيجةٍ إطلاقاً، فتقرأ البوّابةُ الغيابَ نجاحاً. -->
+        <ini name="memory_limit" value="2048M"/>
         <server name="APP_ENV" value="testing"/>
         <server name="BCRYPT_ROUNDS" value="4"/>
         <server name="CACHE_DRIVER" value="array"/>

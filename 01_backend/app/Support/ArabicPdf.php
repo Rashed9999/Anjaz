@@ -27,7 +27,27 @@ class ArabicPdf
      */
     public static function render(string $html, array $opts = []): string
     {
-        @ini_set('memory_limit', '512M');
+        // ══════════════════════════════════════════════════════════════
+        //  AMIAL-GATE-BLINDSPOT-001 — **يُرفع الحدُّ ولا يُخفض أبداً.**
+        //
+        //  كان السطرُ `ini_set('memory_limit', '512M')` بلا شرط، وهو
+        //  **يخفض** الحدَّ متى كان أعلى — ويبقى منخفضاً لبقيّة العمليّة
+        //  كلِّها لا لهذه الدالّة وحدها.
+        //
+        //  **والثمن:** أوّلُ اختبارٍ يُصيّر إيصالاً يقصّ سقفَ العمليّة إلى
+        //  ٥١٢ ميغابايت، فتنهار مجموعةُ الاختبارات بعده بمئات الاختبارات:
+        //  «Allowed memory size of 536870912 bytes exhausted». ولأنّ
+        //  الانهيارَ يمنع طباعةَ سطر النتيجة، كانت البوّابةُ تقرأ الغيابَ
+        //  نجاحاً وتطبع `✓` فارغاً في الطبقة التاسعة.
+        //
+        //  وفي الإنتاج أخطر: طلبٌ يطبع إيصالاً يقصّ سقفَ بقيّة عمله.
+        // ══════════════════════════════════════════════════════════════
+        $current = trim((string) ini_get('memory_limit'));
+
+        if (self::toBytes($current) < 512 * 1024 * 1024) {
+            @ini_set('memory_limit', '512M');
+        }
+
         @set_time_limit(120);
 
         $format = $opts['format'] ?? 'A4';
@@ -108,5 +128,28 @@ class ArabicPdf
     public static function thermalFormat(int $widthMm): array
     {
         return [$widthMm, 300];
+    }
+
+    /**
+     * يحوّل صيغةَ `memory_limit` إلى بايتات.
+     *
+     * **و`-1` بلا حدّ** — تُعامَل أكبرَ من كلّ شيءٍ لا صفراً. ولو قُرئت
+     * صفراً لخُفض الحدُّ في كلّ بيئةٍ غيرِ محدودة، وهو عينُ العطل.
+     */
+    private static function toBytes(string $v): int
+    {
+        if ($v === '' || $v === '-1') {
+            return PHP_INT_MAX;
+        }
+
+        $unit = strtolower(substr($v, -1));
+        $n = (int) $v;
+
+        return match ($unit) {
+            'g' => $n * 1024 * 1024 * 1024,
+            'm' => $n * 1024 * 1024,
+            'k' => $n * 1024,
+            default => $n,
+        };
     }
 }

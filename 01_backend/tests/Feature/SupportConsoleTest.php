@@ -59,7 +59,9 @@ class SupportConsoleTest extends TestCase
         Passport::actingAs($this->customer, [], 'api');
 
         $this->getJson('/api/v1/amial/admin/support/search?q=777')
-            ->assertStatus(403)->assertJsonPath('code', 'FORBIDDEN');
+            // **الرمزُ صار `PERMISSION_DENIED`** موحَّداً مع بقيّة البوّابات —
+            // و`FORBIDDEN` كان اسماً محلّيّاً لهذه النقطة وحدها.
+            ->assertStatus(403)->assertJsonPath('code', 'PERMISSION_DENIED');
         $this->getJson('/api/v1/amial/admin/support/ops-dashboard')->assertStatus(403);
         $this->postJson("/api/v1/amial/admin/support/customers/{$this->customer->id}/freeze",
             ['reason' => 'اختبار وصول'])->assertStatus(403);

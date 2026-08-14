@@ -169,7 +169,6 @@ class LedgerCoverageGuardTest extends TestCase
         'InstallmentService' => 'دَين معلوم: الأقساط لا تُرحَّل — نفس البند',
         'SplitBillService' => 'دَين معلوم: تقسيم الفاتورة لا يُرحَّل — نفس البند',
         'FamilyFundService' => 'دَين معلوم: صندوق العائلة لا يُرحَّل — نفس البند',
-        'CharityService' => 'دَين معلوم: تسوية الجمعيات لا تُرحَّل (التبرّع نفسه يُرحَّل)',
         'SubscriptionService' => 'دَين معلوم: رسوم الاشتراك لا تُرحَّل — نفس البند',
 
         // ── أدوات لا خدمات مال ──

@@ -89,7 +89,11 @@ class NotificationController extends Controller
 
     public function edit(int $id): View
     {
-        $notification = $this->notification->find($id);
+        // AMIAL-SWEEP-001 — **`find` تُرجع `null` والقالبُ يقرأ `->id`.**
+        // فإشعارٌ محذوفٌ يُفتح رابطُه من سجلٍّ قديمٍ يُخرج صفحةً بيضاءَ
+        // بخطأ ٥٠٠ بدل «غير موجود». كشفه مسحُ اللوحة.
+        $notification = $this->notification->findOrFail($id);
+
         return view('admin-views.notification.edit', compact('notification'));
     }
 

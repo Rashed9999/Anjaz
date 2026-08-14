@@ -39,7 +39,10 @@ class CharityServiceTest extends TestCase
         $this->donations = app(DonationsService::class);
         $this->admin = User::factory()->create();
 
-        $this->category = CharityCategory::create([
+        // AMIAL-CHARITY-META-001 — **التصنيفاتُ صارت مزروعةً بهجرة**،
+        // فإنشاؤها هنا يصطدم بمفتاحِ الرمز الفريد. و`updateOrCreate` تُبقي
+        // الاختبارَ يعمل في القاعدتين: التي زُرعت والتي لم تُزرع بعد.
+        $this->category = CharityCategory::updateOrCreate(['code' => 'medical'], [
             'code' => 'medical',
             'name_ar' => 'علاج',
             'sort_order' => 1,

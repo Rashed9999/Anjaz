@@ -107,7 +107,12 @@ class ReceiptDownloadEndpointTest extends TestCase
             ->get("/api/v1/amial/receipts/{$receipt->id}/download");
 
         $response->assertOk();
-        $this->assertStringStartsWith('%PDF', (string) $response->getContent());
+
+        // **`response()->file()` تُرجع `BinaryFileResponse`**، و`getContent()`
+        // عليها `false` دائماً — المحتوى يُرسَل بـ`sendContent()` لا يُبنى في
+        // الذاكرة. فكان الاختبارُ يقارن سلسلةً فارغةً بـ«%PDF» ويسقط، **والنقطةُ
+        // سليمةٌ تماماً**. و`streamedContent()` تُشغّل الإرسالَ وتلتقطه.
+        $this->assertStringStartsWith('%PDF', $response->streamedContent());
     }
 
     /** إيصال غيرك لا يُنزَّل — الإيصال يحمل مبلغاً وطرفاً. */

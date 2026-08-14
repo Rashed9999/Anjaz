@@ -39,7 +39,16 @@ class SafePaymentAdminAuditTest extends TestCase
 
     private function staff(): User
     {
-        return User::factory()->create(['type' => ADMIN_TYPE]);
+        // AMIAL-AUDIT-CENTER-001 — **سجلُّ التدقيق صار خلف صلاحيّة**
+        // (`platform.audit.view`)، ونوعُ الحساب وحدَه لم يعد يفتحه. فحسابٌ
+        // بنوع إدارةٍ بلا دورٍ يُردّ ٤٠٣ — وهو الصواب: من يقرأ قراراتِ
+        // الحسم ليس بالضرورة كلَّ من يدخل اللوحة.
+        $u = User::factory()->create(['type' => ADMIN_TYPE, 'role' => 'admin']);
+
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($u, \App\Services\PlatformRoleService::ADMIN);
+
+        return $u->refresh();
     }
 
     /** نزاع مفتوح جاهز للحسم، مع دليل من كل طرف. */
@@ -231,6 +240,21 @@ class SafePaymentAdminAuditTest extends TestCase
      */
     public function test_tampering_with_a_recorded_decision_breaks_the_chain(): void
     {
+        // **السلسلةُ تبدأ من نقطةٍ معلومة.**
+        //
+        // `amial:audit-verify` تمشي على كلّ صفوف التدقيق في القاعدة، وصفٌّ
+        // **مُثبَتٌ** من اختبارٍ سابقٍ (خارج معاملة الاختبار) يجعلها مكسورةً
+        // قبل أن يعبث بها أحد — فيسقط التأكيدُ الأوّل والميزةُ سليمة.
+        // (ويمرّ منفرداً ويسقط في المجموعة: أخبثُ صور السقوط.)
+        //
+        // **والرأسُ يُعاد إلى البدء لا يُحذف**: الإدراجُ يُحدّثه ولا يُنشئه،
+        // فحذفُ صفّه يوقف تقدّمَ السلسلة ويكسرها من جهةٍ أخرى.
+        DB::table('audit_decisions')->delete();
+        DB::table('audit_chain_head')->updateOrInsert(
+            ['id' => 1],
+            ['last_hash' => hash('sha256', 'AMIAL-AUDIT-CHAIN-GENESIS')],
+        );
+
         [$p] = $this->disputedDeal();
         app(SafePaymentService::class)->adminResolveRelease(
             $p, $this->staff(), 'أدلّة البائع كافية والتسليم مؤكَّد'

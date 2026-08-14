@@ -72,7 +72,10 @@ class BannerController extends Controller
 
     public function edit(int $id): View
     {
-        $banner = $this->banner->find($id);
+        // AMIAL-SWEEP-001 — نفسُ عطل الإشعارات: `find` تُرجع `null` والقالبُ
+        // يقرأ `->id`، فبانرٌ محذوفٌ يُخرج ٥٠٠ بدل «غير موجود».
+        $banner = $this->banner->findOrFail($id);
+
         return view('admin-views.banner.edit', compact('banner'));
     }
 

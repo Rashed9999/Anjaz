@@ -17,13 +17,13 @@
     <style>
         .admin-mobile-toggle,.admin-sidebar-close,.amial-sidebar-backdrop { display:none; }
         @media (max-width: 767.98px) {
-            .admin-mobile-toggle { display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border:0; border-radius:12px; background:#053391; color:#fff; font-size:20px; }
+            .admin-mobile-toggle { display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border:0; border-radius:12px; background:var(--amial-primary); color:var(--amial-surface); font-size:20px; }
             .amial-sidebar { position:fixed !important; z-index:1060; top:0; right:0; bottom:0; width:min(86vw,330px) !important; max-width:none !important; height:100dvh; overflow-y:auto; transform:translateX(106%); transition:transform .22s ease; box-shadow:-18px 0 46px rgba(10,28,68,.22); }
             body.amial-sidebar-open { overflow:hidden; }
             body.amial-sidebar-open .amial-sidebar { transform:translateX(0); }
             .amial-sidebar-backdrop { position:fixed; inset:0; z-index:1055; background:rgba(8,19,43,.5); opacity:0; pointer-events:none; transition:opacity .22s ease; }
             body.amial-sidebar-open .amial-sidebar-backdrop { display:block; opacity:1; pointer-events:auto; }
-            .admin-sidebar-close { display:inline-flex; width:34px; height:34px; align-items:center; justify-content:center; border:0; border-radius:10px; background:rgba(255,255,255,.13); color:#fff; font-size:24px; line-height:1; }
+            .admin-sidebar-close { display:inline-flex; width:34px; height:34px; align-items:center; justify-content:center; border:0; border-radius:10px; background:rgba(255,255,255,.13); color:var(--amial-surface); font-size:24px; line-height:1; }
             .admin-main { width:100%; padding:18px 14px 30px !important; }
             .admin-main > header { margin-bottom:18px !important; }
         }

@@ -44,7 +44,7 @@ class PaymentRequestDirectFlowTest extends TestCase
 
     private function user(string $phone, string $balance = '50000'): User
     {
-        $u = User::factory()->create(['phone' => $phone, 'zone_code' => 'SOUTH']);
+        $u = User::factory()->create(['phone' => $phone, 'zone_code' => 'SOUTH', 'is_active' => 1, 'is_kyc_verified' => 1]);
         EMoney::updateOrCreate(['user_id' => $u->id],
             ['current_balance' => $balance, 'zone_code' => 'SOUTH']);
 

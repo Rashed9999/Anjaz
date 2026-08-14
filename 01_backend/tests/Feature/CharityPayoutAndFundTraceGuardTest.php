@@ -71,7 +71,10 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         $this->admin = User::factory()->create(['type' => ADMIN_TYPE, 'role' => 'admin']);
         app(PlatformRoleService::class)->assign($this->admin, PlatformRoleService::ADMIN);
 
-        $this->category = CharityCategory::create([
+        // AMIAL-CHARITY-META-001 — **التصنيفاتُ صارت مزروعةً بهجرة**،
+        // فإنشاؤها هنا يصطدم بمفتاحِ الرمز الفريد. و`updateOrCreate` تُبقي
+        // الاختبارَ يعمل في القاعدتين: التي زُرعت والتي لم تُزرع بعد.
+        $this->category = CharityCategory::updateOrCreate(['code' => 'relief'], [
             'code' => 'relief', 'name_ar' => 'إغاثة', 'sort_order' => 1, 'is_active' => true,
         ]);
 
