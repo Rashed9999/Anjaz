@@ -14,15 +14,20 @@
     <title>@yield('title', 'أميال باي') — أميال باي</title>
     <meta name="description" content="@yield('desc', 'أميال باي — المحفظة الإلكترونيّة ونقاط البيع وشبكة الصرافة في اليمن.')">
     <meta name="theme-color" content="#053391">
-    <link rel="stylesheet" href="{{ asset('assets/site/site.css') }}">
+    {{-- رقم الإصدار يمنع المتصفح من جمع HTML الجديد مع CSS قديم مخزّن. --}}
+    <link rel="stylesheet" href="{{ asset('assets/site/site.css') }}?v=amial-site-20260812-2">
     @stack('head')
 </head>
 <body>
 
 <header class="site-head">
     <div class="wrap">
-        <a class="logo" href="{{ route('site.home') }}">
-            <span class="mark">🏦</span> أميال باي
+        <a class="logo" href="{{ route('site.home') }}" aria-label="أميال باي — الصفحة الرئيسية">
+            <img class="logo-image" src="{{ asset('branding/logo.png') }}" alt="شعار أميال باي">
+            <span class="logo-copy">
+                <strong>أميال باي</strong>
+                <small>AMIAL PAY</small>
+            </span>
         </a>
 
         <button class="nav-toggle" type="button" aria-label="القائمة"
@@ -46,7 +51,7 @@
                  كان فيها زرٌّ واحد يقود إلى `/login`، ومنه لا سبيلَ ظاهرٌ
                  إلى لوحة الإدارة. فمن أراد الإدارة وجب أن يكتب العنوان
                  بيده — وهو ما لا يفعله أحد، ولا يعرفه أصلاً. --}}
-            <a class="nav-admin" href="{{ route('admin.auth.login') }}">🛡️ الإدارة</a>
+            <a class="nav-admin" href="{{ route('admin.auth.login') }}">بوابة الإدارة</a>
             <a class="btn btn-primary" href="{{ route('login') }}">تسجيل الدخول</a>
         </nav>
     </div>
@@ -58,7 +63,10 @@
     <div class="wrap">
         <div class="cols">
             <div>
-                <div class="brand">🏦 أميال باي</div>
+                <div class="footer-brand">
+                    <img src="{{ asset('branding/logo.png') }}" alt="شعار أميال باي">
+                    <span>أميال باي <small>AMIAL PAY</small></span>
+                </div>
                 <div class="note">
                     محفظةٌ إلكترونيّة ونقاط بيعٍ وشبكةُ صرافةٍ في الجمهوريّة اليمنيّة.
                     خدماتُنا للأفراد والتجّار وشركات الصرافة وفروعها.

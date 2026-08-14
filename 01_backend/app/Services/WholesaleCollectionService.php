@@ -103,6 +103,19 @@ class WholesaleCollectionService
                 'current_balance' => MoneyService::sub((string)$customer->current_balance, $amount),
             ]);
 
+            if (!empty($collection->paid_transaction_id)) {
+                app(ReceiptService::class)->attachBusinessReference(
+                    (string) $collection->paid_transaction_id,
+                    'wholesale_invoice',
+                    (int) $inv->id,
+                    [
+                        'merchant_vertical' => 'wholesale',
+                        'invoice_number' => $inv->invoice_number,
+                        'collection_id' => $collection->id,
+                    ],
+                );
+            }
+
             return $collection->fresh(['invoice', 'customer']);
         });
     }

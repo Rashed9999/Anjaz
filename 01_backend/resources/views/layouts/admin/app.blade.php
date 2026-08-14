@@ -14,14 +14,31 @@
          وخلفيّةٌ (#f4f6fa) غير خلفيّته (#F2F3F7). علامةٌ واحدةٌ
          بهويّتين — والقيمُ تُنسخ ولا تُشتق. --}}
     <link href="{{ asset('assets/css/amial-tokens.css') }}" rel="stylesheet">
+    <style>
+        .admin-mobile-toggle,.admin-sidebar-close,.amial-sidebar-backdrop { display:none; }
+        @media (max-width: 767.98px) {
+            .admin-mobile-toggle { display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border:0; border-radius:12px; background:#053391; color:#fff; font-size:20px; }
+            .amial-sidebar { position:fixed !important; z-index:1060; top:0; right:0; bottom:0; width:min(86vw,330px) !important; max-width:none !important; height:100dvh; overflow-y:auto; transform:translateX(106%); transition:transform .22s ease; box-shadow:-18px 0 46px rgba(10,28,68,.22); }
+            body.amial-sidebar-open { overflow:hidden; }
+            body.amial-sidebar-open .amial-sidebar { transform:translateX(0); }
+            .amial-sidebar-backdrop { position:fixed; inset:0; z-index:1055; background:rgba(8,19,43,.5); opacity:0; pointer-events:none; transition:opacity .22s ease; }
+            body.amial-sidebar-open .amial-sidebar-backdrop { display:block; opacity:1; pointer-events:auto; }
+            .admin-sidebar-close { display:inline-flex; width:34px; height:34px; align-items:center; justify-content:center; border:0; border-radius:10px; background:rgba(255,255,255,.13); color:#fff; font-size:24px; line-height:1; }
+            .admin-main { width:100%; padding:18px 14px 30px !important; }
+            .admin-main > header { margin-bottom:18px !important; }
+        }
+    </style>
     @stack('css_or_js')
 </head>
 <body>
 <div class="container-fluid">
     <div class="row">
         <!-- الشريط الجانبي -->
-        <aside class="col-lg-2 col-md-3 amial-sidebar p-3" data-testid="admin-sidebar">
-            <div class="amial-brand mb-4">💳 {{ Helpers::get_business_settings('business_name') ?? 'Amial Pay' }}</div>
+        <aside class="col-lg-2 col-md-3 amial-sidebar p-3" data-testid="admin-sidebar" aria-label="التنقل الرئيسي">
+            <div class="amial-brand mb-4 d-flex align-items-center justify-content-between">
+                <span>💳 {{ Helpers::get_business_settings('business_name') ?? 'Amial Pay' }}</span>
+                <button type="button" class="admin-sidebar-close" data-admin-sidebar-close aria-label="إغلاق القائمة">×</button>
+            </div>
             <ul class="nav nav-pills nav-vertical card-navbar-nav flex-column gap-1">
                 <li class="nav-item {{ Request::is('admin') ? 'active' : '' }}">
                     <a class="nav-link" href="{{ route('admin.dashboard') }}" data-testid="nav-dashboard">
@@ -47,11 +64,15 @@
                 </li>
             </ul>
         </aside>
+        <div class="amial-sidebar-backdrop" data-admin-sidebar-close></div>
 
         <!-- المحتوى -->
-        <main class="col-lg-10 col-md-9 p-4">
+        <main class="col-lg-10 col-md-9 p-4 admin-main">
             <header class="d-flex justify-content-between align-items-center mb-4">
-                <h4 class="m-0" data-testid="page-title">@yield('title', 'الإدارة')</h4>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="admin-mobile-toggle" data-admin-sidebar-open aria-label="فتح القائمة">☰</button>
+                    <h4 class="m-0" data-testid="page-title">@yield('title', 'الإدارة')</h4>
+                </div>
                 <span class="text-muted small">{{ auth('user')->user()?->f_name ?? 'الإدارة' }}</span>
             </header>
 
@@ -70,6 +91,18 @@
      ووسيطٌ بلا مفتاحٍ من العميل حمايتُه صفر — يُولّد مفتاحاً عشوائيّاً
      لكلّ طلب، فتصير كلُّ ضغطةٍ عمليّةً جديدة. --}}
 <script src="{{ asset('assets/js/amial-idempotency.js') }}"></script>
+@include('partials._app_dialogs')
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
+    (() => {
+        const body = document.body;
+        const open = document.querySelector('[data-admin-sidebar-open]');
+        const closes = document.querySelectorAll('[data-admin-sidebar-close]');
+        const close = () => body.classList.remove('amial-sidebar-open');
+        open?.addEventListener('click', () => body.classList.add('amial-sidebar-open'));
+        closes.forEach((button) => button.addEventListener('click', close));
+        document.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
+    })();
+</script>
 @stack('script')
 </body>
 </html>

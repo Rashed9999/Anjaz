@@ -134,6 +134,27 @@ class ReceiptServiceTest extends TestCase
     }
 
     /** @test */
+    public function receiver_borne_transfer_fee_is_visible_without_being_subtracted_twice()
+    {
+        Queue::fake();
+
+        [$debitReceipt, $creditReceipt] = $this->service->issueDualForTransfer([
+            'from_user_id' => $this->sender->id,
+            'to_user_id' => $this->receiver->id,
+            'reference_transaction_id' => 'TX_RECEIVER_FEE_001',
+            'receipt_type' => 'send_money',
+            'amount' => '200.0000',
+            'fee' => '3.0000',
+            'fee_bearer' => 'receiver',
+        ]);
+
+        $this->assertEquals('0.0000', (string) $debitReceipt->fee);
+        $this->assertEquals('200.0000', (string) $debitReceipt->net_amount);
+        $this->assertEquals('3.0000', (string) $creditReceipt->fee);
+        $this->assertEquals('197.0000', (string) $creditReceipt->net_amount);
+    }
+
+    /** @test */
     public function verification_codes_are_globally_unique_across_thousand_receipts()
     {
         Queue::fake();

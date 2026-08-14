@@ -998,6 +998,11 @@ trait TransactionTrait
                 'receipt_type' => $receiptType,
                 'amount' => $amount,
                 'fee' => $fee,
+                // رسمُ دفع التاجر يُخصم من التاجر لا العميل. كان غياب هذا
+                // التصريح يجعل إيصال العميل يدّعي أنه دفع amount + fee،
+                // مع أن محفظته خُصمت amount فقط، ويجعل فاتورة البيع تخالف
+                // القيد. المستلم هنا هو التاجر، فهو حامل الرسم.
+                'fee_bearer' => 'receiver',
                 'zone_code' => 'SOUTH',
             ]);
 

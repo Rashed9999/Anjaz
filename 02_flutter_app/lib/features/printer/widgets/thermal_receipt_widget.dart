@@ -6,9 +6,11 @@ class ThermalReceiptLine {
   final String name;
   final num qty;
   final num price; // سعر الوحدة
-  const ThermalReceiptLine(this.name, this.qty, this.price);
+  final num? lineTotal;
+  final String? details;
+  const ThermalReceiptLine(this.name, this.qty, this.price, {this.lineTotal, this.details});
 
-  num get total => qty * price;
+  num get total => lineTotal ?? qty * price;
 }
 
 /// إيصال حراري بتصميم مناسب للطباعة (أبيض/أسود، عالي التباين).
@@ -26,6 +28,11 @@ class ThermalReceiptWidget extends StatelessWidget {
     this.invoiceNo,
     this.paid,
     this.change,
+    this.subtotal,
+    this.discount,
+    this.tax,
+    this.balanceDue,
+    this.contextLines = const [],
     this.logoBytes,
     this.phone,
     this.address,
@@ -41,6 +48,11 @@ class ThermalReceiptWidget extends StatelessWidget {
     DateTime? dateTime,
     num? paid,
     num? change,
+    num? subtotal,
+    num? discount,
+    num? tax,
+    num? balanceDue,
+    List<String> contextLines = const [],
   }) {
     String s(String k, [String d = '']) => '${settings[k] ?? d}';
     bool flag(String k) => settings[k] == true || settings[k] == 1 || settings[k] == '1';
@@ -57,6 +69,11 @@ class ThermalReceiptWidget extends StatelessWidget {
       dateTime: dateTime,
       paid: paid,
       change: change,
+      subtotal: subtotal,
+      discount: discount,
+      tax: tax,
+      balanceDue: balanceDue,
+      contextLines: contextLines,
     );
   }
 
@@ -66,6 +83,11 @@ class ThermalReceiptWidget extends StatelessWidget {
   final num total;
   final num? paid;
   final num? change;
+  final num? subtotal;
+  final num? discount;
+  final num? tax;
+  final num? balanceDue;
+  final List<String> contextLines;
   final String footer;
   final DateTime? dateTime;
   final String? invoiceNo;
@@ -127,7 +149,29 @@ class ThermalReceiptWidget extends StatelessWidget {
                   Expanded(flex: 3, child: Text(_money(l.total), textAlign: TextAlign.left, style: small)),
                 ]),
               )),
+          if (lines.any((line) => line.details != null && line.details!.isNotEmpty)) ...[
+            const SizedBox(height: 3),
+            ...lines.where((line) => line.details != null && line.details!.isNotEmpty).map(
+                  (line) => Text('${line.name}: ${line.details}', style: small.copyWith(fontSize: 16)),
+                ),
+          ],
+          if (contextLines.isNotEmpty) ...[
+            _divider(),
+            ...contextLines.map((line) => Text(line, style: small)),
+          ],
           _divider(),
+          if (subtotal != null) Row(children: [
+            const Expanded(child: Text('المجموع الفرعي', style: small)),
+            Text('${_money(subtotal!)} ر.ي', style: small),
+          ]),
+          if (discount != null && discount! > 0) Row(children: [
+            const Expanded(child: Text('الخصم', style: small)),
+            Text('- ${_money(discount!)} ر.ي', style: small),
+          ]),
+          if (tax != null && tax! > 0) Row(children: [
+            const Expanded(child: Text('الضريبة', style: small)),
+            Text('${_money(tax!)} ر.ي', style: small),
+          ]),
           Row(children: [
             const Expanded(child: Text('الإجمالي', style: TextStyle(color: Colors.black, fontSize: 26, fontWeight: FontWeight.bold))),
             Text('${_money(total)} ر.ي', style: black.copyWith(fontSize: 26, fontWeight: FontWeight.bold)),
@@ -145,6 +189,12 @@ class ThermalReceiptWidget extends StatelessWidget {
               Text('${_money(change!)} ر.ي', style: small),
             ]),
           ],
+          if (balanceDue != null && balanceDue! > 0) ...[
+            Row(children: [
+              const Expanded(child: Text('المتبقي', style: small)),
+              Text('${_money(balanceDue!)} ر.ي', style: black),
+            ]),
+          ],
           _divider(),
           const SizedBox(height: 4),
           Text(footer, textAlign: TextAlign.center, style: black.copyWith(fontSize: 20)),
@@ -160,6 +210,85 @@ class ThermalReceiptWidget extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: 6),
         child: DottedLine(),
       );
+}
+
+/// سند محفظة حراري؛ لا نسمّيه فاتورة ولا نحشره في جدول أصناف بيع.
+class ThermalVoucherWidget extends StatelessWidget {
+  const ThermalVoucherWidget({
+    super.key,
+    required this.title,
+    required this.documentNumber,
+    required this.amount,
+    required this.fee,
+    required this.finalAmount,
+    required this.finalLabel,
+    required this.transactionNumber,
+    required this.verificationCode,
+    this.fromName,
+    this.toName,
+    this.issuedAt,
+  });
+
+  final String title;
+  final String documentNumber;
+  final num amount;
+  final num fee;
+  final num finalAmount;
+  final String finalLabel;
+  final String transactionNumber;
+  final String verificationCode;
+  final String? fromName;
+  final String? toName;
+  final DateTime? issuedAt;
+
+  String _money(num value) => value.toStringAsFixed(0);
+
+  @override
+  Widget build(BuildContext context) {
+    final dt = issuedAt ?? DateTime.now();
+    final timestamp = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    const normal = TextStyle(color: Colors.black, fontSize: 18, height: 1.3);
+    const strong = TextStyle(color: Colors.black, fontSize: 20, fontWeight: FontWeight.bold, height: 1.3);
+
+    Widget row(String label, String value, {bool bold = false}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: Text(label, style: bold ? strong : normal)),
+            Expanded(child: Text(value, textAlign: TextAlign.left, style: bold ? strong : normal)),
+          ]),
+        );
+
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Container(
+        color: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+          const Text('أميال باي', textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.black, fontSize: 30, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 3),
+          Text(title, textAlign: TextAlign.center, style: strong.copyWith(fontSize: 24)),
+          const SizedBox(height: 8),
+          row('رقم السند', documentNumber),
+          row('التاريخ', timestamp),
+          const DottedLine(),
+          if (fromName != null && fromName!.isNotEmpty) row('من', fromName!),
+          if (toName != null && toName!.isNotEmpty) row('إلى', toName!),
+          const DottedLine(),
+          row('المبلغ', '${_money(amount)} ر.ي'),
+          row('الرسوم', '${_money(fee)} ر.ي'),
+          row(finalLabel, '${_money(finalAmount)} ر.ي', bold: true),
+          const DottedLine(),
+          row('مرجع العملية', transactionNumber),
+          row('رمز التحقق', verificationCode),
+          const SizedBox(height: 8),
+          const Text('سند إلكتروني - الطباعة لا تنشئ معاملة جديدة',
+              textAlign: TextAlign.center, style: normal),
+        ]),
+      ),
+    );
+  }
 }
 
 /// خطّ منقّط للفصل (أوضح من Divider في الطباعة).

@@ -3,9 +3,16 @@
 namespace Tests\Feature;
 
 use App\Models\PaymentRequest;
+use App\Models\Receipt;
+use App\Models\EMoney;
+use App\Models\Transaction;
 use App\Models\User;
+use App\Support\Access\AccessConstants;
+use App\Support\Access\AccessPresets;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -49,11 +56,16 @@ class DirectMoneyRequestFlowGuardTest extends TestCase
 
         $this->requester = User::factory()->create([
             'type' => CUSTOMER_TYPE, 'is_active' => 1,
+            'is_kyc_verified' => 1,
+            'kyc_tier' => 2,
             'f_name' => 'أحمد', 'l_name' => 'الصالح',
         ]);
 
         $this->recipient = User::factory()->create([
             'type' => CUSTOMER_TYPE, 'is_active' => 1,
+            'is_kyc_verified' => 1,
+            'kyc_tier' => 2,
+            'transaction_pin' => Hash::make('1234'),
             'f_name' => 'سالم', 'l_name' => 'المقطري',
         ]);
     }
@@ -71,6 +83,15 @@ class DirectMoneyRequestFlowGuardTest extends TestCase
     private function dartCode(string $relative): string
     {
         return preg_replace('#^\s*//.*$#m', '', $this->dart($relative)) ?? '';
+    }
+
+    public function test_customers_are_authorized_to_see_the_payment_request_feature(): void
+    {
+        $this->assertContains(
+            AccessConstants::F_PAYMENT_REQUESTS,
+            AccessPresets::roleBase(AccessConstants::ROLE_USER),
+            'الواجهة تبني طلب المال لكن خريطة الوصول تخفيه عن العميل',
+        );
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -96,6 +117,179 @@ class DirectMoneyRequestFlowGuardTest extends TestCase
 
         $this->assertSame(PaymentRequest::SHARE_DIRECT,
             PaymentRequest::latest('id')->value('share_method'));
+    }
+
+    public function test_the_strict_flow_verifies_then_delivers_without_a_share_fallback(): void
+    {
+        $verified = $this->actingAs($this->requester, 'api')
+            ->postJson('/api/v1/amial/payment-requests/check-recipient', [
+                'phone' => $this->recipient->phone,
+            ])->assertOk()->json('meta');
+
+        $this->assertTrue($verified['found']);
+        $this->assertNotSame('سالم المقطري', $verified['masked_name'],
+            'نقطة التحقق تكشف الاسم الكامل وتسمح بحصاد بيانات العملاء');
+        $this->assertSame(26, strlen($verified['verification_token']));
+
+        $meta = $this->actingAs($this->requester, 'api')
+            ->postJson('/api/v1/amial/payment-requests/direct', [
+                'amount' => '5000',
+                'recipient_id' => $verified['recipient_id'],
+                'verification_token' => $verified['verification_token'],
+                'note' => 'حصتي من الفاتورة',
+            ])->assertCreated()->json('meta');
+
+        $this->assertTrue($meta['delivered']);
+        $this->assertArrayNotHasKey('public_url', $meta,
+            'عقد الطلب المباشر أعاد رابطاً — وعادت الشاشة القديمة');
+        $this->assertSame(PaymentRequest::SHARE_DIRECT,
+            PaymentRequest::find($meta['request']['id'])->share_method);
+
+        $row = $this->actingAs($this->requester, 'api')
+            ->getJson('/api/v1/amial/payment-requests?direction=outgoing')
+            ->assertOk()->json('meta.requests.0');
+        $this->assertSame($verified['masked_name'], $row['recipient_label']);
+        $this->assertNotSame('سالم المقطري', $row['recipient_label'],
+            'القائمة كشفت الاسم الكامل بعد أن قنّعه فحص المستلم');
+    }
+
+    public function test_a_direct_request_rejects_an_unverified_recipient_token(): void
+    {
+        $this->actingAs($this->requester, 'api')
+            ->postJson('/api/v1/amial/payment-requests/direct', [
+                'amount' => '5000',
+                'recipient_id' => $this->recipient->id,
+                'verification_token' => str_repeat('A', 26),
+            ])->assertForbidden();
+
+        $this->assertSame(0, PaymentRequest::count(),
+            'أُنشئ الطلب من recipient_id قابل للتعديل بلا تأكيد المستلم');
+    }
+
+    public function test_direct_approval_moves_money_and_writes_all_financial_traces(): void
+    {
+        Queue::fake();
+        EMoney::updateOrCreate(['user_id' => $this->requester->id], [
+            'current_balance' => '0.0000', 'held_balance' => '0.0000',
+            'pending_balance' => '0.0000', 'charge_earned' => '0.0000',
+            'zone_code' => 'SOUTH',
+        ]);
+        EMoney::updateOrCreate(['user_id' => $this->recipient->id], [
+            'current_balance' => '20000.0000', 'held_balance' => '0.0000',
+            'pending_balance' => '0.0000', 'charge_earned' => '0.0000',
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $verified = $this->actingAs($this->requester, 'api')
+            ->postJson('/api/v1/amial/payment-requests/check-recipient', [
+                'phone' => $this->recipient->phone,
+            ])->assertOk()->json('meta');
+
+        $id = $this->actingAs($this->requester, 'api')
+            ->postJson('/api/v1/amial/payment-requests/direct', [
+                'amount' => '5000',
+                'recipient_id' => $verified['recipient_id'],
+                'verification_token' => $verified['verification_token'],
+            ])->assertCreated()->json('meta.request.id');
+
+        $this->actingAs($this->recipient, 'api')
+            ->postJson("/api/v1/amial/payment-requests/{$id}/pay", [
+                'pin' => '1234',
+            ])->assertOk();
+
+        $request = PaymentRequest::findOrFail($id);
+        $this->assertSame('paid', $request->status);
+        $this->assertNotNull($request->paid_transaction_id);
+        $this->assertSame(2, Transaction::where('ref_trans_id', $request->paid_transaction_id)
+            ->orWhere('transaction_id', $request->paid_transaction_id)->count());
+        $this->assertDatabaseHas('ledger_journal_entries', [
+            'source_type' => 'payment_request',
+            'source_id' => $request->request_ulid,
+        ]);
+        $this->assertDatabaseHas('audit_decisions', [
+            'subject_type' => 'payment_request',
+            'subject_id' => $request->request_ulid,
+            'action' => 'PAYMENT_REQUEST_PAID',
+        ]);
+        $this->assertSame(2, Receipt::where(
+            'reference_transaction_id', $request->paid_transaction_id)->count(),
+            'التحويل بلا إيصالين للطرفين');
+        $this->assertSame('5000.0000', (string) EMoney::where(
+            'user_id', $this->requester->id)->value('current_balance'));
+    }
+
+    public function test_direct_approval_with_insufficient_balance_moves_nothing(): void
+    {
+        EMoney::updateOrCreate(['user_id' => $this->requester->id], [
+            'current_balance' => '0.0000', 'held_balance' => '0.0000',
+            'pending_balance' => '0.0000', 'charge_earned' => '0.0000',
+            'zone_code' => 'SOUTH',
+        ]);
+        EMoney::updateOrCreate(['user_id' => $this->recipient->id], [
+            'current_balance' => '1000.0000', 'held_balance' => '0.0000',
+            'pending_balance' => '0.0000', 'charge_earned' => '0.0000',
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $verified = $this->actingAs($this->requester, 'api')
+            ->postJson('/api/v1/amial/payment-requests/check-recipient', [
+                'phone' => $this->recipient->phone,
+            ])->assertOk()->json('meta');
+        $id = $this->actingAs($this->requester, 'api')
+            ->postJson('/api/v1/amial/payment-requests/direct', [
+                'amount' => '5000',
+                'recipient_id' => $verified['recipient_id'],
+                'verification_token' => $verified['verification_token'],
+            ])->assertCreated()->json('meta.request.id');
+
+        $this->actingAs($this->recipient, 'api')
+            ->postJson("/api/v1/amial/payment-requests/{$id}/pay", ['pin' => '1234'])
+            ->assertStatus(402);
+
+        $this->assertSame('pending', PaymentRequest::findOrFail($id)->status);
+        $this->assertSame(0, Transaction::count());
+        $this->assertSame(0, \App\Models\Ledger\LedgerJournalEntry::count());
+        $this->assertSame('0.0000', (string) EMoney::where(
+            'user_id', $this->requester->id)->value('current_balance'));
+        $this->assertSame('1000.0000', (string) EMoney::where(
+            'user_id', $this->recipient->id)->value('current_balance'));
+    }
+
+    public function test_wrong_payment_pins_are_counted_and_lock_the_account(): void
+    {
+        $verified = $this->actingAs($this->requester, 'api')
+            ->postJson('/api/v1/amial/payment-requests/check-recipient', [
+                'phone' => $this->recipient->phone,
+            ])->assertOk()->json('meta');
+        $id = $this->actingAs($this->requester, 'api')
+            ->postJson('/api/v1/amial/payment-requests/direct', [
+                'amount' => '5000',
+                'recipient_id' => $verified['recipient_id'],
+                'verification_token' => $verified['verification_token'],
+            ])->assertCreated()->json('meta.request.id');
+
+        for ($attempt = 1; $attempt < 5; $attempt++) {
+            $this->actingAs($this->recipient, 'api')
+                ->postJson("/api/v1/amial/payment-requests/{$id}/pay", [
+                    'pin' => '9999',
+                ])->assertForbidden();
+        }
+
+        $this->actingAs($this->recipient, 'api')
+            ->postJson("/api/v1/amial/payment-requests/{$id}/pay", [
+                'pin' => '9999',
+            ])->assertStatus(423)
+            ->assertJsonPath('code', 'PIN_LOCKED');
+
+        $this->assertSame(5, (int) $this->recipient->fresh()->pin_failed_attempts);
+        $this->assertTrue($this->recipient->fresh()->pin_locked_until->isFuture());
+        $this->assertSame('pending', PaymentRequest::findOrFail($id)->status);
+        $this->assertSame(0, Transaction::count(),
+            'محاولة PIN فاشلة حرّكت مالاً أو كتبت عملية');
+        $this->assertDatabaseHas('account_security_events', [
+            'user_id' => $this->recipient->id,
+            'event_type' => 'PIN_LOCKED',
+        ]);
     }
 
     public function test_a_request_to_a_stranger_keeps_the_link(): void
@@ -243,8 +437,9 @@ class DirectMoneyRequestFlowGuardTest extends TestCase
     {
         $src = $this->dartCode('helper/notification_helper.dart');
 
-        $this->assertSame(2, substr_count($src, "'payment_request_received'"),
-            'نوعُ الإشعار غيرُ معالَجٍ في مسارَي الاستقبال (المقدّمة والخلفيّة)');
+        $this->assertGreaterThanOrEqual(4,
+            substr_count($src, "'payment_request_received'"),
+            'نوعُ الإشعار غيرُ معالَجٍ في مسارات الاستقبال والفتح');
 
         $this->assertStringContainsString('IncomingRequestsScreen', $src);
     }
@@ -290,7 +485,43 @@ class DirectMoneyRequestFlowGuardTest extends TestCase
         $src = $this->dartCode(
             'features/requested_money/screens/incoming_requests_screen.dart');
 
-        $this->assertStringContainsString("r['requester_label']", $src,
+        $this->assertStringContainsString("request['requester_label']", $src,
             "الصفُّ يقرأ `requester_name` — وهو ليس عموداً، فيُعرض «مستخدم»");
+    }
+
+    /** شاشةُ الطلب نفسُها لا تعيد رابطاً من الباب الخلفي. */
+    public function test_the_customer_request_screen_is_strictly_direct(): void
+    {
+        $src = $this->dartCode(
+            'features/requested_money/screens/payment_request_create_screen.dart');
+
+        $this->assertStringContainsString('createDirect(', $src);
+        $this->assertStringContainsString('تأكيد طلب المال', $src);
+        $this->assertStringContainsString('verification_token', $this->dartCode(
+            'features/requested_money/domain/repositories/payment_request_repo.dart'));
+
+        foreach (['QrDisplayWidget', "shareMethod: 'link'", '_shareMethod'] as $needle) {
+            $this->assertStringNotContainsString($needle, $src,
+                "شاشةُ طلب العميل أعادت {$needle}");
+        }
+    }
+
+    public function test_admin_can_trace_both_parties_status_and_transaction(): void
+    {
+        $controller = (string) file_get_contents(
+            app_path('Http/Controllers/Admin/AdminSurfaceController.php'));
+        $view = (string) file_get_contents(resource_path(
+            'views/admin-views/amial/surface/payment-requests.blade.php'));
+
+        foreach (['recipient', 'paidBy', 'paid_transaction_id', "export') === 'csv'"] as $needle) {
+            $this->assertStringContainsString($needle, $controller,
+                "لوحة الإدارة لا تجلب أثر الطلب: {$needle}");
+        }
+        foreach (['share_method', 'paid_transaction_id', 'recipient', 'declined'] as $needle) {
+            $this->assertStringContainsString($needle, $view,
+                "جدول الإدارة يخفي معلومة لازمة للدعم: {$needle}");
+        }
+        $this->assertStringNotContainsString('طلبات الأموال (روابط/QR)', $view,
+            'لوحة الإدارة ما زالت تصف الميزة الجديدة كأنها روابط وQR فقط');
     }
 }

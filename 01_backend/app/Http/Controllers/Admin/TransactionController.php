@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\CentralLogics\helpers;
+use App\CentralLogics\Helpers;
 use App\Exceptions\TransactionFailedException;
 use App\Http\Controllers\Controller;
 use App\Models\EMoney;
@@ -17,6 +17,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 use OpenSpout\Common\Exception\InvalidArgumentException;
 use OpenSpout\Common\Exception\IOException;
 use OpenSpout\Common\Exception\UnsupportedTypeException;
@@ -88,7 +89,9 @@ class TransactionController extends Controller
             });
 
         $transactions = $transactions->latest()->paginate(Helpers::pagination_limit())->appends($queryParam);
-        return view('admin-views.transaction.index', compact('transactions', 'search',  'trx_type'));
+        $parties = $this->partyMap($transactions->getCollection());
+
+        return view('admin-views.transaction.index', compact('transactions', 'parties', 'search', 'trx_type'));
     }
 
 
@@ -140,20 +143,21 @@ class TransactionController extends Controller
         $transactions = $transactions->latest()->get();
 
         // Prepare data for export
-        $data = $transactions->map(function ($transaction, $index) {
-            $sender = Helpers::get_user_info($transaction->from_user_id);
-            $receiver = Helpers::get_user_info($transaction->to_user_id);
+        $parties = $this->partyMap($transactions);
+        $data = $transactions->map(function ($transaction, $index) use ($parties) {
+            $sender = $parties->get((int) ($transaction->from_user_id ?? 0));
+            $receiver = $parties->get((int) ($transaction->to_user_id ?? 0));
 
             return [
                 'SL' => $index + 1,
                 'Transaction Id' => $transaction->transaction_id,
                 'Sender Info' => $sender ? ($sender->f_name . ' ' . $sender->l_name . ' ' . $sender->phone) : 'N/A',
                 'Receiver Info' => $receiver ? ($receiver->f_name . ' ' . $receiver->l_name . ' ' . $receiver->phone) : 'N/A',
-                'Debit' => Helpers::set_symbol($transaction['debit']),
-                'Credit' => Helpers::set_symbol($transaction['credit']),
-                'Charge' => Helpers::set_symbol($transaction['charge']),
+                'Debit' => Helpers::set_symbol((float) ($transaction['debit'] ?? 0)),
+                'Credit' => Helpers::set_symbol((float) ($transaction['credit'] ?? 0)),
+                'Charge' => Helpers::set_symbol((float) ($transaction['charge'] ?? 0)),
                 'Transaction_type' => $transaction->transaction_type,
-                'Balance' => Helpers::set_symbol($transaction->balance),
+                'Balance' => Helpers::set_symbol((float) ($transaction->balance ?? 0)),
                 'Created At' => date('d M Y h:i A', strtotime($transaction->created_at)),
             ];
         });
@@ -398,5 +402,34 @@ class TransactionController extends Controller
             Toastr::error(translate('Status change failed'));
             return back();
         }
+    }
+
+    /**
+     * تُحمَّل أطراف الصفحة مرة واحدة.
+     *
+     * بعض سجلات المحاسبة التاريخية لا تحمل طرفَي التحويل (رسم/قيد نظامي)،
+     * ولا ينبغي أن يحوّل حقلٌ فارغ كشفَ العمليات إلى خطأ 500. كما أن استدعاء
+     * `get_user_info` داخل كل صف كان استعلامين إضافيين لكل عملية.
+     *
+     * @param iterable<Transaction> $transactions
+     * @return Collection<int,User>
+     */
+    private function partyMap(iterable $transactions): Collection
+    {
+        $ids = collect($transactions)
+            ->flatMap(fn (Transaction $transaction) => [
+                $transaction->from_user_id,
+                $transaction->to_user_id,
+            ])
+            ->filter(fn ($id) => is_numeric($id) && (int) $id > 0)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        return $this->user->whereIn('id', $ids)->get()->keyBy('id');
     }
 }

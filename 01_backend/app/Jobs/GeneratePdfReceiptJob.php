@@ -23,13 +23,7 @@ use Illuminate\Support\Facades\View;
  *   - يفشل بصمت — العملية المالية لا تتأثر
  *   - PDF يُخزَّن في `storage/app/receipts/{YYYY}/{MM}/{DD}/{receipt_number}.pdf`
  *
- * **الـ PDF Library:**
- *   يستخدم `barryvdh/laravel-dompdf` (الـ default للـ Laravel).
- *   إذا غير مُثبَّت، الـ Job يفشل بشكل آمن ويسجل warning.
- *
- *   composer require barryvdh/laravel-dompdf
- *
- *   ثم Service Provider يُسجَّل تلقائياً.
+ * **الـ PDF Library:** mPDF عبر ArabicPdf لتشكيل العربية وRTL.
  */
 class GeneratePdfReceiptJob implements ShouldQueue
 {
@@ -50,42 +44,24 @@ class GeneratePdfReceiptJob implements ShouldQueue
             return;
         }
 
-        if ($receipt->status === 'pdf_generated' && !empty($receipt->pdf_storage_path)) {
+        $documents = app(\App\Services\ReceiptDocumentService::class);
+        if ($receipt->status === 'pdf_generated'
+            && !empty($receipt->pdf_storage_path)
+            && Storage::disk('local')->exists($receipt->pdf_storage_path)
+            && $documents->isCurrent($receipt)) {
             // مُنتج بالفعل — idempotent
             return;
         }
 
         try {
-            // AMIAL-NOTICE-001: التصيير عبر mPDF لا DomPDF.
-            //
-            // DomPDF لا يدعم تشكيل العربية ولا اتجاه النصّ، فتخرج الحروف
-            // مقطّعة ومعكوسة — وهو سبب «اللغة العربية معكوسة» في الإشعارات
-            // المولَّدة تلقائياً، بينما كانت الإشعارات المطلوبة عند الطلب
-            // سليمة لأنها تمرّ بـ ArabicPdf أصلاً. الآن المساران واحد.
-            $notice = app(\App\Services\ReceiptNoticeService::class);
-            $owner = $receipt->user;
+            // AMIAL-DOCUMENTS-001: نفس عقد البيانات ونفس القالب الذي تستعمله
+            // المعاينة والطباعة. نوع المعاملة يختار سند محفظة، ودفع التاجر
+            // يختار فاتورة قطاعية من سجل البيع الموثوق.
+            $document = $documents->build($receipt);
 
-            $html = View::make('receipts.notice', [
-                'receipt' => $receipt,
-                'title' => $notice->title($receipt),
-                // AMIAL-RECEIPT-TYPE-001: اسم العملية في حقل معنون
-                'typeLabel' => $notice->typeLabel($receipt),
-                // AMIAL-RECEIPT-NUMBERS-001: الأرقام مجموعةً للقراءة والإملاء
-                'receiptNumberGrouped' => \App\Support\ReadableCode::group($receipt->receipt_number),
-                'verificationGrouped' => \App\Support\ReadableCode::group($receipt->verification_code, 4),
-                'opening' => $notice->opening($receipt),
-                'narrative' => $notice->narrative($receipt),
-                'amountInWords' => $notice->amountInWords($receipt),
-                'amountFormatted' => \App\CentralLogics\Helpers::money($receipt->amount),
-                'feeFormatted' => \App\CentralLogics\Helpers::money($receipt->fee) . ' ر.ي',
-                'totalFormatted' => \App\CentralLogics\Helpers::money($receipt->net_amount) . ' ر.ي',
-                'ownerName' => $owner
-                    ? trim(($owner->f_name ?? '') . ' ' . ($owner->l_name ?? ''))
-                    : '',
-                'accountNumber' => $owner->account_number ?? $owner->unique_id ?? '',
-                'logoData' => $this->logoDataUri(),
-                'supportPhone' => config('amial.support_phone', ''),
-                'supportSite' => config('amial.support_site', ''),
+            $html = View::make($documents->a4View($document), [
+                'document' => $document,
+                'qrDataUri' => $this->qrDataUri((string) $document['verification_url']),
             ])->render();
 
             $bytes = \App\Support\ArabicPdf::render($html, ['format' => 'A4', 'margin' => 12]);
@@ -97,6 +73,10 @@ class GeneratePdfReceiptJob implements ShouldQueue
                 'pdf_storage_path' => $path,
                 'pdf_generated_at' => now(),
                 'status' => 'pdf_generated',
+                'metadata' => array_merge(
+                    is_array($receipt->metadata) ? $receipt->metadata : [],
+                    ['print_document_version' => \App\Services\ReceiptDocumentService::DOCUMENT_VERSION],
+                ),
             ]);
 
             Log::info("Receipt PDF generated: {$receipt->receipt_number}");
@@ -128,21 +108,15 @@ class GeneratePdfReceiptJob implements ShouldQueue
     /**
      * مسار التخزين: receipts/2026/05/16/AMY-20260516-AB12CD34.pdf
      */
-    /**
-     * شعار أميال كـ data URI — mPDF لا يقرأ مسارات نسبية من قالب مُصيَّر
-     * خارج سياق HTTP. نُعيد سلسلة فارغة إن غاب الملف فلا ينكسر الإشعار.
-     */
-    private function logoDataUri(): string
+    private function qrDataUri(string $url): ?string
     {
-        foreach (['branding/logo.png', 'logo.png', 'images/logo.png'] as $rel) {
-            $abs = public_path($rel);
-            if (is_file($abs) && is_readable($abs)) {
-                $mime = str_ends_with($abs, '.png') ? 'image/png' : 'image/jpeg';
-                return 'data:' . $mime . ';base64,' . base64_encode((string) file_get_contents($abs));
-            }
+        try {
+            $svg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')
+                ->size(150)->margin(0)->generate($url);
+            return 'data:image/svg+xml;base64,' . base64_encode($svg);
+        } catch (\Throwable) {
+            return null;
         }
-
-        return '';
     }
 
     private function buildStoragePath(Receipt $receipt): string
@@ -157,9 +131,4 @@ class GeneratePdfReceiptJob implements ShouldQueue
         );
     }
 
-    private function buildVerificationUrl(string $code): string
-    {
-        $base = config('app.url', 'https://amialpay.com');
-        return rtrim($base, '/') . '/v/' . $code;
-    }
 }

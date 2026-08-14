@@ -34,7 +34,6 @@ import 'package:amial_pay/shared/widgets/verified_badge.dart';
 import 'package:amial_pay/features/credit/screens/my_credits_screen.dart';
 import 'package:amial_pay/features/donations/screens/donations_home_screen.dart';
 import 'package:amial_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
-import 'package:amial_pay/features/requested_money/screens/requested_money_list_screen.dart';
 import 'package:amial_pay/features/kyc_verification/screens/kyc_verify_screen.dart';
 import 'package:amial_pay/common/widgets/amial_form.dart';
 import 'package:amial_pay/features/reports/screens/amial_account_statement_screen.dart';
@@ -248,11 +247,6 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                   subtitle: 'حصّتي مع الأصدقاء',
                   color: const Color(0xFF0E7C7B),
                   onTap: () => Get.to(() => const SplitBillMySharesScreen())),
-              _serviceCard(icon: Icons.mark_email_unread_outlined, label: 'الطلبات الواردة',
-                  subtitle: 'طلبات أموال وصلتك',
-                  color: const Color(0xFF1D4FB8),
-                  onTap: () => Get.to(() => const RequestedMoneyListScreen(
-                      requestType: RequestType.request))),
               _serviceCard(icon: Icons.verified_user_outlined, label: 'توثيق الحساب',
                   subtitle: 'ارفع هويتك',
                   color: const Color(0xFF1B9E4B),

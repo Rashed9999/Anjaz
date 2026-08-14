@@ -104,8 +104,8 @@
                     <tbody>
                         @forelse($transactions as $key => $trx)
                             @php
-                                $sender   = \App\CentralLogics\Helpers::get_user_info($trx->from_user_id);
-                                $receiver = \App\CentralLogics\Helpers::get_user_info($trx->to_user_id);
+                                $sender   = $parties->get((int) ($trx->from_user_id ?? 0));
+                                $receiver = $parties->get((int) ($trx->to_user_id ?? 0));
                             @endphp
                             <tr>
                                 <td>{{ $transactions->firstItem() + $key }}</td>
@@ -132,13 +132,13 @@
                                     @endif
                                 </td>
                                 <td class="text-end {{ $trx->debit > 0 ? 'text-danger' : 'text-muted' }}">
-                                    {{ $trx->debit > 0 ? \App\CentralLogics\Helpers::set_symbol($trx->debit) : '—' }}
+                                    {{ (float) ($trx->debit ?? 0) > 0 ? \App\CentralLogics\Helpers::set_symbol((float) $trx->debit) : '—' }}
                                 </td>
                                 <td class="text-end {{ $trx->credit > 0 ? 'text-success' : 'text-muted' }}">
-                                    {{ $trx->credit > 0 ? \App\CentralLogics\Helpers::set_symbol($trx->credit) : '—' }}
+                                    {{ (float) ($trx->credit ?? 0) > 0 ? \App\CentralLogics\Helpers::set_symbol((float) $trx->credit) : '—' }}
                                 </td>
-                                <td class="text-end">{{ \App\CentralLogics\Helpers::set_symbol($trx->charge) }}</td>
-                                <td class="text-end fw-semibold">{{ \App\CentralLogics\Helpers::set_symbol($trx->balance) }}</td>
+                                <td class="text-end">{{ \App\CentralLogics\Helpers::set_symbol((float) ($trx->charge ?? 0)) }}</td>
+                                <td class="text-end fw-semibold">{{ is_null($trx->balance) ? '—' : \App\CentralLogics\Helpers::set_symbol((float) $trx->balance) }}</td>
                                 <td><small>{{ date('d M Y', strtotime($trx->created_at)) }}<br>{{ date('h:i A', strtotime($trx->created_at)) }}</small></td>
                             </tr>
                         @empty

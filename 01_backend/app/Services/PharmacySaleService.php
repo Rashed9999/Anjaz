@@ -192,6 +192,15 @@ class PharmacySaleService
                 $this->alerts->checkLowStock($r['product']->fresh());
             }
 
+            if (!empty($sale->paid_transaction_id)) {
+                app(ReceiptService::class)->attachBusinessReference(
+                    (string) $sale->paid_transaction_id,
+                    'pharmacy_sale',
+                    (int) $sale->id,
+                    ['merchant_vertical' => 'pharmacy', 'sale_ulid' => $sale->sale_ulid],
+                );
+            }
+
             return $sale->fresh(['items', 'customer']);
         });
     }

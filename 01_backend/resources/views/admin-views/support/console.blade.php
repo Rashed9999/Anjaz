@@ -309,6 +309,8 @@
                 <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">مدين / دائن</div><div>${esc(t.debit)} / ${esc(t.credit)}</div></div></div>
                 <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">القرار</div><div>${esc(t.decision_code ?? 'OK')} ${t.decision_reason ? '— ' + esc(t.decision_reason) : ''}</div></div></div>
             </div>
+            <h6>الدليل المحاسبي</h6>
+            <div class="table-responsive mb-3"><table class="table table-sm"><thead><tr><th>القيد</th><th>المصدر</th><th>الحالة</th><th>الحركة</th></tr></thead><tbody>${(j.meta.ledger_entries || []).map(e => `<tr><td class="font-monospace">${esc(e.ulid)}</td><td>${esc(e.source_type)} / ${esc(e.source_id)}</td><td>${esc(e.status)}${e.is_reversal ? ' — عكسي' : ''}</td><td>${e.lines.map(l => `${esc(l.direction)} ${esc(l.amount)} (${esc(l.account)})`).join('<br>')}</td></tr>`).join('') || '<tr><td colspan="4" class="text-muted">لا يوجد قيد مرتبط — يلزم تحقيق مالي.</td></tr>'}</tbody></table></div>
             <h6>الخط الزمني</h6>
             <ul class="list-group">${j.meta.timeline.map(e => `
                 <li class="list-group-item d-flex justify-content-between">
@@ -447,6 +449,18 @@
             tile('قيد التحقيق', (m.support.tickets_by_status && m.support.tickets_by_status.investigating) || 0);
     }
     setInterval(() => { if (document.querySelector('#tab-ops.active, #tab-ops.show')) loadOps(); }, 30000);
+
+    // روابط لوحة التحكم تقود إلى الطابور نفسه لا إلى أول تبويب عشوائياً.
+    // لا نقبل إلا تبويبات الشاشة الفعلية، ثم نحمل بيانات الطابور عند فتحه.
+    const requestedTab = new URLSearchParams(window.location.search).get('tab');
+    const tabLoaders = {tickets: loadTickets, approvals: loadApprovals, insider: loadInsider, ops: loadOps};
+    if (requestedTab && tabLoaders[requestedTab]) {
+        const trigger = document.querySelector(`[data-bs-target="#tab-${requestedTab}"]`);
+        if (trigger && window.bootstrap?.Tab) {
+            window.bootstrap.Tab.getOrCreateInstance(trigger).show();
+            tabLoaders[requestedTab]();
+        }
+    }
 })();
 </script>
 @endsection

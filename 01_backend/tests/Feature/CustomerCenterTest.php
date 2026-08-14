@@ -6,12 +6,14 @@ use App\Models\Aml\AmlInvestigation;
 use App\Models\Aml\AmlUserRiskProfile;
 use App\Models\EMoney;
 use App\Models\KycDocument;
+use App\Models\PaymentRequest;
 use App\Models\User;
 use App\Services\CustomerActionService;
 use App\Services\CustomerStatusResolver;
 use DomainException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -73,6 +75,39 @@ class CustomerCenterTest extends TestCase
                 ->assertOk()
                 ->assertJsonPath('success', true);
         }
+    }
+
+    /** @test */
+    public function support_can_trace_money_requests_from_the_customer_file(): void
+    {
+        $other = User::factory()->create([
+            'type' => CUSTOMER_TYPE, 'phone' => '770003399',
+            'f_name' => 'سالم', 'l_name' => 'المقطري', 'zone_code' => 'SOUTH',
+        ]);
+        $request = PaymentRequest::create([
+            'request_ulid' => (string) Str::ulid(),
+            'short_code' => 'ABC234',
+            'requester_user_id' => $this->customer->id,
+            'recipient_user_id' => $other->id,
+            'recipient_phone' => $other->phone,
+            'amount' => '7500.0000',
+            'share_method' => PaymentRequest::SHARE_DIRECT,
+            'status' => 'paid',
+            'paid_by_user_id' => $other->id,
+            'paid_transaction_id' => (string) Str::ulid(),
+            'paid_at' => now(),
+            'expires_at' => now()->addDay(),
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $row = $this->actingAs($this->staff, 'user')
+            ->getJson("/admin/amial/customer/{$this->customer->id}/tab/support")
+            ->assertOk()->json('meta.payment_requests.0');
+
+        $this->assertSame($request->request_ulid, $row['request_ulid']);
+        $this->assertSame('outgoing', $row['direction']);
+        $this->assertSame('سالم المقطري', $row['counterparty']);
+        $this->assertSame($request->paid_transaction_id, $row['paid_transaction_id']);
     }
 
     /** @test */

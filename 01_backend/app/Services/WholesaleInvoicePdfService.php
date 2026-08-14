@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\WholesaleInvoice;
-use Barryvdh\DomPDF\Facade\Pdf;
+use App\Support\ArabicPdf;
 
 /**
  * AMIAL-WHOLESALE-001 — توليد PDF فاتورة جملة.
@@ -24,7 +24,7 @@ class WholesaleInvoicePdfService
         // تحميل العلاقات اللازمة
         $invoice->loadMissing(['business', 'customer', 'salesRep', 'items', 'collections']);
 
-        $pdf = Pdf::loadView('pdf.wholesale-invoice', [
+        $html = view('pdf.wholesale-invoice', [
             'invoice' => $invoice,
             'business' => $invoice->business,
             'customer' => $invoice->customer,
@@ -36,13 +36,9 @@ class WholesaleInvoicePdfService
             'days_overdue' => $invoice->isOverdue() ? $invoice->daysOverdue() : 0,
             'status_label' => $this->statusLabel($invoice->status),
             'status_color' => $this->statusColor($invoice->status),
-        ]);
+        ])->render();
 
-        // دعم العربية + A4
-        $pdf->setOption(['defaultFont' => 'DejaVu Sans']);
-        $pdf->setPaper('A4', 'portrait');
-
-        return $pdf->output();
+        return ArabicPdf::render($html, ['format' => 'A4', 'margin' => 0]);
     }
 
     public function suggestedFilename(WholesaleInvoice $invoice): string

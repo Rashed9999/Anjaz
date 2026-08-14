@@ -128,6 +128,11 @@ class ThermalPrintService extends GetxService {
     String? invoiceNo,
     num? paid,
     num? change,
+    num? subtotal,
+    num? discount,
+    num? tax,
+    num? balanceDue,
+    List<String> contextLines = const [],
     DateTime? dateTime,
   }) async {
     final logo = await fetchLogoBytes(settings['logo_url']?.toString());
@@ -139,6 +144,11 @@ class ThermalPrintService extends GetxService {
       invoiceNo: invoiceNo,
       paid: paid,
       change: change,
+      subtotal: subtotal,
+      discount: discount,
+      tax: tax,
+      balanceDue: balanceDue,
+      contextLines: contextLines,
       dateTime: dateTime,
     ));
   }

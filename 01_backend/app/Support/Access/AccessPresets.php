@@ -25,6 +25,7 @@ class AccessPresets
                 A::F_TRANSFER, A::F_RECEIVE, A::F_QR_PAY,
                 A::F_FAMILY_FUND, A::F_SAFE_PAY, A::F_BILL_PAY,
                 A::F_FAVORITE_NUMBERS, A::F_RECEIPTS,
+                A::F_PAYMENT_REQUESTS,
             ],
             A::ROLE_AGENT => [
                 ...$common,

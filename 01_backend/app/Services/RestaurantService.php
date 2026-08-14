@@ -149,6 +149,19 @@ class RestaurantService
                 RestaurantTable::where('id', $locked->table_id)->update(['status' => 'free']);
             }
 
+            if (!empty($sale->paid_transaction_id)) {
+                app(ReceiptService::class)->attachBusinessReference(
+                    (string) $sale->paid_transaction_id,
+                    'restaurant_order',
+                    (int) $locked->id,
+                    [
+                        'merchant_vertical' => 'restaurant',
+                        'sale_ulid' => $sale->sale_ulid,
+                        'order_no' => $locked->order_no,
+                    ],
+                );
+            }
+
             return ['order' => $locked->fresh(), 'sale' => $sale];
         });
     }

@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Controller;
 use App\Models\PaymentRequest;
 use App\Services\PaymentRequestService;
+use App\Services\RecipientVerificationService;
+use App\Services\TransactionPinService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -22,7 +24,44 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(
         private readonly PaymentRequestService $service,
+        private readonly RecipientVerificationService $recipientVerification,
+        private readonly TransactionPinService $pinService,
     ) {}
+
+    /**
+     * عقد «طلب مال من عميل»: مستلم مؤكّد إلزامي، ولا هبوط إلى رابط/QR.
+     */
+    public function createDirect(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'amount' => 'required|numeric|min:0.01|lt:100000000',
+            'recipient_id' => 'required|integer|min:1',
+            'verification_token' => 'required|string|size:26',
+            'note' => 'sometimes|nullable|string|max:255',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        try {
+            $req = $this->service->createDirect(
+                requester: $request->user(),
+                recipientId: (int) $request->input('recipient_id'),
+                verificationToken: (string) $request->input('verification_token'),
+                amount: (string) $request->input('amount'),
+                note: $request->input('note'),
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('DIRECT_REQUEST_INVALID', $e->getMessage(), 422);
+        } catch (\RuntimeException $e) {
+            return $this->error('DIRECT_REQUEST_REJECTED', $e->getMessage(), 403);
+        }
+
+        return $this->ok([
+            'request' => $req,
+            'delivered' => true,
+            'delivery_label' => 'وصل إلى حسابه',
+            'recipient_label' => (string) $req->recipient_name,
+        ], 'DIRECT_REQUEST_CREATED', 'وصل الطلب إلى العميل', 201);
+    }
 
     public function create(Request $request): JsonResponse
     {
@@ -106,48 +145,66 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
      */
     public function checkRecipient(Request $request): JsonResponse
     {
-        $v = Validator::make($request->all(), ['phone' => 'required|string|max:32']);
+        if ((int) (\App\CentralLogics\Helpers::get_business_settings(
+            'send_money_request_status') ?? 1) !== 1) {
+            return $this->error(
+                'REQUEST_MONEY_DISABLED', 'خدمة طلب المال غير مفعّلة حالياً', 403,
+            );
+        }
+
+        $v = Validator::make($request->all(), [
+            'phone' => ['required', 'string', 'min:6', 'max:32'],
+        ]);
 
         if ($v->fails()) {
             return $this->validationError($v);
         }
 
-        $phone = (string) $request->input('phone');
+        try {
+            $requester = $request->user();
+            if ((int) $requester->type !== CUSTOMER_TYPE || !(bool) $requester->is_active) {
+                throw new \RuntimeException('طلب المال المباشر متاح للعملاء النشطين فقط');
+            }
+            if (($requester->zone_code ?? 'UNKNOWN') !== 'SOUTH') {
+                throw new \RuntimeException('خدمة طلب المال غير متاحة في منطقتك الحالية');
+            }
+            if ((int) $requester->is_kyc_verified !== 1) {
+                throw new \RuntimeException('أكمل توثيق حسابك قبل طلب المال');
+            }
 
-        // **البابُ نفسُه الذي يستعمله الإنشاء** — وإلّا قالت الشاشةُ
-        // «غير مشترك» وربط الخادمُ الطلبَ بصاحبه. (وقع هذا فعلاً: قيّدتُ
-        // الفحصَ بـ`CUSTOMER_TYPE` والإنشاءُ لا يُقيّد.)
-        $user = $this->service->resolveRecipient($phone);
+            // المصدر المركزي نفسه المستخدم قبل التحويل: اسم ورقم مقنّعان
+            // + token أحادي الاستخدام. لا نعيد بناء بحث هاتف أضعف هنا.
+            $verified = $this->recipientVerification->verifyRecipient(
+                (string) $request->input('phone'),
+                (int) $requester->id,
+            );
+            $recipient = \App\Models\User::find((int) $verified['recipient_id']);
 
-        // **وطلبٌ من النفس يُقال قبل الإرسال لا بعده.**
-        if ($user && (int) $user->id === (int) $request->user()->id) {
+            if (!$recipient || (int) $recipient->type !== CUSTOMER_TYPE) {
+                throw new \RuntimeException('لا يوجد عميل بهذا الرقم');
+            }
+            if (!(bool) $recipient->is_active) {
+                throw new \RuntimeException('حساب العميل موقوف حالياً');
+            }
+            if ((int) $recipient->is_kyc_verified !== 1) {
+                throw new \RuntimeException('حساب العميل غير موثّق لاستقبال الطلب');
+            }
             return $this->ok([
-                'found' => false, 'is_self' => true,
-                'hint' => 'هذا رقمك أنت',
-            ]);
+                // مفاتيح found/name باقية لتوافق النسخة السابقة.
+                'found' => true,
+                'is_self' => false,
+                'name' => $verified['masked_name'],
+                'masked_name' => $verified['masked_name'],
+                'masked_phone' => $verified['masked_phone'],
+                'recipient_id' => $verified['recipient_id'],
+                'verification_token' => $verified['verification_token'],
+                'expires_in' => $verified['expires_in'],
+                'hint' => 'تحقّق من الاسم ثم أرسل الطلب مباشرةً',
+            ], 'REQUEST_RECIPIENT_VERIFIED', 'تأكّد من بيانات العميل');
+        } catch (\RuntimeException $e) {
+            // لا رابط احتياطياً في «طلب مال من عميل»: الخطأ يتوقف هنا.
+            return $this->error('REQUEST_RECIPIENT_INVALID', $e->getMessage(), 422);
         }
-
-        if (! $user) {
-            return $this->ok([
-                'found' => false, 'is_self' => false,
-                'hint' => 'غير مشترك في أميال — سيُنشأ رابطٌ تُشاركه معه',
-            ]);
-        }
-
-        // حسابٌ موقوف: **يُقال، ولا يُترك الطالب ينتظر جواباً لن يأتي.**
-        if (! $user->is_active) {
-            return $this->ok([
-                'found' => false, 'is_self' => false,
-                'hint' => 'الحساب موقوف حالياً — استعمل الرابط',
-            ]);
-        }
-
-        return $this->ok([
-            'found' => true,
-            'is_self' => false,
-            'name' => trim(($user->f_name ?? '') . ' ' . ($user->l_name ?? '')),
-            'hint' => 'مشترك في أميال — سيصله الطلب فوراً',
-        ]);
     }
 
     public function list(Request $request): JsonResponse
@@ -284,6 +341,10 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
             $result = $this->service->pay($request->user(), $req);
         } catch (\App\Exceptions\InsufficientBalanceException $e) {
             return new JsonResponse($e->toApiArray(), 402);
+        } catch (\App\Exceptions\AmlBlockedException $e) {
+            return new JsonResponse($e->toApiArray(), 403);
+        } catch (\App\Exceptions\AmlHeldException $e) {
+            return new JsonResponse($e->toApiArray(), 202);
         } catch (\InvalidArgumentException | \RuntimeException $e) {
             return $this->error('PAYMENT_FAILED', $e->getMessage(), 422);
         }
@@ -318,6 +379,11 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
      */
     public function decline(Request $request, int $id): JsonResponse
     {
+        $v = Validator::make($request->all(), [
+            'reason' => 'sometimes|nullable|string|max:255',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
         $req = PaymentRequest::find($id);
         if (!$req) return $this->error('NOT_FOUND', 'الطلب غير موجود', 404);
 
@@ -351,11 +417,17 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
     public function payById(Request $request, int $id): JsonResponse
     {
         $v = Validator::make($request->all(), [
-            'pin' => 'required|string|min:4|max:4',
+            'pin' => ['required', 'string', 'regex:/^\d{4}$/'],
         ]);
         if ($v->fails()) return $this->validationError($v);
 
-        if (!\App\CentralLogics\Helpers::pin_check($request->user()->id, (string) $request->input('pin'))) {
+        if (!$this->pinService->verify($request->user(), (string) $request->input('pin'))) {
+            $lockedUntil = $request->user()->fresh()?->pin_locked_until;
+            if ($lockedUntil?->isFuture()) {
+                return $this->error(
+                    'PIN_LOCKED', 'تم إيقاف محاولات الرمز مؤقتاً — حاول لاحقاً', 423,
+                );
+            }
             return $this->error('PIN_INVALID', 'رمز الحماية غير صحيح', 403);
         }
 
@@ -363,7 +435,13 @@ class PaymentRequestController extends AmialApiController // AMIAL-FIX-007
         if (!$req) return $this->error('NOT_FOUND', 'الطلب غير موجود', 404);
 
         try {
-            $result = $this->service->pay($request->user(), $req);
+            $result = $this->service->payDirect($request->user(), $req);
+        } catch (\App\Exceptions\InsufficientBalanceException $e) {
+            return new JsonResponse($e->toApiArray(), 402);
+        } catch (\App\Exceptions\AmlBlockedException $e) {
+            return new JsonResponse($e->toApiArray(), 403);
+        } catch (\App\Exceptions\AmlHeldException $e) {
+            return new JsonResponse($e->toApiArray(), 202);
         } catch (\InvalidArgumentException $e) {
             return $this->error('FORBIDDEN', $e->getMessage(), 403);
         } catch (\RuntimeException $e) {

@@ -412,6 +412,15 @@ class FuelStationService
                 'zone_code' => $merchant->zone_code ?? 'SOUTH',
             ]);
 
+            if (!empty($paidTxId)) {
+                app(ReceiptService::class)->attachBusinessReference(
+                    (string) $paidTxId,
+                    'fuel_sale',
+                    (int) $sale->id,
+                    ['merchant_vertical' => 'fuel', 'sale_ulid' => $sale->sale_ulid],
+                );
+            }
+
             // حدّث عدّاد المضخّة
             if ($pump->isMechanical() && $meterAfter !== null) {
                 $pump->update(['current_meter_reading' => $meterAfter]);

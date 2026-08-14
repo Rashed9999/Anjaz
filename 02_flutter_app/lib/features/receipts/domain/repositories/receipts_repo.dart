@@ -42,6 +42,18 @@ class ReceiptsRepo extends GetxService {
     return '${apiClient.appBaseUrl}${AppConstants.amialReceiptDownload}$id/download';
   }
 
+  String documentUrl(int id, String route) {
+    final safeRoute = route.trim().replaceFirst(RegExp(r'^/+'), '');
+    return '${apiClient.appBaseUrl}${AppConstants.amialReceiptDownload}$id/$safeRoute';
+  }
+
+  Future<Response> recordPrint(int id, {required String format, required String printerName}) {
+    return apiClient.postData(
+      '${AppConstants.amialReceiptShow}$id/print-event',
+      {'format': format, 'printer_name': printerName},
+    );
+  }
+
   Future<Response> verifyPublic(String code) async {
     return apiClient.getData('${AppConstants.amialReceiptVerifyPublic}$code');
   }

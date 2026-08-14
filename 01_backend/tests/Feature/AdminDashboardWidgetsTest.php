@@ -180,6 +180,34 @@ class AdminDashboardWidgetsTest extends TestCase
 
         $this->assertStringContainsString(number_format(8123456, 0), $html,
             'الأدمن نفسه لا يرى الخزينة — حُجب المال عن الجميع');
+        $this->assertStringContainsString('data-testid="financial-map"', $html,
+            'صاحب الصلاحية المالية لا يرى الخريطة التنفيذية لمصادر أرقامه');
+    }
+
+    /**
+     * @test
+     *
+     * لوحة الانتباه لا تُظهر طوابير امتثال أو تدقيق لموظف الدعم؛ إخفاء
+     * الرابط وحده لا يكفي إذا بقيت الأعداد أو الحالة في HTML.
+     */
+    public function attention_queue_is_scoped_to_the_operator_permissions(): void
+    {
+        $html = $this->dashboardAs(PlatformRoleService::SUPPORT, '9677700030049');
+
+        $this->assertStringContainsString('data-attention="tickets"', $html);
+        $this->assertStringNotContainsString('data-attention="approvals"', $html);
+        $this->assertStringNotContainsString('data-attention="security"', $html);
+        $this->assertStringNotContainsString('data-attention="reconciliation"', $html);
+    }
+
+    /** @test */
+    public function an_admin_without_a_platform_role_does_not_receive_zero_valued_sensitive_kpis(): void
+    {
+        $html = $this->dashboardAs(null, '9677700030059');
+
+        $this->assertStringContainsString('transactions-denied', $html);
+        $this->assertStringNotContainsString('data-kpi="today"', $html);
+        $this->assertStringContainsString('لا توجد مؤشرات متاحة لهذا الدور', $html);
     }
 
     // ══════════════════════════════════════════════════════════════

@@ -172,11 +172,11 @@ Route::middleware(['auth:api'])->group(function () {
         // AMIAL-OPS-CONSOLE-001 — منصة عمليات الموظفين (Customer Operations Console)
         Route::prefix('support')->name('support.')->group(function () {
             $c = \App\Http\Controllers\Api\V1\Amial\SupportConsoleController::class;
-            Route::get('/search', [$c, 'search'])->name('search');
-            Route::get('/ops-dashboard', [$c, 'opsDashboard'])->name('ops-dashboard');
+            Route::get('/search', [$c, 'search'])->middleware('platform:platform.customers.view')->name('search');
+            Route::get('/ops-dashboard', [$c, 'opsDashboard'])->middleware('platform:platform.ops.view')->name('ops-dashboard');
             Route::get('/customers/{id}', [$c, 'customer'])->where('id', '[0-9]+')->middleware('platform:platform.customers.view')->name('customers.show');
             Route::get('/customers/{id}/transactions', [$c, 'customerTransactions'])->where('id', '[0-9]+')->middleware('platform:platform.transactions.view')->name('customers.transactions');
-            Route::get('/transactions/{ref}', [$c, 'transaction'])->name('transactions.show');
+            Route::get('/transactions/{ref}', [$c, 'transaction'])->middleware('platform:platform.transactions.view')->name('transactions.show');
             // إجراءات التحقّق — كلها تتطلب سبباً وتُسجَّل في التدقيق
             Route::post('/customers/{id}/freeze', [$c, 'freeze'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.freeze');
             Route::post('/customers/{id}/reset-pin', [$c, 'resetPin'])->where('id', '[0-9]+')->middleware('platform:platform.customers.reset_pin')->name('customers.reset-pin');
@@ -197,17 +197,17 @@ Route::middleware(['auth:api'])->group(function () {
             Route::post('/devices/{deviceRowId}/block', [$c, 'blockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.block');
             Route::post('/devices/{deviceRowId}/unblock', [$c, 'unblockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.unblock');
             // تذاكر النزاعات
-            Route::get('/tickets', [$c, 'tickets'])->name('tickets.index');
-            Route::post('/tickets', [$c, 'createTicket'])->name('tickets.create');
-            Route::get('/tickets/{id}', [$c, 'showTicket'])->where('id', '[0-9]+')->name('tickets.show');
-            Route::post('/tickets/{id}/update', [$c, 'updateTicket'])->where('id', '[0-9]+')->name('tickets.update');
-            Route::post('/tickets/{id}/note', [$c, 'addTicketNote'])->where('id', '[0-9]+')->name('tickets.note');
+            Route::get('/tickets', [$c, 'tickets'])->middleware('platform:platform.tickets.manage')->name('tickets.index');
+            Route::post('/tickets', [$c, 'createTicket'])->middleware('platform:platform.tickets.manage')->name('tickets.create');
+            Route::get('/tickets/{id}', [$c, 'showTicket'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.show');
+            Route::post('/tickets/{id}/update', [$c, 'updateTicket'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.update');
+            Route::post('/tickets/{id}/note', [$c, 'addTicketNote'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.note');
             // AMIAL-INSIDER-001: Maker-Checker + مراقبة الموظفين
-            Route::get('/approvals', [$c, 'approvalsList'])->name('approvals.index');
-            Route::post('/approvals/{id}/approve', [$c, 'approveRequest'])->where('id', '[0-9]+')->name('approvals.approve');
-            Route::post('/approvals/{id}/reject', [$c, 'rejectRequest'])->where('id', '[0-9]+')->name('approvals.reject');
-            Route::get('/insider/overview', [$c, 'insiderOverview'])->name('insider.overview');
-            Route::post('/insider/alerts/{id}/ack', [$c, 'acknowledgeAlert'])->where('id', '[0-9]+')->name('insider.alerts.ack');
+            Route::get('/approvals', [$c, 'approvalsList'])->middleware('platform:platform.approvals.decide')->name('approvals.index');
+            Route::post('/approvals/{id}/approve', [$c, 'approveRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.approve');
+            Route::post('/approvals/{id}/reject', [$c, 'rejectRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.reject');
+            Route::get('/insider/overview', [$c, 'insiderOverview'])->middleware('platform:platform.audit.view')->name('insider.overview');
+            Route::post('/insider/alerts/{id}/ack', [$c, 'acknowledgeAlert'])->where('id', '[0-9]+')->middleware('platform:platform.audit.view')->name('insider.alerts.ack');
         });
 
         // AMIAL-MAINT-001 — لوحة «الصيانة الأولية» (تشغيل/إيقاف الميزات)
@@ -302,6 +302,12 @@ Route::middleware(['auth:api'])->group(function () {
 
     // -------- Payment Requests (AMIAL-PAYMENT-REQUESTS-001) --------
     Route::prefix('payment-requests')->name('amial.payment-requests.')->middleware('amial.idempotency')->group(function () {
+        // طلبُ عميلٍ مباشراً: لا رابطَ ولا QR، ومستلمٌ مؤكّد إلزامي.
+        Route::post('/direct', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'createDirect'])
+            ->middleware([
+                'amial.zone:request_money',
+                'amial.rate-limit:payment_request_create,30,1',
+            ])->name('create-direct');
         Route::post('/', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'create'])
             ->middleware('amial.rate-limit:payment_request_create,30,1')->name('create');
         Route::get('/', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'list'])->name('list');
@@ -333,7 +339,10 @@ Route::middleware(['auth:api'])->group(function () {
             ->where('id', '[0-9]+')->name('decline');
         Route::post('/{id}/pay', [\App\Http\Controllers\Api\V1\Amial\PaymentRequestController::class, 'payById'])
             ->where('id', '[0-9]+')
-            ->middleware('amial.rate-limit:payment_request_pay,30,1')->name('pay-by-id');
+            ->middleware([
+                'amial.zone:send_money',
+                'amial.rate-limit:payment_request_pay,30,1',
+            ])->name('pay-by-id');
     });
 
     // -------- Legal Terms --------
@@ -399,6 +408,9 @@ Route::middleware(['auth:api'])->group(function () {
         // AMIAL-INVOICE-A4-001: فاتورة رسمية A4
         Route::get('/{id}/invoice', [ReceiptController::class, 'invoice'])
             ->where('id', '[0-9]+')->name('invoice');
+        Route::post('/{id}/print-event', [ReceiptController::class, 'recordPrint'])
+            ->middleware('amial.rate-limit:receipt_print,30,1')
+            ->where('id', '[0-9]+')->name('print-event');
     });
 
     // -------- AMIAL-FUND-FAMILY-001 (v0.9-B) --------

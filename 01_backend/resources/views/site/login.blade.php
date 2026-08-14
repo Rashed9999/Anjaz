@@ -1,143 +1,34 @@
-{{-- AMIAL-UNIFIED-WEB-LOGIN-001 — بابٌ واحد.
-
-     **حقلٌ واحدٌ للمعرّف لا قائمةٌ منسدلة.**
-
-     قائمةُ «أنا: موظّف / شركة / إدارة» تسأل المستعمل سؤالاً يعرف النظامُ
-     جوابَه من حسابه. والصرّاف يقف أمامها كلّ صباح، ويخطئ فيها، فيُقال له
-     «بيانات خاطئة» وبياناتُه صحيحة. والأسوأ أنّها لا تحرس شيئاً: ما يأتي
-     من المتصفّح يمكن تغييره، فالصلاحيّة تُقرأ من الحساب لا من الاختيار.
-     (القاعدة الثامنة: الهويّة تحدّد النطاق، لا القائمة المنسدلة.) --}}
+{{-- AMIAL-UNIFIED-WEB-LOGIN-002 — واجهة دخول حديثة؛ منطق الحراس لم يتغير. --}}
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>تسجيل الدخول — أميال باي</title>
-    <meta name="robots" content="noindex">
-    <meta name="theme-color" content="#053391">
-    <link rel="stylesheet" href="{{ asset('assets/site/site.css') }}">
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>دخول آمن — أميال باي</title><meta name="robots" content="noindex"><meta name="theme-color" content="#062b75">
+    <link rel="stylesheet" href="{{ asset('assets/site/site.css') }}?v=amial-site-20260812-3">
+    <style>
+        :root{--n:#062b75;--b:#0a4abf;--sky:#eaf2ff;--ink:#10213f;--muted:#66738a;--line:#dbe5f4;--gold:#ffc928}*{box-sizing:border-box}
+        .amial-login{min-height:100svh;color:var(--ink);background:radial-gradient(circle at 85% 6%,rgba(58,121,255,.42),transparent 25rem),radial-gradient(circle at 5% 100%,rgba(34,92,214,.32),transparent 29rem),linear-gradient(135deg,#041d54,#07378d 48%,#041d54);padding:clamp(16px,4vw,48px);display:grid;place-items:center}
+        .login-layout{width:min(100%,1040px);display:grid;grid-template-columns:minmax(280px,.82fr) minmax(360px,1fr);background:rgba(255,255,255,.97);border:1px solid rgba(255,255,255,.45);border-radius:28px;overflow:hidden;box-shadow:0 32px 80px rgba(0,15,54,.42)}
+        .login-brand{position:relative;min-height:610px;padding:46px;color:#fff;background:linear-gradient(160deg,#073c9f,#062766 72%);overflow:hidden;display:flex;flex-direction:column}.login-brand:before,.login-brand:after{content:"";position:absolute;border:1px solid rgba(255,255,255,.18);border-radius:50%;pointer-events:none}.login-brand:before{width:390px;height:390px;left:-170px;bottom:-120px}.login-brand:after{width:280px;height:280px;right:-130px;top:-90px}
+        .brand-logo{position:relative;display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none;width:max-content}.brand-logo img{width:50px;height:50px;object-fit:contain;background:#fff;border-radius:13px;padding:4px}.brand-logo strong{display:block;font-size:20px}.brand-logo small{display:block;direction:ltr;letter-spacing:1.8px;opacity:.72;font-size:10px;margin-top:2px}.brand-copy{position:relative;margin:auto 0}.eyebrow{color:#b9d1ff;font-size:13px;font-weight:700}.brand-copy h1{font-size:clamp(29px,3.4vw,44px);line-height:1.27;margin:12px 0;max-width:380px}.brand-copy p{margin:0;max-width:360px;line-height:1.9;color:#dce8ff}.brand-points{position:relative;display:grid;gap:12px;margin-top:30px}.brand-point{display:flex;gap:9px;align-items:center;font-size:13px;color:#e8f0ff}.brand-point i{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.14);font-style:normal;color:var(--gold)}
+        .login-panel{padding:clamp(25px,5vw,55px);display:flex;flex-direction:column;justify-content:center}.panel-top{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:30px}.back-home{color:var(--b);font-size:13px;font-weight:700;text-decoration:none}.back-home:hover{text-decoration:underline}.secure{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap}.secure b{color:#138b57}.panel-title{font-size:28px;margin:0 0 8px;letter-spacing:-.5px}.panel-lead{color:var(--muted);font-size:14px;line-height:1.8;margin:0 0 26px}
+        .login-alert{border-radius:13px;padding:13px 14px;margin-bottom:18px;font-size:13px;line-height:1.7;text-align:start}.info{background:#edf5ff;border:1px solid #cfe2ff;color:#15457f}.error{background:#fff1f2;border:1px solid #fecdd3;color:#9f1239}.session-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}.session-actions a{padding:8px 12px;border-radius:9px;font-weight:700;text-decoration:none}.session-go{background:var(--b);color:#fff}.session-out{color:var(--b);border:1px solid #bcd1f7}
+        .login-form .field{margin-bottom:17px}.login-form label:not(.remember){display:flex;justify-content:space-between;font-size:13px;font-weight:800;margin:0 0 8px}.login-form label small{color:var(--muted);font-weight:500}.login-form input[type=text],.login-form input[type=password]{width:100%;border:1px solid var(--line);border-radius:12px;background:#fbfdff;color:var(--ink);font:inherit;padding:14px 15px;outline:0;transition:.2s}.login-form input:focus{border-color:#1760d5;box-shadow:0 0 0 4px rgba(23,96,213,.12);background:#fff}.hint{font-size:11px;color:var(--muted);margin-top:7px;line-height:1.6}.captcha-row{display:flex;gap:10px;align-items:center;direction:ltr}.captcha-row img{border:1px solid var(--line);border-radius:10px;height:48px}.remember{display:flex;align-items:center;gap:8px;color:#536277;font-size:12px;margin:3px 0 20px;cursor:pointer}.remember input{accent-color:var(--b);width:16px;height:16px}.login-submit{width:100%;border:0;border-radius:12px;padding:15px;background:linear-gradient(135deg,#0b51ce,#08368b);color:#fff;font:inherit;font-weight:800;cursor:pointer;box-shadow:0 9px 20px rgba(9,65,167,.25);transition:.2s}.login-submit:hover{transform:translateY(-1px);box-shadow:0 12px 24px rgba(9,65,167,.32)}
+        .portal-divider{display:flex;align-items:center;gap:12px;color:#8995a8;font-size:12px;margin:28px 0 14px}.portal-divider:before,.portal-divider:after{content:"";height:1px;background:var(--line);flex:1}.portals{display:grid;gap:9px}.portal-link{color:var(--ink);text-decoration:none;border:1px solid var(--line);border-radius:13px;padding:12px;display:flex;align-items:center;gap:11px;transition:.2s}.portal-link:hover{border-color:#96b8ef;background:#f4f8ff;transform:translateY(-1px)}.portal-icon{width:35px;height:35px;border-radius:10px;background:var(--sky);display:grid;place-items:center;font-size:18px;flex:none}.portal-link b{font-size:13px;display:block}.portal-link small{display:block;color:var(--muted);font-size:11px;margin-top:3px}.portal-arrow{margin-inline-start:auto;color:var(--b);font-size:19px}.app-note{margin:18px 0 0;text-align:center;color:#718097;font-size:11px;line-height:1.7}
+        @media(max-width:760px){.amial-login{padding:0;place-items:stretch}.login-layout{border-radius:0;grid-template-columns:1fr;min-height:100svh}.login-brand{min-height:auto;padding:26px 22px 29px}.brand-copy{margin:27px 0 0}.brand-copy h1{font-size:27px;margin:7px 0}.brand-copy p{font-size:13px}.brand-points{display:none}.login-panel{padding:29px 22px 34px;justify-content:flex-start}.panel-top{margin-bottom:24px}.panel-title{font-size:26px}}
+    </style>
 </head>
-<body class="auth-page">
-
-<div class="auth-card">
-    <a class="logo" href="{{ route('site.home') }}"><span class="mark">🏦</span> أميال باي</a>
-    <div class="sub">بوّابة الويب — بابٌ واحدٌ يفتح على لوحتك</div>
-
-    {{-- **من له جلسةٌ يرى النموذج، لا يُحوَّل عنه.**
-
-         كانت الصفحة تُحوّل من له جلسةٍ إلى لوحته. فمن جرّب الدخول برمز
-         صرّافٍ مرّةً بقيت جلستُه، وصارت كلُّ ضغطةٍ على «تسجيل الدخول» في
-         الموقع ترميه إلى بوّابة الوكيل — ولا يرى النموذج إطلاقاً، ولا
-         سبيل له إلى لوحةٍ أخرى.
-
-         فيُقال له من هو، ويُترك له البابان. --}}
-    @if (!empty($current))
-        <div class="alert alert-info" style="text-align:start">
-            <div style="margin-bottom:10px">
-                أنت داخلٌ الآن باسم <strong>{{ $current['name'] }}</strong>
-                في {{ $current['where'] }}.
-            </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <a class="btn btn-primary" style="padding:8px 16px;font-size:14px"
-                   href="{{ $current['go'] }}">تابِع إلى لوحتك</a>
-                <a class="btn btn-ghost" style="padding:8px 16px;font-size:14px"
-                   href="{{ $current['out'] }}">خروج ودخولٌ بحسابٍ آخر</a>
-            </div>
-        </div>
-    @endif
-
-    @if ($errors->any())
-        <div class="alert alert-error">
-            @foreach ($errors->all() as $error)
-                <div>{{ $error }}</div>
-            @endforeach
-        </div>
-    @endif
-
-    <form method="POST" action="{{ route('login.submit') }}" autocomplete="on">
-        @csrf
-
-        <div class="field">
-            <label for="username">رمز الموظّف أو رقم الهاتف</label>
-            <input class="input" id="username" name="username" type="text"
-                   value="{{ old('username') }}" required autofocus
-                   autocomplete="username" inputmode="text" dir="ltr"
-                   placeholder="MKL-014  أو  9677xxxxxxxx">
-            {{-- كان المثال رمزَ صرّافٍ وحده، والسطرُ يبدأ بـ«الصرّاف» —
-                 فقرأها الأدمن بوّابةَ وكيلٍ وظنّ أنّه في المكان الخطأ. --}}
-            <div class="hint">
-                موظّف الصرافة برمزه · صاحب الشركة والإدارة برقم الهاتف.
-            </div>
-        </div>
-
-        <div class="field">
-            <label for="password">كلمة السرّ</label>
-            <input class="input" id="password" name="password" type="password"
-                   required autocomplete="current-password">
-        </div>
-
-        @if ($needsCaptcha)
-            {{-- تظهر بعد محاولاتٍ فاشلة فقط — لا في كلّ دخول. --}}
-            <div class="field">
-                <label for="captcha">اكتب ما في الصورة</label>
-                <div class="captcha-row">
-                    <img src="{{ route('login.captcha') }}" alt="رمز التحقّق" width="130" height="46">
-                    <input class="input" id="captcha" name="captcha" type="text"
-                           required autocomplete="off" dir="ltr" style="flex:1">
-                </div>
-                <div class="hint">ظهرت هذه الخطوة بعد محاولاتٍ فاشلة متتالية.</div>
-            </div>
-        @endif
-
-        <label class="check">
-            <input type="checkbox" name="remember" value="1"> أبقني داخلاً على هذا الجهاز
-        </label>
-
-        <button class="btn btn-primary btn-block btn-lg" type="submit">دخول</button>
-    </form>
-
-    {{-- **كانت هذه القائمة معروضةً ولا تعمل — ثلاثةُ سطورٍ تشبه القائمة
-         ولا يُفتح منها شيء.**
-
-         وكتبتُ حينها أنّها «إخبارٌ لا اختيار» لأنّ الصلاحيّة تُقرأ من
-         الحساب لا من قائمةٍ منسدلة. والمبدأ صحيح — **وطبّقتُه في غير
-         موضعه**: قائمةٌ تقول «أنا أدمن» لا تمنح شيئاً، لكنّ **رابطاً إلى
-         صفحة دخولٍ عامّة تنقّلٌ لا تصريح**. ومنعُه ليس حمايةً بل عرقلة.
-
-         فلم يجد صاحب المشروع سبيلاً إلى لوحة الإدارة من الموقع إطلاقاً،
-         وأخبرني أربع مرّات.
-
-         (مهارة `amial-interactive-ui`: «No fake UI. Everything visible
-         must function.» — وهي التي تكشف هذا الصنف بعينه.) --}}
-    <div class="portals">
-        <div class="portals-t">أو ادخل من بوّابتك مباشرةً</div>
-
-        <a class="portal" href="{{ route('agent.login') }}">
-            <span>🏪</span>
-            <div><b>شركات الصرافة وموظّفوها</b>
-                <small>{{ $agentHost ?? 'بوّابة الوكيل' }}</small></div>
-            <em>←</em>
-        </a>
-
-        <a class="portal" href="{{ route('admin.auth.login') }}">
-            <span>🛡️</span>
-            <div><b>موظّفو أميال باي</b>
-                <small>{{ $adminHost ?? 'لوحة الإدارة' }} — والدورُ يُقرّر ما تراه</small></div>
-            <em>←</em>
-        </a>
-
-        {{-- والثالث بلا رابطٍ **بسببٍ مكتوب**: لا صفحةَ ويب له أصلاً.
-             («Never leave disabled UI without reason».) --}}
-        <div class="portal muted"><span>📱</span>
-            <div><b>العملاء والتجّار</b>
-                <small>تطبيق أميال باي — لا صفحةَ ويب لهم</small></div>
-        </div>
-    </div>
-
-    <div class="auth-foot">
-        <a href="{{ route('site.home') }}">العودة إلى الموقع</a>
-    </div>
-</div>
-
-</body>
-</html>
+<body class="amial-login"><main class="login-layout">
+    <aside class="login-brand" aria-label="أميال باي"><a class="brand-logo" href="{{ route('site.home') }}" aria-label="العودة إلى موقع أميال باي"><img src="{{ asset('branding/logo.png') }}" alt="شعار أميال باي"><span><strong>أميال باي</strong><small>AMIAL PAY</small></span></a><div class="brand-copy"><div class="eyebrow">بوابة دخول موحّدة</div><h1>دخول آمن إلى مساحة عملك.</h1><p>أدخل معرّفك وكلمة المرور، وسيوجّهك النظام تلقائياً إلى البوابة المناسبة لصلاحياتك.</p></div><div class="brand-points"><div class="brand-point"><i>✓</i>لا تختار الدور — حسابك يحدّد وجهتك بأمان.</div><div class="brand-point"><i>✓</i>حماية من المحاولات المتكررة والتحويل الخاطئ.</div></div></aside>
+    <section class="login-panel" aria-labelledby="login-title"><div class="panel-top"><a class="back-home" href="{{ route('site.home') }}">→ العودة إلى الموقع</a><span class="secure"><b>●</b> اتصال آمن</span></div><h1 class="panel-title" id="login-title">مرحباً بعودتك</h1><p class="panel-lead">استخدم رمز الموظف أو رقم الهاتف المسجّل في أميال باي.</p>
+        @if (!empty($current))<div class="login-alert info">أنت داخل الآن باسم <strong>{{ $current['name'] }}</strong> في {{ $current['where'] }}.<div class="session-actions"><a class="session-go" href="{{ $current['go'] }}">متابعة إلى لوحتي</a><a class="session-out" href="{{ $current['out'] }}">دخول بحساب آخر</a></div></div>@endif
+        @if ($errors->any())<div class="login-alert error" role="alert">@foreach ($errors->all() as $error)<div>{{ $error }}</div>@endforeach</div>@endif
+        <form class="login-form" method="POST" action="{{ route('login.submit') }}" autocomplete="on">@csrf
+            <div class="field"><label for="username">رمز الموظف أو رقم الهاتف <small>مطلوب</small></label><input id="username" name="username" type="text" value="{{ old('username') }}" required autofocus autocomplete="username" inputmode="text" dir="ltr" placeholder="MKL-014 أو 9677xxxxxxxx"><div class="hint">موظفو الصرافة يستخدمون الرمز، وأصحاب الشركات والإدارة يستخدمون رقم الهاتف.</div></div>
+            <div class="field"><label for="password">كلمة المرور <small>مطلوب</small></label><input id="password" name="password" type="password" required autocomplete="current-password" placeholder="أدخل كلمة المرور"></div>
+            @if ($needsCaptcha)<div class="field"><label for="captcha">رمز التحقق <small>ظهر لحماية الحساب</small></label><div class="captcha-row"><img src="{{ route('login.captcha') }}" alt="رمز التحقق"><input id="captcha" name="captcha" type="text" required autocomplete="off" dir="ltr" placeholder="اكتب الرمز"></div></div>@endif
+            <label class="remember"><input type="checkbox" name="remember" value="1"> إبقني مسجلاً على هذا الجهاز الشخصي</label><button class="login-submit" type="submit" data-testid="unified-login-submit">تسجيل الدخول بأمان</button>
+        </form>
+        <div class="portal-divider">أو بوابة متخصصة</div><nav class="portals" aria-label="بوابات الدخول المتخصصة"><a class="portal-link" href="{{ route('agent.login') }}"><span class="portal-icon">🏪</span><span><b>بوابة شركات الصرافة</b><small>{{ $agentHost ?? 'دخول الشركة والموظفين' }}</small></span><span class="portal-arrow">←</span></a><a class="portal-link" href="{{ route('admin.auth.login') }}"><span class="portal-icon">🛡️</span><span><b>لوحة إدارة أميال باي</b><small>{{ $adminHost ?? 'دخول موظفي المنصة' }}</small></span><span class="portal-arrow">←</span></a></nav><p class="app-note">للعملاء والتجار: الدخول وإدارة المحفظة يتمان من تطبيق أميال باي.</p>
+    </section>
+</main></body></html>

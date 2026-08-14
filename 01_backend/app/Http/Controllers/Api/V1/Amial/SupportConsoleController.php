@@ -347,6 +347,22 @@ class SupportConsoleController extends Controller
             ];
         }
 
+        // دفتر الأستاذ هو الدليل المالي، لا سجل العملية وحده. نربط العملية
+        // بالقيود من source_id كي يرى الدعم طرفي الحركة والقيد العكسي إن وجد.
+        $refs = array_values(array_filter([
+            (string) $tx->transaction_id,
+            (string) $tx->ref_trans_id,
+        ]));
+        $ledgerEntries = \App\Models\Ledger\LedgerJournalEntry::with('lines.account')
+            ->whereIn('source_id', $refs)->orderBy('id')->get();
+        foreach ($ledgerEntries as $entry) {
+            $timeline[] = [
+                'at' => $entry->posted_at ?? $entry->created_at,
+                'event' => $entry->is_reversal ? 'ledger_reversal_posted' : 'ledger_entry_posted',
+                'detail' => "قيد {$entry->entry_ulid} — {$entry->source_type} — {$entry->total_amount}",
+            ];
+        }
+
         usort($timeline, fn($x, $y) => strcmp((string) $x['at'], (string) $y['at']));
 
         return $this->ok([
@@ -359,7 +375,6 @@ class SupportConsoleController extends Controller
                 'decision_code' => $tx->decision_code,
                 'decision_reason' => $tx->decision_reason,
                 'note' => $tx->note,
-                'idempotency_key' => $tx->idempotency_key,
             ],
             'receipt' => $receipt ? [
                 'id' => $receipt->id,
@@ -368,6 +383,20 @@ class SupportConsoleController extends Controller
             ] : null,
             'disputes' => $disputes->map(fn($d) => [
                 'id' => $d->id, 'status' => $d->status, 'created_at' => $d->created_at,
+            ])->values(),
+            'ledger_entries' => $ledgerEntries->map(fn($e) => [
+                'ulid' => $e->entry_ulid,
+                'source_type' => $e->source_type,
+                'source_id' => $e->source_id,
+                'status' => $e->status,
+                'is_reversal' => (bool) $e->is_reversal,
+                'reverses_entry_id' => $e->reverses_entry_id,
+                'posted_at' => $e->posted_at,
+                'lines' => $e->lines->map(fn($l) => [
+                    'account' => $l->account?->account_code,
+                    'direction' => $l->direction,
+                    'amount' => (string) $l->amount,
+                ])->values(),
             ])->values(),
             'timeline' => $timeline,
         ]);

@@ -19,6 +19,7 @@ class NotificationService
     /** الأنواع المعروفة (للفلترة في الـ UI). أنواع جديدة تُقبل، لكنها بلا أيقونة افتراضية. */
     public const TYPES = [
         'transfer_received', 'transfer_sent',
+        'payment_request_received', 'payment_request_declined',
         'withdrawal_completed', 'withdrawal_failed', 'withdrawal_pending', 'withdraw_pending', 'withdraw_cancelled',
         'credit_sale', 'credit_payment', 'credit_over_limit',
         'merchant_payment_received',

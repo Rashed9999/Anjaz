@@ -303,10 +303,27 @@
         },
 
         support(m, body) {
-            body.innerHTML = table(['الرقم', 'الموضوع', 'الحالة', 'الأولوية', 'آخر تحديث'],
-                m.tickets.map(t => `<tr><td class="font-monospace small">${esc(t.ticket_number)}</td>
-                    <td>${esc(t.subject)}</td><td>${esc(t.status)}</td><td>${esc(t.priority)}</td>
-                    <td class="small">${dt(t.updated_at)}</td></tr>`).join(''), 'لا تذاكر', 'cc-support');
+            const directions = {outgoing: 'طلبه العميل', incoming: 'طُلب منه'};
+            const statuses = {pending: 'بانتظار الموافقة', paid: 'مدفوع', declined: 'مرفوض', cancelled: 'ملغى', expired: 'منتهٍ'};
+            body.innerHTML = `
+                <div class="card p-3 mb-3"><h6>طلبات الأموال المرتبطة بالعميل</h6>
+                    ${table(['الرمز', 'الاتجاه/الطرف', 'المبلغ', 'الحالة', 'رقم العملية', 'التاريخ'],
+                        (m.payment_requests || []).map(r => `<tr>
+                            <td class="font-monospace small" title="${esc(r.request_ulid)}">${esc(r.short_code)}</td>
+                            <td class="small"><span class="badge bg-light text-dark">${esc(directions[r.direction] || r.direction)}</span>
+                                ${esc(r.counterparty)}<div class="text-muted font-monospace">${esc(r.counterparty_phone)}</div></td>
+                            <td class="text-end fw-bold">${num(r.amount)}</td>
+                            <td>${esc(statuses[r.status] || r.status)}</td>
+                            <td class="font-monospace small">${esc(r.paid_transaction_id || '—')}</td>
+                            <td class="small">${dt(r.paid_at || r.created_at)}</td></tr>`).join(''),
+                        'لا طلبات أموال', 'cc-payment-requests')}
+                </div>
+                <div class="card p-3"><h6>تذاكر الدعم</h6>
+                    ${table(['الرقم', 'الموضوع', 'الحالة', 'الأولوية', 'آخر تحديث'],
+                        m.tickets.map(t => `<tr><td class="font-monospace small">${esc(t.ticket_number)}</td>
+                            <td>${esc(t.subject)}</td><td>${esc(t.status)}</td><td>${esc(t.priority)}</td>
+                            <td class="small">${dt(t.updated_at)}</td></tr>`).join(''), 'لا تذاكر', 'cc-support')}
+                </div>`;
         },
 
         notifications(m, body) {

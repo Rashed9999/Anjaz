@@ -21,6 +21,8 @@ import 'package:amial_pay/features/setting/widgets/profile_holder.dart';
 import 'package:amial_pay/features/setting/widgets/status_menu.dart';
 import 'package:amial_pay/features/setting/widgets/user_info_widget.dart';
 import 'package:amial_pay/features/requested_money/screens/requested_money_list_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/setting/screens/transaction_limit_screen.dart';
 import 'package:amial_pay/features/language/widgets/amial_language_switch.dart';
 import 'package:amial_pay/common/widgets/amial_build_stamp.dart';
@@ -156,12 +158,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.requestProfile,title: 'requests'.tr),
-                    onTap: () => Get.to(()=> const RequestedMoneyListScreen(requestType: RequestType.request)),
+                    onTap: () => Get.to(()=> const IncomingRequestsScreen()),
                   ),
 
                   CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.sendMoneyProfile,title: 'send_requests'.tr),
-                    onTap: () => Get.to(()=> const RequestedMoneyListScreen(requestType: RequestType.sendRequest)),
+                    onTap: () => Get.to(()=> const OutgoingRequestsScreen()),
                   ),
 
                   if(transactionTableModelList.isNotEmpty) CustomInkWellWidget(
@@ -337,7 +339,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
-
 
 
 

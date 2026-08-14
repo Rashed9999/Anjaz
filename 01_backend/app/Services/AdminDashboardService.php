@@ -3,8 +3,11 @@
 namespace App\Services;
 
 use App\CentralLogics\Helpers;
+use App\Models\Transaction;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * AMIAL-DASH-TRUTH-001 — أرقام لوحة الإدارة تُحسب مرّةً وصحيحةً.
@@ -49,6 +52,20 @@ use Illuminate\Support\Facades\DB;
 class AdminDashboardService
 {
     /**
+     * صفّ العملية الاقتصاديّة الأصلي فقط.
+     *
+     * السجلات التابعة (استلام، رسم، عكس...) تشير إلى الصف الأساسي عبر
+     * `ref_trans_id`. الإصدارات القديمة حفظت الأصل بـ 0 والجديدة بـ NULL،
+     * ولذلك ينبغي قبول الشكلين، لا اختيار أحدهما وإخفاء الآخر.
+     */
+    private function primaryTransactions()
+    {
+        return DB::table('transactions')->where(function ($query) {
+            $query->whereNull('ref_trans_id')->orWhere('ref_trans_id', '0');
+        });
+    }
+
+    /**
      * حجمُ العمليّات لكلّ شهرٍ في سنةٍ — **مجموعُ المنصّة لا أعلى مستخدم**.
      *
      * @return array<int,float> مفتاحُه رقم الشهر ١..١٢
@@ -64,8 +81,7 @@ class AdminDashboardService
             $from = Carbon::create($year, $m, 1)->startOfMonth();
             $to   = $from->copy()->endOfMonth();
 
-            $out[$m] = (float) DB::table('transactions')
-                ->where('ref_trans_id', 0)
+            $out[$m] = (float) $this->primaryTransactions()
                 ->whereBetween('created_at', [$from, $to])
                 ->sum('debit');   // بلا groupBy — المجموع لا أعلى صفّ
         }
@@ -145,13 +161,107 @@ class AdminDashboardService
         ];
     }
 
+    /**
+     * القوائم والترتيبات من العملية الأصلية، لا من كل قيودها المحاسبية.
+     *
+     * @return array{agents:\Illuminate\Support\Collection,customers:\Illuminate\Support\Collection}
+     */
+    public function leaderboards(): array
+    {
+        $primary = static fn () => Transaction::query()
+            ->with('user')
+            ->where(function ($query) {
+                $query->whereNull('ref_trans_id')->orWhere('ref_trans_id', '0');
+            });
+
+        $rank = static fn ($query, int $take) => $query
+            ->select(['user_id', DB::raw('SUM(debit) as total_transaction')])
+            ->orderByDesc('total_transaction')
+            ->groupBy('user_id')
+            ->take($take)
+            ->get();
+
+        return [
+            'agents' => $rank($primary()->agent(), 6),
+            'customers' => $rank($primary()->customer(), 4),
+        ];
+    }
+
+    /** @return array{customers:int,agents:int,merchants:int} */
+    public function populationCounts(): array
+    {
+        return [
+            'customers' => User::where('type', CUSTOMER_TYPE)->count(),
+            'agents' => User::where('type', AGENT_TYPE)->count(),
+            'merchants' => User::where('type', MERCHANT_TYPE)->count(),
+        ];
+    }
+
+    /**
+     * طابورُ العمل الذي يحتاج تدخلاً من المشغّل، لا أرقاماً للزينة.
+     *
+     * كل عنصر يقرأ من جدول نطاقه التشغيلي القائم، ولا يُستعلم عنه أصلاً
+     * إن لم يملك المشغّل الصلاحية المقابلة. وحين لا تكون الهجرة مطبقة،
+     * تكون الحالة «غير متاح» لا صفراً مضللاً.
+     *
+     * @param array<string,bool> $permissions
+     * @return array<string,array{state:string,count?:int,status?:string,ran_at?:string|null}>
+     */
+    public function attentionQueue(array $permissions): array
+    {
+        $counter = static function (bool $allowed, string $table, callable $query): array {
+            if (!$allowed) {
+                return ['state' => 'hidden'];
+            }
+
+            if (!Schema::hasTable($table)) {
+                return ['state' => 'unavailable'];
+            }
+
+            return ['state' => 'ready', 'count' => (int) $query()];
+        };
+
+        $queue = [
+            'kyc' => $counter((bool) ($permissions['kyc'] ?? false), 'kyc_documents',
+                fn () => DB::table('kyc_documents')->where('status', 'pending')->count()),
+            'tickets' => $counter((bool) ($permissions['tickets'] ?? false), 'support_tickets',
+                fn () => DB::table('support_tickets')
+                    ->whereIn('status', ['open', 'investigating'])
+                    ->whereIn('priority', ['high', 'urgent'])->count()),
+            'approvals' => $counter((bool) ($permissions['approvals'] ?? false), 'approval_requests',
+                fn () => DB::table('approval_requests')->where('status', 'pending')->count()),
+            'security' => $counter((bool) ($permissions['audit'] ?? false), 'security_alerts',
+                fn () => DB::table('security_alerts')->where('status', 'new')->count()),
+        ];
+
+        if (!($permissions['audit'] ?? false)) {
+            $queue['reconciliation'] = ['state' => 'hidden'];
+        } elseif (!Schema::hasTable('reconciliation_runs')) {
+            $queue['reconciliation'] = ['state' => 'unavailable'];
+        } else {
+            $last = DB::table('reconciliation_runs')->orderByDesc('ran_at')->first();
+            $queue['reconciliation'] = $last
+                ? [
+                    'state' => 'ready',
+                    'status' => (string) $last->status,
+                    'ran_at' => $last->ran_at,
+                    'count' => (int) $last->wallets_diverged
+                        + (int) $last->unbalanced_entries
+                        + (int) $last->tills_diverged,
+                ]
+                : ['state' => 'unknown'];
+        }
+
+        return $queue;
+    }
+
     /** عدّاداتُ اليوم — تُحسب من الحركة لا من عدّادٍ مخزَّن. */
     public function today(): array
     {
         return [
-            'tx_count'  => (int) DB::table('transactions')
+            'tx_count'  => (int) $this->primaryTransactions()
                 ->whereDate('created_at', today())->count(),
-            'tx_volume' => (float) DB::table('transactions')
+            'tx_volume' => (float) $this->primaryTransactions()
                 ->whereDate('created_at', today())->sum('debit'),
         ];
     }

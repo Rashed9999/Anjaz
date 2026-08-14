@@ -10,6 +10,20 @@ class PaymentRequestRepo extends GetxService {
 
   Future<Response> create(Map<String, dynamic> data) => apiClient.postData(_base, data);
 
+  /// طلب عميل مباشر بعد تأكيد هويته — لا يتحول إلى رابط أو QR.
+  Future<Response> createDirect({
+    required String amount,
+    required int recipientId,
+    required String verificationToken,
+    String? note,
+  }) =>
+      apiClient.postData('$_base/direct', {
+        'amount': amount,
+        'recipient_id': recipientId,
+        'verification_token': verificationToken,
+        if (note != null && note.isNotEmpty) 'note': note,
+      });
+
   /// AMIAL-REQUEST-DIRECT-002 — **«أهذا الرقم مشترك؟» قبل الإرسال.**
   ///
   /// كان الطالبُ يضغط «إرسال» ثمّ يكتشف أنّ ما أُنشئ رابطٌ عليه أن

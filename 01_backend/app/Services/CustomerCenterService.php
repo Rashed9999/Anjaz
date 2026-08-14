@@ -8,6 +8,7 @@ use App\Models\Aml\AmlUserRiskProfile;
 use App\Models\AmialNotification;
 use App\Models\EMoney;
 use App\Models\KycDocument;
+use App\Models\PaymentRequest;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -423,12 +424,8 @@ class CustomerCenterService
     {
         $this->logAccess($actorId, $customer->id, 'support');
 
-        if (!Schema::hasTable('support_tickets')) {
-            return ['tickets' => []];
-        }
-
-        return [
-            'tickets' => DB::table('support_tickets')
+        $tickets = Schema::hasTable('support_tickets')
+            ? DB::table('support_tickets')
                 ->where('user_id', $customer->id)
                 ->orderByDesc('id')->limit(50)->get()
                 ->map(fn ($t) => [
@@ -438,7 +435,45 @@ class CustomerCenterService
                     'priority' => (string) ($t->priority ?? '—'),
                     'created_at' => (string) $t->created_at,
                     'updated_at' => (string) $t->updated_at,
-                ])->all(),
+                ])->all()
+            : [];
+
+        $requests = Schema::hasTable('payment_requests')
+            ? PaymentRequest::with([
+                'requester:id,f_name,l_name,phone',
+                'recipient:id,f_name,l_name,phone',
+            ])->where(function ($q) use ($customer): void {
+                $q->where('requester_user_id', $customer->id)
+                    ->orWhere('recipient_user_id', $customer->id);
+            })->orderByDesc('id')->limit(100)->get()
+                ->map(function (PaymentRequest $request) use ($customer): array {
+                    $outgoing = (int) $request->requester_user_id === (int) $customer->id;
+                    $other = $outgoing ? $request->recipient : $request->requester;
+                    $fallback = $outgoing ? $request->recipient_name : null;
+                    $name = trim(($other?->f_name ?? '') . ' ' . ($other?->l_name ?? ''));
+
+                    return [
+                        'request_ulid' => (string) $request->request_ulid,
+                        'short_code' => (string) $request->short_code,
+                        'direction' => $outgoing ? 'outgoing' : 'incoming',
+                        'counterparty' => $name !== '' ? $name : (string) ($fallback ?: '—'),
+                        'counterparty_phone' => (string) ($other?->phone
+                            ?? ($outgoing ? $request->recipient_phone : $request->requester?->phone)
+                            ?? '—'),
+                        'amount' => (string) $request->amount,
+                        'status' => (string) $request->status,
+                        'share_method' => (string) $request->share_method,
+                        'paid_transaction_id' => $request->paid_transaction_id,
+                        'note' => $request->note,
+                        'created_at' => $request->created_at?->toIso8601String(),
+                        'paid_at' => $request->paid_at?->toIso8601String(),
+                    ];
+                })->all()
+            : [];
+
+        return [
+            'tickets' => $tickets,
+            'payment_requests' => $requests,
         ];
     }
 

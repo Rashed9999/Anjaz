@@ -118,6 +118,16 @@ class ReceiptsController extends GetxController implements GetxService {
 
   String getDownloadUrl(int id) => repo.downloadUrl(id);
 
+  String getDocumentUrl(int id, String route) => repo.documentUrl(id, route);
+
+  Future<void> recordPrint({required int id, required String format, required String printerName}) async {
+    try {
+      await repo.recordPrint(id, format: format, printerName: printerName);
+    } catch (_) {
+      // التدقيق اللاحق لا يجعل طباعةً نجحت تبدو فاشلة للمستخدم.
+    }
+  }
+
   String? _msg(Response r) {
     try {
       if (r.body is Map) return r.body['message'] as String?;
