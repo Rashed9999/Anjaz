@@ -225,6 +225,51 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         );
     }
 
+    public function test_two_simultaneous_payouts_cannot_credit_the_wallet_twice(): void
+    {
+        // ══════════════════════════════════════════════════════════════
+        //  **القاعدة الأولى، الطبقة التاسعة: الفحصُ داخل القفل.**
+        //
+        //  `test_a_settlement_cannot_be_paid_twice` أعلاه **متتابع** —
+        //  ينتظر الأوّلَ أن يفرغ. وكان فحصُ «معلَّقة» خارج المعاملة بلا
+        //  قفل، فيمرّ الطلبان معاً: يُشحن الرصيدُ مرّتين، و`post` يجد
+        //  مفتاحَ التكرار فيُرجع القيدَ القائم **بصمت** — فمالٌ يُخلق من
+        //  العدم بقيدٍ واحد.
+        //
+        //  ولا يمسكه اختبارٌ متتابعٌ أبداً. فيُحاكى التزامنُ بمعاملتين
+        //  متداخلتين على اتّصالين: الثانيةُ تصطدم بقفل الأولى.
+        // ══════════════════════════════════════════════════════════════
+        $settlement = $this->pendingSettlement('400.0000');
+        $payable = (string) $settlement->payable_amount;
+
+        $recipient = User::factory()->create(['phone' => '967771900007']);
+        EMoney::create(['user_id' => $recipient->id, 'current_balance' => '0.0000']);
+
+        $this->charity->payoutSettlement($settlement, $this->admin, 'wallet', 'R-1', $recipient);
+
+        // **نسخةٌ قديمةٌ في الذاكرة** — كما يحمل الطلبُ الثاني حالةً قرأها
+        // قبل أن يكتب الأوّل. وبلا إعادةِ قراءةٍ داخل القفل تمرّ.
+        $stale = new \App\Models\CharitySettlement();
+        $stale->exists = true;
+        $stale->setRawAttributes($settlement->getOriginal(), true);
+        $stale->status = 'pending';
+
+        try {
+            $this->charity->payoutSettlement($stale, $this->admin, 'wallet', 'R-2', $recipient);
+            $this->fail('صُرفت التسويةُ مرّتين — الفحصُ خارج القفل');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('ليست معلَّقة', $e->getMessage());
+        }
+
+        // **والرصيدُ مرّةً واحدة** — وهو الثابتُ الحقيقيّ لا الاستثناء.
+        $this->assertSame(
+            0,
+            bccomp((string) EMoney::where('user_id', $recipient->id)->value('current_balance'),
+                $payable, 4),
+            'شُحن الرصيدُ مرّتين — مالٌ خُلق من العدم',
+        );
+    }
+
     public function test_wallet_payout_refuses_to_run_without_a_recipient(): void
     {
         $settlement = $this->pendingSettlement();
@@ -455,6 +500,90 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
             $items[0]['campaign_ulid'] ?? null,
             'العاجلةُ ليست في الصدارة',
         );
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  ①ج ما كشفته المراجعةُ الآليّة على شيفرة هذه الجولة نفسِها
+    // ══════════════════════════════════════════════════════════════════
+
+    public function test_a_campaign_that_has_not_started_accepts_nothing(): void
+    {
+        // **`start_at` كان يُحفظ ولا يُقرأ.** أُضيف إلى النموذج والحقل
+        // والتحقّق، ونُسي في `acceptingDonations` و`isAccepting` — فحملةٌ
+        // تبدأ بعد شهرٍ تُعرض وتُقبل تبرّعاتُها فورَ اعتمادها.
+        $this->charity->verifyOrganization($this->org, $this->admin);
+
+        $future = $this->charity->createCampaign($this->org, [
+            'category_id' => $this->category->id,
+            'title_ar' => 'حملةُ موسم', 'description_ar' => 'وصف',
+            'target_amount' => '5000.0000',
+            'start_at' => now()->addDays(20),
+        ], $this->admin);
+        $this->charity->approveCampaign($future, $this->admin);
+
+        $this->assertFalse($future->fresh()->isAccepting(),
+            'حملةٌ لم تبدأ بعدُ تقول إنّها تقبل');
+
+        $donor = User::factory()->create(['zone_code' => 'SOUTH']);
+        $items = $this->actingAs($donor, 'api')
+            ->getJson('/api/v1/amial/donations/campaigns')->assertOk()->json('meta.items');
+
+        // **والبابان يقولان الشيءَ نفسه** (القاعدة الرابعة).
+        $this->assertNotContains(
+            $future->campaign_ulid,
+            array_column($items, 'campaign_ulid'),
+            'الحملةُ غيرُ المبدوءة معروضةٌ في التطبيق',
+        );
+    }
+
+    public function test_donor_phones_are_behind_a_permission(): void
+    {
+        // هواتفُ المتبرّعين بياناتٌ شخصيّة — وكانت تُردّ لأيّ مديرٍ بلا
+        // صلاحيّة، بينما حركةُ صندوق العائلة محروسة. تفاوتٌ بلا سبب.
+        $this->charity->verifyOrganization($this->org, $this->admin);
+        $campaign = $this->charity->createCampaign($this->org, [
+            'category_id' => $this->category->id,
+            'title_ar' => 'حملة', 'description_ar' => 'وصف',
+            'target_amount' => '9000.0000',
+        ], $this->admin);
+
+        $plain = User::factory()->create(['type' => ADMIN_TYPE, 'role' => 'admin']);
+
+        $this->actingAs($plain, 'user')
+            ->getJson('/admin/amial/charity/campaigns/' . $campaign->campaign_ulid . '/donors')
+            ->assertForbidden();
+    }
+
+    public function test_the_legacy_transfer_door_is_guarded_like_the_payout(): void
+    {
+        // **بابان لفعلٍ واحد** — `markTransferred` تقلب التسويةَ إلى
+        // «مصروفة» بلا قيدٍ في الدفتر. فإن بقي فليُحرَس بالصلاحيّة نفسِها،
+        // وإلّا صار طريقاً خلفيّاً يلتفّ على القيد.
+        $routes = file_get_contents(base_path('routes/admin/amial.php'));
+
+        $this->assertMatchesRegularExpression(
+            "~'markTransferred'\\]\\).*?platform\\.money\\.move~su",
+            $routes,
+            'بابُ «تمّ التحويل» بلا صلاحيّة تحريك المال',
+        );
+    }
+
+    public function test_charity_images_go_through_the_bounded_thumbnailer(): void
+    {
+        // `Helpers::upload` سقفُها ٢٥٠٠ بكسل و**webp تُنسخ بلا تصغير** —
+        // ووُصفت «قاتلة» في `CatalogImageService`، ثمّ استُعملت هنا لحملةٍ
+        // بغلافٍ ومعرضٍ من عشر صور. تناقضٌ في الجولة نفسِها.
+        $src = file_get_contents(
+            base_path('app/Http/Controllers/Admin/AdminCharityController.php'));
+
+        $this->assertStringContainsString('CatalogImageService', $src);
+
+        // **التعليقُ يذكرها شرحاً لا استعمالاً** — ونفيٌ نصّيٌّ أعمى يسقط
+        // على السطر الذي يشرح تجنُّبها. فتُنزع التعليقاتُ أوّلاً.
+        $code = preg_replace('~//[^\n]*~u', '', $src);
+
+        $this->assertStringNotContainsString('Helpers::upload', $code,
+            'صورُ الحملات ما زالت تمرّ بالمُساعِد غير المحدود');
     }
 
     // ══════════════════════════════════════════════════════════════════

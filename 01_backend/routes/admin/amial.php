@@ -157,14 +157,23 @@ Route::prefix('charity')->name('charity.')->middleware('amial.idempotency')->gro
 
     // AMIAL-CHARITY-DONORS-001 — «يجب إظهار المتبرّعين». والجدولُ مكتوبٌ
     // منذ بُنيت الحملات ولا نقطةَ تقرؤه للإدارة.
+    // **هواتفُ المتبرّعين بياناتٌ شخصيّة.** كانت تُردّ لأيّ مديرٍ بلا
+    // صلاحيّة، بينما تفصيلُ صندوق العائلة محروسٌ بـ`platform.audit.view`.
+    // تفاوتٌ بلا سبب — والأشدُّ هو الصواب.
     Route::get('/campaigns/{ulid}/donors', [AdminCharityController::class, 'campaignDonors'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('campaigns.donors');
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware('platform:platform.audit.view')->name('campaigns.donors');
 
     // Settlements
     Route::get('/settlements', [AdminCharityController::class, 'indexSettlements'])->name('settlements.index');
     Route::post('/settlements/generate', [AdminCharityController::class, 'generateSettlement'])->name('settlements.generate');
+    // **بابان لفعلٍ واحد، أحدُهما محروسٌ والآخرُ لا** — القاعدة الرابعة.
+    // هذا يقلب التسويةَ إلى «مصروفة» **بلا قيدٍ في الدفتر**، وهو عينُ
+    // الثغرة التي عولجت في `payout`. فيُحرَس بالصلاحيّة نفسِها حتّى
+    // يُزال، ولا يُترك باباً خلفيّاً يلتفّ على القيد.
     Route::post('/settlements/{ulid}/transferred', [AdminCharityController::class, 'markTransferred'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('settlements.transferred');
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware('platform:platform.money.move')->name('settlements.transferred');
 
     // AMIAL-CHARITY-PAYOUT-001 — «طريقة سحب المال … إلى محفظة أميال باي أو
     // عبر وكيل». وهو الوحيد هنا الذي **يُحرّك مالاً** — فيُحرَس بصلاحيّة

@@ -384,6 +384,31 @@ class CharityService
         }
 
         return DB::transaction(function () use ($settlement, $admin, $method, $reference, $recipient, $notes, $payable) {
+            // ══════════════════════════════════════════════════════════
+            //  **الفحصُ يُعاد داخل القفل** — القاعدة الأولى، الطبقة التاسعة.
+            //
+            //  كان فحصُ «معلَّقة» أعلاه **خارج المعاملة وبلا قفل**، وهو
+            //  يمرّ في كلّ اختبارٍ متتابعٍ لأنّ لا أحدَ يتحرّك بين
+            //  السطرين. وتحت طلبين متزامنين يمرّان معاً:
+            //
+            //    · `FinancialGuardService::credit` **يشحن الرصيد مرّتين**،
+            //    · و`LedgerService::post` يجد المفتاحَ نفسَه فيُرجع القيدَ
+            //      القائم **بصمتٍ ولا يرمي**.
+            //
+            //  فالنتيجة: مالٌ يُخلق من العدم بقيدٍ واحد — **كسرُ حِفظ
+            //  المال**، وهو أخطرُ ما يقع في هذا المشروع.
+            //
+            //  والقفلُ على صفّ التسوية يُسلسل الطلبين، فيرى الثاني حالةَ
+            //  الأوّل بعد كتابتها. (كشفه محورُ المعايير في مراجعةٍ آليّة.)
+            // ══════════════════════════════════════════════════════════
+            $locked = CharitySettlement::whereKey($settlement->id)->lockForUpdate()->first();
+
+            if (! $locked || $locked->status !== 'pending') {
+                throw new \RuntimeException('التسوية ليست معلَّقة');
+            }
+
+            $settlement = $locked;
+
             /** @var LedgerService $ledger */
             $ledger = app(LedgerService::class);
 

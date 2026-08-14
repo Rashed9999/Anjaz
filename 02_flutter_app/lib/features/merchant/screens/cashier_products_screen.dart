@@ -1,3 +1,4 @@
+import 'package:amial_pay/features/entitlements/controllers/entitlements_controller.dart';
 import 'package:amial_pay/features/retail/screens/product_variants_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -273,6 +274,12 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
                   // AMIAL-VARIANTS-REACH-001 — **المدخلُ الذي كان مفقوداً.**
                   // الخادمُ والمستودعُ كانا يحملان توليدَ المتغيّرات، ولا
                   // زرَّ في التطبيق يفتحه. (القاعدة ١٢.)
+                  // **الزرُّ يظهر لمن يفتحه فقط.** المسارُ محروسٌ بقدرة
+                  // `retail.variants`، فظهورُه لتاجرِ صيدليّةٍ أو مطعمٍ
+                  // يقود إلى رفضٍ ٤٠٢ — زرٌّ يعمل ويصل إلى طريقٍ مسدود.
+                  // (كشفه محورُ المواصفة في مراجعةٍ آليّة.)
+                  if (Get.isRegistered<EntitlementsController>() &&
+                      Get.find<EntitlementsController>().isAvailable('retail.variants'))
                   IconButton(
                     icon: const Icon(Icons.auto_awesome_motion,
                         color: AmialColors.textMuted, size: 20),

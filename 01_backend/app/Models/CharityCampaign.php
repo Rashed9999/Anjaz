@@ -65,9 +65,21 @@ class CharityCampaign extends Model
         return $q->where('status', 'active');
     }
 
+    /**
+     * AMIAL-CHARITY-META-001 — **البدايةُ تُطبَّق لا تُحفظ فقط.**
+     *
+     * أُضيف `start_at` إلى النموذج والحقلِ والتحقّق، **ونُسي هنا** — فكان
+     * يُحفظ ولا يُقرأ، وحملةٌ تبدأ بعد شهرٍ تُعرض وتُقبل تبرّعاتُها فورَ
+     * اعتمادها. أي أنّ الحقلَ كان زينةً تناقض تعليقَه نفسَه.
+     * (كشفه محورُ المواصفة في مراجعةٍ آليّة.)
+     */
     public function scopeAcceptingDonations(Builder $q): Builder
     {
         return $q->where('status', 'active')
+            ->where(function ($q) {
+                $q->whereNull('start_at')
+                  ->orWhere('start_at', '<=', now());
+            })
             ->where(function ($q) {
                 $q->whereNull('deadline_at')
                   ->orWhere('deadline_at', '>=', now());
@@ -79,9 +91,11 @@ class CharityCampaign extends Model
         return $q->where('is_featured', true);
     }
 
+    /** **والبابان يقولان الشيءَ نفسه** — القاعدة الرابعة. */
     public function isAccepting(): bool
     {
         return $this->status === 'active'
+            && ($this->start_at === null || ! $this->start_at->isFuture())
             && ($this->deadline_at === null || $this->deadline_at->isFuture());
     }
 

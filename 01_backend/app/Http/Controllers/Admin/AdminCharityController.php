@@ -172,18 +172,20 @@ class AdminCharityController extends Controller
         ], [], ['file' => 'الصورة']);
         if ($v->fails()) return $this->validationError($v);
 
-        $stored = \App\CentralLogics\Helpers::upload(
-            'charity/', APPLICATION_IMAGE_FORMAT, $request->file('file'));
-
-        // **`upload` تُرجع `false` على ملفٍّ ليس صورةً** — ولو مُرّرت كما هي
-        // لصار الرابطُ `…/charity/` وظهرت صورةٌ مكسورةٌ بلا رسالة.
-        if (! $stored) {
-            return $this->error('UPLOAD_FAILED', 'تعذّر قراءةُ الصورة — جرّب صيغةً أخرى', 422);
+        // **المصغِّرُ المحدود، لا `Helpers::upload`.** تلك سقفُها ٢٥٠٠ بكسل
+        // و**webp تُنسخ بلا تصغيرٍ إطلاقاً** — وقد وُصفت «قاتلة» في
+        // `CatalogImageService` لهذا السبب بعينه، ثمّ استُعملت هنا لحملةٍ
+        // تحمل غلافاً ومعرضاً من عشر صور. تناقضٌ في الجولة نفسِها.
+        try {
+            $stored = app(\App\Services\Catalog\CatalogImageService::class)
+                ->store($request->file('file'));
+        } catch (\RuntimeException $e) {
+            return $this->error('UPLOAD_FAILED', $e->getMessage(), 422);
         }
 
         return $this->ok([
-            'path' => 'charity/' . $stored,
-            'url' => asset('storage/charity/' . $stored),
+            'path' => $stored,
+            'url' => asset('storage/' . $stored),
         ], 'UPLOADED', 'رُفعت الصورة', 201);
     }
 
