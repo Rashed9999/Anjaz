@@ -29,7 +29,6 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
   bool _busy = false;
   String _feedback = '';
   Color _feedbackColor = Colors.transparent;
-  int _addedCount = 0;
 
   @override
   void initState() {
@@ -59,10 +58,7 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
       return;
     }
     if (result == 'added') {
-      setState(() {
-        _addedCount++;
-        _show('✓ تمت الإضافة', Colors.green);
-      });
+      setState(() => _show('✓ تمت الإضافة', Colors.green));
     } else if (result == 'not_found') {
       await _quickCreate(code);
     } else {
@@ -122,10 +118,7 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
     if (!mounted) return;
     if (product != null) {
       c.addProductToCart(product);
-      setState(() {
-        _addedCount++;
-        _show('✓ أُنشئ وأُضيف', Colors.green);
-      });
+      setState(() => _show('✓ أُنشئ وأُضيف', Colors.green));
     } else {
       setState(() => _show(c.lastError.value, AmialColors.red));
     }
@@ -155,7 +148,7 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
     final result = await c.lookupAndAddByBarcode(code);
     if (!mounted) return;
     if (result == 'added') {
-      setState(() { _addedCount++; _show('✓ أُضيف للسلّة', Colors.green); });
+      setState(() => _show('✓ أُضيف للسلّة', Colors.green));
     } else if (result == 'not_found') {
       setState(() => _show('لا يوجد منتج بهذا الباركود', AmialColors.red));
     } else {
@@ -194,30 +187,158 @@ class _CashierScanScreenState extends State<CashierScanScreen> {
             ),
           ),
         ),
-        // شريط الحالة السفلي
-        Positioned(
-          left: 0, right: 0, bottom: 0,
-          child: Container(
-            color: Colors.black.withValues(alpha: 0.7),
-            padding: const EdgeInsets.all(16),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              if (_feedback.isNotEmpty)
-                Text(_feedback, style: TextStyle(color: _feedbackColor, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('أُضيف: $_addedCount صنف', style: const TextStyle(color: Colors.white)),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: AmialColors.yellow, foregroundColor: Colors.black),
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.check),
-                  label: const Text('تم — للسلّة'),
-                ),
-              ]),
-            ]),
-          ),
-        ),
+        // السلّة الحيّة أسفل الكاميرا
+        Positioned(left: 0, right: 0, bottom: 0, child: SafeArea(child: _cartPanel())),
         ]),
       ),
     );
   }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  AMIAL-CASHIER-BARCODE-002 — **الكاشير يرى ما مسحه وهو يمسح.**
+  //
+  //  كان أسفل الشاشة سطرٌ واحد: «أُضيف: ٧ صنف». **رقمٌ بلا أسماء ولا
+  //  أسعارٍ ولا مجموع** — والكاشير يمسح اثني عشر صنفاً وهو أعمى:
+  //
+  //   · مسح صنفاً مرّتين بالخطأ ⇒ لا يعرف، والعدّاد يزيد فيطمئنّ.
+  //   · مسح الصنف الخطأ ⇒ لا اسمَ يُراجعه، ولا حذفَ من هنا.
+  //   · الزبون يسأل «كم المجموع؟» ⇒ لا جواب حتّى يخرج من الشاشة.
+  //
+  //  والعلاجُ كان مبنيّاً في المشروع أصلاً: `ContinuousScannerScreen`
+  //  تعرض سلّةً حيّةً بأزرار الكمّيّة والحذف والمجموع منذ بُنيت —
+  //  **وتستعملها الجملةُ والصيدليّة، والتجزئةُ لا.** وهي أكثرُ الأصناف
+  //  عدداً. (القاعدة الرابعة: ميزةٌ لها مدخلان تُختبر من مدخليها —
+  //  فأُصلح مدخلٌ وتُرك الآخر.)
+  //
+  //  ولا تُنسخ الشاشةُ الأخرى هنا: سلّةُ `CashierController` هي مصدرُ
+  //  الحقيقة، وهي نفسُها التي تُقرأ في نقطة البيع. فنسخةٌ ثانيةٌ من
+  //  السلّة تعني رقمين لا يلتقيان.
+  // ══════════════════════════════════════════════════════════════════
+
+  Widget _cartPanel() {
+    return Obx(() {
+      final lines = c.cart;
+
+      return Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (_feedback.isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              color: _feedbackColor.withValues(alpha: 0.12),
+              child: Text(_feedback,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: _feedbackColor, fontWeight: FontWeight.bold, fontSize: 13)),
+            ),
+
+          if (lines.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Row(children: [
+                Icon(Icons.qr_code_scanner, color: AmialColors.primary),
+                SizedBox(width: 10),
+                Expanded(child: Text('وجّه الكاميرا نحو الباركود',
+                    style: TextStyle(fontSize: 14))),
+              ]),
+            )
+          else
+            // **مرتفعٌ محدود**: السلّةُ لا تأكل الكاميرا مهما طالت،
+            // والأحدثُ أوّلاً — فآخرُ ما مُسح هو ما يُراجَع.
+            Container(
+              constraints: const BoxConstraints(maxHeight: 190),
+              child: ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                itemCount: lines.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (_, i) => _cartLine(lines.length - 1 - i),
+              ),
+            ),
+
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${lines.length} صنف · ${lines.fold<int>(0, (s, l) => s + l.qty)} قطعة',
+                      style: TextStyle(color: Colors.grey.shade700, fontSize: 11.5)),
+                  Text('${c.cartTotal.toStringAsFixed(0)} ر.ي',
+                      style: const TextStyle(
+                          fontSize: 22, fontWeight: FontWeight.bold, color: AmialColors.primary)),
+                ]),
+              ),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: AmialColors.yellow,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                ),
+                onPressed: () => Navigator.pop(context),
+                icon: const Icon(Icons.point_of_sale),
+                label: Text(lines.isEmpty ? 'رجوع' : 'إتمام البيع'),
+              ),
+            ]),
+          ),
+        ]),
+      );
+    });
+  }
+
+  Widget _cartLine(int i) {
+    final l = c.cart[i];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: Row(children: [
+        IconButton(
+          icon: const Icon(Icons.delete_outline, color: AmialColors.red, size: 19),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          tooltip: 'حذف',
+          onPressed: () => c.removeLine(i),
+        ),
+        const SizedBox(width: 6),
+        _step(Icons.remove, () => c.decLine(i)),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            color: AmialColors.primary.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text('${l.qty}',
+              style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
+        ),
+        _step(Icons.add, () => c.incLine(i)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(l.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            Text('${l.lineTotal.toStringAsFixed(0)} ر.ي',
+                style: TextStyle(fontSize: 11.5, color: Colors.grey.shade700)),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _step(IconData icon, VoidCallback onTap) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+              color: Colors.grey.shade200, borderRadius: BorderRadius.circular(6)),
+          child: Icon(icon, size: 16),
+        ),
+      );
 }
