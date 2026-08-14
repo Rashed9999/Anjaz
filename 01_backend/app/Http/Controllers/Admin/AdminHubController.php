@@ -294,6 +294,16 @@ class AdminHubController extends Controller
                 'sales_total' => $salesTotal,
                 'sales_count' => $salesCount,
             ];
+
+            // ══════════════════════════════════════════════════════════
+            //  AMIAL-MERCHANT-360-001 — **الماليّ والتشغيليّ والإداريّ.**
+            //
+            //  كان الملفُّ يجيب عن «مَن هو» ولا يجيب عن «ماذا يُدرّ»،
+            //  ولا «كيف يعمل»، ولا «ماذا أستطيع أن أفعل به». وحسابُ
+            //  محطّةِ وقودٍ كان يُعرض بلا ذكرِ خزّانٍ ولا مضخّةٍ ولا
+            //  ورديّة — والملفُّ لا يعلم أنّ له قطاعاً أصلاً.
+            $payload['merchant360'] = app(\App\Services\Admin\MerchantThreeSixtyService::class)
+                ->build($user);
         }
 
         // ===== إضافات الوكيل =====

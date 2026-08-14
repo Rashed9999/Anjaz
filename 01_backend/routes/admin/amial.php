@@ -81,7 +81,15 @@ Route::prefix('recovery')->name('recovery.')->group(function () {
 });
 
 // ============ Audit Decisions ============
-Route::get('/audit', [AuditDecisionsController::class, 'index'])->name('audit.index');
+// AMIAL-AUDIT-DETAIL-002 — القائمةُ والتفصيلُ والتصدير، وكلُّها قراءةٌ
+// محضة تحت `platform.audit.view`: سجلُّ التدقيق لا يُعدَّل ولا يُحذف،
+// وقراءتُه اطّلاعٌ على كلّ ما جرى في المنصّة فلا تُترك بلا صلاحيّة.
+Route::middleware('platform:platform.audit.view')->group(function () {
+    Route::get('/audit', [AuditDecisionsController::class, 'index'])->name('audit.index');
+    Route::get('/audit/export.csv', [AuditDecisionsController::class, 'export'])->name('audit.export');
+    Route::get('/audit/{id}.json', [AuditDecisionsController::class, 'show'])
+        ->where('id', '[0-9]+')->name('audit.show');
+});
 
 // ============ Security Events ============
 Route::get('/security-events', [SecurityEventsController::class, 'index'])->name('security-events.index');

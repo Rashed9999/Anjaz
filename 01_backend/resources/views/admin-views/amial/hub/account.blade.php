@@ -40,6 +40,17 @@
         return `<div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted small">${esc(label)}</span><span class="fw-500">${esc(value)}</span></div>`;
     }
 
+    // AMIAL-MERCHANT-360-001 — صفٌّ بقيمةٍ **مبنيّةٍ عندنا** لا واردةٍ من
+    // مستخدم. و`row` تُهرّب قيمتَها دائماً — وهو الصواب لبيانات الحساب —
+    // فلو مُرّرت إليها «<span>غير متاح</span>» لظهر الوسمُ نصّاً على الشاشة.
+    //
+    // **ولا تُنادى هذه بقيمةٍ من الخادم**: مدخلاتُها من `money()`/`num()`
+    // وحدهما، وكلتاهما تُهرّب ما يأتي من البيانات قبل أن تلفّه.
+    function rowHtml(label, valueHtml) {
+        if (valueHtml === null || valueHtml === undefined || valueHtml === '') return '';
+        return `<div class="d-flex justify-content-between border-bottom py-1"><span class="text-muted small">${esc(label)}</span><span class="fw-500">${valueHtml}</span></div>`;
+    }
+
     function card(title, inner) {
         return `<div class="card stat-card mb-3"><div class="card-header fw-bold">${esc(title)}</div><div class="card-body">${inner}</div></div>`;
     }
@@ -93,6 +104,77 @@
                 row('اسم المتجر', m.store_name) + row('رقم التاجر', m.merchant_number) + row('النشاط', m.business_type) +
                 row('الباقة', m.plan) + row('التوثيق', m.verification) + row('انتهاء الاشتراك', m.subscription_expires) +
                 row('إجمالي المبيعات', fmt(m.sales_total) + ' ر.ي') + row('عدد المبيعات', m.sales_count));
+
+            // ══════════════════════════════════════════════════════════
+            //  AMIAL-MERCHANT-360-001 — الماليّ ثمّ التشغيليّ ثمّ الحدود.
+            //
+            //  **والفراغُ يُقال ولا يُعرض صفراً** (القاعدة السابعة):
+            //  جدولٌ غيرُ موجودٍ في المخطّط يُرجع `null` من الخدمة، وهو
+            //  «غير متاح» — لا «صفر ريال».
+            // ══════════════════════════════════════════════════════════
+            const t = u.merchant360 || {};
+
+            const money = (v) => v === null || v === undefined
+                ? '<span class="text-muted">غير متاح</span>' : fmt(v) + ' ر.ي';
+            const num = (v) => v === null || v === undefined
+                ? '<span class="text-muted">غير متاح</span>' : esc(v);
+
+            if (t.financial) {
+                const f = t.financial;
+                html += card('الأداء المالي',
+                    rowHtml('إجمالي المبيعات', money(f.sales_total)) +
+                    rowHtml('مبيعات ٣٠ يوماً', money(f.sales_30d)) +
+                    rowHtml('عدد العمليات', num(f.sales_count)) +
+                    rowHtml('متوسّط العملية', money(f.sales_avg)) +
+                    rowHtml('رسومٌ دفعها للمنصّة', money(f.fees_paid)) +
+                    rowHtml('رسوم ٣٠ يوماً', money(f.fees_paid_30d)) +
+                    rowHtml('مرتجعات', money(f.refunds_total)) +
+                    rowHtml('فواتير مفتوحة', num(f.invoices_open)) +
+                    rowHtml('مستحقٌّ على الفواتير', money(f.invoices_due)) +
+                    rowHtml('تسويات معلّقة', num(f.settlements_pending)));
+            }
+
+            if (t.operations) {
+                const o = t.operations;
+                let opsBody;
+
+                if (o.missing) {
+                    // **حسابُ محطّةٍ بلا محطّة** — يُقال صراحةً مع طريق الخروج.
+                    opsBody = `<div class="alert alert-warning mb-0 small">${esc(o.missing)} —
+                               يُبنى تلقائياً عند أوّل فتحٍ للوحة القطاع في التطبيق.</div>`;
+                } else if (!(o.metrics || []).length) {
+                    opsBody = '<span class="text-muted small">لا مؤشّرات قطاعيّة لهذا النشاط</span>';
+                } else {
+                    opsBody = '<div class="row g-2">' + o.metrics.map(x =>
+                        `<div class="col-6 col-md-4"><div class="border rounded p-2 text-center">
+                           <div class="fs-5 fw-bold">${num(x.value)}</div>
+                           <div class="small text-muted">${esc(x.label)}</div>
+                           ${x.hint ? `<div class="small text-warning">${esc(x.hint)}</div>` : ''}
+                         </div></div>`).join('') + '</div>';
+                }
+
+                html += card('تفاصيل العمل — ' + esc(o.label || o.vertical || '—'), opsBody);
+            }
+
+            if (t.limits) {
+                const l = t.limits;
+                html += card('حدود الاستقبال',
+                    rowHtml('الحدّ اليوميّ', money(l.daily_receive)) +
+                    rowHtml('حدّ العمليّة الواحدة', money(l.single_receive)) +
+                    rowHtml('الحدّ الشهريّ', money(l.monthly_receive)) +
+                    rowHtml('يسمح بالتحويل للخارج', l.can_transfer_out === null
+                        ? '<span class="text-muted">غير معروف</span>'
+                        : (l.can_transfer_out ? 'نعم' : 'لا')));
+            }
+
+            const devs = (t.devices || []).map(d =>
+                `<tr><td>${esc(d.device)}</td><td class="text-monospace small">${esc(d.device_id_tail ?? '—')}</td>` +
+                `<td class="text-monospace small">${esc(d.ip ?? '—')}</td>` +
+                `<td>${d.is_active ? '<span class="badge bg-success">نشِط</span>' : '<span class="badge bg-secondary">منتهٍ</span>'}</td>` +
+                `<td class="small text-muted">${esc(d.last_seen)}</td></tr>`).join('');
+            html += card('الأجهزة (آخر ١٠)', devs
+                ? `<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>الجهاز</th><th>المعرّف</th><th>IP</th><th>الحالة</th><th>آخر ظهور</th></tr></thead><tbody>${devs}</tbody></table></div>`
+                : '<span class="text-muted small">لا أجهزة مسجّلة</span>');
 
             const staff = (m.staff || []).map(s => `<tr><td>${esc(s.display_name ?? '—')}</td><td>${esc(s.pos_number ?? '—')}</td><td>${esc(s.branch ?? '—')}</td><td>${s.is_active ? '<span class="badge bg-success">نشِط</span>' : '<span class="badge bg-danger">معطَّل</span>'}</td></tr>`).join('');
             html += card('الموظفون (نقاط البيع)', staff ? `<div class="table-responsive"><table class="table table-sm mb-0"><thead><tr><th>الموظف</th><th>رقم النقطة</th><th>الفرع</th><th>الحالة</th></tr></thead><tbody>${staff}</tbody></table></div>` : '<span class="text-muted small">لا موظفين</span>');

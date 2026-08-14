@@ -35,84 +35,130 @@
     // استعملت الأقواس، وكانت المجموعات المتعدّدة البادئات ستبقى مطويّة دائماً
     // بلا أن يسقط أيّ اختبار.)
     // والرابط: [التسمية، اسم المسار أو العنوان، الصلاحية المطلوبة (أو null)]
+    // ══════════════════════════════════════════════════════════════════
+    //  AMIAL-SIDEBAR-SUBJECT-001 — **التجميع بالموضوع لا بالنظام.**
+    //
+    //  **الثمن الذي دُفع:** قال صاحبُ المشروع: «هذه القائمة بها الكثير من
+    //  التكرار». وقِيس فلم يكن تكراراً حرفيّاً — **٥١ رابطاً و٥١ وجهةً
+    //  فريدة، ولا وجهةَ مكرّرة**. لكنّ شكواه كانت في محلّها من وجهٍ آخر:
+    //
+    //  كان التجميعُ **بالنظام** (مراكز · مال · امتثال · أمان · خدمات)،
+    //  فتتوزّع بيانات الموضوع الواحد على مجموعاتٍ عدّة:
+    //
+    //    · العميل يُبلَغ من ثلاثة مداخل في مجموعتين.
+    //    · التاجرُ في أربعة: «مركز التجّار» و«الاشتراكات» و«الفواتير»
+    //      و«الموظفون» — وثلاثةٌ منها تحت «الخدمات والعملاء».
+    //    · لوحتا قطاعِ التاجر (وقود · تجزئة) كانتا تحت «المال والدفتر».
+    //
+    //  فمن يريد شيئاً عن تاجرٍ يفتح مجموعتين ويخمّن. **وذاك ما يُقرأ
+    //  تكراراً** — لا الروابطُ نفسُها.
+    //
+    //  فصار التجميعُ **بمن تُدير**: كلُّ ما يخصّ العميل تحت «العملاء»،
+    //  وكلُّ ما يخصّ التاجر تحت «التجّار»، وهكذا.
+    //
+    //  **ولم يُحذف رابطٌ واحد.** والحارسُ `AdminSidebarCoverageGuardTest`
+    //  يُثبت ذلك: يقارن مجموعةَ الوجهات بقائمةٍ مرجعيّة، فأيُّ رابطٍ
+    //  يسقط في إعادة ترتيبٍ لاحقة يُكشف. (وصفحةٌ لا يُوصل إليها ليست
+    //  مبنيّة — القاعدة ١٢.)
+    // ══════════════════════════════════════════════════════════════════
     $groups = [
         [
-            'title' => 'المراكز الرئيسية',
-            'icon' => '🏢',
-            'match' => ['admin/amial/hub/*', 'admin/amial/customer*'],
+            'title' => 'العملاء',
+            'icon' => '👤',
+            'match' => ['admin/amial/customer*', 'admin/amial/hub/customers*',
+                        'admin/support-center*', 'admin/amial/recovery*',
+                        'admin/amial/hub/verification*', 'admin/amial/otp*'],
             'links' => [
-                // AMIAL-CUSTOMER-CENTER-001: الشاشة الموحَّدة أوّلاً — هي ما
-                // يُدار منه العميل. والقديمة تبقى للقائمة والإنشاء بالجملة.
                 ['🔎 ملفّ العميل الموحَّد (١٠ تبويبات)', route('admin.amial.customer.page'), 'platform.customers.view'],
                 ['👥 قائمة العملاء وإنشاء الحسابات', route('admin.amial.hub.customers'), null],
-                ['🤝 مركز الوكلاء (الفروع والخزائن)', route('admin.amial.hub.agents'), null],
-                // البوّابة مبنيّة منذ الالتزام السابق ولم يكن إليها بابٌ من هنا:
-                // شركة الصرافة تدخل من كمبيوترها بهاتف الحساب وكلمة سرّه، وهذا
-                // الرابط هو ما يُريه المدير العنوان ليمرّره لها.
-                ['🏦 بوّابة الوكيل (شركات الصرافة)', route('agent.login'), null, '_blank'],
-                ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), null],
-                ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), 'platform.money.move'],
+                ['🎧 مركز الدعم (بحث شامل + الأجهزة)', route('admin.support-center.index'), null],
                 ['🪪 لوحة التحقق (الحسابات الجديدة)', route('admin.amial.hub.verification'), null],
-                // AMIAL-OTP-CENTER-001 — القاعدة ١٢: يُوصل إليه من هنا.
                 ['🔐 مركز التحقّق (OTP وبوّابات الإرسال)', route('admin.amial.otp.page'), 'platform.settings.update'],
+                ['🔑 استعادة الحسابات', route('admin.amial.recovery.index'), null],
+            ],
+        ],
+        [
+            'title' => 'التجّار',
+            'icon' => '🏪',
+            'match' => ['admin/amial/hub/merchants*', 'admin/amial/hub/subscriptions*',
+                        'admin/amial/hub/staff*', 'admin/amial/invoices*',
+                        'admin/amial/catalog*', 'admin/amial/fuel*', 'admin/amial/retail*',
+                        'admin/amial/entitlements*'],
+            'links' => [
+                ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), null],
+                ['💎 لوحة الاشتراكات', route('admin.amial.hub.subscriptions'), null],
+                ['🎚️ الباقات والقدرات (ماذا تفتح كل باقة)', route('admin.amial.entitlements.page'), 'platform.settings.manage'],
+                ['🧾 فواتير التجّار ومدفوعاتها', route('admin.amial.invoices.page'), null],
+                ['📦 كتالوج المنتجات (الباركود)', route('admin.amial.catalog.page'), 'platform.settings.update'],
+                ['👔 لوحة الموظفين (نقاط البيع)', route('admin.amial.hub.staff'), null],
+                // لوحتا القطاع كانتا تحت «المال والدفتر» — وهما شأنُ تاجرٍ
+                // لا شأنُ خزينة.
+                ['⛽ مركز محطات الوقود (فروقات المخزون)', route('admin.amial.fuel.page'), 'platform.audit.view'],
+                ['🏪 مركز التجزئة (المخزون والجرد)', route('admin.amial.retail.page'), 'platform.audit.view'],
+            ],
+        ],
+        [
+            'title' => 'الوكلاء',
+            'icon' => '🤝',
+            'match' => ['admin/amial/hub/agents*', 'admin/amial/hub/settlements*'],
+            'links' => [
+                ['🤝 مركز الوكلاء (الفروع والخزائن)', route('admin.amial.hub.agents'), null],
+                ['🧾 تسويات الوكلاء', route('admin.amial.hub.settlements'), 'platform.money.move'],
+                // البوّابة يدخلها الوكيلُ من كمبيوتره؛ وهذا الرابطُ يُري
+                // المديرَ العنوانَ ليمرّره لشركة الصرافة.
+                ['🏦 بوّابة الوكيل (شركات الصرافة)', route('agent.login'), null, '_blank'],
             ],
         ],
         [
             'title' => 'المال والدفتر',
             'icon' => '📚',
-            'match' => ['admin/amial/ledger*', 'admin/amial/fuel*', 'admin/amial/partner-settlements*', 'admin/amial/fees*', 'admin/transaction*', 'admin/emoney*', 'admin/expense*'],
+            'match' => ['admin/amial/ledger*', 'admin/amial/partner-settlements*',
+                        'admin/amial/fees*', 'admin/transaction*', 'admin/emoney*',
+                        'admin/expense*', 'admin/withdraw*', 'admin/amial/hub/finance*'],
             'links' => [
+                ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), 'platform.money.move'],
                 ['📚 مركز الدفتر (ميزان المراجعة)', route('admin.amial.ledger.page'), 'platform.audit.view'],
-                // AMIAL-FUEL-VERTICAL-001 — القاعدة ١٢: المسار المسجّل ليس
-                // ظهوراً؛ لا بدّ من رابطٍ يمرّ به المستعمل.
-                ['⛽ مركز محطات الوقود (فروقات المخزون)', route('admin.amial.fuel.page'), 'platform.audit.view'],
-                ['🏪 مركز التجزئة (المخزون والجرد)', route('admin.amial.retail.page'), 'platform.audit.view'],
-                ['🎚️ الباقات والقدرات (ماذا تفتح كل باقة)', route('admin.amial.entitlements.page'), 'platform.settings.manage'],
                 ['📊 كشف المعاملات (فلاتر + تصدير)', route('admin.transaction.index'), null],
-                ['🧾 تسويات الوكلاء', route('admin.amial.hub.settlements'), 'platform.money.move'],
                 ['🤝 تسويات الشركاء (الموافقة المزدوجة)', route('admin.amial.partner-settlements.page'), 'platform.money.move'],
                 ['🏦 رصيد المنصّة (إنشاء/شحن)', route('admin.emoney.index'), 'platform.money.move'],
                 ['💸 مصاريف المنصّة', route('admin.expense.index'), null],
                 ['📈 التحكّم بالرسوم والأرباح', route('admin.amial.fees.index'), 'platform.fees.update'],
+                ['💸 طلبات السحب (اعتماد ورفض)', route('admin.withdraw.index'), 'platform.money.move'],
             ],
         ],
         [
-            'title' => 'الامتثال والرقابة',
+            'title' => 'الامتثال والمخاطر',
             'icon' => '🛡️',
-            'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*', 'admin/amial/supervision*'],
+            'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*',
+                        'admin/amial/supervision*', 'admin/amial/security-events*',
+                        'admin/amial/sentinel*'],
             'links' => [
                 ['🪪 مراجعة مستندات الهوية', route('admin.amial.kyc.page'), 'platform.customers.freeze'],
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), null],
                 ['🔍 سجلّ تدقيق النظام', route('admin.amial.audit.index'), null],
                 ['👁️ لوحة الإشراف (الفريق والقرارات)', route('admin.amial.supervision.index'), 'platform.audit.view'],
-            ],
-        ],
-        [
-            'title' => 'الأمان والوصول',
-            'icon' => '🔐',
-            'match' => ['admin/amial/security-events*', 'admin/amial/sentinel*', 'admin/amial/recovery*', 'admin/amial/ops/roles*', 'admin/amial/surface/rbac*'],
-            'links' => [
                 ['⚠️ أحداث الأمان', route('admin.amial.security-events.index'), null],
                 ['🔒 حارس الأمان', route('admin.amial.sentinel.index'), null],
-                ['🔑 استعادة الحسابات', route('admin.amial.recovery.index'), null],
-                // الصلاحيات كانت رابطين متجاورين يفعلان شيئاً متقارباً:
-                // «الأدوار» تُسند، و«RBAC» تعرض المصفوفة. جُمعا هنا بأسماءٍ
-                // تقول الفرق بدل أن يتركا للتخمين.
-                ['👥 أدوار الموظّفين (إسناد)', route('admin.amial.ops.roles.index'), 'platform.settings.update'],
-                ['🛡️ مصفوفة الصلاحيات (RBAC)', route('admin.amial.surface.rbac'), null],
             ],
         ],
         [
-            'title' => 'الخدمات والعملاء',
-            'icon' => '🧾',
-            'match' => ['admin/support-center*', 'admin/amial/surface*', 'admin/amial/charity*', 'admin/amial/hub/subscriptions*', 'admin/amial/hub/disputes*', 'admin/amial/hub/staff*', 'admin/amial/invoices*', 'admin/amial/catalog*'],
+            'title' => 'الصلاحيات',
+            'icon' => '🔐',
+            'match' => ['admin/amial/ops/roles*', 'admin/amial/surface/rbac*', 'admin/amial/2fa*'],
             'links' => [
-                ['🎧 مركز الدعم (بحث شامل + الأجهزة)', route('admin.support-center.index'), null],
-                ['🧾 فواتير التجّار ومدفوعاتها', route('admin.amial.invoices.page'), null],
-                ['📦 كتالوج المنتجات (الباركود)', route('admin.amial.catalog.page'), 'platform.settings.update'],
-                ['💎 لوحة الاشتراكات', route('admin.amial.hub.subscriptions'), null],
+                // «الأدوار» تُسند، و«RBAC» تعرض المصفوفة — والاسمان يقولان
+                // الفرقَ بدل أن يُترك للتخمين.
+                ['👥 أدوار الموظّفين (إسناد)', route('admin.amial.ops.roles.index'), 'platform.settings.update'],
+                ['🛡️ مصفوفة الصلاحيات (RBAC)', route('admin.amial.surface.rbac'), null],
+                ['🔐 المصادقة الثنائية لحسابي', route('admin.amial.2fa.page'), null],
+            ],
+        ],
+        [
+            'title' => 'خدمات المنصّة',
+            'icon' => '🧩',
+            'match' => ['admin/amial/hub/disputes*', 'admin/amial/charity*', 'admin/amial/surface*'],
+            'links' => [
                 ['⚖️ لوحة النزاعات (دفع آمن)', route('admin.amial.hub.disputes'), null],
-                ['👔 لوحة الموظفين (نقاط البيع)', route('admin.amial.hub.staff'), null],
                 ['🎗️ لوحة التبرعات (الجمعيات)', route('admin.amial.charity.page'), null],
                 ['⚡ مزوّدو الفواتير', route('admin.amial.surface.bill-providers'), null],
                 ['👨‍👩‍👧 صناديق العائلة', route('admin.amial.surface.funds'), null],
@@ -133,26 +179,18 @@
         [
             'title' => 'الإعدادات والتشغيل',
             'icon' => '⚙️',
-            'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*', 'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*', 'admin/amial/legal*', 'admin/amial/hub/settings*', 'admin/amial/2fa*', 'admin/withdraw*'],
+            'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*',
+                        'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*',
+                        'admin/amial/legal*', 'admin/amial/hub/settings*'],
             'links' => [
                 ['🏢 إعدادات الأعمال (عام/رسوم/حدود)', route('admin.business-settings.business-setup'), null],
                 ['⚙️ مفاتيح سريعة (تشغيل/إيقاف)', route('admin.amial.hub.settings'), null],
                 ['💬 حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.money.move'],
-                // لوحتا المناطق: كلتاهما تُعيد تعيين المنطقة. تُجمعان هنا
-                // بأسماءٍ تقول الفرق — «النطاق والمخالفات» مقابل «توزيع
-                // المستخدمين» — بدل أن يُتركا «لوحة المناطق» و«إدارة المناطق».
                 ['🗺️ نطاق التشغيل والمخالفات', route('admin.amial.hub.zones.index'), null],
                 ['🗂️ توزيع المستخدمين على المناطق', route('admin.amial.zones.index'), null],
                 ['🔥 إعداد Firebase', route('admin.business-settings.fcm-index'), null],
                 ['📜 الشروط القانونية', route('admin.amial.legal.index'), null],
-                ['🩺 حالة التشغيل (الطوابير والمستندات)', route('admin.amial.ops.index'), 'platform.ops.view'],
-                ['🛠️ وضع الصيانة', url('admin/maintenance'), null],
-                // AMIAL-2FA-DOOR-001 — الميزةُ مبنيّةٌ منذ v1.8 بلا مدخل.
-                // **ولا صلاحيّةَ عليها**: كلُّ مديرٍ يؤمّن حسابَه هو.
-                ['🔐 المصادقة الثنائية لحسابي', route('admin.amial.2fa.page'), null],
-                // AMIAL-WITHDRAW-DOOR-001 — المسارُ سُجّل في الجولة السابقة
-                // والرابطُ أُجّل، فبقيت صفحةً لا يُوصل إليها.
-                ['💸 طلبات السحب (اعتماد ورفض)', route('admin.withdraw.index'), 'platform.audit.view'],
+                ['🩺 حالة التشغيل (الطوابير والمستندات)', route('admin.amial.ops.index'), null],
             ],
         ],
     ];
