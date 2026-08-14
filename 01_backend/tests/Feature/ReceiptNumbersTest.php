@@ -158,9 +158,28 @@ class ReceiptNumbersTest extends TestCase
 
     // ===================== بحث الدعم =====================
 
+    /**
+     * **حسابُ إدارةٍ بدرجةٍ حقيقيّة** — AMIAL-DOCUMENTS-002.
+     *
+     * كان الاختباران يدخلان بحسابِ `ADMIAL_TYPE` بلا درجةٍ إطلاقاً، وكانا
+     * يمرّان — **لأنّ مركز الدعم كان مفتوحاً بلا صلاحيّة**. ثمّ أُغلق
+     * (`platform.customers.view`) فسقطا.
+     *
+     * فاختبارٌ يسقط عند إغلاق ثغرةٍ كان يُثبتها لا يُصلَح بفتحها ثانيةً:
+     * يُعطى الحسابُ درجتَه. (وقع هذا نفسُه في `AgentNetworkApiTest`.)
+     */
+    private function supportOperator(): User
+    {
+        $u = User::factory()->create(['type' => ADMIN_TYPE, 'role' => 'admin']);
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($u, \App\Services\PlatformRoleService::SUPPORT);
+
+        return $u;
+    }
+
     public function test_support_finds_a_receipt_by_its_printed_grouped_number(): void
     {
-        $admin = User::factory()->create(['type' => ADMIN_TYPE]);
+        $admin = $this->supportOperator();
         $r = $this->issue();
         $printed = ReadableCode::group($r->receipt_number);
 
@@ -174,7 +193,7 @@ class ReceiptNumbersTest extends TestCase
 
     public function test_support_finds_a_receipt_by_verification_code(): void
     {
-        $admin = User::factory()->create(['type' => ADMIN_TYPE]);
+        $admin = $this->supportOperator();
         $r = $this->issue();
 
         $found = $this->actingAs($admin, 'user')

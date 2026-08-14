@@ -23,6 +23,29 @@ return new class extends Migration
 
     public function down(): void
     {
+        // ══════════════════════════════════════════════════════════════
+        //  **تراجُعٌ لا يعمل ليس تراجعاً — AMIAL-DOCUMENTS-002.**
+        //
+        //  كان هذا السطر يُضيّق التعداد وفي الجدول صفوفٌ تحمل
+        //  `support_ticket`، فيقع:
+        //
+        //      SQLSTATE[01000] 1265 Data truncated for column
+        //      'subject_type' at row 1
+        //
+        //  وهو لا يمسّ الإنتاج (لا أحد يتراجع هناك)، **لكنّه يُسقط كلّ
+        //  اختبارٍ يستعمل `DatabaseMigrations`** — وهو يتراجع بعد كلّ
+        //  حالة. فسقط `ReceiptDocumentAfterCommitTest` بعد سبع تأكيداتٍ
+        //  ناجحة، ورسالتُه تتحدّث عن عمودٍ لا علاقةَ له بالإيصالات.
+        //
+        //  فتُنقل الصفوفُ الخارجةُ عن التعداد الهدف أوّلاً. و`user` هي
+        //  القيمة الافتراضيّة للعمود، فلا تُخترع قيمةٌ جديدة.
+        // ══════════════════════════════════════════════════════════════
+        DB::table('audit_decisions')
+            ->whereNotIn('subject_type', [
+                'user', 'transaction', 'wallet', 'merchant', 'session', 'pin',
+            ])
+            ->update(['subject_type' => 'user']);
+
         DB::statement("
             ALTER TABLE audit_decisions
             MODIFY subject_type ENUM('user','transaction','wallet','merchant','session','pin')

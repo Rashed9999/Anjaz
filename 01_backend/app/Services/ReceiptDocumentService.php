@@ -13,6 +13,7 @@ use App\Models\WholesaleCollection;
 use App\Models\WholesaleInvoice;
 use App\Support\Access\AccessConstants as A;
 use App\Support\ArabicTafqit;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
@@ -681,8 +682,11 @@ class ReceiptDocumentService
             default => 'image/png',
         };
 
-        return 'data:' . $mime . ';base64,'
-            . base64_encode((string) Storage::disk('public')->get($relative));
+        return $this->logoDataUri(
+            (string) Storage::disk('public')->get($relative),
+            $mime,
+            'merchant:' . $relative,
+        );
     }
 
     private function platformLogoData(): ?string
@@ -690,12 +694,108 @@ class ReceiptDocumentService
         foreach (['branding/logo-full.png', 'branding/logo.png'] as $relative) {
             $absolute = public_path($relative);
             if (is_file($absolute) && is_readable($absolute)) {
-                return 'data:image/png;base64,'
-                    . base64_encode((string) file_get_contents($absolute));
+                return $this->logoDataUri(
+                    (string) file_get_contents($absolute),
+                    'image/png',
+                    'platform:' . $relative . ':' . (string) filemtime($absolute),
+                );
             }
         }
 
         return null;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  AMIAL-DOCUMENTS-002 — **شعارٌ بحجمه الكامل داخل كلّ إيصال.**
+    //
+    //  **ما قِيس:** `public/branding/logo-full.png` يزن ٩٢٣ كيلوبايت
+    //  (١٢٥٤×١٢٥٤)، ويُضمَّن في HTML مُرمَّزاً بـbase64 — فيصير ١٫٢
+    //  ميغابايت. **والقالبُ يعرضه ١١٦×٦٦ بكسل.**
+    //
+    //  ```
+    //  html bytes : 1,238,522     ← إيصالُ محفظةٍ واحد
+    //  أكبر قطعة  : 1,231,xxx     ← <img src="data:image/png;base64,…">
+    //  ```
+    //
+    //  **وmPDF يرفض ما يتجاوز `pcre.backtrack_limit`** (١٠٠٠٠٠٠ هنا):
+    //
+    //      MpdfException: The HTML code size is larger than
+    //      pcre.backtrack_limit 1000000
+    //
+    //  فسقط توليدُ كلّ إيصالٍ PDF — **وإصدارُ الإيصال نفسُه يستدعيه**،
+    //  فسقط معه ٧٦ اختباراً في مسارات التحويل والشبّاك ودفع الطلبات.
+    //
+    //  **والرسالةُ لا تدلّ على سببها**: تتحدّث عن حدٍّ في PCRE، والعطلُ
+    //  صورةٌ غيرُ مصغَّرة. (وهو صنفُ الأعطال الذي مُلئ به هذا الملفّ.)
+    //
+    //  فيُصغَّر الشعارُ مرّةً إلى عرض الطباعة ويُخزَّن مُرمَّزاً. ولا
+    //  يُستبدل بمسارٍ على القرص: **القالبُ نفسُه يُعرض في المتصفّح**
+    //  للمعاينة والطباعة، ومسارُ ملفٍّ محلّيٍّ لا يُحمَّل هناك.
+    // ══════════════════════════════════════════════════════════════════
+
+    /** عرضُ الشعار في الطباعة ١١٦ بكسل — والضعفُ لدقّة الشاشات العالية. */
+    private const LOGO_MAX_WIDTH = 240;
+
+    private function logoDataUri(string $bytes, string $mime, string $cacheKey): ?string
+    {
+        if ($bytes === '') {
+            return null;
+        }
+
+        $key = 'receipt:logo:' . self::DOCUMENT_VERSION . ':' . md5($cacheKey);
+
+        return Cache::remember($key, now()->addDay(), function () use ($bytes, $mime) {
+            $small = $this->downscalePng($bytes);
+
+            // **والتصغيرُ إن تعذّر لا يُسقط الإيصال**: يُرجَع الأصل، وهو
+            // ما كان يقع قبل هذا الإصلاح — فالعطلُ يعود لا يختفي صامتاً.
+            return 'data:' . ($small !== null ? 'image/png' : $mime) . ';base64,'
+                . base64_encode($small ?? $bytes);
+        });
+    }
+
+    /** يُرجع PNG مصغَّراً، أو `null` إن تعذّر — بلا رمي. */
+    private function downscalePng(string $bytes): ?string
+    {
+        if (! function_exists('imagecreatefromstring')) {
+            return null;
+        }
+
+        try {
+            $src = @imagecreatefromstring($bytes);
+
+            if ($src === false) {
+                return null;
+            }
+
+            $w = imagesx($src);
+
+            if ($w <= self::LOGO_MAX_WIDTH) {
+                imagedestroy($src);
+
+                return null;   // صغيرٌ أصلاً — يُترك كما هو
+            }
+
+            $dst = imagescale($src, self::LOGO_MAX_WIDTH);
+            imagedestroy($src);
+
+            if ($dst === false) {
+                return null;
+            }
+
+            // الشفافيّةُ تُحفظ — شعارٌ بخلفيّةٍ سوداء على ورقةٍ بيضاء
+            // عطلٌ مرئيٌّ لا يرفعه أحد.
+            imagesavealpha($dst, true);
+
+            ob_start();
+            imagepng($dst, null, 9);
+            $out = (string) ob_get_clean();
+            imagedestroy($dst);
+
+            return $out !== '' ? $out : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function normalizeVertical(string $vertical): string

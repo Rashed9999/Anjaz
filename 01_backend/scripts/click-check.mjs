@@ -468,7 +468,23 @@ const CASES = [
         expectNav: null,
         dom: [
             ['لم يُستدعَ print', `window.__printed !== true`],
-            ['وقيل للمستعمل ماذا يفعل', `/اعرض التقرير/.test(window.__lastAlert || '')`],
+            // AMIAL-UI-DIALOGS-001 — **الرسالةُ صارت حواراً مُعلَّماً لا `alert`.**
+            //
+            // `_app_dialogs.blade.php` يستبدل `window.alert` عند تحميل
+            // الصفحة، **فيغلب بديلَ الفحص** المحقون قبلها. فبقي
+            // `__lastAlert` فارغاً والرسالةُ تُعرض على الشاشة فعلاً:
+            // فحصٌ يسقط والميزةُ سليمة — وهو كذبٌ في الاتّجاه الآخر.
+            //
+            // فيُقرأ ما يراه المستعمل: نصُّ الحوار وهو مفتوح. والارتدادُ
+            // إلى `__lastAlert` يبقى لصفحاتٍ لا تُضمّن الحوار.
+            ['وقيل للمستعمل ماذا يفعل',
+             `(() => {
+                 const d = document.getElementById('amial-dialog');
+                 const shown = d && d.classList.contains('is-open')
+                     ? (document.getElementById('amial-dialog-message')?.textContent || '')
+                     : '';
+                 return /اعرض التقرير/.test(shown || window.__lastAlert || '');
+              })()`],
         ],
     },
 
