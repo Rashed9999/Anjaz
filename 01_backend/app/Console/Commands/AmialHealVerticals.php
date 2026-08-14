@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Models\MerchantProfile;
 use App\Models\User;
 use App\Services\Vertical\VerticalBootstrapService;
-use App\Support\Access\AccessConstants as A;
 use Illuminate\Console\Command;
 
 /**
@@ -32,11 +31,21 @@ class AmialHealVerticals extends Command
     {
         $dry = (bool) $this->option('dry-run');
 
-        $profiles = MerchantProfile::whereIn('business_type',
-            [A::BIZ_FUEL, A::BIZ_PHARMACY, A::BIZ_WHOLESALE])->get(['user_id', 'business_type']);
+        // ══════════════════════════════════════════════════════════════
+        //  AMIAL-MERCHANT-USABLE-001 — **كلُّ تاجرٍ لا ثلاثةُ أنشطةٍ فقط.**
+        //
+        //  كان المسحُ مقصوراً على الوقود والصيدليّة والجملة — وهي وحدَها
+        //  تحتاج **سجلَّ قطاع**. ثمّ صارت التهيئةُ تزرع **أدوارَ
+        //  الموظّفين** أيضاً، وتلك يحتاجها كلُّ تاجر.
+        //
+        //  فتاجرُ التجزئة — وهو الأكثر — كان يبقى بلا أدوارٍ يُسندها،
+        //  ولا شيءَ في النشرة يُصلحه. **إصلاحٌ يمرّ فوق من يحتاجه.**
+        $profiles = MerchantProfile::whereNotNull('business_type')
+            ->where('business_type', '!=', '')
+            ->get(['user_id', 'business_type']);
 
         if ($profiles->isEmpty()) {
-            $this->info('لا تجّار بأنشطةٍ تحتاج سجلَّ قطاع.');
+            $this->info('لا تجّار بأنشطةٍ محدَّدة.');
 
             return self::SUCCESS;
         }

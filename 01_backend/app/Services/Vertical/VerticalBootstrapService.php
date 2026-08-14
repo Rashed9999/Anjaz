@@ -54,6 +54,25 @@ class VerticalBootstrapService
             return null;
         }
 
+        // ══════════════════════════════════════════════════════════════
+        //  AMIAL-MERCHANT-USABLE-001 — **أدوارُ الموظّفين تُولَد مع الحساب.**
+        //
+        //  قالها صاحبُ المشروع: «عند إنشاء تاجر يُنشأ دورُه وهو مالك،
+        //  ثمّ المالكُ هو من يُنشئ صلاحيّة موظّفيه».
+        //
+        //  **والمِلكيّةُ قائمةٌ بالفعل**: `MerchantPermissionService::isOwner`
+        //  تقيسها من الهويّة — صاحبُ الحساب يملك كلَّ صلاحيّات قطاعه بلا
+        //  صفِّ دور. فذاك الشقُّ سليم.
+        //
+        //  **والناقصُ هو الشقُّ الثاني**: `seedFuelRoles` مبنيّةٌ منذ
+        //  جولات، ولا تُنادى إلّا من زرٍّ في شاشة «الأدوار». فمن أراد أن
+        //  يُسند دوراً لكاشيره يفتح الشاشة فيجدها فارغة، وعليه أن يعرف
+        //  أنّ في مكانٍ ما زرَّ «إنشاء الأدوار الافتراضيّة».
+        //
+        //  فتُزرع مع الحساب. **وهي آمنةُ التكرار** ولا تكتب فوق تعديلات
+        //  المالك: `seedRoles` تتخطّى كلَّ دورٍ موجودٍ برمزه.
+        $this->seedRolesFor($merchant, $type);
+
         try {
             return match ($type) {
                 A::BIZ_FUEL => $this->fuel($merchant),
@@ -107,6 +126,35 @@ class VerticalBootstrapService
         app(\App\Services\WholesaleService::class)->getOrCreateBusiness($m);
 
         return ['vertical' => A::BIZ_WHOLESALE, 'created' => ! $existed];
+    }
+
+    /**
+     * أدوارُ الموظّفين الافتراضيّة لهذا النشاط.
+     *
+     * ولا تُعطِّل إنشاءَ الحساب إن فشلت: المالكُ يملك قطاعَه بهويّته،
+     * ويستطيع زرعَها بنفسه من شاشة «الأدوار».
+     */
+    private function seedRolesFor(User $merchant, string $type): void
+    {
+        try {
+            $perm = app(\App\Services\Merchant\MerchantPermissionService::class);
+
+            match ($type) {
+                A::BIZ_FUEL => $perm->seedFuelRoles($merchant),
+
+                // التجزئةُ والبيعُ السريع والصيدليّةُ والجملةُ والمطعم
+                // تعمل على شبكة أدوار التجزئة نفسِها (كاشير · مخزون ·
+                // مشرف…)، وهي المبنيّةُ اليوم. ولا تُخترع قائمةٌ لكلّ
+                // نشاطٍ قبل أن تُكتب صلاحيّاتُه.
+                default => $perm->seedRetailRoles($merchant),
+            };
+        } catch (\Throwable $e) {
+            Log::warning('VerticalBootstrap: role seeding failed', [
+                'merchant_user_id' => $merchant->id,
+                'business_type' => $type,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /** أيحتاج هذا النشاطُ سجلَّ قطاعٍ خاصّاً به؟ */
