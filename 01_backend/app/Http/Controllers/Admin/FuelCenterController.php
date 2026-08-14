@@ -49,6 +49,14 @@ class FuelCenterController extends Controller
                 ->orWhere('city', 'like', "%{$s}%"));
         }
 
+        // AMIAL-MERCHANT-360-DRILL-001 — **الفتحُ على تاجرٍ بعينه.**
+        // يأتي من زرّ «محطّاتُه» في ملفّ التاجر ٣٦٠. وبلا هذا المرشّح
+        // يفتح الزرُّ قائمةَ كلّ المحطّات فيعود المحقّقُ يبحث بالاسم —
+        // وهو بعينه ما اشتُكي منه.
+        if ($mid = (int) $request->query('merchant_id', 0)) {
+            $q->where('merchant_user_id', $mid);
+        }
+
         $rows = $q->orderBy('station_name')->limit(200)->get()
             ->map(function (FuelStation $st) {
                 $tanks = FuelTank::where('station_id', $st->id)->get();

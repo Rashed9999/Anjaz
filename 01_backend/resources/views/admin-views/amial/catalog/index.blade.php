@@ -137,6 +137,15 @@
           <div class="col"><label class="form-label small">الوحدة</label>
             <input id="cat-new-unit" class="form-control form-control-sm" placeholder="قطعة · كيلو"></div>
         </div>
+        {{-- AMIAL-CATALOG-IMAGE-001 — **من الجهاز، مصغَّرةً قبل الحفظ.**
+             و`image_path` كان عموداً يُقرأ في موضعين ولا يُكتب في موضع. --}}
+        <div class="mt-2">
+          <label class="form-label small">صورة الصنف</label>
+          <input type="file" id="cat-new-image" class="form-control form-control-sm"
+                 accept="image/jpeg,image/png,image/webp" data-testid="cat-image-file">
+          <div class="form-text">تُصغَّر إلى ٤٠٠ بكسل — صورةٌ واحدةٌ لكلّ باركود يشترك فيها كلُّ التجّار.</div>
+          <div class="mt-2" id="cat-new-image-preview"></div>
+        </div>
         <div class="text-danger small mt-2" id="cat-add-err"></div>
       </div>
       <div class="modal-footer">
@@ -187,6 +196,9 @@
   var BADGE = { verified:'success', proposed:'warning', rejected:'secondary' };
   var LABEL = { verified:'موثّقة', proposed:'مقترَحة', rejected:'مرفوضة' };
   var CSRF = document.querySelector('meta[name="csrf-token"]').content;
+  // **مُعرَّفٌ قبل أوّل استعمال.** متغيّرٌ غيرُ معرَّفٍ داخل `map` يرمي
+  // فيموت المعالجُ صامتاً ويبقى الجدولُ على «جارٍ التحميل». (القاعدة ٩.)
+  var IMG_BASE = '{{ asset('storage') }}/';
 
   function get(u) { return fetch(u, { headers:{'Accept':'application/json'} }).then(function (r) { return r.json(); }); }
 
@@ -227,7 +239,10 @@
       $('cat-rows').innerHTML = rows.length ? rows.map(function (r) {
         return '<tr>'
           + '<td><code>' + esc(r.barcode) + '</code></td>'
-          + '<td>' + esc(r.name) + '</td>'
+          + '<td>' + (r.image_path
+              ? '<img src="' + esc(IMG_BASE + r.image_path) + '" alt="" loading="lazy"'
+                + ' style="width:32px;height:32px;object-fit:cover;border-radius:4px" class="ms-2">'
+              : '') + esc(r.name) + '</td>'
           + '<td class="small text-muted">' + esc(r.category || '—') + '</td>'
           + '<td>' + r.adoption_count + '</td>'
           + '<td><span class="badge bg-' + (BADGE[r.status] || 'secondary') + '">'
@@ -326,12 +341,42 @@
     new bootstrap.Modal($('cat-add-modal')).show();
   });
 
+  // **الرفعُ خارج `post()`**: تلك تُرسل JSON، و`FormData` يجب أن يضع
+  // المتصفّحُ حدودَها بنفسه — وإلّا وصل الملفُّ ولا يُقرأ.
+  function uploadImage(file) {
+    var fd = new FormData();
+    fd.append('file', file);
+    return fetch('{{ route('admin.amial.catalog.images') }}', {
+      method: 'POST',
+      headers: {'Accept': 'application/json', 'X-CSRF-TOKEN': CSRF},
+      body: fd
+    }).then(function (r) { return r.json(); });
+  }
+
+  $('cat-new-image').addEventListener('change', function (e) {
+    var box = $('cat-new-image-preview');
+    var f = e.target.files[0];
+    if (!f) { box.innerHTML = ''; box.dataset.path = ''; return; }
+    box.innerHTML = '<span class="text-muted small">جارٍ الرفع…</span>';
+    uploadImage(f).then(function (j) {
+      if (!j || !j.success) {
+        box.dataset.path = '';
+        e.target.value = '';
+        box.innerHTML = '<span class="text-danger small">' + esc((j && j.message) || 'تعذّر الرفع') + '</span>';
+        return;
+      }
+      box.dataset.path = j.image_path;
+      box.innerHTML = '<img src="' + esc(j.url) + '" alt="" style="max-height:80px;border-radius:6px">';
+    });
+  });
+
   $('cat-add-go').addEventListener('click', function () {
     post('{{ route('admin.amial.catalog.store') }}', {
       barcode: $('cat-new-barcode').value.trim(),
       name: $('cat-new-name').value.trim(),
       category: $('cat-new-category').value.trim(),
-      unit: $('cat-new-unit').value.trim()
+      unit: $('cat-new-unit').value.trim(),
+      image_path: $('cat-new-image-preview').dataset.path || null
     }).then(function (j) {
       if (!j || !j.success) { $('cat-add-err').textContent = (j && j.message) || 'تعذّر الحفظ'; return; }
       bootstrap.Modal.getInstance($('cat-add-modal')).hide();

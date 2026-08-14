@@ -443,6 +443,10 @@ Route::prefix('catalog')->name('catalog.')->middleware('platform:platform.settin
         Route::get('/export', [$cc, 'export'])->name('export');
         Route::post('/', [$cc, 'store'])->name('store');
         Route::post('/import', [$cc, 'import'])->name('import');
+        // AMIAL-CATALOG-IMAGE-001 — رفعُ صورة الصنف مصغَّرةً إلى ٤٠٠ بكسل.
+        // **قبل `/{id}`**: وإلّا التقطه `[0-9]+`… لا، لا يلتقطه — لكنّ
+        // ترتيبَ المسارات النصّيّة قبل المتغيّرة عادةٌ تمنع مفاجأةً لاحقة.
+        Route::post('/images', [$cc, 'uploadImage'])->name('images');
         Route::get('/{id}', [$cc, 'show'])->where('id', '[0-9]+')->name('show');
         Route::post('/{id}/review', [$cc, 'review'])->where('id', '[0-9]+')->name('review');
     });

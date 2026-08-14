@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\AuditService;
+use App\Services\Catalog\CatalogImageService;
 use App\Services\Catalog\ProductCatalogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,7 +36,43 @@ class ProductCatalogCenterController extends Controller
     public function __construct(
         private readonly ProductCatalogService $catalog,
         private readonly AuditService $audit,
+        private readonly CatalogImageService $images,
     ) {}
+
+    /**
+     * AMIAL-CATALOG-IMAGE-001 — **رفعُ صورة الصنف.**
+     *
+     * ══════════════════════════════════════════════════════════════
+     * `image_path` عمودٌ في الجدول منذ بُني الكتالوج، **ويُقرأ في
+     * موضعين ولا يُكتب في موضعٍ واحد.** فالصورةُ كانت وعداً في المخطّط
+     * لا في الشاشة — مبنيٌّ ولا يُوصَل إليه.
+     *
+     * **وتُصغَّر إلى ٤٠٠ بكسل قبل الحفظ** — وهذا هو الفرقُ بين ٢٫٥
+     * غيغابايت و٥٠ عند مئة ألف صنف. التفصيلُ في `CatalogImageService`.
+     * ══════════════════════════════════════════════════════════════
+     */
+    public function uploadImage(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'file' => 'required|file|mimes:jpg,jpeg,png,webp|max:5120',
+        ], [], ['file' => 'الصورة']);
+
+        if ($v->fails()) {
+            return response()->json(['success' => false, 'message' => $v->errors()->first()], 422);
+        }
+
+        try {
+            $path = $this->images->store($request->file('file'));
+        } catch (\RuntimeException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'image_path' => $path,
+            'url' => asset('storage/' . $path),
+        ]);
+    }
 
     public function page(): View
     {
@@ -170,6 +207,7 @@ class ProductCatalogCenterController extends Controller
             'category' => 'sometimes|nullable|string|max:80',
             'unit' => 'sometimes|nullable|string|max:24',
             'note' => 'sometimes|nullable|string|max:255',
+            'image_path' => 'sometimes|nullable|string|max:255',
         ]);
 
         if ($v->fails()) {
@@ -187,7 +225,15 @@ class ProductCatalogCenterController extends Controller
         $action = $request->input('action');
         $newName = trim((string) $request->input('name', ''));
 
+        // **والقديمةُ تُحذف حين تُستبدل.** وإلّا تراكمت صورٌ لا يشير إليها
+        // صفٌّ واحد — ونموُّ قرصٍ لا يفسّره أحدٌ أسوأُ من نموٍّ مفهوم.
+        $newImage = $request->input('image_path', $e->image_path);
+        if ($newImage !== $e->image_path) {
+            $this->images->forget($e->image_path);
+        }
+
         DB::table('product_catalog_entries')->where('id', $id)->update([
+            'image_path' => $newImage,
             'status' => $action === 'verify' ? 'verified' : 'rejected',
             'name' => $newName !== '' ? $newName : $e->name,
             'category' => $request->input('category', $e->category),

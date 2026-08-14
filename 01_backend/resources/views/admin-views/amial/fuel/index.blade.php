@@ -151,7 +151,14 @@
     // ── المحطات ──
     async function loadStations(q) {
         try {
-            const d = await get('/stations' + (q ? ('?q=' + encodeURIComponent(q)) : ''));
+            // AMIAL-MERCHANT-360-DRILL-001 — `?merchant=` من ملفّ التاجر
+            // يُمرَّر إلى الخادم. وبلا التمرير يفتح الزرُّ كلَّ المحطّات
+            // — رابطٌ يعمل ويصل إلى الشاشة الخطأ (القاعدة التاسعة).
+            const mid = new URLSearchParams(location.search).get('merchant');
+            const qs = new URLSearchParams();
+            if (q) qs.set('q', q);
+            if (mid) qs.set('merchant_id', mid);
+            const d = await get('/stations' + (qs.toString() ? '?' + qs : ''));
             const rows = d.stations || [];
 
             $('fc-st-body').innerHTML = rows.length ? rows.map(s =>

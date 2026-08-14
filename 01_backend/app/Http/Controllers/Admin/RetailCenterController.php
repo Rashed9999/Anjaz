@@ -54,7 +54,10 @@ class RetailCenterController extends Controller
     /** المتاجرُ كلُّها بمؤشّراتها — الصفحةُ الأولى. */
     public function merchants(Request $request): JsonResponse
     {
-        $ids = MerchantLocation::query()->distinct()->pluck('merchant_user_id');
+        // AMIAL-MERCHANT-360-DRILL-001 — الفتحُ على تاجرٍ بعينه من ملفّه.
+        $ids = ($mid = (int) $request->query('merchant_id', 0))
+            ? collect([$mid])
+            : MerchantLocation::query()->distinct()->pluck('merchant_user_id');
 
         $q = User::whereIn('id', $ids);
 

@@ -232,7 +232,11 @@
         const body = document.getElementById('rc-merchants-body');
         const q = document.getElementById('rc-search').value.trim();
         try {
-            const d = await get('/merchants', q ? {q: q} : {});
+            // AMIAL-MERCHANT-360-DRILL-001 — الفتحُ على تاجرٍ بعينه.
+            const mid = new URLSearchParams(location.search).get('merchant');
+            const params = q ? {q: q} : {};
+            if (mid) params.merchant_id = mid;
+            const d = await get('/merchants', params);
             body.innerHTML = d.merchants.length ? d.merchants.map(m => {
                 const waiting = (m.pending_wastes || 0) + (m.counts_in_review || 0);
                 return '<tr><td><strong>' + esc(m.name) + '</strong>'

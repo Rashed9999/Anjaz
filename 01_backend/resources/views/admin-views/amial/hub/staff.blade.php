@@ -67,7 +67,12 @@
     async function load() {
         const tbody = document.getElementById('tbody');
         tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>';
-        const r = await fetch(`${base}/staff/list.json?page=${page}&search=${encodeURIComponent(search)}`, {headers: {'Accept': 'application/json'}});
+        // AMIAL-MERCHANT-360-DRILL-001 — `?merchant=` من ملفّ التاجر ٣٦٠.
+        // والنقطةُ تقبل `merchant_id` منذ بُنيت — ولا شيءَ كان يمرّره.
+        const mid = new URLSearchParams(location.search).get('merchant');
+        const r = await fetch(`${base}/staff/list.json?page=${page}&search=${encodeURIComponent(search)}`
+            + (mid ? `&merchant_id=${encodeURIComponent(mid)}` : ''),
+            {headers: {'Accept': 'application/json'}});
         const j = await r.json();
         lastPage = j.last_page;
         document.getElementById('page-info').textContent = `${j.total} موظف — صفحة ${j.current_page} من ${j.last_page}`;
