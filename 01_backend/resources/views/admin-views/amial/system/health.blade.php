@@ -138,7 +138,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse ($errors as $e)
+                    @forelse ($defects as $e)
                         <tr class="{{ $e->status_flag === 'open' ? 'h-err' : 'h-ack' }}">
                             <td>
                                 <div class="fw-bold" style="font-size:.85rem">{{ class_basename($e->exception) }}</div>

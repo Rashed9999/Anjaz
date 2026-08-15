@@ -67,7 +67,17 @@ class SystemHealthController extends Controller
             ->orderByDesc('checked_at')
             ->first();
 
-        $errors = DB::table('system_errors')
+        // ══════════════════════════════════════════════════════════════
+        //  **الاسمُ `$errors` محجوزٌ في Blade** — وهو `ViewErrorBag` الذي
+        //  يقرؤه القالبُ الأمّ (`layouts/admin/app.blade.php:93`) بـ
+        //  `$errors->any()`. ومتغيّرٌ بهذا الاسم من المتحكّم **يحجبه**،
+        //  فتُستدعى `any()` على `Collection` لا تملكها ⇒ ٥٠٠.
+        //
+        //  ولا يظهر في أيّ اختبار وحدة: العطلُ في القالب الأمّ لا في هذا.
+        //  **وأمسكه صاحبُ المشروع بعد الدفع بدقائق** — لأنّ البوّابةَ لم
+        //  تكن تفتح هذه الصفحة.
+        // ══════════════════════════════════════════════════════════════
+        $defects = DB::table('system_errors')
             ->where('status_flag', '!=', 'resolved')
             ->orderByDesc('last_seen_at')
             ->limit(50)
@@ -86,7 +96,7 @@ class SystemHealthController extends Controller
         $lastBeat = DB::table('system_health_checks')->max('checked_at');
 
         return view('admin-views.amial.system.health', compact(
-            'now', 'overall', 'history', 'lastDown', 'errors', 'counts', 'lastBeat'));
+            'now', 'overall', 'history', 'lastDown', 'defects', 'counts', 'lastBeat'));
     }
 
     /** يُغيّر حالةَ خطأ: أُقرَّ به · حُلّ · أُعيد فتحُه. */

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Services\ErrorTrackingService;
+use App\Models\User;
 use App\Services\SystemHealthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -169,6 +170,50 @@ class ObservabilityGuardTest extends TestCase
         $this->assertSame('open',
             DB::table('system_errors')->value('status_flag'),
             'عطلٌ عاد وبقي «محلولاً» — فلا يراه أحد');
+    }
+
+    /**
+     * @test
+     *
+     * **والصفحةُ تُفتح فعلاً** — وهذا ما كان ناقصاً.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمن — دفعه صاحبُ المشروع بعد الدفع بدقائق:** فتح «صحّة النظام»
+     * فخرجت ٥٠٠. **والبوّابةُ خضراء** لأنّ طبقتَها الخامسة تفتح خمسَ عشرةَ
+     * صفحةً وهذه ليست فيها، والحرّاسُ فحصوا الخدمةَ والجدولَ والرابطَ
+     * **ولم يفتح أحدٌ الصفحة**.
+     *
+     * وهو نصُّ القاعدة التاسعة واقعاً على صفحة: **زرٌّ لم يُضغط ليس
+     * مبنيّاً** — وصفحةٌ لم تُفتح ليست مبنيّة.
+     */
+    public function the_health_page_actually_renders(): void
+    {
+        $admin = User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
+
+        DB::table('admin_user_roles')->insert([
+            'user_id' => $admin->id,
+            'role_id' => DB::table('roles')->whereNull('merchant_user_id')
+                ->where('code', 'platform_admin')->value('id'),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        // **تُفتح مرّتين**: على جدولٍ فارغٍ (يومَ التركيب) وعلى جدولٍ فيه
+        // نبضٌ وعطل. والفارغُ هو الحالةُ التي انهارت.
+        $this->actingAs($admin->fresh(), 'user')
+            ->get('/admin/amial/system/health')
+            ->assertOk();
+
+        DB::table('system_health_checks')->insert([
+            'component' => 'database', 'state' => 'down',
+            'latency_ms' => 12, 'detail' => 'اختبار', 'checked_at' => now(),
+        ]);
+
+        app(ErrorTrackingService::class)
+            ->record(new \RuntimeException('عطلٌ للعرض'), null, 500);
+
+        $this->actingAs($admin->fresh(), 'user')
+            ->get('/admin/amial/system/health')
+            ->assertOk();
     }
 
     /**
