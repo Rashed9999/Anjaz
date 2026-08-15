@@ -1,0 +1,15 @@
+# AMIAL-DB-FORENSICS-001 — قناةُ أثرٍ لموتٍ لم يترك أثراً.
+#
+# ماتت MariaDB ثلاثَ مرّاتٍ في جلسةٍ واحدة ولم يُعرف السبب، لأنّ كلَّ
+# القنوات كانت مغلقة: `skip_log_error` مضبوط، ولا خادمَ syslog، ولا
+# مقبسَ /dev/log. فما يكتبه `logger` يضيع في العدم.
+#
+# وهذا يسبق أيَّ تشخيص: لا يُشخَّص ما لا يُرى.
+
+[mysqld_safe]
+skip_log_error = 0
+log_error = /var/log/mysql/error.log
+syslog = 0
+
+[mysqld]
+log_error = /var/log/mysql/error.log
