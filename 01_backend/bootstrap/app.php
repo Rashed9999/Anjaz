@@ -149,6 +149,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToGroup('api', \App\Http\Middleware\AmialMaintenanceMode::class);
 
         // AMIAL-SEC-HEADERS-001 — ترويسات أمان لكل استجابة (كشف غيابها اختبار الاختراق)
+        // AMIAL-419-LOOP-001 — صفحةٌ تحمل رمزَ CSRF لا تُخزَّن في المتصفّح.
+        // (`no-cache` وحدَها تسمح باستعمال النسخة **حين يتعذّر التحقّق** —
+        // وهو ما يقع على اتّصالٍ ضعيف، فيصل رمزٌ من جلسةٍ ماتت ⇒ ٤١٩.)
+        $middleware->appendToGroup('web', \App\Http\Middleware\NoStoreCsrfPages::class);
         $middleware->appendToGroup('web', \App\Http\Middleware\SecurityHeaders::class);
         $middleware->appendToGroup('api', \App\Http\Middleware\SecurityHeaders::class);
 

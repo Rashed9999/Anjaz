@@ -58,7 +58,15 @@
     <div class="step">٣ · إن تكرّر بعدهما، فالعطل عند الخادم لا عندك — أبلِغ الإدارة.</div>
 
     <div style="margin-top:20px">
-        <button class="btn" onclick="location.reload()">إعادة المحاولة</button>
+        {{-- **كان `location.reload()`** — وإعادةُ تحميل ردِّ ٤١٩ تُعيد
+             إرسال الطلب نفسِه برمزه الفاسد، فتخرج ٤١٩ ثانيةً. فيدور
+             المستعملُ بلا مخرجٍ إلّا مسحَ بيانات المتصفّح.
+
+             والصحيحُ **طلبُ صفحةٍ جديدةً بـGET** — فتُنشئ جلسةً ورمزاً
+             جديدَين. ووجهتُها الدخولُ لأنّ ٤١٩ غالباً على إرسال نموذج. --}}
+        <a class="btn" href="{{ url()->previous() !== url()->current()
+            ? route('admin.auth.login') : '/' }}"
+           style="text-decoration:none;display:inline-block">ابدأ من جديد</a>
     </div>
 </div>
 
