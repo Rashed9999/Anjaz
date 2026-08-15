@@ -34,7 +34,22 @@ plugins {
     //  يقرأ `newDsl` وحدَه، فيحتاج إعادةَ كتابة ملفّات Gradle كلِّها.
     //  و8.11.1 هو المطلوبُ حرفاً بحرف، ويعمل مع Gradle 8.14.3 المثبّت.
     id("com.android.application") version "8.11.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.1.0" apply false
+    // ══════════════════════════════════════════════════════════════════
+    //  AMIAL-BUILD-KGP-001 — **العطلُ نفسُه ثانيةً، على Kotlin هذه المرّة.**
+    //
+    //      Your project's Kotlin version (2.1.0) is lower than Flutter's
+    //      minimum supported version of 2.2.20.
+    //
+    //  وهو ليس عطلاً جديداً بل تكرارُ AMIAL-BUILD-AGP-001 فوقه: `stable`
+    //  يتحرّك، والمشروعُ مثبَّتٌ فيتخلّف. ولا يظهر محلّيّاً — `flutter
+    //  analyze` لا يمسّ Gradle ولا مُصرِّفَ أندرويد في حاوية التطوير.
+    //
+    //  **والعلاجُ ليس الرقمَ بل الحارس:** `GradleFloorGuardTest` يقرأ
+    //  `DependencyVersionChecker.kt` من Flutter المثبَّت ويقارن — على حدّ
+    //  **التحذير** لا الخطأ، لأنّ تحذيرَ اليوم خطأُ غد. وبه يُمسَك
+    //  التخلُّفُ في `verify.sh` قبل أن يسقط بناءٌ في Codemagic.
+    // ══════════════════════════════════════════════════════════════════
+    id("org.jetbrains.kotlin.android") version "2.2.20" apply false
     // AMIAL-FCM-001: 4.3.15 يسبق AGP 8 ويتعثّر مع Gradle الحديث؛ 4.4.2 هو المتوافق.
     id("com.google.gms.google-services") version "4.4.2" apply false
     // AMIAL-CRASH-001: الحزمة وحدها ترفع أعطال Dart. أمّا انهيارات الطبقة

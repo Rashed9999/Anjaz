@@ -39,6 +39,18 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    //  `kotlinOptions` مهجورةٌ لا محذوفة — **قِيس ولم يُفترَض.**
+    //
+    //  قالبُ Flutter الحاليُّ نفسُه هجرها إلى `compilerOptions`، فيبدو
+    //  للناظر أنّها أُزيلت مع Kotlin 2.2. وفُحصت جرّةُ الإضافة:
+    //  `kotlin-gradle-plugin-2.2.20.jar` فيها `DeprecatedKotlinJvmOptions`
+    //  و`KotlinJvmOptionsCompat` — **فهي تعمل**.
+    //
+    //  فلم تُغيَّر: تغييرٌ ثانٍ في هجرةٍ لا يمكن اختبارُها في هذه الحاوية
+    //  (لا مُصرِّفَ أندرويد فيها) مخاطرةٌ بلا سبب. ويُهاجَر حين تُزال فعلاً،
+    //  ومعه `jvmTarget` إلى `JvmTarget.JVM_11` بالصيغة الجديدة.
+    // ══════════════════════════════════════════════════════════════════
     kotlinOptions {
         jvmTarget = JavaVersion.VERSION_11.toString()
     }
