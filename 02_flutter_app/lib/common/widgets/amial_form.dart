@@ -315,9 +315,24 @@ class AmialScreenHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      // ══════════════════════════════════════════════════════════════
+      //  AMIAL-RTL-BACK-001 — **زرُّ الرجوع كان يسارَ الشاشة وحدَه.**
+      //
+      //  كان آخرَ عنصرٍ في `Row`، و`Row` في RTL يضع الآخِرَ **يساراً**.
+      //  فصارت هذه الشاشاتُ الأربعُ الوحيدةَ التي يُرجَع منها من اليسار،
+      //  وكلُّ ما عداها — «خدمات التاجر» وكشفُ الحساب وقائمةُ القدرات —
+      //  يضعه يميناً كما يفعل `AppBar` تلقائيّاً في RTL.
+      //
+      //  **ويدُ المستعمل تتعلّم موضعاً واحداً.** فصار أوّلَ عنصرٍ ⇒ يمينُ
+      //  الشاشة في RTL، والأيقونةُ `arrow_back_ios` تنقلب تلقائيّاً
+      //  فتشير يميناً — أي «إلى الوراء» في اتّجاه القراءة.
+      // ══════════════════════════════════════════════════════════════
       child: Row(
         children: [
-          ...actions,
+          _SquareButton(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onTap: onBack ?? () => Get.back(),
+          ),
           const Spacer(),
           Text(title,
               style: const TextStyle(
@@ -325,10 +340,7 @@ class AmialScreenHeader extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                   color: Color(0xFF1A2433))),
           const Spacer(),
-          _SquareButton(
-            icon: Icons.arrow_forward_ios_rounded,
-            onTap: onBack ?? () => Get.back(),
-          ),
+          ...actions,
         ],
       ),
     );

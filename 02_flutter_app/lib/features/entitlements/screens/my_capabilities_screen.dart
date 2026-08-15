@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+
+import 'package:amial_pay/features/entitlements/capability_screens.dart';
 import 'package:amial_pay/common/widgets/vertical_state_view.dart';
 import 'package:amial_pay/features/entitlements/controllers/entitlements_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
@@ -193,11 +195,14 @@ class _MyCapabilitiesScreenState extends State<MyCapabilitiesScreen> {
               _stateLine(state, unlock, usage),
             ],
           ),
-          trailing: available && cap['screen'] != null
+          // **الشرطُ رمزُ القدرة لا نصُّ المسار.** كان `cap['screen'] != null`
+          // — وهو يصدق لأربعين قدرةً ولا واحدةَ منها مسجَّلةٌ مساراً، فيظهر
+          // السهمُ ويُضغط فتخرج «لم تُفعَّل شاشتها بعد». (قِيس: ٤٠ من ٤٠.)
+          trailing: available && CapabilityScreens.screenFor('${cap['code']}') != null
               ? const Icon(Icons.chevron_left_rounded)
               : null,
-          onTap: available && cap['screen'] != null
-              ? () => _open('${cap['screen']}')
+          onTap: available && CapabilityScreens.screenFor('${cap['code']}') != null
+              ? () => _open('${cap['code']}')
               : () => _explain(cap, state, unlock, usage),
         ),
       ),
@@ -209,8 +214,13 @@ class _MyCapabilitiesScreenState extends State<MyCapabilitiesScreen> {
     switch (state) {
       case EntitlementsController.stLockedByPlan:
         return Text(
+          // **العملةُ من الخادم لا مكتوبةً هنا.** كان «ر.س» محفوراً في هذا
+          // السطر وحدَه — موضعٌ واحدٌ في تطبيقٍ فيه ٢٧٥ موضعاً بـ«ر.ي».
+          // وليست غلطةَ حرف: الثابتُ في الخادم اسمُه `PLAN_PRICES_SAR`
+          // والأسعارُ بالريال السعوديّ فعلاً، والأرصدةُ كلُّها يمنيّة.
+          // فصار المصدرُ واحداً: يُغيَّر في الخادم فيتبعه كلُّ سطح.
           'تُفتح في باقة ${unlock?['plan_name'] ?? '—'}'
-          ' · ${unlock?['price_monthly'] ?? '—'} ر.س شهرياً',
+          ' · ${unlock?['price_monthly'] ?? '—'} ${unlock?['currency'] ?? ''} شهرياً',
           style: const TextStyle(
               fontSize: 11, color: AmialColors.yellowDark, fontWeight: FontWeight.bold),
         );
@@ -236,16 +246,25 @@ class _MyCapabilitiesScreenState extends State<MyCapabilitiesScreen> {
     }
   }
 
-  void _open(String screen) {
-    // **التنقّلُ بالاسم**: الشاشةُ تأتي من الخادم، والمسارُ يُطابق ما هو
-    // مسجَّلٌ في التطبيق. وما لا مسارَ له يُقال ولا يُفتح على فراغ.
-    if (Get.routeTree.matchRoute(screen).route == null) {
+  /// **التنقّلُ برمز القدرة لا بنصّ المسار.**
+  ///
+  /// كان يُطابق `cap['screen']` بشجرة مسارات GetX. وقِيس أنّ ما يسجّله
+  /// التطبيق هو مساراتُ القالب القديم (`/splash` · `/send_money`) ولا
+  /// واحدَ من الأربعين التي يُعلنها الخادم — **فكانت كلُّ خدمةٍ «متاحة»
+  /// ميّتةً عند الضغط**، والرسالةُ تصدق دائماً.
+  ///
+  /// والرمزُ هو المفتاحُ الذي يعرفه الطرفان أصلاً: `access.has(code)`.
+  void _open(String code) {
+    final builder = CapabilityScreens.screenFor(code);
+
+    if (builder == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('هذه الخدمة متاحة في حسابك ولم تُفعَّل شاشتها بعد'),
+        content: Text('هذه الخدمة متاحة في حسابك ولم تُبنَ شاشتها بعد'),
       ));
       return;
     }
-    Get.toNamed(screen);
+
+    Get.to(builder);
   }
 
   void _explain(Map<String, dynamic> cap, String state,

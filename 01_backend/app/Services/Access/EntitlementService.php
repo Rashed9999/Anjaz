@@ -127,6 +127,7 @@ class EntitlementService
                 'code' => $ctx['plan'],
                 'name' => A::PLAN_LABELS[$ctx['plan']] ?? $ctx['plan'],
                 'price_monthly' => A::PLAN_PRICES_SAR[$ctx['plan']] ?? 0,
+                'currency' => A::PLAN_PRICE_CURRENCY,
                 'expires_at' => $ctx['expires_at'],
             ],
             'business_type' => $ctx['business_type'],
@@ -254,6 +255,8 @@ class EntitlementService
             'plan_name' => A::PLAN_LABELS[$needed] ?? $needed,
             'price_monthly' => A::PLAN_PRICES_SAR[$needed] ?? 0,
             'price_annual' => A::PLAN_PRICES_SAR_ANNUAL[$needed] ?? 0,
+            // العملةُ ترافق السعر — فلا تُكتب في شاشة. (AMIAL-CURRENCY-001)
+            'currency' => A::PLAN_PRICE_CURRENCY,
         ];
     }
 

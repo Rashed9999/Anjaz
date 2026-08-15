@@ -76,7 +76,7 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
             icon: Icons.receipt_long,
             label: 'الديون',
             subtitle: 'سجّل من عليه دين',
-            color: AmialColors.yellowDark,
+            color: AmialColors.primary,
             onTap: () => Get.to(() => const CreditDashboardScreen()),
           )),
           const SizedBox(height: 14),
@@ -84,7 +84,7 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
             icon: Icons.bar_chart,
             label: 'تقرير اليوم',
             subtitle: 'كم بِعت اليوم؟',
-            color: Colors.green.shade700,
+            color: AmialColors.primary,
             onTap: () => Get.to(() => const CashierReportScreen()),
           )),
         ]),
@@ -136,15 +136,26 @@ class MerchantRetailHomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // شبكة 2×2 للأدوات
-          GridView.count(
-            crossAxisCount: 2, shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 10, crossAxisSpacing: 10, childAspectRatio: 1.3,
-            children: [
+          // ══════════════════════════════════════════════════════════
+          //  **الفجوات: خليّةٌ فارغةٌ لكلّ ميزةٍ مقفلة.**
+          //
+          //  `AccessGate` يُرجع `SizedBox.shrink()` عند القفل — ودجتٌ
+          //  بصفر حجم **تبقى عنصراً في القائمة**، و`GridView.count`
+          //  يوزّع أبناءه بالموضع فتحتلّ خليّةً كاملة.
+          //
+          //  قِيس على باقة البداية: الموظفون وتصدير Excel وسجلّ التدقيق
+          //  مقفلةٌ ⇒ **ثلاثُ خلايا فارغةٍ متتالية**، ثمّ «إعدادات
+          //  الفاتورة» وحدَها، ثمّ فجوةٌ، ثمّ «العروض» وحدَها.
+          //
+          //  **والفجوةُ ليست فراغاً — هي بصمةُ ما لا يملكه التاجر**،
+          //  فالشاشةُ تُفشي باقتَه بالثقوب.
+          //
+          //  فتُبنى القائمةُ وتُصفّى **ثمّ** تُسلَّم للشبكة.
+          // ══════════════════════════════════════════════════════════
+          _ToolGrid(children: [
               AccessGate(feature: 'products', child: _MiniAction(
                 icon: Icons.inventory_2, label: 'المنتجات',
-                color: Colors.blue.shade700,
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const CashierProductsScreen()),
               )),
               // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١٠ — **زرُّ «المخزون»
@@ -152,22 +163,22 @@ class MerchantRetailHomeScreen extends StatelessWidget {
               // الكتالوج، ولا مكانَ للمواقع ولا التحويلات ولا الجرد.
               AccessGate(feature: 'inventory', child: _MiniAction(
                 icon: Icons.warehouse, label: 'المخزون',
-                color: Colors.orange.shade800,
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const RetailOpsCenterScreen()),
               )),
               AccessGate(feature: 'customers', child: _MiniAction(
                 icon: Icons.people, label: 'العملاء',
-                color: Colors.deepPurple,
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const CreditCustomersScreen()),
               )),
               AccessGate(feature: 'debts', child: _MiniAction(
                 icon: Icons.account_balance_wallet, label: 'الديون',
-                color: AmialColors.yellowDark,
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const CreditDashboardScreen()),
               )),
               AccessGate(feature: 'barcode', child: _MiniAction(
                 icon: Icons.qr_code_scanner, label: 'مسح باركود',
-                color: Colors.teal,
+                color: AmialColors.primary,
                 onTap: () async {
                   final scanned = await Get.to<List<ScannedItem>>(
                     () => const ContinuousScannerScreen(context: 'auto'),
@@ -184,7 +195,7 @@ class MerchantRetailHomeScreen extends StatelessWidget {
               )),
               AccessGate(feature: 'daily_reports', child: _MiniAction(
                 icon: Icons.bar_chart, label: 'التقارير',
-                color: Colors.green.shade700,
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const CashierReportScreen()),
               )),
               AccessGate(feature: 'employees', child: _MiniAction(
@@ -194,7 +205,7 @@ class MerchantRetailHomeScreen extends StatelessWidget {
               )),
               AccessGate(feature: 'excel_export', child: _MiniAction(
                 icon: Icons.grid_on, label: 'تصدير Excel',
-                color: const Color(0xFF1D6F42),
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantExcelExportScreen()),
               )),
               AccessGate(feature: 'audit_log', child: _MiniAction(
@@ -204,12 +215,12 @@ class MerchantRetailHomeScreen extends StatelessWidget {
               )),
               _MiniAction(
                 icon: Icons.receipt_long, label: 'إعدادات الفاتورة',
-                color: AmialColors.yellowDark,
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const ReceiptSettingsScreen()),
               ),
               AccessGate(feature: 'promotions', child: _MiniAction(
                 icon: Icons.local_offer, label: 'العروض والخصومات',
-                color: const Color(0xFFC0392B),
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantPromotionsScreen()),
               )),
               AccessGate(feature: 'loyalty', child: _MiniAction(
@@ -229,7 +240,7 @@ class MerchantRetailHomeScreen extends StatelessWidget {
               )),
               AccessGate(feature: 'expenses', child: _MiniAction(
                 icon: Icons.receipt_long, label: 'المصروفات',
-                color: const Color(0xFFC0392B),
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantExpensesScreen()),
               )),
               AccessGate(feature: 'installments', child: _MiniAction(
@@ -259,11 +270,10 @@ class MerchantRetailHomeScreen extends StatelessWidget {
               )),
               AccessGate(feature: 'advanced_backup', child: _MiniAction(
                 icon: Icons.backup, label: 'نسخة احتياطية',
-                color: const Color(0xFF1D6F42),
+                color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantBackupScreen()),
               )),
-            ],
-          ),
+          ]),
 
           // CTA ترقية إن FREE
           Obx(() => access.isFreePlan ? Padding(
@@ -413,5 +423,53 @@ class _UpgradeBanner extends StatelessWidget {
         Icon(Icons.chevron_left, color: Colors.black87),
       ]),
     );
+  }
+}
+
+/// AMIAL-GRID-HOLES-001 — **شبكةٌ بلا ثقوب.**
+///
+/// ══════════════════════════════════════════════════════════════════════
+/// `GridView.count` يوزّع أبناءه **بالموضع**، و`AccessGate` يُرجع
+/// `SizedBox.shrink()` عند القفل — ودجتٌ بصفر حجمٍ **تحتلّ خليّةً كاملة**.
+/// فكانت الشاشةُ الأولى التي يراها التاجرُ مثقوبةً بعدد ما لا يملكه.
+///
+/// **والحلُّ أن تُصفّى القائمةُ قبل التوزيع لا بعده.** ويُقاس التصفيةُ
+/// بأن يُسأل `AccessGate` عن حالته مسبقاً — فيُبنى منه `_GatedTool` يحمل
+/// الشرطَ بدل أن يبتلعه.
+class _ToolGrid extends StatelessWidget {
+  final List<Widget> children;
+
+  const _ToolGrid({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    final access = Get.find<AccessController>();
+
+    return Obx(() {
+      // **يُسأل الشرطُ هنا** — فما لا يُعرض لا يحجز خليّة.
+      final visible = children.where((w) {
+        if (w is! AccessGate) return true;
+
+        final g = w;
+        var ok = true;
+        if (g.feature != null) ok = ok && access.has(g.feature!);
+        if (g.anyOf != null) ok = ok && access.hasAny(g.anyOf!);
+        if (g.allOf != null) ok = ok && access.hasAll(g.allOf!);
+
+        return ok || g.fallback != null;
+      }).toList();
+
+      if (visible.isEmpty) return const SizedBox.shrink();
+
+      return GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 1.3,
+        children: visible,
+      );
+    });
   }
 }

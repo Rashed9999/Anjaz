@@ -1,8 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/helper/pdf_downloader_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/money_format.dart';
 import 'package:amial_pay/features/merchant/controllers/customer_credit_controller.dart';
 
 /// AMIAL-CUSTOMER-CREDIT-001 — كشف حساب عميل + تسجيل سداد/مرتجع.
@@ -18,6 +22,7 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
   late final CustomerCreditController c;
   DateTime? _from;
   DateTime? _to;
+  bool _busyPdf = false;
 
   @override
   void initState() {
@@ -102,8 +107,9 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
           const Text('الرصيد الحالي', style: TextStyle(color: Colors.white70)),
         ]),
         const SizedBox(height: 10),
-        Text('${closing.toStringAsFixed(0)} ر.ي',
-            style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+        Text(Money.format(closing),
+            style: const TextStyle(color: Colors.white, fontSize: 32,
+                fontWeight: FontWeight.bold, fontFeatures: Money.features)),
         if (lim > 0) ...[
           const SizedBox(height: 10),
           ClipRRect(
@@ -154,11 +160,26 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
     );
   }
 
+  /// **البطاقتان كانتا متبادلتَي القيمة — وهو أخطرُ ما في هذه الشاشة.**
+  ///
+  /// ══════════════════════════════════════════════════════════════════
+  /// الخادمُ يعرّفهما بتعليق كاتبه في `CustomerCreditService::getStatement`:
+  ///
+  ///     $debitSum   // ما زاد عليه (مبيعات)      ⇐ مدين
+  ///     $creditSum  // ما نزل (سداد/مرتجع)       ⇐ دائن
+  ///
+  /// وكان المكتوب: بطاقةُ «مدين» تعرض `credit`، وبطاقةُ «دائن» تعرض
+  /// `debit`. **فعميلٌ اشترى بألفٍ ومئتين آجلاً ولم يسدّد شيئاً كان
+  /// يُعرَض «مدين ٠ · دائن ١٢٠٠»** — أي أنّ الشاشة تقول للتاجر إنّ لا
+  /// دَينَ على الرجل، وهو مدينٌ بكلّ المبلغ. (قِيس على حسابٍ حقيقيّ.)
+  ///
+  /// واللونان كانا مقلوبَين معها: المدينُ أخضرَ والدائنُ أحمر.
+  /// **وفي دفتر ديون: ما يزيد الدَّينَ هو الأحمر.**
   Widget _totalsRow(Map totals) {
     return Row(children: [
-      Expanded(child: _statCard('مدين (-)', totals['credit'] ?? '0', Colors.green.shade700)),
+      Expanded(child: _statCard('مدين (عليه)', totals['debit'] ?? '0', AmialColors.danger)),
       const SizedBox(width: 8),
-      Expanded(child: _statCard('دائن (+)', totals['debit'] ?? '0', AmialColors.red)),
+      Expanded(child: _statCard('دائن (سدّد)', totals['credit'] ?? '0', AmialColors.success)),
     ]);
   }
 
@@ -169,7 +190,9 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
       child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
         Text(title, style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
         const SizedBox(height: 4),
-        Text('$value ر.ي', style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+        Text(Money.format(value),
+            style: TextStyle(color: color, fontWeight: FontWeight.bold,
+                fontSize: 16, fontFeatures: Money.features)),
       ]),
     );
   }
@@ -190,48 +213,104 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
           label: const Text('مرتجع'),
         )),
         const SizedBox(width: 8),
-        IconButton(
+        // **كان أيقونةً عاريةً بـtooltip وحده** — و`tooltip` لا يظهر
+        // باللمس على الهاتف. فزرٌّ **يعدّل رصيدَ دَينٍ يدويّاً** كان بلا
+        // اسمٍ بين «سداد» و«مرتجع» المكتوبَين. والفعلُ الماليُّ يُسمّى.
+        Expanded(child: OutlinedButton.icon(
           onPressed: () => _movementDialog('تعديل', 'adjustment'),
-          icon: const Icon(Icons.tune),
-          tooltip: 'تعديل يدوي',
-        ),
+          icon: const Icon(Icons.tune, size: 18),
+          label: const Text('تعديل'),
+          style: OutlinedButton.styleFrom(foregroundColor: AmialColors.warning),
+        )),
       ]),
       const SizedBox(height: 8),
       // AMIAL-CREDIT-PDF-001 — زر تحميل/مشاركة كشف PDF
       Row(children: [
         Expanded(child: OutlinedButton.icon(
-          onPressed: () => _downloadPdf(account),
-          icon: const Icon(Icons.picture_as_pdf, color: AmialColors.red),
-          label: const Text('تحميل كشف PDF'),
+          onPressed: _busyPdf ? null : () => _downloadPdf(account),
+          icon: _busyPdf
+              ? const SizedBox(width: 16, height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.picture_as_pdf),
+          label: Text(_busyPdf ? 'جارٍ التحضير…' : 'تحميل كشف PDF'),
+          // **كان بالأحمر** — وهو في نظام الألوان للأخطاء والتحذيرات وحدَها.
+          // فعلٌ حميدٌ بلون الخطر يُدرّب العينَ على تجاهل الأحمر.
           style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: AmialColors.red),
-            foregroundColor: AmialColors.red,
+            side: const BorderSide(color: AmialColors.primary),
+            foregroundColor: AmialColors.primary,
           ),
         )),
       ]),
     ]);
   }
 
-  /// يفتح رابط الـ PDF عبر المتصفّح/الـ download intent.
-  /// URL: /api/v1/amial/merchant/credit/customers/{id}/statement/pdf
-  void _downloadPdf(Map account) {
+  /// **الزرُّ كان يكذب: مكتوبٌ عليه «تحميل» وهو ينسخ نصّاً.**
+  ///
+  /// ══════════════════════════════════════════════════════════════════
+  /// وثلاثةُ أعطالٍ مركَّبةٍ فيه، كلٌّ منها يكفي وحده:
+  ///
+  ///   ① ما نُسخ **ليس رابطاً**: `/api/v1/...` مسارٌ نسبيٌّ بلا بروتوكولٍ
+  ///     ولا نطاق. لصقُه في المتصفّح لا يفعل شيئاً — **فالتعليماتُ لا
+  ///     تعمل ولو اتّبعها التاجرُ حرفيّاً.**
+  ///   ② ولو كُتب كاملاً لَردّ ٤٠١: وسطاءُ النقطة `api · auth:api ·
+  ///     amial.idempotency`، والمتصفّحُ الخارجيّ لا يحمل الرمز.
+  ///   ③ ولا يفشل: يقول «الرابط جاهز» بلونٍ مطمئن. **ومعطَّلٌ يُرى خيرٌ
+  ///     من موهِمٍ ينجح.**
+  ///
+  /// و`PdfDownloaderHelper` **مبنيٌّ في المشروع وتستعمله أربعُ شاشات** —
+  /// الإيصالات والجملة والتقارير وكشف حساب أميال. يجلب عبر عميل الـAPI
+  /// المصادَق فيحمل الرمز، ثمّ يكتب ويفتح. القطعتان الطرفيّتان كانتا
+  /// تعملان، والوصلةُ بينهما وحدَها مكسورة.
+  Future<void> _downloadPdf(Map account) async {
     final id = account['id'];
     if (id == null) return;
-    final url = '/api/v1/amial/merchant/credit/customers/$id/statement/pdf';
-    Clipboard.setData(ClipboardData(text: url));
-    Get.snackbar(
-      'الرابط جاهز',
-      'افتح الرابط في المتصفّح لتحميل PDF (تم نسخه)',
-      backgroundColor: AmialColors.yellow.withValues(alpha: 0.2),
-      duration: const Duration(seconds: 4),
-      snackPosition: SnackPosition.BOTTOM,
-    );
+
+    setState(() => _busyPdf = true);
+
+    try {
+      final resp = await Get.find<ApiClient>().getData(
+        '/api/v1/amial/merchant/credit/customers/$id/statement/pdf',
+        headers: {'Accept': 'application/pdf'},
+      );
+
+      // **`Response.bodyBytes` في GetX تيّارٌ لا بايتات.** والبايتاتُ في
+      // `bodyString`/`body`؛ فيُقرأ التيّارُ إلى `Uint8List` كما يفعل
+      // `receipt_detail_screen` تماماً.
+      final bytes = await _collect(resp.bodyBytes);
+
+      if (resp.statusCode != 200 || bytes.isEmpty) {
+        // **الفشلُ يُقال** — لا «الرابط جاهز» على ملفٍّ لم يصل.
+        Get.snackbar('تعذّر تحضير الكشف',
+            'لم يصل الملفّ من الخادم (${resp.statusCode}). أعِد المحاولة.',
+            backgroundColor: AmialColors.dangerSurface,
+            snackPosition: SnackPosition.BOTTOM);
+        return;
+      }
+
+      await PdfDownloaderHelper.downloadAndOpenPdf(
+        pdfData: bytes,
+        baseFileName: 'كشف-${account['name'] ?? id}',
+      );
+    } finally {
+      if (mounted) setState(() => _busyPdf = false);
+    }
+  }
+
+  /// يجمع تيّارَ البايتات إلى `Uint8List` — نفسُ ما تفعله شاشةُ الإيصالات.
+  static Future<Uint8List> _collect(Stream<List<int>>? stream) async {
+    if (stream == null) return Uint8List(0);
+
+    final chunks = <int>[];
+    await for (final c in stream) {
+      chunks.addAll(c);
+    }
+
+    return Uint8List.fromList(chunks);
   }
 
   Widget _movementTile(Map m) {
     final amount = '${m['amount']}';
     final isNegative = amount.startsWith('-');
-    final cleanAmount = amount.replaceAll('-', '');
     final type = m['type'];
     final label = type == 'sale' ? 'بيع آجل'
         : type == 'payment' ? 'سداد دفعة'
@@ -240,7 +319,9 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
     final icon = type == 'sale' ? Icons.shopping_cart
         : type == 'payment' ? Icons.payments
         : type == 'return' ? Icons.undo : Icons.tune;
-    final color = isNegative ? Colors.green.shade700 : AmialColors.red;
+    // السالبُ سدادٌ أو مرتجع (ينزل الدَّين) ⇐ أخضر. والموجبُ بيعٌ آجل
+    // (يزيده) ⇐ أحمر. ومن التوكِنز لا من لوحة Material.
+    final color = isNegative ? AmialColors.success : AmialColors.danger;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
@@ -249,16 +330,23 @@ class _CreditCustomerStatementScreenState extends State<CreditCustomerStatementS
       child: Row(children: [
         // المبلغ + الرصيد
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('${isNegative ? '-' : '+'}$cleanAmount ر.ي',
-              style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold)),
-          Text('الرصيد: ${m['balance_after']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+          Text(Money.signed(amount),
+              style: TextStyle(color: color, fontSize: 16,
+                  fontWeight: FontWeight.bold, fontFeatures: Money.features)),
+          Text('الرصيد: ${Money.plain(m['balance_after'])}',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 11,
+                  fontFeatures: Money.features)),
         ]),
         const Spacer(),
         // الوصف
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
           if (m['reference_number'] != null)
-            Text('${m['reference_number']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+            // **الرمزُ يُعزَل.** قِيس أنّ `#GHPXVSQZ` يُعرَض `GHPXVSQZ#`:
+            // نصٌّ لاتينيٌّ داخل سياقٍ عربيٍّ بلا عزل، فتقفز الشرطةُ إلى
+            // آخره. **وهو الرمزُ الذي يُقرأ في الهاتف عند نزاع.**
+            Text(Money.isolate('${m['reference_number']}'),
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
           if (m['due_date'] != null)
             Text('استحقاق: ${m['due_date'].toString().substring(0, 10)}',
                 style: TextStyle(color: AmialColors.yellowDark, fontSize: 11)),

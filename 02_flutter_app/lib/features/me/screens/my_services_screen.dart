@@ -18,7 +18,6 @@ import 'package:amial_pay/features/merchant_verification/screens/merchant_verifi
 import 'package:amial_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
 import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
-import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/features/plans/screens/my_usage_screen.dart';
 import 'package:amial_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
@@ -181,9 +180,21 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
           // البطاقات المرئية فقط (حسب الصلاحيات) قبل الشبكة — تخطيط متراصّ.
           Obx(() {
             final access = Get.find<AccessController>();
-            const merchantAny = ['products', 'inventory', 'fuel_pos', 'pharmacy_pos',
-                'wholesale_invoices', 'daily_reports', 'profit_reports'];
-            final isMerchant = access.hasAny(merchantAny);
+            // ══════════════════════════════════════════════════════════
+            //  **الهويّةُ تحدّد النطاق، لا العكس** (القاعدة الثامنة).
+            //
+            //  كان: `hasAny(['products','inventory','fuel_pos', …])` —
+            //  أي «من عنده `products` فهو تاجر». وهذا مقلوب، ونتيجتاه
+            //  مقيستان:
+            //
+            //   • عميلٌ يُمنح `inventory` أو `daily_reports` لأيّ سبب
+            //     ⇒ تنفتح له كتلةُ التاجر كاملةً.
+            //   • وتاجرٌ في باقة البداية لا يملك أيّاً منها ⇒ **تختفي
+            //     عنه «خطّتي» و«استخدامي»** — فمن يحتاج الترقيةَ أكثرَ
+            //     من غيره لا يرى زرَّها.
+            //
+            //  و`access.isMerchant` موجودٌ أصلاً ويقرأ `role` من الخادم.
+            final isMerchant = access.isMerchant;
 
             final cards = <Widget>[
               _notificationCard(),
@@ -230,30 +241,40 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
               // حتى لا تصبح شاشة يتيمة لا يفتحها زرّ.
               // AMIAL-STATEMENT-001: كشف الحساب — بيان محاسبي لفترة، غير
               // «الإيصالات» التي هي مستندات عمليات مفردة.
-              _serviceCard(icon: Icons.account_balance_wallet_outlined,
+              if (access.has('receipts'))
+                _serviceCard(icon: Icons.account_balance_wallet_outlined,
                   label: 'كشف حساب',
                   subtitle: 'مدين ودائن ورصيد',
                   color: AmialColors.primary,
                   onTap: () => Get.to(() => const AmialAccountStatementScreen())),
-              _serviceCard(icon: Icons.receipt_long_outlined, label: 'فواتيري الآجلة',
+              if (access.has('debts') || !isMerchant)
+                _serviceCard(icon: Icons.receipt_long_outlined, label: 'فواتيري الآجلة',
                   subtitle: 'ما عليك من دين',
                   color: const Color(0xFFB45309),
                   onTap: () => Get.to(() => const MyCreditsScreen())),
-              _serviceCard(icon: Icons.volunteer_activism_outlined, label: 'التبرعات',
+              if (access.has('donations') || !isMerchant)
+                _serviceCard(icon: Icons.volunteer_activism_outlined, label: 'التبرعات',
                   subtitle: 'تبرّع لجهة موثوقة',
                   color: const Color(0xFFDB2777),
                   onTap: () => Get.to(() => const DonationsHomeScreen())),
-              _serviceCard(icon: Icons.call_split_rounded, label: 'تقسيم الفواتير',
+              if (!isMerchant)
+                _serviceCard(icon: Icons.call_split_rounded, label: 'تقسيم فاتورة مع أصدقاء',
                   subtitle: 'حصّتي مع الأصدقاء',
                   color: const Color(0xFF0E7C7B),
                   onTap: () => Get.to(() => const SplitBillMySharesScreen())),
-              _serviceCard(icon: Icons.verified_user_outlined, label: 'توثيق الحساب',
+              // **توثيقان في شاشةٍ واحدة**: «توثيق الحساب» كان بلا سور
+              // و«توثيق المتجر» مسوَّرٌ بقدرة، فيظهران معاً للتاجر فلا
+              // يعرف أيَّهما يخصّه. فالشخصيُّ لغير التاجر.
+              if (!isMerchant)
+                _serviceCard(icon: Icons.verified_user_outlined, label: 'توثيق الحساب',
                   subtitle: 'ارفع هويتك',
                   color: const Color(0xFF1B9E4B),
                   onTap: () => Get.to(() => const KycVerifyScreen())),
-              _serviceCard(icon: Icons.handshake, label: 'أقساطي', subtitle: 'سداد التقسيط',
+              if (!isMerchant)
+                _serviceCard(icon: Icons.handshake, label: 'أقساطي', subtitle: 'سداد التقسيط',
                   color: const Color(0xFF00695C), onTap: () => Get.to(() => const MyInstallmentsScreen())),
-              _serviceCard(icon: Icons.redeem, label: 'بطاقات هديتي', subtitle: 'رصيد المتجر',
+              if (!isMerchant)
+                _serviceCard(icon: Icons.redeem, label: 'بطاقات هديتي', subtitle: 'رصيد المتجر',
                   color: const Color(0xFF7B1FA2), onTap: () => Get.to(() => const MyGiftCardsScreen())),
               if (access.has('family_fund'))
                 _serviceCard(icon: Icons.savings, label: 'الصناديق المشتركة', subtitle: 'صندوق عائلي',
@@ -286,9 +307,10 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
               // (حصص المنتجات/الموظفين/الفروع). كان التعليق يقول «لكل التجار»
               // لكن بلا فحص صلاحية فعليّ — فكان المواطن العادي يراها، وهو ما
               // يوحي خطأً بأن المحفظة تتطلّب اشتراكاً. الآن مقصورة على التاجر.
-              if (isMerchant)
-                _serviceCard(icon: Icons.workspace_premium, label: 'خطّتي', subtitle: 'عرض الخطط',
-                    color: const Color(0xFFEAB308), onTap: () => Get.to(() => const PlansCatalogScreen())),
+              // **كانت ثلاثةَ مداخلَ للباقة نفسِها** — «خدمات التاجر» و
+              // «خطّتي» و«استخدامي» ومعها زرُّ «ترقية» داخل الشاشة.
+              // فصار «خدمات التاجر» بابَها، و«استخدامي» يبقى لأنّه رقمٌ
+              // يوميٌّ لا صفحةَ تسويق.
               if (isMerchant)
                 _serviceCard(icon: Icons.bar_chart, label: 'استخدامي', subtitle: 'الحدود + العدّاد',
                     color: const Color(0xFF0EA5E9), onTap: () => Get.to(() => const MyUsageScreen())),

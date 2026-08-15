@@ -57,8 +57,16 @@ class RouteHelper {
   static const String showWebViewScreen = '/show_web_view_screen';
 
 
-  static const String sendMoneyBalanceInput = '/send_money_balance_inputsend_money_balance_input';
-  static const String sendMoneyConfirmation = '/transaction_confirmation_screen.dart';
+  // AMIAL-ROUTE-NAME-001 — **مساران فاسدان قِيسا في جدول المسارات.**
+  //
+  //   كان: '/send_money_balance_inputsend_money_balance_input'  — نصٌّ مكرَّرٌ حرفيّاً
+  //   وكان: '/transaction_confirmation_screen.dart'             — اسمُ مسارٍ ينتهي بـ‎.dart
+  //
+  // ولا يُنتجان خطأً: المسارُ يُسجَّل ويُفتح بالاسم نفسِه، فيعمل. لكنّه
+  // يظهر في أيّ رابطٍ عميقٍ أو سجلٍّ أو تحليل — واسمٌ فيه اسمُ ملفٍّ
+  // يكشف بنيةَ الشيفرة لمن يقرأ الرابط.
+  static const String sendMoneyBalanceInput = '/send_money_balance_input';
+  static const String sendMoneyConfirmation = '/transaction_confirmation';
 
   static const String requestMoney = '/request_money';
   static const String requestMoneyBalanceInput = '/requestMoney_balance_input';
