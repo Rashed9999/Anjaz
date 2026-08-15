@@ -252,7 +252,20 @@ $app = Application::configure(basePath: dirname(__DIR__))
         // و`no-cache` ليست `no-store`: الأولى تعني «تحقّق قبل الاستعمال»،
         // والمتصفّح يحتفظ بالنسخة ويستعملها حين يتعذّر التحقّق. والثانية
         // تمنع الاحتفاظ أصلاً — وهي المطلوبة لصفحةٍ قياسُها مطبوعٌ فيها.
+        // ══════════════════════════════════════════════════════════════
+        //  AMIAL-OBSERVABILITY-001 — كلُّ عطلٍ يُسجَّل حيث يُقرأ.
+        //
+        //  **الثمن:** ثلاثةُ أعطالٍ في يومٍ واحدٍ وصلت عبر صاحب المشروع لا
+        //  عبر جهاز. ولم يكن في المنصّة تتبّعُ أخطاءٍ من جهة الخادم.
+        //
+        //  ويُستعمل `respond` لا `report`: الأوّلُ يعرف **رمزَ الردّ**،
+        //  فيُميَّز العطلُ (٥٠٠) من السلوك الصحيح (٤٠٤ · ٤٢٢ · ٤٠٣). وبلا
+        //  ذلك يُغرق الجدولُ برفضٍ سليمٍ فيُخفي ما يستحقّ النظر.
+        // ══════════════════════════════════════════════════════════════
         $exceptions->respond(function ($response, \Throwable $e, $request) {
+            app(\App\Services\ErrorTrackingService::class)
+                ->record($e, $request, $response->getStatusCode());
+
             if ($response->getStatusCode() === 419) {
                 $response->headers->set('Cache-Control',
                     'no-store, no-cache, must-revalidate, max-age=0');
@@ -363,6 +376,16 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping()
             ->onOneServer()
             ->appendOutputTo(storage_path('logs/backup.log'));
+
+        // AMIAL-OBSERVABILITY-001 — نبضُ التوفّر كلَّ خمس دقائق.
+        //
+        // **بلا هذا لا يُعرف إلّا الحاضر**: تفتح اللوحةَ فتراه سليماً ولا
+        // تعرف أنّه سقط ثلاث مرّاتٍ ليلاً. وخمسٌ حدٌّ وسط: أقلُّ منها
+        // يُنمّي الجدول، وأكثرُ يُخفي انقطاعاً قصيراً.
+        $schedule->command('amial:health-check')
+            ->everyFiveMinutes()
+            ->name('health-check')
+            ->withoutOverlapping();
     })
     ->create();
 

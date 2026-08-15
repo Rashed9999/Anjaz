@@ -791,3 +791,18 @@ Route::prefix('ops')->name('ops.')->group(function () {
 // قراءةٌ محضة: الإشراف رقابةٌ على التنفيذ لا تنفيذ، فلا فعل هنا يُغيّر شيئاً.
 Route::get('/supervision', [SupervisionController::class, 'index'])
     ->middleware('platform:platform.audit.view')->name('supervision.index');
+
+// ============ AMIAL-OBSERVABILITY-001 — مركز صحّة النظام ============
+//
+// **الثمن:** ثلاثةُ أعطالٍ في يومٍ واحدٍ وصلت عبر صاحب المشروع لا عبر
+// جهاز. وقِيس أنّ المنصّةَ بلا نقطةِ صحّةٍ ولا تتبّعِ أخطاءٍ ولا سجلِّ
+// توفّر — **فصاحبُ المشروع هو جهازُ الرصد.**
+//
+// وتحت `platform.audit.view`: الصحّةُ رقابةٌ لا تنفيذ. وتغييرُ حالة عطلٍ
+// فعلٌ إداريٌّ يُدقَّق، فله صلاحيّتُه.
+Route::get('/system/health', [\App\Http\Controllers\Admin\SystemHealthController::class, 'index'])
+    ->middleware('platform:platform.audit.view')->name('system.health');
+
+Route::post('/system/errors/{id}', [\App\Http\Controllers\Admin\SystemHealthController::class, 'updateError'])
+    ->where('id', '[0-9]+')
+    ->middleware('platform:platform.audit.view')->name('system.errors.update');

@@ -157,7 +157,7 @@
             'icon' => '🛡️',
             'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*',
                         'admin/amial/supervision*', 'admin/amial/security-events*',
-                        'admin/amial/sentinel*'],
+                        'admin/amial/sentinel*', 'admin/amial/system*'],
             'links' => [
                 ['🪪 مراجعة مستندات الهوية', route('admin.amial.kyc.page'), 'platform.customers.freeze'],
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), null],
@@ -165,6 +165,10 @@
                 ['👁️ لوحة الإشراف (الفريق والقرارات)', route('admin.amial.supervision.index'), 'platform.audit.view'],
                 ['⚠️ أحداث الأمان', route('admin.amial.security-events.index'), null],
                 ['🔒 حارس الأمان', route('admin.amial.sentinel.index'), null],
+                // AMIAL-OBSERVABILITY-001 — **صفحةٌ لا يُوصل إليها ليست مبنيّة.**
+                // وموضعُها هنا لا في «الإعدادات»: الصحّةُ رقابةٌ على التشغيل،
+                // ومن يفتح «أحداث الأمان» هو من يسأل «هل النظامُ سليم؟».
+                ['💓 صحّة النظام والأعطال', route('admin.amial.system.health'), 'platform.audit.view'],
             ],
         ],
         [

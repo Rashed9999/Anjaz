@@ -22,6 +22,7 @@ use App\Http\Controllers\Web\RegistrationController;
 Route::post('newsletter/subscribe', [NewsLetterController::class, 'newsLetterSubscribe'])->name('newsletter.subscribe');
 
 
+
 Route::group(['prefix' => 'agent', 'as' => 'agent.'], function () {
 });
 
