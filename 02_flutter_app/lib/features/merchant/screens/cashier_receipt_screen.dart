@@ -184,7 +184,7 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   @override
   Widget build(BuildContext context) {
@@ -201,7 +201,7 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
           child: Container(
             height: 88, width: 88,
             decoration: BoxDecoration(
-                color: waiting ? AmialColors.yellow : const Color(0xFF2E7D32),
+                color: waiting ? AmialColors.yellow : AmialColors.success,
                 shape: BoxShape.circle),
             child: Icon(waiting ? Icons.qr_code_2 : Icons.check_rounded,
                 color: waiting ? const Color(0xFF053391) : Colors.white, size: 48),
@@ -212,7 +212,7 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
             textAlign: TextAlign.center,
             style: TextStyle(
                 fontSize: 17, fontWeight: FontWeight.bold,
-                color: waiting ? AmialColors.yellowDark : const Color(0xFF2E7D32))),
+                color: waiting ? AmialColors.yellowDark : AmialColors.success)),
         const SizedBox(height: 18),
 
         // الفاتورة الموحّدة

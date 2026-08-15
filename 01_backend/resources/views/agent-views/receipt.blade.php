@@ -11,13 +11,16 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>إيصال {{ $r['receipt_number'] }}</title>
+    {{-- الخطُّ يُحمَّل من التوكِنز لا يُطلَب بالاسم: كان `'Tajawal'` مذكوراً
+         ولا يُحمَّل، فيُطبع الإيصالُ بخطّ النظام — ويختلف من جهازٍ لآخر. --}}
+    <link href="{{ asset('assets/css/amial-tokens.css') }}" rel="stylesheet">
     <style>
-        :root { --ink:#111; --muted:#6b7280; --line:#d1d5db; --brand:#0f1b2d; }
+        :root { --ink:#111; --muted:#6b7280; --line:#d1d5db; --brand:var(--amial-primary-dark); }
 
         * { box-sizing: border-box; }
         body {
-            margin: 0; padding: 16px; background: #f4f6fa; color: var(--ink);
-            font-family: 'Tajawal', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            margin: 0; padding: 16px; background: var(--amial-background); color: var(--ink);
+            font-family: var(--amial-font);
             font-size: 13px; direction: rtl;
         }
 

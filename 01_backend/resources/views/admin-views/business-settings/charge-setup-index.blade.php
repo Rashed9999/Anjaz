@@ -3,7 +3,7 @@
 @section('title', translate('الرسوم والعمولات'))
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-3" style="color:#053391">💰 {{ translate('الرسوم والعمولات') }}</h4>
+    <h4 class="fw-bold mb-3" style="color:var(--amial-primary)">💰 {{ translate('الرسوم والعمولات') }}</h4>
     @include('admin-views.business-settings.partials._tabs', ['tab' => 'charge'])
     @php $bs = fn($k, $d = 0) => \App\CentralLogics\Helpers::get_business_settings($k) ?? $d; @endphp
     <form method="POST" action="{{ route('admin.business-settings.charge-setup') }}">
@@ -31,7 +31,7 @@
                     <div class="col-md-4"><label class="form-label">{{ translate('خصم سحب للمفضّلة %') }}</label>
                         <input name="favorite_number_cash_out_charge_discount" type="number" step="0.01" class="form-control" value="{{ $bs('favorite_number_cash_out_charge_discount') }}"></div>
                 </div>
-                <button class="btn text-white mt-4" style="background:#053391">{{ translate('حفظ الرسوم') }}</button>
+                <button class="btn text-white mt-4" style="background:var(--amial-primary)">{{ translate('حفظ الرسوم') }}</button>
             </div>
         </div>
     </form>

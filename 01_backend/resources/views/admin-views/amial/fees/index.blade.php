@@ -6,7 +6,7 @@
 <div class="content container-fluid">
 
     <div class="d-flex align-items-center gap-3 mb-4">
-        <i class="tio-percent" style="font-size:24px;color:#0B435B"></i>
+        <i class="tio-percent" style="font-size:24px;color:var(--amial-primary-dark)"></i>
         <h2 class="page-header-title mb-0">{{ translate('Fee & Profit Control') }}</h2>
         <span class="badge badge-soft-info ms-auto">AMIAL-FEE-ENGINE-001</span>
     </div>
@@ -31,7 +31,7 @@
                 <a href="{{ route('admin.amial.fees.profit') }}" class="btn btn-soft-primary">
                     <i class="tio-chart-bar-4"></i> {{ translate('Profit Report') }}
                 </a>
-                <a href="{{ route('admin.amial.fees.create') }}" class="btn btn-primary" style="background:#0B435B;border-color:#0B435B">
+                <a href="{{ route('admin.amial.fees.create') }}" class="btn btn-primary" style="background:var(--amial-primary-dark);border-color:var(--amial-primary-dark)">
                     <i class="tio-add"></i> {{ translate('New version') }}
                 </a>
             </div>

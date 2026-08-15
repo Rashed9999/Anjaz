@@ -10,7 +10,7 @@
 <div class="content container-fluid" dir="rtl">
 
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
-        <h4 class="fw-bold m-0" style="color:#053391">📊 {{ translate('كشف المعاملات') }}</h4>
+        <h4 class="fw-bold m-0" style="color:var(--amial-primary)">📊 {{ translate('كشف المعاملات') }}</h4>
         <div class="btn-group">
             <a class="btn btn-sm btn-outline-success"
                href="{{ route('admin.transaction.export', array_merge(request()->query(), ['export_type' => 'excel'])) }}">
@@ -62,7 +62,7 @@
                         <input type="date" name="end_date" value="{{ $endDate }}" class="form-control">
                     </div>
                     <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary w-100" style="background:#053391;border:none">
+                        <button type="submit" class="btn btn-primary w-100" style="background:var(--amial-primary);border:none">
                             <i class="tio-filter-list"></i> {{ translate('تطبيق') }}
                         </button>
                     </div>

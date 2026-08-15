@@ -180,7 +180,7 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   @override
   Widget build(BuildContext context) {
@@ -199,7 +199,7 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
             height: 84,
             width: 84,
             decoration: const BoxDecoration(
-                color: Color(0xFF2E7D32), shape: BoxShape.circle),
+                color: AmialColors.success, shape: BoxShape.circle),
             child: const Icon(Icons.check_rounded, color: Colors.white, size: 46),
           ),
           const SizedBox(height: 8),
@@ -207,7 +207,7 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
               style: TextStyle(
                   fontSize: 17,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF2E7D32))),
+                  color: AmialColors.success)),
           const SizedBox(height: 18),
 
           // ====== الفاتورة الموحّدة (تقرأ إعدادات التاجر، تُلتقط كاملة) ======

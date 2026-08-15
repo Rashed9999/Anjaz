@@ -3,7 +3,7 @@
 @section('title', translate('تعديل إشعار'))
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-3" style="color:#053391">✏️ {{ translate('تعديل الإشعار') }}</h4>
+    <h4 class="fw-bold mb-3" style="color:var(--amial-primary)">✏️ {{ translate('تعديل الإشعار') }}</h4>
 
     <div class="row justify-content-center">
         <div class="col-lg-6">
@@ -39,7 +39,7 @@
                             {{ translate('عند الحفظ سيُعاد إرسال الإشعار كإشعار دفع للفئة المختارة.') }}
                         </div>
                         <div class="d-flex gap-2">
-                            <button type="submit" class="btn text-white flex-grow-1" style="background:#053391">{{ translate('حفظ وإعادة الإرسال') }}</button>
+                            <button type="submit" class="btn text-white flex-grow-1" style="background:var(--amial-primary)">{{ translate('حفظ وإعادة الإرسال') }}</button>
                             <a href="{{ route('admin.notification.add-new') }}" class="btn btn-outline-secondary">{{ translate('رجوع') }}</a>
                         </div>
                     </form>

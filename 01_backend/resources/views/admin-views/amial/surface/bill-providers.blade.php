@@ -2,7 +2,7 @@
 @section('title', translate('مزوّدو الفواتير'))
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-1" style="color:#053391">⚡ {{ translate('مزوّدو دفع الفواتير') }}</h4>
+    <h4 class="fw-bold mb-1" style="color:var(--amial-primary)">⚡ {{ translate('مزوّدو دفع الفواتير') }}</h4>
     <small class="text-muted">{{ translate('طلبات اليوم') }}: {{ $ordersToday }}</small>
     @if(session('success'))<div class="alert alert-success mt-2">{{ session('success') }}</div>@endif
     <div class="card border-0 shadow-sm mt-3" style="border-radius:16px"><div class="card-body">

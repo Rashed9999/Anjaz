@@ -81,7 +81,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('تم بنجاح'),
-            backgroundColor: Color(0xFF2E7D32)),
+            backgroundColor: AmialColors.success),
       );
     }
   }
@@ -301,11 +301,11 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
             borderRadius: BorderRadius.circular(10),
           ),
           child: const Row(children: [
-            Icon(Icons.verified_user_rounded, size: 18, color: Color(0xFF2E7D32)),
+            Icon(Icons.verified_user_rounded, size: 18, color: AmialColors.success),
             SizedBox(width: 8),
             Expanded(
               child: Text('تُوثِّق هذه العملية بتأكيد التسليم برمز المشتري.',
-                  style: TextStyle(fontSize: 11.5, color: Color(0xFF2E7D32))),
+                  style: TextStyle(fontSize: 11.5, color: AmialColors.success)),
             ),
           ]),
         ),
@@ -404,7 +404,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('فُتح النزاع — المبلغ محجوز حتى المراجعة'),
-        backgroundColor: Color(0xFF2E7D32),
+        backgroundColor: AmialColors.success,
       ),
     );
 
@@ -433,7 +433,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
     await Get.find<SafePaymentController>().refreshEvidence(widget.ulid);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('رُفعت الأدلّة ✓'), backgroundColor: Color(0xFF2E7D32)),
+      const SnackBar(content: Text('رُفعت الأدلّة ✓'), backgroundColor: AmialColors.success),
     );
   }
 

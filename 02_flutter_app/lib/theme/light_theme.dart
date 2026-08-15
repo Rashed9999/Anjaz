@@ -10,7 +10,7 @@ const Color _onSecondaryColor = Color(0xFF053391); // نصّ/أيقونة أزر
 
 ThemeData light = ThemeData(
   brightness: Brightness.light,
-  fontFamily: 'Rubik',
+  fontFamily: 'IBMPlexSansArabic',
   primaryColor:  _primaryColor,
   primaryColorLight: const Color(0xFF1D4FB8),
   scaffoldBackgroundColor: AmialColors.background,
@@ -32,7 +32,7 @@ ThemeData light = ThemeData(
     scrolledUnderElevation: 0,
     centerTitle: true,
     titleTextStyle: TextStyle(
-      fontFamily: 'Rubik',
+      fontFamily: 'IBMPlexSansArabic',
       fontSize: 16,
       fontWeight: FontWeight.bold,
       color: Color(0xFF1A2433),
@@ -72,7 +72,7 @@ ThemeData light = ThemeData(
 
 // ThemeData light = ThemeData(
 //   brightness: Brightness.light,
-//   fontFamily: 'Rubik',
+//   fontFamily: 'IBMPlexSansArabic',
 //   primaryColor: const Color(0xFF003E47),
 //   primaryColorLight: const Color(0xFF14684E),
 //   secondaryHeaderColor: const Color(0xFFE0EC53),

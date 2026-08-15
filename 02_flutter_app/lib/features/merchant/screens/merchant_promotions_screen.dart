@@ -45,7 +45,7 @@ class _MerchantPromotionsScreenState extends State<MerchantPromotionsScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   Future<void> _editDialog({Map<String, dynamic>? existing}) async {
     final isEdit = existing != null;

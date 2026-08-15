@@ -102,7 +102,7 @@ class _CorporateAccountsScreenState extends State<CorporateAccountsScreen> {
       );
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   @override
   Widget build(BuildContext context) {
@@ -166,7 +166,7 @@ class _CorporateAccountsScreenState extends State<CorporateAccountsScreen> {
             '${suspended ? '  •  موقوف' : ''}', style: const TextStyle(fontSize: 11)),
         trailing: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text('${_fmt(bal)} ر.ي', style: TextStyle(
-              fontWeight: FontWeight.bold, color: bal > 0 ? AmialColors.red : const Color(0xFF2E7D32))),
+              fontWeight: FontWeight.bold, color: bal > 0 ? AmialColors.red : AmialColors.success)),
           const Icon(Icons.chevron_left, color: AmialColors.textMuted, size: 18),
         ]),
         onTap: () async {

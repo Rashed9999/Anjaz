@@ -125,7 +125,7 @@ class _PaymentRequestShowScreenState extends State<PaymentRequestShowScreen> {
   // ══════════════════════════════════════════════════════════════════
 
   Widget _headline(bool delivered, String recipient) {
-    final color = delivered ? const Color(0xFF2E7D32) : AmialColors.yellowDark;
+    final color = delivered ? AmialColors.success : AmialColors.yellowDark;
 
     return Column(children: [
       Container(

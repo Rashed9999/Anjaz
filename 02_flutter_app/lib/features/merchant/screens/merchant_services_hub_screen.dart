@@ -124,7 +124,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.verified, color: Color(0xFF2E7D32)),
+                  const Icon(Icons.verified, color: AmialColors.success),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text('باقتك تفتح كل الخدمات — لا شيء محجوب عنك.',
@@ -276,7 +276,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
                       ? Colors.grey.shade600
                       : locked
                           ? AmialColors.yellowDark
-                          : const Color(0xFF2E7D32))),
+                          : AmialColors.success)),
         ]),
       ),
     );
@@ -323,7 +323,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
                           ? Colors.grey.shade600
                           : locked
                               ? AmialColors.yellowDark
-                              : const Color(0xFF2E7D32)),
+                              : AmialColors.success),
                   const SizedBox(width: 4),
                   Text(
                       foreign
@@ -337,7 +337,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
                               ? Colors.grey.shade600
                               : locked
                                   ? AmialColors.yellowDark
-                                  : const Color(0xFF2E7D32))),
+                                  : AmialColors.success)),
                 ]),
               ]),
             ),

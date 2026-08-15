@@ -22,7 +22,7 @@
 
 @push('css_or_js')
 <style>
-    .amdash { --blue:#053391; --blue2:#1D4FB8; --gold:#FECA1E; --ink:#1A2433; --muted:#8B97A8; }
+    .amdash { --blue:var(--amial-primary); --blue2:var(--amial-primary-light); --gold:var(--amial-yellow); --ink:var(--amial-text); --muted:#8B97A8; }
     .amdash .a-card { background:#fff; border:1px solid #e8edf5; border-radius:18px; box-shadow:0 4px 16px rgba(21,40,76,.035); }
     .amdash a.a-card { transition:.15s; }
     .amdash a.a-card:hover { border-color:#cfd9ea; transform:translateY(-2px); box-shadow:0 6px 18px rgba(5,51,145,.08); }
@@ -363,7 +363,7 @@
                                    href="{{ $range($mFrom->toDateString(), $mTo->toDateString()) }}"
                                    title="{{ $monthNames[$i-1] }} — {{ number_format($v, 0) }} ر.ي">
                                     <small class="text-muted" style="font-size:9px">{{ $v > 0 ? number_format($v / 1000, 0) . 'k' : '' }}</small>
-                                    <div class="a-bar" style="height:{{ max($h, $v > 0 ? 4 : 1) }}px;background:{{ $isMax ? 'var(--gold)' : 'linear-gradient(180deg,#1D4FB8,#053391)' }};opacity:{{ $v > 0 ? 1 : .12 }}"></div>
+                                    <div class="a-bar" style="height:{{ max($h, $v > 0 ? 4 : 1) }}px;background:{{ $isMax ? 'var(--gold)' : 'linear-gradient(180deg,var(--amial-primary-light),var(--amial-primary))' }};opacity:{{ $v > 0 ? 1 : .12 }}"></div>
                                     <small class="text-muted mt-1" style="font-size:10px">{{ $monthNames[$i-1] }}</small>
                                 </a>
                             @endfor

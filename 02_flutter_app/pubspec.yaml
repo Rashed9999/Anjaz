@@ -102,18 +102,28 @@ flutter:
     - assets/svg/
     - assets/branding/
     - assets/brand/
+    - assets/fonts/
 
   fonts:
-    - family: Rubik
+    # AMIAL-TYPE-001 — الخطُّ يغطّي العربيّة.
+    #
+    # **العطل المقيس:** كان التطبيق يُضمِّن Rubik ويضبطه عائلةً افتراضيّة،
+    # و`Rubik-Regular.ttf` فيه **٦٩٠ محرفاً وصفرُ حرفٍ عربيّ**. فكلُّ نصٍّ
+    # عربيٍّ — أي كلُّ نصٍّ في التطبيق — يسقط على خطّ الجهاز، والوضعُ
+    # المظلم على Roboto وفيه صفرٌ أيضاً. **ثلاثةُ خطوطٍ في تطبيقٍ واحد،
+    # ولا واحدَ منها يكتب العربيّة.**
+    #
+    # وIBM Plex Sans Arabic يكتبها ويكتب اللاتينيّة والأرقامَ العربيّةَ
+    # وعلامةَ الريال ﷼ — قِيس: ١٠٣٢ محرفاً، ولا محرفَ ناقصاً في الفحص.
+    # ورخصتُه SIL OFL (الملفّ بجانبه).
+    - family: IBMPlexSansArabic
       fonts:
-        - asset: assets/font/Rubik-Light.ttf
-          weight: 300
-        - asset: assets/font/Rubik-Regular.ttf
+        - asset: assets/fonts/IBMPlexSansArabic-Regular.ttf
           weight: 400
-        - asset: assets/font/Rubik-Medium.ttf
-          weight: 500
-        - asset: assets/font/Rubik-SemiBold.ttf
+        - asset: assets/fonts/IBMPlexSansArabic-SemiBold.ttf
           weight: 600
+        - asset: assets/fonts/IBMPlexSansArabic-Bold.ttf
+          weight: 700
 
 # AMIAL-BRANDING-001: native splash configuration
 flutter_native_splash:

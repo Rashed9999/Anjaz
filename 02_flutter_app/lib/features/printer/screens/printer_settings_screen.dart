@@ -80,7 +80,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   @override
   Widget build(BuildContext context) {
@@ -102,7 +102,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           ),
           child: Row(children: [
             Icon(_btOn ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-                color: _btOn ? const Color(0xFF2E7D32) : AmialColors.red),
+                color: _btOn ? AmialColors.success : AmialColors.red),
             const SizedBox(width: 10),
             Expanded(child: Text(_btOn ? 'البلوتوث مفعّل' : 'البلوتوث مغلق — فعّله من إعدادات الهاتف',
                 style: const TextStyle(fontWeight: FontWeight.w600))),

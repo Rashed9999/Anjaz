@@ -184,7 +184,7 @@ class _DisputeSheetState extends State<DisputeSheet> {
               Container(
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF8E1),
+                  color: AmialColors.warningSurface,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Row(children: [

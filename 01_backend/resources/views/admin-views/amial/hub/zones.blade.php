@@ -5,12 +5,12 @@
 <div class="content container-fluid" dir="rtl">
 
     <div class="d-flex justify-content-between align-items-center flex-wrap mb-1">
-        <h4 class="fw-bold mb-0" style="color:#053391">🗺️ {{ translate('لوحة المناطق') }}</h4>
+        <h4 class="fw-bold mb-0" style="color:var(--amial-primary)">🗺️ {{ translate('لوحة المناطق') }}</h4>
         <div class="d-flex gap-2 align-items-center">
             {{-- لوحة قائمة بذاتها لتعديل منطقة حساب بعينه — نصل بينهما بدل تكرارهما --}}
             <a href="{{ route('admin.amial.zones.index') }}"
                class="btn btn-sm btn-outline-secondary">تعديل منطقة حساب بعينه</a>
-            <span class="badge" id="modeBadge" style="background:#5F6B7C">…</span>
+            <span class="badge" id="modeBadge" style="background:var(--amial-text-secondary)">…</span>
         </div>
     </div>
     <p class="text-muted small mb-3">
@@ -41,7 +41,7 @@
             <div class="card border-0 shadow-sm h-100" style="border-radius:14px">
                 <div class="card-body">
                     <div class="text-muted small">معتمد بلا منطقة <span class="text-danger">(عالق)</span></div>
-                    <div class="fw-bold" style="font-size:26px;color:#DC0A0B" id="cStranded">—</div>
+                    <div class="fw-bold" style="font-size:26px;color:var(--amial-danger)" id="cStranded">—</div>
                 </div>
             </div>
         </div>
@@ -49,7 +49,7 @@
             <div class="card border-0 shadow-sm h-100" style="border-radius:14px">
                 <div class="card-body">
                     <div class="text-muted small">مخالفات موقع الوكلاء (30 يوماً)</div>
-                    <div class="fw-bold" style="font-size:26px;color:#DC0A0B" id="cViolations">—</div>
+                    <div class="fw-bold" style="font-size:26px;color:var(--amial-danger)" id="cViolations">—</div>
                 </div>
             </div>
         </div>

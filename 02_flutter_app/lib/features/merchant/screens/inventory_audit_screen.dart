@@ -116,7 +116,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
   void _snack(String m, {bool ok = false}) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(m),
-        backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red,
+        backgroundColor: ok ? AmialColors.success : AmialColors.red,
       ));
 
   @override
@@ -176,7 +176,7 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: _stat('الفروقات المكتشفة', '$discovered',
-                    discovered > 0 ? AmialColors.red : const Color(0xFF2E7D32)),
+                    discovered > 0 ? AmialColors.red : AmialColors.success),
               ),
             ]),
           ),
@@ -244,10 +244,10 @@ class _InventoryAuditScreenState extends State<InventoryAuditScreen> {
     final touched = _counted.containsKey(id);
 
     final (label, fg, bg) = diff == 0
-        ? ('مطابق', const Color(0xFF2E7D32), const Color(0xFFE3F3E5))
+        ? ('مطابق', AmialColors.success, AmialColors.successSurface)
         : diff < 0
-            ? ('$diff نقص', AmialColors.red, const Color(0xFFFDE7E7))
-            : ('+$diff زيادة', const Color(0xFF2E7D32), const Color(0xFFE3F3E5));
+            ? ('$diff نقص', AmialColors.red, AmialColors.dangerSurface)
+            : ('+$diff زيادة', AmialColors.success, AmialColors.successSurface);
 
     return Container(
       padding: const EdgeInsets.all(14),

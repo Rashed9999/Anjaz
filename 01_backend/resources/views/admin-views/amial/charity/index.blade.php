@@ -20,7 +20,7 @@
 
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-3" style="color:#053391">🎗️ {{ translate('لوحة التبرعات — الجمعيات الخيرية') }}</h4>
+    <h4 class="fw-bold mb-3" style="color:var(--amial-primary)">🎗️ {{ translate('لوحة التبرعات — الجمعيات الخيرية') }}</h4>
 
     <ul class="nav nav-tabs mb-3" role="tablist">
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-orgs" type="button">الجمعيات</button></li>

@@ -237,7 +237,7 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                     child: _summaryCard('الإيرادات', _totalCredit,
-                        const Color(0xFF2E7D32), Icons.arrow_downward)),
+                        AmialColors.success, Icons.arrow_downward)),
               ]),
               const SizedBox(height: 10),
               _summaryCard(
@@ -359,7 +359,7 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
                 style: TextStyle(color: AmialColors.textMuted))),
       );
     }
-    final barColor = debit ? const Color(0xFFDC0A0B) : const Color(0xFF2E7D32);
+    final barColor = debit ? const Color(0xFFDC0A0B) : AmialColors.success;
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(

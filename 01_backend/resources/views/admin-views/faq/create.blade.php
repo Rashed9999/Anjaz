@@ -3,7 +3,7 @@
 @section('title', translate('سؤال جديد'))
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-3" style="color:#053391">➕ {{ translate('إضافة سؤال شائع') }}</h4>
+    <h4 class="fw-bold mb-3" style="color:var(--amial-primary)">➕ {{ translate('إضافة سؤال شائع') }}</h4>
 
     <div class="row justify-content-center">
         <div class="col-lg-7">
@@ -29,7 +29,7 @@
                             <textarea name="answer" rows="5" class="form-control" maxlength="1000" required>{{ old('answer') }}</textarea>
                         </div>
                         <div class="d-flex gap-2">
-                            <button type="submit" class="btn text-white flex-grow-1" style="background:#053391">{{ translate('حفظ') }}</button>
+                            <button type="submit" class="btn text-white flex-grow-1" style="background:var(--amial-primary)">{{ translate('حفظ') }}</button>
                             <a href="{{ route('admin.faq.index') }}" class="btn btn-outline-secondary">{{ translate('رجوع') }}</a>
                         </div>
                     </form>

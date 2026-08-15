@@ -60,7 +60,7 @@ class BuyerDeliveryCodeCard extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 14),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF8E1),
+              color: AmialColors.warningSurface,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(children: [

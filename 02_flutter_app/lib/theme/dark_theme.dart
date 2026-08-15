@@ -7,7 +7,7 @@ const Color _primaryColor = Color(0xFF5B8DEF);
 const Color _secondaryColor = Color(0xFFFECA1E);
 
 ThemeData dark = ThemeData(
-  fontFamily: 'Roboto',
+  fontFamily: 'IBMPlexSansArabic',
   primaryColor: _primaryColor,
   primaryColorLight: _primaryColor,
   brightness: Brightness.dark,

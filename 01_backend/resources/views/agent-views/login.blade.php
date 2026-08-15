@@ -14,15 +14,16 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>بوّابة الوكيل — أميال باي</title>
     <link href="{{ asset('assets/vendor/bootstrap/css/bootstrap.rtl.min.css') }}" rel="stylesheet">
+    <link href="{{ asset('assets/css/amial-tokens.css') }}" rel="stylesheet">
     <style>
         body {
-            background: linear-gradient(160deg, #0f1b2d 0%, #16304f 100%);
+            background: linear-gradient(160deg, var(--amial-primary-dark) 0%, var(--amial-primary) 100%);
             min-height: 100vh; display: flex; align-items: center; justify-content: center;
-            font-family: system-ui, "Segoe UI", Tahoma, sans-serif; padding: 1rem;
+            padding: 1rem;
         }
         .login-card { width: 100%; max-width: 430px; border: 0; border-radius: 1.25rem;
                       box-shadow: 0 18px 50px rgba(0,0,0,.35); }
-        .brand { font-size: 1.6rem; font-weight: 800; color: #0f1b2d; }
+        .brand { font-size: var(--amial-text-2xl); font-weight: 700; color: var(--amial-primary-dark); }
     </style>
 </head>
 <body>

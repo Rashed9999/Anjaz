@@ -59,7 +59,7 @@ class _RestaurantScreenState extends State<RestaurantScreen> with SingleTickerPr
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   Map<String, dynamic>? _orderForTable(int tableId) {
     for (final o in _orders) { if (o['table_id'] == tableId) return o; }
@@ -160,16 +160,16 @@ class _RestaurantScreenState extends State<RestaurantScreen> with SingleTickerPr
           : _openOrder(tableId: t['id'] as int, label: '${t['label']}'),
       child: Container(
         decoration: BoxDecoration(
-          color: occupied ? AmialColors.red.withValues(alpha: 0.1) : const Color(0xFF2E7D32).withValues(alpha: 0.08),
+          color: occupied ? AmialColors.red.withValues(alpha: 0.1) : AmialColors.success.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: occupied ? AmialColors.red : const Color(0xFF2E7D32), width: 1.2),
+          border: Border.all(color: occupied ? AmialColors.red : AmialColors.success, width: 1.2),
         ),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Icon(Icons.table_restaurant, size: 30, color: occupied ? AmialColors.red : const Color(0xFF2E7D32)),
+          Icon(Icons.table_restaurant, size: 30, color: occupied ? AmialColors.red : AmialColors.success),
           const SizedBox(height: 6),
           Text('${t['label']}', style: const TextStyle(fontWeight: FontWeight.bold)),
           Text(occupied ? 'مشغولة' : 'متاحة',
-              style: TextStyle(fontSize: 11, color: occupied ? AmialColors.red : const Color(0xFF2E7D32))),
+              style: TextStyle(fontSize: 11, color: occupied ? AmialColors.red : AmialColors.success)),
           if (occupied && order != null)
             Text('${AmialMoney.fmt(order['total'])} ر.ي', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
         ]),
@@ -188,7 +188,7 @@ class _RestaurantScreenState extends State<RestaurantScreen> with SingleTickerPr
 
   Widget _kitchenCard(Map<String, dynamic> o) {
     final status = '${o['status']}';
-    final color = status == 'ready' ? const Color(0xFF2E7D32) : status == 'preparing' ? AmialColors.yellowDark : AmialColors.primary;
+    final color = status == 'ready' ? AmialColors.success : status == 'preparing' ? AmialColors.yellowDark : AmialColors.primary;
     final items = (o['items'] ?? []) as List;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),

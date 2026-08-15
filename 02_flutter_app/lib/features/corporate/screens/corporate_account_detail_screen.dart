@@ -54,7 +54,7 @@ class _CorporateAccountDetailScreenState extends State<CorporateAccountDetailScr
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   Future<void> _amountDialog(String title, String endpoint, String okMsg) async {
     final amt = TextEditingController();
@@ -156,7 +156,7 @@ class _CorporateAccountDetailScreenState extends State<CorporateAccountDetailScr
                     const SizedBox(height: 8),
                     Text('${_fmt(bal)} ر.ي',
                         style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold,
-                            color: bal > 0 ? AmialColors.red : const Color(0xFF2E7D32))),
+                            color: bal > 0 ? AmialColors.red : AmialColors.success)),
                     const Text('المستحقّ على الشركة', style: TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
                     const Divider(height: 24),
                     Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
@@ -178,7 +178,7 @@ class _CorporateAccountDetailScreenState extends State<CorporateAccountDetailScr
                     onPressed: bal > 0 ? () => _amountDialog('سداد', 'settle', 'تم تسجيل السداد') : null,
                     icon: const Icon(Icons.payments, size: 18),
                     label: const Text('سداد'),
-                    style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2E7D32), minimumSize: const Size.fromHeight(48)),
+                    style: FilledButton.styleFrom(backgroundColor: AmialColors.success, minimumSize: const Size.fromHeight(48)),
                   )),
                 ]),
                 const SizedBox(height: 18),
@@ -220,7 +220,7 @@ class _CorporateAccountDetailScreenState extends State<CorporateAccountDetailScr
 
   Widget _movementRow(Map<String, dynamic> m) {
     final isCharge = m['type'] == 'charge' || m['type'] == 'adjustment';
-    final color = isCharge ? AmialColors.red : const Color(0xFF2E7D32);
+    final color = isCharge ? AmialColors.red : AmialColors.success;
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),

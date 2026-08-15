@@ -180,7 +180,7 @@ class _EvidencePickerSheetState extends State<EvidencePickerSheet> {
               Container(
                 padding: const EdgeInsets.all(11),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF8E1),
+                  color: AmialColors.warningSurface,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: AmialColors.yellowDark.withValues(alpha: 0.4)),
                 ),

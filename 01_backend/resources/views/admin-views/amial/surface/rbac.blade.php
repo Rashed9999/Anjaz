@@ -2,7 +2,7 @@
 @section('title', translate('صلاحيات RBAC'))
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-1" style="color:#053391">🛡️ {{ translate('الصلاحيات — المدراء المعيَّنون') }}</h4>
+    <h4 class="fw-bold mb-1" style="color:var(--amial-primary)">🛡️ {{ translate('الصلاحيات — المدراء المعيَّنون') }}</h4>
     <small class="text-muted">{{ translate('إجمالي موظفي نقاط البيع') }}: {{ $staffCount }}</small>
     <div class="card border-0 shadow-sm mt-3" style="border-radius:16px"><div class="card-body">
         <table class="table align-middle">
@@ -13,7 +13,7 @@
                     <td><b>{{ $m->display_name }}</b><br><small class="text-muted">POS {{ $m->pos_number }}</small></td>
                     <td>{{ $m->merchant?->f_name }} {{ $m->merchant?->l_name }}</td>
                     <td>
-                        @if(in_array('operations_manager', $m->permissions ?? [])) <span class="badge" style="background:#053391">مدير عمليات</span> @endif
+                        @if(in_array('operations_manager', $m->permissions ?? [])) <span class="badge" style="background:var(--amial-primary)">مدير عمليات</span> @endif
                         @if(in_array('financial_manager', $m->permissions ?? [])) <span class="badge" style="background:#B8860B">مدير مالي</span> @endif
                     </td>
                     <td>{!! $m->is_active ? '✅' : '⛔' !!}</td>

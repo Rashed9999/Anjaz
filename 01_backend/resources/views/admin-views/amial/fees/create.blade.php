@@ -116,7 +116,7 @@
                     </div>
                     <div class="card-footer text-end">
                         <a href="{{ route('admin.amial.fees.index') }}" class="btn btn-soft-secondary">{{ translate('Cancel') }}</a>
-                        <button type="submit" class="btn btn-primary" style="background:#0B435B;border-color:#0B435B">
+                        <button type="submit" class="btn btn-primary" style="background:var(--amial-primary-dark);border-color:var(--amial-primary-dark)">
                             <i class="tio-save"></i> {{ translate('Save new version') }}
                         </button>
                     </div>
@@ -137,7 +137,7 @@
                     <table class="table table-sm table-borderless mb-0" id="sim_table" style="display:none">
                         <tbody>
                         <tr><td>{{ translate('Fee') }}</td><td class="text-end fw-bold" id="r_fee">—</td></tr>
-                        <tr><td>{{ translate('Platform profit') }}</td><td class="text-end fw-bold" id="r_profit" style="color:#0B435B">—</td></tr>
+                        <tr><td>{{ translate('Platform profit') }}</td><td class="text-end fw-bold" id="r_profit" style="color:var(--amial-primary-dark)">—</td></tr>
                         <tr><td>{{ translate('Agent commission') }}</td><td class="text-end" id="r_agent">—</td></tr>
                         <tr class="border-top"><td>{{ translate('Total debited from payer') }}</td><td class="text-end" id="r_debit">—</td></tr>
                         <tr><td>{{ translate('Net credited to receiver') }}</td><td class="text-end" id="r_credit">—</td></tr>

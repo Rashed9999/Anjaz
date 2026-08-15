@@ -4,8 +4,8 @@
 @section('content')
 <div class="content container-fluid" dir="rtl">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap">
-        <h4 class="fw-bold m-0" style="color:#053391">❓ {{ translate('الأسئلة الشائعة') }}</h4>
-        <a href="{{ route('admin.faq.create') }}" class="btn btn-sm text-white" style="background:#053391">
+        <h4 class="fw-bold m-0" style="color:var(--amial-primary)">❓ {{ translate('الأسئلة الشائعة') }}</h4>
+        <a href="{{ route('admin.faq.create') }}" class="btn btn-sm text-white" style="background:var(--amial-primary)">
             <i class="tio-add"></i> {{ translate('سؤال جديد') }}
         </a>
     </div>
@@ -19,7 +19,7 @@
                     <form method="POST" action="{{ route('admin.faq.category.store') }}" class="d-flex gap-2 mb-3">
                         @csrf
                         <input type="text" name="name" class="form-control form-control-sm" placeholder="{{ translate('اسم الفئة') }}" required>
-                        <button class="btn btn-sm text-white" style="background:#053391">{{ translate('إضافة') }}</button>
+                        <button class="btn btn-sm text-white" style="background:var(--amial-primary)">{{ translate('إضافة') }}</button>
                     </form>
                     <ul class="list-group list-group-flush">
                         @forelse($categories as $cat)

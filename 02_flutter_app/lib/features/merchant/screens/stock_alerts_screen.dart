@@ -136,7 +136,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFFDE7E7),
+                          color: AmialColors.dangerSurface,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text('${out.length + low.length}',
@@ -153,7 +153,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
                         title: 'نفاد المخزون',
                         message: '${p['name']}: المخزون فارغ تماماً.',
                         color: AmialColors.red,
-                        bg: const Color(0xFFFDE7E7),
+                        bg: AmialColors.dangerSurface,
                         icon: Icons.remove_shopping_cart_outlined,
                       )),
                   ...low.map((p) => _alertCard(
@@ -174,7 +174,7 @@ class _StockAlertsScreenState extends State<StockAlertsScreen> {
                     ),
                     child: const Column(children: [
                       Icon(Icons.check_circle_outline,
-                          size: 48, color: Color(0xFF2E7D32)),
+                          size: 48, color: AmialColors.success),
                       SizedBox(height: 10),
                       Text('كل المنتجات فوق الحد الأدنى — لا تنبيهات',
                           style: TextStyle(color: AmialColors.textSecondary)),

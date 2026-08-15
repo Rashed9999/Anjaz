@@ -32,7 +32,7 @@ class _OfflineSalesScreenState extends State<OfflineSalesScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   Future<void> _sync() async {
     setState(() => _syncing = true);
@@ -63,12 +63,12 @@ class _OfflineSalesScreenState extends State<OfflineSalesScreen> {
                 margin: const EdgeInsets.all(14),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: _items.isEmpty ? const Color(0xFF2E7D32).withValues(alpha: 0.08) : AmialColors.yellow.withValues(alpha: 0.15),
+                  color: _items.isEmpty ? AmialColors.success.withValues(alpha: 0.08) : AmialColors.yellow.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(children: [
                   Icon(_items.isEmpty ? Icons.cloud_done : Icons.cloud_off,
-                      color: _items.isEmpty ? const Color(0xFF2E7D32) : AmialColors.yellowDark, size: 30),
+                      color: _items.isEmpty ? AmialColors.success : AmialColors.yellowDark, size: 30),
                   const SizedBox(width: 12),
                   Expanded(child: Text(
                     _items.isEmpty ? 'كل المبيعات مُزامَنة' : '${_items.length} عملية بانتظار المزامنة',

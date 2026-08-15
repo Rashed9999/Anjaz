@@ -60,11 +60,11 @@ class _WithdrawHistoryScreenState extends State<WithdrawHistoryScreen> {
   (String, Color, Color) _statusChip(String st) {
     switch (st) {
       case 'completed':
-        return ('مكتمل', const Color(0xFF2E7D32), const Color(0xFFE3F3E5));
+        return ('مكتمل', AmialColors.success, AmialColors.successSurface);
       case 'pending':
         return ('قيد الانتظار', const Color(0xFFB8860B), const Color(0xFFFBF3D9));
       case 'cancelled':
-        return ('ملغي', AmialColors.red, const Color(0xFFFDE7E7));
+        return ('ملغي', AmialColors.red, AmialColors.dangerSurface);
       case 'expired':
         return ('منتهي', AmialColors.textMuted, const Color(0xFFEFEFEF));
       default:

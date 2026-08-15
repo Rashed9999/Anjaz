@@ -40,7 +40,7 @@ class _RestaurantOrderScreenState extends State<RestaurantOrderScreen> {
       s + ((double.tryParse('${it['qty'] ?? it['quantity']}') ?? 0) * (double.tryParse('${it['price']}') ?? 0)));
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   Future<void> _addItem() async {
     final name = TextEditingController();
@@ -208,7 +208,7 @@ class _RestaurantOrderScreenState extends State<RestaurantOrderScreen> {
                   onPressed: _busy ? null : _close,
                   icon: const Icon(Icons.point_of_sale),
                   label: const Text('إغلاق ودفع'),
-                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2E7D32)),
+                  style: FilledButton.styleFrom(backgroundColor: AmialColors.success),
                 )),
               ]),
             ),

@@ -3,7 +3,7 @@
 @section('title', translate('رصيد المنصّة'))
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-3" style="color:#053391">🏦 {{ translate('رصيد المنصّة (E-Money)') }}</h4>
+    <h4 class="fw-bold mb-3" style="color:var(--amial-primary)">🏦 {{ translate('رصيد المنصّة (E-Money)') }}</h4>
 
     {{-- نظرة عامّة --}}
     @php
@@ -44,9 +44,9 @@
                         <div class="mb-3">
                             <label class="form-label">{{ translate('المبلغ') }} (ر.ي)</label>
                             <input type="number" name="amount" step="0.01" min="0" class="form-control form-control-lg"
-                                   required placeholder="0.00" style="font-weight:bold;color:#053391">
+                                   required placeholder="0.00" style="font-weight:bold;color:var(--amial-primary)">
                         </div>
-                        <button type="submit" class="btn w-100 text-white" style="background:#053391">
+                        <button type="submit" class="btn w-100 text-white" style="background:var(--amial-primary)">
                             <i class="tio-add-circle"></i> {{ translate('إنشاء الرصيد') }}
                         </button>
                     </form>

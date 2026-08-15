@@ -4,7 +4,7 @@
 <div class="content container-fluid" dir="rtl">
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div>
-            <h4 class="fw-bold mb-1" style="color:#053391">📨 {{ translate('طلبات الأموال') }}</h4>
+            <h4 class="fw-bold mb-1" style="color:var(--amial-primary)">📨 {{ translate('طلبات الأموال') }}</h4>
             <small class="text-muted">{{ translate('متابعة الطلب المباشر من إنشائه حتى موافقة المستلم وترحيل العملية') }}</small>
         </div>
         <div class="d-flex gap-2">

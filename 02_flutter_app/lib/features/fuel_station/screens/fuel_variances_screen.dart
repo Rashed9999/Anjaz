@@ -62,7 +62,7 @@ class _FuelVariancesScreenState extends State<FuelVariancesScreen> {
 
     return Card(
       key: const Key('fuel-unattributed-banner'),
-      color: const Color(0xFFFFF8E1),
+      color: AmialColors.warningSurface,
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Row(children: [

@@ -83,7 +83,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
   void _snack(String m, {bool ok = false}) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(m),
-        backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red,
+        backgroundColor: ok ? AmialColors.success : AmialColors.red,
       ));
 
   (String, Color, Color) _poBadge(String st) => switch (st) {
@@ -91,11 +91,11 @@ class _SuppliersScreenState extends State<SuppliersScreen>
         'approved' => ('معتمد', const Color(0xFF1E5A8A), const Color(0xFFE3EEFA)),
         'partially_received' => (
             'مستلم جزئياً',
-            const Color(0xFF2E7D32),
-            const Color(0xFFE3F3E5)
+            AmialColors.success,
+            AmialColors.successSurface
           ),
-        'completed' => ('مكتمل', const Color(0xFF2E7D32), const Color(0xFFE3F3E5)),
-        'cancelled' => ('ملغي', AmialColors.red, const Color(0xFFFDE7E7)),
+        'completed' => ('مكتمل', AmialColors.success, AmialColors.successSurface),
+        'cancelled' => ('ملغي', AmialColors.red, AmialColors.dangerSurface),
         _ => (st, AmialColors.textMuted, const Color(0xFFEFEFEF)),
       };
 
@@ -149,7 +149,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
                   'إجمالي المديونية',
                   AmialMoney.yer(c.totals.value['total_debt'] ?? 0),
                   Icons.account_balance_wallet_outlined,
-                  const Color(0xFF2E7D32),
+                  AmialColors.success,
                 ),
               ),
               const SizedBox(width: 10),
@@ -260,7 +260,7 @@ class _SuppliersScreenState extends State<SuppliersScreen>
                         fontSize: 16,
                         color: debt > 0
                             ? AmialColors.red
-                            : const Color(0xFF2E7D32))),
+                            : AmialColors.success)),
                 const Text('المديونية الحالية',
                     style: TextStyle(
                         fontSize: 12, color: AmialColors.textSecondary)),

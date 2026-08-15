@@ -190,7 +190,7 @@ class _FuelOwnerConsoleScreenState extends State<FuelOwnerConsoleScreen> {
 
     return Card(
       key: Key(key),
-      color: danger ? const Color(0xFFFFEBEE) : const Color(0xFFFFF8E1),
+      color: danger ? const Color(0xFFFFEBEE) : AmialColors.warningSurface,
       child: ListTile(
         leading: Icon(icon, color: color),
         title: Text(text, style: TextStyle(color: color, fontSize: 14)),

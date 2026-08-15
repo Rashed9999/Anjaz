@@ -20,9 +20,9 @@ class OperationStatus {
   static OperationStatus of(String? raw) {
     switch (_normalize(raw)) {
       case 'completed':
-        return const OperationStatus('مكتملة', Color(0xFF2E7D32), Color(0xFFE3F3E5));
+        return const OperationStatus('مكتملة', AmialColors.success, AmialColors.successSurface);
       case 'cancelled':
-        return const OperationStatus('ملغية', AmialColors.red, Color(0xFFFDE7E7));
+        return const OperationStatus('ملغية', AmialColors.red, AmialColors.dangerSurface);
       case 'under_review':
         return const OperationStatus('قيد المراجعة', Color(0xFF1D4FB8), Color(0xFFE4ECFB));
       case 'pending':

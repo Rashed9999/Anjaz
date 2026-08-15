@@ -107,14 +107,14 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE3F3E5),
+                        color: AmialColors.successSurface,
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                           '${totals['sales_count'] ?? 0} عملية',
                           style: const TextStyle(
                               fontSize: 11,
-                              color: Color(0xFF2E7D32),
+                              color: AmialColors.success,
                               fontWeight: FontWeight.w600)),
                     ),
                     const Spacer(),
@@ -282,7 +282,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                                   fontWeight: FontWeight.bold,
                                   fontSize: 15,
                                   color: positive
-                                      ? const Color(0xFF2E7D32)
+                                      ? AmialColors.success
                                       : AmialColors.red)),
                           const Spacer(),
                           Expanded(

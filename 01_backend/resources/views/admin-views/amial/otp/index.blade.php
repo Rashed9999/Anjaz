@@ -13,7 +13,7 @@
 
 @push('css_or_js')
 <style>
-    .otpc { --ok:#12694E; --warn:#B8860B; --bad:#C0392B; --pri:#053391; }
+    .otpc { --ok:#12694E; --warn:#B8860B; --bad:#C0392B; --pri:var(--amial-primary); }
     .otpc .card { border:1px solid #eef1f5; border-radius:14px; }
     .otpc .kpi { font-size:22px; font-weight:800; line-height:1.15; }
     .otpc .kpi-l { font-size:11.5px; color:#8B97A8; }

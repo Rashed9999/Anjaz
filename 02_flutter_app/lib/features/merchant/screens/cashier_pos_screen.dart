@@ -598,7 +598,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFDE7E7),
+                    color: AmialColors.dangerSurface,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Text('نفد',

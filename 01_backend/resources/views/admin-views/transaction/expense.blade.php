@@ -3,7 +3,7 @@
 @section('title', translate('المصاريف'))
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-3" style="color:#053391">💸 {{ translate('مصاريف المنصّة') }}</h4>
+    <h4 class="fw-bold mb-3" style="color:var(--amial-primary)">💸 {{ translate('مصاريف المنصّة') }}</h4>
 
     {{-- ملخّص --}}
     <div class="row g-3 mb-3">
@@ -18,10 +18,10 @@
             </div>
         </div>
         <div class="col-6 col-md-4">
-            <div class="card border-0 shadow-sm" style="border-radius:14px;border-bottom:3px solid #053391">
+            <div class="card border-0 shadow-sm" style="border-radius:14px;border-bottom:3px solid var(--amial-primary)">
                 <div class="card-body py-3">
                     <small class="text-muted">{{ translate('عدد المستفيدين') }}</small>
-                    <div class="fw-bold" style="font-size:20px;color:#053391">{{ number_format($totalUsers ?? 0) }}</div>
+                    <div class="fw-bold" style="font-size:20px;color:var(--amial-primary)">{{ number_format($totalUsers ?? 0) }}</div>
                 </div>
             </div>
         </div>
@@ -48,7 +48,7 @@
                     </select>
                 </div>
                 <div class="col-md-3 d-flex gap-2">
-                    <button class="btn btn-primary flex-grow-1" style="background:#053391;border:none">{{ translate('تطبيق') }}</button>
+                    <button class="btn btn-primary flex-grow-1" style="background:var(--amial-primary);border:none">{{ translate('تطبيق') }}</button>
                     <a href="{{ route('admin.expense.index') }}" class="btn btn-outline-secondary">{{ translate('تعيين') }}</a>
                 </div>
             </form>

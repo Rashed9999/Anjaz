@@ -50,7 +50,7 @@ class _MerchantApiKeysScreenState extends State<MerchantApiKeysScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   Future<void> _generate() async {
     final label = TextEditingController();

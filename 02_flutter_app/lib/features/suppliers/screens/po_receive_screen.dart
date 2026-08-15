@@ -68,8 +68,8 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
     if (ok) {
       Get.back(result: true);
       Get.snackbar('تم الاستلام', 'حُدّث المخزون ومديونية المورد',
-          backgroundColor: const Color(0xFFE3F3E5),
-          colorText: const Color(0xFF2E7D32));
+          backgroundColor: AmialColors.successSurface,
+          colorText: AmialColors.success);
     } else {
       _snack(c.lastError.value.isEmpty ? 'فشل الاستلام' : c.lastError.value);
     }
@@ -196,14 +196,14 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
               color: done
-                  ? const Color(0xFF2E7D32).withValues(alpha: 0.4)
+                  ? AmialColors.success.withValues(alpha: 0.4)
                   : AmialColors.border),
         ),
         child: Column(children: [
           Row(children: [
             if (done)
               const Icon(Icons.check_circle,
-                  color: Color(0xFF2E7D32), size: 20),
+                  color: AmialColors.success, size: 20),
             const Spacer(),
             Expanded(
               flex: 4,

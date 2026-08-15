@@ -45,7 +45,7 @@ class _MyInstallmentsScreenState extends State<MyInstallmentsScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   Future<void> _pay(Map<String, dynamic> c) async {
     final amountCtrl = TextEditingController(text: '${c['monthly_amount'] ?? ''}');
@@ -110,7 +110,7 @@ class _MyInstallmentsScreenState extends State<MyInstallmentsScreen> {
           Expanded(child: Text('${c['item_name']?.toString().isNotEmpty == true ? c['item_name'] : 'عقد #${c['id']}'}',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
           Text(done ? 'مكتمل' : '${c['months']} أشهر',
-              style: TextStyle(color: done ? const Color(0xFF2E7D32) : AmialColors.textSecondary,
+              style: TextStyle(color: done ? AmialColors.success : AmialColors.textSecondary,
                   fontWeight: FontWeight.bold, fontSize: 12)),
         ]),
         const SizedBox(height: 10),

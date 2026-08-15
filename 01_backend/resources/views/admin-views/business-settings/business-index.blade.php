@@ -3,7 +3,7 @@
 @section('title', translate('إعدادات الأعمال'))
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-3" style="color:#053391">🏢 {{ translate('إعدادات الأعمال') }}</h4>
+    <h4 class="fw-bold mb-3" style="color:var(--amial-primary)">🏢 {{ translate('إعدادات الأعمال') }}</h4>
     @include('admin-views.business-settings.partials._tabs', ['tab' => 'business'])
     @php $bs = fn($k, $d = '') => \App\CentralLogics\Helpers::get_business_settings($k) ?? $d; @endphp
     <form method="POST" action="{{ route('admin.business-settings.business-setup') }}" enctype="multipart/form-data">
@@ -24,7 +24,7 @@
                     <div class="col-md-4"><label class="form-label">{{ translate('الأيقونة Favicon (اختياري)') }}</label>
                         <input name="favicon" type="file" class="form-control"></div>
                 </div>
-                <button class="btn text-white mt-4" style="background:#053391">{{ translate('حفظ الإعدادات') }}</button>
+                <button class="btn text-white mt-4" style="background:var(--amial-primary)">{{ translate('حفظ الإعدادات') }}</button>
             </div>
         </div>
     </form>

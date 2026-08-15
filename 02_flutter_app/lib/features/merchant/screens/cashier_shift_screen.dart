@@ -51,7 +51,7 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   Future<void> _open() async {
     final floatCtrl = TextEditingController(text: '0');
@@ -110,7 +110,7 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
 
   void _showResult(Map<String, dynamic> s) {
     final variance = double.tryParse('${s['variance']}') ?? 0;
-    final color = variance == 0 ? const Color(0xFF2E7D32) : AmialColors.red;
+    final color = variance == 0 ? AmialColors.success : AmialColors.red;
     final label = variance == 0 ? 'مطابق تماماً' : variance > 0 ? 'زيادة' : 'عجز';
     showDialog(context: context, builder: (ctx) => AlertDialog(
       title: Row(children: [Icon(variance == 0 ? Icons.check_circle : Icons.warning, color: color), const SizedBox(width: 8), const Text('تقرير Z')]),
@@ -181,7 +181,7 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
         const SizedBox(height: 16),
         FilledButton.icon(onPressed: _close, icon: const Icon(Icons.lock),
             label: const Text('إقفال الوردية (Z)'),
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2E7D32), minimumSize: const Size.fromHeight(52))),
+            style: FilledButton.styleFrom(backgroundColor: AmialColors.success, minimumSize: const Size.fromHeight(52))),
       ]);
 
   Widget _row(String k, String v, {bool bold = false, Color? color}) => Padding(

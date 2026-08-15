@@ -10,11 +10,18 @@
          خاماً بنقاطٍ سوداء، وبلا سكربته فلا تتبدّل التبويبات ولا تُفتح
          النوافذ. وهو ما بدا «بدائياً» و«أزراراً لا تعمل». --}}
     <link href="{{ asset('assets/vendor/bootstrap/css/bootstrap.rtl.min.css') }}" rel="stylesheet">
+    {{-- AMIAL-BRAND-004 — كانت هذه البوّابة **علامةً ثالثة**: ترويسةُ
+         ‎#0f1b2d وخلفيّةُ ‎#f4f6fa وأزرقان ‎#2563eb و‎#1e40af، ولا تُحمّل
+         ملفَّ التوكِنز إطلاقاً. وخطُّها `'Tajawal'` مذكورٌ ولا يُحمَّل —
+         فتسقط على خطّ النظام وتختلف على كلّ جهاز.
+
+         وموظّفُ الصرافة يفتح هذه البوّابة ثمّ يفتح التطبيق، فيرى منتجين. --}}
+    <link href="{{ asset('assets/css/amial-tokens.css') }}" rel="stylesheet">
     <style>
-        body { background:#f4f6fa; font-family:'Tajawal',system-ui,sans-serif; }
-        .topbar { background:#0f1b2d; color:#fff; }
-        .money { font-variant-numeric:tabular-nums; }
-        .cash { color:#0b7a3b; } .emoney { color:#0d5bd6; }
+        .topbar { background: var(--amial-primary-dark); color: #fff; }
+        /* الرصيدان بلونَي العلامة — النقدُ ذهبُها والإلكترونيُّ أزرقُها. */
+        .cash   { color: var(--amial-cash); }
+        .emoney { color: var(--amial-emoney); }
     </style>
 </head>
 <body>

@@ -18,7 +18,7 @@ class TrustCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (Color color, IconData icon) = switch (true) {
-      _ when trust.isTrusted => (const Color(0xFF2E7D32), Icons.verified_rounded),
+      _ when trust.isTrusted => (AmialColors.success, Icons.verified_rounded),
       _ when trust.isRisky => (AmialColors.red, Icons.report_gmailerrorred_rounded),
       _ when trust.isNew => (AmialColors.textMuted, Icons.person_outline_rounded),
       _ => (AmialColors.primary, Icons.history_rounded),
@@ -61,7 +61,7 @@ class TrustCard extends StatelessWidget {
           )
         else
           Row(children: [
-            _stat('أتمّ', '${trust.completedDeals}', const Color(0xFF2E7D32)),
+            _stat('أتمّ', '${trust.completedDeals}', AmialColors.success),
             _divider(),
             _stat('نزاعات', '${trust.disputedDeals}',
                 trust.disputedDeals > 0 ? AmialColors.red : AmialColors.textSecondary),

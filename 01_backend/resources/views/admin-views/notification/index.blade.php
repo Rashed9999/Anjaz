@@ -3,7 +3,7 @@
 @section('title', translate('الإشعارات'))
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-3" style="color:#053391">🔔 {{ translate('إشعارات الدفع') }}</h4>
+    <h4 class="fw-bold mb-3" style="color:var(--amial-primary)">🔔 {{ translate('إشعارات الدفع') }}</h4>
 
     <div class="row">
         {{-- نموذج الإرسال --}}
@@ -33,7 +33,7 @@
                             <label class="form-label">{{ translate('الصورة') }}</label>
                             <input type="file" name="image" class="form-control" accept="image/*" required>
                         </div>
-                        <button type="submit" class="btn w-100 text-white" style="background:#053391">
+                        <button type="submit" class="btn w-100 text-white" style="background:var(--amial-primary)">
                             <i class="tio-send"></i> {{ translate('إرسال الإشعار') }}
                         </button>
                     </form>

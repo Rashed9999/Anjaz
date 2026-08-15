@@ -70,9 +70,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
     if (qty <= 0) return ('نفد المخزون', Colors.white, const Color(0xFF5F6B7C));
     if (qty < _lowStock) {
       return ('بقي ${qty.toStringAsFixed(0)} فقط', const Color(0xFFDC0A0B),
-          const Color(0xFFFDE7E7));
+          AmialColors.dangerSurface);
     }
-    return ('متوفر', const Color(0xFF2E7D32), const Color(0xFFE3F3E5));
+    return ('متوفر', AmialColors.success, AmialColors.successSurface);
   }
 
   @override

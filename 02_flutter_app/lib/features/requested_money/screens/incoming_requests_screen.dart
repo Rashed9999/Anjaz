@@ -381,6 +381,6 @@ class _IncomingRequestsScreenState extends State<IncomingRequestsScreen> {
   void _snack(String message, {required bool ok}) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(message),
-        backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red,
+        backgroundColor: ok ? AmialColors.success : AmialColors.red,
       ));
 }

@@ -7,7 +7,7 @@
 
     <div class="d-flex align-items-center gap-3 mb-4">
         <a href="{{ route('admin.amial.fees.index') }}" class="btn btn-soft-secondary btn-sm"><i class="tio-back-ui"></i></a>
-        <i class="tio-chart-bar-4" style="font-size:22px;color:#0B435B"></i>
+        <i class="tio-chart-bar-4" style="font-size:22px;color:var(--amial-primary-dark)"></i>
         <h2 class="page-header-title mb-0">{{ translate('Profit Report') }}</h2>
         <span class="badge badge-soft-info ms-auto">AMIAL-PROFIT-REPORT-001</span>
     </div>
@@ -25,7 +25,7 @@
                     <input type="date" name="to" class="form-control" value="{{ $to->format('Y-m-d') }}">
                 </div>
                 <div class="col-md-4">
-                    <button class="btn btn-primary" style="background:#0B435B;border-color:#0B435B">
+                    <button class="btn btn-primary" style="background:var(--amial-primary-dark);border-color:var(--amial-primary-dark)">
                         <i class="tio-filter-list"></i> {{ translate('Apply') }}
                     </button>
                 </div>
@@ -36,10 +36,10 @@
     {{-- بطاقات ملخّص --}}
     <div class="row mb-4">
         <div class="col-sm-6 col-lg-3 mb-3">
-            <div class="card h-100" style="border-bottom:3px solid #0B435B">
+            <div class="card h-100" style="border-bottom:3px solid var(--amial-primary-dark)">
                 <div class="card-body">
                     <h6 class="text-muted mb-1">{{ translate('Net profit (period)') }}</h6>
-                    <span class="h3" style="color:#0B435B">{{ number_format((float)$periodNet, 2) }}</span>
+                    <span class="h3" style="color:var(--amial-primary-dark)">{{ number_format((float)$periodNet, 2) }}</span>
                     <small class="text-muted d-block">{{ translate('after agent commissions') }}</small>
                 </div>
             </div>
@@ -105,7 +105,7 @@
                     <tr class="border-top">
                         <th>{{ translate('Total') }}</th>
                         <th class="text-end">{{ number_format((int)$grossByType->sum('cnt')) }}</th>
-                        <th class="text-end" style="color:#0B435B">{{ number_format((float)$periodGross, 2) }}</th>
+                        <th class="text-end" style="color:var(--amial-primary-dark)">{{ number_format((float)$periodGross, 2) }}</th>
                     </tr>
                 </tfoot>
                 @endif

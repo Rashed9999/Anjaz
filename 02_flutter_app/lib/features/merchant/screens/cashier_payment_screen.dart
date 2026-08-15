@@ -138,7 +138,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
               decoration: BoxDecoration(color: AmialColors.background, borderRadius: BorderRadius.circular(8)),
               child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                 Text('نقداً: ${AmialMoney.yer(cash)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.success)),
                 Text('محفظةً: ${AmialMoney.yer(wallet)}',
                     style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
               ]),
@@ -387,7 +387,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red),
+        SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red),
       );
 
   @override
@@ -437,7 +437,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                   padding: const EdgeInsets.only(top: 6),
                   child: Text('خصم ${AmialMoney.yer(_discount)}${_promoLabel != null ? ' • $_promoLabel' : ''}',
                       style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
+                          fontSize: 12, fontWeight: FontWeight.bold, color: AmialColors.success)),
                 ),
             ]),
           ),

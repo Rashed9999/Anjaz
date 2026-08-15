@@ -84,7 +84,7 @@ class _FuelPricesScreenState extends State<FuelPricesScreen> {
   Widget _pendingCard(Map<String, dynamic> p) {
     return Card(
       key: Key('fuel-pending-price-${p['id']}'),
-      color: const Color(0xFFFFF8E1),
+      color: AmialColors.warningSurface,
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

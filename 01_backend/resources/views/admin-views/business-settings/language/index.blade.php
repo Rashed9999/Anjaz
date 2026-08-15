@@ -4,7 +4,7 @@
 @section('content')
 @php $languages = \App\CentralLogics\Helpers::get_business_settings('language') ?? []; @endphp
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-3" style="color:#053391">🌐 {{ translate('إدارة اللغات') }}</h4>
+    <h4 class="fw-bold mb-3" style="color:var(--amial-primary)">🌐 {{ translate('إدارة اللغات') }}</h4>
     <div class="alert alert-info small">
         {{ translate('العربية هي اللغة الأساسية لأميال باي، والإنجليزية لغة ثانوية اختيارية.') }}
     </div>
@@ -25,7 +25,7 @@
                             <label class="form-label">{{ translate('رمز اللغة (ISO)') }}</label>
                             <input type="text" name="code" class="form-control" required maxlength="5" placeholder="fr">
                         </div>
-                        <button type="submit" class="btn w-100 text-white" style="background:#053391">{{ translate('إضافة') }}</button>
+                        <button type="submit" class="btn w-100 text-white" style="background:var(--amial-primary)">{{ translate('إضافة') }}</button>
                     </form>
                 </div>
             </div>

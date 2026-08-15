@@ -215,12 +215,12 @@ class _SetGovernorateSheetState extends State<SetGovernorateSheet> {
                   ),
                   child: Row(children: [
                     const Icon(Icons.place_rounded,
-                        size: 18, color: Color(0xFF2E7D32)),
+                        size: 18, color: AmialColors.success),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text('يبدو أنك في محافظة $_detected',
                           style: const TextStyle(
-                              fontSize: 12.5, color: Color(0xFF2E7D32))),
+                              fontSize: 12.5, color: AmialColors.success)),
                     ),
                   ]),
                 ),

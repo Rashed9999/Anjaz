@@ -52,7 +52,7 @@ class _MerchantInstallmentsScreenState extends State<MerchantInstallmentsScreen>
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   List<int> get _durations =>
       ((_plan['durations'] ?? [3, 6, 12]) as List).map((e) => int.tryParse('$e') ?? 0).where((e) => e > 0).toList();
@@ -217,7 +217,7 @@ class _MerchantInstallmentsScreenState extends State<MerchantInstallmentsScreen>
               const SizedBox(height: 12),
               FilledButton.icon(onPressed: doCreate, icon: const Icon(Icons.handshake),
                   label: const Text('إنشاء العقد وتحصيل الدفعة'),
-                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2E7D32), minimumSize: const Size.fromHeight(52))),
+                  style: FilledButton.styleFrom(backgroundColor: AmialColors.success, minimumSize: const Size.fromHeight(52))),
             ]),
           ),
         );
@@ -270,7 +270,7 @@ class _MerchantInstallmentsScreenState extends State<MerchantInstallmentsScreen>
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
       child: Row(children: [
         Icon(active ? Icons.check_circle : Icons.pause_circle_outline,
-            color: active ? const Color(0xFF2E7D32) : AmialColors.textSecondary),
+            color: active ? AmialColors.success : AmialColors.textSecondary),
         const SizedBox(width: 8),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(active ? 'التقسيط مُفعّل' : 'التقسيط غير مُفعّل',
@@ -285,7 +285,7 @@ class _MerchantInstallmentsScreenState extends State<MerchantInstallmentsScreen>
 
   Widget _contractTile(Map<String, dynamic> c) {
     final statusLabel = {'active': 'نشط', 'completed': 'مكتمل', 'defaulted': 'متعثّر', 'cancelled': 'ملغى'}[c['status']] ?? c['status'];
-    final statusColor = c['status'] == 'completed' ? const Color(0xFF2E7D32)
+    final statusColor = c['status'] == 'completed' ? AmialColors.success
         : c['status'] == 'defaulted' ? AmialColors.red : AmialColors.primary;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),

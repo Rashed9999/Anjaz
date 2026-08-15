@@ -25,7 +25,7 @@
     text-align: center;
   }
   .logo { font-size: 48px; margin-bottom: 8px; }
-  .app-name { color: #053391; font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .app-name { color: var(--amial-primary); font-size: 22px; font-weight: 700; margin-bottom: 4px; }
   .subtitle { color: #6b7280; font-size: 14px; margin-bottom: 28px; }
   .label {
     display: block;
@@ -41,18 +41,18 @@
     font-size: 24px;
     letter-spacing: 10px;
     text-align: center;
-    border: 2px solid #e5e7eb;
+    border: 2px solid var(--amial-border);
     border-radius: 10px;
     outline: none;
     transition: border-color 0.2s;
     margin-bottom: 20px;
     -webkit-text-security: disc;
   }
-  .pin-input:focus { border-color: #053391; }
+  .pin-input:focus { border-color: var(--amial-primary); }
   .btn {
     width: 100%;
     padding: 14px;
-    background: #053391;
+    background: var(--amial-primary);
     color: white;
     border: none;
     border-radius: 10px;

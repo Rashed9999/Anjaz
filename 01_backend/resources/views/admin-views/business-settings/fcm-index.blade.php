@@ -3,7 +3,7 @@
 @section('title', translate('إعداد Firebase'))
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-3" style="color:#053391">🔥 {{ translate('إعداد Firebase (الإشعارات)') }}</h4>
+    <h4 class="fw-bold mb-3" style="color:var(--amial-primary)">🔥 {{ translate('إعداد Firebase (الإشعارات)') }}</h4>
 
     {{-- حالة المفتاح الحالي --}}
     <div class="card border-0 shadow-sm mb-3" style="border-radius:16px">
@@ -49,7 +49,7 @@
                 <input name="push_notification_key" type="text" class="form-control" dir="ltr"
                        placeholder="{{ translate('غير مطلوب — أميال باي تستعمل HTTP v1') }}">
 
-                <button class="btn text-white mt-3" style="background:#053391">{{ translate('حفظ') }}</button>
+                <button class="btn text-white mt-3" style="background:var(--amial-primary)">{{ translate('حفظ') }}</button>
             </div>
         </div>
     </form>
@@ -69,7 +69,7 @@
                                placeholder="{{ translate('رقم هاتف مستخدم — مثال 770000000') }}">
                     </div>
                     <div class="col-md-3">
-                        <button class="btn text-white w-100" style="background:#FECA1E;color:#053391!important">
+                        <button class="btn text-white w-100" style="background:var(--amial-yellow);color:var(--amial-primary)!important">
                             {{ translate('أرسل اختباراً') }}
                         </button>
                     </div>

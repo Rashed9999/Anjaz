@@ -19,7 +19,56 @@
  * حارسٍ هو ما أنتج الأزرقين أصلاً.)
  */
 
+/* ══════════════════════════════════════════════════════════════════════
+   AMIAL-TYPE-001 — الخطُّ مُضمَّنٌ لا مُستعار.
+   ══════════════════════════════════════════════════════════════════════
+   **العطل:** لم يكن في المشروع خطٌّ واحدٌ مُضمَّن. بوّابةُ الوكيل تطلب
+   `'Tajawal'` ولا تُحمّله، فيسقط على خطّ النظام: طاهوما على ويندوز،
+   ونوتو نسخ على أندرويد، وشيءٌ ثالثٌ على ماك. **فالشاشةُ نفسُها تختلف
+   على كلّ جهاز** — ولا هويّةَ لشيءٍ يتبدّل بمن ينظر إليه.
+
+   **ولمَ IBM Plex Sans Arabic:** أرقامُه جدوليّةُ العرض بالتصميم لا
+   بالحيلة، وهو ما يهمّ في شاشةٍ كلُّها مبالغ. ورخصتُه SIL OFL — تصلح
+   لمستودعٍ عامٍّ ولحزمةٍ تُنشر. واختير عمداً بعيداً عن Cairo وTajawal:
+   هما ما يختاره كلُّ موقعٍ عربيّ، فلا يميّزان شيئاً.
+
+   والملفّاتُ محلّيّة: `verify.sh` يمنع أيَّ إطارٍ من شبكةٍ خارجيّة —
+   وخطٌّ من CDN يتوقّف عند أوّل انقطاع، والمستعمِلُ في اليمن.
+   ══════════════════════════════════════════════════════════════════════ */
+
+@font-face {
+    font-family: 'IBM Plex Sans Arabic';
+    src: url('../fonts/IBMPlexSansArabic-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans Arabic';
+    src: url('../fonts/IBMPlexSansArabic-SemiBold.woff2') format('woff2');
+    font-weight: 600;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'IBM Plex Sans Arabic';
+    src: url('../fonts/IBMPlexSansArabic-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-display: swap;
+}
+
 :root {
+    /* ═══ الطباعة ═══ */
+    --amial-font: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+
+    /* سلَّمٌ من ستّ درجات — ولا مقاسَ خارجَه. */
+    --amial-text-xs:   .75rem;    /* تسميةٌ · وحدةُ عملة */
+    --amial-text-sm:   .875rem;   /* جدولٌ · نصٌّ ثانويّ */
+    --amial-text-base: 1rem;
+    --amial-text-lg:   1.125rem;  /* عنوانُ بطاقة */
+    --amial-text-xl:   1.5rem;    /* مؤشِّر */
+    --amial-text-2xl:  2rem;      /* الرصيدُ الأكبر في الشاشة */
+
     /* ═══ العلامة ═══ */
     --amial-primary:        #053391;   /* الأزرق الملكي — من نصّ «أميال» */
     --amial-primary-dark:   #021F5C;
@@ -30,6 +79,40 @@
     --amial-yellow-light:   #FFE680;
 
     --amial-red:            #DC0A0B;   /* التحذيرات والأخطاء فقط */
+
+    /* ══════════════════════════════════════════════════════════════════
+       الحالات — طبقةٌ كانت **تُخترع في كلّ ملفّ**.
+       ══════════════════════════════════════════════════════════════════
+       قِيس قبل كتابتها: ستّةُ أخضرَ مختلفةٍ تعني «نجح» في مشروعٍ واحد —
+       ‎#2E7D32 (٩٩ مرّة) و‎#059669 و‎#16A34A و‎#0F9D58 و‎#12694E و‎#008926.
+       ولا واحدَ منها في نظام الألوان. فالمطوّرُ الذي يحتاج أخضرَ نجاحٍ
+       لم يجد واحداً فاخترعه — وهذا يتكرّر بلا نهايةٍ ما لم يوجد التوكِن.
+
+       وكلُّها مقيسةٌ ضدّ حدّ WCAG AA (4.5:1) على السطح **وعلى الخلفيّة**،
+       لا على الأبيض وحده. والقيمُ في `DesignSystemSyncTest`.
+       ══════════════════════════════════════════════════════════════════ */
+    --amial-success:        #0F7A46;   /* نجحت · مُعتمَدة · متاح  — 5.39:1 */
+    --amial-warning:        #8A5A00;   /* معلَّقة · تحتاج مراجعة — 5.93:1 */
+    --amial-danger:         #DC0A0B;   /* فشلت · مرفوضة · مجمَّدة — 5.13:1 */
+    --amial-info:           #1D4FB8;   /* معلومةٌ محايدة        — 7.34:1 */
+
+    /* ══════════════════════════════════════════════════════════════════
+       AMIAL-SIGNATURE-001 — **الزوجُ الذي يميّز هذا المنتج عن أيّ محفظة.**
+       ══════════════════════════════════════════════════════════════════
+       للفرع قيدان يتحرّكان في اتّجاهين متعاكسين: النقدُ الورقيّ يحدّ
+       **السحب**، والرصيدُ الإلكترونيّ يحدّ **الإيداع**. وموظّفٌ يرى رقماً
+       واحداً كبيراً يَعِد العميلَ بما لا يستطيع.
+
+       فهذا الزوجُ ليس تفصيلاً بصريّاً — هو أصدقُ حقيقةٍ في هذا المنتج،
+       **وهو العنصرُ الذي يُذكَر به**. ولذلك يُحمَل بلونَي العلامة نفسِهما
+       لا بلونين جديدين: **النقدُ ذهبُ العلامة، والإلكترونيُّ أزرقُها** —
+       والورقةُ النقديّة اليمنيّة نفسُها ذهبيّة.
+
+       ويفترقان بالشكل أيضاً لا باللون وحده (`.amial-cash` مصمتة
+       و`.amial-emoney` محدَّدة) — فعمى الألوان لا يُلغي الفرق.
+       ══════════════════════════════════════════════════════════════════ */
+    --amial-cash:           #7A5C00;   /* نقدٌ ورقيّ — ذهبُ العلامة داكناً 6.25:1 */
+    --amial-emoney:         #1D4FB8;   /* رصيدٌ إلكترونيّ — أزرقُ العلامة  7.34:1 */
 
     /* ═══ الأسطح ═══ */
     --amial-background:     #F2F3F7;
@@ -54,6 +137,102 @@
 body {
     background: var(--amial-background);
     color: var(--amial-text);
+    font-family: var(--amial-font);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   المالُ لا يرقص.
+   ══════════════════════════════════════════════════════════════════════
+   أرقامٌ متناسبةُ العرض تُزيح العمودَ كلَّه كلّما تبدّل رقم، فيقرأ
+   المحاسبُ عموداً يهتزّ. `tabular-nums` تُثبّت عرضَ كلّ رقم، و`ltr`
+   تمنع انقلابَ المبلغ في سياقٍ عربيّ.
+
+   وتُطبَّق تلقائيّاً على كلّ خليّةٍ فيها صنفُ `money` أو `amount` —
+   فلا تعتمد على تذكُّر كاتب القالب.
+   ══════════════════════════════════════════════════════════════════════ */
+.money, .amount, .amial-money, td.money, .table .money {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+    direction: ltr;
+    unicode-bidi: isolate;
+    display: inline-block;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   العنصرُ المميِّز — الرصيدان جنباً إلى جنب.
+   ══════════════════════════════════════════════════════════════════════
+   يفترقان بالشكل قبل اللون: المصمتُ نقدٌ في الدرج، والمحدَّدُ رصيدٌ في
+   النظام. فمن لا يميّز الذهبيَّ من الأزرق يميّز المملوءَ من المفرَّغ.
+   ══════════════════════════════════════════════════════════════════════ */
+.amial-balance-pair {
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+    align-items: stretch;
+}
+
+.amial-cash, .amial-emoney {
+    display: inline-flex;
+    flex-direction: column;
+    gap: .1rem;
+    padding: .4rem .7rem;
+    border-radius: var(--amial-radius-sm);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.25;
+}
+
+.amial-cash {
+    background: var(--amial-cash);
+    color: #fff;
+    border: 1px solid var(--amial-cash);
+}
+
+.amial-emoney {
+    background: transparent;
+    color: var(--amial-emoney);
+    border: 1px solid var(--amial-emoney);
+}
+
+/* التسميةُ تحت الرقم تقول ما يحدّه — لا «الرصيد» مفرداً. */
+.amial-cash  > .amial-cap,
+.amial-emoney > .amial-cap {
+    font-size: var(--amial-text-xs);
+    opacity: .85;
+    font-weight: 400;
+}
+
+/* ── حالاتٌ تُقرأ باللفظ لا باللون وحده ─────────────────────────── */
+
+.amial-state {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    font-size: var(--amial-text-sm);
+    font-weight: 600;
+}
+
+.amial-state::before {
+    content: '';
+    width: .5rem;
+    height: .5rem;
+    border-radius: 50%;
+    background: currentColor;
+    flex: none;
+}
+
+.amial-state-success { color: var(--amial-success); }
+.amial-state-warning { color: var(--amial-warning); }
+.amial-state-danger  { color: var(--amial-danger); }
+.amial-state-info    { color: var(--amial-info); }
+
+/* والغيابُ ليس صفراً (القاعدة السابعة): شكلُه مفرَّغٌ لا ممتلئ. */
+.amial-state-unknown {
+    color: var(--amial-text-muted);
+}
+
+.amial-state-unknown::before {
+    background: transparent;
+    border: 1.5px solid currentColor;
 }
 
 .amial-sidebar {

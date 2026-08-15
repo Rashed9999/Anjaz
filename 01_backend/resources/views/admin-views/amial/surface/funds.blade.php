@@ -2,7 +2,7 @@
 @section('title', translate('صناديق العائلة'))
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-3" style="color:#053391">👨‍👩‍👧 {{ translate('صناديق العائلة') }}</h4>
+    <h4 class="fw-bold mb-3" style="color:var(--amial-primary)">👨‍👩‍👧 {{ translate('صناديق العائلة') }}</h4>
     <div class="card border-0 shadow-sm" style="border-radius:16px"><div class="card-body">
         <table class="table align-middle">
             <thead><tr><th>{{ translate('الصندوق') }}</th><th>{{ translate('الأعضاء') }}</th><th>{{ translate('الرصيد') }}</th><th>{{ translate('الحالة') }}</th><th>{{ translate('أُنشئ') }}</th></tr></thead>

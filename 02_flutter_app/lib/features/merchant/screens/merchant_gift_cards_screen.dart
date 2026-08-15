@@ -43,7 +43,7 @@ class _MerchantGiftCardsScreenState extends State<MerchantGiftCardsScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   Future<void> _issue() async {
     final amount = TextEditingController();
@@ -160,7 +160,7 @@ class _MerchantGiftCardsScreenState extends State<MerchantGiftCardsScreen> {
   Widget _card(Map<String, dynamic> c) {
     final status = '${c['status']}';
     final active = status == 'active';
-    final color = status == 'void' ? AmialColors.red : status == 'depleted' ? AmialColors.textSecondary : const Color(0xFF2E7D32);
+    final color = status == 'void' ? AmialColors.red : status == 'depleted' ? AmialColors.textSecondary : AmialColors.success;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),

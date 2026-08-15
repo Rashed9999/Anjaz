@@ -87,7 +87,7 @@ class _MyGiftCardsScreenState extends State<MyGiftCardsScreen> {
           InkWell(
             onTap: () {
               Clipboard.setData(ClipboardData(text: '${c['code']}'));
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نُسخ الكود'), backgroundColor: Color(0xFF2E7D32)));
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('نُسخ الكود'), backgroundColor: AmialColors.success));
             },
             child: const Icon(Icons.copy, color: Colors.white70, size: 16),
           ),

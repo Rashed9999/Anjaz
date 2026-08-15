@@ -414,7 +414,7 @@ class _AmialCustomerHomeScreenState extends State<AmialCustomerHomeScreen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: _coverageIsGap ? const Color(0xFFFFF8E1) : Colors.white,
+        color: _coverageIsGap ? AmialColors.warningSurface : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: color.withValues(alpha: 0.45)),
       ),

@@ -15,9 +15,9 @@
     <title>{{ translate('Two-Factor Authentication') }} — {{ Helpers::get_business_settings('business_name') ?? 'Amial Pay' }}</title>
     <link href="{{ asset('assets/vendor/bootstrap/css/bootstrap.rtl.min.css') }}" rel="stylesheet">
     <style>
-        body { background:linear-gradient(135deg,#0f2b46,#17395c); min-height:100vh; display:flex; align-items:center; }
+        body { background:linear-gradient(135deg,var(--amial-primary-dark),#17395c); min-height:100vh; display:flex; align-items:center; }
         .tf-card { border:0; border-radius:1.25rem; box-shadow:0 10px 40px rgba(0,0,0,.25); }
-        .brand { font-weight:800; color:#0f2b46; }
+        .brand { font-weight:800; color:var(--amial-primary-dark); }
         .code-input { letter-spacing:.6rem; text-align:center; font-size:1.5rem; font-weight:700; }
     </style>
 </head>

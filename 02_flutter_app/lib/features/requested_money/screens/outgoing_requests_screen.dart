@@ -86,7 +86,7 @@ class _OutgoingRequestsScreenState extends State<OutgoingRequestsScreen> {
   /// مجهولةٌ تُعرض كما جاءت لا تُبتلع صامتةً.
   (String, Color, IconData) _statusOf(String s) => switch (s) {
         'pending' => ('بانتظار موافقته', Colors.orange.shade800, Icons.hourglass_top_rounded),
-        'paid' => ('دُفع', const Color(0xFF2E7D32), Icons.check_circle_rounded),
+        'paid' => ('دُفع', AmialColors.success, Icons.check_circle_rounded),
         'declined' => ('رفضه', AmialColors.red, Icons.cancel_rounded),
         'cancelled' => ('سحبتَه', Colors.grey.shade700, Icons.undo_rounded),
         'expired' => ('انتهت مدّته', Colors.grey.shade700, Icons.timer_off_rounded),
@@ -175,7 +175,7 @@ class _OutgoingRequestsScreenState extends State<OutgoingRequestsScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(done ? 'سُحب الطلب' : (c.lastError.value.isEmpty ? 'تعذّر السحب' : c.lastError.value)),
-      backgroundColor: done ? const Color(0xFF2E7D32) : AmialColors.red,
+      backgroundColor: done ? AmialColors.success : AmialColors.red,
     ));
   }
 }

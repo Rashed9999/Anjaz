@@ -11,7 +11,7 @@
 <style>
     .amial-chart { width: 100%; height: auto; font-family: inherit; }
     .amial-chart text { font-size: 11px; fill: #6b7280; }
-    .amial-chart .grid { stroke: #e5e7eb; stroke-width: 1; }
+    .amial-chart .grid { stroke: var(--amial-border); stroke-width: 1; }
     .amial-chart .axis { stroke: #9ca3af; stroke-width: 1; }
     .chart-legend { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .85rem; }
     .chart-legend i { display: inline-block; width: .8rem; height: .8rem; border-radius: 2px; }

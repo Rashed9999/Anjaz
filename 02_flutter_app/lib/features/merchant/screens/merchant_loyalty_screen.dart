@@ -73,7 +73,7 @@ class _MerchantLoyaltyScreenState extends State<MerchantLoyaltyScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   Future<void> _save() async {
     final r = await _api.postData('/api/v1/amial/merchant/loyalty/program', {

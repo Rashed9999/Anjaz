@@ -672,7 +672,7 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
                 Clipboard.setData(ClipboardData(text: value));
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                   content: Text('نُسخ الرقم'),
-                  backgroundColor: Color(0xFF2E7D32),
+                  backgroundColor: AmialColors.success,
                   duration: Duration(seconds: 1),
                 ));
               },

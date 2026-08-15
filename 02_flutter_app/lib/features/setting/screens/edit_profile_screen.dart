@@ -49,7 +49,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(m), backgroundColor: ok ? const Color(0xFF2E7D32) : AmialColors.red));
+      SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   Future<void> _save(EditProfileController c) async {
     if (!_formKey.currentState!.validate()) return;

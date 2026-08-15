@@ -248,7 +248,7 @@ class _PaymentRequestCreateScreenState
         final result = c.recipientCheck.value;
         if (result?['found'] == true) {
           return _StatusCard(
-            color: const Color(0xFF2E7D32),
+            color: AmialColors.success,
             icon: Icons.verified_user_rounded,
             title: '${result?['masked_name'] ?? result?['name'] ?? 'عميل أميال'}',
             subtitle: '${result?['masked_phone'] ?? ''}\nتحقّق من الاسم قبل الإرسال',

@@ -3,7 +3,7 @@
 @section('title', translate('تفاصيل السؤال'))
 @section('content')
 <div class="content container-fluid" dir="rtl">
-    <h4 class="fw-bold mb-3" style="color:#053391">👁️ {{ translate('تفاصيل السؤال') }}</h4>
+    <h4 class="fw-bold mb-3" style="color:var(--amial-primary)">👁️ {{ translate('تفاصيل السؤال') }}</h4>
 
     <div class="row justify-content-center">
         <div class="col-lg-7">
@@ -18,7 +18,7 @@
                     <h5 class="fw-bold mt-3">{{ $faq->question }}</h5>
                     <p class="text-muted" style="white-space:pre-line">{{ $faq->answer }}</p>
                     <div class="d-flex gap-2 mt-4">
-                        <a href="{{ route('admin.faq.edit', ['id' => $faq->id]) }}" class="btn text-white" style="background:#053391">{{ translate('تعديل') }}</a>
+                        <a href="{{ route('admin.faq.edit', ['id' => $faq->id]) }}" class="btn text-white" style="background:var(--amial-primary)">{{ translate('تعديل') }}</a>
                         <a href="{{ route('admin.faq.index') }}" class="btn btn-outline-secondary">{{ translate('رجوع') }}</a>
                     </div>
                 </div>

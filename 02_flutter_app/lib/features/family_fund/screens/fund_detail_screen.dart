@@ -115,7 +115,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('تمت المساهمة بنجاح'),
-            backgroundColor: Color(0xFF2E7D32)),
+            backgroundColor: AmialColors.success),
       );
     }
   }
@@ -180,7 +180,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
       content: Text(success
           ? 'أُرسلت الدعوة — سيظهر الصندوق لدى العضو ليقبلها'
           : ctrl.lastError.value),
-      backgroundColor: success ? const Color(0xFF2E7D32) : AmialColors.red,
+      backgroundColor: success ? AmialColors.success : AmialColors.red,
     ));
   }
 
@@ -276,7 +276,7 @@ class _FundDetailScreenState extends State<FundDetailScreen> {
       content: Text(success
           ? 'تم الصرف من الصندوق بنجاح'
           : (ctrl.lastError.value.isEmpty ? 'فشل الصرف' : ctrl.lastError.value)),
-      backgroundColor: success ? const Color(0xFF2E7D32) : AmialColors.red,
+      backgroundColor: success ? AmialColors.success : AmialColors.red,
     ));
   }
 
