@@ -219,7 +219,7 @@ class OtpCenterScreenTest extends TestCase
             ->getJson('/admin/amial/otp/stats')->assertOk()->json('meta');
 
         $this->assertIsBool($m['door_open']);
-        $this->assertSame(9, count($m['providers']), 'قائمةُ المزوّدين ليست من السجلّ');
+        $this->assertSame(10, count($m['providers']), 'قائمةُ المزوّدين ليست من السجلّ');
         $this->assertCount(14, $m['trend'], 'الرسمُ ليس أربعةَ عشرَ يوماً');
 
         // «لا محاولات» ليست «٠٪» — الغيابُ يُقال. (القاعدة السابعة)

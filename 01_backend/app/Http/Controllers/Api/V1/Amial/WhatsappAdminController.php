@@ -23,7 +23,22 @@ use Illuminate\Support\Facades\Validator;
  */
 class WhatsappAdminController extends Controller
 {
-    private const PROVIDERS = ['meta_cloud', 'twilio', '360dialog', 'wati', 'ultramsg'];
+    /**
+     * **هذه القائمةُ هي البابُ، لا مجلَّدُ المزوّدين.**
+     *
+     * `ProviderRegistry` يكتشف الأصنافَ بمسح المجلّد، **لكنّ الحفظَ هنا
+     * محكومٌ بـ`in:` على هذه القائمة**. فصنفٌ مبنيٌّ واسمُه ليس فيها
+     * يُرفض حفظُه بـ٤٢٢، ولا يُفعَّل أبداً — «مبنيٌّ ولا يُوصَل إليه» في
+     * أنقى صوره: الشيفرةُ سليمةٌ والقائمةُ لا تعرفها.
+     *
+     * الحارس: `MessagingProviderReachabilityTest` — يقارن المجلَّدَ بالقائمة.
+     */
+    private const PROVIDERS = [
+        'meta_cloud', 'twilio', '360dialog', 'wati', 'ultramsg',
+        // AMIAL-MESSAGING-002 — غيرُ رسميٍّ بلا نافذةِ ٢٤ ساعة، فيصلح
+        // لإنذارات ٠٢:٠٠ التي يمنعها meta_cloud وtwilio.
+        'green_api',
+    ];
     private const SECRET_KEYS = ['access_token', 'token', 'api_key', 'sid'];
     private const CHANNELS = ['whatsapp_first', 'sms_first', 'whatsapp_only', 'sms_only'];
 

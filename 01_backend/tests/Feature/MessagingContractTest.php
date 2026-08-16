@@ -93,11 +93,14 @@ class MessagingContractTest extends TestCase
 
         foreach (['sms:twilio', 'sms:nexmo', 'sms:2factor', 'sms:msg91',
                   'whatsapp:meta_cloud', 'whatsapp:twilio', 'whatsapp:360dialog',
-                  'whatsapp:wati', 'whatsapp:ultramsg'] as $expected) {
+                  'whatsapp:wati', 'whatsapp:ultramsg',
+                  // AMIAL-MESSAGING-002 — غيرُ مقيَّدٍ بنافذة ٢٤ ساعة،
+                  // فهو المزوّدُ الذي تصل به إنذاراتُ ٠٢:٠٠.
+                  'whatsapp:green_api'] as $expected) {
             $this->assertContains($expected, $keys, "مزوّدٌ لم يُكتشف: {$expected}");
         }
 
-        $this->assertCount(9, $keys, 'عددُ المزوّدين تغيّر — راجع الاكتشاف');
+        $this->assertCount(10, $keys, 'عددُ المزوّدين تغيّر — راجع الاكتشاف');
     }
 
     /**
