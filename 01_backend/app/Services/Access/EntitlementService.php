@@ -383,8 +383,17 @@ class EntitlementService
             'max_branches' => \App\Models\Branch::where('merchant_user_id', $ownerId)->count(),
             'max_locations' => \App\Models\Retail\MerchantLocation::where('merchant_user_id', $ownerId)
                 ->where('is_active', true)->count(),
-            'max_pos_devices' => \App\Models\PosUser::where('merchant_user_id', $ownerId)
-                ->where('is_active', true)->count(),
+            // AMIAL-POS-DEVICES-001 — **الجهازُ يُعدّ من جدوله، لا من
+            // صفوف الموظّفين.**
+            //
+            // كان هذا السطرُ نسخةً حرفيّةً من `max_employees`، فحدّان
+            // يُباعان بأرقامٍ مختلفة يعدّان الصفوفَ نفسَها: البدايةُ تَعِد
+            // بصفر موظّفين وتُعطي واحداً، والأعمالُ تبيع خمسةً وتُسلّم
+            // ثلاثة.
+            //
+            // **والتعريفُ واحدٌ**: `PosDevice::activeSeats` يُستدعى هنا
+            // ومن المُسجِّل سواءً — والملغى لا يُحتسَب.
+            'max_pos_devices' => \App\Models\Merchant\PosDevice::activeSeats((int) $ownerId),
             default => null,
         };
 
