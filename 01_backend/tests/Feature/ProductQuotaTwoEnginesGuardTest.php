@@ -160,9 +160,13 @@ class ProductQuotaTwoEnginesGuardTest extends TestCase
 
     private function seedWholesaleProduct(User $m): void
     {
+        // **الأعمدةُ الإلزاميّةُ تُقرأ من الهجرة لا تُخمَّن.**
+        // أوّلُ صيغةٍ أسقطت البذرَ لأنّ `base_price` و`business_name` بلا
+        // افتراضيّ — فسقط الاختبارُ على أداته وأعلن «عطلاً» ليس عطلاً.
         $this->seedInto('wholesale_products', [
             'wholesale_business_id' => $this->wholesaleBusinessId($m),
             'name' => 'صنفُ جملةٍ للقياس',
+            'base_price' => 100,
         ]);
     }
 
@@ -170,7 +174,8 @@ class ProductQuotaTwoEnginesGuardTest extends TestCase
     {
         $this->seedInto('pharmacy_products', [
             'merchant_user_id' => $m->id,
-            'name' => 'دواءٌ للقياس',
+            'trade_name' => 'دواءٌ للقياس',
+            'sale_price' => 100,
         ]);
     }
 
@@ -196,6 +201,7 @@ class ProductQuotaTwoEnginesGuardTest extends TestCase
 
             return (int) DB::table('wholesale_businesses')->insertGetId([
                 'merchant_user_id' => $m->id,
+                'business_name' => 'منشأةُ جملةٍ للقياس',
                 'created_at' => now(), 'updated_at' => now(),
             ]);
         } catch (\Throwable $e) {
