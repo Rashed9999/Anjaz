@@ -114,11 +114,79 @@ class EntitlementShadowModeGuardTest extends TestCase
     {
         $shadow = (array) config('amial.entitlements.shadow');
 
-        foreach ([A::F_SUPPLIERS, A::F_PURCHASES, A::F_PROFIT_REPORTS, A::F_BRANCHES] as $code) {
+        foreach ([A::F_SUPPLIERS, A::F_PURCHASES, A::F_PROFIT_REPORTS, A::F_BRANCHES,
+            A::F_ADVANCED_REPORTS, A::F_EXCEL_EXPORT] as $code) {
             $this->assertContains($code, $shadow,
                 "«{$code}» رُبطت بالوسيط وليست في الظلّ — فجدارُ دفعٍ اشتعل على "
                 . 'تجربةٍ حيّة بلا أن يعرف أحدٌ من يتأثّر');
         }
+    }
+
+    /**
+     * @test
+     *
+     * **والقرارُ واحدٌ في الوسيط وفي المتحكّم.**
+     *
+     * `advanced_reports` و`excel_export` تُحرَسان من `ReportController` لا
+     * من وسيط — لأنّهما **قيمتان داخل نقطةٍ واحدة** لا مساران. ولو نُسخ
+     * منطقُ الظلّ إلى هناك لصار تعريفان، **وقد افترق تعريفان في هذه
+     * الجولة ثلاثَ مرّات**.
+     *
+     * فيُفحص المسارُ الثاني بالعمل: تاجرٌ مجّانيٌّ يطلب دفترَه بصيغة Excel.
+     */
+    public function the_controller_path_obeys_the_same_gate(): void
+    {
+        $merchant = $this->freeMerchant();
+
+        // ① في الظلّ: يمرّ ويُكتب.
+        config(['amial.entitlements.shadow' => [A::F_ADVANCED_REPORTS, A::F_EXCEL_EXPORT]]);
+
+        $shadowed = $this->actingAs($merchant, 'api')
+            ->postJson('/api/v1/amial/reports/request', [
+                'report_type' => 'merchant_ledger', 'format' => 'excel',
+            ]);
+
+        $this->assertNotSame(402, $shadowed->getStatusCode(),
+            'المتحكّمُ منع في الظلّ — فالتعريفان افترقا مرّةً أخرى');
+
+        $this->assertDatabaseHas('system_errors', [
+            'exception' => 'entitlement.shadow.' . A::F_ADVANCED_REPORTS . '.locked_by_plan',
+        ]);
+
+        // ② وخارجَه: يمنع بـ٤٠٢ ومعه طريقُ الترقية.
+        config(['amial.entitlements.shadow' => []]);
+
+        $this->actingAs($merchant, 'api')
+            ->postJson('/api/v1/amial/reports/request', [
+                'report_type' => 'merchant_ledger', 'format' => 'excel',
+            ])
+            ->assertStatus(402)
+            ->assertJsonPath('code', 'PLAN_UPGRADE_REQUIRED');
+    }
+
+    /**
+     * @test
+     *
+     * **ولا يُمنَع عميلٌ عاديٌّ من كشف عمليّاته.**
+     *
+     * `reports/*` بادئةٌ **عامّةٌ لكلّ مستخدم**. وحراستُها بوسيطٍ كانت
+     * ستحجب `user_transactions` عن كلّ عميل — وهو ما كشفه تحليلُ الأثر
+     * قبل التنفيذ. فالحدُّ على التاجر وحدَه، **وهذا يُثبَت لا يُوعَد به**.
+     */
+    public function an_ordinary_customer_is_never_blocked_from_their_own_report(): void
+    {
+        config(['amial.entitlements.shadow' => []]);   // الإنفاذُ مشتعل
+
+        $customer = User::factory()->create(['type' => 2, 'zone_code' => 'SOUTH']);
+
+        $response = $this->actingAs($customer, 'api')
+            ->postJson('/api/v1/amial/reports/request', [
+                'report_type' => 'user_transactions',
+            ]);
+
+        $this->assertNotSame(402, $response->getStatusCode(),
+            'عميلٌ عاديٌّ مُنع من كشف عمليّاته بحجّة باقةِ تاجر — '
+            . 'وهو العطلُ الذي تجنّبه التحليلُ ثمّ عاد من الباب الآخر');
     }
 
     /**

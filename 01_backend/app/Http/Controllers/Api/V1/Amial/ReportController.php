@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\GenerateReportJob;
 use App\Models\ReportExport;
 use App\Services\ReportService;
+use App\Support\Access\AccessConstants as A;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -39,15 +40,51 @@ class ReportController extends Controller
             return $this->error('FORBIDDEN', 'هذا التقرير للإدارة فقط', 403);
         }
 
+        $requesterType = match ((int)($user->type ?? 2)) {
+            0 => 'admin', 3 => 'merchant', default => 'user',
+        };
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-ENTITLEMENTS-002 — **قدرتان ليستا مساراً بل قيمتين.**
+        //
+        // `advanced_reports` و`excel_export` مدفوعتان (باقة الأعمال) ولهما
+        // شاشتان في التطبيق، **ولم يكن يحرسهما شيء**. وحراسةُ البادئة
+        // `reports/*` كانت ستحجب **تقريرَ عميلٍ عاديّ**: `user_transactions`
+        // منها، والبادئةُ عامّةٌ لكلّ مستخدم.
+        //
+        // فالحدُّ هنا، على القيمة نفسِها، والقرارُ من `EntitlementService::gate`
+        // — **المصدرُ الواحد** الذي يعرف وضعَ الظلّ ويكتب فيه.
+        //
+        // **والحدُّ على التاجر وحدَه**: قدرةُ متجرٍ تُقاس بباقة متجر، وعميلٌ
+        // عاديٌّ لا باقةَ له — فسؤالُه عنها يمنعه ممّا كان له مجّاناً.
+        if ($requesterType === 'merchant') {
+            $entitlements = app(\App\Services\Access\EntitlementService::class);
+
+            // ① تقريرُ دفتر التاجر هو «التقرير المتقدّم» — و
+            //    `user_transactions` كشفُ عمليّاتٍ عاديّ لا يُباع.
+            if ($reportType === 'merchant_ledger') {
+                $denial = $entitlements->gate($user, A::F_ADVANCED_REPORTS);
+
+                if ($denial !== null) {
+                    return $this->planDenial($denial);
+                }
+            }
+
+            // ② وصيغةُ Excel قدرةٌ مستقلّة — تُباع مع أيّ تقرير.
+            if ($request->input('format') === 'excel') {
+                $denial = $entitlements->gate($user, A::F_EXCEL_EXPORT);
+
+                if ($denial !== null) {
+                    return $this->planDenial($denial);
+                }
+            }
+        }
+
         $params = array_filter([
             'from' => $request->input('from'),
             'to' => $request->input('to'),
             'merchant_user_id' => $reportType === 'merchant_ledger' ? $user->id : null,
         ]);
-
-        $requesterType = match ((int)($user->type ?? 2)) {
-            0 => 'admin', 3 => 'merchant', default => 'user',
-        };
 
         $export = $this->service->request($user, $reportType,
             $request->input('format', 'csv'), $params, $requesterType);
@@ -60,6 +97,33 @@ class ReportController extends Controller
             'status' => $export->status,
             'message' => 'يُولَّد التقرير في الخلفية. تابع الحالة ثم حمّله عند الجاهزية.',
         ], 'REPORT_REQUESTED');
+    }
+
+    /**
+     * **ردُّ المنع بصيغة الوسيط نفسِها** — ٤٠٢ ومعه طريقُ الترقية.
+     *
+     * ولو ردّ المتحكّمُ شكلاً ثانياً لبنى التطبيقُ شاشتين لحالةٍ واحدة،
+     * ولضاع «كيف أُسمح لي» في إحداهما.
+     */
+    private function planDenial(array $r): JsonResponse
+    {
+        return new JsonResponse([
+            'success' => false,
+            'code' => $r['state'] === \App\Services\Access\EntitlementService::LIMIT_REACHED
+                ? 'PLAN_LIMIT_REACHED' : 'PLAN_UPGRADE_REQUIRED',
+            'message' => sprintf('«%s» متاحة في باقة %s (%s %s شهرياً)',
+                $r['capability']['name'] ?? '—',
+                $r['unlock']['plan_name'] ?? '—',
+                $r['unlock']['price_monthly'] ?? '—',
+                A::PLAN_PRICE_CURRENCY),
+            'errors' => (object) [],
+            'meta' => [
+                'capability' => $r['capability'],
+                'state' => $r['state'],
+                'unlock' => $r['unlock'],
+                'usage' => $r['usage'],
+            ],
+        ], 402);
     }
 
     /** GET /api/v1/amial/reports/{ulid}/status */

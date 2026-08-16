@@ -70,6 +70,76 @@ class EntitlementService
      *
      * @return array{state:string,capability:array,unlock:?array,usage:?array}
      */
+    /**
+     * AMIAL-ENTITLEMENTS-002 — **قرارُ البوّابة الواحد.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * يُستعمل من `EnsureCapability` **ومن المتحكّم سواءً** — وهذا هو
+     * الغرض. فقدرتان في هذه الدفعة لا تُحرَسان بوسيط: `advanced_reports`
+     * و`excel_export` **قيمتان داخل نقطةٍ واحدة** لا مساران.
+     *
+     * **ولو نُسخ منطقُ الظلّ إلى المتحكّم لصار تعريفان.** وقد افترق
+     * تعريفان في هذه الجولة ثلاثَ مرّات: مرّةً في عدّ الطبقات، ومرّةً في
+     * نطاق مفتاح الظلّ، ومرّةً في هروب تعبيرٍ نمطيّ. فصار القرارُ هنا
+     * وحدَه.
+     *
+     * @return array|null  `null` = يمرّ الطلب (متاحةٌ، أو في الظلّ وقد
+     *                     كُتبت). وغيرُ ذلك: حالةُ المنع كما هي.
+     */
+    public function gate(User $user, string $code): ?array
+    {
+        // **الأدمن يمرّ** — يفحص ويُصلح، ولا يشتري باقةً ليرى شاشة.
+        // (وهو الحدُّ نفسُه الذي في الوسيط، ويُكتب هنا مرّةً واحدة.)
+        if ((int) ($user->type ?? -1) === ADMIN_TYPE) {
+            return null;
+        }
+
+        $r = $this->state($user, $code);
+
+        if ($r['state'] === self::AVAILABLE) {
+            return null;
+        }
+
+        // **و`NOT_APPLICABLE` لا تدخل الظلَّ**: ليست منعاً بل إخفاءُ قدرةِ
+        // قطاعٍ آخر — وإمرارُها تفتح مضخّاتِ الوقود لصيدليّة.
+        if ($r['state'] !== self::NOT_APPLICABLE && $this->isShadowed($code)) {
+            $this->recordShadow($user, $code, $r);
+
+            return null;
+        }
+
+        return $r;
+    }
+
+    /** أفي الظلّ هي؟ — قائمةٌ لا مفتاحٌ عامّ (والسببُ في `config/amial.php`). */
+    public function isShadowed(string $code): bool
+    {
+        return in_array($code, (array) config('amial.entitlements.shadow', []), true);
+    }
+
+    /**
+     * **يُكتب المنعُ الذي لم يقع** — في مركز الأعطال، لا في ملفٍّ لا يُقرأ.
+     *
+     * والبصمةُ بالقدرة والحالة: فتاجرٌ يفتح شاشةَ الموردين عشرين مرّةً في
+     * اليوم يُنتج **سطراً واحداً بعدّاد**، لا عشرين سطراً تُغرق القائمةَ
+     * فتُهجَر.
+     *
+     * ولا يُوقِف فشلُ التسجيل الطلبَ: وعدُ الظلّ ألّا يُلمَس السلوك.
+     */
+    private function recordShadow(User $user, string $code, array $r): void
+    {
+        try {
+            app(\App\Services\OpsAlertService::class)->note(
+                'entitlement.shadow.' . $code . '.' . $r['state'],
+                sprintf('استحقاق (ظلّ): «%s»', $r['capability']['name'] ?? $code),
+                sprintf('الحالة %s · الحساب %s · لو كان الإنفاذُ مشتعلاً لرُدّ الطلب',
+                    $r['state'], $user->id ?? '—'),
+            );
+        } catch (\Throwable) {
+            // صمتٌ مقصود — انظر أعلاه.
+        }
+    }
+
     public function state(User $user, string $code): array
     {
         $cap = CapabilityRegistry::find($code);
