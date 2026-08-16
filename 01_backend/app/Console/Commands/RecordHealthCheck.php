@@ -55,7 +55,41 @@ class RecordHealthCheck extends Command
             ->where('checked_at', '<', $now->copy()->subDays(14))
             ->delete();
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-PROD-READINESS-001 — **القطعةُ الساقطةُ تُنذِر، لا تُكتب فقط.**
+        //
+        // كان هذا الأمرُ يكتب `down` في `system_health_checks` ثمّ ينتهي.
+        // فقاعدةٌ تسقط الثالثةَ فجراً تُسجَّل في جدولٍ لا يقرؤه أحد، ولا
+        // يُعرف الانقطاعُ إلّا حين يفتح مشرفٌ الصفحةَ صباحاً — أو حين
+        // يشتكي تاجر.
+        //
+        // **والإنذارُ من `OpsAlertService`** ليكون في المسار نفسِه الذي
+        // تسلكه المصالحة: أثرٌ في مركز الأعطال أوّلاً، ثمّ القناةُ
+        // الخارجيّةُ إن وُجدت.
+        //
+        // **وبصمةٌ لكلّ قطعةٍ على حدة** — فقاعدةٌ ساقطةٌ وقرصٌ ممتلئٌ
+        // حادثتان تُغلقان مستقلّتين، لا سطرٌ واحدٌ يُقفل فيُخفي الأخرى.
+        // ══════════════════════════════════════════════════════════════
+        $down = array_keys(array_filter(
+            $result['checks'],
+            static fn (array $c): bool => ($c['status'] ?? '') === 'unhealthy',
+        ));
+
+        foreach ($down as $component) {
+            app(\App\Services\OpsAlertService::class)->raise(
+                "health.down.{$component}",
+                "قطعةٌ ساقطة: {$component}",
+                "⛔ أميال باي — {$component} ساقطةٌ الآن ("
+                . now()->format('Y-m-d H:i') . ")\n"
+                . mb_substr((string) ($result['checks'][$component]['message'] ?? ''), 0, 300),
+            );
+        }
+
         $this->line("الحالة: {$result['status']}");
+
+        if ($down !== []) {
+            $this->error('ساقط: ' . implode(' · ', $down));
+        }
 
         return $result['status'] === 'unhealthy' ? self::FAILURE : self::SUCCESS;
     }

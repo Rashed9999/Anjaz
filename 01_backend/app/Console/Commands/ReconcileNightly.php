@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\CentralLogics\WhatsappModule;
+use App\Services\OpsAlertService;
 use App\Services\Reconciliation\ReconciliationService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -123,14 +123,6 @@ class ReconcileNightly extends Command
      */
     private function alert_(array $r): void
     {
-        $to = (array) config('amial.reconciliation.alert_numbers', []);
-
-        if ($to === []) {
-            $this->warn('⚠️ وُجد فرقٌ ولا رقمَ إنذارٍ مضبوط (AMIAL_RECON_ALERT_TO)');
-
-            return;
-        }
-
         $msg = "⚠️ أميال باي — المصالحة الليليّة\n"
             . "وُجد فرقٌ في " . now()->format('Y-m-d H:i') . "\n\n"
             . "• محافظ مختلفة: {$r['wallets']['diverged']} (الفرق {$r['wallets']['gap']})\n"
@@ -138,13 +130,27 @@ class ReconcileNightly extends Command
             . "• خزائن مختلفة: {$r['tills']['diverged']} (الفرق {$r['tills']['gap']})\n\n"
             . "افتح لوحة الإدارة ← مركز الدفتر.";
 
-        foreach ($to as $number) {
-            try {
-                WhatsappModule::sendText($number, $msg);
-            } catch (\Throwable $e) {
-                // **سقوطُ الإنذار لا يُسقط المصالحة** — الصفُّ محفوظٌ سلفاً.
-                Log::warning('reconcile-nightly: تعذّر الإنذار', ['error' => $e->getMessage()]);
-            }
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-PROD-READINESS-001 — **كان هنا فرعٌ صامت.**
+        //
+        // كان: إن كانت قائمةُ الأرقام فارغةً ⇒ `$this->warn(...)` و`return`.
+        // وقِيس أنّها **فارغةٌ فعلاً** (`AMIAL_RECON_ALERT_TO=` في
+        // `.env.example` بلا قيمة). فاختلالُ ثابتٍ ماليٍّ كان يُكتشَف
+        // الساعةَ الثانية ويُطبَع في ملفٍّ ولا يوقظ أحداً.
+        //
+        // فصار الإنذارُ عبر `OpsAlertService`: **الأثرُ في مركز الأعطال
+        // أوّلاً ودائماً**، ثمّ القناةُ الخارجيّةُ إن وُجدت. فغيابُ الرقم
+        // يُضعف الإنذارَ ولا يُلغيه.
+        // ══════════════════════════════════════════════════════════════
+        $sent = app(OpsAlertService::class)->raise(
+            'recon.nightly_diverged',
+            'المصالحةُ الليليّةُ وجدت فرقاً',
+            $msg,
+        );
+
+        if (! $sent) {
+            $this->warn('⚠️ وُجد فرقٌ — سُجّل في مركز الأعطال، ولا قناةَ خارجيّةً مضبوطة');
+            $this->warn('   اضبط AMIAL_RECON_ALERT_TO ليصل الإنذارُ ليلاً.');
         }
     }
 }

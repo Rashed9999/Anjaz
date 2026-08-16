@@ -56,6 +56,11 @@ services:
       DB_USERNAME: amial_user
       DB_PASSWORD: demo_local_only_pw
       RUN_SEEDERS: "true"   # ← يُشغِّل البيانات التجريبية عند أوّل تشغيل
+      # AMIAL-PROD-READINESS-001 — منفذُ الخروج من حاجز APP_DEBUG.
+      # `.env.demo` يعمل بـ APP_DEBUG=true عن قصدٍ لبيئة التطوير المحلّيّة،
+      # و`entrypoint.sh` يرفض الخدمةَ بها ما لم يُصرَّح هنا. **والتصريحُ
+      # هنا لا هناك:** فالافتراضُ في الإنتاج يبقى مغلقاً.
+      AMIAL_ALLOW_DEBUG: "true"
     volumes:
       - amial_storage:/var/www/html/storage/app
       - amial_logs:/var/www/html/storage/logs

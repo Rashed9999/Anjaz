@@ -124,5 +124,18 @@ php artisan route:cache
 php artisan view:cache
 php artisan event:cache
 
+# ── AMIAL-PROD-READINESS-001: ختمُ لحظة الإقلاع ──────────────────────
+#
+# يقرؤه `HealthCheckController::deployProbe` لنافذة سماح الإقلاع.
+# **وهو هنا وفي `entrypoint.sh` معاً عن قصد:** الملفّان تباعدا مرّتين من
+# قبل (حاجزُ APP_DEBUG ومجلّداتُ PDF)، وكلتاهما كلّفت عطلاً. الحارس:
+# `DeploymentProbeGuardTest::the_deployed_entrypoint_stamps_the_boot_time`.
+#
+# وهذه الهجرةُ تجري في المقدّمة هنا لا في الخلفيّة، فالنافذةُ احتياطٌ لا
+# حاجةٌ — لكنّ غيابَ الملفّ يجعل المسبارَ صارماً من الثانية الأولى، وهو ما
+# يُسقط الإقلاعَ قبل أن يقوم php-fpm.
+date -u +%s > /tmp/amial-boot-epoch 2>/dev/null || true
+chmod 644 /tmp/amial-boot-epoch 2>/dev/null || true
+
 echo "✅ التهيئة اكتملت — يبدأ Supervisor..."
 exec /usr/bin/supervisord -n -c /etc/supervisord.conf

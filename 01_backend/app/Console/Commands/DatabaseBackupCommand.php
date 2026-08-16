@@ -79,8 +79,44 @@ class DatabaseBackupCommand extends Command
                 'exit_code' => $exitCode,
                 'output' => $output,
             ]);
+
+            $this->alarm('backup.failed', 'فشلت النسخةُ الاحتياطيّة',
+                "⛔ أميال باي — لم تُنتَج نسخةٌ احتياطيّةٌ الليلة (mysqldump exit {$exitCode}).\n"
+                . 'كلُّ ساعةٍ تمرّ بلا نسخةٍ تُوسّع ما يضيع عند أوّل عطل.');
+
             return 1;
         }
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-PROD-READINESS-001 — **ملفٌّ موجودٌ ليس نسخةً صالحة.**
+        //
+        // كان الفحصُ «`exitCode == 0` وحجمٌ > صفر». و`mysqldump` المقطوعُ
+        // في منتصفه — قرصٌ امتلأ، أو اتّصالٌ انقطع، أو `pipefail` غيرُ
+        // مضبوطٍ خلف `| gzip` — **يترك ملفّاً غيرَ فارغٍ ورمزَ خروجٍ صفراً**.
+        // فتُقرأ نسخةٌ ناقصةٌ سليمةً، ولا يُكتشَف ذلك إلّا ليلةَ الحاجة.
+        //
+        // فيُفحص شيئان: أنّ الضغطَ سليمٌ إلى آخر بايت (`gzip -t`)، وأنّ
+        // `mysqldump` ختم عمله (`-- Dump completed`). والثاني وحدَه يكشف
+        // القطعَ الذي يمرّ من الأوّل.
+        //
+        // **وبصمةٌ تُكتب بجانب النسخة** — كما يفعل `scripts/backup.sh` —
+        // فـ`scripts/restore.sh` يرفض النسخةَ المفسودة ولا يُدخلها.
+        // ══════════════════════════════════════════════════════════════
+        $verdict = $this->verifyArchive($outFile);
+
+        if ($verdict !== null) {
+            $this->error("❌ النسخةُ غيرُ صالحة: {$verdict}");
+            @unlink($outFile);
+
+            $this->alarm('backup.corrupt', 'النسخةُ الاحتياطيّةُ غيرُ صالحة',
+                "⛔ أميال باي — أُنتجت نسخةٌ ثمّ رُفضت: {$verdict}\n"
+                . 'حُذفت لئلّا تُقرأ سليمةً ليلةَ الحاجة. لا نسخةَ لهذه الليلة.');
+
+            return 1;
+        }
+
+        @file_put_contents($outFile . '.sha256',
+            hash_file('sha256', $outFile) . '  ' . basename($outFile) . "\n");
 
         $sizeMb = round(filesize($outFile) / 1024 / 1024, 2);
         $duration = round(microtime(true) - $startedAt, 1);
@@ -98,6 +134,50 @@ class DatabaseBackupCommand extends Command
         }
 
         return 0;
+    }
+
+    /**
+     * يفحص أرشيفَ النسخة. يعيد `null` إن كان سليماً، وإلّا سببَ الرفض.
+     *
+     * **والفحصان مختلفان ولا يُغني أحدُهما:** `gzip -t` يكشف الفسادَ في
+     * البِنية، و«ختمُ mysqldump» يكشف **القطعَ النظيف** — تدفّقٌ توقّف
+     * وأُغلق الضغطُ عليه سليماً، فيمرّ من الأوّل ويسقط من الثاني.
+     */
+    private function verifyArchive(string $file): ?string
+    {
+        exec('gzip -t ' . escapeshellarg($file) . ' 2>&1', $o, $rc);
+
+        if ($rc !== 0) {
+            return 'أرشيفٌ مضغوطٌ فاسد (gzip -t)';
+        }
+
+        // آخرُ ما يكتبه mysqldump. غيابُه = قُطع التدفّق قبل النهاية.
+        exec('gunzip -c ' . escapeshellarg($file) . ' 2>/dev/null | tail -c 4096',
+            $tailLines, $tailRc);
+
+        $tail = implode("\n", $tailLines);
+
+        if (! str_contains($tail, 'Dump completed')) {
+            return 'ناقصة — لا خاتمةَ «Dump completed» (قُطع التفريغ)';
+        }
+
+        return null;
+    }
+
+    /**
+     * إنذارٌ تشغيليّ — **الأثرُ في مركز الأعطال أوّلاً**، ثمّ القناةُ
+     * الخارجيّةُ إن وُجدت.
+     *
+     * وكان فشلُ النسخة يُكتب في `Log::error` وحدَه: ليلةٌ بلا نسخةٍ لا
+     * يعرفها أحدٌ حتّى تُطلَب النسخةُ ولا توجد.
+     */
+    private function alarm(string $key, string $title, string $detail): void
+    {
+        try {
+            app(\App\Services\OpsAlertService::class)->raise($key, $title, $detail);
+        } catch (\Throwable $ignored) {
+            // المُنذِرُ لا يُسقط من استدعاه.
+        }
     }
 
     /**

@@ -84,6 +84,70 @@ class HealthCheckController
         ], $status);
     }
 
+    /**
+     * GET /railway-health — **مسبارُ النشر.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-PROD-READINESS-001 — **«نجح النشر» كانت تعني «أقلع nginx».**
+     *
+     * كان هذا المسارُ سطراً في `docker/nginx.conf`:
+     *
+     *     location = /railway-health { return 200 "ok"; }
+     *
+     * يجيب **قبل PHP وقبل قاعدة البيانات** — فالقاعدةُ قد تكون ساقطةً،
+     * والهجرةُ لم تبدأ، والتطبيقُ يردّ ٥٠٠ على كلّ طلب، **والفحصُ أخضر**.
+     * ونشرةٌ مكسورةٌ تحلّ محلَّ سليمةٍ ولا شيءَ يمنعها.
+     *
+     * وفي المقابل كانت `/health/readiness` مبنيّةً وصحيحةً — تفحص القاعدةَ
+     * والتخزينَ والطابورَ بالعمل — **ولا يسألها النشر**. وهو نمطُ العطل
+     * الأكثر تكراراً في هذا المشروع: مبنيٌّ ولا يُوصَل إليه.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ولمَ نافذةُ سماحٍ بدل الجاهزيّة الصرفة؟**
+     *
+     * لأنّ `entrypoint.sh` يبدأ nginx فوراً ويُجري الهجرة **في الخلفيّة**.
+     * فمسبارٌ صارمٌ من الثانية الأولى يُسقط **النشرةَ السليمة** ما دامت
+     * الهجرةُ تجري — وحارسٌ يمنع الصوابَ يُنزَع بعد يومين.
+     *
+     * فالتمييزُ بين **«لم يجهز بعد»** و**«لن يجهز»**:
+     *   · داخل النافذة (١٨٠ ثانيةً افتراضاً) ⇒ ٢٠٠ ومعها `warming`
+     *     والثواني المتبقّية — فيمرّ الإقلاع الطبيعيّ.
+     *   · بعدها ⇒ جاهزيّةٌ صرفة، و٥٠٣ تُبقي النشرةَ القديمة.
+     *
+     * **ولا نافذةَ حين لا يُعرف وقتُ الإقلاع** (لا ملفّ) — فالافتراضُ
+     * الصرامة، لا التساهل.
+     */
+    public function deployProbe(): JsonResponse
+    {
+        $ready = $this->readiness();
+
+        if ($ready->getStatusCode() === 200) {
+            return $ready;
+        }
+
+        $grace = (int) env('AMIAL_DEPLOY_GRACE_SECONDS', 180);
+        $bootedAt = @file_get_contents('/tmp/amial-boot-epoch');
+        $bootedAt = is_string($bootedAt) ? (int) trim($bootedAt) : 0;
+
+        $elapsed = $bootedAt > 0 ? (time() - $bootedAt) : PHP_INT_MAX;
+
+        if ($elapsed >= 0 && $elapsed < $grace) {
+            /** @var array<string,mixed> $body */
+            $body = json_decode((string) $ready->getContent(), true) ?: [];
+
+            return new JsonResponse([
+                'status' => 'warming',
+                'timestamp' => now()->toIso8601String(),
+                // **تُقال الثواني المتبقّية** — فمن يقرأ السجلَّ يعرف أنّ
+                // المهلةَ تنفد، ولا يظنّ الأخضرَ صحّةً.
+                'grace_seconds_left' => $grace - $elapsed,
+                'checks' => $body['checks'] ?? [],
+            ], 200);
+        }
+
+        return $ready;
+    }
+
     private function checkDatabase(): array
     {
         $start = microtime(true);

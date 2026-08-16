@@ -95,8 +95,17 @@ class SystemHealthController extends Controller
         // لا تجري — وصفحةٌ خضراءُ فوق راصدٍ ميّتٍ أسوأ من صفحةٍ حمراء.
         $lastBeat = DB::table('system_health_checks')->max('checked_at');
 
+        // **وهل يخرج الإنذارُ من الخادم أصلاً؟** (AMIAL-PROD-READINESS-001)
+        //
+        // كلُّ ما فوق يُكتب في جدولين، ويُقرأ من هذه الصفحة وحدَها. فإن لم
+        // تكن ثَمّ قناةٌ خارجيّة، فالمشرفُ **هو** جهازُ الرصد — وقاعدةُ
+        // المشروع تقول إنّه لم يعد كذلك. فتُقال الفجوةُ حيث تُقرأ، لا
+        // تُترك سطراً في سجلّ.
+        $hasAlertChannel = \App\Services\OpsAlertService::hasExternalChannel();
+
         return view('admin-views.amial.system.health', compact(
-            'now', 'overall', 'history', 'lastDown', 'defects', 'counts', 'lastBeat'));
+            'now', 'overall', 'history', 'lastDown', 'defects', 'counts',
+            'lastBeat', 'hasAlertChannel'));
     }
 
     /** يُغيّر حالةَ خطأ: أُقرَّ به · حُلّ · أُعيد فتحُه. */
