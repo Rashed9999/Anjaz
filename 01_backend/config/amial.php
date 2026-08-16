@@ -184,7 +184,7 @@ return [
             'trim',
             explode(',', (string) env(
                 'AMIAL_ENTITLEMENTS_SHADOW',
-                'suppliers,purchases,profit_reports,branches,advanced_reports,excel_export',
+                'suppliers,purchases,profit_reports,branches,advanced_reports,excel_export,customers',
             )),
         ))),
     ],

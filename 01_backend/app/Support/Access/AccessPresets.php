@@ -64,9 +64,22 @@ class AccessPresets
                 A::F_QUICK_SALE, A::F_DEBTS, A::F_DAILY_REPORTS, A::F_REFUNDS,
             ],
 
-            // بقالة/سوبرماركت: POS كامل
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-ENTITLEMENTS-006 — **صنفُ النشاط يقول ما ينطبق، لا ما
+            // اشتُري.** (قرارُ صاحب المشروع، ٢٠٢٦-٠٨-١٦.)
+            //
+            // كان `F_PRODUCTS` و`F_CUSTOMERS` هنا، ويُوحَّدان مع الباقة في
+            // `resolveFeatures` — **فيحصل عليهما تاجرُ التجزئة مجّاناً**
+            // بينما تبيعهما الباقةُ: المنتجاتُ من «البداية» والعملاءُ من
+            // «الأعمال».
+            //
+            // وهو ستُّ تركيباتٍ مقيسة (تجزئةٌ وجملةٌ × ثلاثِ باقات).
+            //
+            // **وبقيّةُ القائمة تبقى**: الكاشيرُ والإيصالاتُ والتقاريرُ
+            // اليوميّةُ وتقسيمُ الفاتورة **لا تبيعها أيُّ باقة** — فهي
+            // البابُ الأوّلُ للقطاع لا عمقُه.
             A::BIZ_RETAIL => [
-                A::F_CASHIER, A::F_PRODUCTS, A::F_CUSTOMERS, A::F_DEBTS,
+                A::F_CASHIER, A::F_DEBTS,
                 A::F_REFUNDS, A::F_PAYMENT_REQUESTS, A::F_SPLIT_BILL,
                 A::F_DAILY_REPORTS, A::F_RECEIPTS,
             ],
@@ -85,9 +98,9 @@ class AccessPresets
                 A::F_DEBTS, A::F_DAILY_REPORTS, A::F_RECEIPTS,
             ],
 
-            // جملة
+            // جملة — و`F_PRODUCTS`/`F_CUSTOMERS` نُزعتا للسبب أعلاه.
             A::BIZ_WHOLESALE => [
-                A::F_CASHIER, A::F_PRODUCTS, A::F_CUSTOMERS, A::F_DEBTS,
+                A::F_CASHIER, A::F_DEBTS,
                 A::F_WHOLESALE_INVOICES, A::F_WHOLESALE_COLLECTIONS,
                 A::F_DAILY_REPORTS, A::F_RECEIPTS,
             ],

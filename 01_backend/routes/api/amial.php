@@ -690,10 +690,23 @@ Route::middleware(['auth:api'])->group(function () {
         // AMIAL-CUSTOMER-CREDIT-001 — نظام ديون العملاء
         Route::prefix('credit')->name('credit.')->group(function () {
             Route::get('/dashboard', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'dashboard'])->name('dashboard');
-            Route::get('/customers', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'listCustomers'])->name('customers');
-            Route::post('/customers', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'upsertCustomer'])->name('customers.upsert');
-            Route::get('/customers/{id}', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'showCustomer'])->name('customers.show');
-            Route::get('/customers/{id}/statement', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'statement'])->name('customers.statement');
+            // AMIAL-ENTITLEMENTS-006 — **الحدُّ على الفعل لا على البادئة.**
+            //
+            // `credit/*` تخدم قدرتين: `debts` **مجّانيّة** و`customers`
+            // من باقة الأعمال. فحراسةُ البادئة كلِّها كانت تُقفل دفترَ
+            // الديون في وجه كلّ تاجرٍ مجّانيّ.
+            //
+            // فالمحروسُ **إدارةُ العملاء** (قائمةٌ وإنشاءٌ وملفٌّ وكشف)،
+            // و**عملياتُ الدين تبقى مجّانيّة**: تسديدٌ ومرتجعٌ وتسوية —
+            // فمن باع بالآجل يجب أن يُحصّل دينَه مهما كانت باقتُه.
+            Route::get('/customers', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'listCustomers'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_CUSTOMERS)->name('customers');
+            Route::post('/customers', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'upsertCustomer'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_CUSTOMERS)->name('customers.upsert');
+            Route::get('/customers/{id}', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'showCustomer'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_CUSTOMERS)->name('customers.show');
+            Route::get('/customers/{id}/statement', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'statement'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_CUSTOMERS)->name('customers.statement');
             Route::get('/customers/{id}/statement/pdf', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'statementPdf'])->name('customers.statement-pdf');
             Route::post('/customers/{id}/payment', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'recordPayment'])
                 ->middleware('amial.rate-limit:credit_payment,60,1')->name('customers.payment');

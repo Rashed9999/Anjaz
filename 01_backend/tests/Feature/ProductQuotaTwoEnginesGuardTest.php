@@ -131,16 +131,6 @@ class ProductQuotaTwoEnginesGuardTest extends TestCase
             'العدّادُ ① يقول صفراً بعد البذر — فالبذرُ لم يقع، '
             . '**والمقارنةُ التاليةُ ستكون صمتاً لا جواباً**');
 
-        // ══════════════════════════════════════════════════════════
-        // **البذرُ يُثبَت قبل المقارنة — وإلّا كانت المقارنةُ صمتاً.**
-        //
-        // بذرٌ يسقط يجعل العدّادين يقولان صفراً فيتّفقان، **فيُقرأ ذلك
-        // ›لا تعارض‹ وهو ›لم يُسأل‹**. وقد وقع: البوّابةُ أخرجت أخضرَ
-        // مرّتين والسؤالُ لم يُطرح.
-        $this->assertGreaterThan(0, $this->engineOne($m),
-            'العدّادُ ① يقول صفراً بعد البذر — فالبذرُ لم يقع، '
-            . '**والمقارنةُ التاليةُ ستكون صمتاً لا جواباً**');
-
         $one = $this->engineOne($m);
         $two = $this->engineTwo($m);
 
@@ -163,6 +153,9 @@ class ProductQuotaTwoEnginesGuardTest extends TestCase
         $m = $this->merchant(A::BIZ_PHARMACY, A::PLAN_STARTER);
 
         $this->seedPharmacyProduct($m);
+
+        $this->assertGreaterThan(0, $this->engineOne($m),
+            'العدّادُ ① يقول صفراً بعد البذر — فالمقارنةُ صمتٌ لا جواب');
 
         $one = $this->engineOne($m);
         $two = $this->engineTwo($m);

@@ -351,7 +351,10 @@ final class CapabilityRegistry
             C::make(A::F_CUSTOMERS)
                 ->nameAr('العملاء')
                 ->group('الناس')->icon('people')
-                ->minPlan(A::PLAN_BUSINESS)->screen('/customers'),
+                ->minPlan(A::PLAN_BUSINESS)// AMIAL-ENTITLEMENTS-006 — **المسارُ مفردٌ لا بادئة**: `credit/*`
+                // تخدم `debts` المجّانيّة أيضاً، فحراسةُ البادئة تُقفلها.
+                ->routes(['credit/customers'])
+                ->screen('/customers'),
 
             C::make(A::F_EMPLOYEES)
                 ->nameAr('الموظفون')
