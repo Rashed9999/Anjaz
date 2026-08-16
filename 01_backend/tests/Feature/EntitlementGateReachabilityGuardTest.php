@@ -248,7 +248,14 @@ class EntitlementGateReachabilityGuardTest extends TestCase
 
         // صيغتان: `capability:code` نصّاً، و`capability:' . A::F_X` ثابتاً.
         preg_match_all(
-            '~capability:([a-z0-9_.]+)|capability:\'\s*\.\s*[\\A-Za-z]+::(F_[A-Z_]+)~',
+            // **ولا شرطةٌ مائلةٌ داخل صنفِ محارف.** الصيغةُ الأولى كتبت
+            // `[\\A-Za-z]` لتلتقط `\App\...::F_X`، وPHP يحوّل `\\` إلى `\`
+            // في النصّ المفرد، فيصل PCRE سلسلةٌ `[\A-…]` — و`\A` مرساةٌ لا
+            // تصلح داخل صنف. **فسقط الحارسُ في البوّابة بخطأِ تصريف**
+            // ومرّ `php -l` لأنّه يفحص التركيبَ لا التعبير.
+            //
+            // فيُستبدَل الصنفُ بما لا شرطةَ فيه: أيُّ شيءٍ حتّى `::`.
+            '~capability:([a-z0-9_.]+)|capability:\'\s*\.\s*[^\s)]+::(F_[A-Z_]+)~',
             $src, $m, PREG_SET_ORDER);
 
         foreach ($m as $hit) {
