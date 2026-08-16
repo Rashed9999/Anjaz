@@ -78,6 +78,39 @@ class OpsAlertGuardTest extends TestCase
     /**
      * @test
      *
+     * **ورقمٌ مضبوطٌ بلا مزوّدٍ مُفعَّل لا يُعدّ وصولاً.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمن — كاد يُدفَع:** `ProviderRegistry::sendText` لا يرمي
+     * استثناءً أبداً؛ يُعيد `'not_found'` حين لا مزوّدَ نصٍّ حرٍّ مُفعَّل،
+     * و`'error'` حين يسقط كلُّ مزوّد. وكان `OpsAlertService` يضع
+     * `$sent = true` لمجرّد ألّا يُرمى استثناء.
+     *
+     * فمن ضبط `AMIAL_RECON_ALERT_TO` ولم يُفعّل مزوّداً كان يرى
+     * **«✓ أُرسلت»** من `amial:alert-test`، ويطمئنّ، ولا يصل شيء.
+     * **وهو أسوأُ من غياب القناة**: غيابُها معلومٌ، وادّعاؤها يُنهي البحث.
+     */
+    public function a_configured_number_without_a_provider_is_not_counted_as_delivered(): void
+    {
+        // رقمٌ مضبوطٌ — ولا مزوّدَ واتساب مُفعَّلٌ في بيئة الاختبار.
+        config(['amial.reconciliation.alert_numbers' => ['967771234567']]);
+
+        $sent = app(OpsAlertService::class)->raise(
+            'recon.nightly_diverged', 'فرقٌ', 'تفصيل');
+
+        $this->assertFalse($sent,
+            'ادّعى الوصولَ ولا مزوّدَ مُفعَّل — فيُقرأ «✓ أُرسلت» على فشلٍ تامّ');
+
+        // **والأثرُ يبقى** — الفشلُ في القناة لا يُضيّع الحادثة.
+        $this->assertTrue(
+            DB::table('system_errors')
+                ->where('exception', 'recon.nightly_diverged')->exists(),
+            'ضاعت الحادثةُ مع فشل القناة');
+    }
+
+    /**
+     * @test
+     *
      * **وغيابُ القناة يُرفَع عطلاً بنفسه.**
      *
      * فالفجوةُ التي تُخفي الأعطال لا يجوز أن تكون هي أخفاها.

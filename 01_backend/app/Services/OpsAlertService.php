@@ -84,8 +84,32 @@ class OpsAlertService
 
         foreach ($to as $number) {
             try {
-                WhatsappModule::sendText((string) $number, $detail);
-                $sent = true;
+                // ══════════════════════════════════════════════════════
+                // AMIAL-PROD-READINESS-002 — **النتيجةُ تُقرأ، لا يُكتفى
+                // بغياب الاستثناء.**
+                //
+                // `ProviderRegistry::sendText` **لا يرمي أبداً**؛ يُعيد نصّاً:
+                //
+                //   'not_found'  لا مزوّدَ نصٍّ حرٍّ مُفعَّلاً إطلاقاً
+                //   'error'      جُرّب كلُّ مزوّدٍ وسقط
+                //   'success'
+                //
+                // وكان هذا الموضعُ يضع `$sent = true` لمجرّد ألّا يُرمى
+                // استثناء — **فيدّعي الوصولَ حتّى بلا مزوّدٍ واحد**،
+                // و`amial:alert-test` يطبع «✓ أُرسلت» على فشلٍ تامّ.
+                //
+                // وهو نصُّ ما تحاربه هذه الجولة: **حارسٌ يكذب أسوأ من
+                // غيابه** — ووقع في الأداة المبنيّة لإنهاء ذلك.
+                // ══════════════════════════════════════════════════════
+                $result = WhatsappModule::sendText((string) $number, $detail);
+
+                if ($result === 'success') {
+                    $sent = true;
+                } else {
+                    Log::warning('ops-alert: لم يصل', [
+                        'key' => $key, 'result' => $result,
+                    ]);
+                }
             } catch (\Throwable $e) {
                 // **سقوطُ القناة لا يُسقط ما استدعاها** — الأثرُ محفوظٌ سلفاً.
                 Log::warning('ops-alert: تعذّر الإرسال', [
