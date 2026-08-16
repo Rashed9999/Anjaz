@@ -283,7 +283,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
                 textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: color)),
             const SizedBox(height: 2),
-            Text(plan['is_free'] == true ? _freePriceLabel(plan) : '$price ر.ي',
+            Text(plan['is_free'] == true ? _freePriceLabel(plan) : '$price ${_cur(plan)}',
                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             if (plan['is_free'] != true)
               Text(_annual ? 'سنوياً' : 'شهرياً',
@@ -359,6 +359,20 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
     );
   }
 
+  /// AMIAL-PLAN-CURRENCY-001 — **العملةُ تُرسَل مع السعر، ولا تُكتب هنا.**
+  ///
+  /// قِيس: `PLAN_PRICES_SAR` بالريال **السعوديّ** كما يقول اسمُه، وكلُّ
+  /// رصيدٍ في المنتج بالريال **اليمنيّ**. وأربعةُ مواضعَ في هذه الشاشة
+  /// كانت تكتب «ر.ي» على الرقم نفسِه — **فالرقمُ صحيحٌ والعملةُ كاذبة**،
+  /// وهي أخطرُ من رقمٍ خاطئ: ٣٥ ر.س ≈ ٢٤٠٠ ر.ي.
+  ///
+  /// و`amial-financial-truth` تقول: «Never silently convert currencies».
+  /// **فلا تُحوَّل** — تُقال. والخادمُ يرسل `currency` مع كلّ سعر، ومصدرُها
+  /// `AccessConstants::PLAN_PRICE_CURRENCY` — سطرٌ واحدٌ يُغيَّر إن غُيِّر
+  /// التسعير، لا تسعُ شاشات.
+  String _cur(Map<String, dynamic> plan) =>
+      (plan['currency'] ?? '').toString();
+
   String _planLabel(String? code) {
     return c.plans.firstWhere(
       (p) => p['code'] == code,
@@ -422,7 +436,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
                   textBaseline: TextBaseline.alphabetic, children: [
                 Text('$price', style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
                 const SizedBox(width: 4),
-                const Text('ر.ي', style: TextStyle(color: Colors.white, fontSize: 14)),
+                Text(_cur(plan), style: const TextStyle(color: Colors.white, fontSize: 14)),
               ]),
               Text(priceLabel, style: const TextStyle(color: Colors.white70, fontSize: 12)),
             ],
@@ -585,7 +599,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(children: [
-              Text('$price ر.ي', style: const TextStyle(
+              Text('$price ${_cur(plan)}', style: const TextStyle(
                   fontSize: 24, fontWeight: FontWeight.bold, color: AmialColors.primary)),
               Text(_annual ? 'سنوياً' : 'شهرياً',
                   style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
@@ -632,6 +646,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
   Future<void> _openContactSheet(Map<String, dynamic> plan, dynamic price) async {
     final planLabel = plan['label']?.toString() ?? '';
     final priceSar = (price is num) ? price.toInt() : (int.tryParse('$price') ?? 0);
+    final currency = _cur(plan);
 
     await showModalBottomSheet(
       context: context,
@@ -657,7 +672,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
               onTap: () async {
                 Navigator.pop(sheetCtx);
                 await _tryLaunch(ContactConstants.upgradeWhatsAppUrl(
-                  planLabel: planLabel, priceSar: priceSar,
+                  planLabel: planLabel, priceSar: priceSar, currency: currency,
                 ));
               },
             ),
@@ -679,7 +694,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
               onTap: () async {
                 Navigator.pop(sheetCtx);
                 await _tryLaunch(ContactConstants.mailUrl(
-                  'ترقية إلى $planLabel — $priceSar ر.ي',
+                  'ترقية إلى $planLabel — $priceSar $currency',
                 ));
               },
             ),

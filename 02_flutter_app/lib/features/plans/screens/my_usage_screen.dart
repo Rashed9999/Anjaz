@@ -310,6 +310,10 @@ class UsageLimitDialog {
     final suggestedPlan = meta['suggested_plan']?.toString();
     final suggestedLabel = meta['suggested_plan_label']?.toString() ?? '';
     final suggestedPrice = meta['suggested_plan_price_sar'];
+    // AMIAL-PLAN-CURRENCY-001 — العملةُ من الخادم؛ كان «ر.ي» محفوراً
+    // على سعرٍ بالريال السعوديّ.
+    final suggestedCurrency =
+        (meta['suggested_plan_price_currency'] ?? '').toString();
 
     final limitLabel = _limitLabel(limitType);
     final isBlocked = max == '0';
@@ -363,7 +367,7 @@ class UsageLimitDialog {
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text('ترقية إلى $suggestedLabel',
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text('$suggestedPrice ر.ي / شهرياً',
+                  Text('$suggestedPrice $suggestedCurrency / شهرياً',
                       style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
                 ])),
               ]),

@@ -55,6 +55,10 @@ class ErrorTrackingService
                         'occurrences' => DB::raw('occurrences + 1'),
                         'last_seen_at' => $now,
                         'message' => mb_substr($e->getMessage(), 0, 2000),
+                        // AMIAL-PROD-READINESS-005 — **آخرُ طلبٍ لا أوّلُه.**
+                        // من يحقّق يبدأ من الأحدث، وأسطرُ السجلّ الأقدمُ قد
+                        // دُوِّرت أصلاً.
+                        'request_id' => $request?->attributes->get('request_id'),
                         // **خطأٌ عاد بعد إغلاقه يُفتح ثانيةً.** وإلّا بقي
                         // «محلولاً» وهو يقع كلَّ دقيقة.
                         'status_flag' => $existing->status_flag === 'resolved'
@@ -73,6 +77,7 @@ class ErrorTrackingService
                 'line' => $e->getLine(),
                 'method' => $request?->method(),
                 'path' => $request ? mb_substr($request->path(), 0, 512) : null,
+                'request_id' => $request?->attributes->get('request_id'),
                 'status' => $status,
                 'user_id' => $request?->user()?->id,
                 'actor_type' => $request?->user()?->type !== null

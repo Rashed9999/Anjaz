@@ -161,7 +161,17 @@
                                 <div class="small text-muted">{{ \Illuminate\Support\Str::limit($e->message, 120) }}</div>
                             </td>
                             <td class="h-mono">{{ basename((string) $e->file) }}:{{ $e->line }}</td>
-                            <td class="h-mono">{{ $e->method }} /{{ \Illuminate\Support\Str::limit((string) $e->path, 40) }}</td>
+                            <td class="h-mono">
+                                {{ $e->method }} /{{ \Illuminate\Support\Str::limit((string) $e->path, 40) }}
+                                {{-- AMIAL-PROD-READINESS-005 — الخيطُ يظهر حيث يُقرأ.
+                                     بدونه يبقى مخزَّناً ولا يُوصَل إليه: يبحث
+                                     المشرفُ في السجلّ بالوقت والتخمين. --}}
+                                @if ($e->request_id)
+                                    <div class="small" style="color:var(--amial-text-muted)">
+                                        طلب: {{ $e->request_id }}
+                                    </div>
+                                @endif
+                            </td>
                             <td class="text-center fw-bold" style="font-variant-numeric:tabular-nums">{{ $e->occurrences }}</td>
                             <td class="small">{{ \Carbon\Carbon::parse($e->last_seen_at)->diffForHumans() }}</td>
                             <td class="text-center">

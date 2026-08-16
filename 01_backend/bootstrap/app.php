@@ -117,6 +117,12 @@ $app = Application::configure(basePath: dirname(__DIR__))
 
         $middleware->use([
             TrustProxies::class,
+            // AMIAL-PROD-READINESS-005 — **أوّلَ ما يجري، قبل كلّ شيء.**
+            //
+            // المعرّفُ يجب أن يوجد قبل أوّل سطرِ سجلٍّ يُكتب — وإلّا خرجت
+            // أسطرُ الوسائط التي تسبقه بلا خيطٍ يربطها بما بعدها. وهي
+            // بالضبط أسطرُ الرفض والحدّ والصيانة التي يُبحث عنها.
+            \App\Http\Middleware\RequestId::class,
             // **بعد `TrustProxies` مباشرةً وقبل الجلسة.**
             // يقرأ `X-Forwarded-Proto` (فيلزم أن يكون الوسيط موثوقاً
             // قبله)، ويكتب `session.secure` قبل أن تُبنى كوكي الجلسة

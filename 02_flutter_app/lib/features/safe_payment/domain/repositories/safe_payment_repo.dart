@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
-import 'package:amial_pay/data/api/idempotency_key_generator.dart';
 import 'package:amial_pay/util/app_constants.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
@@ -27,6 +26,7 @@ class SafePaymentRepo extends GetxService {
     required String amount,
     String? deliveryTerms,
     List<String>? attachments,
+    required String idempotencyKey,
   }) async {
     return apiClient.postData(
       AppConstants.amialSafePayments,
@@ -38,41 +38,48 @@ class SafePaymentRepo extends GetxService {
         'delivery_terms': ?deliveryTerms,
         'attachments': ?attachments,
       },
-      idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('safe_pay_create'),
+      idempotencyKey: idempotencyKey,
     );
   }
 
   // Seller actions
-  Future<Response> sellerAccept(String ulid, {String? note}) =>
-      _action(ulid, 'seller-accept', {'note': ?note}, 'sp_accept');
+  Future<Response> sellerAccept(String ulid,
+          {String? note, required String idempotencyKey}) =>
+      _action(ulid, 'seller-accept', {'note': ?note}, idempotencyKey);
 
-  Future<Response> sellerReject(String ulid, String reason) =>
-      _action(ulid, 'seller-reject', {'reason': reason}, 'sp_reject');
+  Future<Response> sellerReject(String ulid, String reason,
+          {required String idempotencyKey}) =>
+      _action(ulid, 'seller-reject', {'reason': reason}, idempotencyKey);
 
-  Future<Response> sellerMarkInDelivery(String ulid, {String? note}) =>
-      _action(ulid, 'seller-mark-in-delivery', {'note': ?note}, 'sp_in_delivery');
+  Future<Response> sellerMarkInDelivery(String ulid,
+          {String? note, required String idempotencyKey}) =>
+      _action(ulid, 'seller-mark-in-delivery', {'note': ?note}, idempotencyKey);
 
-  Future<Response> sellerMarkDelivered(String ulid, {String? note}) =>
-      _action(ulid, 'seller-mark-delivered', {'note': ?note}, 'sp_delivered');
+  Future<Response> sellerMarkDelivered(String ulid,
+          {String? note, required String idempotencyKey}) =>
+      _action(ulid, 'seller-mark-delivered', {'note': ?note}, idempotencyKey);
 
   // Buyer actions
-  Future<Response> buyerConfirm(String ulid) =>
-      _action(ulid, 'buyer-confirm', {}, 'sp_confirm');
+  Future<Response> buyerConfirm(String ulid,
+          {required String idempotencyKey}) =>
+      _action(ulid, 'buyer-confirm', {}, idempotencyKey);
 
-  Future<Response> buyerCancel(String ulid, String reason) =>
-      _action(ulid, 'buyer-cancel', {'reason': reason}, 'sp_cancel');
+  Future<Response> buyerCancel(String ulid, String reason,
+          {required String idempotencyKey}) =>
+      _action(ulid, 'buyer-cancel', {'reason': reason}, idempotencyKey);
 
   Future<Response> buyerDispute(
     String ulid,
     String reason, {
     String? reasonCode,
     List<String>? attachments,
+    required String idempotencyKey,
   }) =>
       _action(ulid, 'buyer-dispute', {
         'reason': reason,
         'reason_code': ?reasonCode,
         'attachments': ?attachments,
-      }, 'sp_dispute');
+      }, idempotencyKey);
 
   // ============ AMIAL-SAFEPAY-EVIDENCE-001 ============
 
@@ -99,14 +106,25 @@ class SafePaymentRepo extends GetxService {
   }
 
   /// البائع يؤكّد التسليم برمز المشتري.
-  Future<Response> verifyDelivery(String ulid, String code) =>
-      _action(ulid, 'verify-delivery', {'code': code}, 'sp_verify_delivery');
+  Future<Response> verifyDelivery(String ulid, String code,
+          {required String idempotencyKey}) =>
+      _action(ulid, 'verify-delivery', {'code': code}, idempotencyKey);
 
-  Future<Response> _action(String ulid, String path, Map<String, dynamic> body, String idemPrefix) {
+  /// AMIAL-IDEMPOTENCY-002 — **المفتاحُ يُستقبَل ولا يُولَّد هنا.**
+  ///
+  /// كان `IdempotencyKeyGenerator.forFinancialAction(idemPrefix)` داخل
+  /// قائمة المُعامِلات — أي في **كلّ نداء**. فمن انقطع اتّصالُه بعد وصول
+  /// الطلب وقبل وصول الردّ يُعيد المحاولة بمفتاحٍ جديد، فيقرؤها الخادمُ
+  /// عمليّةً ثانية.
+  ///
+  /// والمستودعُ `GetxService` مفردٌ لا يعرف متى تبدأ نيّةٌ ومتى تنتهي —
+  /// يعرفها المتحكّم، فمنه يأتي المفتاح.
+  Future<Response> _action(
+      String ulid, String path, Map<String, dynamic> body, String idempotencyKey) {
     return apiClient.postData(
       '${AppConstants.amialSafePayments}/$ulid/$path',
       body,
-      idempotencyKey: IdempotencyKeyGenerator.forFinancialAction(idemPrefix),
+      idempotencyKey: idempotencyKey,
     );
   }
 }

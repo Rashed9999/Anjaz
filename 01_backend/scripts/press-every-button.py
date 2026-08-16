@@ -27,12 +27,19 @@ AMIAL-PRESS-001 — **يُضغط كلُّ زرٍّ في اللوحة، لا ثم
 ══════════════════════════════════════════════════════════════════════
 
 الاستعمال:
-    php artisan serve --port 8123 &
+    php artisan db:seed --class=DemoDataSeeder
+    AMIAL_DISABLE_ADMIN_CAPTCHA=true php artisan serve --port 8123 &
     python3 scripts/press-every-button.py --base http://127.0.0.1:8123
+
+**والمتغيّرُ ليس زينة.** رمزُ الكابتشا **صورةٌ** ورمزُها في الجلسة — لا
+يقرؤه مسبار. وهو معطَّلٌ في الإنتاج أصلاً
+(`AMIAL_DISABLE_ADMIN_CAPTCHA=true`)، فالمسبارُ يعمل عليه بلا إعداد؛
+والمحلّيُّ وحدَه يحتاج السطرَ أعلاه.
 """
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -75,10 +82,32 @@ def admin_pages() -> list[str]:
     return sorted(set(pages))
 
 
+def _visible_sig(page) -> str:
+    """بصمةُ النصّ **الذي يراه الإنسان** — لا شيفرةُ الصفحة.
+
+    مطواةٌ تنفتح لا تغيّر من الشيفرة إلّا صنفاً واحداً، **وتغيّر المرئيَّ
+    كثيراً**. فهذا القياسُ يفرّق بين زرٍّ عمل بلا طلبِ شبكةٍ وزرٍّ ميّت.
+
+    **والمقارنةُ بالنصّ لا بطوله.** تبويبان طولُهما متقارب يُقرآن سواءً
+    بالطول — وقد وقع: تبويبانِ سليمانِ عُدّا ميّتين لأنّ الفرقَ في الطول
+    كان دون العشرين محرفاً. **والأرقامُ تُنزع** لأنّ ساعةً في الترويسة
+    تتغيّر وحدَها فتجعل كلَّ زرٍّ «حيّاً».
+    """
+    try:
+        raw = page.locator("body").inner_text(timeout=2000) or ""
+    except Exception:
+        return ""
+
+    return re.sub(r"\s+", " ", re.sub(r"[0-9٠-٩]+", "", raw)).strip()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://127.0.0.1:8123")
     ap.add_argument("--limit", type=int, default=0, help="عددُ الصفحات (0 = الكلّ)")
+    # الافتراضُ حسابُ `DemoDataSeeder` — ويُغلَب بالبيئة على قاعدةٍ أخرى.
+    ap.add_argument("--phone", default=os.environ.get("PROBE_ADMIN_PHONE", "967700000000"))
+    ap.add_argument("--password", default=os.environ.get("PROBE_ADMIN_PASSWORD", "Admin@2026"))
     args = ap.parse_args()
 
     pages = admin_pages()
@@ -124,9 +153,18 @@ def main() -> int:
         #  **ومسبارٌ يكذب أسوأ من غيابه.** فيُتأكَّد من الدخول قبل أيّ ضغطة،
         #  ويُوقَف المسحُ بخطأٍ صريحٍ إن لم ينجح.
         # ══════════════════════════════════════════════════════════════
+        #  **وكلمةُ المرورِ كانت مخترَعةً.** كُتب هنا
+        #  `"sweep-probe-password"` — ولا حسابَ في هذا المشروع بهذا السرّ.
+        #  فالدخولُ يفشل **دائماً**، ويخرج المسبارُ بالرمز ٢ قبل أن يضغط
+        #  زرّاً واحداً. أي أنّ هذا الملفَّ كلَّه (٢٢٥ سطراً) لم يُنتج
+        #  نتيجةً واحدةً منذ كُتب.
+        #
+        #  والسرُّ الصحيحُ ليس سرّاً: `DemoDataSeeder` يُنشئ مديرَ العرض
+        #  بـ`Admin@2026`. **ويُقرأ من البيئة أوّلاً** — فمن يشغّله على
+        #  قاعدةٍ غيرِ قاعدة العرض يمرّره بلا تعديل ملفّ.
         page.goto(f"{args.base}/admin/auth/login", wait_until="networkidle")
-        page.fill('input[name="phone"]', "967700000000")
-        page.fill('input[name="password"]', "sweep-probe-password")
+        page.fill('input[name="phone"]', args.phone)
+        page.fill('input[name="password"]', args.password)
 
         # **وجودُ الحقل ليس شرطاً.** حقلُ رمز التحقّق يُعرض دائماً في
         # القالب، و`AMIAL_DISABLE_ADMIN_CAPTCHA` تُلغي التحقّقَ لا العرض.
@@ -139,7 +177,26 @@ def main() -> int:
         page.wait_for_load_state("networkidle")
 
         if "login" in page.url:
+            # **ويُقال أيُّ البابين أُغلق.** «تعذّر الدخول» وحدَها أرسلت
+            # خلف كلمةِ مرورٍ صحيحة: السببُ كان الكابتشا لا الحساب.
+            body = page.content()
             print(f"تعذّر الدخول — بقي على {page.url}", file=sys.stderr)
+
+            if "Captcha" in body or "كابتشا" in body:
+                print("  السبب: **الكابتشا** — ورمزُها صورةٌ لا يقرؤها مسبار.",
+                      file=sys.stderr)
+                print("  فيُشغَّل الخادمُ بها معطَّلة:", file=sys.stderr)
+                print("     AMIAL_DISABLE_ADMIN_CAPTCHA=true php artisan serve --port 8123",
+                      file=sys.stderr)
+                print("  (وهي معطَّلةٌ في الإنتاج أصلاً — فالمسبارُ يعمل عليه بلا شيء)",
+                      file=sys.stderr)
+            else:
+                print(f"  السبب: الحسابُ أو السرّ. المجرَّب: {args.phone}", file=sys.stderr)
+                print("  وإن كانت القاعدةُ فارغة:", file=sys.stderr)
+                print("     php artisan db:seed --class=DemoDataSeeder", file=sys.stderr)
+                print("  أو مرِّر حساباً آخر: PROBE_ADMIN_PHONE=… PROBE_ADMIN_PASSWORD=…",
+                      file=sys.stderr)
+
             browser.close()
             return 2
 
@@ -149,8 +206,13 @@ def main() -> int:
             except Exception:
                 continue
 
+            # **ما يُضغَط عنصرٌ يُضغَط.** كان المرشِّحُ يشمل
+            # `[data-testid]:visible` كلَّها — فالتقط **عناوينَ الصفحات**
+            # (وسمُ الاختبار عليها لا على زرّ) وأبلغ عنها «ميّتة». وعنوانٌ
+            # لا يفعل شيئاً حين يُضغَط: هذا هو الصواب لا العطل.
             buttons = page.locator(
-                "button:visible, a[data-act]:visible, [data-testid]:visible"
+                "button:visible, a[data-act]:visible, "
+                "a[data-testid]:visible, button[data-testid]:visible"
             )
             n = min(buttons.count(), 40)
 
@@ -168,10 +230,24 @@ def main() -> int:
                     skipped += 1
                     continue
 
+                # **والتبويبُ المفتوحُ سلفاً لا يُقاس بضغطة.** ضغطُ التبويب
+                # النشط لا يفعل شيئاً — وهو الصواب. فعُدَّ سبعةً منها
+                # «ميّتة» في أوّل تشغيلٍ صادق.
+                try:
+                    if (b.get_attribute("aria-selected") == "true"
+                            or "active" in (b.get_attribute("class") or "").split()):
+                        skipped += 1
+                        continue
+                except Exception:
+                    pass
+
                 before_url = page.url
-                before_text = len(page.content())
+                before_html = len(page.content())
+                before_seen = _visible_sig(page)
+
                 requests: list[str] = []
-                page.on("request", lambda r: requests.append(r.url))
+                on_request = lambda r: requests.append(r.url)  # noqa: E731
+                page.on("request", on_request)
                 console.clear()
 
                 try:
@@ -179,13 +255,30 @@ def main() -> int:
                     page.wait_for_timeout(450)
                     pressed += 1
                 except Exception:
+                    page.remove_listener("request", on_request)
                     skipped += 1
                     continue
 
-                moved = page.url != before_url
-                changed = abs(len(page.content()) - before_text) > 60
+                page.remove_listener("request", on_request)
 
-                if not (requests or moved or changed):
+                moved = page.url != before_url
+                changed = abs(len(page.content()) - before_html) > 60
+                # **والنصُّ المرئيُّ هو الإشارةُ الثالثة، وبها أُصلح كذبٌ.**
+                #
+                # أوّلُ تشغيلٍ ناجح — بعد إصلاح الدخول — أبلغ عن **٣٥ زرّاً
+                # ميّتاً من ٤٠**، وكلُّها مطاوي القائمة الجانبيّة وتبويبات
+                # الصفحة. وهي تعمل: تفتح قسماً أو تبدّل تبويباً بـCSS.
+                #
+                # والسببُ أنّ القياسَ كان على طول **الشيفرة** — و
+                # `class="collapse"` ← `class="collapse show"` خمسةُ محارف،
+                # دون عتبة الستّين. فقيل «لم يحدث شيء» وقد حدث كلُّ شيء.
+                #
+                # **والنصُّ المرئيُّ يقفز** حين ينفتح مطواة: بنودُ القائمة
+                # كانت مخفيّةً فصارت تُقرأ. (وحارسٌ يكذب أسوأ من غيابه —
+                # وهذا الملفُّ كذب مرّتين قبل أن يصدق.)
+                seen_changed = _visible_sig(page) != before_seen
+
+                if not (requests or moved or changed or seen_changed):
                     dead.append((path, label, "ضُغط ولم يحدث شيء"))
 
                 for c in console:

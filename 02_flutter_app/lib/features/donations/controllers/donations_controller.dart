@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/donations/domain/models/donation_models.dart';
+import 'package:amial_pay/data/api/idempotent_intent.dart';
 import 'package:amial_pay/features/donations/domain/repositories/donations_repo.dart';
 
 /// AMIAL-DONATIONS-001 (v1.2)
-class DonationsController extends GetxController implements GetxService {
+class DonationsController extends GetxController with IdempotentIntent implements GetxService {
   final DonationsRepo repo;
   DonationsController({required this.repo});
 
@@ -100,12 +101,17 @@ class DonationsController extends GetxController implements GetxService {
   }) async {
     try {
       isSubmitting.value = true;
+      // AMIAL-IDEMPOTENCY-002 — مفتاحٌ واحدٌ لنيّةٍ واحدة، والحملةُ نطاقُه:
+      // تبرّعان لحملتين نيّتان، وإعادةُ الأولى بعد انقطاعٍ إعادةٌ لا تبرّعٌ ثانٍ.
       final r = await repo.donate(
         campaignUlid: campaignUlid,
         amount: amount,
         isAnonymous: isAnonymous,
         message: message,
+        idempotencyKey: keyFor('donate', scope: campaignUlid),
       );
+
+      settleKey('donate', r, scope: campaignUlid);
       if ((r.statusCode == 200 || r.statusCode == 201) &&
           r.body is Map &&
           r.body['success'] == true) {

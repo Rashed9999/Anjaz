@@ -152,6 +152,7 @@ class FeatureAccessService
             'subscription_plan' => $plan,
             'subscription_plan_label' => A::PLAN_LABELS[$plan] ?? $plan,
             'subscription_price_sar' => A::PLAN_PRICES_SAR[$plan] ?? 0,
+            'subscription_price_currency' => A::PLAN_PRICE_CURRENCY,
             'subscription_expires_at' => $expiresAt,
             'subscription_notes' => $notes,
             'features' => array_values($features),

@@ -57,6 +57,7 @@ class AccessController extends Controller
                 'is_expired' => $isExpired,
                 'limits' => AccessPresets::planLimits($effectivePlan),
                 'price_monthly_sar' => A::PLAN_PRICES_SAR[$effectivePlan] ?? 0,
+                'currency' => A::PLAN_PRICE_CURRENCY,
             ];
         }
 
@@ -141,6 +142,7 @@ class AccessController extends Controller
                     'label' => A::PLAN_LABELS[$code] ?? $code,
                     'price_monthly_sar' => A::PLAN_PRICES_SAR[$code] ?? 0,
                     'price_annual_sar' => A::PLAN_PRICES_SAR_ANNUAL[$code] ?? 0,
+                    'currency' => A::PLAN_PRICE_CURRENCY,
                     'duration_days' => $code === A::PLAN_FREE ? null : 30,
                     'features' => AccessPresets::planFeatures($code),
                     'limits' => AccessPresets::planLimits($code),
@@ -164,7 +166,10 @@ class AccessController extends Controller
         return $this->ok([
             'plans' => $plans,
             'current_plan' => $currentPlan,
-            'currency' => 'SAR',
+            // **العملةُ من الثابت لا مكتوبةً هنا** — موضعٌ واحدٌ يُغيَّر إن
+            // غُيِّر التسعير. وكان `'SAR'` هنا و«ر.ي» في الشاشة، فالخادمُ
+            // يقول السعوديّ والتطبيقُ يكتب اليمنيّ على الرقم نفسِه.
+            'currency' => \App\Support\Access\AccessConstants::PLAN_PRICE_CURRENCY,
             'note' => 'الأسعار مرجعية بالريال السعودي. التفعيل يتم يدوياً عبر خدمة العملاء.',
         ]);
     }
@@ -187,6 +192,7 @@ class AccessController extends Controller
                 'label' => A::PLAN_LABELS[$p] ?? $p,
                 'price_sar' => A::PLAN_PRICES_SAR[$p] ?? 0,
                 'price_annual_sar' => A::PLAN_PRICES_SAR_ANNUAL[$p] ?? 0,
+                'currency' => A::PLAN_PRICE_CURRENCY,
             ], A::ALL_PLANS),
         ]);
     }

@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/safe_payment/domain/models/safe_payment_models.dart';
+import 'package:amial_pay/data/api/idempotent_intent.dart';
 import 'package:amial_pay/features/safe_payment/domain/repositories/safe_payment_repo.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
-class SafePaymentController extends GetxController implements GetxService {
+class SafePaymentController extends GetxController with IdempotentIntent implements GetxService {
   final SafePaymentRepo repo;
   SafePaymentController({required this.repo});
 
@@ -98,13 +99,20 @@ class SafePaymentController extends GetxController implements GetxService {
   }) async {
     try {
       isSubmitting.value = true;
+      // AMIAL-IDEMPOTENCY-002 — نطاقُ النيّة هاتفُ البائع مع المبلغ:
+      // صفقتان لبائعين مختلفين نيّتان، وإعادةُ الأولى إعادةٌ لا صفقةٌ ثانية.
+      final createKey = keyFor('sp_create', scope: '$sellerPhone|$amount');
+
       final r = await repo.create(
         sellerPhone: sellerPhone,
         title: title,
         description: description,
         amount: amount,
         deliveryTerms: deliveryTerms,
+        idempotencyKey: createKey,
       );
+
+      settleKey('sp_create', r, scope: '$sellerPhone|$amount');
       if ((r.statusCode == 200 || r.statusCode == 201) &&
           r.body is Map &&
           r.body['success'] == true) {
@@ -123,23 +131,31 @@ class SafePaymentController extends GetxController implements GetxService {
 
   // ============ Seller actions ============
   Future<bool> sellerAccept(String ulid, {String? note}) =>
-      _executeAction(() => repo.sellerAccept(ulid, note: note), ulid);
+      _executeAction((k) => repo.sellerAccept(ulid, note: note, idempotencyKey: k),
+          ulid, 'sp_accept');
 
   Future<bool> sellerReject(String ulid, String reason) =>
-      _executeAction(() => repo.sellerReject(ulid, reason), ulid);
+      _executeAction((k) => repo.sellerReject(ulid, reason, idempotencyKey: k),
+          ulid, 'sp_reject');
 
   Future<bool> sellerMarkInDelivery(String ulid, {String? note}) =>
-      _executeAction(() => repo.sellerMarkInDelivery(ulid, note: note), ulid);
+      _executeAction(
+          (k) => repo.sellerMarkInDelivery(ulid, note: note, idempotencyKey: k),
+          ulid, 'sp_in_delivery');
 
   Future<bool> sellerMarkDelivered(String ulid, {String? note}) =>
-      _executeAction(() => repo.sellerMarkDelivered(ulid, note: note), ulid);
+      _executeAction(
+          (k) => repo.sellerMarkDelivered(ulid, note: note, idempotencyKey: k),
+          ulid, 'sp_delivered');
 
   // ============ Buyer actions ============
   Future<bool> buyerConfirm(String ulid) =>
-      _executeAction(() => repo.buyerConfirm(ulid), ulid);
+      _executeAction((k) => repo.buyerConfirm(ulid, idempotencyKey: k),
+          ulid, 'sp_confirm');
 
   Future<bool> buyerCancel(String ulid, String reason) =>
-      _executeAction(() => repo.buyerCancel(ulid, reason), ulid);
+      _executeAction((k) => repo.buyerCancel(ulid, reason, idempotencyKey: k),
+          ulid, 'sp_cancel');
 
   Future<bool> buyerDispute(
     String ulid,
@@ -148,9 +164,11 @@ class SafePaymentController extends GetxController implements GetxService {
     List<String>? attachments,
   }) =>
       _executeAction(
-          () => repo.buyerDispute(ulid, reason,
-              reasonCode: reasonCode, attachments: attachments),
-          ulid);
+          (k) => repo.buyerDispute(ulid, reason,
+              reasonCode: reasonCode,
+              attachments: attachments,
+              idempotencyKey: k),
+          ulid, 'sp_dispute');
 
   // ============ AMIAL-SAFEPAY-CODE-001 ============
 
@@ -159,7 +177,8 @@ class SafePaymentController extends GetxController implements GetxService {
   /// لا يمرّ عبر `_executeAction` لأن الفشل هنا ليس فشلاً عابراً: للمشتري
   /// ثلاث محاولات فقط، فرسالة الخادم (كم بقي) يجب أن تصل للبائع حرفياً.
   Future<bool> verifyDelivery(String ulid, String code) =>
-      _executeAction(() => repo.verifyDelivery(ulid, code), ulid);
+      _executeAction((k) => repo.verifyDelivery(ulid, code, idempotencyKey: k),
+          ulid, 'sp_verify_delivery');
 
   // ============ AMIAL-SAFEPAY-EVIDENCE-001 ============
 
@@ -211,11 +230,21 @@ class SafePaymentController extends GetxController implements GetxService {
   int get evidenceCount =>
       evidence.values.fold<int>(0, (sum, list) => sum + list.length);
 
+  /// AMIAL-IDEMPOTENCY-002 — **المفتاحُ يُبنى هنا ويُتلَف هنا.**
+  ///
+  /// وهذا الموضعُ هو مصبُّ تسعِ عمليّاتٍ ماليّة، فسدُّه يسدّها كلَّها.
+  /// والنطاقُ `العمليّة:الصفقة`: فقبولُ صفقةٍ وقبولُ أخرى نيّتان، وإعادةُ
+  /// الأولى بعد انقطاعٍ إعادةٌ لا قبولٌ ثانٍ.
   Future<bool> _executeAction(
-      Future<Response> Function() action, String ulid) async {
+      Future<Response> Function(String idempotencyKey) action,
+      String ulid,
+      String intent) async {
+    final key = keyFor(intent, scope: ulid);
+
     try {
       isSubmitting.value = true;
-      final r = await action();
+      final r = await action(key);
+      settleKey(intent, r, scope: ulid);
       if ((r.statusCode == 200 || r.statusCode == 201) &&
           r.body is Map &&
           r.body['success'] == true) {

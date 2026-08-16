@@ -354,18 +354,38 @@ Route::middleware(['auth:api'])->group(function () {
     });
 
     // -------- Account Recovery --------
+    //
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-PROD-READINESS-004 — **استعادةُ الحساب كانت بلا سقفٍ خاصّ.**
+    //
+    // قِيس في تدقيق الجاهزيّة: هذه المساراتُ تحمل سقفَ المجموعة العامّ
+    // وحدَه (‏٦٠/دقيقة)، بينما `auth_login` عليه ١٠ و`verify_pin` عليه ١٠.
+    //
+    // **وهي بابُ استيلاءٍ على حساب**: ستّون محاولةً في الدقيقة على رمزٍ
+    // من ستّ خاناتٍ تستنفده في ساعاتٍ من عنوانٍ واحد — ثمّ يُبدَّل رقمُ
+    // الهاتف ويُملَك الحساب بما فيه.
+    //
+    // والسقوفُ بحسب الخطر لا بالتساوي:
+    //   · التحقّقُ من الرمز — الأخطر — ٥/دقيقة كـ`check-otp` في التسجيل.
+    //   · بدءُ الاستعادة يُرسل رسالةً مدفوعة ⇒ ٥/دقيقة.
+    //   · الإتمامُ يغيّر الهاتفَ فعلاً ⇒ ١٠/دقيقة.
+    // ══════════════════════════════════════════════════════════════════
     Route::prefix('recovery')->name('amial.recovery.')->group(function () {
         Route::post('/initiate-self', [AccountRecoveryController::class, 'initiateSelf'])
+            ->middleware('amial.rate-limit:recovery_initiate,5,1')
             ->name('initiate-self');
 
         Route::post('/initiate-lost', [AccountRecoveryController::class, 'initiateLost'])
+            ->middleware('amial.rate-limit:recovery_initiate,5,1')
             ->name('initiate-lost');
 
         Route::post('/{ulid}/verify-otp', [AccountRecoveryController::class, 'verifyOtp'])
+            ->middleware('amial.rate-limit:recovery_verify,5,1')
             ->where('ulid', '[A-Z0-9]{26}')
             ->name('verify-otp');
 
         Route::post('/{ulid}/complete', [AccountRecoveryController::class, 'complete'])
+            ->middleware('amial.rate-limit:recovery_complete,10,1')
             ->where('ulid', '[A-Z0-9]{26}')
             ->name('complete');
 

@@ -20,12 +20,20 @@ class ContactConstants {
   // ============ روابط جاهزة ============
 
   /// رابط WhatsApp مع رسالة ترقية مُعدّة مسبقاً.
-  static String upgradeWhatsAppUrl({required String planLabel, required int priceSar}) {
+  /// AMIAL-PLAN-CURRENCY-001 — **العملةُ مُعامِلٌ لا حرفٌ محفور.**
+  ///
+  /// كانت الرسالةُ تقول «السعر: ٣٥ ر.ي» والسعرُ ٣٥ **ر.س**. أي أنّ أوّلَ
+  /// ما يقرؤه العميلُ عن التسعير كان خطأً بمقدار سبعين ضعفاً.
+  static String upgradeWhatsAppUrl({
+    required String planLabel,
+    required int priceSar,
+    required String currency,
+  }) {
     final msg = Uri.encodeComponent(
       'مرحباً 👋\n\n'
       'أرغب في ترقية اشتراكي في أميال باي إلى:\n'
       '🎯 الخطّة: $planLabel\n'
-      '💰 السعر: $priceSar ر.ي / شهرياً\n\n'
+      '💰 السعر: $priceSar $currency / شهرياً\n\n'
       'يرجى تزويدي بطرق الدفع المتاحة.'
     );
     return 'https://wa.me/$whatsappNumber?text=$msg';

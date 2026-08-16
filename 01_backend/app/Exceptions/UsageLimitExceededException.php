@@ -81,6 +81,7 @@ class UsageLimitExceededException extends Exception
                 'suggested_plan_price_sar' => $this->suggestedPlan
                     ? (A::PLAN_PRICES_SAR[$this->suggestedPlan] ?? 0)
                     : null,
+                'suggested_plan_price_currency' => A::PLAN_PRICE_CURRENCY,
             ],
         ], 402); // 402 Payment Required
     }

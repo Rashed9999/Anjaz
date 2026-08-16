@@ -123,20 +123,33 @@ class MerchantCenterService
             'store_name' => $store->store_name ?? null,
             'phone' => $m->phone,
             'email' => $m->email,
-            'business_type' => $p->business_type,
-            'business_type_label' => A::BUSINESS_TYPE_LABELS[$p->business_type ?? ''] ?? '—',
+            // AMIAL-MERCHANT-PROFILE-NULL-001 — **حسابُ تاجرٍ بلا ملفٍّ
+            // يُسقط الصفحةَ كلَّها.** `$p` قد تكون `null`: مستخدمٌ نوعُه ٣
+            // ولا صفَّ له في `merchant_profiles` (يقع عند إنشاءٍ يدويٍّ من
+            // اللوحة أو ترقيةِ حسابٍ لم تكتمل). وقراءةُ خاصّيّةٍ على `null`
+            // ترفع `ErrorException` فيردّ المركزُ **٥٠٠**.
+            //
+            // وكُشف بالمسبار حين كانت في القاعدة بياناتُ عرضٍ حقيقيّة —
+            // فمسحٌ على قاعدةٍ فارغةٍ كان يمرّ سنةً كاملةً وهي مكسورة.
+            //
+            // **والغيابُ يُقال ولا يُملأ صفراً** (القاعدة السابعة).
+            'business_type' => $p?->business_type,
+            'business_type_label' => $p === null
+                ? 'لا ملفَّ تاجرٍ لهذا الحساب'
+                : (A::BUSINESS_TYPE_LABELS[$p->business_type ?? ''] ?? '—'),
+            'has_profile' => $p !== null,
             'status' => (int) ($m->is_active ?? 0) === 1 ? 'active' : 'frozen',
             'status_ar' => (int) ($m->is_active ?? 0) === 1 ? 'نشط' : 'مجمَّد',
             'created_at' => $m->created_at?->format('Y-m-d'),
             // **«لم يدخل قطّ» ليست تاريخاً فارغاً** (القاعدة ٧).
             'last_login' => $lastLogin?->last_seen_at?->format('Y-m-d H:i') ?? 'لم يُسجَّل دخول',
             'last_transaction' => $lastTx?->created_at?->format('Y-m-d H:i') ?? 'لا عمليات',
-            'kyc_status' => $p->verification_status ?? 'pending',
+            'kyc_status' => $p?->verification_status ?? 'pending',
             'verification_level' => $m->verification_level ?? 'basic',
             'zone_code' => $m->zone_code,
-            'plan' => $p->subscription_plan ?? A::PLAN_FREE,
-            'plan_name' => A::PLAN_LABELS[$p->subscription_plan ?? A::PLAN_FREE] ?? '—',
-            'plan_expires' => optional($p->subscription_expires_at ?? null)->format('Y-m-d'),
+            'plan' => $p?->subscription_plan ?? A::PLAN_FREE,
+            'plan_name' => A::PLAN_LABELS[$p?->subscription_plan ?? A::PLAN_FREE] ?? '—',
+            'plan_expires' => $p?->subscription_expires_at?->format('Y-m-d'),
             // بياناتٌ تشغيليّةٌ **عدداً لا تفصيلاً**
             'branches_count' => Branch::where('merchant_user_id', $m->id)->count(),
             'pos_count' => PosUser::where('merchant_user_id', $m->id)->count(),
@@ -339,7 +352,7 @@ class MerchantCenterService
             },
             'avg_daily_volume' => $p?->avg_daily_volume,
             'peak_daily_volume' => $p?->peak_daily_volume,
-            'aml_flags' => (int) ($p->aml_flags_count ?? 0),
+            'aml_flags' => (int) ($p?->aml_flags_count ?? 0),
             'last_flagged_at' => $p?->last_flagged_at,
             'last_reviewed_at' => $p?->last_reviewed_at,
             'events' => $events->map(fn ($e) => [
@@ -440,9 +453,11 @@ class MerchantCenterService
             ->orderByDesc('id')->limit(20)->get();
 
         return [
-            'kyc_status' => $p->verification_status ?? 'pending',
+            'kyc_status' => $p?->verification_status ?? 'pending',
             'verification_level' => $m->verification_level ?? 'basic',
-            'verified_at' => optional($p->verified_at ?? null)?->format('Y-m-d'),
+            'verified_at' => $p?->verified_at?->format('Y-m-d'),
+            // AMIAL-MERCHANT-PROFILE-NULL-001 — الغيابُ يُقال لا يُملأ.
+            'has_profile' => $p !== null,
             'documents_count' => $docs->count(),
             'documents' => $docs->map(fn (KycDocument $d) => [
                 'id' => $d->id,

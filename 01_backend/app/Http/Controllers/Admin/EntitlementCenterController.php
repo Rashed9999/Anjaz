@@ -166,10 +166,20 @@ class EntitlementCenterController extends Controller
                 'id' => $merchant->id,
                 'name' => trim(($merchant->f_name ?? '') . ' ' . ($merchant->l_name ?? '')) ?: '—',
                 'phone' => $merchant->phone,
-                'plan' => $profile->subscription_plan ?? A::PLAN_FREE,
-                'plan_name' => A::PLAN_LABELS[$profile->subscription_plan ?? A::PLAN_FREE] ?? '—',
-                'business_type' => $profile->business_type,
-                'expires_at' => optional($profile->subscription_expires_at ?? null)->format('Y-m-d'),
+                // AMIAL-MERCHANT-PROFILE-NULL-001 — **`$profile` قد تكون
+                // `null`.** مستخدمٌ نوعُه ٣ بلا صفٍّ في `merchant_profiles`
+                // (إنشاءٌ يدويٌّ من اللوحة، أو ترقيةٌ لم تكتمل). وقراءةُ
+                // خاصّيّةٍ على `null` تُسقط الصفحةَ بـ٥٠٠ — والسطرُ الثالث
+                // وحدَه كان بلا `??` فكان هو القاتل.
+                //
+                // وكُشف بمسبار اللوحة **حين كانت في القاعدة بياناتُ عرضٍ
+                // حقيقيّة**؛ ومسحٌ على قاعدةٍ فارغةٍ يمرّ فوق العطل بلا أن
+                // يراه. **والغيابُ يُقال ولا يُملأ** (القاعدة السابعة).
+                'plan' => $profile?->subscription_plan ?? A::PLAN_FREE,
+                'plan_name' => A::PLAN_LABELS[$profile?->subscription_plan ?? A::PLAN_FREE] ?? '—',
+                'business_type' => $profile?->business_type,
+                'has_profile' => $profile !== null,
+                'expires_at' => $profile?->subscription_expires_at?->format('Y-m-d'),
             ],
             'manifest' => $this->entitlements->manifestFor($merchant),
             'overrides' => MerchantCapabilityOverride::where('merchant_user_id', $id)

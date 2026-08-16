@@ -82,6 +82,7 @@ class EntitlementController extends Controller
                 'name' => A::PLAN_LABELS[$plan] ?? $plan,
                 'price_monthly' => A::PLAN_PRICES_SAR[$plan] ?? 0,
                 'price_annual' => A::PLAN_PRICES_SAR_ANNUAL[$plan] ?? 0,
+                'currency' => A::PLAN_PRICE_CURRENCY,
                 'limits' => A::PLAN_LIMITS[$plan] ?? [],
                 'capabilities_count' => count($opens),
                 'capabilities' => $opens,

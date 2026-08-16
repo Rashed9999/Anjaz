@@ -1,6 +1,5 @@
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
-import 'package:amial_pay/data/api/idempotency_key_generator.dart';
 import 'package:amial_pay/util/app_constants.dart';
 
 /// AMIAL-DONATIONS-001 (v1.2)
@@ -27,6 +26,11 @@ class DonationsRepo extends GetxService {
     required String amount,
     bool isAnonymous = false,
     String? message,
+    // AMIAL-IDEMPOTENCY-002 — **يُستقبَل ولا يُولَّد هنا.**
+    // كان يُولَّد في قائمة المُعامِلات، أي في كلّ نداء — فإعادةُ المحاولة
+    // بعد انقطاعٍ تصل بمفتاحٍ جديدٍ فتُقرأ تبرّعاً ثانياً. والمستودعُ
+    // `GetxService` مفردٌ لا يعرف متى تبدأ نيّةٌ ومتى تنتهي؛ يعرفها المتحكّم.
+    required String idempotencyKey,
   }) {
     return apiClient.postData(
       AppConstants.amialDonationsDonate,
@@ -36,7 +40,7 @@ class DonationsRepo extends GetxService {
         'is_anonymous': isAnonymous,
         'message': ?message,
       },
-      idempotencyKey: IdempotencyKeyGenerator.forFinancialAction('donate'),
+      idempotencyKey: idempotencyKey,
     );
   }
 

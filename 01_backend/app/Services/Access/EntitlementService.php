@@ -278,6 +278,7 @@ class EntitlementService
                     'plan' => $plan,
                     'plan_name' => A::PLAN_LABELS[$plan] ?? $plan,
                     'price_monthly' => A::PLAN_PRICES_SAR[$plan] ?? 0,
+                    'currency' => A::PLAN_PRICE_CURRENCY,
                 ];
             }
         }
