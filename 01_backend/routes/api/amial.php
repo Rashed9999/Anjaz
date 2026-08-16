@@ -565,7 +565,9 @@ Route::middleware(['auth:api'])->group(function () {
     // -------- AMIAL-MERCHANT-001 (v1.7) --------
     Route::prefix('merchant')->name('amial.merchant.')->middleware('amial.idempotency')->group(function () {
         // P1-BRANCHES — إدارة الفروع
-        Route::prefix('branches')->name('branches.')->group(function () {
+        Route::prefix('branches')->name('branches.')
+            ->middleware('capability:' . \App\Support\Access\AccessConstants::F_BRANCHES)
+            ->group(function () {
             Route::get('/', [\App\Http\Controllers\Api\V1\Amial\BranchController::class, 'index'])->name('index');
             Route::post('/', [\App\Http\Controllers\Api\V1\Amial\BranchController::class, 'store'])
                 ->middleware('amial.rate-limit:branch_create,10,1')->name('store');
@@ -651,11 +653,17 @@ Route::middleware(['auth:api'])->group(function () {
             Route::get('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'listSales'])->name('sales.list');
             Route::get('/report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'report'])->name('report');
             // AMIAL-PROFIT-001 — تقرير الربحية (إيراد/تكلفة/ربح/هامش + اتجاه + منتجات)
-            Route::get('/profit-report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'profitReport'])->name('profit-report');
+            Route::get('/profit-report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'profitReport'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_PROFIT_REPORTS)
+                ->name('profit-report');
         });
 
         // AMIAL-SUPPLIERS-001 — الموردون وأوامر الشراء (تصاميم 53/57/67/68)
-        Route::prefix('suppliers')->name('suppliers.')->group(function () {
+        // AMIAL-ENTITLEMENTS-002 — حارسُ الباقة، ويبدأ في وضع الظلّ
+        // (‏`AMIAL_ENTITLEMENTS_ENFORCE=false`): يُكتب المنعُ ولا يقع.
+        Route::prefix('suppliers')->name('suppliers.')
+            ->middleware('capability:' . \App\Support\Access\AccessConstants::F_SUPPLIERS)
+            ->group(function () {
             $sc = \App\Http\Controllers\Api\V1\Amial\SupplierController::class;
             Route::get('/', [$sc, 'index'])->name('index');
             Route::post('/', [$sc, 'store'])->name('store');
@@ -664,7 +672,9 @@ Route::middleware(['auth:api'])->group(function () {
                 ->where('id', '[0-9]+')
                 ->middleware('amial.rate-limit:supplier_payment,30,1')->name('payment');
         });
-        Route::prefix('purchase-orders')->name('purchase-orders.')->group(function () {
+        Route::prefix('purchase-orders')->name('purchase-orders.')
+            ->middleware('capability:' . \App\Support\Access\AccessConstants::F_PURCHASES)
+            ->group(function () {
             $sc = \App\Http\Controllers\Api\V1\Amial\SupplierController::class;
             Route::get('/', [$sc, 'poIndex'])->name('index');
             Route::post('/', [$sc, 'poStore'])

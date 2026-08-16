@@ -64,6 +64,28 @@ class EnsureCapability
 
         $r = $this->entitlements->state($user, $code);
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-ENTITLEMENTS-002 — **وضعُ الظلّ: يُكتب المنعُ ولا يقع.**
+        //
+        // ستُّ قدراتٍ مدفوعةٍ رُبطت بمساراتها في هذه الدفعة، وقد عاشت بلا
+        // حارسٍ حتّى اليوم — وتجّارُ التجربة يستعملونها الآن. فإشعالُ
+        // ستّةِ جدرانِ دفعٍ في لحظةٍ واحدة **يسلبهم ما اعتادوه بلا إنذار**،
+        // ولا سبيلَ لمعرفة من يتأثّر قبل وقوعه.
+        //
+        // فيمرّ الطلبُ ويُكتب من كان سيُمنَع. ويقرأ صاحبُ المنصّة القائمةَ
+        // في مركز الأعطال، ثمّ يُشعل `AMIAL_ENTITLEMENTS_ENFORCE=true`.
+        //
+        // **والأساسيّةُ لا تدخل الظلَّ**: `NOT_APPLICABLE` ليست منعاً بل
+        // إخفاءُ قدرةِ قطاعٍ آخر — وإمرارُها في الظلّ يفتح مضخّاتِ الوقود
+        // لصيدليّة. فتُنفَّذ دائماً.
+        if ($r['state'] !== EntitlementService::AVAILABLE
+            && $r['state'] !== EntitlementService::NOT_APPLICABLE
+            && ! config('amial.entitlements.enforce', false)) {
+            $this->recordShadowDenial($user, $code, $r);
+
+            return $next($request);
+        }
+
         return match ($r['state']) {
             EntitlementService::AVAILABLE => $next($request),
 
@@ -98,6 +120,30 @@ class EnsureCapability
                 403, $r,
             ),
         };
+    }
+
+    /**
+     * **يُكتب المنعُ الذي لم يقع** — في مركز الأعطال، لا في ملفٍّ لا يُقرأ.
+     *
+     * والبصمةُ بالقدرة والحالة والحساب: فتاجرٌ يفتح شاشةَ الموردين عشرين
+     * مرّةً في اليوم يُنتج **سطراً واحداً** بعدّادٍ، لا عشرين سطراً تُغرق
+     * القائمةَ فتُهجَر.
+     *
+     * ولا يُوقِف فشلُ التسجيل الطلبَ: غرضُ الظلّ ألّا يُلمَس السلوك.
+     */
+    private function recordShadowDenial(mixed $user, string $code, array $r): void
+    {
+        try {
+            app(\App\Services\OpsAlertService::class)->note(
+                'entitlement.shadow.' . $code . '.' . $r['state'],
+                sprintf('استحقاق (ظلّ): «%s»', $r['capability']['name'] ?? $code),
+                sprintf('الحالة %s · الحساب %s · لو كان الإنفاذُ مشتعلاً لرُدّ الطلب',
+                    $r['state'], $user->id ?? '—'),
+            );
+        } catch (\Throwable) {
+            // **صمتٌ مقصود.** وضعُ الظلّ وعدُه ألّا يُغيّر السلوك — فسقوطُ
+            // التسجيل لا يجوز أن يُسقط طلبَ تاجر.
+        }
     }
 
     private function deny(string $code, string $message, int $status, ?array $r = null): JsonResponse

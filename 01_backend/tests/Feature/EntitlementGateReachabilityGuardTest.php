@@ -30,7 +30,22 @@ use Tests\TestCase;
  * إليه» — واقعاً هذه المرّةَ على الأداة التي بُنيت لتمنعه.
  *
  * ══════════════════════════════════════════════════════════════════════
- * **ولمَ حارسٌ يُثبّت الرقمَ بدل أن يُصلحه:**
+ * **الدفعةُ الأولى — أربعٌ رُبطت وثلاثٌ استُثنيت بسبب:**
+ *
+ * | القدرة | الحكم |
+ * |---|---|
+ * | `suppliers` · `purchases` · `branches` | رُبطت ببادئاتها تحت `merchant/` |
+ * | `profit_reports` | **مسارٌ واحدٌ لا بادئة** — حراسةُ `cashier` كلِّها تُقفل نقطةَ البيع وهي مجّانيّة |
+ * | `customers` | **لا تُربَط**: نهاياتُها داخل `credit/*`، وهي نفسُها التي تخدم `debts` المجّانيّة |
+ * | `advanced_reports` | **لا تُربَط**: `reports/*` بادئةٌ عامّةٌ لكلّ مستخدم، ومنها تقريرُ عمليّاتِ عميلٍ عاديّ |
+ * | `excel_export` | **ليست مساراً** — قيمةُ `format: excel` داخل `reports/request` |
+ *
+ * **وثلاثتُها كِدنَ يقعنَ**: القياسُ الأوّل رشّحهنّ للربط بالبادئة، وقراءةُ
+ * المجموعات هي التي كشفت أنّ ذلك **يُقفل دفترَ ديونٍ مجّانيّاً وتقريرَ
+ * عميلٍ عاديّ**. (القاعدة الثالثة: يُقاس ثمّ يُقال.)
+ *
+ * ══════════════════════════════════════════════════════════════════════
+ * **ولمَ سقفٌ يُنقَص بدل إصلاحٍ دفعةً واحدة:**
  *
  * ربطُ ٤٦ قدرةً بمساراتها تغييرٌ في مسارِ مالٍ حيّ: بادئةٌ خاطئةٌ على
  * `cashier` **تُقفل نقطةَ البيع في وجه كلّ تاجرٍ يدفع**. ولا تُكتب
@@ -51,7 +66,7 @@ class EntitlementGateReachabilityGuardTest extends TestCase
      * وهو سقفٌ لا هدف: يُنقَص ولا يُزاد. ومن أضاف قدرةً بلا مسارٍ يسقط
      * هنا فيعلم قبل الدمج لا بعد ستّة أشهر.
      */
-    private const UNROUTED_CEILING = 46;
+    private const UNROUTED_CEILING = 42;
 
     /** بادئاتُ المسارات المسجَّلة فعلاً — تُقرأ من الملفّ لا من تخمين. */
     private function declaredPrefixes(): array
@@ -212,6 +227,48 @@ class EntitlementGateReachabilityGuardTest extends TestCase
     }
 
     /**
+     * ما يحرسه **وسيطٌ مكتوبٌ في ملفّ المسارات** — لا في السجلّ ولا في متحكّم.
+     *
+     * **وهذه الطبقةُ الثالثةُ نُسيت في أوّل نسخةٍ من هذا الحارس، فكذب.**
+     * قال إنّ `products` بلا حارسٍ وهي محروسةٌ بـ`capability:` على مسارين.
+     * وأمسكه CI بعدّه ٨ حيث قِيس ٧ محلّيّاً — لأنّ سكربتَ القياس كان يقرأ
+     * الطبقةَ والاختبارُ لا يقرؤها.
+     *
+     * **ودرسُه في الحرّاس نفسِها**: قياسان بتعريفين مختلفين يُنتجان رقمين،
+     * وأحدُهما يكذب. فصار التعريفُ واحداً هنا.
+     *
+     * @return array<string,true>
+     */
+    private function gatedByRouteMiddleware(): array
+    {
+        $src = (string) preg_replace('~//[^\n]*|/\*.*?\*/~s', '',
+            (string) file_get_contents(base_path('routes/api/amial.php')));
+
+        $out = [];
+
+        // صيغتان: `capability:code` نصّاً، و`capability:' . A::F_X` ثابتاً.
+        preg_match_all(
+            '~capability:([a-z0-9_.]+)|capability:\'\s*\.\s*[\\A-Za-z]+::(F_[A-Z_]+)~',
+            $src, $m, PREG_SET_ORDER);
+
+        foreach ($m as $hit) {
+            if (($hit[1] ?? '') !== '') {
+                $out[$hit[1]] = true;
+
+                continue;
+            }
+
+            $name = \App\Support\Access\AccessConstants::class . '::' . ($hit[2] ?? '');
+
+            if (($hit[2] ?? '') !== '' && defined($name)) {
+                $out[constant($name)] = true;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
      * @test
      *
      * **الرقمُ الذي يهمّ تجاريّاً: قدرةٌ مدفوعةٌ لها شاشةٌ ولا حارسَ لها
@@ -227,7 +284,7 @@ class EntitlementGateReachabilityGuardTest extends TestCase
      */
     public function paid_capabilities_with_a_screen_and_no_gate_at_all_never_grow(): void
     {
-        $inControllers = $this->gatedInsideControllers();
+        $gated = $this->gatedInsideControllers() + $this->gatedByRouteMiddleware();
 
         $open = [];
 
@@ -244,7 +301,7 @@ class EntitlementGateReachabilityGuardTest extends TestCase
                 continue;
             }
 
-            if (isset($inControllers[$a['code']])) {
+            if (isset($gated[$a['code']])) {
                 continue;
             }
 
@@ -253,9 +310,22 @@ class EntitlementGateReachabilityGuardTest extends TestCase
 
         sort($open);
 
-        $this->assertLessThanOrEqual(7, count($open),
+        // **ثلاثٌ بعد الدفعة الأولى، وكانت سبعاً.** وأربعٌ رُبطت:
+        // `suppliers` · `purchases` · `profit_reports` · `branches`.
+        //
+        // **والثلاثُ الباقية لا تُربَط بالبادئة، ولكلٍّ سببٌ مقيس:**
+        //
+        // | القدرة | لمَ لا تُحرَس ببادئة |
+        // |---|---|
+        // | `customers` | نهاياتُها داخل `credit/*` — **وهي نفسُها التي تخدم `debts` المجّانيّة**. فحراسةُ البادئة تُقفل دفترَ الديون في وجه كلّ تاجرٍ مجّانيّ |
+        // | `advanced_reports` | `reports/*` بادئةٌ **عامّةٌ لكلّ مستخدم**، و`user_transactions` منها. فحراستُها تحجب تقريرَ عميلٍ عاديّ |
+        // | `excel_export` | **ليست مساراً أصلاً** — قيمةُ `format: excel` داخل `reports/request`. فحدُّها في المتحكّم لا في وسيط |
+        //
+        // وكلُّ واحدةٍ منها تحتاج شقَّ مسارٍ أو فحصاً في متحكّم — **ولا
+        // يُشقّ مسارٌ ماليٌّ بلا مجموعةِ اختباراتٍ تجري**.
+        $this->assertLessThanOrEqual(3, count($open),
             sprintf(
-                "قدراتٌ مدفوعةٌ لها شاشةٌ ولا يحرسها الخادمُ بشيءٍ صارت %d وكانت 7:\n  %s\n\n"
+                "قدراتٌ مدفوعةٌ لها شاشةٌ ولا يحرسها الخادمُ بشيءٍ صارت %d وكانت 3:\n  %s\n\n"
                 . 'وكلُّ واحدةٍ منها تُفتح بنداءٍ مباشرٍ من باقةٍ لا تشتريها.',
                 count($open), implode("\n  ", $open)));
     }

@@ -327,6 +327,9 @@ final class CapabilityRegistry
             C::make(A::F_SUPPLIERS)
                 ->nameAr('الموردون')
                 ->group('المخزون')->icon('local_shipping')
+                // AMIAL-ENTITLEMENTS-002 — المساراتُ نسبةً إلى `merchant/`
+                // (كما يقرؤها `EntitlementCenterController::coverage`).
+                ->routes(['suppliers'])
                 ->minPlan(A::PLAN_BUSINESS)->screen('/suppliers'),
 
             C::make(A::F_PURCHASES)
@@ -335,6 +338,7 @@ final class CapabilityRegistry
                 ->group('المخزون')->icon('shopping_cart')
                 ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.purchase.*'])
+                ->routes(['purchase-orders'])
                 ->screen('/purchase-orders'),
         ];
     }
@@ -405,6 +409,10 @@ final class CapabilityRegistry
                 ->descAr('إيراد وتكلفة وربح وهامش — محسوبة من تكلفة ملتقَطة لحظة البيع، '
                     . 'وما لا تُعرف تكلفته يُعزل ويُقال عدده.')
                 ->group('التقارير')->icon('trending_up')
+                // **مسارٌ واحدٌ لا بادئة**: تقريرُ الربحيّة نهايةٌ مفردةٌ
+                // داخل مجموعة الكاشير، وحراسةُ `cashier` كلِّها تُقفل
+                // نقطةَ البيع نفسَها — وهي مجّانيّة.
+                ->routes(['cashier/profit-report'])
                 ->minPlan(A::PLAN_BUSINESS)->screen('/reports/profit'),
 
             C::make(A::F_ADVANCED_REPORTS)
@@ -438,6 +446,7 @@ final class CapabilityRegistry
                 ->nameAr('الفروع')
                 ->group('التقارير')->icon('account_tree')
                 ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->routes(['branches'])
                 ->limit('max_branches')->screen('/branches'),
 
             C::make(A::F_BRANCH_REPORTS)

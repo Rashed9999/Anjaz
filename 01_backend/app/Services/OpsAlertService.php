@@ -161,6 +161,22 @@ class OpsAlertService
      * صفٌّ واحدٌ بعدّاده لا عشرةُ صفوفٍ تُغرق الجدول. (وهي قاعدةُ
      * `ErrorTrackingService` نفسُها.)
      */
+    /**
+     * AMIAL-ENTITLEMENTS-002 — **أثرٌ بلا إنذار.**
+     *
+     * ليس كلُّ ما يستحقّ أن يُكتب يستحقّ أن يوقظ أحداً. ومنعٌ في وضع
+     * الظلّ حادثةٌ تُقرأ في مركز الأعطال ويُقرَّر على ضوئها — **ولو أرسل
+     * رسالةً لكلّ مرّةٍ يفتح فيها تاجرٌ شاشةَ الموردين لأُطفئت القناةُ
+     * كلُّها في يوم**، فيضيع معها إنذارُ المصالحة الحقيقيّ.
+     *
+     * فيُفصل الأثرُ عن الإنذار: هذه تكتب، و`raise` تكتب وتُنذر. وكلتاهما
+     * على مفتاحٍ واحدٍ يُجمّع التكرار في سطرٍ بعدّاد.
+     */
+    public function note(string $key, string $title, string $detail): void
+    {
+        $this->trace($key, $title, $detail);
+    }
+
     private function trace(string $key, string $title, string $detail): void
     {
         $fingerprint = hash('sha256', 'ops|' . $key);
