@@ -285,6 +285,83 @@ class DeploymentGateGuardTest extends TestCase
     /**
      * @test
      *
+     * **ثلاثُ بوّاباتٍ بعتبةٍ واحدةٍ لتحليل Dart.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمن — ظهر في أوّل تشغيلٍ للبوّابة بعد إصلاح P0-١:**
+     *
+     *   flutter analyze  →  133 issues found  →  exit 1
+     *   (صفر خطأ · ١٣ تحذير · ١٢٠ ملاحظة)
+     *
+     * و`codemagic.yaml` — **وهو الذي يبني التطبيقَ المشحون** —
+     * و`scripts/verify.sh` كلاهما يعدّ `error •` وحدَها، بسببٍ مكتوبٍ
+     * فيهما: دلالةُ رمز خروج `flutter analyze` تختلف بين الإصدارات.
+     *
+     * **فكان CI الشاذَّ لا الأشدّ**: يمنع دمجاً يبني codemagic نسخته بلا
+     * شكوى. وثلاثُ عتباتٍ تُنتج «أخضرُ هنا وأحمرُ هناك» — وهو ما يُدرَّب
+     * النظرُ على تجاهله، فتموت البوّابةُ الثلاثُ معاً.
+     *
+     * ولا يُقاس تطابقُ النصّ — تُقاس **العتبة**: أنّ الثلاثة يعدّون
+     * `error •` ولا يعتمدون رمزَ الخروج المجرَّد.
+     */
+    public function all_three_gates_use_the_same_dart_threshold(): void
+    {
+        $sources = [
+            'ci.yml' => base_path('../.github/workflows/ci.yml'),
+            'codemagic.yaml' => base_path('../codemagic.yaml'),
+            'verify.sh' => base_path('scripts/verify.sh'),
+        ];
+
+        foreach ($sources as $name => $path) {
+            $this->assertFileExists($path, "«{$name}» مفقود");
+
+            $src = (string) file_get_contents($path);
+
+            $this->assertMatchesRegularExpression("~error •~", $src,
+                "«{$name}» لا يعدّ `error •` — فعتبتُه غيرُ عتبة أختيه، "
+                . 'و«أخضرُ هنا وأحمرُ هناك» يُميت البوّاباتِ الثلاث');
+
+            // **ولا يُترَك `flutter analyze` مجرّداً يقرّر بنفسه.**
+            $this->assertDoesNotMatchRegularExpression(
+                '~run:\s*flutter analyze\s*$~m', $src,
+                "«{$name}» يعتمد رمزَ خروج `flutter analyze` المجرّد — "
+                . 'ودلالتُه تختلف بين الإصدارات، فيسقط على ملاحظةٍ أسلوبيّة');
+        }
+    }
+
+    /**
+     * @test
+     *
+     * **وتجهيزُ بيئة CI يُنشئ ما لا يتتبّعه git.**
+     *
+     * `storage/` كلُّه مُتجاهَل، فلا وجودَ له في نسخة CI — و`passport:keys`
+     * يكتب فيه مباشرةً. سقط الباكندُ عليه في أوّل تشغيلٍ حقيقيّ:
+     *
+     *   file_put_contents(…/storage/oauth-public.key): No such file or directory
+     *
+     * ولا يظهر محلّيّاً: المجلّدُ قائمٌ على جهاز التطوير منذ أوّل تشغيل.
+     */
+    public function the_ci_environment_creates_the_untracked_storage_tree(): void
+    {
+        // **تُنزع التعليقاتُ أوّلاً.** التعليقُ الشارحُ أعلى الخطوة يذكر
+        // `passport:keys` بنصّه، فيجده `strpos` قبل الأمر الحقيقيّ ويُقاس
+        // ترتيبٌ لا وجودَ له. (سقط هذا الحارسُ بذلك في أوّل تشغيل — وهو
+        // الفخُّ نفسُه الذي وقع في هذا المشروع أربعَ مرّاتٍ الآن.)
+        $yml = (string) preg_replace('~^\s*#.*$~m', '', $this->workflow());
+
+        $keys = strpos($yml, 'passport:keys');
+        $mkdir = strpos($yml, 'mkdir -p storage');
+
+        $this->assertNotFalse($mkdir,
+            'البوّابةُ لا تُنشئ شجرةَ storage — و`passport:keys` يكتب فيها فيسقط');
+
+        $this->assertLessThan($keys, $mkdir,
+            'شجرةُ storage تُنشأ **بعد** `passport:keys` — والترتيبُ هنا شرطُ عمل');
+    }
+
+    /**
+     * @test
+     *
      * **الحاجزُ يحجب** — وهو نصفُ الفحص الذي يُنسى.
      */
     public function the_deployed_entrypoint_refuses_to_serve_with_debug_on(): void

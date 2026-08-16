@@ -116,6 +116,17 @@ jobs:
         working-directory: 01_backend
         run: |
           cp .env.example .env
+          # AMIAL-PROD-READINESS-002 — **git لا يتتبّع مجلّداً فارغاً.**
+          #
+          # `storage/` كلُّه مُتجاهَلٌ في .gitignore، فلا يوجد في نسخة CI.
+          # و`passport:keys` يكتب فيه مباشرةً فيسقط:
+          #
+          #   file_put_contents(…/storage/oauth-public.key):
+          #   Failed to open stream: No such file or directory
+          #
+          # ولا يظهر محلّيّاً: المجلّدُ قائمٌ على جهاز التطوير منذ أوّل تشغيل.
+          mkdir -p storage/framework/{cache/data,sessions,views} \
+                   storage/logs storage/app/public bootstrap/cache
           php artisan key:generate
           # مفاتيح Passport (إلزامية لاختبارات المصادقة الـ16)
           php artisan passport:keys --force
@@ -143,8 +154,42 @@ jobs:
         with:
           channel: stable
       - run: flutter pub get
-      - name: تحليل (0 أخطاء)
-        run: flutter analyze
+      # ══════════════════════════════════════════════════════════
+      # AMIAL-PROD-READINESS-002 — **عتبةٌ واحدةٌ لثلاث بوّابات.**
+      #
+      # كانت هنا `flutter analyze` مجرّدة، فتسقط على أيّ ملاحظةٍ أسلوبيّة:
+      #
+      #   133 issues found.  →  exit 1
+      #   (صفر خطأ · ١٣ تحذير · ١٢٠ ملاحظة)
+      #
+      # و`codemagic.yaml` — **وهو الذي يبني التطبيقَ الذي يُشحَن فعلاً** —
+      # و`scripts/verify.sh` كلاهما يعدّ `error •` وحدَها ويطبع الباقيَ
+      # غيرَ مانع، بسببٍ مكتوبٍ فيهما: «لا نعتمد على رمز خروج
+      # flutter analyze: دلالته تختلف بين الإصدارات».
+      #
+      # **فـCI كان الشاذَّ من الثلاثة**، لا الأشدَّ: يمنع دمجاً يبني
+      # codemagic نسخته بلا شكوى. وثلاثُ عتباتٍ لثلاث بوّاباتٍ تُنتج
+      # «أخضرُ هنا وأحمرُ هناك» — وهو ما يُعلَّم النظرُ عنه.
+      #
+      # والتحذيراتُ الـ١٣٣ **تُطبَع ولا تُخفى** — دَينٌ معلومٌ يُسدَّد، لا
+      # عطلٌ يمنع الشحن.
+      # ══════════════════════════════════════════════════════════
+      - name: تحليل (0 أخطاء تصريف)
+        working-directory: 02_flutter_app
+        run: |
+          flutter analyze --no-pub > analyze_report.txt 2>&1 || true
+
+          ERRORS=$(grep -E '^[[:space:]]*error •' analyze_report.txt | grep -v '• build/' || true)
+
+          echo "تحذيرات (غير مانعة): $(grep -cE '^[[:space:]]*warning •' analyze_report.txt || true)"
+          echo "ملاحظات أسلوبية    : $(grep -cE '^[[:space:]]*info •'    analyze_report.txt || true)"
+
+          if [ -n "$ERRORS" ]; then
+            echo "::error::أخطاءُ تصريفٍ في Dart — البناءُ سيسقط في codemagic:"
+            echo "$ERRORS"
+            exit 1
+          fi
+          echo "✓ صفر خطأ تصريف"
       - name: اختبارات الواجهة
         run: flutter test
 

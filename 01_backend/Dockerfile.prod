@@ -20,7 +20,24 @@ RUN composer install \
         --ignore-platform-reqs
 
 COPY . .
-RUN composer dump-autoload --optimize --no-dev
+
+# AMIAL-PROD-READINESS-002 — **`--no-scripts` هنا ليست تحسيناً بل شرطَ عمل.**
+#
+# `dump-autoload` يُطلق `post-autoload-dump` في `composer.json`، وفيه
+# `@php artisan package:discover`. وهذا يُقلع Laravel كاملاً **داخل صورة
+# `composer:2.7`** — وهي لا تملك امتداداتِ pdo_mysql وgd وintl وbcmath،
+# ولا `.env` ولا `APP_KEY`. فيسقط البناءُ في عشرين ثانية:
+#
+#   ERROR: process "composer dump-autoload --optimize --no-dev"
+#          did not complete successfully: exit code: 1
+#
+# **ولم يُكتشَف حتّى أُطلقت البوّابةُ على فرعٍ موجود** (P0-١): كانت هذه
+# الصورةُ تُبنى في وظيفةٍ لا تجري منذ يونيو.
+#
+# وخريطةُ التحميل التلقائيّ وحدَها هي المطلوبةُ من هذه المرحلة. وبيانُ
+# الحزم (`bootstrap/cache/packages.php`) يبنيه Laravel كسولاً عند أوّل
+# حاجة في صورة التشغيل — وفيها كلُّ الامتدادات.
+RUN composer dump-autoload --optimize --no-dev --no-scripts --ignore-platform-reqs
 
 # ── Stage 2: صورة التشغيل النهائية ───────────────────────
 FROM php:8.4-fpm-alpine AS production
