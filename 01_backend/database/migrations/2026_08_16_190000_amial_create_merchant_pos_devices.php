@@ -71,6 +71,15 @@ return new class extends Migration
              */
             $table->string('device_uuid_hash', 64);
 
+            /**
+             * **إصدارُ المفتاح الذي جُزّئت به هذه البصمة.**
+             *
+             * فتدويرُ `AMIAL_DEVICE_HASH_KEY` لا يمحو هويّةَ الأجهزة:
+             * الصفُّ القديم يُقارَن بمفتاحه، ويُرحَّل إلى الجديد عند أوّل
+             * ظهورٍ للجهاز. وبدونه يكون التدويرُ **مسحاً لكلّ المقاعد**.
+             */
+            $table->unsignedSmallInteger('hash_key_version')->default(1);
+
             // آخرُ أربعة محارف — للعرض في الشاشة وحدَه، فيميّزها صاحبُها.
             $table->string('device_hint', 8)->nullable();
 

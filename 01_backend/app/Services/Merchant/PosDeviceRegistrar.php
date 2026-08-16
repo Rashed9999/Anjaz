@@ -52,21 +52,37 @@ class PosDeviceRegistrar
         string $deviceUuid,
         array $attributes = [],
     ): array {
-        $hash = PosDevice::hashUuid($deviceUuid);
         $max = $this->maxSeats($merchant);
 
-        return DB::transaction(function () use ($merchant, $deviceUuid, $hash, $max, $attributes) {
+        return DB::transaction(function () use ($merchant, $deviceUuid, $max, $attributes) {
             // **القفلُ على صفّ التاجر** — لا على جدول الأجهزة: فالمقعدُ
             // مورِدُ التاجر، والمتنافسون عليه طلباتُه هو.
             DB::table('users')->where('id', $merchant->id)->lockForUpdate()->first();
 
-            $existing = PosDevice::where('merchant_user_id', $merchant->id)
-                ->where('device_uuid_hash', $hash)
-                ->first();
+            // **البحثُ يمرّ بـ`locate` ولا يُجزّئ هنا** — فمصدرُ الهويّة
+            // واحد. ولو جُزّئ في هذا الملفّ لعرف الجهازَ بالمفتاح الحاليّ
+            // وحدَه، **فصار التدويرُ محواً لكلّ المقاعد** بينما الطراز
+            // يَعِد بعكسه: تعريفان لمفهومٍ واحدٍ يفترقان — وهو العطلُ
+            // الأكثرُ تكراراً في هذه الجولة.
+            [$existing, $needsMigration] = PosDevice::locate($merchant->id, $deviceUuid);
+
+            // **الترحيلُ عند أوّل ظهور** — الصفُّ المجزَّأ بمفتاحٍ سابقٍ
+            // يُعاد تجزئتُه بالحاليّ، فيذوب المفتاحُ القديم بلا يومٍ
+            // يُقفَل فيه متجرٌ واحد.
+            if ($existing !== null && $needsMigration) {
+                $existing->forceFill([
+                    'device_uuid_hash' => PosDevice::hashUuid($deviceUuid),
+                    'hash_key_version' => PosDevice::currentKeyVersion(),
+                ])->save();
+            }
 
             // ① **العودةُ بالبصمة نفسِها لا تستهلك مقعداً** — ولو كان
             //    الحدُّ مستنفَداً. فمن سجّل ثمّ أعاد فتحَ التطبيق يعمل.
-            if ($existing !== null && $existing->revoked_at === null) {
+            //
+            //    **والشرطُ هو شرطُ `activeSeats` عينُه**: صفٌّ لا يُحتسَب
+            //    مقعداً لا يُعاد «موجوداً» — وإلّا صار جهازٌ يعمل بلا أن
+            //    يشغل مقعداً، وهو التفافٌ على الحدّ من الباب الخلفيّ.
+            if ($existing !== null && $existing->revoked_at === null && $existing->is_active) {
                 $existing->forceFill([
                     'last_seen_at' => now(),
                     'app_version' => $attributes['app_version'] ?? $existing->app_version,
@@ -81,8 +97,8 @@ class PosDeviceRegistrar
                 ];
             }
 
-            // ② **والملغى يُحيا بمقعدٍ جديد** — فإلغاءُ جهازٍ ثمّ إعادتُه
-            //    يمرّ بالحدّ كأيّ جهازٍ جديد، وإلّا صار الإلغاءُ بابَ تجاوز.
+            // ② **والملغى يمرّ بالحدّ كأيّ جهازٍ جديد** — وإلّا صار
+            //    الإلغاءُ بابَ تجاوز: يُلغى جهازٌ فيُعاد بلا حساب.
             $used = PosDevice::activeSeats($merchant->id);
 
             if ($max >= 0 && $used >= $max) {
@@ -94,11 +110,50 @@ class PosDeviceRegistrar
                 ];
             }
 
+            // ③ **والملغى يُحيا في صفّه لا في صفٍّ ثانٍ.**
+            //
+            //    وكان يُنشأ صفٌّ جديد — **وهو ما يصطدم بالقيد الفريد
+            //    حتماً**: البصمةُ نفسُها والتاجرُ نفسُه. فيقع في مُلتقِط
+            //    1062 أدناه فيُعيد «موجودٌ» مشيراً إلى **الصفّ الملغى**،
+            //    أي يُعلن النجاحَ ويُسلّم جهازاً ملغى.
+            //
+            //    والأثرُ لا يُمحى: تاريخُ الإلغاءات يُحفظ في `metadata`.
+            if ($existing !== null) {
+                $history = (array) ($existing->metadata['revocations'] ?? []);
+
+                $history[] = [
+                    'revoked_at' => $existing->revoked_at?->toIso8601String(),
+                    'revoked_by_user_id' => $existing->revoked_by_user_id,
+                    'restored_at' => now()->toIso8601String(),
+                ];
+
+                $existing->forceFill([
+                    'branch_id' => $attributes['branch_id'] ?? $existing->branch_id,
+                    'display_name' => $attributes['display_name'] ?? $existing->display_name,
+                    'platform' => $attributes['platform'] ?? $existing->platform,
+                    'app_version' => $attributes['app_version'] ?? $existing->app_version,
+                    'registered_at' => now(),
+                    'last_seen_at' => now(),
+                    'revoked_at' => null,
+                    'revoked_by_user_id' => null,
+                    'is_active' => true,
+                    'metadata' => ['revocations' => $history] + (array) $existing->metadata,
+                ])->save();
+
+                return [
+                    'result' => self::RESULT_REGISTERED,
+                    'device' => $existing,
+                    'used' => PosDevice::activeSeats($merchant->id),
+                    'max' => $max,
+                ];
+            }
+
             try {
                 $device = PosDevice::create([
                     'merchant_user_id' => $merchant->id,
                     'branch_id' => $attributes['branch_id'] ?? null,
-                    'device_uuid_hash' => $hash,
+                    'device_uuid_hash' => PosDevice::hashUuid($deviceUuid),
+                    'hash_key_version' => PosDevice::currentKeyVersion(),
                     'device_hint' => PosDevice::hintOf($deviceUuid),
                     'display_name' => $attributes['display_name'] ?? null,
                     'platform' => $attributes['platform'] ?? null,
@@ -115,20 +170,14 @@ class PosDeviceRegistrar
                     throw $e;
                 }
 
-                $device = PosDevice::where('merchant_user_id', $merchant->id)
-                    ->where('device_uuid_hash', $hash)->firstOrFail();
+                [$device] = PosDevice::locate($merchant->id, $deviceUuid);
 
                 return [
-                    'result' => self::RESULT_EXISTING,
+                    'result' => $device === null ? self::RESULT_LIMIT : self::RESULT_EXISTING,
                     'device' => $device,
                     'used' => PosDevice::activeSeats($merchant->id),
                     'max' => $max,
                 ];
-            }
-
-            // **الملغى القديمُ يُطوى** — فلا يبقى صفّان بالبصمة نفسِها.
-            if ($existing !== null) {
-                $existing->forceFill(['is_active' => false])->save();
             }
 
             return [

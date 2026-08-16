@@ -159,6 +159,73 @@ class PosDeviceSeatGuardTest extends TestCase
     /**
      * @test
      *
+     * **والملغى يعود حيّاً في صفّه — لا في صفٍّ ثانٍ ولا ملغىً.**
+     *
+     * ══════════════════════════════════════════════════════════════
+     * **وهذا عطلٌ وُجد بالسؤال لا بالبلاغ.** كان المُسجِّل يُنشئ صفّاً
+     * جديداً للجهاز الملغى — **وهو يصطدم بالقيد الفريد حتماً**: التاجرُ
+     * نفسُه والبصمةُ نفسُها. فيقع في مُلتقِط `1062` فيُعيد «موجودٌ»
+     * مشيراً إلى **الصفّ الملغى نفسِه**.
+     *
+     * أي أنّ المُسجِّل يُعلن النجاحَ ويُسلّم جهازاً ملغى، **ولا يُستعاد
+     * جهازٌ أُلغي أبداً**. ولا خطأَ في أيّ سجلّ: `1062` مُلتقَطٌ عمداً.
+     */
+    public function a_revoked_device_comes_back_alive_in_its_own_row(): void
+    {
+        $m = $this->merchant(A::PLAN_FREE);
+
+        $first = $this->reg()->register($m, 'device-revoke-then-return');
+        $this->reg()->revoke($first['device'], $m->id);
+
+        $back = $this->reg()->register($m, 'device-revoke-then-return');
+
+        $this->assertSame(PosDeviceRegistrar::RESULT_REGISTERED, $back['result'],
+            'العودةُ بعد الإلغاء لم تُقرأ تسجيلاً جديداً');
+
+        $this->assertNull($back['device']->revoked_at,
+            '**المُسجِّلُ أعلن النجاحَ وسلّم جهازاً ما زال ملغى** — '
+            . 'فالجهازُ الملغى لا يُستعاد أبداً');
+
+        $this->assertTrue((bool) $back['device']->is_active,
+            'الجهازُ عاد غيرَ نشِط');
+
+        $this->assertSame(1, PosDevice::where('merchant_user_id', $m->id)->count(),
+            'صفّان لبصمةٍ واحدة');
+
+        $this->assertSame(1, PosDevice::activeSeats($m->id),
+            'العودةُ لم تشغل مقعداً — فالإلغاءُ ثمّ العودةُ بابُ تجاوزٍ للحدّ');
+    }
+
+    /**
+     * @test
+     *
+     * **والعودةُ بعد الإلغاء تمرّ بالحدّ كأيّ جهازٍ جديد.**
+     *
+     * وإلّا صار الإلغاءُ بابَ تجاوز: تُلغى الأجهزةُ وتُعاد بلا حساب.
+     */
+    public function a_revoked_device_cannot_return_when_the_limit_is_full(): void
+    {
+        $m = $this->merchant(A::PLAN_FREE);   // مقعدٌ واحد
+
+        $old = $this->reg()->register($m, 'device-old-one');
+        $this->reg()->revoke($old['device'], $m->id);
+
+        // المقعدُ الوحيدُ شُغل بجهازٍ آخر.
+        $this->assertSame(PosDeviceRegistrar::RESULT_REGISTERED,
+            $this->reg()->register($m, 'device-new-one')['result']);
+
+        $back = $this->reg()->register($m, 'device-old-one');
+
+        $this->assertSame(PosDeviceRegistrar::RESULT_LIMIT, $back['result'],
+            'الملغى عاد والحدُّ مستنفَد — **فالإلغاءُ بابُ تجاوزٍ للحدّ**');
+
+        $this->assertSame(1, PosDevice::activeSeats($m->id),
+            'المقاعدُ تجاوزت الحدَّ بعودةِ ملغى');
+    }
+
+    /**
+     * @test
+     *
      * **ومحرّكُ الباقات يقرأ الجدولَ الجديد لا صفوفَ الموظّفين.**
      *
      * وهذه هي التجربةُ التي تُثبت الفصلَ في **مسار الإنفاذ** لا في

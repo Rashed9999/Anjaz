@@ -33,5 +33,13 @@
         <server name="QUEUE_CONNECTION" value="sync"/>
         <server name="SESSION_DRIVER" value="array"/>
         <server name="TELESCOPE_ENABLED" value="false"/>
+
+        <!-- AMIAL-POS-DEVICES-001 — **سرُّ بصمات الأجهزة، ولا يُشتقّ من
+             `APP_KEY`.** المُسجِّلُ يسقط برسالةٍ صريحةٍ إن غاب المفتاح
+             (‏ولا يشتقّه صامتاً)، فيُضبط هنا لتجري المجموعة. والقيمةُ
+             ثابتةٌ للاختبار وحدَه — والإنتاجُ يقرأ `AMIAL_DEVICE_HASH_KEY`
+             من البيئة، وحارسُ `PosDeviceIdentityRotationGuardTest` يمنع
+             أن يعود الاشتقاقُ من `APP_KEY`. -->
+        <server name="AMIAL_DEVICE_HASH_KEY" value="testing-device-hash-key-not-a-production-secret"/>
     </php>
 </phpunit>
