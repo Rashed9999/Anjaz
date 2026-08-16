@@ -57,8 +57,10 @@ class AuditChainVerify extends Command
                 $broken[] = ['id' => $row->id, 'why' => 'رابط السلسلة مكسور (حذف/إدراج سجل قبله؟)'];
             }
 
-            $expected = AuditService::computeEntryHash($row->prev_hash, (array) $row);
-            if ($expected !== $row->entry_hash) {
+            // AMIAL-AUDIT-JSON-001 — يُقبل الشكلان: القانونيُّ للسجلّات
+            // الجديدة، والخامُّ لما كُتب قبل الإصلاح. والعبثُ يكسرهما معاً.
+            if (! AuditService::hashMatches(
+                (string) $row->prev_hash, (array) $row, (string) $row->entry_hash)) {
                 $broken[] = ['id' => $row->id, 'why' => 'محتوى السجل عُدِّل بعد كتابته'];
             }
 

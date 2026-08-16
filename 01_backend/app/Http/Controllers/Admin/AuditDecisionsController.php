@@ -217,7 +217,7 @@ class AuditDecisionsController extends Controller
      */
     private function verifyOne(AuditDecision $d): array
     {
-        $recomputed = AuditService::computeEntryHash((string) $d->prev_hash, [
+        $attrs = [
             'decision_id' => $d->decision_id,
             'actor_type' => $d->actor_type,
             'actor_user_id' => $d->actor_user_id,
@@ -230,12 +230,15 @@ class AuditDecisionsController extends Controller
             'transaction_id' => $d->transaction_id,
             'zone_code' => $d->zone_code,
             'severity' => $d->severity,
-        ]);
+        ];
 
         return [
             'entry_hash' => $d->entry_hash,
             'prev_hash' => $d->prev_hash,
-            'hash_matches' => hash_equals((string) $d->entry_hash, $recomputed),
+            // AMIAL-AUDIT-JSON-001 — الشكلُ القانونيُّ أو الخامُّ القديم.
+            // فعلى MySQL 8 كان كلُّ سجلٍّ سليمٍ يُعرض «معبوثاً به».
+            'hash_matches' => AuditService::hashMatches(
+                (string) $d->prev_hash, $attrs, (string) $d->entry_hash),
         ];
     }
 

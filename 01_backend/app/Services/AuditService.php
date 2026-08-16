@@ -126,8 +126,84 @@ class AuditService
      * بصمة السجل: SHA-256(بصمة السابق + الحقول الجوهرية بترتيب ثابت).
      * تُستخدم عند الكتابة وعند التحقق (amial:audit-verify) — يجب أن تبقى متطابقة.
      */
-    public static function computeEntryHash(string $prevHash, array $a): string
+    /**
+     * AMIAL-AUDIT-JSON-001 — **صيغةٌ قانونيّةٌ لِـ`context` قبل البصم.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمن — كشفته بوّابةُ GitHub في أوّل تشغيلٍ حقيقيّ:**
+     *
+     *   AdminCommandCenterGuardTest → «بصمةُ قرارٍ سليمٍ لا تطابق»
+     *   SafePaymentAdminAuditTest   → amial:audit-verify يخرج بـ١ بدل ٠
+     *
+     * يمرّان محلّيّاً ويسقطان في CI. **والفرقُ محرّكُ القاعدة:**
+     *
+     *   · MariaDB : `json()` مرادفٌ لـ`LONGTEXT` — يُخزَّن النصُّ حرفاً بحرف.
+     *   · MySQL 8 : نوعُ JSON أصليّ — **يُعيد ترتيبَ المفاتيح ويحذف
+     *               الفراغات** عند التخزين.
+     *
+     * والبصمةُ تُحسب **قبل** الحفظ من نصّ PHP، وتُقارَن **بعد** القراءة
+     * من نصّ المحرّك. فعلى MySQL 8 لا يتطابقان أبداً.
+     *
+     * **وليس هذا عطلَ اختبار:** `docker-compose.prod.yml` يستعمل `mysql:8.0`.
+     * أي أنّ سلسلةَ التدقيق هناك **تُبلّغ عن كلّ سجلٍّ سليمٍ أنّه معبوثٌ
+     * به** — وحارسٌ يصرخ على كلّ شيءٍ لا يصدّقه أحدٌ حين يصرخ على الحقّ.
+     *
+     * فتُوحَّد الصيغةُ قبل البصم: تُفكَّك، وتُرتَّب مفاتيحُها ترتيباً
+     * ثابتاً على كلّ عمق، ثمّ تُعاد. فتستوي القاعدتان.
+     *
+     * وما ليس JSON صالحاً يُترَك كما هو — فلا تُغيَّر بصمةُ نصٍّ حرّ.
+     */
+    public static function canonicalContext(?string $context): string
     {
+        if ($context === null || $context === '') {
+            return '';
+        }
+
+        $decoded = json_decode($context, true);
+
+        if (! is_array($decoded)) {
+            return $context;
+        }
+
+        $sort = static function (array &$a) use (&$sort): void {
+            ksort($a);
+            foreach ($a as &$v) {
+                if (is_array($v)) {
+                    $sort($v);
+                }
+            }
+        };
+
+        $sort($decoded);
+
+        return (string) json_encode($decoded,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /**
+     * **أتطابق بصمةُ الصفّ؟** — بالصيغة القانونيّة، أو بالصيغة القديمة.
+     *
+     * والتراجعُ مقصود: السجلّاتُ المكتوبةُ قبل هذا الإصلاح بُصمت بالنصّ
+     * الخام. فرفضُها الآن يجعل كلَّ تاريخٍ سابقٍ «معبوثاً به» — وهو
+     * العطلُ نفسُه مقلوباً.
+     *
+     * **والعبثُ يبقى مكشوفاً**: تعديلُ صفٍّ يكسر الصيغتين معاً.
+     */
+    public static function hashMatches(string $prevHash, array $a, string $stored): bool
+    {
+        if (self::computeEntryHash($prevHash, $a) === $stored) {
+            return true;
+        }
+
+        return self::computeEntryHash($prevHash, $a, legacy: true) === $stored;
+    }
+
+    public static function computeEntryHash(string $prevHash, array $a, bool $legacy = false): string
+    {
+        $context = $legacy
+            ? (string) ($a['context'] ?? '')
+            : self::canonicalContext(isset($a['context']) ? (string) $a['context'] : null);
+
         $canonical = implode('|', [
             $prevHash,
             (string) ($a['decision_id'] ?? ''),
@@ -138,7 +214,7 @@ class AuditService
             (string) ($a['action'] ?? ''),
             (string) ($a['decision_code'] ?? ''),
             (string) ($a['reason'] ?? ''),
-            (string) ($a['context'] ?? ''),
+            $context,
             (string) ($a['transaction_id'] ?? ''),
             (string) ($a['zone_code'] ?? ''),
             (string) ($a['severity'] ?? ''),
