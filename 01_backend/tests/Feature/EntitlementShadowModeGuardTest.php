@@ -29,12 +29,23 @@ use Tests\TestCase;
  *
  * | ما يُفحص | لأنّ |
  * |---|---|
+ * | المربوطُ حديثاً **في الظلّ** | وإلّا اشتعل جدارُ دفعٍ على تجربةٍ حيّة |
+ * | الظلُّ **لا يمسّ ما كان محروساً** | وهذا ما أسقط الصيغةَ الأولى — أدناه |
  * | الظلُّ **يُمرّر** الطلب | وعدُ الظلّ ألّا يُلمَس السلوك — وحارسٌ يَعِد بذلك ولا يفي أسوأُ من إنفاذٍ صريح |
  * | الظلُّ **يكتب** الحادثة | ظلٌّ صامتٌ = لا شيء. والقرارُ يُبنى على القائمة |
  * | الإنفاذُ حين يُشعَل **يمنع فعلاً** | فلا يبقى مطفأً بحسن نيّةٍ إلى الأبد |
  * | `NOT_APPLICABLE` **لا تدخل الظلّ** | ليست منعاً بل إخفاءُ قدرةِ قطاعٍ آخر — وإمرارُها تفتح مضخّاتِ الوقود لصيدليّة |
  *
- * والافتراضيُّ في `config/amial.php` **مطفأ**، وهو قرارٌ مكتوبٌ لا سهو.
+ * ══════════════════════════════════════════════════════════════════════
+ * **والصيغةُ الأولى كانت مفتاحاً عامّاً — وأسقطتها البوّابة.**
+ *
+ * `enforce => false` أطفأت الوسيطَ كلَّه، **فسقطت خمسةُ اختباراتٍ تُثبت
+ * المنع**: `products` و`retail.*` و`rbac` محروسةٌ منذ زمن، فجاء «وضعُ
+ * الأمان» فسلّمها مجّاناً.
+ *
+ * **حاجزٌ بُني ليمنع انقطاعاً كاد يفتح باباً مغلقاً** — وهو أخطرُ من
+ * غيابه لأنّه يُطمئن. فصار الظلُّ **قائمةً مقصورةً على ما رُبط في هذه
+ * الدفعة**، وإشعالُ واحدةٍ حذفُ رمزها منها.
  */
 class EntitlementShadowModeGuardTest extends TestCase
 {
@@ -95,17 +106,41 @@ class EntitlementShadowModeGuardTest extends TestCase
     /**
      * @test
      *
-     * **الافتراضيُّ مطفأ.**
+     * **المربوطُ حديثاً في الظلّ افتراضاً.**
      *
-     * وهذا هو الحدُّ الذي يمنع أن تتحوّل هذه الدفعةُ إلى انقطاعٍ لتاجر:
-     * من ربط قدرةً خامسةً غداً لا يُشعل معها جداراً.
+     * وهذا هو الحدُّ الذي يمنع أن تتحوّل هذه الدفعةُ إلى انقطاعٍ لتاجر.
      */
-    public function enforcement_is_off_by_default(): void
+    public function the_newly_wired_capabilities_start_in_shadow(): void
     {
-        $this->assertFalse(
-            (bool) config('amial.entitlements.enforce'),
-            'الإنفاذُ مشتعلٌ افتراضاً — فأربعةُ جدرانِ دفعٍ تعمل على تجربةٍ حيّة '
-            . 'بلا أن يعرف أحدٌ من يتأثّر');
+        $shadow = (array) config('amial.entitlements.shadow');
+
+        foreach ([A::F_SUPPLIERS, A::F_PURCHASES, A::F_PROFIT_REPORTS, A::F_BRANCHES] as $code) {
+            $this->assertContains($code, $shadow,
+                "«{$code}» رُبطت بالوسيط وليست في الظلّ — فجدارُ دفعٍ اشتعل على "
+                . 'تجربةٍ حيّة بلا أن يعرف أحدٌ من يتأثّر');
+        }
+    }
+
+    /**
+     * @test
+     *
+     * **والظلُّ لا يمسّ ما كان محروساً — وهذا ما أمسكته البوّابة.**
+     *
+     * الصيغةُ الأولى كانت مفتاحاً عامّاً يُطفئ الوسيطَ كلَّه، **فأسقطت
+     * خمسةَ اختباراتٍ**: `products` و`retail.*` و`rbac` محروسةٌ منذ زمن،
+     * فجاء «وضعُ الأمان» فسلّمها مجّاناً.
+     *
+     * **حاجزٌ بُني ليمنع انقطاعاً كاد يفتح باباً مغلقاً** — وهو أخطرُ من
+     * غيابه، لأنّه يُطمئن.
+     */
+    public function shadow_never_covers_a_capability_that_was_already_enforced(): void
+    {
+        $shadow = (array) config('amial.entitlements.shadow');
+
+        foreach ([A::F_PRODUCTS, 'rbac', 'retail.catalog', 'inventory_audit'] as $code) {
+            $this->assertNotContains($code, $shadow,
+                "«{$code}» كانت محروسةً ودخلت الظلَّ — فبابٌ مغلقٌ فُتح باسم الأمان");
+        }
     }
 
     /**
@@ -115,7 +150,7 @@ class EntitlementShadowModeGuardTest extends TestCase
      */
     public function in_shadow_mode_the_request_passes(): void
     {
-        config(['amial.entitlements.enforce' => false]);
+        config(['amial.entitlements.shadow' => [self::CAPABILITY]]);
 
         $response = $this->actingAs($this->freeMerchant(), 'api')->getJson(self::URL);
 
@@ -133,7 +168,7 @@ class EntitlementShadowModeGuardTest extends TestCase
      */
     public function the_shadow_denial_is_written_where_it_is_read(): void
     {
-        config(['amial.entitlements.enforce' => false]);
+        config(['amial.entitlements.shadow' => [self::CAPABILITY]]);
 
         $this->actingAs($this->freeMerchant(), 'api')->getJson(self::URL);
 
@@ -156,7 +191,8 @@ class EntitlementShadowModeGuardTest extends TestCase
      */
     public function when_enforcement_is_lit_the_gate_actually_denies(): void
     {
-        config(['amial.entitlements.enforce' => true]);
+        // إشعالُ الإنفاذ = حذفُ الرمز من قائمة الظلّ.
+        config(['amial.entitlements.shadow' => []]);
 
         $response = $this->actingAs($this->freeMerchant(), 'api')->getJson(self::URL);
 
