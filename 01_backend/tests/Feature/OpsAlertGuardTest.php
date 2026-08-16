@@ -130,6 +130,85 @@ class OpsAlertGuardTest extends TestCase
     /**
      * @test
      *
+     * **والبريدُ قناةٌ كاملةٌ لا احتياط.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-PROD-READINESS-003 — أُضيف لأنّ واتساب يشترط ثلاثةً معاً:
+     * رقمٌ مربوطٌ بـQR، ومزوّدٌ مُفعَّلٌ في اللوحة، وهاتفٌ يبقى متّصلاً.
+     * وكلٌّ منها بابُ صمتٍ إن سقط.
+     *
+     * **والبريدُ مُثبَتُ الوصول عمليّاً**: صاحبُ المشروع يقرأ إشعارات
+     * GitHub على هاتفه ويردّ في دقائق. فما يوقظه معلومٌ لا مفترَض.
+     */
+    public function email_alone_is_a_complete_alert_channel(): void
+    {
+        config([
+            'amial.reconciliation.alert_numbers' => [],
+            'amial.reconciliation.alert_emails' => ['owner@example.test'],
+        ]);
+
+        \Illuminate\Support\Facades\Mail::fake();
+
+        $sent = app(OpsAlertService::class)->raise(
+            'recon.nightly_diverged', 'فرقٌ في المصالحة', 'تفصيل');
+
+        $this->assertTrue($sent,
+            'بريدٌ مضبوطٌ ولا يُعدّ وصولاً — فالقناةُ الثانيةُ زينةٌ لا قناة');
+
+        \Illuminate\Support\Facades\Mail::assertSentCount(1);
+    }
+
+    /**
+     * @test
+     *
+     * **والقناتان مستقلّتان — لا واحدةٌ خلفَ الأخرى.**
+     *
+     * لو كان البريدُ احتياطاً يُجرَّب حين يسقط واتساب، لعاد الفرعُ
+     * الصامتُ من بابٍ آخر: مزوّدٌ يردّ «نجاحاً» كاذباً يمنع البريدَ من
+     * الخروج. فتُجرَّبان دائماً معاً.
+     */
+    public function both_channels_are_attempted_not_chained(): void
+    {
+        config([
+            // رقمٌ بلا مزوّدٍ مُفعَّل ⇒ واتساب يسقط
+            'amial.reconciliation.alert_numbers' => ['967771234567'],
+            'amial.reconciliation.alert_emails' => ['owner@example.test'],
+        ]);
+
+        \Illuminate\Support\Facades\Mail::fake();
+
+        $sent = app(OpsAlertService::class)->raise(
+            'health.down.database', 'القاعدةُ ساقطة', 'تفصيل');
+
+        $this->assertTrue($sent, 'سقوطُ واتساب أسكت البريدَ معه');
+        \Illuminate\Support\Facades\Mail::assertSentCount(1);
+    }
+
+    /**
+     * @test
+     *
+     * **واللوحةُ تعرف القناتين** — فلا تُنذر بفجوةٍ مسدودةٍ بالبريد.
+     */
+    public function an_email_channel_alone_silences_the_missing_channel_banner(): void
+    {
+        config([
+            'amial.reconciliation.alert_numbers' => [],
+            'amial.reconciliation.alert_emails' => ['owner@example.test'],
+        ]);
+
+        $this->assertTrue(OpsAlertService::hasExternalChannel(),
+            'البريدُ مضبوطٌ واللوحةُ ما تزال تقول «لا قناة» — إنذارٌ كاذبٌ يُتجاهَل');
+
+        $html = $this->actingAs($this->platformAdmin(), 'user')
+            ->get('/admin/amial/system/health')->assertOk()->getContent();
+
+        $this->assertStringNotContainsString(
+            'لا قناةَ إنذارٍ خارجيّةٌ مضبوطة', (string) $html);
+    }
+
+    /**
+     * @test
+     *
      * **والمتكرّرُ يُعدّ ولا يُكرَّر** — وإلّا أغرق الجدولَ ما يستحقّ النظر.
      */
     public function a_repeating_alarm_is_counted_not_duplicated(): void

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 use App\CentralLogics\WhatsappModule;
 
@@ -66,13 +67,18 @@ class OpsAlertService
         $to = array_values(array_filter(
             (array) config('amial.reconciliation.alert_numbers', [])));
 
-        if ($to === []) {
+        $emails = array_values(array_filter(
+            (array) config('amial.reconciliation.alert_emails', [])));
+
+        if ($to === [] && $emails === []) {
             // ② **الفجوةُ تُرفَع عطلاً** — لا سطرَ تحذيرٍ في ملفّ.
             $this->trace(
                 self::NO_CHANNEL_KEY,
                 'لا قناةَ إنذارٍ خارجيّةٌ مضبوطة',
-                'وقع إنذارٌ تشغيليٌّ ولا رقمَ يصله: اضبط AMIAL_RECON_ALERT_TO. '
-                . 'وحتّى يُضبَط، لا يُعرف الانكسارُ إلّا بفتح هذه الصفحة.',
+                'وقع إنذارٌ تشغيليٌّ ولا قناةَ تُوصِله. اضبط إحداهما: '
+                . 'AMIAL_ALERT_EMAIL (الأسهل — يحتاج SMTP فقط) '
+                . 'أو AMIAL_RECON_ALERT_TO (واتساب — يحتاج مزوّداً مُفعَّلاً). '
+                . 'وحتّى تُضبَط، لا يُعرف الانكسارُ إلّا بفتح هذه الصفحة.',
             );
 
             Log::warning('ops-alert: لا قناةَ خارجيّة', ['key' => $key, 'title' => $title]);
@@ -113,6 +119,32 @@ class OpsAlertService
             } catch (\Throwable $e) {
                 // **سقوطُ القناة لا يُسقط ما استدعاها** — الأثرُ محفوظٌ سلفاً.
                 Log::warning('ops-alert: تعذّر الإرسال', [
+                    'key' => $key, 'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-PROD-READINESS-003 — **قناةٌ ثانية: البريد.**
+        //
+        // **وتُجرَّب دائماً، لا حين يسقط واتساب.** فقناتان مستقلّتان
+        // تعنيان أنّ سقوطَ إحداهما لا يُسكت الإنذار — وهذا غرضُهما.
+        // ولو كان البريدُ احتياطاً مشروطاً لعاد الفرعُ الصامتُ من بابٍ آخر.
+        //
+        // ولا يُرسَل رقمُ عميلٍ ولا مبلغُ محفظةٍ بعينها — كما في واتساب:
+        // الإنذارُ يقول «هناك فرق، افتح اللوحة»، والتفصيلُ خلف الجلسة.
+        // ══════════════════════════════════════════════════════════════
+        foreach ($emails as $address) {
+            try {
+                // **`Mailable` لا `Mail::raw`**: `MailFake::raw()` دالّةٌ
+                // فارغةٌ لا تُسجّل شيئاً، فقناةٌ مبنيّةٌ بها لا يُثبَت
+                // إرسالُها في أيّ اختبار — وقناةٌ لا تُختبَر تُظنّ عاملةً
+                // حتّى الليلة التي تُحتاج فيها.
+                Mail::to($address)->send(new \App\Mail\OpsAlertMail($title, $detail));
+
+                $sent = true;
+            } catch (\Throwable $e) {
+                Log::warning('ops-alert: تعذّر إرسالُ البريد', [
                     'key' => $key, 'error' => $e->getMessage(),
                 ]);
             }
@@ -184,6 +216,7 @@ class OpsAlertService
     /** أَمضبوطةٌ قناةٌ خارجيّة؟ — تقرؤه اللوحةُ لتقول الفجوةَ صراحةً. */
     public static function hasExternalChannel(): bool
     {
-        return array_filter((array) config('amial.reconciliation.alert_numbers', [])) !== [];
+        return array_filter((array) config('amial.reconciliation.alert_numbers', [])) !== []
+            || array_filter((array) config('amial.reconciliation.alert_emails', [])) !== [];
     }
 }

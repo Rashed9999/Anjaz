@@ -66,8 +66,10 @@
             ⚠ <strong>لا قناةَ إنذارٍ خارجيّةٌ مضبوطة.</strong>
             الأعطالُ وسقوطُ القطع وفروقُ المصالحة الليليّة تُسجَّل أدناه
             <em>ولا يصل بها إشعارٌ إلى أحد</em> — فلا تُعرَف إلّا بفتح هذه
-            الصفحة. اضبط <code>AMIAL_RECON_ALERT_TO</code> برقم واتساب،
-            ثمّ أثبِت وصولَه: <code>php artisan amial:alert-test</code>.
+            الصفحة. اضبط إحدى القناتين ثمّ أثبِت وصولَها بـ
+            <code>php artisan amial:alert-test</code>:
+            <br>• <code>AMIAL_ALERT_EMAIL</code> — بريدٌ إلكترونيّ (يحتاج SMTP فقط)
+            <br>• <code>AMIAL_RECON_ALERT_TO</code> — واتساب (يحتاج مزوّداً مُفعَّلاً في اللوحة)
         </div>
     @endunless
 
