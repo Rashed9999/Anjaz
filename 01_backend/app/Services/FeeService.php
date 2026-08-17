@@ -75,8 +75,31 @@ class FeeService
             throw new InvalidArgumentException("Amount cannot be negative: {$amount}");
         }
 
-        // لا توجد نسخة نشطة => العملية مجانية (رسم صفر)
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-FEE-TRUTH-006 — **غيابُ التسعير ليس مجّانيّة.**
+        //
+        // كان `null` يُقرأ «رسمٌ صفر» صامتاً، فيخلط حالتين لا تجتمعان:
+        //
+        //   **مجّانيٌّ عمداً**   قرارٌ تجاريٌّ اتُّخذ ووُثّق
+        //   **إعدادٌ مفقود**    نسخةٌ لم تُنشأ، أو أُلغيت، أو خطأٌ في الرمز
+        //
+        // والثاني **يُسلّم الخدمةَ بلا ثمنٍ بلا أن يقرّر أحد**. وقد وقع
+        // فعلاً: `AGENT_DEPOSIT` كان يُطلب بحروفٍ صغيرة ولا يُطابق شيئاً،
+        // **فصارت كلُّ عمليّات الوكيل مجّانيّةً شهوراً** — وهو مكتوبٌ في
+        // `CLAUDE.md` بثمنٍ دُفع.
+        //
+        // فالغيابُ الآن **يُرفع عطلاً في مركز الأعطال** ويُقال في الردّ،
+        // ولا يُبتلع. والمجّانيُّ عمداً يُنشأ **نسخةً صريحةً بصفر** —
+        // فيكون له سببٌ وسجلٌّ ومَن قرّره.
         if ($scheme === null) {
+            app(\App\Services\OpsAlertService::class)->note(
+                'fee.missing_scheme.'.$code.'.'.$zone,
+                sprintf('تسعيرٌ مفقود: «%s»', $code),
+                sprintf('لا نسخةَ نشطةٌ للرمز %s في المنطقة %s — '
+                    . 'والعمليّةُ مرّت بلا رسم. إن كانت مجّانيّةً عمداً '
+                    . 'فأنشئ نسخةً صريحةً بصفر.', $code, $zone),
+            );
+
             return [
                 'code' => $code,
                 'amount' => $amount,
@@ -89,8 +112,18 @@ class FeeService
                 'scheme_id' => null,
                 'scheme_version' => null,
                 'zone_code' => $zone,
+
+                // **والحالةُ تُقال في الردّ** — فمن يقرأ الرقمَ يعرف
+                // أهو قرارٌ أم نقص. (‏القاعدة السابعة: «غير معروف» ليس صفراً.)
+                'pricing_state' => 'missing_config',
             ];
         }
+
+        // والنسخةُ الموجودةُ تُعلن حالتَها كذلك — فحقلٌ يظهر أحياناً
+        // ويغيب أحياناً يُقرأ غيابُه «سليم»، وهو أسوأُ من ألّا يوجد.
+        $pricingState = MoneyService::gt((string) ($scheme->percent_rate ?? '0'), '0')
+            || MoneyService::gt((string) ($scheme->fixed_amount ?? '0'), '0')
+                ? 'priced' : 'explicit_zero';
 
         $feeType = $scheme->fee_type;
 
@@ -134,6 +167,33 @@ class FeeService
         } else {
             $totalDebit = $amount;                          // الدافع يدفع المبلغ
             $netCredit = MoneyService::sub($amount, $fee);  // الرسم يُخصم من المستلم
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-FEE-TRUTH-007 — **لا صافيَ استلامٍ سالب.**
+            //
+            // حين يتحمّل **المستلمُ** الرسمَ ويكون الرسمُ أكبرَ من المبلغ
+            // — رسمٌ ثابتٌ فوق مبلغٍ صغير، أو حدٌّ أدنى للرسم يتجاوزه —
+            // يخرج `net_credit` سالباً. أي **حركةٌ ماليّةٌ تُنقص من رصيد
+            // المستلم بدل أن تزيده**: يُرسَل له مالٌ فيَنقص.
+            //
+            // ولا يُقصّ الرقمُ صامتاً عند الصفر: ذاك يُخفي إعداداً خاطئاً
+            // ويجعل الرسمَ المحصَّلَ غيرَ الرسم المُعلَن، فينكسر الدفتر.
+            // **بل يُرفض الحساب** ويُقال السبب — والإعدادُ يُصلَح من
+            // مركز الرسوم.
+            if (! MoneyService::isNonNegative($netCredit)) {
+                app(\App\Services\OpsAlertService::class)->note(
+                    'fee.negative_net_credit.'.$code,
+                    sprintf('رسمٌ يفوق المبلغ: «%s»', $code),
+                    sprintf('المبلغ %s · الرسم %s · المتحمّل %s — '
+                        . 'صافي الاستلام سالب. النسخة v%s.',
+                        $amount, $fee, $bearer, (string) $scheme->version),
+                );
+
+                throw new InvalidArgumentException(sprintf(
+                    'تسعيرٌ غيرُ صالح: الرسم (%s) يفوق المبلغ (%s) والمتحمّلُ هو '
+                    . 'المستلم — فصافي الاستلام يصير سالباً. راجع نسخةَ الرسم v%s.',
+                    $fee, $amount, (string) $scheme->version));
+            }
         }
 
         return [
@@ -148,6 +208,7 @@ class FeeService
             'scheme_id' => $scheme->id,
             'scheme_version' => $scheme->version,
             'zone_code' => $zone,
+            'pricing_state' => $pricingState,
         ];
     }
 
