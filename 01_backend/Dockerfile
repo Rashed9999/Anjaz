@@ -51,6 +51,17 @@ COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer
 # السماح لـ composer بالعمل كـ root داخل بناء Docker (يمنع تعطيل الإضافات)
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
+# ══════════════════════════════════════════════════════════════════════
+# AMIAL-BUILD-003 — **حدُّ ذاكرة composer يُرفَع صراحةً.**
+#
+# `memory_limit=256M` يُكتب في `php.ini` أعلاه لأجل التطبيق. وcomposer
+# يقرأ الملفَّ نفسَه، وحلُّ شجرةِ تبعيّاتٍ بمئة حزمة يتجاوزها. **وسقوطُه
+# على الذاكرة لا يقول «نفدت الذاكرة»**: يُقتَل فيبدو البناءُ منقطعاً بلا
+# سبب — وهو ما يصعب تشخيصُه من سجلٍّ بعيد.
+#
+# و`-1` هنا لا تمسّ التطبيق: متغيّرُ بيئةٍ يقرؤه composer وحدَه.
+ENV COMPOSER_MEMORY_LIMIT=-1
+
 # ── PHP config ──────────────────────────────────────────
 RUN echo "upload_max_filesize=50M"  >> /usr/local/etc/php/conf.d/amial.ini \
  && echo "post_max_size=50M"        >> /usr/local/etc/php/conf.d/amial.ini \
@@ -86,7 +97,45 @@ COPY docker/supervisord.conf /etc/supervisord.conf
 RUN date -u +%s > /etc/amial-build-epoch
 
 WORKDIR /var/www/html
+
+# ══════════════════════════════════════════════════════════════════════
+# AMIAL-BUILD-002 — **الحزمُ تُثبَّت قبل نسخ الشيفرة، لا بعدها.**
+#
+# **الثمنُ الذي قِيس من سجلّ Coolify نفسِه:**
+#
+# كان الترتيبُ `COPY . .` ثمّ `composer install`. وطبقةُ Docker تُبطَل
+# بكلّ ما بعد أوّل تغيير، **فأيُّ تعديلٍ في سطرٍ واحدٍ من PHP يُعيد تثبيتَ
+# مئةِ حزمةٍ من الصفر**. والسجلّ يقوله بالأرقام:
+#
+#     #8 … #16   CACHED          ← كلُّ ما قبل نسخ الشيفرة
+#     #17 COPY . .   DONE 0.8s   ← تغيّرت الشيفرة فبطلت الطبقة
+#     #20 composer install → 532 ثانيةً ثمّ سقط البناء
+#
+# **فتسعُ دقائقَ في كلّ نشرة**، ونافذةُ سقوطٍ تُفتَح في كلّ مرّة —
+# لا لشيءٍ إلّا أنّ الترتيبَ يجعل الحزمَ تابعةً للشيفرة وهي ليست كذلك:
+# **`composer.lock` وحدَه يقرّر ما يُثبَّت.**
+#
+# ══════════════════════════════════════════════════════════════════════
+# **وأخطرُ ما فيه أنّ الصوابَ كان مكتوباً في الملفّ الآخر.**
+#
+# `Dockerfile.prod` يفعل هذا بالضبط منذ `AMIAL-PROD-READINESS-002`.
+# **وCoolify يبني `Dockerfile` لا `.prod`** — وهو العطلُ المكتوب في
+# `CLAUDE.md`: «الصورةُ المفحوصةُ ليست المشحونة»، واقعاً هذه المرّة على
+# ترتيب الطبقات بدل حاجز `APP_DEBUG`.
+#
+# الحارس: `DockerLayerCacheGuardTest` — يمنع رجوعَ الترتيب.
+COPY composer.json composer.lock ./
+
+# `--no-scripts` و`--no-autoloader` شرطُ عملٍ لا تحسين: السكربتاتُ تُقلع
+# Laravel، ولا شيفرةَ بعد — `artisan` نفسُه لم يُنسخ. وخريطةُ التحميل
+# تُبنى بعد نسخ الشيفرة.
+RUN composer install --no-dev --no-scripts --no-autoloader --no-interaction --prefer-dist
+
 COPY . .
+
+# وهنا تُبنى الخريطةُ وتُطلق السكربتاتُ (`package:discover`) — والصورةُ
+# هذه تملك كلَّ الامتدادات، بخلاف مرحلةِ `composer:2.7` في `Dockerfile.prod`.
+RUN composer dump-autoload --no-dev --optimize --no-interaction
 
 # صلاحيات storage
 # AMIAL-PDF-DURABLE-001: تُنشأ هنا للنشرات بلا volume، ويُعاد إنشاؤها في
@@ -111,8 +160,7 @@ RUN mkdir -p /var/lib/nginx/tmp/{fastcgi,proxy,client_body,scgi,uwsgi} \
  && chown -R www-data:www-data /var/lib/nginx /var/cache/nginx \
  && chmod -R 755 /var/lib/nginx /var/cache/nginx
 
-# تثبيت الحزم (بلا dev packages لبيئة الإنتاج/الديمو)
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+# (‏تثبيتُ الحزم انتقل إلى أعلى — قبل نسخ الشيفرة. انظر AMIAL-BUILD-002.)
 
 # تهيئة الإقلاع قابلة للتنفيذ
 RUN chmod +x docker/entrypoint.sh
