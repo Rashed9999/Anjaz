@@ -441,7 +441,9 @@ class TransactionController extends Controller
         }
 
         $amount = $request->amount;
-        $charge = helpers::get_withdraw_charge($amount);
+        // AMIAL-FEE-TRUTH-001 — المحرّكُ الواحد (‏انظر متحكّمَ العميل).
+        $charge = app(\App\Services\FeeService::class)
+            ->calculate('WITHDRAW', (string) $amount, ['applies_to' => 'agent'])['fee'];
         $totalAmount = $amount + $charge;
 
         $withdrawRequest = $this->withdrawRequest;

@@ -198,26 +198,46 @@ class BusinessSettingsController extends Controller
         return back();
     }
 
+    /**
+     * AMIAL-FEE-TRUTH-004 — **لا محرِّرَ رسومٍ ثانياً.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ما كان:** هذه الشاشةُ تكتب `cashout_charge_percent` و
+     * `sendmoney_charge_flat` و`withdraw_charge_percent` — **وكانت هي
+     * المصدرَ الذي يقرؤه المالُ الحيُّ فعلاً**، بينما «إدارة الرسوم
+     * والعمولات» تكتب في `fee_schemes` ولا يقرؤها أحد.
+     *
+     * فمحرِّران للمال نفسِه، وأحدُهما بلا صلاحيّةِ رسومٍ ولا سجلِّ تغيير
+     * ولا نسخٍ ولا سبب.
+     *
+     * **وما صار:** المسارُ الماليُّ كلُّه على `FeeService`، فكتابةُ الرسوم
+     * هنا **تُوقَف صراحةً** — ولا تُترك تكتب قيماً لا يقرؤها أحد، فذلك
+     * يجعل المديرَ يظنّ أنّه غيّر رسماً وهو لم يغيّر شيئاً: **كذبةٌ أهدأُ
+     * من العطل وأطولُ عمراً**.
+     *
+     * **ويبقى ما هو سياسةٌ لا تسعير**: حالةُ الأرقام المفضّلة وحدُّها
+     * ونِسَبُ خصمها — وهي تُقرأ من `FeeDiscountPolicy` فوق الرسم المحسوب.
+     */
     public function chargeSetupUpdate(Request $request): RedirectResponse
     {
-        DB::table('business_settings')->updateOrInsert(['key' => 'agent_commission_percent'], [
-            'value' => $request['agent_commission_percent']
-        ]);
-
-        DB::table('business_settings')->updateOrInsert(['key' => 'cashout_charge_percent'], [
-            'value' => $request['cashout_charge_percent']
-        ]);
-
-        DB::table('business_settings')->updateOrInsert(['key' => 'sendmoney_charge_flat'], [
-            'value' => $request['sendmoney_charge_flat']
-        ]);
-
-        DB::table('business_settings')->updateOrInsert(['key' => 'withdraw_charge_percent'], [
-            'value' => $request['withdraw_charge_percent']
-        ]);
+        // **الرسومُ لم تعد تُكتب هنا** — ولا تُحذف المفاتيحُ القديمة:
+        // `ConfigController` ما زال يعرضها للتطبيق، وحذفُها يكسر شاشةً
+        // تقرأ الإعداد. تُترك ساكنةً ويُقال إنّها لم تعد تحكم.
+        if ($request->hasAny(['cashout_charge_percent', 'sendmoney_charge_flat',
+            'withdraw_charge_percent', 'agent_commission_percent'])) {
+            Toastr::warning(translate(
+                'الرسوم والعمولات تُضبط الآن من «إدارة الرسوم والعمولات» '
+                . 'بنسخٍ وسببٍ وسجلِّ تغيير — ولم تُحفظ من هنا.'));
+        }
 
         DB::table('business_settings')->updateOrInsert(['key' => 'favorite_number_status'], [
-            'value' => $request['favorite_number_status'] == 'on' ? 1 : 0
+            // **`1`/`0` و`'on'` كلاهما تفعيل.**
+            //
+            // كانت المقارنةُ `== 'on'` وحدَها، والشاشةُ تُرسل `1`/`0` —
+            // **فالتفعيلُ لا يُحفظ أبداً**: يُضغط الزرُّ وتبقى القيمةُ
+            // كما هي، ولا خطأَ في أيّ سجلّ.
+            'value' => in_array(strtolower(trim((string) $request['favorite_number_status'])),
+                ['1', 'on', 'true', 'yes'], true) ? 1 : 0
         ]);
 
         DB::table('business_settings')->updateOrInsert(['key' => 'favorite_number_limit'], [

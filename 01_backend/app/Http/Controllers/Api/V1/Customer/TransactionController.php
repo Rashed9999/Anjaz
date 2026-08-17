@@ -85,24 +85,43 @@ class TransactionController extends Controller
             }
         }
 
-        $charge = Helpers::get_sendmoney_charge();
-        $favouriteNumberStatus = helpers::get_business_settings('favorite_number_status') ?? 0;
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-FEE-TRUTH-001 — **الرسمُ من المحرّك الواحد، لا من
+        // `business_settings`.**
+        //
+        // **الثمنُ الذي قِيس:** كان هذا السطرُ `Helpers::get_sendmoney_charge()`
+        // — يقرأ مفتاحاً في `business_settings` تكتبه شاشةٌ قديمة. بينما
+        // «إدارة الرسوم والعمولات» تكتب في `fee_schemes`، ومحرّكُها
+        // `FeeService` **مبنيٌّ ومختبَرٌ بالكامل**.
+        //
+        // وأخطرُ ما فيه: `send_money_with_fee_engine` في `TransactionTrait`
+        // كانت موجودةً وتفعل الصواب — **ولا يناديها إلّا الاختبارات**.
+        // فالمجموعةُ تُثبت أنّ المحرّك يعمل، والمالُ الحقيقيُّ يمرّ من
+        // مكانٍ آخر. (‏قِيس: صفرُ مستهلكٍ إنتاجيّ لكلتا الدالّتين.)
+        //
+        // فالمديرُ يغيّر الرسمَ في الشاشة ولا يتغيّر شيء، ولا خطأَ في أيّ
+        // سجلّ — **وهو ما نهى عنه صاحبُ المشروع نصّاً**.
+        $breakdown = app(\App\Services\FeeService::class)
+            ->calculate('SEND_MONEY', (string) $request['amount'], ['applies_to' => 'customer']);
 
-        if ($favouriteNumberStatus){
-            $favouriteList = FavouriteNumber::where('user_id', $request->user()->id)->contacts()->pluck('phone')->toArray();
-            $isFavouriteExist = in_array($receiverPhone, $favouriteList);
+        // **والخصمُ سياسةٌ فوق الرسم لا محرّكٌ ثانٍ** — انظر `FeeDiscountPolicy`.
+        $discounted = app(\App\Services\FeeDiscountPolicy::class)->applyFavouriteNumber(
+            $request->user(), $receiverPhone, $breakdown['fee'], 'SEND_MONEY');
 
-            if ($isFavouriteExist){
-                $discountOnCharge = (float) helpers::get_business_settings('favorite_number_send_money_charge_discount') ?? 0;
+        $charge = $discounted['fee'];
 
-                if ($discountOnCharge > 0) {
-                    $discountAmount = $charge * ($discountOnCharge / 100);
-                    $charge -= $discountAmount;
-                }
-            }
-        }
-
-        $customerTransaction = $this->customer_send_money_transaction($request->user()->id, Helpers::get_user_id($receiverPhone), $request['amount'], $charge);
+        $customerTransaction = $this->customer_send_money_transaction(
+            from_user_id: $request->user()->id,
+            to_user_id: Helpers::get_user_id($receiverPhone),
+            amount: $request['amount'],
+            charge: $charge,
+            feeMeta: [
+                'scheme_id' => $breakdown['scheme_id'],
+                'scheme_version' => $breakdown['scheme_version'],
+                'discount' => $discounted['discount'],
+                'discount_reason' => $discounted['reason'],
+            ],
+        );
 
         if (is_null($customerTransaction)) {
             return response()->json(['message' => translate('فشلت العملية')], 501);
@@ -174,24 +193,32 @@ class TransactionController extends Controller
             }
         }
 
-        $charge = Helpers::get_cashout_charge($request['amount']);
-        $favouriteNumberStatus = helpers::get_business_settings('favorite_number_status') ?? 0;
+        // AMIAL-FEE-TRUTH-001 — المحرّكُ الواحد (‏انظر `sendMoney` أعلاه).
+        // والسحبُ يحمل **حصّةَ وكيل** أيضاً، وهي في المخطّط لا في
+        // `business_settings` — فالقديمُ كان يُسقطها بالكامل.
+        $breakdown = app(\App\Services\FeeService::class)
+            ->calculate('CASH_OUT', (string) $request['amount'], ['applies_to' => 'customer']);
 
-        if ($favouriteNumberStatus){
-            $favouriteList = FavouriteNumber::where('user_id', $request->user()->id)->contacts()->pluck('phone')->toArray();
-            $isFavouriteExist = in_array($receiverPhone, $favouriteList);
+        $discounted = app(\App\Services\FeeDiscountPolicy::class)->applyFavouriteNumber(
+            $request->user(), $receiverPhone, $breakdown['fee'], 'CASH_OUT');
 
-            if ($isFavouriteExist){
-                $discountOnCharge = (float) helpers::get_business_settings('favorite_number_cash_out_charge_discount') ?? 0;
+        $charge = $discounted['fee'];
 
-                if ($discountOnCharge > 0) {
-                    $discountAmount = $charge * ($discountOnCharge / 100);
-                    $charge -= $discountAmount;
-                }
-            }
-        }
-
-        $customerTransaction = $this->customer_cash_out_transaction($request->user()->id, Helpers::get_user_id($receiverPhone), $request['amount'], $charge);
+        $customerTransaction = $this->customer_cash_out_transaction(
+            from_user_id: $request->user()->id,
+            to_user_id: Helpers::get_user_id($receiverPhone),
+            amount: $request['amount'],
+            charge: $charge,
+            // **حصّةُ الوكيل تُمرَّر من المحرّك** — والمسارُ القديم كان
+            // يُسقطها، فيأخذ الوكيلُ ما يحسبه الدفترُ لا ما سعّره الأدمن.
+            agentCommissionOverride: $breakdown['agent_commission'] ?? null,
+            feeMeta: [
+                'scheme_id' => $breakdown['scheme_id'],
+                'scheme_version' => $breakdown['scheme_version'],
+                'discount' => $discounted['discount'],
+                'discount_reason' => $discounted['reason'],
+            ],
+        );
 
         if (is_null($customerTransaction)) return response()->json(['message' => translate('فشلت العملية')], 501);
 
@@ -341,23 +368,19 @@ class TransactionController extends Controller
             }
         }
 
-        $charge = Helpers::get_sendmoney_charge();
-        $favouriteNumberStatus = helpers::get_business_settings('favorite_number_status') ?? 0;
+        // AMIAL-FEE-TRUTH-001 — **قبولُ طلب المال تحويلٌ، فيُسعَّر تسعيرَه.**
+        //
+        // وكان يقرأ `business_settings` كأخوَيه، **فبابٌ ثالثٌ للرسم نفسِه**
+        // — ويُنسى عادةً لأنّه لا يُسمّى «تحويلاً» في الشاشة.
         $receiverPhone = $this->user->find($requestMoney->from_user_id)->phone;
 
-        if ($favouriteNumberStatus){
-            $favouriteList = FavouriteNumber::where('user_id', $request->user()->id)->contacts()->pluck('phone')->toArray();
-            $isFavouriteExist = in_array($receiverPhone, $favouriteList);
+        $breakdown = app(\App\Services\FeeService::class)
+            ->calculate('SEND_MONEY', (string) $requestMoney->amount, ['applies_to' => 'customer']);
 
-            if ($isFavouriteExist){
-                $discountOnCharge = (float) helpers::get_business_settings('favorite_number_send_money_charge_discount') ?? 0;
+        $discounted = app(\App\Services\FeeDiscountPolicy::class)->applyFavouriteNumber(
+            $request->user(), $receiverPhone, $breakdown['fee'], 'SEND_MONEY');
 
-                if ($discountOnCharge > 0) {
-                    $discountAmount = $charge * ($discountOnCharge / 100);
-                    $charge -= $discountAmount;
-                }
-            }
-        }
+        $charge = $discounted['fee'];
 
         $customerTransaction = $this->customer_request_money_transaction($requestMoney->to_user_id, $requestMoney->from_user_id, $requestMoney->amount, $charge);
 
@@ -694,8 +717,18 @@ class TransactionController extends Controller
         }
 
         $amount = $request->amount;
-        $charge = helpers::get_withdraw_charge($amount);
-        $totalAmount = $amount + $charge;
+
+        // AMIAL-FEE-TRUTH-001 — **السحبُ إلى وسيلةٍ خارجيّة عمليّةٌ مسعَّرة.**
+        //
+        // وكان يقرأ `withdraw_charge_percent` من `business_settings` —
+        // **ولا حقلَ له في «إدارة الرسوم» أصلاً**، فهو رسمٌ يُخصَم من
+        // العميل ولا يستطيع الأدمنُ رؤيتَه ولا تغييرَه من مركزه.
+        // فأُضيف الرمزُ `WITHDRAW` إلى السجلّ وصار مسعَّراً كغيره.
+        $breakdown = app(\App\Services\FeeService::class)
+            ->calculate('WITHDRAW', (string) $amount, ['applies_to' => 'customer']);
+
+        $charge = $breakdown['fee'];
+        $totalAmount = \App\Services\MoneyService::add($amount, $charge);
 
         $withdrawRequest = $this->withdrawRequest;
         $withdrawRequest->user_id = $request->user()->id;

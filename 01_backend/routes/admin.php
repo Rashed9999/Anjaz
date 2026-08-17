@@ -126,8 +126,14 @@ Route::group(['as' => 'admin.'], function () {
             Route::post('mail-config-status', [BusinessSettingsController::class, 'mailConfigStatus'])->name('mail_config_status');
             Route::get('mail-send', [BusinessSettingsController::class, 'sendMail'])->name('send_mail');
 
-            Route::get('charge-setup', [BusinessSettingsController::class, 'chargeSetupIndex'])->name('charge-setup');
-            Route::put('charge-setup', [BusinessSettingsController::class, 'chargeSetupUpdate']);
+            // AMIAL-FEE-TRUTH-004 — **بابٌ يمسّ سياسةَ خصمٍ يُحرَس كالرسوم.**
+            //
+            // كان بلا صلاحيّةِ رسومٍ إطلاقاً بينما الشاشةُ الجديدة تطلب
+            // `platform.fees.update` — **فبابان للمال نفسِه وأحدُهما مفتوح**.
+            Route::get('charge-setup', [BusinessSettingsController::class, 'chargeSetupIndex'])
+                ->middleware('platform:platform.fees.view')->name('charge-setup');
+            Route::put('charge-setup', [BusinessSettingsController::class, 'chargeSetupUpdate'])
+                ->middleware('platform:platform.fees.update');
 
             Route::post('report-disputes-status', [DisputeController::class, 'disputesReasonSettingsStatus'])->name('report-disputes-status');
             Route::post('disputes-reason-time-update', [DisputeController::class, 'disputesReasonTimeUpdate'])->name('disputes-reason-time-update');

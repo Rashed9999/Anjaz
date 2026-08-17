@@ -58,6 +58,13 @@ class FeeScheme extends Model
 
         // عمليّاتُ شبّاك الوكيل — تُطلب في `AgentCounterService::quote()`.
         'AGENT_DEPOSIT', 'AGENT_WITHDRAW',
+
+        // AMIAL-FEE-TRUTH-001 — **السحبُ إلى وسيلةٍ خارجيّة.**
+        //
+        // كان يُحسب من `business_settings.withdraw_charge_percent` — رسمٌ
+        // يُخصَم من العميل فعلاً و**لا حقلَ له في مركز الرسوم إطلاقاً**.
+        // فالأدمنُ لا يراه ولا يغيّره، ولا يظهر في تقرير الأرباح مسعَّراً.
+        'WITHDRAW',
     ];
 
     public const FEE_TYPES = ['percent', 'fixed', 'percent_plus_fixed'];
