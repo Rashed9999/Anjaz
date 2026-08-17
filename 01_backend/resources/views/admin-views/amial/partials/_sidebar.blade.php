@@ -148,7 +148,12 @@
                 ['🤝 تسويات الشركاء (الموافقة المزدوجة)', route('admin.amial.partner-settlements.page'), 'platform.money.move'],
                 ['🏦 رصيد المنصّة (إنشاء/شحن)', route('admin.emoney.index'), 'platform.money.move'],
                 ['💸 مصاريف المنصّة', route('admin.expense.index'), null],
-                ['📈 التحكّم بالرسوم والأرباح', route('admin.amial.fees.index'), 'platform.fees.update'],
+                // AMIAL-FEE-TRUTH-010 — **الرابطُ بصلاحيّة القراءة لا الكتابة.**
+                //
+                // كان مشروطاً بـ`platform.fees.update`، فمن يملك `fees.view`
+                // **لا يرى الرابطَ أصلاً** وإن كانت الصفحةُ تُفتح له. وهو نمطُ
+                // العطل الأكثرُ تكراراً في هذا المشروع: مبنيٌّ ولا يُوصَل إليه.
+                ['📈 مركز الرسوم والأرباح', route('admin.amial.fees.index'), 'platform.fees.view'],
                 ['💸 طلبات السحب (اعتماد ورفض)', route('admin.withdraw.index'), 'platform.money.move'],
             ],
         ],

@@ -153,6 +153,27 @@ class FeeService
             MoneyService::normalize((string)$scheme->agent_commission_fixed)
         );
         if (MoneyService::gt($agentCommission, $fee)) {
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-FEE-TRUTH-013 — **والقصُّ يُقال، لا يُبتلع.**
+            //
+            // كان يُقصّ صامتاً. والقصُّ يعني شيئين معاً:
+            //
+            //   **ربحُ المنصّة صفر**  — كلُّ الرسم للوكيل
+            //   **والوكيلُ يأخذ أقلَّ من الموعود** — حصّتُه قُصّت
+            //
+            // فطرفان خسرا، والإعدادُ الخاطئُ باقٍ يعمل على كلّ عمليّةٍ
+            // بعدها **ولا سطرَ في أيّ سجلّ**. وهذا ما يقع بالضبط حين
+            // تُضبط حصّةٌ ثابتةٌ (‏مثلاً ٥٠) فوق رسمٍ نسبيٍّ صغير: تعمل
+            // على المبالغ الكبيرة وتُقصّ على الصغيرة، فالعطلُ متقطّع.
+            app(\App\Services\OpsAlertService::class)->note(
+                'fee.commission_clipped.'.$code,
+                sprintf('حصّةُ وكيلٍ تفوق الرسم: «%s»', $code),
+                sprintf('المبلغ %s · الرسم %s · الحصّةُ المحسوبة %s — قُصّت '
+                    . 'إلى الرسم، فربحُ المنصّة صفرٌ والوكيلُ أخذ أقلَّ من '
+                    . 'الموعود. راجع النسخة v%s.',
+                    $amount, $fee, $agentCommission, (string) $scheme->version),
+            );
+
             $agentCommission = $fee; // لا تتجاوز حصة الوكيل الرسم نفسه
         }
 
@@ -226,6 +247,27 @@ class FeeService
                 ->where('zone_code', $zone)
                 ->where('applies_to', $appliesTo)
                 ->where('is_active', true)
+
+                // ══════════════════════════════════════════════════════
+                // AMIAL-FEE-TRUTH-014 — **`effective_from` كان حقلاً
+                // مكتوباً لا يقرؤه أحد.**
+                //
+                // في الجدول عمودان — `effective_from` و`effective_to` —
+                // ويُكتب الأوّلُ في كلّ نسخة. **ولم يكن يُقرأ إطلاقاً.**
+                // فنسخةٌ مؤرّخةٌ للغد تسري **اليوم**، وواجهةٌ تعرض
+                // «يسري من ...» تكذب على من يقرؤها.
+                //
+                // فصار يُقرأ. **ولا جدولةَ تُعرض في الشاشة بعد** — وذلك
+                // مكتوبٌ في `createVersion` بسببه: الجدولةُ الكاملةُ
+                // تحتاج أن تبقى النسخةُ القديمةُ نشطةً حتّى يحين موعدُ
+                // الجديدة، وهو ما يكسر «نسخةٌ نشطةٌ واحدة». فالمعروضُ
+                // اليومَ سريانٌ فوريٌّ، والحقلُ صادقٌ لا زينة.
+                ->where(function ($q) {
+                    $q->whereNull('effective_from')->orWhere('effective_from', '<=', now());
+                })
+                ->where(function ($q) {
+                    $q->whereNull('effective_to')->orWhere('effective_to', '>', now());
+                })
                 ->orderByDesc('version')
                 ->first();
         });
@@ -289,7 +331,19 @@ class FeeService
                 'bearer' => $data['bearer'] ?? 'sender',
                 'version' => $newVersion,
                 'is_active' => true,
-                'effective_from' => $data['effective_from'] ?? now(),
+
+                // ══════════════════════════════════════════════════════
+                // AMIAL-FEE-TRUTH-014 — **السريانُ فوريٌّ، ولا جدولة.**
+                //
+                // والجدولةُ **لم تُبنَ عمداً لا سهواً**: نسخةٌ مؤجَّلةٌ
+                // تقتضي بقاءَ القديمة نشطةً حتّى موعدِها، أي **نسختين
+                // نشطتين معاً** — وهو ما يمنعه القيدُ الفريدُ في القاعدة،
+                // وهو الذي يجعل «أيُّ تسعيرةٍ تسري الآن؟» سؤالاً له جوابٌ
+                // واحد. فبناءُ الجدولة قرارُ بنيةٍ لا حقلُ تاريخٍ يُضاف.
+                //
+                // فيُفرَض `now()` هنا ولا يُقبل من الطلب: حقلٌ يُرسَل
+                // ويُتجاهَل أسوأُ من حقلٍ لا وجودَ له.
+                'effective_from' => now(),
                 'notes' => $data['notes'] ?? null,
                 'created_by' => $adminId,
             ]);
@@ -301,16 +355,30 @@ class FeeService
         });
     }
 
-    /** تعطيل نسخة (لإيقاف رسم عملية مؤقتاً). */
-    public function deactivate(int $schemeId, ?int $adminId = null, ?string $ip = null): void
-    {
-        DB::transaction(function () use ($schemeId, $adminId, $ip) {
+    /**
+     * تعطيل نسخة (لإيقاف رسم عملية مؤقتاً).
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **AMIAL-FEE-TRUTH-018 — والسببُ يُحفَظ في السجلّ لا في رأس فاعله.**
+     *
+     * فتعطيلُ نسخةٍ يجعل العمليّةَ **مجّانيّةً** حتّى تُضبط أخرى. ومن يقرأ
+     * السجلَّ بعد شهر يرى «عُطّلت» ولا يعرف: أقرارٌ تجاريٌّ أم خطأ؟
+     */
+    public function deactivate(
+        int $schemeId,
+        ?int $adminId = null,
+        ?string $ip = null,
+        ?string $reason = null,
+    ): void {
+        DB::transaction(function () use ($schemeId, $adminId, $ip, $reason) {
             $scheme = FeeScheme::lockForUpdate()->findOrFail($schemeId);
             $old = $scheme->toArray();
             $scheme->is_active = false;
             $scheme->effective_to = now();
             $scheme->save();
-            $this->log($scheme->id, $scheme->code, 'deactivated', $old, null, $adminId, $ip);
+            $this->log($scheme->id, $scheme->code, 'deactivated', $old,
+                $reason !== null && $reason !== '' ? ['reason' => $reason] : null,
+                $adminId, $ip);
             $this->flushCache($scheme->code, $scheme->zone_code, $scheme->applies_to);
         });
     }
@@ -321,7 +389,7 @@ class FeeService
 
     private function validate(array $data): void
     {
-        if (empty($data['code']) || !in_array($data['code'], FeeScheme::CODES, true)) {
+        if (empty($data['code']) || !in_array($data['code'], FeeScheme::codes(), true)) {
             throw new InvalidArgumentException('Invalid fee code.');
         }
         if (empty($data['fee_type']) || !in_array($data['fee_type'], FeeScheme::FEE_TYPES, true)) {
@@ -355,6 +423,58 @@ class FeeService
         $max = $data['max_fee'] ?? null;
         if ($min !== null && $min !== '' && $max !== null && $max !== '' && (float)$min > (float)$max) {
             throw new InvalidArgumentException('min_fee cannot be greater than max_fee.');
+        }
+
+        $this->validateAgainstRegistry($data, $appliesTo, $bearer);
+    }
+
+    /**
+     * AMIAL-FEE-TRUTH-012 — **والتحقّقُ يسأل سجلَّ العمليّات، لا القائمةَ وحدَها.**
+     *
+     * ══════════════════════════════════════════════════════════════════════
+     * كان التحقّقُ يقبل **أيَّ** جهةٍ مع **أيّ** رمز: نسخةُ `SEND_MONEY`
+     * بـ`applies_to = agent`، أو `MERCHANT_QR` بـ`bearer = receiver`.
+     * وتُحفَظ ويراها الأدمنُ فعّالة — **ولا تُطابق نداءً واحداً** لأنّ
+     * المسارَ الحيَّ يطلبها بجهةٍ أخرى. فيردّ المحرّكُ `missing_config`
+     * والخدمةُ مجّانيّةٌ بلا أن يقرّر أحد. **وهو العطلُ نفسُه بثوبٍ ثانٍ.**
+     *
+     * **وأخطرُ منه حصّةُ الوكيل.** في التحويل بين المحفظتين لا يدَ بشريّةً
+     * أصلاً، فرقمٌ في «حصّة الوكيل» هناك **يُقتطع من ربح المنصّة ويُقيَّد
+     * لحصّةٍ لا صاحبَ لها** — والدفترُ متوازنٌ فلا يُنبّه أحد.
+     */
+    private function validateAgainstRegistry(array $data, string $appliesTo, string $bearer): void
+    {
+        $op = \App\Support\Fees\FeeOperationRegistry::find((string) $data['code']);
+
+        if ($op === null) {
+            return;   // الرمزُ فُحص أعلاه؛ وهذا لطمأنة المحلّل الساكن.
+        }
+
+        if (! in_array($appliesTo, $op->actors, true)) {
+            throw new InvalidArgumentException(sprintf(
+                'العمليّة «%s» لا تُطبَّق على «%s» — الجهاتُ المشروعة: %s. '
+                . 'ونسخةٌ بجهةٍ لا تُطلب لا تُطابق نداءً واحداً، فتبقى العمليّةُ بلا تسعير.',
+                $op->labelAr, $appliesTo, implode('، ', $op->actors)));
+        }
+
+        if (! in_array($bearer, $op->bearers, true)) {
+            throw new InvalidArgumentException(sprintf(
+                'العمليّة «%s» لا يتحمّل رسمَها «%s» — المتحمّلون المشروعون: %s.',
+                $op->labelAr, $bearer, implode('، ', $op->bearers)));
+        }
+
+        if (! $op->agentCommission) {
+            $hasCommission = MoneyService::gt(
+                MoneyService::normalize((string) ($data['agent_commission_percent'] ?? 0)), '0')
+                || MoneyService::gt(
+                    MoneyService::normalize((string) ($data['agent_commission_fixed'] ?? 0)), '0');
+
+            if ($hasCommission) {
+                throw new InvalidArgumentException(sprintf(
+                    'العمليّة «%s» لا وكيلَ فيها، فلا حصّةَ وكيلٍ لها. '
+                    . 'ورقمٌ هنا يُقتطع من ربح المنصّة ويُقيَّد لمن لم يعمل.',
+                    $op->labelAr));
+            }
         }
     }
 

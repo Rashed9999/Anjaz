@@ -30,14 +30,13 @@ class FeeScheme extends Model
         'created_by' => 'integer',
     ];
 
-    /** الأكواد المعتمدة للعمليات. */
     /**
      * رموزُ الرسوم التي تُضبط من لوحة الإدارة.
      *
      * ══════════════════════════════════════════════════════════════════
      * **AMIAL-TRUTH-002 — ورمزٌ هنا بلا مستهلكٍ زرٌّ يكذب.**
      *
-     * `FeeSchemeController` يتحقّق `in:CODES`، فهذه القائمةُ هي ما يستطيع
+     * `FeeSchemeController` يتحقّق `in:codes()`، فهذه القائمةُ هي ما يستطيع
      * الأدمنُ تسعيرَه. **وما ليس فيها لا يُسعَّر أبداً.**
      *
      * وقد كُشف بتدقيق `amial-financial-truth` أنّ `AgentCounterService`
@@ -49,23 +48,24 @@ class FeeScheme extends Model
      * مجّانية الآن».** لم يكن نقصَ ضبطٍ من صاحب المشروع: كان اسمين لا
      * يلتقيان، والأدمنُ لا يملك حقلاً يكتبهما فيه.
      *
+     * ══════════════════════════════════════════════════════════════════
+     * **AMIAL-FEE-TRUTH-009 — وكانت هذه القائمةُ ثابتاً مستقلّاً، فصارت
+     * تُقرأ من `FeeOperationRegistry`.**
+     *
+     * والسببُ أنّ الرمزَ وحدَه لا يكفي: الشاشةُ تحتاج اسمَه العربيَّ، وأيَّ
+     * الجهات تُطبَّق عليه، وهل له حصّةُ وكيلٍ أصلاً. فكانت هذه المعرفةُ
+     * موزّعةً على ثلاثة مواضعَ لا يتحدّث بعضُها إلى بعض — **وثلاثُ قوائمَ
+     * لعمليّةٍ واحدةٍ تفترق في اليوم الذي تُضاف فيه عمليّةٌ جديدة**.
+     *
      * والحارسُ `FeeCodeReachabilityTest` يمسك الاتّجاهين: رمزٌ هنا بلا
      * مستهلك، ورمزٌ يُطلب وليس هنا.
+     *
+     * @return array<int,string>
      */
-    public const CODES = [
-        'SEND_MONEY', 'CASH_OUT', 'CASH_IN', 'MERCHANT_QR', 'MERCHANT_POS',
-        'SAFE_PAYMENT', 'BILL_PAY', 'SPLIT_BILL', 'REFUND', 'FAMILY_FUND_CONTRIB',
-
-        // عمليّاتُ شبّاك الوكيل — تُطلب في `AgentCounterService::quote()`.
-        'AGENT_DEPOSIT', 'AGENT_WITHDRAW',
-
-        // AMIAL-FEE-TRUTH-001 — **السحبُ إلى وسيلةٍ خارجيّة.**
-        //
-        // كان يُحسب من `business_settings.withdraw_charge_percent` — رسمٌ
-        // يُخصَم من العميل فعلاً و**لا حقلَ له في مركز الرسوم إطلاقاً**.
-        // فالأدمنُ لا يراه ولا يغيّره، ولا يظهر في تقرير الأرباح مسعَّراً.
-        'WITHDRAW',
-    ];
+    public static function codes(): array
+    {
+        return \App\Support\Fees\FeeOperationRegistry::codes();
+    }
 
     public const FEE_TYPES = ['percent', 'fixed', 'percent_plus_fixed'];
     public const APPLIES_TO = ['customer', 'merchant', 'agent'];

@@ -332,6 +332,20 @@ class LedgerReportService
             $q->where('total_amount', '>=', $filters['min_amount']);
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-FEE-TRUTH-019 — **الجسرُ من الحركة إلى قيدها.**
+        //
+        // كان البحثُ بـ`entry_ulid` وحدَه — وهو رقمُ القيد، **ولا يعرفه من
+        // يقف أمام حركةٍ ماليّة**. فمن أراد أن يتتبّع رسماً من تقرير
+        // الأرباح إلى قيده لم يجد سبيلاً إلّا المطابقةَ بالعين.
+        //
+        // و`idempotency_key` هو المفتاحُ المشترك: تكتبه `recordTransaction`
+        // على الحركة، ويكتبه محرّكُ الترحيل على القيد. **فهو الوصلةُ
+        // الوحيدةُ القائمةُ فعلاً** — لا تُخترع وصلةٌ ثانية.
+        if (!empty($filters['idempotency_key'])) {
+            $q->where('idempotency_key', $filters['idempotency_key']);
+        }
+
         return $q->orderByDesc('id')->limit($limit)->get()
             ->map(fn (LedgerJournalEntry $e) => [
                 'id' => (int) $e->id,

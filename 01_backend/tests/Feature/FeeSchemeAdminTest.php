@@ -70,7 +70,10 @@ class FeeSchemeAdminTest extends TestCase
     {
         $resp = $this->withoutMiddleware()->postJson('/admin/amial/fees/simulate', [
             'amount' => '1000',
-            'code' => 'SEND_MONEY',
+
+            // AMIAL-FEE-TRUTH-012 — **عمليّةُ وكيلٍ لأنّ فيها حصّةَ وكيل.**
+            // كان `SEND_MONEY` بحصّةِ ٤٠٪، ولا وكيلَ في التحويل أصلاً.
+            'code' => 'CASH_OUT',
             'fee_type' => 'percent',
             'percent_rate' => '1',
             'fixed_amount' => '0',
@@ -96,7 +99,12 @@ class FeeSchemeAdminTest extends TestCase
             'bearer' => 'sender', 'version' => 1, 'is_active' => true, 'effective_from' => now(),
         ]);
 
-        $resp = $this->withoutMiddleware()->post("/admin/amial/fees/{$scheme->id}/deactivate");
+        // AMIAL-FEE-TRUTH-018 — **والسببُ إلزاميّ الآن.**
+        // فالتعطيلُ يجعل العمليّةَ مجّانيّةً حتّى تُضبط نسخةٌ جديدة، وقرارٌ
+        // بهذا الأثر لا يُترك بلا سببٍ يقرؤه من يراجع بعد شهر.
+        $resp = $this->withoutMiddleware()->post("/admin/amial/fees/{$scheme->id}/deactivate", [
+            'reason' => 'إيقافُ رسم الفواتير مؤقّتاً بقرار الإدارة',
+        ]);
         $resp->assertRedirect();
         $this->assertFalse($scheme->fresh()->is_active);
     }

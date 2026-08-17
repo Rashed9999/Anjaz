@@ -426,9 +426,17 @@
     // ---------- بحث القيود ----------
     document.getElementById('lg-btn-entries').onclick = loadEntries;
 
+    // AMIAL-FEE-TRUTH-019 — **وصلةُ التنقّل من تقرير الأرباح.**
+    //
+    // يفتح مركزُ الرسوم هذه الصفحةَ بـ`?idempotency_key=…` ليعرض قيدَ
+    // حركةٍ بعينها. وبلا قراءةِ المُعامِل هنا يصل الزائرُ إلى صفحةٍ عامّةٍ
+    // **تتجاهل ما طلبه** — رابطٌ يعمل ويذهب إلى غير وجهته.
+    const lgPinnedKey = new URLSearchParams(location.search).get('idempotency_key') || '';
+
     async function loadEntries() {
         const qs = [];
         const v = id => document.getElementById(id).value;
+        if (lgPinnedKey) qs.push('idempotency_key=' + encodeURIComponent(lgPinnedKey));
         if (v('lg-e-ulid')) qs.push('ulid=' + encodeURIComponent(v('lg-e-ulid')));
         if (v('lg-e-source')) qs.push('source_type=' + encodeURIComponent(v('lg-e-source')));
         if (v('lg-e-from')) qs.push('from=' + v('lg-e-from'));
@@ -458,7 +466,13 @@
                 <td class="small text-muted">${esc(e.posted_at)}</td>
             </tr>`).join('');
 
-        box.innerHTML = `<div class="table-responsive"><table class="table table-sm" data-testid="lg-entries-table">
+        const pinned = lgPinnedKey
+            ? `<div class="alert alert-info py-2 small d-flex align-items-center gap-2">
+                   <span>مقصورٌ على قيود الحركة <code>${esc(lgPinnedKey)}</code></span>
+                   <a class="ms-auto" href="${location.pathname}">إزالةُ القصر</a>
+               </div>` : '';
+
+        box.innerHTML = pinned + `<div class="table-responsive"><table class="table table-sm" data-testid="lg-entries-table">
             <thead class="thead-light"><tr><th>المرجع</th><th>المصدر</th><th class="text-end">المبلغ</th>
                 <th>من (مدين)</th><th>إلى (دائن)</th><th>التاريخ</th></tr></thead>
             <tbody>${rows || '<tr><td colspan="6" class="text-muted text-center py-3">لا قيود</td></tr>'}</tbody></table></div>`;
@@ -469,6 +483,13 @@
     loadRecon();
     loadAccounts();
     loadEntries();
+
+    // وإن جاء الزائرُ من تقرير الأرباح إلى قيدٍ بعينه، يُفتح تبويبُ القيود
+    // — لا يُترك على الميزان فيظنّ أنّ الرابطَ لم يفعل شيئاً.
+    if (lgPinnedKey) {
+        const tab = document.querySelector('[data-bs-target="#lg-entries"]');
+        if (tab && window.bootstrap) new bootstrap.Tab(tab).show();
+    }
 })();
 </script>
 @endsection

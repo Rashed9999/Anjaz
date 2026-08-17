@@ -239,7 +239,7 @@ class PlatformRoleEnforcementTest extends TestCase
         $seenBySupport = $this->actingAs($support, 'user')
             ->get(route('admin.dashboard'))->assertOk()->getContent();
 
-        foreach (['التحكّم بالرسوم والأرباح', 'تسويات الوكلاء', 'المركز المالي'] as $label) {
+        foreach (['مركز الرسوم والأرباح', 'تسويات الوكلاء', 'المركز المالي'] as $label) {
             $this->assertStringNotContainsString($label, $seenBySupport,
                 "«{$label}» ظهر لموظّف الدعم — ويردّ ٤٠٣ حين يضغطه");
         }
@@ -249,7 +249,7 @@ class PlatformRoleEnforcementTest extends TestCase
         $seenByAdmin = $this->actingAs($admin, 'user')
             ->get(route('admin.dashboard'))->assertOk()->getContent();
 
-        foreach (['التحكّم بالرسوم والأرباح', 'تسويات الوكلاء'] as $label) {
+        foreach (['مركز الرسوم والأرباح', 'تسويات الوكلاء'] as $label) {
             $this->assertStringContainsString($label, $seenByAdmin,
                 "«{$label}» اختفى عن مدير المنصّة — الفلترة تُخفي عن الجميع");
         }

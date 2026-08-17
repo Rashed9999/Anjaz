@@ -76,7 +76,16 @@ if command -v node >/dev/null 2>&1; then
     python3 - "$f" <<'PY' || JS_BAD=1
 import re, subprocess, sys, tempfile, os, pathlib
 f = sys.argv[1]
-s = re.sub(r'\{\{[^}]*\}\}', 'X', pathlib.Path(f).read_text(encoding='utf-8', errors='replace'))
+s = pathlib.Path(f).read_text(encoding='utf-8', errors='replace')
+
+# `{{ }}` تُستبدَل بقيمةٍ — والمُصرِّفُ لا يراها.
+s = re.sub(r'\{\{[^}]*\}\}', 'X', s)
+
+# **و`@json(...)` مثلُها.** كانت تمرّ كما هي فيقرؤها `node` رمزاً غريباً
+# ويسقط الفحصُ على **قالبٍ سليمٍ تماماً** — وحارسٌ يسقط على الصواب يُعطّل
+# التزاماً صحيحاً ثمّ يُطلَب تخفيفُه. وهي أشيعُ صيغةٍ لتمرير بياناتٍ من
+# الخادم إلى شيفرة الصفحة، فبقاؤها يجعل الطبقةَ عائقاً لا حارساً.
+s = re.sub(r'@json\s*\((?:[^()]|\([^()]*\))*\)', 'null', s)
 for i, js in enumerate(re.findall(r'<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>', s, re.S)):
     if not js.strip():
         continue

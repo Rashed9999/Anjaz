@@ -11,7 +11,7 @@ use Tests\TestCase;
  * ══════════════════════════════════════════════════════════════════════
  * **ما كشفه تدقيق `amial-financial-truth`:**
  *
- * `FeeSchemeController` يتحقّق `in:FeeScheme::CODES`. فتلك القائمةُ هي
+ * `FeeSchemeController` يتحقّق `in:FeeScheme::codes()`. فتلك القائمةُ هي
  * كلُّ ما يستطيع الأدمنُ تسعيرَه، **وما ليس فيها لا يُسعَّر أبداً**.
  *
  * وقِيس فوُجد انفصامٌ في الاتّجاهين:
@@ -36,24 +36,23 @@ class FeeCodeReachabilityTest extends TestCase
     /**
      * رموزٌ في القائمة لا يستهلكها أحدٌ بعد — **بعلمنا، لا صمتاً**.
      *
-     * @var array<string,string> الرمز ⇒ السبب وما يجري اليوم
+     * ══════════════════════════════════════════════════════════════════
+     * **AMIAL-FEE-TRUTH-009 — وكانت هذه القائمةُ مكتوبةً هنا حرفيّاً.**
+     *
+     * فصارت الأسبابُ في موضعين: هنا، وفي الشاشة التي يجب أن تقول للأدمن
+     * لماذا لا يُسعَّر هذا الرمز. **وموضعان يفترقان**: يُوصَل رمزٌ فيُرفع
+     * استثناؤه من الاختبار وتبقى الشاشةُ تقول «غيرُ موصول» — أو العكس،
+     * وهو أخطر.
+     *
+     * فصار السببُ يُكتب مرّةً واحدةً في `FeeOperationRegistry`، **ومنه
+     * يقرأ الحارسُ والشاشةُ معاً**.
+     *
+     * @return array<string,string> الرمز ⇒ السبب وما يجري اليوم
      */
-    private const NOT_WIRED_YET = [
-        'CASH_IN' => 'إيداعُ العميل عبر الوكيل يمرّ بـAGENT_DEPOSIT — وهذا الرمز '
-            . 'باقٍ لقناةٍ مستقبليّة (إيداع بنكيّ مباشر) ولا يُحصَّل منه شيء.',
-
-        'BILL_PAY' => 'رسمُ الفواتير يُحسب اليوم من عمودَي '
-            . '`bill_service_products.fee_amount/fee_percent` في `BillPayService`. '
-            . 'فمن يضبط مخطّطاً هنا لا يتغيّر شيء. **وقرارٌ ينتظر**: أهو رسمُ '
-            . 'المنصّة فوق رسم المزوّد أم بدله؟ لا يُخترع جوابُه في شيفرة.',
-
-        'SPLIT_BILL' => 'تقسيمُ الفاتورة يُنفَّذ بلا رسمٍ اليوم.',
-
-        'REFUND' => 'الاسترجاعُ بلا رسمٍ اليوم — وهو الأصلح للعميل.',
-
-        'FAMILY_FUND_CONTRIB' => 'صندوقُ العائلة يكتب `fee => 0` صراحةً في '
-            . '`FamilyFundService`، فالمساهمةُ مجّانيّةٌ بقرار.',
-    ];
+    private function notWiredYet(): array
+    {
+        return \App\Support\Fees\FeeOperationRegistry::notWired();
+    }
 
     /**
      * الملفّاتُ التي تُطلب منها الرسوم — تُمسح بحثاً عن الرموز.
@@ -80,6 +79,35 @@ class FeeCodeReachabilityTest extends TestCase
         }
 
         return $out;
+    }
+
+    /**
+     * شيفرةُ **مستهلكي المحرّك وحدَهم** — بلا تعليقات.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * كان المسحُ يشمل كلَّ ملفّات `Services` و`Controllers` و`Traits`.
+     * فذكرُ رمزٍ في **جدول ترجمةٍ للعرض** يُقرأ استهلاكاً: أسقط
+     * `FeeProfitReportService` — وفيه `'cash_in' => 'CASH_IN'` لترجمة
+     * اسم الحركة — استثناءَ `CASH_IN` الصحيحَ وهو لم يُوصَل بعد.
+     *
+     * **ومستهلكُ رسمٍ تعريفُه واحد: ملفٌّ ينادي المحرّك.**
+     */
+    private function consumerBlob(): string
+    {
+        $blob = '';
+
+        foreach ($this->sourceFiles() as $file) {
+            $src = (string) preg_replace(
+                ['#/\*.*?\*/#s', '#^\s*//.*$#m'], '', (string) file_get_contents($file));
+
+            if (! preg_match('~->(?:calculate|quote)\s*\(~', $src)) {
+                continue;
+            }
+
+            $blob .= $src;
+        }
+
+        return $blob;
     }
 
     /**
@@ -116,7 +144,7 @@ class FeeCodeReachabilityTest extends TestCase
         $unknown = [];
 
         foreach ($requested as $code => $where) {
-            if (! in_array($code, FeeScheme::CODES, true)) {
+            if (! in_array($code, FeeScheme::codes(), true)) {
                 $unknown[] = "{$code}  ← {$where}";
             }
         }
@@ -142,21 +170,16 @@ class FeeCodeReachabilityTest extends TestCase
      */
     public function every_configurable_fee_code_is_consumed_or_declared(): void
     {
-        $blob = '';
-
-        foreach ($this->sourceFiles() as $file) {
-            $blob .= (string) preg_replace(
-                ['#/\*.*?\*/#s', '#^\s*//.*$#m'], '', file_get_contents($file));
-        }
+        $blob = $this->consumerBlob();
 
         $orphans = [];
 
-        foreach (FeeScheme::CODES as $code) {
+        foreach (FeeScheme::codes() as $code) {
             if (str_contains($blob, "'{$code}'")) {
                 continue;   // مستهلَك
             }
 
-            if (array_key_exists($code, self::NOT_WIRED_YET)) {
+            if (array_key_exists($code, $this->notWiredYet())) {
                 continue;   // مصرَّحٌ به بسببه
             }
 
@@ -166,7 +189,7 @@ class FeeCodeReachabilityTest extends TestCase
         $this->assertSame([], $orphans, sprintf(
             "رموزٌ يعرضها الأدمنُ ولا يستهلكها أحد، ولا سببَ مكتوب:\n  %s\n"
             . "يضبطها الأدمنُ ويراها فعّالة ولا يُخصم منها ريال.\n"
-            . 'إمّا تُوصَل، وإمّا يُكتب سببُها في NOT_WIRED_YET.',
+            . 'إمّا تُوصَل، وإمّا يُكتب سببُها في `FeeOperationRegistry`.',
             implode("\n  ", $orphans),
         ));
     }
@@ -181,16 +204,11 @@ class FeeCodeReachabilityTest extends TestCase
      */
     public function no_stale_exception_remains_after_a_code_is_wired(): void
     {
-        $blob = '';
-
-        foreach ($this->sourceFiles() as $file) {
-            $blob .= (string) preg_replace(
-                ['#/\*.*?\*/#s', '#^\s*//.*$#m'], '', file_get_contents($file));
-        }
+        $blob = $this->consumerBlob();
 
         $stale = [];
 
-        foreach (array_keys(self::NOT_WIRED_YET) as $code) {
+        foreach (array_keys($this->notWiredYet()) as $code) {
             if (str_contains($blob, "'{$code}'")) {
                 $stale[] = $code;
             }
@@ -213,7 +231,7 @@ class FeeCodeReachabilityTest extends TestCase
     public function the_agent_counter_can_finally_be_priced(): void
     {
         foreach (['AGENT_DEPOSIT', 'AGENT_WITHDRAW'] as $code) {
-            $this->assertContains($code, FeeScheme::CODES,
+            $this->assertContains($code, FeeScheme::codes(),
                 "رمزُ {$code} غيرُ قابلٍ للضبط — يبقى شبّاكُ الوكيل مجّانيّاً بلا سبيلٍ لتسعيره");
         }
 

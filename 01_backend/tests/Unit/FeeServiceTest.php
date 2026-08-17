@@ -80,10 +80,23 @@ class FeeServiceTest extends TestCase
         $this->assertSame('7.0000', $r['fee']);
     }
 
+    /**
+     * **حصّةُ الوكيل تُجرَّب على عمليّةٍ فيها وكيل.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-FEE-TRUTH-012 — كانت تُجرَّب على `SEND_MONEY`، **ولا وكيلَ في
+     * التحويل بين محفظتين**. والثابتُ المُختبَر (‏`ربح + عمولة = رسم`)
+     * حسابيٌّ صحيحٌ لا علاقةَ له بالرمز — لكنّ التركيبةَ المستعملةَ فيه
+     * صارت مرفوضةً في المحرّك نفسِه: رقمٌ في «حصّة الوكيل» على التحويل
+     * يُقتطع من ربح المنصّة ويُقيَّد لحصّةٍ لا صاحبَ لها.
+     *
+     * فالثابتُ باقٍ، والتركيبةُ صارت `CASH_OUT` — وهي عمليّةُ وكيلٍ حقيقيّة.
+     */
     public function test_platform_profit_plus_agent_commission_equals_fee_exactly(): void
     {
         $r = $this->fees->simulate(
-            $this->scheme(['percent_rate' => '2.5', 'agent_commission_percent' => '40']),
+            $this->scheme(['code' => 'CASH_OUT', 'percent_rate' => '2.5',
+                'agent_commission_percent' => '40']),
             '100'
         );
 
@@ -101,7 +114,8 @@ class FeeServiceTest extends TestCase
     {
         // عمولة ثابتة 10 أكبر من الرسم 2.5 => تُسقَف عند الرسم
         $r = $this->fees->simulate(
-            $this->scheme(['percent_rate' => '2.5', 'agent_commission_fixed' => '10']),
+            $this->scheme(['code' => 'CASH_OUT', 'percent_rate' => '2.5',
+                'agent_commission_fixed' => '10']),
             '100'
         );
 

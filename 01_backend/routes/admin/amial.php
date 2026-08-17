@@ -617,15 +617,39 @@ Route::prefix('merchants')->name('merchants.')->group(function () {
 //
 // AMIAL-OPERATOR-RBAC-003: نسبةُ ربحٍ تُغيَّر مرّةً يبقى أثرُها على كلّ
 // عمليّةٍ بعدها. فلا تُترك لكلّ من دخل اللوحة — لمدير المنصّة وحده.
-Route::prefix('fees')->name('fees.')->middleware('platform:platform.fees.update')
-    ->group(function () {
-    Route::get('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webIndex'])->name('index');
-    Route::get('/create', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webCreate'])->name('create');
-    Route::get('/profit', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webProfit'])->name('profit');
-    Route::post('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webStore'])->name('store');
-    Route::post('/simulate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'simulate'])->name('simulate');
-    Route::get('/history/{code}', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webHistory'])->name('history');
-    Route::post('/{id}/deactivate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webDeactivate'])->name('deactivate');
+//
+// ══════════════════════════════════════════════════════════════════════
+// **AMIAL-FEE-TRUTH-010 — والقراءةُ فُصلت عن الكتابة.**
+//
+// كانت المجموعةُ كلُّها خلف `platform.fees.update`. فمن أراد أن **يقرأ**
+// تسعيرةً أو يفتح تقريرَ الأرباح — محاسبٌ يراجع، أو مشرفٌ يتحقّق من
+// شكوى — لزمه إذنُ **تغيير** الرسوم. فإمّا يُمنع من الاطّلاع، وإمّا
+// يُعطى مفتاحَ تغيير المال كلِّه. **وأقلُّ صلاحيّةٍ تكفي** (`amial-rbac`).
+//
+// وتقريرُ الأرباح خاصّةً **لا يغيّر شيئاً**: فوضعُه خلف إذن التعديل
+// يُغري بمنح إذن التعديل لمن يحتاج تقريراً.
+Route::prefix('fees')->name('fees.')->group(function () {
+
+    // ── القراءة ────────────────────────────────────────────────────
+    Route::middleware('platform:platform.fees.view')->group(function () {
+        Route::get('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webIndex'])->name('index');
+        Route::get('/profit', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webProfit'])->name('profit');
+        Route::get('/history/{code?}', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webHistory'])->name('history');
+        Route::get('/operations', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webOperations'])->name('operations');
+        Route::get('/policies', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webPolicies'])->name('policies');
+        Route::get('/drill', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webDrill'])->name('drill');
+    });
+
+    // ── الكتابة ────────────────────────────────────────────────────
+    //
+    // **والمحاكي كتابةٌ لا قراءة**: هو الشاشةُ التي تُجرَّب فيها نسخةٌ
+    // قبل حفظها، ومن لا يملك حقَّ الحفظ لا حاجةَ له بها.
+    Route::middleware('platform:platform.fees.update')->group(function () {
+        Route::get('/create', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webCreate'])->name('create');
+        Route::post('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webStore'])->name('store');
+        Route::post('/simulate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'simulate'])->name('simulate');
+        Route::post('/{id}/deactivate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webDeactivate'])->name('deactivate');
+    });
 });
 
 // ============ AMIAL-SENTINEL-001 — Security Sentinel Dashboard ============

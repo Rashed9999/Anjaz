@@ -212,7 +212,7 @@ class AdminSettingsController extends AmialApiController // AMIAL-FIX-007
 
         return $this->ok([
             'schemes' => $active,
-            'codes' => FeeScheme::CODES,
+            'codes' => FeeScheme::codes(),
             'fee_types' => FeeScheme::FEE_TYPES,
             'bearers' => FeeScheme::BEARERS,
             'applies_to' => FeeScheme::APPLIES_TO,

@@ -89,7 +89,9 @@ class LedgerCenterController extends Controller
     {
         return $this->ok([
             'items' => $this->reports->searchEntries($request->only([
-                'ulid', 'source_type', 'from', 'to', 'min_amount',
+                // `idempotency_key` — الوصلةُ من حركةٍ ماليّةٍ إلى قيدها،
+                // ليعمل التنقّلُ من تقرير الأرباح إلى الدفتر (AMIAL-FEE-TRUTH-019).
+                'ulid', 'source_type', 'from', 'to', 'min_amount', 'idempotency_key',
             ])),
             'source_types' => $this->reports->sourceTypes(),
         ]);
