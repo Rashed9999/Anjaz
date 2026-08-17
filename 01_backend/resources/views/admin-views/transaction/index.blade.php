@@ -161,7 +161,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
     (function () {
         var sel = document.getElementById('dateType');
         if (!sel) return;

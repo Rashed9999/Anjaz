@@ -98,7 +98,7 @@
         </div>
     </div>
 </div>
-<script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
     // AMIAL-CSRF-001: كان التبديل والحذف روابط GET. رابط الحذف بالذات خطر
     // مضاعف: أي زاحف أو جالب مسبق للصفحات يتبع الروابط، فيحذف بلا نيّة أحد.
     function bannerToggle(url) {

@@ -106,7 +106,7 @@
         </div>
     </div>
 </div>
-<script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
     // AMIAL-CSRF-001: تفعيل إشعار وتعطيله تغيير في الحالة — POST مع رمز.
     function notifToggle(url) {
         fetch(url, { method: 'POST', headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } })

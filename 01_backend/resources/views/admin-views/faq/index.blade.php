@@ -92,7 +92,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
     function faqToggle(id, status) {
         // AMIAL-CSRF-001: كان GET — تبديل حالة سؤال بطلب لا يحمل رمزاً.
         fetch("{{ url('admin/faq/status') }}/" + id + "/" + status, {

@@ -51,7 +51,7 @@
   </div></div>
 </div>
 
-<script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     const ROOT = document.getElementById('mc');
     const MID = ROOT.getAttribute('data-mid');

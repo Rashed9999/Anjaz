@@ -1,439 +1,553 @@
 @extends('layouts.admin.app')
-{{-- AMIAL-OTP-CENTER-001 — مركز التحقّق.
-
-     يُجيب سؤالين كانا يحتاجان فتحَ الخادم:
-       ١) لماذا لا يصل رمزُ التحقّق؟   ← جدولُ صحّة المزوّدين
-       ٢) من يستطيع التسجيل بالرمز الثابت؟ ← جدولُ أرقام العرض
-
-     ولا خريطةَ هنا عمداً: التحقّقُ بلا جغرافيا، ورسمٌ للزينة يزاحم ما
-     يُقرأ. والرسمُ الوحيد — محاولاتُ ١٤ يوماً — يُجيب «هل التسجيل يعمل؟»
-     وهبوطُه إلى صفرٍ هو الإنذار: العميلُ الذي لم يستطع التسجيل لا يشتكي،
-     يذهب. --}}
-@section('title', 'مركز التحقّق')
+@section('title', 'مركز التحقق')
 
 @push('css_or_js')
 <style>
-    .otpc { --ok:#12694E; --warn:#B8860B; --bad:#C0392B; --pri:var(--amial-primary); }
-    .otpc .card { border:1px solid #eef1f5; border-radius:14px; }
-    .otpc .kpi { font-size:22px; font-weight:800; line-height:1.15; }
-    .otpc .kpi-l { font-size:11.5px; color:#8B97A8; }
-    .otpc .door { border-radius:16px; padding:16px 18px; color:#fff; }
-    .otpc .door-open { background:linear-gradient(135deg,#C0392B,#E05C4A); }
-    .otpc .door-shut { background:linear-gradient(135deg,#12694E,#1B8A68); }
-    .otpc .bar { display:inline-block; width:100%; max-width:22px; border-radius:5px 5px 0 0; background:var(--pri); }
-    .otpc .bar-b { background:var(--bad); }
-    .otpc table thead th { position:sticky; top:0; background:#f8fafc; z-index:2; }
-    .otpc .srt { cursor:pointer; user-select:none; }
-    .otpc .srt:hover { color:var(--pri); }
+    .otp-center {
+        --otp-primary: var(--amial-primary, #0b4da2);
+        --otp-ink: #172033;
+        --otp-muted: #6b778c;
+        --otp-border: #e7ebf1;
+        --otp-surface: #fff;
+        --otp-soft: #f7f9fc;
+        --otp-success: #157a5a;
+        --otp-warning: #9a6a06;
+        --otp-danger: #b42318;
+    }
+    .otp-center .otp-page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; }
+    .otp-center .otp-title { margin:0; color:var(--otp-ink); font-size:1.45rem; font-weight:800; }
+    .otp-center .otp-subtitle { color:var(--otp-muted); margin-top:5px; font-size:.86rem; }
+    .otp-center .otp-actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .otp-center .otp-card { background:var(--otp-surface); border:1px solid var(--otp-border); border-radius:16px; box-shadow:0 4px 18px rgba(28,39,60,.035); }
+    .otp-center .otp-status { border-radius:16px; color:#fff; padding:16px 18px; display:flex; align-items:center; justify-content:space-between; gap:14px; }
+    .otp-center .otp-status.is-open { background:linear-gradient(135deg,#b42318,#d84b3f); }
+    .otp-center .otp-status.is-closed { background:linear-gradient(135deg,#116149,#1a8a68); }
+    .otp-center .otp-status.is-loading { background:linear-gradient(135deg,#667085,#8b95a5); }
+    .otp-center .otp-status strong { display:block; font-size:1rem; }
+    .otp-center .otp-status small { opacity:.9; }
+    .otp-center .otp-kpi { padding:15px; height:100%; }
+    .otp-center .otp-kpi-value { font-weight:800; font-size:1.2rem; color:var(--otp-ink); }
+    .otp-center .otp-kpi-label { margin-top:4px; font-size:.75rem; color:var(--otp-muted); }
+    .otp-center .otp-section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:15px 16px 8px; }
+    .otp-center .otp-section-title { margin:0; font-size:.98rem; font-weight:800; color:var(--otp-ink); }
+    .otp-center .otp-help { color:var(--otp-muted); font-size:.75rem; }
+    .otp-center .otp-chart { min-height:205px; padding:8px 12px 16px; }
+    .otp-center .otp-chart-grid { height:175px; display:flex; align-items:flex-end; justify-content:space-between; gap:5px; border-bottom:1px solid var(--otp-border); }
+    .otp-center .otp-day { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; }
+    .otp-center .otp-bars { height:145px; display:flex; align-items:flex-end; gap:2px; }
+    .otp-center .otp-bar { width:8px; min-height:2px; border-radius:4px 4px 0 0; background:var(--otp-primary); }
+    .otp-center .otp-bar.blocked { width:5px; background:var(--otp-danger); }
+    .otp-center .otp-day-label { font-size:9px; color:var(--otp-muted); margin-top:5px; white-space:nowrap; }
+    .otp-center .provider-row { padding:12px 0; border-bottom:1px solid var(--otp-border); display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .otp-center .provider-row:last-child { border-bottom:0; }
+    .otp-center .provider-name { font-weight:700; color:var(--otp-ink); }
+    .otp-center .provider-meta { color:var(--otp-muted); font-size:.72rem; margin-top:2px; }
+    .otp-center .otp-toolbar { display:grid; grid-template-columns:minmax(220px,1fr) 180px 135px; gap:8px; }
+    .otp-center .otp-table thead th { background:#f8fafc; color:#475467; font-size:.76rem; border-bottom:1px solid var(--otp-border); white-space:nowrap; }
+    .otp-center .otp-table td { vertical-align:middle; }
+    .otp-center .otp-sort { cursor:pointer; user-select:none; }
+    .otp-center .otp-sort:hover { color:var(--otp-primary); }
+    .otp-center .otp-mobile-list { display:none; }
+    .otp-center .otp-mobile-item { padding:14px; border-bottom:1px solid var(--otp-border); }
+    .otp-center .otp-mobile-item:last-child { border-bottom:0; }
+    .otp-center .otp-empty { text-align:center; color:var(--otp-muted); padding:28px 14px; }
+    .otp-center .otp-skeleton { height:14px; border-radius:7px; background:linear-gradient(90deg,#f0f2f5,#e5e8ed,#f0f2f5); background-size:200% 100%; animation:otpShimmer 1.2s infinite; }
+    @keyframes otpShimmer { to { background-position:-200% 0; } }
+    .otp-center .form-text-error { color:var(--otp-danger); font-size:.75rem; margin-top:4px; display:none; }
+    .otp-center .form-text-error.show { display:block; }
+    .otp-center .badge-soft-success { background:#eaf7f2; color:#12694e; }
+    .otp-center .badge-soft-danger { background:#fff0ef; color:#b42318; }
+    .otp-center .badge-soft-secondary { background:#f2f4f7; color:#475467; }
+    .otp-center .badge-soft-warning { background:#fff7df; color:#8a5b00; }
+
+    /* الشاشة المصورة كانت تبقي sidebar بعرض عمود على الجوال/التابلت. */
+    @media (max-width:1199.98px) {
+        .admin-mobile-header { display:flex !important; }
+        .admin-sidebar {
+            position:fixed !important; top:0 !important; right:0 !important; bottom:0 !important;
+            width:min(320px,88vw) !important; max-width:none !important; height:100vh !important;
+            z-index:1045 !important; transform:translateX(105%); transition:transform .22s ease;
+            overflow-y:auto !important;
+        }
+        .admin-sidebar.show { transform:translateX(0) !important; }
+        .admin-main { width:100% !important; max-width:100% !important; flex:0 0 100% !important; padding:76px 12px 24px !important; }
+    }
+    @media (max-width:767.98px) {
+        .otp-center .otp-page-head { flex-direction:column; }
+        .otp-center .otp-actions { width:100%; }
+        .otp-center .otp-actions .btn { flex:1; }
+        .otp-center .otp-status { align-items:flex-start; flex-direction:column; }
+        .otp-center .otp-toolbar { grid-template-columns:1fr; }
+        .otp-center .otp-desktop-table { display:none; }
+        .otp-center .otp-mobile-list { display:block; }
+        .otp-center .otp-section-head { align-items:flex-start; flex-direction:column; }
+        .otp-center .otp-section-head .btn-group-wrap { width:100%; display:grid !important; grid-template-columns:1fr 1fr; }
+        .otp-center .otp-section-head .btn-group-wrap .btn:last-child { grid-column:1/-1; }
+        .otp-center .otp-chart { overflow-x:auto; }
+        .otp-center .otp-chart-grid { min-width:620px; }
+    }
 </style>
 @endpush
 
 @section('content')
-<div class="content container-fluid otpc" dir="rtl">
-
-    {{-- ==== العنوان + المسار ==== --}}
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb small mb-1">
-            <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">لوحة التحكّم</a></li>
-            <li class="breadcrumb-item">الحسابات والتحقّق</li>
-            <li class="breadcrumb-item active">مركز التحقّق</li>
+<div class="content container-fluid otp-center" dir="rtl">
+    <nav aria-label="breadcrumb" class="mb-2">
+        <ol class="breadcrumb small mb-0">
+            <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">لوحة التحكم</a></li>
+            <li class="breadcrumb-item">الحسابات والتحقق</li>
+            <li class="breadcrumb-item active" aria-current="page">مركز التحقق</li>
         </ol>
     </nav>
 
-    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="otp-page-head">
         <div>
-            <h4 class="fw-bold mb-0" style="color:var(--pri)">🔐 مركز التحقّق</h4>
-            <small class="text-muted">رمزُ التحقّق، وأرقامُ العرض، وصحّةُ بوّابات الإرسال</small>
+            <h1 class="otp-title">مركز التحقق</h1>
+            <div class="otp-subtitle">حالة رموز التحقق، أرقام العرض، وصحة بوابات الإرسال من مكان واحد.</div>
         </div>
-        <div class="d-flex gap-2">
-            <button class="btn btn-sm btn-outline-secondary" id="otp-help" data-testid="otp-help">؟ مساعدة</button>
-            <button class="btn btn-sm btn-outline-secondary" id="otp-refresh" data-testid="otp-refresh">⟳ تحديث</button>
+        <div class="otp-actions">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="otp-help" data-testid="otp-help">مساعدة</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="otp-refresh" data-testid="otp-refresh">تحديث البيانات</button>
         </div>
     </div>
 
-    <div id="otp-alert"></div>
+    <div id="otp-alert" aria-live="polite"></div>
 
-    {{-- ==== حالةُ الباب — أهمُّ حقيقةٍ في الشاشة ==== --}}
-    <div id="otp-door" class="door door-shut mb-3" data-testid="otp-door">
-        <div class="small">…جارٍ القراءة</div>
+    <section id="otp-door" data-testid="otp-door" class="otp-status is-loading mb-3" aria-live="polite">
+        <div>
+            <strong>جارٍ قراءة حالة التحقق…</strong>
+            <small>يتم التحقق من أرقام العرض وبوابات الإرسال.</small>
+        </div>
+    </section>
+
+    <div class="row g-3 mb-3" id="otp-kpis" data-testid="otp-kpis">
+        @for($i=0;$i<4;$i++)
+            <div class="col-6 col-lg-3"><div class="otp-card otp-kpi"><div class="otp-skeleton mb-2"></div><div class="otp-skeleton" style="width:60%"></div></div></div>
+        @endfor
     </div>
-
-    {{-- ==== المؤشّرات ==== --}}
-    <div class="row g-3 mb-3" id="otp-kpis" data-testid="otp-kpis"></div>
 
     <div class="row g-3">
-        {{-- ==== الرسم ==== --}}
-        <div class="col-lg-7">
-            <div class="card p-3 h-100">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <strong>📈 محاولات التحقّق — ١٤ يوماً</strong>
-                    <small class="text-muted">الأزرق: محاولات · الأحمر: محظورة</small>
+        <div class="col-xl-7">
+            <section class="otp-card h-100">
+                <div class="otp-section-head">
+                    <div>
+                        <h2 class="otp-section-title">محاولات التحقق — آخر 14 يوماً</h2>
+                        <div class="otp-help">الأزرق: المحاولات، الأحمر: المحاولات المحظورة مؤقتاً.</div>
+                    </div>
                 </div>
-                <div id="otp-chart" style="height:190px" data-testid="otp-chart"></div>
-                <div class="small text-muted mt-2">
-                    هبوطٌ مفاجئٌ إلى صفرٍ يعني أنّ التسجيل توقّف — ومن لم يستطع التسجيل لا يشتكي.
+                <div id="otp-chart" data-testid="otp-chart" class="otp-chart" aria-live="polite">
+                    <div class="otp-empty">جارٍ تحميل الرسم…</div>
                 </div>
-            </div>
+            </section>
         </div>
 
-        {{-- ==== صحّةُ المزوّدين ==== --}}
-        <div class="col-lg-5">
-            <div class="card p-3 h-100">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <strong>📡 بوّابات الإرسال</strong>
-                    <button class="btn btn-sm btn-outline-primary" id="otp-test" data-testid="otp-test">✉️ رسالةُ فحص</button>
+        <div class="col-xl-5">
+            <section class="otp-card h-100">
+                <div class="otp-section-head">
+                    <div>
+                        <h2 class="otp-section-title">بوابات الإرسال</h2>
+                        <div class="otp-help">الحالة الفعلية لكل مزود والقناة التي يخدمها.</div>
+                    </div>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="otp-test" data-testid="otp-test">إرسال رسالة فحص</button>
                 </div>
-                <div id="otp-providers" data-testid="otp-providers">
-                    <div class="text-muted small py-3">…جارٍ القراءة</div>
+                <div class="px-3 pb-3" id="otp-providers" data-testid="otp-providers" aria-live="polite">
+                    <div class="otp-empty">جارٍ قراءة المزودين…</div>
                 </div>
-            </div>
+            </section>
         </div>
     </div>
 
-    {{-- ==== أرقامُ العرض ==== --}}
-    <div class="card p-3 mt-3">
-        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <strong>📱 أرقامُ العرض — تقبل الرمزَ الثابت</strong>
-            <div class="d-flex gap-2 flex-wrap">
-                <button class="btn btn-sm btn-primary" id="otp-add" data-testid="otp-add">＋ إضافة رقم</button>
-                <a class="btn btn-sm btn-outline-secondary" href="{{ route('admin.amial.otp.export') }}" data-testid="otp-export">⬇️ تصدير CSV</a>
-                <button class="btn btn-sm btn-danger" id="otp-close" data-testid="otp-close">🔒 إقفال الباب</button>
+    <section class="otp-card mt-3">
+        <div class="otp-section-head">
+            <div>
+                <h2 class="otp-section-title">أرقام العرض — الرمز الثابت</h2>
+                <div class="otp-help">هذه الأرقام فقط يمكنها استعمال رمز العرض. لا تضف رقماً حقيقياً لعميل.</div>
+            </div>
+            <div class="d-flex gap-2 flex-wrap btn-group-wrap">
+                <button type="button" class="btn btn-primary btn-sm" id="otp-add" data-testid="otp-add">إضافة رقم</button>
+                <a class="btn btn-outline-secondary btn-sm" data-testid="otp-export" href="{{ route('admin.amial.otp.export') }}">تصدير CSV</a>
+                <button type="button" class="btn btn-outline-danger btn-sm" id="otp-close" data-testid="otp-close">إقفال باب العرض</button>
             </div>
         </div>
 
-        {{-- بحث + فلاتر --}}
-        <div class="row g-2 mb-3">
-            <div class="col-md-5">
-                <input type="search" class="form-control form-control-sm" id="otp-search"
-                       placeholder="بحث برقمٍ أو وصف…" data-testid="otp-search">
+        <div class="px-3 pb-3">
+            <div class="otp-toolbar mb-3">
+                <div>
+                    <label class="form-label small mb-1" for="otp-search">بحث</label>
+                    <input type="search" class="form-control form-control-sm" id="otp-search" data-testid="otp-search" placeholder="رقم الهاتف أو الوصف">
+                </div>
+                <div>
+                    <label class="form-label small mb-1" for="otp-state">الحالة</label>
+                    <select class="form-select form-select-sm" id="otp-state" data-testid="otp-state">
+                        <option value="">كل الحالات</option>
+                        <option value="active">مفعّلة</option>
+                        <option value="disabled">معطّلة</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label small mb-1" for="otp-per">عدد الصفوف</label>
+                    <select class="form-select form-select-sm" id="otp-per" data-testid="otp-per">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
             </div>
-            <div class="col-md-3">
-                <select class="form-select form-select-sm" id="otp-state" data-testid="otp-state">
-                    <option value="">كلّ الحالات</option>
-                    <option value="active">المُفعَّلة</option>
-                    <option value="disabled">المعطَّلة</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <select class="form-select form-select-sm" id="otp-per" data-testid="otp-per">
-                    <option value="25">٢٥ صفّاً</option>
-                    <option value="50">٥٠ صفّاً</option>
-                    <option value="100">١٠٠ صفّ</option>
-                </select>
-            </div>
-        </div>
 
-        <div id="otp-env" class="alert alert-warning py-2 small d-none" data-testid="otp-env"></div>
+            <div id="otp-env" data-testid="otp-env" class="alert alert-warning py-2 small d-none"></div>
 
-        <div class="table-responsive" style="max-height:520px;overflow:auto">
-            <table class="table table-sm align-middle mb-0">
-                <thead>
+            <div class="otp-desktop-table table-responsive">
+                <table class="table table-hover otp-table mb-0">
+                    <thead>
                     <tr>
-                        <th class="srt" data-sort="phone">الرقم</th>
+                        <th class="otp-sort" data-sort="phone">الرقم</th>
                         <th>الوصف</th>
                         <th>الحالة</th>
-                        <th class="srt text-end" data-sort="use_count">مرّات الاستعمال</th>
-                        <th class="srt" data-sort="last_used_at">آخر استعمال</th>
-                        <th class="text-end">إجراء</th>
+                        <th class="otp-sort" data-sort="use_count">مرات الاستعمال</th>
+                        <th class="otp-sort" data-sort="last_used_at">آخر استعمال</th>
+                        <th>الإجراء</th>
                     </tr>
-                </thead>
-                <tbody id="otp-rows" data-testid="otp-rows">
-                    <tr><td colspan="6" class="text-center text-muted py-4">…جارٍ التحميل</td></tr>
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody id="otp-rows" data-testid="otp-rows"><tr><td colspan="6" class="otp-empty">جارٍ تحميل الأرقام…</td></tr></tbody>
+                </table>
+            </div>
+            <div id="otp-mobile-rows" class="otp-mobile-list border rounded"></div>
 
-        <div class="d-flex justify-content-between align-items-center mt-2">
-            <small class="text-muted" id="otp-count">—</small>
-            <div class="btn-group btn-group-sm">
-                <button class="btn btn-outline-secondary" id="otp-prev" data-testid="otp-prev">السابق</button>
-                <button class="btn btn-outline-secondary" id="otp-next" data-testid="otp-next">التالي</button>
+            <div class="d-flex justify-content-between align-items-center gap-2 mt-3 flex-wrap">
+                <small class="text-muted" id="otp-count">جارٍ القراءة…</small>
+                <div class="btn-group btn-group-sm" role="group" aria-label="التنقل بين الصفحات">
+                    <button type="button" class="btn btn-outline-secondary" id="otp-prev" data-testid="otp-prev">السابق</button>
+                    <button type="button" class="btn btn-outline-secondary" id="otp-next" data-testid="otp-next">التالي</button>
+                </div>
             </div>
         </div>
-    </div>
+    </section>
 </div>
 
-{{-- ==================== النوافذ ==================== --}}
-
-<div class="modal fade" id="mdAdd" tabindex="-1" aria-labelledby="mdAddT" aria-hidden="true">
+{{-- إضافة رقم --}}
+<div class="modal fade" id="mdAdd" tabindex="-1" aria-labelledby="mdAddTitle" aria-hidden="true" dir="rtl">
     <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
-        <div class="modal-header"><h6 class="modal-title" id="mdAddT">＋ إضافة رقم عرض</h6>
-            <button class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>
+        <div class="modal-header"><h5 class="modal-title" id="mdAddTitle">إضافة رقم عرض</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>
         <div class="modal-body">
-            <div class="alert alert-warning py-2 small">
-                هذا الرقم سيُقبل منه <strong>الرمزُ الثابت</strong> بلا رسالة. لا تُضف رقمَ عميلٍ حقيقيّ.
-            </div>
-            <label class="form-label small">الرقم</label>
-            <input class="form-control mb-2" id="md-phone" placeholder="967777100001" data-testid="md-phone">
-            <label class="form-label small">الوصف (اختياريّ)</label>
-            <input class="form-control" id="md-label" placeholder="عميل تجريبيّ للعرض" data-testid="md-label">
+            <div class="alert alert-warning small">الرقم المضاف سيقبل رمز العرض الثابت دون رسالة حقيقية. استخدم حسابات الاختبار فقط.</div>
+            <label class="form-label" for="md-phone">رقم الهاتف</label>
+            <input class="form-control" id="md-phone" data-testid="md-phone" inputmode="tel" autocomplete="off" placeholder="967777100001">
+            <div class="form-text-error" id="md-phone-error"></div>
+            <label class="form-label mt-3" for="md-label">الوصف <span class="text-muted">(اختياري)</span></label>
+            <input class="form-control" id="md-label" data-testid="md-label" maxlength="120" placeholder="مثال: حساب العرض الرئيسي">
         </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">إلغاء</button>
-            <button class="btn btn-primary btn-sm" id="md-save" data-testid="md-save">حفظ</button>
-        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">إلغاء</button><button type="button" class="btn btn-primary" id="md-save" data-testid="md-save">حفظ الرقم</button></div>
     </div></div>
 </div>
 
-<div class="modal fade" id="mdClose" tabindex="-1" aria-labelledby="mdCloseT" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered"><div class="modal-content border-danger">
-        <div class="modal-header"><h6 class="modal-title text-danger" id="mdCloseT">🔒 إقفالُ الباب كاملاً</h6>
-            <button class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>
+{{-- تأكيد تفعيل/تعطيل رقم --}}
+<div class="modal fade" id="mdToggle" tabindex="-1" aria-labelledby="mdToggleTitle" aria-hidden="true" dir="rtl">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title" id="mdToggleTitle">تأكيد تغيير الحالة</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>
+        <div class="modal-body"><p class="mb-1" id="md-toggle-text"></p><small class="text-muted">يُسجل هذا الإجراء في سجل التدقيق.</small></div>
+        <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">إلغاء</button><button type="button" class="btn btn-primary" id="md-toggle-go">تأكيد</button></div>
+    </div></div>
+</div>
+
+{{-- إقفال الباب --}}
+<div class="modal fade" id="mdClose" tabindex="-1" aria-labelledby="mdCloseTitle" aria-hidden="true" dir="rtl">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title text-danger" id="mdCloseTitle">إقفال باب الرمز الثابت</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>
         <div class="modal-body">
-            <div class="alert alert-danger py-2 small">
-                <strong>يُعطَّل كلُّ أرقام العرض.</strong> لن يُقبل الرمزُ الثابت من أيّ رقم،
-                وسيحتاج كلُّ تسجيلٍ رمزاً حقيقيّاً عبر البوّابة.
-                <div class="mt-1">افعلها يوم الإطلاق — <strong>وبعد أن تتأكّد أنّ بوّابة الإرسال تعمل.</strong></div>
-            </div>
+            <div class="alert alert-danger small">سيتم تعطيل جميع أرقام العرض. بعد ذلك يحتاج أي تسجيل جديد إلى قناة إرسال حقيقية.</div>
             <div id="md-close-ready"></div>
-            <label class="form-label small">اكتب <code>إقفال</code> للتأكيد</label>
-            <input class="form-control" id="md-confirm" placeholder="إقفال" data-testid="md-confirm">
+            <label class="form-label" for="md-confirm">اكتب <code>إقفال</code> للتأكيد</label>
+            <input class="form-control" id="md-confirm" data-testid="md-confirm" autocomplete="off" placeholder="إقفال">
+            <div class="form-text-error" id="md-confirm-error">اكتب كلمة إقفال كما هي.</div>
         </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">تراجع</button>
-            <button class="btn btn-danger btn-sm" id="md-close-go" data-testid="md-close-go">إقفال</button>
-        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">تراجع</button><button type="button" class="btn btn-danger" id="md-close-go" data-testid="md-close-go">إقفال الباب</button></div>
     </div></div>
 </div>
 
-<div class="modal fade" id="mdTest" tabindex="-1" aria-labelledby="mdTestT" aria-hidden="true">
+{{-- رسالة الفحص --}}
+<div class="modal fade" id="mdTest" tabindex="-1" aria-labelledby="mdTestTitle" aria-hidden="true" dir="rtl">
     <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
-        <div class="modal-header"><h6 class="modal-title" id="mdTestT">✉️ رسالةُ فحص</h6>
-            <button class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>
+        <div class="modal-header"><h5 class="modal-title" id="mdTestTitle">رسالة فحص حقيقية</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>
         <div class="modal-body">
-            <p class="small text-muted">تُرسَل رسالةٌ حقيقيّةٌ عبر أوّل مزوّدٍ مُفعَّل — لتتأكّد أنّ القناة تعمل قبل الاعتماد عليها.</p>
-            <label class="form-label small">الرقم</label>
-            <input class="form-control" id="md-test-phone" placeholder="967…" data-testid="md-test-phone">
-            <div id="md-test-out" class="mt-2"></div>
+            <p class="small text-muted">اختر قناة لديها مزود مفعّل يدعم إرسال النص الحر، ثم أرسل رسالة تشخيصية إلى رقم تملكه.</p>
+            <label class="form-label" for="md-test-channel">القناة</label>
+            <select class="form-select" id="md-test-channel"></select>
+            <div class="form-text-error" id="md-test-channel-error"></div>
+            <label class="form-label mt-3" for="md-test-phone">رقم الهاتف</label>
+            <input class="form-control" id="md-test-phone" data-testid="md-test-phone" inputmode="tel" autocomplete="off" placeholder="967…">
+            <div class="form-text-error" id="md-test-phone-error"></div>
+            <div id="md-test-out" class="mt-3" aria-live="polite"></div>
         </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">إغلاق</button>
-            <button class="btn btn-primary btn-sm" id="md-test-go" data-testid="md-test-go">إرسال</button>
-        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">إغلاق</button><button type="button" class="btn btn-primary" id="md-test-go" data-testid="md-test-go">إرسال الفحص</button></div>
     </div></div>
 </div>
 
-<div class="modal fade" id="mdHelp" tabindex="-1" aria-labelledby="mdHelpT" aria-hidden="true">
+{{-- المساعدة --}}
+<div class="modal fade" id="mdHelp" tabindex="-1" aria-labelledby="mdHelpTitle" aria-hidden="true" dir="rtl">
     <div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content">
-        <div class="modal-header"><h6 class="modal-title" id="mdHelpT">؟ كيف يعمل التحقّق</h6>
-            <button class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>
-        <div class="modal-body small">
-            <p><strong>الرقمُ يحدّد الطريق، لا مفتاحٌ عامّ:</strong></p>
-            <ul>
-                <li><strong>رقمٌ في هذه القائمة</strong> ← يُقبل منه الرمزُ الثابت، ويُعبَّأ في التطبيق تلقائياً، ولا يحتاج بوّابة.</li>
-                <li><strong>أيُّ رقمٍ آخر</strong> ← رمزٌ عشوائيٌّ عبر البوّابة، <strong>ولا يُفصح عنه أبداً</strong>.</li>
-            </ul>
-            <p class="mb-1"><strong>يوم الإطلاق:</strong> تأكّد أنّ بوّابةً مُفعَّلة، ثمّ اضغط «إقفال الباب».</p>
-            <p class="text-muted mb-0">وتُعطَّل الأرقامُ ولا تُحذف — أثرُ من فتح باباً في نظامٍ ماليٍّ لا يُمحى.</p>
+        <div class="modal-header"><h5 class="modal-title" id="mdHelpTitle">كيف يعمل مركز التحقق؟</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>
+        <div class="modal-body">
+            <div class="row g-3">
+                <div class="col-md-6"><div class="border rounded p-3 h-100"><strong>أرقام العرض</strong><p class="small text-muted mt-2 mb-0">الأرقام الموجودة هنا فقط يمكنها قبول رمز العرض الثابت دون مزود إرسال.</p></div></div>
+                <div class="col-md-6"><div class="border rounded p-3 h-100"><strong>الأرقام الحقيقية</strong><p class="small text-muted mt-2 mb-0">تأخذ رمزاً عشوائياً ويجب إيصاله عبر واتساب أو SMS. لا يُفصح عن الرمز في الاستجابة.</p></div></div>
+            </div>
+            <div class="alert alert-info small mt-3 mb-0">قبل إقفال باب العرض تأكد من وجود قناة إرسال جاهزة واختبرها برسالة فحص.</div>
         </div>
     </div></div>
 </div>
 @endsection
 
-@push('script_2')
+@push('script')
 <script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
-    const BASE  = '{{ url('admin/amial/otp') }}';
-    const TOKEN = '{{ csrf_token() }}';
-    const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    'use strict';
+
+    const BASE = @json(url('admin/amial/otp'));
+    const TOKEN = @json(csrf_token());
     const $ = id => document.getElementById(id);
+    const esc = value => String(value ?? '—').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const modal = id => bootstrap.Modal.getOrCreateInstance($(id));
 
-    let page = 1, sort = 'created_at', dir = 'desc';
+    let page = 1;
+    let sort = 'created_at';
+    let dir = 'desc';
+    let toggleTarget = null;
+    let testableChannels = [];
+    let searchTimer = null;
 
-    const banner = (kind, msg) => {
-        $('otp-alert').innerHTML =
-            `<div class="alert alert-${kind} alert-dismissible py-2 small">${esc(msg)}
-             <button class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button></div>`;
-    };
-
-    async function get(path) {
-        const r = await fetch(BASE + path, {headers: {'Accept': 'application/json'}});
-        return r.json();
+    function banner(kind, message) {
+        $('otp-alert').innerHTML = `<div class="alert alert-${kind} alert-dismissible fade show py-2 small" role="alert">${esc(message)}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="إغلاق"></button></div>`;
     }
 
-    async function post(path, body) {
-        const r = await fetch(BASE + path, {
-            method: 'POST',
-            headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': TOKEN},
-            body: JSON.stringify(body || {}),
-        });
-        return r.json();
-    }
-
-    const busy = (btn, on) => {
-        if (!btn) return;
-        btn.disabled = on;
-        if (on) { btn.dataset.t = btn.innerHTML; btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>'; }
-        else if (btn.dataset.t) { btn.innerHTML = btn.dataset.t; }
-    };
-
-    // ---------- المؤشّرات + الباب + الرسم + المزوّدون ----------
-    async function loadStats() {
-        const j = await get('/stats');
-        if (!j.success) { banner('warning', 'تعذّرت قراءة الحالة'); return; }
-        const m = j.meta;
-
-        // حالةُ الباب — أوّلُ ما يُقرأ.
-        $('otp-door').className = 'door mb-3 ' + (m.door_open ? 'door-open' : 'door-shut');
-        $('otp-door').innerHTML = m.door_open
-            ? `<div class="fw-bold" style="font-size:17px">⚠️ البابُ مفتوح — ${m.demo_count} رقماً يقبل الرمزَ الثابت</div>
-               <div class="small mt-1" style="opacity:.9">مقبولٌ في التجربة. وقبل الإطلاق: أقفِله.</div>`
-            : `<div class="fw-bold" style="font-size:17px">✅ البابُ مقفل — لا رقمَ يقبل الرمزَ الثابت</div>
-               <div class="small mt-1" style="opacity:.9">كلُّ تسجيلٍ يحتاج رمزاً حقيقيّاً عبر البوّابة.</div>`;
-
-        const t = m.today;
-        const tile = (v, l, cls) =>
-            `<div class="col-lg-3 col-md-4 col-6"><div class="card p-3 h-100 ${cls || ''}">
-               <div class="kpi">${v}</div><div class="kpi-l">${l}</div></div></div>`;
-
-        $('otp-kpis').innerHTML =
-            tile(m.delivery_ready ? '✅ جاهزة' : '🔴 غير مهيّأة', 'قناةُ الإيصال',
-                 m.delivery_ready ? 'border-success' : 'border-danger') +
-            tile(m.demo_count, 'أرقامُ العرض', m.demo_count ? 'border-warning' : '') +
-            tile(t.attempts, 'محاولاتُ اليوم') +
-            // «لا محاولات» ليست «٠٪ نجاح» — الغيابُ يُقال. (القاعدة السابعة)
-            tile(t.success_rate === null ? '—' : t.success_rate + '٪', 'نسبةُ النجاح اليوم') +
-            tile(t.blocked, 'محظورٌ مؤقّتاً', t.blocked ? 'border-warning' : '');
-
-        // الرسم
-        const max = Math.max(1, ...m.trend.map(d => d.attempts));
-        $('otp-chart').innerHTML =
-            '<div class="d-flex align-items-end justify-content-between h-100" style="gap:4px">' +
-            m.trend.map(d => {
-                const h = Math.round((d.attempts / max) * 150);
-                const hb = Math.round((d.blocked / max) * 150);
-                return `<div class="d-flex flex-column align-items-center flex-fill" title="${esc(d.date)} — ${d.attempts} محاولة، ${d.blocked} محظورة">
-                          <small class="text-muted" style="font-size:9px">${d.attempts || ''}</small>
-                          <div class="bar${d.blocked ? ' bar-b' : ''}" style="height:${Math.max(h, 2)}px;opacity:${d.attempts ? 1 : .15}"></div>
-                          <small class="text-muted" style="font-size:9px">${esc(d.date).slice(5)}</small>
-                        </div>`;
-            }).join('') + '</div>';
-
-        // المزوّدون — يُجيب «لماذا لا يصل الرمز؟»
-        $('otp-providers').innerHTML = m.providers.length
-            ? '<div class="table-responsive"><table class="table table-sm mb-0"><tbody>' +
-              m.providers.map(p => `
-                <tr>
-                  <td>${esc(p.key)}<div class="small text-muted">${esc(p.channel)} · أولويّة ${p.priority}</div></td>
-                  <td class="text-end">${p.enabled
-                      ? '<span class="badge bg-success">مُفعَّل</span>'
-                      : '<span class="badge bg-secondary">غير مُفعَّل</span>'}
-                      ${p.free_text ? '<span class="badge bg-light text-dark ms-1">نصّ حرّ</span>' : ''}</td>
-                </tr>`).join('') + '</tbody></table></div>'
-            : '<div class="text-muted small py-3">لا مزوّدين.</div>';
-
-        $('md-close-ready').innerHTML = m.delivery_ready
-            ? '<div class="alert alert-success py-2 small">✅ بوّابةٌ مُفعَّلة — الإقفال آمن.</div>'
-            : '<div class="alert alert-danger py-2 small">🔴 <strong>لا بوّابةَ مُفعَّلة.</strong> الإقفالُ الآن يمنع كلَّ تسجيلٍ جديد.</div>';
-    }
-
-    // ---------- الجدول ----------
-    async function loadRows() {
-        const q = new URLSearchParams({
-            search: $('otp-search').value, state: $('otp-state').value,
-            per_page: $('otp-per').value, page, sort, dir,
-        });
-
-        const j = await get('/numbers?' + q);
-        if (!j.success) { banner('warning', 'تعذّر جلب الأرقام'); return; }
-        const m = j.meta;
-
-        const env = $('otp-env');
-        if (m.from_env) {
-            env.classList.remove('d-none');
-            env.innerHTML = `الجدولُ فارغ — تعمل المنصّة الآن بقائمة <code>AMIAL_DEMO_PHONES</code>
-                             (${m.env_numbers.length} رقماً). أوّلُ إضافةٍ هنا تجعل الجدولَ هو الحكم.`;
+    function setBusy(button, on, text) {
+        if (!button) return;
+        if (on) {
+            button.dataset.originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = `<span class="spinner-border spinner-border-sm ms-1" aria-hidden="true"></span>${esc(text || 'جارٍ التنفيذ')}`;
         } else {
-            env.classList.add('d-none');
+            button.disabled = false;
+            if (button.dataset.originalText) button.innerHTML = button.dataset.originalText;
+        }
+    }
+
+    function fieldError(id, message) {
+        const el = $(id);
+        if (!el) return;
+        el.textContent = message || '';
+        el.classList.toggle('show', Boolean(message));
+    }
+
+    async function request(path, options = {}) {
+        const headers = Object.assign({'Accept':'application/json'}, options.headers || {});
+        if ((options.method || 'GET').toUpperCase() !== 'GET') headers['X-CSRF-TOKEN'] = TOKEN;
+        if (options.body && typeof options.body !== 'string') {
+            headers['Content-Type'] = 'application/json';
+            options.body = JSON.stringify(options.body);
         }
 
-        $('otp-count').textContent = `${m.total} رقماً · صفحة ${m.page} من ${m.pages}`;
-        $('otp-prev').disabled = m.page <= 1;
-        $('otp-next').disabled = m.page >= m.pages;
+        let response;
+        try {
+            response = await fetch(BASE + path, Object.assign({}, options, {headers}));
+        } catch (error) {
+            throw new Error('تعذر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.');
+        }
 
-        $('otp-rows').innerHTML = m.rows.length ? m.rows.map(r => `
-            <tr>
-                <td><code>${esc(r.phone)}</code></td>
-                <td>${esc(r.label)}</td>
-                <td>${r.is_active
-                    ? '<span class="badge bg-warning text-dark">مُفعَّل</span>'
-                    : '<span class="badge bg-secondary">معطَّل</span>'}</td>
-                <td class="text-end">${r.use_count ?? 0}</td>
-                <td class="small text-muted">${esc(r.last_used_at)}</td>
-                <td class="text-end">
-                    <button class="btn btn-sm ${r.is_active ? 'btn-outline-danger' : 'btn-outline-success'}"
-                            data-act="toggle" data-id="${r.id}" data-testid="otp-toggle-${r.id}">
-                        ${r.is_active ? 'تعطيل' : 'تفعيل'}
-                    </button>
-                </td>
-            </tr>`).join('')
-            : '<tr><td colspan="6" class="text-center text-muted py-4">لا أرقامَ مطابقة.</td></tr>';
+        const raw = await response.text();
+        let data = null;
+        try { data = raw ? JSON.parse(raw) : {}; } catch (error) {
+            throw new Error(response.status === 419 ? 'انتهت جلسة الإدارة. حدّث الصفحة وسجّل الدخول من جديد.' : 'أعاد الخادم استجابة غير متوقعة.');
+        }
+
+        if (!response.ok || data.success === false) {
+            const validation = data.errors && typeof data.errors === 'object'
+                ? Object.values(data.errors).flat().filter(Boolean)[0]
+                : null;
+            throw new Error(validation || data.message || `فشل الطلب (${response.status})`);
+        }
+
+        return data;
     }
 
-    // ---------- الأزرار ----------
-    $('otp-refresh').onclick = () => { loadStats(); loadRows(); };
-    $('otp-help').onclick    = () => new bootstrap.Modal($('mdHelp')).show();
-    $('otp-add').onclick     = () => { $('md-phone').value = ''; $('md-label').value = ''; new bootstrap.Modal($('mdAdd')).show(); };
-    $('otp-close').onclick   = () => { $('md-confirm').value = ''; new bootstrap.Modal($('mdClose')).show(); };
-    $('otp-test').onclick    = () => { $('md-test-out').innerHTML = ''; new bootstrap.Modal($('mdTest')).show(); };
+    function renderStats(meta) {
+        const door = $('otp-door');
+        door.className = `otp-status mb-3 ${meta.door_open ? 'is-open' : 'is-closed'}`;
+        door.innerHTML = meta.door_open
+            ? `<div><strong>باب العرض مفتوح</strong><small>${meta.demo_count} رقم/أرقام تقبل الرمز الثابت حالياً.</small></div><span class="badge bg-light text-danger">وضع اختبار</span>`
+            : `<div><strong>باب العرض مقفل</strong><small>لا يوجد رقم يقبل الرمز الثابت؛ التسجيل يعتمد على قناة إرسال حقيقية.</small></div><span class="badge bg-light text-success">وضع آمن</span>`;
 
-    $('otp-search').oninput = () => { page = 1; loadRows(); };
-    $('otp-state').onchange = () => { page = 1; loadRows(); };
-    $('otp-per').onchange   = () => { page = 1; loadRows(); };
-    $('otp-prev').onclick   = () => { if (page > 1) { page--; loadRows(); } };
-    $('otp-next').onclick   = () => { page++; loadRows(); };
+        const today = meta.today || {};
+        const rate = today.non_blocked_rate === null || today.non_blocked_rate === undefined ? '—' : `${today.non_blocked_rate}%`;
+        const tiles = [
+            [meta.delivery_ready ? 'جاهزة' : 'غير مهيأة', 'قناة الإيصال', meta.delivery_ready ? 'text-success' : 'text-danger'],
+            [meta.demo_count ?? 0, 'أرقام العرض الفعالة', ''],
+            [today.attempts ?? 0, 'محاولات اليوم', ''],
+            [rate, 'نسبة غير المحظور', ''],
+            [today.blocked ?? 0, 'محظور مؤقتاً', (today.blocked ?? 0) > 0 ? 'text-warning' : ''],
+        ];
+        $('otp-kpis').innerHTML = tiles.map(([v,l,c]) => `<div class="col-6 col-lg"><div class="otp-card otp-kpi"><div class="otp-kpi-value ${c}">${esc(v)}</div><div class="otp-kpi-label">${esc(l)}</div></div></div>`).join('');
 
-    document.querySelectorAll('.srt').forEach(th => {
-        th.onclick = () => {
-            const s = th.dataset.sort;
-            dir = (sort === s && dir === 'desc') ? 'asc' : 'desc';
-            sort = s; loadRows();
-        };
+        const trend = Array.isArray(meta.trend) ? meta.trend : [];
+        if (!trend.length) {
+            $('otp-chart').innerHTML = '<div class="otp-empty">لا توجد بيانات للرسم.</div>';
+        } else {
+            const max = Math.max(1, ...trend.map(d => Number(d.attempts || 0)));
+            $('otp-chart').innerHTML = `<div class="otp-chart-grid">${trend.map(d => {
+                const attempts = Number(d.attempts || 0), blocked = Number(d.blocked || 0);
+                const h = Math.max(attempts ? 4 : 2, Math.round(attempts / max * 138));
+                const hb = Math.max(blocked ? 4 : 0, Math.round(blocked / max * 138));
+                return `<div class="otp-day" title="${esc(d.date)} — ${attempts} محاولة، ${blocked} محظورة"><div class="otp-bars"><span class="otp-bar" style="height:${h}px;opacity:${attempts ? 1 : .18}"></span>${blocked ? `<span class="otp-bar blocked" style="height:${hb}px"></span>` : ''}</div><span class="otp-day-label">${esc(String(d.date).slice(5))}</span></div>`;
+            }).join('')}</div>`;
+        }
+
+        const providers = Array.isArray(meta.providers) ? meta.providers : [];
+        testableChannels = [...new Set(providers.filter(p => p.testable).map(p => p.channel))];
+        $('otp-providers').innerHTML = providers.length ? providers.map(p => `<div class="provider-row"><div><div class="provider-name">${esc(p.key)}</div><div class="provider-meta">${esc(p.channel_label || p.channel)} · الأولوية ${esc(p.priority)}</div></div><div class="text-nowrap">${p.enabled ? '<span class="badge badge-soft-success">مفعّل</span>' : '<span class="badge badge-soft-secondary">معطّل</span>'}${p.testable ? ' <span class="badge badge-soft-warning">قابل للفحص</span>' : ''}</div></div>`).join('') : '<div class="otp-empty">لم يتم اكتشاف أي مزود إرسال.</div>';
+
+        const select = $('md-test-channel');
+        select.innerHTML = testableChannels.length
+            ? testableChannels.map(ch => `<option value="${esc(ch)}">${ch === 'whatsapp' ? 'واتساب' : 'رسائل SMS'}</option>`).join('')
+            : '<option value="">لا توجد قناة قابلة للفحص</option>';
+        $('otp-test').disabled = !testableChannels.length;
+
+        $('md-close-ready').innerHTML = meta.delivery_ready
+            ? '<div class="alert alert-success small py-2">توجد قناة إرسال مفعّلة. اختبرها قبل الإقفال النهائي.</div>'
+            : '<div class="alert alert-danger small py-2"><strong>لا توجد قناة إرسال جاهزة.</strong> إقفال باب العرض الآن سيمنع التسجيل الحقيقي حتى تجهّز قناة الإرسال.</div>';
+    }
+
+    async function loadStats() {
+        try {
+            const data = await request('/stats');
+            renderStats(data.meta || {});
+        } catch (error) {
+            $('otp-door').className = 'otp-status is-loading mb-3';
+            $('otp-door').innerHTML = `<div><strong>تعذرت قراءة حالة التحقق</strong><small>${esc(error.message)}</small></div><button type="button" class="btn btn-light btn-sm" id="otp-status-retry">إعادة المحاولة</button>`;
+            $('otp-providers').innerHTML = `<div class="otp-empty text-danger">${esc(error.message)}</div>`;
+            $('otp-chart').innerHTML = `<div class="otp-empty text-danger">تعذر تحميل الرسم.</div>`;
+            setTimeout(() => { const b=$('otp-status-retry'); if (b) b.onclick=loadStats; }, 0);
+        }
+    }
+
+    function rowHtml(row) {
+        const active = Boolean(row.is_active);
+        return `<tr><td dir="ltr" class="text-end"><code>${esc(row.phone)}</code></td><td>${esc(row.label || '—')}</td><td>${active ? '<span class="badge badge-soft-warning">مفعّل</span>' : '<span class="badge badge-soft-secondary">معطّل</span>'}</td><td>${esc(row.use_count ?? 0)}</td><td class="small text-muted">${esc(row.last_used_at || 'لم يُستخدم')}</td><td><button type="button" class="btn btn-sm ${active ? 'btn-outline-danger' : 'btn-outline-success'}" data-action="toggle" data-testid="otp-toggle-${Number(row.id)}" data-id="${Number(row.id)}" data-phone="${esc(row.phone)}" data-active="${active ? 1 : 0}">${active ? 'تعطيل' : 'تفعيل'}</button></td></tr>`;
+    }
+
+    function mobileRowHtml(row) {
+        const active = Boolean(row.is_active);
+        return `<div class="otp-mobile-item"><div class="d-flex justify-content-between gap-2"><div><code dir="ltr">${esc(row.phone)}</code><div class="small text-muted mt-1">${esc(row.label || 'بلا وصف')}</div></div>${active ? '<span class="badge badge-soft-warning align-self-start">مفعّل</span>' : '<span class="badge badge-soft-secondary align-self-start">معطّل</span>'}</div><div class="d-flex justify-content-between align-items-end gap-2 mt-3"><div class="small text-muted">الاستخدام: ${esc(row.use_count ?? 0)}<br>آخر استعمال: ${esc(row.last_used_at || 'لم يُستخدم')}</div><button type="button" class="btn btn-sm ${active ? 'btn-outline-danger' : 'btn-outline-success'}" data-action="toggle" data-testid="otp-toggle-${Number(row.id)}" data-id="${Number(row.id)}" data-phone="${esc(row.phone)}" data-active="${active ? 1 : 0}">${active ? 'تعطيل' : 'تفعيل'}</button></div></div>`;
+    }
+
+    async function loadRows() {
+        $('otp-rows').innerHTML = '<tr><td colspan="6" class="otp-empty">جارٍ تحميل الأرقام…</td></tr>';
+        $('otp-mobile-rows').innerHTML = '<div class="otp-empty">جارٍ تحميل الأرقام…</div>';
+        const params = new URLSearchParams({search:$('otp-search').value,state:$('otp-state').value,per_page:$('otp-per').value,page:String(page),sort,dir});
+        try {
+            const data = await request('/numbers?' + params.toString());
+            const meta = data.meta || {};
+            const rows = Array.isArray(meta.rows) ? meta.rows : [];
+            $('otp-rows').innerHTML = rows.length ? rows.map(rowHtml).join('') : '<tr><td colspan="6" class="otp-empty">لا توجد أرقام مطابقة.</td></tr>';
+            $('otp-mobile-rows').innerHTML = rows.length ? rows.map(mobileRowHtml).join('') : '<div class="otp-empty">لا توجد أرقام مطابقة.</div>';
+            $('otp-count').textContent = `${meta.total ?? 0} رقم · الصفحة ${meta.page ?? 1} من ${meta.pages ?? 1}`;
+            $('otp-prev').disabled = Number(meta.page || 1) <= 1;
+            $('otp-next').disabled = Number(meta.page || 1) >= Number(meta.pages || 1);
+            const env = $('otp-env');
+            if (meta.from_env) {
+                env.classList.remove('d-none');
+                env.innerHTML = `الجدول لم يُعتمد بعد كمصدر للأرقام؛ المنصة تقرأ بذرة البيئة الحالية (${Number((meta.env_numbers || []).length)} رقم). أول تعديل من هذه الشاشة يجعل الجدول هو المصدر.`;
+            } else env.classList.add('d-none');
+        } catch (error) {
+            const retry = `<button type="button" class="btn btn-outline-danger btn-sm mt-2" id="otp-rows-retry">إعادة المحاولة</button>`;
+            $('otp-rows').innerHTML = `<tr><td colspan="6" class="otp-empty text-danger">${esc(error.message)}<br>${retry}</td></tr>`;
+            $('otp-mobile-rows').innerHTML = `<div class="otp-empty text-danger">${esc(error.message)}<br>${retry.replace('id="otp-rows-retry"','id="otp-rows-retry-mobile"')}</div>`;
+            setTimeout(() => { const a=$('otp-rows-retry'), b=$('otp-rows-retry-mobile'); if(a)a.onclick=loadRows;if(b)b.onclick=loadRows; }, 0);
+        }
+    }
+
+    function openToggle(button) {
+        toggleTarget = {id:button.dataset.id, phone:button.dataset.phone, active:button.dataset.active === '1'};
+        $('md-toggle-text').innerHTML = toggleTarget.active
+            ? `سيتم <strong>تعطيل</strong> الرقم <code dir="ltr">${esc(toggleTarget.phone)}</code> ولن يقبل رمز العرض بعد ذلك.`
+            : `سيتم <strong>تفعيل</strong> الرقم <code dir="ltr">${esc(toggleTarget.phone)}</code> وسيقبل رمز العرض الثابت.`;
+        $('md-toggle-go').className = toggleTarget.active ? 'btn btn-danger' : 'btn btn-success';
+        $('md-toggle-go').textContent = toggleTarget.active ? 'تعطيل الرقم' : 'تفعيل الرقم';
+        modal('mdToggle').show();
+    }
+
+    async function runToggle() {
+        if (!toggleTarget) return;
+        const button = $('md-toggle-go');
+        setBusy(button,true,'جارٍ الحفظ');
+        try {
+            await request(`/numbers/${encodeURIComponent(toggleTarget.id)}/toggle`, {method:'POST',body:{}});
+            modal('mdToggle').hide();
+            banner('success','تم تحديث حالة الرقم وتسجيل الإجراء.');
+            await Promise.all([loadStats(),loadRows()]);
+        } catch(error) { banner('danger',error.message); }
+        finally { setBusy(button,false); }
+    }
+
+    document.addEventListener('click', event => {
+        const button = event.target.closest('[data-action="toggle"]');
+        if (button) openToggle(button);
     });
 
+    $('otp-refresh').onclick = async function () {
+        setBusy(this,true,'جارٍ التحديث');
+        await Promise.all([loadStats(),loadRows()]);
+        setBusy(this,false);
+    };
+    $('otp-help').onclick = () => modal('mdHelp').show();
+    $('otp-add').onclick = () => { $('md-phone').value='';$('md-label').value='';fieldError('md-phone-error','');modal('mdAdd').show(); };
+    $('otp-close').onclick = () => { $('md-confirm').value='';fieldError('md-confirm-error','');modal('mdClose').show(); };
+    $('otp-test').onclick = () => { $('md-test-out').innerHTML='';$('md-test-phone').value='';fieldError('md-test-phone-error','');fieldError('md-test-channel-error','');modal('mdTest').show(); };
+    $('md-toggle-go').onclick = runToggle;
+
+    $('otp-search').oninput = () => { clearTimeout(searchTimer); searchTimer=setTimeout(() => {page=1;loadRows();},300); };
+    $('otp-state').onchange = () => {page=1;loadRows();};
+    $('otp-per').onchange = () => {page=1;loadRows();};
+    $('otp-prev').onclick = () => {if(page>1){page--;loadRows();}};
+    $('otp-next').onclick = () => {page++;loadRows();};
+    document.querySelectorAll('.otp-sort').forEach(th => th.onclick = () => { const next=th.dataset.sort; dir = sort===next && dir==='desc'?'asc':'desc'; sort=next; page=1; loadRows(); });
+
     $('md-save').onclick = async function () {
-        busy(this, true);
-        const j = await post('/numbers', {phone: $('md-phone').value, label: $('md-label').value});
-        busy(this, false);
-        if (!j.success) { banner('danger', j.message); return; }
-        bootstrap.Modal.getInstance($('mdAdd')).hide();
-        banner('success', 'أُضيف الرقم');
-        loadStats(); loadRows();
+        fieldError('md-phone-error','');
+        if ($('md-phone').value.replace(/\D/g,'').length < 7) { fieldError('md-phone-error','أدخل رقم هاتف صالحاً.'); return; }
+        setBusy(this,true,'جارٍ الحفظ');
+        try {
+            await request('/numbers',{method:'POST',body:{phone:$('md-phone').value,label:$('md-label').value}});
+            modal('mdAdd').hide(); banner('success','تمت إضافة رقم العرض بنجاح.'); await Promise.all([loadStats(),loadRows()]);
+        } catch(error) { fieldError('md-phone-error',error.message); }
+        finally { setBusy(this,false); }
     };
 
     $('md-close-go').onclick = async function () {
-        busy(this, true);
-        const j = await post('/close-door', {confirm: $('md-confirm').value});
-        busy(this, false);
-        if (!j.success) { banner('danger', j.message); return; }
-        bootstrap.Modal.getInstance($('mdClose')).hide();
-        banner('success', `أُقفل الباب — عُطّل ${j.meta.disabled} رقماً`);
-        loadStats(); loadRows();
+        fieldError('md-confirm-error','');
+        if ($('md-confirm').value.trim() !== 'إقفال') { fieldError('md-confirm-error','اكتب كلمة إقفال كما هي.'); return; }
+        setBusy(this,true,'جارٍ الإقفال');
+        try {
+            const data=await request('/close-door',{method:'POST',body:{confirm:'إقفال'}});
+            modal('mdClose').hide();
+            const suffix = data.meta && data.meta.delivery_ready ? '' : ' تنبيه: لا توجد قناة إرسال جاهزة حالياً.';
+            banner(data.meta && data.meta.delivery_ready ? 'success' : 'warning',`تم إقفال باب العرض وتعطيل ${data.meta?.disabled ?? 0} رقم.${suffix}`);
+            await Promise.all([loadStats(),loadRows()]);
+        } catch(error) { banner('danger',error.message); }
+        finally { setBusy(this,false); }
     };
 
     $('md-test-go').onclick = async function () {
-        busy(this, true);
-        const j = await post('/test-send', {phone: $('md-test-phone').value});
-        busy(this, false);
-        $('md-test-out').innerHTML = j.success
-            ? '<div class="alert alert-success py-2 small mb-0">✅ وصلت — القناة تعمل.</div>'
-            : `<div class="alert alert-danger py-2 small mb-0">${esc(j.message)}</div>`;
+        fieldError('md-test-phone-error','');fieldError('md-test-channel-error','');$('md-test-out').innerHTML='';
+        const channel=$('md-test-channel').value, phone=$('md-test-phone').value;
+        if(!channel){fieldError('md-test-channel-error','لا توجد قناة قابلة للفحص أو لم تختر قناة.');return;}
+        if(phone.replace(/\D/g,'').length<7){fieldError('md-test-phone-error','أدخل رقم هاتف صالحاً.');return;}
+        setBusy(this,true,'جارٍ الإرسال');
+        try {
+            const data=await request('/test-send',{method:'POST',body:{channel,phone}});
+            $('md-test-out').innerHTML=`<div class="alert alert-success small py-2 mb-0">تم إرسال رسالة الفحص عبر ${channel==='whatsapp'?'واتساب':'SMS'} بنجاح.</div>`;
+        } catch(error) { $('md-test-out').innerHTML=`<div class="alert alert-danger small py-2 mb-0">${esc(error.message)}</div>`; }
+        finally { setBusy(this,false); }
     };
 
-    // **تفويضٌ على الجدول** — والصفوف تُبنى بعد التحميل، فمعالجٌ مباشرٌ
-    // عليها يموت مع أوّل إعادة رسم. (القاعدة التاسعة.)
-    $('otp-rows').addEventListener('click', async function (e) {
-        const btn = e.target.closest('[data-act="toggle"]');
-        if (!btn) return;
-        busy(btn, true);
-        const j = await post(`/numbers/${btn.dataset.id}/toggle`);
-        busy(btn, false);
-        if (!j.success) { banner('danger', j.message); return; }
-        loadStats(); loadRows();
-    });
-
-    loadStats();
-    loadRows();
+    Promise.all([loadStats(),loadRows()]).catch(() => {});
 })();
 </script>
 @endpush

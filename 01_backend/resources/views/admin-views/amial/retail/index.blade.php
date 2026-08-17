@@ -138,7 +138,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     // AMIAL-SWEEP-001 — **التعليقُ الذي يشرح العطلَ كان هو العطل.**
     //

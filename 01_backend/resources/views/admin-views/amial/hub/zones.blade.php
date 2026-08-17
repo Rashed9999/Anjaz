@@ -143,7 +143,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     const base = '{{ url('admin/amial/hub/zones') }}';
     const csrf = document.querySelector('meta[name="csrf-token"]').content;

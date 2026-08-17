@@ -91,7 +91,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
 (function () {
     const B = '{{ url("admin/amial/entitlements") }}';
     const CSRF = '{{ csrf_token() }}';
