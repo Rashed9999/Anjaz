@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Amial;
 
+use App\Http\Controllers\Concerns\DeniesByPlan;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
 use App\Models\MerchantSale;
@@ -204,6 +205,20 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             'client_uuid' => 'sometimes|nullable|string|max:64',
         ]);
         if ($v->fails()) return $this->validationError($v);
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-OFFLINE-POS-002 — **البيعُ دون اتصالٍ قدرةٌ مدفوعة.**
+        //
+        // والبيعُ المتّصلُ مجّانيّ. والفارقُ يُقرأ من الطلب نفسِه:
+        // **`client_uuid` لا يُرسَل إلّا من طابور المزامنة** — فهو مفتاحُ
+        // منع التكرار الذي يولّده التطبيقُ حين يبيع والشبكةُ مقطوعة.
+        //
+        // فالحارسُ على الفعل لا على العنوان: مسارُ البيع واحدٌ للحالتين،
+        // ووضعُ `capability:` عليه يُقفل الكاشيرَ على كلّ تاجرٍ مجّانيّ.
+        if ($request->filled('client_uuid')
+            && ($deny = $this->denyUnless($request, 'offline_pos')) !== null) {
+            return $deny;
+        }
 
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;

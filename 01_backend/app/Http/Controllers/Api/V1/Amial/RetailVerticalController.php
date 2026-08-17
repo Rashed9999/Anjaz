@@ -128,7 +128,19 @@ class RetailVerticalController extends Controller
             $locations = MerchantLocation::where('merchant_user_id', $merchant->id)
                 ->where('is_active', true)->get();
 
-            $low = $this->stock->lowStock($merchant->id);
+            // ══════════════════════════════════════════════════════
+            // **تنبيهُ النفاد مدفوعٌ من «البداية» — ومركزُ العمليّات ليس.**
+            //
+            // فلا يُحرَس المسارُ كلُّه (‏يُقفل المخزونَ على المجّانيّ)،
+            // ولا يُرسَل القسمُ صفراً (‏«غير معروف» ليس صفراً — القاعدة
+            // السابعة: صفرٌ يُقرأ «فحصنا فلم نجد»، والتاجرُ يظنّ مخزونَه
+            // سليماً وهو لم يُفحص).
+            //
+            // **فيُقال إنّه مقفول، ويُقال بكم يُفتح.**
+            $lowStockState = app(\App\Services\Access\EntitlementService::class)
+                ->gate($request->user(), 'low_stock_alerts');
+
+            $low = $lowStockState === null ? $this->stock->lowStock($merchant->id) : null;
 
             return $this->ok([
                 'locations' => $locations->map(fn (MerchantLocation $l) => [
@@ -142,6 +154,13 @@ class RetailVerticalController extends Controller
                 ])->all(),
 
                 'low_stock' => $low,
+
+                // **القسمُ المقفولُ يُصرَّح به لا يُطوى** — فالشاشةُ تعرض
+                // «ارفع الباقة» مكانَ قائمةٍ فارغةٍ تكذب.
+                'low_stock_locked' => $lowStockState !== null ? [
+                    'state' => $lowStockState['state'] ?? null,
+                    'unlock' => $lowStockState['unlock'] ?? null,
+                ] : null,
 
                 // **البضاعةُ في الطريق حالةٌ تُقال** — خرجت ولم تصل.
                 'in_transit' => $this->transfers->inTransit($merchant),

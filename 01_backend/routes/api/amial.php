@@ -1063,10 +1063,22 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
                 ->name('sales.record');
             Route::get('/sales', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listSales'])->name('sales.index');
 
-            // Alerts
-            Route::get('/alerts', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listAlerts'])->name('alerts.index');
-            Route::post('/alerts/scan', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'scanExpiringBatches'])->name('alerts.scan');
+            // ══════════════════════════════════════════════════════
+            // Alerts — **تنبيهُ نفاد المخزون، مبنيٌّ ولم يكن موصولاً
+            // باستحقاقه.**
+            //
+            // `PharmacyAlertService` قائمٌ منذ مدّة (‏`checkLowStock` و
+            // `scanExpiringBatches` و`dismissAlert`)، والقدرةُ
+            // `low_stock_alerts` تُباع من «البداية» في السجلّ وفي جدول
+            // الباقات — **ولا حارسَ بينهما**. فكانت تُقرأ «مدفوعةٌ بلا
+            // نقطة نهاية» وهي مبنيّةٌ بالكامل: العطلُ في الوصل لا في
+            // البناء.
+            Route::get('/alerts', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listAlerts'])
+                ->middleware('capability:low_stock_alerts')->name('alerts.index');
+            Route::post('/alerts/scan', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'scanExpiringBatches'])
+                ->middleware('capability:low_stock_alerts')->name('alerts.scan');
             Route::post('/alerts/{id}/dismiss', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'dismissAlert'])
+                ->middleware('capability:low_stock_alerts')
                 ->where('id', '[0-9]+')->name('alerts.dismiss');
         });
 

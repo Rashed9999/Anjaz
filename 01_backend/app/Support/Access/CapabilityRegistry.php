@@ -180,11 +180,30 @@ final class CapabilityRegistry
                 ->group('البيع')->icon('account_balance_wallet')
                 ->minPlan(A::PLAN_FREE)->screen('/credit'),
 
+            // ══════════════════════════════════════════════════════════
+            // **مبنيّةٌ بالكامل ولم تكن موصولةً باستحقاقها.**
+            //
+            // **وقد كِدتُ أعلنها «لم تُبنَ»** — بحثتُ في الخادم وحدَه فلم
+            // أجد لها أثراً. والبناءُ كلُّه في التطبيق:
+            //
+            //   `OfflineSaleQueue`      طابورٌ في التخزين المحلّيّ
+            //   `OfflineSalesScreen`    شاشةٌ تعرض ما لم يُزامَن
+            //   `sync()`                يرفعها عند عودة الشبكة
+            //   `CashierService`        **يمنع التكرار بـ`client_uuid`**
+            //
+            // فالدرسُ مقيس: **«لم أجدها» ليست «غيرَ موجودة»** — والبحثُ
+            // في نصفِ المشروع يُنتج حكماً على المشروع كلِّه.
+            //
+            // والحارسُ **على الفعل**: بيعةٌ تصل ومعها `client_uuid` هي
+            // بيعةٌ وقعت دون اتصالٍ ثمّ زُومنت — وذاك هو المُباع. والبيعُ
+            // المتّصلُ مجّانيٌّ كما كان.
             C::make(A::F_OFFLINE_POS)
                 ->nameAr('البيع دون اتصال')
                 ->descAr('البيع يستمرّ حين تنقطع الشبكة ويُزامَن بعدها بلا تكرار.')
                 ->group('البيع')->icon('cloud_off')
-                ->minPlan(A::PLAN_BUSINESS),
+                ->minPlan(A::PLAN_BUSINESS)
+                ->routes(['cashier/sales'])
+                ->screen('/offline-sales'),
 
             C::make(A::F_SPLIT_BILL)
                 ->nameAr('تقسيم الفاتورة')
@@ -281,7 +300,9 @@ final class CapabilityRegistry
                 ->nameAr('تنبيه نفاد المخزون')
                 ->descAr('ما نزل تحت حدّ إعادة الطلب — ومن لم يُضبط له حدّ لا يُعدّ منخفضاً.')
                 ->group('المخزون')->icon('warning_amber')
-                ->minPlan(A::PLAN_STARTER),
+                ->minPlan(A::PLAN_STARTER)
+                ->routes(['pharmacy/alerts'])
+                ->screen('/retail'),
 
             C::make('retail.locations')
                 ->nameAr('المواقع والمستودعات')
@@ -374,13 +395,19 @@ final class CapabilityRegistry
                 ->routes(['retail/roles'])
                 ->screen('/retail/roles'),
 
+            // **ومثلُها: سقفُ الخصم مُعلَنٌ ولا يُفرَض في أيّ موضع.**
+            //
+            // لا عمودَ سقفٍ في أدوار التجزئة، ولا فحصَ في مسار البيع.
+            // فالدورُ يحمل `retail.discount.apply` أو لا يحمله — **وحين
+            // يحمله فلا سقف**. أي أنّ «سقف الخصم» اسمٌ بلا رقم.
             C::make('retail.discount_limit')
                 ->nameAr('سقف الخصم للموظف')
                 ->descAr('حدّ أعلى لما يخصمه كل دور — مبلغ لا نسبة، فالنسبة تُقاس '
                     . 'على إجمالي يكتبه الكاشير نفسه.')
                 ->group('الناس')->icon('percent')
                 ->minPlan(A::PLAN_MERCHANT_PRO)
-                ->permissions(['retail.discount.apply']),
+                ->permissions(['retail.discount.apply'])
+                ->comingSoon(),
 
             // ══════════════════════════════════════════════════════════
             // **مصدرا حقيقةٍ تناقضا، والحسمُ لجدول الحدود.**
@@ -548,9 +575,13 @@ final class CapabilityRegistry
 
             C::make(A::F_PHARMACY_PRESCRIPTIONS)
                 ->nameAr('الوصفات الطبية')
+                ->descAr('وسمُ الصنف «يحتاج وصفة» فيُوقَف بيعُه بلا رقمها، '
+                    . 'وتوثيقُ الطبيب وتاريخِ الوصفة على البيعة.')
                 ->group('الصيدلية')->icon('description')
                 ->minPlan(A::PLAN_MERCHANT_PRO)
-                ->businessTypes([A::BIZ_PHARMACY]),
+                ->businessTypes([A::BIZ_PHARMACY])
+                ->routes(['pharmacy/products', 'pharmacy/sales'])
+                ->screen('/pharmacy'),
 
             C::make(A::F_WHOLESALE_INVOICES)
                 ->nameAr('فواتير الجملة')

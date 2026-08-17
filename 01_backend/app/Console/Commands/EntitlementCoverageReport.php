@@ -76,6 +76,9 @@ class EntitlementCoverageReport extends Command
                 // ④ لها API معلَن؟
                 'has_api' => $a['routes'] !== [] || $apiGated,
 
+                // **حالةُ البناء** — `coming_soon` تعني مُعلَنةً لم تُبنَ.
+                'coming_soon' => ($a['status'] ?? 'available') === 'coming_soon',
+
                 // ⑤ الـAPI محروس؟
                 'api_gated' => $apiGated,
 
@@ -327,7 +330,15 @@ class EntitlementCoverageReport extends Command
         $unprotected = array_values(array_filter($paid,
             fn ($r) => $r['has_api'] && ! $r['api_gated']));
 
-        $soldWithoutApi = array_values(array_filter($paid, fn ($r) => ! $r['has_api']));
+        // **والمُعلَنُ «قريباً» ليس مبيعاً** — فلا يُعدّ ديناً.
+        //
+        // الفرقُ الذي يُغلق القطاع: قدرةٌ بلا نقطة نهاية إمّا **مصرَّحٌ
+        // بأنّها لم تُبنَ** (‏فلا تُمنح ولا تُعرض متاحة)، وإمّا **تُباع
+        // وهي جوفاء** — وهذه وحدَها عيب.
+        $soldWithoutApi = array_values(array_filter($paid,
+            fn ($r) => ! $r['has_api'] && ! $r['coming_soon']));
+
+        $comingSoon = array_values(array_filter($rows, fn ($r) => $r['coming_soon']));
         $shadowed = array_values(array_filter($paid, fn ($r) => $r['in_shadow']));
 
         $this->line('');
@@ -360,7 +371,8 @@ class EntitlementCoverageReport extends Command
         $this->line(sprintf('  المدفوعة                  : %d', count($paid)));
         $this->line(sprintf('  المجّانيّةُ والأساسيّة       : %d', count($rows) - count($paid)));
         $this->line(sprintf('  **مدفوعةٌ بلا حارس**       : %d', count($unprotected)));
-        $this->line(sprintf('  مدفوعةٌ بلا نقطةِ نهاية    : %d', count($soldWithoutApi)));
+        $this->line(sprintf('  **تُباع ولم تُبنَ**         : %d', count($soldWithoutApi)));
+        $this->line(sprintf('  مُعلَنةٌ «قريباً»           : %d', count($comingSoon)));
         $this->line(sprintf('  مدفوعةٌ في الظلّ           : %d', count($shadowed)));
         $this->line(sprintf('  بلا شاشة                  : %d',
             count(array_filter($rows, fn ($r) => ! $r['has_screen']))));
@@ -386,9 +398,18 @@ class EntitlementCoverageReport extends Command
 
         if ($soldWithoutApi !== []) {
             $this->newLine();
-            $this->line('  ── مدفوعةٌ ولا نقطةَ نهايةٍ لها (‏تُباع ولا تُبنى) ──');
+            $this->line('  ── **تُباع ولم تُبنَ** — عيبٌ يُغلق القطاع ──');
 
             foreach ($soldWithoutApi as $r) {
+                $this->line(sprintf('    · %-24s %s', $r['code'], $r['min_plan']));
+            }
+        }
+
+        if ($comingSoon !== []) {
+            $this->newLine();
+            $this->line('  ── مُعلَنةٌ «قريباً» (‏لا تُمنح ولا تُباع) ──');
+
+            foreach ($comingSoon as $r) {
                 $this->line(sprintf('    · %-24s %s', $r['code'], $r['min_plan']));
             }
         }

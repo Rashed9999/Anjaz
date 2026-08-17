@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:amial_pay/data/api/api_client.dart';
 import 'package:camera/camera.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -50,6 +51,21 @@ Future<void> main() async {
   cameras = await availableCameras();
 
   Map<String, Map<String, String>> languages = await di.init();
+
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-POS-DEVICES-009 — **هويّةُ مقعد الجهاز تُلصق قبل أوّل طلب.**
+  //
+  // فالخادمُ يربط رمزَ الجلسة بمقعدٍ مسجَّل عند الدخول، ويقارن الترويسةَ
+  // في كلّ طلبٍ بعده. **ولو أُلصقت بعد الدخول لدخل الموظّفُ بلا مقعد**
+  // ثمّ تعذّر ربطُه، فيعمل في «الوضع الصامت» أبداً ولا يُغلق شيء.
+  //
+  // وتُلصق قبل `runApp` لا في شاشةٍ بعينها: الدخولُ له أكثرُ من باب.
+  try {
+    await Get.find<ApiClient>().attachPosDeviceHeader();
+  } catch (_) {
+    // **لا يُوقَف الإقلاعُ لأجلها** — غيابُ الترويسة يُعالَج في الخادم
+    // (‏وضعٌ صامتٌ أو منعٌ صريح)، وتعطيلُ التطبيق كلِّه أسوأُ من كليهما.
+  }
 
   int? orderID;
   NotificationBody? body;

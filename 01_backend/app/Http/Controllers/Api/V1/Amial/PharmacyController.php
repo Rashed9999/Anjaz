@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Amial;
 
+use App\Http\Controllers\Concerns\DeniesByPlan;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
 use App\Models\Pharmacy;
@@ -25,6 +26,8 @@ use Illuminate\Support\Facades\Validator;
  */
 class PharmacyController extends Controller
 {
+    use DeniesByPlan;
+
     public function __construct(
         private readonly PharmacyService $svc,
         private readonly PharmacySaleService $saleSvc,
@@ -87,6 +90,13 @@ class PharmacyController extends Controller
         if ($request->filled('category_id')) {
             $q->where('category_id', $request->query('category_id'));
         }
+        // **«المنخفض فقط» مرشِّحٌ مدفوع** — والقائمةُ نفسُها مجّانيّة.
+        // فالحارسُ على الفعل لا على العنوان، كما في تصدير Excel.
+        if ($request->boolean('low_stock_only')
+            && ($deny = $this->denyUnless($request, 'low_stock_alerts')) !== null) {
+            return $deny;
+        }
+
         if ($request->boolean('low_stock_only')) {
             $q->whereColumn('current_stock', '<=', 'low_stock_threshold');
         }
@@ -97,6 +107,22 @@ class PharmacyController extends Controller
 
     public function addProduct(Request $request): JsonResponse
     {
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-PHARMACY-RX-001 — **إدارةُ الوصفات مبنيّةٌ ولم تكن موصولة.**
+        //
+        // `PharmacySaleService` يفرضها فعلاً منذ مدّة: صنفٌ عليه
+        // `requires_prescription` يُوقف البيعَ إن غاب رقمُ الوصفة. لكنّ
+        // القدرةَ `pharmacy_prescriptions` كانت **تُباع في «تاجر محترف»
+        // ولا يحرسها شيء** — فكلُّ صيدليّةٍ تستعملها مجّاناً.
+        //
+        // والحارسُ **على وسم الصنف وعلى حقول الوصفة في البيعة**، لا على
+        // الصيدليّة كلِّها: صيدليّةٌ لا تشتري الميزةَ تبيع كأيّ متجر،
+        // ولا يُقفَل عليها البابُ الأساسيّ.
+        if ($request->boolean('requires_prescription')
+            && ($deny = $this->denyUnless($request, 'pharmacy_prescriptions')) !== null) {
+            return $deny;
+        }
+
         $v = Validator::make($request->all(), [
             'trade_name' => 'required|string|max:200',
             'generic_name' => 'sometimes|nullable|string|max:200',
@@ -129,6 +155,13 @@ class PharmacyController extends Controller
 
     public function updateProduct(Request $request, int $id): JsonResponse
     {
+        // **والتعديلُ بابٌ ثانٍ للفعل نفسِه** — يُنشأ الصنفُ عاديّاً
+        // ثمّ يُعلَّم بالتعديل. فيُحرس البابان.
+        if ($request->boolean('requires_prescription')
+            && ($deny = $this->denyUnless($request, 'pharmacy_prescriptions')) !== null) {
+            return $deny;
+        }
+
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -276,6 +309,13 @@ class PharmacyController extends Controller
 
     public function recordSale(Request $request): JsonResponse
     {
+        // **وتسجيلُ بيانات الوصفة على البيعة هو الفعلُ المدفوع** — والبيعُ
+        // نفسُه مجّانيّ. فمن لم يشترِ الميزةَ يبيع ولا يوثّق وصفة.
+        if (($request->filled('prescription_number') || $request->filled('prescribing_doctor'))
+            && ($deny = $this->denyUnless($request, 'pharmacy_prescriptions')) !== null) {
+            return $deny;
+        }
+
         $v = Validator::make($request->all(), [
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|integer',

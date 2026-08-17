@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/data/api/pos_device_identity.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-POS-DEVICES-008 — إدارة أجهزة نقاط البيع.
@@ -79,6 +80,86 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
         content: Text(m),
         backgroundColor: ok ? AmialColors.success : AmialColors.red,
       ));
+
+  /// **تسجيلُ الجهاز الحاليّ — وهو الفعلُ الذي بدونه لا يعمل شيء.**
+  ///
+  /// ══════════════════════════════════════════════════════════════════
+  /// **ولمَ يفعله صاحبُ الحساب لا الموظّف:**
+  ///
+  /// المقعدُ مورِدٌ في باقة التاجر. ولو سجّله الموظّفُ لاستنفد كاشيرٌ
+  /// حدَّ متجرٍ كامل بفتح التطبيق على هواتفه. **وتسجيلُ الجهاز ≠ مصادقةُ
+  /// الموظّف** — وهو قيدٌ صريحٌ في المواصفة.
+  ///
+  /// فالترتيبُ على جهازٍ جديد: يدخل **التاجر** مرّةً ويضغط هنا، ثمّ
+  /// يتناوب موظّفوه عليه بحساباتهم.
+  Future<void> _registerThisDevice() async {
+    final uuid = await PosDeviceIdentity.get();
+
+    if (uuid == null) {
+      _snack('تعذّر توليد هويّة لهذا الجهاز — المخزن الآمن غير متاح');
+      return;
+    }
+
+    if (!mounted) return;
+
+    final nameCtrl = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تسجيل هذا الجهاز'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'سيشغل هذا الجهاز مقعداً من باقتك، فيصير مصرّحاً له بتشغيل '
+              'نقطة البيع. والموظّفون يدخلون عليه بحساباتهم.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: nameCtrl,
+              decoration: const InputDecoration(
+                labelText: 'اسمٌ يميّزه',
+                hintText: 'كاشير الواجهة',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('تسجيل'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    final r = await _api.postData(_base, {
+      'device_uuid': uuid,
+      'display_name': nameCtrl.text.trim(),
+      'platform': Theme.of(context).platform.name,
+    });
+
+    if (r.statusCode == 200) {
+      final created = (r.body is Map ? r.body['data']?['created'] : false) == true;
+
+      _snack(created ? 'سُجّل الجهاز وشُغل مقعده' : 'هذا الجهاز مسجَّلٌ سلفاً',
+          ok: true);
+      _load();
+    } else {
+      // **ورسالةُ الخادم تُعرض كما هي** — فهي تقول «بلغتَ حدَّ الأجهزة
+      // (٣ من ٣)» وتلك أنفعُ من «تعذّر التسجيل».
+      _snack(_messageOf(r.body) ?? 'تعذّر تسجيل الجهاز');
+    }
+  }
 
   /// **الإلغاءُ يُؤكَّد** — فهو يُخرج جهازاً من الخدمة فوراً ويقطع جلساته.
   Future<void> _revoke(Map<String, dynamic> d) async {
@@ -169,6 +250,11 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
         title: const Text('أجهزة نقاط البيع'),
         actions: [
           IconButton(
+            tooltip: 'تسجيل هذا الجهاز',
+            onPressed: _loading ? null : _registerThisDevice,
+            icon: const Icon(Icons.add_to_home_screen),
+          ),
+          IconButton(
             tooltip: 'تحديث',
             onPressed: _loading ? null : _load,
             icon: const Icon(Icons.refresh),
@@ -213,11 +299,19 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
               padding: EdgeInsets.symmetric(horizontal: 32),
               child: Text(
                 'لا جهازَ مسجَّلٌ بعد.\n\n'
-                'الجهازُ يُسجَّل من تطبيق نقطة البيع نفسِه عند أوّل تشغيل، '
-                'ثم يظهر هنا فتُسمّيه أو تُلغيه.',
+                'سجّل هذا الجهاز ليعمل عليه موظّفوك، أو افتح التطبيق على '
+                'جهاز الكاشير وسجّله من هنا بحسابك.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey),
               ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Center(
+            child: FilledButton.icon(
+              onPressed: _registerThisDevice,
+              icon: const Icon(Icons.add_to_home_screen),
+              label: const Text('سجّل هذا الجهاز'),
             ),
           ),
         ],

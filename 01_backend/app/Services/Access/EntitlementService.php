@@ -223,6 +223,9 @@ class EntitlementService
             'icon' => $cap->iconName(),
             'screen' => $cap->screenRoute(),
             'is_core' => $cap->isCore(),
+            // **حالةُ البناء تُرافق كلَّ قدرة** — فشاشةُ «قدراتي» لا تعرض
+            // قدرةً لم تُبنَ كأنّها متاحة.
+            'status' => $cap->toArray()['status'] ?? 'available',
         ];
 
         $row = fn (string $state, ?array $unlock = null, ?array $usage = null): array => [

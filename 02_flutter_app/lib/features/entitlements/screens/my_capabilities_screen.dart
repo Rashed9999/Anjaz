@@ -163,7 +163,15 @@ class _MyCapabilitiesScreenState extends State<MyCapabilitiesScreen> {
     final usage = row['usage'] is Map
         ? Map<String, dynamic>.from(row['usage'] as Map) : null;
 
-    final available = state == EntitlementsController.stAvailable;
+    // ══════════════════════════════════════════════════════════════
+    // **«قريباً» حالةٌ ثالثةٌ لا صنفٌ من المقفول.**
+    //
+    // فالمقفولُ يُفتح بالترقية، و«قريباً» **لا يفتحها شيء** — وعرضُها
+    // مقفولةً يبيع للتاجر ترقيةً لا تُعطيه ما يظنّ. (‏وقد كانت قدرتان
+    // تظهران متاحتين ولا شيءَ خلفهما إطلاقاً.)
+    final comingSoon = '${cap['status'] ?? 'available'}' == 'coming_soon';
+
+    final available = !comingSoon && state == EntitlementsController.stAvailable;
 
     return Card(
       color: AmialColors.cardSurface,
@@ -177,7 +185,9 @@ class _MyCapabilitiesScreenState extends State<MyCapabilitiesScreen> {
                 ? AmialColors.primary.withValues(alpha: 0.12)
                 : AmialColors.border,
             child: Icon(
-              available ? Icons.check_rounded : Icons.lock_outline_rounded,
+              comingSoon
+                  ? Icons.hourglass_empty_rounded
+                  : (available ? Icons.check_rounded : Icons.lock_outline_rounded),
               size: 18,
               color: available ? AmialColors.primary : AmialColors.textMuted,
             ),
@@ -192,7 +202,14 @@ class _MyCapabilitiesScreenState extends State<MyCapabilitiesScreen> {
                     style: const TextStyle(
                         fontSize: 11, color: AmialColors.textMuted)),
               const SizedBox(height: 4),
-              _stateLine(state, unlock, usage),
+              if (comingSoon)
+                const Text('قريباً — قيد التطوير، ولا تُحتسب في باقتك',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AmialColors.textMuted))
+              else
+                _stateLine(state, unlock, usage),
             ],
           ),
           // **الشرطُ رمزُ القدرة لا نصُّ المسار.** كان `cap['screen'] != null`

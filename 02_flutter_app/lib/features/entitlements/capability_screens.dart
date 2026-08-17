@@ -121,6 +121,11 @@ class CapabilityScreens {
     'fuel_variance': () => const FuelVariancesScreen(),
     'fuel_cards': () => const FuelOpsCenterScreen(),
     'pharmacy_pos': () => const PharmacyDashboardScreen(),
+    // **الوصفاتُ تُدار من لوحة الصيدليّة نفسِها** — وسمُ الصنف وحقولُ
+    // الوصفة في البيعة. ولا شاشةَ ثالثةٌ لها، فتُوجَّه إلى موضع عملها.
+    // (‏وبلا هذا السطر يظهر سهمُ الدخول ويُضغط فلا يفتح — أمسكه
+    // `CapabilityScreenMapGuardTest`.)
+    'pharmacy_prescriptions': () => const PharmacyDashboardScreen(),
     'wholesale_invoices': () => const WholesaleDashboardScreen(),
     'restaurant_tables': () => const RestaurantScreen(),
 

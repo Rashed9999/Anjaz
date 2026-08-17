@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:amial_pay/data/api/pos_device_identity.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
@@ -47,6 +48,12 @@ class ApiClient extends GetxService {
         'device-model': '${deiceInfo.data['brand']} ${deiceInfo.data['model']}'
       });
     }
+
+    // **وتُعاد ترويسةُ المقعد** — فبناءُ الترويسات من جديد يُسقطها،
+    // فتُرسَل مرّةً ثمّ تختفي، ويصير الجهازُ مجهولاً بعد أوّل تحديثِ رمز.
+    if (_posDeviceUuid != null) {
+      _mainHeaders!['X-POS-Device'] = _posDeviceUuid!;
+    }
   }
 
    void updateHeader(String token) {
@@ -65,6 +72,37 @@ class ApiClient extends GetxService {
              : ''} ${deiceInfo.data['model']}'.replaceAll(' null ', ' ')
        });
      }
+
+    // **وتُعاد ترويسةُ المقعد** — فبناءُ الترويسات من جديد يُسقطها،
+    // فتُرسَل مرّةً ثمّ تختفي، ويصير الجهازُ مجهولاً بعد أوّل تحديثِ رمز.
+    if (_posDeviceUuid != null) {
+      _mainHeaders!['X-POS-Device'] = _posDeviceUuid!;
+    }
+   }
+
+   /// AMIAL-POS-DEVICES-009 — **ترويسةُ مقعد الجهاز.**
+   ///
+   /// ══════════════════════════════════════════════════════════════════
+   /// **تُرسَل مع كلّ طلبٍ لا مع الدخول وحدَه.**
+   ///
+   /// فالخادمُ يقارنها بالمقعد المربوط بالرمز في كلّ طلب: رمزُ الجهاز «أ»
+   /// بترويسة «ب» يُردّ. ولو أُرسلت عند الدخول فقط لكان نسخُ الرمز إلى
+   /// جهازٍ آخرَ يعمل بلا أن يُكشف.
+   ///
+   /// **وغيابُها ليس بابَ تحرُّر**: الربطُ في الخادم، فالرمزُ يبقى على
+   /// مقعده صامتاً كان حاملُه أو ناطقاً.
+   ///
+   /// وتُضبَط في `main` بعد الإقلاع، وتبقى عبر `updateHeader` لأنّها
+   /// تُعاد من `_posDeviceUuid` المحفوظ.
+   String? _posDeviceUuid;
+
+   Future<void> attachPosDeviceHeader() async {
+     final uuid = await PosDeviceIdentity.get();
+
+     if (uuid == null || uuid.isEmpty) return;
+
+     _posDeviceUuid = uuid;
+     _mainHeaders?['X-POS-Device'] = uuid;
    }
 
    /// P1-BRANCHES — يحدّد الفرع النشط للـ requests القادمة.

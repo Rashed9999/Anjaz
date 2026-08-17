@@ -54,6 +54,28 @@ final class Capability
     /** مسارُ الشاشة في التطبيق — **وبلا شاشةٍ لا تظهر في ملفّ الخدمات**. */
     private ?string $screen = null;
 
+    /**
+     * **حالةُ البناء — و`available` تعني «مبنيّةٌ ويُوصَل إليها».**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمنُ الذي أدخل هذا الحقل:** أربعُ قدراتٍ كانت **تُباع في
+     * الباقات** ولا نقطةَ نهايةٍ لها ولا فعلَ في التطبيق:
+     * `offline_pos` و`retail.discount_limit` — تظهران في صفحة التسعير
+     * وفي «قدراتي» كأنّهما جاهزتان، **ويدفع التاجرُ ثمنَهما**.
+     *
+     * وهذا أسوأُ من ثغرةٍ أمنيّة: الثغرةُ تُعطي بلا ثمن، وهذا **يأخذ
+     * الثمنَ بلا عطاء**.
+     *
+     * فصارت الحالةُ حقلاً صريحاً:
+     *
+     *   `available`    مبنيّةٌ وموصولة — تُباع
+     *   `coming_soon`  مُعلَنةٌ ولم تُبنَ — **لا تُمنح ولا تُباع**، وتُعرض «قريباً»
+     *
+     * و**`coming_soon` تُنزع من `planFeatures` أيضاً** — فحقلٌ يقول
+     * «قريباً» بينما الاتّحادُ يمنحها يُنتج زرّاً يعمل على لا شيء.
+     */
+    private string $status = 'available';
+
     private function __construct(public readonly string $code) {}
 
     public static function make(string $code): self
@@ -158,9 +180,23 @@ final class Capability
         return false;
     }
 
+    /** **قدرةٌ مُعلَنةٌ لم تُبنَ بعد** — لا تُمنح، وتُعرض «قريباً». */
+    public function comingSoon(): self
+    {
+        $this->status = 'coming_soon';
+
+        return $this;
+    }
+
+    public function isComingSoon(): bool
+    {
+        return $this->status === 'coming_soon';
+    }
+
     public function toArray(): array
     {
         return [
+            'status' => $this->status,
             'code' => $this->code,
             'name' => $this->name(),
             'description' => $this->descAr,

@@ -72,8 +72,12 @@ class EntitlementController extends Controller
                             >= CapabilityRegistry::planRank($cap->minimumPlan()));
 
                 if ($open) {
+                    // **وحالةُ البناء تُرسَل** — فقدرةٌ لم تُبنَ تظهر
+                    // «قريباً» في صفحة التسعير لا كأنّها مشمولة. وبدونها
+                    // يقرأ التاجرُ وعداً ويدفع ثمنَه.
                     $opens[] = ['code' => $cap->code, 'name' => $cap->name(),
-                        'group' => $cap->groupName()];
+                        'group' => $cap->groupName(),
+                        'status' => $cap->toArray()['status'] ?? 'available'];
                 }
             }
 

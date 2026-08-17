@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Amial;
 
+use App\Http\Controllers\Concerns\DeniesByPlan;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
 use App\Models\PosUser;
@@ -27,6 +28,8 @@ use Illuminate\Support\Facades\Validator;
  */
 class WholesaleController extends Controller
 {
+    use DeniesByPlan;
+
     public function __construct(
         private readonly WholesaleService $svc,
         private readonly WholesaleInvoiceService $invSvc,
@@ -151,6 +154,13 @@ class WholesaleController extends Controller
             $q->where(fn($q) => $q->where('name', 'like', "%{$s}%")
                 ->orWhere('barcode', $s)->orWhere('sku', $s));
         }
+        // **«المنخفض فقط» مرشِّحٌ مدفوع** — والقائمةُ نفسُها مجّانيّة.
+        // فالحارسُ على الفعل لا على العنوان، كما في تصدير Excel.
+        if ($request->boolean('low_stock_only')
+            && ($deny = $this->denyUnless($request, 'low_stock_alerts')) !== null) {
+            return $deny;
+        }
+
         if ($request->boolean('low_stock_only')) {
             $q->whereColumn('current_stock', '<=', 'low_stock_threshold');
         }
