@@ -224,6 +224,14 @@ $app = Application::configure(basePath: dirname(__DIR__))
             // («الخدمة متوقّفة مؤقتاً»)، وهذه **إذنُ اشتراكٍ لتاجرٍ بعينه**.
             // واسمان متشابهان لمعنيين مختلفين أوقعا خلطاً من قبل.
             'capability' => \App\Http\Middleware\EnsureCapability::class,
+
+            // AMIAL-POS-DEVICES-003 — **مقعدُ الجهاز يُفحص في كلّ طلب.**
+            //
+            // ولا تُخلط بـ`checkDeviceId`: تلك جهازُ **جلسةِ مستخدم**
+            // (‏`UserLogHistory`) — تمنع أن يعمل حسابٌ على هاتفين وتحظر
+            // المسروق. وهذه **مقعدُ ترخيصٍ يملكه التاجر** — تمنع أن يعمل
+            // عشرةُ أجهزةٍ برمزِ مقعدٍ واحدٍ مدفوع.
+            'amial.pos-device' => \App\Http\Middleware\EnsurePosDevice::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

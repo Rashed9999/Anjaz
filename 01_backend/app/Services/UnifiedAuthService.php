@@ -351,6 +351,20 @@ class UnifiedAuthService
         $tokenName = "amial-{$role}";
         $token = $user->createToken($tokenName);
 
+        // AMIAL-POS-DEVICES-003 — **الرمزُ يُربط بمقعده عند الإصدار.**
+        //
+        // ولو تُرك الربطُ لأوّل طلبٍ لصار الجهازُ يُثبت نفسَه بترويسةٍ
+        // يرسلها هو — وهذا **بابُ الالتفاف عينُه**: من نسخ الرمزَ ينسخ
+        // الترويسة. فالربطُ يقع هنا، حيث كلمةُ المرور قد فُحصت للتوّ.
+        if ($role === 'pos') {
+            $this->bindPosDevice(
+                $user,
+                $token->token->id ?? null,
+                $request,
+                (int) ($extraMeta['merchant_user_id'] ?? 0),
+            );
+        }
+
         // AMIAL-FIX(POST-LOGIN): تسجيل الجهاز (UserLogHistory) — بدونه يرفض
         // middleware «checkDeviceId» كلّ طلبات الشاشة الرئيسية بـ 403 فتظهر
         // فارغة. نُكرّر منطق 6cash: تعطيل الأجهزة القديمة ثمّ تفعيل الحالي.
@@ -417,6 +431,93 @@ class UnifiedAuthService
      * يُطابق منطق LoginController::logUserHistory (6cash): يُعطّل الأجهزة
      * السابقة ويُنشئ سجلّاً نشطاً للجهاز الحالي. آمن: أي خطأ لا يكسر الدخول.
      */
+    /**
+     * AMIAL-POS-DEVICES-003 — **يربط رمزَ نقطة البيع بمقعد جهازٍ مسجَّل.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ولا يُخلط بـ`registerDevice` أدناه.** ذاك `UserLogHistory`:
+     * **جهازُ جلسةٍ لمستخدمٍ واحد** — يمنع أن يعمل حسابٌ على هاتفين معاً،
+     * ويُحظر عند السرقة. وهذا **مقعدُ ترخيصٍ يملكه التاجر** ويتناوب عليه
+     * موظّفوه. مفهومان لا يُغني أحدُهما عن الآخر:
+     *
+     *   `UserLogHistory` : «هل هذا هاتفُ فلانٍ النشط؟»       — أمنُ حساب
+     *   `PosDevice`      : «هل هذا مقعدٌ مدفوعٌ في الباقة؟»  — حدُّ باقة
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **وثلاثةُ فروقٍ في المعاملة، ولكلٍّ سببُه:**
+     *
+     * ① **ترويسةٌ حاضرةٌ تُفحص دائماً — ولا شفاعةَ للوضع الصامت.**
+     *    فمن أرسل معرِّفاً غيرَ مسجَّلٍ ادّعى ادّعاءً، ورفضُه لا يمسّ أحداً
+     *    اليوم: لا عميلَ يُرسل هذه الترويسة بعد. (القيدُ الثامن: «دخولٌ
+     *    بمعرِّفٍ مخترَع».)
+     *
+     * ② **وغيابُها هو الصامتُ وحدَه** — لأنّ منعَه اليومَ يُخرج كلَّ موظّفٍ
+     *    يعمل الآن. والسببُ وشرطُ الخروج في `config/amial.php`.
+     *
+     * ③ **ولا يُنشئ مقعداً.** التسجيلُ فعلٌ مستقلٌّ يمرّ بالحصّة والملكيّة،
+     *    ولو أنشأ الدخولُ مقعداً لصار **بابَ تسجيلٍ بلا حدّ** (القيدُ الرابع).
+     */
+    private function bindPosDevice(User $user, $tokenId, Request $request, int $merchantUserId): void
+    {
+        $header = \App\Http\Middleware\EnsurePosDevice::HEADER;
+        $raw = trim((string) $request->header($header, ''));
+        $enforced = (bool) config('amial.pos_devices.enforce_session_binding', false);
+
+        if ($raw === '') {
+            if ($enforced) {
+                throw new \RuntimeException(
+                    'لا جهازَ مسجَّلٌ لهذه الجلسة. سجّل الجهازَ من حساب التاجر ثمّ أعد الدخول.');
+            }
+
+            app(OpsAlertService::class)->note(
+                'pos_device_login_without_device',
+                'دخولُ نقطة بيعٍ بلا هويّة جهاز',
+                sprintf('user=%d · merchant=%d — الوضعُ الصامت', $user->id, $merchantUserId),
+            );
+
+            return;
+        }
+
+        // ① ترويسةٌ حضرت — فتُفحص، صامتاً كان الوضعُ أو منفَّذاً.
+        if ($merchantUserId <= 0) {
+            throw new \RuntimeException('تعذّر تحديدُ التاجر لهذه الجلسة');
+        }
+
+        try {
+            [$device] = \App\Models\Merchant\PosDevice::locate($merchantUserId, $raw);
+        } catch (\Throwable $e) {
+            // مفتاحُ البصمة غيرُ مضبوطٍ مثلاً — **يُرفع عطلاً ولا يُسرَّب
+            // سببُه إلى العميل**، ولا يُقبل الدخولُ بجهازٍ لم يُتحقَّق منه.
+            Log::error('bindPosDevice failed', ['user_id' => $user->id, 'err' => $e->getMessage()]);
+
+            throw new \RuntimeException('تعذّر التحقّقُ من الجهاز');
+        }
+
+        if ($device === null) {
+            throw new \RuntimeException(
+                'هذا الجهاز غير مسجَّلٍ لدى هذا التاجر. سجّله من حساب التاجر أوّلاً.');
+        }
+
+        if ($device->revoked_at !== null || ! $device->is_active) {
+            throw new \RuntimeException('أُلغي هذا الجهاز. راجع صاحبَ الحساب.');
+        }
+
+        if ($tokenId === null) {
+            throw new \RuntimeException('تعذّر ربطُ الجلسة بالجهاز');
+        }
+
+        \App\Models\Merchant\PosDeviceSession::create([
+            'access_token_id' => (string) $tokenId,
+            'pos_device_id' => $device->id,
+            'merchant_user_id' => $merchantUserId,
+            'actor_user_id' => $user->id,
+            'started_at' => now(),
+            'last_seen_at' => now(),
+        ]);
+
+        $device->forceFill(['last_seen_at' => now()])->save();
+    }
+
     private function registerDevice(User $user, Request $request): void
     {
         try {

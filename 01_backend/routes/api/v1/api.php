@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['throttle:100,1'])->group(function () {
     Route::group(['middleware' => ['deviceVerify']], function () {
-        Route::group(['middleware' => ['inactiveAuthCheck', 'trackLastActiveAt', 'auth:api']], function () {
+        Route::group(['middleware' => ['inactiveAuthCheck', 'trackLastActiveAt', 'auth:api', 'amial.pos-device']], function () {
             Route::post('check-customer', [GeneralController::class, 'checkCustomer']);
             Route::post('check-agent', [GeneralController::class, 'checkAgent']);
         });
@@ -42,7 +42,7 @@ Route::middleware(['throttle:100,1'])->group(function () {
                 Route::put('reset-password', [PasswordResetController::class, 'resetPasswordSubmit']);
             });
 
-            Route::group(['middleware' => ['inactiveAuthCheck', 'trackLastActiveAt', 'auth:api', 'customerAuth', 'checkDeviceId']], function () {
+            Route::group(['middleware' => ['inactiveAuthCheck', 'trackLastActiveAt', 'auth:api', 'customerAuth', 'checkDeviceId', 'amial.pos-device']], function () {
                 Route::get('get-customer', [CustomerAuthController::class, 'getCustomer']);
                 Route::get('get-purpose', [CustomerAuthController::class, 'getPurpose']);
                 Route::get('get-banner', [BannerController::class, 'getCustomerBanner']);
@@ -123,7 +123,7 @@ Route::middleware(['throttle:100,1'])->group(function () {
                 Route::put('reset-password', [AgentPasswordResetController::class, 'resetPasswordSubmit']);
             });
 
-            Route::group(['middleware' => ['inactiveAuthCheck', 'trackLastActiveAt', 'auth:api', 'agentAuth', 'checkDeviceId']], function () {
+            Route::group(['middleware' => ['inactiveAuthCheck', 'trackLastActiveAt', 'auth:api', 'agentAuth', 'checkDeviceId', 'amial.pos-device']], function () {
                 Route::get('get-agent', [AgentController::class, 'getAgent']);
                 Route::get('get-notification', [NotificationController::class, 'getAgentNotification']);
                 Route::get('get-banner', [BannerController::class, 'getAgentBanner']);
