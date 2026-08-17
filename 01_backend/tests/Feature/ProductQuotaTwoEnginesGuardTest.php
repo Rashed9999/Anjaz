@@ -176,8 +176,11 @@ class ProductQuotaTwoEnginesGuardTest extends TestCase
         // **الأعمدةُ الإلزاميّةُ تُقرأ من الهجرة لا تُخمَّن.**
         // أوّلُ صيغةٍ أسقطت البذرَ لأنّ `base_price` و`business_name` بلا
         // افتراضيّ — فسقط الاختبارُ على أداته وأعلن «عطلاً» ليس عطلاً.
+        // **الأعمدةُ تُقرأ من القاعدة لا تُخمَّن.** أوّلُ صيغةٍ كتبت
+        // `wholesale_business_id` والعمودُ `business_id` — فسقط البذرُ
+        // فخُطّي الاختبار، **فبقي السؤالُ بلا جواب جولتين**.
         $this->seedInto('wholesale_products', [
-            'wholesale_business_id' => $this->wholesaleBusinessId($m),
+            'business_id' => $this->wholesaleBusinessId($m),
             'name' => 'صنفُ جملةٍ للقياس',
             'base_price' => 100,
         ]);
@@ -185,8 +188,10 @@ class ProductQuotaTwoEnginesGuardTest extends TestCase
 
     private function seedPharmacyProduct(User $m): void
     {
+        $pharmacyId = $this->pharmacyId($m);
+
         $this->seedInto('pharmacy_products', [
-            'merchant_user_id' => $m->id,
+            'pharmacy_id' => $pharmacyId,
             'trade_name' => 'دواءٌ للقياس',
             'sale_price' => 100,
         ]);
@@ -221,6 +226,28 @@ class ProductQuotaTwoEnginesGuardTest extends TestCase
             $this->markTestSkipped(sprintf(
                 'تعذّر إنشاءُ منشأةِ جملةٍ للقياس (%s) — **والسؤالُ يبقى مفتوحاً '
                 . 'لا مُجاباً**', mb_substr($e->getMessage(), 0, 140)));
+        }
+    }
+
+    /** صيدليّةٌ للقياس — و`pharmacy_products.pharmacy_id` يشير إليها. */
+    private function pharmacyId(User $m): int
+    {
+        try {
+            $existing = DB::table('pharmacies')->where('merchant_user_id', $m->id)->value('id');
+
+            if ($existing !== null) {
+                return (int) $existing;
+            }
+
+            return (int) DB::table('pharmacies')->insertGetId([
+                'merchant_user_id' => $m->id,
+                'pharmacy_name' => 'صيدليّةُ القياس',
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        } catch (\Throwable $e) {
+            $this->markTestSkipped(sprintf(
+                'تعذّر إنشاءُ صيدليّةٍ للقياس (%s) — **والسؤالُ يبقى مفتوحاً**',
+                mb_substr($e->getMessage(), 0, 140)));
         }
     }
 

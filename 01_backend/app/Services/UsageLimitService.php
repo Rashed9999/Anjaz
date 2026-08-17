@@ -246,7 +246,14 @@ class UsageLimitService
             ->first();
     }
 
-    private function countProducts(User $merchant, string $sector): int
+    /**
+     * **عامٌّ عمداً — فهذا هو التعريفُ الوحيدُ لعدّ الأصناف.**
+     *
+     * `EntitlementService::usageFor` كان يعدّ `merchant_products` وحدَه
+     * مهما كان القطاع، فافترق عدّادان لحدٍّ واحد. وقِيس بالتشغيل:
+     * تاجرُ جملةٍ له صنفٌ واحد ⇒ ① يقول 1 و② يقول 0.
+     */
+    public function countProducts(User $merchant, string $sector): int
     {
         // 'auto' = حدّد القطاع من business_type
         if ($sector === 'auto') {

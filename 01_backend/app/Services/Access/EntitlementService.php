@@ -376,8 +376,24 @@ class EntitlementService
         }
 
         $used = match ($key) {
-            'max_products' => \App\Models\MerchantProduct::where('merchant_user_id', $ownerId)
-                ->where('is_variant_parent', false)->count(),
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-PRODUCT-QUOTA-003 — **عدّادٌ واحدٌ لحدٍّ واحد.**
+            //
+            // كان هذا السطرُ يعدّ `merchant_products` وحدَه **مهما كان
+            // القطاع**، بينما `UsageLimitService` يعدّ من جدول القطاع.
+            // فحدُّ الأصناف كان يُقاس بمقياسين:
+            //
+            //   تاجرُ جملةٍ بلغ مئةَ صنفٍ في جدول الجملة
+            //     ⇒ بابُ الجملة يمنعه (‏المحرّك ① يرى 100)
+            //       ⇒ **وبابُ الكاشير يفتح** (‏المحرّك ② يرى 0)
+            //
+            // فالحدُّ يُلتَفّ عليه **بتغيير الباب لا بتغيير الباقة**.
+            //
+            // وكان هذا «مُرجَّحاً بقراءة الشيفرة» جولتين، ولم يُثبَت
+            // لأنّ البذرَ كان يسقط على أسماء أعمدةٍ مخمَّنة فيُخطَّى
+            // الاختبار. **وأوّلُ تشغيلٍ صادقٍ أخرج: ① = 1 و② = 0.**
+            'max_products' => app(\App\Services\UsageLimitService::class)
+                ->countProducts(\App\Models\User::findOrFail($ownerId), 'auto'),
             'max_employees' => \App\Models\PosUser::where('merchant_user_id', $ownerId)
                 ->where('is_active', true)->count(),
             'max_branches' => \App\Models\Branch::where('merchant_user_id', $ownerId)->count(),

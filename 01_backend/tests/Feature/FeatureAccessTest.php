@@ -121,7 +121,18 @@ class FeatureAccessTest extends TestCase
         // Retail base
         $this->assertContains(A::F_CASHIER, $features);
         $this->assertContains(A::F_PRODUCTS, $features);
-        $this->assertContains(A::F_CUSTOMERS, $features);
+        // ══════════════════════════════════════════════════════════════
+        // **و«العملاء» ليست في «البداية»** — قرارُ صاحب المشروع صراحةً:
+        //
+        //   «customers ليست مجانية … إدارةُ العملاء الكاملة تبدأ من
+        //    Business.  Retail وWholesale: products تبدأ من Starter،
+        //    وcustomers تبدأ من Business. لا يحصل عليهما التاجر مجانًا
+        //    بسبب business_type.»
+        //
+        // وكان هذا الفحصُ يطلب عكسَه، فبقي ساقطاً منذ نُفّذ القرار.
+        // **والاختبارُ هو المتخلّف لا الشيفرة** — فيُقلَب ويُثبَّت المنع.
+        $this->assertNotContains(A::F_CUSTOMERS, $features,
+            '«العملاء» مُنحت على «البداية» — وهي تبدأ من «الأعمال»');
         // STARTER يُفعّل
         $this->assertContains(A::F_INVENTORY, $features);
         $this->assertContains(A::F_BARCODE, $features);
