@@ -860,6 +860,48 @@ class FeeCentreScreensGuardTest extends TestCase
             '`number_format` في الحساب لا في العرض — وهي تُقرّب صامتةً');
     }
 
+
+    /**
+     * @test
+     *
+     * **㉘ وكلُّ سكربتٍ مضمَّنٍ في اللوحة موقَّعٌ بـnonce.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **عطلٌ وقع فعلاً في هذا القطاع، وكشفه متصفّحٌ لا اختبار:**
+     *
+     * `SecurityHeaders` يضبط `script-src \'self\' \'nonce-…\'`. فسكربتٌ
+     * مضمَّنٌ بلا توقيعٍ **يرفضه المتصفّحُ صامتاً**: الصفحةُ تردّ ٢٠٠،
+     * والاختباراتُ خضراء، **وكلُّ سلوك الشاشة ميّت** — القائمةُ لا تُرشِّح،
+     * وحقلُ حصّة الوكيل لا يختفي، والمحاكي لا يردّ.
+     *
+     * ولا تمسكه طبقةُ الضغط في البوّابة: هي تبني القالبَ **مباشرةً** فلا
+     * يمرّ بالوسيط، فلا ترى المنعَ أبداً. (‏«جرّبتُ المسار السليم،
+     * والمستعمل يسلك المسار الآخر».)
+     */
+    public function every_inline_script_in_the_fee_centre_carries_a_csp_nonce(): void
+    {
+        $offenders = [];
+
+        foreach (glob(resource_path('views/admin-views/amial/fees/*.blade.php')) as $f) {
+            $src = (string) preg_replace(
+                ['~\{\{--.*?--\}\}~s', '~<!--.*?-->~s'], '', (string) file_get_contents($f));
+
+            preg_match_all('~<script(?![^>]*\bsrc=)([^>]*)>~i', $src, $m);
+
+            foreach ($m[1] ?? [] as $attrs) {
+                if (! str_contains($attrs, 'nonce')) {
+                    $offenders[] = basename($f);
+                }
+            }
+        }
+
+        $this->assertSame([], $offenders, sprintf(
+            "سكربتٌ مضمَّنٌ بلا `nonce` — **يمنعه المتصفّحُ صامتاً** فتموت "
+            . "الشاشةُ وهي تردّ ٢٠٠:\n  %s\n"
+            . 'الصيغة: <script nonce="{{ request()->attributes->get(\'csp_nonce\') }}">',
+            implode("\n  ", array_unique($offenders))));
+    }
+
     /**
      * @test
      *

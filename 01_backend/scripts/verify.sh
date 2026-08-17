@@ -259,6 +259,53 @@ else
   printf '  \033[33m—\033[0m node غير متوفّر — تخطّي\n'
 fi
 
+# ── ٦ب) مركزُ الرسوم في متصفّحٍ حقيقيّ، بخمسة عروض ────────────────────
+#
+# **ما لا تمسكه الطبقةُ السادسة:** هي تبني القالبَ **مباشرةً** بلا خادم،
+# فلا يمرّ بوسيط `SecurityHeaders`. وسكربتٌ مضمَّنٌ بلا `nonce` يمنعه
+# المتصفّحُ في الإنتاج **صامتاً** — الصفحةُ تردّ ٢٠٠ وكلُّ سلوكها ميّت.
+# وقد وقع هذا فعلاً في هذا القطاع.
+#
+# **ولا تقيس عرضاً:** جدولٌ بتسعة أعمدة يُخرج الصفحةَ كلَّها عن شاشةِ
+# هاتفٍ بعرض ٣٦٠، فيصير التمريرُ الأفقيُّ شرطاً لبلوغ الأزرار.
+#
+# فهذه الطبقةُ تُقلع خادماً حقيقيّاً وتفتح الصفحاتِ عبره. **وإن تعذّر
+# ذلك تُقال مُخطّاةً صراحةً ولا تُعدّ نجاحاً** — «غير معروف» ليس صفراً.
+head_ "٦ب) مركز الرسوم في متصفّح (٣٦٠ → ١٠٢٤)"
+if command -v node >/dev/null 2>&1 && [[ -f scripts/fee-centre-probe.mjs ]]; then
+  FEE_PORT=8127
+
+  php artisan amial:probe-admin >/dev/null 2>&1
+  AMIAL_DISABLE_ADMIN_CAPTCHA=true php artisan serve --port "$FEE_PORT" >/tmp/fee-probe-serve.log 2>&1 &
+  FEE_SRV=$!
+
+  # انتظارُ إقلاعٍ بحدٍّ أعلى — ولا `sleep` أعمى يُطيل البوّابةَ بلا سبب.
+  for _ in $(seq 1 20); do
+    curl -s -o /dev/null "http://127.0.0.1:$FEE_PORT/admin/auth/login" && break
+    sleep 0.5
+  done
+
+  FEE_OUT=$(PROBE_BASE="http://127.0.0.1:$FEE_PORT" \
+    NODE_PATH="${NODE_PATH:-/opt/node22/lib/node_modules}" \
+    node scripts/fee-centre-probe.mjs 2>&1)
+  FEE_RC=$?
+
+  kill "$FEE_SRV" 2>/dev/null; wait "$FEE_SRV" 2>/dev/null
+
+  echo "$FEE_OUT" | sed 's/^/  /' | sed 's/^  \(  \)/\1/'
+
+  if [[ $FEE_RC -eq 0 ]]; then
+    echo "$FEE_OUT" | grep -q 'تخطّي' || PASS=$((PASS+1))
+  elif [[ $FEE_RC -eq 2 ]]; then
+    # تعذّر الدخول — بيئةٌ لا حسابَ فيها، لا شيفرةٌ مكسورة.
+    printf '  \033[33m—\033[0m تعذّر الدخول — الطبقةُ مُخطّاةٌ ولا تُعدّ نجاحاً\n'
+  else
+    FAIL=$((FAIL+1))
+  fi
+else
+  printf '  \033[33m—\033[0m node أو المسبار غير متوفّر — تخطّي\n'
+fi
+
 # ── ٧) تصريف Dart ────────────────────────────────────────────────────
 #
 # **الطبقة التي كانت غائبة، وثمنُها بناءٌ ساقطٌ على شاشة صاحب المشروع.**

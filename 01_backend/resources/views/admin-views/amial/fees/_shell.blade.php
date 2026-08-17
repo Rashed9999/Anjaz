@@ -44,10 +44,18 @@
 .fee-state{display:inline-flex;align-items:center;gap:.3rem;font-size:var(--amial-text-xs);
     font-weight:700;padding:.2rem .55rem;border-radius:999px;white-space:nowrap}
 .fee-state::before{content:'';width:.5rem;height:.5rem;border-radius:50%;background:currentColor}
-.fee-state.s-priced{color:var(--amial-success);background:rgba(15,122,70,.10)}
-.fee-state.s-zero{color:var(--amial-info);background:rgba(29,79,184,.10)}
-.fee-state.s-missing{color:var(--amial-danger);background:rgba(220,10,11,.10)}
-.fee-state.s-not_wired{color:var(--amial-text-muted);background:rgba(139,151,168,.14)}
+/* **الخلفيّةُ تُشتقّ من لون الحالة نفسِه** — لا ثلاثيّةَ RGB مكتوبةً بيدٍ.
+   فقيمةٌ منسوخةٌ من التوكِن تبقى كما هي حين يتغيّر التوكِن، فتفترق
+   الخلفيّةُ عن نصّها بصمت. و`currentColor` تتبعه دائماً. */
+.fee-state{background:var(--amial-background)}
+.fee-state.s-priced{color:var(--amial-success)}
+.fee-state.s-zero{color:var(--amial-info)}
+.fee-state.s-missing{color:var(--amial-danger)}
+.fee-state.s-not_wired{color:var(--amial-text-muted)}
+
+@supports (background: color-mix(in srgb, red 10%, transparent)) {
+    .fee-state{background:color-mix(in srgb, currentColor 12%, transparent)}
+}
 
 /* **لا فيضانَ أفقيٌّ للصفحة** — الجدولُ وحدَه ينزلق داخل إطاره. */
 .fee-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
