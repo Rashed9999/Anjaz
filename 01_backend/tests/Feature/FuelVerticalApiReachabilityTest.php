@@ -43,8 +43,16 @@ class FuelVerticalApiReachabilityTest extends TestCase
         $perm = app(MerchantPermissionService::class);
 
         $this->merchant = User::factory()->create(['type' => 3, 'zone_code' => 'SOUTH']);
+        // **الملفُّ يُطابق الواقع: محطّةُ وقودٍ على باقةٍ تشتري المصالحة.**
+        //
+        // كان بلا `business_type` وعلى المجّانيّ، ومحطّةٌ مبنيّةٌ فوقه —
+        // حالةٌ لا تقع في الإنتاج. وحين حُرست `fuel_variance` بقدرتها
+        // رُفض الطلبُ **قبل** فحص الصلاحيّة (‏نشاطٌ غيرُ منطبق)، فسقط
+        // الاختبار. **والفحصُ كان يقيس شيئاً لا يقع.**
         MerchantProfile::create([
             'user_id' => $this->merchant->id, 'verification_status' => 'verified',
+            'business_type' => \App\Support\Access\AccessConstants::BIZ_FUEL,
+            'subscription_plan' => \App\Support\Access\AccessConstants::PLAN_BUSINESS,
         ]);
 
         $this->station = $fuel->getOrCreateStation($this->merchant, [
@@ -170,9 +178,20 @@ class FuelVerticalApiReachabilityTest extends TestCase
                 ? $this->getJson(self::BASE . $path)
                 : $this->postJson(self::BASE . $path, []);
 
-            $this->assertSame(422, $res->status(), sprintf(
-                'الكاشير وصل إلى «%s» (%s %s) — والحدُّ في الخادم لا في الشاشة',
-                $label, $method, $path,
+            // **البابُ بابان، وكلاهما بابٌ لا زرّ.**
+            //
+            // كان الفحصُ يطلب ٤٢٢ وحدَها — رمزَ وسيطِ الصلاحيّات. ثمّ
+            // حُرست `fuel_variance` بقدرتها، فصار الرفضُ يقع **أبكرَ**
+            // بـ٤٠٣ (‏دورٌ لا يملك `fuel.recon.*`). والغرضُ محفوظٌ في
+            // كليهما: **لم يصل**.
+            //
+            // ولا يُوسَّع القبولُ إلى «أيّ ٤xx»: ٢٠٠ يسقط، و٤٠٤ يسقط —
+            // وذاك مهمّ، فـ٤٠٤ كانت تعني «نشاطٌ غيرُ منطبق» وهي كذبةٌ
+            // على موظّفٍ في محطّةِ وقودٍ فعليّة (‏وقد وقعت، وأُصلحت
+            // بوراثة موظّفِ الأدوار في `FeatureAccessService`).
+            $this->assertContains($res->status(), [403, 422], sprintf(
+                'الكاشير وصل إلى «%s» (%s %s) وردَّ %d — والحدُّ في الخادم لا في الشاشة',
+                $label, $method, $path, $res->status(),
             ));
 
             $this->assertFalse($res->json('success'));

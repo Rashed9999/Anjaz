@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Amial;
 
+use App\Http\Controllers\Concerns\DeniesByPlan;
 use App\Http\Controllers\Controller;
 use App\Models\CorporateAccount;
 use App\Models\CorporateAccountMember;
@@ -28,6 +29,8 @@ use Illuminate\Support\Facades\Validator;
  */
 class CorporateAccountController extends Controller
 {
+    use DeniesByPlan;
+
     public function __construct(
         private FeatureAccessService $access,
         private CorporateAccountService $svc,
@@ -87,6 +90,13 @@ class CorporateAccountController extends Controller
         ]);
         if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);
 
+        // **والإنشاءُ يضبط الحدَّ أوّلَ مرّة** — فيمرّ بالقدرة نفسِها.
+        // وحراسةُ التعديل وحدَه بابُ التفاف: يُنشأ الحسابُ بالحدّ المطلوب
+        // فلا يُحتاج تعديلٌ أصلاً.
+        if ($deny = $this->denyUnless($request, 'corporate_credit_limits')) {
+            return $deny;
+        }
+
         $account = $this->svc->createAccount($m, $request->all());
         return $this->ok(['account' => $this->accountArray($account)], 'CREATED', 'تم إنشاء الحساب', 201);
     }
@@ -128,6 +138,24 @@ class CorporateAccountController extends Controller
             'status' => 'sometimes|in:active,suspended',
         ]);
         if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);
+
+        // ══════════════════════════════════════════════════════════════
+        // **الحدُّ الائتمانيُّ قدرةٌ مستقلّةٌ عن فتح الحساب.**
+        //
+        // كان السطحُ كلُّه خلف `corporate_accounts` وحدَها، وكلتاهما
+        // «مؤسسيّة» — فبدا محروساً. **لكنّ التقريرَ يقرأ الحارسَ باسمه**،
+        // فقال «`corporate_credit_limits` بلا حارس» وهو صادقٌ حرفيّاً:
+        // لا موضعَ في الشيفرة كلِّها يذكر هذه القدرة.
+        //
+        // وحراسةُ قدرةٍ باسم أختها تعمل **حتّى يفترق سعراهما يوماً** —
+        // فيُرفع الحدُّ الائتمانيُّ إلى باقةٍ أعلى، ولا يتغيّر شيءٌ في
+        // الواقع، ولا يُلاحظ أحد. فتُحرَس باسمها.
+        if (array_key_exists('credit_limit', $request->all())
+            || array_key_exists('monthly_limit', $request->all())) {
+            if ($deny = $this->denyUnless($request, 'corporate_credit_limits')) {
+                return $deny;
+            }
+        }
 
         $account = $this->svc->updateAccount($account, $request->all());
         return $this->ok(['account' => $this->accountArray($account)], 'UPDATED', 'تم التحديث');

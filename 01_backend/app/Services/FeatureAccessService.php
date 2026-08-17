@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MerchantProfile;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use App\Models\PosUser;
 use App\Support\Access\AccessConstants as A;
 use App\Support\Access\AccessPresets;
@@ -120,8 +121,50 @@ class FeatureAccessService
             }
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-ACTOR-002 — **وموظّفُ الأدوار يرث كذلك.**
+        //
+        // للمشروع طريقان لتوظيف عاملٍ تحت تاجر، وقد افترقا بصمت:
+        //
+        //   `pos_users`          كاشيرٌ برقم نقطة بيع     ← يُورَّث أعلاه
+        //   `merchant_user_roles` موظّفٌ بدورٍ (‏محطّةُ وقودٍ مثلاً) ← **لا**
+        //
+        // فالثاني كان يُقرأ «بلا صنفِ نشاطٍ وبلا اشتراك». ولم يظهر ذلك
+        // ما دامت مساراتُ الوقود بلا حارسِ قدرة: الصلاحيّةُ وحدَها كانت
+        // تحكم فتردّ ٤٢٢. **وأوّلَ ما حُرست `fuel_variance` بقدرتها ردّ
+        // الخادمُ ٤٠٤ «نشاطٌ غيرُ منطبق»** على موظّفٍ في محطّةِ وقودٍ
+        // فعليّة — أي أنّ الحارسَ الجديدَ كشف ثغرةً قديمةً في الوراثة.
+        //
+        // ولا يُمنح الموظّفُ شيئاً زائداً: الصلاحيّاتُ تُضيَّق بعدها
+        // بـ`restrictToPosPermissions` لموظّف نقطة البيع، وبمصفوفة أدوار
+        // التاجر لموظّف الأدوار — وهذه ترث **الاشتراكَ والصنف** لا الإذن.
+        if ($actor === 'customer' && $ownerId === null) {
+            $assignment = DB::table('merchant_user_roles')
+                ->where('user_id', $user->id)
+                ->whereNotNull('merchant_user_id')
+                ->first();
+
+            if ($assignment !== null) {
+                $actor = 'staff';
+                $ownerId = (int) $assignment->merchant_user_id;
+
+                $ownerProfile = MerchantProfile::where('user_id', $ownerId)->first();
+
+                if ($ownerProfile) {
+                    $businessType = $ownerProfile->business_type;
+                    $plan = $ownerProfile->subscription_plan ?? A::PLAN_FREE;
+
+                    if ($plan !== A::PLAN_FREE
+                        && $ownerProfile->subscription_expires_at !== null
+                        && $ownerProfile->subscription_expires_at->isPast()) {
+                        $plan = A::PLAN_FREE;
+                    }
+                }
+            }
+        }
+
         // الوراثةُ تُحسب بصنف التاجر وخطّته أيّاً كان الفاعل.
-        $inheritRole = in_array($actor, ['owner', 'pos'], true) ? A::ROLE_MERCHANT : $role;
+        $inheritRole = in_array($actor, ['owner', 'pos', 'staff'], true) ? A::ROLE_MERCHANT : $role;
 
         $features = $this->resolveFeatures(
             $inheritRole, $verificationLevel, $businessType, $plan, $extraFeatures);

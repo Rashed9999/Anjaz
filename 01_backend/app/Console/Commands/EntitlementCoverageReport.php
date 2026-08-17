@@ -141,8 +141,26 @@ class EntitlementCoverageReport extends Command
     /** @return array<string,true> */
     private function gatedInsideControllers(): array
     {
-        return $this->scanForCapabilityCodes(app_path('Http/Controllers'),
+        $byConstant = $this->scanForCapabilityCodes(app_path('Http/Controllers'),
             '~(?:hasFeature|gate)\([^,]+,\s*(?:A|AccessConstants)::(F_[A-Z_]+)~');
+
+        // **وحراسةٌ برمزٍ نصّيّ تُرى أيضاً** — `DeniesByPlan::denyUnless`.
+        //
+        // وبدون هذا كان التقريرُ يقول «بلا حارس» عن قدرةٍ محروسةٍ فعلاً
+        // (‏`retail.returns.by_line`)، **وهو بلاغٌ كاذبٌ يُنفَق عليه وقتٌ
+        // ثمّ لا شيء** — وأسوأُ منه أنّه يُخفي البلاغَ الصادقَ في الضجيج.
+        $byLiteral = [];
+
+        foreach ($this->phpFiles(app_path('Http/Controllers')) as $path) {
+            if (preg_match_all('~denyUnless\([^,]+,\s*[\x27"]([a-z0-9_.]+)[\x27"]~',
+                (string) file_get_contents($path), $m)) {
+                foreach ($m[1] as $code) {
+                    $byLiteral[$code] = true;
+                }
+            }
+        }
+
+        return $byConstant + $byLiteral;
     }
 
     /** @return array<string,true> */
@@ -296,7 +314,20 @@ class EntitlementCoverageReport extends Command
     private function emitTable(array $rows): int
     {
         $paid = array_values(array_filter($rows, fn ($r) => $r['paid']));
-        $unprotected = array_values(array_filter($paid, fn ($r) => ! $r['api_gated']));
+        // ══════════════════════════════════════════════════════════════
+        // **«بلا حارس» ≠ «بلا نقطة نهاية».**
+        //
+        // قدرةٌ مدفوعةٌ **لا مسارَ لها إطلاقاً** ليست ثغرةً: لا يبلغها
+        // طلبٌ أصلاً. وعدُّها ثغرةً يُضخّم الرقمَ بما لا يُخترَق، فيُخفي
+        // الثغراتِ الحقيقيّةَ في الضجيج — **وحارسٌ يبالغ يُهمَل كحارسٍ
+        // يسكت**.
+        //
+        // وهي **ليست سليمةً** أيضاً: قدرةٌ تُباع ولا تُبنى وعدٌ لا
+        // يُنفَّذ. فتُعدّ في بابٍ ثانٍ بصوتٍ مسموع، ولا تُخلَط بالأوّل.
+        $unprotected = array_values(array_filter($paid,
+            fn ($r) => $r['has_api'] && ! $r['api_gated']));
+
+        $soldWithoutApi = array_values(array_filter($paid, fn ($r) => ! $r['has_api']));
         $shadowed = array_values(array_filter($paid, fn ($r) => $r['in_shadow']));
 
         $this->line('');
@@ -329,6 +360,7 @@ class EntitlementCoverageReport extends Command
         $this->line(sprintf('  المدفوعة                  : %d', count($paid)));
         $this->line(sprintf('  المجّانيّةُ والأساسيّة       : %d', count($rows) - count($paid)));
         $this->line(sprintf('  **مدفوعةٌ بلا حارس**       : %d', count($unprotected)));
+        $this->line(sprintf('  مدفوعةٌ بلا نقطةِ نهاية    : %d', count($soldWithoutApi)));
         $this->line(sprintf('  مدفوعةٌ في الظلّ           : %d', count($shadowed)));
         $this->line(sprintf('  بلا شاشة                  : %d',
             count(array_filter($rows, fn ($r) => ! $r['has_screen']))));
@@ -351,6 +383,15 @@ class EntitlementCoverageReport extends Command
         $this->line('    · الملاحة: تُقرأ من نصّ Dart، **ولا يُضغَط زرّ**');
         $this->line('    · التحقّقُ بالتشغيل: يحتاج خادماً حيّاً — لا يدّعيه هذا التقرير');
         $this->line('');
+
+        if ($soldWithoutApi !== []) {
+            $this->newLine();
+            $this->line('  ── مدفوعةٌ ولا نقطةَ نهايةٍ لها (‏تُباع ولا تُبنى) ──');
+
+            foreach ($soldWithoutApi as $r) {
+                $this->line(sprintf('    · %-24s %s', $r['code'], $r['min_plan']));
+            }
+        }
 
         if ($this->option('fail-on-unprotected') && $unprotected !== []) {
             $this->error(sprintf('  %d قدرةً مدفوعةً بلا حارس — التقريرُ يخرج بواحد.',

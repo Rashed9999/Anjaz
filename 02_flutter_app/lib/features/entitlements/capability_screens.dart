@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.dart';
 import 'package:amial_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amial_pay/features/corporate/screens/corporate_accounts_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_ops_center_screen.dart';
@@ -97,6 +98,8 @@ class CapabilityScreens {
     // ── العملاء والفريق ────────────────────────────────────────────
     'customers': () => const CreditCustomersScreen(),
     'employees': () => const MerchantStaffScreen(),
+    // AMIAL-POS-DEVICES-008 — الجهازُ مقعدٌ، والموظّفُ حساب: شاشتان لا واحدة.
+    'multi_pos': () => const MerchantPosDevicesScreen(),
     'branches': () => const BranchesManagementScreen(),
     'corporate_accounts': () => const CorporateAccountsScreen(),
 

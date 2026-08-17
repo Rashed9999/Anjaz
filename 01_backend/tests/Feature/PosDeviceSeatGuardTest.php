@@ -61,7 +61,7 @@ class PosDeviceSeatGuardTest extends TestCase
 
         $before = PosDevice::activeSeats($m->id);
 
-        $staffUser = User::factory()->create(['type' => 2]);
+        $staffUser = User::factory()->create(['type' => 4, 'role' => 'pos']);
 
         PosUser::create([
             'user_id' => $staffUser->id,
@@ -236,7 +236,7 @@ class PosDeviceSeatGuardTest extends TestCase
     {
         $m = $this->merchant(A::PLAN_BUSINESS);
 
-        $staffUser = User::factory()->create(['type' => 2]);
+        $staffUser = User::factory()->create(['type' => 4, 'role' => 'pos']);
 
         PosUser::create([
             'user_id' => $staffUser->id,

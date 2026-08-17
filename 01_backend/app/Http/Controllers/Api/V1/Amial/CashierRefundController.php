@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Amial;
 
+use App\Http\Controllers\Concerns\DeniesByPlan;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
 use App\Models\MerchantRefund;
@@ -23,6 +24,8 @@ use Illuminate\Support\Facades\Validator;
  */
 class CashierRefundController extends Controller
 {
+    use DeniesByPlan;
+
     public function __construct(
         private readonly MerchantSaleRefundService $refundSvc,
     ) {}
@@ -40,6 +43,20 @@ class CashierRefundController extends Controller
             'reason' => 'sometimes|nullable|string|max:500',
         ]);
         if ($v->fails()) return $this->validationError($v);
+
+        // ══════════════════════════════════════════════════════════════
+        // **المرتجعُ الكاملُ مجّانيّ، والسطريُّ مدفوع — والمسارُ واحد.**
+        //
+        // فالحارسُ **على الفعل لا على العنوان**: لا يُوضَع `capability:`
+        // على المسار لأنّه يُقفل تصحيحَ المال على التاجر المجّانيّ —
+        // ومنعُ الاسترداد ليس ميزةَ باقةٍ بل حبسُ مالِ عميل.
+        //
+        // وما يُباع هو **تفصيلُ المرتجع سطراً سطراً** (`items`).
+        if (! empty($request->input('items', []))) {
+            if ($deny = $this->denyUnless($request, 'retail.returns.by_line')) {
+                return $deny;
+            }
+        }
 
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;

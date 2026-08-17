@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.dart';
 import 'package:amial_pay/features/merchant/screens/inventory_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
@@ -549,6 +550,10 @@ class MerchantServicesHubScreen extends StatelessWidget {
     _Svc('employees', 'الموظفون',
         'أضِف موظفي الكاشير بصلاحيات محدّدة، وتابع مبيعات وأداء كل موظف.',
         Icons.badge, 'الأعمال', () => const MerchantStaffScreen()),
+    _Svc('multi_pos', 'أجهزة نقاط البيع',
+        'أجهزةُ الكاشير المسجَّلة في متجرك: سمِّها، وتابع آخر نشاطها، '
+        'وألغِ ما فُقد منها فيتوقّف فوراً. والموظّفون يتناوبون عليها.',
+        Icons.point_of_sale, 'حسب الباقة', () => const MerchantPosDevicesScreen()),
     _Svc('audit_log', 'سجلّ التدقيق',
         'سجلّ كامل لكل عملية حسّاسة في متجرك: من فعل ماذا ومتى — للرقابة والأمان.',
         Icons.fact_check, 'التاجر برو', () => const MerchantAuditLogScreen()),

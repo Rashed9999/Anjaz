@@ -382,10 +382,35 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_MERCHANT_PRO)
                 ->permissions(['retail.discount.apply']),
 
+            // ══════════════════════════════════════════════════════════
+            // **مصدرا حقيقةٍ تناقضا، والحسمُ لجدول الحدود.**
+            //
+            // كانت `minPlan(BUSINESS)` — وجدولُ الحدود يقول:
+            //
+            //     مجّاني 1 · البداية 1 · الأعمال 3 · محترف ∞
+            //
+            // فالمجّانيُّ **يُباع له مقعدٌ واحد**، وباقةُ الأعمال تُميَّز
+            // بالعدد لا بأصل الحقّ. ومع `minPlan(BUSINESS)` كان يقع هذا:
+            //
+            //   تاجرٌ مجّانيٌّ يفتح شاشةَ الأجهزة ⇒ ٤٠٢ «ارفع الباقة»
+            //     ⇒ ولا يُسجّل **المقعدَ الذي تبيعه له باقتُه**
+            //       ⇒ فلا يعمل جهازُ بيعٍ واحدٌ على المجّانيّ إطلاقاً
+            //
+            // وقِيس بالتشغيل: `PosDeviceBypassMatrixTest` سقط عليه.
+            //
+            // **فالتمييزُ حدٌّ لا بوّابة**: التسجيلُ متاحٌ للكلّ،
+            // و`max_pos_devices` يفرض العدد — وهو مشتقٌّ من الباقة.
+            // (‏وإن أُريد للأجهزة أن تكون مدفوعةً من أصلها فالتغييرُ في
+            // جدول الحدود: `free`/`starter` إلى صفر — وذاك قرارُ تسعير.)
             C::make(A::F_MULTI_POS)
-                ->nameAr('أجهزة بيع متعددة')
+                ->nameAr('أجهزة نقاط البيع')
+                ->descAr('مقعدُ ترخيصٍ لكلّ جهازٍ يعمل على نقطة البيع — '
+                    . 'والموظّفون يتناوبون عليه، فالجهازُ ليس موظّفاً. '
+                    . 'والعددُ بحسب الباقة.')
                 ->group('الناس')->icon('devices')
-                ->minPlan(A::PLAN_BUSINESS)->limit('max_pos_devices'),
+                ->minPlan(A::PLAN_FREE)->limit('max_pos_devices')
+                ->routes(['pos-devices'])
+                ->screen('/pos-devices'),
 
             C::make(A::F_SHIFT_CLOSE)
                 ->nameAr('الورديات وإغلاق الصندوق')
@@ -455,7 +480,8 @@ final class CapabilityRegistry
             C::make(A::F_BRANCH_REPORTS)
                 ->nameAr('تقارير الفروع')
                 ->group('التقارير')->icon('leaderboard')
-                ->minPlan(A::PLAN_MERCHANT_PRO),
+                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->routes(['branches/{id}/report']),
 
             C::make(A::F_MULTI_CURRENCY)
                 ->nameAr('تعدد العملات')
@@ -504,7 +530,8 @@ final class CapabilityRegistry
                 ->nameAr('بطاقات الوقود وحسابات الشركات')
                 ->group('الوقود')->icon('credit_card')
                 ->minPlan(A::PLAN_BUSINESS)
-                ->businessTypes([A::BIZ_FUEL]),
+                ->businessTypes([A::BIZ_FUEL])
+                ->routes(['fuel/companies/{id}/cards']),
 
             C::make(A::F_PHARMACY_POS)
                 ->nameAr('بيع الصيدلية')
@@ -516,7 +543,8 @@ final class CapabilityRegistry
                 ->nameAr('الدفعات وتواريخ الصلاحية')
                 ->group('الصيدلية')->icon('event_busy')
                 ->minPlan(A::PLAN_STARTER)
-                ->businessTypes([A::BIZ_PHARMACY]),
+                ->businessTypes([A::BIZ_PHARMACY])
+                ->routes(['pharmacy/products/{id}/batches']),
 
             C::make(A::F_PHARMACY_PRESCRIPTIONS)
                 ->nameAr('الوصفات الطبية')
@@ -534,7 +562,8 @@ final class CapabilityRegistry
                 ->nameAr('تسعير متعدد المستويات')
                 ->group('الجملة')->icon('price_change')
                 ->minPlan(A::PLAN_MERCHANT_PRO)
-                ->businessTypes([A::BIZ_WHOLESALE]),
+                ->businessTypes([A::BIZ_WHOLESALE])
+                ->routes(['wholesale/price-tiers']),
 
             C::make(A::F_RESTAURANT_TABLES)
                 ->nameAr('الطاولات والطلبات')
@@ -561,10 +590,17 @@ final class CapabilityRegistry
                 ->group('المؤسسي')->icon('business')
                 ->minPlan(A::PLAN_ENTERPRISE)->screen('/corporate'),
 
+            // **يُحرَس مع `corporate_accounts` في المتحكّم نفسِه** —
+            // فالسطحُ المؤسسيُّ كلُّه خلف بوّابةٍ واحدةٍ في
+            // `CorporateAccountController::__construct`، وكلاهما
+            // `enterprise`. والمساراتُ تُعلَن هنا ليقرأها التقريرُ
+            // فيقول الحقيقة: **قدرةٌ بلا مسارٍ مُعلَنٍ تُقرأ «بلا حارس»
+            // وهي محروسة** — بلاغٌ كاذبٌ يُنفق عليه وقتٌ ثمّ لا شيء.
             C::make(A::F_CORPORATE_CREDIT_LIMITS)
                 ->nameAr('الحدود الائتمانية للشركات')
                 ->group('المؤسسي')->icon('credit_score')
-                ->minPlan(A::PLAN_ENTERPRISE),
+                ->minPlan(A::PLAN_ENTERPRISE)
+                ->routes(['corporate/accounts']),
 
             C::make(A::F_OPERATIONS_MANAGER)
                 ->nameAr('مدير العمليات')

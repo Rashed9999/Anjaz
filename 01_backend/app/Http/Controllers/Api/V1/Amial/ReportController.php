@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Amial;
 
+use App\Http\Controllers\Concerns\DeniesByPlan;
 use App\Http\Controllers\Controller;
 use App\Jobs\GenerateReportJob;
 use App\Models\ReportExport;
@@ -18,6 +19,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class ReportController extends Controller
 {
+    use DeniesByPlan;
+
     public function __construct(private readonly ReportService $service) {}
 
     /** POST /api/v1/amial/reports/request */
@@ -105,27 +108,6 @@ class ReportController extends Controller
      * ولو ردّ المتحكّمُ شكلاً ثانياً لبنى التطبيقُ شاشتين لحالةٍ واحدة،
      * ولضاع «كيف أُسمح لي» في إحداهما.
      */
-    private function planDenial(array $r): JsonResponse
-    {
-        return new JsonResponse([
-            'success' => false,
-            'code' => $r['state'] === \App\Services\Access\EntitlementService::LIMIT_REACHED
-                ? 'PLAN_LIMIT_REACHED' : 'PLAN_UPGRADE_REQUIRED',
-            'message' => sprintf('«%s» متاحة في باقة %s (%s %s شهرياً)',
-                $r['capability']['name'] ?? '—',
-                $r['unlock']['plan_name'] ?? '—',
-                $r['unlock']['price_monthly'] ?? '—',
-                A::PLAN_PRICE_CURRENCY),
-            'errors' => (object) [],
-            'meta' => [
-                'capability' => $r['capability'],
-                'state' => $r['state'],
-                'unlock' => $r['unlock'],
-                'usage' => $r['usage'],
-            ],
-        ], 402);
-    }
-
     /** GET /api/v1/amial/reports/{ulid}/status */
     public function status(Request $request, string $ulid): JsonResponse
     {

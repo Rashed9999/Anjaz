@@ -78,7 +78,26 @@ class EntitlementGateReachabilityGuardTest extends TestCase
 
         preg_match_all("~Route::prefix\('([^']+)'\)~", $src, $m);
 
-        return array_values(array_unique($m[1]));
+        // ══════════════════════════════════════════════════════════════
+        // **عُرفُ الإعلان واحد: مسارٌ نسبيٌّ إلى `merchant/`.**
+        //
+        // وهو ما يفترضه الحارسُ الآخر (`EntitlementsGuardTest`) إذ يُركّب
+        // `amial/merchant/` + البادئة. **وكان هذا الملفُّ يقرأ نصَّ
+        // `Route::prefix` حرفيّاً**، فبعضُها يحمل `merchant/` وبعضُها لا:
+        //
+        //     Route::prefix('suppliers')          → suppliers
+        //     Route::prefix('merchant/corporate') → merchant/corporate
+        //
+        // فحارسان لحقلٍ واحدٍ بعُرفين متناقضين: **ما يُرضي أحدَهما يُسقط
+        // الآخر**، ولا صيغةَ تُرضيهما. وهو نفسُ عطل «مصدرَي حقيقةٍ
+        // يفترقان» الذي يحاربه المشروع كلُّه — واقعاً على الحرّاس أنفسِهم.
+        //
+        // فتُنزَع البادئةُ هنا، ويصير العُرفُ واحداً.
+        $prefixes = array_map(
+            static fn (string $p) => preg_replace('~^merchant/~', '', trim($p, '/')),
+            $m[1]);
+
+        return array_values(array_unique($prefixes));
     }
 
     /** @return array<int,Capability> */

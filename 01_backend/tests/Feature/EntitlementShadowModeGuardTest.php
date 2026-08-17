@@ -106,20 +106,50 @@ class EntitlementShadowModeGuardTest extends TestCase
     /**
      * @test
      *
-     * **المربوطُ حديثاً في الظلّ افتراضاً.**
+     * **والظلُّ انتهى — السبعُ تُنفِّذ الآن.**
      *
-     * وهذا هو الحدُّ الذي يمنع أن تتحوّل هذه الدفعةُ إلى انقطاعٍ لتاجر.
+     * ══════════════════════════════════════════════════════════════
+     * **وهذا الفحصُ مقلوبٌ عمداً، وكان يطلب العكس.**
+     *
+     * كُتب أوّلاً ليمنع أن تتحوّل دفعةُ الربط إلى انقطاعٍ لتاجر: «كلُّ
+     * مربوطٍ حديثاً يبدأ في الظلّ». وكان صواباً يومَه.
+     *
+     * **ثمّ قِيس ثمنُ بقائه**: مصفوفةُ `PaidEndpointBypassMatrixTest`
+     * أخرجت **٢٠ التفافاً حيّاً** من هذه السبع وحدَها — قدراتٌ مدفوعةٌ
+     * تعمل بطلبٍ مباشرٍ على باقةٍ لا تشتريها. فالظلُّ لم يكن تدرّجاً بل
+     * **تسعيراً لا يُحصَّل**.
+     *
+     * وشرطُ الخروج كان «إثباتُ المتأثّرين» — وصار يُقاس بأمرٍ مستقلّ
+     * (`amial:shadow-report`) بدل أن يبقى شرطاً بلا أداةٍ فلا يتحقّق
+     * أبداً.
+     *
+     * **والمنفذُ باقٍ**: `AMIAL_ENTITLEMENTS_SHADOW=customers` يُعيد
+     * واحدةً بعينها إلى الظلّ بلا نشرة، ولا يُصفَّر الحارسُ كلُّه.
      */
-    public function the_newly_wired_capabilities_start_in_shadow(): void
+    public function the_wired_capabilities_are_no_longer_in_shadow(): void
     {
         $shadow = (array) config('amial.entitlements.shadow');
 
         foreach ([A::F_SUPPLIERS, A::F_PURCHASES, A::F_PROFIT_REPORTS, A::F_BRANCHES,
-            A::F_ADVANCED_REPORTS, A::F_EXCEL_EXPORT] as $code) {
-            $this->assertContains($code, $shadow,
-                "«{$code}» رُبطت بالوسيط وليست في الظلّ — فجدارُ دفعٍ اشتعل على "
-                . 'تجربةٍ حيّة بلا أن يعرف أحدٌ من يتأثّر');
+            A::F_ADVANCED_REPORTS, A::F_EXCEL_EXPORT, A::F_CUSTOMERS] as $code) {
+            $this->assertNotContains($code, $shadow, sprintf(
+                '«%s» ما زالت في الظلّ — **فهي مدفوعةٌ تُسلَّم بلا ثمن**، '
+                . 'وقياسُ المتأثّرين بـ`php artisan amial:shadow-report`', $code));
         }
+    }
+
+    /**
+     * @test
+     *
+     * **وأداةُ قياس المتأثّرين موجودةٌ وتُشغَّل.**
+     *
+     * فشرطُ خروجٍ لا أداةَ لقياسه لا يتحقّق أبداً، ويبقى «مؤقّتاً» سنةً.
+     */
+    public function the_shadow_measurement_command_exists(): void
+    {
+        $this->assertArrayHasKey('amial:shadow-report',
+            \Illuminate\Support\Facades\Artisan::all(),
+            '**شرطُ الخروج بلا أداةِ قياس** — فالظلُّ يبقى إلى الأبد');
     }
 
     /**

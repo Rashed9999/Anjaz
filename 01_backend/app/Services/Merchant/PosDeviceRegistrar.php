@@ -211,8 +211,13 @@ class PosDeviceRegistrar
         \App\Models\Merchant\PosDeviceSession::endAllForDevice((int) $device->id);
     }
 
-    /** حدُّ الباقة — و`-1` بلا حدّ. */
-    private function maxSeats(User $merchant): int
+    /**
+     * حدُّ الباقة — و`-1` بلا حدّ.
+     *
+     * **عامٌّ عمداً**: الشاشةُ تعرض «مستهلَكٌ من الحدّ»، ولو حسبته بنفسها
+     * لصار تعريفان للحدّ الواحد — وهو العطلُ الذي تكرّر في هذا المشروع.
+     */
+    public function maxSeats(User $merchant): int
     {
         $profile = \App\Models\MerchantProfile::where('user_id', $merchant->id)->first();
 

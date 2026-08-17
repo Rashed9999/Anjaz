@@ -92,8 +92,18 @@ class AccessPresets
             ],
 
             // صيدلية
+            // صيدليّة — و`F_PHARMACY_BATCHES` نُزعت للسبب نفسِه:
+            //
+            // السجلُّ يبيعها من **البداية** (`min_plan = starter`)، وهذا
+            // السطرُ كان يمنحها **مجّاناً** لكلّ صيدليّة. فمصدرا حقيقةٍ
+            // لشيءٍ واحدٍ يتناقضان، **والاتّحادُ يُرجّح الأسخى دائماً** —
+            // فالقدرةُ المدفوعةُ تُسلَّم بلا ثمن، والسجلُّ يقول إنّها محروسة.
+            //
+            // (‏قِيست بمصفوفة `PlanEntitlementMatrixTest`: حالتان — صيدليّةٌ
+            // مجّانيّةٌ موثَّقةٌ وغيرُ موثَّقة. وهي آخرُ تسرُّبٍ من ستّةٍ
+            // كانت: `F_PRODUCTS` و`F_CUSTOMERS` في التجزئة والجملة.)
             A::BIZ_PHARMACY => [
-                A::F_PHARMACY_POS, A::F_PHARMACY_PRODUCTS, A::F_PHARMACY_BATCHES,
+                A::F_PHARMACY_POS, A::F_PHARMACY_PRODUCTS,
                 A::F_PHARMACY_CUSTOMERS, A::F_PHARMACY_ALERTS,
                 A::F_DEBTS, A::F_DAILY_REPORTS, A::F_RECEIPTS,
             ],
@@ -131,6 +141,13 @@ class AccessPresets
                 A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
+                // **دفعاتُ الصيدليّة تُباع من «البداية»** — والسجلُّ يقولها.
+                // وكانت تُمنح بـ`business_type` مجّاناً، فنُزعت من هناك؛
+                // ولو لم تُضَف هنا لصارت **بلا بابٍ إطلاقاً**: لا باقةَ
+                // تمنحها ولا نوعَ نشاط. (‏وقد وقع ذلك فعلاً وأمسكه
+                // اختباران قائمان — والانطباقُ على الصيدليّة وحدَها
+                // يفرضه `businessTypes` في السجلّ لا هذا الجدول.)
+                A::F_PHARMACY_BATCHES,
                 A::F_PROMOTIONS,
             ],
 
@@ -139,6 +156,13 @@ class AccessPresets
                 A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
+                // **دفعاتُ الصيدليّة تُباع من «البداية»** — والسجلُّ يقولها.
+                // وكانت تُمنح بـ`business_type` مجّاناً، فنُزعت من هناك؛
+                // ولو لم تُضَف هنا لصارت **بلا بابٍ إطلاقاً**: لا باقةَ
+                // تمنحها ولا نوعَ نشاط. (‏وقد وقع ذلك فعلاً وأمسكه
+                // اختباران قائمان — والانطباقُ على الصيدليّة وحدَها
+                // يفرضه `businessTypes` في السجلّ لا هذا الجدول.)
+                A::F_PHARMACY_BATCHES,
                 A::F_PROMOTIONS,
                 A::F_OFFLINE_POS,
                 A::F_GIFT_CARDS,
@@ -156,6 +180,13 @@ class AccessPresets
                 A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
+                // **دفعاتُ الصيدليّة تُباع من «البداية»** — والسجلُّ يقولها.
+                // وكانت تُمنح بـ`business_type` مجّاناً، فنُزعت من هناك؛
+                // ولو لم تُضَف هنا لصارت **بلا بابٍ إطلاقاً**: لا باقةَ
+                // تمنحها ولا نوعَ نشاط. (‏وقد وقع ذلك فعلاً وأمسكه
+                // اختباران قائمان — والانطباقُ على الصيدليّة وحدَها
+                // يفرضه `businessTypes` في السجلّ لا هذا الجدول.)
+                A::F_PHARMACY_BATCHES,
                 A::F_PROMOTIONS,
                 A::F_OFFLINE_POS,
                 A::F_GIFT_CARDS,
@@ -179,6 +210,13 @@ class AccessPresets
                 A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
+                // **دفعاتُ الصيدليّة تُباع من «البداية»** — والسجلُّ يقولها.
+                // وكانت تُمنح بـ`business_type` مجّاناً، فنُزعت من هناك؛
+                // ولو لم تُضَف هنا لصارت **بلا بابٍ إطلاقاً**: لا باقةَ
+                // تمنحها ولا نوعَ نشاط. (‏وقد وقع ذلك فعلاً وأمسكه
+                // اختباران قائمان — والانطباقُ على الصيدليّة وحدَها
+                // يفرضه `businessTypes` في السجلّ لا هذا الجدول.)
+                A::F_PHARMACY_BATCHES,
                 A::F_PROMOTIONS,
                 A::F_OFFLINE_POS,
                 A::F_GIFT_CARDS,

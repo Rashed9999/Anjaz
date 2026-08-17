@@ -571,6 +571,61 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
 
     // -------- AMIAL-MERCHANT-001 (v1.7) --------
     Route::prefix('merchant')->name('amial.merchant.')->middleware('amial.idempotency')->group(function () {
+        // ══════════════════════════════════════════════════════════
+        // AMIAL-POS-DEVICES-004 — **مقاعدُ أجهزة نقاط البيع.**
+        //
+        // `capability:multi_pos` يحمل `limit('max_pos_devices')`، فالحدُّ
+        // يُقرأ من مصدرٍ واحد. **والقراءةُ خارج البوّابة عمداً**: تاجرٌ
+        // بلغ حدَّه يجب أن **يرى أجهزتَه ليُلغي واحداً** — ولو حُرست
+        // القائمةُ لصار الحدُّ بابَ سجنٍ لا بابَ ترقية: يُمنع من الدخول
+        // ويُمنع من الإصلاح، ولا مخرجَ إلّا الدعم.
+        Route::prefix('pos-devices')->name('pos-devices.')->group(function () {
+            $c = \App\Http\Controllers\Api\V1\Amial\PosDeviceController::class;
+
+            Route::get('/', [$c, 'index'])->name('index');
+
+            // ══════════════════════════════════════════════════════
+            // **والحدُّ يُفرَض في المُسجِّل لا في وسيطٍ عامّ.**
+            //
+            // `capability:multi_pos` يحمل `limit('max_pos_devices')`،
+            // ووسيطُ القدرات يعرف «مشغولٌ ١ من ١» **ولا يعرف أيَّ جهازٍ
+            // يطرق**. فكان يقع هذا — وقِيس بالتشغيل:
+            //
+            //   تاجرٌ بلغ حدَّه ⇒ جهازُه المسجَّلُ نفسُه يُعيد الاقتران
+            //     ⇒ الوسيطُ يردّ ٤٠٢ قبل أن يُسأل «أهو جهازٌ جديد؟»
+            //       ⇒ **جهازٌ يملك مقعدَه لا يستطيع استعمالَه**
+            //
+            // وهو نفسُ العطل الذي أُصلح داخل المُسجِّل («العودةُ بالبصمة
+            // نفسِها لا تستهلك مقعداً») ثمّ أُعيد من باب المسار.
+            //
+            // **فالمُسجِّلُ وحدَه يفرض**: يعرف الهويّة، ويعدّ داخل معاملةٍ
+            // بقفلٍ على صفّ التاجر، ويردّ ٤٠٢ بالصيغة نفسِها. وهو أمتنُ
+            // من الوسيط لا أضعف: الوسيطُ يقرأ ثمّ يُمرّر — **وبين
+            // القراءة والكتابة يمرّ طلبٌ آخر**.
+            //
+            // (‏ولا بوّابةَ باقةٍ هنا: `multi_pos` أدناها «مجّاني» لأنّ
+            // جدولَ الحدود يبيع للمجّانيّ مقعداً واحداً.)
+            Route::post('/', [$c, 'store'])
+                ->middleware('amial.rate-limit:pos_device_register,10,1')
+                ->name('store');
+            Route::post('/pair', [$c, 'pair'])
+                ->middleware('amial.rate-limit:pos_device_register,10,1')
+                ->name('pair');
+
+            // وتغييرُ الاسم لا يستهلك مقعداً — فلا يُسأل عن الحدّ أصلاً.
+            // **PUT وPATCH كلاهما** — عميلُ فلاتر لا يملك PATCH، وإضافةُ
+            // فعلٍ إلى العميل المشترك أوسعُ أثراً من قبولِ مرادفٍ هنا.
+            // (‏ولولا هذا لكان زرُّ «تسمية» زرّاً ميّتاً: يُضغط فلا يصل طلب.)
+            Route::match(['put', 'patch'], '/{id}', [$c, 'update'])
+                ->where('id', '[0-9]+')->name('update');
+
+            // **والإلغاءُ بلا حارسِ باقة** — من هبطت باقتُه يجب أن يستطيع
+            // تقليصَ أجهزته إلى الحدّ الجديد. وحراستُه تحبسه فوق الحدّ
+            // بلا سبيلٍ إلى النزول.
+            Route::delete('/{id}', [$c, 'destroy'])
+                ->where('id', '[0-9]+')->name('destroy');
+        });
+
         // P1-BRANCHES — إدارة الفروع
         Route::prefix('branches')->name('branches.')
             ->middleware('capability:' . \App\Support\Access\AccessConstants::F_BRANCHES)
@@ -588,6 +643,7 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
                 ->where('id', '[0-9]+')->name('default');
             // P1-BRANCHES — تقرير سريع لكل فرع (إجمالي البيع + عدد الفواتير)
             Route::get('/{id}/report', [\App\Http\Controllers\Api\V1\Amial\BranchController::class, 'report'])
+                ->middleware('capability:branch_reports')
                 ->where('id', '[0-9]+')->name('report');
         });
 
@@ -790,10 +846,13 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
 
             // Cards (AMIAL-FUEL-CARDS-001)
             Route::get('/companies/{id}/cards', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listCards'])
+                ->middleware('capability:fuel_cards')
                 ->where('id', '[0-9]+')->name('companies.cards.index');
             Route::post('/companies/{id}/cards', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addCard'])
+                ->middleware('capability:fuel_cards')
                 ->where('id', '[0-9]+')->name('companies.cards.add');
             Route::put('/companies/{id}/cards/{cardId}', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'updateCard'])
+                ->middleware('capability:fuel_cards')
                 ->where(['id' => '[0-9]+', 'cardId' => '[0-9]+'])->name('companies.cards.update');
 
             // Shifts (AMIAL-FUEL-002)
@@ -842,11 +901,15 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
 
             // مصالحة المخزون الرطب
             Route::get('/tanks/{id}/reconciliation', [$FV, 'reconciliationPreview'])
+                ->middleware('capability:fuel_variance')
                 ->where('id', '[0-9]+')->name('recon.preview');
             Route::post('/tanks/{id}/reconcile', [$FV, 'reconcile'])
+                ->middleware('capability:fuel_variance')
                 ->where('id', '[0-9]+')->name('recon.run');
-            Route::get('/stock-variances', [$FV, 'variances'])->name('recon.index');
+            Route::get('/stock-variances', [$FV, 'variances'])
+                ->middleware('capability:fuel_variance')->name('recon.index');
             Route::post('/stock-variances/{id}/resolve', [$FV, 'resolveVariance'])
+                ->middleware('capability:fuel_variance')
                 ->where('id', '[0-9]+')->name('recon.resolve');
 
             // الأسعار — اقتراحٌ ثمّ اعتماد
@@ -901,8 +964,10 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::get('/locations', [$RV, 'locations'])->middleware('capability:retail.locations')->name('locations.index');
             Route::post('/locations', [$RV, 'addLocation'])->middleware('capability:retail.locations')->name('locations.add');
             Route::get('/products/{id}/stock', [$RV, 'productStock'])
+                ->middleware('capability:inventory')
                 ->where('id', '[0-9]+')->name('products.stock');
             Route::get('/products/{id}/movements', [$RV, 'movements'])
+                ->middleware('capability:inventory')
                 ->where('id', '[0-9]+')->name('products.movements');
             Route::get('/products/{id}/price-history', [$RV, 'priceHistory'])
                 ->where('id', '[0-9]+')->name('products.price-history');
@@ -979,8 +1044,10 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
 
             // Batches
             Route::get('/products/{id}/batches', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listBatches'])
+                ->middleware('capability:pharmacy_batches')
                 ->where('id', '[0-9]+')->name('batches.index');
             Route::post('/products/{id}/batches', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'addBatch'])
+                ->middleware('capability:pharmacy_batches')
                 ->where('id', '[0-9]+')->name('batches.add');
 
             // Customers
@@ -1012,7 +1079,8 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::post('/', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'upsertBusiness'])->name('upsert');
 
             // Price Tiers
-            Route::post('/price-tiers', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'addPriceTier'])->name('tiers.add');
+            Route::post('/price-tiers', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'addPriceTier'])
+                ->middleware('capability:wholesale_multi_pricing')->name('tiers.add');
 
             // Products
             Route::get('/products', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'listProducts'])->name('products.index');
@@ -1021,6 +1089,7 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::put('/products/{id}', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'updateProduct'])
                 ->where('id', '[0-9]+')->name('products.update');
             Route::post('/products/{id}/adjust-stock', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'adjustStock'])
+                ->middleware('capability:inventory')
                 ->where('id', '[0-9]+')->name('products.adjust-stock');
 
             // Multi-Pricing

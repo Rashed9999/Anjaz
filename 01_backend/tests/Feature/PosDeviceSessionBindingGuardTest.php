@@ -62,7 +62,7 @@ class PosDeviceSessionBindingGuardTest extends TestCase
     /** موظّفُ نقطةِ بيعٍ تحت تاجر. */
     private function cashier(User $merchant, string $posNumber = 'POS-001'): User
     {
-        $staff = User::factory()->create(['type' => 2]);
+        $staff = User::factory()->create(['type' => 4, 'role' => 'pos']);
 
         PosUser::create([
             'user_id' => $staff->id,
