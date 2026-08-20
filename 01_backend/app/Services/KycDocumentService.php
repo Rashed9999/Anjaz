@@ -181,6 +181,62 @@ class KycDocumentService
     }
 
     /**
+     * القرار النهائي للحساب لا يُمنح لمجرد ضغط زر في لوحة قديمة.
+     * لا بد من اكتمال المستندات المعتمدة، ومراجع آخر غير صاحب الحساب.
+     */
+    public function decideAccountVerification(
+        User $user,
+        User $reviewer,
+        bool $approve,
+        int $targetTier = 2,
+        ?string $reason = null,
+    ): User {
+        if ((int) $user->id === (int) $reviewer->id) {
+            throw new DomainException('FOUR_EYES_VIOLATION');
+        }
+        if (!array_key_exists($targetTier, self::REQUIRED_BY_TIER)) {
+            throw new DomainException('فئة التحقق المطلوبة غير صحيحة');
+        }
+        if (!$approve && mb_strlen(trim((string) $reason)) < 5) {
+            throw new DomainException('سبب رفض التحقق مطلوب وواضح للعميل');
+        }
+
+        return DB::transaction(function () use ($user, $reviewer, $approve, $targetTier, $reason) {
+            $account = User::query()->lockForUpdate()->findOrFail($user->id);
+
+            if ($approve) {
+                $completeness = $this->completenessFor($account, $targetTier);
+                if (!$completeness['complete']) {
+                    throw new DomainException(
+                        'KYC_DOCUMENTS_INCOMPLETE: ' . implode(', ', $completeness['missing'])
+                    );
+                }
+
+                $account->is_kyc_verified = 1;
+                $account->kyc_tier = max((int) ($account->kyc_tier ?? 0), $targetTier);
+                $account->kyc_tier_updated_at = now();
+            } else {
+                $account->is_kyc_verified = 2;
+            }
+            $account->save();
+
+            $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $reviewer->id,
+                'subject_type' => 'user',
+                'subject_id' => (string) $account->id,
+                'action' => 'KYC_ACCOUNT_DECISION',
+                'decision_code' => $approve ? 'KYC_APPROVED' : 'KYC_REJECTED',
+                'reason' => $approve ? null : mb_substr(trim((string) $reason), 0, 500),
+                'severity' => 'critical',
+                'context' => ['target_tier' => $targetTier],
+            ]);
+
+            return $account->fresh();
+        });
+    }
+
+    /**
      * لا يراجع المرء مستندَ نفسه.
      *
      * قد تبدو حالةً نادرة، لكن موظّفي المنصّة عملاء فيها أيضاً — ولهم محافظ

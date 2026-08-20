@@ -408,8 +408,10 @@
         // هما حادثتان تستحقّان سؤالين. فيُعرَض العدد لا المجموع وحده.
         $el('ag-alerts').innerHTML = t.shifts_with_variance
             ? `<div class="alert alert-warning py-2 mb-3">
-                 ⚠️ <strong>${t.shifts_with_variance}</strong> ورديّة أُغلقت بفرقٍ اليوم
-                 (صافي الفرق ${num(t.variance_total)}) — راجعها في «الشبابيك والورديّات».
+                 ⚠️ <strong>${t.shifts_with_variance}</strong> ورديّة أُغلقت بفرقٍ اليوم:
+                 عجز ${t.shortage_count || 0} (${num(t.shortage_total || 0)})
+                 وفائض ${t.overage_count || 0} (${num(t.overage_total || 0)})
+                 — راجعها في «الشبابيك والورديّات».
                </div>`
             : '';
 

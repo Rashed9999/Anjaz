@@ -3,21 +3,22 @@
 @section('title', translate('Operations Console'))
 
 @section('content')
+@php($firstSupportTab = collect($capabilities)->filter()->keys()->first())
 <div class="content container-fluid" id="ops-console" data-testid="ops-console">
 
     <ul class="nav nav-tabs mb-3" role="tablist">
-        <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-search" data-testid="tab-search">🔍 خدمة العملاء</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-tx" data-testid="tab-tx">💳 فحص عملية</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-tickets" data-testid="tab-tickets">🎫 التذاكر</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-approvals" data-testid="tab-approvals">✅ الموافقات</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-insider" data-testid="tab-insider">🛡 أمن داخلي</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-ops" data-testid="tab-ops">📊 المراقبة</button></li>
+        @if($capabilities['customers'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'customers' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-search" data-testid="tab-search">🔍 خدمة العملاء</button></li>@endif
+        @if($capabilities['transactions'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'transactions' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-tx" data-testid="tab-tx">💳 فحص عملية</button></li>@endif
+        @if($capabilities['tickets'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'tickets' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-tickets" data-testid="tab-tickets">🎫 التذاكر</button></li>@endif
+        @if($capabilities['approvals'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'approvals' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-approvals" data-testid="tab-approvals">✅ الموافقات</button></li>@endif
+        @if($capabilities['insider'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'insider' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-insider" data-testid="tab-insider">🛡 أمن داخلي</button></li>@endif
+        @if($capabilities['ops'])<li class="nav-item"><button class="nav-link {{ $firstSupportTab === 'ops' ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#tab-ops" data-testid="tab-ops">📊 المراقبة</button></li>@endif
     </ul>
 
     <div class="tab-content">
 
         {{-- ============ 1) خدمة العملاء: بحث + ملف 360° ============ --}}
-        <div class="tab-pane fade show active" id="tab-search">
+        <div class="tab-pane fade {{ $firstSupportTab === 'customers' ? 'show active' : '' }}" id="tab-search">
             <div class="card p-3 mb-3">
                 <div class="input-group">
                     <input type="text" id="q" class="form-control" data-testid="search-input"
@@ -30,7 +31,7 @@
         </div>
 
         {{-- ============ 2) فحص عملية ============ --}}
-        <div class="tab-pane fade" id="tab-tx">
+        <div class="tab-pane fade {{ $firstSupportTab === 'transactions' ? 'show active' : '' }}" id="tab-tx">
             <div class="card p-3 mb-3">
                 <div class="input-group">
                     <input type="text" id="tx-ref" class="form-control" placeholder="رقم العملية (TRX…)">
@@ -41,7 +42,7 @@
         </div>
 
         {{-- ============ 3) التذاكر ============ --}}
-        <div class="tab-pane fade" id="tab-tickets">
+        <div class="tab-pane fade {{ $firstSupportTab === 'tickets' ? 'show active' : '' }}" id="tab-tickets">
             <div class="card p-3 mb-3">
                 <div class="d-flex gap-2 mb-3 flex-wrap">
                     <select id="tk-status" class="form-select" style="max-width:200px">
@@ -59,7 +60,7 @@
         </div>
 
         {{-- ============ الموافقات (Maker-Checker) ============ --}}
-        <div class="tab-pane fade" id="tab-approvals">
+        <div class="tab-pane fade {{ $firstSupportTab === 'approvals' ? 'show active' : '' }}" id="tab-approvals">
             <div class="card p-3 mb-3">
                 <div class="d-flex gap-2 mb-3 align-items-center">
                     <span class="text-muted small">الإجراءات الحساسة (فكّ تجميد / إعادة PIN) تتطلب اعتماد مشرف آخر — لا اعتماد ذاتي.</span>
@@ -70,7 +71,7 @@
         </div>
 
         {{-- ============ أمن داخلي (مراقبة الموظفين) ============ --}}
-        <div class="tab-pane fade" id="tab-insider">
+        <div class="tab-pane fade {{ $firstSupportTab === 'insider' ? 'show active' : '' }}" id="tab-insider">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <span class="text-muted small">كل اطّلاع موظف على ملف عميل مسجَّل — وأي تعديل في سجل التدقيق يُكشف (سلسلة تجزئة).</span>
                 <button class="btn btn-sm btn-outline-primary" id="btn-insider" data-testid="btn-insider">تحديث</button>
@@ -87,7 +88,7 @@
         </div>
 
         {{-- ============ 4) المراقبة ============ --}}
-        <div class="tab-pane fade" id="tab-ops">
+        <div class="tab-pane fade {{ $firstSupportTab === 'ops' ? 'show active' : '' }}" id="tab-ops">
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <span class="text-muted small">تحديث تلقائي كل 30 ثانية</span>
                 <button class="btn btn-sm btn-outline-primary" id="btn-ops" data-testid="btn-ops">تحديث الآن</button>
@@ -101,6 +102,7 @@
 (function () {
     const BASE = '{{ url('admin/support-center') }}';
     const CSRF = '{{ csrf_token() }}';
+    const CAN_ACK_INSIDER = @json($capabilities['approvals']);
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
     async function get(path) {
@@ -410,7 +412,7 @@
                 <span><span class="badge bg-${a.severity === 'critical' ? 'danger' : 'warning text-dark'}">${esc(a.severity)}</span>
                 ${esc(typeLabels[a.alert_type] || a.alert_type)} — ${esc(a.admin ? (a.admin.f_name + ' ' + (a.admin.l_name || '')) : a.admin_id)}
                 <small class="text-muted">${esc(a.created_at)}</small></span>
-                <button class="btn btn-sm btn-outline-secondary js-ack" data-id="${a.id}">مراجعة ✓</button>
+                ${CAN_ACK_INSIDER ? `<button class="btn btn-sm btn-outline-secondary js-ack" data-id="${a.id}">مراجعة ✓</button>` : ''}
             </li>`).join('');
         document.getElementById('insider-alerts').innerHTML = alerts
             ? `<ul class="list-group">${alerts}</ul>`

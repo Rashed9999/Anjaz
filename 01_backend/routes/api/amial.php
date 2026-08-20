@@ -190,12 +190,11 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::post('/customers/{id}/revoke-sessions', [$c, 'revokeSessions'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.revoke-sessions');
             Route::post('/customers/{id}/require-kyc', [$c, 'requireKyc'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('customers.require-kyc');
             // AMIAL-KYC-DOCS-001 — مراجعة مستندات الهوية.
-            // الصلاحية نفسها المستعملة لطلب تحديث الهوية: من يطلب المستند
-            // هو من يبتّ فيه، ولا معنى لفصلهما.
-            Route::get('/kyc/queue', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'queue'])->middleware('platform:platform.customers.freeze')->name('kyc.queue');
-            Route::get('/kyc/documents/{id}/file', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'file'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('kyc.file');
-            Route::post('/kyc/documents/{id}/approve', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'approve'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('kyc.approve');
-            Route::post('/kyc/documents/{id}/reject', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'reject'])->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('kyc.reject');
+            // مراجعة الوثائق قرار امتثال، ولا تُخلط مع صلاحية تجميد الحساب.
+            Route::get('/kyc/queue', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'queue'])->middleware('platform:platform.approvals.decide')->name('kyc.queue');
+            Route::get('/kyc/documents/{id}/file', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'file'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('kyc.file');
+            Route::post('/kyc/documents/{id}/approve', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'approve'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('kyc.approve');
+            Route::post('/kyc/documents/{id}/reject', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'reject'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('kyc.reject');
 
             // AMIAL-DEVICE-TRUST-001 — نفس مسارات الويب بنفس الصلاحية.
             // تحصينُ سطحٍ واحد يترك الآخر باباً مفتوحاً، وقد وقع ذلك في هذا
@@ -214,7 +213,7 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::post('/approvals/{id}/approve', [$c, 'approveRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.approve');
             Route::post('/approvals/{id}/reject', [$c, 'rejectRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.reject');
             Route::get('/insider/overview', [$c, 'insiderOverview'])->middleware('platform:platform.audit.view')->name('insider.overview');
-            Route::post('/insider/alerts/{id}/ack', [$c, 'acknowledgeAlert'])->where('id', '[0-9]+')->middleware('platform:platform.audit.view')->name('insider.alerts.ack');
+            Route::post('/insider/alerts/{id}/ack', [$c, 'acknowledgeAlert'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('insider.alerts.ack');
         });
 
         // AMIAL-MAINT-001 — لوحة «الصيانة الأولية» (تشغيل/إيقاف الميزات)

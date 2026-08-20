@@ -59,7 +59,7 @@ Route::group(['as' => 'admin.'], function () {
         // AMIAL-OPS-CONSOLE-001 — منصة عمليات الموظفين (واجهة ويب + JSON بجلسة الأدمن)
         Route::group(['prefix' => 'support-center', 'as' => 'support-center.'], function () {
             $sc = \App\Http\Controllers\Api\V1\Amial\SupportConsoleController::class;
-            Route::get('/', fn () => view('admin-views.support.console'))->name('index');
+            Route::get('/', [$sc, 'page'])->name('index');
             Route::get('search', [$sc, 'search'])->middleware('platform:platform.customers.view')->name('search');
             Route::get('ops-dashboard', [$sc, 'opsDashboard'])->middleware('platform:platform.ops.view')->name('ops-dashboard');
             Route::get('customers/{id}', [$sc, 'customer'])->where('id', '[0-9]+')->middleware('platform:platform.customers.view')->name('customers.show');
@@ -85,7 +85,7 @@ Route::group(['as' => 'admin.'], function () {
             Route::post('approvals/{id}/approve', [$sc, 'approveRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.approve');
             Route::post('approvals/{id}/reject', [$sc, 'rejectRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.reject');
             Route::get('insider/overview', [$sc, 'insiderOverview'])->middleware('platform:platform.audit.view')->name('insider.overview');
-            Route::post('insider/alerts/{id}/ack', [$sc, 'acknowledgeAlert'])->where('id', '[0-9]+')->middleware('platform:platform.audit.view')->name('insider.alerts.ack');
+            Route::post('insider/alerts/{id}/ack', [$sc, 'acknowledgeAlert'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('insider.alerts.ack');
         });
 
         // AMIAL-MAINT-001 — لوحة «الصيانة الأولية» (تشغيل/إيقاف الميزات)

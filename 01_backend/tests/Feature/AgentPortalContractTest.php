@@ -111,7 +111,9 @@ class AgentPortalContractTest extends TestCase
             'staff_total', 'staff_active', 'tellers',
             'shifts_opened', 'shifts_open_now', 'drawers_cash',
             'deposits_count', 'deposits_total', 'withdrawals_count', 'withdrawals_total',
-            'shifts_with_variance', 'variance_total', 'branches_idle',
+            'shifts_with_variance',
+            'shortage_count', 'shortage_total', 'overage_count', 'overage_total',
+            'branches_idle',
         ] as $k) {
             $this->assertArrayHasKey($k, $j['meta']['today'],
                 "بطاقة المؤشّرات تقرأ «today.{$k}» ولا يُرسله الخادم");

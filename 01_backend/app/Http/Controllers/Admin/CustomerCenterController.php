@@ -20,15 +20,38 @@ use Illuminate\Support\Facades\DB;
  */
 class CustomerCenterController extends Controller
 {
+    /** كل تبويب يكشف بيانات مستقلة، فلا تكفي صلاحية فتح المركز وحدها. */
+    private const TAB_PERMISSIONS = [
+        'overview' => 'platform.customers.view',
+        'wallets' => 'platform.customers.view',
+        'transactions' => 'platform.transactions.view',
+        'devices' => 'platform.customers.sessions',
+        'authentication' => 'platform.customers.sessions',
+        'kyc' => 'platform.approvals.decide',
+        'risk' => 'platform.audit.view',
+        'support' => 'platform.tickets.manage',
+        'notifications' => 'platform.customers.view',
+        'audit' => 'platform.audit.view',
+    ];
+
     public function __construct(
         private readonly CustomerCenterService $center,
         private readonly CustomerActionService $actions,
     ) {
     }
 
-    public function page()
+    public function page(Request $request)
     {
-        return view('admin-views.amial.customer.index');
+        $actor = $request->user();
+        $tabs = collect(self::TAB_PERMISSIONS)
+            ->filter(fn (string $permission) => $actor->hasPlatformPermission($permission))
+            ->keys()->values()->all();
+        $actions = collect(CustomerActionService::ACTIONS)
+            ->filter(fn (array $action) => $actor->hasPlatformPermission($action[1]))
+            ->map(fn (array $action, string $code) => ['code' => $code, 'label' => $action[0]])
+            ->values()->all();
+
+        return view('admin-views.amial.customer.index', compact('tabs', 'actions'));
     }
 
     /**
@@ -55,12 +78,13 @@ class CustomerCenterController extends Controller
             subjectId: 0,
             fieldName: 'customer_search',
             accessType: 'search',
-            accessReason: 'بحث في مركز العملاء: ' . mb_substr($q, 0, 60),
+            // لا يصبح سجل الحماية نسخةً أخرى من رقم الهاتف أو الهوية.
+            accessReason: $this->safeSearchAuditReason($q),
         );
 
         $digits = preg_replace('/\D+/', '', $q);
 
-        $users = User::query()
+        $users = User::query()->where('type', CUSTOMER_TYPE)
             ->where(function ($w) use ($q, $digits) {
                 $w->where('phone', 'like', "%{$q}%")
                     ->orWhere('f_name', 'like', "%{$q}%")
@@ -78,7 +102,7 @@ class CustomerCenterController extends Controller
         if ($users->isEmpty() && \Illuminate\Support\Facades\Schema::hasTable('transactions')) {
             $ownerId = DB::table('transactions')->where('transaction_id', $q)->value('user_id');
             if ($ownerId) {
-                $users = User::where('id', $ownerId)
+                $users = User::where('id', $ownerId)->where('type', CUSTOMER_TYPE)
                     ->get(['id', 'f_name', 'l_name', 'phone', 'type', 'is_temp_blocked', 'is_kyc_verified']);
             }
         }
@@ -97,7 +121,15 @@ class CustomerCenterController extends Controller
 
     public function tab(Request $request, int $id, string $tab): JsonResponse
     {
-        $customer = User::find($id);
+        $permission = self::TAB_PERMISSIONS[$tab] ?? null;
+        if ($permission === null) {
+            return $this->error('تبويب غير معروف', 404);
+        }
+        if (!$request->user()->hasPlatformPermission($permission)) {
+            return $this->error('لا تملك صلاحية هذا التبويب', 403);
+        }
+
+        $customer = User::where('type', CUSTOMER_TYPE)->find($id);
         if (!$customer) {
             return $this->error('العميل غير موجود', 404);
         }
@@ -161,5 +193,19 @@ class CustomerCenterController extends Controller
             'success' => false, 'code' => 'ERROR', 'message' => $message,
             'errors' => (object) [], 'meta' => (object) [],
         ], $status);
+    }
+
+    private function safeSearchAuditReason(string $query): string
+    {
+        $normalized = mb_strtolower(trim($query));
+        $kind = filter_var($normalized, FILTER_VALIDATE_EMAIL)
+            ? 'email'
+            : (preg_match('/^[+()\\s\\-\\d]{7,}$/u', $normalized) ? 'phone_or_identifier' : 'name_or_reference');
+
+        return sprintf(
+            'بحث في مركز العملاء: %s [fingerprint:%s]',
+            $kind,
+            substr(hash('sha256', $normalized), 0, 16),
+        );
     }
 }

@@ -523,27 +523,26 @@ Route::prefix('partner-settlements')->name('partner-settlements.')->middleware('
 // ============ AMIAL-KYC-PANEL-001 — مراجعة مستندات الهوية ============
 //
 // كانت هذه النقاط مسجَّلة على سطح الـAPI وحده، فبقي المستند يصل بلا مراجع.
-// الصلاحية هي `platform.customers.freeze` نفسها المستعملة في الـAPI: اعتماد
-// هويّة يفتح حدوداً مالية أعلى، فهو من جنس القرارات التي تمسّ حساب العميل.
+// اعتماد الهوية قرار امتثال مستقل؛ لا يمنح من يجمّد الحساب سلطة رفع حدوده.
 Route::prefix('kyc')->name('kyc.')->group(function () {
     $kyc = App\Http\Controllers\Api\V1\Amial\KycDocumentController::class;
 
-    Route::get('/', [$kyc, 'page'])->middleware('platform:platform.customers.freeze')->name('page');
-    Route::get('/queue', [$kyc, 'queue'])->middleware('platform:platform.customers.freeze')->name('queue');
+    Route::get('/', [$kyc, 'page'])->middleware('platform:platform.approvals.decide')->name('page');
+    Route::get('/queue', [$kyc, 'queue'])->middleware('platform:platform.approvals.decide')->name('queue');
     Route::get('/documents/{id}/file', [$kyc, 'file'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('file');
+        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('file');
     // AMIAL-KYC-OCR-001 — الحقول المستخرَجة وإقرارها
     Route::get('/documents/{id}/ocr', [$kyc, 'ocr'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('ocr');
+        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('ocr');
     Route::post('/documents/{id}/fields', [$kyc, 'confirmFields'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('fields');
+        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('fields');
     Route::post('/documents/{id}/reread', [$kyc, 'reread'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('reread');
+        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('reread');
 
     Route::post('/documents/{id}/approve', [$kyc, 'approve'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('approve');
+        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approve');
     Route::post('/documents/{id}/reject', [$kyc, 'reject'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('reject');
+        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('reject');
 });
 
 // ============ AMIAL-2FA-001 (v1.8) ============
@@ -682,7 +681,7 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     Route::get('/{slug}/users.json', [$hc, 'usersJson'])
         ->where('slug', 'customers|agents|merchants')->name('users.json');
     Route::get('/{slug}/kyc.json', [$hc, 'kycJson'])
-        ->where('slug', 'customers|agents|merchants')->name('kyc.json');
+        ->where('slug', 'customers|agents|merchants')->middleware('platform:platform.approvals.decide')->name('kyc.json');
     Route::get('/users/{id}/transactions.json', [$hc, 'userTransactionsJson'])
         ->where('id', '[0-9]+')->name('users.transactions');
 
@@ -697,7 +696,7 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     Route::post('/users/{id}/toggle-active', [$hc, 'toggleActive'])
         ->where('id', '[0-9]+')->name('users.toggle-active');
     Route::post('/users/{id}/kyc', [$hc, 'kycStatus'])
-        ->where('id', '[0-9]+')->name('users.kyc');
+        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('users.kyc');
     Route::post('/transfer', [$hc, 'transfer'])->name('transfer');
     Route::post('/agents/{id}/credit', [$hc, 'agentCredit'])
         ->where('id', '[0-9]+')->name('agents.credit');

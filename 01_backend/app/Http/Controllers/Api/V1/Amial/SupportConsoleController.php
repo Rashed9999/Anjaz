@@ -42,6 +42,24 @@ class SupportConsoleController extends Controller
         private readonly InsiderWatchService $watch,
     ) {}
 
+    /** لا تعرض اللوحة تبويباً لا يستطيع المشغّل فتح بياناته فعلياً. */
+    public function page(Request $request)
+    {
+        $actor = $request->user();
+        $capabilities = [
+            'customers' => $actor->hasPlatformPermission('platform.customers.view'),
+            'transactions' => $actor->hasPlatformPermission('platform.transactions.view'),
+            'tickets' => $actor->hasPlatformPermission('platform.tickets.manage'),
+            'approvals' => $actor->hasPlatformPermission('platform.approvals.decide'),
+            'insider' => $actor->hasPlatformPermission('platform.audit.view'),
+            'ops' => $actor->hasPlatformPermission('platform.ops.view'),
+        ];
+
+        abort_unless(in_array(true, $capabilities, true), 403);
+
+        return view('admin-views.support.console', compact('capabilities'));
+    }
+
     // ==================== 1) البحث الموحّد ====================
 
     /**
@@ -58,6 +76,7 @@ class SupportConsoleController extends Controller
         }
 
         $users = collect();
+        $canTraceTransactions = $request->user()->hasPlatformPermission('platform.transactions.view');
         $transactions = collect();
         $receipts = collect();
 
@@ -69,7 +88,7 @@ class SupportConsoleController extends Controller
         // المخزَّن مطبّعاً أيضاً كي تُوجد الأشكال القديمة والجديدة معاً.
         $normalized = \App\Support\ReadableCode::normalize($q);
 
-        if ($normalized !== '' && preg_match('/^[A-Z0-9]{6,40}$/', $normalized)) {
+        if ($canTraceTransactions && $normalized !== '' && preg_match('/^[A-Z0-9]{6,40}$/', $normalized)) {
             $transactions = Transaction::where('transaction_id', $normalized)
                 ->orWhere('ref_trans_id', $normalized)
                 ->limit(5)->get();

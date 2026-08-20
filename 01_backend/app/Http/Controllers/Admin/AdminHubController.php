@@ -14,6 +14,7 @@ use App\Services\AgentNetworkService;
 use App\Services\AuditService;
 use App\Services\MoneyService;
 use App\Services\PlatformTreasuryService;
+use App\Services\KycDocumentService;
 use App\Services\ZoneAssignmentService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -404,8 +405,17 @@ class AdminHubController extends Controller
         }
 
         $user = User::findOrFail($id);
-        $user->is_kyc_verified = $status;
-        $user->save();
+        try {
+            $user = app(KycDocumentService::class)->decideAccountVerification(
+                user: $user,
+                reviewer: $request->user(),
+                approve: $status === 1,
+                targetTier: (int) $request->input('target_tier', 2),
+                reason: $request->input('reason'),
+            );
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
 
         // AMIAL-ZONE-GAP-001 — الاعتماد يُسند المنطقة التشغيلية.
         //
@@ -428,14 +438,6 @@ class AdminHubController extends Controller
                     : ['verification_status' => 'rejected'],
             );
         }
-
-        app(AuditService::class)->record([
-            'actor_type' => 'admin', 'actor_user_id' => $request->user()?->id,
-            'subject_type' => 'user', 'subject_id' => $user->id,
-            'action' => 'ADMIN_KYC_REVIEW',
-            'decision_code' => $status === 1 ? 'KYC_APPROVED' : 'KYC_REJECTED',
-            'severity' => 'info',
-        ]);
 
         // AMIAL-VERIFY-GATE: إشعار داخل التطبيق (مركز الإشعارات) — يعرف صاحب
         // الحساب فور القرار دون انتظار محاولة دخول. آمن: لا يكسر القرار أبداً.

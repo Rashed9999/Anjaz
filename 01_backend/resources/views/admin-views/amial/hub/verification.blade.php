@@ -119,7 +119,11 @@
                 const j = await post(`${base}/users/${id}/kyc`, {status: 1});
                 alert(j.message);
             } else if (btn.dataset.act === 'reject') {
-                const j = await post(`${base}/users/${id}/kyc`, {status: 2});
+                const reason = prompt('سبب رفض الوثائق (سيظهر للعميل ويُسجّل في التدقيق):');
+                if (!reason || reason.trim().length < 5) {
+                    alert('سبب رفض واضح مطلوب (5 أحرف على الأقل)'); return;
+                }
+                const j = await post(`${base}/users/${id}/kyc`, {status: 2, reason});
                 alert(j.message);
             } else if (btn.dataset.act === 'block') {
                 const reason = prompt('سبب الحظر/فكّ الحظر (يُسجَّل في التدقيق):') || '';

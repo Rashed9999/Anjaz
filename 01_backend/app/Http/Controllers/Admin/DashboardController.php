@@ -47,7 +47,7 @@ class DashboardController extends Controller
         $data['counts'] = $canCustomers ? $dash->populationCounts() : [];
         $data['today'] = $canTransactions ? $dash->today() : null;
         $data['attention'] = $dash->attentionQueue([
-            'kyc' => $can('platform.customers.freeze'),
+            'kyc' => $can('platform.approvals.decide'),
             'tickets' => $can('platform.tickets.manage'),
             'approvals' => $can('platform.approvals.decide'),
             'audit' => $can('platform.audit.view'),

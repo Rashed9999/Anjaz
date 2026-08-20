@@ -44,6 +44,8 @@
 (function () {
     const BASE = '{{ url('admin/amial/customer') }}';
     const CSRF = '{{ csrf_token() }}';
+    const ALLOWED_TABS = @json($tabs);
+    const ALLOWED_ACTIONS = @json($actions);
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const num = n => Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 2});
     const dt = s => esc(String(s || '').slice(0, 16).replace('T', ' '));
@@ -91,12 +93,13 @@
     });
 
     // ---------- الملفّ ----------
-    const TABS = [
+    const ALL_TABS = [
         ['overview', '📋 نظرة عامة'], ['wallets', '💰 المحافظ'], ['transactions', '💳 العمليات'],
         ['devices', '📱 الأجهزة'], ['authentication', '🔐 المصادقة'], ['kyc', '🪪 الهوية'],
         ['risk', '⚠️ المخاطر'], ['support', '🎫 الدعم'], ['notifications', '🔔 الإشعارات'],
         ['audit', '📜 التدقيق'],
     ];
+    const TABS = ALL_TABS.filter(([code]) => ALLOWED_TABS.includes(code));
 
     async function openCustomer(id) {
         current = id;
@@ -110,7 +113,7 @@
             </ul>
             <div id="cc-tab-body"></div>`;
 
-        loadTab('overview');
+        loadTab(TABS[0][0]);
     }
 
     document.addEventListener('click', e => {
@@ -350,19 +353,18 @@
     };
 
     // ---------- الإجراءات ----------
-    const ACTIONS = [
-        ['freeze', 'تجميد الحساب', 'danger'], ['unfreeze', 'إلغاء التجميد', 'success'],
-        ['suspend', 'إيقاف مؤقت', 'warning'], ['activate', 'تفعيل الحساب', 'success'],
-        ['reset_pin', 'إعادة تعيين PIN', 'warning'], ['revoke_sessions', 'إنهاء كل الجلسات', 'secondary'],
-        ['require_kyc', 'طلب تحديث الهوية', 'info'], ['update_limits', 'تعديل الحدود', 'primary'],
-        ['add_note', 'إضافة ملاحظة', 'secondary'], ['escalate_risk', 'تحويل إلى المخاطر', 'danger'],
-        ['close', 'إغلاق الحساب', 'dark'], ['mark_deceased', 'تعليم كمتوفّى', 'dark'],
-    ];
+    const ACTION_STYLE = {
+        freeze: 'danger', unfreeze: 'success', suspend: 'warning', activate: 'success',
+        reset_pin: 'warning', revoke_sessions: 'secondary', require_kyc: 'info',
+        update_limits: 'primary', add_note: 'secondary', escalate_risk: 'danger',
+        close: 'dark', mark_deceased: 'dark',
+    };
 
     function showActions() {
-        const html = ACTIONS.map(a => `
-            <button class="btn btn-sm btn-outline-${a[2]} m-1 js-cc-act" data-act="${a[0]}"
-                    data-label="${a[1]}" data-testid="cc-act-${a[0]}">${a[1]}</button>`).join('');
+        if (!ALLOWED_ACTIONS.length) return;
+        const html = ALLOWED_ACTIONS.map(a => `
+            <button class="btn btn-sm btn-outline-${ACTION_STYLE[a.code] || 'secondary'} m-1 js-cc-act" data-act="${a.code}"
+                    data-label="${esc(a.label)}" data-testid="cc-act-${a.code}">${esc(a.label)}</button>`).join('');
 
         document.getElementById('cc-tab-body').insertAdjacentHTML('afterbegin', `
             <div class="card p-3 mb-3" id="cc-actions">

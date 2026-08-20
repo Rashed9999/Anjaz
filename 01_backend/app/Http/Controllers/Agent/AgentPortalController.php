@@ -290,8 +290,15 @@ class AgentPortalController extends Controller
             'withdrawals_total' => $sum($moves->where('reason', 'customer_withdraw')),
 
             'shifts_with_variance' => $variances->count(),
-            'variance_total' => (string) $variances->reduce(
-                fn ($a, $s) => bcadd($a, (string) $s->variance, 4), '0'),
+            // لا تُقاصّ الفروق: العجز والفائض حادثتان مستقلتان حتى إن تساويا.
+            'shortage_count' => $variances->filter(fn ($s) => bccomp((string) $s->variance, '0', 4) < 0)->count(),
+            'shortage_total' => (string) $variances
+                ->filter(fn ($s) => bccomp((string) $s->variance, '0', 4) < 0)
+                ->reduce(fn ($a, $s) => bcadd($a, bcmul((string) $s->variance, '-1', 4), 4), '0'),
+            'overage_count' => $variances->filter(fn ($s) => bccomp((string) $s->variance, '0', 4) > 0)->count(),
+            'overage_total' => (string) $variances
+                ->filter(fn ($s) => bccomp((string) $s->variance, '0', 4) > 0)
+                ->reduce(fn ($a, $s) => bcadd($a, (string) $s->variance, 4), '0'),
 
             // فرعٌ لم يفتح شبّاكاً اليوم لا يخدم أحداً مهما كان رصيده.
             'branches_idle' => count(array_diff($branchIds, $shiftsToday->pluck('branch_id')->all())),

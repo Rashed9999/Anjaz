@@ -578,7 +578,14 @@
         const btn = e.target.closest('button[data-kyc]');
         if (!btn) return;
         try {
-            const j = await post(`${base}/users/${btn.dataset.id}/kyc`, {status: Number(btn.dataset.kyc)});
+            const status = Number(btn.dataset.kyc);
+            const reason = status === 2
+                ? prompt('سبب رفض الوثائق (سيظهر للعميل ويُسجّل في التدقيق):')
+                : null;
+            if (status === 2 && (!reason || reason.trim().length < 5)) {
+                alert('سبب رفض واضح مطلوب (5 أحرف على الأقل)'); return;
+            }
+            const j = await post(`${base}/users/${btn.dataset.id}/kyc`, {status, reason});
             alert(j.message); loadKyc(); loadUsers();
         } catch (err) { alert(err.message); }
     });

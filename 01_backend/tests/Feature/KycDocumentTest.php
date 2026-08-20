@@ -209,6 +209,37 @@ class KycDocumentTest extends TestCase
             'اكتملت المستندات ولم تُحتسب مكتملة');
     }
 
+    public function test_account_approval_requires_a_complete_approved_document_set(): void
+    {
+        $u = $this->customer();
+        $admin = $this->reviewer();
+
+        try {
+            $this->svc->decideAccountVerification($u, $admin, true);
+            $this->fail('اعتمد الحساب بلا وثائق مكتملة');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString('KYC_DOCUMENTS_INCOMPLETE', $e->getMessage());
+        }
+        $this->assertNotSame(1, (int) $u->fresh()->is_kyc_verified);
+
+        foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE] as $type) {
+            $this->svc->approve($this->svc->upload($u, $type, $this->image()), $admin);
+        }
+
+        $verified = $this->svc->decideAccountVerification($u, $admin, true);
+        $this->assertSame(1, (int) $verified->is_kyc_verified);
+        $this->assertGreaterThanOrEqual(2, (int) $verified->kyc_tier);
+    }
+
+    public function test_account_verification_cannot_be_decided_by_its_owner(): void
+    {
+        $staff = $this->reviewer();
+
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessage('FOUR_EYES_VIOLATION');
+        $this->svc->decideAccountVerification($staff, $staff, false, 2, 'رفض مستقل');
+    }
+
     public function test_an_expired_document_does_not_count_as_complete(): void
     {
         // بطاقةٌ انتهت صلاحيتها لا توثّق، والحساب الموثَّق بها غير موثَّق.

@@ -252,6 +252,44 @@ class CustomerCenterTest extends TestCase
             'بحثٌ لم يُسجَّل');
     }
 
+    /** @test */
+    public function search_audit_never_keeps_the_raw_phone_and_search_never_returns_non_customers(): void
+    {
+        $agent = User::factory()->create([
+            'type' => AGENT_TYPE, 'phone' => '770003399', 'f_name' => 'عميل مزيف',
+        ]);
+
+        $this->actingAs($this->staff, 'user')
+            ->getJson('/admin/amial/customer/search?q=770003399')
+            ->assertOk()
+            ->assertJsonPath('meta.items', []);
+
+        $log = DB::table('pii_access_logs')->where('field_name', 'customer_search')->latest('id')->first();
+        $this->assertStringNotContainsString($agent->phone, (string) $log->access_reason);
+        $this->assertStringContainsString('fingerprint:', (string) $log->access_reason);
+    }
+
+    /** @test */
+    public function a_support_operator_cannot_open_customer_tabs_outside_their_capability(): void
+    {
+        $support = User::factory()->create([
+            'type' => ADMIN_TYPE, 'role' => 'admin', 'phone' => '967770003399',
+        ]);
+        $roleId = DB::table('roles')->whereNull('merchant_user_id')
+            ->where('code', 'platform_support')->value('id');
+        DB::table('admin_user_roles')->insert([
+            'user_id' => $support->id, 'role_id' => $roleId,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($support->fresh(), 'user')
+            ->getJson("/admin/amial/customer/{$this->customer->id}/tab/overview")
+            ->assertOk();
+        $this->actingAs($support->fresh(), 'user')
+            ->getJson("/admin/amial/customer/{$this->customer->id}/tab/risk")
+            ->assertForbidden();
+    }
+
     // ── شرط الوثيقة: الأداء ─────────────────────────────────────────────
 
     /** @test */

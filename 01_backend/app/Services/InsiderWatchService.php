@@ -44,13 +44,19 @@ class InsiderWatchService
     /** يسجّل عملية بحث (استعلام واسع). */
     public function logSearch(int $adminId, string $query, int $resultsCount): void
     {
+        // سجل التدقيق يثبت نمط البحث، لا يحتفظ بنسخة من رقم هاتف/هوية العميل.
+        $normalized = mb_strtolower(trim($query));
         $this->piiAudit->logAccess(
             actorUserId: $adminId,
             subjectType: 'user',
             subjectId: 0,
             fieldName: 'search',
             accessType: 'search',
-            accessReason: mb_substr("q={$query} results={$resultsCount}", 0, 500),
+            accessReason: sprintf(
+                'search_fingerprint=%s results=%d',
+                substr(hash('sha256', $normalized), 0, 16),
+                $resultsCount,
+            ),
         );
 
         $this->assess($adminId);
