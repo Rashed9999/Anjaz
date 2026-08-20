@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ApprovalRequest;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * AMIAL-INSIDER-001 — خدمة Maker-Checker (أربع عيون).
@@ -194,10 +195,19 @@ class ApprovalService
                 $u->save();
             }),
             'reset_pin' => tap($user, function (User $u) {
-                $u->transaction_pin = null;
-                $u->requires_pin_setup = true;
-                $u->pin_failed_attempts = 0;
-                $u->pin_locked_until = null;
+                // مسارات التطبيق القديمة تستعمل أكثر من اسم للـ PIN. لا
+                // نترك واحداً منها فعالاً بعد اعتماد إعادة التعيين.
+                foreach (['transaction_pin', 'pin_code', 'pin', 'pin_locked_until'] as $column) {
+                    if (Schema::hasColumn('users', $column)) {
+                        $u->forceFill([$column => null]);
+                    }
+                }
+                if (Schema::hasColumn('users', 'requires_pin_setup')) {
+                    $u->forceFill(['requires_pin_setup' => true]);
+                }
+                if (Schema::hasColumn('users', 'pin_failed_attempts')) {
+                    $u->forceFill(['pin_failed_attempts' => 0]);
+                }
                 $u->save();
             }),
             default => throw new \InvalidArgumentException("منفّذ غير معروف: {$req->action_type}"),

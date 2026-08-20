@@ -114,7 +114,8 @@ class CustomerCenterController extends Controller
                 'phone' => (string) $u->phone,
                 'type' => (int) $u->type,
                 'is_frozen' => (int) ($u->is_temp_blocked ?? 0) === 1,
-                'is_kyc_verified' => (bool) ($u->is_kyc_verified ?? false),
+                // 2 = مرفوض و3 = لم يقدّم؛ كلاهما ليس توثيقاً.
+                'is_kyc_verified' => (int) ($u->is_kyc_verified ?? 0) === 1,
             ])->all(),
         ]);
     }
@@ -159,7 +160,7 @@ class CustomerCenterController extends Controller
 
     public function act(Request $request, int $id): JsonResponse
     {
-        $customer = User::find($id);
+        $customer = User::where('type', CUSTOMER_TYPE)->find($id);
         if (!$customer) {
             return $this->error('العميل غير موجود', 404);
         }

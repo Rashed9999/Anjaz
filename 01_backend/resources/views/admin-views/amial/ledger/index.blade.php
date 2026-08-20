@@ -98,12 +98,17 @@
                 <div class="alert alert-secondary py-2 small">
                     الدفتر قد يكون <strong>متوازناً تماماً ويختلف مع ذلك عن المحافظ</strong>:
                     التوازن الداخليّ لا يعني المطابقة الخارجية.
-                    ومصدر الحقيقة للرصيد هو المحفظة — فالانحراف يعني <strong>قيداً ناقصاً في الدفتر</strong>
-                    لا خطأً في رصيد العميل.
+                    والفرق <strong>حالة تحقيق</strong> لا حكمٌ مسبق: لا نسمّي المحفظة أو الدفتر مخطئاً
+                    قبل وصل الحركة الأصلية بالقيد والتسوية والتدقيق.
                 </div>
                 <div class="d-flex mb-2"><button class="btn btn-outline-primary btn-sm ms-auto" id="lg-btn-recon">تحديث</button></div>
                 <div id="lg-recon-summary" class="row g-3 mb-3"></div>
                 <div id="lg-recon-list"></div>
+                <div class="border-top mt-4 pt-3">
+                    <h6 class="mb-1">قضايا المطابقة المفتوحة</h6>
+                    <div class="small text-muted mb-2">يُنشئها التشغيل الليلي ويتصعّد فرقها عند التكرار؛ لا يُغلق أي فرق تلقائياً.</div>
+                    <div id="lg-recon-cases"></div>
+                </div>
             </div>
         </div>
 
@@ -164,7 +169,19 @@
 (function () {
     const BASE = '{{ url('admin/amial/ledger') }}';
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const num = n => Number(n || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    // لا Number للأموال: الرقم الدفتري قد يتجاوز حدّ دقة JavaScript.
+    const money = value => {
+        if (value === null || value === undefined || value === '') return 'غير متاح';
+        let raw = String(value).trim();
+        const sign = raw.startsWith('-') ? '-' : '';
+        raw = raw.replace(/^[+-]/, '');
+        if (!/^\d+(?:\.\d+)?$/.test(raw)) return esc(value);
+        let [whole, fraction = ''] = raw.split('.');
+        whole = (whole.replace(/^0+(?=\d)/, '') || '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        fraction = fraction.replace(/0+$/, '');
+        return sign + whole + (fraction ? '.' + fraction : '');
+    };
+    const nonZero = value => /^-?(?:0*\.)?0*$/.test(String(value ?? '0').trim()) === false;
 
     async function get(path) {
         const r = await fetch(BASE + path, {headers: {'Accept': 'application/json'}});
@@ -241,10 +258,10 @@
                     <td>${esc(r.ran_at)}</td>
                     <td>${badge(r.status)}</td>
                     <td class="text-end">${r.wallets_checked}<span class="text-muted small"> / ${r.wallets_diverged}</span></td>
-                    <td class="text-end ${Number(r.wallets_gap) ? 'fw-bold text-danger' : 'text-muted'}">${num(r.wallets_gap)}</td>
-                    <td class="text-end ${Number(r.ledger_net) ? 'fw-bold text-danger' : 'text-muted'}">${num(r.ledger_net)}</td>
+                    <td class="text-end ${nonZero(r.wallets_gap) ? 'fw-bold text-danger' : 'text-muted'}">${money(r.wallets_gap)}</td>
+                    <td class="text-end ${nonZero(r.ledger_net) ? 'fw-bold text-danger' : 'text-muted'}">${money(r.ledger_net)}</td>
                     <td class="text-end">${r.tills_checked}<span class="text-muted small"> / ${r.tills_diverged}</span></td>
-                    <td class="text-end ${Number(r.tills_gap) ? 'fw-bold text-danger' : 'text-muted'}">${num(r.tills_gap)}</td>
+                    <td class="text-end ${nonZero(r.tills_gap) ? 'fw-bold text-danger' : 'text-muted'}">${money(r.tills_gap)}</td>
                     <td class="text-end text-muted">${r.duration_ms}ms</td>
                 </tr>`).join('') +
             '</tbody></table></div>';
@@ -276,11 +293,11 @@
         if (!m.balanced) {
             banner += `<div class="alert alert-danger" data-testid="lg-unbalanced">
                 <strong>⚠️ الدفتر غير متوازن.</strong>
-                مجموع المدين ${num(m.total_debit)} ومجموع الدائن ${num(m.total_credit)} —
-                الفرق <strong>${num(m.difference)}</strong>.
+                مجموع المدين ${money(m.total_debit)} ومجموع الدائن ${money(m.total_credit)} —
+                الفرق <strong>${money(m.difference)}</strong>.
                 هذا يعني قيداً غير متوازن: مالٌ ظهر أو اختفى من العدم.
                 ${m.unbalanced_entries.length ? `<div class="mt-2 small">القيود المختلّة:
-                    ${m.unbalanced_entries.slice(0, 5).map(e => `<span class="badge bg-dark">${esc(e.ulid)} (${num(e.difference)})</span>`).join(' ')}</div>` : ''}
+                    ${m.unbalanced_entries.slice(0, 5).map(e => `<span class="badge bg-dark">${esc(e.ulid)} (${money(e.difference)})</span>`).join(' ')}</div>` : ''}
             </div>`;
         }
         if (m.drifted_accounts > 0) {
@@ -292,9 +309,9 @@
         document.getElementById('ledger-banner').innerHTML = banner;
 
         document.getElementById('lg-trial-summary').innerHTML =
-            tile('مجموع المدين', num(m.total_debit)) +
-            tile('مجموع الدائن', num(m.total_credit)) +
-            tile('الفرق', num(m.difference), m.balanced ? 'متوازن ✓' : 'غير متوازن',
+            tile('مجموع المدين', money(m.total_debit)) +
+            tile('مجموع الدائن', money(m.total_credit)) +
+            tile('الفرق', money(m.difference), m.balanced ? 'متوازن ✓' : 'غير متوازن',
                  m.balanced ? 'border-success' : 'border-danger') +
             tile('حسابات منحرفة', m.drifted_accounts, 'المخزَّن ≠ المحسوب',
                  m.drifted_accounts > 0 ? 'border-warning' : 'border-success');
@@ -303,11 +320,11 @@
             <tr class="${a.has_drift ? 'table-warning' : ''}">
                 <td class="font-monospace small">${esc(a.account_code)}</td>
                 <td>${esc(a.name)}<div class="small text-muted">${esc(a.account_type)}</div></td>
-                <td class="text-end">${num(a.debit_total)}</td>
-                <td class="text-end">${num(a.credit_total)}</td>
-                <td class="text-end fw-bold">${num(a.computed_balance)}</td>
-                <td class="text-end text-muted">${num(a.stored_balance)}</td>
-                <td class="text-end ${a.has_drift ? 'text-danger fw-bold' : 'text-muted'}">${num(a.drift)}</td>
+                <td class="text-end">${money(a.debit_total)}</td>
+                <td class="text-end">${money(a.credit_total)}</td>
+                <td class="text-end fw-bold">${money(a.computed_balance)}</td>
+                <td class="text-end text-muted">${money(a.stored_balance)}</td>
+                <td class="text-end ${a.has_drift ? 'text-danger fw-bold' : 'text-muted'}">${money(a.drift)}</td>
             </tr>`).join('');
 
         box.innerHTML = `<div class="table-responsive"><table class="table table-sm" data-testid="lg-trial-table">
@@ -319,10 +336,10 @@
             <tbody>${rows || '<tr><td colspan="7" class="text-muted text-center py-3">لا حركة في هذه الفترة</td></tr>'}</tbody>
             <tfoot class="table-light fw-bold"><tr>
                 <td colspan="2">الإجمالي</td>
-                <td class="text-end">${num(m.total_debit)}</td>
-                <td class="text-end">${num(m.total_credit)}</td>
+                <td class="text-end">${money(m.total_debit)}</td>
+                <td class="text-end">${money(m.total_credit)}</td>
                 <td colspan="3" class="text-end ${m.balanced ? 'text-success' : 'text-danger'}">
-                    ${m.balanced ? 'متوازن ✓' : 'الفرق ' + num(m.difference)}</td>
+                    ${m.balanced ? 'متوازن ✓' : 'الفرق ' + money(m.difference)}</td>
             </tr></tfoot>
         </table></div>`;
     }
@@ -341,17 +358,17 @@
         document.getElementById('lg-recon-summary').innerHTML =
             tile('محافظ فُحصت', m.checked) +
             tile('منحرفة', m.divergent, '', m.divergent > 0 ? 'border-danger' : 'border-success') +
-            tile('مجموع الفروق', num(m.total_gap), 'محفظة − دفتر',
+            tile('مجموع الفروق', money(m.total_gap), 'محفظة − دفتر',
                  m.divergent > 0 ? 'border-danger' : '');
 
         const rows = (m.rows || []).map(r => `
             <tr class="${r.diverged ? 'table-danger' : ''}">
                 <td>${esc(r.name)}<div class="small text-muted">#${r.user_id} • ${esc(r.phone)}</div></td>
-                <td class="text-end">${num(r.wallet_balance)}</td>
-                <td class="text-end">${num(r.ledger_balance)}</td>
-                <td class="text-end ${r.diverged ? 'fw-bold' : 'text-muted'}">${num(r.gap)}</td>
+                <td class="text-end">${money(r.wallet_balance)}</td>
+                <td class="text-end">${money(r.ledger_balance)}</td>
+                <td class="text-end ${r.diverged ? 'fw-bold' : 'text-muted'}">${money(r.gap)}</td>
                 <td>${r.diverged
-                    ? '<span class="badge bg-danger">قيد ناقص في الدفتر</span>'
+                    ? '<span class="badge bg-danger">فرق يحتاج تحقيقاً</span>'
                     : '<span class="badge bg-success">مطابق</span>'}</td>
             </tr>`).join('');
 
@@ -359,6 +376,28 @@
             <thead class="thead-light"><tr><th>العميل</th><th class="text-end">المحفظة</th>
                 <th class="text-end">الدفتر</th><th class="text-end">الفرق</th><th></th></tr></thead>
             <tbody>${rows || '<tr><td colspan="5" class="text-muted text-center py-3">لا محافظ</td></tr>'}</tbody></table></div>`;
+        loadReconCases();
+    }
+
+    async function loadReconCases() {
+        const box = document.getElementById('lg-recon-cases');
+        box.innerHTML = '<div class="text-muted small py-2">جارٍ تحميل القضايا…</div>';
+        try {
+            const j = await get('/reconciliation-cases');
+            const items = j.success ? (j.meta.items || []) : [];
+            const severity = s => s === 'critical' ? 'danger' : (s === 'high' ? 'warning text-dark' : 'secondary');
+            box.innerHTML = `<div class="table-responsive"><table class="table table-sm" data-testid="lg-recon-cases-table">
+                <thead class="thead-light"><tr><th>القضية</th><th>العميل</th><th class="text-end">الفرق</th><th>الفرضية</th><th>الحالة</th><th>التكرار</th><th>آخر رصد</th></tr></thead>
+                <tbody>${items.map(c => `<tr class="${c.severity === 'critical' ? 'table-danger' : ''}">
+                    <td class="font-monospace small">${esc(c.case_ulid)}</td><td>#${esc(c.subject_user_id)}</td>
+                    <td class="text-end fw-bold">${money(c.difference)}</td><td class="small">${esc(c.root_cause || 'بانتظار التصنيف')}</td>
+                    <td><span class="badge bg-${severity(c.severity)}">${esc(c.status)}</span></td>
+                    <td>${esc(c.detection_count)}</td><td class="small">${esc(c.last_detected_at || '—')}</td>
+                </tr>`).join('') || '<tr><td colspan="7" class="text-muted text-center py-3">لا قضايا مسجّلة بعد؛ تُنشأ من التشغيل الليلي، لا من العرض اليدوي.</td></tr>'}</tbody>
+            </table></div>`;
+        } catch (error) {
+            box.innerHTML = '<div class="alert alert-warning py-2 small">تعذّر تحميل قضايا المطابقة.</div>';
+        }
     }
 
     // ---------- دليل الحسابات ----------
@@ -379,7 +418,7 @@
                         <div class="fw-bold">${esc(a.name)}</div>
                         <div class="small text-muted">${esc(a.account_type)} • ${esc(a.normal_balance)}</div>
                     </div>
-                    <div class="text-end fw-bold">${num(a.current_balance)}</div>
+                    <div class="text-end fw-bold">${money(a.current_balance)}</div>
                 </div>
             </button>`).join('') || '<div class="list-group-item text-muted">لا حسابات</div>';
     }
@@ -402,8 +441,8 @@
                 </div>
                 <div class="text-end">
                     <div class="small text-muted">الرصيد المحسوب</div>
-                    <div class="fs-5 fw-bold">${num(m.computed_balance)}</div>
-                    <div class="small text-muted">المخزَّن ${num(a.stored_balance)}</div>
+                    <div class="fs-5 fw-bold">${money(m.computed_balance)}</div>
+                    <div class="small text-muted">المخزَّن ${money(a.stored_balance)}</div>
                 </div>
             </div>
             ${m.mismatched_lines > 0 ? `<div class="alert alert-warning py-2 small">
@@ -416,9 +455,9 @@
                     <tr class="${l.mismatch ? 'table-warning' : ''}">
                         <td class="small">${esc((l.posted_at || '').slice(0, 16))}</td>
                         <td class="small">${esc(l.description)}<div class="text-muted font-monospace">${esc(l.source_type)}</div></td>
-                        <td class="text-end">${l.direction === 'debit' ? num(l.amount) : ''}</td>
-                        <td class="text-end">${l.direction === 'credit' ? num(l.amount) : ''}</td>
-                        <td class="text-end fw-bold">${num(l.running_balance)}</td>
+                        <td class="text-end">${l.direction === 'debit' ? money(l.amount) : ''}</td>
+                        <td class="text-end">${l.direction === 'credit' ? money(l.amount) : ''}</td>
+                        <td class="text-end fw-bold">${money(l.running_balance)}</td>
                     </tr>`).join('') || '<tr><td colspan="5" class="text-muted text-center py-3">لا حركة</td></tr>'}</tbody>
             </table></div>`;
     });
@@ -460,9 +499,9 @@
             <tr>
                 <td class="font-monospace small">${esc(e.ulid)}</td>
                 <td class="small">${esc(e.source_type)}<div class="text-muted">${esc(e.description)}</div></td>
-                <td class="text-end fw-bold">${num(e.amount)}</td>
-                <td class="small">${e.debits.map(d => `${esc(d.account)} <span class="text-muted">${num(d.amount)}</span>`).join('<br>')}</td>
-                <td class="small">${e.credits.map(c => `${esc(c.account)} <span class="text-muted">${num(c.amount)}</span>`).join('<br>')}</td>
+                <td class="text-end fw-bold">${money(e.amount)}</td>
+                <td class="small">${e.debits.map(d => `${esc(d.account)} <span class="text-muted">${money(d.amount)}</span>`).join('<br>')}</td>
+                <td class="small">${e.credits.map(c => `${esc(c.account)} <span class="text-muted">${money(c.amount)}</span>`).join('<br>')}</td>
                 <td class="small text-muted">${esc(e.posted_at)}</td>
             </tr>`).join('');
 

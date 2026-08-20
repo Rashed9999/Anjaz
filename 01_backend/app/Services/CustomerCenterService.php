@@ -40,6 +40,7 @@ class CustomerCenterService
     public function __construct(
         private readonly CustomerStatusResolver $status,
         private readonly PiiAccessAuditService $pii,
+        private readonly LedgerReportService $ledgerReports,
     ) {
     }
 
@@ -71,6 +72,7 @@ class CustomerCenterService
         $this->logAccess($actorId, $customer->id, 'overview');
 
         $wallet = EMoney::where('user_id', $customer->id)->first();
+        $financialTruth = $this->ledgerReports->walletTruth((int) $customer->id);
         $status = $this->status->resolve($customer);
         $risk = AmlUserRiskProfile::find($customer->id);
 
@@ -88,7 +90,9 @@ class CustomerCenterService
             ],
             'status' => $status,
             'wallet' => [
-                'current_balance' => (string) ($wallet->current_balance ?? '0'),
+                // E-Money هو الرصيد التشغيلي. لا يُعرض كـ«متحقَّق» قبل أن
+                // تُقارن به سطور الدفتر في financial_truth أدناه.
+                'current_balance' => (string) ($financialTruth['operational_balance'] ?? $wallet?->current_balance ?? '0'),
                 'held_balance' => (string) ($wallet->held_balance ?? '0'),
                 'pending_balance' => (string) ($wallet->pending_balance ?? '0'),
                 // المتاح = الحاليّ ناقص المحجوز. ويُحسب هنا لا يُترك للموظّف:
@@ -101,9 +105,10 @@ class CustomerCenterService
                 ),
             ],
             'kyc' => [
-                'is_verified' => (bool) ($customer->is_kyc_verified ?? false),
+                'is_verified' => $this->isKycVerified($customer),
                 'tier' => (int) ($customer->kyc_tier ?? 0),
-                'sanction_status' => (string) ($customer->sanction_status ?? 'clear'),
+                // NULL ليس «clear»؛ لم تُجرَ الشاشة فلا يجوز أن تطمئن الموظف.
+                'sanction_status' => $this->sanctionStatus($customer),
             ],
             'risk' => [
                 'score' => (string) ($risk->current_risk_score ?? '0'),
@@ -111,6 +116,7 @@ class CustomerCenterService
                 'override' => (string) ($risk->manual_override ?? 'none'),
             ],
             'limits' => $this->limits($customer),
+            'financial_truth' => $financialTruth,
             'notes' => $this->notes($customer),
             'counters' => [
                 'open_tickets' => Schema::hasTable('support_tickets')
@@ -138,6 +144,30 @@ class CustomerCenterService
         };
     }
 
+    private function isKycVerified(User $customer): bool
+    {
+        return (int) ($customer->is_kyc_verified ?? 0) === 1;
+    }
+
+    private function accountKycState(User $customer): string
+    {
+        return match ((int) ($customer->is_kyc_verified ?? 0)) {
+            1 => 'verified',
+            2 => 'rejected',
+            3 => 'not_submitted',
+            default => 'pending',
+        };
+    }
+
+    private function sanctionStatus(User $customer): string
+    {
+        if (!Schema::hasColumn('users', 'sanction_status') || $customer->sanction_status === null) {
+            return 'unknown';
+        }
+
+        return (string) $customer->sanction_status;
+    }
+
     /** الحدّ النافذ: استثناء العميل إن وُجد، وإلّا حدّ فئته. */
     private function limits(User $customer): array
     {
@@ -149,15 +179,18 @@ class CustomerCenterService
             ? DB::table('kyc_tier_limits')->where('tier', (int) ($customer->kyc_tier ?? 0))->first()
             : null;
 
-        $pick = fn (string $key, $default) => $override[$key] ?? ($tier->{$key} ?? $default);
+        $pick = fn (string $key) => $override[$key] ?? ($tier ? $tier->{$key} : null);
 
         return [
             'source' => $override !== [] ? 'استثناء خاصّ بالعميل' : 'حدّ الفئة',
-            'max_balance' => (string) $pick('max_balance', '0'),
-            'max_single_transaction' => (string) $pick('max_single_transaction', '0'),
-            'max_daily_total' => (string) $pick('max_daily_total', '0'),
-            'max_monthly_total' => (string) $pick('max_monthly_total', '0'),
+            // الصفر رقم صالح في بعض السياسات؛ أمّا null فهو «لا توجد سياسة
+            // صالحة معرّفة» ولا يجوز للواجهة أن تخلطهما.
+            'max_balance' => $pick('max_balance') === null ? null : (string) $pick('max_balance'),
+            'max_single_transaction' => $pick('max_single_transaction') === null ? null : (string) $pick('max_single_transaction'),
+            'max_daily_total' => $pick('max_daily_total') === null ? null : (string) $pick('max_daily_total'),
+            'max_monthly_total' => $pick('max_monthly_total') === null ? null : (string) $pick('max_monthly_total'),
             'has_override' => $override !== [],
+            'state' => $tier || $override !== [] ? 'configured' : 'not_configured',
         ];
     }
 
@@ -346,7 +379,8 @@ class CustomerCenterService
         $this->logAccess($actorId, $customer->id, 'kyc');
 
         return [
-            'is_verified' => (bool) ($customer->is_kyc_verified ?? false),
+            'is_verified' => $this->isKycVerified($customer),
+            'account_state' => $this->accountKycState($customer),
             'tier' => (int) ($customer->kyc_tier ?? 0),
             'documents' => KycDocument::with('reviewer:id,f_name,l_name')
                 ->where('user_id', $customer->id)
@@ -384,7 +418,7 @@ class CustomerCenterService
                 'override' => (string) ($profile->manual_override ?? 'none'),
                 'override_reason' => $profile->override_reason ?? null,
             ],
-            'sanction_status' => (string) ($customer->sanction_status ?? 'clear'),
+            'sanction_status' => $this->sanctionStatus($customer),
             'flagged' => Schema::hasTable('aml_flagged_transactions')
                 ? AmlFlaggedTransaction::where('actor_user_id', $customer->id)
                     ->orderByDesc('id')->limit(30)->get()

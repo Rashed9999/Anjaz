@@ -430,6 +430,19 @@ class AgentPortalTest extends TestCase
             'الرسالة تختلف بين رقمٍ مسجَّل وآخر غير مسجَّل — فتُفشي أيّهما صحيح');
     }
 
+    /** @test */
+    public function agent_login_is_throttled_after_repeated_failures(): void
+    {
+        for ($i = 0; $i < 5; $i++) {
+            $this->post('/agent/login', ['username' => '770009999', 'password' => 'wrong'])
+                ->assertSessionHasErrors('username');
+        }
+
+        $this->post('/agent/login', ['username' => '770009999', 'password' => 'wrong'])
+            ->assertSessionHasErrors('username');
+        $this->assertStringContainsString('محاولات كثيرة', session()->get('errors')->first('username'));
+    }
+
     // ══ حماية العميل ═══════════════════════════════════════════════════
 
     /** @test */

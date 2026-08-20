@@ -157,15 +157,15 @@ class AgentReportService
             ? (string) $moves->first()->balance_before
             : (string) $this->till->tillFor($branch)->cash_on_hand;
 
-        $closing = $moves->isNotEmpty()
-            ? (string) $moves->last()->balance_after
-            : $opening;
-
         // الرصيد المتوقَّع يُحسب من الافتتاحيّ والحركة — لا يُقرأ من الخزنة.
         // وقراءتُه من الخزنة تجعل المطابقة تقارن الرقم بنفسه.
         $expected = bcsub(bcadd($opening, $sum('in'), 4), $sum('out'), 4);
 
         $till = $this->till->tillFor($branch);
+        // «المسجَّل» هو ما تقوله الخزنة الآن، لا ما قالته آخر حركة. لو عُدّل
+        // العمود أو حصل خلل بعد الحركة، قراءة balance_after تجعل التقرير
+        // يقارن تاريخ الحركة بنفسه ويخفي الفرق.
+        $closing = (string) $till->cash_on_hand;
 
         return [
             'date' => $date,
@@ -179,6 +179,9 @@ class AgentReportService
                 'adjustments' => bcsub($sum('in', 'count_adjustment'), $sum('out', 'count_adjustment'), 4),
                 'closing' => $closing,
                 'expected' => $expected,
+                // فرق النقد قيمة مالية، فلا يُترك للمتصفح ليحسبه بـ Number
+                // ويخسر الدقّة في مبالغ الريال الكبيرة.
+                'difference' => bcsub($expected, $closing, 4),
                 // الخبر: هل يطابق المحسوب ما هو مسجَّل؟
                 'reconciles' => bccomp($expected, $closing, 4) === 0,
             ],

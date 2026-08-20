@@ -6,6 +6,7 @@ use App\Models\EMoney;
 use App\Models\Ledger\LedgerAccount;
 use App\Models\Ledger\LedgerJournalEntry;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * AMIAL-LEDGER-CENTER-001 — مركز الدفتر (الفصل ١٧).
@@ -35,6 +36,92 @@ use Illuminate\Support\Facades\DB;
  */
 class LedgerReportService
 {
+    /**
+     * الحقيقة المالية لمحفظة عميل واحدة.
+     *
+     * مركز العملاء لا يحسب رصيداً موازياً: الرصيد التشغيلي يبقى من محرك
+     * E-Money، بينما يُشتق الرصيد الدفتري من سطور القيود للمطابقة. إن غاب
+     * أحد المصدرين أو اختلفا نُعيد حالة صريحة قابلة للتصعيد، لا بطاقة خضراء
+     * برقم لا يمكن تفسيره.
+     *
+     * @return array{state:string,operational_balance:?string,ledger_balance:?string,gap:?string,account_id:?int,account_code:?string,first_entry_at:?string,last_entry_at:?string,last_entry_ulid:?string,reason:?string}
+     */
+    public function walletTruth(int $userId): array
+    {
+        $wallet = EMoney::where('user_id', $userId)->first();
+        $operational = $wallet ? (string) ($wallet->current_balance ?? '0') : null;
+
+        if (!Schema::hasTable('ledger_accounts')
+            || !Schema::hasTable('ledger_entry_lines')
+            || !Schema::hasTable('ledger_journal_entries')) {
+            return $this->walletTruthUnavailable($operational, 'جداول الدفتر غير متاحة للتحقق');
+        }
+
+        $account = LedgerAccount::query()
+            ->where('owner_user_id', $userId)
+            ->where('account_code', 'USER_WALLET_' . $userId)
+            ->first();
+
+        if (!$account) {
+            return $this->walletTruthUnavailable($operational, 'لا يوجد حساب دفتر للمحفظة');
+        }
+
+        $totals = DB::table('ledger_entry_lines as l')
+            ->join('ledger_journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
+            ->where('l.account_id', $account->id)
+            ->where('e.status', 'posted')
+            ->selectRaw("COALESCE(SUM(CASE WHEN l.direction = 'debit' THEN l.amount ELSE 0 END), 0) AS debit_total")
+            ->selectRaw("COALESCE(SUM(CASE WHEN l.direction = 'credit' THEN l.amount ELSE 0 END), 0) AS credit_total")
+            ->selectRaw('MIN(e.posted_at) AS first_entry_at, MAX(e.posted_at) AS last_entry_at')
+            ->first();
+
+        $debit = (string) ($totals->debit_total ?? '0');
+        $credit = (string) ($totals->credit_total ?? '0');
+        $ledger = $account->normal_balance === 'debit'
+            ? bcsub($debit, $credit, 4)
+            : bcsub($credit, $debit, 4);
+        $last = DB::table('ledger_entry_lines as l')
+            ->join('ledger_journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
+            ->where('l.account_id', $account->id)->where('e.status', 'posted')
+            ->orderByDesc('e.posted_at')->orderByDesc('l.id')
+            ->first(['e.entry_ulid']);
+
+        $gap = $operational === null ? null : bcsub($operational, $ledger, 4);
+        $state = $operational === null
+            ? 'unverifiable'
+            : (bccomp($gap, '0', 4) === 0 ? 'reconciled' : 'mismatch');
+
+        return [
+            'state' => $state,
+            'operational_balance' => $operational,
+            'ledger_balance' => $ledger,
+            'gap' => $gap,
+            'account_id' => (int) $account->id,
+            'account_code' => (string) $account->account_code,
+            'first_entry_at' => $totals->first_entry_at ?? null,
+            'last_entry_at' => $totals->last_entry_at ?? null,
+            'last_entry_ulid' => $last?->entry_ulid,
+            'reason' => $state === 'mismatch' ? 'الرصيد التشغيلي لا يطابق قيود الدفتر' : null,
+        ];
+    }
+
+    /** @return array{state:string,operational_balance:?string,ledger_balance:null,gap:null,account_id:null,account_code:null,first_entry_at:null,last_entry_at:null,last_entry_ulid:null,reason:string} */
+    private function walletTruthUnavailable(?string $operational, string $reason): array
+    {
+        return [
+            'state' => 'unverifiable',
+            'operational_balance' => $operational,
+            'ledger_balance' => null,
+            'gap' => null,
+            'account_id' => null,
+            'account_code' => null,
+            'first_entry_at' => null,
+            'last_entry_at' => null,
+            'last_entry_ulid' => null,
+            'reason' => $reason,
+        ];
+    }
+
     /**
      * ميزان المراجعة — مجموع المدين ومجموع الدائن لكلّ حساب.
      *

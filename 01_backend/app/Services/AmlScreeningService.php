@@ -84,14 +84,6 @@ class AmlScreeningService
     {
         // 1) Check whitelist/blacklist override
         $profile = $this->getOrCreateProfile($context->actorUserId);
-        if ($profile->isWhitelisted()) {
-            return new AmlDecision(
-                finalAction: 'allow',
-                totalRiskScore: 0,
-                triggeredRules: [],
-                reasonSummary: 'User whitelisted by admin',
-            );
-        }
         if ($profile->isBlacklisted()) {
             // blacklisted = block فوري
             $decision = new AmlDecision(
@@ -158,6 +150,9 @@ class AmlScreeningService
             $strategy = $this->strategies[$rule->rule_type] ?? null;
             if (!$strategy) {
                 Log::warning("AML: no strategy for rule type {$rule->rule_type}");
+                if ($this->isCriticalRule($rule)) {
+                    return $this->holdForCriticalFailure($context, $profile, $rule, 'لا توجد استراتيجية للقاعدة');
+                }
                 continue;
             }
 
@@ -168,6 +163,9 @@ class AmlScreeningService
                     'rule' => $rule->code,
                     'error' => $e->getMessage(),
                 ]);
+                if ($this->isCriticalRule($rule)) {
+                    return $this->holdForCriticalFailure($context, $profile, $rule, 'فشل تنفيذ القاعدة');
+                }
                 continue;
             }
 
@@ -280,30 +278,28 @@ class AmlScreeningService
 
     private function recordEvaluation(TransactionContext $context, AmlRule $rule, RuleEvaluationResult $result): void
     {
-        try {
-            AmlRuleEvaluation::create([
-                'transaction_ulid' => $context->transactionUlid,
-                'transaction_type' => $context->transactionType,
-                'actor_user_id' => $context->actorUserId,
-                'counterparty_user_id' => $context->counterpartyUserId,
-                'amount' => $context->amount,
-                'rule_id' => $rule->id,
-                'rule_code' => $rule->code,
-                'matched' => $result->matched,
-                'contributed_risk_score' => $result->contributedRiskScore,
-                'evaluation_context' => $result->context,
-                'created_at' => $context->timestamp,
-            ]);
-        } catch (\Throwable $e) {
-            Log::warning('AML evaluation record failed', ['err' => $e->getMessage()]);
-        }
+        // إذا كان التدفق مالياً وفي معاملة قاعدة بيانات، ففشل هذا السجل يجب
+        // أن يفشل العملية معها. سجّل اختفى بعد Hold/Block أسوأ من منع ظاهر.
+        AmlRuleEvaluation::create([
+            'transaction_ulid' => $context->transactionUlid,
+            'transaction_type' => $context->transactionType,
+            'actor_user_id' => $context->actorUserId,
+            'counterparty_user_id' => $context->counterpartyUserId,
+            'amount' => $context->amount,
+            'rule_id' => $rule->id,
+            'rule_code' => $rule->code,
+            'matched' => $result->matched,
+            'contributed_risk_score' => $result->contributedRiskScore,
+            'evaluation_context' => $result->context,
+            'created_at' => $context->timestamp,
+        ]);
     }
 
     private function persistDecision(TransactionContext $context, AmlDecision $decision): void
     {
         if ($decision->isAllowed()) return;
 
-        try {
+        DB::transaction(function () use ($context, $decision): void {
             // إنشاء flagged transaction record
             $flagged = AmlFlaggedTransaction::create([
                 'flag_ulid' => (string) Str::ulid(),
@@ -323,12 +319,34 @@ class AmlScreeningService
             if ($decision->isBlocked() || $decision->isHeld()) {
                 $this->createAlert($flagged, $decision);
             }
-        } catch (\Throwable $e) {
-            Log::error('AML persist decision failed', [
-                'err' => $e->getMessage(),
-                'decision' => $decision->finalAction,
-            ]);
-        }
+        });
+    }
+
+    private function isCriticalRule(AmlRule $rule): bool
+    {
+        return in_array($rule->action_on_match, ['hold', 'block'], true)
+            || str_contains(strtoupper((string) $rule->code), 'SANCTION')
+            || str_contains(strtoupper((string) $rule->code), 'HARD');
+    }
+
+    private function holdForCriticalFailure(
+        TransactionContext $context,
+        AmlUserRiskProfile $profile,
+        AmlRule $rule,
+        string $failure,
+    ): AmlDecision {
+        $decision = new AmlDecision(
+            finalAction: 'hold', totalRiskScore: 100,
+            triggeredRules: [[
+                'code' => 'AML_CRITICAL_RULE_FAILURE', 'action' => 'hold', 'score' => 100,
+                'reason' => $failure . ': ' . $rule->code,
+            ]],
+            reasonSummary: 'Critical AML control failure: ' . $rule->code,
+        );
+        $this->persistDecision($context, $decision);
+        $this->updateProfile($profile, $context, $decision);
+
+        return $decision;
     }
 
     private function createAlert(AmlFlaggedTransaction $flagged, AmlDecision $decision): void

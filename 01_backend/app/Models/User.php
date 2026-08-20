@@ -108,6 +108,11 @@ class User extends Authenticatable
         'zone_code' => 'string',
         'security_hold_until' => 'datetime',
         'security_hold_reason' => 'string',
+        // مركز العملاء يتعامل مع الاستثناء كـ patch مُدقّق، لا نص JSON قد
+        // يمحو الحقول الأخرى عند حفظ حدّ واحد.
+        'limit_override' => 'array',
+        'limit_override_at' => 'datetime',
+        'lifecycle_changed_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

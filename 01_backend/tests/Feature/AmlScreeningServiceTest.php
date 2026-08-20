@@ -281,7 +281,7 @@ class AmlScreeningServiceTest extends TestCase
     }
 
     /** @test */
-    public function whitelist_bypasses_all_rules()
+    public function whitelist_does_not_bypass_a_hard_aml_rule()
     {
         AmlUserRiskProfile::create([
             'user_id' => $this->user->id,
@@ -299,8 +299,10 @@ class AmlScreeningServiceTest extends TestCase
 
         $decision = $this->service->screen($this->makeContext(['amount' => '50000']));
 
-        $this->assertEquals('allow', $decision->finalAction);
-        $this->assertStringContainsString('whitelist', $decision->reasonSummary ?? '');
+        $this->assertEquals('block', $decision->finalAction);
+        $this->assertDatabaseHas('aml_flagged_transactions', [
+            'transaction_type' => 'send_money', 'initial_decision' => 'block',
+        ]);
     }
 
     /** @test */

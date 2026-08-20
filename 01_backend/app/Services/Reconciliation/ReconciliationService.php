@@ -31,7 +31,10 @@ use Illuminate\Support\Facades\DB;
  */
 class ReconciliationService
 {
-    public function __construct(private readonly LedgerReportService $reports) {}
+    public function __construct(
+        private readonly LedgerReportService $reports,
+        private readonly ReconciliationCaseService $cases,
+    ) {}
 
     /**
      * تُجرى المصالحة كاملةً.
@@ -77,6 +80,9 @@ class ReconciliationService
         $count = (int) DB::table('e_money')->count();
 
         $r = $this->reports->walletReconciliation(max($count, 1));
+        // الحالة تُفتح أو تتصعّد هنا، في التشغيل الليلي الذي اكتشف الفرق؛
+        // لا في GET للوحة، ولا في زر «تحديث»، كي لا تكون القراءة فعلاً مالياً.
+        $this->cases->recordWalletResults($r['rows'] ?? []);
 
         /**
          * **مفاتيحُ في الجذر لا تحت `summary`.**

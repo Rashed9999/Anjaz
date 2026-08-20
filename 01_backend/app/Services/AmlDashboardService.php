@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Aml\AmlFlaggedTransaction;
 use App\Models\Aml\AmlInvestigation;
+use App\Models\Aml\AmlRule;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -36,7 +37,9 @@ class AmlDashboardService
 
     public function metrics(): array
     {
+        $ruleCounts = $this->ruleHealth();
         return [
+            'health' => $ruleCounts,
             'high_risk' => $this->highRiskByType(),
             'large_transactions' => $this->largeTransactions(),
             'structuring' => $this->structuringAlerts(),
@@ -55,6 +58,28 @@ class AmlDashboardService
             'investigations' => $this->investigationCounts(),
             'reports' => $this->reports->pendingSummary(),
             'generated_at' => now()->toIso8601String(),
+        ];
+    }
+
+    /** «صفر قواعد» عطل حرج، لا لوحة خضراء فارغة. */
+    private function ruleHealth(): array
+    {
+        if (!$this->hasTable('aml_rules')) {
+            return ['status' => 'critical', 'rules_total' => null, 'active_rules' => null,
+                'shadow_rules' => null, 'message' => 'جدول قواعد AML غير متاح'];
+        }
+
+        $total = AmlRule::count();
+        $active = AmlRule::where('is_active', true)->count();
+        $shadow = AmlRule::where('is_active', true)->where('shadow_mode', true)->count();
+        return [
+            'status' => $active === 0 ? 'critical' : ($shadow === $active ? 'warning' : 'healthy'),
+            'rules_total' => $total,
+            'active_rules' => $active,
+            'shadow_rules' => $shadow,
+            'message' => $active === 0
+                ? 'لا توجد قواعد AML فعالة؛ مراقبة المعاملات غير مفعلة.'
+                : ($shadow === $active ? 'كل القواعد الفعالة في وضع الظل؛ الرصد لا يمنع.' : 'قواعد AML الفعالة متاحة'),
         ];
     }
 

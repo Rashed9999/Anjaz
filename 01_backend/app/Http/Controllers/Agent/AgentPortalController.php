@@ -20,6 +20,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 
 /**
  * AMIAL-AGENT-PORTAL-001 — بوّابة الوكيل.
@@ -69,6 +70,14 @@ class AgentPortalController extends Controller
 
         $id = trim((string) $request->input('username'));
         $password = (string) $request->input('password');
+        $throttleKey = 'agent-login:' . sha1(mb_strtolower($id) . '|' . (string) $request->ip());
+
+        // رموز الموظفين قصيرة ومتسلسلة غالباً؛ كلمة مرور صحيحة لا يجب أن
+        // تمنح المهاجم آلاف محاولات التخمين. المفتاح لا يسرّب وجود الرمز.
+        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
+            $seconds = RateLimiter::availableIn($throttleKey);
+            return back()->withErrors(['username' => 'محاولات كثيرة. أعد المحاولة بعد ' . $seconds . ' ثانية'])->withInput();
+        }
 
         // رمزُ الموظّف أوّلاً: هو الحالة الغالبة في شركةٍ لها آلاف الموظّفين.
         $staff = AgentStaff::whereRaw('UPPER(username) = ?', [mb_strtoupper($id)])->first();
@@ -92,6 +101,7 @@ class AgentPortalController extends Controller
             Auth::guard('user')->logout();
             Auth::guard('agent_staff')->login($staff, (bool) $request->boolean('remember'));
             $request->session()->regenerate();
+            RateLimiter::clear($throttleKey);
 
             $staff->forceFill(['last_login_at' => now()])->save();
 
@@ -134,6 +144,7 @@ class AgentPortalController extends Controller
         Auth::guard('user')->logout();
         Auth::guard('agent_staff')->login($hq, (bool) $request->boolean('remember'));
         $request->session()->regenerate();
+        RateLimiter::clear($throttleKey);
 
         $hq->forceFill(['last_login_at' => now()])->save();
 
@@ -148,6 +159,10 @@ class AgentPortalController extends Controller
      */
     private function loginFailed(Request $request)
     {
+        $id = trim((string) $request->input('username'));
+        $throttleKey = 'agent-login:' . sha1(mb_strtolower($id) . '|' . (string) $request->ip());
+        RateLimiter::hit($throttleKey, 60);
+
         return back()->withErrors(['username' => 'بيانات الدخول غير صحيحة'])->withInput();
     }
 

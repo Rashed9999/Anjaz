@@ -86,6 +86,18 @@ class AmlDashboardAndScreeningTest extends TestCase
     }
 
     /** @test */
+    public function no_active_aml_rule_is_a_critical_health_state_not_a_zero_kpi(): void
+    {
+        DB::table('aml_rules')->delete();
+
+        $health = $this->dash->metrics()['health'];
+
+        $this->assertSame('critical', $health['status']);
+        $this->assertSame(0, $health['active_rules']);
+        $this->assertStringContainsString('لا توجد قواعد', $health['message']);
+    }
+
+    /** @test */
     public function high_risk_users_are_counted_by_type_not_lumped_together(): void
     {
         // وكيلٌ عالي الخطر مشكلةٌ من نوعٍ آخر: نقطةُ دخولٍ للنقد إلى المنصّة

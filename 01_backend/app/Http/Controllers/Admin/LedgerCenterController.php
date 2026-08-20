@@ -50,6 +50,15 @@ class LedgerCenterController extends Controller
         return $this->ok($this->reports->walletReconciliation());
     }
 
+    /** القضايا التي أنشأها التشغيل الليلي؛ القراءة لا تنشئ ولا تصلح فرقاً. */
+    public function reconciliationCases(Request $request): JsonResponse
+    {
+        return $this->ok([
+            'items' => app(\App\Services\Reconciliation\ReconciliationCaseService::class)
+                ->recent((int) $request->query('limit', 100)),
+        ]);
+    }
+
     /**
      * AMIAL-RECON-NIGHTLY-001 — تاريخُ المصالحات الليليّة.
      *

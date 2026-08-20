@@ -206,6 +206,43 @@ class CustomerCenterTest extends TestCase
     }
 
     /** @test */
+    public function the_customer_centre_never_calls_a_non_approved_kyc_value_verified(): void
+    {
+        // القيمة 3 هي «لم يقدّم بعد» في قاعدة البيانات القديمة، وليست موافقة.
+        $this->customer->forceFill(['is_kyc_verified' => 3])->save();
+
+        $overview = $this->actingAs($this->staff, 'user')
+            ->getJson("/admin/amial/customer/{$this->customer->id}/tab/overview")
+            ->assertOk()->json('meta.kyc');
+        $kyc = $this->actingAs($this->staff, 'user')
+            ->getJson("/admin/amial/customer/{$this->customer->id}/tab/kyc")
+            ->assertOk()->json('meta');
+
+        $this->assertFalse($overview['is_verified']);
+        $this->assertFalse($kyc['is_verified']);
+        $this->assertSame('not_submitted', $kyc['account_state']);
+    }
+
+    /** @test */
+    public function an_unreconciled_wallet_is_exposed_as_a_financial_exception_not_a_green_balance(): void
+    {
+        // رصيد المحفظة يُحدَّث مباشرةً هنا عمداً من دون تمرير قيد جديد،
+        // فنصنع فرقاً واقعياً بين مصدر التشغيل والدفتر. إخفاؤه خلف بطاقة
+        // «الرصيد الحالي» يخلق طمأنينة مالية كاذبة.
+        DB::table('e_money')->where('user_id', $this->customer->id)
+            ->update(['current_balance' => '140000']);
+
+        $financial = $this->actingAs($this->staff, 'user')
+            ->getJson("/admin/amial/customer/{$this->customer->id}/tab/overview")
+            ->assertOk()->json('meta.financial_truth');
+
+        $this->assertSame('mismatch', $financial['state']);
+        $this->assertSame('140000', $financial['operational_balance']);
+        $this->assertSame('150000.0000', $financial['ledger_balance']);
+        $this->assertSame('-10000.0000', $financial['gap']);
+    }
+
+    /** @test */
     public function a_closed_account_outranks_everything_else(): void
     {
         $this->customer->forceFill([
@@ -349,6 +386,37 @@ class CustomerCenterTest extends TestCase
     }
 
     /** @test */
+    public function unfreezing_creates_a_second_person_approval_and_does_not_restore_access_immediately(): void
+    {
+        $this->customer->forceFill(['is_temp_blocked' => 1])->save();
+
+        $out = app(CustomerActionService::class)->run(
+            $this->customer, $this->staff, 'unfreeze',
+            'اكتمل فحص البلاغ ونحتاج اعتماد مشرف مختلف لفك التجميد',
+        );
+
+        $this->assertTrue($out['approval_required']);
+        $this->assertSame(1, (int) $this->customer->fresh()->is_temp_blocked);
+        $this->assertDatabaseHas('approval_requests', [
+            'subject_user_id' => $this->customer->id,
+            'action_type' => 'unfreeze_wallet',
+            'status' => 'pending',
+        ]);
+    }
+
+    /** @test */
+    public function the_customer_action_endpoint_cannot_target_an_agent_or_employee(): void
+    {
+        $agent = User::factory()->create(['type' => AGENT_TYPE, 'phone' => '770003411']);
+
+        $this->actingAs($this->staff, 'user')
+            ->postJson("/admin/amial/customer/{$agent->id}/action", [
+                'action' => 'freeze',
+                'reason' => 'اختبار منع توجيه إجراء العميل نحو وكيل',
+            ])->assertNotFound();
+    }
+
+    /** @test */
     public function escalating_to_risk_opens_a_real_case_not_a_log_line(): void
     {
         // زرٌّ يكتب «صُعِّد» ولا يُنشئ شيئاً يجعل الموظّف يظنّ أنّه سلّم
@@ -434,6 +502,26 @@ class CustomerCenterTest extends TestCase
             ->json('meta.limits');
 
         $this->assertFalse($otherLimits['has_override'], 'تسرّب الاستثناء إلى عميل آخر');
+    }
+
+    /** @test */
+    public function changing_one_limit_keeps_the_customer_other_explicit_limits(): void
+    {
+        $this->customer->forceFill(['limit_override' => [
+            'max_daily_total' => '500000',
+            'max_monthly_total' => '3000000',
+        ]])->save();
+
+        app(CustomerActionService::class)->run(
+            $this->customer->fresh(), $this->staff, 'update_limits',
+            'تعديل سقف العملية فقط بعد مراجعة النشاط',
+            ['max_single_transaction' => '900000'],
+        );
+
+        $override = $this->customer->fresh()->limit_override;
+        $this->assertSame('900000', $override['max_single_transaction']);
+        $this->assertSame('500000', $override['max_daily_total']);
+        $this->assertSame('3000000', $override['max_monthly_total']);
     }
 
     /** @test */

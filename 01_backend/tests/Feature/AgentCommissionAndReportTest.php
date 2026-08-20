@@ -301,10 +301,13 @@ class AgentCommissionAndReportTest extends TestCase
 
         $r = app(AgentReportService::class)->dailyReport($this->branch);
 
-        // المتوقَّع محسوبٌ من الحركة، والمسجَّل من آخر حركة — فكلاهما سليم
-        // ولا يتأثّر بالعبث في العمود.
+        // المتوقَّع محسوبٌ من الحركة، لكن المسجَّل يُقرأ من الخزنة الآن؛
+        // لذلك يظهر العبث بدلاً من أن يطابق التقريرُ صفّ الحركة مع نفسه.
         $this->assertSame(0, bccomp($r['cash']['expected'], '510000', 4),
             'المتوقَّع قُرئ من الخزنة فتأثّر بالعبث');
+        $this->assertSame(0, bccomp($r['cash']['closing'], '999999', 4));
+        $this->assertFalse($r['cash']['reconciles']);
+        $this->assertSame(0, bccomp($r['cash']['difference'], '-489999', 4));
     }
 
     /** @test */

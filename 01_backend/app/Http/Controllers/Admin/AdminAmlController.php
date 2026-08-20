@@ -7,6 +7,7 @@ use App\Models\Aml\AmlAlert;
 use App\Models\Aml\AmlFlaggedTransaction;
 use App\Models\Aml\AmlRule;
 use App\Models\Aml\AmlUserRiskProfile;
+use App\Services\AuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -51,10 +52,15 @@ class AdminAmlController extends Controller
     public function toggleRule(Request $request, int $id): JsonResponse
     {
         $rule = AmlRule::findOrFail($id);
+        $before = (bool) $rule->is_active;
         $rule->update([
             'is_active' => !$rule->is_active,
             'updated_by_admin_id' => $request->user()->id,
         ]);
+        $this->auditRuleChange($request, $rule, 'AML_RULE_TOGGLED', [
+            'is_active' => $before,
+        ]);
+
         return $this->ok(['rule' => $rule], 'TOGGLED',
             $rule->is_active ? 'تم تفعيل القاعدة' : 'تم إيقاف القاعدة');
     }
@@ -74,11 +80,16 @@ class AdminAmlController extends Controller
         if ($v->fails()) return $this->validationError($v);
 
         $rule = AmlRule::findOrFail($id);
+        $before = $rule->only([
+            'parameters', 'action_on_match', 'risk_score_contribution',
+            'priority', 'is_active', 'shadow_mode',
+        ]);
         $rule->fill(array_merge(
             $v->validated(),
             ['updated_by_admin_id' => $request->user()->id],
         ));
         $rule->save();
+        $this->auditRuleChange($request, $rule, 'AML_RULE_UPDATED', $before);
 
         return $this->ok(['rule' => $rule], 'UPDATED', 'تم تحديث القاعدة');
     }
@@ -230,11 +241,28 @@ class AdminAmlController extends Controller
             ['user_id' => $userId],
             ['current_risk_score' => 0, 'risk_level' => 'low', 'manual_override' => 'none'],
         );
+        $before = (string) $profile->manual_override;
 
         $profile->update([
             'manual_override' => $request->input('override'),
             'override_reason' => $request->input('reason'),
             'override_admin_id' => $request->user()->id,
+        ]);
+
+        app(AuditService::class)->record([
+            'actor_type' => 'admin',
+            'actor_user_id' => $request->user()->id,
+            'subject_type' => 'aml_risk_profile',
+            'subject_id' => (string) $profile->id,
+            'action' => 'AML_USER_OVERRIDE_SET',
+            'decision_code' => strtoupper((string) $profile->manual_override),
+            'reason' => (string) $request->input('reason'),
+            'severity' => $profile->manual_override === 'blacklist' ? 'critical' : 'warning',
+            'context' => [
+                'customer_id' => $userId,
+                'before_override' => $before,
+                'after_override' => $profile->manual_override,
+            ],
         ]);
 
         return $this->ok(['profile' => $profile], 'OVERRIDE_SET', 'تم تطبيق الإعداد');
@@ -499,6 +527,28 @@ class AdminAmlController extends Controller
     }
 
     // ============================================================
+    /** تغييرات سياسة AML تظل قابلة للمراجعة، لا مجرّد updated_at. */
+    private function auditRuleChange(Request $request, AmlRule $rule, string $action, array $before): void
+    {
+        app(AuditService::class)->record([
+            'actor_type' => 'admin',
+            'actor_user_id' => $request->user()->id,
+            'subject_type' => 'aml_rule',
+            'subject_id' => (string) $rule->id,
+            'action' => $action,
+            'decision_code' => (string) $rule->code,
+            'severity' => in_array($rule->action_on_match, ['hold', 'block'], true)
+                ? 'critical' : 'warning',
+            'context' => [
+                'before' => $before,
+                'after' => $rule->only([
+                    'parameters', 'action_on_match', 'risk_score_contribution',
+                    'priority', 'is_active', 'shadow_mode',
+                ]),
+            ],
+        ]);
+    }
+
     private function ok(array $meta, string $code = 'OK', string $message = 'OK'): JsonResponse
     {
         return new JsonResponse([

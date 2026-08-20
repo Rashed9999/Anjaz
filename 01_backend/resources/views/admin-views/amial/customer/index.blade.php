@@ -47,19 +47,42 @@
     const ALLOWED_TABS = @json($tabs);
     const ALLOWED_ACTIONS = @json($actions);
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const num = n => Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 2});
+    // لا نحول الريال إلى Number: JavaScript يفقد الدقة بعد 2^53، والمال لا
+    // يُقرّب في المتصفح. التنسيق نصّي، والحساب يبقى في محرك المال/الخادم.
+    const money = value => {
+        if (value === null || value === undefined || value === '') return 'غير متاح';
+        let raw = String(value).trim();
+        const sign = raw.startsWith('-') ? '-' : '';
+        raw = raw.replace(/^[+-]/, '');
+        if (!/^\d+(?:\.\d+)?$/.test(raw)) return esc(value);
+        let [whole, fraction = ''] = raw.split('.');
+        whole = whole.replace(/^0+(?=\d)/, '') || '0';
+        whole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        fraction = fraction.replace(/0+$/, '');
+        return sign + whole + (fraction ? '.' + fraction : '');
+    };
     const dt = s => esc(String(s || '').slice(0, 16).replace('T', ' '));
 
     let current = null;
     const loaded = {};
+    let searchSequence = 0;
+    let customerSequence = 0;
 
-    async function get(p) { return (await fetch(BASE + p, {headers: {'Accept': 'application/json'}})).json(); }
+    async function get(p) {
+        const response = await fetch(BASE + p, {headers: {'Accept': 'application/json'}});
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok && body.success === undefined) throw new Error('تعذّر الاتصال بالخادم');
+        return body;
+    }
     async function post(p, b) {
-        return (await fetch(BASE + p, {
+        const response = await fetch(BASE + p, {
             method: 'POST',
             headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF},
             body: JSON.stringify(b || {}),
-        })).json();
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok && body.success === undefined) throw new Error('تعذّر الاتصال بالخادم');
+        return body;
     }
 
     // ---------- البحث ----------
@@ -70,9 +93,13 @@
         const q = document.getElementById('cc-q').value.trim();
         if (q.length < 2) return;
         const box = document.getElementById('cc-results');
+        const sequence = ++searchSequence;
         box.innerHTML = '<div class="text-muted small">جارٍ البحث…</div>';
-        const j = await get('/search?q=' + encodeURIComponent(q));
-        if (!j.success) { box.innerHTML = ''; return; }
+        let j;
+        try { j = await get('/search?q=' + encodeURIComponent(q)); }
+        catch (error) { if (sequence === searchSequence) box.innerHTML = '<div class="alert alert-warning mt-2 mb-0">تعذّر البحث، حاول مجدداً.</div>'; return; }
+        if (sequence !== searchSequence) return;
+        if (!j.success) { box.innerHTML = `<div class="alert alert-warning mt-2 mb-0">${esc(j.message || 'تعذّر البحث')}</div>`; return; }
 
         const items = j.meta.items || [];
         box.innerHTML = items.length ? '<div class="list-group mt-2">' + items.map(u => `
@@ -103,6 +130,7 @@
 
     async function openCustomer(id) {
         current = id;
+        const sequence = ++customerSequence;
         for (const k in loaded) delete loaded[k];
 
         document.getElementById('cc-profile').innerHTML = `
@@ -113,7 +141,7 @@
             </ul>
             <div id="cc-tab-body"></div>`;
 
-        loadTab(TABS[0][0]);
+        if (TABS.length) loadTab(TABS[0][0], sequence);
     }
 
     document.addEventListener('click', e => {
@@ -121,13 +149,17 @@
         if (!b) return;
         document.querySelectorAll('.js-cc-tab').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
-        loadTab(b.dataset.tab);
+        loadTab(b.dataset.tab, customerSequence);
     });
 
-    async function loadTab(tab) {
+    async function loadTab(tab, sequence = customerSequence) {
         const body = document.getElementById('cc-tab-body');
         body.innerHTML = '<div class="text-muted p-3">جارٍ التحميل…</div>';
-        const j = await get(`/${current}/tab/${tab}`);
+        const customerId = current;
+        let j;
+        try { j = await get(`/${customerId}/tab/${tab}`); }
+        catch (error) { if (sequence === customerSequence && customerId === current) body.innerHTML = '<div class="alert alert-warning">تعذّر تحميل البيانات. حدّث التبويب وحاول مجدداً.</div>'; return; }
+        if (sequence !== customerSequence || customerId !== current) return;
         if (!j.success) { body.innerHTML = `<div class="alert alert-warning">${esc(j.message)}</div>`; return; }
         loaded[tab] = j.meta;
         RENDER[tab](j.meta, body);
@@ -147,7 +179,7 @@
 
     const RENDER = {
         overview(m, body) {
-            const p = m.profile, s = m.status, w = m.wallet, l = m.limits;
+            const p = m.profile, s = m.status, w = m.wallet, l = m.limits, f = m.financial_truth;
 
             // كلّ الأسباب لا الحالة الظاهرة وحدها: من يرى «مجمَّد» ولا يعرف
             // أنّ هويّته مرفوضة أيضاً سيرفع التجميد ثمّ يتفاجأ.
@@ -168,9 +200,11 @@
 
             body.innerHTML = `
                 <div class="row g-3 mb-3">
-                    ${card('الرصيد الحاليّ', num(w.current_balance))}
-                    ${card('المتاح فعلاً', num(w.available_balance), 'محجوز ' + num(w.held_balance),
-                           Number(w.held_balance) > 0 ? 'border-warning' : '')}
+                    ${card('الرصيد التشغيلي', money(w.current_balance),
+                        f.state === 'reconciled' ? 'مطابق للدفتر' : (f.reason || 'يتطلب تحققاً'),
+                        f.state === 'reconciled' ? 'border-success' : 'border-danger')}
+                    ${card('المتاح فعلاً', money(w.available_balance), 'محجوز ' + money(w.held_balance),
+                           String(w.held_balance || '0') !== '0' ? 'border-warning' : '')}
                     ${card('درجة الخطر', esc(m.risk.score), esc(m.risk.level),
                            ['high','very_high','critical'].includes(m.risk.level) ? 'border-danger' : '')}
                     ${card('فئة الهوية', m.kyc.tier, m.kyc.is_verified ? 'موثَّقة' : 'غير موثَّقة',
@@ -185,10 +219,11 @@
                 <div class="row g-3">
                     <div class="col-lg-6"><div class="card p-3">
                         <h6>الحدود <span class="badge bg-${l.has_override ? 'warning text-dark' : 'secondary'}">${esc(l.source)}</span></h6>
-                        ${table(['الحدّ', 'القيمة'], [
+                        ${l.state === 'configured' ? table(['الحدّ', 'القيمة'], [
                             ['أقصى رصيد', l.max_balance], ['أقصى عملية', l.max_single_transaction],
                             ['يوميّ', l.max_daily_total], ['شهريّ', l.max_monthly_total],
-                        ].map(r => `<tr><td>${r[0]}</td><td class="text-end">${num(r[1])}</td></tr>`).join(''), '')}
+                        ].map(r => `<tr><td>${r[0]}</td><td class="text-end">${money(r[1])}</td></tr>`).join(''), '')
+                        : '<div class="alert alert-warning mb-0 small">لا توجد سياسة حدود نافذة لهذا العميل؛ لا يُفسَّر ذلك كحدّ صفري.</div>'}
                     </div></div>
 
                     <div class="col-lg-6"><div class="card p-3">
@@ -205,8 +240,8 @@
 
         wallets(m, body) {
             body.innerHTML = table(['المحفظة', 'الرصيد', 'محجوز', 'معلَّق', 'العملة', 'الحالة'],
-                m.wallets.map(w => `<tr><td>${esc(w.name)}</td><td class="text-end fw-bold">${num(w.balance)}</td>
-                    <td class="text-end">${num(w.reserved)}</td><td class="text-end">${num(w.pending)}</td>
+                m.wallets.map(w => `<tr><td>${esc(w.name)}</td><td class="text-end fw-bold">${money(w.balance)}</td>
+                    <td class="text-end">${money(w.reserved)}</td><td class="text-end">${money(w.pending)}</td>
                     <td>${esc(w.currency)}</td><td>${esc(w.status)}</td></tr>`).join(''),
                 'لا محافظ', 'cc-wallets');
         },
@@ -214,8 +249,8 @@
         transactions(m, body) {
             body.innerHTML = table(['المرجع', 'النوع', 'مدين', 'دائن', 'الرصيد', 'التاريخ'],
                 m.items.map(t => `<tr><td class="font-monospace small">${esc(t.transaction_id)}</td>
-                    <td>${esc(t.type)}</td><td class="text-end">${num(t.debit)}</td>
-                    <td class="text-end">${num(t.credit)}</td><td class="text-end">${num(t.balance)}</td>
+                    <td>${esc(t.type)}</td><td class="text-end">${money(t.debit)}</td>
+                    <td class="text-end">${money(t.credit)}</td><td class="text-end">${money(t.balance)}</td>
                     <td class="small">${dt(t.created_at)}</td></tr>`).join(''),
                 'لا عمليات', 'cc-transactions');
         },
@@ -266,6 +301,7 @@
                 <div class="alert alert-${c.complete ? 'success' : 'warning'} py-2">
                     ${c.complete ? 'مستندات الفئة ' + c.tier + ' مكتملة'
                         : 'ينقص: ' + (c.missing || []).map(esc).join('، ')}
+                    <div class="small mt-1">حالة الحساب: ${esc(m.account_state)}</div>
                 </div>
                 ${table(['المستند', 'الحالة', 'القراءة الآلية', 'ينتهي', 'المراجع', 'رُفع'],
                     m.documents.map(d => `<tr>
@@ -288,14 +324,15 @@
                     ${card('الاستثناء اليدويّ', esc(p.override), esc(p.override_reason || ''),
                            p.override === 'whitelist' ? 'border-warning' : '')}
                     ${card('العقوبات', esc(m.sanction_status),
-                           '', m.sanction_status === 'blocked' ? 'border-danger' : '')}
+                           m.sanction_status === 'unknown' ? 'لم تُجرَ/لا توجد نتيجة موثقة' : '',
+                           m.sanction_status === 'blocked' ? 'border-danger' : (m.sanction_status === 'unknown' ? 'border-warning' : ''))}
                     ${card('تحقيقات', m.investigations.length)}
                 </div>
                 <div class="row g-3">
                     <div class="col-lg-6"><div class="card p-3"><h6>عمليات معلّقة</h6>
                         ${table(['المرجع', 'المبلغ', 'الخطر', 'الحالة'],
                             m.flagged.map(f => `<tr><td class="font-monospace small">${esc(String(f.flag_ulid).slice(0, 10))}…</td>
-                            <td>${num(f.amount)}</td><td>${esc(f.risk_score)}</td><td class="small">${esc(f.status)}</td></tr>`).join(''),
+                            <td>${money(f.amount)}</td><td>${esc(f.risk_score)}</td><td class="small">${esc(f.status)}</td></tr>`).join(''),
                             'لا شيء')}</div></div>
                     <div class="col-lg-6"><div class="card p-3"><h6>القضايا</h6>
                         ${table(['القضية', 'الحالة', 'الأولوية', 'العمر'],
@@ -315,7 +352,7 @@
                             <td class="font-monospace small" title="${esc(r.request_ulid)}">${esc(r.short_code)}</td>
                             <td class="small"><span class="badge bg-light text-dark">${esc(directions[r.direction] || r.direction)}</span>
                                 ${esc(r.counterparty)}<div class="text-muted font-monospace">${esc(r.counterparty_phone)}</div></td>
-                            <td class="text-end fw-bold">${num(r.amount)}</td>
+                            <td class="text-end fw-bold">${money(r.amount)}</td>
                             <td>${esc(statuses[r.status] || r.status)}</td>
                             <td class="font-monospace small">${esc(r.paid_transaction_id || '—')}</td>
                             <td class="small">${dt(r.paid_at || r.created_at)}</td></tr>`).join(''),
@@ -383,26 +420,58 @@
         if (!b) return;
         const act = b.dataset.act;
 
-        const reason = prompt(`سبب «${b.dataset.label}» (١٠ أحرف على الأقل — يُسجَّل في التدقيق):`);
-        if (!reason || reason.trim().length < 10) { alert('السبب إلزامي (١٠ أحرف على الأقل)'); return; }
+        // نافذة أميال نفسها، لا prompt/confirm/alert التابعة للمتصفح. لها ×
+        // وEsc وتُرجع Promise كي لا يُنفذ الفعل قبل أن يكتب الموظف سببه.
+        const dialog = window.amialDialog;
+        if (!dialog) return;
+        const reason = await dialog.request(
+            `سبب «${b.dataset.label}» (١٠ أحرف على الأقل — يُسجَّل في التدقيق):`,
+            {title: 'تأكيد إجراء على العميل', okLabel: 'متابعة', danger: ['close', 'mark_deceased'].includes(act)},
+        );
+        if (reason === null) return;
+        if (reason.trim().length < 10) {
+            await dialog.show('السبب إلزامي ويجب أن يتكوّن من ١٠ أحرف على الأقل.', 'بيانات ناقصة');
+            return;
+        }
 
         let payload = {};
 
         if (act === 'update_limits') {
+            const single = await dialog.request('أقصى عملية (اتركه فارغاً دون تغيير):', {title: 'تعديل الحدود', okLabel: 'التالي'});
+            if (single === null) return;
+            const daily = await dialog.request('الحد اليومي (اتركه فارغاً دون تغيير):', {title: 'تعديل الحدود', okLabel: 'التالي'});
+            if (daily === null) return;
+            const monthly = await dialog.request('الحد الشهري (اتركه فارغاً دون تغيير):', {title: 'تعديل الحدود', okLabel: 'حفظ'});
+            if (monthly === null) return;
             payload = {
-                max_single_transaction: prompt('أقصى عملية:') || undefined,
-                max_daily_total: prompt('الحدّ اليوميّ:') || undefined,
-                max_monthly_total: prompt('الحدّ الشهريّ:') || undefined,
+                max_single_transaction: single || undefined,
+                max_daily_total: daily || undefined,
+                max_monthly_total: monthly || undefined,
             };
         } else if (act === 'add_note') {
-            payload = {body: reason, pin: confirm('تثبيت الملاحظة أعلى الملفّ؟')};
+            const pin = await dialog.ask('هل تريد تثبيت الملاحظة أعلى الملفّ؟', {title: 'إضافة ملاحظة', okLabel: 'تثبيت'});
+            payload = {body: reason, pin};
         } else if (act === 'close' || act === 'mark_deceased') {
-            if (!confirm(`«${b.dataset.label}» إجراءٌ لا يُتراجع عنه من هذه الشاشة. متابعة؟`)) return;
+            const confirmed = await dialog.ask(
+                `«${b.dataset.label}» إجراءٌ لا يُتراجع عنه من هذه الشاشة. متابعة؟`,
+                {title: 'تأكيد نهائي', okLabel: 'نعم، متابعة', danger: true},
+            );
+            if (!confirmed) return;
         }
 
-        const j = await post(`/${current}/action`, {action: act, reason: reason.trim(), payload});
-        alert(j.message || (j.success ? 'تم' : 'فشل'));
-        if (j.success) loadTab('overview');
+        b.disabled = true;
+        b.dataset.original = b.textContent;
+        b.textContent = 'جارٍ الحفظ…';
+        try {
+            const j = await post(`/${current}/action`, {action: act, reason: reason.trim(), payload});
+            await dialog.show(j.message || (j.success ? 'تم' : 'فشل'), j.success ? 'تم الإجراء' : 'تعذّر الإجراء');
+            if (j.success) loadTab('overview');
+        } catch (error) {
+            await dialog.show('تعذّر الاتصال بالخادم. لم نؤكد تنفيذ الإجراء؛ راجع سجل التدقيق قبل إعادة المحاولة.', 'تعذّر الإجراء');
+        } finally {
+            b.disabled = false;
+            b.textContent = b.dataset.original || b.textContent;
+        }
     });
 })();
 </script>

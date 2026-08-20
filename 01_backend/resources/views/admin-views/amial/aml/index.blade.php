@@ -290,6 +290,24 @@
 
         let html = '';
 
+        const health = m.health || {};
+        const banner = document.getElementById('aml-shadow-banner');
+        if (health.status === 'critical') {
+            banner.innerHTML = `<div class="alert alert-danger" data-testid="aml-critical-health">
+                <strong>CRITICAL — ${esc(health.message)}</strong>
+                لا تعني الأصفار أن الفحص تم؛ يجب معالجة سبب غياب القواعد قبل اعتبار الرقابة عاملة.
+            </div>`;
+        } else if (health.status === 'warning') {
+            banner.innerHTML = `<div class="alert alert-warning" data-testid="aml-shadow-health">
+                <strong>تنبيه AML:</strong> ${esc(health.message)}
+            </div>`;
+        } else {
+            banner.innerHTML = '';
+        }
+        html += tile('قواعد AML الفعالة', health.active_rules ?? 'غير متاح',
+            'الإجمالي ' + (health.rules_total ?? '—') + ' • ظل ' + (health.shadow_rules ?? '—'),
+            health.status === 'healthy' ? 'border-success' : 'border-danger');
+
         const hr = m.high_risk;
         if (hr.configured) {
             html += tile('عملاء عالو الخطر', hr.customers, '', hr.customers > 0 ? 'border-warning' : '')

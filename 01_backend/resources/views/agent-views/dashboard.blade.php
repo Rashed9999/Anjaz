@@ -307,7 +307,19 @@
     const BASE = '{{ url('agent') }}';
     const CSRF = document.querySelector('meta[name="csrf-token"]').content;
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const num = n => Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 0});
+    // هذه لوحة تشغيل نقدي؛ لا يمر رقم مالي عبر Number حتى لا يفقد المتصفح
+    // وحدات من رقم كبير قبل أن يراه الصرّاف. الحساب نفسه يبقى في الخادم.
+    const num = value => {
+        if (value === null || value === undefined || value === '') return 'غير متاح';
+        let raw = String(value).trim();
+        const sign = raw.startsWith('-') ? '-' : '';
+        raw = raw.replace(/^[+-]/, '');
+        if (!/^\d+(?:\.\d+)?$/.test(raw)) return esc(value);
+        let [whole, fraction = ''] = raw.split('.');
+        whole = (whole.replace(/^0+(?=\d)/, '') || '0').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        fraction = fraction.replace(/0+$/, '');
+        return sign + whole + (fraction ? '.' + fraction : '');
+    };
 
     let branches = [];
     let customer = null;
@@ -1100,7 +1112,7 @@
                 <div class="text-end">
                     ${c.reconciles
                         ? '<span class="badge bg-success fs-6">الحركة مطابقة ✓</span>'
-                        : `<span class="badge bg-danger fs-6">فرق ${num(Number(c.expected) - Number(c.closing))}</span>`}
+                        : `<span class="badge bg-danger fs-6">فرق ${num(c.difference)}</span>`}
                     ${m.counted_today ? '' : '<div class="small text-danger mt-1">⚠️ لم يُجرَد الدرج اليوم</div>'}
                 </div>
             </div>

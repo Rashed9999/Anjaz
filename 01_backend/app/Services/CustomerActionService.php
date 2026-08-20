@@ -42,6 +42,7 @@ class CustomerActionService
 
     public function __construct(
         private readonly AuditService $audit,
+        private readonly ApprovalService $approvals,
     ) {
     }
 
@@ -69,14 +70,22 @@ class CustomerActionService
             throw new DomainException('FOUR_EYES_VIOLATION: لا تُنفَّذ الإجراءات على حسابك الشخصيّ');
         }
 
+        // هذا مركز العملاء فقط. تمرير معرّف وكيل/تاجر إلى المسار نفسه كان
+        // يسمح لإجراء عميل أن يمسّ كياناً له سياسات تشغيل مختلفة.
+        if ((int) $customer->type !== CUSTOMER_TYPE) {
+            throw new DomainException('CUSTOMER_SCOPE_REQUIRED: الإجراء متاح للعملاء فقط');
+        }
+
         $result = match ($action) {
             'freeze' => $this->setFrozen($customer, true),
-            'unfreeze' => $this->setFrozen($customer, false),
+            // إعادة الوصول أخطر من منعه: لا تُنفَّذ بضغط الموظف نفسه.
+            'unfreeze' => $this->requestApproval($customer, $actor, 'unfreeze_wallet', $reason),
             'suspend' => $this->setLifecycle($customer, 'inactive', $reason),
             'activate' => $this->setLifecycle($customer, 'active', $reason),
             'close' => $this->setLifecycle($customer, 'closed', $reason),
             'mark_deceased' => $this->markDeceased($customer, $reason),
-            'reset_pin' => $this->resetPin($customer),
+            // إعادة PIN ناقل استيلاء على الحساب، فتخضع لنفس maker-checker.
+            'reset_pin' => $this->requestApproval($customer, $actor, 'reset_pin', $reason),
             'revoke_sessions' => $this->revokeSessions($customer),
             'require_kyc' => $this->requireKyc($customer),
             'update_limits' => $this->updateLimits($customer, $actor, $payload),
@@ -97,7 +106,12 @@ class CustomerActionService
             'context' => array_merge(['customer_id' => $customer->id], $result['context'] ?? []),
         ]);
 
-        return ['message' => $result['message'], 'action' => $action];
+        return [
+            'message' => $result['message'],
+            'action' => $action,
+            'approval_required' => (bool) ($result['approval_required'] ?? false),
+            'approval_request_number' => $result['approval_request_number'] ?? null,
+        ];
     }
 
     // ── التنفيذ ─────────────────────────────────────────────────────────
@@ -110,6 +124,23 @@ class CustomerActionService
         ])->save();
 
         return ['message' => $frozen ? 'جُمّد الحساب' : 'رُفع التجميد'];
+    }
+
+    private function requestApproval(User $customer, User $actor, string $approvalAction, string $reason): array
+    {
+        $request = $this->approvals->submit(
+            maker: $actor,
+            actionType: $approvalAction,
+            subjectUserId: (int) $customer->id,
+            reason: $reason,
+        );
+
+        return [
+            'message' => 'أُنشئ طلب ' . $request->request_number . ' لاعتماد مشرف مختلف قبل التنفيذ',
+            'approval_required' => true,
+            'approval_request_number' => $request->request_number,
+            'context' => ['approval_request_number' => $request->request_number],
+        ];
     }
 
     private function setLifecycle(User $c, string $state, string $reason): array
@@ -182,8 +213,12 @@ class CustomerActionService
         $clean = [];
 
         foreach ($allowed as $k) {
-            if (isset($payload[$k]) && is_numeric($payload[$k]) && (float) $payload[$k] >= 0) {
-                $clean[$k] = (string) $payload[$k];
+            if (array_key_exists($k, $payload) && $payload[$k] !== null && $payload[$k] !== '') {
+                $value = trim((string) $payload[$k]);
+                if (!preg_match('/^\d+(?:\.\d{1,4})?$/', $value)) {
+                    throw new DomainException('قيمة الحدّ «' . $k . '» غير صالحة');
+                }
+                $clean[$k] = $value;
             }
         }
 
@@ -191,14 +226,20 @@ class CustomerActionService
             throw new DomainException('لا حدود صالحة للحفظ');
         }
 
+        $existing = is_array($c->limit_override)
+            ? $c->limit_override
+            : (json_decode((string) $c->limit_override, true) ?: []);
+        // Patch لا Replace: تعديل سقفٍ واحد لا يمحو الاستثناءات الأخرى.
+        $merged = array_merge($existing, $clean);
+
         // حدٌّ يوميّ يفوق الشهريّ يمرّ في الحفظ ويُربك في التنفيذ — يُمنع هنا.
-        if (isset($clean['max_daily_total'], $clean['max_monthly_total'])
-            && bccomp($clean['max_daily_total'], $clean['max_monthly_total'], 4) > 0) {
+        if (isset($merged['max_daily_total'], $merged['max_monthly_total'])
+            && bccomp((string) $merged['max_daily_total'], (string) $merged['max_monthly_total'], 4) > 0) {
             throw new DomainException('الحدّ اليوميّ أكبر من الشهريّ — راجع القيم');
         }
 
         $c->forceFill([
-            'limit_override' => $clean,
+            'limit_override' => $merged,
             'limit_override_by' => $actor->id,
             'limit_override_at' => now(),
         ])->save();

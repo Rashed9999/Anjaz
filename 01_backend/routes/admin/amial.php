@@ -184,15 +184,17 @@ Route::prefix('charity')->name('charity.')->middleware('amial.idempotency')->gro
 });
 
 // ============ AMIAL-AML-001 (v1.4) ============
-Route::prefix('aml')->name('aml.')->group(function () {
+Route::prefix('aml')->name('aml.')->middleware('platform:platform.audit.view')->group(function () {
     // AMIAL-AML-PANEL-001 — الصفحة. كلّ ما تحتها كان JSON بلا مُشغِّل.
     Route::get('/', [AdminAmlController::class, 'page'])->name('page');
 
     // Rules
     Route::get('/rules', [AdminAmlController::class, 'indexRules'])->name('rules.index');
     Route::get('/rules/{id}', [AdminAmlController::class, 'showRule'])->name('rules.show');
-    Route::post('/rules/{id}/toggle', [AdminAmlController::class, 'toggleRule'])->name('rules.toggle');
-    Route::patch('/rules/{id}', [AdminAmlController::class, 'updateRule'])->name('rules.update');
+    Route::post('/rules/{id}/toggle', [AdminAmlController::class, 'toggleRule'])
+        ->middleware('platform:platform.approvals.decide')->name('rules.toggle');
+    Route::patch('/rules/{id}', [AdminAmlController::class, 'updateRule'])
+        ->middleware('platform:platform.approvals.decide')->name('rules.update');
 
     // Flagged transactions
     Route::get('/flagged', [AdminAmlController::class, 'indexFlagged'])->name('flagged.index');
@@ -214,6 +216,7 @@ Route::prefix('aml')->name('aml.')->group(function () {
     Route::get('/structuring', [AdminAmlController::class, 'structuring'])->name('structuring.index');
     Route::get('/sanctions', [AdminAmlController::class, 'sanctions'])->name('sanctions.index');
     Route::post('/sanctions/{id}/review', [AdminAmlController::class, 'reviewSanction'])
+        ->middleware('platform:platform.approvals.decide')
         ->where('id', '[0-9]+')->name('sanctions.review');
 
     // AMIAL-AML-INVESTIGATION-001 — مركز التحقيقات (الفصل ١٠، التبويب ٧)
@@ -242,6 +245,7 @@ Route::prefix('aml')->name('aml.')->group(function () {
     Route::get('/users/{userId}/profile', [AdminAmlController::class, 'showUserProfile'])
         ->where('userId', '[0-9]+')->name('users.profile');
     Route::post('/users/{userId}/override', [AdminAmlController::class, 'setUserOverride'])
+        ->middleware('platform:platform.approvals.decide')
         ->where('userId', '[0-9]+')->name('users.override');
 });
 
@@ -431,6 +435,7 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
         Route::get('/accounts/{id}/statement', [$lc, 'statement'])
             ->where('id', '[0-9]+')->name('statement');
         Route::get('/reconciliation', [$lc, 'reconciliation'])->name('reconciliation');
+        Route::get('/reconciliation-cases', [$lc, 'reconciliationCases'])->name('reconciliation-cases');
         Route::get('/entries', [$lc, 'entries'])->name('entries');
         // AMIAL-RECON-NIGHTLY-001: تاريخُ المصالحات — القاعدة ١٢.
         Route::get('/reconciliation-runs', [$lc, 'reconciliationRuns'])->name('reconciliation-runs');

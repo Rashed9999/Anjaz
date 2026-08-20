@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\EMoney;
 use App\Models\Ledger\LedgerAccount;
+use App\Models\ReconciliationCase;
 use App\Models\User;
 use App\Services\LedgerReportService;
 use App\Services\LedgerService;
+use App\Services\Reconciliation\ReconciliationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -183,6 +185,29 @@ class LedgerCenterTest extends TestCase
             'المحفظة المنحرفة ليست أوّل الصفّ');
     }
 
+    /** @test */
+    public function a_repeated_wallet_difference_becomes_a_case_and_escalates_instead_of_being_auto_fixed(): void
+    {
+        $u = $this->customer('770005599', '20000');
+        EMoney::where('user_id', $u->id)->update(['current_balance' => '5000']);
+
+        // ثلاث ليالٍ افتراضياً: لا نستدعي reconcileWalletBalance ولا نغيّر
+        // المحفظة؛ المطلوب قضية وتصعيد، لا «إصلاح» يخفي الدليل.
+        app(ReconciliationService::class)->run();
+        app(ReconciliationService::class)->run();
+        app(ReconciliationService::class)->run();
+
+        $case = ReconciliationCase::where('case_type', 'wallet')
+            ->where('subject_user_id', $u->id)->first();
+
+        $this->assertNotNull($case, 'فرق المحفظة لم يتحول إلى قضية مطابقة');
+        $this->assertSame('critical', $case->severity);
+        $this->assertSame(3, $case->detection_count);
+        $this->assertSame('amount_mismatch', $case->root_cause);
+        $this->assertSame('5000.0000', (string) EMoney::where('user_id', $u->id)->value('current_balance'),
+            'التشغيل الليلي أصلح الرصيد تلقائياً وأخفى الدليل');
+    }
+
     // ── كشف الحساب ──────────────────────────────────────────────────────
 
     /** @test */
@@ -230,6 +255,7 @@ class LedgerCenterTest extends TestCase
         foreach ([
             '/admin/amial/ledger/trial-balance',
             '/admin/amial/ledger/reconciliation',
+            '/admin/amial/ledger/reconciliation-cases',
             '/admin/amial/ledger/accounts',
             '/admin/amial/ledger/entries',
         ] as $url) {
