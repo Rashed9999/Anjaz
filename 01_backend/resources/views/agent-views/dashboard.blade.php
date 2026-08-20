@@ -18,10 +18,32 @@
          وموظّفُ الصرافة يفتح هذه البوّابة ثمّ يفتح التطبيق، فيرى منتجين. --}}
     <link href="{{ asset('assets/css/amial-tokens.css') }}" rel="stylesheet">
     <style>
-        .topbar { background: var(--amial-primary-dark); color: #fff; }
+        :root { --ag-navy:var(--amial-primary-dark); --ag-blue:var(--amial-primary); --ag-sky:#eaf2ff; --ag-line:var(--amial-border); }
+        .topbar { background:linear-gradient(120deg,var(--ag-navy),var(--ag-blue)); color:#fff; box-shadow:0 8px 28px rgba(2,31,92,.18); }
+        .ag-brand-mark { width:38px; height:38px; display:grid; place-items:center; border-radius:12px; background:var(--amial-yellow); color:var(--ag-navy); font-weight:900; }
+        .ag-shell { max-width:1440px; margin:auto; }
+        .ag-tabs-wrap { position:sticky; top:0; z-index:1010; background:rgba(244,247,251,.94); backdrop-filter:blur(12px); padding:.75rem 0 .55rem; }
+        .ag-tabs { flex-wrap:nowrap; overflow-x:auto; border:1px solid var(--ag-line); border-radius:14px; padding:5px; background:#fff; box-shadow:0 5px 18px rgba(25,50,90,.06); scrollbar-width:none; }
+        .ag-tabs::-webkit-scrollbar { display:none; }
+        .ag-tabs .nav-link { white-space:nowrap; border:0!important; border-radius:10px; color:#44516a; font-weight:700; }
+        .ag-tabs .nav-link.active { color:#fff; background:var(--ag-blue); box-shadow:0 5px 14px rgba(11,79,189,.22); }
+        .ag-hero { color:#fff; background:linear-gradient(125deg,#082d6f,#0b56c6); border:0; border-radius:20px; overflow:hidden; position:relative; }
+        .ag-hero::after { content:""; position:absolute; width:240px; height:240px; border-radius:50%; background:rgba(255,255,255,.07); inset:-100px auto auto -70px; }
+        .ag-hero > * { position:relative; z-index:1; }
+        .ag-action { border:1px solid var(--ag-line); border-radius:16px; background:#fff; padding:1rem; height:100%; transition:.18s ease; }
+        .ag-action:hover { transform:translateY(-2px); border-color:#a9c7f5; box-shadow:0 10px 24px rgba(25,50,90,.08); }
+        .ag-action-icon { width:40px; height:40px; display:grid; place-items:center; border-radius:12px; background:var(--ag-sky); font-size:1.15rem; }
+        #ag .card { border-color:var(--ag-line); border-radius:16px; box-shadow:0 5px 18px rgba(25,50,90,.045); }
+        .money { font-variant-numeric:tabular-nums; }
         /* الرصيدان بلونَي العلامة — النقدُ ذهبُها والإلكترونيُّ أزرقُها. */
-        .cash   { color: var(--amial-cash); }
-        .emoney { color: var(--amial-emoney); }
+        .cash { color:var(--amial-cash); } .emoney { color:var(--amial-emoney); }
+        @media (max-width:767.98px) {
+            .topbar { padding:.65rem .85rem!important; }
+            .ag-shell { padding:.7rem!important; }
+            .ag-hero { border-radius:16px; }
+            .ag-hero .card-body { padding:1.15rem!important; }
+            #ag .table { min-width:680px; }
+        }
     </style>
 </head>
 <body>
@@ -40,8 +62,9 @@
     بلونين، وتحت كلٍّ منهما ما يحدّه.
 --}}
 
-<div class="topbar py-2 px-3 d-flex align-items-center gap-3 flex-wrap">
-    <strong>🏦 أميال باي — بوّابة شركات الصرافة</strong>
+<div class="topbar py-3 px-4 d-flex align-items-center gap-3 flex-wrap">
+    <div class="ag-brand-mark">أ</div>
+    <div><strong class="d-block">أميال باي للأعمال</strong><span class="small opacity-75">بوّابة تشغيل شركات الصرافة</span></div>
     {{-- الفرع يُعرَض في الترويسة ولا يُختار في أيّ شاشة: هو هويّة الداخل. --}}
     @if($branchName)
         <span class="badge bg-light text-dark">🏬 {{ $branchName }}</span>
@@ -50,53 +73,71 @@
     <span class="ms-auto small">
         {{ $staffName }}@if($staffUsername) <span class="opacity-75" dir="ltr">({{ $staffUsername }})</span>@endif
     </span>
-    <a href="{{ route('agent.logout') }}" class="btn btn-sm btn-outline-light">خروج</a>
+    <a href="{{ route('agent.logout') }}" class="btn btn-sm btn-outline-light rounded-pill px-3">تسجيل الخروج</a>
 </div>
 
-<div class="container-fluid p-3" id="ag" data-testid="agent-portal">
+<div class="container-fluid p-3 ag-shell" id="ag" data-testid="agent-portal" data-role="{{ $role }}">
 
     @include('partials._clock_guard')
 
-    {{-- AMIAL-TELLER-WS-001 — مساحةُ عمل الصرّاف.
-
-         **فوق التبويبات لا داخلها عمداً.** ما فيها ليس تبويباً يُفتح عند
-         الحاجة: هو ما يجب أن يراه الصرّاف **قبل** أن يبدأ — حدُّه،
-         وصلاحيتُه، وتعميمُ الإدارة، وحالةُ الأنظمة. وتبويبٌ يُفتح بالضغط
-         يعني أنّه لن يُفتح، فيُكتشف كلُّ ذلك بالرفض أمام العميل.
-
-         ويراها المدير أيضاً — بمحتوى دوره: طلبات تنتظر قراره بدل طلباته. --}}
-    @include('agent-views._workspace')
-
-    <div class="row g-3 mb-3" id="ag-totals"></div>
-    <div id="ag-alerts"></div>
-
     {{-- التبويبات تختلف بالدور. الصرّاف لا يرى «الفروع» لأنّ له فرعاً
          واحداً هو فرعه، والمدير لا يرى «الشبّاك» لأنّه لا يقف عليه. --}}
-    <ul class="nav nav-tabs mb-3">
+    <div class="ag-tabs-wrap"><ul class="nav nav-tabs ag-tabs">
         @if($role === 'teller')
             <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ag-counter" data-testid="ag-tab-counter">💵 الشبّاك</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-report" data-testid="ag-tab-report">📋 تقرير اليوم</button></li>
         @else
-            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ag-staff" data-testid="ag-tab-staff">👤 الموظّفون</button></li>
+            <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ag-overview" data-testid="ag-tab-overview">الرئيسية</button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-workspace" data-testid="ag-tab-workspace">المتابعة <span class="badge bg-danger ms-1" id="ag-attention-badge" style="display:none">0</span></button></li>
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-staff" data-testid="ag-tab-staff">الموظّفون</button></li>
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-shifts" data-testid="ag-tab-shifts">🪟 الشبابيك والورديّات</button></li>
             @if($role !== 'branch_manager')
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-branches" data-testid="ag-tab-branches">🏬 الفروع</button></li>
             @endif
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-till" data-testid="ag-tab-till">🧾 حركة النقد</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-earn" data-testid="ag-tab-earn">📈 العمولات</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-ops" data-testid="ag-tab-ops">📜 سجلّ العمليات</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-reports" data-testid="ag-tab-reports">📊 التقارير</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-settle" data-testid="ag-tab-settle">🤝 التسويات</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-report" data-testid="ag-tab-report">📋 تقرير اليوم</button></li>
-            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-settings" data-testid="ag-tab-settings">⚙️ الإعدادات</button></li>
+            <li class="nav-item dropdown"><button class="nav-link dropdown-toggle" data-bs-toggle="dropdown">المزيد</button>
+                <ul class="dropdown-menu shadow border-0">
+                    <li><button class="dropdown-item" data-bs-toggle="tab" data-bs-target="#ag-earn" data-testid="ag-tab-earn">📈 العمولات</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="tab" data-bs-target="#ag-ops" data-testid="ag-tab-ops">📜 سجلّ العمليات</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="tab" data-bs-target="#ag-reports" data-testid="ag-tab-reports">📊 التقارير التحليلية</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="tab" data-bs-target="#ag-settle" data-testid="ag-tab-settle">🤝 التسويات</button></li>
+                    <li><button class="dropdown-item" data-bs-toggle="tab" data-bs-target="#ag-report" data-testid="ag-tab-report">📋 تقرير اليوم</button></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><button class="dropdown-item" data-bs-toggle="tab" data-bs-target="#ag-settings" data-testid="ag-tab-settings">⚙️ الإعدادات</button></li>
+                </ul>
+            </li>
         @endif
-    </ul>
+    </ul></div>
 
     <div class="tab-content">
 
         @if($role === 'teller')
+            @include('agent-views._workspace')
             @include('agent-views._counter')
         @else
+            <div class="tab-pane fade show active" id="ag-overview">
+                <div class="card ag-hero mb-3"><div class="card-body p-4 d-flex align-items-center gap-3 flex-wrap">
+                    <div><div class="small opacity-75 mb-1">مركز التشغيل اليومي</div>
+                        <h3 class="mb-1">مرحباً، {{ $staffName }}</h3>
+                        <div class="opacity-75">أرصدة حقيقية، حركة اليوم، وما يحتاج قرارك في مكان واحد.</div></div>
+                    <div class="ms-auto d-flex gap-2 flex-wrap">
+                        <button class="btn btn-light" data-bs-toggle="tab" data-bs-target="#ag-workspace">راجع المتابعة</button>
+                        <button class="btn btn-warning" data-bs-toggle="tab" data-bs-target="#ag-till">إدارة السيولة</button>
+                    </div>
+                </div></div>
+                <div class="row g-3 mb-3" id="ag-totals"></div>
+                <div id="ag-alerts"></div>
+                <div class="row g-3 mb-3" id="ag-attention"></div>
+                <div class="row g-3">
+                    <div class="col-md-4"><button class="ag-action w-100 text-start" data-bs-toggle="tab" data-bs-target="#ag-staff"><span class="ag-action-icon">👥</span><strong class="d-block mt-2">الفريق والصلاحيات</strong><small class="text-muted">التعيين، الأدوار، وساعات العمل</small></button></div>
+                    <div class="col-md-4"><button class="ag-action w-100 text-start" data-bs-toggle="tab" data-bs-target="#ag-shifts"><span class="ag-action-icon">🪟</span><strong class="d-block mt-2">الشبابيك والورديات</strong><small class="text-muted">المفتوح الآن وفروق الجرد</small></button></div>
+                    <div class="col-md-4"><button class="ag-action w-100 text-start" data-bs-toggle="tab" data-bs-target="#ag-reports"><span class="ag-action-icon">📊</span><strong class="d-block mt-2">التقارير التحليلية</strong><small class="text-muted">الفروع، الموظفون، وحجم العمل</small></button></div>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="ag-workspace">
+                <div class="d-flex align-items-center mb-3"><div><h4 class="mb-1">المتابعة والقرارات</h4><div class="text-muted">طلبات الموظفين والتعاميم التي تتطلب انتباهك.</div></div></div>
+                @include('agent-views._workspace')
+            </div>
             @include('agent-views._staff')
         @endif
 
@@ -426,6 +467,39 @@
                  — راجعها في «الشبابيك والورديّات».
                </div>`
             : '';
+
+        // «تحتاج انتباهك» ليست مؤشّرات للزينة: كل بطاقة تفتح المكان الذي
+        // يُتخذ فيه القرار، والأعداد جاءت من سجلات حقيقية محصورة بالدور.
+        const a = m.attention || {};
+        const attentionTotal = Number(a.pending_requests || 0)
+            + Number(a.open_emergencies || 0) + Number(a.unreviewed_variances || 0);
+        const attentionCard = (icon, title, value, text, target, tone) => `
+            <div class="col-md-4"><button class="ag-action w-100 text-start border-${tone}"
+                data-bs-toggle="tab" data-bs-target="${target}">
+                <div class="d-flex align-items-center gap-3"><span class="ag-action-icon">${icon}</span>
+                    <div><div class="small text-muted">${title}</div>
+                    <div class="fs-4 fw-bold">${value}</div></div></div>
+                <small class="text-muted d-block mt-2">${text}</small>
+            </button></div>`;
+
+        $el('ag-attention').innerHTML = attentionTotal ?
+            attentionCard('✋', 'طلبات موافقة', a.pending_requests || 0,
+                'راجع طلبات تجاوز الحدود والوقت الإضافي', '#ag-workspace', 'warning')
+            + attentionCard('🚨', 'بلاغات طوارئ مفتوحة', a.open_emergencies || 0,
+                'تحتاج استلاماً ومعالجةً موثقة', '#ag-workspace', 'danger')
+            + attentionCard('⚖️', 'فروق غير مراجعة', a.unreviewed_variances || 0,
+                'راجع الوردية ولا تقاص العجز بالفائض', '#ag-shifts', 'warning')
+            : `<div class="col-12"><div class="alert alert-success border-0 shadow-sm">
+                <strong>✓ لا توجد أعمال حرجة معلّقة.</strong>
+                <span class="text-muted ms-2">الطلبات والطوارئ وفروق الجرد تحت السيطرة.</span>
+               </div></div>`;
+
+        if (attentionTotal) {
+            $el('ag-attention-badge').textContent = String(attentionTotal);
+            $el('ag-attention-badge').style.display = '';
+        } else {
+            $el('ag-attention-badge').style.display = 'none';
+        }
 
         const opts = branches.map(b =>
             `<option value="${b.id}">${esc(b.name)} (${esc(b.code)})</option>`).join('');

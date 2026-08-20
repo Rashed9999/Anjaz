@@ -298,4 +298,72 @@ class AgentTellerRequestService
 
         return $alert;
     }
+
+    /** بلاغات الطوارئ التي تقع ضمن فروع هذا المدير. */
+    public function emergenciesFor(AgentStaff $manager): array
+    {
+        if ($manager->isTeller()) {
+            return [];
+        }
+
+        return AgentPanicAlert::with(['staff', 'branch'])
+            ->whereIn('branch_id', $manager->visibleBranchIds() ?: [0])
+            ->whereIn('status', ['open', 'acknowledged'])
+            ->orderByRaw("case when status = 'open' then 0 else 1 end")
+            ->orderByDesc('id')->limit(50)->get()
+            ->map(fn (AgentPanicAlert $a) => [
+                'id' => (int) $a->id,
+                'number' => $a->alert_number,
+                'kind' => $a->kind,
+                'kind_label' => AgentPanicAlert::KIND_LABELS[$a->kind] ?? $a->kind,
+                'status' => $a->status,
+                'status_label' => AgentPanicAlert::STATUS_LABELS[$a->status] ?? $a->status,
+                'staff' => $a->staff?->name,
+                'staff_username' => $a->staff?->username,
+                'branch' => $a->branch?->name,
+                'note' => $a->note,
+                'geo_label' => AgentPanicAlert::GEO_LABELS[$a->geo_state] ?? $a->geo_state,
+                'lat' => $a->lat === null ? null : (string) $a->lat,
+                'lng' => $a->lng === null ? null : (string) $a->lng,
+                'at' => $a->created_at?->toDateTimeString(),
+            ])->all();
+    }
+
+    /** استلام البلاغ أو إقفاله؛ لا حذف ولا تعديل لتاريخ البلاغ. */
+    public function decideEmergency(AgentStaff $manager, int $id, string $status, string $note): AgentPanicAlert
+    {
+        if ($manager->isTeller()) {
+            throw new DomainException('إدارة بلاغات الطوارئ من صلاحية المدير');
+        }
+
+        $alert = AgentPanicAlert::find($id);
+        if (!$alert || !in_array((int) $alert->branch_id, $manager->visibleBranchIds(), true)) {
+            throw new DomainException('البلاغ خارج نطاقك');
+        }
+        if (!in_array($status, ['acknowledged', 'resolved', 'false_alarm'], true)) {
+            throw new DomainException('حالة البلاغ غير صالحة');
+        }
+        if (in_array($status, ['resolved', 'false_alarm'], true) && mb_strlen(trim($note)) < 10) {
+            throw new DomainException('اكتب نتيجة المعالجة — عشرة أحرف فأكثر');
+        }
+        if (in_array($alert->status, ['resolved', 'false_alarm'], true)) {
+            throw new DomainException('البلاغ مقفل بالفعل');
+        }
+
+        $alert->update([
+            'status' => $status,
+            'acknowledged_by_user_id' => $manager->agent_user_id,
+            'acknowledged_at' => $alert->acknowledged_at ?: now(),
+            'resolution_note' => $note ?: $alert->resolution_note,
+        ]);
+
+        $this->audit->record([
+            'actor_type' => 'agent', 'actor_user_id' => $manager->agent_user_id,
+            'action' => 'agent.panic.' . $status, 'severity' => 'critical',
+            'subject_type' => 'agent_panic_alert', 'subject_id' => $alert->alert_number,
+            'metadata' => ['manager_staff_id' => $manager->id, 'note' => $note],
+        ]);
+
+        return $alert->fresh();
+    }
 }

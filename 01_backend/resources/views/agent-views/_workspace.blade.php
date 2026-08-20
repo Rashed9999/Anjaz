@@ -16,9 +16,9 @@
     <div id="ws-announce"></div>
 
     {{-- ١٨) المؤشّرات الرئيسية --}}
-    <div class="row g-2 mb-3" id="ws-kpis"></div>
+    <div class="row g-2 mb-3 {{ $role === 'teller' ? '' : 'd-none' }}" id="ws-kpis"></div>
 
-    <div class="row g-3 mb-3">
+    <div class="row g-3 mb-3 {{ $role === 'teller' ? '' : 'd-none' }}">
         {{-- ٦) الصلاحيات + ٣) الحدود --}}
         <div class="col-lg-7">
             <div class="card p-3 h-100">
@@ -71,13 +71,49 @@
         <div id="ws-requests"></div>
     </div>
 
+    @if($role !== 'teller')
+    <div class="card p-3 mb-3" id="ws-emergency-card">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <h6 class="mb-0 text-danger">🚨 بلاغات الطوارئ</h6>
+            <span class="badge bg-danger" id="ws-emergency-count">0</span>
+            <button class="btn btn-sm btn-outline-secondary ms-auto" id="ws-emergency-refresh">تحديث</button>
+        </div>
+        <div id="ws-emergencies"><div class="text-muted small">جارٍ التحميل…</div></div>
+    </div>
+    @endif
+
     {{-- ١٠) العملاء الأخيرون --}}
-    <div class="card p-3 mb-3" id="ws-recent-card" style="display:none">
+    <div class="card p-3 mb-3 {{ $role === 'teller' ? '' : 'd-none' }}" id="ws-recent-card" style="display:none">
         <h6 class="mb-2">👥 آخر من خدمتَهم</h6>
         <div class="d-flex flex-wrap gap-1" id="ws-recent"></div>
         <div class="form-text">اضغط الاسم ليُملأ رقمُه في خانة البحث.</div>
     </div>
 </div>
+
+@if($role !== 'teller')
+<div class="modal fade" id="ws-emergency-modal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">معالجة بلاغ الطوارئ</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>
+        <div class="modal-body">
+            <div class="alert alert-danger py-2 small" id="ws-emergency-summary"></div>
+            <label class="form-label">الإجراء</label>
+            <select class="form-select mb-3" id="ws-emergency-status">
+                <option value="acknowledged">استلمت البلاغ وأتابعه</option>
+                <option value="resolved">تمت المعالجة</option>
+                <option value="false_alarm">إنذار خاطئ موثق</option>
+            </select>
+            <label class="form-label">نتيجة المعالجة</label>
+            <textarea class="form-control" rows="4" id="ws-emergency-note" placeholder="إلزامية عند إغلاق البلاغ — عشرة أحرف فأكثر"></textarea>
+            <div class="text-danger small mt-2" id="ws-emergency-err"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-light" data-bs-dismiss="modal">إلغاء</button>
+            <button class="btn btn-danger" id="ws-emergency-save">حفظ الإجراء</button>
+        </div>
+    </div></div>
+</div>
+@endif
 
 {{-- كشفُ ساعات الدوام (AMIAL-WORKTIME-001) --}}
 <div class="modal fade" id="ws-sheet-modal" tabindex="-1">
@@ -124,6 +160,25 @@
         </div>
         <div class="modal-footer">
             <button class="btn btn-primary" id="ws-req-send">إرسال الطلب</button>
+        </div>
+    </div></div>
+</div>
+
+{{-- قرار المدير في نافذة من المشروع، لا نافذة المتصفّح الخام. --}}
+<div class="modal fade" id="ws-decision-modal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title" id="ws-decision-title">قرار الطلب</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="إغلاق"></button></div>
+        <div class="modal-body">
+            <input type="hidden" id="ws-decision-id"><input type="hidden" id="ws-decision-approve">
+            <div class="alert alert-light border small" id="ws-decision-help"></div>
+            <label class="form-label">ملاحظة القرار</label>
+            <textarea class="form-control" id="ws-decision-note" rows="3"></textarea>
+            <div class="text-danger small mt-2" id="ws-decision-err"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-light" data-bs-dismiss="modal">إلغاء</button>
+            <button class="btn btn-primary" id="ws-decision-save">حفظ القرار</button>
         </div>
     </div></div>
 </div>
@@ -350,11 +405,41 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
                 <div class="small mt-1">📝 ${esc(r.reason)}</div>
                 <div class="mt-2 d-flex gap-2">
-                    <button class="btn btn-sm btn-success" data-ws-approve="${r.id}">موافقة</button>
-                    <button class="btn btn-sm btn-outline-danger" data-ws-reject="${r.id}">رفض</button>
+                    <button class="btn btn-sm btn-success" data-ws-request="${r.id}" data-ws-approve="1">موافقة</button>
+                    <button class="btn btn-sm btn-outline-danger" data-ws-request="${r.id}" data-ws-approve="0">رفض</button>
                 </div>
             </div>`).join('')
             : '<div class="text-muted small">لا طلبات تنتظر قرارك.</div>';
+    }
+
+    let EMERGENCY_ID = null;
+    let EMERGENCY_ROWS = [];
+
+    function renderEmergencies(rows) {
+        const host = $('ws-emergencies');
+        if (!host) return;
+        EMERGENCY_ROWS = rows;
+        $('ws-emergency-count').textContent = String(rows.length);
+        host.innerHTML = rows.length ? rows.map(a => `
+            <div class="border border-danger-subtle rounded-3 p-3 mb-2 bg-danger-subtle bg-opacity-25">
+                <div class="d-flex gap-2 flex-wrap align-items-center">
+                    <strong class="text-danger">${esc(a.kind_label)}</strong>
+                    <span class="badge ${a.status === 'open' ? 'bg-danger' : 'bg-warning text-dark'}">${esc(a.status_label)}</span>
+                    <span class="ms-auto small text-muted" dir="ltr">${esc(a.number)} · ${esc(a.at)}</span>
+                </div>
+                <div class="small mt-2"><strong>${esc(a.staff)}</strong> · ${esc(a.branch)}
+                    ${a.staff_username ? `· <span dir="ltr">${esc(a.staff_username)}</span>` : ''}</div>
+                ${a.note ? `<div class="small mt-1">ملاحظة الموظف: ${esc(a.note)}</div>` : ''}
+                <div class="small text-muted mt-1">${esc(a.geo_label)}</div>
+                <button class="btn btn-sm btn-danger mt-2" data-ws-emergency="${a.id}">استلام ومعالجة</button>
+            </div>`).join('')
+            : '<div class="alert alert-success py-2 mb-0">لا بلاغات طوارئ مفتوحة.</div>';
+    }
+
+    async function loadEmergencies() {
+        if (!$('ws-emergencies')) return;
+        try { renderEmergencies(((await get('/teller/emergencies')).meta || {}).rows || []); }
+        catch (e) { $('ws-emergencies').innerHTML = `<div class="alert alert-danger py-2">${esc(e.message)}</div>`; }
     }
 
     // ── التحميل ──────────────────────────────────────────────────────
@@ -397,16 +482,44 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             try { renderPending(((await get('/teller/requests')).meta || {}).rows || []); }
             catch (e) { /* لا تُسقط الشاشة كلّها لأجل قائمة */ }
+            loadEmergencies();
         }
 
         onBreak = (m.day_log || {}).on_break === true;
         renderBreak();
 
         $('ws').dataset.boot = '1';
-        window.wsLogEvent('counter_opened');
+        if (ROLE === 'teller') window.wsLogEvent('counter_opened');
     }
 
     $('ws-refresh').addEventListener('click', load);
+
+    if ($('ws-emergency-refresh')) $('ws-emergency-refresh').addEventListener('click', loadEmergencies);
+    if ($('ws-emergencies')) $('ws-emergencies').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-ws-emergency]');
+        if (!b) return;
+        const row = EMERGENCY_ROWS.find(x => Number(x.id) === Number(b.dataset.wsEmergency));
+        if (!row) return;
+        EMERGENCY_ID = row.id;
+        $('ws-emergency-summary').textContent = `${row.kind_label} — ${row.staff} — ${row.branch}`;
+        $('ws-emergency-status').value = row.status === 'open' ? 'acknowledged' : 'resolved';
+        $('ws-emergency-note').value = '';
+        $('ws-emergency-err').textContent = '';
+        bootstrap.Modal.getOrCreateInstance($('ws-emergency-modal')).show();
+    });
+    if ($('ws-emergency-save')) $('ws-emergency-save').addEventListener('click', async () => {
+        if (!EMERGENCY_ID) return;
+        $('ws-emergency-err').textContent = '';
+        try {
+            await post(`/teller/emergencies/${EMERGENCY_ID}/decide`, {
+                status: $('ws-emergency-status').value,
+                note: $('ws-emergency-note').value,
+            });
+            bootstrap.Modal.getInstance($('ws-emergency-modal'))?.hide();
+            await loadEmergencies();
+            if (typeof loadOverview === 'function') loadOverview();
+        } catch (e) { $('ws-emergency-err').textContent = e.message; }
+    });
 
     // العميل الأخير يملأ خانة البحث في الشبّاك — إن كانت موجودة.
     $('ws-recent').addEventListener('click', (e) => {
@@ -418,21 +531,32 @@ document.addEventListener('DOMContentLoaded', function () {
         if (find) find.click();
     });
 
-    $('ws-requests').addEventListener('click', async (e) => {
-        const ok = e.target.closest('button[data-ws-approve]');
-        const no = e.target.closest('button[data-ws-reject]');
-        if (!ok && !no) return;
+    $('ws-requests').addEventListener('click', (e) => {
+        const b = e.target.closest('button[data-ws-request]');
+        if (!b) return;
+        const approve = b.dataset.wsApprove === '1';
+        $('ws-decision-id').value = b.dataset.wsRequest;
+        $('ws-decision-approve').value = b.dataset.wsApprove;
+        $('ws-decision-note').value = '';
+        $('ws-decision-err').textContent = '';
+        $('ws-decision-title').textContent = approve ? 'تأكيد الموافقة' : 'رفض الطلب';
+        $('ws-decision-help').textContent = approve
+            ? 'راجع المبلغ والسبب قبل تسجيل موافقتك.'
+            : 'سبب الرفض إلزامي — عشرة أحرف فأكثر.';
+        bootstrap.Modal.getOrCreateInstance($('ws-decision-modal')).show();
+    });
+
+    $('ws-decision-save').addEventListener('click', async () => {
+        const id = $('ws-decision-id').value;
+        const approve = $('ws-decision-approve').value === '1';
+        $('ws-decision-err').textContent = '';
         try {
-            if (no) {
-                const note = prompt('سبب الرفض (عشرة أحرف فأكثر):');
-                if (!note) return;
-                await post(`/teller/requests/${no.dataset.wsReject}/decide`, {approve: false, note: note});
-            } else {
-                const note = prompt('ملاحظة الموافقة (اختياريّة):') || '';
-                await post(`/teller/requests/${ok.dataset.wsApprove}/decide`, {approve: true, note: note});
-            }
+            await post(`/teller/requests/${id}/decide`, {
+                approve: approve, note: $('ws-decision-note').value,
+            });
+            bootstrap.Modal.getInstance($('ws-decision-modal'))?.hide();
             load();
-        } catch (err) { alert(err.message); }
+        } catch (err) { $('ws-decision-err').textContent = err.message; }
     });
 
     // ── طلب الموافقة ─────────────────────────────────────────────────

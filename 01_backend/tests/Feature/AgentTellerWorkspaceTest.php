@@ -501,6 +501,41 @@ class AgentTellerWorkspaceTest extends TestCase
         $this->assertSame(0, bccomp('14.5', (string) $ok->lat, 4));
     }
 
+    /** @test */
+    public function a_manager_can_receive_and_close_an_emergency_but_a_teller_cannot_manage_it(): void
+    {
+        $alert = app(AgentTellerRequestService::class)->panic($this->teller, [
+            'kind' => 'threat', 'geo_state' => 'unavailable', 'note' => 'تهديد عند الشبّاك',
+        ]);
+
+        $this->assertCount(1, app(AgentTellerRequestService::class)->emergenciesFor($this->manager));
+        $this->assertSame([], app(AgentTellerRequestService::class)->emergenciesFor($this->teller));
+
+        $this->expectException(DomainException::class);
+        app(AgentTellerRequestService::class)->decideEmergency(
+            $this->teller, $alert->id, 'resolved', 'حاول الصراف الإغلاق بنفسه',
+        );
+    }
+
+    /** @test */
+    public function closing_an_emergency_preserves_it_and_records_the_resolution(): void
+    {
+        $alert = app(AgentTellerRequestService::class)->panic($this->teller, [
+            'kind' => 'fraud', 'geo_state' => 'unavailable',
+        ]);
+
+        $closed = app(AgentTellerRequestService::class)->decideEmergency(
+            $this->manager, $alert->id, 'resolved', 'تواصل المدير مع الفرع وتأكد من السلامة',
+        );
+
+        $this->assertSame('resolved', $closed->status);
+        $this->assertNotNull($closed->acknowledged_at);
+        $this->assertDatabaseHas('agent_panic_alerts', [
+            'id' => $alert->id, 'status' => 'resolved',
+            'resolution_note' => 'تواصل المدير مع الفرع وتأكد من السلامة',
+        ]);
+    }
+
     // ══════════════════════════════════════════════════════════════════
     // ١٢) التعاميم
     // ══════════════════════════════════════════════════════════════════

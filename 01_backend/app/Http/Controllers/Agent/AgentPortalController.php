@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Agent;
 
 use App\Http\Controllers\Controller;
 use App\Models\Agent\AgentBranch;
+use App\Models\Agent\AgentPanicAlert;
 use App\Models\Agent\AgentStaff;
+use App\Models\Agent\AgentTellerRequest;
 use App\Models\EMoney;
 use App\Models\User;
 use App\Services\AgentBranchService;
@@ -223,8 +225,18 @@ class AgentPortalController extends Controller
     {
         $rootId = (int) $request->attributes->get('agent_root_id');
         $agent = User::find($rootId);
+        $staff = $request->attributes->get('agent_staff');
+        $role = (string) $request->attributes->get('portal_role');
+        $visibleBranchIds = array_map('intval', (array) $request->attributes->get('agent_branch_ids', []));
 
-        $branches = $this->branches->listFor($agent);
+        // `listFor` ترجع فروع الشركة كلّها. أمّا ما يراه الداخل فيأتي من
+        // الوسيط حسب دوره؛ تطبيق الحصر بعد الجلب هنا ليس تجميلاً للواجهة،
+        // بل يمنع مدير فرع أو صرّافاً من قراءة خزائن بقية الفروع من JSON.
+        $branches = array_values(array_filter(
+            $this->branches->listFor($agent),
+            fn (array $branch) => in_array((int) $branch['id'], $visibleBranchIds, true),
+        ));
+        $scopedBranchIds = array_map('intval', array_column($branches, 'id'));
 
         // الإجماليّان يُجمعان كلٌّ على حدة ولا يُخلطان: مجموعُهما رقمٌ بلا
         // معنى — نقدٌ ورقيّ ورصيدٌ إلكترونيّ ليسا من جنسٍ واحد وإن كانا
@@ -239,8 +251,11 @@ class AgentPortalController extends Controller
                 'phone' => (string) $agent->phone,
                 'is_branch_account' => (bool) $request->attributes->get('is_branch_account'),
             ],
-            'own_balance' => (string) (EMoney::where('user_id', $agent->id)
-                ->value('current_balance') ?? '0'),
+            // محفظة الشركة الأمّ قرار سيولة للإدارة العامّة، وليست معلومة
+            // يحتاجها موظّف فرع لأداء عمله.
+            'own_balance' => $role === AgentStaff::ROLE_HEAD_OFFICE
+                ? (string) (EMoney::where('user_id', $agent->id)->value('current_balance') ?? '0')
+                : null,
             'branches' => $branches,
             'totals' => [
                 'cash_on_hand' => $totalCash,
@@ -250,7 +265,8 @@ class AgentPortalController extends Controller
                 'low_cash_branches' => count(array_filter($branches, fn ($b) => $b['cash_is_low'])),
             ],
             // ما تسأل عنه الإدارة العامّة كلّ صباح — لا الأرصدة وحدها.
-            'today' => $this->todaySnapshot($rootId, array_column($branches, 'id')),
+            'today' => $this->todaySnapshot($rootId, $scopedBranchIds, $staff),
+            'attention' => $this->attentionSnapshot($rootId, $scopedBranchIds, $staff),
         ]);
     }
 
@@ -263,13 +279,18 @@ class AgentPortalController extends Controller
      *
      * @param  array<int>  $branchIds
      */
-    private function todaySnapshot(int $rootId, array $branchIds): array
+    private function todaySnapshot(int $rootId, array $branchIds, ?AgentStaff $actor): array
     {
         $today = now()->toDateString();
         $from = $today . ' 00:00:00';
         $to = $today . ' 23:59:59';
 
-        $staff = \App\Models\Agent\AgentStaff::where('agent_user_id', $rootId);
+        $staff = AgentStaff::where('agent_user_id', $rootId);
+        if ($actor?->isTeller()) {
+            $staff->whereKey($actor->id);
+        } elseif (!$actor?->isHeadOffice()) {
+            $staff->whereIn('branch_id', $branchIds ?: [0]);
+        }
 
         $shiftsToday = \App\Models\Agent\AgentShift::whereIn('branch_id', $branchIds)
             ->whereBetween('opened_at', [$from, $to])->get();
@@ -277,9 +298,13 @@ class AgentPortalController extends Controller
         $openNow = \App\Models\Agent\AgentShift::whereIn('branch_id', $branchIds)
             ->where('status', \App\Models\Agent\AgentShift::STATUS_OPEN)->get();
 
-        $moves = \App\Models\Agent\AgentCashMovement::whereIn('branch_id', $branchIds)
+        $movesQuery = \App\Models\Agent\AgentCashMovement::whereIn('branch_id', $branchIds)
             ->whereBetween('created_at', [$from, $to])
-            ->whereIn('reason', ['customer_deposit', 'customer_withdraw'])->get();
+            ->whereIn('reason', ['customer_deposit', 'customer_withdraw']);
+        if ($actor?->isTeller()) {
+            $movesQuery->where('staff_id', $actor->id);
+        }
+        $moves = $movesQuery->get();
 
         $sum = fn ($c) => (string) $c->reduce(fn ($a, $m) => bcadd($a, (string) $m->amount, 4), '0');
 
@@ -305,6 +330,11 @@ class AgentPortalController extends Controller
             'withdrawals_total' => $sum($moves->where('reason', 'customer_withdraw')),
 
             'shifts_with_variance' => $variances->count(),
+            // صافي الفرق مفيد كإشارة سريعة في لوحة المتابعة، لكنه لا
+            // يلغي فصلي العجز والفائض أدناه: الحادثتان لا تتقاصّان
+            // محاسبياً حتى لو تساوى مقدارهما.
+            'variance_total' => (string) $variances->reduce(
+                fn ($a, $s) => bcadd($a, (string) $s->variance, 4), '0'),
             // لا تُقاصّ الفروق: العجز والفائض حادثتان مستقلتان حتى إن تساويا.
             'shortage_count' => $variances->filter(fn ($s) => bccomp((string) $s->variance, '0', 4) < 0)->count(),
             'shortage_total' => (string) $variances
@@ -317,6 +347,43 @@ class AgentPortalController extends Controller
 
             // فرعٌ لم يفتح شبّاكاً اليوم لا يخدم أحداً مهما كان رصيده.
             'branches_idle' => count(array_diff($branchIds, $shiftsToday->pluck('branch_id')->all())),
+        ];
+    }
+
+    /**
+     * أعمالٌ تحتاج قراراً الآن، ضمن فروع الداخل وحدها.
+     *
+     * لا نستنتج «الانتباه» من ألوان الواجهة: كل رقمٍ استعلامٌ عن سجلّ
+     * قابلٍ للفتح والمراجعة، ولذلك لا تظهر بطاقةٌ لا تقود إلى عمل.
+     *
+     * @param array<int> $branchIds
+     */
+    private function attentionSnapshot(int $rootId, array $branchIds, ?AgentStaff $actor): array
+    {
+        $ids = $branchIds ?: [0];
+        $requests = AgentTellerRequest::where('agent_user_id', $rootId)
+            ->whereIn('branch_id', $ids);
+        $emergencies = AgentPanicAlert::where('agent_user_id', $rootId)
+            ->whereIn('branch_id', $ids);
+        $variances = \App\Models\Agent\AgentShift::whereIn('branch_id', $ids);
+
+        if ($actor?->isTeller()) {
+            $requests->where('staff_id', $actor->id);
+            $emergencies->where('staff_id', $actor->id);
+            $variances->where('staff_id', $actor->id);
+        }
+
+        return [
+            'pending_requests' => $requests
+                ->where('status', AgentTellerRequest::STATUS_PENDING)
+                ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->count(),
+            'open_emergencies' => $emergencies->whereIn('status', ['open', 'acknowledged'])
+                ->count(),
+            'unreviewed_variances' => $variances->whereNotNull('variance')
+                ->whereNull('reviewed_at')
+                ->where('variance', '!=', 0)
+                ->count(),
         ];
     }
 

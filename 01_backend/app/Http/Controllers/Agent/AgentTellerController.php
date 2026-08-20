@@ -149,6 +149,30 @@ class AgentTellerController extends Controller
         );
     }
 
+    public function emergencies(Request $request): JsonResponse
+    {
+        return $this->ok(['rows' => $this->requests->emergenciesFor($this->actor($request))]);
+    }
+
+    public function decideEmergency(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'status' => 'required|string|in:acknowledged,resolved,false_alarm',
+            'note' => 'nullable|string|max:1000',
+        ]);
+
+        try {
+            $alert = $this->requests->decideEmergency(
+                $this->actor($request), $id,
+                (string) $request->input('status'), (string) $request->input('note', ''),
+            );
+        } catch (DomainException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+
+        return $this->ok(['status' => $alert->status], 'حُفظت حالة البلاغ وسجلّ المعالجة');
+    }
+
     // ── ساعاتُ الدوام (AMIAL-WORKTIME-001) ─────────────────────────────
 
     /**

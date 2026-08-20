@@ -86,6 +86,9 @@ Route::middleware('agent.portal')->group(function () use ($c, $counter, $staff, 
         Route::post('/requests/{id}/decide', [$teller, 'decideRequest'])
             ->where('id', '[0-9]+')->name('requests.decide');
         Route::post('/panic', [$teller, 'panic'])->name('panic');
+        Route::get('/emergencies', [$teller, 'emergencies'])->name('emergencies');
+        Route::post('/emergencies/{id}/decide', [$teller, 'decideEmergency'])
+            ->where('id', '[0-9]+')->name('emergencies.decide');
         Route::post('/event', [$teller, 'logEvent'])->name('event');
 
         // ساعاتُ الدوام — قراءةُ كشفي، واستراحةٌ داخل ورديّتي.

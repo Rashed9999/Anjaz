@@ -3,7 +3,7 @@
      الشركة تُعيّن وتُعطّل بنفسها. ولو مرّ تعيينُ صرّافٍ بتذكرة دعمٍ عندنا
      لتعطّل فرعٌ في المكلا انتظاراً لموظّفٍ في صنعاء. --}}
 
-<div class="tab-pane fade show active" id="ag-staff">
+<div class="tab-pane fade" id="ag-staff">
     <div class="card p-3">
         <div class="d-flex mb-3 align-items-center flex-wrap gap-2">
             <h6 class="mb-0">موظّفو الشركة</h6>

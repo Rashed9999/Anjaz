@@ -45,4 +45,14 @@ class AgentPanicAlert extends Model
         'unavailable' => 'الجهاز لم يُعطِ موقعاً',
         'insecure' => 'الاتّصال غير مشفَّر — المتصفّح يمنع الموقع',
     ];
+
+    public function staff()
+    {
+        return $this->belongsTo(AgentStaff::class, 'staff_id');
+    }
+
+    public function branch()
+    {
+        return $this->belongsTo(AgentBranch::class, 'branch_id');
+    }
 }

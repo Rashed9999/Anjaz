@@ -118,6 +118,33 @@ class AgentPortalContractTest extends TestCase
             $this->assertArrayHasKey($k, $j['meta']['today'],
                 "بطاقة المؤشّرات تقرأ «today.{$k}» ولا يُرسله الخادم");
         }
+
+        foreach (['pending_requests', 'open_emergencies', 'unreviewed_variances'] as $k) {
+            $this->assertArrayHasKey($k, $j['meta']['attention']);
+        }
+    }
+
+    /** @test */
+    public function a_branch_manager_overview_is_scoped_to_their_branch_and_hides_company_wallet(): void
+    {
+        $mine = $this->addBranch('MGR');
+        $other = $this->addBranch('OTH');
+        $manager = app(AgentStaffService::class)->hire($this->hq, [
+            'name' => 'مدير فرع', 'role' => AgentStaff::ROLE_BRANCH_MANAGER,
+            'branch_id' => $mine->id, 'password' => 'manager12',
+        ]);
+        app(AgentStaffService::class)->hire($this->hq, [
+            'name' => 'صرّاف الفرع الآخر', 'role' => AgentStaff::ROLE_TELLER,
+            'branch_id' => $other->id, 'password' => 'teller123',
+        ]);
+
+        $meta = $this->actingAs($manager, 'agent_staff')
+            ->getJson(route('agent.overview'))->assertOk()->json('meta');
+
+        $this->assertSame([$mine->id], array_column($meta['branches'], 'id'));
+        $this->assertNull($meta['own_balance'], 'مدير الفرع رأى محفظة الشركة الأمّ');
+        $this->assertSame(1, $meta['today']['staff_total'],
+            'دخل موظفو فروع أخرى في إحصائية مدير الفرع');
     }
 
     /** @test */
