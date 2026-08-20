@@ -41,6 +41,7 @@ class CustomerCenterService
         private readonly CustomerStatusResolver $status,
         private readonly PiiAccessAuditService $pii,
         private readonly LedgerReportService $ledgerReports,
+        private readonly KycDocumentService $kycDocuments,
     ) {
     }
 
@@ -104,12 +105,10 @@ class CustomerCenterService
                     4,
                 ),
             ],
-            'kyc' => [
-                'is_verified' => $this->isKycVerified($customer),
-                'tier' => (int) ($customer->kyc_tier ?? 0),
+            'kyc' => array_merge($this->kycReconciliation($customer), [
                 // NULL ليس «clear»؛ لم تُجرَ الشاشة فلا يجوز أن تطمئن الموظف.
                 'sanction_status' => $this->sanctionStatus($customer),
-            ],
+            ]),
             'risk' => $this->riskSummary($risk),
             'limits' => $this->limits($customer),
             'financial_truth' => $financialTruth,
@@ -153,6 +152,84 @@ class CustomerCenterService
             3 => 'not_submitted',
             default => 'pending',
         };
+    }
+
+    /**
+     * حالة قرار الحساب وحالة سجلّ المستندات حقيقتان مختلفتان.
+     *
+     * لا يجعل غيابُ مستندات KYC الحديثة حساباً قديماً غير موثّق من تلقاء
+     * نفسه؛ ذلك قرارٌ يغيّر قدرة العميل على المال. لكن إخفاء الغياب خلف
+     * شارة «موثّق» يضلّل الموظف ويمنع تنظيف بيانات الترحيل. لذلك نعرض
+     * مصدرَي الحقيقة مع نتيجة مصالحة صريحة، من دون أي تعديل على الحساب.
+     *
+     * @return array<string,mixed>
+     */
+    private function kycReconciliation(User $customer): array
+    {
+        $tier = max(0, min(3, (int) ($customer->kyc_tier ?? 0)));
+        // الفئة 0/1 لا تتطلب ملفّات في KycDocumentService. عند غيابها نعرض
+        // جاهزية ترقية الفئة 2، لا ندّعي أن الحساب الحالي ناقص المستندات.
+        $documentTier = $tier >= 2 ? $tier : 2;
+        $completeness = $this->kycDocuments->completenessFor($customer, $documentTier);
+        $documents = KycDocument::query()->where('user_id', $customer->id)
+            ->get(['id', 'status']);
+        $hasDocuments = $documents->isNotEmpty();
+        $hasPending = $documents->contains('status', KycDocument::STATUS_PENDING);
+        $hasRejected = $documents->contains('status', KycDocument::STATUS_REJECTED);
+        $accountState = $this->accountKycState($customer);
+
+        [$state, $severity, $label, $description] = match (true) {
+            $accountState === 'rejected' => [
+                'account_rejected', 'danger', 'قرار الحساب: مرفوض',
+                'رُفض توثيق الحساب؛ راجع سبب الرفض وسجلّ المستندات قبل أي إعادة تقديم.',
+            ],
+            $accountState === 'verified' && $completeness['complete'] => [
+                'verified_with_current_documents', 'success', 'موثّق والمستندات مكتملة',
+                'قرار الحساب وسجلّ مستندات الفئة الحالية متوافقان.',
+            ],
+            $accountState === 'verified' && !$hasDocuments => [
+                'verified_without_document_record', 'warning', 'موثّق في الحساب — لا سجل مستندات',
+                'قرار الحساب نافذ، لكن لا توجد مستندات حديثة في السجل؛ هذه فجوة ترحيل/أرشفة وليست دليلاً على إلغاء التوثيق.',
+            ],
+            $accountState === 'verified' => [
+                'verified_documents_incomplete', 'warning', 'موثّق في الحساب — سجل المستندات غير مكتمل',
+                'قرار الحساب نافذ، لكن ملفّ مستندات الفئة المستهدفة يحتاج مراجعة أو استكمالاً.',
+            ],
+            $completeness['complete'] => [
+                'documents_complete_pending_account_decision', 'warning', 'المستندات مكتملة — قرار الحساب معلّق',
+                'اكتمال المستندات لا يساوي اعتماد الحساب؛ يلزم قرار مستقل من مراجع مخوّل.',
+            ],
+            $hasPending => [
+                'documents_under_review', 'warning', 'مستندات قيد المراجعة',
+                'الحساب غير موثّق بعد؛ توجد مستندات تنتظر مراجعة أو استكمالاً.',
+            ],
+            $hasRejected => [
+                'documents_require_resubmission', 'danger', 'مستندات تحتاج إعادة تقديم',
+                'الحساب غير موثّق؛ يوجد مستند مرفوض ولا توجد حزمة مكتملة معتمدة.',
+            ],
+            $accountState === 'not_submitted' => [
+                'not_submitted', 'secondary', 'لم تُقدَّم هوية',
+                'لا يوجد قرار اعتماد ولا ملف مستندات للفئة المستهدفة.',
+            ],
+            default => [
+                'account_pending', 'warning', 'قرار الحساب معلّق',
+                'الحساب غير موثّق ولم تكتمل مستندات الفئة المستهدفة.',
+            ],
+        };
+
+        return [
+            'is_verified' => $this->isKycVerified($customer),
+            'account_state' => $accountState,
+            'tier' => $tier,
+            'document_target_tier' => $documentTier,
+            'completeness' => $completeness,
+            'reconciliation' => [
+                'state' => $state,
+                'severity' => $severity,
+                'label' => $label,
+                'description' => $description,
+            ],
+        ];
     }
 
     private function sanctionStatus(User $customer): string
@@ -396,10 +473,7 @@ class CustomerCenterService
     {
         $this->logAccess($actorId, $customer->id, 'kyc');
 
-        return [
-            'is_verified' => $this->isKycVerified($customer),
-            'account_state' => $this->accountKycState($customer),
-            'tier' => (int) ($customer->kyc_tier ?? 0),
+        return array_merge($this->kycReconciliation($customer), [
             'documents' => KycDocument::with('reviewer:id,f_name,l_name')
                 ->where('user_id', $customer->id)
                 ->orderByDesc('created_at')->get()
@@ -416,8 +490,7 @@ class CustomerCenterService
                     'reviewed_at' => $d->reviewed_at?->toIso8601String(),
                     'uploaded_at' => $d->created_at?->toIso8601String(),
                 ])->all(),
-            'completeness' => app(KycDocumentService::class)->completenessFor($customer, 2),
-        ];
+        ]);
     }
 
     // ── التبويب ٧: المخاطر ──────────────────────────────────────────────

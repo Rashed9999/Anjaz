@@ -224,6 +224,47 @@ class CustomerCenterTest extends TestCase
     }
 
     /** @test */
+    public function kyc_reconciliation_exposes_a_legacy_verified_account_without_documents(): void
+    {
+        $this->customer->forceFill(['is_kyc_verified' => 1, 'kyc_tier' => 2])->save();
+
+        $kyc = $this->actingAs($this->staff, 'user')
+            ->getJson("/admin/amial/customer/{$this->customer->id}/tab/kyc")
+            ->assertOk()->json('meta');
+
+        $this->assertTrue($kyc['is_verified']);
+        $this->assertSame('verified_without_document_record', $kyc['reconciliation']['state']);
+        $this->assertSame('warning', $kyc['reconciliation']['severity']);
+        $this->assertFalse($kyc['completeness']['complete']);
+    }
+
+    /** @test */
+    public function kyc_reconciliation_never_treats_complete_documents_as_an_account_approval(): void
+    {
+        $this->customer->forceFill(['is_kyc_verified' => 0, 'kyc_tier' => 0])->save();
+        foreach ([
+            KycDocument::TYPE_ID_FRONT,
+            KycDocument::TYPE_ID_BACK,
+            KycDocument::TYPE_SELFIE,
+        ] as $type) {
+            KycDocument::create([
+                'user_id' => $this->customer->id,
+                'doc_type' => $type,
+                'encrypted_path' => 'tests/kyc/' . $type,
+                'status' => KycDocument::STATUS_APPROVED,
+            ]);
+        }
+
+        $kyc = $this->actingAs($this->staff, 'user')
+            ->getJson("/admin/amial/customer/{$this->customer->id}/tab/kyc")
+            ->assertOk()->json('meta');
+
+        $this->assertFalse($kyc['is_verified']);
+        $this->assertTrue($kyc['completeness']['complete']);
+        $this->assertSame('documents_complete_pending_account_decision', $kyc['reconciliation']['state']);
+    }
+
+    /** @test */
     public function an_unreconciled_wallet_is_exposed_as_a_financial_exception_not_a_green_balance(): void
     {
         // رصيد المحفظة يُحدَّث مباشرةً هنا عمداً من دون تمرير قيد جديد،

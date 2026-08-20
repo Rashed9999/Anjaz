@@ -210,8 +210,9 @@
                            m.risk.state === 'measured' ? esc(m.risk.level) : 'لم يُحتسب بعد',
                            m.risk.state === 'unassessed' ? 'border-warning'
                                : (['high','very_high','critical'].includes(m.risk.level) ? 'border-danger' : ''))}
-                    ${card('فئة الهوية', m.kyc.tier, m.kyc.is_verified ? 'موثَّقة' : 'غير موثَّقة',
-                           m.kyc.is_verified ? '' : 'border-warning')}
+                    ${card('حالة الهوية', esc(m.kyc.reconciliation.label), esc(m.kyc.reconciliation.description),
+                           m.kyc.reconciliation.severity === 'success' ? 'border-success'
+                               : (m.kyc.reconciliation.severity === 'danger' ? 'border-danger' : 'border-warning'))}
                     ${card('تذاكر مفتوحة', m.counters.open_tickets)}
                     ${card('تحقيقات مفتوحة', m.counters.open_investigations, '',
                            m.counters.open_investigations > 0 ? 'border-danger' : '')}
@@ -300,11 +301,16 @@
 
         kyc(m, body) {
             const c = m.completeness;
+            const r = m.reconciliation;
             body.innerHTML = `
-                <div class="alert alert-${c.complete ? 'success' : 'warning'} py-2">
-                    ${c.complete ? 'مستندات الفئة ' + c.tier + ' مكتملة'
-                        : 'ينقص: ' + (c.missing || []).map(esc).join('، ')}
-                    <div class="small mt-1">حالة الحساب: ${esc(m.account_state)}</div>
+                <div class="alert alert-${esc(r.severity)} py-2" data-testid="cc-kyc-reconciliation">
+                    <strong>${esc(r.label)}</strong>
+                    <div class="small mt-1">${esc(r.description)}</div>
+                    <div class="small mt-2">
+                        فئة الحساب: ${esc(m.tier)} • فئة ملف المستندات: ${esc(m.document_target_tier)}<br>
+                        ${c.complete ? 'مستندات الفئة ' + esc(c.tier) + ' مكتملة'
+                            : 'المطلوب للاستكمال: ' + (c.missing || []).map(esc).join('، ')}
+                    </div>
                 </div>
                 ${table(['المستند', 'الحالة', 'القراءة الآلية', 'ينتهي', 'المراجع', 'رُفع'],
                     m.documents.map(d => `<tr>
