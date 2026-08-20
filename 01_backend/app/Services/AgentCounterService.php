@@ -517,6 +517,7 @@ class AgentCounterService
             CustomerStatusResolver::CLOSED,
             CustomerStatusResolver::DECEASED,
             CustomerStatusResolver::FROZEN,
+            CustomerStatusResolver::SUSPENDED,
         ], true)) {
             throw new DomainException(
                 "لا تُنفَّذ عمليات على هذا العميل — حالته: {$status['label']}",

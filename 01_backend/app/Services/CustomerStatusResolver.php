@@ -106,6 +106,13 @@ class CustomerStatusResolver
             $note(self::FROZEN, 'الحساب مجمَّد مؤقتاً');
         }
 
+        // «موقوف» قرارٌ تشغيليّ مستقل عن «غير نشط». وضعه بعد التجميد وقبل
+        // التوثيق يحفظ أولوية المنع: لا يظهر للصرّاف "هوية معلّقة" بينما
+        // الحساب موقوف صراحةً.
+        if ($user->lifecycle_state === 'suspended') {
+            $note(self::SUSPENDED, 'الحساب موقوف مؤقتاً بقرار تشغيلي');
+        }
+
         // ٤) تحقيقٌ مفتوح: يُعرَض ولا يمنع — التحقيق ليس إدانة.
         if (Schema::hasTable('aml_investigations')
             && AmlInvestigation::where('subject_user_id', $user->id)->open()->exists()) {

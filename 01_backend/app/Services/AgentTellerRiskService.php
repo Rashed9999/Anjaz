@@ -57,6 +57,7 @@ class AgentTellerRiskService
             CustomerStatusResolver::CLOSED,
             CustomerStatusResolver::DECEASED,
             CustomerStatusResolver::FROZEN,
+            CustomerStatusResolver::SUSPENDED,
         ];
 
         if (in_array($status['status'], $hardStop, true)) {

@@ -83,7 +83,7 @@ class CustomerActionService
             'freeze' => $this->setFrozen($customer, true),
             // إعادة الوصول أخطر من منعه: لا تُنفَّذ بضغط الموظف نفسه.
             'unfreeze' => $this->requestApproval($customer, $actor, 'unfreeze_wallet', $reason),
-            'suspend' => $this->setLifecycle($customer, 'inactive', $reason),
+            'suspend' => $this->setLifecycle($customer, 'suspended', $reason),
             'activate' => $this->setLifecycle($customer, 'active', $reason),
             'close' => $this->setLifecycle($customer, 'closed', $reason),
             'mark_deceased' => $this->markDeceased($customer, $reason),

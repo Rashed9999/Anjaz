@@ -476,6 +476,20 @@ class CustomerCenterTest extends TestCase
         );
     }
 
+    /** الإيقاف المؤقت حالة صريحة لا اسم آخر للخمول. */
+    public function suspending_a_customer_uses_the_suspended_state(): void
+    {
+        app(CustomerActionService::class)->run(
+            $this->customer, $this->staff, 'suspend',
+            'إيقاف مؤقت حتى تنتهي مراجعة البلاغ التشغيلي',
+        );
+
+        $fresh = $this->customer->fresh();
+        $this->assertSame('suspended', $fresh->lifecycle_state);
+        $this->assertSame(CustomerStatusResolver::SUSPENDED,
+            app(CustomerStatusResolver::class)->resolve($fresh)['status']);
+    }
+
     /** @test */
     public function a_daily_limit_above_the_monthly_one_is_refused(): void
     {
