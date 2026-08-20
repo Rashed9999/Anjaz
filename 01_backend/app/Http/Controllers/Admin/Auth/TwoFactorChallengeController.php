@@ -79,10 +79,13 @@ class TwoFactorChallengeController extends Controller
 
         $admin = User::find($id);
 
-        if (! $admin) {
+        // قد يُعطّل الموظف بين إدخال كلمة المرور والرمز الثاني. لا تُنشئ
+        // البوابة جلسةً متأخرةً لحساب أُغلق أثناء التحقق.
+        if (! $admin || ! (bool) $admin->is_active) {
             $request->session()->forget(['amial.2fa.pending_user', 'amial.2fa.remember']);
 
-            return redirect()->route('admin.auth.login');
+            return redirect()->route('admin.auth.login')
+                ->withErrors(['الحساب غير متاح لتسجيل الدخول.']);
         }
 
         // `verify` تقبل رمزَ التطبيق **أو** رمزَ استرداد، وتستهلك

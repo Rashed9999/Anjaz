@@ -64,16 +64,18 @@ class OperatorRolesAssignmentTest extends TestCase
             'مُنح الدور ولم تصل الصلاحية — الصفحة بلا أثر');
     }
 
-    public function test_removing_a_role_takes_the_permission_away(): void
+    public function test_an_active_operator_cannot_be_left_with_zero_roles(): void
     {
         $admin = $this->operator('platform_admin');
         $support = $this->operator('platform_support');
 
         $this->actingAs($admin, 'user')
             ->post("/admin/amial/ops/roles/{$support->id}", ['role_ids' => []])
-            ->assertRedirect();
+            ->assertRedirect()
+            ->assertSessionHasErrors('role_ids');
 
-        $this->assertFalse(User::find($support->id)->hasPlatformPermission('platform.customers.view'));
+        $this->assertTrue(User::find($support->id)->hasPlatformPermission('platform.customers.view'),
+            'حساب إدارة نشط بلا دور يظلّ حالةً غامضة لا ينبغي أن ينشئها المسار');
     }
 
     public function test_two_roles_can_be_granted_at_once(): void
@@ -146,11 +148,12 @@ class OperatorRolesAssignmentTest extends TestCase
         $onlyAdmin = $this->operator('platform_admin');
         $second = $this->operator('platform_admin');
 
-        // بمديرَين: خفضُ أحدهما مسموح
+        // بمديرَين: خفضُ أحدهما إلى دور تشغيل آخر مسموح، لا إلى «لا دور».
         $this->actingAs($onlyAdmin, 'user')
-            ->post("/admin/amial/ops/roles/{$second->id}", ['role_ids' => []])
+            ->post("/admin/amial/ops/roles/{$second->id}", ['role_ids' => [$this->roleId('platform_support')]])
             ->assertRedirect();
         $this->assertFalse(User::find($second->id)->hasPlatformPermission('platform.settings.update'));
+        $this->assertTrue(User::find($second->id)->hasPlatformPermission('platform.customers.view'));
 
         // وبمديرٍ واحد: يُمنع
         $newbie = $this->operator();
@@ -164,6 +167,27 @@ class OperatorRolesAssignmentTest extends TestCase
             ->assertSessionHas('error');
 
         $this->assertTrue(User::find($onlyAdmin->id)->hasPlatformPermission('platform.settings.update'));
+    }
+
+    /** لا يقبل المسار دور تاجر حتى لو كان معرّفه صحيحاً في جدول roles. */
+    public function test_a_non_platform_role_id_is_rejected_without_touching_assignments(): void
+    {
+        $admin = $this->operator('platform_admin');
+        $support = $this->operator('platform_support');
+        $foreignRole = DB::table('roles')->insertGetId([
+            'code' => 'merchant_injected_role',
+            'label_ar' => 'دور تاجر مزوّر',
+            'merchant_user_id' => 999999,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $this->actingAs($admin, 'user')
+            ->post("/admin/amial/ops/roles/{$support->id}", ['role_ids' => [$foreignRole]])
+            ->assertRedirect()
+            ->assertSessionHasErrors('role_ids');
+
+        $this->assertSame([$this->roleId('platform_support')], DB::table('admin_user_roles')
+            ->where('user_id', $support->id)->pluck('role_id')->map(fn ($id) => (int) $id)->all());
     }
 
     /** حساب عميل لا يُمنح أدوار منصّة ولو أُرسل معرّفه. */

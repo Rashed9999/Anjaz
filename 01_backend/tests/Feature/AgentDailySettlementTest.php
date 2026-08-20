@@ -366,6 +366,41 @@ class AgentDailySettlementTest extends TestCase
         $this->assertGreaterThan(0, $day['suspicious_count']);
     }
 
+    /** @test */
+    public function an_unclosed_shift_blocks_the_normal_daily_close(): void
+    {
+        app(AgentShiftService::class)->open($this->teller, '100000');
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('ورديات مفتوحة');
+        app(AgentDailySettlementService::class)
+            ->submit($this->company, $this->hq, now()->toDateString(), $this->inWindow());
+    }
+
+    /** فرقٌ كبيرٌ مغلق بلا مراجعة ليس «يوماً سليماً» يمكن تحويله. */
+    public function an_unreviewed_shift_variance_blocks_the_normal_daily_close(): void
+    {
+        $shift = app(AgentShiftService::class)->open($this->teller, '500000');
+        app(AgentCounterService::class)->deposit(
+            $this->branch, $this->customer(), '100000',
+            $this->branch->account, 'إيداع', $shift->fresh(),
+        );
+
+        $fresh = $shift->fresh();
+        app(AgentShiftService::class)->close(
+            $this->teller, $fresh, bcsub($fresh->expectedCash(), '60000', 4), 'فرق كبير قيد المراجعة',
+        );
+
+        $day = app(AgentDailySettlementService::class)
+            ->computeDay($this->company, now()->toDateString());
+        $this->assertGreaterThan(0, $day['pending_review']);
+
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('مراجعة فروق الورديات');
+        app(AgentDailySettlementService::class)
+            ->submit($this->company, $this->hq, now()->toDateString(), $this->inWindow());
+    }
+
     // ══════════════════════════════════════════════════════════════════
     // شاشة أميال
     // ══════════════════════════════════════════════════════════════════

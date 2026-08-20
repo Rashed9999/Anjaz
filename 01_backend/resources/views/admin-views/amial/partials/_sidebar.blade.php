@@ -222,7 +222,6 @@
                 ['⚙️ مفاتيح سريعة (تشغيل/إيقاف)', route('admin.amial.hub.settings'), null],
                 ['💬 حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.money.move'],
                 ['🗺️ نطاق التشغيل والمخالفات', route('admin.amial.hub.zones.index'), null],
-                ['🗂️ توزيع المستخدمين على المناطق', route('admin.amial.zones.index'), null],
                 ['🔥 إعداد Firebase', route('admin.business-settings.fcm-index'), null],
                 ['📜 الشروط القانونية', route('admin.amial.legal.index'), null],
                 ['🩺 حالة التشغيل (الطوابير والمستندات)', route('admin.amial.ops.index'), null],

@@ -296,7 +296,6 @@ class AdminCommandCenterGuardTest extends TestCase
         'admin.amial.surface.payment-requests',
         'admin.amial.surface.rbac',
         'admin.amial.whatsapp.limits.page',
-        'admin.amial.zones.index',
         'admin.banner.index',
         'admin.business-settings.business-setup',
         'admin.business-settings.fcm-index',

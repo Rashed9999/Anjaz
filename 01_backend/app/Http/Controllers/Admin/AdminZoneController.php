@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\ZoneAssignmentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +18,7 @@ class AdminZoneController extends Controller
 {
     public function __construct(
         private readonly ZoneAssignmentService $zoneService,
+        private readonly AuditService $audit,
     ) {}
 
     /** POST /admin/amial/zone/assign */
@@ -31,16 +33,32 @@ class AdminZoneController extends Controller
 
         $user = User::findOrFail($request->input('user_id'));
 
+        $actor = $request->user();
+        abort_unless($actor, 401);
+
         try {
             $zone = $this->zoneService->assignByAdmin(
                 $user,
                 $request->input('zone'),
-                $request->user()->id,
+                $actor->id,
                 $request->input('reason'),
             );
         } catch (\RuntimeException $e) {
             return $this->error('ASSIGN_FAILED', $e->getMessage(), 422);
         }
+
+        $this->audit->record([
+            'actor_type' => 'admin',
+            'actor_user_id' => $actor->id,
+            'subject_type' => 'user',
+            'subject_id' => (string) $user->id,
+            'action' => 'ZONE_CHANGED',
+            'decision_code' => 'ZONE_SET',
+            'reason' => (string) $request->input('reason'),
+            'zone_code' => $zone,
+            'severity' => 'notice',
+            'context' => ['assignment_method' => 'admin_decision'],
+        ]);
 
         return $this->ok(['user_id' => $user->id, 'zone' => $zone], 'ASSIGNED', 'تم إسناد المنطقة');
     }
@@ -55,9 +73,24 @@ class AdminZoneController extends Controller
         if ($v->fails()) return $this->validationError($v);
 
         $user = User::findOrFail($request->input('user_id'));
+        $actor = $request->user();
+        abort_unless($actor, 401);
         $zone = $this->zoneService->assignFromKyc(
-            $user, $request->input('city'), $request->user()->id,
+            $user, $request->input('city'), $actor->id,
         );
+
+        $this->audit->record([
+            'actor_type' => 'admin',
+            'actor_user_id' => $actor->id,
+            'subject_type' => 'user',
+            'subject_id' => (string) $user->id,
+            'action' => 'ZONE_ASSIGNED_FROM_KYC',
+            'decision_code' => 'ZONE_KYC_SET',
+            'reason' => 'إسناد من محافظة موثقة في KYC',
+            'zone_code' => $zone,
+            'severity' => 'notice',
+            'context' => ['assignment_method' => 'kyc_verification'],
+        ]);
 
         return $this->ok([
             'user_id' => $user->id,

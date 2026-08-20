@@ -117,6 +117,18 @@ class LoginController extends Controller
             // أحدٍ بتغييرٍ صامت**.
             $admin = auth('user')->user();
 
+            // `attempt` يتحقق من كلمة المرور والنوع، لا من صلاحية تشغيل
+            // الحساب. إبقاء هذا الفحص في واجهة اللوحة فقط يعني أن «تعطيل
+            // موظف» يظلّ يستطيع فتح كل شيء بكلمة مروره.
+            if (!$admin || !(bool) $admin->is_active) {
+                auth('user')->logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+
+                return redirect()->route('admin.auth.login')
+                    ->withErrors(['تم تعطيل حساب الموظف. راجع مدير المنصّة.']);
+            }
+
             if ($admin && $admin->two_factor_enabled && $admin->two_factor_confirmed_at) {
                 auth('user')->logout();
 

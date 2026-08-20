@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\AuditService;
+use App\Services\ZoneAssignmentService;
 use App\Services\ZonePolicyService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -24,57 +26,19 @@ class ZoneManagementController extends Controller
 {
     public function __construct(
         private readonly AuditService $audit,
+        private readonly ZoneAssignmentService $zones,
     ) {}
 
     /**
-     * GET /admin/amial/zones
+     * المسار القديم يبقى لروابط الموظفين المحفوظة فقط. كانت هذه شاشةً ثانية
+     * للسياسة نفسها وتنتج أرقاماً وتعريفات متعارضة؛ مركز المناطق هو المصدر
+     * المرئي الوحيد الآن.
      */
-    public function index(Request $request)
+    public function index(): RedirectResponse
     {
-        $zoneFilter = $request->query('zone', 'all');
-        $typeFilter = $request->query('type', 'all');
-        $search = trim((string)$request->query('search', ''));
-
-        $query = User::query();
-
-        if ($zoneFilter !== 'all') {
-            $query->where('zone_code', strtoupper($zoneFilter));
-        }
-        if ($typeFilter !== 'all') {
-            $query->where('type', (int)$typeFilter);
-        }
-        if (!empty($search)) {
-            $query->where(function ($q) use ($search) {
-                $q->where('phone', 'like', "%{$search}%")
-                  ->orWhere('f_name', 'like', "%{$search}%")
-                  ->orWhere('l_name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
-            });
-        }
-
-        $users = $query->orderByDesc('created_at')->paginate(20)->withQueryString();
-
-        // إحصاءات للـ dashboard cards
-        $stats = User::selectRaw('zone_code, COUNT(*) as cnt')
-            ->groupBy('zone_code')
-            ->pluck('cnt', 'zone_code')
-            ->toArray();
-
-        $totalUsers = User::count();
-        $southUsers = $stats['SOUTH'] ?? 0;
-        $otherZones = $totalUsers - $southUsers;
-
-        return view('admin-views.amial.zones.index', [
-            'users' => $users,
-            'stats' => $stats,
-            'total_users' => $totalUsers,
-            'south_users' => $southUsers,
-            'other_users' => $otherZones,
-            'valid_zones' => ZonePolicyService::VALID_ZONES,
-            'zone_filter' => $zoneFilter,
-            'type_filter' => $typeFilter,
-            'search' => $search,
-        ]);
+        return redirect()
+            ->route('admin.amial.hub.zones.index')
+            ->with('info', 'نُقلت إدارة المناطق إلى مركز سياسة المناطق الموحّد.');
     }
 
     /**
@@ -85,7 +49,9 @@ class ZoneManagementController extends Controller
         $v = Validator::make($request->all(), [
             'user_id' => 'required|integer|exists:users,id',
             'zone' => 'required|string|in:' . implode(',', ZonePolicyService::VALID_ZONES),
-            'reason' => 'sometimes|string|max:500',
+            // إسناد المنطقة قرار تشغيلي يؤثر في السطح المسموح، فلا يقبل
+            // «تحديثاً» بلا تفسير يُراجَع لاحقاً.
+            'reason' => 'required|string|min:10|max:500',
         ]);
         if ($v->fails()) {
             return back()->withErrors($v)->withInput();
@@ -100,23 +66,29 @@ class ZoneManagementController extends Controller
             return back()->with('warning', "User #{$user->id} is already in zone {$newZone}");
         }
 
-        $user->zone_code = $newZone;
-        $user->save();
+        $actor = $request->user();
+        if (!$actor) {
+            abort(401);
+        }
+
+        // هذا هو مدخل الإسناد الوحيد: يسجل التاريخ وطريقة القرار ولا
+        // يتجاوز قواعد الخدمة كما كانت تفعل الشاشة القديمة.
+        $this->zones->assignByAdmin($user, $newZone, (int) $actor->id, (string) $request->input('reason'));
 
         $this->audit->record([
             'actor_type' => 'admin',
-            'actor_user_id' => auth('admin')->id() ?? auth()->id() ?? 1,
+            'actor_user_id' => $actor->id,
             'subject_type' => 'user',
             'subject_id' => (string)$user->id,
             'action' => 'ZONE_CHANGED',
             'decision_code' => 'ZONE_SET',
-            'reason' => $request->input('reason') ?: "Zone changed via admin panel: {$oldZone} → {$newZone}",
+            'reason' => (string) $request->input('reason'),
             'zone_code' => $newZone,
             'severity' => 'notice',
             'context' => [
                 'old_zone' => $oldZone,
                 'new_zone' => $newZone,
-                'user_phone' => $user->phone,
+                'assignment_method' => 'admin_decision',
             ],
         ]);
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Aml\AmlAlert;
 use App\Models\User;
+use App\Services\AuditService;
 use App\Services\KycGeoConsistencyService;
 use App\Services\ZoneAssignmentService;
 use App\Services\ZonePolicyService;
@@ -29,6 +30,10 @@ use Illuminate\Support\Facades\DB;
  */
 class ZoneControlController extends Controller
 {
+    public function __construct(private readonly AuditService $audit)
+    {
+    }
+
     public function index(): View
     {
         return view('admin-views.amial.hub.zones', [
@@ -208,11 +213,27 @@ class ZoneControlController extends Controller
             ], 422);
         }
 
+        $actor = $request->user();
+        abort_unless($actor, 401);
+
         $zone = app(ZoneAssignmentService::class)->assignFromKyc(
             $user,
             YemenGovernorates::name($code) ?? '',
-            $request->user()?->id
+            $actor->id,
         );
+
+        $this->audit->record([
+            'actor_type' => 'admin',
+            'actor_user_id' => $actor->id,
+            'subject_type' => 'user',
+            'subject_id' => (string) $user->id,
+            'action' => 'ZONE_ASSIGNED_FROM_KYC',
+            'decision_code' => 'ZONE_KYC_SET',
+            'reason' => 'إعادة إسناد من محافظة السكن الموثقة',
+            'zone_code' => $zone,
+            'severity' => 'notice',
+            'context' => ['assignment_method' => 'kyc_reassignment'],
+        ]);
 
         return response()->json([
             'message' => 'أُسندت المنطقة: ' . ZonePolicyService::zoneNameAr($zone),

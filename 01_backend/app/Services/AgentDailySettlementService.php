@@ -314,6 +314,17 @@ class AgentDailySettlementService
 
         $day = $this->computeDay($agent, $date);
 
+        // الإقفال لا يُحوّل العجز أو الوردية المفتوحة إلى ملاحظة داخل
+        // تسويةٍ «مرفوعة». يجب أن تُغلق الورديات وتُراجع الفروق أولاً؛
+        // الاستثناء لاحقاً يحتاج مسار override مستقل وصلاحية وسجلّاً، لا
+        // زر الرفع العادي.
+        if ((int) $day['unclosed_shifts'] > 0) {
+            throw new DomainException('لا يمكن إقفال اليوم وفيه ورديات مفتوحة');
+        }
+        if ((int) $day['pending_review'] > 0) {
+            throw new DomainException('لا يمكن إقفال اليوم قبل مراجعة فروق الورديات');
+        }
+
         return DB::transaction(function () use ($agent, $by, $date, $day, $window, $unlocked, $existing, $now) {
             $row = $existing ?: new AgentDailySettlement([
                 'settlement_ulid' => (string) Str::ulid(),

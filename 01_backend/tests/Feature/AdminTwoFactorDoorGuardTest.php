@@ -80,6 +80,15 @@ class AdminTwoFactorDoorGuardTest extends TestCase
         $this->assertTrue(auth('user')->check());
     }
 
+    /** حساب أوقفه مدير المنصّة لا يبقى نافذاً بكلمة المرور القديمة. */
+    public function test_a_disabled_admin_cannot_open_a_session(): void
+    {
+        $this->admin(false)->forceFill(['is_active' => 0])->save();
+
+        $this->login()->assertRedirect(route('admin.auth.login'));
+        $this->assertFalse(auth('user')->check());
+    }
+
     public function test_the_password_alone_does_not_open_the_panel_when_two_factor_is_on(): void
     {
         $this->admin(true);
@@ -136,6 +145,19 @@ class AdminTwoFactorDoorGuardTest extends TestCase
 
         $this->post(route('admin.auth.two-factor.verify'), ['code' => '000000'])
             ->assertRedirect();
+
+        $this->assertFalse(auth('user')->check());
+    }
+
+    /** التعطيل بعد كلمة المرور وقبل TOTP لا يمرّ من الجلسة المعلّقة. */
+    public function test_a_disabled_pending_admin_cannot_finish_two_factor(): void
+    {
+        $admin = $this->admin(true);
+        $this->login();
+        $admin->forceFill(['is_active' => 0])->save();
+
+        $this->post(route('admin.auth.two-factor.verify'), ['code' => '000000'])
+            ->assertRedirect(route('admin.auth.login'));
 
         $this->assertFalse(auth('user')->check());
     }

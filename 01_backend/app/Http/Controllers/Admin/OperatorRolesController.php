@@ -76,11 +76,15 @@ class OperatorRolesController extends Controller
             'email' => 'nullable|email|max:190',
             // **ثمانيةٌ حدٌّ أدنى**: هذا حسابٌ يفتح لوحةَ الإدارة.
             'password' => 'required|string|min:8',
-            'role_ids' => 'array',
+            'role_ids' => 'required|array|min:1',
             'role_ids.*' => 'integer|exists:roles,id',
         ]);
 
         $phone = \App\CentralLogics\Helpers::filter_phone($data['phone']);
+        $roleIds = $this->platformRoleIds($data['role_ids']);
+        if (count($roleIds) !== count(array_unique(array_map('intval', $data['role_ids'])))) {
+            return back()->withInput()->withErrors(['role_ids' => 'لا يجوز إسناد دورٍ غير تابع لموظفي المنصّة']);
+        }
 
         // **ولا يُنشأ حسابٌ برقمٍ مأخوذ** — وإلّا صار للرقم حسابان
         // ودخولٌ لا يُعرف أيَّهما يفتح.
@@ -94,7 +98,7 @@ class OperatorRolesController extends Controller
                 ->withErrors(['phone' => 'الرقم مستعملٌ في حسابٍ آخر']);
         }
 
-        $operator = DB::transaction(function () use ($data, $phone, $request) {
+        $operator = DB::transaction(function () use ($data, $phone, $roleIds, $request) {
             $u = new User();
             $u->f_name = $data['f_name'];
             $u->l_name = $data['l_name'] ?? '';
@@ -106,7 +110,7 @@ class OperatorRolesController extends Controller
             $u->is_phone_verified = 1; // أدخله مديرٌ بنفسه، ولا OTP في هذا المسار
             $u->save();
 
-            foreach (array_unique(array_map('intval', $data['role_ids'] ?? [])) as $roleId) {
+            foreach ($roleIds as $roleId) {
                 DB::table('admin_user_roles')->insert([
                     'user_id' => $u->id,
                     'role_id' => $roleId,
@@ -127,7 +131,7 @@ class OperatorRolesController extends Controller
             'action' => 'ADMIN_OPERATOR_CREATED',
             'decision_code' => 'OPERATOR_CREATED',
             'reason' => 'إنشاءُ موظّف منصّةٍ من شاشة الأدوار',
-            'context' => ['roles' => $data['role_ids'] ?? [], 'phone' => $phone],
+            'context' => ['roles' => $roleIds],
             'severity' => 'warning',
         ]);
 
@@ -138,7 +142,7 @@ class OperatorRolesController extends Controller
     public function update(Request $request, int $userId): RedirectResponse
     {
         $data = $request->validate([
-            'role_ids' => 'array',
+            'role_ids' => 'required|array|min:1',
             'role_ids.*' => 'integer|exists:roles,id',
         ]);
 
@@ -149,7 +153,10 @@ class OperatorRolesController extends Controller
 
         $before = DB::table('admin_user_roles')->where('user_id', $userId)
             ->pluck('role_id')->all();
-        $after = array_values(array_unique(array_map('intval', $data['role_ids'] ?? [])));
+        $after = $this->platformRoleIds($data['role_ids']);
+        if (count($after) !== count(array_unique(array_map('intval', $data['role_ids'])))) {
+            return back()->withErrors(['role_ids' => 'لا يجوز إسناد دورٍ غير تابع لموظفي المنصّة']);
+        }
 
         // من يسحب دوره عن نفسه يُقفل الباب وهو داخله، ولا أحد يفتحه له.
         if ($operator->id === $request->user()->id
@@ -200,6 +207,16 @@ class OperatorRolesController extends Controller
     {
         return DB::table('roles')->whereNull('merchant_user_id')
             ->where('code', 'platform_admin')->value('id');
+    }
+
+    /** لا يقبل POST مُزوّراً دور تاجرٍ أو دوراً محلياً باسم موظف منصة. */
+    private function platformRoleIds(array $roleIds): array
+    {
+        $requested = array_values(array_unique(array_map('intval', $roleIds)));
+
+        return DB::table('roles')->whereIn('id', $requested)
+            ->whereNull('merchant_user_id')->where('code', 'like', 'platform_%')
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
     }
 
     private function keepsAdminRole(array $roleIds): bool

@@ -6,12 +6,7 @@
 
     <div class="d-flex justify-content-between align-items-center flex-wrap mb-1">
         <h4 class="fw-bold mb-0" style="color:var(--amial-primary)">🗺️ {{ translate('لوحة المناطق') }}</h4>
-        <div class="d-flex gap-2 align-items-center">
-            {{-- لوحة قائمة بذاتها لتعديل منطقة حساب بعينه — نصل بينهما بدل تكرارهما --}}
-            <a href="{{ route('admin.amial.zones.index') }}"
-               class="btn btn-sm btn-outline-secondary">تعديل منطقة حساب بعينه</a>
-            <span class="badge" id="modeBadge" style="background:var(--amial-text-secondary)">…</span>
-        </div>
+        <span class="badge" id="modeBadge" style="background:var(--amial-text-secondary)">…</span>
     </div>
     <p class="text-muted small mb-3">
         اليمن فيه بنكان مركزيان وعملتان بسعرين. الضبط يقع عند <strong>عبور النقد</strong>
