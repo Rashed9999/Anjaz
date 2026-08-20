@@ -16,8 +16,10 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Services\ApprovalService;
 use App\Services\AuditService;
+use App\Services\CustomerActionService;
 use App\Services\InsiderWatchService;
 use App\Support\Phone;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +42,7 @@ class SupportConsoleController extends Controller
         private readonly AuditService $audit,
         private readonly ApprovalService $approvals,
         private readonly InsiderWatchService $watch,
+        private readonly CustomerActionService $customerActions,
     ) {}
 
     /** لا تعرض اللوحة تبويباً لا يستطيع المشغّل فتح بياناته فعلياً. */
@@ -435,33 +438,14 @@ class SupportConsoleController extends Controller
         if ($resp = $this->requireAdmin($request)) return $resp;
         if ($resp = $this->requireReason($request)) return $resp;
 
-        $user = User::find($id);
+        $user = User::where('type', CUSTOMER_TYPE)->find($id);
         if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
 
         $unfreeze = (bool) $request->input('unfreeze', false);
 
-        if ($unfreeze) {
-            $req = $this->approvals->submit(
-                $request->user(), 'unfreeze_wallet', $user->id,
-                trim((string) $request->input('reason')),
-            );
-            return $this->ok([
-                'approval_required' => true,
-                'request_number' => $req->request_number,
-                'request_id' => $req->id,
-            ], 'APPROVAL_PENDING', 'فكّ التجميد يتطلب اعتماد مشرف آخر — أُنشئ طلب ' . $req->request_number, 202);
-        }
-
-        $user->is_temp_blocked = true;
-        $user->temp_block_time = now();
-        $user->save();
-
-        $this->auditAction($request, $user, 'SUPPORT_FREEZE_WALLET');
-
-        return $this->ok([
-            'user_id' => $user->id,
-            'is_temp_blocked' => true,
-        ], 'OK', 'تم تجميد الحساب مؤقتاً');
+        return $this->runCustomerAction(
+            $request, $user, $unfreeze ? 'unfreeze' : 'freeze',
+        );
     }
 
     /**
@@ -473,19 +457,10 @@ class SupportConsoleController extends Controller
         if ($resp = $this->requireAdmin($request)) return $resp;
         if ($resp = $this->requireReason($request)) return $resp;
 
-        $user = User::find($id);
+        $user = User::where('type', CUSTOMER_TYPE)->find($id);
         if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
 
-        $req = $this->approvals->submit(
-            $request->user(), 'reset_pin', $user->id,
-            trim((string) $request->input('reason')),
-        );
-
-        return $this->ok([
-            'approval_required' => true,
-            'request_number' => $req->request_number,
-            'request_id' => $req->id,
-        ], 'APPROVAL_PENDING', 'إعادة تعيين PIN تتطلب اعتماد مشرف آخر — أُنشئ طلب ' . $req->request_number, 202);
+        return $this->runCustomerAction($request, $user, 'reset_pin');
     }
 
     // ==================== الموافقات (Maker-Checker) ====================
@@ -607,22 +582,10 @@ class SupportConsoleController extends Controller
         if ($resp = $this->requireAdmin($request)) return $resp;
         if ($resp = $this->requireReason($request)) return $resp;
 
-        $user = User::find($id);
+        $user = User::where('type', CUSTOMER_TYPE)->find($id);
         if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
 
-        $tokenIds = DB::table('oauth_access_tokens')
-            ->where('user_id', $user->id)->where('revoked', false)
-            ->pluck('id');
-
-        DB::table('oauth_access_tokens')->whereIn('id', $tokenIds)->update(['revoked' => true]);
-        DB::table('oauth_refresh_tokens')->whereIn('access_token_id', $tokenIds)->update(['revoked' => true]);
-
-        $this->auditAction($request, $user, 'SUPPORT_REVOKE_SESSIONS', ['revoked_tokens' => count($tokenIds)]);
-
-        return $this->ok([
-            'user_id' => $user->id,
-            'revoked_sessions' => count($tokenIds),
-        ], 'OK', 'تم إنهاء كل الجلسات');
+        return $this->runCustomerAction($request, $user, 'revoke_sessions');
     }
 
     /** POST /admin/support/customers/{id}/require-kyc  {reason} */
@@ -1045,6 +1008,35 @@ class SupportConsoleController extends Controller
             || in_array($user->role ?? null, [A::ROLE_ADMIN, 'super_admin'], true));
 
         return $isAdmin ? null : $this->error('FORBIDDEN', 'صلاحية إدارية مطلوبة', 403);
+    }
+
+    /**
+     * لا تنفّذ بوابة الدعم نسخةً ثانية من التجميد وPIN والجلسات. مركز
+     * العملاء والدعم يمران من الحارس نفسه: الصلاحية، السبب، منع
+     * self-action، نطاق العميل، الموافقة الثنائية، وسجل التدقيق الحرج.
+     */
+    private function runCustomerAction(Request $request, User $customer, string $action): JsonResponse
+    {
+        try {
+            $out = $this->customerActions->run(
+                $customer,
+                $request->user(),
+                $action,
+                trim((string) $request->input('reason', '')),
+            );
+        } catch (DomainException $e) {
+            return $this->error('ACTION_REJECTED', $e->getMessage(), 422);
+        }
+
+        $approvalRequired = (bool) ($out['approval_required'] ?? false);
+
+        return $this->ok([
+            'user_id' => (int) $customer->id,
+            'action' => $action,
+            'approval_required' => $approvalRequired,
+            'request_number' => $out['approval_request_number'] ?? null,
+            'operation' => $out['context'] ?? [],
+        ], $approvalRequired ? 'APPROVAL_PENDING' : 'OK', (string) $out['message'], $approvalRequired ? 202 : 200);
     }
 
     /** كل إجراء أمني يتطلب سبباً موثَّقاً. */

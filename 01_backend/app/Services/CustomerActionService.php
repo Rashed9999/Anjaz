@@ -33,7 +33,10 @@ class CustomerActionService
         'close' => ['إغلاق الحساب', 'platform.customers.freeze'],
         'mark_deceased' => ['تعليم كمتوفّى', 'platform.customers.freeze'],
         'reset_pin' => ['إعادة تعيين PIN', 'platform.customers.reset_pin'],
-        'revoke_sessions' => ['إنهاء جميع الجلسات', 'platform.customers.sessions'],
+        // لا ندّعي إنهاء «كل» جلسة بينما ليست كلّ فئات الجلسات موحّدة في
+        // مخزنٍ واحد. هذه العملية تلغي الجلسات والرموز التي يستطيع النظام
+        // إثباتها وتعدّها في سجلّ التدقيق.
+        'revoke_sessions' => ['إلغاء الجلسات المسجّلة', 'platform.customers.sessions'],
         'require_kyc' => ['طلب تحديث الهوية', 'platform.customers.freeze'],
         'update_limits' => ['تعديل حدود التحويل', 'platform.settings.update'],
         'add_note' => ['إضافة ملاحظة', 'platform.customers.view'],
@@ -111,6 +114,9 @@ class CustomerActionService
             'action' => $action,
             'approval_required' => (bool) ($result['approval_required'] ?? false),
             'approval_request_number' => $result['approval_request_number'] ?? null,
+            // لا يُخفى أثر الإجراء عن السطح الذي طلبه، لكن يُبنى من الخدمة
+            // لا من عدّادٍ مستقل في كلّ متحكّم.
+            'context' => $result['context'] ?? [],
         ];
     }
 
@@ -188,14 +194,43 @@ class CustomerActionService
 
     private function revokeSessions(User $c): array
     {
-        $n = DB::table('user_log_histories')->where('user_id', $c->id)
+        $deviceRows = DB::table('user_log_histories')->where('user_id', $c->id)
             ->update(['is_active' => 0]);
 
+        $accessTokenIds = collect();
         if (Schema::hasTable('oauth_access_tokens')) {
-            DB::table('oauth_access_tokens')->where('user_id', $c->id)->update(['revoked' => 1]);
+            $accessTokenIds = DB::table('oauth_access_tokens')
+                ->where('user_id', $c->id)
+                ->where('revoked', false)
+                ->pluck('id');
+
+            if ($accessTokenIds->isNotEmpty()) {
+                DB::table('oauth_access_tokens')->whereIn('id', $accessTokenIds)
+                    ->update(['revoked' => true]);
+            }
         }
 
-        return ['message' => "أُنهيت {$n} جلسة", 'context' => ['sessions' => $n]];
+        // رمزُ التجديد بابُ عودةٍ إلى الجلسة. إلغاء access token وحده ثم
+        // ترك refresh token صالحاً يجعل عبارة «ألغيت الجلسات» غير صادقة.
+        $refreshTokens = 0;
+        if ($accessTokenIds->isNotEmpty() && Schema::hasTable('oauth_refresh_tokens')) {
+            $refreshTokens = DB::table('oauth_refresh_tokens')
+                ->whereIn('access_token_id', $accessTokenIds)
+                ->where('revoked', false)
+                ->update(['revoked' => true]);
+        }
+
+        return [
+            'message' => sprintf(
+                'أُلغيت %d جلسة API و%d رمز تجديد، وعُطّلت %d سجلات أجهزة',
+                $accessTokenIds->count(), $refreshTokens, $deviceRows,
+            ),
+            'context' => [
+                'revoked_access_tokens' => $accessTokenIds->count(),
+                'revoked_refresh_tokens' => $refreshTokens,
+                'deactivated_device_rows' => $deviceRows,
+            ],
+        ];
     }
 
     private function requireKyc(User $c): array

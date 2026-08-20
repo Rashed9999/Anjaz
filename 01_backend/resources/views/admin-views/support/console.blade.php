@@ -181,7 +181,7 @@
                 <button class="btn btn-sm btn-outline-danger js-act" data-act="freeze" data-id="${p.id}" data-unfreeze="${m.security.is_temp_blocked ? 1 : ''}" data-testid="btn-freeze">
                     ${m.security.is_temp_blocked ? 'فك التجميد' : 'تجميد مؤقت'}</button>
                 <button class="btn btn-sm btn-outline-warning js-act" data-act="reset-pin" data-id="${p.id}" data-testid="btn-reset-pin">إعادة تعيين PIN</button>
-                <button class="btn btn-sm btn-outline-secondary js-act" data-act="revoke-sessions" data-id="${p.id}" data-testid="btn-revoke">إنهاء كل الجلسات</button>
+                <button class="btn btn-sm btn-outline-secondary js-act" data-act="revoke-sessions" data-id="${p.id}" data-testid="btn-revoke">إلغاء الجلسات المسجّلة</button>
                 <button class="btn btn-sm btn-outline-info js-act" data-act="require-kyc" data-id="${p.id}" data-testid="btn-kyc">طلب رفع الهوية</button>
                 <button class="btn btn-sm btn-primary js-act" data-act="open-ticket" data-id="${p.id}" data-name="${esc(p.name)}" data-testid="btn-open-ticket">+ فتح تذكرة</button>
             </div>
@@ -207,23 +207,34 @@
 
     // ---------- إجراءات ----------
     window.doAction = async function (id, action, unfreeze) {
+        const dialog = window.amialDialog;
+        if (!dialog) return;
         const labels = {'freeze': unfreeze ? 'فك التجميد' : 'التجميد المؤقت', 'reset-pin': 'إعادة تعيين PIN',
-                        'revoke-sessions': 'إنهاء الجلسات', 'require-kyc': 'طلب رفع الهوية'};
-        const reason = prompt('سبب ' + (labels[action] || action) + ' (إلزامي — يُسجَّل في التدقيق):');
-        if (!reason || reason.trim().length < 5) { alert('السبب إلزامي (5 أحرف على الأقل)'); return; }
+                        'revoke-sessions': 'إلغاء الجلسات المسجّلة', 'require-kyc': 'طلب رفع الهوية'};
+        const reason = await dialog.request(
+            'سبب ' + (labels[action] || action) + ' (10 أحرف على الأقل — يُسجَّل في التدقيق):',
+            {title: 'تأكيد إجراء على العميل', okLabel: 'تنفيذ', danger: action === 'freeze' && !unfreeze},
+        );
+        if (reason === null) return;
+        if (reason.trim().length < 10) {
+            await dialog.show('السبب إلزامي ويجب أن يتكوّن من 10 أحرف على الأقل.', 'بيانات ناقصة');
+            return;
+        }
         const body = {reason: reason.trim()};
         if (action === 'freeze' && unfreeze) body.unfreeze = true;
         const j = await post(`/customers/${id}/${action}`, body);
-        alert(j.message || (j.success ? 'تم' : 'فشل'));
+        await dialog.show(j.message || (j.success ? 'تم' : 'فشل'), j.success ? 'تم الإجراء' : 'تعذّر الإجراء');
         if (j.success) loadCustomer(id);
     };
 
     window.openTicket = async function (userId, name) {
-        const subject = prompt('موضوع التذكرة للعميل ' + name + ':');
-        if (!subject) return;
-        const ref = prompt('رقم العملية المرتبطة (اختياري):') || null;
+        const dialog = window.amialDialog;
+        if (!dialog) return;
+        const subject = await dialog.request('موضوع التذكرة للعميل ' + name + ':', {title: 'فتح تذكرة دعم', okLabel: 'التالي'});
+        if (subject === null || !subject.trim()) return;
+        const ref = await dialog.request('رقم العملية المرتبطة (اختياري):', {title: 'فتح تذكرة دعم', okLabel: 'فتح التذكرة'}) || null;
         const j = await post('/tickets', {user_id: userId, subject: subject, transaction_ref: ref, category: 'other'});
-        alert(j.success ? ('فُتحت التذكرة ' + j.meta.ticket.ticket_number) : (j.message || 'فشل'));
+        await dialog.show(j.success ? ('فُتحت التذكرة ' + j.meta.ticket.ticket_number) : (j.message || 'فشل'), j.success ? 'تم فتح التذكرة' : 'تعذّر فتح التذكرة');
     };
 
     // تفويض أحداث (CSP يمنع onclick المضمّنة): صفوف البحث + أزرار الإجراءات
@@ -287,11 +298,20 @@
 
         const b = e.target.closest('.js-dev');
         if (!b) return;
+        const dialog = window.amialDialog;
+        if (!dialog) return;
         const isBlock = b.dataset.do === 'block';
-        const reason = prompt((isBlock ? 'سبب حظر الجهاز' : 'سبب رفع الحظر') + ' (إلزامي — 5 أحرف على الأقل، يُسجَّل في التدقيق):');
-        if (!reason || reason.trim().length < 5) { alert('السبب إلزامي (5 أحرف على الأقل)'); return; }
+        const reason = await dialog.request(
+            (isBlock ? 'سبب حظر الجهاز' : 'سبب رفع الحظر') + ' (5 أحرف على الأقل — يُسجَّل في التدقيق):',
+            {title: isBlock ? 'حظر جهاز' : 'رفع حظر جهاز', okLabel: 'تنفيذ', danger: isBlock},
+        );
+        if (reason === null) return;
+        if (reason.trim().length < 5) {
+            await dialog.show('السبب إلزامي ويجب أن يتكوّن من 5 أحرف على الأقل.', 'بيانات ناقصة');
+            return;
+        }
         const j = await post(`/devices/${b.dataset.row}/${b.dataset.do}`, {reason: reason.trim()});
-        alert(j.message || (j.success ? 'تم' : 'فشل'));
+        await dialog.show(j.message || (j.success ? 'تم' : 'فشل'), j.success ? 'تم الإجراء' : 'تعذّر الإجراء');
         loadDevices(parseInt(b.dataset.user, 10));
     });
 
@@ -372,16 +392,22 @@
     document.addEventListener('click', async function (e) {
         const b = e.target.closest('.js-apr');
         if (!b) return;
+        const dialog = window.amialDialog;
+        if (!dialog) return;
         const id = b.dataset.id;
         if (b.dataset.apr === 'approve') {
-            const note = prompt('ملاحظة الاعتماد (اختياري):') || null;
+            const note = await dialog.request('ملاحظة الاعتماد (اختياري):', {title: 'اعتماد طلب', okLabel: 'اعتماد'}) || null;
             const j = await post(`/approvals/${id}/approve`, {note});
-            alert(j.message || (j.success ? 'اعتُمد' : 'فشل'));
+            await dialog.show(j.message || (j.success ? 'اعتُمد' : 'فشل'), j.success ? 'تم الاعتماد' : 'تعذّر الاعتماد');
         } else {
-            const note = prompt('سبب الرفض (إلزامي):');
-            if (!note || note.trim().length < 5) { alert('سبب الرفض إلزامي (5 أحرف)'); return; }
+            const note = await dialog.request('سبب الرفض (5 أحرف على الأقل):', {title: 'رفض طلب', okLabel: 'رفض', danger: true});
+            if (note === null) return;
+            if (note.trim().length < 5) {
+                await dialog.show('سبب الرفض إلزامي ويجب أن يتكوّن من 5 أحرف على الأقل.', 'بيانات ناقصة');
+                return;
+            }
             const j = await post(`/approvals/${id}/reject`, {note: note.trim()});
-            alert(j.message || (j.success ? 'رُفض' : 'فشل'));
+            await dialog.show(j.message || (j.success ? 'رُفض' : 'فشل'), j.success ? 'تم الرفض' : 'تعذّر الرفض');
         }
         loadApprovals();
     });

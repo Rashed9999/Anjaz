@@ -167,6 +167,17 @@ class SupportConsoleTest extends TestCase
             ->assertStatus(422)->assertJsonPath('code', 'REASON_REQUIRED');
     }
 
+    /** المسار يحمل اسم customers؛ فلا يتحول إلى بابٍ خفيّ لمسار وكيل أو تاجر. */
+    public function test_customer_security_actions_cannot_target_a_non_customer(): void
+    {
+        $agent = User::factory()->create(['type' => AGENT_TYPE, 'phone' => '967771555099']);
+        $this->actAsAdmin();
+
+        $this->postJson("/api/v1/amial/admin/support/customers/{$agent->id}/freeze", [
+            'reason' => 'اختبار منع توجيه تجميد العميل إلى حساب وكيل',
+        ])->assertNotFound();
+    }
+
     public function test_freeze_is_immediate_and_audited(): void
     {
         $this->actAsAdmin();
@@ -174,13 +185,15 @@ class SupportConsoleTest extends TestCase
         // التجميد (يقيّد) فوري — إيقاف احتيال لا ينتظر موافقة
         $this->postJson("/api/v1/amial/admin/support/customers/{$this->customer->id}/freeze",
             ['reason' => 'اشتباه احتيال — بلاغ عميل'])
-            ->assertOk()->assertJsonPath('meta.is_temp_blocked', true);
+            ->assertOk()->assertJsonPath('meta.action', 'freeze');
 
         $this->assertTrue((bool) $this->customer->fresh()->is_temp_blocked);
         $this->assertDatabaseHas('audit_decisions', [
-            'action' => 'SUPPORT_FREEZE_WALLET',
+            // مركز الدعم ومركز العملاء لا ينفذان نسختين من التجميد.
+            'action' => 'CUSTOMER_FREEZE',
             'actor_user_id' => $this->admin->id,
             'subject_id' => (string) $this->customer->id,
+            'severity' => 'critical',
         ]);
     }
 
@@ -226,14 +239,24 @@ class SupportConsoleTest extends TestCase
             ['id' => 'tok_support_2', 'user_id' => $this->customer->id, 'client_id' => 1,
              'revoked' => false, 'created_at' => now(), 'updated_at' => now()],
         ]);
+        DB::table('oauth_refresh_tokens')->insert([
+            ['id' => 'ref_support_1', 'access_token_id' => 'tok_support_1', 'revoked' => false],
+            ['id' => 'ref_support_2', 'access_token_id' => 'tok_support_2', 'revoked' => false],
+        ]);
         $this->actAsAdmin();
 
         $this->postJson("/api/v1/amial/admin/support/customers/{$this->customer->id}/revoke-sessions",
             ['reason' => 'جهاز مفقود — طلب العميل'])
-            ->assertOk()->assertJsonPath('meta.revoked_sessions', 2);
+            ->assertOk()
+            ->assertJsonPath('meta.action', 'revoke_sessions')
+            ->assertJsonPath('meta.operation.revoked_access_tokens', 2)
+            ->assertJsonPath('meta.operation.revoked_refresh_tokens', 2);
 
         $this->assertSame(0, DB::table('oauth_access_tokens')
             ->where('user_id', $this->customer->id)->where('revoked', false)->count());
+        $this->assertSame(0, DB::table('oauth_refresh_tokens')
+            ->whereIn('access_token_id', ['tok_support_1', 'tok_support_2'])
+            ->where('revoked', false)->count());
     }
 
     public function test_require_kyc_resets_verification(): void
