@@ -205,8 +205,11 @@
                         f.state === 'reconciled' ? 'border-success' : 'border-danger')}
                     ${card('المتاح فعلاً', money(w.available_balance), 'محجوز ' + money(w.held_balance),
                            String(w.held_balance || '0') !== '0' ? 'border-warning' : '')}
-                    ${card('درجة الخطر', esc(m.risk.score), esc(m.risk.level),
-                           ['high','very_high','critical'].includes(m.risk.level) ? 'border-danger' : '')}
+                    ${card('درجة الخطر',
+                           m.risk.state === 'measured' ? esc(m.risk.score) : '—',
+                           m.risk.state === 'measured' ? esc(m.risk.level) : 'لم يُحتسب بعد',
+                           m.risk.state === 'unassessed' ? 'border-warning'
+                               : (['high','very_high','critical'].includes(m.risk.level) ? 'border-danger' : ''))}
                     ${card('فئة الهوية', m.kyc.tier, m.kyc.is_verified ? 'موثَّقة' : 'غير موثَّقة',
                            m.kyc.is_verified ? '' : 'border-warning')}
                     ${card('تذاكر مفتوحة', m.counters.open_tickets)}
@@ -319,8 +322,11 @@
             const p = m.profile;
             body.innerHTML = `
                 <div class="row g-3 mb-3">
-                    ${card('درجة الخطر', esc(p.score), esc(p.level),
-                           ['high','very_high','critical'].includes(p.level) ? 'border-danger' : '')}
+                    ${card('درجة الخطر',
+                           p.state === 'measured' ? esc(p.score) : '—',
+                           p.state === 'measured' ? esc(p.level) : 'لم يُحتسب بعد',
+                           p.state === 'unassessed' ? 'border-warning'
+                               : (['high','very_high','critical'].includes(p.level) ? 'border-danger' : ''))}
                     ${card('الاستثناء اليدويّ', esc(p.override), esc(p.override_reason || ''),
                            p.override === 'whitelist' ? 'border-warning' : '')}
                     ${card('العقوبات', esc(m.sanction_status),

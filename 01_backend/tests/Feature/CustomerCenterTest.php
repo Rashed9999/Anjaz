@@ -242,6 +242,18 @@ class CustomerCenterTest extends TestCase
         $this->assertSame('-10000.0000', $financial['gap']);
     }
 
+    /** غياب تقييم المخاطر ليس درجة صفرية مطمئنة للموظف. */
+    public function an_unassessed_risk_profile_is_not_presented_as_zero_risk(): void
+    {
+        $overview = $this->actingAs($this->staff, 'user')
+            ->getJson("/admin/amial/customer/{$this->customer->id}/tab/overview")
+            ->assertOk()->json('meta.risk');
+
+        $this->assertSame('unassessed', $overview['state']);
+        $this->assertNull($overview['score']);
+        $this->assertSame('unassessed', $overview['level']);
+    }
+
     /** @test */
     public function a_closed_account_outranks_everything_else(): void
     {

@@ -110,11 +110,7 @@ class CustomerCenterService
                 // NULL ليس «clear»؛ لم تُجرَ الشاشة فلا يجوز أن تطمئن الموظف.
                 'sanction_status' => $this->sanctionStatus($customer),
             ],
-            'risk' => [
-                'score' => (string) ($risk->current_risk_score ?? '0'),
-                'level' => (string) ($risk->risk_level ?? 'unknown'),
-                'override' => (string) ($risk->manual_override ?? 'none'),
-            ],
+            'risk' => $this->riskSummary($risk),
             'limits' => $this->limits($customer),
             'financial_truth' => $financialTruth,
             'notes' => $this->notes($customer),
@@ -166,6 +162,28 @@ class CustomerCenterService
         }
 
         return (string) $customer->sanction_status;
+    }
+
+    /**
+     * الصفر نتيجة فحص، لا بديل عن غياب الفحص. وجود Profile فارغ أو قديم لا
+     * يكفي لتقديم «0» على أنّه درجة مخاطر محسوبة.
+     */
+    private function riskSummary(?AmlUserRiskProfile $profile): array
+    {
+        $assessedAt = $profile?->last_evaluation_at;
+        $measured = $profile !== null && $assessedAt !== null;
+
+        return [
+            'state' => $measured ? 'measured' : 'unassessed',
+            'score' => $measured ? (string) $profile->current_risk_score : null,
+            'level' => $measured ? (string) ($profile->risk_level ?: 'unknown') : 'unassessed',
+            'assessed_at' => $assessedAt?->toIso8601String(),
+            'source' => $measured ? 'aml_risk_profile' : null,
+            // قد تكون القائمة السوداء اليدوية موجودة قبل دورة التقييم؛ لا
+            // نخفيها لمجرد أن الدرجة لم تُحسب.
+            'override' => (string) ($profile->manual_override ?? 'none'),
+            'override_reason' => $profile?->override_reason,
+        ];
     }
 
     /** الحدّ النافذ: استثناء العميل إن وُجد، وإلّا حدّ فئته. */
@@ -412,12 +430,7 @@ class CustomerCenterService
         $profile = AmlUserRiskProfile::find($customer->id);
 
         return [
-            'profile' => [
-                'score' => (string) ($profile->current_risk_score ?? '0'),
-                'level' => (string) ($profile->risk_level ?? 'unknown'),
-                'override' => (string) ($profile->manual_override ?? 'none'),
-                'override_reason' => $profile->override_reason ?? null,
-            ],
+            'profile' => $this->riskSummary($profile),
             'sanction_status' => $this->sanctionStatus($customer),
             'flagged' => Schema::hasTable('aml_flagged_transactions')
                 ? AmlFlaggedTransaction::where('actor_user_id', $customer->id)
