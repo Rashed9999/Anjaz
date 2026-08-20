@@ -152,7 +152,8 @@ trait TransactionTrait
      * block/hold نرمي قبل أي خصم، وتبقى سجلات الفحص (flagged/alert) محفوظة
      * بدل أن تُلغى مع rollback. allow/flag → نُكمل التنفيذ (flag مُسجَّل للمراجعة).
      *
-     * آمن للإنتاج المتدرّج: عند غياب القواعد أو كونها shadow، النتيجة allow دائماً.
+     * آمن للإنتاج المتدرّج: قواعد الظلّ لا توقف المال، لكن غياب كلّ قاعدة
+     * فعالة عن نوعٍ معلن أنه خاضع للفحص يُعلَن فجوةً ويُعلّق العملية.
      *
      * @throws \App\Exceptions\AmlBlockedException عند block
      * @throws \App\Exceptions\AmlHeldException عند hold

@@ -3,20 +3,20 @@
 namespace App\Http\Controllers\Admin;
 
 use App\CentralLogics\helpers;
-use App\Exceptions\TransactionFailedException;
 use App\Http\Controllers\Controller;
 use App\Models\EMoney;
+use App\Services\PlatformTreasuryService;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 
 class EMoneyController extends Controller
 {
     public function __construct(
         private EMoney $eMoney,
+        private readonly PlatformTreasuryService $treasury,
     )
     {
     }
@@ -48,38 +48,26 @@ class EMoneyController extends Controller
     {
         $request->validate([
             'amount' => ['required', 'numeric', 'regex:/^\d{1,12}(\.\d{1,2})?$/'],
+            'reference' => ['required', 'string', 'max:120'],
+            'reason' => ['required', 'string', 'max:500'],
         ], [
             'amount.regex' => translate('Amount must be a valid number with up to 12 digits before the decimal point and up to 2 digits after the decimal point.'),
             'amount.required' => translate('Amount is required.'),
         ]);
 
-        DB::beginTransaction();
-        $data = [];
-        $data['from_user_id'] = Helpers::get_admin_id();
-        $data['to_user_id'] = $data['from_user_id'];
-
-
         try {
-            $data['user_id'] = $data['from_user_id'];
-            $data['type'] = 'credit';
-            $data['transaction_type'] = CASH_IN;
-            $data['ref_trans_id'] = null;
-            $data['amount'] = $request->amount;
-
-            $adminTransaction = Helpers::make_transaction($data);
-
-            Helpers::send_transaction_notification($data['user_id'], $data['amount'], $data['transaction_type']);
-
-            if ($adminTransaction == null) {
-                throw new TransactionFailedException('Transaction from receiver is failed');
-            }
-
-            DB::commit();
-            Toastr::success(translate('EMoney generated successfully!'));
-
-        } catch (TransactionFailedException $e) {
-            DB::rollBack();
-            Toastr::error(translate('Something went wrong!'));
+            $issued = $this->treasury->issueAdminFloat(
+                $request->input('amount'), $request->user(),
+                $request->input('reference'), $request->input('reason'),
+                $request->header('Idempotency-Key'),
+            );
+            Helpers::send_transaction_notification(
+                Helpers::get_admin_id(), (float) $request->input('amount'), CASH_IN);
+            Toastr::success($issued['duplicate']
+                ? translate('This treasury issuance was already recorded.')
+                : translate('Treasury issuance posted successfully.'));
+        } catch (\Throwable $e) {
+            Toastr::error($e->getMessage() ?: translate('Something went wrong!'));
         }
         return back();
     }

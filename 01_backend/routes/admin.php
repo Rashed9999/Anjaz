@@ -265,7 +265,9 @@ Route::group(['as' => 'admin.'], function () {
 
         Route::group(['prefix' => 'emoney', 'as' => 'emoney.'], function () {
             Route::get('index', [EMoneyController::class, 'index'])->name('index');
-            Route::post('store', [EMoneyController::class, 'store'])->name('store');
+            Route::post('store', [EMoneyController::class, 'store'])
+                ->middleware('platform:platform.money.move')
+                ->name('store');
 
         });
 

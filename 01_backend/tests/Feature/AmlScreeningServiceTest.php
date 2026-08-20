@@ -75,6 +75,23 @@ class AmlScreeningServiceTest extends TestCase
         $this->assertEmpty($decision->triggeredRules);
     }
 
+    /** A configured AML flow with no active coverage must not fail open. */
+    public function test_holds_a_screened_transaction_when_no_active_rule_covers_it(): void
+    {
+        AmlRule::query()->delete();
+        config()->set('amial.aml.hold_when_uncovered', true);
+
+        $decision = $this->service->screen($this->makeContext([
+            'transaction_type' => 'send_money',
+        ]));
+
+        $this->assertSame('hold', $decision->finalAction);
+        $this->assertSame('AML_COVERAGE_GAP', $decision->triggeredRules[0]['code']);
+        $this->assertDatabaseHas('aml_flagged_transactions', [
+            'transaction_type' => 'send_money', 'initial_decision' => 'hold',
+        ]);
+    }
+
     /** @test */
     public function blocks_when_amount_exceeds_max_single_tx()
     {

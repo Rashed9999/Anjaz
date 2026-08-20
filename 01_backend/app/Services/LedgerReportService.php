@@ -275,10 +275,12 @@ class LedgerReportService
         $rows = [];
         $divergent = 0;
         $totalGap = '0';
+        $walletUserIds = [];
 
         EMoney::with('user:id,f_name,l_name,phone')
             ->orderBy('user_id')->limit($limit)->get()
-            ->each(function (EMoney $w) use (&$rows, &$divergent, &$totalGap, $ledger) {
+            ->each(function (EMoney $w) use (&$rows, &$divergent, &$totalGap, &$walletUserIds, $ledger) {
+                $walletUserIds[(int) $w->user_id] = true;
                 $wallet = (string) ($w->current_balance ?? '0');
                 $book = (string) ($ledger[$w->user_id] ?? '0');
                 $gap = bcsub($wallet, $book, 4);
@@ -299,6 +301,34 @@ class LedgerReportService
                     'diverged' => $off,
                 ];
             });
+
+        // And the other direction matters just as much: a ledger wallet
+        // without an E-Money row used to vanish from this report entirely.
+        // That made a deleted/corrupt operational wallet look reconciled even
+        // while the ledger still carried a liability.  It is a real mismatch:
+        // the wallet side is zero because it does not exist, not because it
+        // has been checked and found equal.
+        foreach ($ledger as $userId => $book) {
+            $userId = (int) $userId;
+            if (isset($walletUserIds[$userId])) {
+                continue;
+            }
+
+            $book = (string) $book;
+            $gap = bcsub('0', $book, 4);
+            $divergent++;
+            $totalGap = bcadd($totalGap, $gap, 4);
+            $rows[] = [
+                'user_id' => $userId,
+                'name' => 'محفظة دفترية بلا صف E-Money',
+                'phone' => '—',
+                'wallet_balance' => '0',
+                'ledger_balance' => $book,
+                'gap' => $gap,
+                'diverged' => true,
+                'missing_wallet' => true,
+            ];
+        }
 
         // المنحرفة أوّلاً — هي ما يُنظر فيه، والباقي حشو.
         usort($rows, fn ($a, $b) => ($b['diverged'] <=> $a['diverged']));

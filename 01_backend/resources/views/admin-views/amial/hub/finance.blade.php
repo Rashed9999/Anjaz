@@ -51,13 +51,21 @@
 
     {{-- تعبئة محفظة الإدارة --}}
     <div class="card stat-card mb-4">
-        <div class="card-header fw-bold">تعبئة محفظة الإدارة</div>
+        <div class="card-header fw-bold">إصدار رصيد الخزينة</div>
         <div class="card-body d-flex gap-2 flex-wrap align-items-end">
             <div>
                 <label class="form-label">المبلغ (ر.ي)</label>
                 <input type="number" min="1" class="form-control" id="topup-amount" dir="ltr" style="max-width:220px">
             </div>
-            <button class="btn btn-primary" id="topup-submit">تعبئة</button>
+            <div>
+                <label class="form-label">مرجع الإثبات</label>
+                <input type="text" class="form-control" id="topup-reference" maxlength="120" placeholder="TREASURY-2026-0001">
+            </div>
+            <div class="flex-grow-1" style="min-width:220px">
+                <label class="form-label">سبب الإصدار</label>
+                <input type="text" class="form-control" id="topup-reason" maxlength="500" placeholder="توريد نقد موثق إلى الخزينة">
+            </div>
+            <button class="btn btn-primary" id="topup-submit">ترحيل القيد</button>
             <span class="text-danger small" id="topup-error"></span>
             <span class="text-success small" id="topup-ok"></span>
         </div>
@@ -162,12 +170,18 @@
             const r = await fetch(`${base}/finance/topup`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'},
-                body: JSON.stringify({amount: document.getElementById('topup-amount').value}),
+                body: JSON.stringify({
+                    amount: document.getElementById('topup-amount').value,
+                    reference: document.getElementById('topup-reference').value,
+                    reason: document.getElementById('topup-reason').value,
+                }),
             });
             const j = await r.json();
             if (!r.ok) throw new Error(j.message || 'فشلت التعبئة');
             okEl.textContent = `${j.message} — الرصيد الآن: ${fmt(j.balance)} ر.ي`;
             document.getElementById('topup-amount').value = '';
+            document.getElementById('topup-reference').value = '';
+            document.getElementById('topup-reason').value = '';
             loadStats(); loadFeed();
         } catch (err) { errEl.textContent = err.message; }
     });

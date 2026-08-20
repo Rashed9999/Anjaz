@@ -309,6 +309,13 @@ return [
             'send_money', 'cash_out', 'safe_payment_fund', 'donation', 'pay_merchant',
         ],
 
+        // A protected transaction type with zero active rules is a coverage
+        // failure, not evidence that its risk is zero.  Hold it for review by
+        // default; operators may explicitly relax this only during a planned
+        // AML maintenance window and the decision remains visible in alerts.
+        'hold_when_uncovered' => filter_var(
+            env('AMIAL_AML_HOLD_WHEN_UNCOVERED', true), FILTER_VALIDATE_BOOLEAN),
+
         // AMIAL-AML-REGREPORT-001 — حدّ بلاغ العملة (CTR).
         //
         // فوق هذا المبلغ يُبلَّغ المنظّم عن العملية **سواء اشتُبه فيها أو

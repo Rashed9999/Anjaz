@@ -37,7 +37,7 @@
                 <div class="card-header border-0"><span class="fw-bold">{{ translate('إنشاء / شحن رصيد المنصّة') }}</span></div>
                 <div class="card-body">
                     <div class="alert alert-warning small">
-                        ⚠️ {{ translate('هذه العملية تُصدِر رصيداً جديداً إلى خزينة المنصّة (معاملة إيداع للحساب الإداري). استخدمها بحذر — تُسجَّل كاملةً في سجلّ المعاملات.') }}
+                        ⚠️ {{ translate('هذه العملية تُصدر رصيداً مقابل احتياطي خزينة موثق. المرجع والسبب إلزاميان، والقيد المزدوج وسجل التدقيق يُنشآن معاً.') }}
                     </div>
                     <form method="POST" action="{{ route('admin.emoney.store') }}" onsubmit="return confirm('{{ translate('تأكيد إنشاء الرصيد؟') }}')">
                         @csrf
@@ -45,6 +45,16 @@
                             <label class="form-label">{{ translate('المبلغ') }} (ر.ي)</label>
                             <input type="number" name="amount" step="0.01" min="0" class="form-control form-control-lg"
                                    required placeholder="0.00" style="font-weight:bold;color:var(--amial-primary)">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">{{ translate('مرجع الإثبات / سند التوريد') }}</label>
+                            <input type="text" name="reference" maxlength="120" class="form-control" required
+                                   placeholder="TREASURY-2026-0001">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">{{ translate('سبب الإصدار') }}</label>
+                            <textarea name="reason" maxlength="500" class="form-control" rows="2" required
+                                      placeholder="توريد نقد موثق إلى خزينة المنصة"></textarea>
                         </div>
                         <button type="submit" class="btn w-100 text-white" style="background:var(--amial-primary)">
                             <i class="tio-add-circle"></i> {{ translate('إنشاء الرصيد') }}

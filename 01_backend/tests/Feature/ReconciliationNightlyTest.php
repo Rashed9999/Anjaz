@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\EMoney;
+use App\Models\Ledger\LedgerAccount;
+use App\Models\Ledger\LedgerEntryLine;
+use App\Models\Ledger\LedgerJournalEntry;
 use App\Models\User;
 use App\Services\Reconciliation\ReconciliationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -109,6 +112,42 @@ class ReconciliationNightlyTest extends TestCase
         $this->assertSame('clean', $r['status'],
             'قاعدةٌ سليمةٌ أُبلغ عنها فرق — إنذارٌ كاذب');
         $this->assertSame(0, $r['wallets']['diverged']);
+    }
+
+    /** A ledger liability with no operational wallet is not a clean balance. */
+    public function a_ledger_wallet_without_an_emoney_row_is_caught(): void
+    {
+        $user = User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => '967770009005']);
+        $wallet = LedgerAccount::create([
+            'account_code' => "USER_WALLET_{$user->id}", 'account_type' => 'liability',
+            'name_ar' => 'محفظة مفقودة', 'owner_user_id' => $user->id,
+            'owner_type' => 'user', 'normal_balance' => 'credit',
+            'current_balance' => '100.0000', 'zone_code' => 'SOUTH',
+        ]);
+        $reserve = LedgerAccount::create([
+            'account_code' => 'TEST_RECON_RESERVE', 'account_type' => 'asset',
+            'name_ar' => 'احتياطي الفحص', 'owner_type' => 'platform',
+            'normal_balance' => 'debit', 'current_balance' => '100.0000', 'zone_code' => 'SOUTH',
+        ]);
+        $entry = LedgerJournalEntry::create([
+            'entry_ulid' => (string) \Illuminate\Support\Str::ulid(),
+            'source_type' => 'test', 'description_ar' => 'محفظة بلا صف تشغيلي',
+            'total_amount' => '100', 'status' => 'posted', 'zone_code' => 'SOUTH',
+            'posted_at' => now(), 'created_at' => now(),
+        ]);
+        LedgerEntryLine::insert([
+            ['journal_entry_id' => $entry->id, 'account_id' => $reserve->id, 'direction' => 'debit',
+                'amount' => '100', 'balance_before' => '0', 'balance_after' => '100', 'created_at' => now()],
+            ['journal_entry_id' => $entry->id, 'account_id' => $wallet->id, 'direction' => 'credit',
+                'amount' => '100', 'balance_before' => '0', 'balance_after' => '100', 'created_at' => now()],
+        ]);
+
+        $r = $this->svc()->run();
+
+        $this->assertSame('diverged', $r['status']);
+        $this->assertSame(1, $r['wallets']['diverged']);
+        $this->assertTrue((bool) ($r['wallets']['worst'][0]['missing_wallet'] ?? false),
+            'حسابٌ دفتري بلا محفظة تشغيلية اختفى من المصالحة');
     }
 
     /**

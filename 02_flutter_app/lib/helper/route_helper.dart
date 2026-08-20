@@ -28,6 +28,46 @@ import 'package:amial_pay/features/splash/screens/welcome_screen.dart';
 import 'package:amial_pay/features/language/screens/change_language_screen.dart';
 import 'package:amial_pay/features/onboarding/screens/on_boarding_sceen.dart';
 import 'package:amial_pay/features/verification/screens/varification_screen.dart';
+// AMIAL-ENTITLEMENTS-ROUTES-001 — this list is the client half of the
+// capability manifest served by the backend.  A capability must never be
+// advertised as available unless its named route resolves to a real screen.
+import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
+import 'package:amial_pay/features/merchant/screens/offline_sales_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
+import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_promotions_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_loyalty_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_shift_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_excel_export_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_expenses_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_backup_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_currencies_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_installments_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_api_keys_screen.dart';
+import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart';
+import 'package:amial_pay/features/retail/screens/retail_ops_center_screen.dart';
+import 'package:amial_pay/features/retail/screens/retail_catalog_screen.dart';
+import 'package:amial_pay/features/retail/screens/retail_prices_screen.dart';
+import 'package:amial_pay/features/retail/screens/retail_locations_screen.dart';
+import 'package:amial_pay/features/retail/screens/retail_transfers_screen.dart';
+import 'package:amial_pay/features/retail/screens/retail_counts_screen.dart';
+import 'package:amial_pay/features/retail/screens/retail_wastes_screen.dart';
+import 'package:amial_pay/features/suppliers/screens/suppliers_screen.dart';
+import 'package:amial_pay/features/branches/screens/branches_management_screen.dart';
+import 'package:amial_pay/features/reports/screens/amial_reports_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_tanks_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_variances_screen.dart';
+import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
+import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
+import 'package:amial_pay/features/corporate/screens/corporate_accounts_screen.dart';
 
 class RouteHelper {
   static const String splash = '/splash';
@@ -92,6 +132,51 @@ class RouteHelper {
   static const String choseLanguageScreen = '/chose_language_screen';
   static const String unifiedLoginScreen = '/unified_login';  // AMIAL: دخول أميال باي الموحّد
   static const String qrCodeDownloadOrShare = '/qr_code_download_or_share';
+
+  // Merchant capability manifest routes. Keep these values equal to
+  // CapabilityRegistry::screen() in the backend; the contract test checks it.
+  static const String quickSale = '/quick-sale';
+  static const String cashier = '/cashier';
+  static const String offlineSales = '/offline-sales';
+  static const String posDevices = '/pos-devices';
+  static const String refunds = '/refunds';
+  static const String retailReturns = '/retail/returns';
+  static const String credit = '/credit';
+  static const String products = '/products';
+  static const String retailCatalog = '/retail/catalog';
+  static const String retailVariants = '/retail/variants';
+  static const String retailPrices = '/retail/prices';
+  static const String promotions = '/promotions';
+  static const String loyalty = '/loyalty';
+  static const String retail = '/retail';
+  static const String retailLocations = '/retail/locations';
+  static const String retailTransfers = '/retail/transfers';
+  static const String retailCounts = '/retail/counts';
+  static const String retailWastes = '/retail/wastes';
+  static const String suppliers = '/suppliers';
+  static const String purchaseOrders = '/purchase-orders';
+  static const String customers = '/customers';
+  static const String staff = '/staff';
+  static const String retailRoles = '/retail/roles';
+  static const String shifts = '/shifts';
+  static const String reportsDaily = '/reports/daily';
+  static const String reportsProfit = '/reports/profit';
+  static const String reports = '/reports';
+  static const String export = '/export';
+  static const String expenses = '/expenses';
+  static const String auditLog = '/audit-log';
+  static const String backup = '/backup';
+  static const String branches = '/branches';
+  static const String currencies = '/currencies';
+  static const String installments = '/installments';
+  static const String fuel = '/fuel';
+  static const String fuelTanks = '/fuel/tanks';
+  static const String fuelVariances = '/fuel/variances';
+  static const String pharmacy = '/pharmacy';
+  static const String wholesale = '/wholesale';
+  static const String restaurant = '/restaurant';
+  static const String apiKeys = '/api-keys';
+  static const String corporate = '/corporate';
 
   static String getSplashRoute() => splash;
   static String getHomeRoute(String name) => '$home?name=$name';
@@ -199,6 +284,58 @@ class RouteHelper {
     GetPage(name: support, page: () => const SupportScreen()),
     GetPage(name: qrCodeDownloadOrShare, page: () => QrCodeDownloadOrShareScreen(qrCode:  utf8.decode(base64Url.decode(Get.parameters['qr-code']!.replaceAll(' ', '+'))),
         phoneNumber: utf8.decode(base64Url.decode(Get.parameters['phone-number']!.replaceAll(' ', '+'))),)),
+
+    // The named entries below are deliberately explicit.  The backend returns
+    // these paths in its capability manifest, so an available card can always
+    // open a concrete workflow rather than a generic placeholder or a dead end.
+    GetPage(name: quickSale, page: () => const CashierPosScreen()),
+    GetPage(name: cashier, page: () => const CashierPosScreen()),
+    GetPage(name: offlineSales, page: () => const OfflineSalesScreen()),
+    GetPage(name: posDevices, page: () => const MerchantPosDevicesScreen()),
+    GetPage(name: refunds, page: () => const MerchantRefundScreen()),
+    GetPage(name: retailReturns, page: () => const MerchantRefundScreen()),
+    GetPage(name: credit, page: () => const CreditDashboardScreen()),
+    GetPage(name: products, page: () => const CashierProductsScreen()),
+    GetPage(name: retailCatalog, page: () => const RetailCatalogScreen()),
+    // Variants are edited from the product catalogue, never from an orphaned
+    // empty editor that has no selected product.
+    GetPage(name: retailVariants, page: () => const CashierProductsScreen()),
+    GetPage(name: retailPrices, page: () => const RetailPricesScreen()),
+    GetPage(name: promotions, page: () => const MerchantPromotionsScreen()),
+    GetPage(name: loyalty, page: () => const MerchantLoyaltyScreen()),
+    GetPage(name: retail, page: () => const RetailOpsCenterScreen()),
+    GetPage(name: retailLocations, page: () => const RetailLocationsScreen()),
+    GetPage(name: retailTransfers, page: () => const RetailTransfersScreen()),
+    GetPage(name: retailCounts, page: () => const RetailCountsScreen()),
+    GetPage(name: retailWastes, page: () => const RetailWastesScreen()),
+    // Suppliers contains both supplier and purchase-order tabs; using one
+    // operational hub avoids a misleading, duplicate purchase-order screen.
+    GetPage(name: suppliers, page: () => const SuppliersScreen()),
+    GetPage(name: purchaseOrders, page: () => const SuppliersScreen()),
+    GetPage(name: customers, page: () => const CreditCustomersScreen()),
+    GetPage(name: staff, page: () => const MerchantStaffScreen()),
+    // Staff is the current operational role-assignment surface.  It includes
+    // role controls per employee, so permissions do not lead to a faux screen.
+    GetPage(name: retailRoles, page: () => const MerchantStaffScreen()),
+    GetPage(name: shifts, page: () => const CashierShiftScreen()),
+    GetPage(name: reportsDaily, page: () => const CashierReportScreen()),
+    GetPage(name: reportsProfit, page: () => const ProfitReportScreen()),
+    GetPage(name: reports, page: () => const AmialReportsScreen()),
+    GetPage(name: export, page: () => const MerchantExcelExportScreen()),
+    GetPage(name: expenses, page: () => const MerchantExpensesScreen()),
+    GetPage(name: auditLog, page: () => const MerchantAuditLogScreen()),
+    GetPage(name: backup, page: () => const MerchantBackupScreen()),
+    GetPage(name: branches, page: () => const BranchesManagementScreen()),
+    GetPage(name: currencies, page: () => const MerchantCurrenciesScreen()),
+    GetPage(name: installments, page: () => const MerchantInstallmentsScreen()),
+    GetPage(name: fuel, page: () => const FuelStationDashboardScreen()),
+    GetPage(name: fuelTanks, page: () => const FuelTanksScreen()),
+    GetPage(name: fuelVariances, page: () => const FuelVariancesScreen()),
+    GetPage(name: pharmacy, page: () => const PharmacyDashboardScreen()),
+    GetPage(name: wholesale, page: () => const WholesaleDashboardScreen()),
+    GetPage(name: restaurant, page: () => const RestaurantScreen()),
+    GetPage(name: apiKeys, page: () => const MerchantApiKeysScreen()),
+    GetPage(name: corporate, page: () => const CorporateAccountsScreen()),
 
     ];
 

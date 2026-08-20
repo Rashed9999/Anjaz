@@ -108,10 +108,40 @@ class AmlScreeningService
         $rules = $this->getApplicableRules($context->transactionType);
 
         if ($rules->isEmpty()) {
+            $coveredType = in_array($context->transactionType,
+                (array) config('amial.aml.screened_types', []), true);
+
+            // **A monitored money flow without rules is not "clean".**
+            // The former allow made a disabled/missing seed indistinguishable
+            // from a successful screening and quietly turned AML off.  We
+            // hold only types explicitly declared as screened; generic calls
+            // to this service keep their ordinary no-rule allow behaviour.
+            if ($coveredType && config('amial.aml.hold_when_uncovered', true)) {
+                $decision = new AmlDecision(
+                    finalAction: 'hold',
+                    totalRiskScore: 100,
+                    triggeredRules: [[
+                        'code' => 'AML_COVERAGE_GAP',
+                        'score' => 100,
+                        'action' => 'hold',
+                        'reason' => 'No active AML rule covers this screened transaction type',
+                    ]],
+                    reasonSummary: 'AML coverage gap: no applicable active rules',
+                );
+                $this->persistDecision($context, $decision);
+                $this->updateProfile($profile, $context, $decision);
+
+                Log::critical('AML coverage gap: screened transaction held', [
+                    'transaction_type' => $context->transactionType,
+                    'actor_user_id' => $context->actorUserId,
+                    'transaction_ulid' => $context->transactionUlid,
+                ]);
+
+                return $decision;
+            }
+
             return new AmlDecision(
-                finalAction: 'allow',
-                totalRiskScore: 0,
-                triggeredRules: [],
+                finalAction: 'allow', totalRiskScore: 0, triggeredRules: [],
                 reasonSummary: 'No applicable rules',
             );
         }

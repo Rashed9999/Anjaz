@@ -8,6 +8,7 @@ import 'package:amial_pay/features/fuel_station/screens/fuel_station_dashboard_s
 import 'package:amial_pay/features/fuel_station/screens/fuel_owner_console_screen.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
 import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
+import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
 
 /// CRITICAL-001 — Home Dispatcher.
@@ -97,9 +98,9 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
         return const MerchantRetailHomeScreen();
       }
 
-      // Merchant + restaurant → placeholder للآن
+      // Merchant + restaurant → operational restaurant workspace.
       if (_access.isMerchant && _access.isRestaurant) {
-        return _placeholderScreen('قطاع المطاعم قريباً');
+        return const RestaurantScreen();
       }
 
       // AMIAL-WEB-ONLY-PORTALS-001: الوكيل والأدمن لوحتاهما على المتصفّح.
@@ -118,28 +119,6 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
     });
   }
 
-  Widget _placeholderScreen(String title) {
-    return Scaffold(
-      backgroundColor: AmialColors.background,
-      appBar: AppBar(
-        title: Text(title),
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            const Icon(Icons.construction, size: 80, color: AmialColors.yellowDark),
-            const SizedBox(height: 16),
-            Text(title, textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text('سيتم إضافة هذا القطاع في الإصدار القادم',
-                style: TextStyle(color: Colors.grey.shade600), textAlign: TextAlign.center),
-          ]),
-        ),
-      ),
-    );
-  }
 }
 
 /// Helper: غلاف لاستخدام Dispatcher مع home_screen الأصلي بدون الحاجة لتغيير routing.

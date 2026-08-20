@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\AgentNetworkService;
 use App\Services\AuditService;
 use App\Services\MoneyService;
+use App\Services\PlatformTreasuryService;
 use App\Services\ZoneAssignmentService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -742,40 +743,35 @@ class AdminHubController extends Controller
         return response()->json(['settlement_ulid' => $settlement->ulid ?? null, 'message' => 'تم تحويل الرصيد للوكيل']);
     }
 
-    /** POST hub/finance/topup — تعبئة محفظة الإدارة (نفس EMoneyController القديم، JSON) */
-    public function adminTopup(Request $request): JsonResponse
+    /** POST hub/finance/topup — إصدار خزينة موثق، لا زيادة رصيدٍ صامتة. */
+    public function adminTopup(Request $request, PlatformTreasuryService $treasury): JsonResponse
     {
         $v = Validator::make($request->all(), [
             'amount' => ['required', 'numeric', 'gt:0', 'regex:/^\d{1,12}(\.\d{1,4})?$/'],
+            'reference' => ['required', 'string', 'max:120'],
+            'reason' => ['required', 'string', 'max:500'],
         ]);
         if ($v->fails()) return response()->json(['message' => $v->errors()->first()], 422);
 
-        $adminId = Helpers::get_admin_id();
-        DB::beginTransaction();
         try {
-            $tx = Helpers::make_transaction([
-                'from_user_id' => $adminId, 'to_user_id' => $adminId,
-                'user_id' => $adminId, 'type' => 'credit',
-                'transaction_type' => CASH_IN, 'ref_trans_id' => null,
-                'amount' => (string) $request->input('amount'),
-            ]);
-            if ($tx === null) throw new TransactionFailedException();
-            DB::commit();
+            $issued = $treasury->issueAdminFloat(
+                (string) $request->input('amount'), $request->user(),
+                (string) $request->input('reference'), (string) $request->input('reason'),
+                $request->header('Idempotency-Key'),
+            );
         } catch (\Throwable $e) {
-            DB::rollBack();
             return response()->json(['message' => 'فشلت التعبئة: ' . $e->getMessage()], 422);
         }
 
-        app(AuditService::class)->record([
-            'actor_type' => 'admin', 'actor_user_id' => $request->user()?->id,
-            'subject_type' => 'wallet', 'subject_id' => $adminId,
-            'action' => 'ADMIN_WALLET_TOPUP', 'decision_code' => 'TOPPED_UP',
-            'transaction_id' => $tx,
-            'context' => ['amount' => (string) $request->input('amount')], 'severity' => 'notice',
-        ]);
-
+        $adminId = Helpers::get_admin_id();
         $balance = (string) (EMoney::where('user_id', $adminId)->value('current_balance') ?? '0');
-        return response()->json(['balance' => $balance, 'transaction_id' => $tx, 'message' => 'تمت تعبئة محفظة الإدارة']);
+        return response()->json([
+            'balance' => $balance,
+            'transaction_id' => $issued['transaction_id'],
+            'ledger_entry_ulid' => $issued['entry']->entry_ulid,
+            'duplicate' => $issued['duplicate'],
+            'message' => $issued['duplicate'] ? 'طلب مكرر — عُرض قيد الإصدار الأصلي' : 'تم ترحيل إصدار الخزينة',
+        ]);
     }
 
     // ==================== المالية: إحصاءات + البثّ الحيّ ====================
