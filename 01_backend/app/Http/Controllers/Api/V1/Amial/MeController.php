@@ -40,8 +40,19 @@ class MeController extends Controller
             'tier' => null,        // null | verified | premium | gold
             'status' => null,      // pending | verified | rejected
             'is_verified' => false,
+            'update_required' => false,
         ];
-        if ($merchant) {
+        if ((int) $user->type === CUSTOMER_TYPE) {
+            $verification['status'] = match ((int) ($user->is_kyc_verified ?? 0)) {
+                1 => 'verified',
+                2 => 'rejected',
+                default => 'pending',
+            };
+            $verification['is_verified'] = (int) ($user->is_kyc_verified ?? 0) === 1;
+            $verification['tier'] = (string) ((int) ($user->kyc_tier ?? 0));
+            $verification['update_required'] = \Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_update_required')
+                && (int) ($user->kyc_update_required ?? 0) === 1;
+        } elseif ($merchant) {
             $verification['status'] = $merchant->verification_status;
             $verification['is_verified'] = $merchant->verification_status === 'verified';
             if ($verification['is_verified']) {

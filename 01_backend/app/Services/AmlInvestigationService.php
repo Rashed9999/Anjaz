@@ -41,6 +41,7 @@ class AmlInvestigationService
 {
     public function __construct(
         private readonly AuditService $audit,
+        private readonly KycUpdateRequestService $kycUpdates,
     ) {
     }
 
@@ -187,7 +188,7 @@ class AmlInvestigationService
             // الإجراء يُنفَّذ فعلاً لا يُسجَّل وحسب. وإجراءٌ يُكتب في الخطّ
             // الزمنيّ ولا يقع هو أخطر من عدمه: من يقرأ الملفّ يظنّ الحساب
             // مجمَّداً وهو يعمل.
-            $this->execute($inv, $action);
+            $this->execute($inv, $actor, $action);
 
             $type = $action === 'escalate'
                 ? AmlInvestigationEvent::TYPE_ESCALATED
@@ -217,7 +218,7 @@ class AmlInvestigationService
         });
     }
 
-    private function execute(AmlInvestigation $inv, string $action): void
+    private function execute(AmlInvestigation $inv, User $actor, string $action): void
     {
         $subject = User::find($inv->subject_user_id);
         if (!$subject) {
@@ -226,7 +227,7 @@ class AmlInvestigationService
 
         match ($action) {
             'freeze_account' => $this->freezeAccount($subject),
-            'request_kyc' => $this->flagKycRequired($subject),
+            'request_kyc' => $this->kycUpdates->request($subject, $actor, 'aml_investigation'),
             'blacklist' => $this->blacklist($subject, $inv),
             // التصعيد وطلب مصدر الأموال وتجميد العملية: أثرُها في الملفّ
             // وفي إشعار العميل، لا في حالة الحساب.
@@ -238,13 +239,6 @@ class AmlInvestigationService
     {
         if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'is_temp_blocked')) {
             $user->forceFill(['is_temp_blocked' => 1])->save();
-        }
-    }
-
-    private function flagKycRequired(User $user): void
-    {
-        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_update_required')) {
-            $user->forceFill(['kyc_update_required' => 1])->save();
         }
     }
 

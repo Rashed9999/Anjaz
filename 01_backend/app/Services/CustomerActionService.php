@@ -46,6 +46,7 @@ class CustomerActionService
     public function __construct(
         private readonly AuditService $audit,
         private readonly ApprovalService $approvals,
+        private readonly KycUpdateRequestService $kycUpdates,
     ) {
     }
 
@@ -90,7 +91,7 @@ class CustomerActionService
             // إعادة PIN ناقل استيلاء على الحساب، فتخضع لنفس maker-checker.
             'reset_pin' => $this->requestApproval($customer, $actor, 'reset_pin', $reason),
             'revoke_sessions' => $this->revokeSessions($customer),
-            'require_kyc' => $this->requireKyc($customer),
+            'require_kyc' => $this->requireKyc($customer, $actor, $reason),
             'update_limits' => $this->updateLimits($customer, $actor, $payload),
             'add_note' => $this->addNote($customer, $actor, $payload['body'] ?? $reason, (bool) ($payload['pin'] ?? false)),
             'escalate_risk' => $this->escalateToRisk($customer, $actor, $reason),
@@ -233,13 +234,16 @@ class CustomerActionService
         ];
     }
 
-    private function requireKyc(User $c): array
+    private function requireKyc(User $customer, User $actor, string $reason): array
     {
-        if (Schema::hasColumn('users', 'kyc_update_required')) {
-            $c->forceFill(['kyc_update_required' => 1])->save();
-        }
+        $out = $this->kycUpdates->request($customer, $actor, 'customer_center');
 
-        return ['message' => 'طُلب من العميل تحديث هويّته'];
+        return [
+            'message' => $out['already_required']
+                ? 'طلب تحديث الهوية قائم بالفعل والعمليات الحساسة مقيّدة'
+                : 'طُلب تحديث الهوية وقُيّدت العمليات الحساسة حتى الاعتماد',
+            'context' => $out,
+        ];
     }
 
     private function updateLimits(User $c, User $actor, array $payload): array

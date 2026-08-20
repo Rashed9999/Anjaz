@@ -259,17 +259,26 @@ class SupportConsoleTest extends TestCase
             ->where('revoked', false)->count());
     }
 
-    public function test_require_kyc_resets_verification(): void
+    public function test_require_kyc_restricts_financial_access_and_notifies_the_customer(): void
     {
         $this->customer->forceFill(['is_kyc_verified' => 1])->save();
         $this->actAsAdmin();
 
         $this->postJson("/api/v1/amial/admin/support/customers/{$this->customer->id}/require-kyc",
             ['reason' => 'وثيقة منتهية الصلاحية'])
-            ->assertOk();
+            ->assertOk()
+            ->assertJsonPath('meta.action', 'require_kyc')
+            ->assertJsonPath('meta.operation.financial_access_restricted', true);
 
-        $this->assertFalse((bool) $this->customer->fresh()->is_kyc_verified);
-        $this->assertDatabaseHas('audit_decisions', ['action' => 'SUPPORT_REQUIRE_KYC']);
+        $fresh = $this->customer->fresh();
+        $this->assertSame(0, (int) $fresh->is_kyc_verified);
+        $this->assertSame(0, (int) $fresh->kyc_tier);
+        $this->assertSame(1, (int) $fresh->kyc_update_required);
+        $this->assertDatabaseHas('audit_decisions', ['action' => 'CUSTOMER_REQUIRE_KYC']);
+        $this->assertDatabaseHas('amial_notifications', [
+            'user_id' => $this->customer->id,
+            'type' => 'kyc_update_required',
+        ]);
     }
 
     // ==================== التذاكر ====================

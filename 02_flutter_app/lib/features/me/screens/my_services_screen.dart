@@ -266,10 +266,19 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
               // و«توثيق المتجر» مسوَّرٌ بقدرة، فيظهران معاً للتاجر فلا
               // يعرف أيَّهما يخصّه. فالشخصيُّ لغير التاجر.
               if (!isMerchant)
-                _serviceCard(icon: Icons.verified_user_outlined, label: 'توثيق الحساب',
-                  subtitle: 'ارفع هويتك',
-                  color: const Color(0xFF1B9E4B),
-                  onTap: () => Get.to(() => const KycVerifyScreen())),
+                Obx(() {
+                  final verification = (me.me.value?['verification'] ?? {}) as Map;
+                  final updateRequired = verification['update_required'] == true;
+                  return _serviceCard(
+                    icon: updateRequired ? Icons.warning_amber_rounded : Icons.verified_user_outlined,
+                    label: updateRequired ? 'تحديث الهوية مطلوب' : 'توثيق الحساب',
+                    subtitle: updateRequired
+                        ? 'العمليات الحساسة مقيّدة حتى يكتمل الاعتماد'
+                        : 'ارفع هويتك',
+                    color: updateRequired ? const Color(0xFFD97706) : const Color(0xFF1B9E4B),
+                    onTap: () => Get.to(() => const KycVerifyScreen()),
+                  );
+                }),
               if (!isMerchant)
                 _serviceCard(icon: Icons.handshake, label: 'أقساطي', subtitle: 'سداد التقسيط',
                   color: const Color(0xFF00695C), onTap: () => Get.to(() => const MyInstallmentsScreen())),

@@ -594,26 +594,10 @@ class SupportConsoleController extends Controller
         if ($resp = $this->requireAdmin($request)) return $resp;
         if ($resp = $this->requireReason($request)) return $resp;
 
-        $user = User::find($id);
+        $user = User::where('type', CUSTOMER_TYPE)->find($id);
         if (!$user) return $this->error('USER_NOT_FOUND', 'العميل غير موجود', 404);
 
-        $user->is_kyc_verified = false;
-        $user->save();
-
-        $this->auditAction($request, $user, 'SUPPORT_REQUIRE_KYC');
-
-        // AMIAL-KYC-DOCS-001: الدائرة صارت مغلقة.
-        //
-        // كان هذا الزرّ يضع العلامة ثم لا مكان يرفع إليه العميل مستنده —
-        // فيطمئنّ الموظّف وينتظر العميل ما لن يأتي. الآن تُعاد حالةُ ما
-        // رفعه ليعرف الموظّف ما ينقص قبل أن يغلق المكالمة.
-        $kyc = app(\App\Services\KycDocumentService::class);
-
-        return $this->ok([
-            'user_id' => $user->id,
-            'kyc' => $kyc->completenessFor($user, 2),
-            'upload_endpoint' => 'POST /api/v1/amial/me/kyc/documents',
-        ], 'OK', 'سيُطلب من العميل رفع وثائق الهوية من التطبيق');
+        return $this->runCustomerAction($request, $user, 'require_kyc');
     }
 
     // ==================== 4.5) أجهزة العميل ====================

@@ -7,6 +7,7 @@ use App\Models\User;
 use DomainException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * AMIAL-KYC-DOCS-001 — رفع مستندات الهوية ومراجعتها.
@@ -203,9 +204,21 @@ class KycDocumentService
 
         return DB::transaction(function () use ($user, $reviewer, $approve, $targetTier, $reason) {
             $account = User::query()->lockForUpdate()->findOrFail($user->id);
+            $requiredTier = $targetTier;
+
+            // طلب تحديث حسابٍ كان في الفئة ٣ لا يعيده افتراض لوحة قديمة إلى
+            // الفئة ٢. تُستعاد الفئة السابقة فقط بعد اكتمال مستنداتها الجديدة.
+            if (Schema::hasColumn('users', 'kyc_update_required')
+                && (int) ($account->kyc_update_required ?? 0) === 1
+                && Schema::hasColumn('users', 'kyc_update_previous_tier')) {
+                $previousTier = (int) ($account->kyc_update_previous_tier ?? 0);
+                if (array_key_exists($previousTier, self::REQUIRED_BY_TIER)) {
+                    $requiredTier = max($requiredTier, $previousTier);
+                }
+            }
 
             if ($approve) {
-                $completeness = $this->completenessFor($account, $targetTier);
+                $completeness = $this->completenessFor($account, $requiredTier);
                 if (!$completeness['complete']) {
                     throw new DomainException(
                         'KYC_DOCUMENTS_INCOMPLETE: ' . implode(', ', $completeness['missing'])
@@ -213,8 +226,20 @@ class KycDocumentService
                 }
 
                 $account->is_kyc_verified = 1;
-                $account->kyc_tier = max((int) ($account->kyc_tier ?? 0), $targetTier);
+                $account->kyc_tier = max((int) ($account->kyc_tier ?? 0), $requiredTier);
                 $account->kyc_tier_updated_at = now();
+                // لا يُمسح طلب التحديث بمجرد رفع ملفات أو اعتماد ملفٍ مفرد؛
+                // يُمسح هنا فقط، بعد قرار الحساب النهائي ومستندات مكتملة.
+                foreach ([
+                    'kyc_update_required',
+                    'kyc_update_requested_at',
+                    'kyc_update_requested_by',
+                    'kyc_update_previous_tier',
+                ] as $column) {
+                    if (Schema::hasColumn('users', $column)) {
+                        $account->setAttribute($column, in_array($column, ['kyc_update_required'], true) ? 0 : null);
+                    }
+                }
             } else {
                 $account->is_kyc_verified = 2;
             }
@@ -229,7 +254,7 @@ class KycDocumentService
                 'decision_code' => $approve ? 'KYC_APPROVED' : 'KYC_REJECTED',
                 'reason' => $approve ? null : mb_substr(trim((string) $reason), 0, 500),
                 'severity' => 'critical',
-                'context' => ['target_tier' => $targetTier],
+                'context' => ['target_tier' => $requiredTier],
             ]);
 
             return $account->fresh();

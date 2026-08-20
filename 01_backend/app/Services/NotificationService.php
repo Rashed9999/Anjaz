@@ -24,6 +24,7 @@ class NotificationService
         'credit_sale', 'credit_payment', 'credit_over_limit',
         'merchant_payment_received',
         'merchant_verified', 'merchant_verification_rejected', 'merchant_verification_submitted', 'merchant_resubmission_required',
+        'kyc_update_required',
         'refund_received', 'refund_pending',
         'system', 'promo', 'terms_update',
     ];

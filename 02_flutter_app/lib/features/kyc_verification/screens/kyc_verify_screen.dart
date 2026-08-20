@@ -67,7 +67,10 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                 ),
                 const SizedBox(height: Dimensions.fontSizeDefault),
 
-                Text('upload_your_image'.tr, style: rubikRegular),
+                const Text(
+                  'ارفع ٣ صور بالترتيب: وجه الهوية، ظهر الهوية، ثم صورة شخصية حيّة.',
+                  style: TextStyle(fontSize: 13, height: 1.5),
+                ),
                 const SizedBox(height: Dimensions.paddingSizeDefault,),
 
                 Container(height: 100,padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeExtraSmall),
@@ -160,8 +163,8 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                   child: CustomButtonWidget(buttonText: 'upload'.tr, onTap: (){
                     if(_identityNumberController.text.isEmpty) {
                       showCustomSnackBarHelper('identity_number_is_empty'.tr);
-                    }else if(kycVerifyController.identityImage.isEmpty) {
-                      showCustomSnackBarHelper('please_upload_identity_image'.tr);
+                    }else if(kycVerifyController.identityImage.length != 3) {
+                      showCustomSnackBarHelper('يرجى رفع ثلاث صور بالترتيب: وجه الهوية وظهرها وصورة شخصية');
                     }else if(kycVerifyController.dropDownSelectedValue == kycVerifyController.dropList[0]) {
                       showCustomSnackBarHelper('select_identity_type'.tr);
                     }else if(_addressController.text.trim().isEmpty) {

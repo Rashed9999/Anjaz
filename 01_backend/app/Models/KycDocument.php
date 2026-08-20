@@ -45,6 +45,8 @@ class KycDocument extends Model
     public const STATUS_PENDING = 'pending';
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
+    /** كان معتمداً، لكن طلب إعادة التحقق جعله غير صالح لقرارٍ جديد. */
+    public const STATUS_SUPERSEDED = 'superseded';
 
     public const TYPE_ID_FRONT = 'national_id_front';
     public const TYPE_ID_BACK = 'national_id_back';

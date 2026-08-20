@@ -231,6 +231,51 @@ class KycDocumentTest extends TestCase
         $this->assertGreaterThanOrEqual(2, (int) $verified->kyc_tier);
     }
 
+    public function test_account_approval_is_the_only_place_that_clears_a_kyc_update_request(): void
+    {
+        $u = $this->customer();
+        $admin = $this->reviewer();
+        $u->forceFill(['kyc_update_required' => 1, 'kyc_update_requested_at' => now()])->save();
+
+        foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE] as $type) {
+            $this->svc->approve($this->svc->upload($u, $type, $this->image()), $admin);
+        }
+
+        $this->assertSame(1, (int) $u->fresh()->kyc_update_required,
+            'اعتماد مستند مفرد لا يمسح طلب تحديث الحساب');
+
+        $verified = $this->svc->decideAccountVerification($u->fresh(), $admin, true);
+        $this->assertSame(0, (int) $verified->kyc_update_required);
+        $this->assertNull($verified->kyc_update_requested_at);
+    }
+
+    public function test_reverification_of_a_tier_three_customer_requires_new_tier_three_documents(): void
+    {
+        $u = $this->customer();
+        $admin = $this->reviewer();
+        $u->forceFill([
+            'is_kyc_verified' => 0,
+            'kyc_tier' => 0,
+            'kyc_update_required' => 1,
+            'kyc_update_previous_tier' => 3,
+        ])->save();
+
+        foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE] as $type) {
+            $this->svc->approve($this->svc->upload($u, $type, $this->image()), $admin);
+        }
+
+        try {
+            $this->svc->decideAccountVerification($u->fresh(), $admin, true, 2);
+            $this->fail('أُعيدت فئة ٣ بمستندات فئة ٢ فقط');
+        } catch (DomainException $e) {
+            $this->assertStringContainsString(KycDocument::TYPE_ADDRESS_PROOF, $e->getMessage());
+        }
+
+        $this->svc->approve($this->svc->upload($u, KycDocument::TYPE_ADDRESS_PROOF, $this->image('address.jpg')), $admin);
+        $verified = $this->svc->decideAccountVerification($u->fresh(), $admin, true, 2);
+        $this->assertSame(3, (int) $verified->kyc_tier);
+    }
+
     public function test_account_verification_cannot_be_decided_by_its_owner(): void
     {
         $staff = $this->reviewer();

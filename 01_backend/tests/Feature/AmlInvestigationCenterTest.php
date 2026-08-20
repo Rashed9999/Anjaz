@@ -219,6 +219,25 @@ class AmlInvestigationCenterTest extends TestCase
             'سُجّل الإدراج في القائمة السوداء ولم يقع فعلاً');
     }
 
+    /** @test */
+    public function an_aml_kyc_request_uses_the_same_financial_restriction_as_support(): void
+    {
+        $this->customer->forceFill(['is_kyc_verified' => 1, 'kyc_tier' => 2])->save();
+        $case = $this->openCase();
+
+        $this->inv->takeAction($case, $this->officer, 'request_kyc',
+            'توجد مؤشرات تستلزم إعادة التحقق من هوية صاحب الحساب');
+
+        $fresh = $this->customer->fresh();
+        $this->assertSame(0, (int) $fresh->is_kyc_verified);
+        $this->assertSame(0, (int) $fresh->kyc_tier);
+        $this->assertSame(1, (int) $fresh->kyc_update_required);
+        $this->assertDatabaseHas('amial_notifications', [
+            'user_id' => $this->customer->id,
+            'type' => 'kyc_update_required',
+        ]);
+    }
+
     // ── بلاغ الاشتباه ───────────────────────────────────────────────────
 
     /** @test */

@@ -57,6 +57,18 @@ class MeAndWithdrawApiTest extends TestCase
           ->assertJsonPath('meta.roles.is_customer', true);
     }
 
+    /** التطبيق يقرأ حالة إعادة التحقق بدلاً من إبقاء العميل بلا تفسير. */
+    public function me_endpoint_exposes_a_required_kyc_update_to_the_customer(): void
+    {
+        $this->customer->forceFill(['kyc_update_required' => 1])->save();
+        Passport::actingAs($this->customer);
+
+        $this->getJson('/api/v1/amial/me')
+            ->assertOk()
+            ->assertJsonPath('meta.verification.update_required', true)
+            ->assertJsonPath('meta.verification.status', 'pending');
+    }
+
     /** @test */
     public function account_number_endpoint_returns_only_account_number(): void
     {

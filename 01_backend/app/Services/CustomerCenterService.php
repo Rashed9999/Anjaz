@@ -177,11 +177,17 @@ class CustomerCenterService
         $hasPending = $documents->contains('status', KycDocument::STATUS_PENDING);
         $hasRejected = $documents->contains('status', KycDocument::STATUS_REJECTED);
         $accountState = $this->accountKycState($customer);
+        $updateRequired = Schema::hasColumn('users', 'kyc_update_required')
+            && (int) ($customer->kyc_update_required ?? 0) === 1;
 
         [$state, $severity, $label, $description] = match (true) {
             $accountState === 'rejected' => [
                 'account_rejected', 'danger', 'قرار الحساب: مرفوض',
                 'رُفض توثيق الحساب؛ راجع سبب الرفض وسجلّ المستندات قبل أي إعادة تقديم.',
+            ],
+            $updateRequired => [
+                'update_required', 'danger', 'تحديث الهوية مطلوب',
+                'العمليات الحساسة مقيّدة حتى تُرفع الوثائق وتُعتمد بقرار منفصل.',
             ],
             $accountState === 'verified' && $completeness['complete'] => [
                 'verified_with_current_documents', 'success', 'موثّق والمستندات مكتملة',
@@ -222,6 +228,9 @@ class CustomerCenterService
             'account_state' => $accountState,
             'tier' => $tier,
             'document_target_tier' => $documentTier,
+            'update_required' => $updateRequired,
+            'update_requested_at' => $updateRequired
+                ? $customer->kyc_update_requested_at?->toIso8601String() : null,
             'completeness' => $completeness,
             'reconciliation' => [
                 'state' => $state,

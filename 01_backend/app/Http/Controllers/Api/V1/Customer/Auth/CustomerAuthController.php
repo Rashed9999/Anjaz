@@ -16,6 +16,8 @@ use App\CentralLogics\Helpers;
 use Illuminate\Support\Carbon;
 use App\Models\BusinessSetting;
 use App\Models\WithdrawRequest;
+use App\Models\KycDocument;
+use App\Services\KycDocumentService;
 use App\Models\TransactionLimit;
 use App\CentralLogics\SmsModule;
 use App\Models\PhoneVerification;
@@ -576,7 +578,8 @@ class CustomerAuthController extends Controller
         $validator = Validator::make($request->all(), [
             'identification_number' => 'required',
             'identification_type' => 'required|in:passport,driving_licence,nid,trade_license',
-            'identification_image' => 'required|array',
+            'identification_image' => 'required|array|size:3',
+            'identification_image.*' => 'required|file|max:8192|mimetypes:image/jpeg,image/png,image/heic,image/heif,application/pdf',
             // AMIAL-KYC: العنوان + التوقيع الإلكتروني + الإقرار (اختيارية توافقاً
             // مع أي عميل قديم؛ التطبيق الجديد يرسلها ويشترطها في الواجهة).
             'address' => 'sometimes|nullable|string|max:500',
@@ -588,18 +591,32 @@ class CustomerAuthController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        $identityImages = [];
-        foreach ($request->identification_image as $image) {
-            $identityImages[] = Helpers::file_uploader('user/identity/', 'png', $image);
-        }
-
         $user = $this->user->find($request->user()->id);
         if($user->is_kyc_verified == 1) {
             return response()->json(Helpers::response_formatter(DEFAULT_FAIL_200), 200);
         }
+        // هذا الطرف هو نموذج التطبيق القديم. لا نسمح له بعد اليوم أن يخزّن
+        // صور هوية في المسار القديم غير المشفّر أو أن يترك «رفع KYC» خارج
+        // طابور المراجعة الحديث. الصور الثلاث بالترتيب: وجه البطاقة، ظهرها،
+        // وصورة حيّة؛ وتظهر كلها في مركز KYC للمراجع.
+        try {
+            $documents = app(KycDocumentService::class);
+            foreach ([
+                KycDocument::TYPE_ID_FRONT,
+                KycDocument::TYPE_ID_BACK,
+                KycDocument::TYPE_SELFIE,
+            ] as $index => $type) {
+                $documents->uploadAndRead($user, $type, $request->file('identification_image')[$index]);
+            }
+        } catch (\DomainException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
         $user->identification_number = $request->identification_number;
         $user->identification_type = $request->identification_type;
-        $user->identification_image = $identityImages;
+        // لا نكرر بيانات الهوية في التخزين القديم؛ KycDocumentService يحفظها
+        // مشفّرة ويخفي مسارها ولا يفتحها إلا للمراجع المخوّل.
+        $user->identification_image = json_encode([], JSON_UNESCAPED_UNICODE);
 
         // AMIAL-KYC: حفظ العنوان + التوقيع + الإقرار (فقط إن أُرسلت وإن وُجدت الأعمدة)
         if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'address') && $request->filled('address')) {
