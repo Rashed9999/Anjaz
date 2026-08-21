@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\KycGeoConsistencyService;
 use App\Support\YemenGovernorates;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
 /**
@@ -20,6 +21,7 @@ use Tests\TestCase;
 class ZoneEnforcementGapsTest extends TestCase
 {
     use RefreshDatabase;
+    use EstablishesKycEvidence;
 
     private function admin(): User
     {
@@ -47,6 +49,8 @@ class ZoneEnforcementGapsTest extends TestCase
         $user = $this->createViaHub(['residence_governorate' => 'YE-AD']);
         $this->assertSame('UNKNOWN', $user->zone_code);
 
+        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
+        $this->establishKycEvidence($user);
         $this->actingAs($this->admin(), 'user')
             ->postJson("/admin/amial/hub/users/{$user->id}/kyc", ['status' => 1])
             ->assertSuccessful();
@@ -58,6 +62,8 @@ class ZoneEnforcementGapsTest extends TestCase
     {
         $user = $this->createViaHub(['residence_governorate' => 'YE-SN']); // صنعاء
 
+        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
+        $this->establishKycEvidence($user);
         $this->actingAs($this->admin(), 'user')
             ->postJson("/admin/amial/hub/users/{$user->id}/kyc", ['status' => 1])
             ->assertSuccessful();
@@ -70,6 +76,8 @@ class ZoneEnforcementGapsTest extends TestCase
         // لا نخمّن SOUTH عند غياب البيانات — ذلك الافتراض الخطير بعينه.
         $user = $this->createViaHub();
 
+        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
+        $this->establishKycEvidence($user);
         $this->actingAs($this->admin(), 'user')
             ->postJson("/admin/amial/hub/users/{$user->id}/kyc", ['status' => 1])
             ->assertSuccessful();

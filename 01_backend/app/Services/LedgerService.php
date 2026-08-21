@@ -272,6 +272,85 @@ class LedgerService
      * ثم يُنادي هذه ليمرّ، فقد حوّل عطلاً إلى عادة.
      */
     /**
+     * AMIAL-LEDGER-OPENING-003 — **الافتتاحُ ليس التصحيح.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * `reconcileWalletBalance` صارت **مسارَ التصحيح المضبوط** وحدَه: قضيّةٌ
+     * معتمَدةٌ وأربعُ عيونٍ وملاحظةٌ دائمة. وهذا صحيحٌ لتصحيح انحرافٍ ظهر
+     * بعد أن صار للمحفظة تاريخٌ في الدفتر.
+     *
+     * **لكنّها كانت أيضاً المسارَ الوحيدَ للرصيد الافتتاحيّ** — وذاك يقع
+     * **لحظةَ النشر**، قبل أن تُشغَّل مصالحةٌ ليليّةٌ واحدة، فلا قضيّةَ
+     * موجودةٌ ولا يمكن أن توجد. فصار أمرُ الترحيل يشترط ما لا يتحقّق:
+     * **حاجزٌ يجعل الميزةَ التي يحرسها مستحيلة**، وكلُّ محفظةٍ قديمةٍ
+     * تبقى صفراً في الدفتر فيُرفض أوّلُ خصمٍ عليها بـ«الرصيد لا يكفي».
+     *
+     * فيُفصَل المساران بالاسم لا بالرايات:
+     *
+     *   • **الافتتاح** — رصيدُ الدفتر **صفرٌ قطعاً**. لا شيءَ يُناقَض،
+     *     فلا شيءَ يُصحَّح: تُدخَل المحفظةُ القائمةُ إلى الدفتر كما هي.
+     *     ولا يُقبل على حسابٍ له قيدٌ واحد — **فلا يصلح باباً خلفيّاً
+     *     للتعديل**.
+     *   • **التصحيح** — `reconcileWalletBalance` بقضيّتها وعيونها الأربع.
+     *
+     * ومقابلُ القيد **حسابٌ معلَّقٌ (أصل) لا حقوقُ ملكيّة**: المالُ موجودٌ
+     * فعلاً في بنكٍ أو عهدةِ وكيلٍ ولم يدخل الدفترَ بعد، وحقوقُ الملكيّة
+     * تبتلعه صامتاً فلا يُسأل عنه أحد. (‏وهو المنطقُ نفسُه في `a2f9b37`.)
+     *
+     * @return LedgerJournalEntry|null  و`null` تعني: لا شيءَ يُفتَح
+     */
+    public function openWalletBalance(int $userId, string $reason): ?LedgerJournalEntry
+    {
+        if (trim($reason) === '') {
+            throw new RuntimeException('Opening a wallet balance requires a stated reason.');
+        }
+
+        return DB::transaction(function () use ($userId, $reason): ?LedgerJournalEntry {
+            $account = $this->getOrCreateUserWallet($userId);
+
+            $wallet = \App\Models\EMoney::where('user_id', $userId)->value('current_balance');
+            $wallet = $wallet === null ? '0' : (string) $wallet;
+
+            $inLedger = $this->computeBalanceFromLines($account->id);
+
+            // **الشرطُ الذي يمنع هذا المسارَ من أن يصير تعديلاً.** حسابٌ له
+            // رصيدٌ في الدفتر له تاريخ، وتغييرُه تصحيحٌ يمرّ بأربع عيون.
+            if (bccomp($inLedger, '0', 4) !== 0) {
+                throw new RuntimeException(
+                    'This wallet already has a ledger history — a correction '
+                    . 'must go through an approved reconciliation case, not an opening entry.'
+                );
+            }
+
+            if (bccomp($wallet, '0', 4) <= 0) {
+                return null; // لا رصيدَ يُفتَح — ولا قيدَ بصفر
+            }
+
+            $opening = $this->getOrCreateSystemAccount(
+                'OPENING_BALANCE_SUSPENSE', 'asset',
+                'حساب معلّق لأرصدة افتتاحيّة مرحَّلة عند النشر', 'debit'
+            );
+
+            return $this->post(
+                sourceType: 'opening_balance',
+                sourceId: (string) $userId,
+                description: "رصيد افتتاحيّ للمحفظة: {$reason}",
+                lines: [
+                    ['account' => $opening->account_code, 'direction' => 'debit', 'amount' => $wallet],
+                    ['account' => $account->account_code, 'direction' => 'credit', 'amount' => $wallet],
+                ],
+                // مفتاحٌ واحدٌ لكلّ محفظة — فإعادةُ تشغيل أمر النشر لا تضاعف.
+                idempotencyKey: "wallet-opening-balance:{$userId}",
+                metadata: [
+                    'reason' => $reason,
+                    'wallet' => $wallet,
+                    'ledger_before' => $inLedger,
+                ],
+            );
+        });
+    }
+
+    /**
      * Controlled correction of a wallet/ledger variance.
      *
      * This is deliberately not a convenience repair API. A caller must provide

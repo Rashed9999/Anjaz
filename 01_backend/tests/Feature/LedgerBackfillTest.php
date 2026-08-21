@@ -106,9 +106,19 @@ class LedgerBackfillTest extends TestCase
             'تضاعف الرصيد عند الإعادة — الأمر غير آمن للتكرار');
 
         $this->assertSame(1,
-            LedgerJournalEntry::where('source_type', 'external_adjustment')
+            LedgerJournalEntry::where('source_type', 'opening_balance')
                 ->where('source_id', (string) $u->id)->count(),
             'كُتب قيدٌ ثانٍ للمحفظة نفسها');
+
+        // AMIAL-LEDGER-OPENING-003 — **والافتتاحُ لا يُكتب تصحيحاً.**
+        //
+        // كان هذا القيدُ يُرحَّل بـ`external_adjustment`، فيختلط في كلّ
+        // تقريرٍ بعده رصيدٌ افتتاحيٌّ مشروعٌ مع **تسويةٍ خارجيّةٍ تستوجب
+        // تحقيقاً**. ومن قرأ التقريرَ رأى تسوياتٍ بعدد محافظ الإنتاج كلِّها.
+        $this->assertSame(0,
+            LedgerJournalEntry::where('source_type', 'external_adjustment')
+                ->where('source_id', (string) $u->id)->count(),
+            'الافتتاحُ رُحّل تسويةً خارجيّة — فيُقرأ في التقارير شبهةً لا ترحيلاً');
     }
 
     public function test_dry_run_writes_nothing(): void

@@ -33,6 +33,6 @@
         <a href="{{ route('admin.auth.two-factor.cancel') }}" class="back" data-testid="two-factor-cancel">الرجوع إلى تسجيل الدخول</a>
     </section>
 </main>
-<script>document.getElementById('two-factor-form')?.addEventListener('submit', () => { const button = document.getElementById('two-factor-submit'); button.setAttribute('aria-busy', 'true'); button.disabled = true; button.querySelector('.spinner-border')?.classList.remove('d-none'); });</script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">document.getElementById('two-factor-form')?.addEventListener('submit', () => { const button = document.getElementById('two-factor-submit'); button.setAttribute('aria-busy', 'true'); button.disabled = true; button.querySelector('.spinner-border')?.classList.remove('d-none'); });</script>
 </body>
 </html>

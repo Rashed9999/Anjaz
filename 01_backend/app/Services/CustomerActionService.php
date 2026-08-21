@@ -114,6 +114,13 @@ class CustomerActionService
             'action' => $action,
             'approval_required' => (bool) ($result['approval_required'] ?? false),
             'approval_request_number' => $result['approval_request_number'] ?? null,
+            // AMIAL-APPROVAL-ID-001 — **الرقمُ المعروضُ ليس المعرّفَ الذي
+            // يُعتمَد به.** توحيدُ إجراءات العميل في هذه الخدمة أبقى
+            // `request_number` (‏نصٌّ يُقرأ: `APR-000123`) وأسقط `request_id`
+            // (‏المفتاحَ الذي يبني به السطحُ مسارَ الاعتماد). فصار السطحُ
+            // يبني `…/approvals//approve` — **شرطةٌ مزدوجةٌ ومسارٌ لا وجودَ
+            // له**: أربعُ عيونٍ مبنيّةٌ ولا يُوصَل إليها. يُعادان معاً.
+            'approval_request_id' => $result['approval_request_id'] ?? null,
             // لا يُخفى أثر الإجراء عن السطح الذي طلبه، لكن يُبنى من الخدمة
             // لا من عدّادٍ مستقل في كلّ متحكّم.
             'context' => $result['context'] ?? [],
@@ -148,6 +155,7 @@ class CustomerActionService
             'message' => 'أُنشئ طلب ' . $request->request_number . ' لاعتماد مشرف مختلف قبل التنفيذ',
             'approval_required' => true,
             'approval_request_number' => $request->request_number,
+            'approval_request_id' => (int) $request->id,
             'context' => ['approval_request_number' => $request->request_number],
         ];
     }
@@ -216,6 +224,7 @@ class CustomerActionService
             'message' => 'فُتحت معاملة وفاة وطلب ' . $request->request_number . ' لمراجعة موظف مختلف قبل التعليم النهائي',
             'approval_required' => true,
             'approval_request_number' => $request->request_number,
+            'approval_request_id' => (int) $request->id,
             'context' => ['approval_request_number' => $request->request_number],
         ];
     }

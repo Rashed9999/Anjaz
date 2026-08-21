@@ -694,8 +694,12 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
 
     public function test_creating_an_employee_grants_the_chosen_roles_in_one_step(): void
     {
+        // **دورُ موظّفِ منصّةٍ يبدأ بـ`platform_`** — و`platformRoleIds`
+        // تُسقط ما سواه بحقّ: دورٌ تابعٌ لتاجرٍ لا يُسنَد إلى موظّف منصّة.
+        // فكان اسمُ الدور في هذه التركيبة يجعل الإنشاءَ يُردّ، ثمّ يُقرأ
+        // الردُّ «الشاشةُ لا تُنشئ» — والشاشةُ سليمةٌ والتركيبةُ هي الخطأ.
         $roleId = DB::table('roles')->insertGetId([
-            'code' => 'auditor_guard_test', 'label_ar' => 'مدقّق',
+            'code' => 'platform_auditor_guard_test', 'label_ar' => 'مدقّق',
             'created_at' => now(), 'updated_at' => now(),
         ]);
 
@@ -724,11 +728,20 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
     {
         User::factory()->create(['phone' => '967771900011']);
 
+        $roleId = DB::table('roles')->insertGetId([
+            'code' => 'platform_dup_phone_guard_test', 'label_ar' => 'مدقّق',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        // **الطلبُ سليمٌ في كلّ شيءٍ إلّا الهاتف** — وإلّا ردّه التحقّقُ من
+        // حقلٍ ناقصٍ قبل أن يُسأل عن الرقم، فيمرّ الاختبارُ ولم يُشغَّل
+        // الحارسُ الذي يسمّيه. (‏القاعدة الثانية: حارسٌ لم يُجرَّب ليس حارساً.)
         $this->actingAs($this->admin, 'user')
             ->post('/admin/amial/ops/operators', [
                 'f_name' => 'مكرَّر',
                 'phone' => '967771900011',
                 'password' => 'Passw0rd!2026',
+                'role_ids' => [$roleId],
             ])->assertSessionHasErrors('phone');
 
         // **رقمٌ بحسابين يكسر الدخول نفسَه**: من يسجّل الدخول لا يُعرف مَن هو.

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\EMoney;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
 /**
@@ -13,6 +14,7 @@ use Tests\TestCase;
 class AdminHubTest extends TestCase
 {
     use RefreshDatabase;
+    use EstablishesKycEvidence;
 
     private User $admin;
 
@@ -124,13 +126,15 @@ class AdminHubTest extends TestCase
     {
         $customer = User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => '967771009030', 'is_kyc_verified' => 0]);
 
+        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
+        $this->establishKycEvidence($customer);
         $this->actingAs($this->admin, 'user')
             ->postJson("/admin/amial/hub/users/{$customer->id}/kyc", ['status' => 1])
             ->assertOk();
         $this->assertSame(1, (int) $customer->fresh()->is_kyc_verified);
 
         $this->actingAs($this->admin, 'user')
-            ->postJson("/admin/amial/hub/users/{$customer->id}/kyc", ['status' => 2])
+            ->postJson("/admin/amial/hub/users/{$customer->id}/kyc", ['status' => 2, 'reason' => 'الوثائق غير واضحة ولا تُقرأ'])
             ->assertOk();
         $this->assertSame(2, (int) $customer->fresh()->is_kyc_verified);
     }
@@ -171,8 +175,14 @@ class AdminHubTest extends TestCase
     /** @test */
     public function admin_topup_credits_admin_wallet(): void
     {
+        // إصدارُ خزينةٍ مالٌ يُخلَق من لا شيء — فلا يُقبل بلا سندٍ وسبب.
+        // (‏`PlatformTreasuryIssuanceTest` يحرس الشرطَ نفسَه من جهته.)
         $this->actingAs($this->admin, 'user')
-            ->postJson('/admin/amial/hub/finance/topup', ['amount' => '50000'])
+            ->postJson('/admin/amial/hub/finance/topup', [
+                'amount' => '50000',
+                'reference' => 'BANK-DEP-2026-0001',
+                'reason' => 'إيداعٌ بنكيٌّ مقابلَ إصدار رصيدٍ إلكترونيّ',
+            ])
             ->assertOk();
 
         $this->assertSame('1050000.0000',
@@ -228,6 +238,8 @@ class AdminHubTest extends TestCase
         $this->assertSame('retail', $profile->business_type);
 
         // بعد اعتماد الإدارة يصير موثّقاً
+        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
+        $this->establishKycEvidence($merchant);
         $this->actingAs($this->admin, 'user')
             ->postJson("/admin/amial/hub/users/{$merchant->id}/kyc", ['status' => 1])
             ->assertSuccessful();

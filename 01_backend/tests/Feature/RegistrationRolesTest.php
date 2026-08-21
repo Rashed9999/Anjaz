@@ -8,6 +8,7 @@ use App\Models\MerchantProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
 /**
@@ -17,6 +18,7 @@ use Tests\TestCase;
 class RegistrationRolesTest extends TestCase
 {
     use RefreshDatabase;
+    use EstablishesKycEvidence;
 
     private function registerPayload(string $phone, array $extra = []): array
     {
@@ -117,6 +119,8 @@ class RegistrationRolesTest extends TestCase
         $this->assertSame('صيدلية النور', $row['store_name']);
 
         // الاعتماد يوثّق الحساب وملف التاجر معاً
+        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
+        $this->establishKycEvidence($merchant);
         $this->actingAs($admin, 'user')
             ->postJson("/admin/amial/hub/users/{$merchant->id}/kyc", ['status' => 1])
             ->assertOk();
@@ -154,6 +158,8 @@ class RegistrationRolesTest extends TestCase
 
         // بعد اعتماده من الأدمن = موثّق
         $admin = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770009200']);
+        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
+        $this->establishKycEvidence($pending);
         $this->actingAs($admin, 'user')
             ->postJson("/admin/amial/hub/users/{$pending->id}/kyc", ['status' => 1])
             ->assertOk();
@@ -171,6 +177,8 @@ class RegistrationRolesTest extends TestCase
         $user = User::where('phone', '967771500008')->first();
 
         $admin = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770009201']);
+        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
+        $this->establishKycEvidence($user);
         $this->actingAs($admin, 'user')
             ->postJson("/admin/amial/hub/users/{$user->id}/kyc", ['status' => 1])
             ->assertOk();

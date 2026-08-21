@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
@@ -33,6 +34,14 @@ use Tests\TestCase;
  */
 class AdminRouteReferenceGuardTest extends TestCase
 {
+    // **وهذا الحارسُ نفسُه كان يلوّث المجموعة.** الاختبارُ الثاني يُنشئ
+    // مديراً ليُصيّر القائمةَ الجانبيّة، وبلا `RefreshDatabase` يبقى ذلك
+    // الحسابُ في القاعدة لكلّ ما بعده أبجديّاً. فسقط اختباران بعيدان
+    // (‏عدُّ «مستخدمين جدد اليوم» ومجموعُ رسوم مسوّاة) — **وكلاهما يمرّ
+    // منفرداً**، فيُقرأ سقوطُهما عطلاً في شيفرةٍ سليمة ويُرسَل من يصدّقه
+    // خلف عطلٍ لا وجودَ له.
+    use RefreshDatabase;
+
     /**
      * قوالبُ اللوحة كلُّها + الجزئيّاتُ المشتركةُ التي تُضمَّن فيها.
      *

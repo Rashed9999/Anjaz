@@ -1019,6 +1019,8 @@ class SupportConsoleController extends Controller
             'action' => $action,
             'approval_required' => $approvalRequired,
             'request_number' => $out['approval_request_number'] ?? null,
+            // المفتاحُ الذي يُبنى به مسارُ الاعتماد — لا الرقمُ المعروض.
+            'request_id' => $out['approval_request_id'] ?? null,
             'operation' => $out['context'] ?? [],
         ], $approvalRequired ? 'APPROVAL_PENDING' : 'OK', (string) $out['message'], $approvalRequired ? 202 : 200);
     }

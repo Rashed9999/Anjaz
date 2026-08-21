@@ -81,7 +81,7 @@
         </div>
     </section>
 </main>
-<script>
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
     (() => {
         const image = document.getElementById('admin-captcha-image');
         const refresh = document.getElementById('admin-captcha-refresh');

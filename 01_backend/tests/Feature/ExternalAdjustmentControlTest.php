@@ -36,7 +36,15 @@ class ExternalAdjustmentControlTest extends TestCase
         $walletOwner = User::factory()->create();
         $maker = User::factory()->create();
         $checker = User::factory()->create();
-        EMoney::create(['user_id' => $walletOwner->id, 'current_balance' => '125.0000']);
+        // **الفرقُ يُصنَع، لا يُفترَض.** `EMoneyObserver` يفتح كلَّ محفظةٍ
+        // تولد مموَّلةً في الدفتر — فمحفظةٌ تُنشأ بـ١٢٥ يكون دفترُها ١٢٥
+        // أيضاً، والفارقُ صفرٌ، و`reconcileWalletBalance` تُعيد `null` بحقّ:
+        // لا شيءَ يُصحَّح. فتُنشأ بصفرٍ ثمّ يُرفَع العمودُ خاماً تجاوزاً
+        // للمراقب — وتلك هي الحالةُ التي تصف القضيّةُ نفسُها (‏١٢٥ مقابل ٠).
+        EMoney::create(['user_id' => $walletOwner->id, 'current_balance' => '0.0000']);
+        \Illuminate\Support\Facades\DB::table('e_money')
+            ->where('user_id', $walletOwner->id)
+            ->update(['current_balance' => '125.0000']);
 
         $case = ReconciliationCase::create([
             'case_ulid' => (string) \Illuminate\Support\Str::ulid(),

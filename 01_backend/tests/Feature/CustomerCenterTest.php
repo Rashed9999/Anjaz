@@ -295,7 +295,9 @@ class CustomerCenterTest extends TestCase
             ->assertOk()->json('meta.financial_truth');
 
         $this->assertSame('mismatch', $financial['state']);
-        $this->assertSame('140000', $financial['operational_balance']);
+        // الثلاثةُ بصيغةٍ واحدة — فمقارنةُ رقمين مختلفَي الشكل تُشكّك في
+        // الحساب بدل أن تُظهر الفرق.
+        $this->assertSame('140000.0000', $financial['operational_balance']);
         $this->assertSame('150000.0000', $financial['ledger_balance']);
         $this->assertSame('-10000.0000', $financial['gap']);
     }

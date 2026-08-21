@@ -141,8 +141,18 @@ class OperatorRolesController extends Controller
 
     public function update(Request $request, int $userId): RedirectResponse
     {
+        // AMIAL-OPERATOR-LASTADMIN-001 — **الحارسُ الذي كان يحرسه غيرُه.**
+        //
+        // كان الشرطُ `required|array|min:1`، فقائمةٌ فارغةٌ تُردّ **بخطأ
+        // تحقّقٍ من الحقل** قبل أن يُسأل «أيترك هذا المنصّةَ بلا مدير؟».
+        // فالنتيجةُ ردٌّ صحيحٌ لسببٍ خاطئ: يُردّ سحبُ الأدوار عن **أيّ**
+        // موظّفٍ كما يُردّ عن آخر مدير — والحمايةُ الحقيقيّةُ لم تُشغَّل قطّ.
+        // وحارسٌ لم يُشغَّل لا يُعرف أيعمل أم لا. (‏القاعدة الثانية.)
+        //
+        // فالإفراغُ صار **مقبولاً شكلاً** ليردّه من يملك ردَّه: `wouldLeaveNoAdmin`
+        // و`keepsAdminRole` أدناه — وهما يقولان السببَ الحقيقيّ للموظّف.
         $data = $request->validate([
-            'role_ids' => 'required|array|min:1',
+            'role_ids' => 'present|array',
             'role_ids.*' => 'integer|exists:roles,id',
         ]);
 
@@ -169,6 +179,15 @@ class OperatorRolesController extends Controller
         if ($this->wouldLeaveNoAdmin($operator->id, $after)) {
             return back()->with('error',
                 'لا يمكن ترك المنصّة بلا مدير — أسنِد الدور إلى حساب آخر أوّلاً');
+        }
+
+        // **وحسابُ إدارةٍ نشطٌ بلا دورٍ حالةٌ غامضة**: يدخل اللوحةَ ولا يرى
+        // شيئاً، فيعود صاحبُه يسأل «لماذا لا تعمل؟». الصحيحُ تعطيلُ الحساب
+        // لا تفريغُه. وموضعُ هذا الفحص **بعد** الحارسين أعلاه مقصود: آخرُ
+        // مديرٍ يفرّغ دورَه يستحقّ الرسالةَ التي تخصّه، لا رسالةَ حقلٍ عامّة.
+        if ($after === []) {
+            return back()->withErrors(['role_ids' =>
+                'لا يُترك حسابُ إدارةٍ نشطٌ بلا دور — عطّل الحساب إن لم يعد يعمل']);
         }
 
         DB::transaction(function () use ($userId, $after, $request) {

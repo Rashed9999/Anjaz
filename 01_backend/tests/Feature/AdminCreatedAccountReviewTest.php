@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\MerchantProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\EstablishesKycEvidence;
 use Tests\TestCase;
 
 /**
@@ -18,6 +19,7 @@ use Tests\TestCase;
 class AdminCreatedAccountReviewTest extends TestCase
 {
     use RefreshDatabase;
+    use EstablishesKycEvidence;
 
     private function admin(): User
     {
@@ -90,6 +92,8 @@ class AdminCreatedAccountReviewTest extends TestCase
     {
         [, $user] = $this->create('customers');
 
+        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
+        $this->establishKycEvidence($user);
         $this->actingAs($this->admin(), 'user')
             ->postJson("/admin/amial/hub/users/{$user->id}/kyc", ['status' => 1]);
 
@@ -106,6 +110,8 @@ class AdminCreatedAccountReviewTest extends TestCase
     {
         [, $user] = $this->create('merchants', ['store_name' => 'متجر']);
 
+        // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
+        $this->establishKycEvidence($user);
         $this->actingAs($this->admin(), 'user')
             ->postJson("/admin/amial/hub/users/{$user->id}/kyc", ['status' => 1])
             ->assertSuccessful();
@@ -119,7 +125,7 @@ class AdminCreatedAccountReviewTest extends TestCase
         [, $user] = $this->create('customers');
 
         $this->actingAs($this->admin(), 'user')
-            ->postJson("/admin/amial/hub/users/{$user->id}/kyc", ['status' => 2])
+            ->postJson("/admin/amial/hub/users/{$user->id}/kyc", ['status' => 2, 'reason' => 'الوثائق غير واضحة ولا تُقرأ'])
             ->assertSuccessful();
 
         $this->assertSame(2, (int) $user->fresh()->is_kyc_verified);

@@ -438,6 +438,13 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
         Route::get('/entries', [$lc, 'entries'])->name('entries');
         // AMIAL-RECON-NIGHTLY-001: تاريخُ المصالحات — القاعدة ١٢.
         Route::get('/reconciliation-runs', [$lc, 'reconciliationRuns'])->name('reconciliation-runs');
+        // AMIAL-RECON-CASES-DOOR-001 — **قضايا المصالحة: مبنيّةٌ ولا باب.**
+        //
+        // `reconciliationCases()` قائمةٌ في المتحكّم، و`ReconciliationCaseService`
+        // تُنشئ قضيّةً لكلّ فرقٍ يجده التشغيلُ الليليّ — **ولا مسارَ يصل إلى
+        // القراءة**. فالفروقُ تُكتشَف وتُسجَّل ولا يراها أحد: مصالحةٌ تعمل
+        // في الظلام. (‏القاعدة ١٢ في أخطر موضعها.)
+        Route::get('/reconciliation-cases', [$lc, 'reconciliationCases'])->name('reconciliation-cases');
     });
 
 // ============ AMIAL-OTP-CENTER-001 — مركز التحقّق ============

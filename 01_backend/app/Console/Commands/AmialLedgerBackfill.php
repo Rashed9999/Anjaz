@@ -36,14 +36,17 @@ class AmialLedgerBackfill extends Command
     {
         $dry = (bool) $this->option('dry-run');
         $chunk = max(1, (int) $this->option('chunk'));
-        if (!$dry && !$this->option('execute-approved-cases')) {
-            $this->error('تم إيقاف الترحيل: يلزم --execute-approved-cases، وقضية pending_approval مستقلة لكل محفظة.');
-            return self::FAILURE;
-        }
+        // AMIAL-LEDGER-OPENING-003 — وضعان لا رايةٌ واحدة.
+        //
+        // كان الشرطُ «`--execute-approved-cases` وإلّا فشل»، والقضيّةُ
+        // المعتمَدةُ لا يمكن أن توجد لحظةَ النشر — فالأمرُ الذي وُصف بأنّه
+        // «يُشغَّل مرّةً عند النشر» صار لا يُشغَّل أبداً.
+        $approvedCases = (bool) $this->option('execute-approved-cases');
 
-        $this->info($dry
-            ? '— تجربة جافّة: لن يُكتب شيء —'
-            : '— تنفيذ فعليّ —');
+        $this->info($dry ? '— تجربة جافّة: لن يُكتب شيء —' : '— تنفيذ فعليّ —');
+        $this->info($approvedCases
+            ? 'الوضع: تنفيذُ قضايا مصالحةٍ معتمَدة (تصحيحٌ بأربع عيون)'
+            : 'الوضع: أرصدةٌ افتتاحيّةٌ للمحافظ التي لا قيدَ لها في الدفتر');
 
         $opened = 0;
         $already = 0;
@@ -52,7 +55,7 @@ class AmialLedgerBackfill extends Command
         $totalOpened = '0';
 
         EMoney::orderBy('user_id')->chunkById($chunk, function ($wallets) use (
-            $ledger, $dry, &$opened, &$already, &$empty, &$failed, &$totalOpened
+            $ledger, $dry, $approvedCases, &$opened, &$already, &$empty, &$failed, &$totalOpened
         ) {
             foreach ($wallets as $wallet) {
                 $userId = (int) $wallet->user_id;
@@ -83,25 +86,32 @@ class AmialLedgerBackfill extends Command
                 }
 
                 try {
-                    $case = ReconciliationCase::query()
-                        ->where('case_type', 'wallet')
-                        ->where('subject_user_id', $userId)
-                        ->where('status', 'pending_approval')
-                        ->whereNotNull('maker_admin_id')
-                        ->whereNotNull('checker_admin_id')
-                        ->orderByDesc('last_detected_at')
-                        ->first();
+                    if ($approvedCases) {
+                        $case = ReconciliationCase::query()
+                            ->where('case_type', 'wallet')
+                            ->where('subject_user_id', $userId)
+                            ->where('status', 'pending_approval')
+                            ->whereNotNull('maker_admin_id')
+                            ->whereNotNull('checker_admin_id')
+                            ->orderByDesc('last_detected_at')
+                            ->first();
 
-                    if (!$case || trim((string) $case->action_taken) === '') {
-                        throw new \RuntimeException('لا توجد قضية محفظة معتمدة بملاحظة مراجع مستقلة.');
+                        if (!$case || trim((string) $case->action_taken) === '') {
+                            throw new \RuntimeException('لا توجد قضية محفظة معتمدة بملاحظة مراجع مستقلة.');
+                        }
+
+                        $ledger->reconcileWalletBalance($userId, 'تصحيحٌ معتمَدٌ لانحراف محفظة', [
+                            'case_ulid' => $case->case_ulid,
+                            'maker_admin_id' => (int) $case->maker_admin_id,
+                            'checker_admin_id' => (int) $case->checker_admin_id,
+                            'approval_note' => (string) $case->action_taken,
+                        ]);
+                    } else {
+                        // رصيدُ الدفتر صفرٌ هنا قطعاً (‏فُحص أعلاه)، والخدمةُ
+                        // تُعيد فحصَه تحت القفل: لا شيءَ يُناقَض فلا تصحيح.
+                        $ledger->openWalletBalance($userId, 'ترحيل أوّليّ للمحافظ القائمة عند النشر');
                     }
 
-                    $ledger->reconcileWalletBalance($userId, 'ترحيل افتتاحي معتمد', [
-                        'case_ulid' => $case->case_ulid,
-                        'maker_admin_id' => (int) $case->maker_admin_id,
-                        'checker_admin_id' => (int) $case->checker_admin_id,
-                        'approval_note' => (string) $case->action_taken,
-                    ]);
                     $opened++;
                     $totalOpened = bcadd($totalOpened, $balance, 4);
                 } catch (\Throwable $e) {

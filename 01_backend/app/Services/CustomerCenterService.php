@@ -655,7 +655,12 @@ class CustomerCenterService
                 $q->where('requester_user_id', $customer->id)
                     ->orWhere('recipient_user_id', $customer->id);
             })->orderByDesc('id')->limit(100)->get()
-                ->map(function (PaymentRequest $request) use ($customer): array {
+                // `$revealPii` يُقرأ داخل الإغلاق — وبلا `use` هنا ترتفع
+                // `Undefined variable` فتردّ الشاشةُ ٥٠٠ **بعد** أن تمرّ من
+                // كلّ حارس صلاحيّة. والأسوأ أنّ الافتراض الصامت في PHP هو
+                // `null` أي «لا تكشف»، فلو لم تُرفَع لكان الحجبُ يقع بالصدفة
+                // لا بالقرار — وحجبٌ بالصدفة يُرفَع بالصدفة.
+                ->map(function (PaymentRequest $request) use ($customer, $revealPii): array {
                     $outgoing = (int) $request->requester_user_id === (int) $customer->id;
                     $other = $outgoing ? $request->recipient : $request->requester;
                     $fallback = $outgoing ? $request->recipient_name : null;

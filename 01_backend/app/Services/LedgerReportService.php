@@ -49,7 +49,13 @@ class LedgerReportService
     public function walletTruth(int $userId): array
     {
         $wallet = EMoney::where('user_id', $userId)->first();
-        $operational = $wallet ? (string) ($wallet->current_balance ?? '0') : null;
+        // AMIAL-MONEY-SHAPE-001 — الأرقامُ الثلاثةُ في بطاقةٍ واحدةٍ تُقرأ
+        // بصيغةٍ واحدة. `ledger_balance` و`gap` يخرجان من `bcsub(...,4)`،
+        // فتركُ التشغيليّ خاماً يُخرج «١٤٠٠٠٠» بجوار «١٥٠٠٠٠٫٠٠٠٠» —
+        // ومن يقارن رقمين مختلفَي الشكل يشكّ في الحساب لا في الفرق.
+        $operational = $wallet
+            ? \App\Services\MoneyService::normalize((string) ($wallet->current_balance ?? '0'))
+            : null;
 
         if (!Schema::hasTable('ledger_accounts')
             || !Schema::hasTable('ledger_entry_lines')

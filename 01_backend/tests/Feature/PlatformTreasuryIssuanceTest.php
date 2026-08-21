@@ -38,8 +38,18 @@ class PlatformTreasuryIssuanceTest extends TestCase
 
         $lines = LedgerEntryLine::where('journal_entry_id', $issued['entry']->id)->get();
         $this->assertCount(2, $lines);
-        $this->assertSame('1250.5000', (string) $lines->where('direction', 'debit')->sum('amount'));
-        $this->assertSame('1250.5000', (string) $lines->where('direction', 'credit')->sum('amount'));
+        // `Collection::sum` تجمع **بالعائم** ثمّ تُنصَّص، فتُخرج `'1250.5'`
+        // من `'1250.5000'` — ومقارنةُ مالٍ بنصٍّ خرج من عائمٍ تسقط على
+        // الشكل تارةً وعلى القيمة تارةً، ولا تفرّق بينهما. فالجمعُ عشريٌّ
+        // والمقارنةُ بـ`bccomp`. (‏القاعدة السادسة: لا مالَ عبر عائم.)
+        $sum = fn (string $direction): string => array_reduce(
+            $lines->where('direction', $direction)->pluck('amount')->all(),
+            fn ($carry, $amount) => bcadd((string) $carry, (string) $amount, 4),
+            '0',
+        );
+
+        $this->assertSame(0, bccomp('1250.5000', $sum('debit'), 4));
+        $this->assertSame(0, bccomp('1250.5000', $sum('credit'), 4));
         $this->assertTrue($lines->contains(fn ($l) => $l->account->account_code === 'TREASURY_CASH_RESERVE'));
         $this->assertTrue($lines->contains(fn ($l) => $l->account->account_code === "USER_WALLET_{$this->admin->id}"));
     }
