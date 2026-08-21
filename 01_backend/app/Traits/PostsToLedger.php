@@ -450,6 +450,219 @@ trait PostsToLedger
         );
     }
 
+    /**
+     * AMIAL-LEDGER-CASHOUT-001 — **السحبُ النقديُّ عند الوكيل: مسارٌ كاملٌ
+     * بلا قيدٍ واحد.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ما قِيس:** `CustomerWithdrawService` يُحرّك المالَ في ثلاث خطوات —
+     * حجزٌ عند الطلب، وفكٌّ عند الإلغاء أو الانتهاء، وصرفٌ عند حضور
+     * العميل إلى الوكيل — **وصفرُ قيودٍ في الدفتر في الثلاث**. وهو مُعلَنٌ
+     * بقعةً عمياء في `config('amial.reconciliation.blind_spots')` منذ
+     * كُتب، وتعتذر عنه المصالحةُ الليليّةُ في كلّ ليلة.
+     *
+     * والسحبُ النقديُّ ليس تدفّقاً هامشيّاً: **هو الطريقُ الوحيدُ الذي
+     * يخرج به المالُ من المنصّة إلى يدِ العميل ورقاً**. فدفترٌ لا يراه
+     * يرى الأموالَ داخلةً ولا يراها خارجة — وميزانُ مراجعةٍ متوازنٌ فوق
+     * ذلك يُطمئن ولا يقول شيئاً.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ولماذا حسابُ حجزٍ وسيط (`CASH_OUT_HOLD`) لا قيدٌ واحدٌ عند الصرف:**
+     *
+     * بين الطلب والصرف تمرّ دقائقُ أو ساعات. والمالُ في تلك المدّة **خرج
+     * من متاح العميل ولم يصل الوكيل**: `hold()` تنقله من `current_balance`
+     * إلى `held_balance`. فقيدٌ واحدٌ عند الصرف يجعل الدفترَ يقول إنّ
+     * المالَ بقي متاحاً للعميل طوال الانتظار — **ورصيدٌ يُعرَض متاحاً وهو
+     * محجوزٌ يَعِد العميلَ بما لا يستطيع**، ويُبنى عليه قرارُ إقراضٍ أو حدٍّ.
+     *
+     * وهو التزامٌ لا حقُّ ملكيّة: مالٌ تحتفظ به المنصّةُ لحساب العميل ولم
+     * يصر ملكاً لأحدٍ بعد — يعود إليه إن ألغى، ويذهب للوكيل إن صرف.
+     *
+     * **وأربعةُ مخارجَ من الحجز لا ثلاثة**: إلغاءٌ صريح · انتهاءُ صلاحيّةٍ
+     * يكتشفه الوكيلُ عند التنفيذ · كنسُ `expireStale` المجدول · والصرف.
+     * ومخرجٌ واحدٌ بلا قيدٍ يترك الحجزَ معلّقاً في الدفتر إلى الأبد.
+     */
+    protected function ledgerCashOutRequested(
+        int $customerUserId,
+        string $totalDebit,
+        string $sourceId,
+    ): void {
+        $ledger = $this->ledgerService();
+        $wallet = $ledger->getOrCreateUserWallet($customerUserId);
+
+        $ledger->post(
+            sourceType: 'cash_out_requested',
+            sourceId: $sourceId,
+            description: 'طلب سحب نقديّ — حجز المبلغ والرسم',
+            lines: [
+                ['account' => $wallet->account_code, 'direction' => 'debit', 'amount' => $totalDebit],
+                ['account' => $this->cashOutHold()->account_code, 'direction' => 'credit', 'amount' => $totalDebit],
+            ],
+            idempotencyKey: "cash_out_req_{$sourceId}",
+        );
+    }
+
+    /**
+     * رجع المال إلى العميل — إلغاءً أو انتهاءَ صلاحيّة.
+     *
+     * `$why` يدخل في مفتاح التفرّد لا في الوصف وحدَه: طلبٌ يُلغى ثمّ
+     * يُكنَس (‏وكلاهما يفكّ حتّى السقف) يكتب قيداً واحداً لا اثنين —
+     * ومفتاحٌ واحدٌ لسببين مختلفين يبتلع الثاني صامتاً.
+     */
+    protected function ledgerCashOutReleased(
+        int $customerUserId,
+        string $totalDebit,
+        string $sourceId,
+        string $why = 'cancelled',
+    ): void {
+        $ledger = $this->ledgerService();
+        $wallet = $ledger->getOrCreateUserWallet($customerUserId);
+
+        $ledger->post(
+            sourceType: 'cash_out_released',
+            sourceId: $sourceId,
+            description: $why === 'expired'
+                ? 'انتهت صلاحيّة طلب السحب — فكّ الحجز'
+                : 'إلغاء طلب سحب نقديّ — فكّ الحجز',
+            lines: [
+                ['account' => $this->cashOutHold()->account_code, 'direction' => 'debit', 'amount' => $totalDebit],
+                ['account' => $wallet->account_code, 'direction' => 'credit', 'amount' => $totalDebit],
+            ],
+            idempotencyKey: "cash_out_rel_{$sourceId}",
+        );
+    }
+
+    /**
+     * صُرف المال: من الحجز إلى الوكيل (‏المبلغُ تعويضُ نقدِه، والعمولةُ
+     * أجرُه) وإلى إيراد المنصّة (‏حصّتُها من الرسم).
+     *
+     * **ولا يُخصم من محفظة العميل هنا** — خُصم عند الطلب. ومن أعاد خصمَه
+     * خصم مرّتين، **وفحصُ التوازن لا يمسكه** لأنّ الطرفين يتساويان في
+     * الحالتين. (‏وهذا التحذيرُ بعينه مكتوبٌ فوق `ledgerWithdrawApproved`
+     * لأنّ العطلَ وقع هناك من قبل.)
+     */
+    protected function ledgerCashOutExecuted(
+        int $agentUserId,
+        string $amount,
+        string $agentCommission,
+        string $platformProfit,
+        string $sourceId,
+    ): void {
+        $ledger = $this->ledgerService();
+        $agent = $ledger->getOrCreateUserWallet($agentUserId);
+
+        $total = bcadd(bcadd($amount, $agentCommission, 4), $platformProfit, 4);
+        $agentCredit = bcadd($amount, $agentCommission, 4);
+
+        $lines = [
+            ['account' => $this->cashOutHold()->account_code, 'direction' => 'debit', 'amount' => $total],
+            [
+                'account' => $agent->account_code,
+                'direction' => 'credit',
+                'amount' => $agentCredit,
+                'description' => 'تعويضُ نقدِ الوكيل وعمولتُه',
+            ],
+        ];
+
+        if (bccomp($platformProfit, '0', 4) > 0) {
+            $fee = $ledger->getOrCreateSystemAccount(
+                'PLATFORM_FEE', 'revenue', 'رسوم المنصة', 'credit'
+            );
+            $lines[] = [
+                'account' => $fee->account_code,
+                'direction' => 'credit',
+                'amount' => $platformProfit,
+                'description' => 'حصّة المنصّة من رسم السحب النقديّ',
+            ];
+        }
+
+        $ledger->post(
+            sourceType: 'cash_out_executed',
+            sourceId: $sourceId,
+            description: 'تنفيذ سحب نقديّ عند وكيل',
+            lines: $lines,
+            idempotencyKey: "cash_out_exec_{$sourceId}",
+        );
+    }
+
+    /**
+     * AMIAL-LEDGER-FAMILYFUND-001 — **مالٌ يخرج من محفظةٍ ولا يدخل أخرى.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * صندوقُ العائلة **حوضٌ مشترك**: المساهمةُ تخصم من محفظة العضو وتزيد
+     * `family_funds.balance` — وهو عمودٌ في جدولٍ لا محفظةَ مستخدم. فالمالُ
+     * يغادر الدفترَ من طرفٍ ولا يدخله من طرف، **ولا يظهر ذلك في ميزان
+     * المراجعة** لأنّ الدفترَ لا يعرف أنّ الحوضَ موجودٌ أصلاً.
+     *
+     * وهو **التزامٌ على المنصّة**: مالٌ تحتفظ به لحساب أعضاء الصندوق، ولا
+     * يصير ملكاً لها في أيّ لحظة. وتصنيفُه أصلاً أو حقوقَ ملكيّةٍ يجعل
+     * كلَّ ريالٍ يودعه الناسُ يُقرأ ثروةً للمنصّة.
+     *
+     * **وحسابٌ لكلّ صندوقٍ لا حسابٌ واحدٌ يجمعها:** الوثيقةُ تطلب
+     * `Drill-down حقيقي` — ورقمٌ إجماليٌّ لعشرة آلاف صندوقٍ لا يُفضي إلى
+     * شيء. وهو النمطُ نفسُه في `USER_WALLET_{id}`.
+     */
+    protected function ledgerFamilyFundContribution(
+        int $memberUserId,
+        int $fundId,
+        string $amount,
+        string $sourceId,
+    ): void {
+        $ledger = $this->ledgerService();
+        $wallet = $ledger->getOrCreateUserWallet($memberUserId);
+
+        $ledger->post(
+            sourceType: 'family_fund_contribute',
+            sourceId: $sourceId,
+            description: 'مساهمةٌ في صندوق عائلة #'.$fundId,
+            lines: [
+                ['account' => $wallet->account_code, 'direction' => 'debit', 'amount' => $amount],
+                ['account' => $this->familyFundAccount($fundId)->account_code,
+                    'direction' => 'credit', 'amount' => $amount],
+            ],
+            idempotencyKey: "family_fund_contrib_{$sourceId}",
+        );
+    }
+
+    /** والصرفُ عكسُها: من الحوض إلى محفظة المستفيد. */
+    protected function ledgerFamilyFundDisbursement(
+        int $beneficiaryUserId,
+        int $fundId,
+        string $amount,
+        string $sourceId,
+    ): void {
+        $ledger = $this->ledgerService();
+        $wallet = $ledger->getOrCreateUserWallet($beneficiaryUserId);
+
+        $ledger->post(
+            sourceType: 'family_fund_disburse',
+            sourceId: $sourceId,
+            description: 'صرفٌ من صندوق عائلة #'.$fundId,
+            lines: [
+                ['account' => $this->familyFundAccount($fundId)->account_code,
+                    'direction' => 'debit', 'amount' => $amount],
+                ['account' => $wallet->account_code, 'direction' => 'credit', 'amount' => $amount],
+            ],
+            idempotencyKey: "family_fund_disb_{$sourceId}",
+        );
+    }
+
+    private function familyFundAccount(int $fundId): \App\Models\Ledger\LedgerAccount
+    {
+        return $this->ledgerService()->getOrCreateSystemAccount(
+            'FAMILY_FUND_'.$fundId, 'liability',
+            'حوض صندوق عائلة #'.$fundId.' — مالُ الأعضاء بعهدة المنصّة', 'credit'
+        );
+    }
+
+    private function cashOutHold(): \App\Models\Ledger\LedgerAccount
+    {
+        return $this->ledgerService()->getOrCreateSystemAccount(
+            'CASH_OUT_HOLD', 'liability',
+            'سحوبات نقديّة محجوزة (طُلبت ولم تُصرف)', 'credit'
+        );
+    }
+
     // AMIAL-LEDGER-BLOCKING-003 — حُذف `safeLedgerPost` عمداً.
     //
     // كان يبتلع أي استثناء من الدفتر ويكتفي بسطرٍ في اللوج. وقياسٌ حيّ

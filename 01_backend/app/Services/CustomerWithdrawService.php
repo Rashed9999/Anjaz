@@ -61,6 +61,15 @@ class CustomerWithdrawService
                 'zone_code' => $customer->zone_code ?? 'SOUTH',
             ]);
 
+            // AMIAL-LEDGER-CASHOUT-001 — الحجزُ يُرحَّل ساعةَ يقع، لا عند
+            // الصرف. وداخلَ المعاملة: إمّا أن يتمّ الحجزُ وقيدُه معاً وإمّا
+            // لا يتمّ شيء. (‏وهذا سببُ حذف `safeLedgerPost`.)
+            $this->ledgerCashOutRequested(
+                customerUserId: $customer->id,
+                totalDebit: $totalDebit,
+                sourceId: (string) $req->id,
+            );
+
             $this->audit()->record([
                 'actor_type' => 'customer', 'actor_user_id' => $customer->id,
                 'action' => 'withdraw_request', 'decision_code' => 'WITHDRAW_PENDING',
@@ -112,7 +121,16 @@ class CustomerWithdrawService
             // انتهاء الصلاحية مثلاً) بينما الطلب ما زال pending، فكان الإلغاء
             // يفشل بـ«لا يوجد محجوز كافٍ لفكّه» ويعلق المستخدم في الشاشة.
             $this->guard()->releaseHoldUpTo($customer->id, (string)$req->total_debit, 'withdraw_cancel');
-            $req->update(['status' => $req->expires_at->isPast() ? 'expired' : 'cancelled']);
+            $expired = $req->expires_at->isPast();
+            $req->update(['status' => $expired ? 'expired' : 'cancelled']);
+
+            $this->ledgerCashOutReleased(
+                customerUserId: $customer->id,
+                totalDebit: (string) $req->total_debit,
+                sourceId: (string) $req->id,
+                why: $expired ? 'expired' : 'cancelled',
+            );
+
             return $req;
         });
     }
@@ -122,6 +140,19 @@ class CustomerWithdrawService
      */
     public function execute(User $agent, string $opCode, string $identifier): array
     {
+        // AMIAL-WITHDRAW-EXPIRE-001 — **فكُّ حجزٍ كان يُردَّ مع الاستثناء.**
+        //
+        // كان فكُّ الحجز ووسمُ الطلب «منتهياً» يقعان **داخل** معاملةِ
+        // التنفيذ، ثمّ يُرمى `RuntimeException` في السطر التالي — فتُردّ
+        // المعاملةُ كلُّها ويعود الطلبُ `pending` والحجزُ قائماً. أي أنّ
+        // هذا الفرعَ لم يُنجز شيئاً قطّ منذ كُتب: يقرأ الوكيلُ «انتهت
+        // الصلاحيّة» ولا يتغيّر شيء، ويبقى مالُ العميل محجوزاً حتّى يمرّ
+        // كنسُ `expireStale` المجدول.
+        //
+        // **ولا يكشفه اختبارٌ يتحقّق من الرسالة وحدَها** — الرسالةُ صحيحة.
+        // فصار الانتهاءُ يقع في معاملةٍ مستقلّةٍ **تُثبَّت** قبل أن يُرمى.
+        $this->expireIfPast($opCode);
+
         return DB::transaction(function () use ($agent, $opCode, $identifier) {
             $req = WithdrawalRequest::where('op_code', $opCode)->lockForUpdate()->first();
             if (!$req) {
@@ -132,12 +163,6 @@ class CustomerWithdrawService
             }
             if ($req->status !== 'pending') {
                 throw new RuntimeException('العملية ملغاة أو منتهية');
-            }
-            if ($req->expires_at->isPast()) {
-                // منتهية: نفكّ الحجز ونعلّمها
-                $this->guard()->releaseHoldUpTo($req->customer_user_id, (string)$req->total_debit, 'withdraw_expired');
-                $req->update(['status' => 'expired']);
-                throw new RuntimeException('انتهت صلاحية العملية');
             }
 
             // AMIAL-WITHDRAW-FIX: رقم العملية (op_code) هو المُصرّح الفعلي. تأكيد
@@ -201,6 +226,16 @@ class CustomerWithdrawService
 
             // تسجيل حركة سيولة الوكيل
             app(AgentNetworkService::class)->recordFloatMovement($agent->id, 'cash_out', (string)$req->amount);
+
+            // **الصرفُ يُرحَّل**: من الحجز إلى الوكيل وإلى إيراد المنصّة.
+            // ولا خصمَ من العميل هنا — خُصم عند الطلب.
+            $this->ledgerCashOutExecuted(
+                agentUserId: (int) $agent->id,
+                amount: (string) $req->amount,
+                agentCommission: (string) $req->agent_commission,
+                platformProfit: (string) $req->platform_profit,
+                sourceId: (string) $req->id,
+            );
 
             $req->update([
                 'status' => 'completed',
@@ -285,6 +320,16 @@ class CustomerWithdrawService
                     if ($locked && $locked->status === 'pending') {
                         $this->guard()->releaseHoldUpTo($locked->customer_user_id, (string)$locked->total_debit, 'withdraw_expired');
                         $locked->update(['status' => 'expired']);
+
+                        // **المخرجُ الرابع** — الكنسُ المجدول. وهو الذي
+                        // يُنهي أكثرَ الطلبات فعلاً: من طلب ولم يذهب إلى
+                        // وكيلٍ لا يُلغي بنفسه غالباً.
+                        $this->ledgerCashOutReleased(
+                            customerUserId: (int) $locked->customer_user_id,
+                            totalDebit: (string) $locked->total_debit,
+                            sourceId: (string) $locked->id,
+                            why: 'expired',
+                        );
                     }
                 });
                 $count++;
@@ -293,6 +338,38 @@ class CustomerWithdrawService
     }
 
     // ---- helpers ----
+
+    /**
+     * ينهي طلباً انتهت صلاحيّتُه **في معاملةٍ مستقلّةٍ تُثبَّت**.
+     *
+     * ولا يرمي: من نادى هذه يريد أن يقع الفكُّ، ثمّ يقرّر هو ما يقوله
+     * للوكيل. ورميٌ من هنا يُعيد العطلَ الذي أُصلح — استثناءٌ يمرّ عبر
+     * معاملةِ المنادي فيردّ فكَّه.
+     */
+    private function expireIfPast(string $opCode): void
+    {
+        DB::transaction(function () use ($opCode) {
+            $req = WithdrawalRequest::where('op_code', $opCode)->lockForUpdate()->first();
+
+            if (! $req || $req->status !== 'pending' || ! $req->expires_at->isPast()) {
+                return;
+            }
+
+            $this->guard()->releaseHoldUpTo(
+                $req->customer_user_id, (string) $req->total_debit, 'withdraw_expired');
+            $req->update(['status' => 'expired']);
+
+            // **المخرجُ الثالث من الحجز** — يكتشفه الوكيلُ لا العميل. وبلا
+            // قيدٍ هنا يبقى الحجزُ معلّقاً في الدفتر أبداً بينما رجع المالُ
+            // إلى المحفظة فعلاً: انحرافٌ دائمٌ بمقداره.
+            $this->ledgerCashOutReleased(
+                customerUserId: (int) $req->customer_user_id,
+                totalDebit: (string) $req->total_debit,
+                sourceId: (string) $req->id,
+                why: 'expired',
+            );
+        });
+    }
 
     private function generateOpCode(): string
     {

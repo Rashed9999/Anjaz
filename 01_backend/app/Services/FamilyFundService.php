@@ -24,6 +24,10 @@ use Illuminate\Support\Str;
  */
 class FamilyFundService
 {
+    // AMIAL-LEDGER-FAMILYFUND-001 — الحوضُ يدخل الدفتر. التفصيلُ فوق
+    // `PostsToLedger::ledgerFamilyFundContribution`.
+    use \App\Traits\PostsToLedger;
+
     public function __construct(
         private readonly FinancialGuardService $guard,
         private readonly AuditService $audit,
@@ -262,6 +266,16 @@ class FamilyFundService
                 ->where('user_id', $user->id)
                 ->increment('total_contributed', $amountNormalized);
 
+            // **والدفترُ يرى المالَ يغادر إلى الحوض** — لا يراه يتبخّر.
+            // ومرجعُ القيد `tx_ulid` لا رقمُ الصندوق: العضوُ يساهم مراراً،
+            // ومفتاحٌ برقم الصندوق يبتلع كلَّ مساهمةٍ بعد الأولى صامتاً.
+            $this->ledgerFamilyFundContribution(
+                memberUserId: (int) $user->id,
+                fundId: (int) $fund->id,
+                amount: $amountNormalized,
+                sourceId: (string) $tx->tx_ulid,
+            );
+
             // 5) إيصال (خارج الـ transaction سيُستدعى ReceiptService::issueDebit
             //    لكن نسجله هنا داخل الـ tx — الـ Job يدفع للـ queue)
             $this->receipts->issueDebit([
@@ -484,6 +498,13 @@ class FamilyFundService
             ->where('user_id', $beneficiary->id)
             ->increment('total_disbursed', $amount);
 
+        $this->ledgerFamilyFundDisbursement(
+            beneficiaryUserId: (int) $beneficiary->id,
+            fundId: (int) $fund->id,
+            amount: $amount,
+            sourceId: (string) $tx->tx_ulid,
+        );
+
         $this->receipts->issueCredit([
             'user_id' => $beneficiary->id,
             'counterparty_user_id' => $proposer->id,
@@ -534,6 +555,16 @@ class FamilyFundService
         FamilyFundMember::where('fund_id', $lockedFund->id)
             ->where('user_id', $beneficiary->id)
             ->increment('total_disbursed', $amount);
+
+        // **المخرجُ الثاني من الحوض** — الموافقةُ الجماعيّة. وهو مسارٌ
+        // مستقلٌّ عن `executeDisbursement`، ومن رحّل أحدَهما وحدَه ترك
+        // نصفَ الصرف بلا قيد: حوضٌ ينزل في الجدول ولا ينزل في الدفتر.
+        $this->ledgerFamilyFundDisbursement(
+            beneficiaryUserId: (int) $beneficiary->id,
+            fundId: (int) $lockedFund->id,
+            amount: $amount,
+            sourceId: (string) $tx->tx_ulid,
+        );
 
         $this->receipts->issueCredit([
             'user_id' => $beneficiary->id,

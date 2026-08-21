@@ -159,6 +159,29 @@ class InstallmentService
                 'zone_code' => $merchant->zone_code ?? 'SOUTH',
             ]);
 
+            // AMIAL-LEDGER-INSTALMENT-001 — **الدفعةُ الأولى مالٌ يتحرّك.**
+            //
+            // كانت تُخصَم من العميل وتُضاف للتاجر **بلا قيدٍ واحد**، وهي
+            // مُعلَنةٌ بقعةً عمياء منذ كُتبت. والقيدُ يُكتب بعد إنشاء العقد
+            // لأنّ رقمَه هو مرجعُ القيد — فقيدٌ بلا مرجعٍ لا يُتتبَّع.
+            //
+            // **وما لا يُرحَّل هنا وسببُه، صراحةً:** لا يُقيَّد **الدَّينُ
+            // الباقي** (‏`financed_amount`) ذمّةً مدينةً على العميل لصالح
+            // التاجر. وذلك اعترافُ إيرادٍ يحتاج قراراً محاسبيّاً — متى
+            // يُعترف بالربح: عند البيع أم مع كلّ قسط؟ — وهو قرارُ ماليّةٍ
+            // لا قرارُ شيفرة. والمقصودُ هنا سدُّ ما يتحرّك فعلاً في
+            // المحافظ لا اختراعُ سياسةِ اعتراف.
+            if (MoneyService::isPositive($down)) {
+                $this->ledgerTransfer(
+                    fromUserId: (int) $customer->id,
+                    toUserId: (int) $merchant->id,
+                    amount: $down,
+                    sourceType: 'installment_down_payment',
+                    sourceId: (string) $contract->id,
+                    description: 'دفعةٌ أولى لعقد تقسيط #' . $contract->id,
+                );
+            }
+
             // 2) جدول الأقساط الشهرية (آخر قسط يُصحّح التقريب)
             for ($i = 1; $i <= $months; $i++) {
                 $amount = $i === $months ? $q['last_installment'] : $q['monthly_amount'];
@@ -205,6 +228,22 @@ class InstallmentService
             $this->guard()->lockWalletsOrdered([$customer->id, $contract->merchant_user_id]);
             $this->guard()->debit($customer->id, $amount, "installment_pay:{$contract->id}");
             $this->guard()->credit($contract->merchant_user_id, $amount, "installment_pay:{$contract->id}");
+
+            // **وكلُّ قسطٍ يُرحَّل بمفتاحٍ يخصّه.** والعميلُ يسدّد أقساطاً
+            // كثيرةً على العقد نفسِه، فمفتاحٌ برقم العقد وحدَه يبتلع كلَّ
+            // سدادٍ بعد الأوّل **صامتاً** — يتحرّك المالُ ولا يُكتب قيد،
+            // وهو أخطرُ من ألّا يُرحَّل أصلاً: يبدو مغطّىً وليس كذلك.
+            // فيُميَّز بما سُدِّد قبله (‏`paid_amount` قبل هذه الدفعة).
+            $this->ledgerTransfer(
+                fromUserId: (int) $customer->id,
+                toUserId: (int) $contract->merchant_user_id,
+                amount: $amount,
+                sourceType: 'installment_payment',
+                sourceId: (string) $contract->id,
+                description: 'سداد قسطٍ على عقد #' . $contract->id,
+                idempotencyKey: sprintf('installment_pay:%d:%s:%s',
+                    $contract->id, (string) $contract->paid_amount, $amount),
+            );
 
             // وزّع على أقدم الأقساط غير المسدّدة
             $left = $amount;
