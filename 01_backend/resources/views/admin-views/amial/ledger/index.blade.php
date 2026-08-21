@@ -516,17 +516,42 @@
         const j = await get('/accounts' + (t ? '?type=' + t : ''));
         if (!j.success) return;
 
-        box.innerHTML = (j.meta.items || []).map(a => `
-            <button class="list-group-item list-group-item-action js-lg-acc" data-id="${a.id}">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <div class="font-monospace small">${esc(a.account_code)}</div>
-                        <div class="fw-bold">${esc(a.name)}</div>
-                        <div class="small text-muted">${esc(a.account_type)} • ${esc(a.normal_balance)}</div>
-                    </div>
-                    <div class="text-end fw-bold">${money(a.current_balance)}</div>
+        // AMIAL-CHART-IDENTITY-001 — **الاسمُ أوّلاً والرمزُ ثانياً**،
+        // ومجموعٌ لكلّ فئةٍ وفئةٍ فرعيّة. وقائمةٌ مسطّحةٌ بالرموز لا تُقرأ
+        // منها ميزانيّة، ومراجعٌ يرى `USER_WALLET_417` يفتح ملفَّ كلّ رقمٍ
+        // ليعرف صاحبَه — فيُسجّل اطّلاعاً على بياناتٍ شخصيّةٍ في كلّ مرّة.
+        const groups = j.meta.groups || [];
+
+        // **والقطعُ يُقال** — قائمةٌ مقطوعةٌ تُقرأ «هذه حساباتُنا» وهي ليست.
+        const note = j.meta.truncated
+            ? `<div class="list-group-item bg-warning-subtle small">⚠️ ${esc(j.meta.note)}</div>` : '';
+
+        box.innerHTML = note + (groups.map(g => `
+            <div class="list-group-item bg-light d-flex justify-content-between align-items-center">
+                <strong>${esc(g.label)}</strong>
+                <span class="small text-muted">${g.count} حساباً</span>
+                <span class="money fw-bold">${money(g.total)}</span>
+            </div>
+            ${g.subgroups.map(sg => `
+                <div class="list-group-item py-1 ps-4 d-flex justify-content-between small text-muted">
+                    <span>${esc(sg.label)}</span><span class="money">${money(sg.total)}</span>
                 </div>
-            </button>`).join('') || '<div class="list-group-item text-muted">لا حسابات</div>';
+                ${sg.accounts.map(a => `
+                <button class="list-group-item list-group-item-action js-lg-acc ps-5" data-id="${a.id}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="fw-bold">${esc(a.label)}</div>
+                            <div class="small text-muted">
+                                ${esc(a.normal_balance === 'debit' ? 'طبيعتُه مدين' : 'طبيعتُه دائن')}
+                                • ${esc(a.currency || 'YER')}
+                                ${a.is_active ? '' : ' • <span class="text-danger">موقوف</span>'}
+                            </div>
+                            <div class="font-monospace text-muted" style="font-size:.72rem">${esc(a.account_code)}</div>
+                        </div>
+                        <div class="text-end fw-bold money">${money(a.current_balance)}</div>
+                    </div>
+                </button>`).join('')}`).join('')}`).join('')
+            || '<div class="list-group-item text-muted">لا حسابات</div>');
     }
 
     document.addEventListener('click', async function (e) {

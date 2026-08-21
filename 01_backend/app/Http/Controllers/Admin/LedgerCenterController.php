@@ -35,7 +35,22 @@ class LedgerCenterController extends Controller
 
     public function accounts(Request $request): JsonResponse
     {
-        return $this->ok(['items' => $this->reports->chartOfAccounts($request->query('type'))]);
+        // AMIAL-CHART-IDENTITY-001 — الدليلُ صار مجموعاً بفئاته ومالكيه.
+        // ويُردّ مسطوحاً أيضاً في `items` **لئلّا ينكسر مستهلكٌ قائم**:
+        // تغييرُ شكل ردٍّ تقرؤه شاشةٌ يُفرّغها بلا خطأٍ في أيّ سجلّ.
+        $chart = $this->reports->chartOfAccounts($request->query('type'));
+
+        $flat = [];
+
+        foreach ($chart['groups'] as $g) {
+            foreach ($g['subgroups'] as $s) {
+                foreach ($s['accounts'] as $a) {
+                    $flat[] = $a;
+                }
+            }
+        }
+
+        return $this->ok($chart + ['items' => $flat]);
     }
 
     public function statement(Request $request, int $id): JsonResponse

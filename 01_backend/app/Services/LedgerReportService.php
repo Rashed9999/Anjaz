@@ -248,26 +248,166 @@ class LedgerReportService
     }
 
     /** دليل الحسابات. */
-    public function chartOfAccounts(?string $type = null): array
+    /**
+     * AMIAL-CHART-IDENTITY-001 — **`USER_WALLET_417` ليس هويّةً.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ما تطلبه الوثيقةُ في المحورين ٢٣ و٢٤:**
+     *
+     *     ٢٣) لا تجعل Chart of Accounts قائمةً مسطّحةً فقط — اعرض Hierarchy.
+     *     ٢٤) لا تعرض `USER_WALLET_1` وحدَه: أظهر الاسمَ والمالكَ والنوعَ
+     *         والاتّجاهَ الطبيعيَّ والعملةَ والحالة. **والرمزُ التقنيُّ ثانويّ.**
+     *
+     * وثلاثةُ أعطالٍ قِيست في الشكل القديم:
+     *
+     * | ما كان | الأثر |
+     * |---|---|
+     * | `owner_user_id: 417` رقماً | مراجعٌ يرى الرقمَ ولا يعرف صاحبَه، فيفتح ملفَّ كلّ رقمٍ ليعرف — **ويُسجّل اطّلاعاً على بياناتٍ شخصيّةٍ في كلّ مرّة** |
+     * | قائمةٌ مسطّحةٌ بالرمز | أصولٌ وخصومٌ وإيراداتٌ متجاورةٌ بلا مجموعٍ لكلّ فئة — والميزانيّةُ لا تُقرأ منها |
+     * | `limit(500)` **صامتاً** | إنتاجٌ فيه آلافُ المحافظ يُخرج ٥٠٠ **ولا يقول إنّه قطع**. ومن قرأ «هذه حساباتُنا» قرأ كذبةً. (القاعدة السابعة.) |
+     *
+     * **والاسمُ أقلُّ كشفاً من فتح الملفّ وأكثرُ إفادة** — وهو المنطقُ
+     * نفسُه في طابور مستندات الهويّة.
+     *
+     * @return array{
+     *   groups:array<int,array{type:string,label:string,total:string,count:int,
+     *     subgroups:array<int,array{key:string,label:string,total:string,accounts:array<int,array<string,mixed>>}>}>,
+     *   shown:int, total:int, truncated:bool, note:?string
+     * }
+     */
+    public function chartOfAccounts(?string $type = null, int $limit = 500): array
     {
         $q = LedgerAccount::query();
+
         if ($type) {
             $q->where('account_type', $type);
         }
 
-        return $q->orderBy('account_code')->limit(500)->get()
-            ->map(fn (LedgerAccount $a) => [
+        $total = (clone $q)->count();
+        $rows = $q->orderBy('account_type')->orderBy('account_code')->limit($limit)->get();
+
+        // **أسماءُ المالكين دفعةً واحدة** — لا استعلامٌ لكلّ صفّ. وألفُ
+        // حسابٍ بألف استعلامٍ يجعل الصفحةَ تنتظر دقيقةً فتُهجَر.
+        $ownerIds = $rows->pluck('owner_user_id')->filter()->unique()->all();
+        $owners = $ownerIds === [] ? [] : \App\Models\User::whereIn('id', $ownerIds)
+            ->get(['id', 'f_name', 'l_name', 'type'])
+            ->mapWithKeys(fn ($u) => [(int) $u->id => [
+                'name' => trim(($u->f_name ?? '').' '.($u->l_name ?? '')) ?: ('حساب #'.$u->id),
+                'type' => (int) $u->type,
+            ]])->all();
+
+        $groups = [];
+
+        foreach ($rows as $a) {
+            $ownerId = $a->owner_user_id ? (int) $a->owner_user_id : null;
+            $owner = $ownerId !== null ? ($owners[$ownerId] ?? null) : null;
+            $sub = $this->accountSubgroup($a);
+
+            $groups[$a->account_type]['type'] = $a->account_type;
+            $groups[$a->account_type]['label'] = self::TYPE_LABELS[$a->account_type] ?? $a->account_type;
+            $groups[$a->account_type]['total'] = bcadd(
+                $groups[$a->account_type]['total'] ?? '0', (string) $a->current_balance, 4);
+            $groups[$a->account_type]['count'] = ($groups[$a->account_type]['count'] ?? 0) + 1;
+
+            $groups[$a->account_type]['subgroups'][$sub['key']]['key'] = $sub['key'];
+            $groups[$a->account_type]['subgroups'][$sub['key']]['label'] = $sub['label'];
+            $groups[$a->account_type]['subgroups'][$sub['key']]['total'] = bcadd(
+                $groups[$a->account_type]['subgroups'][$sub['key']]['total'] ?? '0',
+                (string) $a->current_balance, 4);
+
+            $groups[$a->account_type]['subgroups'][$sub['key']]['accounts'][] = [
                 'id' => (int) $a->id,
-                'account_code' => $a->account_code,
+                // **الاسمُ أوّلاً والرمزُ ثانياً** — كما تطلب الوثيقة.
+                'label' => $owner !== null
+                    ? $owner['name'].' — '.$this->ownerRole($owner['type'])
+                    : ($a->name_ar ?: $a->account_code),
                 'name' => $a->name_ar,
+                'owner_name' => $owner['name'] ?? null,
+                'owner_role' => $owner !== null ? $this->ownerRole($owner['type']) : null,
+                'owner_user_id' => $ownerId,
+                'owner_type' => $a->owner_type,
+                'account_code' => $a->account_code,
                 'account_type' => $a->account_type,
                 'normal_balance' => $a->normal_balance,
-                'owner_type' => $a->owner_type,
-                'owner_user_id' => $a->owner_user_id,
                 'current_balance' => (string) $a->current_balance,
                 'currency' => $a->currency,
                 'is_active' => (bool) $a->is_active,
-            ])->all();
+            ];
+        }
+
+        // إعادةُ الفهرسة إلى قوائمَ مرتّبة — والمفاتيحُ النصّيّةُ تُخرج
+        // كائناً في JSON فتنكسر الحلقةُ في الشاشة.
+        $out = [];
+
+        foreach ($groups as $g) {
+            $g['subgroups'] = array_values($g['subgroups']);
+            $out[] = $g;
+        }
+
+        $truncated = $total > count($rows);
+
+        return [
+            'groups' => $out,
+            'shown' => count($rows),
+            'total' => $total,
+            'truncated' => $truncated,
+            // **القطعُ يُقال ولا يُسكت عنه** — ومن قرأ «هذه حساباتُنا» على
+            // قائمةٍ مقطوعةٍ قرأ كذبة.
+            'note' => $truncated
+                ? sprintf('عُرض %d من %d حساباً — القائمةُ مقطوعة. صفِّ بالنوع لترى الباقي.',
+                    count($rows), $total)
+                : null,
+        ];
+    }
+
+    /** الفئاتُ الخمسُ كما في وثيقة مركز الدفتر. */
+    private const TYPE_LABELS = [
+        'asset' => 'الأصول',
+        'liability' => 'الالتزامات',
+        'equity' => 'حقوق الملكيّة',
+        'revenue' => 'الإيرادات',
+        'expense' => 'المصروفات',
+    ];
+
+    /**
+     * الفئةُ الفرعيّةُ **تُستنتَج من رمز الحساب لا تُخترَع**.
+     *
+     * والوثيقةُ تطلب تحت الأصول: نقداً وبنكاً واحتياطيّاً وذمماً؛ وتحت
+     * الالتزامات: محافظَ العملاء والتجّار والوكلاء والضمان. وهذه أقربُ
+     * ما يُقاس من الرموز القائمة — **ومن أضاف رمزاً جديداً بلا قاعدةٍ
+     * هنا يقع في «أخرى» ظاهراً، لا يختفي**.
+     *
+     * @return array{key:string,label:string}
+     */
+    private function accountSubgroup(LedgerAccount $a): array
+    {
+        $code = (string) $a->account_code;
+
+        return match (true) {
+            str_starts_with($code, 'USER_WALLET_') => match ((int) ($a->owner_type === 'user' ? 1 : 0)) {
+                default => ['key' => 'wallets', 'label' => 'محافظ المستعملين'],
+            },
+            str_starts_with($code, 'FAMILY_FUND_') => ['key' => 'pooled', 'label' => 'أحواضٌ مشتركة'],
+            str_contains($code, 'HOLD') || str_contains($code, 'PENDING') || str_contains($code, 'ESCROW')
+                => ['key' => 'holds', 'label' => 'أموالٌ محجوزة'],
+            str_contains($code, 'SUSPENSE') => ['key' => 'suspense', 'label' => 'حساباتٌ معلَّقةٌ قيد التحقيق'],
+            str_contains($code, 'TREASURY') || str_contains($code, 'RESERVE')
+                => ['key' => 'treasury', 'label' => 'الخزينة والاحتياطيّ'],
+            str_contains($code, 'FEE') || str_contains($code, 'COMMISSION')
+                => ['key' => 'fees', 'label' => 'رسومٌ وعمولات'],
+            default => ['key' => 'other', 'label' => 'أخرى'],
+        };
+    }
+
+    private function ownerRole(int $type): string
+    {
+        return match ($type) {
+            CUSTOMER_TYPE => 'عميل',
+            AGENT_TYPE => 'وكيل',
+            MERCHANT_TYPE => 'تاجر',
+            ADMIN_TYPE => 'إدارة',
+            default => 'حساب',
+        };
     }
 
     /**
