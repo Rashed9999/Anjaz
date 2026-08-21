@@ -259,6 +259,25 @@ class AdminCharityController extends Controller
         return $this->ok(['campaign' => $campaign], 'PAUSED', 'تم إيقاف الحملة');
     }
 
+    public function deleteCampaign(Request $request, string $ulid): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'reason' => 'required|string|min:10|max:500',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $campaign = CharityCampaign::where('campaign_ulid', $ulid)->first();
+        if (!$campaign) return $this->error('NOT_FOUND', 'Not found', 404);
+
+        try {
+            $this->service->deleteCampaign($campaign, $request->user(), $request->input('reason'));
+        } catch (\RuntimeException $e) {
+            return $this->error('DELETE_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok([], 'DELETED', 'تم حذف الحملة الموقوفة');
+    }
+
     // ============== Settlements ==============
 
     /**
@@ -404,7 +423,7 @@ class AdminCharityController extends Controller
     {
         $v = Validator::make($request->all(), [
             'method' => 'required|string|in:bank,wallet,agent',
-            'reference' => 'required|string|min:3|max:100',
+            'reference' => 'sometimes|nullable|string|min:3|max:100',
             // **الهاتفُ لا المعرّف**: من يصرف يعرف رقمَ من يقبض، ولا يعرف
             // رقمَه الداخليّ في قاعدتنا.
             'recipient_phone' => 'required_unless:method,bank|nullable|string|max:32',
@@ -416,6 +435,15 @@ class AdminCharityController extends Controller
         if (!$settlement) return $this->error('NOT_FOUND', 'Not found', 404);
 
         $method = (string) $request->input('method');
+        $reference = trim((string) $request->input('reference'));
+        if ($method === 'bank' && $reference === '') {
+            return $this->error('BANK_REFERENCE_REQUIRED', 'رقم مرجع الحوالة البنكية مطلوب', 422);
+        }
+        // المحفظة والوكيل عمليتان داخليتان؛ المرجع ليس معلومة يملكها
+        // الموظف، بل معرّف تتبّع ثابت تنشئه المنصة ويرتبط بالتسوية.
+        if ($method !== 'bank' && $reference === '') {
+            $reference = 'AMIAL-' . $settlement->settlement_ulid;
+        }
         $recipient = null;
 
         if ($method !== 'bank') {
@@ -431,7 +459,7 @@ class AdminCharityController extends Controller
                 $settlement,
                 $request->user(),
                 $method,
-                (string) $request->input('reference'),
+                $reference,
                 $recipient,
                 $request->input('notes'),
             );

@@ -222,6 +222,50 @@ class CharityService
         return $campaign;
     }
 
+    /**
+     * حذف حملة أُوقفت قبل أن تستقبل أي تبرع.
+     *
+     * لا نحذف حملةً لها تاريخ مالي: التبرعات وإيصالاتها وقيودها تبقى
+     * قابلة للتدقيق، لذلك الحملة التي تلقت مالاً تُوقف فقط ولا تُمحى.
+     */
+    public function deleteCampaign(CharityCampaign $campaign, User $admin, string $reason): void
+    {
+        DB::transaction(function () use ($campaign, $admin, $reason) {
+            $locked = CharityCampaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->status !== 'paused') {
+                throw new \RuntimeException('يجب إيقاف الحملة قبل حذفها');
+            }
+            if (Donation::where('campaign_id', $locked->id)->exists()) {
+                throw new \RuntimeException('لا يمكن حذف حملة لها تبرعات؛ أبقها موقوفة لحفظ السجل المالي');
+            }
+
+            $org = CharityOrganization::whereKey($locked->org_id)->lockForUpdate()->firstOrFail();
+
+            $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $admin->id,
+                'subject_type' => 'charity_campaign',
+                'subject_id' => (string) $locked->id,
+                'action' => 'CHARITY_CAMPAIGN_DELETED',
+                'decision_code' => 'DELETED',
+                'reason' => mb_substr($reason, 0, 255),
+                'severity' => 'warning',
+                'context' => [
+                    'campaign_ulid' => $locked->campaign_ulid,
+                    'organization_id' => $org->id,
+                    'title_ar' => $locked->title_ar,
+                ],
+            ]);
+
+            $locked->delete();
+            if ((int) $org->total_campaigns > 0) {
+                $org->total_campaigns = (int) $org->total_campaigns - 1;
+                $org->save();
+            }
+        });
+    }
+
     // ============================================================
     // التسويات
     // ============================================================

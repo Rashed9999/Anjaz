@@ -270,10 +270,11 @@
                        placeholder="7XXXXXXXX">
                 <div class="form-text" id="payout-recipient-hint">صاحبُ المحفظة التي يدخلها المال.</div>
               </div>
-              <div class="mb-2">
-                <label class="form-label small">المرجع *</label>
-                <input name="reference" class="form-control" required minlength="3" maxlength="100"
-                       placeholder="رقم الحوالة أو رقم الإيصال">
+              <div class="mb-2" id="payout-reference-wrap">
+                <label class="form-label small">رقم مرجع الحوالة البنكية *</label>
+                <input name="reference" id="payout-reference" class="form-control" minlength="3" maxlength="100"
+                       placeholder="الرقم الصادر من البنك">
+                <div class="form-text">لا يُطلب لصرف المحفظة أو الوكيل؛ المنصة تنشئ مرجع التتبع تلقائياً.</div>
               </div>
               <div class="mb-0">
                 <label class="form-label small">ملاحظات</label>
@@ -410,6 +411,7 @@
                         <button class="btn btn-sm btn-outline-primary" data-donors="${esc(c.campaign_ulid)}">المتبرّعون</button>
                         ${c.status === 'pending_approval' || c.status === 'paused' ? `<button class="btn btn-sm btn-success" data-camp-act="approve" data-ulid="${esc(c.campaign_ulid)}">اعتماد</button>` : ''}
                         ${c.status === 'active' ? `<button class="btn btn-sm btn-outline-warning" data-camp-act="pause" data-ulid="${esc(c.campaign_ulid)}">إيقاف</button>` : ''}
+                        ${c.status === 'paused' ? `<button class="btn btn-sm btn-outline-danger" data-camp-act="delete" data-ulid="${esc(c.campaign_ulid)}">حذف</button>` : ''}
                     </td>
                 </tr>`;
             }).join('') : '<tr><td colspan="6" class="text-muted">لا حملات بعد</td></tr>';
@@ -489,11 +491,15 @@
         }
 
         if (camp) {
-            const label = camp.dataset.campAct === 'approve' ? 'اعتماد' : 'إيقاف';
-            if (!await amialDialog.ask(`${label} هذه الحملة؟`, {okLabel: label})) return;
+            const label = {approve: 'اعتماد', pause: 'إيقاف', delete: 'حذف'}[camp.dataset.campAct];
+            const destructive = camp.dataset.campAct === 'delete';
+            if (!await amialDialog.ask(`${label} هذه الحملة؟`, {okLabel: label, danger: destructive})) return;
             let reason = null;
-            if (camp.dataset.campAct === 'pause') {
-                reason = await amialDialog.request('اكتب سبب الإيقاف (10 أحرف على الأقل):', {title: label, okLabel: label});
+            if (camp.dataset.campAct === 'pause' || destructive) {
+                const question = destructive
+                    ? 'اكتب سبب الحذف (10 أحرف على الأقل). لا تُحذف الحملة إن كان لها تبرعات.'
+                    : 'اكتب سبب الإيقاف (10 أحرف على الأقل):';
+                reason = await amialDialog.request(question, {title: label, okLabel: label, danger: destructive});
                 if (!reason || reason.trim().length < 10) return;
             }
             try { await api(`${base}/campaigns/${camp.dataset.ulid}/${camp.dataset.campAct}`, {method: 'POST', body: JSON.stringify(reason ? {reason: reason.trim()} : {})});
@@ -554,10 +560,15 @@
         const wrap = document.getElementById('payout-recipient-wrap');
         const input = document.getElementById('payout-recipient');
         const hint = document.getElementById('payout-recipient-hint');
+        const referenceWrap = document.getElementById('payout-reference-wrap');
+        const reference = document.getElementById('payout-reference');
         const needed = m !== 'bank';
         wrap.style.display = needed ? '' : 'none';
         input.required = needed;
         if (!needed) input.value = '';
+        referenceWrap.style.display = needed ? 'none' : '';
+        reference.required = !needed;
+        if (needed) reference.value = '';
         hint.textContent = m === 'agent'
             ? 'رقمُ الوكيل — يُشحن رصيدُه ويدفع النقدَ الورقيّ للجمعية.'
             : 'صاحبُ المحفظة التي يدخلها المال.';
