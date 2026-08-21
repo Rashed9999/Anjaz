@@ -397,6 +397,29 @@ class CustomerCenterTest extends TestCase
             ->assertForbidden();
     }
 
+    /** القراءة لا تفتح تحقيقات أو تعدّل حدوداً أو تطلب KYC. */
+    public function customer_read_permission_never_authorizes_customer_mutations(): void
+    {
+        $reader = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770003398']);
+        $roleId = DB::table('roles')->whereNull('merchant_user_id')->where('code', 'platform_support')->value('id');
+        DB::table('admin_user_roles')->insert(['user_id' => $reader->id, 'role_id' => $roleId, 'created_at' => now(), 'updated_at' => now()]);
+
+        foreach (['escalate_risk', 'update_limits', 'require_kyc'] as $action) {
+            $this->actingAs($reader->fresh(), 'user')
+                ->postJson("/admin/amial/customer/{$this->customer->id}/action", [
+                    'action' => $action, 'reason' => 'سبب اختباري مكتوب لمنع تنفيذ تعديل بلا صلاحية',
+                ])->assertStatus(422);
+        }
+
+        // كتابة ملاحظة صلاحية دعمٍ منفصلة وصريحة، وليست أثراً عرضياً لقراءة
+        // الملف. هذا يثبت أن المصفوفة لا تمنع الدعم من عمله المشروع.
+        $this->actingAs($reader->fresh(), 'user')
+            ->postJson("/admin/amial/customer/{$this->customer->id}/action", [
+                'action' => 'add_note', 'reason' => 'ملاحظة دعم موثقة بعد تواصل العميل مع المركز',
+            ])->assertOk();
+        $this->assertDatabaseHas('customer_notes', ['user_id' => $this->customer->id, 'author_id' => $reader->id]);
+    }
+
     // ── شرط الوثيقة: الأداء ─────────────────────────────────────────────
 
     /** @test */
@@ -508,30 +531,88 @@ class CustomerCenterTest extends TestCase
     }
 
     /** @test */
-    public function marking_deceased_also_freezes_the_account(): void
+    public function marking_deceased_requires_a_second_person_before_freezing_the_account(): void
     {
-        // تعليمٌ بلا تجميد يترك الباب مفتوحاً لمن يملك هاتف المتوفّى.
-        app(CustomerActionService::class)->run(
+        // تعليمٌ بلا مراجعة مستقلة يترك موظفاً واحداً قادراً على خلق حالة
+        // قانونية نهائية. maker يفتح معاملة فقط؛ checker هو من يثبتها ويجمد.
+        $out = app(CustomerActionService::class)->run(
             $this->customer, $this->staff, 'mark_deceased',
             'وردت شهادة وفاة من ذوي العميل عبر فرع عدن',
         );
 
         $fresh = $this->customer->fresh();
-        $this->assertSame('deceased', $fresh->lifecycle_state);
-        $this->assertSame(1, (int) $fresh->is_temp_blocked, 'عُلّم كمتوفٍّ ولم يُجمَّد');
+        $this->assertTrue($out['approval_required']);
+        $this->assertNotSame('deceased', $fresh->lifecycle_state);
+        $this->assertSame(0, (int) $fresh->is_temp_blocked);
     }
 
     /** @test */
     public function a_closed_account_is_not_reopened_from_this_screen(): void
     {
-        app(CustomerActionService::class)->run(
+        EMoney::where('user_id', $this->customer->id)->update([
+            'current_balance' => '0', 'held_balance' => '0', 'pending_balance' => '0',
+        ]);
+        $out = app(CustomerActionService::class)->run(
             $this->customer, $this->staff, 'close', 'طلب العميل إغلاق حسابه نهائياً',
         );
+
+        $this->assertTrue($out['approval_required']);
+        $this->assertDatabaseHas('approval_requests', [
+            'subject_user_id' => $this->customer->id,
+            'action_type' => 'close_customer', 'status' => 'pending',
+        ]);
+
+        // لا يُغلق عند إنشاء الطلب؛ تنفيذه حصراً في ApprovalService بعد
+        // اعتماد موظف مختلف.
+        $this->assertNotSame('closed', $this->customer->fresh()->lifecycle_state);
+        $this->customer->forceFill(['lifecycle_state' => 'closed'])->save();
 
         $this->expectException(DomainException::class);
         app(CustomerActionService::class)->run(
             $this->customer->fresh(), $this->staff, 'activate', 'محاولة إعادة الفتح',
         );
+    }
+
+    /** الرصيد أو الحجز أو تحقيق AML مفتوح يمنع إغلاق الحساب قبل الاعتماد. */
+    public function closing_a_customer_with_unsettled_money_fails_preflight(): void
+    {
+        $this->expectException(DomainException::class);
+        $this->expectExceptionMessageMatches('/CLOSURE_PREFLIGHT_FAILED/');
+
+        app(CustomerActionService::class)->run(
+            $this->customer, $this->staff, 'close', 'طلب إغلاق لكن المحفظة لم تدخل مرحلة التسوية بعد',
+        );
+    }
+
+    /** تعليم الوفاة لا يغير حالة العميل عند ضغط maker وحده. */
+    public function deceased_marking_creates_a_reviewable_case_and_second_person_request(): void
+    {
+        $out = app(CustomerActionService::class)->run(
+            $this->customer, $this->staff, 'mark_deceased',
+            'استلمنا شهادة وفاة أصلية من الورثة وتحتاج مراجعة مستقلة',
+        );
+
+        $this->assertTrue($out['approval_required']);
+        $request = DB::table('approval_requests')->where('subject_user_id', $this->customer->id)
+            ->where('action_type', 'mark_customer_deceased')->latest('id')->first();
+        $this->assertNotNull($request);
+        $this->assertDatabaseHas('customer_death_cases', [
+            'approval_request_id' => $request->id, 'status' => 'pending_review',
+        ]);
+        $this->assertNotSame('deceased', $this->customer->fresh()->lifecycle_state);
+    }
+
+    /** القضية المفتوحة تستقبل دليل التصعيد الثاني بدلاً من إنشاء قضايا مكررة. */
+    public function repeated_risk_escalation_links_the_existing_open_case(): void
+    {
+        app(CustomerActionService::class)->run(
+            $this->customer, $this->staff, 'escalate_risk', 'نمط تحويلات غير معتاد أبلغ عنه فريق الدعم',
+        );
+        app(CustomerActionService::class)->run(
+            $this->customer->fresh(), $this->staff, 'escalate_risk', 'ورد بلاغ إضافي يثبت استمرار النمط نفسه',
+        );
+
+        $this->assertSame(1, AmlInvestigation::where('subject_user_id', $this->customer->id)->open()->count());
     }
 
     /** الإيقاف المؤقت حالة صريحة لا اسم آخر للخمول. */
