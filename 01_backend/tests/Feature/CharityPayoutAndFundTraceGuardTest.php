@@ -354,7 +354,10 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
             'title_ar' => 'حملة', 'description_ar' => 'وصف',
             'target_amount' => '10000.0000',
         ], $this->admin);
-        $this->charity->approveCampaign($campaign, $this->admin);
+        // **أربعُ عيونٍ على اعتماد الحملة**: من أنشأها لا يعتمدها.
+        // (‏والحارسُ الجديدُ صحيح — التركيبةُ هي التي كانت تستعمل مشرفاً
+        // واحداً لكلا الدورين.)
+        $this->charity->approveCampaign($campaign, $this->payoutAdmin);
 
         $donor = User::factory()->create(['f_name' => 'سرّيّ', 'zone_code' => 'SOUTH']);
         EMoney::create(['user_id' => $donor->id, 'current_balance' => '5000.0000']);
@@ -499,7 +502,7 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
                 'target_amount' => '1000.0000',
                 'is_urgent' => $urgent,
             ], $this->admin);
-            return $this->charity->approveCampaign($c, $this->admin);
+            return $this->charity->approveCampaign($c, $this->payoutAdmin);
         };
 
         // **العاجلةُ تُنشأ أوّلاً عمداً.** ولو أُنشئت آخراً لتصدّرت بحكم
@@ -539,7 +542,7 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
             'target_amount' => '5000.0000',
             'start_at' => now()->addDays(20),
         ], $this->admin);
-        $this->charity->approveCampaign($future, $this->admin);
+        $this->charity->approveCampaign($future, $this->payoutAdmin);
 
         $this->assertFalse($future->fresh()->isAccepting(),
             'حملةٌ لم تبدأ بعدُ تقول إنّها تقبل');

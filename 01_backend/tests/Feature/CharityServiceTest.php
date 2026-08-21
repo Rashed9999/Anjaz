@@ -244,6 +244,23 @@ class CharityServiceTest extends TestCase
             $this->org, Carbon::now()->subDay(), Carbon::now()->addDay(), $this->admin,
         );
 
+        // AMIAL-TREASURY-SOURCE-001 × AMIAL-CHARITY-PAYOUT-001 —
+        // **لا يُدفَع من حسابٍ بنكيٍّ يراه الدفترُ فارغاً.**
+        //
+        // صرفُ التسوية «بنكيّاً» يُدائن `TREASURY_BANK` — أي **يُنقص أصلاً**.
+        // وأصلٌ ينزل تحت الصفر يعني الدفعَ من مالٍ لا وجودَ له، فيرفضه
+        // الدفترُ **بحقّ**. والرفضُ هنا ليس عائقاً في التركيبة: هو الحارسُ
+        // نفسُه يقول إنّ أرصدةَ البنك لم تُرحَّل.
+        //
+        // فتُموَّل بمسارها الحقيقيّ — إصدارُ خزينةٍ بمصدر «إيداعٌ بنكيّ».
+        $treasuryAdmin = User::factory()->create(['type' => ADMIN_TYPE, 'is_active' => 1]);
+        EMoney::firstOrCreate(['user_id' => \App\CentralLogics\Helpers::get_admin_id()],
+            ['current_balance' => '0.0000']);
+        app(\App\Services\PlatformTreasuryService::class)->issueAdminFloat(
+            '5000', $treasuryAdmin, 'BANK-SEED-'.uniqid(), 'ترحيلُ رصيدٍ بنكيٍّ قائم',
+            null, 'bank_deposit',
+        );
+
         $settlement = $this->service->markSettlementTransferred(
             $settlement, $this->checker,
             bankReference: 'BNK-REF-2026-001',

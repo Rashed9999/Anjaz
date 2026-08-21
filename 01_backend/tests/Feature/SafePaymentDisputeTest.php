@@ -152,10 +152,18 @@ class SafePaymentDisputeTest extends TestCase
         $this->assertEquals('0.0000', (string)$payment->held_amount);
 
         // التسوية الجزئية تكتب حصّتيها في الدفتر، لا في e_money وحدها.
+        //
+        // AMIAL-SOURCEID-WIDTH-001 — **ولا يُطابَق على مرجعٍ مركَّب.**
+        // كان المرجعُ `{ulid}_partial_refund_{ulid}` = ٦٨ محرفاً في عمودٍ
+        // سعتُه ٦٤، **فيسقط استردادُ مالِ مشترٍ في نزاع** بـ`Data too long`.
+        // فصار المرجعُ معرّفَ الحركة نفسِها — وهي المعرّفُ الحقيقيّ —
+        // ويُطابَق عليها هنا.
         $this->assertSame(1, LedgerJournalEntry::where('source_type', 'safe_payment_refund')
-            ->where('source_id', 'like', $payment->payment_ulid . '_partial_refund_%')->count());
+            ->where('source_id', $payment->buyer_refund_tx_id)->count(),
+            'حصّةُ المشتري لم تُكتب في الدفتر');
         $this->assertSame(1, LedgerJournalEntry::where('source_type', 'safe_payment_release')
-            ->where('source_id', 'like', $payment->payment_ulid . '_partial_release_%')->count());
+            ->where('source_id', $payment->seller_credit_tx_id)->count(),
+            'حصّةُ البائع لم تُكتب في الدفتر');
     }
 
     /** @test */

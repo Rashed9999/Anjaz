@@ -704,8 +704,15 @@ class SafePaymentService
                 $this->ledgerRefundEscrow(
                     toBuyerUserId: $locked->buyer_user_id,
                     amount: $buyerAmount,
-                    sourceId: $locked->payment_ulid . '_partial_refund_' . $refundTxId,
-                    description: "استرداد جزئي لدفع آمن: {$locked->title}",
+                    // AMIAL-SOURCEID-WIDTH-001 — **`source_id` سعتُه ٦٤ محرفاً.**
+                    //
+                    // و`{ulid}_partial_refund_{ulid}` يبلغ ٦٨ — فيسقط الاسترداد
+                    // كلُّه بـ`Data too long`، **وهو استردادٌ لمالِ مشترٍ في
+                    // نزاع**. ومرجعُ القيد هو معرّفُ الاسترداد نفسُه (٢٦
+                    // محرفاً)، ورقمُ الدفعة يُحمَل في الوصف — فالتتبّعُ باقٍ
+                    // والحقلُ لا يفيض.
+                    sourceId: $refundTxId,
+                    description: "استرداد جزئي لدفع آمن {$locked->payment_ulid}: {$locked->title}",
                 );
             }
 
@@ -734,7 +741,8 @@ class SafePaymentService
                     toSellerUserId: $locked->seller_user_id,
                     grossAmount: $sellerAmount,
                     feeAmount: $platformFee,
-                    sourceId: $locked->payment_ulid . '_partial_release_' . $creditTxId,
+                    // AMIAL-SOURCEID-WIDTH-001 — نفسُ الفيضان في ساق الإفراج.
+                    sourceId: $creditTxId,
                     description: "إفراج جزئي لدفع آمن: {$locked->title}",
                 );
             }

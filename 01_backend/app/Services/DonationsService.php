@@ -74,8 +74,20 @@ class DonationsService
         $netToCharity = MoneyService::sub($amountNormalized, $platformFee);
 
         // ====== Execute ======
+        // AMIAL-DONATION-SCOPE-001 — **`$org` كانت تُقرأ خارج نطاقها.**
+        //
+        // تُحمَّل تحت القفل **داخل** المعاملة، وتُقرأ بعدها في
+        // `safeIssueReceipt` — فترتفع `Undefined variable $org` **بعد أن
+        // يتمّ التبرّعُ ويُخصم المال**. أي أنّ المالَ يتحرّك ثمّ ينهار
+        // المسار: لا إيصالَ للمتبرّع، وخطأٌ في وجهه على عمليّةٍ نجحت.
+        //
+        // ولا تُحمَّل قبل المعاملة (فذاك يقرأ حالةً قد تتغيّر تحت القفل):
+        // تُمرَّر بالمرجع لتخرج من الإغلاق كما قُرئت داخله.
+        $org = null;
+
         $donation = DB::transaction(function () use (
             $donor, $campaign, $amountNormalized, $platformFee, $netToCharity, $isAnonymous, $message,
+            &$org,
         ) {
             // يُعاد تحميل كل طرف تحت القفل قبل خصم المال. فحص حالة الحملة
             // خارج المعاملة يسمح لقبول تبرع لحملة أوقفها مدير في اللحظة نفسها.

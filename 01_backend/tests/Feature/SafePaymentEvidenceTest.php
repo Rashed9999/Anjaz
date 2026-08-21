@@ -187,7 +187,7 @@ class SafePaymentEvidenceTest extends TestCase
         $this->actingAs($seller, 'api')
             ->get("/api/v1/amial/safe-payments/evidence/{$e->id}/file")
             ->assertOk()
-            ->assertHeader('Cache-Control', 'private, no-store')
+            ->assertHeader('Cache-Control', 'no-store, private')
             ->assertHeader('X-Content-Type-Options', 'nosniff');
     }
 

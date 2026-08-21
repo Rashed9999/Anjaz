@@ -196,7 +196,12 @@ class DonationsServiceTest extends TestCase
     /** @test */
     public function inactive_or_sanctioned_user_cannot_donate(): void
     {
-        $this->donor->update(['is_active' => false]);
+        // **`is_active` و`sanction_status` ليستا في `$fillable`**، و`update()`
+        // **تُسقطهما صامتاً** — فكان الحسابُ يبقى نشطاً والاختبارُ يفحص
+        // حارساً لم يُشغَّل. (‏وهو فخُّ الإسقاط الصامت الموثَّق في نموذج
+        // المستخدم: «`create` تُسقط بصمتٍ ما ليس في `$fillable`».)
+        $this->donor->forceFill(['is_active' => false])->save();
+
         try {
             $this->service->donate($this->donor, $this->campaign, '50.0000');
             $this->fail('كان يجب رفض الحساب غير النشط');
@@ -204,7 +209,7 @@ class DonationsServiceTest extends TestCase
             $this->assertStringContainsString('غير نشط', $e->getMessage());
         }
 
-        $this->donor->update(['is_active' => true, 'sanction_status' => 'blocked']);
+        $this->donor->forceFill(['is_active' => true, 'sanction_status' => 'blocked'])->save();
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('مقيّد');
         $this->service->donate($this->donor->fresh(), $this->campaign, '50.0000');
