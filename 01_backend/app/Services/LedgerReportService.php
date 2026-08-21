@@ -609,6 +609,63 @@ class LedgerReportService
             $q->where('idempotency_key', $filters['idempotency_key']);
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-LEDGER-SEARCH-001 — **المحقّقُ لا يبدأ من رقم القيد.**
+        //
+        // يبدأ ممّا في يده: **رقمِ معاملةٍ** يشتكي منها عميل، أو **هاتفٍ**
+        // على شاشة الدعم، أو **معرّفِ مستخدم**. وبحثٌ لا يقبل إلّا
+        // `entry_ulid` يفترض أنّ السائلَ يعرف الجوابَ سلفاً.
+        //
+        // فتُفتَح ثلاثةُ مداخلَ لا واحد.
+
+        // ① مرجعُ المصدر — رقمُ المعاملة أو رقمُ الطلب أو `tx_ulid`.
+        if (!empty($filters['source_id'])) {
+            $q->where('source_id', (string) $filters['source_id']);
+        }
+
+        // ② **الهاتفُ يصير معرّفَ مستخدمٍ ثمّ حسابَ محفظة.** ولا يُبحث
+        //   بالهاتف في القيود مباشرةً: القيدُ لا يحمل هاتفاً، وبحثٌ نصّيٌّ
+        //   في وصفه يُطابق أرقاماً في جملٍ أخرى فيُخرج نتائجَ كاذبة.
+        $userId = null;
+
+        if (!empty($filters['phone'])) {
+            $userId = \App\Models\User::whereIn('phone',
+                \App\Support\Phone::variants((string) $filters['phone']))->value('id');
+
+            // **هاتفٌ لا حسابَ له يُخرج «لا نتائج» لا «كلَّ القيود».**
+            // ومرشِّحٌ يُسقَط بصمتٍ عند غياب قيمته يعرض الدفترَ كلَّه
+            // لمن سأل عن شخصٍ واحد — وهو تسريبٌ لا نقصُ دقّة.
+            if (! $userId) {
+                return [];
+            }
+        }
+
+        if (!empty($filters['user_id'])) {
+            $userId = (int) $filters['user_id'];
+        }
+
+        // ③ قيودُ حسابِ مستخدمٍ بعينه — من أيّ طرفٍ كان، مديناً أو دائناً.
+        if ($userId) {
+            $accountId = LedgerAccount::where('account_code', 'USER_WALLET_' . $userId)->value('id');
+
+            if (! $accountId) {
+                return [];
+            }
+
+            $q->whereExists(fn ($sub) => $sub->select(DB::raw(1))
+                ->from('ledger_entry_lines as sl')
+                ->whereColumn('sl.journal_entry_id', 'ledger_journal_entries.id')
+                ->where('sl.account_id', $accountId));
+        }
+
+        if (!empty($filters['max_amount'])) {
+            $q->where('total_amount', '<=', $filters['max_amount']);
+        }
+
+        if (!empty($filters['status'])) {
+            $q->where('status', (string) $filters['status']);
+        }
+
         return $q->orderByDesc('id')->limit($limit)->get()
             ->map(fn (LedgerJournalEntry $e) => [
                 'id' => (int) $e->id,
@@ -626,7 +683,61 @@ class LedgerReportService
                     'account' => $l->account->name_ar ?? $l->account->account_code ?? '—',
                     'amount' => (string) $l->amount,
                 ])->values()->all(),
+                'idempotency_key' => $e->idempotency_key,
+                'source_id' => $e->source_id,
+                // AMIAL-LEDGER-SEARCH-002 — **مدينٌ ودائنٌ ليسا «من» و«إلى».**
+                'economic_effect' => $this->economicEffect($e),
             ])->all();
+    }
+
+    /**
+     * AMIAL-LEDGER-SEARCH-002 — **«مدين» و«دائن» ليسا «من» و«إلى».**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ما تطلبه الوثيقةُ في المحور ٢٦:**
+     *
+     *     لا تسمِّ `Debit = من` و`Credit = إلى`. استخدم «مدين» و«دائن»،
+     *     **ثمّ أضف تفسيراً اقتصاديّاً منفصلاً**:
+     *     «انخفض رصيدُ الوكيل ٥٠٬٠٠٠» · «زادت أصولُ النقد ١٠٠٬٠٠٠».
+     *
+     * **ولماذا هذا ليس تجميلَ لغة:** «من/إلى» صحيحةٌ في التحويل وحدَه،
+     * **وتنقلب في نصف القيود**. حسابُ العميل **التزامٌ** على المنصّة:
+     * فإيداعُه يُقيَّد **دائناً** — أي «إلى» بمنطق التحويل — وهو في
+     * الحقيقة **زيادةُ ما ندين به له**. ومن قرأ «إلى العميل» على قيد
+     * إيداعٍ ظنّ أنّ مالاً خرج من المنصّة إليه، **والعكسُ هو الواقع**.
+     *
+     * فيُترجَم الاتّجاهُ إلى أثرٍ اقتصاديٍّ بحسب **صنف الحساب** لا بحسب
+     * موضعه في القيد.
+     *
+     * @return array<int,string>
+     */
+    private function economicEffect(LedgerJournalEntry $entry): array
+    {
+        $out = [];
+
+        foreach ($entry->lines as $line) {
+            $account = $line->account;
+
+            if (! $account) {
+                continue;
+            }
+
+            $name = $account->name_ar ?: $account->account_code;
+            $isDebit = $line->direction === 'debit';
+
+            // المدينُ يزيد الأصولَ والمصروفات، ويُنقص الالتزاماتِ وحقوقَ
+            // الملكيّة والإيرادات. والدائنُ عكسُه. **وهذه هي القاعدةُ
+            // المحاسبيّةُ نفسُها، لا اصطلاحٌ للعرض.**
+            $increases = match ($account->account_type) {
+                'asset', 'expense' => $isDebit,
+                default => ! $isDebit,
+            };
+
+            $out[] = sprintf('%s %s بمقدار %s',
+                $increases ? 'زاد' : 'انخفض', $name, (string) $line->amount);
+        }
+
+        return $out;
     }
 
     /** أنواع المصادر الموجودة فعلاً — للفلتر. */

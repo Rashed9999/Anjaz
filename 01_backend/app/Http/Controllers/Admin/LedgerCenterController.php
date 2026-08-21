@@ -135,6 +135,10 @@ class LedgerCenterController extends Controller
                 // `idempotency_key` — الوصلةُ من حركةٍ ماليّةٍ إلى قيدها،
                 // ليعمل التنقّلُ من تقرير الأرباح إلى الدفتر (AMIAL-FEE-TRUTH-019).
                 'ulid', 'source_type', 'from', 'to', 'min_amount', 'idempotency_key',
+                // AMIAL-LEDGER-SEARCH-001 — **المحقّقُ لا يبدأ من رقم
+                // القيد**، بل ممّا في يده: رقمِ معاملةٍ يشتكي منها عميل،
+                // أو هاتفٍ على شاشة الدعم، أو معرّفِ مستخدم.
+                'source_id', 'phone', 'user_id', 'max_amount', 'status',
             ])),
             'source_types' => $this->reports->sourceTypes(),
         ]);

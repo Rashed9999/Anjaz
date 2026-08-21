@@ -190,6 +190,18 @@
                         <input type="date" id="lg-e-to" class="form-control form-control-sm"></div>
                     <div><label class="form-label small mb-1">أقلّ مبلغ</label>
                         <input type="number" id="lg-e-min" class="form-control form-control-sm" style="max-width:120px"></div>
+                    {{-- AMIAL-LEDGER-SEARCH-001 — **المحقّقُ لا يبدأ من رقم
+                         القيد**، بل ممّا في يده: رقمِ معاملةٍ يشتكي منها
+                         عميل، أو هاتفٍ على شاشة الدعم، أو معرّفِ مستخدم. --}}
+                    <div><label class="form-label small mb-1">رقم المعاملة / المرجع</label>
+                        <input type="text" id="lg-e-source-id" class="form-control form-control-sm"
+                               style="max-width:180px" placeholder="مرجعُ المصدر"></div>
+                    <div><label class="form-label small mb-1">هاتف صاحب الحساب</label>
+                        <input type="text" id="lg-e-phone" class="form-control form-control-sm"
+                               style="max-width:150px" placeholder="7XXXXXXXX"></div>
+                    <div><label class="form-label small mb-1">معرّف المستخدم</label>
+                        <input type="number" id="lg-e-user" class="form-control form-control-sm"
+                               style="max-width:120px"></div>
                     <button class="btn btn-primary btn-sm" id="lg-btn-entries">بحث</button>
                 </div>
                 <div id="lg-entries-list"></div>
@@ -612,6 +624,9 @@
         if (v('lg-e-from')) qs.push('from=' + v('lg-e-from'));
         if (v('lg-e-to')) qs.push('to=' + v('lg-e-to'));
         if (v('lg-e-min')) qs.push('min_amount=' + v('lg-e-min'));
+        if (v('lg-e-source-id')) qs.push('source_id=' + encodeURIComponent(v('lg-e-source-id')));
+        if (v('lg-e-phone')) qs.push('phone=' + encodeURIComponent(v('lg-e-phone')));
+        if (v('lg-e-user')) qs.push('user_id=' + encodeURIComponent(v('lg-e-user')));
 
         const box = document.getElementById('lg-entries-list');
         box.innerHTML = '<div class="text-muted">جارٍ البحث…</div>';
@@ -633,6 +648,7 @@
                 <td class="text-end fw-bold">${money(e.amount)}</td>
                 <td class="small">${e.debits.map(d => `${esc(d.account)} <span class="text-muted">${money(d.amount)}</span>`).join('<br>')}</td>
                 <td class="small">${e.credits.map(c => `${esc(c.account)} <span class="text-muted">${money(c.amount)}</span>`).join('<br>')}</td>
+                <td class="small">${(e.economic_effect || []).map(x => esc(x)).join('<br>') || '—'}</td>
                 <td class="small text-muted">${esc(e.posted_at)}</td>
             </tr>`).join('');
 
@@ -644,8 +660,8 @@
 
         box.innerHTML = pinned + `<div class="table-responsive"><table class="table table-sm" data-testid="lg-entries-table">
             <thead class="thead-light"><tr><th>المرجع</th><th>المصدر</th><th class="text-end">المبلغ</th>
-                <th>من (مدين)</th><th>إلى (دائن)</th><th>التاريخ</th></tr></thead>
-            <tbody>${rows || '<tr><td colspan="6" class="text-muted text-center py-3">لا قيود</td></tr>'}</tbody></table></div>`;
+                <th>مدين</th><th>دائن</th><th>الأثر الاقتصاديّ</th><th>التاريخ</th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="7" class="text-muted text-center py-3">لا قيود</td></tr>'}</tbody></table></div>`;
     }
 
     // أوّل ما يُفتح: الميزان والمطابقة — هما ما يُسأل عنه.
