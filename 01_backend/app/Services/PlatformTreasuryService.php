@@ -78,6 +78,120 @@ class PlatformTreasuryService
         ],
     ];
 
+    /**
+     * AMIAL-TREASURY-MAKERCHECKER-001 — **«لا زرَّ واحدٌ يخلق مليارات».**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * المحورُ ٣٤ من وثيقة المركز الماليّ يطلب مساراً لا ضغطة:
+     *
+     *     Maker → يُدخل إثباتَ التمويل → Pending Verification
+     *           → Checker يتحقّق → معاينةٌ محاسبيّة → اعتماد
+     *           → ترحيلٌ ذرّيّ → مصالحة → اكتمال
+     *
+     * **وهذا الإجراءُ وحدَه يخلق مالاً من العدم.** سواه يُحرّك موجوداً أو
+     * يفتح باباً؛ وهذا يزيد المعروضَ من الريال الإلكترونيّ. وموظّفٌ واحدٌ
+     * يملك زرَّه يملك المنصّةَ كلَّها.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **وحاجزٌ يجعل الميزةَ مستحيلةً ليس حماية** — وهو عطلٌ وقع في هذا
+     * المشروع من قبل (‏أمرُ ترحيل المحافظ اشترط قضيّةً لا يمكن أن توجد
+     * لحظةَ النشر). فمنصّةٌ بمشرفٍ واحدٍ لا يمكن أن يُعتمَد فيها طلب:
+     * **يُقال ذلك صراحةً بالاسم**، ولا يُترك الطلبُ معلّقاً إلى الأبد
+     * ينتظر من لا وجودَ له.
+     *
+     * **والحدُّ يُقرأ من الإعداد لا يُثبَّت:** صفرٌ يعني «كلُّ إصدارٍ
+     * يحتاج عينين ثانيتين» وهو الافتراضُ الآمن، ومن أراد استثناءً
+     * تشغيليّاً ضبطه صراحةً — **فيكون قراراً موقَّعاً لا سهواً**.
+     *
+     * @return array{mode:'issued'|'pending_approval', entry?:mixed,
+     *   transaction_id?:?string, duplicate?:bool, request?:\App\Models\ApprovalRequest}
+     */
+    public function requestIssuance(
+        string|int|float $amount,
+        User $actor,
+        string $reference,
+        string $reason,
+        string $fundingSource = 'treasury_supply',
+        ?string $idempotencyKey = null,
+    ): array {
+        $amount = MoneyService::normalize($amount);
+        $threshold = MoneyService::normalize(
+            (string) config('amial.treasury.approval_threshold', '0'));
+
+        // دون الحدّ: يُصدَر مباشرةً — وهو استثناءٌ مضبوطٌ بقرارٍ لا سهو.
+        if (bccomp($threshold, '0', 4) > 0 && bccomp($amount, $threshold, 4) <= 0) {
+            return $this->issueAdminFloat(
+                $amount, $actor, $reference, $reason, $idempotencyKey, $fundingSource
+            ) + ['mode' => 'issued'];
+        }
+
+        // **ولا يُقبل طلبٌ لا يستطيع أحدٌ اعتمادَه.**
+        if (! $this->hasAnotherApprover($actor)) {
+            throw new RuntimeException(
+                'لا يمكن إصدارُ رصيدٍ الآن: **لا مشرفَ ثانٍ يعتمد الطلب**. '
+                . 'وإصدارُ المال يحتاج عينين ثانيتين. '
+                . 'أنشئ حسابَ مشرفٍ آخرَ، أو اضبط '
+                . '`AMIAL_TREASURY_APPROVAL_THRESHOLD` بقرارٍ مكتوبٍ لاستثناء '
+                . 'المبالغ الصغيرة.'
+            );
+        }
+
+        // **ولا يُصدَر شيءٌ هنا** — الترحيلُ يقع لحظةَ الاعتماد بيد
+        // المُراجِع. وإصدارٌ يقع عند الطلب ثمّ «يُعتمَد» توقيعٌ على أمرٍ واقع.
+        $request = app(ApprovalService::class)->submit(
+            maker: $actor,
+            actionType: 'treasury_issuance',
+            subjectUserId: (int) Helpers::get_admin_id(),
+            reason: trim($reason),
+            payload: [
+                'amount' => $amount,
+                'reference' => trim($reference),
+                'funding_source' => $fundingSource,
+                // **المعاينةُ المحاسبيّةُ تُحفَظ مع الطلب** — فالمُراجِعُ
+                // يرى القيدَ الذي سيقع قبل أن يعتمد، لا بعده.
+                'preview' => $this->issuancePreview($amount, $fundingSource),
+            ],
+        );
+
+        return ['mode' => 'pending_approval', 'request' => $request];
+    }
+
+    /**
+     * **المعاينةُ المحاسبيّةُ قبل الاعتماد** (المحور ٣٦ من وثيقة الدفتر).
+     *
+     * مُراجِعٌ يوقّع على «إصدار ٥٠٠٬٠٠٠» لا يعرف أين ستقع. **ورقمٌ بلا
+     * قيدٍ يُوقَّع عليه بالثقة لا بالمراجعة.**
+     *
+     * @return array<string,mixed>
+     */
+    public function issuancePreview(string $amount, string $fundingSource): array
+    {
+        $src = self::FUNDING_SOURCES[$fundingSource] ?? self::FUNDING_SOURCES['treasury_supply'];
+
+        return [
+            'funding_source' => $fundingSource,
+            'funding_source_label' => $src['label'],
+            'lines' => [
+                ['account' => $src['account'], 'name' => $src['name'],
+                    'direction' => 'مدين', 'amount' => $amount],
+                ['account' => 'USER_WALLET_'.Helpers::get_admin_id(), 'name' => 'محفظة الإدارة',
+                    'direction' => 'دائن', 'amount' => $amount],
+            ],
+            'effect' => sprintf(
+                'يزيد «%s» بمقدار %s، ويزيد الرصيدُ الإلكترونيُّ المُصدَر بالمقدار نفسِه.',
+                $src['name'], $amount),
+        ];
+    }
+
+    /** أثمّة مشرفٌ آخرُ يستطيع الاعتماد؟ */
+    private function hasAnotherApprover(User $actor): bool
+    {
+        return User::where('type', ADMIN_TYPE)
+            ->where('id', '!=', $actor->id)
+            ->where('is_active', 1)
+            ->exists();
+    }
+
     public function issueAdminFloat(
         string|int|float $amount,
         ?User $actor,

@@ -204,6 +204,24 @@ class ApprovalService
             // يُعاد فحص التسوية لحظة الاعتماد، لا لحظة فتح الطلب فقط:
             // قد يصل مال أو يُفتح تحقيق بين المرحلتين.
             'close_customer' => $this->closures->close($user, $req->reason),
+
+            // AMIAL-TREASURY-MAKERCHECKER-001 — **الإصدارُ يقع هنا لا عند الطلب.**
+            //
+            // فالمالُ يُخلَق **لحظةَ الاعتماد** بيد المُراجِع، لا لحظةَ
+            // كتابة الطلب. وإصدارٌ يقع عند الطلب ثمّ «يُعتمَد» بعده ليس
+            // أربعَ عيونٍ — هو **توقيعٌ على أمرٍ واقع**.
+            //
+            // ويُعاد الفحصُ كلُّه هنا (‏انحرافُ محفظة الإدارة، ومنعُ
+            // التكرار بمرجع الإثبات) لأنّ الحالَ قد تتغيّر بين المرحلتين.
+            'treasury_issuance' => app(\App\Services\PlatformTreasuryService::class)
+                ->issueAdminFloat(
+                    amount: (string) (($req->payload['amount'] ?? '0')),
+                    actor: $checker,
+                    reference: (string) ($req->payload['reference'] ?? ''),
+                    reason: (string) $req->reason,
+                    idempotencyKey: null,
+                    fundingSource: (string) ($req->payload['funding_source'] ?? 'treasury_supply'),
+                ),
             'mark_customer_deceased' => tap($user, function (User $u) use ($req, $checker) {
                 $u->forceFill([
                     'lifecycle_state' => 'deceased',

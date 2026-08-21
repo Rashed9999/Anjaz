@@ -22,6 +22,10 @@ class ApprovalRequest extends Model
         'reset_pin',
         'close_customer',
         'mark_customer_deceased',
+        // AMIAL-TREASURY-MAKERCHECKER-001 — **«لا زرَّ واحدٌ يخلق مليارات».**
+        // وهذا الإجراءُ وحدَه يخلق مالاً من العدم؛ سواه يُحرّك موجوداً أو
+        // يفتح باباً. فموضعُه هنا ليس توسيعَ قائمةٍ بل إغلاقُ أخطر باب.
+        'treasury_issuance',
     ];
 
     protected $fillable = [

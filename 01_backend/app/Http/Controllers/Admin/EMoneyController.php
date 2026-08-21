@@ -61,12 +61,23 @@ class EMoneyController extends Controller
         ]);
 
         try {
-            $issued = $this->treasury->issueAdminFloat(
+            // AMIAL-TREASURY-MAKERCHECKER-001 — **الطلبُ لا الإصدار.**
+            // والخدمةُ تقرّر: دون الحدّ تُصدر، وفوقه ترفع طلباً يعتمده
+            // مشرفٌ آخر — **والمالُ يُخلَق لحظةَ الاعتماد لا لحظةَ الطلب**.
+            $issued = $this->treasury->requestIssuance(
                 $request->input('amount'), $request->user(),
                 $request->input('reference'), $request->input('reason'),
-                $request->header('Idempotency-Key'),
                 (string) $request->input('funding_source', 'treasury_supply'),
+                $request->header('Idempotency-Key'),
             );
+
+            if (($issued['mode'] ?? '') === 'pending_approval') {
+                Toastr::success(translate('أُنشئ طلب ').$issued['request']->request_number
+                    .translate(' — ينتظر اعتماد مشرف آخر. لم يُصدَر رصيدٌ بعد.'));
+
+                return back();
+            }
+
             Helpers::send_transaction_notification(
                 Helpers::get_admin_id(), (float) $request->input('amount'), CASH_IN);
             Toastr::success($issued['duplicate']

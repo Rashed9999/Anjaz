@@ -761,14 +761,27 @@ class AdminHubController extends Controller
         if ($v->fails()) return response()->json(['message' => $v->errors()->first()], 422);
 
         try {
-            $issued = $treasury->issueAdminFloat(
+            // AMIAL-TREASURY-MAKERCHECKER-001 — الطلبُ لا الإصدار؛ والمالُ
+            // يُخلَق لحظةَ اعتماد مشرفٍ آخر.
+            $issued = $treasury->requestIssuance(
                 (string) $request->input('amount'), $request->user(),
                 (string) $request->input('reference'), (string) $request->input('reason'),
-                $request->header('Idempotency-Key'),
                 (string) $request->input('funding_source', 'treasury_supply'),
+                $request->header('Idempotency-Key'),
             );
         } catch (\Throwable $e) {
             return response()->json(['message' => 'فشلت التعبئة: ' . $e->getMessage()], 422);
+        }
+
+        if (($issued['mode'] ?? '') === 'pending_approval') {
+            return response()->json([
+                'approval_required' => true,
+                'request_number' => $issued['request']->request_number,
+                'request_id' => (int) $issued['request']->id,
+                'preview' => $issued['request']->payload['preview'] ?? null,
+                'message' => 'إصدارُ الرصيد يتطلّب اعتماد مشرفٍ آخر — أُنشئ طلب '
+                    . $issued['request']->request_number . '. **لم يُصدَر رصيدٌ بعد.**',
+            ], 202);
         }
 
         $adminId = Helpers::get_admin_id();

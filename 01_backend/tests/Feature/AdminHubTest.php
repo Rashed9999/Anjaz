@@ -175,18 +175,38 @@ class AdminHubTest extends TestCase
     /** @test */
     public function admin_topup_credits_admin_wallet(): void
     {
-        // إصدارُ خزينةٍ مالٌ يُخلَق من لا شيء — فلا يُقبل بلا سندٍ وسبب.
-        // (‏`PlatformTreasuryIssuanceTest` يحرس الشرطَ نفسَه من جهته.)
-        $this->actingAs($this->admin, 'user')
+        // AMIAL-TREASURY-MAKERCHECKER-001 — **إصدارُ الرصيد لم يعد ضغطةً.**
+        //
+        // مالٌ يُخلَق من لا شيء لا يُقبل بلا سندٍ وسبب **ولا بعينين
+        // واحدتين**. فيُفحَص المسارُ الحقيقيُّ كاملاً: طلبٌ يُرفع، ولا
+        // ريالَ يتحرّك، ثمّ مشرفٌ **مختلف** يعتمد فيقع الإصدار.
+        $checker = User::factory()->create([
+            'type' => ADMIN_TYPE, 'phone' => '967770009911', 'is_active' => 1,
+        ]);
+
+        $before = (string) EMoney::where('user_id', $this->admin->id)->value('current_balance');
+
+        $reqId = $this->actingAs($this->admin, 'user')
             ->postJson('/admin/amial/hub/finance/topup', [
                 'amount' => '50000',
                 'reference' => 'BANK-DEP-2026-0001',
                 'reason' => 'إيداعٌ بنكيٌّ مقابلَ إصدار رصيدٍ إلكترونيّ',
+                'funding_source' => 'bank_deposit',
             ])
-            ->assertOk();
+            ->assertStatus(202)
+            ->assertJsonPath('approval_required', true)
+            ->json('request_id');
+
+        // **ولا ريالَ قبل الاعتماد.**
+        $this->assertSame($before,
+            (string) EMoney::where('user_id', $this->admin->id)->value('current_balance'),
+            '**أُصدر المالُ عند الطلب** — والاعتمادُ بعده توقيعٌ على أمرٍ واقع');
+
+        app(\App\Services\ApprovalService::class)->approve($checker, (int) $reqId, 'راجعتُ سندَ البنك');
 
         $this->assertSame('1050000.0000',
-            (string) EMoney::where('user_id', $this->admin->id)->value('current_balance'));
+            (string) EMoney::where('user_id', $this->admin->id)->value('current_balance'),
+            'اعتُمد الطلبُ ولم يقع الإصدار');
     }
 
     // ==================== «حقيقي وليس واجهة» ====================
