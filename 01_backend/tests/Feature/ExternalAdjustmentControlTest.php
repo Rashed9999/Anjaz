@@ -18,7 +18,7 @@ class ExternalAdjustmentControlTest extends TestCase
     public function an_external_adjustment_is_rejected_without_an_approved_case(): void
     {
         $walletOwner = User::factory()->create();
-        EMoney::create(['user_id' => $walletOwner->id, 'current_balance' => '125.0000']);
+        EMoney::updateOrCreate(['user_id' => $walletOwner->id], ['current_balance' => '125.0000']);
 
         try {
             app(LedgerService::class)->reconcileWalletBalance($walletOwner->id, 'فرق غير موثق');
@@ -75,9 +75,9 @@ class ExternalAdjustmentControlTest extends TestCase
         $this->assertSame('corrected', $case->status);
         $this->assertSame($entry->id, $case->resolution_journal_entry_id);
         $this->assertSame(2, $entry->lines()->count());
-        $this->assertSame('0.0000', (string) $entry->lines()
-            ->selectRaw("SUM(CASE WHEN direction = 'debit' THEN amount ELSE -amount END) AS net")
-            ->value('net'));
+        $debits = (string) $entry->lines()->where('direction', 'debit')->sum('amount');
+        $credits = (string) $entry->lines()->where('direction', 'credit')->sum('amount');
+        $this->assertSame(0, bccomp($debits, $credits, 4));
     }
 
     /** @test */
@@ -85,7 +85,7 @@ class ExternalAdjustmentControlTest extends TestCase
     {
         $walletOwner = User::factory()->create();
         $operator = User::factory()->create();
-        EMoney::create(['user_id' => $walletOwner->id, 'current_balance' => '25.0000']);
+        EMoney::updateOrCreate(['user_id' => $walletOwner->id], ['current_balance' => '25.0000']);
 
         $case = ReconciliationCase::create([
             'case_ulid' => (string) \Illuminate\Support\Str::ulid(),
