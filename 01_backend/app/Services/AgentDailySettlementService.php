@@ -593,6 +593,11 @@ class AgentDailySettlementService
                 'actor_type' => 'admin',
                 'actor_user_id' => $admin->id,
                 'action' => 'agent.daily_settlement.accept',
+                // **رمزُ القرار يُمرَّر ولا يُترَك لـ`UNKNOWN`.**
+                // فعمودُ «القرار» في شاشة التدقيق كان فارغَ المعنى على
+                // كلّ صفٍّ من جانب الوكيل، وهذا قرارُ اعتمادِ تسويةٍ لا
+                // حدثٌ مرصود.
+                'decision_code' => 'ACCEPTED',
                 'severity' => 'critical',
                 'subject_type' => 'agent_daily_settlement',
                 'subject_id' => $row->settlement_ulid,
@@ -633,6 +638,7 @@ class AgentDailySettlementService
             'actor_type' => 'admin',
             'actor_user_id' => $admin->id,
             'action' => 'agent.daily_settlement.reject',
+            'decision_code' => 'REJECTED',
             'severity' => 'critical',
             'subject_type' => 'agent_daily_settlement',
             'subject_id' => $row->settlement_ulid,

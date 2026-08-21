@@ -193,6 +193,7 @@ class AgentTellerRequestService
             'actor_type' => 'agent',
             'actor_user_id' => $manager->agent_user_id,
             'action' => 'agent.teller_request.' . ($approve ? 'approve' : 'reject'),
+            'decision_code' => $approve ? 'APPROVED' : 'REJECTED',
             'severity' => 'high',
             'subject_type' => 'agent_teller_request',
             'subject_id' => $row->request_number,

@@ -1,0 +1,35 @@
+{
+  "_": [
+    "AMIAL-BUILD-FLOOR-002 — إقرارٌ مكتوبٌ بفجوةٍ إلى حدّ تحذير Flutter.",
+    "",
+    "يقرؤه tests/Feature/GradleFloorGuardTest.php. ولا يُقبل إقرارٌ على حدّ",
+    "**الخطأ** إطلاقاً — ذاك يُسقط البناء، ولا يُؤجَّل بورقة.",
+    "",
+    "**وينتهي من تلقاء نفسه.** كلُّ مدخلٍ يذكر الحدَّين اللذين كُتب في",
+    "مواجهتهما. فإذا حرّك Flutter أحدَهما لم يعد الإقرارُ مطابقاً، فيسقط",
+    "الحارس ويُعاد النظر. وإقرارٌ لا ينتهي يصير صمتاً بعد شهر."
+  ],
+  "waivers": {
+    "AGP": {
+      "pinned": "8.11.1",
+      "error_floor_when_written": "8.11.1",
+      "warn_floor_when_written": "9.0.1",
+      "written_at": "2026-08-21",
+      "reason": "AGP 9 يقرأ newDsl وحدَه فيحتاج إعادةَ كتابة ملفّات Gradle كلِّها — وهو ما يمنعه the_agp_major_stays_on_eight_until_the_dsl_is_migrated. ولا مُصرِّفَ أندرويد في حاوية التطوير، فرفعٌ غيرُ مُجرَّبٍ يُسقط Codemagic بدل أن يحميه."
+    },
+    "KGP": {
+      "pinned": "2.2.20",
+      "error_floor_when_written": "2.2.20",
+      "warn_floor_when_written": "2.3.20",
+      "written_at": "2026-08-21",
+      "reason": "Kotlin 2.3.20 غيرُ مُجرَّبٍ مع AGP 8.11.1، ولا سبيلَ لتجريبه هنا (لا Android SDK). ويُرفع مع رفع AGP في هجرة الـDSL نفسِها."
+    },
+    "Gradle": {
+      "pinned": "8.14.3",
+      "error_floor_when_written": "8.14.0",
+      "warn_floor_when_written": "9.1.0",
+      "written_at": "2026-08-21",
+      "reason": "Gradle 9 شرطُ AGP 9 لا مطلبٌ مستقلّ — فيتحرّكان معاً في هجرة الـDSL."
+    }
+  }
+}

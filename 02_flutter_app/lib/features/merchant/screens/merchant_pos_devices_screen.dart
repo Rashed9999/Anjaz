@@ -149,7 +149,17 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
     });
 
     if (r.statusCode == 200) {
-      final created = (r.body is Map ? r.body['data']?['created'] : false) == true;
+      // AMIAL-DART-PARSE-001 — **تعبيرٌ شرطيٌّ يلتبس على المحلّل.**
+      //
+      // `cond ? a?['k'] : b` — المحلّلُ يقرأ `?[` بعد تعبيرٍ داخل شرطيٍّ
+      // فيضطرب: `Expected an identifier` و`Expected to find ':'` في
+      // الموضع نفسِه. ولا يظهر هنا إطلاقاً (‏لا Flutter في هذه الحاوية)
+      // ويسقط بناءُ Codemagic — **وأوّلُ من يراه صاحبُ المشروع**.
+      //
+      // فيُفكَّك إلى خطوتين: أوضحُ للقارئ، وبلا التباسٍ للمحلّل.
+      final body = r.body;
+      final data = body is Map ? body['data'] : null;
+      final created = data is Map && data['created'] == true;
 
       _snack(created ? 'سُجّل الجهاز وشُغل مقعده' : 'هذا الجهاز مسجَّلٌ سلفاً',
           ok: true);
@@ -328,7 +338,10 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
       margin: const EdgeInsets.all(12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: full ? AmialColors.red.withValues(alpha: 0.08) : AmialColors.surface,
+        // **`AmialColors.surface` لا وجودَ لها** — التوكِنُ اسمُه
+        // `cardSurface`. ولونٌ يُخترَع اسمُه هو ما ولّد ستّةَ أخضرَ
+        // للنجاح في هذا المشروع. (‏وثيقةُ الهويّة البصريّة.)
+        color: full ? AmialColors.red.withValues(alpha: 0.08) : AmialColors.cardSurface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: full ? AmialColors.red : AmialColors.border,

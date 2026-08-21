@@ -48,11 +48,43 @@ class AuditService
         return self::SEVERITY_MAP[mb_strtolower(trim((string) $value))] ?? 'info';
     }
 
+    /**
+     * مفاتيحُ الحمولة المعروفة — وما عداها يُسقَط.
+     *
+     * **يُقرأ في `assertKnownKeys()`، وهي سببُ وجوده.**
+     */
+    public const KNOWN_KEYS = [
+        'actor_type', 'actor_user_id', 'subject_type', 'subject_id',
+        'action', 'decision_code', 'reason', 'severity', 'context',
+        'transaction_id', 'idempotency_key', 'zone_code',
+        // مرادفٌ تاريخيّ — انظر أدناه.
+        'metadata',
+    ];
+
     public function record(array $payload): ?string
     {
         try {
-            // فلترة context
-            $context = $payload['context'] ?? [];
+            $this->assertKnownKeys($payload);
+
+            // ══════════════════════════════════════════════════════════
+            // **`metadata` مرادفٌ لـ`context` — وهذا إصلاحُ فقدٍ صامت.**
+            //
+            // **الثمن الذي دُفع:** سبعةَ عشرَ موضعاً في جانب الوكيل تكتب
+            // `'metadata' => [...]` — الورديّاتُ والتسوياتُ والموظّفون
+            // وطلباتُ الشبّاك وأحداثُه. و`record()` لا تقرأ إلّا
+            // `context`، فكان كلُّ ما فيها **يُسقَط بلا رسالة**:
+            // `staff_id` و`branch_id` و`opening_float` و`reference`.
+            //
+            // فالسجلُّ يقول «فُتحت ورديّة» ولا يقول **من ولا في أيّ فرعٍ
+            // ولا بكم عهدة**. وشاشةُ التدقيق تقول «لا سياق مسجَّل» —
+            // وهي صادقةٌ فيما تقرأ، والفقدُ وقع قبلها بطبقة.
+            //
+            // ولا يُعاد كتابةُ سبعةَ عشرَ موضعاً وتُترَك الفجوةُ مفتوحةً
+            // للثامنَ عشر: **يُقبل الاسمان، ويُحرَس أن لا يدخل ثالثٌ
+            // مجهولٌ صامتاً** (`assertKnownKeys`).
+            // ══════════════════════════════════════════════════════════
+            $context = $payload['context'] ?? $payload['metadata'] ?? [];
+
             if (is_array($context)) {
                 $context = $this->sanitizeContext($context);
             }
@@ -221,6 +253,34 @@ class AuditService
         ]);
 
         return hash('sha256', $canonical);
+    }
+
+    /**
+     * **مفتاحٌ مجهولٌ في الحمولة يُصرَّح به ولا يُبتلع.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ولا يُرمى استثناء.** فـ`record()` كلُّها داخل `try`، ورميٌ هنا
+     * يُبتلع في `catch` أدناه **فيُفقَد سطرُ التدقيق كلُّه** — أي عقوبةٌ
+     * على خطأٍ صغيرٍ بفقدِ الأثر نفسِه، وهو ما يُفترض أن نحميه.
+     *
+     * فالأثرُ سطرُ سجلٍّ هنا، **والمنعُ حارسٌ ساكنٌ يمسح الشيفرة**
+     * (`AuditPayloadKeysGuardTest`) — يقرأ نداءات `record([...])` كلَّها
+     * ويسقط إن دخل مفتاحٌ ليس في `KNOWN_KEYS`. فالفحصُ قبل النشر لا بعده.
+     *
+     * @param  array<string,mixed>  $payload
+     */
+    private function assertKnownKeys(array $payload): void
+    {
+        $unknown = array_diff(array_keys($payload), self::KNOWN_KEYS);
+
+        if ($unknown === []) {
+            return;
+        }
+
+        Log::channel('stack')->warning('AuditService: مفاتيحُ حمولةٍ مجهولةٌ أُسقطت', [
+            'unknown_keys' => array_values($unknown),
+            'action' => $payload['action'] ?? null,
+        ]);
     }
 
     /**

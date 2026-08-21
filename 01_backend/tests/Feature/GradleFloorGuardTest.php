@@ -90,19 +90,31 @@ class GradleFloorGuardTest extends TestCase
 
         // warnAGPVersion: AndroidPluginVersion(8, 11, 1)
         // warnKGPVersion / warnGradleVersion: Version(2, 2, 20)
+        //
+        // **والحدّان يُقرآن معاً — لا التحذيرُ وحدَه.**
+        //
+        // كان هذا الحارسُ يقرأ `warn*` فقط، **فالرقمُ الذي يُسقط البناءَ
+        // فعلاً كان خارجَ نظره**. وقِيس عند أوّل تشغيلٍ حقيقيّ (بعد تثبيت
+        // Flutter) أنّ اثنين من ثلاثةٍ يجلسان على حدّ الخطأ **بالضبط**:
+        // AGP 8.11.1 = خطأ 8.11.1، وKGP 2.2.20 = خطأ 2.2.20. أي أنّ
+        // إصداراً واحداً من stable يكفي لكسر البناء، والحارسُ ساكت.
         $floors = [];
+        $errors = [];
 
         foreach (['AGP', 'KGP', 'Gradle'] as $what) {
-            if (! preg_match(
-                '~warn' . $what . 'Version[^=]*=\s*(?:AndroidPlugin)?Version\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)~',
-                $src, $m)) {
-                $this->fail(
-                    "لم يُعثر على warn{$what}Version في {$checker}.\n"
-                    . 'غيّر Flutter بنيةَ الفاحص — يُقرأ الملفّ ويُحدَّث هذا التعبير، '
-                    . 'ولا يُحذف الفحص.');
-            }
+            foreach (['warn' => &$floors, 'error' => &$errors] as $tier => &$into) {
+                if (! preg_match(
+                    '~' . $tier . $what . 'Version[^=]*=\s*(?:AndroidPlugin)?Version\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)~',
+                    $src, $m)) {
+                    $this->fail(
+                        "لم يُعثر على {$tier}{$what}Version في {$checker}.\n"
+                        . 'غيّر Flutter بنيةَ الفاحص — يُقرأ الملفّ ويُحدَّث هذا التعبير، '
+                        . 'ولا يُحذف الفحص.');
+                }
 
-            $floors[$what] = [(int) $m[1], (int) $m[2], (int) $m[3]];
+                $into[$what] = [(int) $m[1], (int) $m[2], (int) $m[3]];
+            }
+            unset($into);
         }
 
         $settings = file_get_contents($this->app_('android/settings.gradle.kts'));
@@ -119,7 +131,10 @@ class GradleFloorGuardTest extends TestCase
         preg_match('~gradle-([\d.]+)-~', $wrapper, $m);
         $pinned['Gradle'] = $m[1] ?? null;
 
-        $behind = [];
+        $waivers = $this->waivers();
+
+        $broken = [];   // دون حدّ الخطأ — يُسقط البناءَ اليوم. لا إقرارَ يُقبل.
+        $behind = [];   // دون حدّ التحذير بلا إقرارٍ مطابق.
 
         foreach ($floors as $what => $floor) {
             $this->assertNotNull($pinned[$what],
@@ -127,18 +142,80 @@ class GradleFloorGuardTest extends TestCase
 
             $have = array_map('intval', array_pad(explode('.', $pinned[$what]), 3, 0));
 
-            if ($this->cmp($have, $floor) < 0) {
-                $behind[] = sprintf('%s: المثبَّت %s · وحدُّ التحذير %s',
-                    $what, $pinned[$what], implode('.', $floor));
+            // ①  حدُّ الخطأ — **لا يُؤجَّل بورقة.** Flutter يوقف البناءَ هنا.
+            if ($this->cmp($have, $errors[$what]) < 0) {
+                $broken[] = sprintf('%s: المثبَّت %s · وحدُّ الخطأ %s',
+                    $what, $pinned[$what], implode('.', $errors[$what]));
+
+                continue;
+            }
+
+            if ($this->cmp($have, $floor) >= 0) {
+                continue;
+            }
+
+            // ②  دون التحذير — يُقبل إقرارٌ مكتوبٌ **مطابقٌ للحدّين معاً**.
+            //
+            // والمطابقةُ الحرفيّةُ هي ما يجعله ينتهي من تلقائه: أوّلُ تحريكٍ
+            // من Flutter لأيّ حدٍّ يُبطل الإقرار، فيسقط الحارسُ ويُعاد النظر.
+            // **وإقرارٌ لا ينتهي صمتٌ مؤجَّل.**
+            $w = $waivers[$what] ?? null;
+
+            $matches = $w
+                && ($w['pinned'] ?? null) === $pinned[$what]
+                && ($w['warn_floor_when_written'] ?? null) === implode('.', $floor)
+                && ($w['error_floor_when_written'] ?? null) === implode('.', $errors[$what])
+                && mb_strlen(trim((string) ($w['reason'] ?? ''))) >= 20;
+
+            if (! $matches) {
+                $behind[] = sprintf(
+                    '%s: المثبَّت %s · وحدُّ التحذير %s · وحدُّ الخطأ %s — %s',
+                    $what, $pinned[$what], implode('.', $floor),
+                    implode('.', $errors[$what]),
+                    $w === null ? 'ولا إقرارَ مكتوب' : 'والإقرارُ المكتوبُ لم يعد مطابقاً');
             }
         }
+
+        $this->assertSame([], $broken,
+            "نسخةٌ **دون حدّ الخطأ** الذي يُعلنه Flutter المثبَّت:\n  "
+            . implode("\n  ", $broken) . "\n\n"
+            . "وهذا ليس تحذيراً: Flutter يوقف البناءَ عنده. ولا يُقبل إقرارٌ\n"
+            . "على حدّ الخطأ — يُرفع الرقمُ في android/settings.gradle.kts.");
 
         $this->assertSame([], $behind,
             "نسخةٌ دون حدّ التحذير الذي يُعلنه Flutter المثبَّت:\n  "
             . implode("\n  ", $behind) . "\n\n"
             . "و«تحذيرُ» اليوم «خطأُ» غد: Codemagic يسحب stable وهو أحدثُ من\n"
-            . "المثبَّت هنا، فيسقط البناءُ بعد دقيقةٍ من assembleRelease.\n"
-            . "الحلّ: ارفع الرقمَ في android/settings.gradle.kts.");
+            . "المثبَّت هنا، فيسقط البناءُ بعد دقيقةٍ من assembleRelease.\n\n"
+            . "فإمّا يُرفع الرقمُ في android/settings.gradle.kts،\n"
+            . "وإمّا — إن كان الرفعُ هجرةً لا سطراً — يُكتب إقرارٌ بسببه في\n"
+            . '02_flutter_app/android/gradle-floor-waiver.json، يذكر الحدّين معاً.');
+    }
+
+    /**
+     * الإقراراتُ المكتوبة — أو مصفوفةٌ فارغةٌ إن غاب الملفّ.
+     *
+     * **وملفٌّ مُفسَدٌ ليس ملفّاً غائباً**: غيابُه يعني «لا إقرار» فيسقط
+     * الحارسُ بالرسالة الصحيحة، أمّا JSON مكسورٌ فيُسقط الحارسَ برسالةٍ
+     * تدلّ على موضعه — لا يُبتلع بصمتٍ فيُقرأ «لا إقرار».
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    private function waivers(): array
+    {
+        $p = $this->app_('android/gradle-floor-waiver.json');
+
+        if (! is_file($p)) {
+            return [];
+        }
+
+        $json = json_decode((string) file_get_contents($p), true);
+
+        if (! is_array($json)) {
+            $this->fail("ملفُّ الإقرارات مكسورٌ ولا يُقرأ: {$p} — " . json_last_error_msg());
+        }
+
+        return is_array($json['waivers'] ?? null) ? $json['waivers'] : [];
     }
 
     /**
