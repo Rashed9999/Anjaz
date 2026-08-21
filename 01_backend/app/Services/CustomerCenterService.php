@@ -66,6 +66,36 @@ class CustomerCenterService
         );
     }
 
+    /** صلاحية كشف مستقلة: فتح الملف لا يعني تلقائياً كشف كل PII فيه. */
+    private function canRevealPii(int $actorId): bool
+    {
+        return User::find($actorId)?->hasPlatformPermission('platform.customers.pii.reveal') ?? false;
+    }
+
+    private function maskPhone(?string $phone): string
+    {
+        $value = trim((string) $phone);
+        if ($value === '') return '—';
+        return mb_substr($value, 0, 3) . '••••' . mb_substr($value, -2);
+    }
+
+    private function maskEmail(?string $email): string
+    {
+        $value = trim((string) $email);
+        if ($value === '' || !str_contains($value, '@')) return $value ?: '—';
+        [$local, $domain] = explode('@', $value, 2);
+        return mb_substr($local, 0, 1) . '•••@' . $domain;
+    }
+
+    private function maskIp(?string $ip): string
+    {
+        $value = trim((string) $ip);
+        if ($value === '' || $value === '—') return '—';
+        if (str_contains($value, ':')) return '••••:••••';
+        $parts = explode('.', $value);
+        return count($parts) === 4 ? $parts[0] . '.' . $parts[1] . '.••.••' : '••••';
+    }
+
     // ── التبويب ١: نظرة عامة ────────────────────────────────────────────
 
     public function overview(User $customer, int $actorId): array
@@ -77,12 +107,13 @@ class CustomerCenterService
         $status = $this->status->resolve($customer);
         $risk = AmlUserRiskProfile::find($customer->id);
 
+        $revealPii = $this->canRevealPii($actorId);
         return [
             'profile' => [
                 'id' => (int) $customer->id,
                 'name' => trim((string) ($customer->f_name . ' ' . $customer->l_name)) ?: '—',
-                'phone' => (string) $customer->phone,
-                'email' => (string) ($customer->email ?? '—'),
+                'phone' => $revealPii ? (string) $customer->phone : $this->maskPhone($customer->phone),
+                'email' => $revealPii ? (string) ($customer->email ?? '—') : $this->maskEmail($customer->email),
                 'type' => $this->typeLabel((int) $customer->type),
                 'zone_code' => (string) ($customer->zone_code ?? '—'),
                 'registered_at' => $customer->created_at?->toIso8601String(),
@@ -243,11 +274,56 @@ class CustomerCenterService
 
     private function sanctionStatus(User $customer): string
     {
-        if (!Schema::hasColumn('users', 'sanction_status') || $customer->sanction_status === null) {
-            return 'unknown';
+        // القيمة الافتراضية clear في users لا تثبت أن فحصاً وقع. لا يتحول
+        // "لم نفحص" إلى براءة لمجرد default في هجرة قديمة.
+        if (!Schema::hasColumn('users', 'sanction_status')
+            || !Schema::hasColumn('users', 'sanction_checked')
+            || !(bool) $customer->sanction_checked) {
+            return 'not_screened';
         }
 
-        return (string) $customer->sanction_status;
+        if (Schema::hasTable('sanction_screening_logs')) {
+            $latest = DB::table('sanction_screening_logs')->where('user_id', $customer->id)
+                ->orderByDesc('screened_at')->value('result');
+            if ($latest === 'confirmed_match') return 'blocked';
+            if ($latest === 'potential_match') return 'flagged';
+            if ($latest === 'clear') return 'clear';
+        }
+
+        return in_array($customer->sanction_status, ['clear', 'flagged', 'blocked'], true)
+            ? (string) $customer->sanction_status : 'not_screened';
+    }
+
+    private function transactionLabel(?string $type): string
+    {
+        return match ((string) $type) {
+            'send_money' => 'تحويل صادر', 'received_money' => 'تحويل وارد',
+            'cash_in' => 'إيداع نقدي', 'cash_out' => 'سحب نقدي',
+            'payment_request' => 'طلب أموال', 'safe_payment' => 'دفع آمن',
+            default => 'عملية مالية',
+        };
+    }
+
+    private function securityEventLabel(?string $type): string
+    {
+        return match ((string) $type) {
+            'PHONE_CHANGED' => 'تم تغيير رقم الهاتف',
+            'PIN_CHANGED' => 'تم تغيير الرمز السرّي',
+            'PIN_FAILED' => 'محاولة رمز سرّي فاشلة',
+            'LOGIN_FAILED' => 'محاولة دخول فاشلة',
+            'LOGIN_SUCCESS' => 'تسجيل دخول ناجح',
+            'PASSWORD_CHANGED' => 'تم تغيير كلمة المرور',
+            default => 'حدث أمني',
+        };
+    }
+
+    private function notificationTypeLabel(?string $type): string
+    {
+        return match ((string) $type) {
+            'transaction' => 'عملية مالية', 'payment_request' => 'طلب أموال',
+            'kyc' => 'الهوية والتحقق', 'security' => 'أمان الحساب',
+            'support' => 'الدعم', default => 'إشعار',
+        };
     }
 
     /**
@@ -391,7 +467,8 @@ class CustomerCenterService
         $items = $q->orderByDesc('id')->limit(300)->get()
             ->map(fn ($t) => [
                 'transaction_id' => (string) ($t->transaction_id ?? $t->id),
-                'type' => (string) ($t->transaction_type ?? '—'),
+                'type' => $this->transactionLabel($t->transaction_type ?? null),
+                'technical_type' => (string) ($t->transaction_type ?? ''),
                 'debit' => (string) ($t->debit ?? '0'),
                 'credit' => (string) ($t->credit ?? '0'),
                 'balance' => (string) ($t->balance ?? '0'),
@@ -410,6 +487,7 @@ class CustomerCenterService
     public function devices(User $customer, int $actorId): array
     {
         $this->logAccess($actorId, $customer->id, 'devices');
+        $revealPii = $this->canRevealPii($actorId);
 
         return [
             'devices' => DB::table('user_log_histories')
@@ -418,11 +496,11 @@ class CustomerCenterService
                 ->limit(50)->get()
                 ->map(fn ($d) => [
                     'id' => (int) $d->id,
-                    'device_id' => (string) $d->device_id,
+                    'device_id' => $revealPii ? (string) $d->device_id : '••••' . mb_substr((string) $d->device_id, -6),
                     'device_model' => (string) ($d->device_model ?: '—'),
                     'os' => (string) ($d->os ?: '—'),
                     'app_version' => $d->app_version ?? null,
-                    'ip_address' => (string) ($d->ip_address ?: '—'),
+                    'ip_address' => $revealPii ? (string) ($d->ip_address ?: '—') : $this->maskIp($d->ip_address),
                     'is_active' => (bool) $d->is_active,
                     'is_trusted' => (bool) ($d->is_trusted ?? false),
                     'is_blocked' => (bool) ($d->is_blocked ?? false),
@@ -468,7 +546,8 @@ class CustomerCenterService
     private function securityEvent($e): array
     {
         return [
-            'type' => (string) $e->event_type,
+            'type' => $this->securityEventLabel($e->event_type),
+            'technical_type' => (string) $e->event_type,
             'severity' => (string) ($e->severity ?? 'info'),
             'ip' => (string) ($e->ip_address ?? '—'),
             'note' => (string) ($e->note ?? ''),
@@ -552,6 +631,7 @@ class CustomerCenterService
     public function support(User $customer, int $actorId): array
     {
         $this->logAccess($actorId, $customer->id, 'support');
+        $revealPii = $this->canRevealPii($actorId);
 
         $tickets = Schema::hasTable('support_tickets')
             ? DB::table('support_tickets')
@@ -586,9 +666,11 @@ class CustomerCenterService
                         'short_code' => (string) $request->short_code,
                         'direction' => $outgoing ? 'outgoing' : 'incoming',
                         'counterparty' => $name !== '' ? $name : (string) ($fallback ?: '—'),
-                        'counterparty_phone' => (string) ($other?->phone
+                        'counterparty_phone' => $revealPii ? (string) ($other?->phone
                             ?? ($outgoing ? $request->recipient_phone : $request->requester?->phone)
-                            ?? '—'),
+                            ?? '—') : $this->maskPhone((string) ($other?->phone
+                                ?? ($outgoing ? $request->recipient_phone : $request->requester?->phone)
+                                ?? '')),
                         'amount' => (string) $request->amount,
                         'status' => (string) $request->status,
                         'share_method' => (string) $request->share_method,
@@ -616,7 +698,8 @@ class CustomerCenterService
             'items' => AmialNotification::where('user_id', $customer->id)
                 ->orderByDesc('id')->limit(100)->get()
                 ->map(fn ($n) => [
-                    'type' => (string) $n->type,
+                    'type' => $this->notificationTypeLabel($n->type),
+                    'technical_type' => (string) $n->type,
                     'title' => (string) $n->title,
                     'body' => (string) $n->body,
                     // «أُرسل» و«قُرئ» ليسا واحداً: شكوى «لم يصلني إشعار» تُحسم
