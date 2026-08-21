@@ -89,6 +89,95 @@ class ReconciliationCaseService
         });
     }
 
+    /**
+     * Cash is reconciled by physical custody: branch safe and teller drawer.
+     * Repeated observations attach to the same open case; this method never
+     * changes cash, a till balance, or a journal.
+     *
+     * @param list<array<string,mixed>> $rows
+     */
+    public function recordCashResults(array $rows): void
+    {
+        if (!Schema::hasTable('reconciliation_cases')) {
+            return;
+        }
+
+        foreach ($rows as $row) {
+            $dimension = (array) ($row['dimension'] ?? []);
+            $branchId = (int) ($dimension['branch_id'] ?? 0);
+            $kind = (string) ($row['kind'] ?? '');
+            if ($branchId < 1 || !in_array($kind, ['branch_safe', 'teller_drawer'], true)) {
+                continue;
+            }
+
+            // Drawer cases require the new dimension column. Until its
+            // migration is applied we skip that dimension rather than guess.
+            if ($kind === 'teller_drawer' && !Schema::hasColumn('reconciliation_cases', 'shift_id')) {
+                continue;
+            }
+
+            DB::transaction(function () use ($row, $dimension, $branchId, $kind): void {
+                $query = ReconciliationCase::query()
+                    ->where('case_type', $kind === 'branch_safe' ? 'cash_till' : 'cash_drawer')
+                    ->where('branch_id', $branchId)
+                    ->whereIn('status', ReconciliationCase::OPEN_STATUSES)
+                    ->lockForUpdate();
+
+                if ($kind === 'branch_safe') {
+                    $query->where('till_id', (int) ($dimension['till_id'] ?? 0));
+                } else {
+                    $query->where('shift_id', (int) ($dimension['shift_id'] ?? 0));
+                }
+
+                $case = $query->first();
+                $expected = (string) ($row['expected'] ?? '0');
+                $actual = (string) ($row['held'] ?? '0');
+                $difference = (string) ($row['gap'] ?? '0');
+                $evidence = ['last_cash_snapshot' => [
+                    'kind' => $kind, 'dimension' => $dimension,
+                    'expected' => $expected, 'actual' => $actual, 'difference' => $difference,
+                ]];
+
+                if (!$case) {
+                    $case = ReconciliationCase::create([
+                        'case_ulid' => (string) Str::ulid(),
+                        'case_type' => $kind === 'branch_safe' ? 'cash_till' : 'cash_drawer',
+                        'source' => 'nightly_cash_reconciliation',
+                        'branch_id' => $branchId,
+                        'till_id' => $kind === 'branch_safe' ? (int) ($dimension['till_id'] ?? 0) : null,
+                        'shift_id' => $kind === 'teller_drawer' ? (int) ($dimension['shift_id'] ?? 0) : null,
+                        'expected_amount' => $expected, 'actual_amount' => $actual, 'difference' => $difference,
+                        'currency' => 'YER', 'status' => 'detected', 'severity' => 'high',
+                        'first_detected_at' => now(), 'last_detected_at' => now(), 'detection_count' => 1,
+                        'assigned_team' => 'finance_reconciliation',
+                        'root_cause' => 'cash_custody_variance', 'evidence' => $evidence,
+                    ]);
+                    app(\App\Services\AuditService::class)->record([
+                        'actor_type' => 'system', 'subject_type' => 'reconciliation_case',
+                        'subject_id' => $case->case_ulid, 'action' => 'RECONCILIATION_CASE_OPENED',
+                        'decision_code' => strtoupper($case->case_type), 'severity' => 'high',
+                        'context' => ['branch_id' => $branchId, 'difference' => $difference],
+                    ]);
+                    return;
+                }
+
+                $count = (int) $case->detection_count + 1;
+                $case->forceFill([
+                    'expected_amount' => $expected, 'actual_amount' => $actual, 'difference' => $difference,
+                    'last_detected_at' => now(), 'detection_count' => $count,
+                    'severity' => $this->severityFor($count),
+                    'evidence' => array_merge((array) $case->evidence, $evidence),
+                ])->save();
+                app(\App\Services\AuditService::class)->record([
+                    'actor_type' => 'system', 'subject_type' => 'reconciliation_case',
+                    'subject_id' => $case->case_ulid, 'action' => 'RECONCILIATION_CASE_SEEN_AGAIN',
+                    'decision_code' => strtoupper($case->case_type), 'severity' => $case->severity,
+                    'context' => ['branch_id' => $branchId, 'difference' => $difference, 'detections' => $count],
+                ]);
+            });
+        }
+    }
+
     private function markVerifying(int $userId): void
     {
         ReconciliationCase::query()
