@@ -19,7 +19,7 @@ class ReconciliationCase extends Model
 
     protected $fillable = [
         'case_ulid', 'case_type', 'source', 'subject_user_id', 'ledger_account_id',
-        'branch_id', 'till_id', 'expected_amount', 'actual_amount', 'difference',
+        'branch_id', 'till_id', 'shift_id', 'expected_amount', 'actual_amount', 'difference',
         'currency', 'status', 'severity', 'first_detected_at', 'last_detected_at',
         'detection_count', 'assigned_team', 'assigned_user_id', 'root_cause',
         'evidence', 'linked_transaction_ids', 'linked_journal_ids',
