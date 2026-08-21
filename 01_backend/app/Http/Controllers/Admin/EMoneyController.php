@@ -50,6 +50,11 @@ class EMoneyController extends Controller
             'amount' => ['required', 'numeric', 'regex:/^\d{1,12}(\.\d{1,2})?$/'],
             'reference' => ['required', 'string', 'max:120'],
             'reason' => ['required', 'string', 'max:500'],
+            // AMIAL-TREASURY-SOURCE-001 — الطرفُ المقابلُ في الدفتر يتبع
+            // هذا الحقل. وغيابُه يعني أنّ كلَّ إصدارٍ يُقيَّد «نقدٌ في
+            // الخزينة» — وهي كذبةٌ في ثلاثةٍ من خمسة مصادر.
+            'funding_source' => ['nullable', 'string',
+                \Illuminate\Validation\Rule::in(array_keys(PlatformTreasuryService::FUNDING_SOURCES))],
         ], [
             'amount.regex' => translate('Amount must be a valid number with up to 12 digits before the decimal point and up to 2 digits after the decimal point.'),
             'amount.required' => translate('Amount is required.'),
@@ -60,6 +65,7 @@ class EMoneyController extends Controller
                 $request->input('amount'), $request->user(),
                 $request->input('reference'), $request->input('reason'),
                 $request->header('Idempotency-Key'),
+                (string) $request->input('funding_source', 'treasury_supply'),
             );
             Helpers::send_transaction_notification(
                 Helpers::get_admin_id(), (float) $request->input('amount'), CASH_IN);

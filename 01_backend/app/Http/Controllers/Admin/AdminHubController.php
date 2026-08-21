@@ -752,6 +752,11 @@ class AdminHubController extends Controller
             'amount' => ['required', 'numeric', 'gt:0', 'regex:/^\d{1,12}(\.\d{1,4})?$/'],
             'reference' => ['required', 'string', 'max:120'],
             'reason' => ['required', 'string', 'max:500'],
+            // AMIAL-TREASURY-SOURCE-001 — «أين وصل المالُ الحقيقيّ؟».
+            // والافتراضُ `treasury_supply` يُبقي المستهلكَ القديمَ عاملاً
+            // بالسلوك الذي كان له بالضبط، ولا يخترع مصدراً لم يُذكر.
+            'funding_source' => ['nullable', 'string',
+                \Illuminate\Validation\Rule::in(array_keys(PlatformTreasuryService::FUNDING_SOURCES))],
         ]);
         if ($v->fails()) return response()->json(['message' => $v->errors()->first()], 422);
 
@@ -760,6 +765,7 @@ class AdminHubController extends Controller
                 (string) $request->input('amount'), $request->user(),
                 (string) $request->input('reference'), (string) $request->input('reason'),
                 $request->header('Idempotency-Key'),
+                (string) $request->input('funding_source', 'treasury_supply'),
             );
         } catch (\Throwable $e) {
             return response()->json(['message' => 'فشلت التعبئة: ' . $e->getMessage()], 422);
