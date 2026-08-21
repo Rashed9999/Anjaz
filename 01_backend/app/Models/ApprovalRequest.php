@@ -17,7 +17,12 @@ class ApprovalRequest extends Model
     public const STATUSES = ['pending', 'approved', 'rejected', 'expired', 'failed'];
 
     /** الإجراءات الخاضعة للموافقة الثنائية */
-    public const ACTIONS = ['unfreeze_wallet', 'reset_pin'];
+    public const ACTIONS = [
+        'unfreeze_wallet',
+        'reset_pin',
+        'close_customer',
+        'mark_customer_deceased',
+    ];
 
     protected $fillable = [
         'request_number', 'action_type', 'subject_user_id',
