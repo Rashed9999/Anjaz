@@ -28,32 +28,8 @@ use Illuminate\Support\Facades\Route;
  *   Route::prefix('amial')->name('amial.')->group(base_path('routes/admin/amial.php'));
  */
 
-// ══════════════════════════════════════════════════════════════════════
-//  AMIAL-I18N-001 — **تبديلُ لغة اللوحة.**
-//
-//  اللوحةُ عربيّةٌ افتراضاً الآن، **والتبديلُ حقٌّ لا ميزة**: من يقرأ
-//  الإنجليزيّة أسرعَ يبدّل، ومن يشارك شاشتَه مع مورّدٍ أجنبيٍّ يبدّل.
-//
-//  ولا صلاحيّةَ عليه: **تفضيلُ عرضٍ لا فعلٌ إداريّ** — لا يقرأ بياناً
-//  ولا يكتبه، ولا يظهر في التدقيق. وحصرُه بصلاحيّةٍ يجعل من لا يملكها
-//  حبيسَ لغةٍ لا يقرؤها.
-// ══════════════════════════════════════════════════════════════════════
-Route::post('/locale', function (\Illuminate\Http\Request $request) {
-    $wanted = (string) $request->input('locale');
-
-    // **ولا تُقبل لغةٌ لا قاموسَ لها** — وإلّا فُرِّغت اللوحةُ من نصوصها
-    // بقيمةٍ يكتبها المتصفّح. (القاعدة الثامنة: ما يأتي من الطلب يُفحص.)
-    abort_unless(in_array($wanted, ['ar', 'en'], true), 422);
-
-    session(['local' => $wanted]);
-
-    return back();
-})->name('locale');
-
 // ============ Zone Management ============
-// المسار القديم يبقى تحويلَ توافق فقط، ولا يفتح سجلّ المنطقة أو يغيّرها
-// لموظف دعم عادي.
-Route::prefix('zones')->name('zones.')->middleware('platform:platform.approvals.decide')->group(function () {
+Route::prefix('zones')->name('zones.')->group(function () {
     Route::get('/', [ZoneManagementController::class, 'index'])->name('index');
     Route::post('/update', [ZoneManagementController::class, 'update'])->name('update');
 });
@@ -83,15 +59,7 @@ Route::prefix('recovery')->name('recovery.')->group(function () {
 });
 
 // ============ Audit Decisions ============
-// AMIAL-AUDIT-DETAIL-002 — القائمةُ والتفصيلُ والتصدير، وكلُّها قراءةٌ
-// محضة تحت `platform.audit.view`: سجلُّ التدقيق لا يُعدَّل ولا يُحذف،
-// وقراءتُه اطّلاعٌ على كلّ ما جرى في المنصّة فلا تُترك بلا صلاحيّة.
-Route::middleware('platform:platform.audit.view')->group(function () {
-    Route::get('/audit', [AuditDecisionsController::class, 'index'])->name('audit.index');
-    Route::get('/audit/export.csv', [AuditDecisionsController::class, 'export'])->name('audit.export');
-    Route::get('/audit/{id}.json', [AuditDecisionsController::class, 'show'])
-        ->where('id', '[0-9]+')->name('audit.show');
-});
+Route::get('/audit', [AuditDecisionsController::class, 'index'])->name('audit.index');
 
 // ============ Security Events ============
 Route::get('/security-events', [SecurityEventsController::class, 'index'])->name('security-events.index');
@@ -119,10 +87,6 @@ Route::prefix('surface')->name('surface.')->group(function () {
     Route::get('/bill-providers', [$sc, 'billProviders'])->name('bill-providers');
     Route::post('/bill-providers/{id}/toggle', [$sc, 'toggleBillProvider'])->where('id', '[0-9]+')->name('bill-providers.toggle');
     Route::get('/funds', [$sc, 'funds'])->name('funds');
-    // AMIAL-FUND-DETAIL-001 — «أين اختفى المال ومن سحبه؟». والصلاحيّةُ
-    // `audit.view`: قراءةُ حركةِ صندوقٍ اطّلاعٌ على مالِ أُسرةٍ بعينها.
-    Route::get('/funds/{id}', [$sc, 'fundDetail'])->where('id', '[0-9]+')
-        ->middleware('platform:platform.audit.view')->name('funds.detail');
     Route::get('/payment-requests', [$sc, 'paymentRequests'])->name('payment-requests');
     Route::get('/rbac', [$sc, 'rbac'])->name('rbac');
 });
@@ -142,12 +106,6 @@ Route::prefix('charity')->name('charity.')->middleware('amial.idempotency')->gro
     Route::post('/organizations/{ulid}/suspend', [AdminCharityController::class, 'suspendOrg'])
         ->where('ulid', '[A-Z0-9]{26}')->name('orgs.suspend');
 
-    // AMIAL-CHARITY-META-001 — التصنيفات. كانت الشاشةُ تناديه وهو معدوم.
-    Route::get('/categories', [AdminCharityController::class, 'categories'])->name('categories');
-
-    // AMIAL-CHARITY-UPLOAD-001 — رفعُ صورةٍ من الجهاز بدل لصق رابط.
-    Route::post('/uploads', [AdminCharityController::class, 'uploadImage'])->name('uploads');
-
     // Campaigns
     Route::get('/campaigns', [AdminCharityController::class, 'indexCampaigns'])->name('campaigns.index');
     Route::post('/organizations/{orgUlid}/campaigns', [AdminCharityController::class, 'createCampaign'])
@@ -157,46 +115,23 @@ Route::prefix('charity')->name('charity.')->middleware('amial.idempotency')->gro
     Route::post('/campaigns/{ulid}/pause', [AdminCharityController::class, 'pauseCampaign'])
         ->where('ulid', '[A-Z0-9]{26}')->name('campaigns.pause');
 
-    // AMIAL-CHARITY-DONORS-001 — «يجب إظهار المتبرّعين». والجدولُ مكتوبٌ
-    // منذ بُنيت الحملات ولا نقطةَ تقرؤه للإدارة.
-    // **هواتفُ المتبرّعين بياناتٌ شخصيّة.** كانت تُردّ لأيّ مديرٍ بلا
-    // صلاحيّة، بينما تفصيلُ صندوق العائلة محروسٌ بـ`platform.audit.view`.
-    // تفاوتٌ بلا سبب — والأشدُّ هو الصواب.
-    Route::get('/campaigns/{ulid}/donors', [AdminCharityController::class, 'campaignDonors'])
-        ->where('ulid', '[A-Z0-9]{26}')
-        ->middleware('platform:platform.audit.view')->name('campaigns.donors');
-
     // Settlements
     Route::get('/settlements', [AdminCharityController::class, 'indexSettlements'])->name('settlements.index');
     Route::post('/settlements/generate', [AdminCharityController::class, 'generateSettlement'])->name('settlements.generate');
-    // **بابان لفعلٍ واحد، أحدُهما محروسٌ والآخرُ لا** — القاعدة الرابعة.
-    // هذا يقلب التسويةَ إلى «مصروفة» **بلا قيدٍ في الدفتر**، وهو عينُ
-    // الثغرة التي عولجت في `payout`. فيُحرَس بالصلاحيّة نفسِها حتّى
-    // يُزال، ولا يُترك باباً خلفيّاً يلتفّ على القيد.
     Route::post('/settlements/{ulid}/transferred', [AdminCharityController::class, 'markTransferred'])
-        ->where('ulid', '[A-Z0-9]{26}')
-        ->middleware('platform:platform.money.move')->name('settlements.transferred');
-
-    // AMIAL-CHARITY-PAYOUT-001 — «طريقة سحب المال … إلى محفظة أميال باي أو
-    // عبر وكيل». وهو الوحيد هنا الذي **يُحرّك مالاً** — فيُحرَس بصلاحيّة
-    // تحريك المال لا بصلاحيّة تحرير المحتوى.
-    Route::post('/settlements/{ulid}/payout', [AdminCharityController::class, 'payoutSettlement'])
-        ->where('ulid', '[A-Z0-9]{26}')
-        ->middleware('platform:platform.money.move')->name('settlements.payout');
+        ->where('ulid', '[A-Z0-9]{26}')->name('settlements.transferred');
 });
 
 // ============ AMIAL-AML-001 (v1.4) ============
-Route::prefix('aml')->name('aml.')->middleware('platform:platform.audit.view')->group(function () {
+Route::prefix('aml')->name('aml.')->group(function () {
     // AMIAL-AML-PANEL-001 — الصفحة. كلّ ما تحتها كان JSON بلا مُشغِّل.
     Route::get('/', [AdminAmlController::class, 'page'])->name('page');
 
     // Rules
     Route::get('/rules', [AdminAmlController::class, 'indexRules'])->name('rules.index');
     Route::get('/rules/{id}', [AdminAmlController::class, 'showRule'])->name('rules.show');
-    Route::post('/rules/{id}/toggle', [AdminAmlController::class, 'toggleRule'])
-        ->middleware('platform:platform.approvals.decide')->name('rules.toggle');
-    Route::patch('/rules/{id}', [AdminAmlController::class, 'updateRule'])
-        ->middleware('platform:platform.approvals.decide')->name('rules.update');
+    Route::post('/rules/{id}/toggle', [AdminAmlController::class, 'toggleRule'])->name('rules.toggle');
+    Route::patch('/rules/{id}', [AdminAmlController::class, 'updateRule'])->name('rules.update');
 
     // Flagged transactions
     Route::get('/flagged', [AdminAmlController::class, 'indexFlagged'])->name('flagged.index');
@@ -218,7 +153,6 @@ Route::prefix('aml')->name('aml.')->middleware('platform:platform.audit.view')->
     Route::get('/structuring', [AdminAmlController::class, 'structuring'])->name('structuring.index');
     Route::get('/sanctions', [AdminAmlController::class, 'sanctions'])->name('sanctions.index');
     Route::post('/sanctions/{id}/review', [AdminAmlController::class, 'reviewSanction'])
-        ->middleware('platform:platform.approvals.decide')
         ->where('id', '[0-9]+')->name('sanctions.review');
 
     // AMIAL-AML-INVESTIGATION-001 — مركز التحقيقات (الفصل ١٠، التبويب ٧)
@@ -247,7 +181,6 @@ Route::prefix('aml')->name('aml.')->middleware('platform:platform.audit.view')->
     Route::get('/users/{userId}/profile', [AdminAmlController::class, 'showUserProfile'])
         ->where('userId', '[0-9]+')->name('users.profile');
     Route::post('/users/{userId}/override', [AdminAmlController::class, 'setUserOverride'])
-        ->middleware('platform:platform.approvals.decide')
         ->where('userId', '[0-9]+')->name('users.override');
 });
 
@@ -263,7 +196,8 @@ Route::prefix('customer')->name('customer.')->middleware('platform:platform.cust
         Route::get('/search', [$cc, 'search'])->name('search');
         Route::get('/{id}/tab/{tab}', [$cc, 'tab'])
             ->where(['id' => '[0-9]+', 'tab' => '[a-z]+'])->name('tab');
-        Route::post('/{id}/action', [$cc, 'act'])->where('id', '[0-9]+')->name('action');
+        Route::post('/{id}/action', [$cc, 'act'])->where('id', '[0-9]+')
+            ->middleware('amial.idempotency')->name('action');
     });
 
 // ============ AMIAL-FUEL-VERTICAL-001 — مركز محطات الوقود (المرحلة ٩) ============
@@ -437,7 +371,6 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
         Route::get('/accounts/{id}/statement', [$lc, 'statement'])
             ->where('id', '[0-9]+')->name('statement');
         Route::get('/reconciliation', [$lc, 'reconciliation'])->name('reconciliation');
-        Route::get('/reconciliation-cases', [$lc, 'reconciliationCases'])->name('reconciliation-cases');
         Route::get('/entries', [$lc, 'entries'])->name('entries');
         // AMIAL-RECON-NIGHTLY-001: تاريخُ المصالحات — القاعدة ١٢.
         Route::get('/reconciliation-runs', [$lc, 'reconciliationRuns'])->name('reconciliation-runs');
@@ -459,10 +392,6 @@ Route::prefix('catalog')->name('catalog.')->middleware('platform:platform.settin
         Route::get('/export', [$cc, 'export'])->name('export');
         Route::post('/', [$cc, 'store'])->name('store');
         Route::post('/import', [$cc, 'import'])->name('import');
-        // AMIAL-CATALOG-IMAGE-001 — رفعُ صورة الصنف مصغَّرةً إلى ٤٠٠ بكسل.
-        // **قبل `/{id}`**: وإلّا التقطه `[0-9]+`… لا، لا يلتقطه — لكنّ
-        // ترتيبَ المسارات النصّيّة قبل المتغيّرة عادةٌ تمنع مفاجأةً لاحقة.
-        Route::post('/images', [$cc, 'uploadImage'])->name('images');
         Route::get('/{id}', [$cc, 'show'])->where('id', '[0-9]+')->name('show');
         Route::post('/{id}/review', [$cc, 'review'])->where('id', '[0-9]+')->name('review');
     });
@@ -530,26 +459,27 @@ Route::prefix('partner-settlements')->name('partner-settlements.')->middleware('
 // ============ AMIAL-KYC-PANEL-001 — مراجعة مستندات الهوية ============
 //
 // كانت هذه النقاط مسجَّلة على سطح الـAPI وحده، فبقي المستند يصل بلا مراجع.
-// اعتماد الهوية قرار امتثال مستقل؛ لا يمنح من يجمّد الحساب سلطة رفع حدوده.
+// الصلاحية هي `platform.customers.freeze` نفسها المستعملة في الـAPI: اعتماد
+// هويّة يفتح حدوداً مالية أعلى، فهو من جنس القرارات التي تمسّ حساب العميل.
 Route::prefix('kyc')->name('kyc.')->group(function () {
     $kyc = App\Http\Controllers\Api\V1\Amial\KycDocumentController::class;
 
-    Route::get('/', [$kyc, 'page'])->middleware('platform:platform.approvals.decide')->name('page');
-    Route::get('/queue', [$kyc, 'queue'])->middleware('platform:platform.approvals.decide')->name('queue');
+    Route::get('/', [$kyc, 'page'])->middleware('platform:platform.customers.freeze')->name('page');
+    Route::get('/queue', [$kyc, 'queue'])->middleware('platform:platform.customers.freeze')->name('queue');
     Route::get('/documents/{id}/file', [$kyc, 'file'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('file');
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('file');
     // AMIAL-KYC-OCR-001 — الحقول المستخرَجة وإقرارها
     Route::get('/documents/{id}/ocr', [$kyc, 'ocr'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('ocr');
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('ocr');
     Route::post('/documents/{id}/fields', [$kyc, 'confirmFields'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('fields');
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('fields');
     Route::post('/documents/{id}/reread', [$kyc, 'reread'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('reread');
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('reread');
 
     Route::post('/documents/{id}/approve', [$kyc, 'approve'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approve');
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('approve');
     Route::post('/documents/{id}/reject', [$kyc, 'reject'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('reject');
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('reject');
 });
 
 // ============ AMIAL-2FA-001 (v1.8) ============
@@ -565,14 +495,10 @@ Route::prefix('2fa')->name('2fa.')->group(function () {
 
 // ============ AMIAL-ZONE-ASSIGN-001 (v2.0) ============
 Route::prefix('zone')->name('zone.')->group(function () {
-    Route::post('/assign', [App\Http\Controllers\Admin\AdminZoneController::class, 'assign'])
-        ->middleware('platform:platform.approvals.decide')->name('assign');
-    Route::post('/assign-from-kyc', [App\Http\Controllers\Admin\AdminZoneController::class, 'assignFromKyc'])
-        ->middleware('platform:platform.approvals.decide')->name('assign-kyc');
-    Route::get('/logs/{userId}', [App\Http\Controllers\Admin\AdminZoneController::class, 'logs'])
-        ->middleware('platform:platform.audit.view')->name('logs');
-    Route::get('/stats', [App\Http\Controllers\Admin\AdminZoneController::class, 'stats'])
-        ->middleware('platform:platform.audit.view')->name('stats');
+    Route::post('/assign', [App\Http\Controllers\Admin\AdminZoneController::class, 'assign'])->name('assign');
+    Route::post('/assign-from-kyc', [App\Http\Controllers\Admin\AdminZoneController::class, 'assignFromKyc'])->name('assign-kyc');
+    Route::get('/logs/{userId}', [App\Http\Controllers\Admin\AdminZoneController::class, 'logs'])->name('logs');
+    Route::get('/stats', [App\Http\Controllers\Admin\AdminZoneController::class, 'stats'])->name('stats');
 });
 
 // ============ AMIAL-AGENT-NETWORK-001 (v2.4) ============
@@ -627,39 +553,15 @@ Route::prefix('merchants')->name('merchants.')->group(function () {
 //
 // AMIAL-OPERATOR-RBAC-003: نسبةُ ربحٍ تُغيَّر مرّةً يبقى أثرُها على كلّ
 // عمليّةٍ بعدها. فلا تُترك لكلّ من دخل اللوحة — لمدير المنصّة وحده.
-//
-// ══════════════════════════════════════════════════════════════════════
-// **AMIAL-FEE-TRUTH-010 — والقراءةُ فُصلت عن الكتابة.**
-//
-// كانت المجموعةُ كلُّها خلف `platform.fees.update`. فمن أراد أن **يقرأ**
-// تسعيرةً أو يفتح تقريرَ الأرباح — محاسبٌ يراجع، أو مشرفٌ يتحقّق من
-// شكوى — لزمه إذنُ **تغيير** الرسوم. فإمّا يُمنع من الاطّلاع، وإمّا
-// يُعطى مفتاحَ تغيير المال كلِّه. **وأقلُّ صلاحيّةٍ تكفي** (`amial-rbac`).
-//
-// وتقريرُ الأرباح خاصّةً **لا يغيّر شيئاً**: فوضعُه خلف إذن التعديل
-// يُغري بمنح إذن التعديل لمن يحتاج تقريراً.
-Route::prefix('fees')->name('fees.')->group(function () {
-
-    // ── القراءة ────────────────────────────────────────────────────
-    Route::middleware('platform:platform.fees.view')->group(function () {
-        Route::get('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webIndex'])->name('index');
-        Route::get('/profit', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webProfit'])->name('profit');
-        Route::get('/history/{code?}', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webHistory'])->name('history');
-        Route::get('/operations', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webOperations'])->name('operations');
-        Route::get('/policies', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webPolicies'])->name('policies');
-        Route::get('/drill', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webDrill'])->name('drill');
-    });
-
-    // ── الكتابة ────────────────────────────────────────────────────
-    //
-    // **والمحاكي كتابةٌ لا قراءة**: هو الشاشةُ التي تُجرَّب فيها نسخةٌ
-    // قبل حفظها، ومن لا يملك حقَّ الحفظ لا حاجةَ له بها.
-    Route::middleware('platform:platform.fees.update')->group(function () {
-        Route::get('/create', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webCreate'])->name('create');
-        Route::post('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webStore'])->name('store');
-        Route::post('/simulate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'simulate'])->name('simulate');
-        Route::post('/{id}/deactivate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webDeactivate'])->name('deactivate');
-    });
+Route::prefix('fees')->name('fees.')->middleware('platform:platform.fees.update')
+    ->group(function () {
+    Route::get('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webIndex'])->name('index');
+    Route::get('/create', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webCreate'])->name('create');
+    Route::get('/profit', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webProfit'])->name('profit');
+    Route::post('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webStore'])->name('store');
+    Route::post('/simulate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'simulate'])->name('simulate');
+    Route::get('/history/{code}', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webHistory'])->name('history');
+    Route::post('/{id}/deactivate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webDeactivate'])->name('deactivate');
 });
 
 // ============ AMIAL-SENTINEL-001 — Security Sentinel Dashboard ============
@@ -692,7 +594,7 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     Route::get('/{slug}/users.json', [$hc, 'usersJson'])
         ->where('slug', 'customers|agents|merchants')->name('users.json');
     Route::get('/{slug}/kyc.json', [$hc, 'kycJson'])
-        ->where('slug', 'customers|agents|merchants')->middleware('platform:platform.approvals.decide')->name('kyc.json');
+        ->where('slug', 'customers|agents|merchants')->name('kyc.json');
     Route::get('/users/{id}/transactions.json', [$hc, 'userTransactionsJson'])
         ->where('id', '[0-9]+')->name('users.transactions');
 
@@ -707,7 +609,7 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     Route::post('/users/{id}/toggle-active', [$hc, 'toggleActive'])
         ->where('id', '[0-9]+')->name('users.toggle-active');
     Route::post('/users/{id}/kyc', [$hc, 'kycStatus'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('users.kyc');
+        ->where('id', '[0-9]+')->name('users.kyc');
     Route::post('/transfer', [$hc, 'transfer'])->name('transfer');
     Route::post('/agents/{id}/credit', [$hc, 'agentCredit'])
         ->where('id', '[0-9]+')->name('agents.credit');
@@ -752,7 +654,7 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
 
     // لوحة التحقق — اعتماد/رفض/حظر الحسابات المسجَّلة ذاتياً (كل الأدوار)
     // AMIAL-ZONE-PANEL-001 — لوحة المناطق (نطاق التشغيل، العالقون، المخالفات)
-    Route::prefix('zones')->name('zones.')->middleware('platform:platform.audit.view')->group(function () {
+    Route::prefix('zones')->name('zones.')->group(function () {
         $zc = App\Http\Controllers\Admin\ZoneControlController::class;
         Route::get('/', [$zc, 'index'])->name('index');
         Route::get('/summary.json', [$zc, 'summary'])->name('summary');
@@ -760,7 +662,7 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         Route::get('/users/{id}/geo-check.json', [$zc, 'geoCheck'])
             ->where('id', '[0-9]+')->name('geo-check');
         Route::post('/users/{id}/reassign', [$zc, 'reassign'])
-            ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('reassign');
+            ->where('id', '[0-9]+')->name('reassign');
     });
 
     Route::get('/verification', [$hc, 'verification'])->name('verification');
@@ -813,11 +715,6 @@ Route::prefix('ops')->name('ops.')->group(function () {
     Route::post('/roles/{userId}', [OperatorRolesController::class, 'update'])
         ->where('userId', '[0-9]+')
         ->middleware('platform:platform.settings.update')->name('roles.update');
-
-    // AMIAL-OPERATOR-CREATE-001 — إنشاءُ موظّفِ منصّةٍ بأدواره.
-    // وبالصلاحيّة نفسِها: من يُسند الأدوار هو من يُنشئ من يحملها.
-    Route::post('/operators', [OperatorRolesController::class, 'store'])
-        ->middleware('platform:platform.settings.update')->name('operators.store');
 });
 
 // ============ AMIAL-SUPERVISION-001 — لوحة الإشراف ============
@@ -825,18 +722,3 @@ Route::prefix('ops')->name('ops.')->group(function () {
 // قراءةٌ محضة: الإشراف رقابةٌ على التنفيذ لا تنفيذ، فلا فعل هنا يُغيّر شيئاً.
 Route::get('/supervision', [SupervisionController::class, 'index'])
     ->middleware('platform:platform.audit.view')->name('supervision.index');
-
-// ============ AMIAL-OBSERVABILITY-001 — مركز صحّة النظام ============
-//
-// **الثمن:** ثلاثةُ أعطالٍ في يومٍ واحدٍ وصلت عبر صاحب المشروع لا عبر
-// جهاز. وقِيس أنّ المنصّةَ بلا نقطةِ صحّةٍ ولا تتبّعِ أخطاءٍ ولا سجلِّ
-// توفّر — **فصاحبُ المشروع هو جهازُ الرصد.**
-//
-// وتحت `platform.audit.view`: الصحّةُ رقابةٌ لا تنفيذ. وتغييرُ حالة عطلٍ
-// فعلٌ إداريٌّ يُدقَّق، فله صلاحيّتُه.
-Route::get('/system/health', [\App\Http\Controllers\Admin\SystemHealthController::class, 'index'])
-    ->middleware('platform:platform.audit.view')->name('system.health');
-
-Route::post('/system/errors/{id}', [\App\Http\Controllers\Admin\SystemHealthController::class, 'updateError'])
-    ->where('id', '[0-9]+')
-    ->middleware('platform:platform.audit.view')->name('system.errors.update');
