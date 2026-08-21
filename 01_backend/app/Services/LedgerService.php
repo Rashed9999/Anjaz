@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Ledger\LedgerAccount;
 use App\Models\Ledger\LedgerEntryLine;
 use App\Models\Ledger\LedgerJournalEntry;
+use App\Models\ReconciliationCase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -270,43 +271,126 @@ class LedgerService
      * المال دخل من خارج الدفتر وسمّى السبب. أمّا مسارٌ ماليّ ينسى الترحيل
      * ثم يُنادي هذه ليمرّ، فقد حوّل عطلاً إلى عادة.
      */
-    public function reconcileWalletBalance(int $userId, string $reason): ?LedgerJournalEntry
-    {
-        $account = $this->getOrCreateUserWallet($userId);
-
-        $wallet = \App\Models\EMoney::where('user_id', $userId)->value('current_balance');
-        $wallet = $wallet === null ? '0' : (string) $wallet;
-        $inLedger = $this->computeBalanceFromLines($account->id);
-
-        $delta = bcsub($wallet, $inLedger, 4);
-        if (bccomp($delta, '0', 4) === 0) {
-            return null; // متطابقان — لا قيد
+    /**
+     * Controlled correction of a wallet/ledger variance.
+     *
+     * This is deliberately not a convenience repair API. A caller must provide
+     * an approved reconciliation case, two distinct operators, and a durable
+     * approval note. No wallet row is changed here; the only financial effect is
+     * one balanced, idempotent journal entry linked back to that case.
+     *
+     * @param array{case_ulid:string,maker_admin_id:int,checker_admin_id:int,approval_note:string} $control
+     */
+    public function reconcileWalletBalance(
+        int $userId,
+        string $reason,
+        array $control = [],
+    ): ?LedgerJournalEntry {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('reconciliation_cases')) {
+            throw new RuntimeException('Reconciliation cases migration is required before an external adjustment.');
         }
 
-        $adjust = $this->getOrCreateSystemAccount(
-            'EXTERNAL_ADJUSTMENT', 'equity', 'تسويات رصيد من خارج الدفتر', 'debit'
-        );
+        $caseUlid = trim((string) ($control['case_ulid'] ?? ''));
+        $makerId = (int) ($control['maker_admin_id'] ?? 0);
+        $checkerId = (int) ($control['checker_admin_id'] ?? 0);
+        $approvalNote = trim((string) ($control['approval_note'] ?? ''));
 
-        // فرقٌ موجب: المحفظة أكبر ⇒ دخل مالٌ لم يمرّ بالدفتر (دائن للمحفظة).
-        $positive = bccomp($delta, '0', 4) > 0;
-        $magnitude = $positive ? $delta : bcmul($delta, '-1', 4);
+        if ($caseUlid === '' || $makerId < 1 || $checkerId < 1 || $approvalNote === '') {
+            throw new RuntimeException('External adjustment requires case, maker, checker, and approval note.');
+        }
+        if ($makerId === $checkerId) {
+            throw new RuntimeException('Maker and checker must be different users.');
+        }
+        if (trim($reason) === '') {
+            throw new RuntimeException('External adjustment requires a specific reason.');
+        }
 
-        return $this->post(
-            sourceType: 'external_adjustment',
-            sourceId: (string) $userId,
-            description: "تسوية رصيد من خارج الدفتر: {$reason}",
-            lines: $positive
-                ? [
-                    ['account' => $adjust->account_code, 'direction' => 'debit', 'amount' => $magnitude],
-                    ['account' => $account->account_code, 'direction' => 'credit', 'amount' => $magnitude],
-                ]
-                : [
-                    ['account' => $account->account_code, 'direction' => 'debit', 'amount' => $magnitude],
-                    ['account' => $adjust->account_code, 'direction' => 'credit', 'amount' => $magnitude],
+        return DB::transaction(function () use ($userId, $reason, $caseUlid, $makerId, $checkerId, $approvalNote): ?LedgerJournalEntry {
+            $case = ReconciliationCase::query()
+                ->where('case_ulid', $caseUlid)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$case) {
+                throw new RuntimeException('Reconciliation case not found.');
+            }
+            if ($case->case_type !== 'wallet' || (int) $case->subject_user_id !== $userId) {
+                throw new RuntimeException('The approval case does not belong to this wallet.');
+            }
+            if ($case->status !== 'pending_approval') {
+                throw new RuntimeException('External adjustment requires a case pending approval.');
+            }
+            if ((int) $case->maker_admin_id !== $makerId || (int) $case->checker_admin_id !== $checkerId) {
+                throw new RuntimeException('Case maker/checker do not match the supplied approval.');
+            }
+
+            $account = $this->getOrCreateUserWallet($userId);
+            $wallet = \App\Models\EMoney::where('user_id', $userId)->value('current_balance');
+            $wallet = $wallet === null ? '0' : (string) $wallet;
+            $inLedger = $this->computeBalanceFromLines($account->id);
+            $delta = bcsub($wallet, $inLedger, 4);
+
+            if (bccomp($delta, '0', 4) === 0) {
+                return null;
+            }
+
+            $adjust = $this->getOrCreateSystemAccount(
+                'EXTERNAL_ADJUSTMENT', 'equity', 'تسويات رصيد من خارج الدفتر', 'debit'
+            );
+            $positive = bccomp($delta, '0', 4) > 0;
+            $magnitude = $positive ? $delta : bcmul($delta, '-1', 4);
+
+            $entry = $this->post(
+                sourceType: 'external_adjustment',
+                sourceId: $case->case_ulid,
+                description: "تسوية قضية {$case->case_ulid}: {$reason}",
+                lines: $positive
+                    ? [
+                        ['account' => $adjust->account_code, 'direction' => 'debit', 'amount' => $magnitude],
+                        ['account' => $account->account_code, 'direction' => 'credit', 'amount' => $magnitude],
+                    ]
+                    : [
+                        ['account' => $account->account_code, 'direction' => 'debit', 'amount' => $magnitude],
+                        ['account' => $adjust->account_code, 'direction' => 'credit', 'amount' => $magnitude],
+                    ],
+                idempotencyKey: "reconciliation-case:{$case->case_ulid}:external-adjustment",
+                createdByUserId: $makerId,
+                metadata: [
+                    'case_ulid' => $case->case_ulid,
+                    'reason' => $reason,
+                    'approval_note' => $approvalNote,
+                    'maker_admin_id' => $makerId,
+                    'checker_admin_id' => $checkerId,
+                    'wallet' => $wallet,
+                    'ledger_before' => $inLedger,
                 ],
-            metadata: ['reason' => $reason, 'wallet' => $wallet, 'ledger_before' => $inLedger],
-            allowNegative: true,
-        );
+                allowNegative: true,
+            );
+
+            $case->forceFill([
+                'status' => 'corrected',
+                'action_taken' => $approvalNote,
+                'resolution_journal_entry_id' => $entry->id,
+            ])->save();
+
+            app(AuditService::class)->record([
+                'actor_type' => 'admin',
+                'actor_id' => $makerId,
+                'subject_type' => 'reconciliation_case',
+                'subject_id' => $case->case_ulid,
+                'action' => 'EXTERNAL_ADJUSTMENT_POSTED',
+                'decision_code' => 'APPROVED_RECONCILIATION_CASE',
+                'severity' => 'high',
+                'context' => [
+                    'checker_admin_id' => $checkerId,
+                    'journal_entry_id' => $entry->id,
+                    'wallet_user_id' => $userId,
+                    'difference' => $delta,
+                ],
+            ]);
+
+            return $entry;
+        });
     }
 
     /**
