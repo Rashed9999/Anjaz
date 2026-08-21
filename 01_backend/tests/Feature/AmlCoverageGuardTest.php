@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Models\Aml\AmlRule;
 use Tests\TestCase;
 
 /**
@@ -29,6 +31,8 @@ use Tests\TestCase;
  */
 class AmlCoverageGuardTest extends TestCase
 {
+    use RefreshDatabase;
+
     /** كلُّ نوعٍ يُمرَّر فعلاً إلى `screenAml(...)` في الشيفرة. */
     private function screenedInCode(): array
     {
@@ -161,5 +165,86 @@ class AmlCoverageGuardTest extends TestCase
         $this->assertSame([], $offenders,
             'الفحصُ داخل المعاملة: حجبُ عمليّةٍ عندئذٍ يردّ معاملةً بدأت '
             . 'بالفعل — والصحيحُ أن تُمنع قبل أن تبدأ. ' . implode('، ', $offenders));
+    }
+
+    /** البذرةُ نفسُها التي يشغّلها الإقلاع — لا تركيبةٌ مخترَعةٌ للاختبار. */
+    private function seedProductionRules(): void
+    {
+        $this->seed(\Database\Seeders\AmlDefaultRulesSeeder::class);
+    }
+
+    /**
+     * @test
+     *
+     * **① كلُّ نوعٍ مراقَبٍ تغطّيه قاعدةٌ فعّالةٌ واحدةٌ على الأقلّ.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * وبلا هذا يمرّ التدفّقُ الماليُّ الحيُّ إلى `AML_COVERAGE_GAP` فيُحجَز
+     * كلَّ مرّة — **والمنتجُ يتوقّف والسجلُّ يقول إنّ الرقابةَ تعمل**.
+     */
+    public function every_screened_type_is_covered_by_an_active_rule(): void
+    {
+        $this->seedProductionRules();
+
+        $screened = (array) config('amial.aml.screened_types', []);
+
+        $this->assertNotEmpty($screened,
+            'لا نوعَ مراقَبٌ إطلاقاً — إمّا أُفرغت القائمةُ سهواً، '
+            . '**وإمّا أُطفئت الرقابةُ كلُّها بلا قرار**');
+
+        $rules = AmlRule::active()->get();
+
+        $this->assertNotEmpty($rules,
+            'البذرةُ الإنتاجيّةُ لا تُنتج قاعدةً فعّالةً واحدة — '
+            . 'فكلُّ تدفّقٍ مراقَبٍ يُحجَز');
+
+        $uncovered = [];
+
+        foreach ($screened as $type) {
+            $covering = $rules->filter(fn (AmlRule $r) => $r->appliesToType($type));
+
+            if ($covering->isEmpty()) {
+                $uncovered[] = $type;
+            }
+        }
+
+        $this->assertSame([], $uncovered, sprintf(
+            "أنواعٌ ماليّةٌ مُعلَنةٌ مراقَبةً ولا تغطّيها قاعدةٌ واحدة — "
+            . "**تُحجَز أبداً بعد النشر**:\n  %s\n\n"
+            . "القواعدُ الموجودة: %s\n"
+            . 'إمّا يُوسَّع `applies_to` في `AmlDefaultRulesSeeder`، '
+            . 'وإمّا يُرفَع النوعُ من `screened_types` بقرارٍ مكتوب.',
+            implode("\n  ", $uncovered),
+            $rules->pluck('code')->implode('، ')));
+    }
+
+    /**
+     * @test
+     *
+     * **② والحدُّ الأقصى المطلق يغطّي كلَّ تدفّقِ خروجٍ مراقَب.**
+     *
+     * فهو السياسةُ الوحيدةُ المُنفَّذة من أوّل يوم (‏والباقي يراقب ويسجّل).
+     * ونوعٌ خارجٌ منه يعني **سقفاً بلا سقف** على ذلك المسار.
+     */
+    public function the_hard_cap_covers_every_screened_outflow(): void
+    {
+        $this->seedProductionRules();
+
+        $hard = AmlRule::where('code', 'MAX_SINGLE_TX_HARD')->first();
+
+        $this->assertNotNull($hard, 'قاعدةُ الحدّ الأقصى المطلق غيرُ مبذورة');
+        $this->assertTrue((bool) $hard->is_active, 'الحدُّ الأقصى المطلق غيرُ مفعَّل');
+
+        $missing = [];
+
+        foreach ((array) config('amial.aml.screened_types', []) as $type) {
+            if (! $hard->appliesToType($type)) {
+                $missing[] = $type;
+            }
+        }
+
+        $this->assertSame([], $missing,
+            'أنواعٌ مراقَبةٌ خارج الحدّ الأقصى المطلق — **سقفٌ بلا سقف**: '
+            . implode('، ', $missing));
     }
 }

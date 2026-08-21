@@ -108,6 +108,54 @@ class AmlScreeningService
             // from a successful screening and quietly turned AML off.  We
             // hold only types explicitly declared as screened; generic calls
             // to this service keep their ordinary no-rule allow behaviour.
+            //
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-AML-COVERAGE-002 — **و«فجوةُ تغطية» غيرُ «لم يُضبَط
+            // النظامُ بعد».**
+            //
+            // **الثمنُ الذي قِيس، وأمسكته البوّابةُ قبل النشر:**
+            //
+            // الحجزُ أعلاه صحيحُ المبدأ (‏القاعدة السابعة: «غير معروف»
+            // ليس صفراً). لكنّه كان يقع أيضاً حين يكون **جدولُ القواعد
+            // فارغاً تماماً** — وذلك ليس فجوةَ تغطية، بل **بذرةً لم
+            // تُشغَّل**: قاعدةٌ جديدة، أو `db:seed` سقط في الإقلاع
+            // (‏و`entrypoint.sh` يبتلع فشلَه بـ`|| true`).
+            //
+            // وأثرُه أنّ **كلَّ حركةِ مالٍ في المنتج تُحجَز**: لا تحويل،
+            // ولا سحبٌ من وكيل، ولا دفعٌ لتاجر. أي انقطاعٌ كاملٌ سببُه
+            // إعدادٌ ناقصٌ لا خطرٌ مرصود. وقِيس في المجموعة: ٢٩١ اختباراً
+            // ساقطاً، وكلُّ مشاهد التحويل المتوازية تُخرج `AmlHeldException`.
+            //
+            // **فالحالتان تفترقان:**
+            //
+            //   قواعدُ موجودةٌ ولا تغطّي هذا النوع  ⇒ **فجوةٌ حقيقيّة، يُحجَز**
+            //   لا قاعدةَ في النظام إطلاقاً        ⇒ **النظامُ غيرُ مضبوط،
+            //                                        يُرفَع عطلٌ صارخٌ ويمرّ**
+            //
+            // ولا يُسكَت عن الثانية: تُرفَع إلى مركز الأعطال في كلّ مرّة،
+            // فيراها الأدمنُ في الشاشة بدل أن يكتشفها بتوقّف المنتج.
+            // (‏«حارسٌ يقتل المنتجَ ليس حارساً — هو عطلٌ ثانٍ».)
+            $noRulesAtAll = AmlRule::active()->count() === 0;
+
+            if ($coveredType && $noRulesAtAll) {
+                app(\App\Services\OpsAlertService::class)->note(
+                    'aml.not_seeded',
+                    'الرقابةُ على غسل الأموال غيرُ مضبوطة',
+                    'لا قاعدةَ AML فعّالةٌ واحدةٌ في النظام، فالفحصُ لا يجري على '
+                    . 'أيّ تدفّقٍ ماليّ. شغّل: php artisan db:seed '
+                    . '--class=AmlDefaultRulesSeeder --force',
+                );
+
+                Log::critical('AML has no active rules at all — screening is off', [
+                    'transaction_type' => $context->transactionType,
+                ]);
+
+                return new AmlDecision(
+                    finalAction: 'allow', totalRiskScore: 0, triggeredRules: [],
+                    reasonSummary: 'AML not configured: no active rules in the system',
+                );
+            }
+
             if ($coveredType && config('amial.aml.hold_when_uncovered', true)) {
                 $decision = new AmlDecision(
                     finalAction: 'hold',

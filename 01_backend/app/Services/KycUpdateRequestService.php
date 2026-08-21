@@ -54,13 +54,21 @@ class KycUpdateRequestService
             // وثائق الاعتماد السابقة لا تثبت تحديثاً جديداً. لو بقيت
             // APPROVED لأمكن ضغط «اعتماد الحساب» فوراً بلا وثيقة جديدة.
             // لا نحذفها: تبقى سجلاً تاريخياً، لكن لا تدخل في الاكتمال.
-            $invalidatedDocuments = $needsInitialEvidenceReset ? KycDocument::query()
-                ->where('user_id', $account->id)
-                ->where('status', KycDocument::STATUS_APPROVED)
-                ->update([
-                    'status' => KycDocument::STATUS_SUPERSEDED,
-                    'rejection_reason' => 'استُبدلت بطلب تحديث هوية جديد',
-                ]);
+            // AMIAL-KYC-UPDATE-002 — كان هذا شرطاً ثلاثيّاً **بلا فرعٍ ثانٍ**
+            // (`A ? B;`)، فلا يُحلَّل الملفُّ أصلاً: كلُّ مسارٍ يلمس هذه
+            // الخدمةَ يسقط بـ`ParseError` عند بناء الحاوية — لا عند الطلب.
+            // فصار شرطاً صريحاً يقول ما يفعل ومتى.
+            $invalidatedDocuments = 0;
+
+            if ($needsInitialEvidenceReset) {
+                $invalidatedDocuments = KycDocument::query()
+                    ->where('user_id', $account->id)
+                    ->where('status', KycDocument::STATUS_APPROVED)
+                    ->update([
+                        'status' => KycDocument::STATUS_SUPERSEDED,
+                        'rejection_reason' => 'استُبدلت بطلب تحديث هوية جديد',
+                    ]);
+            }
 
             if (! $alreadyRequired) {
                 $this->notifications->dispatch(

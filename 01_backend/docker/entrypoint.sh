@@ -230,11 +230,31 @@ php artisan view:clear 2>/dev/null || true
             fi
         fi
 
+        # ══════════════════════════════════════════════════════════════
+        # AMIAL-AML-COVERAGE-002 — **قواعدُ الرقابة سياسةٌ لا بياناتُ عرض.**
+        #
+        # **الثمنُ الذي قِيس:** كانت بذرةُ قواعد AML خلف `RUN_SEEDERS=true`
+        # مع بذور العرض — **وهي `false` افتراضاً**. فالإنتاجُ يُقلع بلا
+        # قاعدةِ رقابةٍ واحدة، والفحصُ لا يجري على أيّ ريال.
+        #
+        # وفشلُها كان مبتلعاً بـ`2>/dev/null || true`، فلا أثرَ في السجلّ.
+        #
+        # فصارت تُشغَّل **دائماً** — وهي آمنةُ التكرار: `updateOrCreate`
+        # على الرمز، **ولا تُلغي قرارَ مشغّلٍ أطفأ الظلّ عن قاعدة** (‏الظلّ
+        # يُكتب عند الإنشاء فقط). وفشلُها يُقال بصوتٍ عالٍ.
+        if [ "$DB_OK" -eq 1 ]; then
+            echo "🛡️ [خلفية] ضمان قواعد الرقابة على غسل الأموال..."
+            if php artisan db:seed --class=AmlDefaultRulesSeeder --force 2>&1 | tail -3; then
+                :
+            else
+                echo "❌ فشل بذرُ قواعد AML — الفحصُ لن يجري على أيّ تدفّقٍ ماليّ."
+            fi
+        fi
+
         if [ "$DB_OK" -eq 1 ] && [ "${RUN_SEEDERS:-false}" = "true" ]; then
             echo "🌱 [خلفية] تشغيل الـ seeders..."
             php artisan db:seed --class=DemoDataSeeder --force 2>/dev/null || true
             php artisan db:seed --class=FeatureFlagsSeeder --force 2>/dev/null || true
-            php artisan db:seed --class=AmlDefaultRulesSeeder --force 2>/dev/null || true
             php artisan db:seed --class=SettlementPartnerSeeder --force 2>/dev/null || true
             php artisan db:seed --class=BillProvidersStubSeeder --force 2>/dev/null || true
         fi

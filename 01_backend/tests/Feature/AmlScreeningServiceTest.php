@@ -75,10 +75,36 @@ class AmlScreeningServiceTest extends TestCase
         $this->assertEmpty($decision->triggeredRules);
     }
 
-    /** A configured AML flow with no active coverage must not fail open. */
+    /**
+     * A configured AML flow with no active coverage must not fail open.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **AMIAL-AML-COVERAGE-002 — والفجوةُ تُصنَع بقاعدةٍ لا تغطّي، لا بجدولٍ فارغ.**
+     *
+     * كان الاختبارُ يحذف القواعدَ **كلَّها** ثمّ يتوقّع حجزاً. وهذا يخلط
+     * حالتين مختلفتين تماماً:
+     *
+     *   جدولٌ فارغٌ تماماً      ⇒ **النظامُ لم يُضبَط** (‏بذرةٌ لم تُشغَّل)
+     *   قواعدُ موجودةٌ لا تغطّي ⇒ **فجوةُ تغطيةٍ حقيقيّة**
+     *
+     * والخلطُ بينهما جعل كلَّ حركةِ مالٍ تُحجَز على أيّ قاعدةٍ نظيفة —
+     * ٢٩١ اختباراً ساقطاً، وكلَّ تحويلٍ متوازٍ يُخرج `AmlHeldException`.
+     *
+     * فالمقصدُ باقٍ كما أراده كاتبُه، والتركيبةُ صارت تُنتج الفجوةَ التي
+     * يعنيها: **قاعدةٌ فعّالةٌ لنوعٍ آخر**.
+     */
     public function test_holds_a_screened_transaction_when_no_active_rule_covers_it(): void
     {
         AmlRule::query()->delete();
+
+        // قاعدةٌ فعّالةٌ **لنوعٍ آخر** — فالنظامُ مضبوطٌ وهذا النوعُ مكشوف.
+        $this->createRule([
+            'code' => 'COVERS_ANOTHER_TYPE',
+            'applies_to' => 'bill_pay',
+            'rule_type' => 'max_single_transaction',
+            'parameters' => ['threshold_amount' => '5000'],
+        ]);
+
         config()->set('amial.aml.hold_when_uncovered', true);
 
         $decision = $this->service->screen($this->makeContext([
@@ -90,6 +116,39 @@ class AmlScreeningServiceTest extends TestCase
         $this->assertDatabaseHas('aml_flagged_transactions', [
             'transaction_type' => 'send_money', 'initial_decision' => 'hold',
         ]);
+    }
+
+    /**
+     * @test
+     *
+     * **ونظامٌ بلا قاعدةٍ واحدةٍ يُقال إنّه غيرُ مضبوط — ولا يُوقف المال.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * فجدولٌ فارغٌ تماماً معناه **بذرةٌ لم تُشغَّل** لا خطرٌ مرصود. وحجزُ
+     * كلّ ريالٍ حينئذٍ ليس رقابةً — هو **انقطاعٌ كاملٌ للمنتج** سببُه إعدادٌ
+     * ناقص: لا تحويل، ولا سحبٌ من وكيل، ولا دفعٌ لتاجر.
+     *
+     * **ولا يُسكَت عنه**: يُرفَع عطلٌ يراه الأدمنُ في مركز الأعطال، فيُكتشف
+     * بالشاشة لا بتوقّف المنتج. (‏حارسٌ يقتل المنتجَ ليس حارساً — هو عطلٌ ثانٍ.)
+     */
+    public function an_unseeded_system_says_so_instead_of_freezing_all_money(): void
+    {
+        AmlRule::query()->delete();
+        config()->set('amial.aml.hold_when_uncovered', true);
+
+        $before = \Illuminate\Support\Facades\DB::table('system_errors')->count();
+
+        $decision = $this->service->screen($this->makeContext([
+            'transaction_type' => 'send_money',
+        ]));
+
+        $this->assertSame('allow', $decision->finalAction,
+            'جدولُ قواعدَ فارغٌ أوقف المال — **وهو بذرةٌ لم تُشغَّل لا خطرٌ مرصود**');
+
+        $this->assertGreaterThan($before,
+            \Illuminate\Support\Facades\DB::table('system_errors')->count(),
+            'مرّ النظامُ غيرُ المضبوط **بلا أثرٍ في مركز الأعطال** — '
+            . 'فلا أحدَ يعلم أنّ الفحصَ لا يجري');
     }
 
     /** @test */
@@ -348,11 +407,24 @@ class AmlScreeningServiceTest extends TestCase
         ]);
 
         // معاملة send_money → لا match
+        //
+        // ══════════════════════════════════════════════════════════════
+        // **AMIAL-AML-COVERAGE-002 — والنتيجةُ صارت `hold` لا `allow`.**
+        //
+        // والمقصدُ المُختبَرُ لم يتغيّر: قاعدةُ `bill_pay` **لا تُطابق**
+        // `send_money`. والدليلُ عليه أدقُّ من قبل: الحكمُ الآن
+        // `AML_COVERAGE_GAP` — أي أنّ المحرّكَ لم يجد قاعدةً تغطّي النوع،
+        // وهو نفسُه إثباتُ أنّ المرشِّح رفض القاعدة.
+        //
+        // وكان `allow` يُرمّز السلوكَ القديم: **نوعٌ مراقَبٌ بلا تغطيةٍ
+        // يمرّ**. وهو ما أُصلح — فالتأكيدُ يتبع السياسةَ الجديدة.
         $decision = $this->service->screen($this->makeContext([
             'amount' => '5000',
             'transaction_type' => 'send_money',
         ]));
-        $this->assertEquals('allow', $decision->finalAction);
+        $this->assertEquals('hold', $decision->finalAction);
+        $this->assertSame('AML_COVERAGE_GAP', $decision->triggeredRules[0]['code'],
+            'حُجزت لمطابقةِ قاعدةٍ لا لفجوةِ تغطية — **فالمرشِّحُ لم يرفض قاعدةَ bill_pay**');
 
         // معاملة bill_pay → block
         $decision = $this->service->screen($this->makeContext([
