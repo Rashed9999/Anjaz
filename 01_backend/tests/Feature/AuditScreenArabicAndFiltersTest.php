@@ -313,7 +313,60 @@ class AuditScreenArabicAndFiltersTest extends TestCase
 
         $r->assertOk();
         $r->assertSee('عُبث بالسجلّ', false);
-        $r->assertSee('عُدِّل بعد كتابته', false);
+        $r->assertSee('ولا تفسيرَ تقنيّاً له', false);
+    }
+
+    /** @test */
+    public function a_column_our_own_migration_rewrote_is_not_called_tampering(): void
+    {
+        // ══════════════════════════════════════════════════════════════
+        // **الثمن الذي دُفع:** فتح صاحبُ المشروع الشاشةَ فرأى «عُبث
+        // بالسجلّ — ٤٢ موضعاً» وسأل عمّا يفعل. و«البصمةُ لا تطابق» تقول
+        // إنّ **شيئاً** تغيّر ولا تقول **ماذا** — فيقف القارئُ بين
+        // جريمةٍ داخليّةٍ وهجرةٍ من هجراتنا، ولا سبيلَ له بينهما.
+        //
+        // و`down()` في هجرة `2026_07_05_110000` تكتب `subject_type` =
+        // `'user'` على كلّ صفٍّ خارج التعداد — أي أنّ **تراجُعَ هجراتٍ
+        // على خادمِ تجربةٍ يُعيد كتابةَ عمودٍ مبصومٍ عليه**.
+        // ══════════════════════════════════════════════════════════════
+        app(AuditService::class)->record([
+            'action' => 'DONATION_COMPLETED',
+            'decision_code' => 'COMPLETED',
+            'subject_type' => 'donation',
+            'subject_id' => '55',
+            'reason' => 'تبرّعٌ اكتمل',
+        ]);
+
+        DB::table('audit_decisions')->update(['subject_type' => 'user']);
+
+        $r = $this->actingAs($this->auditor(), 'user')->get(route('admin.amial.audit.index'));
+
+        $r->assertOk();
+        $r->assertDontSee('عُبث بالسجلّ', false);
+        $r->assertSee('والسببُ معروفٌ وليس عبثاً', false);
+        $r->assertSee('تراجُع هجرة التعداد', false);
+    }
+
+    /** @test */
+    public function an_unexplainable_change_is_still_raised_as_tampering(): void
+    {
+        // **وهذا شرطُ صحّة التفسير كلِّه.** لو ابتلع المفسِّرُ كلَّ اختلافٍ
+        // لصار كلُّ عبثٍ «هجرةً» — وحارسٌ يفسّر كلَّ شيءٍ لا يحرس شيئاً.
+        app(AuditService::class)->record([
+            'action' => 'ADMIN_WALLET_TRANSFER',
+            'decision_code' => 'OK',
+            'subject_type' => 'user',
+            'subject_id' => '3',
+            'reason' => 'تحويلٌ بمئة',
+        ]);
+
+        DB::table('audit_decisions')->update(['reason' => 'تحويلٌ بمليون']);
+
+        $r = $this->actingAs($this->auditor(), 'user')->get(route('admin.amial.audit.index'));
+
+        $r->assertOk();
+        $r->assertSee('عُبث بالسجلّ', false);
+        $r->assertSee('ولا تفسيرَ تقنيّاً له', false);
     }
 
     /** @test */

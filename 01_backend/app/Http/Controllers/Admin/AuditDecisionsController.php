@@ -309,15 +309,20 @@ class AuditDecisionsController extends Controller
         if ($rows->isEmpty()) {
             // **«غير معروف» ليس «سليم»** — القاعدة السابعة.
             return ['checked' => 0, 'state' => 'empty',
-                'unsigned' => 0, 'tampered' => 0, 'link_breaks' => 0,
+                'unsigned' => 0, 'rewritten' => 0, 'causes' => [],
+                'tampered' => 0, 'link_breaks' => 0,
                 'broken' => 0, 'ids' => [], 'ids_unsigned' => [],
-                'ids_broken' => [], 'first_signed_id' => null];
+                'ids_rewritten' => [], 'ids_broken' => [],
+                'first_signed_id' => null];
         }
 
         $unsigned = 0;      // كُتب قبل وجود السلسلة — **لم يُوقَّع قطّ**
         $tampered = 0;      // بصمةٌ موجودةٌ ولا تطابق المحتوى — **عبثٌ**
         $linkBreaks = 0;    // حلقةٌ لا تصل بسابقتها
+        $rewritten = 0;    // فسّرته هجرةٌ من هجراتنا — **ليس عبثاً**
+        $causes = [];
         $unsignedIds = [];
+        $rewrittenIds = [];
         $brokenIds = [];
         $prev = null;
 
@@ -350,9 +355,23 @@ class AuditDecisionsController extends Controller
                 continue;
             }
 
-            if (! $this->verifyOne($r)['hash_matches']) {
-                $tampered++;
-                $brokenIds[] = (int) $r->id;
+            $v = $this->verifyOne($r);
+
+            if (! $v['hash_matches']) {
+                // **ويُفرَّق بين ما فسّرناه وما لم نفسّره.**
+                //
+                // عمودٌ أعادت هجرتُنا كتابتَه ليس عبثاً، وخلطُهما يجعل
+                // اللافتةَ تصرخ على أثرِ فعلٍ من عندنا — فيُعتاد الصراخُ
+                // ويُتجاهَل يومَ يصدق.
+                if (($v['explanation']['benign'] ?? false) === true) {
+                    $rewritten++;
+                    $causes[$v['explanation']['cause']] =
+                        ($causes[$v['explanation']['cause']] ?? 0) + 1;
+                    $rewrittenIds[] = (int) $r->id;
+                } else {
+                    $tampered++;
+                    $brokenIds[] = (int) $r->id;
+                }
             }
 
             // حلقةٌ لا تصل بسابقتها — **ولا تُحسب على الحدّ مع صفٍّ غير
@@ -367,23 +386,31 @@ class AuditDecisionsController extends Controller
         }
 
         $unsignedIds = array_values(array_unique($unsignedIds));
+        $rewrittenIds = array_values(array_unique($rewrittenIds));
         $brokenIds = array_values(array_unique($brokenIds));
+        arsort($causes);
 
         return [
             'checked' => $rows->count(),
             'unsigned' => $unsigned,
+            'rewritten' => $rewritten,
+            'causes' => $causes,
             'tampered' => $tampered,
             'link_breaks' => $linkBreaks,
             'broken' => $tampered + $linkBreaks,
-            'ids' => array_slice(array_values(array_unique(
-                array_merge($brokenIds, $unsignedIds))), 0, 400),
+            'ids' => array_slice(array_values(array_unique(array_merge(
+                $brokenIds, $rewrittenIds, $unsignedIds))), 0, 400),
             'ids_unsigned' => array_slice($unsignedIds, 0, 400),
+            'ids_rewritten' => array_slice($rewrittenIds, 0, 400),
             'ids_broken' => array_slice($brokenIds, 0, 400),
             'first_signed_id' => (int) (AuditDecision::whereNotNull('entry_hash')
                 ->min('id') ?: 0),
             // **ثلاثُ حالاتٍ لا اثنتان.** و`legacy` ليست `broken`.
+            // **أربعُ حالاتٍ الآن.** و`rewritten` بينهما: بصمةٌ لا تطابق،
+            // **والسببُ معروفٌ ومن عندنا** — فلا هي «سليم» ولا هي «عُبث».
             'state' => match (true) {
                 $tampered > 0 || $linkBreaks > 0 => 'broken',
+                $rewritten > 0 => 'rewritten',
                 $unsigned > 0 => 'legacy',
                 default => 'ok',
             },
@@ -432,14 +459,36 @@ class AuditDecisionsController extends Controller
         $ok = AuditService::hashMatches(
             (string) $d->prev_hash, $attrs, (string) $d->entry_hash);
 
+        if ($ok) {
+            return [
+                'entry_hash' => $d->entry_hash,
+                'prev_hash' => $d->prev_hash,
+                'hash_matches' => true,
+                'verdict' => 'ok',
+                'verdict_label' => 'البصمةُ تطابق المحتوى',
+                'explanation' => null,
+            ];
+        }
+
+        // **«لا تطابق» ليست جواباً — تُسأل: أيُّ حقلٍ ولماذا.**
+        //
+        // فمن يقرأ «عُبث بالسجلّ» يقف بين احتمالين لا سبيلَ له بينهما:
+        // جريمةٌ داخليّة، أو هجرةٌ من هجراتنا أعادت كتابةَ عمودٍ مبصومٍ
+        // عليه. والفرقُ بينهما هو الفرقُ بين تحقيقٍ وسطرٍ في سجلّ.
+        $why = AuditService::explainMismatch(
+            (string) $d->prev_hash, $attrs, (string) $d->entry_hash);
+
         return [
             'entry_hash' => $d->entry_hash,
             'prev_hash' => $d->prev_hash,
-            'hash_matches' => $ok,
-            'verdict' => $ok ? 'ok' : 'tampered',
-            'verdict_label' => $ok
-                ? 'البصمةُ تطابق المحتوى'
-                : 'البصمةُ لا تطابق المحتوى — عُدِّل هذا الصفّ بعد كتابته',
+            'hash_matches' => false,
+            'verdict' => $why === null ? 'tampered' : ($why['benign'] ? 'rewritten' : 'tampered'),
+            'verdict_label' => $why === null
+                ? 'البصمةُ لا تطابق المحتوى، ولا تفسيرَ تقنيّاً — يُحقَّق في هذا الصفّ'
+                : ($why['benign']
+                    ? 'تغيّر «' . $why['field'] . '» — ' . $why['cause']
+                    : 'أُفرغ «' . $why['field'] . '» بعد الكتابة — ' . $why['cause']),
+            'explanation' => $why,
         ];
     }
 
@@ -527,6 +576,7 @@ class AuditDecisionsController extends Controller
 
             $ids = match ($integrity) {
                 'unsigned' => $chain['ids_unsigned'],
+                'rewritten' => $chain['ids_rewritten'],
                 'broken' => $chain['ids_broken'],
                 default => $chain['ids'],
             };

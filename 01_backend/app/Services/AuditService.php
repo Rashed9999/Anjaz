@@ -230,6 +230,86 @@ class AuditService
         return self::computeEntryHash($prevHash, $a, legacy: true) === $stored;
     }
 
+    /**
+     * **أيُّ حقلٍ تغيّر؟** — أو `null` إن لم يُفسَّر.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمن الذي دُفع:** فتح صاحبُ المشروع الشاشةَ فرأى «عُبث بالسجلّ —
+     * ٤٢ موضعاً» وسأل: «ما هذا التحذير وماذا أفعل إن ظهر مرّة أخرى؟».
+     *
+     * **والسؤالُ في محلّه، ولا جوابَ له في الشاشة.** «البصمةُ لا تطابق»
+     * تقول إنّ **شيئاً** تغيّر ولا تقول **ماذا**. فيقف من يقرؤها بين
+     * احتمالين لا سبيلَ له بينهما: جريمةٌ داخليّة، أو هجرةٌ من هجراتنا
+     * أعادت كتابةَ عمود.
+     *
+     * **والبصمةُ لا تُعيد ما مُحي — لكنّها تُجرَّب.** تُعاد الحسبةُ على
+     * فرضيّاتٍ معدودةٍ لكلٍّ سببٌ معروف؛ فإن طابقت إحداها **عُرف الحقلُ
+     * والسبب**، وإن لم تُطابق واحدةٌ منها فالإنذارُ حقيقيٌّ ويستحقّ
+     * تحقيقاً.
+     *
+     * وأوّلُ الفرضيّات أخطرُها لأنّها **من صنعنا**: `down()` في هجرة
+     * `2026_07_05_110000` تكتب `subject_type = 'user'` على كلّ صفٍّ خارج
+     * التعداد. فتراجُعُ هجراتٍ على خادمِ تجربةٍ يُعيد كتابةَ عمودٍ
+     * **مبصومٍ عليه** — والنتيجةُ لافتةٌ حمراءُ تتّهم بريئاً.
+     *
+     * @param  array<string,mixed>  $a
+     * @return array{field:string,cause:string,benign:bool}|null
+     */
+    public static function explainMismatch(string $prevHash, array $a, string $stored): ?array
+    {
+        $try = static function (array $patch) use ($prevHash, $a, $stored): bool {
+            $candidate = array_replace($a, $patch);
+
+            return self::computeEntryHash($prevHash, $candidate) === $stored
+                || self::computeEntryHash($prevHash, $candidate, legacy: true) === $stored;
+        };
+
+        $rawContext = isset($a['context']) ? (string) $a['context'] : '';
+        $decoded = $rawContext !== '' ? json_decode($rawContext, true) : null;
+
+        $hypotheses = [
+            // ① هجرتُنا نحن — `down()` تكتب `user` على كلّ نوعٍ خارج التعداد.
+            [['subject_type' => 'safe_payment'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'e_payment'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'family_fund'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'donation'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'pending_transfer'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'agent_shift'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'agent_staff'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+            [['subject_type' => 'support_ticket'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
+
+            // ② قُصّ إلى الفراغ حين كان العمودُ تعداداً ووضعُ الصرامة مُطفأ.
+            [['subject_type' => ''], 'نوعُ الموضوع', 'قُصّ إلى فراغٍ عند الكتابة — العمودُ كان تعداداً لا يقبل القيمة', true],
+        ];
+
+        // ③ فروقُ ترميز `context` بين محرّك القاعدة وPHP.
+        if (is_array($decoded)) {
+            foreach ([
+                JSON_UNESCAPED_UNICODE,
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                JSON_UNESCAPED_SLASHES,
+                0,
+            ] as $flags) {
+                $hypotheses[] = [['context' => json_encode($decoded, $flags)],
+                    'السياق', 'فرقُ ترميزٍ في تخزين JSON — لا تغييرَ في القيم', true];
+            }
+        }
+
+        // ④ حقولٌ فُقدت أو أُفرغت.
+        $hypotheses[] = [['context' => null], 'السياق', 'أُفرغ بعد الكتابة', false];
+        $hypotheses[] = [['reason' => null], 'السبب', 'أُفرغ بعد الكتابة', false];
+        $hypotheses[] = [['zone_code' => null], 'النطاق', 'أُفرغ بعد الكتابة', false];
+        $hypotheses[] = [['transaction_id' => null], 'رقمُ المعاملة', 'أُفرغ بعد الكتابة', false];
+
+        foreach ($hypotheses as [$patch, $field, $cause, $benign]) {
+            if ($try($patch)) {
+                return ['field' => $field, 'cause' => $cause, 'benign' => $benign];
+            }
+        }
+
+        return null;
+    }
+
     public static function computeEntryHash(string $prevHash, array $a, bool $legacy = false): string
     {
         $context = $legacy

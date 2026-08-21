@@ -46,10 +46,13 @@
             </div>
             <div class="small">
                 @if($chain['tampered'] > 0)
-                    <div>· <strong>{{ $chain['tampered'] }}</strong> صفّاً بصمتُه لا تطابق محتواه — <b>عُدِّل بعد كتابته</b>.</div>
+                    <div>· <strong>{{ $chain['tampered'] }}</strong> صفّاً بصمتُه لا تطابق محتواه <b>ولا تفسيرَ تقنيّاً له</b> — يُحقَّق فيها.</div>
                 @endif
                 @if($chain['link_breaks'] > 0)
                     <div>· <strong>{{ $chain['link_breaks'] }}</strong> حلقةً لا تصل بسابقتها — <b>صفٌّ حُذف بينهما</b>.</div>
+                @endif
+                @if($chain['rewritten'] > 0)
+                    <div class="text-muted">· و{{ $chain['rewritten'] }} صفّاً تفسّرها هجرةٌ من هجراتنا — <b>ليست عبثاً</b>.</div>
                 @endif
                 @if($chain['unsigned'] > 0)
                     <div class="text-muted">· و{{ $chain['unsigned'] }} صفّاً بلا بصمةٍ أصلاً (أقدمُ من السلسلة) — <b>ليست عبثاً</b>.</div>
@@ -57,6 +60,37 @@
             </div>
             <a class="btn btn-sm btn-outline-danger mt-2" data-testid="audit-filter-broken"
                href="{{ route('admin.amial.audit.index', ['integrity' => 'broken']) }}">
+                أرِني الصفوفَ غيرَ المفسَّرة
+            </a>
+        </div>
+    @elseif($chain['state'] === 'rewritten')
+        {{-- **بصمةٌ لا تطابق، والسببُ معروفٌ ومن عندنا.**
+
+             وقع هذا فعلاً: `down()` في هجرة `2026_07_05_110000` تكتب
+             `subject_type = 'user'` على كلّ صفٍّ خارج التعداد. فتراجُعُ
+             هجراتٍ على خادمِ تجربةٍ يُعيد كتابةَ عمودٍ **مبصومٍ عليه**،
+             فتصرخ اللافتةُ «عُبث بالسجلّ» على أثرِ فعلٍ من عندنا.
+
+             ولافتةٌ تصرخ على ما نفعله نحن تُعتاد، فتُتجاهَل يومَ تصدق. --}}
+        <div class="alert alert-warning" data-testid="audit-chain-panel">
+            <strong data-testid="audit-chain">
+                ⓘ {{ $chain['rewritten'] }} صفّاً تغيّر بعد بصمِه — <b>والسببُ معروفٌ وليس عبثاً</b>
+            </strong>
+            <div class="small mt-2">
+                فُحص آخرُ {{ number_format($chain['checked']) }} قرار، ولا صفَّ واحداً بلا تفسير.
+                <div class="mt-1">
+                    @foreach($chain['causes'] as $cause => $count)
+                        <div>· <strong>{{ $count }}</strong> — {{ $cause }}</div>
+                    @endforeach
+                </div>
+                <div class="mt-2">
+                    <b>وما العمل؟</b> لا شيء: القيمُ الماليّةُ والقراراتُ سليمة، والذي تغيّر
+                    عمودُ تصنيفٍ أعادت هجرةٌ كتابتَه. ولا تُعاد البصماتُ حسبةً —
+                    فبصمةٌ تُعاد كتابتُها تُبطل الغرضَ من السلسلة كلِّها.
+                </div>
+            </div>
+            <a class="btn btn-sm btn-outline-secondary mt-2"
+               href="{{ route('admin.amial.audit.index', ['integrity' => 'rewritten']) }}">
                 أرِني هذه الصفوف
             </a>
         </div>
@@ -127,6 +161,7 @@
                     <select name="integrity" class="form-control" data-testid="audit-integrity-filter">
                         <option value="">الكلّ</option>
                         <option value="broken" @selected(($filters['integrity'] ?? '') === 'broken')>المشبوهُ فقط</option>
+                        <option value="rewritten" @selected(($filters['integrity'] ?? '') === 'rewritten')>مفسَّرٌ بهجرة</option>
                         <option value="unsigned" @selected(($filters['integrity'] ?? '') === 'unsigned')>غيرُ الموقَّع</option>
                     </select>
                 </div>
@@ -386,9 +421,10 @@
             // «لم يُوقَّع قطّ» ليست «وُقّع ثمّ غُيّر»، وخلطُهما يُرسل
             // في تحقيقٍ خلف عبثٍ لا وجودَ له.
             const verdict = {
-                ok:       ['success', '✓ '],
-                unsigned: ['secondary', 'ⓘ '],
-                tampered: ['danger',  '⚠ '],
+                ok:        ['success',   '✓ '],
+                unsigned:  ['secondary', 'ⓘ '],
+                rewritten: ['warning text-dark', 'ⓘ '],
+                tampered:  ['danger',    '⚠ '],
             }[d.integrity.verdict] || ['secondary', ''];
 
             const integrity =
