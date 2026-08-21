@@ -3,6 +3,7 @@
 namespace App\Services\Reconciliation;
 
 use App\Services\LedgerReportService;
+use App\Models\Agent\AgentShift;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -48,6 +49,8 @@ class ReconciliationService
         $wallets = $this->wallets();
         $ledger  = $this->ledgerBalance();
         $tills   = $this->tills();
+        // A run creates/updates cases; a dashboard GET must remain read-only.
+        $this->cases->recordCashResults($tills['divergences'] ?? []);
 
         $diverged = $wallets['diverged'] > 0
             || $ledger['unbalanced'] > 0
@@ -144,10 +147,13 @@ class ReconciliationService
     public function tills(): array
     {
         if (!\Illuminate\Support\Facades\Schema::hasTable('agent_cash_tills')) {
-            return ['checked' => 0, 'diverged' => 0, 'gap' => '0', 'worst' => []];
+            return ['checked' => 0, 'diverged' => 0, 'gap' => '0', 'worst' => [], 'divergences' => []];
         }
 
-        $moved = DB::table('agent_cash_movements')
+        // The branch safe and a teller drawer are separate physical places.
+        // Mixing their movements made an open drawer look like a safe variance.
+        $safeMovements = DB::table('agent_cash_movements')
+            ->where('is_drawer', false)
             ->groupBy('branch_id')
             ->selectRaw("branch_id,
                 COALESCE(SUM(CASE WHEN direction='in'  THEN amount ELSE 0 END),0)
@@ -157,32 +163,59 @@ class ReconciliationService
         $checked = 0;
         $diverged = 0;
         $gap = '0';
-        $worst = [];
+        $divergences = [];
 
         foreach (DB::table('agent_cash_tills')->get() as $till) {
             $checked++;
-
-            $held     = (string) ($till->cash_on_hand ?? '0');
-            $expected = (string) ($moved[$till->branch_id] ?? '0');
-            $delta    = bcsub($held, $expected, 4);
+            $held = (string) ($till->cash_on_hand ?? '0');
+            $expected = (string) ($safeMovements[$till->branch_id] ?? '0');
+            $delta = bcsub($held, $expected, 4);
 
             if (bccomp($delta, '0', 4) !== 0) {
                 $diverged++;
                 $gap = bcadd($gap, $delta, 4);
-                $worst[] = [
-                    'branch_id' => (int) $till->branch_id,
+                $divergences[] = [
+                    'kind' => 'branch_safe',
+                    'dimension' => ['branch_id' => (int) $till->branch_id, 'till_id' => (int) $till->id],
                     'held' => $held, 'expected' => $expected, 'gap' => $delta,
                 ];
             }
         }
 
-        usort($worst, fn ($a, $b) => bccomp(
+        // Open teller drawers are reconciled against their own shift movements.
+        // A closed shift has a separate counted-cash variance workflow.
+        if (\Illuminate\Support\Facades\Schema::hasTable('agent_shifts')) {
+            foreach (AgentShift::where('status', AgentShift::STATUS_OPEN)->get() as $shift) {
+                $checked++;
+                $held = (string) $shift->cash_on_hand;
+                $expected = $shift->expectedCash();
+                $delta = bcsub($held, $expected, 4);
+
+                if (bccomp($delta, '0', 4) !== 0) {
+                    $diverged++;
+                    $gap = bcadd($gap, $delta, 4);
+                    $divergences[] = [
+                        'kind' => 'teller_drawer',
+                        'dimension' => [
+                            'branch_id' => (int) $shift->branch_id,
+                            'shift_id' => (int) $shift->id,
+                            'staff_id' => (int) $shift->staff_id,
+                        ],
+                        'held' => $held, 'expected' => $expected, 'gap' => $delta,
+                    ];
+                }
+            }
+        }
+
+        usort($divergences, fn ($a, $b) => bccomp(
             ltrim($b['gap'], '-'), ltrim($a['gap'], '-'), 4
         ));
 
         return [
             'checked' => $checked, 'diverged' => $diverged,
-            'gap' => $gap, 'worst' => array_slice($worst, 0, 5),
+            'gap' => $gap, 'worst' => array_slice($divergences, 0, 5),
+            // The run consumes all findings; the dashboard may show only five.
+            'divergences' => $divergences,
         ];
     }
 
