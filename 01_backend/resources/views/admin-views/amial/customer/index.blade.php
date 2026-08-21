@@ -27,11 +27,11 @@
         <span class="badge badge-soft-secondary ms-auto">شاشة واحدة</span>
     </div>
 
-    {{-- البحث: عشرة مفاتيح تعدّها الوثيقة. وكلّ بحثٍ يُسجَّل. --}}
+    {{-- مفاتيح البحث الفعلية فقط؛ كلّ بحث يسجّل بلا حفظ النص الحساس خاماً. --}}
     <div class="card p-3 mb-3">
         <div class="input-group">
             <input type="text" id="cc-q" class="form-control form-control-lg"
-                   placeholder="هاتف / اسم / بريد / رقم حساب / رقم عملية…" data-testid="cc-search">
+                   placeholder="هاتف / اسم / بريد / رقم حساب / معرّف محفظة / رقم عملية…" data-testid="cc-search">
             <button class="btn btn-primary" id="cc-btn-search">بحث</button>
         </div>
         <div id="cc-results" class="mt-2"></div>
@@ -64,6 +64,7 @@
     const dt = s => esc(String(s || '').slice(0, 16).replace('T', ' '));
 
     let current = null;
+    let currentOverview = null;
     const loaded = {};
     let searchSequence = 0;
     let customerSequence = 0;
@@ -179,6 +180,7 @@
 
     const RENDER = {
         overview(m, body) {
+            currentOverview = m;
             const p = m.profile, s = m.status, w = m.wallet, l = m.limits, f = m.financial_truth;
 
             // كلّ الأسباب لا الحالة الظاهرة وحدها: من يرى «مجمَّد» ولا يعرف
@@ -335,9 +337,10 @@
                                : (['high','very_high','critical'].includes(p.level) ? 'border-danger' : ''))}
                     ${card('الاستثناء اليدويّ', esc(p.override), esc(p.override_reason || ''),
                            p.override === 'whitelist' ? 'border-warning' : '')}
-                    ${card('العقوبات', esc(m.sanction_status),
-                           m.sanction_status === 'unknown' ? 'لم تُجرَ/لا توجد نتيجة موثقة' : '',
-                           m.sanction_status === 'blocked' ? 'border-danger' : (m.sanction_status === 'unknown' ? 'border-warning' : ''))}
+                    ${(() => { const labels = {not_screened: 'لم يُجرَ فحص موثّق', clear: 'لا تطابق موثّق', flagged: 'تطابق محتمل', blocked: 'تطابق مؤكد'};
+                        return card('العقوبات', esc(labels[m.sanction_status] || 'حالة غير موثقة'),
+                            m.sanction_status === 'not_screened' ? 'لا نتيجة فحص قابلة للإثبات' : '',
+                            m.sanction_status === 'blocked' ? 'border-danger' : (m.sanction_status === 'not_screened' ? 'border-warning' : '')); })()}
                     ${card('تحقيقات', m.investigations.length)}
                 </div>
                 <div class="row g-3">
@@ -410,8 +413,25 @@
     };
 
     function showActions() {
-        if (!ALLOWED_ACTIONS.length) return;
-        const html = ALLOWED_ACTIONS.map(a => `
+        if (!ALLOWED_ACTIONS.length || !currentOverview) return;
+        const status = currentOverview.status || {};
+        const reasons = status.reasons || [];
+        const lifecycle = status.status || '';
+        const frozen = reasons.some(r => String(r).includes('مجمَّد'));
+        const terminal = ['CLOSED', 'DECEASED'].includes(lifecycle);
+        const actions = ALLOWED_ACTIONS.filter(a => {
+            if (terminal) return a.code === 'add_note';
+            if (a.code === 'freeze') return !frozen;
+            if (a.code === 'unfreeze') return frozen;
+            if (a.code === 'activate') return ['SUSPENDED', 'INACTIVE'].includes(lifecycle);
+            if (a.code === 'suspend') return lifecycle !== 'SUSPENDED';
+            if (a.code === 'require_kyc') return !currentOverview.kyc?.update_required;
+            if (a.code === 'escalate_risk') return !(currentOverview.counters?.open_investigations > 0);
+            return true;
+        });
+        if (!actions.length) return;
+        document.getElementById('cc-actions')?.remove();
+        const html = actions.map(a => `
             <button class="btn btn-sm btn-outline-${ACTION_STYLE[a.code] || 'secondary'} m-1 js-cc-act" data-act="${a.code}"
                     data-label="${esc(a.label)}" data-testid="cc-act-${a.code}">${esc(a.label)}</button>`).join('');
 
@@ -475,7 +495,12 @@
         b.dataset.original = b.textContent;
         b.textContent = 'جارٍ الحفظ…';
         try {
-            const j = await post(`/${current}/action`, {action: act, reason: reason.trim(), payload});
+            // نفس المفتاح يبقى مع هذا التنفيذ حتى لا يحوّل retry الشبكة أو
+            // النقرتين المتقاربتين إلى ملاحظتين/قضيتين/طلبات اعتماد متعددة.
+            const key = (window.crypto?.randomUUID?.() || (`cc-${Date.now()}-${Math.random().toString(36).slice(2)}`));
+            const j = await post(`/${current}/action`, {
+                action: act, reason: reason.trim(), payload, idempotency_key: key,
+            });
             await dialog.show(j.message || (j.success ? 'تم' : 'فشل'), j.success ? 'تم الإجراء' : 'تعذّر الإجراء');
             if (j.success) loadTab('overview');
         } catch (error) {
