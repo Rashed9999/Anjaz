@@ -334,8 +334,10 @@ class LedgerService
                 return null;
             }
 
+            // This is a suspense account, not permanent equity. Every entry
+            // remains traceable to a case until finance reclassifies its origin.
             $adjust = $this->getOrCreateSystemAccount(
-                'EXTERNAL_ADJUSTMENT', 'equity', 'تسويات رصيد من خارج الدفتر', 'debit'
+                'EXTERNAL_ADJUSTMENT_SUSPENSE', 'asset', 'حساب معلّق لتسويات خارجية قيد التحقيق', 'debit'
             );
             $positive = bccomp($delta, '0', 4) > 0;
             $magnitude = $positive ? $delta : bcmul($delta, '-1', 4);
