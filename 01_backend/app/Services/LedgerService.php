@@ -375,7 +375,7 @@ class LedgerService
 
             app(AuditService::class)->record([
                 'actor_type' => 'admin',
-                'actor_id' => $makerId,
+                'actor_user_id' => $makerId,
                 'subject_type' => 'reconciliation_case',
                 'subject_id' => $case->case_ulid,
                 'action' => 'EXTERNAL_ADJUSTMENT_POSTED',
