@@ -403,6 +403,50 @@ class AgentNetworkService
             $settlement->completed_at = now();
             $settlement->save();
 
+            // AMIAL-CASH-HANDOVER-001 — **الساقُ الورقيّةُ تُفتَح مع الرقميّة.**
+            //
+            // ══════════════════════════════════════════════════════════
+            // اعتمادُ التسوية يُحرّك **الرصيدَ الرقميَّ فوراً**، أمّا النقدُ
+            // الورقيُّ فينتقل في حقيبةٍ مع سائق. وكان الدليلُ على انتقاله
+            // سطراً نصّيّاً في `note` يكتبه طرفٌ واحد — **وهو ما تنهى عنه
+            // الوثيقةُ صراحةً**.
+            //
+            // فيُفتح سجلُّ تسليمٍ **معلّق** لحظةَ الاعتماد. ولا يُغلق إلّا
+            // بتأكيد **الطرف المستلِم**. فرصيدٌ رقميٌّ سُلّم مقابل نقدٍ لم
+            // يؤكّد أحدٌ استلامَه هو **مالٌ في الطريق** — وقد يكون في جيب.
+            //
+            // **ولا يُحجَب الاعتماد على التأكيد** — وذلك قرارُ سياسةٍ لا
+            // قرارُ شيفرة: حجبُه يوقف شبكةَ الوكلاء على سرعة سائق. فيُفتح
+            // السجلُّ ويُعرَض غيرُ المؤكَّد، ويبقى الحجبُ قراراً مكتوباً
+            // لصاحب المشروع.
+            try {
+                app(\App\Services\CashHandoverService::class)->open(
+                    direction: $settlement->settlement_type === 'topup'
+                        ? 'agent_to_platform'    // شحن: الوكيل يسلّم ورقاً ويأخذ رصيداً
+                        : 'platform_to_agent',   // صرف: أميال تسلّم ورقاً وتستردّ رصيداً
+                    amount: $amount,
+                    from: $settlement->settlement_type === 'topup'
+                        ? \App\Models\User::find($settlement->agent_user_id) : null,
+                    to: $settlement->settlement_type === 'topup'
+                        ? null : \App\Models\User::find($settlement->agent_user_id),
+                    deliveredBy: $approver,
+                    meta: [
+                        'settlement_ulid' => $settlement->settlement_ulid,
+                        'reference' => $settlement->payment_reference,
+                        'note' => $settlement->note,
+                    ],
+                );
+            } catch (\Throwable $e) {
+                // **ولا يُسقَط اعتمادٌ ماليٌّ تمّ لأجل سجلٍّ ورقيّ.** لكنّه
+                // يُرفَع عطلاً: تسويةٌ بلا سجلّ تسليمٍ ثغرةٌ في الأثر.
+                app(\App\Services\OpsAlertService::class)->note(
+                    'cash_handover.open_failed',
+                    'تعذّر فتحُ سجلّ تسليم نقد',
+                    'التسوية '.$settlement->settlement_ulid.' اكتملت رقميّاً '
+                        .'ولا سجلَّ تسليمٍ ورقيٍّ لها — '.$e->getMessage(),
+                );
+            }
+
             $this->audit->record([
                 'actor_type' => 'admin',
                 'actor_user_id' => $approver->id,

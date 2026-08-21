@@ -162,6 +162,59 @@ class AdminAgentNetworkController extends Controller
         ], $status);
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-CASH-HANDOVER-001 — **الساقُ الورقيّةُ للتسوية.**
+    //
+    // قيدٌ في الدفتر لا يُثبت أنّ حقيبةً انتقلت. ورصيدٌ رقميٌّ سُلّم مقابل
+    // نقدٍ لم يؤكّد أحدٌ استلامَه هو **مالٌ في الطريق** — وقد يكون في جيب.
+    // ══════════════════════════════════════════════════════════════════
+
+    /** تسليماتٌ لم يؤكّدها مستلِمُها بعد — الأقدمُ أوّلاً. */
+    public function pendingHandovers(): JsonResponse
+    {
+        return new JsonResponse([
+            'success' => true, 'code' => 'OK', 'message' => 'OK', 'errors' => (object) [],
+            'meta' => [
+                'items' => app(\App\Services\CashHandoverService::class)->unconfirmed(),
+                'directions' => \App\Services\CashHandoverService::DIRECTIONS,
+            ],
+        ]);
+    }
+
+    /** **المستلِمُ يؤكّد** — ولا يؤكّد المُسلِّمُ تسليمَ نفسِه. */
+    public function confirmHandover(Request $request, string $ulid): JsonResponse
+    {
+        try {
+            $row = app(\App\Services\CashHandoverService::class)
+                ->confirm($ulid, $request->user(), $request->input('note'));
+        } catch (\DomainException $e) {
+            return $this->error('HANDOVER_REJECTED', $e->getMessage(), 422);
+        }
+
+        return new JsonResponse([
+            'success' => true, 'code' => 'OK',
+            'message' => 'أُكّد استلامُ النقد', 'errors' => (object) [],
+            'meta' => ['handover' => $row],
+        ]);
+    }
+
+    /** خلافٌ في العدّ — **يُرفَع ولا يُحذَف**. */
+    public function disputeHandover(Request $request, string $ulid): JsonResponse
+    {
+        try {
+            $row = app(\App\Services\CashHandoverService::class)
+                ->dispute($ulid, $request->user(), (string) $request->input('reason', ''));
+        } catch (\DomainException $e) {
+            return $this->error('HANDOVER_DISPUTE_REJECTED', $e->getMessage(), 422);
+        }
+
+        return new JsonResponse([
+            'success' => true, 'code' => 'OK',
+            'message' => 'رُفع خلافٌ على التسليم', 'errors' => (object) [],
+            'meta' => ['handover' => $row],
+        ]);
+    }
+
     private function validationError($v): JsonResponse
     {
         return new JsonResponse([

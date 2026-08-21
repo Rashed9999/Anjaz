@@ -13,6 +13,11 @@
         <span class="badge badge-soft-info ms-auto">AMIAL-HUB-001</span>
     </div>
 
+    {{-- AMIAL-CASH-HANDOVER-001 — **قيدٌ في الدفتر ليس دليلاً على أنّ
+         حقيبةً انتقلت.** ورصيدٌ رقميٌّ سُلّم مقابل نقدٍ لم يؤكّد أحدٌ
+         استلامَه هو **مالٌ في الطريق** — وقد يكون في جيب. --}}
+    <div id="handover-panel" class="mb-4"></div>
+
     <div class="row g-3 mb-4">
         <div class="col-md-3 col-6"><div class="card stat-card p-3">
             <small class="text-muted">تسويات معلّقة</small>
@@ -76,7 +81,71 @@
         return j;
     }
 
+    async function loadHandovers() {
+        const box = document.getElementById('handover-panel');
+
+        try {
+            const r = await fetch(`${base}/../settlements/handovers/pending`, {headers: {'Accept': 'application/json'}});
+            const j = await r.json();
+            const items = (j.meta && j.meta.items) || [];
+
+            if (!items.length) {
+                box.innerHTML = '';
+                return;
+            }
+
+            box.innerHTML = `<div class="card border-warning">
+                <div class="card-body">
+                    <h6 class="mb-1">🚚 نقدٌ في الطريق — ${items.length} تسليماً لم يُؤكَّد استلامُه</h6>
+                    <div class="small text-muted mb-3">
+                        الرصيدُ الرقميُّ تحرّك، والنقدُ الورقيُّ ينتظر تأكيدَ المستلِم.
+                        <strong>ومن سلّم لا يستلم.</strong>
+                    </div>
+                    <div class="table-responsive"><table class="table table-sm align-middle" data-testid="handovers-table">
+                    <thead><tr><th>الاتجاه</th><th class="text-end">المبلغ</th><th>المرجع</th>
+                        <th>منذ</th><th class="text-end">—</th></tr></thead><tbody>
+                    ${items.map(h => `<tr>
+                        <td class="small">${esc(h.direction_label)}</td>
+                        <td class="text-end fw-bold">${fmt(h.amount)} ر.ي</td>
+                        <td class="small font-monospace">${esc(h.reference || h.settlement_ulid || '—')}</td>
+                        <td class="small ${h.age_hours > 24 ? 'text-danger fw-bold' : 'text-muted'}">
+                            ${h.age_hours === null ? '—' : h.age_hours + ' ساعة'}</td>
+                        <td class="text-end text-nowrap">
+                            <button class="btn btn-sm btn-success js-hv-confirm" data-u="${esc(h.handover_ulid)}">أستلمتُه</button>
+                            <button class="btn btn-sm btn-outline-danger js-hv-dispute" data-u="${esc(h.handover_ulid)}">خلاف</button>
+                        </td></tr>`).join('')}
+                    </tbody></table></div>
+                </div></div>`;
+        } catch (e) {
+            // **الغيابُ يُقال ولا يُقرأ سلامة.** ولوحٌ فارغٌ لأنّ الطلبَ
+            // سقط يُقرأ «لا نقدَ في الطريق» — وهو أسوأ من رسالة خطأ.
+            box.innerHTML = `<div class="alert alert-secondary py-2 small">
+                تعذّر قراءةُ تسليمات النقد — <strong>وهذا ليس «لا تسليمات معلّقة»</strong>.</div>`;
+        }
+    }
+
+    document.addEventListener('click', async function (e) {
+        const c = e.target.closest('.js-hv-confirm');
+        const d = e.target.closest('.js-hv-dispute');
+        if (!c && !d) return;
+
+        try {
+            if (c) {
+                if (!confirm('تؤكّد أنّك عددتَ المالَ واستلمتَه؟')) return;
+                await post(`${base}/../settlements/handovers/${c.dataset.u}/confirm`, {});
+            } else {
+                const reason = prompt('سببُ الخلاف (يُحفظ ولا يُمحى):');
+                if (!reason) return;
+                await post(`${base}/../settlements/handovers/${d.dataset.u}/dispute`, {reason});
+            }
+            await loadHandovers();
+        } catch (err) {
+            alert(err.message);
+        }
+    });
+
     async function load() {
+        loadHandovers();
         const tbody = document.getElementById('tbody');
         tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>';
         const r = await fetch(`${base}/settlements/list.json?status=${status}&page=${page}`, {headers: {'Accept': 'application/json'}});

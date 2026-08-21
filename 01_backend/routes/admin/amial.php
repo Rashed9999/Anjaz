@@ -614,6 +614,12 @@ Route::prefix('settlements')->name('settlements.')->middleware(['platform:platfo
     ->group(function () {
     Route::get('/pending', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'pendingSettlements'])->name('pending');
     Route::post('/{ulid}/approve', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'approveSettlement'])->name('approve');
+
+    // AMIAL-CASH-HANDOVER-001 — الساقُ الورقيّة. والتأكيدُ تحريكُ عهدةٍ
+    // فعليّة، فهو تحت الصلاحيّة نفسِها التي يُعتمَد بها المال.
+    Route::get('/handovers/pending', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'pendingHandovers'])->name('handovers.pending');
+    Route::post('/handovers/{ulid}/confirm', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'confirmHandover'])->name('handovers.confirm');
+    Route::post('/handovers/{ulid}/dispute', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'disputeHandover'])->name('handovers.dispute');
 });
 
 // ============ AMIAL-MERCHANT-RISK-001 (v2.10) ============
