@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\EMoney;
 use App\Models\Ledger\LedgerAccount;
 use App\Models\Ledger\LedgerEntryLine;
+use App\Models\ReconciliationCase;
 use App\Models\User;
 use App\Traits\TransactionTrait;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -81,10 +82,43 @@ class LedgerWalletReconciliationTest extends TestCase
      * ينشئ الحساب بصفر ولا يعرف شيئاً عن رصيدٍ مُوّل من خارجه. وهذا نفسه
      * سبب العطل الذي يوثّقه `test_the_ledger_is_silently_dead_...` أدناه.
      */
+    private function approvedControlFor(User $walletOwner): array
+    {
+        $maker = User::factory()->create();
+        $checker = User::factory()->create();
+        $case = ReconciliationCase::create([
+            'case_ulid' => (string) \Illuminate\Support\Str::ulid(),
+            'case_type' => 'wallet',
+            'source' => 'test',
+            'subject_user_id' => $walletOwner->id,
+            'expected_amount' => '0',
+            'actual_amount' => '0',
+            'difference' => '0',
+            'currency' => 'YER',
+            'status' => 'pending_approval',
+            'severity' => 'warning',
+            'first_detected_at' => now(),
+            'last_detected_at' => now(),
+            'detection_count' => 1,
+            'maker_admin_id' => $maker->id,
+            'checker_admin_id' => $checker->id,
+        ]);
+
+        return [
+            'case_ulid' => $case->case_ulid,
+            'maker_admin_id' => $maker->id,
+            'checker_admin_id' => $checker->id,
+            'approval_note' => 'اختبار تسوية مُعتمد من مراجع مستقل.',
+        ];
+    }
+
     private function openLedgerFor(User $u, string $balance): void
     {
-        app(\App\Services\LedgerService::class)
-            ->reconcileWalletBalance($u->id, 'رصيد قائم قبل دخول الدفتر');
+        app(\App\Services\LedgerService::class)->reconcileWalletBalance(
+            $u->id,
+            'رصيد قائم قبل دخول الدفتر',
+            $this->approvedControlFor($u),
+        );
     }
 
     // ── الفحص نفسه ────────────────────────────────────────────────────
