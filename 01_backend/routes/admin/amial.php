@@ -445,6 +445,8 @@ Route::prefix('ledger')->name('ledger.')->middleware('platform:platform.audit.vi
         // القراءة**. فالفروقُ تُكتشَف وتُسجَّل ولا يراها أحد: مصالحةٌ تعمل
         // في الظلام. (‏القاعدة ١٢ في أخطر موضعها.)
         Route::get('/reconciliation-cases', [$lc, 'reconciliationCases'])->name('reconciliation-cases');
+        // AMIAL-LEDGER-FLOW-COVERAGE-001 — «كلُّ ريال» تُقاس أو لا تُقال.
+        Route::get('/flow-coverage', [$lc, 'flowCoverage'])->name('flow-coverage');
     });
 
 // ============ AMIAL-OTP-CENTER-001 — مركز التحقّق ============

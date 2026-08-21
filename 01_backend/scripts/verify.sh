@@ -306,6 +306,49 @@ else
   printf '  \033[33m—\033[0m node أو المسبار غير متوفّر — تخطّي\n'
 fi
 
+# ── ٦ج) تغطيةُ التدفّقات في متصفّح ───────────────────────────────────
+#
+# **تبويبٌ لم يُضغط ليس مبنيّاً** (القاعدة التاسعة). والمسارُ مسجَّلٌ
+# والخدمةُ محروسةٌ بخمسة اختبارات — ولا شيءَ من ذلك يُثبت أنّ التبويبَ
+# يعمل: سكربتٌ مضمَّنٌ بلا `nonce` يمنعه CSP **صامتاً**، فتردّ الصفحةُ
+# ٢٠٠ ويُضغط التبويبُ ولا يحدث شيء. ولا يُرى إلّا عبر خادمٍ حقيقيّ —
+# فبناءُ القالب مباشرةً لا يمرّ بالوسيط الذي يضع الترويسة.
+#
+# وقد جُرّب بالعكس: نُزع `nonce` عن سكربت الصفحة فأخرج المسبارُ أربعةَ
+# أعطالٍ وسمّى السكربتَ **ببصمته** لا بنمطٍ في الرسالة.
+head_ "٦ج) تغطية التدفّقات في متصفّح"
+if command -v node >/dev/null 2>&1 && [[ -f scripts/flow-coverage-probe.mjs ]]; then
+  FLOW_PORT=8137
+
+  php artisan amial:probe-admin >/dev/null 2>&1
+  AMIAL_DISABLE_ADMIN_CAPTCHA=true php artisan serve --port "$FLOW_PORT" >/tmp/flow-probe-serve.log 2>&1 &
+  FLOW_SRV=$!
+
+  for _ in $(seq 1 20); do
+    curl -s -o /dev/null "http://127.0.0.1:$FLOW_PORT/admin/auth/login" && break
+    sleep 0.5
+  done
+
+  FLOW_OUT=$(PROBE_BASE="http://127.0.0.1:$FLOW_PORT" \
+    NODE_PATH="${NODE_PATH:-/opt/node22/lib/node_modules}" \
+    node scripts/flow-coverage-probe.mjs 2>&1)
+  FLOW_RC=$?
+
+  kill "$FLOW_SRV" 2>/dev/null; wait "$FLOW_SRV" 2>/dev/null
+
+  echo "$FLOW_OUT" | sed 's/^/  /'
+
+  if [[ $FLOW_RC -eq 0 ]]; then
+    PASS=$((PASS+1))
+  elif [[ $FLOW_RC -eq 2 ]]; then
+    printf '  \033[33m—\033[0m الطبقةُ مُخطّاةٌ ولا تُعدّ نجاحاً\n'
+  else
+    FAIL=$((FAIL+1))
+  fi
+else
+  printf '  \033[33m—\033[0m node أو المسبار غير متوفّر — تخطّي\n'
+fi
+
 # ── ٧) تصريف Dart ────────────────────────────────────────────────────
 #
 # **الطبقة التي كانت غائبة، وثمنُها بناءٌ ساقطٌ على شاشة صاحب المشروع.**

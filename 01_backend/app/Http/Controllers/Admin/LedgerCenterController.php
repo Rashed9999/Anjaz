@@ -50,6 +50,25 @@ class LedgerCenterController extends Controller
         return $this->ok($this->reports->walletReconciliation());
     }
 
+    /**
+     * AMIAL-LEDGER-FLOW-COVERAGE-001 — **تغطيةُ التدفّقات، مقيسةً.**
+     *
+     * تجيب سؤالَ الوثيقة: هل يرى الدفترُ **كلَّ** ما حرّك محفظةً؟ والجوابُ
+     * يُقرأ من البيانات لا من قائمةٍ مكتوبةٍ باليد تشيخ في الاتّجاهين.
+     *
+     * والنافذةُ ثلاثون يوماً افتراضاً: نافذةٌ أقصرُ تُخفي تدفّقاً موسميّاً
+     * (‏كالتسوية الشهريّة)، وأطولُ تُبطئ الصفحة بلا فائدةٍ تشغيليّة.
+     */
+    public function flowCoverage(Request $request): JsonResponse
+    {
+        $days = max(1, min(180, (int) $request->query('days', 30)));
+
+        return $this->ok(
+            app(\App\Services\Reconciliation\LedgerFlowCoverageService::class)
+                ->coverage(now()->subDays($days), now())
+        );
+    }
+
     /** القضايا التي أنشأها التشغيل الليلي؛ القراءة لا تنشئ ولا تصلح فرقاً. */
     public function reconciliationCases(Request $request): JsonResponse
     {

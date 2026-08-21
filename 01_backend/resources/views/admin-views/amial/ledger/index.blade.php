@@ -34,6 +34,7 @@
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lg-accounts" data-testid="lg-tab-accounts">📒 دليل الحسابات</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lg-entries" data-testid="lg-tab-entries">🔍 بحث القيود</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lg-runs" data-testid="lg-tab-runs">🌙 المصالحات الليليّة <span class="badge bg-secondary" id="lg-runs-count">—</span></button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lg-flows" data-testid="lg-tab-flows">📡 تغطية التدفّقات <span class="badge bg-secondary" id="lg-flows-count">—</span></button></li>
     </ul>
 
     <div class="tab-content">
@@ -88,6 +89,38 @@
 
                 <div id="lg-runs-list" data-testid="lg-runs-list">
                     <div class="text-muted py-4 text-center">…جارٍ التحميل</div>
+                </div>
+            </div>
+        </div>
+
+        {{-- ============ تغطية التدفّقات ============ --}}
+        <div class="tab-pane fade" id="lg-flows">
+            <div class="card p-3">
+                <div class="alert alert-secondary py-2 small">
+                    <strong>«كلُّ ريال» تُقاس هنا، ولا تُقال بلا قياس.</strong>
+                    لكلّ نوع عمليّة: كم صفّاً حرّك مالاً في النافذة، وكم منها
+                    يقابله قيدٌ في الدفتر يشير إليه.
+                    <div class="mt-1">
+                        وهذا يقيس <strong>الوصول</strong> لا <strong>الصحّة</strong>:
+                        قيدٌ موجودٌ بمبلغٍ خاطئ يُعدّ هنا مغطّى — و«مطابقة المحافظ»
+                        هي التي تمسك المبلغ. سؤالان لا سؤال.
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                    <label class="small text-muted mb-0">النافذة</label>
+                    <select class="form-select form-select-sm" id="lg-flows-days" style="width:auto">
+                        <option value="7">٧ أيّام</option>
+                        <option value="30" selected>٣٠ يوماً</option>
+                        <option value="90">٩٠ يوماً</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-primary" id="lg-flows-refresh"
+                            data-testid="lg-flows-refresh">⟳ قِس</button>
+                </div>
+
+                <div id="lg-flows-summary" class="row g-3 mb-3"></div>
+                <div id="lg-flows-list" data-testid="lg-flows-list">
+                    <div class="text-muted py-4 text-center">…جارٍ القياس</div>
                 </div>
             </div>
         </div>
@@ -270,6 +303,77 @@
     // يُحمَّل عند فتح التبويب — لا عند فتح الصفحة، فالسجلّ قد يطول.
     document.querySelector('[data-testid="lg-tab-runs"]')
         .addEventListener('shown.bs.tab', loadRuns, {once: false});
+
+    // ---------- تغطية التدفّقات ----------
+    async function loadFlows() {
+        const days = document.getElementById('lg-flows-days').value;
+        const box = document.getElementById('lg-flows-list');
+        const sum = document.getElementById('lg-flows-summary');
+        box.innerHTML = '<div class="text-muted py-4 text-center">…جارٍ القياس</div>';
+
+        const j = await get('/flow-coverage?days=' + days);
+        const d = (j && j.data) || {};
+
+        // **الغيابُ يُقال ولا يُقرأ صفراً.**
+        if (d.measurable === false) {
+            sum.innerHTML = '';
+            box.innerHTML = '<div class="alert alert-warning py-2 small">'
+                + 'غيرُ قابلٍ للقياس: ' + (d.reason || 'سببٌ غيرُ مذكور') + '</div>';
+            document.getElementById('lg-flows-count').textContent = '؟';
+            return;
+        }
+
+        const t = d.totals || {};
+        const gaps = (d.rows || []).filter(r => r.uncovered > 0).length;
+
+        document.getElementById('lg-flows-count').textContent = gaps || '٠';
+        document.getElementById('lg-flows-count').className =
+            'badge ' + (gaps ? 'bg-danger' : 'bg-success');
+
+        sum.innerHTML = [
+            ['حركاتٌ في النافذة', t.moves ?? 0, 'secondary'],
+            ['يراها الدفتر', t.covered ?? 0, 'success'],
+            ['لا يراها', t.uncovered ?? 0, (t.uncovered > 0 ? 'danger' : 'success')],
+            ['نسبة التغطية', (t.percent ?? '—') + (t.percent === '—' ? '' : '%'),
+                (t.percent === '—' ? 'secondary' : 'info')],
+        ].map(([label, value, tone]) => `
+            <div class="col-6 col-lg-3">
+                <div class="card p-3 h-100">
+                    <div class="small text-muted">${label}</div>
+                    <div class="h4 mb-0 money text-${tone}">${value}</div>
+                </div>
+            </div>`).join('');
+
+        if (!(d.rows || []).length) {
+            // نافذةٌ بلا حركةٍ ليست تغطيةً تامّة — تُقال كما هي.
+            box.innerHTML = '<div class="alert alert-secondary py-2 small">'
+                + 'لا حركةَ مالٍ في هذه النافذة — <strong>وهذا ليس «تغطيةً تامّة»</strong>،'
+                + ' بل لا شيءَ فُحص. وسّع النافذة.</div>';
+            return;
+        }
+
+        box.innerHTML = '<div class="table-responsive"><table class="table table-sm align-middle">'
+            + '<thead><tr><th>نوع العمليّة</th><th class="text-end">حركات</th>'
+            + '<th class="text-end">يراها الدفتر</th><th class="text-end">لا يراها</th>'
+            + '<th class="text-end">مبلغٌ تقريبيّ خارج الدفتر</th><th>الحالة</th></tr></thead><tbody>'
+            + d.rows.map(r => {
+                const tone = r.state === 'مرحَّل' ? 'success'
+                    : (r.state === 'جزئيّ' ? 'warning' : 'danger');
+                return `<tr>
+                    <td><code>${r.type}</code></td>
+                    <td class="text-end money">${r.moves}</td>
+                    <td class="text-end money">${r.covered}</td>
+                    <td class="text-end money text-${r.uncovered ? 'danger' : 'muted'}">${r.uncovered}</td>
+                    <td class="text-end money">${r.uncovered ? r.amount_uncovered : '—'}</td>
+                    <td><span class="badge bg-${tone}">${r.state}</span></td>
+                </tr>`;
+            }).join('')
+            + '</tbody></table></div>';
+    }
+
+    document.getElementById('lg-flows-refresh').onclick = loadFlows;
+    document.querySelector('[data-testid="lg-tab-flows"]')
+        .addEventListener('shown.bs.tab', loadFlows, {once: false});
 
     // ---------- ميزان المراجعة ----------
     document.getElementById('lg-btn-trial').onclick = loadTrial;

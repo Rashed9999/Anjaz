@@ -235,6 +235,7 @@ class CustomerWithdrawService
                 agentCommission: (string) $req->agent_commission,
                 platformProfit: (string) $req->platform_profit,
                 sourceId: (string) $req->id,
+                transactionId: $txId,
             );
 
             $req->update([

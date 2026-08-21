@@ -547,6 +547,7 @@ trait PostsToLedger
         string $agentCommission,
         string $platformProfit,
         string $sourceId,
+        ?string $transactionId = null,
     ): void {
         $ledger = $this->ledgerService();
         $agent = $ledger->getOrCreateUserWallet($agentUserId);
@@ -582,6 +583,10 @@ trait PostsToLedger
             description: 'تنفيذ سحب نقديّ عند وكيل',
             lines: $lines,
             idempotencyKey: "cash_out_exec_{$sourceId}",
+            // **مرجعُ القيد رقمُ الطلب، لا رقمُ المعاملة.** فيُحمَل رقمُ
+            // المعاملة معه ليصل قياسُ التغطية إليه — وإلّا أخرج إنذاراً
+            // كاذباً عن مسارٍ مغطّىً، **وإنذارٌ كاذبٌ يُفقد التقريرَ كلَّه**.
+            metadata: $transactionId === null ? [] : ['transaction_id' => $transactionId],
         );
     }
 
