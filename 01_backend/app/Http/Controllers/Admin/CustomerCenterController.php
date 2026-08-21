@@ -23,14 +23,14 @@ class CustomerCenterController extends Controller
     /** كل تبويب يكشف بيانات مستقلة، فلا تكفي صلاحية فتح المركز وحدها. */
     private const TAB_PERMISSIONS = [
         'overview' => 'platform.customers.view',
-        'wallets' => 'platform.customers.view',
+        'wallets' => 'platform.customers.wallets.view',
         'transactions' => 'platform.transactions.view',
-        'devices' => 'platform.customers.sessions',
-        'authentication' => 'platform.customers.sessions',
-        'kyc' => 'platform.approvals.decide',
+        'devices' => 'platform.customers.security.view',
+        'authentication' => 'platform.customers.security.view',
+        'kyc' => 'platform.customers.kyc.view',
         'risk' => 'platform.audit.view',
         'support' => 'platform.tickets.manage',
-        'notifications' => 'platform.customers.view',
+        'notifications' => 'platform.customers.notifications.view',
         'audit' => 'platform.audit.view',
     ];
 
@@ -55,11 +55,10 @@ class CustomerCenterController extends Controller
     }
 
     /**
-     * بحثٌ بعشرة مفاتيح — والوثيقة تعدّها كلّها: الهاتف، ورقم الحساب،
-     * والمحفظة، والاسم، والبريد، ورقم الهوية، وQR، ورقم العملية، والتاجر،
-     * والوكيل.
-     *
-     * والشرط ≤ ٥٠٠ms: فيُحدّ الناتج، ويُبحث في الأعمدة المفهرسة أوّلاً.
+     * سجل بحث مركز العملاء (customer-only) بمفاتيح موجودة ومثبتة فقط:
+     * هاتف، رقم حساب، معرّف محفظة، اسم، بريد، هوية (لصاحب صلاحية PII)،
+     * أو مرجع عملية. أرقام التاجر/الوكيل وQR ليست مفاتيح لهذا المركز؛
+     * نسبتها إليه كانت ادعاءً لا يسنده مسار أو نموذج.
      */
     public function search(Request $request): JsonResponse
     {
@@ -82,42 +81,76 @@ class CustomerCenterController extends Controller
             accessReason: $this->safeSearchAuditReason($q),
         );
 
-        $digits = preg_replace('/\D+/', '', $q);
-
-        $users = User::query()->where('type', CUSTOMER_TYPE)
-            ->where(function ($w) use ($q, $digits) {
-                $w->where('phone', 'like', "%{$q}%")
-                    ->orWhere('f_name', 'like', "%{$q}%")
-                    ->orWhere('l_name', 'like', "%{$q}%")
-                    ->orWhere('email', 'like', "%{$q}%");
-
-                if ($digits !== '') {
-                    $w->orWhere('id', (int) $digits)->orWhere('phone', 'like', "%{$digits}%");
-                }
-            })
-            ->limit(25)
-            ->get(['id', 'f_name', 'l_name', 'phone', 'type', 'is_temp_blocked', 'is_kyc_verified']);
-
-        // رقم عملية: يُترجَم إلى صاحبها بدل أن يُردّ «لا نتائج».
-        if ($users->isEmpty() && \Illuminate\Support\Facades\Schema::hasTable('transactions')) {
-            $ownerId = DB::table('transactions')->where('transaction_id', $q)->value('user_id');
-            if ($ownerId) {
-                $users = User::where('id', $ownerId)->where('type', CUSTOMER_TYPE)
-                    ->get(['id', 'f_name', 'l_name', 'phone', 'type', 'is_temp_blocked', 'is_kyc_verified']);
-            }
-        }
+        $users = $this->searchCustomers($q, $request->user());
 
         return $this->ok([
             'items' => $users->map(fn (User $u) => [
                 'id' => (int) $u->id,
                 'name' => trim((string) ($u->f_name . ' ' . $u->l_name)) ?: '—',
-                'phone' => (string) $u->phone,
+                'phone' => $request->user()->hasPlatformPermission('platform.customers.pii.reveal')
+                    ? (string) $u->phone : $this->maskPhone($u->phone),
                 'type' => (int) $u->type,
                 'is_frozen' => (int) ($u->is_temp_blocked ?? 0) === 1,
                 // 2 = مرفوض و3 = لم يقدّم؛ كلاهما ليس توثيقاً.
                 'is_kyc_verified' => (int) ($u->is_kyc_verified ?? 0) === 1,
             ])->all(),
         ]);
+    }
+
+    private function maskPhone(?string $phone): string
+    {
+        $value = trim((string) $phone);
+        if ($value === '') return '—';
+        return mb_substr($value, 0, 3) . '••••' . mb_substr($value, -2);
+    }
+
+    /** @return \Illuminate\Support\Collection<int,User> */
+    private function searchCustomers(string $query, User $actor)
+    {
+        $columns = ['id', 'f_name', 'l_name', 'phone', 'type', 'is_temp_blocked', 'is_kyc_verified'];
+        $digits = preg_replace('/\D+/', '', $query);
+        $base = fn () => User::query()->where('type', CUSTOMER_TYPE);
+
+        // المعرّفات الفريدة تُفحَص exact أولاً؛ لا نوسّعها إلى LIKE بطيء
+        // أو قد يخلط حسابين متشابهين.
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'account_number')) {
+            $found = $base()->where('account_number', $query)->get($columns);
+            if ($found->isNotEmpty()) return $found;
+        }
+
+        if ($actor->hasPlatformPermission('platform.customers.pii.reveal')
+            && \Illuminate\Support\Facades\Schema::hasColumn('users', 'national_id_blind_index')) {
+            $found = $base()->whereNationalId($query)->get($columns);
+            if ($found->isNotEmpty()) return $found;
+        }
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('e_money') && ctype_digit((string) $digits)) {
+            $ownerId = DB::table('e_money')->where('id', (int) $digits)->value('user_id');
+            if ($ownerId) {
+                $found = $base()->whereKey($ownerId)->get($columns);
+                if ($found->isNotEmpty()) return $found;
+            }
+        }
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('transactions')) {
+            $ownerId = DB::table('transactions')->where('transaction_id', $query)->value('user_id');
+            if ($ownerId) {
+                $found = $base()->whereKey($ownerId)->get($columns);
+                if ($found->isNotEmpty()) return $found;
+            }
+        }
+
+        return $base()->where(function ($w) use ($query, $digits) {
+            $w->where('f_name', 'like', "%{$query}%")
+                ->orWhere('l_name', 'like', "%{$query}%")
+                ->orWhere('email', 'like', "%{$query}%");
+
+            if ($digits !== '') {
+                // يحفظ البحث بالصيَغ المحلية و+967 دون أن نفترض أن كل رقم
+                // هو phone كامل أو أن name search يحتاج مسح جدول كامل.
+                $w->orWhere('phone', 'like', "%{$digits}%")->orWhere('id', (int) $digits);
+            }
+        })->limit(25)->get($columns);
     }
 
     public function tab(Request $request, int $id, string $tab): JsonResponse
