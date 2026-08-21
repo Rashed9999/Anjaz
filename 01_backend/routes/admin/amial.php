@@ -131,35 +131,37 @@ Route::prefix('surface')->name('surface.')->group(function () {
     Route::get('/rbac', [$sc, 'rbac'])->name('rbac');
 });
 
-Route::prefix('charity')->name('charity.')->middleware('amial.idempotency')->group(function () {
+Route::prefix('charity')->name('charity.')->middleware(['platform:platform.transactions.view', 'amial.idempotency'])->group(function () {
     // AMIAL-CHARITY-ADMIN-UI-001: صفحة اللوحة (الواجهة)
     Route::view('/', 'admin-views.amial.charity.index')->name('page');
     // Organizations
     Route::get('/organizations', [AdminCharityController::class, 'indexOrgs'])->name('orgs.index');
-    Route::post('/organizations', [AdminCharityController::class, 'createOrg'])->name('orgs.create');
+    Route::post('/organizations', [AdminCharityController::class, 'createOrg'])
+        ->middleware('platform:platform.approvals.decide')->name('orgs.create');
     Route::get('/organizations/{ulid}', [AdminCharityController::class, 'showOrg'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('orgs.show');
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.audit.view')->name('orgs.show');
     Route::post('/organizations/{ulid}/verify', [AdminCharityController::class, 'verifyOrg'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('orgs.verify');
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.approvals.decide')->name('orgs.verify');
     Route::post('/organizations/{ulid}/reject', [AdminCharityController::class, 'rejectOrg'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('orgs.reject');
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.approvals.decide')->name('orgs.reject');
     Route::post('/organizations/{ulid}/suspend', [AdminCharityController::class, 'suspendOrg'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('orgs.suspend');
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.approvals.decide')->name('orgs.suspend');
 
     // AMIAL-CHARITY-META-001 — التصنيفات. كانت الشاشةُ تناديه وهو معدوم.
     Route::get('/categories', [AdminCharityController::class, 'categories'])->name('categories');
 
     // AMIAL-CHARITY-UPLOAD-001 — رفعُ صورةٍ من الجهاز بدل لصق رابط.
-    Route::post('/uploads', [AdminCharityController::class, 'uploadImage'])->name('uploads');
+    Route::post('/uploads', [AdminCharityController::class, 'uploadImage'])
+        ->middleware('platform:platform.approvals.decide')->name('uploads');
 
     // Campaigns
     Route::get('/campaigns', [AdminCharityController::class, 'indexCampaigns'])->name('campaigns.index');
     Route::post('/organizations/{orgUlid}/campaigns', [AdminCharityController::class, 'createCampaign'])
-        ->where('orgUlid', '[A-Z0-9]{26}')->name('campaigns.create');
+        ->where('orgUlid', '[A-Z0-9]{26}')->middleware('platform:platform.approvals.decide')->name('campaigns.create');
     Route::post('/campaigns/{ulid}/approve', [AdminCharityController::class, 'approveCampaign'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('campaigns.approve');
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.approvals.decide')->name('campaigns.approve');
     Route::post('/campaigns/{ulid}/pause', [AdminCharityController::class, 'pauseCampaign'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('campaigns.pause');
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.approvals.decide')->name('campaigns.pause');
 
     // AMIAL-CHARITY-DONORS-001 — «يجب إظهار المتبرّعين». والجدولُ مكتوبٌ
     // منذ بُنيت الحملات ولا نقطةَ تقرؤه للإدارة.
@@ -172,7 +174,8 @@ Route::prefix('charity')->name('charity.')->middleware('amial.idempotency')->gro
 
     // Settlements
     Route::get('/settlements', [AdminCharityController::class, 'indexSettlements'])->name('settlements.index');
-    Route::post('/settlements/generate', [AdminCharityController::class, 'generateSettlement'])->name('settlements.generate');
+    Route::post('/settlements/generate', [AdminCharityController::class, 'generateSettlement'])
+        ->middleware('platform:platform.money.move')->name('settlements.generate');
     // **بابان لفعلٍ واحد، أحدُهما محروسٌ والآخرُ لا** — القاعدة الرابعة.
     // هذا يقلب التسويةَ إلى «مصروفة» **بلا قيدٍ في الدفتر**، وهو عينُ
     // الثغرة التي عولجت في `payout`. فيُحرَس بالصلاحيّة نفسِها حتّى

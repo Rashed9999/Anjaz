@@ -55,6 +55,7 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
     private CharityService $charity;
     private DonationsService $donations;
     private User $admin;
+    private User $payoutAdmin;
     private CharityOrganization $org;
     private CharityCategory $category;
 
@@ -70,6 +71,8 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
 
         $this->admin = User::factory()->create(['type' => ADMIN_TYPE, 'role' => 'admin']);
         app(PlatformRoleService::class)->assign($this->admin, PlatformRoleService::ADMIN);
+        $this->payoutAdmin = User::factory()->create(['type' => ADMIN_TYPE, 'role' => 'admin']);
+        app(PlatformRoleService::class)->assign($this->payoutAdmin, PlatformRoleService::ADMIN);
 
         // AMIAL-CHARITY-META-001 — **التصنيفاتُ صارت مزروعةً بهجرة**،
         // فإنشاؤها هنا يصطدم بمفتاحِ الرمز الفريد. و`updateOrCreate` تُبقي
@@ -99,7 +102,7 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
             'title_ar' => 'حملة', 'description_ar' => 'وصف',
             'target_amount' => '100000.0000',
         ], $this->admin);
-        $this->charity->approveCampaign($campaign, $this->admin);
+        $this->charity->approveCampaign($campaign, $this->payoutAdmin);
 
         $donor = User::factory()->create(['zone_code' => 'SOUTH']);
         EMoney::create(['user_id' => $donor->id, 'current_balance' => '100000.0000']);
@@ -132,11 +135,11 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         $before = $this->escrowBalance();
         $this->assertTrue(bccomp($before, '0', 4) > 0, 'العهدةُ صفرٌ بعد تبرّعٍ — القيدُ لم يُكتب');
 
-        $recipient = User::factory()->create(['phone' => '967771900001']);
+        $recipient = User::factory()->create(['phone' => '967100000077']);
         EMoney::create(['user_id' => $recipient->id, 'current_balance' => '0.0000']);
 
         $this->charity->payoutSettlement(
-            $settlement, $this->admin, 'wallet', 'REF-W-1', $recipient,
+            $settlement, $this->payoutAdmin, 'wallet', 'REF-W-1', $recipient,
         );
 
         // **المحفظةُ زادت بالمبلغ نفسِه** — لا بمبلغٍ آخرَ ولا بصفر.
@@ -158,11 +161,11 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
     public function test_payout_links_the_settlement_to_its_journal_entry(): void
     {
         $settlement = $this->pendingSettlement();
-        $recipient = User::factory()->create(['phone' => '967771900002']);
+        $recipient = User::factory()->create(['phone' => '967100000077']);
         EMoney::create(['user_id' => $recipient->id, 'current_balance' => '0.0000']);
 
         $paid = $this->charity->payoutSettlement(
-            $settlement, $this->admin, 'wallet', 'REF-W-2', $recipient,
+            $settlement, $this->payoutAdmin, 'wallet', 'REF-W-2', $recipient,
         );
 
         // **بلا رابطٍ إلى الدفتر يبقى الصرفُ رقماً في شاشة.**
@@ -185,7 +188,7 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         EMoney::create(['user_id' => $agent->id, 'current_balance' => '0.0000']);
 
         $paid = $this->charity->payoutSettlement(
-            $settlement, $this->admin, 'agent', 'REF-A-1', $agent,
+            $settlement, $this->payoutAdmin, 'agent', 'REF-A-1', $agent,
         );
 
         $this->assertSame('agent', $paid->payout_method);
@@ -205,23 +208,23 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('ليس وكيلاً');
 
-        $this->charity->payoutSettlement($settlement, $this->admin, 'agent', 'REF-A-2', $notAgent);
+        $this->charity->payoutSettlement($settlement, $this->payoutAdmin, 'agent', 'REF-A-2', $notAgent);
     }
 
     public function test_a_settlement_cannot_be_paid_twice(): void
     {
         $settlement = $this->pendingSettlement();
-        $recipient = User::factory()->create(['phone' => '967771900005']);
+        $recipient = User::factory()->create(['phone' => '967100000077']);
         EMoney::create(['user_id' => $recipient->id, 'current_balance' => '0.0000']);
 
-        $this->charity->payoutSettlement($settlement, $this->admin, 'wallet', 'REF-W-3', $recipient);
+        $this->charity->payoutSettlement($settlement, $this->payoutAdmin, 'wallet', 'REF-W-3', $recipient);
 
         // **الصرفُ مرّتين يخلق مالاً من العدم** — والحالةُ هي البوّابة.
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('ليست معلَّقة');
 
         $this->charity->payoutSettlement(
-            $settlement->refresh(), $this->admin, 'wallet', 'REF-W-4', $recipient,
+            $settlement->refresh(), $this->payoutAdmin, 'wallet', 'REF-W-4', $recipient,
         );
     }
 
@@ -242,10 +245,10 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         $settlement = $this->pendingSettlement('400.0000');
         $payable = (string) $settlement->payable_amount;
 
-        $recipient = User::factory()->create(['phone' => '967771900007']);
+        $recipient = User::factory()->create(['phone' => '967100000077']);
         EMoney::create(['user_id' => $recipient->id, 'current_balance' => '0.0000']);
 
-        $this->charity->payoutSettlement($settlement, $this->admin, 'wallet', 'R-1', $recipient);
+        $this->charity->payoutSettlement($settlement, $this->payoutAdmin, 'wallet', 'R-1', $recipient);
 
         // **نسخةٌ قديمةٌ في الذاكرة** — كما يحمل الطلبُ الثاني حالةً قرأها
         // قبل أن يكتب الأوّل. وبلا إعادةِ قراءةٍ داخل القفل تمرّ.
@@ -255,7 +258,7 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         $stale->status = 'pending';
 
         try {
-            $this->charity->payoutSettlement($stale, $this->admin, 'wallet', 'R-2', $recipient);
+            $this->charity->payoutSettlement($stale, $this->payoutAdmin, 'wallet', 'R-2', $recipient);
             $this->fail('صُرفت التسويةُ مرّتين — الفحصُ خارج القفل');
         } catch (\RuntimeException $e) {
             $this->assertStringContainsString('ليست معلَّقة', $e->getMessage());
@@ -277,21 +280,21 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('المستلم');
 
-        $this->charity->payoutSettlement($settlement, $this->admin, 'wallet', 'REF-W-5', null);
+        $this->charity->payoutSettlement($settlement, $this->payoutAdmin, 'wallet', 'REF-W-5', null);
     }
 
     public function test_the_payout_endpoint_is_reachable_from_the_panel(): void
     {
         $settlement = $this->pendingSettlement();
-        $recipient = User::factory()->create(['phone' => '967771900006']);
+        $recipient = User::factory()->create(['phone' => '967100000077']);
         EMoney::create(['user_id' => $recipient->id, 'current_balance' => '0.0000']);
 
         // **من مدخل الشاشة لا من الخدمة** (القاعدة الرابعة).
-        $this->actingAs($this->admin, 'user')
+        $this->actingAs($this->payoutAdmin, 'user')
             ->postJson('/admin/amial/charity/settlements/' . $settlement->settlement_ulid . '/payout', [
                 'method' => 'wallet',
                 'reference' => 'REF-HTTP-1',
-                'recipient_phone' => '967771900006',
+                'recipient_phone' => '967100000077',
             ])->assertOk();
 
         $this->assertSame('transferred', (string) $settlement->refresh()->status);

@@ -24,6 +24,7 @@ class DonationsRepo extends GetxService {
   Future<Response> donate({
     required String campaignUlid,
     required String amount,
+    required String pin,
     bool isAnonymous = false,
     String? message,
     // AMIAL-IDEMPOTENCY-002 — **يُستقبَل ولا يُولَّد هنا.**
@@ -37,6 +38,7 @@ class DonationsRepo extends GetxService {
       {
         'campaign_ulid': campaignUlid,
         'amount': amount,
+        'pin': pin,
         'is_anonymous': isAnonymous,
         'message': ?message,
       },

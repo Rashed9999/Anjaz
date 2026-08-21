@@ -5,6 +5,10 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
+Schedule::job(new \App\Jobs\ExpireCharityCampaignsJob())
+    ->everyMinute()->withoutOverlapping(5)->onOneServer()
+    ->description('AMIAL-DONATIONS: Complete campaigns past their deadline');
+
 /*
 |--------------------------------------------------------------------------
 | Console Routes (Laravel 11 style — Schedule via routes/console.php)

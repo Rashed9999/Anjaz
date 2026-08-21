@@ -40,6 +40,7 @@ class DonationsService
         private readonly FinancialGuardService $guard,
         private readonly AuditService $audit,
         private readonly ReceiptService $receipts,
+        private readonly KycTierService $kyc,
     ) {}
 
     /**
@@ -55,20 +56,6 @@ class DonationsService
         bool $isAnonymous = false,
         ?string $message = null,
     ): Donation {
-        // ====== Validation ======
-        if ($donor->zone_code !== 'SOUTH') {
-            throw new \RuntimeException('Only SOUTH users can donate');
-        }
-
-        if (!$campaign->isAccepting()) {
-            throw new \RuntimeException('Campaign is not currently accepting donations');
-        }
-
-        $org = $campaign->organization;
-        if (!$org || !$org->isVerified()) {
-            throw new \RuntimeException('Organization is not verified');
-        }
-
         $amountNormalized = MoneyService::normalize($amount);
         $minAmount = (string)config('amial.donations.min_amount', '1.0000');
         $maxAmount = (string)config('amial.donations.max_amount', '50000.0000');
@@ -88,8 +75,22 @@ class DonationsService
 
         // ====== Execute ======
         $donation = DB::transaction(function () use (
-            $donor, $campaign, $org, $amountNormalized, $platformFee, $netToCharity, $isAnonymous, $message,
+            $donor, $campaign, $amountNormalized, $platformFee, $netToCharity, $isAnonymous, $message,
         ) {
+            // يُعاد تحميل كل طرف تحت القفل قبل خصم المال. فحص حالة الحملة
+            // خارج المعاملة يسمح لقبول تبرع لحملة أوقفها مدير في اللحظة نفسها.
+            $lockedDonor = User::whereKey($donor->id)->lockForUpdate()->firstOrFail();
+            $lockedCampaign = CharityCampaign::whereKey($campaign->id)->lockForUpdate()->firstOrFail();
+            $org = CharityOrganization::whereKey($lockedCampaign->org_id)->lockForUpdate()->first();
+
+            $this->assertEligibleDonor($lockedDonor, $amountNormalized);
+            if (!$lockedCampaign->isAccepting()) {
+                throw new \RuntimeException('Campaign is not currently accepting donations');
+            }
+            if (!$org || !$org->isVerified()) {
+                throw new \RuntimeException('Organization is not verified');
+            }
+
             // 1) خصم من المحفظة
             $walletTxId = (string) Str::ulid();
             $this->guard->debit(
@@ -101,9 +102,9 @@ class DonationsService
             // 2) إنشاء donation record
             $donation = Donation::create([
                 'donation_ulid' => (string) Str::ulid(),
-                'campaign_id' => $campaign->id,
+                'campaign_id' => $lockedCampaign->id,
                 'org_id' => $org->id,
-                'donor_user_id' => $donor->id,
+                'donor_user_id' => $lockedDonor->id,
                 'is_anonymous' => $isAnonymous,
                 'amount' => $amountNormalized,
                 'platform_fee' => $platformFee,
@@ -112,7 +113,7 @@ class DonationsService
                 'donor_message' => $message ? mb_substr($message, 0, 500) : null,
                 'status' => 'completed',
                 'donated_at' => now(),
-                'zone_code' => 'SOUTH',
+                'zone_code' => $lockedDonor->zone_code,
             ]);
 
             // AMIAL-LEDGER-RECON-001: قيد مزدوج للتبرّع داخل نفس المعاملة —
@@ -124,7 +125,7 @@ class DonationsService
             // المبلغ مرّتين وسقط الاختبار بـ«98 لا تكفي خصم 102». القيد
             // موجودٌ هنا أصلاً — والقراءةُ وحدها لم تكشف التكرار، بل القياس.
             $ledger = app(\App\Services\LedgerService::class);
-                $donorAcc = $ledger->getOrCreateUserWallet($donor->id);
+                $donorAcc = $ledger->getOrCreateUserWallet($lockedDonor->id);
                 $escrowAcc = $ledger->getOrCreateSystemAccount(
                     'CHARITY_ESCROW', 'liability', 'عهدة التبرعات (قبل التسوية)', 'credit');
                 $feeAcc = $ledger->getOrCreateSystemAccount(
@@ -139,20 +140,19 @@ class DonationsService
                 $ledger->post(
                     sourceType: 'donation',
                     sourceId: $donation->donation_ulid,
-                    description: "تبرّع لحملة #{$campaign->id} — {$org->name}",
+                    description: "تبرّع لحملة #{$lockedCampaign->id} — {$org->name_ar}",
                     lines: $lines,
                     idempotencyKey: 'donation:' . $donation->donation_ulid,
-                    createdByUserId: $donor->id,
+                    createdByUserId: $lockedDonor->id,
                 );
 
             // 3) تحديث campaign.current_amount + donor_count
             // نستخدم lockForUpdate لتجنب race conditions على العداد
-            $lockedCampaign = CharityCampaign::lockForUpdate()->find($campaign->id);
             $newAmount = MoneyService::add((string)$lockedCampaign->current_amount, $netToCharity);
             $newFeeCollected = MoneyService::add((string)$lockedCampaign->platform_fee_collected, $platformFee);
 
-            $isUniqueDonor = !Donation::where('campaign_id', $campaign->id)
-                ->where('donor_user_id', $donor->id)
+            $isUniqueDonor = !Donation::where('campaign_id', $lockedCampaign->id)
+                ->where('donor_user_id', $lockedDonor->id)
                 ->where('id', '<>', $donation->id)
                 ->exists();
 
@@ -169,24 +169,24 @@ class DonationsService
                 $lockedCampaign->update(['status' => 'completed']);
             }
 
-            // 5) تحديث org stats (atomic increment آمن — AMIAL-SECURITY-AUDIT-001 v2.1)
-            // $netToCharity مضمون رقمي (bcmath) لكن نستخدم increment لتجنب أي raw SQL
-            CharityOrganization::where('id', $org->id)
-                ->increment('total_collected', (float)$netToCharity);
+            // 5) إحصاءات الجمعية تحت قفلها وبـ BCMath. increment(float)
+            // يعيد إدخال خطأ التقريب الذي أزلناه من التسويات.
+            $org->total_collected = MoneyService::add((string) $org->total_collected, $netToCharity);
             if ($isUniqueDonor) {
                 $globalUniqueDonor = !Donation::where('org_id', $org->id)
-                    ->where('donor_user_id', $donor->id)
+                ->where('donor_user_id', $lockedDonor->id)
                     ->where('id', '<>', $donation->id)
                     ->exists();
                 if ($globalUniqueDonor) {
-                    CharityOrganization::where('id', $org->id)->increment('total_donors');
+                    $org->total_donors = (int) $org->total_donors + 1;
                 }
             }
+            $org->save();
 
             // 6) audit
             $this->audit->record([
                 'actor_type' => 'user',
-                'actor_user_id' => $donor->id,
+                'actor_user_id' => $lockedDonor->id,
                 'subject_type' => 'donation',
                 'subject_id' => (string)$donation->id,
                 'action' => 'DONATION_COMPLETED',
@@ -235,6 +235,26 @@ class DonationsService
                 reason: "donation_refund:{$locked->donation_ulid}",
             );
 
+            // قيد عكسي لا تعديلٌ للقيد التاريخي: تُعاد المحفظة، ويُطفأ
+            // التزام العهدة وإيراد الرسم بالمبالغ نفسها.
+            $ledger = app(\App\Services\LedgerService::class);
+            $wallet = $ledger->getOrCreateUserWallet($locked->donor_user_id);
+            $escrow = $ledger->getOrCreateSystemAccount('CHARITY_ESCROW', 'liability', 'عهدة التبرعات (قبل التسوية)', 'credit');
+            $fees = $ledger->getOrCreateSystemAccount('PLATFORM_FEE', 'revenue', 'إيرادات رسوم المنصّة', 'credit');
+            $lines = [
+                ['account' => $escrow->account_code, 'direction' => 'debit', 'amount' => (string) $locked->net_to_charity],
+                ['account' => $wallet->account_code, 'direction' => 'credit', 'amount' => (string) $locked->amount],
+            ];
+            if (bccomp((string) $locked->platform_fee, '0', 4) > 0) {
+                $lines[] = ['account' => $fees->account_code, 'direction' => 'debit', 'amount' => (string) $locked->platform_fee];
+            }
+            $ledger->post(
+                sourceType: 'donation_refund', sourceId: $locked->donation_ulid,
+                description: "استرداد تبرع #{$locked->donation_ulid}", lines: $lines,
+                idempotencyKey: 'donation_refund:' . $locked->donation_ulid,
+                createdByUserId: $admin->id,
+            );
+
             // تحديث donation
             $locked->update([
                 'status' => 'refunded',
@@ -248,11 +268,22 @@ class DonationsService
                 'current_amount' => MoneyService::sub((string)$campaign->current_amount, (string)$locked->net_to_charity),
                 'platform_fee_collected' => MoneyService::sub((string)$campaign->platform_fee_collected, (string)$locked->platform_fee),
             ]);
+            if (!Donation::where('campaign_id', $locked->campaign_id)
+                ->where('donor_user_id', $locked->donor_user_id)
+                ->whereIn('status', ['completed', 'settled'])->exists()) {
+                $campaign->decrement('donor_count');
+            }
 
             // AMIAL-SECURITY-AUDIT-001 (v2.1): decrement آمن بدل raw SQL
-            CharityOrganization::where('id', $locked->org_id)
-                ->where('total_collected', '>=', (float)$locked->net_to_charity)
-                ->decrement('total_collected', (float)$locked->net_to_charity);
+            $org = CharityOrganization::whereKey($locked->org_id)->lockForUpdate()->firstOrFail();
+            $org->total_collected = MoneyService::sub((string) $org->total_collected, (string) $locked->net_to_charity);
+            if (!Donation::where('org_id', $locked->org_id)
+                ->where('donor_user_id', $locked->donor_user_id)
+                ->whereIn('status', ['completed', 'settled'])->exists()
+                && (int) $org->total_donors > 0) {
+                $org->total_donors = (int) $org->total_donors - 1;
+            }
+            $org->save();
 
             $this->audit->record([
                 'actor_type' => 'admin',
@@ -272,13 +303,15 @@ class DonationsService
     private function safeIssueReceipt(Donation $donation, User $donor, CharityOrganization $org, CharityCampaign $campaign): void
     {
         try {
-            $this->receipts->issueDebit([
+            $receipt = $this->receipts->issueDebit([
                 'user_id' => $donor->id,
                 'counterparty_user_id' => null, // المنظمة ليست user
                 'reference_transaction_id' => $donation->donation_ulid,
                 'receipt_type' => 'donation',
                 'amount' => (string)$donation->amount,
                 'fee' => (string)$donation->platform_fee,
+                // amount هو كامل ما خُصم؛ لا يضاف الرسم إليه مرةً ثانية.
+                'net_amount' => (string)$donation->amount,
                 'reference_type' => 'donation',
                 'reference_id' => $donation->id,
                 'metadata' => [
@@ -288,11 +321,26 @@ class DonationsService
                 ],
                 'zone_code' => 'SOUTH',
             ]);
+            $donation->update(['receipt_id' => $receipt->id]);
         } catch (\Throwable $e) {
             Log::warning('Donation receipt failed', [
                 'donation_id' => $donation->id,
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function assertEligibleDonor(User $donor, string $amount): void
+    {
+        if (!(bool) $donor->is_active) {
+            throw new \RuntimeException('الحساب غير نشط حالياً');
+        }
+        if (($donor->sanction_status ?? 'clear') === 'blocked') {
+            throw new \RuntimeException('الحساب مقيّد تنظيمياً');
+        }
+        if (($donor->zone_code ?? 'UNKNOWN') !== 'SOUTH') {
+            throw new \RuntimeException('Only SOUTH users can donate');
+        }
+        $this->kyc->assertTransactionAllowed($donor, $amount, 'donations');
     }
 }

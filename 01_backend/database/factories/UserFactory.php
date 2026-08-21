@@ -37,6 +37,10 @@ class UserFactory extends Factory
             'type' => 2,                 // 0=admin, 1=merchant, 2=customer
             'role' => 'customer',
             'verification_level' => 'basic',
+            // الاختبارات المالية تنشئ عميلاً صالحاً افتراضياً؛ الاختبارات
+            // التي تريد رفض KYC تصرّح بالمستوى الأقل صراحةً.
+            'kyc_tier' => 2,
+            'is_active' => true,
             'zone_code' => 'SOUTH',      // المنطقة المسموح لها افتراضياً
             'unique_id' => (string) Str::uuid(),
             'remember_token' => Str::random(10),

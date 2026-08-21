@@ -26,7 +26,7 @@ class CharityCampaign extends Model
         // AMIAL-CHARITY-META-001 — «عاجل». وخارج `fillable` تُبتلع القيمةُ
         // بصمت: يُعلَّم المديرُ الحملةَ عاجلةً فتُحفظ عاديّة.
         'view_count', 'donor_count', 'is_featured', 'is_urgent',
-        'zone_code',
+        'zone_code', 'created_by_admin_id',
     ];
 
     protected $casts = [
@@ -42,6 +42,7 @@ class CharityCampaign extends Model
         'donor_count' => 'integer',
         'is_featured' => 'boolean',
         'is_urgent' => 'boolean',
+        'created_by_admin_id' => 'integer',
     ];
 
     public function organization(): BelongsTo
