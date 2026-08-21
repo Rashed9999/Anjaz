@@ -316,6 +316,23 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/(?<![\w.])prompt\s*\(/', $html);
     }
 
+    public function test_charity_actions_do_not_call_an_unsupported_randomuuid_directly(): void
+    {
+        // كان زر إيقاف الحملة وتوليد التسوية ينهاران في WebView الهاتف قبل
+        // `fetch`: crypto.randomUUID ليس متاحاً في المتصفحات القديمة. مفتاح
+        // التفرّد المركزي يملك fallback ويحافظ على المفتاح عند انقطاع الشبكة.
+        $page = file_get_contents(base_path('resources/views/admin-views/amial/charity/index.blade.php'));
+        $layout = file_get_contents(base_path('resources/views/layouts/admin/app.blade.php'));
+        $idempotency = file_get_contents(public_path('assets/js/amial-idempotency.js'));
+
+        $this->assertStringNotContainsString('crypto.randomUUID()', $page);
+        $this->assertStringContainsString('amial-idempotency.js', $layout);
+        $this->assertStringContainsString("typeof window.crypto.randomUUID === 'function'", $idempotency);
+        $this->assertStringContainsString('Math.random()', $idempotency);
+        $this->assertStringContainsString('col-12 col-xl-1', $page,
+            'زر توليد التسوية يجب ألا ينضغط إلى زر ضيق في عرض الهاتف');
+    }
+
     public function test_the_donations_page_can_create_organizations_and_campaigns(): void
     {
         // «لا يوجد إنشاء تبرّعات» — والصفحةُ كانت قوائمَ وأزرارَ اعتمادٍ فقط.

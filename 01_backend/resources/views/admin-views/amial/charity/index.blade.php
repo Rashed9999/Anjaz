@@ -195,13 +195,13 @@
                 <div class="card-body">
                     <form id="settle-form" data-testid="settlement-form">
                         <div class="row g-2 align-items-end">
-                            <div class="col-md-5"><label class="form-label small">الجمعية *</label>
+                            <div class="col-12 col-xl-5"><label class="form-label small">الجمعية *</label>
                                 <select name="org_ulid" id="settle-org" class="form-select" required></select></div>
-                            <div class="col-md-3"><label class="form-label small">من *</label>
+                            <div class="col-6 col-xl-3"><label class="form-label small">من *</label>
                                 <input name="period_start" type="date" class="form-control" required></div>
-                            <div class="col-md-3"><label class="form-label small">إلى *</label>
+                            <div class="col-6 col-xl-3"><label class="form-label small">إلى *</label>
                                 <input name="period_end" type="date" class="form-control" required></div>
-                            <div class="col-md-1"><button class="btn btn-primary w-100" type="submit">ولّد</button></div>
+                            <div class="col-12 col-xl-1"><button class="btn btn-primary w-100" type="submit">ولّد التسوية</button></div>
                         </div>
                     </form>
                 </div>
@@ -303,10 +303,11 @@
     let orgs = [];
 
     async function api(url, opts = {}) {
+        // مفتاح التفرّد تضيفه `amial-idempotency.js` المحمّل من قالب الإدارة
+        // قبل هذا الملف. ذلك الملف يملك fallback للـ WebView القديم؛ النداء
+        // المباشر لـ crypto.randomUUID كان يرمي قبل أن يصل زر الإيقاف/التسوية
+        // إلى الخادم، ويحوّل زرّاً حقيقياً إلى زرٍ يوهم المستخدم بالعمل.
         const headers = {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf};
-        if ((opts.method || 'GET').toUpperCase() !== 'GET') {
-            headers['Idempotency-Key'] = crypto.randomUUID();
-        }
         const r = await fetch(url, {
             headers,
             ...opts,
@@ -589,7 +590,8 @@
         fd.append('file', file);
         const r = await fetch(`${base}/uploads`, {
             method: 'POST',
-            headers: {'Accept': 'application/json', 'X-CSRF-TOKEN': csrf, 'Idempotency-Key': crypto.randomUUID()},
+            // يدير قالب الإدارة Idempotency-Key مع إعادة المحاولة بأمان.
+            headers: {'Accept': 'application/json', 'X-CSRF-TOKEN': csrf},
             body: fd,
         });
         const j = await r.json().catch(() => ({}));
