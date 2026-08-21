@@ -18,7 +18,11 @@ class ReconciliationCaseService
     /** @param list<array<string,mixed>> $rows */
     public function recordWalletResults(array $rows): void
     {
-        if (!Schema::hasTable('reconciliation_cases')) {
+        if (!Schema::hasTable('reconciliation_cases')
+            || !Schema::hasColumn('reconciliation_cases', 'shift_id')) {
+            // Code may be deployed before the migration in a rolling release.
+            // Skip creating cases for one run rather than writing an incomplete
+            // custody record or failing the reconciliation command.
             return;
         }
 
