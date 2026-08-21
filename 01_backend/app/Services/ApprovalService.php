@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\ApprovalRequest;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 /**
  * AMIAL-INSIDER-001 — خدمة Maker-Checker (أربع عيون).
@@ -22,6 +21,7 @@ class ApprovalService
 
     public function __construct(
         private readonly AuditService $audit,
+        private readonly AccountClosureService $closures,
     ) {}
 
     /** يفتح طلب موافقة. يعيد الطلب المُنشأ. */
@@ -117,7 +117,7 @@ class ApprovalService
                 throw new \DomainException('EXPIRED');
             }
 
-            $this->execute($req);
+            $this->execute($req, $checker);
 
             $req->update([
                 'status' => 'approved',
@@ -184,7 +184,7 @@ class ApprovalService
     }
 
     /** التنفيذ الفعلي للإجراء المعتمد. */
-    private function execute(ApprovalRequest $req): void
+    private function execute(ApprovalRequest $req, User $checker): void
     {
         $user = User::findOrFail($req->subject_user_id);
 
@@ -195,20 +195,29 @@ class ApprovalService
                 $u->save();
             }),
             'reset_pin' => tap($user, function (User $u) {
-                // مسارات التطبيق القديمة تستعمل أكثر من اسم للـ PIN. لا
-                // نترك واحداً منها فعالاً بعد اعتماد إعادة التعيين.
-                foreach (['transaction_pin', 'pin_code', 'pin', 'pin_locked_until'] as $column) {
-                    if (Schema::hasColumn('users', $column)) {
-                        $u->forceFill([$column => null]);
-                    }
-                }
-                if (Schema::hasColumn('users', 'requires_pin_setup')) {
-                    $u->forceFill(['requires_pin_setup' => true]);
-                }
-                if (Schema::hasColumn('users', 'pin_failed_attempts')) {
-                    $u->forceFill(['pin_failed_attempts' => 0]);
-                }
+                $u->transaction_pin = null;
+                $u->requires_pin_setup = true;
+                $u->pin_failed_attempts = 0;
+                $u->pin_locked_until = null;
                 $u->save();
+            }),
+            // يُعاد فحص التسوية لحظة الاعتماد، لا لحظة فتح الطلب فقط:
+            // قد يصل مال أو يُفتح تحقيق بين المرحلتين.
+            'close_customer' => $this->closures->close($user, $req->reason),
+            'mark_customer_deceased' => tap($user, function (User $u) use ($req, $checker) {
+                $u->forceFill([
+                    'lifecycle_state' => 'deceased',
+                    'lifecycle_changed_at' => now(),
+                    'lifecycle_reason' => mb_substr($req->reason, 0, 1000),
+                    'is_temp_blocked' => 1,
+                ])->save();
+
+                if (Schema::hasTable('customer_death_cases')) {
+                    DB::table('customer_death_cases')->where('approval_request_id', $req->id)->update([
+                        'status' => 'confirmed', 'reviewer_id' => $checker->id,
+                        'reviewed_at' => now(), 'updated_at' => now(),
+                    ]);
+                }
             }),
             default => throw new \InvalidArgumentException("منفّذ غير معروف: {$req->action_type}"),
         };
