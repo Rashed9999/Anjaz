@@ -73,6 +73,20 @@ class _MySafePaymentsScreenState extends State<MySafePaymentsScreen>
                 child: CircularProgressIndicator(color: AmialColors.primary));
           }
           if (ctrl.payments.isEmpty) {
+            if (ctrl.lastError.value.isNotEmpty) {
+              return ListView(children: [
+                SizedBox(height: MediaQuery.of(context).size.height * 0.16),
+                const Icon(Icons.cloud_off_outlined, size: 68, color: AmialColors.textMuted),
+                const SizedBox(height: 14),
+                Center(child: Text(ctrl.lastError.value)),
+                const SizedBox(height: 10),
+                Center(child: OutlinedButton.icon(
+                  onPressed: _refresh,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('إعادة المحاولة'),
+                )),
+              ]);
+            }
             return ListView(
               children: [
                 SizedBox(height: MediaQuery.of(context).size.height * 0.15),

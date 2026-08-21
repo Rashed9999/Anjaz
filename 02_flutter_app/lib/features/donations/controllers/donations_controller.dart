@@ -76,6 +76,8 @@ class DonationsController extends GetxController with IdempotentIntent implement
   Future<bool> loadCampaign(String ulid) async {
     try {
       isLoading.value = true;
+      selectedCampaign.value = null;
+      lastError.value = '';
       final r = await repo.campaignShow(ulid);
       if (r.statusCode == 200 && r.body is Map) {
         final meta = Map<String, dynamic>.from(r.body['meta'] ?? {});
@@ -96,6 +98,7 @@ class DonationsController extends GetxController with IdempotentIntent implement
   Future<bool> donate({
     required String campaignUlid,
     required String amount,
+    required String pin,
     bool isAnonymous = false,
     String? message,
   }) async {
@@ -106,6 +109,7 @@ class DonationsController extends GetxController with IdempotentIntent implement
       final r = await repo.donate(
         campaignUlid: campaignUlid,
         amount: amount,
+        pin: pin,
         isAnonymous: isAnonymous,
         message: message,
         idempotencyKey: keyFor('donate', scope: campaignUlid),
@@ -138,9 +142,13 @@ class DonationsController extends GetxController with IdempotentIntent implement
         myDonations.value = items
             .map((j) => AmialDonation.fromJson(Map<String, dynamic>.from(j)))
             .toList();
+        lastError.value = '';
+      } else {
+        lastError.value = _msg(r) ?? 'تعذّر تحميل التبرعات';
       }
     } catch (e) {
       if (kDebugMode) debugPrint('loadMyDonations: $e');
+      lastError.value = 'خطأ في الشبكة';
     } finally {
       isLoading.value = false;
     }

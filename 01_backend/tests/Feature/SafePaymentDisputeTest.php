@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\EMoney;
+use App\Models\Ledger\LedgerJournalEntry;
 use App\Models\SafePayment;
 use App\Models\User;
 use App\Services\SafePaymentService;
@@ -149,6 +150,12 @@ class SafePaymentDisputeTest extends TestCase
         $this->assertEquals('594.0000', (string)$payment->released_to_seller_amount);
         $this->assertEquals('6.0000', (string)$payment->platform_fee);
         $this->assertEquals('0.0000', (string)$payment->held_amount);
+
+        // التسوية الجزئية تكتب حصّتيها في الدفتر، لا في e_money وحدها.
+        $this->assertSame(1, LedgerJournalEntry::where('source_type', 'safe_payment_refund')
+            ->where('source_id', 'like', $payment->payment_ulid . '_partial_refund_%')->count());
+        $this->assertSame(1, LedgerJournalEntry::where('source_type', 'safe_payment_release')
+            ->where('source_id', 'like', $payment->payment_ulid . '_partial_release_%')->count());
     }
 
     /** @test */

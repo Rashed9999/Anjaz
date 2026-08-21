@@ -8,6 +8,7 @@ use App\Models\CharityCategory;
 use App\Models\CharityOrganization;
 use App\Models\Donation;
 use App\Services\DonationsService;
+use App\Services\TransactionPinService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -19,6 +20,7 @@ class DonationsController extends Controller
 {
     public function __construct(
         private readonly DonationsService $service,
+        private readonly TransactionPinService $pinService,
     ) {}
 
     /** GET /api/v1/amial/donations/categories */
@@ -116,6 +118,7 @@ class DonationsController extends Controller
         $v = Validator::make($request->all(), [
             'campaign_ulid' => 'required|string|size:26',
             'amount' => 'required|numeric|min:1',
+            'pin' => 'required|string|min:4|max:6',
             'is_anonymous' => 'sometimes|boolean',
             'message' => 'sometimes|nullable|string|max:500',
         ]);
@@ -123,6 +126,10 @@ class DonationsController extends Controller
 
         $campaign = CharityCampaign::where('campaign_ulid', $request->input('campaign_ulid'))->first();
         if (!$campaign) return $this->error('CAMPAIGN_NOT_FOUND', 'الحملة غير موجودة', 404);
+
+        if (!$this->pinService->verify($request->user(), (string) $request->input('pin'))) {
+            return $this->error('PIN_INVALID', 'رمز PIN غير صحيح أو الحساب مقفل مؤقتاً', 403);
+        }
 
         try {
             $donation = $this->service->donate(

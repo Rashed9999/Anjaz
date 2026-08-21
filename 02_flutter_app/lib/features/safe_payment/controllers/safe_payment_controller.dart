@@ -18,6 +18,9 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
   final RxBool isLoading = false.obs;
   final RxBool isSubmitting = false.obs;
   final RxString lastError = ''.obs;
+  final RxBool isVerifyingSeller = false.obs;
+  final Rx<AmialVerifiedSeller?> verifiedSeller = Rx<AmialVerifiedSeller?>(null);
+  final RxString verifiedSellerPhone = ''.obs;
 
   // ===== AMIAL-SAFEPAY-EVIDENCE-001 / CODE-001 / TRUST-001 =====
 
@@ -56,6 +59,12 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
   }
 
   Future<bool> loadDetail(String ulid) async {
+    selectedPayment.value = null;
+    availableActions.value = AmialSafePaymentActions.empty();
+    deliveryCode.value = '';
+    deliveryCodeVerified.value = false;
+    counterpartyTrust.value = null;
+    evidence.clear();
     try {
       isLoading.value = true;
       final r = await repo.show(ulid);
@@ -92,6 +101,8 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
 
   Future<bool> create({
     required String sellerPhone,
+    required String sellerVerificationToken,
+    required String pin,
     required String title,
     required String description,
     required String amount,
@@ -101,10 +112,15 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
       isSubmitting.value = true;
       // AMIAL-IDEMPOTENCY-002 — نطاقُ النيّة هاتفُ البائع مع المبلغ:
       // صفقتان لبائعين مختلفين نيّتان، وإعادةُ الأولى إعادةٌ لا صفقةٌ ثانية.
-      final createKey = keyFor('sp_create', scope: '$sellerPhone|$amount');
+      // token التحقق يتغيّر كل خمس دقائق، فلا يدخل نطاق النية: فقدان ردّ
+      // الحجز ثم إعادة التحقق يجب أن يعيد نفس العملية لا ينشئ escrow ثانياً.
+      final createScope = '$sellerPhone|$amount|$title|$description';
+      final createKey = keyFor('sp_create', scope: createScope);
 
       final r = await repo.create(
         sellerPhone: sellerPhone,
+        sellerVerificationToken: sellerVerificationToken,
+        pin: pin,
         title: title,
         description: description,
         amount: amount,
@@ -112,7 +128,7 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
         idempotencyKey: createKey,
       );
 
-      settleKey('sp_create', r, scope: '$sellerPhone|$amount');
+      settleKey('sp_create', r, scope: createScope);
       if ((r.statusCode == 200 || r.statusCode == 201) &&
           r.body is Map &&
           r.body['success'] == true) {
@@ -126,6 +142,44 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
       return false;
     } finally {
       isSubmitting.value = false;
+    }
+  }
+
+  Future<bool> verifySeller(String sellerPhone) async {
+    final normalized = sellerPhone.trim();
+    if (normalized.length < 6) {
+      lastError.value = 'أدخل رقم البائع أولاً';
+      return false;
+    }
+    try {
+      isVerifyingSeller.value = true;
+      final r = await repo.verifySeller(normalized);
+      if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        final seller = AmialVerifiedSeller.fromJson(
+            Map<String, dynamic>.from(r.body['meta'] ?? {}));
+        if (seller.recipientId <= 0 || seller.verificationToken.isEmpty) {
+          lastError.value = 'تعذّر تأكيد البائع';
+          return false;
+        }
+        verifiedSeller.value = seller;
+        verifiedSellerPhone.value = normalized;
+        lastError.value = '';
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'تعذّر تأكيد البائع';
+      return false;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return false;
+    } finally {
+      isVerifyingSeller.value = false;
+    }
+  }
+
+  void invalidateSellerVerificationIfNeeded(String sellerPhone) {
+    if (verifiedSellerPhone.value != sellerPhone.trim()) {
+      verifiedSeller.value = null;
+      verifiedSellerPhone.value = '';
     }
   }
 
@@ -149,8 +203,8 @@ class SafePaymentController extends GetxController with IdempotentIntent impleme
           ulid, 'sp_delivered');
 
   // ============ Buyer actions ============
-  Future<bool> buyerConfirm(String ulid) =>
-      _executeAction((k) => repo.buyerConfirm(ulid, idempotencyKey: k),
+  Future<bool> buyerConfirm(String ulid, String pin) =>
+      _executeAction((k) => repo.buyerConfirm(ulid, pin, idempotencyKey: k),
           ulid, 'sp_confirm');
 
   Future<bool> buyerCancel(String ulid, String reason) =>

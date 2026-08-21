@@ -26,6 +26,7 @@ class CharityServiceTest extends TestCase
     private CharityService $service;
     private DonationsService $donations;
     private User $admin;
+    private User $checker;
     private CharityOrganization $org;
     private CharityCategory $category;
 
@@ -38,6 +39,7 @@ class CharityServiceTest extends TestCase
         $this->service = app(CharityService::class);
         $this->donations = app(DonationsService::class);
         $this->admin = User::factory()->create();
+        $this->checker = User::factory()->create();
 
         // AMIAL-CHARITY-META-001 — **التصنيفاتُ صارت مزروعةً بهجرة**،
         // فإنشاؤها هنا يصطدم بمفتاحِ الرمز الفريد. و`updateOrCreate` تُبقي
@@ -135,7 +137,7 @@ class CharityServiceTest extends TestCase
 
         $this->assertEquals('pending_approval', $campaign->status);
 
-        $campaign = $this->service->approveCampaign($campaign, $this->admin);
+        $campaign = $this->service->approveCampaign($campaign, $this->checker);
         $this->assertEquals('active', $campaign->status);
         $this->assertNotNull($campaign->approved_at);
     }
@@ -151,7 +153,7 @@ class CharityServiceTest extends TestCase
             'description_ar' => 'Test',
             'target_amount' => '10000.0000',
         ], $this->admin);
-        $this->service->approveCampaign($campaign, $this->admin);
+        $this->service->approveCampaign($campaign, $this->checker);
 
         // 3 donations
         $donor = User::factory()->create(['zone_code' => 'SOUTH']);
@@ -205,7 +207,7 @@ class CharityServiceTest extends TestCase
             'title_ar' => 'Test', 'description_ar' => 'Test',
             'target_amount' => '10000.0000',
         ], $this->admin);
-        $this->service->approveCampaign($campaign, $this->admin);
+        $this->service->approveCampaign($campaign, $this->checker);
 
         $donor = User::factory()->create(['zone_code' => 'SOUTH']);
         EMoney::create(['user_id' => $donor->id, 'current_balance' => '1000.0000']);
@@ -232,7 +234,7 @@ class CharityServiceTest extends TestCase
             'title_ar' => 'X', 'description_ar' => 'X',
             'target_amount' => '5000.0000',
         ], $this->admin);
-        $this->service->approveCampaign($campaign, $this->admin);
+        $this->service->approveCampaign($campaign, $this->checker);
 
         $donor = User::factory()->create(['zone_code' => 'SOUTH']);
         EMoney::create(['user_id' => $donor->id, 'current_balance' => '1000.0000']);
@@ -243,7 +245,7 @@ class CharityServiceTest extends TestCase
         );
 
         $settlement = $this->service->markSettlementTransferred(
-            $settlement, $this->admin,
+            $settlement, $this->checker,
             bankReference: 'BNK-REF-2026-001',
             notes: 'Transferred via Yemen Bank',
         );

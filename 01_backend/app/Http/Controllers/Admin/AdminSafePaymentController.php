@@ -28,20 +28,49 @@ class AdminSafePaymentController extends Controller
     {
         $query = SafePayment::query()->orderByDesc('disputed_at')->orderByDesc('id');
 
-        if ($request->query('status') === 'disputed_open') {
+        $status = (string) $request->query('status', 'disputed_open');
+        if ($status === 'disputed_open') {
             $query->needingAdminReview();
-        } elseif ($request->query('status')) {
-            $query->where('status', $request->query('status'));
+        } elseif ($status !== '') {
+            $query->where('status', $status);
+        }
+
+        $search = trim((string) $request->query('q', ''));
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('payment_ulid', 'like', "%{$search}%")
+                    ->orWhere('title', 'like', "%{$search}%")
+                    ->orWhereHas('buyer', fn ($users) => $users
+                        ->where('phone', 'like', "%{$search}%")
+                        ->orWhere('f_name', 'like', "%{$search}%")
+                        ->orWhere('l_name', 'like', "%{$search}%"))
+                    ->orWhereHas('seller', fn ($users) => $users
+                        ->where('phone', 'like', "%{$search}%")
+                        ->orWhere('f_name', 'like', "%{$search}%")
+                        ->orWhere('l_name', 'like', "%{$search}%"));
+            });
+        }
+        if ($request->filled('from')) {
+            $query->whereDate('created_at', '>=', $request->query('from'));
+        }
+        if ($request->filled('to')) {
+            $query->whereDate('created_at', '<=', $request->query('to'));
         }
 
         $items = $query->with(['buyer:id,f_name,l_name,phone', 'seller:id,f_name,l_name,phone'])
-            ->paginate(20);
+            ->paginate(min(max((int) $request->query('per_page', 20), 1), 100));
+
+        $open = SafePayment::needingAdminReview();
 
         return $this->ok([
             'pagination' => [
                 'total' => $items->total(),
                 'per_page' => $items->perPage(),
                 'current_page' => $items->currentPage(),
+            ],
+            'summary' => [
+                'open_count' => (clone $open)->count(),
+                'open_held_amount' => (string) ((clone $open)->sum('held_amount') ?: '0'),
             ],
             'items' => $items->items(),
         ]);

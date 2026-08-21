@@ -31,6 +31,7 @@ class CharityService
         return DB::transaction(function () use ($data, $admin) {
             $org = CharityOrganization::create(array_merge($data, [
                 'org_ulid' => (string) Str::ulid(),
+                'created_by_admin_id' => $admin->id,
                 'verification_status' => 'pending_verification',
                 'zone_code' => 'SOUTH',
             ]));
@@ -51,6 +52,9 @@ class CharityService
 
     public function verifyOrganization(CharityOrganization $org, User $admin): CharityOrganization
     {
+        if ($org->created_by_admin_id && (int) $org->created_by_admin_id === (int) $admin->id) {
+            throw new \RuntimeException('لا يجوز لمن أنشأ الجمعية اعتمادها بنفسه');
+        }
         if ($org->verification_status === 'verified') {
             return $org;
         }
@@ -138,6 +142,7 @@ class CharityService
         return DB::transaction(function () use ($org, $data, $admin) {
             $campaign = CharityCampaign::create(array_merge($data, [
                 'campaign_ulid' => (string) Str::ulid(),
+                'created_by_admin_id' => $admin->id,
                 'org_id' => $org->id,
                 'status' => 'pending_approval',
                 'current_amount' => '0',
@@ -165,6 +170,9 @@ class CharityService
 
     public function approveCampaign(CharityCampaign $campaign, User $admin): CharityCampaign
     {
+        if ($campaign->created_by_admin_id && (int) $campaign->created_by_admin_id === (int) $admin->id) {
+            throw new \RuntimeException('لا يجوز لمن أنشأ الحملة اعتمادها بنفسه');
+        }
         if (!in_array($campaign->status, ['pending_approval', 'paused'], true)) {
             throw new \RuntimeException('Campaign is not in approvable state');
         }
@@ -247,9 +255,11 @@ class CharityService
                 throw new \RuntimeException('No unsettled donations in this period');
             }
 
-            $totalDonations = (string)$donations->sum('amount');
-            $totalFees = (string)$donations->sum('platform_fee');
-            $payableAmount = (string)$donations->sum('net_to_charity');
+            // Collection::sum يحوّل decimal إلى float؛ التسوية تجمع DECIMAL
+            // حصراً بـ BCMath كي لا تضيع كسور المال مع كثرة التبرعات.
+            $totalDonations = $this->sumMoney($donations, 'amount');
+            $totalFees = $this->sumMoney($donations, 'platform_fee');
+            $payableAmount = $this->sumMoney($donations, 'net_to_charity');
             $campaignIds = $donations->pluck('campaign_id')->unique();
 
             $settlement = CharitySettlement::create([
@@ -297,33 +307,9 @@ class CharityService
         string $bankReference,
         ?string $notes = null,
     ): CharitySettlement {
-        if ($settlement->status !== 'pending') {
-            throw new \RuntimeException('Settlement is not pending');
-        }
-
-        $settlement->update([
-            'status' => 'transferred',
-            'transferred_at' => now(),
-            'bank_transfer_reference' => mb_substr($bankReference, 0, 100),
-            'transfer_notes' => $notes ? mb_substr($notes, 0, 500) : null,
-            'transferred_by_admin_id' => $admin->id,
-        ]);
-
-        $this->audit->record([
-            'actor_type' => 'admin',
-            'actor_user_id' => $admin->id,
-            'subject_type' => 'charity_settlement',
-            'subject_id' => (string)$settlement->id,
-            'action' => 'CHARITY_SETTLEMENT_TRANSFERRED',
-            'decision_code' => 'TRANSFERRED',
-            'severity' => 'info',
-            'context' => [
-                'bank_reference' => $bankReference,
-                'amount' => (string)$settlement->payable_amount,
-            ],
-        ]);
-
-        return $settlement;
+        // توافقٌ مع العميل الإداري القديم، لكن بلا باب خلفي يغيّر الحالة
+        // من دون دفتر: الحوالة البنكية تمر بمحرك الصرف نفسه.
+        return $this->payoutSettlement($settlement, $admin, 'bank', $bankReference, null, $notes);
     }
 
     /**
@@ -364,6 +350,9 @@ class CharityService
         if ($settlement->status !== 'pending') {
             throw new \RuntimeException('التسوية ليست معلَّقة');
         }
+        if ($settlement->generated_by_admin_id && (int) $settlement->generated_by_admin_id === (int) $admin->id) {
+            throw new \RuntimeException('لا يجوز لمن ولّد التسوية صرفها بنفسه');
+        }
 
         $payable = MoneyService::normalize((string) $settlement->payable_amount);
         if (bccomp($payable, '0', 4) <= 0) {
@@ -381,6 +370,12 @@ class CharityService
         // حارسٌ واحدٌ كشفه، ولا قراءةٌ كانت لتكشفه.
         if ($method === 'agent' && $recipient && (int) $recipient->type !== AGENT_TYPE) {
             throw new \RuntimeException('الحساب المحدَّد ليس وكيلاً');
+        }
+        if ($method === 'wallet' && $recipient) {
+            $orgPhone = (string) ($settlement->organization?->contact_phone ?? '');
+            if ($orgPhone === '' || !in_array((string) $recipient->phone, \App\Support\Phone::variants($orgPhone), true)) {
+                throw new \RuntimeException('محفظة الصرف يجب أن تكون مرتبطة برقم الجمعية الموثّق');
+            }
         }
 
         return DB::transaction(function () use ($settlement, $admin, $method, $reference, $recipient, $notes, $payable) {
@@ -470,5 +465,15 @@ class CharityService
 
             return $settlement->refresh();
         });
+    }
+
+    /** @param \Illuminate\Support\Collection<int, Donation> $donations */
+    private function sumMoney($donations, string $column): string
+    {
+        $total = '0.0000';
+        foreach ($donations as $donation) {
+            $total = bcadd($total, (string) $donation->{$column}, 4);
+        }
+        return $total;
     }
 }

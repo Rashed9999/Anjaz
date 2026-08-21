@@ -34,7 +34,10 @@ class FourEyesRuleTest extends TestCase
 
     private function operator(): User
     {
-        return User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
+        $operator = User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($operator, \App\Services\PlatformRoleService::ADMIN);
+        return $operator->refresh();
     }
 
     private function act(User $who, string $action, string $subjectId = '77'): void

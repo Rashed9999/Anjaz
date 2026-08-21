@@ -5,6 +5,10 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
+Schedule::job(new \App\Jobs\ExpireCharityCampaignsJob())
+    ->everyMinute()->withoutOverlapping(5)->onOneServer()
+    ->description('AMIAL-DONATIONS: Complete campaigns past their deadline');
+
 /*
 |--------------------------------------------------------------------------
 | Console Routes (Laravel 11 style — Schedule via routes/console.php)
@@ -39,6 +43,14 @@ Schedule::job(new \App\Jobs\ReleasePendingTransfersJob())
     ->withoutOverlapping(5)
     ->onOneServer()
     ->description('AMIAL-TRANSFER-COOLDOWN: Release pending transfers past cooldown');
+
+// الدفع الآمن لا يجوز أن يظل حجزاً أبدياً إن لم يرد البائع. المهمةُ قفلٌ
+// ثانٍ فوق deadline في الخدمة: تفكّ الأموال المنتهية كل دقيقة، ومن خادم واحد.
+Schedule::job(new \App\Jobs\ExpireSafePaymentsJob())
+    ->everyMinute()
+    ->withoutOverlapping(5)
+    ->onOneServer()
+    ->description('AMIAL-SAFE-PAYMENT: Refund payments past seller acceptance deadline');
 
 // مستقبلاً نضيف هنا:
 // - Schedule::command('amial:family-fund:cleanup-expired-invitations')->daily();

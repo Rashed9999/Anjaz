@@ -25,7 +25,7 @@ class CharityOrganization extends Model
         'verification_status', 'verified_by_admin_id', 'verified_at',
         'rejection_reason', 'suspension_reason',
         'total_collected', 'total_campaigns', 'total_donors',
-        'zone_code', 'is_active',
+        'zone_code', 'is_active', 'created_by_admin_id',
     ];
 
     protected $casts = [
@@ -35,6 +35,7 @@ class CharityOrganization extends Model
         'is_active' => 'boolean',
         'verified_at' => 'datetime',
         'verified_by_admin_id' => 'integer',
+        'created_by_admin_id' => 'integer',
     ];
 
     // إخفاء معلومات حساسة بنكية من API responses public

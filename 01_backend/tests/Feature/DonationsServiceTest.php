@@ -100,6 +100,7 @@ class DonationsServiceTest extends TestCase
         $this->assertEquals('99.0000', (string)$this->campaign->current_amount);
         $this->assertEquals('1.0000', (string)$this->campaign->platform_fee_collected);
         $this->assertEquals(1, $this->campaign->donor_count);
+        $this->assertNotNull($donation->fresh()->receipt_id, 'التبرع الناجح يجب أن يرتبط بإيصال');
     }
 
     /** @test */
@@ -190,6 +191,23 @@ class DonationsServiceTest extends TestCase
         $this->expectExceptionMessage('SOUTH');
 
         $this->service->donate($north, $this->campaign, '50.0000');
+    }
+
+    /** @test */
+    public function inactive_or_sanctioned_user_cannot_donate(): void
+    {
+        $this->donor->update(['is_active' => false]);
+        try {
+            $this->service->donate($this->donor, $this->campaign, '50.0000');
+            $this->fail('كان يجب رفض الحساب غير النشط');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('غير نشط', $e->getMessage());
+        }
+
+        $this->donor->update(['is_active' => true, 'sanction_status' => 'blocked']);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('مقيّد');
+        $this->service->donate($this->donor->fresh(), $this->campaign, '50.0000');
     }
 
     /** @test */

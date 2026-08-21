@@ -195,13 +195,13 @@
                 <div class="card-body">
                     <form id="settle-form" data-testid="settlement-form">
                         <div class="row g-2 align-items-end">
-                            <div class="col-md-5"><label class="form-label small">الجمعية *</label>
+                            <div class="col-12 col-xl-5"><label class="form-label small">الجمعية *</label>
                                 <select name="org_ulid" id="settle-org" class="form-select" required></select></div>
-                            <div class="col-md-3"><label class="form-label small">من *</label>
+                            <div class="col-6 col-xl-3"><label class="form-label small">من *</label>
                                 <input name="period_start" type="date" class="form-control" required></div>
-                            <div class="col-md-3"><label class="form-label small">إلى *</label>
+                            <div class="col-6 col-xl-3"><label class="form-label small">إلى *</label>
                                 <input name="period_end" type="date" class="form-control" required></div>
-                            <div class="col-md-1"><button class="btn btn-primary w-100" type="submit">ولّد</button></div>
+                            <div class="col-12 col-xl-1"><button class="btn btn-primary w-100" type="submit">ولّد التسوية</button></div>
                         </div>
                     </form>
                 </div>
@@ -298,13 +298,18 @@
     const csrf = document.querySelector('meta[name="csrf-token"]').content;
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
         ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const fmt = (n) => Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 0});
+    const fmt = (n) => Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 4});
 
     let orgs = [];
 
     async function api(url, opts = {}) {
+        // مفتاح التفرّد تضيفه `amial-idempotency.js` المحمّل من قالب الإدارة
+        // قبل هذا الملف. ذلك الملف يملك fallback للـ WebView القديم؛ النداء
+        // المباشر لـ crypto.randomUUID كان يرمي قبل أن يصل زر الإيقاف/التسوية
+        // إلى الخادم، ويحوّل زرّاً حقيقياً إلى زرٍ يوهم المستخدم بالعمل.
+        const headers = {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf};
         const r = await fetch(url, {
-            headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf},
+            headers,
             ...opts,
         });
         const j = await r.json().catch(() => ({}));
@@ -336,9 +341,9 @@
                     <td>${fmt(o.campaigns_count ?? o.total_campaigns)}</td>
                     <td>${fmt(o.total_collected ?? o.total_donations)}</td>
                     <td>
-                        <button class="btn btn-sm btn-success" data-org-act="verify" data-ulid="${esc(o.org_ulid ?? o.ulid)}">اعتماد</button>
-                        <button class="btn btn-sm btn-outline-danger" data-org-act="reject" data-ulid="${esc(o.org_ulid ?? o.ulid)}">رفض</button>
-                        <button class="btn btn-sm btn-outline-secondary" data-org-act="suspend" data-ulid="${esc(o.org_ulid ?? o.ulid)}">تعليق</button>
+                        ${o.verification_status === 'pending_verification' ? `<button class="btn btn-sm btn-success" data-org-act="verify" data-ulid="${esc(o.org_ulid ?? o.ulid)}">اعتماد</button>
+                        <button class="btn btn-sm btn-outline-danger" data-org-act="reject" data-ulid="${esc(o.org_ulid ?? o.ulid)}">رفض</button>` : ''}
+                        ${o.verification_status === 'verified' ? `<button class="btn btn-sm btn-outline-secondary" data-org-act="suspend" data-ulid="${esc(o.org_ulid ?? o.ulid)}">تعليق</button>` : ''}
                     </td>
                 </tr>`).join('')
                 : '<tr><td colspan="5" class="text-muted">لا جمعيات بعد — أنشئ واحدة من الأعلى</td></tr>';
@@ -403,8 +408,8 @@
                     <td><span class="badge badge-soft-secondary">${esc(c.status ?? '')}</span></td>
                     <td>
                         <button class="btn btn-sm btn-outline-primary" data-donors="${esc(c.campaign_ulid)}">المتبرّعون</button>
-                        <button class="btn btn-sm btn-success" data-camp-act="approve" data-ulid="${esc(c.campaign_ulid)}">اعتماد</button>
-                        <button class="btn btn-sm btn-outline-warning" data-camp-act="pause" data-ulid="${esc(c.campaign_ulid)}">إيقاف</button>
+                        ${c.status === 'pending_approval' || c.status === 'paused' ? `<button class="btn btn-sm btn-success" data-camp-act="approve" data-ulid="${esc(c.campaign_ulid)}">اعتماد</button>` : ''}
+                        ${c.status === 'active' ? `<button class="btn btn-sm btn-outline-warning" data-camp-act="pause" data-ulid="${esc(c.campaign_ulid)}">إيقاف</button>` : ''}
                     </td>
                 </tr>`;
             }).join('') : '<tr><td colspan="6" class="text-muted">لا حملات بعد</td></tr>';
@@ -473,7 +478,12 @@
             const label = {verify: 'اعتماد', reject: 'رفض', suspend: 'تعليق'}[org.dataset.orgAct];
             // **نافذةُ المشروع لا نافذةُ المتصفّح** (AMIAL-UI-DIALOGS-002).
             if (!await amialDialog.ask(`${label} هذه الجمعية؟`, {okLabel: label, danger: org.dataset.orgAct !== 'verify'})) return;
-            try { await api(`${base}/organizations/${org.dataset.ulid}/${org.dataset.orgAct}`, {method: 'POST', body: '{}'});
+            let reason = null;
+            if (org.dataset.orgAct !== 'verify') {
+                reason = await amialDialog.request('اكتب سبب القرار (10 أحرف على الأقل):', {title: label, okLabel: label});
+                if (!reason || reason.trim().length < 10) return;
+            }
+            try { await api(`${base}/organizations/${org.dataset.ulid}/${org.dataset.orgAct}`, {method: 'POST', body: JSON.stringify(reason ? {reason: reason.trim()} : {})});
                   await amialDialog.show('تمّ'); loadOrgs(); }
             catch (err) { await amialDialog.show(err.message); }
         }
@@ -481,7 +491,12 @@
         if (camp) {
             const label = camp.dataset.campAct === 'approve' ? 'اعتماد' : 'إيقاف';
             if (!await amialDialog.ask(`${label} هذه الحملة؟`, {okLabel: label})) return;
-            try { await api(`${base}/campaigns/${camp.dataset.ulid}/${camp.dataset.campAct}`, {method: 'POST', body: '{}'});
+            let reason = null;
+            if (camp.dataset.campAct === 'pause') {
+                reason = await amialDialog.request('اكتب سبب الإيقاف (10 أحرف على الأقل):', {title: label, okLabel: label});
+                if (!reason || reason.trim().length < 10) return;
+            }
+            try { await api(`${base}/campaigns/${camp.dataset.ulid}/${camp.dataset.campAct}`, {method: 'POST', body: JSON.stringify(reason ? {reason: reason.trim()} : {})});
                   await amialDialog.show('تمّ'); loadCamps(); }
             catch (err) { await amialDialog.show(err.message); }
         }
@@ -575,6 +590,7 @@
         fd.append('file', file);
         const r = await fetch(`${base}/uploads`, {
             method: 'POST',
+            // يدير قالب الإدارة Idempotency-Key مع إعادة المحاولة بأمان.
             headers: {'Accept': 'application/json', 'X-CSRF-TOKEN': csrf},
             body: fd,
         });

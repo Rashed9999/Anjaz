@@ -35,6 +35,13 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
           if (ctrl.isLoading.value && ctrl.myDonations.isEmpty) {
             return const Center(child: CircularProgressIndicator(color: AmialColors.primary));
           }
+          if (ctrl.lastError.value.isNotEmpty && ctrl.myDonations.isEmpty) {
+            return Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(ctrl.lastError.value),
+              const SizedBox(height: 12),
+              ElevatedButton(onPressed: ctrl.loadMyDonations, child: const Text('إعادة المحاولة')),
+            ]));
+          }
           if (ctrl.myDonations.isEmpty) {
             return ListView(
               children: [
@@ -77,7 +84,7 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
                               style: const TextStyle(
                                   fontSize: 20, fontWeight: FontWeight.bold,
                                   color: AmialColors.primary)),
-                          Text('في $count تبرع — جزاك الله خيراً',
+                          Text('في $count تبرع معروض — جزاك الله خيراً',
                               style: const TextStyle(fontSize: 12)),
                         ],
                       ),

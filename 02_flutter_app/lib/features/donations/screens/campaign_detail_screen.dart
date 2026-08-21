@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amial_pay/features/donations/controllers/donations_controller.dart';
 import 'package:amial_pay/features/donations/domain/models/donation_models.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
 
 /// AMIAL-DONATIONS-001 (v1.2)
 class CampaignDetailScreen extends StatefulWidget {
@@ -138,15 +139,23 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                             ? null
                             : () async {
                                 if (!formKey.currentState!.validate()) return;
+                                final pin = await askAmialPinInput(title: 'تأكيد التبرع');
+                                if (pin == null || pin.isEmpty) return;
                                 final success = await ctrl.donate(
                                   campaignUlid: widget.ulid,
                                   amount: amountCtrl.text.trim(),
+                                  pin: pin,
                                   isAnonymous: isAnonymous,
                                   message: messageCtrl.text.trim().isEmpty
                                       ? null
                                       : messageCtrl.text.trim(),
                                 );
-                                if (success) Navigator.pop(ctx, true);
+                                if (success) {
+                                  Navigator.pop(ctx, true);
+                                } else {
+                                  Get.snackbar('تعذّر التبرع', ctrl.lastError.value,
+                                      snackPosition: SnackPosition.BOTTOM);
+                                }
                               },
                         icon: ctrl.isSubmitting.value
                             ? const SizedBox(
@@ -204,8 +213,19 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
       body: Obx(() {
         final ctrl = Get.find<DonationsController>();
         final campaign = ctrl.selectedCampaign.value;
-        if (ctrl.isLoading.value || campaign == null) {
+        if (ctrl.isLoading.value) {
           return const Center(child: CircularProgressIndicator(color: AmialColors.primary));
+        }
+        if (campaign == null) {
+          return Center(child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(ctrl.lastError.value.isEmpty ? 'تعذّر تحميل الحملة' : ctrl.lastError.value,
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              ElevatedButton(onPressed: () => ctrl.loadCampaign(widget.ulid), child: const Text('إعادة المحاولة')),
+            ]),
+          ));
         }
 
         return Column(
@@ -396,7 +416,7 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
             ),
 
             // ====== Sticky donate button ======
-            if (campaign.isActive)
+            if (campaign.isAcceptingNow)
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -414,6 +434,13 @@ class _CampaignDetailScreenState extends State<CampaignDetailScreen> {
                     minimumSize: const Size(double.infinity, 50),
                   ),
                 ),
+              ),
+            if (!campaign.isAcceptingNow)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                color: AmialColors.yellow.withValues(alpha: 0.16),
+                child: const Text('هذه الحملة لا تستقبل التبرعات حالياً', textAlign: TextAlign.center),
               ),
           ],
         );

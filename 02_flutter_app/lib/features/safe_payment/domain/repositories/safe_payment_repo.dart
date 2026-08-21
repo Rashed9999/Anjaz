@@ -21,6 +21,8 @@ class SafePaymentRepo extends GetxService {
 
   Future<Response> create({
     required String sellerPhone,
+    required String sellerVerificationToken,
+    required String pin,
     required String title,
     required String description,
     required String amount,
@@ -32,6 +34,8 @@ class SafePaymentRepo extends GetxService {
       AppConstants.amialSafePayments,
       {
         'seller_phone': sellerPhone,
+        'seller_verification_token': sellerVerificationToken,
+        'pin': pin,
         'title': title,
         'description': description,
         'amount': amount,
@@ -41,6 +45,10 @@ class SafePaymentRepo extends GetxService {
       idempotencyKey: idempotencyKey,
     );
   }
+
+  /// تأكيد البائع باسم مقنّع + token قصير العمر قبل أن يُحجز المال.
+  Future<Response> verifySeller(String sellerPhone) => apiClient.postData(
+      AppConstants.amialSafePaymentVerifySeller, {'seller_phone': sellerPhone});
 
   // Seller actions
   Future<Response> sellerAccept(String ulid,
@@ -60,9 +68,9 @@ class SafePaymentRepo extends GetxService {
       _action(ulid, 'seller-mark-delivered', {'note': ?note}, idempotencyKey);
 
   // Buyer actions
-  Future<Response> buyerConfirm(String ulid,
+  Future<Response> buyerConfirm(String ulid, String pin,
           {required String idempotencyKey}) =>
-      _action(ulid, 'buyer-confirm', {}, idempotencyKey);
+      _action(ulid, 'buyer-confirm', {'pin': pin}, idempotencyKey);
 
   Future<Response> buyerCancel(String ulid, String reason,
           {required String idempotencyKey}) =>

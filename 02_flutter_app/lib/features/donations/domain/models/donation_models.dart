@@ -165,6 +165,13 @@ class AmialCharityCampaign {
 
   bool get isActive => status == 'active';
 
+  bool get isAcceptingNow {
+    final now = DateTime.now();
+    return isActive &&
+        (startAt == null || !startAt!.isAfter(now)) &&
+        (deadlineAt == null || deadlineAt!.isAfter(now));
+  }
+
   int? get daysRemaining {
     if (deadlineAt == null) return null;
     final diff = deadlineAt!.difference(DateTime.now()).inDays;
