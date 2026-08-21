@@ -959,7 +959,10 @@
         const CONV = {
             topup: ['success', '📥 تسلّم النقد لأميال وتستلم رصيداً إلكترونيّاً'],
             payout: ['warning', '📤 تعيد رصيداً إلكترونيّاً وتستلم نقداً'],
-            none: ['secondary', 'اليوم متعادل — لا تحويل'],
+            // **ولا يُقال «متعادل» مطلقاً** — يُقال «لا تحويلَ مع أميال»،
+            // فالتعادلُ مع المنصّة شيءٌ وتوازنُ الفروع بينها شيءٌ آخر،
+            // وخلطُهما هو ما تمنعه وثيقةُ الوكيل صراحةً.
+            none: ['secondary', 'لا تحويلَ مع أميال اليوم — صافي الورق صفر'],
         };
         const cv = CONV[day.conversion] || CONV.none;
 
@@ -991,6 +994,30 @@
                     والاثنان متعاكسان دائماً: كلّ ريالٍ إلكترونيٍّ خرج منك يقابله ريالٌ ورقيٌّ دخل درجك.
                 </div>
             </div>
+
+            ${(() => {
+                // AMIAL-BRANCH-BALANCE-001 — **صفرُ الشركة لا يعني توازنَ الفروع.**
+                //
+                // كانت البطاقةُ أعلاه تكتب «اليوم متعادل — لا تحويل» على
+                // شبكةٍ فرعُها الأوّلُ يعجز عن الصرف وفرعُها الثاني يعجز
+                // عن الإيداع. **والعميلُ يُردّ في كليهما، والحلُّ على بعد
+                // شارع.** فتُعرَض الخطّةُ الداخليّةُ **فوق** حكم التعادل.
+                const rb = day.internal_rebalance;
+                if (!rb || !rb.needed) return '';
+                return `<div class="alert alert-warning py-2 mb-2" data-testid="ag-rebalance">
+                    <div class="fw-bold">⚖️ فروعُك غيرُ متوازنةٍ بينها — ولو تعادلت الشركة</div>
+                    <div class="small mb-2">${esc(rb.reason)}</div>
+                    <ul class="mb-1 small">${(rb.moves || []).map(mv =>
+                        `<li>انقل <b class="money">${num(mv.amount)}</b> ${esc(mv.what)}
+                             من <b>${esc(mv.from_branch)}</b> إلى <b>${esc(mv.to_branch)}</b></li>`).join('')}</ul>
+                    ${(rb.unmatched || []).length ? `<div class="small text-muted">
+                        وما لا يُغطّيه النقلُ الداخليّ ويبقى لتسوية أميال:
+                        ${rb.unmatched.map(u => esc(u.name) + ' (' + num(u.amount) + ')').join('، ')}</div>` : ''}
+                    <div class="small text-muted mt-1">
+                        اقتراحٌ يُعرَض لا أمرٌ يُنفَّذ — نقلُ العهدة يمرّ بجرْدٍ وتوقيع.
+                    </div>
+                </div>`;
+            })()}
 
             ${(day.flags || []).length ? `<div class="alert alert-warning py-2 small mb-2">
                 <strong>ما سيراه فريق أميال صراحةً:</strong>

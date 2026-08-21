@@ -147,6 +147,66 @@ class AgentDailySettlementService
         $dep = bcadd((string) ($rows['customer_deposit']->total ?? '0'), '0', 4);
         $wdr = bcadd((string) ($rows['customer_withdraw']->total ?? '0'), '0', 4);
 
+        // AMIAL-BRANCH-BALANCE-001 — **صفرُ الشركة لا يعني توازنَ الفروع.**
+        //
+        // ══════════════════════════════════════════════════════════════
+        // والمحورُ السابعُ من وثيقة الوكيل يجعل هذه حالةَ اختبارٍ إلزاميّة:
+        //
+        //     فرع A: ‎+١٬٠٠٠٬٠٠٠ نقداً ويحتاج رصيداً.
+        //     فرع B: ‎−١٬٠٠٠٬٠٠٠ نقداً ولديه رصيدٌ زائد.
+        //     صافي الشركة: صفر. والتسويةُ مع أميال: صفر.
+        //     **ومع ذلك يجب أن تظهر خطّةُ إعادة توازنٍ داخليّة.**
+        //     لا تعرض «كلُّ شيءٍ متعادل» والفروعُ نفسُها غيرُ متوازنة.
+        //
+        // وكان الحسابُ يجمع الفروعَ في رقمٍ واحد، فيُخرج `conversion=none`
+        // على شبكةٍ **نصفُها عاجزٌ عن الصرف ونصفُها عاجزٌ عن الإيداع**.
+        // وهذا ليس نقصَ عرض: فرعٌ بلا ورقٍ يردّ كلَّ ساحبٍ يقف أمامه،
+        // وفرعٌ بلا رصيدٍ إلكترونيٍّ يردّ كلَّ مودِع — **واللوحةُ تقول إنّ
+        // اليومَ متعادل**. (‏والقاعدة العاشرة: للتمويل طبقتان.)
+        $perBranch = AgentCashMovement::whereIn('branch_id', $branchIds)
+            ->where('is_drawer', true)
+            ->whereBetween('created_at', [$from, $to])
+            ->whereIn('reason', ['customer_deposit', 'customer_withdraw'])
+            ->selectRaw('branch_id, reason, sum(amount) as total')
+            ->groupBy('branch_id', 'reason')->get();
+
+        $branchNames = AgentBranch::whereIn('id', $branchIds)
+            ->pluck('name', 'id')->map(fn ($v) => (string) $v)->all();
+
+        $positions = [];
+
+        foreach ($perBranch as $r) {
+            $id = (int) $r->branch_id;
+            $positions[$id] ??= ['deposits' => '0.0000', 'withdrawals' => '0.0000'];
+            $key = $r->reason === 'customer_deposit' ? 'deposits' : 'withdrawals';
+            $positions[$id][$key] = bcadd($positions[$id][$key], (string) $r->total, 4);
+        }
+
+        $branchPositions = [];
+
+        foreach ($positions as $id => $p) {
+            $net = bcsub($p['deposits'], $p['withdrawals'], 4);
+
+            $branchPositions[] = [
+                'branch_id' => $id,
+                'name' => $branchNames[$id] ?? ('فرع #'.$id),
+                'deposits' => $p['deposits'],
+                'withdrawals' => $p['withdrawals'],
+                'net_cash' => $net,
+                // موجبٌ = ورقٌ زائدٌ ورصيدٌ ناقص ⇒ **يعجز عن الصرف**.
+                // سالبٌ = رصيدٌ زائدٌ وورقٌ ناقص ⇒ **يعجز عن الإيداع**.
+                'need' => match (true) {
+                    bccomp($net, '0', 4) > 0 => 'float',
+                    bccomp($net, '0', 4) < 0 => 'cash',
+                    default => 'none',
+                },
+            ];
+        }
+
+        usort($branchPositions, fn ($a, $b) => bccomp($b['net_cash'], $a['net_cash'], 4));
+
+        $rebalance = $this->internalRebalance($branchPositions);
+
         // ── الورديّات وفروقها ─────────────────────────────────────────
         // AMIAL-TRUTH-001 — **الحسابُ من مصدرٍ واحد.**
         //
@@ -229,6 +289,10 @@ class AgentDailySettlementService
             'suspicious_count' => $suspicious,
             'flags' => $flags,
 
+            // AMIAL-BRANCH-BALANCE-001 — الموضعُ الذي يمنع «كلُّ شيءٍ متعادل».
+            'branch_positions' => $branchPositions,
+            'internal_rebalance' => $rebalance,
+
             'net_cash' => $netCash,
             'net_float' => $netFloat,
             'conversion' => $conversion,
@@ -238,6 +302,101 @@ class AgentDailySettlementService
             'shifts_total' => $v['shifts_total'],
             'shifts_closed' => $v['shifts_closed'],
             'branches' => count($branchIds),
+        ];
+    }
+
+    /**
+     * AMIAL-BRANCH-BALANCE-001 — **خطّةُ إعادة التوازن الداخليّة.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * الفروعُ الموجبةُ (‏ورقٌ زائدٌ ورصيدٌ ناقص) تُقابَل بالسالبة (‏رصيدٌ
+     * زائدٌ وورقٌ ناقص). والمطابقةُ **من الأكبر إلى الأكبر** فتُغلق أكبرَ
+     * عجزٍ بأقلّ عدد نقلاتٍ ممكن — ونقلُ نقدٍ بين فرعين حركةٌ ماديّةٌ لها
+     * سائقٌ ومخاطرةُ طريق، فعشرُ نقلاتٍ صغيرةٍ أسوأ من نقلتين كبيرتين.
+     *
+     * **ولا تُنفَّذ هذه الخطّةُ من هنا.** هي **اقتراحٌ يُعرَض** لمن يملك
+     * القرار في شركة الوكيل: نقلُ العهدة بين فرعين يمرّ بـ`fund` و
+     * `collectFromBranch` بجرْدٍ وتوقيع. **وخطّةٌ تُنفَّذ نفسَها تحرّك
+     * نقداً بلا إنسانٍ يستلمه** — وهو أخطرُ ما يمكن أن يفعله تقرير.
+     *
+     * @param  array<int,array<string,mixed>>  $positions
+     * @return array{needed:bool,reason:string,moves:array<int,array<string,string>>,unmatched:array<int,array<string,string>>}
+     */
+    private function internalRebalance(array $positions): array
+    {
+        $surplus = [];   // ورقٌ زائد — يحتاج رصيداً
+        $deficit = [];   // ورقٌ ناقص — يحتاج نقداً
+
+        foreach ($positions as $p) {
+            if ($p['need'] === 'float') {
+                $surplus[] = ['id' => $p['branch_id'], 'name' => $p['name'], 'amount' => $p['net_cash']];
+            } elseif ($p['need'] === 'cash') {
+                $deficit[] = ['id' => $p['branch_id'], 'name' => $p['name'],
+                    'amount' => ltrim($p['net_cash'], '-')];
+            }
+        }
+
+        if ($surplus === [] || $deficit === []) {
+            // **وفرعٌ واحدٌ مائلٌ بلا مقابلٍ داخليٍّ ليس «متوازناً»** — هو
+            // ميلٌ تحلّه التسويةُ الخارجيّة مع أميال، ويُقال ذلك.
+            return [
+                'needed' => false,
+                'reason' => $surplus === [] && $deficit === []
+                    ? 'كلُّ فرعٍ متعادلٌ في نفسه'
+                    : 'الميلُ في اتّجاهٍ واحد — تحلّه التسويةُ مع أميال لا نقلٌ بين الفروع',
+                'moves' => [], 'unmatched' => [],
+            ];
+        }
+
+        usort($surplus, fn ($a, $b) => bccomp($b['amount'], $a['amount'], 4));
+        usort($deficit, fn ($a, $b) => bccomp($b['amount'], $a['amount'], 4));
+
+        $moves = [];
+        $i = 0;
+        $j = 0;
+
+        while ($i < count($surplus) && $j < count($deficit)) {
+            $take = bccomp($surplus[$i]['amount'], $deficit[$j]['amount'], 4) <= 0
+                ? $surplus[$i]['amount']
+                : $deficit[$j]['amount'];
+
+            if (bccomp($take, '0', 4) > 0) {
+                $moves[] = [
+                    'from_branch' => (string) $surplus[$i]['name'],
+                    'from_branch_id' => (string) $surplus[$i]['id'],
+                    'to_branch' => (string) $deficit[$j]['name'],
+                    'to_branch_id' => (string) $deficit[$j]['id'],
+                    'amount' => $take,
+                    'what' => 'نقدٌ ورقيّ',
+                ];
+            }
+
+            $surplus[$i]['amount'] = bcsub($surplus[$i]['amount'], $take, 4);
+            $deficit[$j]['amount'] = bcsub($deficit[$j]['amount'], $take, 4);
+
+            if (bccomp($surplus[$i]['amount'], '0', 4) <= 0) {
+                $i++;
+            }
+            if (bccomp($deficit[$j]['amount'], '0', 4) <= 0) {
+                $j++;
+            }
+        }
+
+        // ما بقي بعد المطابقة يذهب إلى التسوية الخارجيّة — **ويُسمّى**،
+        // فبقيّةٌ مسكوتٌ عنها تُقرأ «اكتملت الخطّة» وهي لم تكتمل.
+        $unmatched = [];
+
+        foreach (array_merge(array_slice($surplus, $i), array_slice($deficit, $j)) as $left) {
+            if (bccomp($left['amount'], '0', 4) > 0) {
+                $unmatched[] = ['name' => (string) $left['name'], 'amount' => $left['amount']];
+            }
+        }
+
+        return [
+            'needed' => true,
+            'reason' => 'فروعٌ مائلةٌ في اتّجاهين — يُعالَج بينها قبل اللجوء إلى أميال',
+            'moves' => $moves,
+            'unmatched' => $unmatched,
         ];
     }
 
@@ -252,6 +411,15 @@ class AgentDailySettlementService
             'overage_count' => 0, 'overage_total' => '0.0000',
             'unclosed_shifts' => 0, 'pending_review' => 0,
             'suspicious_count' => 0, 'flags' => [],
+            // **ويومٌ بلا فروعٍ ليس يوماً متوازناً** — لا شيءَ فُحص.
+            // فالمفتاحان موجودان دائماً كي لا يقرأ من يستهلكهما `undefined`
+            // ويعرضه «متوازن». (‏القاعدة السابعة.)
+            'branch_positions' => [],
+            'internal_rebalance' => [
+                'needed' => false,
+                'reason' => 'لا فرعَ لهذا الوكيل — ولا حركةَ تُقاس',
+                'moves' => [], 'unmatched' => [],
+            ],
             'net_cash' => '0.0000', 'net_float' => '0.0000',
             'conversion' => 'none', 'conversion_amount' => '0.0000',
             'conversion_label' => AgentDailySettlement::CONVERSION_LABELS['none'],
