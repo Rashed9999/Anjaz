@@ -27,26 +27,28 @@ class CustomerActionService
     /** الإجراءات وتسمياتها والصلاحية التي يطلبها كلٌّ منها. */
     public const ACTIONS = [
         'freeze' => ['تجميد الحساب', 'platform.customers.freeze'],
-        'unfreeze' => ['إلغاء التجميد', 'platform.customers.freeze'],
-        'suspend' => ['إيقاف مؤقت', 'platform.customers.freeze'],
-        'activate' => ['تفعيل الحساب', 'platform.customers.freeze'],
-        'close' => ['إغلاق الحساب', 'platform.customers.freeze'],
-        'mark_deceased' => ['تعليم كمتوفّى', 'platform.customers.freeze'],
+        'unfreeze' => ['طلب إلغاء التجميد', 'platform.customers.unfreeze.request'],
+        'suspend' => ['إيقاف مؤقت', 'platform.customers.lifecycle.manage'],
+        'activate' => ['تفعيل الحساب', 'platform.customers.lifecycle.manage'],
+        'close' => ['إغلاق الحساب', 'platform.customers.close.request'],
+        'mark_deceased' => ['فتح معاملة تعليم متوفّى', 'platform.customers.deceased.request'],
         'reset_pin' => ['إعادة تعيين PIN', 'platform.customers.reset_pin'],
         // لا ندّعي إنهاء «كل» جلسة بينما ليست كلّ فئات الجلسات موحّدة في
         // مخزنٍ واحد. هذه العملية تلغي الجلسات والرموز التي يستطيع النظام
         // إثباتها وتعدّها في سجلّ التدقيق.
         'revoke_sessions' => ['إلغاء الجلسات المسجّلة', 'platform.customers.sessions'],
-        'require_kyc' => ['طلب تحديث الهوية', 'platform.customers.freeze'],
-        'update_limits' => ['تعديل حدود التحويل', 'platform.settings.update'],
-        'add_note' => ['إضافة ملاحظة', 'platform.customers.view'],
-        'escalate_risk' => ['تحويل إلى فريق المخاطر', 'platform.customers.view'],
+        'require_kyc' => ['طلب تحديث الهوية', 'platform.customers.kyc.request'],
+        'update_limits' => ['تعديل حدود التحويل', 'platform.customers.limits.update'],
+        'add_note' => ['إضافة ملاحظة', 'platform.customers.notes.create'],
+        'escalate_risk' => ['تحويل إلى فريق المخاطر', 'platform.risk.investigations.create'],
     ];
 
     public function __construct(
         private readonly AuditService $audit,
         private readonly ApprovalService $approvals,
         private readonly KycUpdateRequestService $kycUpdates,
+        private readonly CustomerCenterTargetPolicy $targetPolicy,
+        private readonly AccountClosureService $closures,
     ) {
     }
 
@@ -66,49 +68,46 @@ class CustomerActionService
             throw new DomainException('السبب إلزاميّ (١٠ أحرف على الأقل) — يُراجَع بعد شهرٍ من لم يحضر المكالمة');
         }
 
-        // لا يُنفِّذ الموظّف إجراءً على حسابه هو.
-        //
-        // موظّفو المنصّة عملاء فيها ولهم محافظ وحدود. ومن يرفع تجميداً عن
-        // نفسه أو يوسّع حدوده بيده يُبطل كلّ ضابطٍ فوقه.
-        if ((int) $customer->id === (int) $actor->id) {
-            throw new DomainException('FOUR_EYES_VIOLATION: لا تُنفَّذ الإجراءات على حسابك الشخصيّ');
-        }
+        $this->targetPolicy->assertActionable($customer, $actor);
 
-        // هذا مركز العملاء فقط. تمرير معرّف وكيل/تاجر إلى المسار نفسه كان
-        // يسمح لإجراء عميل أن يمسّ كياناً له سياسات تشغيل مختلفة.
-        if ((int) $customer->type !== CUSTOMER_TYPE) {
-            throw new DomainException('CUSTOMER_SCOPE_REQUIRED: الإجراء متاح للعملاء فقط');
-        }
+        // قفل العميل مع سجلّ التدقيق في المعاملة نفسها. فلا يستقر تغييرٌ حرج
+        // بلا أثر دائم، ولا تتغلب شاشة قديمة على حالةٍ تغيّرت للتو.
+        $result = DB::transaction(function () use ($customer, $actor, $action, $reason, $payload) {
+            $locked = User::whereKey($customer->id)->lockForUpdate()->firstOrFail();
 
-        $result = match ($action) {
-            'freeze' => $this->setFrozen($customer, true),
-            // إعادة الوصول أخطر من منعه: لا تُنفَّذ بضغط الموظف نفسه.
-            'unfreeze' => $this->requestApproval($customer, $actor, 'unfreeze_wallet', $reason),
-            'suspend' => $this->setLifecycle($customer, 'suspended', $reason),
-            'activate' => $this->setLifecycle($customer, 'active', $reason),
-            'close' => $this->setLifecycle($customer, 'closed', $reason),
-            'mark_deceased' => $this->markDeceased($customer, $reason),
-            // إعادة PIN ناقل استيلاء على الحساب، فتخضع لنفس maker-checker.
-            'reset_pin' => $this->requestApproval($customer, $actor, 'reset_pin', $reason),
-            'revoke_sessions' => $this->revokeSessions($customer),
-            'require_kyc' => $this->requireKyc($customer, $actor, $reason),
-            'update_limits' => $this->updateLimits($customer, $actor, $payload),
-            'add_note' => $this->addNote($customer, $actor, $payload['body'] ?? $reason, (bool) ($payload['pin'] ?? false)),
-            'escalate_risk' => $this->escalateToRisk($customer, $actor, $reason),
-        };
+            $result = match ($action) {
+                'freeze' => $this->setFrozen($locked, true),
+                'unfreeze' => $this->requestApproval($locked, $actor, 'unfreeze_wallet', $reason),
+                'suspend' => $this->setLifecycle($locked, 'suspended', $reason),
+                'activate' => $this->setLifecycle($locked, 'active', $reason),
+                'close' => $this->requestClosureApproval($locked, $actor, $reason),
+                'mark_deceased' => $this->requestDeceasedApproval($locked, $actor, $reason),
+                'reset_pin' => $this->requestApproval($locked, $actor, 'reset_pin', $reason),
+                'revoke_sessions' => $this->revokeSessions($locked),
+                'require_kyc' => $this->requireKyc($locked, $actor, $reason),
+                'update_limits' => $this->updateLimits($locked, $actor, $payload),
+                'add_note' => $this->addNote($locked, $actor, $payload['body'] ?? $reason, (bool) ($payload['pin'] ?? false)),
+                'escalate_risk' => $this->escalateToRisk($locked, $actor, $reason),
+            };
 
-        $this->audit->record([
-            'actor_type' => 'admin',
-            'actor_user_id' => $actor->id,
-            'subject_type' => 'user',
-            'subject_id' => (string) $customer->id,
-            'action' => 'CUSTOMER_' . strtoupper($action),
-            'decision_code' => strtoupper($action),
-            'reason' => mb_substr($reason, 0, 500),
-            // كلّ إجراءٍ على حساب عميل حرج: هذه ليست إعداداتٍ بل مسٌّ بحسابه.
-            'severity' => 'critical',
-            'context' => array_merge(['customer_id' => $customer->id], $result['context'] ?? []),
-        ]);
+            $auditId = $this->audit->record([
+                'actor_type' => 'admin',
+                'actor_user_id' => $actor->id,
+                'subject_type' => 'user',
+                'subject_id' => (string) $locked->id,
+                'action' => 'CUSTOMER_' . strtoupper($action),
+                'decision_code' => strtoupper($action),
+                'reason' => mb_substr($reason, 0, 500),
+                'severity' => 'critical',
+                'context' => array_merge(['customer_id' => $locked->id], $result['context'] ?? []),
+            ]);
+
+            if ($auditId === null) {
+                throw new DomainException('AUDIT_PERSISTENCE_FAILED: لم يُنفّذ الإجراء لأن سجل التدقيق لم يُحفظ');
+            }
+
+            return $result;
+        });
 
         return [
             'message' => $result['message'],
@@ -125,6 +124,9 @@ class CustomerActionService
 
     private function setFrozen(User $c, bool $frozen): array
     {
+        if ((int) ($c->is_temp_blocked ?? 0) === ($frozen ? 1 : 0)) {
+            throw new DomainException('NO_CHANGE: حالة التجميد مطبّقة بالفعل');
+        }
         $c->forceFill([
             'is_temp_blocked' => $frozen ? 1 : 0,
             'temp_block_time' => $frozen ? now() : null,
@@ -157,6 +159,12 @@ class CustomerActionService
         if ($c->lifecycle_state === 'closed' && $state !== 'closed') {
             throw new DomainException('الحساب مغلق نهائياً — إعادة فتحه قرارٌ خارج هذه الشاشة');
         }
+        if ($c->lifecycle_state === $state) {
+            throw new DomainException('NO_CHANGE: حالة الحساب مطبّقة بالفعل');
+        }
+        if ($c->lifecycle_state === 'deceased') {
+            throw new DomainException('DECEASED_ACCOUNT: هذا الحساب تحت مسار التركة ولا يُدار من الإجراءات العادية');
+        }
 
         $c->forceFill([
             'lifecycle_state' => $state,
@@ -167,30 +175,49 @@ class CustomerActionService
         return ['message' => 'تغيّرت حالة الحساب إلى: ' . $state];
     }
 
-    private function markDeceased(User $c, string $reason): array
+    private function requestClosureApproval(User $customer, User $actor, string $reason): array
     {
-        // يُجمَّد معها: حسابُ متوفٍّ لا يُنفَّذ عليه شيء حتى تُسوّى التركة،
-        // وتعليمُه بلا تجميد يترك الباب مفتوحاً لمن يملك هاتفه.
-        $c->forceFill([
-            'lifecycle_state' => 'deceased',
-            'lifecycle_changed_at' => now(),
-            'lifecycle_reason' => mb_substr($reason, 0, 1000),
-            'is_temp_blocked' => 1,
-        ])->save();
+        $preflight = $this->closures->preflight($customer);
+        if (! $preflight['allowed']) {
+            throw new DomainException('CLOSURE_PREFLIGHT_FAILED: ' . implode('؛ ', array_column($preflight['blockers'], 'message')));
+        }
 
-        return ['message' => 'عُلّم الحساب كمتوفٍّ وجُمّد'];
+        return $this->requestApproval($customer, $actor, 'close_customer', $reason);
     }
 
-    private function resetPin(User $c): array
+    private function requestDeceasedApproval(User $customer, User $actor, string $reason): array
     {
-        foreach (['pin_code', 'pin', 'pin_failed_attempts', 'pin_locked_until'] as $col) {
-            if (Schema::hasColumn('users', $col)) {
-                $c->forceFill([$col => in_array($col, ['pin_failed_attempts'], true) ? 0 : null]);
-            }
+        if ($customer->lifecycle_state === 'deceased') {
+            throw new DomainException('NO_CHANGE: الحساب معلَّم كمتوفّى بالفعل');
         }
-        $c->save();
 
-        return ['message' => 'أُعيد تعيين الرمز — يضبطه العميل عند أوّل دخول'];
+        $request = $this->approvals->submit(
+            maker: $actor,
+            actionType: 'mark_customer_deceased',
+            subjectUserId: (int) $customer->id,
+            reason: $reason,
+        );
+
+        if (Schema::hasTable('customer_death_cases')) {
+            DB::table('customer_death_cases')->updateOrInsert(
+                ['approval_request_id' => $request->id],
+                [
+                    'case_number' => 'DTH-' . str_pad((string) $request->id, 8, '0', STR_PAD_LEFT),
+                    'customer_user_id' => $customer->id,
+                    'opened_by' => $actor->id,
+                    'evidence_summary' => mb_substr($reason, 0, 2000),
+                    'status' => 'pending_review',
+                    'created_at' => now(), 'updated_at' => now(),
+                ],
+            );
+        }
+
+        return [
+            'message' => 'فُتحت معاملة وفاة وطلب ' . $request->request_number . ' لمراجعة موظف مختلف قبل التعليم النهائي',
+            'approval_required' => true,
+            'approval_request_number' => $request->request_number,
+            'context' => ['approval_request_number' => $request->request_number],
+        ];
     }
 
     private function revokeSessions(User $c): array
@@ -312,6 +339,18 @@ class CustomerActionService
      */
     private function escalateToRisk(User $c, User $actor, string $reason): array
     {
+        $existing = AmlInvestigation::where('subject_user_id', $c->id)->open()
+            ->orderByDesc('id')->first();
+        if ($existing) {
+            app(AmlInvestigationService::class)->addEvidence(
+                $existing, $actor, 'تصعيد إضافي من مركز العملاء: ' . trim($reason),
+            );
+            return [
+                'message' => 'أُلحق التصعيد بالقضية المفتوحة ' . $existing->case_number,
+                'context' => ['case_number' => $existing->case_number, 'linked_existing_case' => true],
+            ];
+        }
+
         $inv = app(AmlInvestigationService::class)->open(
             subjectUserId: $c->id,
             actor: $actor,
