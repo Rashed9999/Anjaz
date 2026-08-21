@@ -583,11 +583,20 @@
                     <h5 class="mb-0">${esc(a.name)}</h5>
                 </div>
                 <div class="text-end">
-                    <div class="small text-muted">الرصيد المحسوب</div>
-                    <div class="fs-5 fw-bold">${money(m.computed_balance)}</div>
+                    {{-- AMIAL-STATEMENT-OPENING-001 — **الافتتاحيُّ يُقال.**
+                         وكشفٌ مقصورٌ على شهرٍ يبدأ متدرّجُه من صفرٍ يُقرأ
+                         كأنّ الحسابَ وُلد أوّلَ الشهر: عميلٌ رصيدُه مليونٌ
+                         وأنفق خمسين ألفاً يُقرأ كشفُه «سالبٌ خمسون ألفاً». --}}
+                    <div class="small text-muted">رصيدٌ افتتاحيّ</div>
+                    <div class="fw-bold money">${money(m.opening_balance)}</div>
+                    <div class="small text-muted mt-1">الرصيد الختاميّ (محسوب)</div>
+                    <div class="fs-5 fw-bold money">${money(m.closing_balance)}</div>
                     <div class="small text-muted">المخزَّن ${money(a.stored_balance)}</div>
                 </div>
             </div>
+            ${m.truncated ? `<div class="alert alert-warning py-2 small">
+                ⚠️ الكشفُ <strong>مقطوعٌ</strong> عند حدّ العرض — وآخرُ سطرٍ فيه
+                لا يساوي الرصيدَ الحقيقيّ. ضيّق المدّة لترى الباقي.</div>` : ''}
             ${m.mismatched_lines > 0 ? `<div class="alert alert-warning py-2 small">
                 ${m.mismatched_lines} سطراً رصيدُه المخزَّن يخالف التسلسل المحسوب.</div>` : ''}
             <div class="table-responsive" style="max-height:460px;overflow:auto">

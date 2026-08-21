@@ -440,7 +440,38 @@ class LedgerReportService
                 e.entry_ulid, e.source_type, e.description_ar as entry_desc, e.posted_at')
             ->get();
 
-        $running = '0';
+        // AMIAL-STATEMENT-OPENING-001 — **رصيدٌ افتتاحيٌّ لا صفر.**
+        //
+        // ══════════════════════════════════════════════════════════════
+        // كان المتدرّجُ يبدأ من صفرٍ **مهما كان المرشِّح**. فكشفُ حسابٍ
+        // مقصورٌ على شهرٍ يعرض رصيداً متدرّجاً كأنّ الحسابَ **وُلد أوّلَ
+        // الشهر**: عميلٌ رصيدُه مليونٌ منذ سنةٍ وأنفق خمسين ألفاً في
+        // الشهر يُقرأ كشفُه **«سالبٌ خمسون ألفاً»**.
+        //
+        // ولا يُنتج ذلك خطأً في أيّ سجلّ، ولا يظهر إلّا حين يقارن أحدٌ
+        // آخرَ سطرٍ في الكشف بالرصيد الحقيقيّ. **والمحور ٢٥ يطلب
+        // `opening balance` صراحةً لهذا السبب.**
+        //
+        // فيُحسب ما قبل النافذة من السطور نفسِها — لا من عمودٍ مخزَّن.
+        $opening = '0.0000';
+
+        if ($from) {
+            $before = DB::table('ledger_entry_lines as l')
+                ->join('ledger_journal_entries as e', 'e.id', '=', 'l.journal_entry_id')
+                ->where('l.account_id', $accountId)
+                ->where('e.posted_at', '<', $from)
+                ->selectRaw("
+                    COALESCE(SUM(CASE WHEN l.direction = 'debit'  THEN l.amount ELSE 0 END), 0) AS d,
+                    COALESCE(SUM(CASE WHEN l.direction = 'credit' THEN l.amount ELSE 0 END), 0) AS c")
+                ->first();
+
+            $d = number_format((float) ($before->d ?? 0), 4, '.', '');
+            $c = number_format((float) ($before->c ?? 0), 4, '.', '');
+            $opening = $account->normal_balance === 'debit'
+                ? bcsub($d, $c, 4) : bcsub($c, $d, 4);
+        }
+
+        $running = $opening;
         $lines = [];
 
         foreach ($rows as $r) {
@@ -475,7 +506,16 @@ class LedgerReportService
                 'stored_balance' => (string) $account->current_balance,
             ],
             'lines' => $lines,
+            // **الافتتاحيُّ والختاميُّ يُسمّيان** — والمحور ٢٥ يطلبهما.
+            'opening_balance' => $opening,
+            'closing_balance' => $running,
+            // يبقى `computed_balance` للمستهلك القائم — وتغييرُ اسم مفتاحٍ
+            // تقرؤه شاشةٌ يُفرّغها بلا خطأٍ في أيّ سجلّ.
             'computed_balance' => $running,
+            'period' => ['from' => $from, 'to' => $to],
+            // **والقطعُ عند الحدّ يُقال** — كشفٌ مقطوعٌ يُقرأ كاملاً،
+            // فيُطابَق آخرُ سطرٍ فيه بالرصيد الحقيقيّ فلا يتّفقان.
+            'truncated' => count($rows) >= $limit,
             'mismatched_lines' => count(array_filter($lines, fn ($l) => $l['mismatch'])),
         ];
     }
