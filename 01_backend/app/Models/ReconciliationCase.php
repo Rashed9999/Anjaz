@@ -42,4 +42,23 @@ class ReconciliationCase extends Model
         'linked_settlement_ids' => 'array',
         'linked_cash_movement_ids' => 'array',
     ];
+
+    /**
+     * رمزُ حساب الدفتر الذي تخصّه القضيّة — **قابلاً للقراءة**.
+     *
+     * AMIAL-LEDGER-DRIFT-CASE-001 · والمحورُ ٢٤ من وثيقة مركز الدفتر
+     * (`Human-readable Account Identity`): مراجعٌ يقرأ `#417` لا يعرف ما
+     * الحساب، ويفتح ملفَّ كلّ رقمٍ ليعرف. **والرمزُ هنا أقلُّ كشفاً وأكثرُ
+     * إفادة** — كما في `pendingQueue` لمستندات الهويّة.
+     */
+    public function ledgerAccountCode(): ?string
+    {
+        if ($this->ledger_account_id === null) {
+            return null;
+        }
+
+        return \Illuminate\Support\Facades\DB::table('ledger_accounts')
+            ->where('id', $this->ledger_account_id)
+            ->value('account_code');
+    }
 }

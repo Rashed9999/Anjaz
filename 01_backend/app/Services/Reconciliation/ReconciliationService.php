@@ -51,10 +51,14 @@ class ReconciliationService
         $tills   = $this->tills();
         // A run creates/updates cases; a dashboard GET must remain read-only.
         $this->cases->recordCashResults($tills['divergences'] ?? []);
+        // **وانحرافُ العمود المخبّأ يُفتح له قضيّةٌ كسواه** — كان يُعرَض
+        // في بطاقةٍ ويُنسى مع إغلاق الصفحة. (المحور ٢٢: «افتح Case».)
+        $this->cases->recordLedgerDrift($ledger['drift'] ?? []);
 
         $diverged = $wallets['diverged'] > 0
             || $ledger['unbalanced'] > 0
             || bccomp($ledger['net'], '0', 4) !== 0
+            || count($ledger['drift'] ?? []) > 0
             || $tills['diverged'] > 0;
 
         return [
@@ -132,7 +136,52 @@ class ReconciliationService
             'credit'     => (string) ($sums->c ?? '0'),
             'net'        => $net,
             'unbalanced' => count($this->reports->unbalancedEntries(50)),
+            // AMIAL-LEDGER-DRIFT-CASE-001 — انحرافُ العمود المخبّأ عن سطوره.
+            'drift'      => $this->accountDrift(),
         ];
+    }
+
+    /**
+     * حساباتٌ عمودُها المخبّأ يخالف مجموعَ سطورها.
+     *
+     * **ويُحسب من السطور لا من العمود** — والقاعدةُ السادسة هي كلُّ
+     * المسألة: مقارنةُ العمود بنفسه تُخرج صفراً دائماً.
+     *
+     * ولا حدَّ للعدد: **مصالحةٌ تفحص مئةً وتسكت عن الباقي تكذب.**
+     *
+     * @return array<int,array{account_id:int,account_code:string,stored:string,computed:string,drift:string}>
+     */
+    public function accountDrift(): array
+    {
+        if (! \Illuminate\Support\Facades\Schema::hasTable('ledger_accounts')) {
+            return [];
+        }
+
+        return DB::table('ledger_accounts as a')
+            ->leftJoin('ledger_entry_lines as l', 'l.account_id', '=', 'a.id')
+            ->groupBy('a.id', 'a.account_code', 'a.normal_balance', 'a.current_balance')
+            ->selectRaw("a.id, a.account_code, a.normal_balance, a.current_balance,
+                COALESCE(SUM(CASE WHEN l.direction = 'debit'  THEN l.amount ELSE 0 END), 0) AS d,
+                COALESCE(SUM(CASE WHEN l.direction = 'credit' THEN l.amount ELSE 0 END), 0) AS c")
+            ->get()
+            ->map(function ($r) {
+                $d = number_format((float) $r->d, 4, '.', '');
+                $c = number_format((float) $r->c, 4, '.', '');
+                $computed = $r->normal_balance === 'debit'
+                    ? bcsub($d, $c, 4) : bcsub($c, $d, 4);
+                $stored = number_format((float) $r->current_balance, 4, '.', '');
+
+                return [
+                    'account_id' => (int) $r->id,
+                    'account_code' => (string) $r->account_code,
+                    'stored' => $stored,
+                    'computed' => $computed,
+                    'drift' => bcsub($computed, $stored, 4),
+                ];
+            })
+            ->filter(fn ($r) => bccomp($r['drift'], '0', 4) !== 0)
+            ->values()
+            ->all();
     }
 
     // ══════════════════════════════════════════════════════════════

@@ -491,9 +491,11 @@
             const items = j.success ? (j.meta.items || []) : [];
             const severity = s => s === 'critical' ? 'danger' : (s === 'high' ? 'warning text-dark' : 'secondary');
             box.innerHTML = `<div class="table-responsive"><table class="table table-sm" data-testid="lg-recon-cases-table">
-                <thead class="thead-light"><tr><th>القضية</th><th>العميل</th><th class="text-end">الفرق</th><th>الفرضية</th><th>الحالة</th><th>التكرار</th><th>آخر رصد</th></tr></thead>
+                <thead class="thead-light"><tr><th>القضية</th><th>الموضوع</th><th class="text-end">الفرق</th><th>الفرضية</th><th>الحالة</th><th>التكرار</th><th>آخر رصد</th></tr></thead>
                 <tbody>${items.map(c => `<tr class="${c.severity === 'critical' ? 'table-danger' : ''}">
-                    <td class="font-monospace small">${esc(c.case_ulid)}</td><td>#${esc(c.subject_user_id)}</td>
+                    <td class="font-monospace small">${esc(c.case_ulid)}</td>
+                    <td class="small">${esc(c.subject_label || (c.subject_user_id ? 'عميل #' + c.subject_user_id : '—'))}
+                        <div class="text-muted" style="font-size:.75rem">${esc(c.case_type)}</div></td>
                     <td class="text-end fw-bold">${money(c.difference)}</td><td class="small">${esc(c.root_cause || 'بانتظار التصنيف')}</td>
                     <td><span class="badge bg-${severity(c.severity)}">${esc(c.status)}</span></td>
                     <td>${esc(c.detection_count)}</td><td class="small">${esc(c.last_detected_at || '—')}</td>

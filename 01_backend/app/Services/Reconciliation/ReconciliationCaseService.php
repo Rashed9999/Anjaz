@@ -36,6 +36,125 @@ class ReconciliationCaseService
         }
     }
 
+    /**
+     * AMIAL-LEDGER-DRIFT-CASE-001 — **الرقمُ يُعرَض ولا يُتابَع.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ما تطلبه الوثيقةُ نصّاً في المحور ٢٢:**
+     *
+     *     إذا `computed_balance ≠ current_balance` — **افتح Case.**
+     *     لا تستخدم auto-update فقط. حدّد لماذا انحرف الـcached balance.
+     *
+     * وقِيس: ميزانُ المراجعة **يحسب الانحرافَ ويعرضه** (`drifted_accounts`
+     * ولافتةٌ صفراءُ أعلى الصفحة) — **ولا يُفتح له شيء**. فهو رقمٌ يراه
+     * من فتح الصفحة اليوم، ويختفي حين يُغلقها، ولا يُسأل عنه أحدٌ غداً.
+     *
+     * **والفرقُ بين «يُعرَض» و«يُتابَع» هو الفرقُ بين لوحةٍ ومركزِ رقابة.**
+     * قضيّةٌ تحمل رقماً وتاريخَ أوّلِ ظهورٍ وعددَ مرّاتٍ وتتصعّد بالتكرار
+     * تُجبر على جوابٍ؛ ورقمٌ في بطاقةٍ يُقرأ ويُنسى.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ولا يُصلَح تلقائيّاً** — والوثيقةُ تقولها صراحةً. تحديثُ العمود
+     * ليطابق السطورَ **يمحو الدليلَ ويترك السبب**: يعود الانحرافُ بعد
+     * أسبوعٍ ولا يُعرف من أين جاء، لأنّ ما كان يدلّ عليه مُسح.
+     *
+     * @param  array<int,array{account_code:string,account_id:int,stored:string,computed:string,drift:string}>  $rows
+     */
+    public function recordLedgerDrift(array $rows): void
+    {
+        if (! Schema::hasTable('reconciliation_cases')) {
+            return;
+        }
+
+        $seen = [];
+
+        foreach ($rows as $row) {
+            $accountId = (int) ($row['account_id'] ?? 0);
+
+            if ($accountId < 1) {
+                continue;
+            }
+
+            $seen[] = $accountId;
+            $this->upsertLedgerDriftCase($row, $accountId);
+        }
+
+        // **وقضيّةٌ لم يعد فرقُها ظاهراً لا تُغلَق تلقائيّاً.** اختفاءُ
+        // الفرق قد يكون إصلاحاً وقد يكون تعديلاً مباشراً على الجدول محا
+        // الأثر. فتُوسَم `verifying` وينتظر مراجعاً — كما في المحافظ.
+        ReconciliationCase::query()
+            ->where('case_type', 'ledger_drift')
+            ->whereIn('status', array_diff(ReconciliationCase::OPEN_STATUSES, ['verifying']))
+            ->when($seen !== [], fn ($q) => $q->whereNotIn('ledger_account_id', $seen))
+            ->update([
+                'status' => 'verifying',
+                'action_taken' => 'لم يظهر انحرافُ العمود في آخر تشغيل؛ '
+                    . 'بانتظار تحقّقٍ ومراجعٍ قبل الإغلاق.',
+                'updated_at' => now(),
+            ]);
+    }
+
+    /** @param array<string,mixed> $row */
+    private function upsertLedgerDriftCase(array $row, int $accountId): void
+    {
+        DB::transaction(function () use ($row, $accountId): void {
+            $case = ReconciliationCase::query()
+                ->where('case_type', 'ledger_drift')
+                ->where('ledger_account_id', $accountId)
+                ->whereIn('status', ReconciliationCase::OPEN_STATUSES)
+                ->lockForUpdate()->first();
+
+            $computed = (string) ($row['computed'] ?? '0');
+            $stored = (string) ($row['stored'] ?? '0');
+            $gap = (string) ($row['drift'] ?? bcsub($computed, $stored, 4));
+            $now = now();
+
+            $evidence = [
+                'account_code' => (string) ($row['account_code'] ?? '—'),
+                // **المحسوبُ هو المتوقَّع لا المخزَّن.** السطورُ هي الحقيقة،
+                // والعمودُ نسخةٌ منها. وعكسُ الاتّجاه هنا يجعل التحقيقَ
+                // يبحث عن خطأٍ في القيود بدل أن يبحث عمّا أفسد العمود.
+                'expected_source' => 'مجموع سطور القيود',
+                'actual_source' => 'ledger_accounts.current_balance',
+            ];
+
+            if (! $case) {
+                ReconciliationCase::create([
+                    'case_ulid' => (string) Str::ulid(),
+                    'case_type' => 'ledger_drift',
+                    'source' => 'nightly_ledger_drift',
+                    'ledger_account_id' => $accountId,
+                    'expected_amount' => $computed,
+                    'actual_amount' => $stored,
+                    'difference' => $gap,
+                    'currency' => 'YER',
+                    'status' => 'detected',
+                    'severity' => 'warning',
+                    'first_detected_at' => $now,
+                    'last_detected_at' => $now,
+                    'detection_count' => 1,
+                    'assigned_team' => 'finance_reconciliation',
+                    'root_cause' => 'cached_balance_drift',
+                    'evidence' => ['initial' => $evidence],
+                ]);
+
+                return;
+            }
+
+            $count = (int) $case->detection_count + 1;
+            $case->forceFill([
+                'expected_amount' => $computed,
+                'actual_amount' => $stored,
+                'difference' => $gap,
+                'last_detected_at' => $now,
+                'detection_count' => $count,
+                // **فرقٌ يتكرّر ليلةً بعد ليلةٍ ليس تقريباً** — يتصعّد.
+                'severity' => $this->severityFor($count),
+                'evidence' => array_merge((array) $case->evidence, ['last' => $evidence]),
+            ])->save();
+        });
+    }
+
     /** @param array<string,mixed> $row */
     private function recordWalletDivergence(array $row): void
     {
@@ -233,6 +352,16 @@ class ReconciliationCaseService
                 'case_ulid' => $case->case_ulid,
                 'case_type' => $case->case_type,
                 'subject_user_id' => $case->subject_user_id,
+                // **ليس لكلّ قضيّةٍ عميل.** قضيّةُ انحراف عمودٍ موضوعُها
+                // حسابٌ في الدفتر، وقضيّةُ خزنةٍ موضوعُها درج. وصفٌّ يعرض
+                // `#null` في عمود «العميل» يُقرأ عطلاً في الشاشة لا نوعاً
+                // آخرَ من القضايا — **فيُشكّ في الأداة بدل أن يُحقَّق في
+                // الفرق.** فيُرسَل معها ما يُسمّي موضوعَها أيّاً كان.
+                'subject_label' => match ($case->case_type) {
+                    'ledger_drift' => 'حساب: '.($case->ledgerAccountCode() ?? '#'.$case->ledger_account_id),
+                    'cash_till', 'cash_drawer' => 'خزنة #'.($case->till_id ?? $case->branch_id ?? '—'),
+                    default => $case->subject_user_id ? 'عميل #'.$case->subject_user_id : '—',
+                },
                 'expected_amount' => (string) $case->expected_amount,
                 'actual_amount' => (string) $case->actual_amount,
                 'difference' => (string) $case->difference,
