@@ -283,7 +283,7 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         $this->charity->payoutSettlement($settlement, $this->payoutAdmin, 'wallet', 'REF-W-5', null);
     }
 
-    public function test_the_payout_endpoint_is_reachable_from_the_panel(): void
+    public function test_wallet_payout_uses_a_platform_reference_without_manual_input(): void
     {
         $settlement = $this->pendingSettlement();
         $recipient = User::factory()->create(['phone' => '967100000077']);
@@ -293,11 +293,59 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
         $this->actingAs($this->payoutAdmin, 'user')
             ->postJson('/admin/amial/charity/settlements/' . $settlement->settlement_ulid . '/payout', [
                 'method' => 'wallet',
-                'reference' => 'REF-HTTP-1',
                 'recipient_phone' => '967100000077',
             ])->assertOk();
 
-        $this->assertSame('transferred', (string) $settlement->refresh()->status);
+        $paid = $settlement->refresh();
+        $this->assertSame('transferred', (string) $paid->status);
+        $this->assertSame('AMIAL-' . $settlement->settlement_ulid, (string) $paid->bank_transfer_reference,
+            'الصرف الداخلي لا يطلب من الموظف اختراع مرجع؛ المنصة تنشئ مرجعاً قابلاً للتتبّع');
+    }
+
+    public function test_bank_payout_still_requires_the_real_bank_reference(): void
+    {
+        $settlement = $this->pendingSettlement();
+
+        $this->actingAs($this->payoutAdmin, 'user')
+            ->postJson('/admin/amial/charity/settlements/' . $settlement->settlement_ulid . '/payout', [
+                'method' => 'bank',
+            ])->assertStatus(422)
+            ->assertJsonPath('code', 'BANK_REFERENCE_REQUIRED');
+
+        $this->assertSame('pending', (string) $settlement->refresh()->status);
+    }
+
+    public function test_a_paused_campaign_without_donations_can_be_deleted_from_the_panel(): void
+    {
+        $this->charity->verifyOrganization($this->org, $this->admin);
+        $campaign = $this->charity->createCampaign($this->org, [
+            'category_id' => $this->category->id,
+            'title_ar' => 'حملة تجريبية', 'description_ar' => 'لا تبرعات لها',
+            'target_amount' => '1000.0000',
+        ], $this->admin);
+        $this->charity->approveCampaign($campaign, $this->payoutAdmin);
+        $this->charity->pauseCampaign($campaign, $this->payoutAdmin, 'انتهى الاختبار ولا حاجة للحملة');
+
+        $this->actingAs($this->payoutAdmin, 'user')
+            ->postJson('/admin/amial/charity/campaigns/' . $campaign->campaign_ulid . '/delete', [
+                'reason' => 'حملة تجريبية بلا تبرعات ويجب حذفها',
+            ])->assertOk();
+
+        $this->assertDatabaseMissing('charity_campaigns', ['id' => $campaign->id]);
+    }
+
+    public function test_a_paused_campaign_with_donations_cannot_be_deleted(): void
+    {
+        $this->pendingSettlement();
+        $campaign = CharityCampaign::where('org_id', $this->org->id)->sole();
+        $this->charity->pauseCampaign($campaign, $this->payoutAdmin, 'أوقفت بعد توليد تسوية الاختبار');
+
+        $this->actingAs($this->payoutAdmin, 'user')
+            ->postJson('/admin/amial/charity/campaigns/' . $campaign->campaign_ulid . '/delete', [
+                'reason' => 'يجب ألا يحذف سجل حملة لها تبرعات',
+            ])->assertStatus(422);
+
+        $this->assertDatabaseHas('charity_campaigns', ['id' => $campaign->id]);
     }
 
     public function test_the_payout_button_exists_on_the_donations_page(): void

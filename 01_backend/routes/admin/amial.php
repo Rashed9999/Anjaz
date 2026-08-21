@@ -162,6 +162,8 @@ Route::prefix('charity')->name('charity.')->middleware(['platform:platform.trans
         ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.approvals.decide')->name('campaigns.approve');
     Route::post('/campaigns/{ulid}/pause', [AdminCharityController::class, 'pauseCampaign'])
         ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.approvals.decide')->name('campaigns.pause');
+    Route::post('/campaigns/{ulid}/delete', [AdminCharityController::class, 'deleteCampaign'])
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.approvals.decide')->name('campaigns.delete');
 
     // AMIAL-CHARITY-DONORS-001 — «يجب إظهار المتبرّعين». والجدولُ مكتوبٌ
     // منذ بُنيت الحملات ولا نقطةَ تقرؤه للإدارة.
