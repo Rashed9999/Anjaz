@@ -167,7 +167,9 @@ class SafePaymentAdminAuditTest extends TestCase
         $context = json_decode($this->trail($p, 'SAFE_PAYMENT_ADMIN_PARTIAL')->context, true);
 
         $this->assertSame('7500.0000', $context['to_buyer']);
-        $this->assertSame('12500.0000', $context['to_seller']);
+        $this->assertSame('12500.0000', $context['to_seller_gross']);
+        $this->assertSame('12375.0000', $context['to_seller_net']);
+        $this->assertSame('125.0000', $context['platform_fee']);
     }
 
     // ===================== القراءة تُسجَّل أيضاً =====================

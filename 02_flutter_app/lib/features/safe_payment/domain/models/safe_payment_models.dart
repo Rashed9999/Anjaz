@@ -321,3 +321,30 @@ class AmialSafePaymentActions {
     sellerMarkDelivered: false, buyerConfirm: false, buyerCancel: false, buyerDispute: false,
   );
 }
+
+/// نتيجة التحقق من البائع. الاسم والرقم مقنّعان لحماية الخصوصية، والرمز
+/// قصير العمر ومربوط بالمشتري والبائع فلا يصلح لعملية أخرى.
+class AmialVerifiedSeller {
+  final int recipientId;
+  final String verificationToken;
+  final String maskedName;
+  final String maskedPhone;
+  final bool isMerchant;
+
+  AmialVerifiedSeller({
+    required this.recipientId,
+    required this.verificationToken,
+    required this.maskedName,
+    required this.maskedPhone,
+    required this.isMerchant,
+  });
+
+  factory AmialVerifiedSeller.fromJson(Map<String, dynamic> j) =>
+      AmialVerifiedSeller(
+        recipientId: int.tryParse('${j['recipient_id'] ?? 0}') ?? 0,
+        verificationToken: '${j['verification_token'] ?? ''}',
+        maskedName: '${j['masked_name'] ?? 'بائع'}',
+        maskedPhone: '${j['masked_phone'] ?? ''}',
+        isMerchant: j['is_merchant'] == true || j['is_merchant'] == 1,
+      );
+}

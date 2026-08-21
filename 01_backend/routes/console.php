@@ -40,6 +40,14 @@ Schedule::job(new \App\Jobs\ReleasePendingTransfersJob())
     ->onOneServer()
     ->description('AMIAL-TRANSFER-COOLDOWN: Release pending transfers past cooldown');
 
+// الدفع الآمن لا يجوز أن يظل حجزاً أبدياً إن لم يرد البائع. المهمةُ قفلٌ
+// ثانٍ فوق deadline في الخدمة: تفكّ الأموال المنتهية كل دقيقة، ومن خادم واحد.
+Schedule::job(new \App\Jobs\ExpireSafePaymentsJob())
+    ->everyMinute()
+    ->withoutOverlapping(5)
+    ->onOneServer()
+    ->description('AMIAL-SAFE-PAYMENT: Refund payments past seller acceptance deadline');
+
 // مستقبلاً نضيف هنا:
 // - Schedule::command('amial:family-fund:cleanup-expired-invitations')->daily();
 // - Schedule::command('amial:legal:cleanup-orphan-acceptances')->weekly();

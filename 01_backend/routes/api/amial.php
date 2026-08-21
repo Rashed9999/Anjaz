@@ -493,6 +493,9 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
         // أسباب النزاع من الخادم — إضافة سبب لا تستحقّ إصدار تطبيق
         Route::get('/dispute-reasons', [SafePaymentController::class, 'disputeReasons'])
             ->name('dispute-reasons');
+        Route::post('/verify-seller', [SafePaymentController::class, 'verifySeller'])
+            ->middleware('amial.rate-limit:safe_pay_verify_seller,10,1')
+            ->name('verify-seller');
         Route::get('/evidence/{id}/file', [SafePaymentController::class, 'evidenceFile'])
             ->where('id', '[0-9]+')->name('evidence.file');
         Route::post('/', [SafePaymentController::class, 'create'])
@@ -516,9 +519,11 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
 
         // Seller actions
         Route::post('/{ulid}/seller-accept', [SafePaymentController::class, 'sellerAccept'])
-            ->where('ulid', '[A-Z0-9]{26}')->name('seller-accept');
+            ->where('ulid', '[A-Z0-9]{26}')
+            ->middleware('amial.rate-limit:safe_pay_seller_response,10,1')->name('seller-accept');
         Route::post('/{ulid}/seller-reject', [SafePaymentController::class, 'sellerReject'])
-            ->where('ulid', '[A-Z0-9]{26}')->name('seller-reject');
+            ->where('ulid', '[A-Z0-9]{26}')
+            ->middleware('amial.rate-limit:safe_pay_seller_response,10,1')->name('seller-reject');
         Route::post('/{ulid}/seller-mark-in-delivery', [SafePaymentController::class, 'sellerMarkInDelivery'])
             ->where('ulid', '[A-Z0-9]{26}')->name('seller-in-delivery');
         Route::post('/{ulid}/seller-mark-delivered', [SafePaymentController::class, 'sellerMarkDelivered'])
@@ -529,12 +534,14 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
         // حارس — أي حُرس فتح الصندوق ولم يُحرس إخراج المال منه. buyer-confirm
         // هو ما ينقل المبلغ فعلاً إلى البائع.
         Route::post('/{ulid}/buyer-confirm', [SafePaymentController::class, 'buyerConfirm'])
-            ->middleware('amial.zone:safe_payment_release')
+            ->middleware(['amial.zone:safe_payment_release', 'amial.rate-limit:safe_pay_confirm,5,1'])
             ->where('ulid', '[A-Z0-9]{26}')->name('buyer-confirm');
         Route::post('/{ulid}/buyer-cancel', [SafePaymentController::class, 'buyerCancel'])
-            ->where('ulid', '[A-Z0-9]{26}')->name('buyer-cancel');
+            ->where('ulid', '[A-Z0-9]{26}')
+            ->middleware('amial.rate-limit:safe_pay_cancel,5,1')->name('buyer-cancel');
         Route::post('/{ulid}/buyer-dispute', [SafePaymentController::class, 'buyerDispute'])
-            ->where('ulid', '[A-Z0-9]{26}')->name('buyer-dispute');
+            ->where('ulid', '[A-Z0-9]{26}')
+            ->middleware('amial.rate-limit:safe_pay_dispute,5,1')->name('buyer-dispute');
     });
 
     // -------- AMIAL-RECIPIENT-VERIFY-001 (v2.6) --------

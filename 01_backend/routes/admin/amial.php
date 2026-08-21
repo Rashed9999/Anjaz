@@ -95,19 +95,25 @@ Route::middleware('platform:platform.audit.view')->group(function () {
 Route::get('/security-events', [SecurityEventsController::class, 'index'])->name('security-events.index');
 
 // ============ AMIAL-SAFE-PAYMENT-001 (v1.1) — Disputes resolution ============
-Route::prefix('safe-payments')->name('safe-payments.')->middleware('amial.idempotency')->group(function () {
-    Route::get('/', [AdminSafePaymentController::class, 'index'])->name('index');
+// النزاع يكشف بيانات ومعاملات حساسة؛ القراءة ليست حق كل موظف، والحسم حركة
+// مال فعلية. حارس admin يثبت أنه موظف، وplatform يثبت أنه يملك الفعل نفسه.
+Route::prefix('safe-payments')->name('safe-payments.')->group(function () {
+    Route::get('/', [AdminSafePaymentController::class, 'index'])
+        ->middleware('platform:platform.transactions.view')->name('index');
     // AMIAL-SAFEPAY-EVIDENCE-001 — قبل مسار {ulid} كي لا يبتلعه
     Route::get('/evidence/{id}/file', [AdminSafePaymentController::class, 'evidenceFile'])
-        ->where('id', '[0-9]+')->name('evidence-file');
+        ->where('id', '[0-9]+')->middleware('platform:platform.transactions.view')->name('evidence-file');
     Route::get('/{ulid}', [AdminSafePaymentController::class, 'show'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('show');
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.transactions.view')->name('show');
     Route::post('/{ulid}/release', [AdminSafePaymentController::class, 'resolveRelease'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('release');
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware(['platform:platform.money.move', 'amial.idempotency'])->name('release');
     Route::post('/{ulid}/refund', [AdminSafePaymentController::class, 'resolveRefund'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('refund');
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware(['platform:platform.money.move', 'amial.idempotency'])->name('refund');
     Route::post('/{ulid}/partial', [AdminSafePaymentController::class, 'resolvePartial'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('partial');
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware(['platform:platform.money.move', 'amial.idempotency'])->name('partial');
 });
 
 // ============ AMIAL-DONATIONS-001 (v1.2) ============
@@ -749,7 +755,8 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         ->where('merchantId', '[0-9]+')->name('subscriptions.extend');
 
     // لوحة النزاعات — واجهة فوق مسارات safe-payments الموجودة (JSON)
-    Route::get('/disputes', [$hc, 'disputes'])->name('disputes');
+    Route::get('/disputes', [$hc, 'disputes'])
+        ->middleware('platform:platform.transactions.view')->name('disputes');
 
     // لوحة التحقق — اعتماد/رفض/حظر الحسابات المسجَّلة ذاتياً (كل الأدوار)
     // AMIAL-ZONE-PANEL-001 — لوحة المناطق (نطاق التشغيل، العالقون، المخالفات)

@@ -22,10 +22,21 @@
                 <option value="disputed">كل المتنازَع عليها</option>
                 <option value="">كل مدفوعات الدفع الآمن</option>
                 <option value="funded">مجمّدة (سارية)</option>
-                <option value="released">مُفرَج عنها</option>
-                <option value="refunded">مُعادة</option>
+                <option value="in_delivery">قيد التسليم</option>
+                <option value="delivered">بانتظار تأكيد المشتري</option>
+                <option value="released_to_seller">مُفرَج عنها</option>
+                <option value="refunded_to_buyer">مُعادة للمشتري</option>
+                <option value="partially_refunded">تسوية جزئية</option>
+                <option value="pending_seller_acceptance">بانتظار قبول البائع</option>
             </select>
+            <input id="search-filter" class="form-control" style="max-width:300px"
+                   placeholder="ابحث بالمرجع أو الاسم أو الجوال">
+            <button class="btn btn-outline-primary" id="search-button">بحث</button>
             <span class="text-muted small ms-auto" id="page-info"></span>
+        </div>
+        <div class="card-body border-bottom py-2 d-flex gap-3 flex-wrap small">
+            <span>نزاعات مفتوحة: <b id="open-count">—</b></span>
+            <span>أموال معلّقة: <b id="open-held">—</b> ر.ي</span>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -69,7 +80,7 @@
             </div>
             <ul class="list-group mb-3" id="d-audit" style="max-height:180px;overflow-y:auto"></ul>
 
-            <div class="card p-3 bg-light border">
+            <div class="card p-3 bg-light border" id="d-resolution-card">
                 <div class="fw-bold mb-2">قرار الحسم</div>
                 <div class="alert alert-secondary py-2 small mb-2">
                     قرارك يُقيَّد باسمك ووقته وببصمات الأدلّة المعروضة أعلاه في سلسلة
@@ -104,13 +115,19 @@
     const fmt = (n) => Number(n || 0).toLocaleString('en-US', {maximumFractionDigits: 2});
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-    let page = 1, lastPage = 1, status = 'disputed_open', currentUlid = null;
+    let page = 1, lastPage = 1, status = 'disputed_open', currentUlid = null, currentPayment = null;
 
     const badge = (st) => ({
         'funded': '<span class="badge bg-primary">مجمّد</span>',
         'disputed': '<span class="badge bg-danger">متنازَع</span>',
-        'released': '<span class="badge bg-success">مُفرَج</span>',
-        'refunded': '<span class="badge bg-secondary">مُعاد</span>',
+        'released_to_seller': '<span class="badge bg-success">مُفرَج للبائع</span>',
+        'refunded_to_buyer': '<span class="badge bg-secondary">مُعاد للمشتري</span>',
+        'seller_rejected': '<span class="badge bg-secondary">رفض البائع</span>',
+        'cancelled': '<span class="badge bg-secondary">أُلغي</span>',
+        'expired': '<span class="badge bg-secondary">انتهت المهلة</span>',
+        'pending_seller_acceptance': '<span class="badge bg-info">بانتظار البائع</span>',
+        'in_delivery': '<span class="badge bg-primary">قيد التسليم</span>',
+        'delivered': '<span class="badge bg-primary">بانتظار التأكيد</span>',
         'partially_refunded': '<span class="badge bg-warning text-dark">تسوية جزئية</span>',
     }[st] || `<span class="badge bg-light text-dark">${esc(st)}</span>`);
 
@@ -130,13 +147,20 @@
     async function load() {
         const tbody = document.getElementById('list-tbody');
         tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">جارٍ التحميل…</td></tr>';
-        const r = await fetch(`${base}?status=${encodeURIComponent(status)}&page=${page}`, {headers: {'Accept': 'application/json'}});
-        const j = await r.json();
+        const q = document.getElementById('search-filter').value.trim();
+        const r = await fetch(`${base}?status=${encodeURIComponent(status)}&page=${page}&q=${encodeURIComponent(q)}`, {headers: {'Accept': 'application/json'}});
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || j.success === false) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">تعذّر تحميل النزاعات. حاول مجدداً.</td></tr>';
+            return;
+        }
         const meta = j.meta || {};
         const items = meta.items || [];
         const pg = meta.pagination || {};
         lastPage = Math.max(1, Math.ceil((pg.total || 0) / (pg.per_page || 20)));
         document.getElementById('page-info').textContent = `${pg.total ?? 0} نتيجة — صفحة ${pg.current_page ?? 1}`;
+        document.getElementById('open-count').textContent = meta.summary?.open_count ?? '0';
+        document.getElementById('open-held').textContent = fmt(meta.summary?.open_held_amount);
 
         tbody.innerHTML = items.length ? items.map(p => `
             <tr>
@@ -226,6 +250,7 @@
 
     async function openDispute(ulid) {
         currentUlid = ulid;
+        currentPayment = null;
         document.getElementById('d-error').textContent = '';
         document.getElementById('d-reason').value = '';
         document.getElementById('d-info').innerHTML = 'جارٍ التحميل…';
@@ -235,9 +260,14 @@
         document.getElementById('d-evidence').innerHTML = '';
 
         const r = await fetch(`${base}/${ulid}`, {headers: {'Accept': 'application/json'}});
-        const j = await r.json();
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || j.success === false) {
+            document.getElementById('d-info').innerHTML = '<div class="alert alert-danger mb-0">تعذّر فتح ملف النزاع.</div>';
+            return;
+        }
         const meta = j.meta || {};
         const p = meta.payment || {};
+        currentPayment = p;
         document.getElementById('d-title').textContent = `نزاع ${p.payment_ulid ?? ''}`;
         document.getElementById('d-info').innerHTML = `
             <div class="row g-2">
@@ -257,6 +287,8 @@
 
         renderEvidence(meta.evidence || {});
         renderAudit(meta.audit_trail || [], p.id);
+        const canResolve = p.status === 'disputed' && !p.admin_resolved_at;
+        document.getElementById('d-resolution-card').classList.toggle('d-none', !canResolve);
         document.getElementById('d-partial-amount').max = p.amount ?? '';
         document.getElementById('d-events').innerHTML = (p.events || []).map(ev => `
             <li class="list-group-item small d-flex justify-content-between">
@@ -272,13 +304,21 @@
 
     async function resolve(action, extra) {
         const errEl = document.getElementById('d-error'); errEl.textContent = '';
+        if (!currentPayment || currentPayment.status !== 'disputed' || currentPayment.admin_resolved_at) {
+            errEl.textContent = 'هذه العملية ليست نزاعاً مفتوحاً للحسم.'; return;
+        }
         const reason = document.getElementById('d-reason').value.trim();
         if (reason.length < 10) { errEl.textContent = 'سبب القرار مطلوب (10 أحرف فأكثر)'; return; }
+        const labels = {release: 'إفراج كامل للبائع', refund: 'إعادة كاملة للمشتري', partial: 'تسوية جزئية'};
+        if (!window.confirm(`هل تؤكد ${labels[action]}؟ القرار المالي نهائي ويُسجّل باسمك.`)) return;
+        const buttons = ['d-release', 'd-refund', 'd-partial'].map(id => document.getElementById(id));
+        buttons.forEach(b => b.disabled = true);
         try {
             const j = await post(`${base}/${currentUlid}/${action}`, Object.assign({reason}, extra || {}));
             bootstrap.Modal.getInstance(document.getElementById('modal-dispute')).hide();
             alert(j.message || 'تم الحسم'); load();
         } catch (err) { errEl.textContent = err.message; }
+        finally { buttons.forEach(b => b.disabled = false); }
     }
 
     document.getElementById('d-release').addEventListener('click', () => resolve('release'));
@@ -287,6 +327,10 @@
         resolve('partial', {buyer_refund_amount: document.getElementById('d-partial-amount').value}));
 
     document.getElementById('status-filter').addEventListener('change', (e) => { status = e.target.value; page = 1; load(); });
+    document.getElementById('search-button').addEventListener('click', () => { page = 1; load(); });
+    document.getElementById('search-filter').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); page = 1; load(); }
+    });
     document.getElementById('prev-page').addEventListener('click', () => { if (page > 1) { page--; load(); } });
     document.getElementById('next-page').addEventListener('click', () => { if (page < lastPage) { page++; load(); } });
 

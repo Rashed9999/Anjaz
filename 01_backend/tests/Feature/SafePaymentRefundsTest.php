@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\EMoney;
+use App\Models\Ledger\LedgerJournalEntry;
 use App\Models\SafePayment;
 use App\Models\User;
 use App\Services\SafePaymentService;
@@ -55,6 +56,10 @@ class SafePaymentRefundsTest extends TestCase
 
         // البائع لم يستلم شيء
         $this->assertBalance($this->seller, '0.0000');
+
+        // الاسترداد ليس تغيير محفظة فقط: escrow خرج منه بقيد متوازن.
+        $this->assertSame(1, LedgerJournalEntry::where('source_type', 'safe_payment_refund')
+            ->where('source_id', 'like', $payment->payment_ulid . '%')->count());
     }
 
     /** @test */
@@ -104,6 +109,8 @@ class SafePaymentRefundsTest extends TestCase
 
         $this->assertEquals('expired', $payment->status);
         $this->assertBalance($this->buyer, '1000.0000'); // refunded
+        $this->assertSame(1, LedgerJournalEntry::where('source_type', 'safe_payment_refund')
+            ->where('source_id', 'like', $payment->payment_ulid . '%')->count());
     }
 
     /** @test */

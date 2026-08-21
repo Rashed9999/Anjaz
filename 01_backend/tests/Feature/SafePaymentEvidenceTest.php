@@ -186,7 +186,9 @@ class SafePaymentEvidenceTest extends TestCase
 
         $this->actingAs($seller, 'api')
             ->get("/api/v1/amial/safe-payments/evidence/{$e->id}/file")
-            ->assertOk();
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'private, no-store')
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
     }
 
     // ===================== رمز التسليم =====================
@@ -372,7 +374,10 @@ class SafePaymentEvidenceTest extends TestCase
 
     private function admin(): User
     {
-        return User::factory()->create(['type' => ADMIN_TYPE]);
+        $admin = User::factory()->create(['type' => ADMIN_TYPE]);
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
+        return $admin->refresh();
     }
 
     /**

@@ -36,9 +36,6 @@ class SafePaymentService
 {
     use \App\Traits\PostsToLedger;
 
-    /** بيانات قيود ledger مؤجلة للنشر بعد commit */
-    private array $pendingLedgerPosts = [];
-
     public function __construct(
         private readonly FinancialGuardService $guard,
         private readonly AuditService $audit,
@@ -67,43 +64,6 @@ class SafePaymentService
             'scheme_id' => $breakdown['scheme_id'],
             'scheme_version' => $breakdown['scheme_version'],
         ];
-    }
-
-    /**
-     * نشر قيود الـ ledger المؤجلة بعد نجاح الـ DB::transaction.
-     * يُستدعى في نهاية كل method عام يقوم بـ release/refund.
-     */
-    private function flushPendingLedgerPosts(): void
-    {
-        $posts = $this->pendingLedgerPosts;
-        $this->pendingLedgerPosts = [];
-
-        foreach ($posts as $post) {
-            // AMIAL-LEDGER-BLOCKING-003: التأجيل يبقى، والابتلاع يزول.
-            //
-            // هذه القيود مؤجَّلة بحكم التصميم: الإفراج والاسترداد يمرّان
-            // بعدّة انتقالات حالة في معاملات منفصلة، فجُمعت لتُنشر مرّة.
-            // لكنّ التأجيل شيء وابتلاع الفشل شيء آخر — كان الاستثناء يُبلع
-            // فيبقى مالٌ أُفرج عنه بلا قيد إفراج. الآن يُرمى فيصل المستدعي.
-            (function () use ($post) {
-                if ($post['type'] === 'release') {
-                    $this->ledgerReleaseEscrow(
-                        toSellerUserId: $post['seller_id'],
-                        grossAmount: $post['gross'],
-                        feeAmount: $post['fee'],
-                        sourceId: $post['source_id'],
-                        description: "إفراج دفع آمن للبائع: {$post['title']}",
-                    );
-                } elseif ($post['type'] === 'refund') {
-                    $this->ledgerRefundEscrow(
-                        toBuyerUserId: $post['buyer_id'],
-                        amount: $post['amount'],
-                        sourceId: $post['source_id'],
-                        description: "استرداد دفع آمن للمشتري: {$post['title']}",
-                    );
-                }
-            })();
-        }
     }
 
     // ============================================================
@@ -280,36 +240,37 @@ class SafePaymentService
     public function verifyDeliveryCode(SafePayment $payment, User $seller, string $code): SafePayment
     {
         $this->assertSeller($payment, $seller);
-
-        if (!in_array($payment->status, ['funded', 'in_delivery'], true)) {
-            throw new \RuntimeException('لا يمكن تأكيد التسليم في الحالة الراهنة');
-        }
-
-        if (empty($payment->delivery_code_hash)) {
-            throw new \RuntimeException('لا يوجد رمز تسليم لهذه العملية');
-        }
-
-        if ((int) $payment->delivery_code_attempts >= 3) {
-            throw new \RuntimeException(
-                'تجاوزت عدد المحاولات. تواصل مع الدعم أو أكمل بالأدلّة المرفوعة.'
-            );
-        }
-
         $clean = preg_replace('/[^0-9]/', '', $code);
 
-        $expected = $this->plainDeliveryCode($payment);
-
-        if ($expected === null || !hash_equals($expected, (string) $clean)) {
-            $payment->increment('delivery_code_attempts');
-            $this->recordEvent($payment, 'delivery_code_failed', $payment->status, $payment->status,
-                actorType: 'seller', actorUserId: $seller->id,
-                context: ['attempts' => $payment->delivery_code_attempts]);
-
-            throw new \RuntimeException('رمز التسليم غير صحيح');
-        }
-
-        DB::transaction(function () use ($payment, $seller) {
+        // فحص الحالة والعداد والمقارنة كلّها تحت القفل نفسه. كان فحص العداد
+        // وزيادته خارج المعاملة، فتصل عدة طلبات متزامنة قبل أن ترى المحاولة
+        // السابقة، وتتجاوز حد المحاولات الثلاث بلا أثر موثوق.
+        $result = DB::transaction(function () use ($payment, $seller, $clean) {
             $locked = SafePayment::lockForUpdate()->find($payment->id);
+
+            if (!in_array($locked->status, ['funded', 'in_delivery'], true)) {
+                return ['payment' => null, 'error' => 'لا يمكن تأكيد التسليم في الحالة الراهنة'];
+            }
+            if (empty($locked->delivery_code_hash)) {
+                return ['payment' => null, 'error' => 'لا يوجد رمز تسليم لهذه العملية'];
+            }
+            if ((int) $locked->delivery_code_attempts >= 3) {
+                return ['payment' => null, 'error' => 'تجاوزت عدد المحاولات. تواصل مع الدعم أو أكمل بالأدلّة المرفوعة.'];
+            }
+
+            $expected = $this->plainDeliveryCode($locked);
+            if ($expected === null || !hash_equals($expected, (string) $clean)) {
+                $attempts = (int) $locked->delivery_code_attempts + 1;
+                $locked->update(['delivery_code_attempts' => $attempts]);
+                $this->recordEvent($locked, 'delivery_code_failed', $locked->status, $locked->status,
+                    actorType: 'seller', actorUserId: $seller->id,
+                    context: ['attempts' => $attempts]);
+
+                // لا نرمِي داخل الـ transaction: نريد تثبيت المحاولة الخاطئة
+                // والسجل قبل إرجاع الرفض للعميل.
+                return ['payment' => null, 'error' => 'رمز التسليم غير صحيح'];
+            }
+
             $from = $locked->status;
 
             $locked->update([
@@ -322,9 +283,15 @@ class SafePaymentService
             $this->recordEvent($locked, 'delivery_code_verified', $from, 'delivered',
                 actorType: 'seller', actorUserId: $seller->id,
                 note: 'أكّد البائع التسليم برمز المشتري');
+
+            return ['payment' => $locked->fresh(), 'error' => null];
         });
 
-        return $payment->fresh();
+        if ($result['error'] !== null) {
+            throw new \RuntimeException($result['error']);
+        }
+
+        return $result['payment'];
     }
 
     public function sellerAccept(SafePayment $payment, User $seller, ?string $note = null): SafePayment
@@ -475,7 +442,6 @@ class SafePaymentService
 
         $payment = $payment->fresh();
         $this->safeIssueReceipt($payment, 'credit', $payment->seller_user_id, $payment->buyer_user_id, 'safe_payment_released');
-        $this->flushPendingLedgerPosts();
         return $payment;
     }
 
@@ -510,7 +476,6 @@ class SafePaymentService
 
         $payment = $payment->fresh();
         $this->safeIssueReceipt($payment, 'credit', $payment->buyer_user_id, $payment->seller_user_id, 'safe_payment_refunded');
-        $this->flushPendingLedgerPosts();
         return $payment;
     }
 
@@ -657,7 +622,6 @@ class SafePaymentService
 
         $payment = $payment->fresh();
         $this->safeIssueReceipt($payment, 'credit', $payment->seller_user_id, $payment->buyer_user_id, 'safe_payment_released');
-        $this->flushPendingLedgerPosts();
         return $payment;
     }
 
@@ -693,7 +657,6 @@ class SafePaymentService
 
         $payment = $payment->fresh();
         $this->safeIssueReceipt($payment, 'credit', $payment->buyer_user_id, $payment->seller_user_id, 'safe_payment_refunded');
-        $this->flushPendingLedgerPosts();
         return $payment;
     }
 
@@ -735,6 +698,15 @@ class SafePaymentService
                 );
                 $locked->buyer_refund_tx_id = $refundTxId;
                 $locked->refunded_to_buyer_amount = $buyerAmount;
+
+                // التسوية الجزئية ليست استثناءً من الدفتر: حصّة المشتري
+                // تخرج من escrow بقيد مستقل ومتوازن داخل المعاملة نفسها.
+                $this->ledgerRefundEscrow(
+                    toBuyerUserId: $locked->buyer_user_id,
+                    amount: $buyerAmount,
+                    sourceId: $locked->payment_ulid . '_partial_refund_' . $refundTxId,
+                    description: "استرداد جزئي لدفع آمن: {$locked->title}",
+                );
             }
 
             // 2) release للبائع (الجزء الآخر، minus fees)
@@ -755,6 +727,16 @@ class SafePaymentService
                 $locked->platform_fee = $platformFee;
                 $locked->fee_scheme_id = $feeInfo['scheme_id'];
                 $locked->fee_scheme_version = $feeInfo['scheme_version'];
+
+                // وحصّة البائع كذلك: الإجمالي قبل الرسم، والصافي للمحفظة،
+                // والرسم لحساب المنصّة. بذلك لا يبقى جزء من escrow بلا أثر.
+                $this->ledgerReleaseEscrow(
+                    toSellerUserId: $locked->seller_user_id,
+                    grossAmount: $sellerAmount,
+                    feeAmount: $platformFee,
+                    sourceId: $locked->payment_ulid . '_partial_release_' . $creditTxId,
+                    description: "إفراج جزئي لدفع آمن: {$locked->title}",
+                );
             }
 
             $locked->held_amount = '0';
@@ -772,13 +754,21 @@ class SafePaymentService
         });
 
         // التسوية الجزئية أخطر الثلاثة: المبلغ يُقسَم برأي الموظّف وحده،
-        // فتُسجَّل الحصّتان كما أدخلهما لا كما آلتا.
+        // فتُسجَّل الحصّتان كما آلت كل واحدة منهما فعلاً (الصافي للبائع).
+        $resolved = $payment->fresh();
         $this->auditAdminResolution(
+            // نحتفظ بنسخة ما قبل الحسم في التدقيق كي يبقى "المحجوز قبل"
+            // حقيقةً قابلة للمراجعة، لا صفراً بعد أن صُفّر الحجز.
             $payment, $admin, 'SAFE_PAYMENT_ADMIN_PARTIAL', 'RESOLVED_PARTIAL', $reason,
-            ['to_buyer' => $buyerAmount, 'to_seller' => $sellerAmount],
+            [
+                'to_buyer' => $buyerAmount,
+                'to_seller_gross' => $sellerAmount,
+                'to_seller_net' => (string) $resolved->released_to_seller_amount,
+                'platform_fee' => (string) $resolved->platform_fee,
+            ],
         );
 
-        $payment = $payment->fresh();
+        $payment = $resolved;
         if (bccomp((string)$payment->refunded_to_buyer_amount, '0', 4) > 0) {
             $this->safeIssueReceipt($payment, 'credit', $payment->buyer_user_id, $payment->seller_user_id, 'safe_payment_refunded',
                 customAmount: (string)$payment->refunded_to_buyer_amount);
@@ -823,7 +813,6 @@ class SafePaymentService
 
         $payment = $payment->fresh();
         $this->safeIssueReceipt($payment, 'credit', $payment->buyer_user_id, $payment->seller_user_id, 'safe_payment_refunded');
-        $this->flushPendingLedgerPosts();
         return $payment;
     }
 
@@ -872,15 +861,15 @@ class SafePaymentService
             actorType: $actorType, actorUserId: $actorUserId,
             context: ['amount' => $sellerCredit, 'platform_fee' => $platformFee]);
 
-        // سجّل بيانات الـ ledger للنشر بعد الـ commit (AMIAL-LEDGER-001 v1.9)
-        $this->pendingLedgerPosts[] = [
-            'type' => 'release',
-            'seller_id' => $locked->seller_user_id,
-            'gross' => (string)$locked->amount,
-            'fee' => $platformFee,
-            'source_id' => $locked->payment_ulid,
-            'title' => $locked->title,
-        ];
+        // القيد داخل معاملة الحالة والمحفظة. تأجيله إلى ما بعد commit كان
+        // يسمح بإفراج رصيد حقيقي ثم فشل الدفتر بلا طريق rollback أو outbox.
+        $this->ledgerReleaseEscrow(
+            toSellerUserId: $locked->seller_user_id,
+            grossAmount: (string)$locked->amount,
+            feeAmount: $platformFee,
+            sourceId: $locked->payment_ulid,
+            description: "إفراج دفع آمن للبائع: {$locked->title}",
+        );
     }
 
     /**
@@ -907,14 +896,13 @@ class SafePaymentService
         $locked->held_amount = MoneyService::sub((string)$locked->held_amount, $refundAmount);
         $locked->save();
 
-        // سجّل بيانات الـ ledger للنشر بعد الـ commit (AMIAL-LEDGER-001 v1.9)
-        $this->pendingLedgerPosts[] = [
-            'type' => 'refund',
-            'buyer_id' => $locked->buyer_user_id,
-            'amount' => $refundAmount,
-            'source_id' => $locked->payment_ulid . '_' . $refundTxId,
-            'title' => $locked->title,
-        ];
+        // الاسترداد، كالإفراج، لا يكتمل ما لم يكتمل قيده في المعاملة نفسها.
+        $this->ledgerRefundEscrow(
+            toBuyerUserId: $locked->buyer_user_id,
+            amount: $refundAmount,
+            sourceId: $locked->payment_ulid . '_' . $refundTxId,
+            description: "استرداد دفع آمن للمشتري: {$locked->title}",
+        );
     }
 
     private function recordEvent(

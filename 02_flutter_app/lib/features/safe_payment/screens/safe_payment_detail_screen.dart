@@ -8,6 +8,7 @@ import 'package:amial_pay/features/safe_payment/widgets/dispute_sheet.dart';
 import 'package:amial_pay/features/safe_payment/widgets/evidence_gallery.dart';
 import 'package:amial_pay/features/safe_payment/widgets/evidence_picker_sheet.dart';
 import 'package:amial_pay/features/safe_payment/widgets/trust_card.dart';
+import 'package:amial_pay/features/shared/widgets/amial_pin_gate.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SAFE-PAYMENT-001 (v1.1)
@@ -124,8 +125,25 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
       body: Obx(() {
         final ctrl = Get.find<SafePaymentController>();
         final payment = ctrl.selectedPayment.value;
-        if (ctrl.isLoading.value || payment == null) {
+        if (ctrl.isLoading.value) {
           return const Center(child: CircularProgressIndicator(color: AmialColors.primary));
+        }
+        if (payment == null) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                const Icon(Icons.error_outline, color: AmialColors.red, size: 42),
+                const SizedBox(height: 12),
+                Text(ctrl.lastError.value.isNotEmpty ? ctrl.lastError.value : 'تعذّر تحميل العملية',
+                    textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () => ctrl.loadDetail(widget.ulid),
+                  icon: const Icon(Icons.refresh), label: const Text('إعادة المحاولة')),
+              ]),
+            ),
+          );
         }
         final actions = ctrl.availableActions.value;
         final isBuyer = ctrl.yourRole.value == 'buyer';
@@ -185,7 +203,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
                           fontSize: 28, fontWeight: FontWeight.bold,
                           color: AmialColors.primary),
                     ),
-                    if (double.parse(payment.heldAmount) > 0) ...[
+                    if ((double.tryParse(payment.heldAmount) ?? 0) > 0) ...[
                       const SizedBox(height: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -198,7 +216,7 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
                             style: const TextStyle(fontSize: 11)),
                       ),
                     ],
-                    if (double.parse(payment.platformFee) > 0) ...[
+                    if ((double.tryParse(payment.platformFee) ?? 0) > 0) ...[
                       const SizedBox(height: 4),
                       Text('رسوم الخدمة: '+AmialMoney.yer(payment.platformFee),
                           style: const TextStyle(
@@ -278,7 +296,18 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
               const SizedBox(height: 24),
 
               // ====== Available actions ======
-              ..._buildActions(ctrl, actions),
+              IgnorePointer(
+                ignoring: ctrl.isSubmitting.value,
+                child: Opacity(
+                  opacity: ctrl.isSubmitting.value ? 0.55 : 1,
+                  child: Column(children: _buildActions(ctrl, actions)),
+                ),
+              ),
+              if (ctrl.isSubmitting.value)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Center(child: CircularProgressIndicator(color: AmialColors.primary)),
+                ),
             ],
           ),
         );
@@ -479,7 +508,11 @@ class _SafePaymentDetailScreenState extends State<SafePaymentDetailScreen> {
         Colors.green.shade700,
         () => _confirmAction('تأكيد الاستلام',
           'هل استلمت السلعة كما هي موصوفة؟ سيتم إفراج المبلغ للبائع.',
-          () => ctrl.buyerConfirm(ulid)),
+          () async {
+            final pin = await askAmialPinInput(title: 'تأكيد الإفراج للبائع');
+            if (pin == null || pin.length < 4) return false;
+            return ctrl.buyerConfirm(ulid, pin);
+          }),
       ));
     }
     if (a.buyerCancel) {

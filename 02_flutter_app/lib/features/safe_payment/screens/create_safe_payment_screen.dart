@@ -34,6 +34,22 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final ctrl = Get.find<SafePaymentController>();
+    final sellerPhone = _sellerPhoneCtrl.text.trim();
+
+    // لا نحجز المال لرقم أُدخل فقط: نطلب من الخادم اسماً مقنّعاً وtoken
+    // مربوطاً به، ثم نُظهره للمشتري قبل أن يوافق.
+    if (ctrl.verifiedSeller.value == null ||
+        ctrl.verifiedSellerPhone.value != sellerPhone) {
+      final verified = await ctrl.verifySeller(sellerPhone);
+      if (!mounted) return;
+      if (!verified) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(ctrl.lastError.value), backgroundColor: AmialColors.red));
+        return;
+      }
+    }
+    final seller = ctrl.verifiedSeller.value!;
 
     // تأكيد قبل الإنشاء (لأن المال سيُخصم مباشرة)
     final confirmed = await showDialog<bool>(
@@ -47,6 +63,22 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
             Text(
               'سيتم خصم ${AmialMoney.fmt(_amountCtrl.text)} ر.ي من حسابك وحجزه حتى تأكيد الاستلام.',
               textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AmialColors.background,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(children: [
+                const Text('البائع المؤكّد', style: TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
+                const SizedBox(height: 3),
+                Text(seller.maskedName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(seller.maskedPhone, textDirection: TextDirection.ltr,
+                    style: const TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
+              ]),
             ),
             const SizedBox(height: 12),
             Container(
@@ -82,12 +114,12 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
 
     if (confirmed != true) return;
 
-    // AMIAL-PIN-GATE-001: رمز PIN قبل حجز المبلغ
-    if (!await askAmialPin(title: 'تأكيد الدفع الآمن')) return;
+    // رمز PIN يُرسل مع طلب الحجز نفسه؛ تحقق منفصل لا يمنع استدعاء API مباشر.
+    final pin = await askAmialPinInput(title: 'تأكيد الدفع الآمن');
+    if (pin == null || pin.length < 4) return;
     if (!mounted) return;
 
     // AMIAL-DS-001: ورقة النتيجة الموحّدة (جارٍ الحجز → نجاح/فشل).
-    final ctrl = Get.find<SafePaymentController>();
     final done = await AmialResultSheet.run<bool>(
       context,
       processingTitle: 'جارٍ حجز المبلغ',
@@ -98,7 +130,9 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
       errorMessage: (e) => '$e',
       action: () async {
         final ok = await ctrl.create(
-          sellerPhone: _sellerPhoneCtrl.text.trim(),
+          sellerPhone: sellerPhone,
+          sellerVerificationToken: seller.verificationToken,
+          pin: pin,
           title: _titleCtrl.text.trim(),
           description: _descCtrl.text.trim(),
           amount: _amountCtrl.text.trim(),
@@ -175,7 +209,47 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
                     if (v == null || v.trim().length < 6) return 'رقم غير صحيح';
                     return null;
                   },
+                  onChanged: ctrl.invalidateSellerVerificationIfNeeded,
                 ),
+                const SizedBox(height: 8),
+                if (ctrl.verifiedSeller.value != null &&
+                    ctrl.verifiedSellerPhone.value == _sellerPhoneCtrl.text.trim())
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AmialColors.success.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AmialColors.success.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.verified_user_outlined, color: AmialColors.success, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(
+                        'البائع المؤكّد: ${ctrl.verifiedSeller.value!.maskedName}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+                      if (ctrl.verifiedSeller.value!.isMerchant)
+                        const Text('تاجر', style: TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
+                    ]),
+                  )
+                else
+                  Align(
+                    alignment: AlignmentDirectional.centerStart,
+                    child: TextButton.icon(
+                      onPressed: ctrl.isVerifyingSeller.value
+                          ? null
+                          : () async {
+                              final ok = await ctrl.verifySeller(_sellerPhoneCtrl.text);
+                              if (!mounted || ok) return;
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text(ctrl.lastError.value), backgroundColor: AmialColors.red));
+                            },
+                      icon: ctrl.isVerifyingSeller.value
+                          ? const SizedBox(width: 15, height: 15,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.person_search_outlined),
+                      label: const Text('تحقق من البائع قبل الحجز'),
+                    ),
+                  ),
                 const SizedBox(height: 12),
 
                 // ====== Title ======
@@ -228,7 +302,6 @@ class _CreateSafePaymentScreenState extends State<CreateSafePaymentScreen> {
                   validator: (v) {
                     final n = double.tryParse(v ?? '');
                     if (n == null || n < 1) return 'الحد الأدنى 1 ر.ي';
-                    if (n > 100000) return 'الحد الأقصى 100,000 ر.ي';
                     return null;
                   },
                 ),

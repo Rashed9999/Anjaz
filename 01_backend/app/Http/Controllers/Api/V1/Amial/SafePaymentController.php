@@ -5,7 +5,10 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Controller;
 use App\Models\SafePayment;
 use App\Models\User;
+use App\Services\KycTierService;
+use App\Services\RecipientVerificationService;
 use App\Services\SafePaymentService;
+use App\Services\TransactionPinService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -17,6 +20,9 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(
         private readonly SafePaymentService $service,
+        private readonly RecipientVerificationService $recipientVerification,
+        private readonly TransactionPinService $pinService,
+        private readonly KycTierService $kyc,
     ) {}
 
     /** GET /api/v1/amial/safe-payments — قائمة (as buyer or seller) */
@@ -96,6 +102,8 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
     {
         $v = Validator::make($request->all(), [
             'seller_phone' => 'required|string|min:6|max:20',
+            'seller_verification_token' => 'required|string|size:26',
+            'pin' => 'required|string|min:4|max:6',
             'title' => 'required|string|min:3|max:200',
             'description' => 'required|string|min:10|max:5000',
             'amount' => 'required|numeric|min:1',
@@ -109,12 +117,31 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
         if (!$seller) return $this->error('SELLER_NOT_FOUND', 'البائع غير مسجل في النظام', 422);
 
         try {
+            $buyer = $request->user();
+            $amount = (string) $request->input('amount');
+            $this->assertEligibleParticipant($buyer, $amount, 'المشتري');
+            $this->assertEligibleParticipant($seller, $amount, 'البائع');
+
+            // PIN الذي يتحقق في شاشة منفصلة لا يثبت شيئاً لهذا الطلب؛ يجب
+            // أن يصل إلى الخادم مع حجز المال نفسه كي لا يُتجاوز باستدعاء API.
+            if (!$this->pinService->verify($buyer, (string) $request->input('pin'))) {
+                return $this->error('PIN_INVALID', 'رمز PIN غير صحيح أو الحساب مقفل مؤقتاً', 403);
+            }
+
+            // token قصير العمر، مربوط بالمشتري والبائع، ويُستهلك مرة واحدة.
+            // يمنع خطأ رقم واحد أو تبديل البائع بين شاشة التأكيد والحجز.
+            $this->recipientVerification->assertValidToken(
+                $buyer->id,
+                (string) $request->input('seller_verification_token'),
+                $seller->id,
+            );
+
             $payment = $this->service->createAndFund(
-                buyer: $request->user(),
+                buyer: $buyer,
                 seller: $seller,
                 title: $request->input('title'),
                 description: $request->input('description'),
-                amount: (string)$request->input('amount'),
+                amount: $amount,
                 deliveryTerms: $request->input('delivery_terms'),
                 attachments: $request->input('attachments'),
             );
@@ -125,6 +152,28 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
         }
 
         return $this->ok(['payment' => $payment], 'SAFE_PAYMENT_CREATED', 'تم إنشاء الطلب وحجز المبلغ', 201);
+    }
+
+    /** POST /safe-payments/verify-seller — الاسم المقنّع قبل حجز المال. */
+    public function verifySeller(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), ['seller_phone' => 'required|string|min:6|max:20']);
+        if ($v->fails()) return $this->validationError($v);
+
+        try {
+            $result = $this->recipientVerification->verifyRecipient(
+                (string) $request->input('seller_phone'), (int) $request->user()->id,
+            );
+            $seller = User::find($result['recipient_id']);
+            if (!$seller) {
+                throw new \RuntimeException('البائع غير متاح حالياً');
+            }
+            $this->assertEligibleParticipant($seller, '1.0000', 'البائع');
+        } catch (\RuntimeException $e) {
+            return $this->error('SELLER_NOT_ELIGIBLE', $e->getMessage(), 422);
+        }
+
+        return $this->ok($result, 'SELLER_VERIFIED', 'تأكد من اسم البائع قبل حجز المبلغ');
     }
 
     /** POST /api/v1/amial/safe-payments/{ulid}/seller-accept */
@@ -165,6 +214,12 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
 
     public function buyerConfirm(Request $request, string $ulid): JsonResponse
     {
+        $v = Validator::make($request->all(), ['pin' => 'required|string|min:4|max:6']);
+        if ($v->fails()) return $this->validationError($v);
+        if (!$this->pinService->verify($request->user(), (string) $request->input('pin'))) {
+            return $this->error('PIN_INVALID', 'رمز PIN غير صحيح أو الحساب مقفل مؤقتاً', 403);
+        }
+
         return $this->execAction($ulid, $request->user(), 'buyer',
             fn($p, $u) => $this->service->buyerConfirm($p, $u),
             'SAFE_PAYMENT_RELEASED', 'تم تأكيد الاستلام وإفراج المبلغ للبائع'
@@ -306,7 +361,10 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
         return response($contents, 200, [
             'Content-Type' => $evidence->mime,
             'Content-Length' => (string) strlen($contents),
-            'Cache-Control' => 'private, max-age=3600',
+            // صورة هوية/فاتورة نزاع لا ينبغي أن تبقى ساعة في cache جهازٍ
+            // مشترك، ولا أن يخمّن المتصفح نوعها خلافاً للـ MIME الموثوق.
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
@@ -393,6 +451,22 @@ class SafePaymentController extends AmialApiController // AMIAL-FIX-007
         }
 
         return $this->ok(['payment' => $updated], $okCode, $okMessage);
+    }
+
+    /** لا تُنشأ escrow بين حسابين غير نشطين أو غير مؤهلين تنظيمياً. */
+    private function assertEligibleParticipant(User $user, string $amount, string $role): void
+    {
+        if (!(bool) $user->is_active) {
+            throw new \RuntimeException("{$role} غير نشط حالياً");
+        }
+        if (($user->sanction_status ?? 'clear') === 'blocked') {
+            throw new \RuntimeException("{$role} مقيَّد تنظيمياً");
+        }
+        if (($user->zone_code ?? 'UNKNOWN') !== 'SOUTH') {
+            throw new \RuntimeException("{$role} غير مؤهل لهذه المنطقة التشغيلية");
+        }
+
+        $this->kyc->assertTransactionAllowed($user, $amount, 'safe_payment');
     }
 
     private function resolveAvailableActions(SafePayment $payment, User $user): array

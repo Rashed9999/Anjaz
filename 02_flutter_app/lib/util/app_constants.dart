@@ -139,6 +139,7 @@ class AppConstants {
 
   // AMIAL-SAFE-PAYMENT-001 (v1.1)
   static const String amialSafePayments = '/api/v1/amial/safe-payments';
+  static const String amialSafePaymentVerifySeller = '/api/v1/amial/safe-payments/verify-seller';
   static const String amialSafePaymentShow = '/api/v1/amial/safe-payments/';        // + {ulid}
   static const String amialSafePaymentSellerAccept = '/api/v1/amial/safe-payments/';// + {ulid}/seller-accept
   static const String amialSafePaymentSellerReject = '/api/v1/amial/safe-payments/';// + {ulid}/seller-reject
