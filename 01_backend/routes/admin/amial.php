@@ -28,6 +28,28 @@ use Illuminate\Support\Facades\Route;
  *   Route::prefix('amial')->name('amial.')->group(base_path('routes/admin/amial.php'));
  */
 
+// ══════════════════════════════════════════════════════════════════════
+//  AMIAL-I18N-001 — **تبديلُ لغة اللوحة.**
+//
+//  اللوحةُ عربيّةٌ افتراضاً الآن، **والتبديلُ حقٌّ لا ميزة**: من يقرأ
+//  الإنجليزيّة أسرعَ يبدّل، ومن يشارك شاشتَه مع مورّدٍ أجنبيٍّ يبدّل.
+//
+//  ولا صلاحيّةَ عليه: **تفضيلُ عرضٍ لا فعلٌ إداريّ** — لا يقرأ بياناً
+//  ولا يكتبه، ولا يظهر في التدقيق. وحصرُه بصلاحيّةٍ يجعل من لا يملكها
+//  حبيسَ لغةٍ لا يقرؤها.
+// ══════════════════════════════════════════════════════════════════════
+Route::post('/locale', function (\Illuminate\Http\Request $request) {
+    $wanted = (string) $request->input('locale');
+
+    // **ولا تُقبل لغةٌ لا قاموسَ لها** — وإلّا فُرِّغت اللوحةُ من نصوصها
+    // بقيمةٍ يكتبها المتصفّح. (القاعدة الثامنة: ما يأتي من الطلب يُفحص.)
+    abort_unless(in_array($wanted, ['ar', 'en'], true), 422);
+
+    session(['local' => $wanted]);
+
+    return back();
+})->name('locale');
+
 // ============ Zone Management ============
 Route::prefix('zones')->name('zones.')->group(function () {
     Route::get('/', [ZoneManagementController::class, 'index'])->name('index');
@@ -59,7 +81,15 @@ Route::prefix('recovery')->name('recovery.')->group(function () {
 });
 
 // ============ Audit Decisions ============
-Route::get('/audit', [AuditDecisionsController::class, 'index'])->name('audit.index');
+// AMIAL-AUDIT-DETAIL-002 — القائمةُ والتفصيلُ والتصدير، وكلُّها قراءةٌ
+// محضة تحت `platform.audit.view`: سجلُّ التدقيق لا يُعدَّل ولا يُحذف،
+// وقراءتُه اطّلاعٌ على كلّ ما جرى في المنصّة فلا تُترك بلا صلاحيّة.
+Route::middleware('platform:platform.audit.view')->group(function () {
+    Route::get('/audit', [AuditDecisionsController::class, 'index'])->name('audit.index');
+    Route::get('/audit/export.csv', [AuditDecisionsController::class, 'export'])->name('audit.export');
+    Route::get('/audit/{id}.json', [AuditDecisionsController::class, 'show'])
+        ->where('id', '[0-9]+')->name('audit.show');
+});
 
 // ============ Security Events ============
 Route::get('/security-events', [SecurityEventsController::class, 'index'])->name('security-events.index');
@@ -87,6 +117,10 @@ Route::prefix('surface')->name('surface.')->group(function () {
     Route::get('/bill-providers', [$sc, 'billProviders'])->name('bill-providers');
     Route::post('/bill-providers/{id}/toggle', [$sc, 'toggleBillProvider'])->where('id', '[0-9]+')->name('bill-providers.toggle');
     Route::get('/funds', [$sc, 'funds'])->name('funds');
+    // AMIAL-FUND-DETAIL-001 — «أين اختفى المال ومن سحبه؟». والصلاحيّةُ
+    // `audit.view`: قراءةُ حركةِ صندوقٍ اطّلاعٌ على مالِ أُسرةٍ بعينها.
+    Route::get('/funds/{id}', [$sc, 'fundDetail'])->where('id', '[0-9]+')
+        ->middleware('platform:platform.audit.view')->name('funds.detail');
     Route::get('/payment-requests', [$sc, 'paymentRequests'])->name('payment-requests');
     Route::get('/rbac', [$sc, 'rbac'])->name('rbac');
 });
@@ -106,6 +140,12 @@ Route::prefix('charity')->name('charity.')->middleware('amial.idempotency')->gro
     Route::post('/organizations/{ulid}/suspend', [AdminCharityController::class, 'suspendOrg'])
         ->where('ulid', '[A-Z0-9]{26}')->name('orgs.suspend');
 
+    // AMIAL-CHARITY-META-001 — التصنيفات. كانت الشاشةُ تناديه وهو معدوم.
+    Route::get('/categories', [AdminCharityController::class, 'categories'])->name('categories');
+
+    // AMIAL-CHARITY-UPLOAD-001 — رفعُ صورةٍ من الجهاز بدل لصق رابط.
+    Route::post('/uploads', [AdminCharityController::class, 'uploadImage'])->name('uploads');
+
     // Campaigns
     Route::get('/campaigns', [AdminCharityController::class, 'indexCampaigns'])->name('campaigns.index');
     Route::post('/organizations/{orgUlid}/campaigns', [AdminCharityController::class, 'createCampaign'])
@@ -115,11 +155,32 @@ Route::prefix('charity')->name('charity.')->middleware('amial.idempotency')->gro
     Route::post('/campaigns/{ulid}/pause', [AdminCharityController::class, 'pauseCampaign'])
         ->where('ulid', '[A-Z0-9]{26}')->name('campaigns.pause');
 
+    // AMIAL-CHARITY-DONORS-001 — «يجب إظهار المتبرّعين». والجدولُ مكتوبٌ
+    // منذ بُنيت الحملات ولا نقطةَ تقرؤه للإدارة.
+    // **هواتفُ المتبرّعين بياناتٌ شخصيّة.** كانت تُردّ لأيّ مديرٍ بلا
+    // صلاحيّة، بينما تفصيلُ صندوق العائلة محروسٌ بـ`platform.audit.view`.
+    // تفاوتٌ بلا سبب — والأشدُّ هو الصواب.
+    Route::get('/campaigns/{ulid}/donors', [AdminCharityController::class, 'campaignDonors'])
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware('platform:platform.audit.view')->name('campaigns.donors');
+
     // Settlements
     Route::get('/settlements', [AdminCharityController::class, 'indexSettlements'])->name('settlements.index');
     Route::post('/settlements/generate', [AdminCharityController::class, 'generateSettlement'])->name('settlements.generate');
+    // **بابان لفعلٍ واحد، أحدُهما محروسٌ والآخرُ لا** — القاعدة الرابعة.
+    // هذا يقلب التسويةَ إلى «مصروفة» **بلا قيدٍ في الدفتر**، وهو عينُ
+    // الثغرة التي عولجت في `payout`. فيُحرَس بالصلاحيّة نفسِها حتّى
+    // يُزال، ولا يُترك باباً خلفيّاً يلتفّ على القيد.
     Route::post('/settlements/{ulid}/transferred', [AdminCharityController::class, 'markTransferred'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('settlements.transferred');
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware('platform:platform.money.move')->name('settlements.transferred');
+
+    // AMIAL-CHARITY-PAYOUT-001 — «طريقة سحب المال … إلى محفظة أميال باي أو
+    // عبر وكيل». وهو الوحيد هنا الذي **يُحرّك مالاً** — فيُحرَس بصلاحيّة
+    // تحريك المال لا بصلاحيّة تحرير المحتوى.
+    Route::post('/settlements/{ulid}/payout', [AdminCharityController::class, 'payoutSettlement'])
+        ->where('ulid', '[A-Z0-9]{26}')
+        ->middleware('platform:platform.money.move')->name('settlements.payout');
 });
 
 // ============ AMIAL-AML-001 (v1.4) ============
@@ -196,6 +257,9 @@ Route::prefix('customer')->name('customer.')->middleware('platform:platform.cust
         Route::get('/search', [$cc, 'search'])->name('search');
         Route::get('/{id}/tab/{tab}', [$cc, 'tab'])
             ->where(['id' => '[0-9]+', 'tab' => '[a-z]+'])->name('tab');
+        // AMIAL-CUSTOMER-IDEMPOTENCY-001 (‏من دفعة Codex — أُبقيت عند
+        // استعادة هذا الملفّ): فعلُ مركز العملاء يُجمّد ويُفكّ ويُعيد PIN.
+        // وضغطتان متتاليتان بلا مفتاح تفرّدٍ تُنفَّذان مرّتين.
         Route::post('/{id}/action', [$cc, 'act'])->where('id', '[0-9]+')
             ->middleware('amial.idempotency')->name('action');
     });
@@ -392,6 +456,10 @@ Route::prefix('catalog')->name('catalog.')->middleware('platform:platform.settin
         Route::get('/export', [$cc, 'export'])->name('export');
         Route::post('/', [$cc, 'store'])->name('store');
         Route::post('/import', [$cc, 'import'])->name('import');
+        // AMIAL-CATALOG-IMAGE-001 — رفعُ صورة الصنف مصغَّرةً إلى ٤٠٠ بكسل.
+        // **قبل `/{id}`**: وإلّا التقطه `[0-9]+`… لا، لا يلتقطه — لكنّ
+        // ترتيبَ المسارات النصّيّة قبل المتغيّرة عادةٌ تمنع مفاجأةً لاحقة.
+        Route::post('/images', [$cc, 'uploadImage'])->name('images');
         Route::get('/{id}', [$cc, 'show'])->where('id', '[0-9]+')->name('show');
         Route::post('/{id}/review', [$cc, 'review'])->where('id', '[0-9]+')->name('review');
     });
@@ -553,15 +621,39 @@ Route::prefix('merchants')->name('merchants.')->group(function () {
 //
 // AMIAL-OPERATOR-RBAC-003: نسبةُ ربحٍ تُغيَّر مرّةً يبقى أثرُها على كلّ
 // عمليّةٍ بعدها. فلا تُترك لكلّ من دخل اللوحة — لمدير المنصّة وحده.
-Route::prefix('fees')->name('fees.')->middleware('platform:platform.fees.update')
-    ->group(function () {
-    Route::get('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webIndex'])->name('index');
-    Route::get('/create', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webCreate'])->name('create');
-    Route::get('/profit', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webProfit'])->name('profit');
-    Route::post('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webStore'])->name('store');
-    Route::post('/simulate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'simulate'])->name('simulate');
-    Route::get('/history/{code}', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webHistory'])->name('history');
-    Route::post('/{id}/deactivate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webDeactivate'])->name('deactivate');
+//
+// ══════════════════════════════════════════════════════════════════════
+// **AMIAL-FEE-TRUTH-010 — والقراءةُ فُصلت عن الكتابة.**
+//
+// كانت المجموعةُ كلُّها خلف `platform.fees.update`. فمن أراد أن **يقرأ**
+// تسعيرةً أو يفتح تقريرَ الأرباح — محاسبٌ يراجع، أو مشرفٌ يتحقّق من
+// شكوى — لزمه إذنُ **تغيير** الرسوم. فإمّا يُمنع من الاطّلاع، وإمّا
+// يُعطى مفتاحَ تغيير المال كلِّه. **وأقلُّ صلاحيّةٍ تكفي** (`amial-rbac`).
+//
+// وتقريرُ الأرباح خاصّةً **لا يغيّر شيئاً**: فوضعُه خلف إذن التعديل
+// يُغري بمنح إذن التعديل لمن يحتاج تقريراً.
+Route::prefix('fees')->name('fees.')->group(function () {
+
+    // ── القراءة ────────────────────────────────────────────────────
+    Route::middleware('platform:platform.fees.view')->group(function () {
+        Route::get('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webIndex'])->name('index');
+        Route::get('/profit', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webProfit'])->name('profit');
+        Route::get('/history/{code?}', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webHistory'])->name('history');
+        Route::get('/operations', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webOperations'])->name('operations');
+        Route::get('/policies', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webPolicies'])->name('policies');
+        Route::get('/drill', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webDrill'])->name('drill');
+    });
+
+    // ── الكتابة ────────────────────────────────────────────────────
+    //
+    // **والمحاكي كتابةٌ لا قراءة**: هو الشاشةُ التي تُجرَّب فيها نسخةٌ
+    // قبل حفظها، ومن لا يملك حقَّ الحفظ لا حاجةَ له بها.
+    Route::middleware('platform:platform.fees.update')->group(function () {
+        Route::get('/create', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webCreate'])->name('create');
+        Route::post('/', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webStore'])->name('store');
+        Route::post('/simulate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'simulate'])->name('simulate');
+        Route::post('/{id}/deactivate', [App\Http\Controllers\Admin\FeeSchemeController::class, 'webDeactivate'])->name('deactivate');
+    });
 });
 
 // ============ AMIAL-SENTINEL-001 — Security Sentinel Dashboard ============
@@ -715,6 +807,11 @@ Route::prefix('ops')->name('ops.')->group(function () {
     Route::post('/roles/{userId}', [OperatorRolesController::class, 'update'])
         ->where('userId', '[0-9]+')
         ->middleware('platform:platform.settings.update')->name('roles.update');
+
+    // AMIAL-OPERATOR-CREATE-001 — إنشاءُ موظّفِ منصّةٍ بأدواره.
+    // وبالصلاحيّة نفسِها: من يُسند الأدوار هو من يُنشئ من يحملها.
+    Route::post('/operators', [OperatorRolesController::class, 'store'])
+        ->middleware('platform:platform.settings.update')->name('operators.store');
 });
 
 // ============ AMIAL-SUPERVISION-001 — لوحة الإشراف ============
@@ -722,3 +819,18 @@ Route::prefix('ops')->name('ops.')->group(function () {
 // قراءةٌ محضة: الإشراف رقابةٌ على التنفيذ لا تنفيذ، فلا فعل هنا يُغيّر شيئاً.
 Route::get('/supervision', [SupervisionController::class, 'index'])
     ->middleware('platform:platform.audit.view')->name('supervision.index');
+
+// ============ AMIAL-OBSERVABILITY-001 — مركز صحّة النظام ============
+//
+// **الثمن:** ثلاثةُ أعطالٍ في يومٍ واحدٍ وصلت عبر صاحب المشروع لا عبر
+// جهاز. وقِيس أنّ المنصّةَ بلا نقطةِ صحّةٍ ولا تتبّعِ أخطاءٍ ولا سجلِّ
+// توفّر — **فصاحبُ المشروع هو جهازُ الرصد.**
+//
+// وتحت `platform.audit.view`: الصحّةُ رقابةٌ لا تنفيذ. وتغييرُ حالة عطلٍ
+// فعلٌ إداريٌّ يُدقَّق، فله صلاحيّتُه.
+Route::get('/system/health', [\App\Http\Controllers\Admin\SystemHealthController::class, 'index'])
+    ->middleware('platform:platform.audit.view')->name('system.health');
+
+Route::post('/system/errors/{id}', [\App\Http\Controllers\Admin\SystemHealthController::class, 'updateError'])
+    ->where('id', '[0-9]+')
+    ->middleware('platform:platform.audit.view')->name('system.errors.update');
