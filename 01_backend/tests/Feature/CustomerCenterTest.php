@@ -77,6 +77,23 @@ class CustomerCenterTest extends TestCase
         }
     }
 
+    /** طلب إعادة الهوية يجب أن يُعرض ولا ينهار بسبب تاريخٍ نصّيّ من قاعدة البيانات. */
+    public function kyc_tab_renders_an_active_kyc_update_request(): void
+    {
+        $this->customer->forceFill([
+            'kyc_update_required' => 1,
+            'kyc_update_requested_at' => now(),
+        ])->save();
+
+        $response = $this->actingAs($this->staff, 'user')
+            ->getJson("/admin/amial/customer/{$this->customer->id}/tab/kyc")
+            ->assertOk()
+            ->assertJsonPath('meta.update_required', true)
+            ->assertJsonPath('meta.reconciliation.state', 'update_required');
+
+        $this->assertNotEmpty($response->json('meta.update_requested_at'));
+    }
+
     /** @test */
     public function support_can_trace_money_requests_from_the_customer_file(): void
     {

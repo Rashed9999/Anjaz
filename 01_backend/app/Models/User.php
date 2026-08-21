@@ -92,6 +92,15 @@ class User extends Authenticatable
         'password' => 'string',
         'is_phone_verified' => 'integer',
         'is_email_verified' => 'integer',
+        // AMIAL-KYC-UPDATE-REQUEST-001 — لا تُعاد قيمة التاريخ كنص؛ مركز
+        // العملاء يحتاج صيغة زمنية حقيقية عند عرض طلب إعادة التحقق.
+        'is_kyc_verified' => 'integer',
+        'kyc_tier' => 'integer',
+        'kyc_tier_updated_at' => 'datetime',
+        'kyc_update_required' => 'boolean',
+        'kyc_update_requested_at' => 'datetime',
+        'kyc_update_requested_by' => 'integer',
+        'kyc_update_previous_tier' => 'integer',
         'last_active_at' => 'datetime',
         'unique_id' => 'string',
         'referral_id' => 'string',
