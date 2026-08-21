@@ -20,9 +20,24 @@ class ZoneControlPanelTest extends TestCase
 {
     use RefreshDatabase;
 
+    /**
+     * AMIAL-ZONE-RBAC-001 — **نوعُ الحساب وحدَه لم يعد يفتح اللوحة.**
+     *
+     * كانت مساراتُ النطاقات التسعةُ بلا `platform:` واحد، فكان أيُّ حسابِ
+     * إدارةٍ — دعماً أو صيانةً — ينقل حساباً بين نطاقين. **ونقلُ الحساب
+     * يفتح أو يُغلق حركةَ ماله** (`EnforceZonePolicy` تقرأ النطاق).
+     *
+     * فصار للّوحة صلاحيّة، ويُسنَد للمشغّل دورٌ يحملها. وحسابٌ بلا دورٍ
+     * يُردّ ٤٠٣ الآن — وهو الصواب، ومحروسٌ في `ZonePermissionGuardTest`.
+     */
     private function admin(): User
     {
-        return User::factory()->create(['type' => ADMIN_TYPE]);
+        $u = User::factory()->create(['type' => ADMIN_TYPE]);
+
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($u, \App\Services\PlatformRoleService::ADMIN);
+
+        return $u->refresh();
     }
 
     /** ملاحظة: لا نسمّيها get() — TestCase تعرّفها public فيتعارض التوقيع. */

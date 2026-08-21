@@ -51,9 +51,17 @@ Route::post('/locale', function (\Illuminate\Http\Request $request) {
 })->name('locale');
 
 // ============ Zone Management ============
+//
+// AMIAL-ZONE-RBAC-001 — **كانت بلا صلاحيّةٍ إطلاقاً.**
+//
+// و`update` تُغيّر محافظاتِ التشغيل — أي **حدَّ الحركة على كلّ الحسابات
+// دفعةً واحدة**، لا على حساب. فتُفرَد بصلاحيّةٍ لا تُمنح إلّا لمدير
+// المنصّة، وتُفصَل القراءةُ عنها.
 Route::prefix('zones')->name('zones.')->group(function () {
-    Route::get('/', [ZoneManagementController::class, 'index'])->name('index');
-    Route::post('/update', [ZoneManagementController::class, 'update'])->name('update');
+    Route::get('/', [ZoneManagementController::class, 'index'])
+        ->middleware('platform:platform.zones.view')->name('index');
+    Route::post('/update', [ZoneManagementController::class, 'update'])
+        ->middleware('platform:platform.zones.policy.update')->name('update');
 });
 
 // ============ Legal Terms ============
@@ -582,11 +590,26 @@ Route::prefix('2fa')->name('2fa.')->group(function () {
 });
 
 // ============ AMIAL-ZONE-ASSIGN-001 (v2.0) ============
+//
+// AMIAL-ZONE-RBAC-001 — **أربعةُ مساراتٍ بلا صلاحيّةٍ واحدة.**
+//
+// ونقلُ حسابٍ بين نطاقين ليس تصنيفاً إداريّاً: `EnforceZonePolicy` تقرأ
+// النطاقَ فتسمح بالحركة أو تمنعها. فالنقلُ **يفتح أو يُغلق حركةَ مالِ
+// صاحبِه** — وكان يفعله كلُّ من يدخل اللوحة.
+//
+// و`assign` تُفرَد عن `assign-from-kyc`: الأولى إسنادٌ يدويٌّ **يخالف
+// الوثيقة** (وهي التجاوز)، والثانية إسنادٌ منها. وجمعُهما في صلاحيّةٍ
+// واحدةٍ يجعل منحَ المقيَّدة منحاً للمطلقة.
 Route::prefix('zone')->name('zone.')->group(function () {
-    Route::post('/assign', [App\Http\Controllers\Admin\AdminZoneController::class, 'assign'])->name('assign');
-    Route::post('/assign-from-kyc', [App\Http\Controllers\Admin\AdminZoneController::class, 'assignFromKyc'])->name('assign-kyc');
-    Route::get('/logs/{userId}', [App\Http\Controllers\Admin\AdminZoneController::class, 'logs'])->name('logs');
-    Route::get('/stats', [App\Http\Controllers\Admin\AdminZoneController::class, 'stats'])->name('stats');
+    Route::post('/assign', [App\Http\Controllers\Admin\AdminZoneController::class, 'assign'])
+        ->middleware('platform:platform.zones.override')->name('assign');
+    Route::post('/assign-from-kyc', [App\Http\Controllers\Admin\AdminZoneController::class, 'assignFromKyc'])
+        ->middleware('platform:platform.zones.assign')->name('assign-kyc');
+    // سجلُّ نطاقِ **شخصٍ بعينه** — اطّلاعٌ على تاريخِ فرد، لا على لوحة.
+    Route::get('/logs/{userId}', [App\Http\Controllers\Admin\AdminZoneController::class, 'logs'])
+        ->middleware('platform:platform.zones.audit.view')->name('logs');
+    Route::get('/stats', [App\Http\Controllers\Admin\AdminZoneController::class, 'stats'])
+        ->middleware('platform:platform.zones.view')->name('stats');
 });
 
 // ============ AMIAL-AGENT-NETWORK-001 (v2.4) ============
@@ -773,15 +796,28 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
 
     // لوحة التحقق — اعتماد/رفض/حظر الحسابات المسجَّلة ذاتياً (كل الأدوار)
     // AMIAL-ZONE-PANEL-001 — لوحة المناطق (نطاق التشغيل، العالقون، المخالفات)
+    //
+    // AMIAL-ZONE-RBAC-001 — **وحراسةُ الصفحة وحدَها لا تكفي.**
+    //
+    // مسارا `summary.json` و`events.json` يُخرجان البياناتِ نفسَها لمن
+    // يعرف عنوانَهما — وهو أوّلُ ما يُجرَّب. فيُحرَس كلٌّ منها بنفسه.
     Route::prefix('zones')->name('zones.')->group(function () {
         $zc = App\Http\Controllers\Admin\ZoneControlController::class;
-        Route::get('/', [$zc, 'index'])->name('index');
-        Route::get('/summary.json', [$zc, 'summary'])->name('summary');
-        Route::get('/events.json', [$zc, 'events'])->name('events');
+        Route::get('/', [$zc, 'index'])
+            ->middleware('platform:platform.zones.view')->name('index');
+        Route::get('/summary.json', [$zc, 'summary'])
+            ->middleware('platform:platform.zones.view')->name('summary');
+        Route::get('/events.json', [$zc, 'events'])
+            ->middleware('platform:platform.zones.view')->name('events');
+        // فحصُ **شخصٍ بعينه** جغرافيّاً — اطّلاعٌ على فرد، لا تشغيلُ لوحة.
         Route::get('/users/{id}/geo-check.json', [$zc, 'geoCheck'])
-            ->where('id', '[0-9]+')->name('geo-check');
+            ->where('id', '[0-9]+')
+            ->middleware('platform:platform.zones.audit.view')->name('geo-check');
+        // إعادةُ الإسناد تمرّ من محافظة السكن المسجَّلة — فهي `assign`
+        // لا `override`.
         Route::post('/users/{id}/reassign', [$zc, 'reassign'])
-            ->where('id', '[0-9]+')->name('reassign');
+            ->where('id', '[0-9]+')
+            ->middleware('platform:platform.zones.assign')->name('reassign');
     });
 
     Route::get('/verification', [$hc, 'verification'])->name('verification');
