@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\EMoney;
+use App\Models\ReconciliationCase;
 use App\Services\LedgerService;
 use Illuminate\Console\Command;
 
@@ -26,6 +27,7 @@ class AmialLedgerBackfill extends Command
 {
     protected $signature = 'amial:ledger-backfill
                             {--dry-run : اعرض ما سيحدث بلا كتابة}
+                            {--execute-approved-cases : نفّذ فقط قضايا المحافظ المعتمدة صراحةً}
                             {--chunk=200 : عدد المحافظ في الدفعة}';
 
     protected $description = 'يسجّل رصيداً افتتاحياً في الدفتر لكل محفظة قائمة (يُشغَّل مرّة عند النشر)';
@@ -34,6 +36,10 @@ class AmialLedgerBackfill extends Command
     {
         $dry = (bool) $this->option('dry-run');
         $chunk = max(1, (int) $this->option('chunk'));
+        if (!$dry && !$this->option('execute-approved-cases')) {
+            $this->error('تم إيقاف الترحيل: يلزم --execute-approved-cases، وقضية pending_approval مستقلة لكل محفظة.');
+            return self::FAILURE;
+        }
 
         $this->info($dry
             ? '— تجربة جافّة: لن يُكتب شيء —'
@@ -77,7 +83,25 @@ class AmialLedgerBackfill extends Command
                 }
 
                 try {
-                    $ledger->reconcileWalletBalance($userId, 'ترحيل أوّليّ للمحافظ القائمة');
+                    $case = ReconciliationCase::query()
+                        ->where('case_type', 'wallet')
+                        ->where('subject_user_id', $userId)
+                        ->where('status', 'pending_approval')
+                        ->whereNotNull('maker_admin_id')
+                        ->whereNotNull('checker_admin_id')
+                        ->orderByDesc('last_detected_at')
+                        ->first();
+
+                    if (!$case || trim((string) $case->action_taken) === '') {
+                        throw new \RuntimeException('لا توجد قضية محفظة معتمدة بملاحظة مراجع مستقلة.');
+                    }
+
+                    $ledger->reconcileWalletBalance($userId, 'ترحيل افتتاحي معتمد', [
+                        'case_ulid' => $case->case_ulid,
+                        'maker_admin_id' => (int) $case->maker_admin_id,
+                        'checker_admin_id' => (int) $case->checker_admin_id,
+                        'approval_note' => (string) $case->action_taken,
+                    ]);
                     $opened++;
                     $totalOpened = bcadd($totalOpened, $balance, 4);
                 } catch (\Throwable $e) {
