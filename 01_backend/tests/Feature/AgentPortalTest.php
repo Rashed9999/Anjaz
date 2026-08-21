@@ -6,6 +6,7 @@ use App\Models\Agent\AgentBranch;
 use App\Models\Agent\AgentCashMovement;
 use App\Models\EMoney;
 use App\Models\Ledger\LedgerJournalEntry;
+use App\Models\ReconciliationCase;
 use App\Models\User;
 use App\Services\AgentBranchService;
 use App\Services\AgentCounterService;
@@ -80,10 +81,32 @@ class AgentPortalTest extends TestCase
         // من الوكيل الأمّ» ولم يكن في النظام مسارٌ يفعل ذلك. فبُني.)
         EMoney::where('user_id', $this->agent->id)->update(['current_balance' => '5000000']);
         app(\App\Services\LedgerService::class)->reconcileWalletBalance(
-            $this->agent->id, 'رصيد افتتاحيّ لاختبار البوّابة');
+            $this->agent->id,
+            'رصيد افتتاحيّ لاختبار البوّابة',
+            $this->approvedControlFor($this->agent),
+        );
 
         app(AgentBranchService::class)->fundBranch(
             $this->branch, $this->agent, '1000000', 'رصيد تشغيل افتتاحيّ للفرع');
+    }
+
+    private function approvedControlFor(User $walletOwner): array
+    {
+        $maker = User::factory()->create();
+        $checker = User::factory()->create();
+        $case = ReconciliationCase::create([
+            'case_ulid' => (string) \Illuminate\Support\Str::ulid(),
+            'case_type' => 'wallet', 'source' => 'test',
+            'subject_user_id' => $walletOwner->id,
+            'expected_amount' => '0', 'actual_amount' => '0', 'difference' => '0',
+            'currency' => 'YER', 'status' => 'pending_approval', 'severity' => 'warning',
+            'first_detected_at' => now(), 'last_detected_at' => now(), 'detection_count' => 1,
+            'maker_admin_id' => $maker->id, 'checker_admin_id' => $checker->id,
+        ]);
+
+        return ['case_ulid' => $case->case_ulid, 'maker_admin_id' => $maker->id,
+            'checker_admin_id' => $checker->id,
+            'approval_note' => 'اختبار فتح رصيد مع مراجعة مستقلة.'];
     }
 
     private function makeAgent(string $phone, string $name): User
