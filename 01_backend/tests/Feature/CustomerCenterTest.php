@@ -397,7 +397,7 @@ class CustomerCenterTest extends TestCase
             ->assertForbidden();
     }
 
-    /** القراءة لا تفتح تحقيقات أو تعدّل حدوداً أو تطلب KYC. */
+    /** @test القراءة لا تفتح تحقيقات أو تعدّل حدوداً أو تطلب KYC. */
     public function customer_read_permission_never_authorizes_customer_mutations(): void
     {
         $reader = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770003398']);
@@ -573,7 +573,7 @@ class CustomerCenterTest extends TestCase
         );
     }
 
-    /** الرصيد أو الحجز أو تحقيق AML مفتوح يمنع إغلاق الحساب قبل الاعتماد. */
+    /** @test الرصيد أو الحجز أو تحقيق AML مفتوح يمنع إغلاق الحساب قبل الاعتماد. */
     public function closing_a_customer_with_unsettled_money_fails_preflight(): void
     {
         $this->expectException(DomainException::class);
@@ -584,7 +584,7 @@ class CustomerCenterTest extends TestCase
         );
     }
 
-    /** تعليم الوفاة لا يغير حالة العميل عند ضغط maker وحده. */
+    /** @test تعليم الوفاة لا يغير حالة العميل عند ضغط maker وحده. */
     public function deceased_marking_creates_a_reviewable_case_and_second_person_request(): void
     {
         $out = app(CustomerActionService::class)->run(
@@ -602,7 +602,7 @@ class CustomerCenterTest extends TestCase
         $this->assertNotSame('deceased', $this->customer->fresh()->lifecycle_state);
     }
 
-    /** القضية المفتوحة تستقبل دليل التصعيد الثاني بدلاً من إنشاء قضايا مكررة. */
+    /** @test القضية المفتوحة تستقبل دليل التصعيد الثاني بدلاً من إنشاء قضايا مكررة. */
     public function repeated_risk_escalation_links_the_existing_open_case(): void
     {
         app(CustomerActionService::class)->run(
