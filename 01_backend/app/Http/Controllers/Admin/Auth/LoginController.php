@@ -2,25 +2,32 @@
 
 namespace App\Http\Controllers\Admin\Auth;
 
-use App\CentralLogics\helpers;
+use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Services\PlatformLoginPinService;
+use App\Support\Phone;
+use Gregwar\Captcha\CaptchaBuilder;
 use Gregwar\Captcha\PhraseBuilder;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Session;
-use Gregwar\Captcha\CaptchaBuilder;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Response;
-
+use Illuminate\Support\Facades\Session;
 
 class LoginController extends Controller
 {
-    public function __construct()
+    public function __construct(private readonly PlatformLoginPinService $loginPins)
     {
         $this->middleware('guest:user', ['except' => ['logout']]);
     }
 
+    /**
+     * مسار CAPTCHA القديم يبقى مؤقتاً حتى لا نكسر روابط قديمة، لكنه لم يعد
+     * جزءاً من عقد دخول الإدارة. الدخول الجديد: هاتف + كلمة مرور + PIN.
+     */
     public function captcha($tmp)
     {
         $phrase = new PhraseBuilder;
@@ -46,7 +53,7 @@ class LoginController extends Controller
             'Expires' => 'Sat, 26 Jul 1997 05:00:00 GMT',
         ];
 
-        ob_start(); // Capture the binary output
+        ob_start();
         $builder->output();
         $imageData = ob_get_clean();
 
@@ -60,95 +67,84 @@ class LoginController extends Controller
 
     public function submit(Request $request): RedirectResponse
     {
-        $request->validate([
-            'phone' => 'required|min:5|max:20',
-            'password' => 'required|min:8',
+        $data = $request->validate([
+            'phone' => 'required|string|min:5|max:20',
+            'password' => 'required|string|min:8',
+            'login_pin' => ['required', 'regex:/^\d{4}$/'],
+        ], [
+            'login_pin.required' => 'أدخل رمز PIN الخاص بحسابك الوظيفي.',
+            'login_pin.regex' => 'رمز PIN يجب أن يتكون من 4 أرقام.',
         ]);
 
-        // AMIAL-UI-001: تخطّي الكابتشا في وضع العرض/الاختبار فقط (افتراضياً معطّل —
-        // الإنتاج يُبقي الكابتشا). يُفعَّل عبر AMIAL_DISABLE_ADMIN_CAPTCHA=true.
-        $captchaDisabled = (bool) config('amial.disable_admin_captcha', false);
+        $phone = Helpers::filter_phone($data['phone']);
+        $rateKey = 'admin-login:' . hash('sha256', $request->ip() . '|' . $phone);
 
-        $recaptcha = Helpers::get_business_settings('recaptcha');
-        if ($captchaDisabled) {
-            // لا فحص كابتشا في وضع العرض/الاختبار
-        } elseif (isset($recaptcha) && $recaptcha['status'] == 1 && !$request?->set_default_captcha) {
-            $request->validate([
-                'g-recaptcha-response' => [
-                    function ($attribute, $value, $fail) {
-                        $secret_key = Helpers::get_business_settings('recaptcha')['secret_key'];
-                        $response = $value;
-
-                        $gResponse = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
-                            'secret' => $secret_key,
-                            'response' => $value,
-                            'remoteip' => \request()->ip(),
-                        ]);
-
-                        if (!$gResponse->successful()) {
-                            $fail(translate('ReCaptcha Failed'));
-                        }
-                    },
-                ],
-            ]);
-        } else {
-            if (strtolower($request->default_captcha_value) != strtolower(Session('default_captcha_code'))) {
-                Session::forget('default_captcha_code');
-                return back()->withErrors(translate('Captcha Failed'));
-            }
+        // CAPTCHA أزيل من عقد الدخول، لذلك حماية التخمين يجب ألا تختفي معه.
+        // الحد على الهاتف + IP، ويضاف إليه قفل PIN على الحساب نفسه في الخدمة.
+        if (RateLimiter::tooManyAttempts($rateKey, PlatformLoginPinService::MAX_ATTEMPTS)) {
+            $seconds = max(1, RateLimiter::availableIn($rateKey));
+            return back()->withInput($request->only('phone', 'remember'))
+                ->withErrors(['تم إيقاف محاولات الدخول مؤقتاً. أعد المحاولة بعد ' . $seconds . ' ثانية.']);
         }
 
+        $admin = User::query()
+            ->where('type', ADMIN_TYPE)
+            ->whereIn('phone', Phone::variants($phone))
+            ->first();
 
-        if (auth('user')->attempt(['phone' => $request->phone, 'password' => $request->password, 'type' => ADMIN_TYPE], $request->remember)) {
-            // ══════════════════════════════════════════════════════════
-            // AMIAL-2FA-DOOR-001 — **مصادقةٌ ثنائيّةٌ مبنيّةٌ ولا تُفرض.**
-            //
-            // `Admin2FAController` و`TwoFactorAuthService` مكتملان منذ
-            // v1.8: توليدُ سرٍّ ورمزُ QR ورموزُ استرداد وتأكيدٌ وتعطيل.
-            // والأعمدةُ الخمسةُ في `users`. **ولم يكن لها شاشةٌ واحدة،
-            // ولا سطرٌ واحدٌ يفحصها عند الدخول.**
-            //
-            // أي أنّ من فعّلها — لو استطاع — يدخل بكلمة المرور وحدها
-            // كأنّه لم يفعّلها. **حمايةٌ تُخزَّن ولا تُقرأ**، وهي أسوأ من
-            // غيابها: تُطمئن صاحبَها إلى بابٍ مفتوح.
-            //
-            // فصار الدخولُ يقف هنا لمن فعّلها: الجلسةُ تُعلَّق حتّى يمرّ
-            // الرمز. ومن لم يفعّلها يدخل كما كان — **ولا يُقفل الباب على
-            // أحدٍ بتغييرٍ صامت**.
-            $admin = auth('user')->user();
-
-            // `attempt` يتحقق من كلمة المرور والنوع، لا من صلاحية تشغيل
-            // الحساب. إبقاء هذا الفحص في واجهة اللوحة فقط يعني أن «تعطيل
-            // موظف» يظلّ يستطيع فتح كل شيء بكلمة مروره.
-            if (!$admin || !(bool) $admin->is_active) {
-                auth('user')->logout();
-                $request->session()->invalidate();
-                $request->session()->regenerateToken();
-
-                return redirect()->route('admin.auth.login')
-                    ->withErrors(['تم تعطيل حساب الموظف. راجع مدير المنصّة.']);
-            }
-
-            if ($admin && $admin->two_factor_enabled && $admin->two_factor_confirmed_at) {
-                auth('user')->logout();
-
-                $request->session()->put('amial.2fa.pending_user', $admin->id);
-                $request->session()->put('amial.2fa.remember', (bool) $request->remember);
-
-                return redirect()->route('admin.auth.two-factor');
-            }
-
-            return redirect()->route('admin.dashboard');
+        if (! $admin || ! Hash::check($data['password'], (string) $admin->password)) {
+            RateLimiter::hit($rateKey, PlatformLoginPinService::LOCK_MINUTES * 60);
+            return back()->withInput($request->only('phone', 'remember'))
+                ->withErrors(['بيانات الدخول غير صحيحة.']);
         }
 
+        if (! (bool) $admin->is_active) {
+            return back()->withInput($request->only('phone', 'remember'))
+                ->withErrors(['تم تعطيل حساب الموظف. راجع مدير المنصّة.']);
+        }
 
-        return redirect()->back()->withInput($request->only('email', 'remember'))
-            ->withErrors(['Credentials does not match.']);
+        $pinResult = $this->loginPins->verify($admin, $data['login_pin']);
+        if (! $pinResult['ok']) {
+            if ($pinResult['reason'] === 'not_configured') {
+                return back()->withInput($request->only('phone', 'remember'))
+                    ->withErrors(['لم يُصدر PIN لهذا الحساب بعد. اطلب من مدير المنصّة إعادة تعيين رمز الدخول وإرساله إلى بريدك.']);
+            }
+
+            RateLimiter::hit($rateKey, PlatformLoginPinService::LOCK_MINUTES * 60);
+
+            if ($pinResult['reason'] === 'locked') {
+                $seconds = max(1, (int) ($pinResult['retry_after'] ?? PlatformLoginPinService::LOCK_MINUTES * 60));
+                return back()->withInput($request->only('phone', 'remember'))
+                    ->withErrors(['تم قفل رمز PIN مؤقتاً بعد محاولات غير صحيحة. أعد المحاولة بعد ' . $seconds . ' ثانية.']);
+            }
+
+            return back()->withInput($request->only('phone', 'remember'))
+                ->withErrors(['رمز PIN غير صحيح.']);
+        }
+
+        RateLimiter::clear($rateKey);
+
+        // TOTP الموجود يبقى طبقة إضافية عند تفعيله، ولا نستبدله بالـPIN.
+        // PIN هنا هو credential وظيفي ثابت؛ TOTP يظل العامل الأقوى المتغير.
+        if ($admin->two_factor_enabled && $admin->two_factor_confirmed_at) {
+            $request->session()->put('amial.2fa.pending_user', $admin->id);
+            $request->session()->put('amial.2fa.remember', (bool) $request->boolean('remember'));
+
+            return redirect()->route('admin.auth.two-factor');
+        }
+
+        auth('user')->login($admin, $request->boolean('remember'));
+        $request->session()->regenerate();
+
+        return redirect()->route('admin.dashboard');
     }
 
     public function logout(Request $request): RedirectResponse
     {
         auth()->guard('user')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
         return redirect()->route('admin.auth.login');
     }
 }
