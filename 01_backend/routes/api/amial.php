@@ -134,6 +134,27 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
         // ثم لا مكان يرفع إليه — الزرّ يعمل والعميل ينتظر ما لن يأتي.
         Route::post('/kyc/documents', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'upload'])->name('kyc.upload');
         Route::get('/kyc/documents', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'mine'])->name('kyc.mine');
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-PROFILE-CHANGE-005 — **الطرفُ الناقص: مكانٌ يملأ فيه العميل.**
+        //
+        // وهو نفسُ عطل `AMIAL-KYC-DOCS-001` أعلاه بصورةٍ أخرى: الدعمُ
+        // يفتح طلبَ تحديثٍ من اللوحة، **ولا مكانَ يستجيب فيه العميل** —
+        // فيبقى الطلبُ `PENDING_CUSTOMER` إلى الأبد.
+        //
+        // **ولا نقطةَ كتابةٍ مباشرةٍ للحقول ها هنا**: العميلُ يملأ **قيمةَ
+        // طلبٍ فُتح**، ويعتمدها مراجع. فحسابٌ موثَّقٌ لا يُغيّر صاحبُه
+        // اسمَه ولا رقمَ هويّته بنفسه.
+        // ══════════════════════════════════════════════════════════════
+        $pch = \App\Http\Controllers\Api\V1\Amial\ProfileChangeController::class;
+
+        Route::get('/profile-changes', [$pch, 'mine'])->name('profile-changes.mine');
+        Route::get('/profile-changes/fields', [$pch, 'fields'])->name('profile-changes.fields');
+        Route::post('/profile-changes', [$pch, 'open'])->name('profile-changes.open');
+        Route::post('/profile-changes/{id}/submit', [$pch, 'submit'])
+            ->where('id', '[0-9]+')->name('profile-changes.submit');
+        Route::post('/profile-changes/{id}/cancel', [$pch, 'cancel'])
+            ->where('id', '[0-9]+')->name('profile-changes.cancel');
     });
 
     // AMIAL-BARCODE-001 — البحث السريع بالباركود (للـ continuous scanner)

@@ -5,6 +5,7 @@ import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart
 import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amial_pay/features/me/screens/my_account_number_screen.dart';
 import 'package:amial_pay/features/installments/screens/my_installments_screen.dart';
+import 'package:amial_pay/features/kyc_verification/screens/my_profile_changes_screen.dart';
 import 'package:amial_pay/features/gift_cards/screens/my_gift_cards_screen.dart';
 import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
@@ -279,6 +280,14 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                     onTap: () => Get.to(() => const KycVerifyScreen()),
                   );
                 }),
+              // AMIAL-PROFILE-CHANGE-006 — **وشاشةٌ لا يُوصل إليها ليست
+              // مبنيّة.** الخادمُ يفتح الطلبَ واللوحةُ تعرض الطابور،
+              // وبلا هذا الرابط يبقى الطلبُ `PENDING_CUSTOMER` أبداً —
+              // لأنّ العميلَ لا يراه.
+              _serviceCard(icon: Icons.manage_accounts_outlined,
+                  label: 'تحديث بياناتي', subtitle: 'طلباتُك وصلاحيّةُ هويّتك',
+                  color: const Color(0xFF455A64),
+                  onTap: () => Get.to(() => const MyProfileChangesScreen())),
               if (!isMerchant)
                 _serviceCard(icon: Icons.handshake, label: 'أقساطي', subtitle: 'سداد التقسيط',
                   color: const Color(0xFF00695C), onTap: () => Get.to(() => const MyInstallmentsScreen())),
