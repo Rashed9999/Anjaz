@@ -262,7 +262,7 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
         // تاجرٍ قرارُ اعتماد. وكانا بلا صلاحيّة.
         Route::post('/variances/{id}/resolve', [\App\Http\Controllers\Api\V1\Amial\AdminPanelController::class, 'resolveVariance'])
             ->where('id', '[0-9]+')
-            ->middleware('platform:platform.money.move')->name('variances.resolve');
+            ->middleware('platform:platform.settlements.decide')->name('variances.resolve');
         Route::post('/merchants/{id}/verify', [\App\Http\Controllers\Api\V1\Amial\AdminPanelController::class, 'verifyMerchant'])
             ->where('id', '[0-9]+')
             ->middleware('platform:platform.approvals.decide')->name('merchants.verify');

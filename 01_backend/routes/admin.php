@@ -245,7 +245,7 @@ Route::group(['as' => 'admin.'], function () {
 
         // AMIAL-ADMIN-DOORS-001 — مصاريفُ المنصّة مالٌ يخرج منها.
         Route::group(['prefix' => 'expense', 'as' => 'expense.',
-            'middleware' => 'platform:platform.money.move'], function () {
+            'middleware' => 'platform:platform.money.view'], function () {
             Route::get('index', [ExpenseController::class, 'index'])->name('index');
         });
 
@@ -290,10 +290,10 @@ Route::group(['as' => 'admin.'], function () {
         // كان الرابطُ مخفيّاً بصلاحيّةٍ والمسارُ مفتوحاً — وإخفاءُ الواجهة
         // ليس حماية، فمن يعرف العنوان يفتحه.
         Route::group(['prefix' => 'emoney', 'as' => 'emoney.',
-            'middleware' => 'platform:platform.money.move'], function () {
+            'middleware' => 'platform:platform.money.view'], function () {
             Route::get('index', [EMoneyController::class, 'index'])->name('index');
             Route::post('store', [EMoneyController::class, 'store'])
-                ->middleware('platform:platform.money.move')
+                ->middleware('platform:platform.treasury.issue')
                 ->name('store');
 
         });

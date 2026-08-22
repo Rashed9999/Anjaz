@@ -123,13 +123,13 @@ Route::prefix('safe-payments')->name('safe-payments.')->group(function () {
         ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.transactions.view')->name('show');
     Route::post('/{ulid}/release', [AdminSafePaymentController::class, 'resolveRelease'])
         ->where('ulid', '[A-Z0-9]{26}')
-        ->middleware(['platform:platform.money.move', 'amial.idempotency'])->name('release');
+        ->middleware(['platform:platform.disputes.decide', 'amial.idempotency'])->name('release');
     Route::post('/{ulid}/refund', [AdminSafePaymentController::class, 'resolveRefund'])
         ->where('ulid', '[A-Z0-9]{26}')
-        ->middleware(['platform:platform.money.move', 'amial.idempotency'])->name('refund');
+        ->middleware(['platform:platform.disputes.decide', 'amial.idempotency'])->name('refund');
     Route::post('/{ulid}/partial', [AdminSafePaymentController::class, 'resolvePartial'])
         ->where('ulid', '[A-Z0-9]{26}')
-        ->middleware(['platform:platform.money.move', 'amial.idempotency'])->name('partial');
+        ->middleware(['platform:platform.disputes.decide', 'amial.idempotency'])->name('partial');
 });
 
 // ============ AMIAL-DONATIONS-001 (v1.2) ============
@@ -508,9 +508,13 @@ Route::prefix('catalog')->name('catalog.')->middleware('platform:platform.settin
     });
 
 // AMIAL-WA-LIMIT-001 — سقفُ المال عبر بوت واتساب.
-// الصلاحيّة `platform.money.move`: رفعُ السقف يُحرّك مالاً بالوكالة —
-// لا يُحرّكه بنفسه، لكنّه يسمح بحركةٍ كانت ممنوعة.
-Route::prefix('whatsapp')->name('whatsapp.')->middleware('platform:platform.money.move')
+//
+// AMIAL-MONEY-KEY-SPLIT-001 — **كانت خلف `money.move` ولا تُحرّك ريالاً.**
+// وحجّةُ ذلك كانت «رفعُ السقف يسمح بحركةٍ كانت ممنوعة» — وهي حجّةٌ
+// تصحّ على كلّ إعدادٍ في المنصّة، فتجعل مفتاحَ تحريك المال شرطاً لضبط
+// أيّ حدّ. وهذا وجهُ التركيز الأخفى: **المفتاحُ العامُّ يُجبر على
+// توسيع من يحمله**. فصارت ضبطَ إعدادٍ كما هي.
+Route::prefix('whatsapp')->name('whatsapp.')->middleware('platform:platform.settings.update')
     ->group(function () {
         $wl = App\Http\Controllers\Admin\WhatsappLimitController::class;
         Route::get('/limits', [$wl, 'page'])->name('limits.page');
@@ -521,7 +525,7 @@ Route::prefix('whatsapp')->name('whatsapp.')->middleware('platform:platform.mone
 // AMIAL-MERCHANT-PAY-002 — مركز فواتير التجّار.
 // يُقرأ من `payment_requests` نفسِه الذي يكتب فيه التطبيق — جذرٌ واحدٌ
 // يُقرأ من زاويتين، لا حقيقتان تفترقان.
-Route::prefix('invoices')->name('invoices.')->middleware('platform:platform.money.move')
+Route::prefix('invoices')->name('invoices.')->middleware('platform:platform.money.view')
     ->group(function () {
         $ic = App\Http\Controllers\Admin\MerchantInvoiceCenterController::class;
         Route::get('/', [$ic, 'page'])->name('page');
@@ -529,7 +533,9 @@ Route::prefix('invoices')->name('invoices.')->middleware('platform:platform.mone
         Route::get('/rows', [$ic, 'rows'])->name('rows');
         Route::get('/export', [$ic, 'export'])->name('export');
         Route::get('/{id}', [$ic, 'show'])->where('id', '[0-9]+')->name('show');
-        Route::post('/{id}/cancel', [$ic, 'cancel'])->where('id', '[0-9]+')->name('cancel');
+        // إلغاءُ فاتورةٍ فعلٌ يمسّ مستحقَّ تاجر — لا يكفيه أن تُقرأ.
+        Route::post('/{id}/cancel', [$ic, 'cancel'])->where('id', '[0-9]+')
+            ->middleware('platform:platform.money.move')->name('cancel');
     });
 
 Route::prefix('otp')->name('otp.')->middleware('platform:platform.settings.update')
@@ -553,20 +559,26 @@ Route::prefix('otp')->name('otp.')->middleware('platform:platform.settings.updat
 // تسويات الشركاء (`Settlement`) — وعليها بُنيت الموافقة المزدوجة، وكان
 // سطحها الوحيد الـAPI فبقي الضابط بلا شاشة تُظهره.
 // AMIAL-ADMIN-DOORS-001 — تسوياتُ الشركاء مالٌ يخرج من المنصّة.
+// AMIAL-MONEY-KEY-SPLIT-001 — القراءةُ بـ`money.view`، والقرارُ يزيد
+// عليها `settlements.decide`. وكانت الأربعُ قراءاتٍ خلف مفتاح تحريك
+// المال، فمن أراد أن يرى لوحةَ تسوياتِ الشركاء وجب منحُه إيّاه.
 Route::prefix('partner-settlements')->name('partner-settlements.')
-    ->middleware(['amial.idempotency', 'platform:platform.money.move'])->group(function () {
+    ->middleware(['amial.idempotency', 'platform:platform.money.view'])->group(function () {
     $st = App\Http\Controllers\Api\V1\Amial\SettlementController::class;
 
     Route::get('/', [$st, 'page'])->name('page');
     Route::get('/list', [$st, 'index'])->name('list');
     Route::get('/dashboard', [$st, 'dashboard'])->name('dashboard');
     Route::get('/{id}', [$st, 'show'])->where('id', '[0-9]+')->name('show');
-    Route::post('/{id}/submit', [$st, 'submit'])->where('id', '[0-9]+')->name('submit');
-    Route::post('/{id}/approve', [$st, 'approve'])->where('id', '[0-9]+')->name('approve');
-    Route::post('/{id}/reject', [$st, 'reject'])->where('id', '[0-9]+')->name('reject');
-    Route::post('/{id}/process', [$st, 'process'])->where('id', '[0-9]+')->name('process');
-    Route::post('/{id}/complete', [$st, 'complete'])->where('id', '[0-9]+')->name('complete');
-    Route::post('/{id}/cancel', [$st, 'cancel'])->where('id', '[0-9]+')->name('cancel');
+
+    Route::middleware('platform:platform.settlements.decide')->group(function () use ($st) {
+        Route::post('/{id}/submit', [$st, 'submit'])->where('id', '[0-9]+')->name('submit');
+        Route::post('/{id}/approve', [$st, 'approve'])->where('id', '[0-9]+')->name('approve');
+        Route::post('/{id}/reject', [$st, 'reject'])->where('id', '[0-9]+')->name('reject');
+        Route::post('/{id}/process', [$st, 'process'])->where('id', '[0-9]+')->name('process');
+        Route::post('/{id}/complete', [$st, 'complete'])->where('id', '[0-9]+')->name('complete');
+        Route::post('/{id}/cancel', [$st, 'cancel'])->where('id', '[0-9]+')->name('cancel');
+    });
 });
 
 // ============ AMIAL-KYC-PANEL-001 — مراجعة مستندات الهوية ============
@@ -661,16 +673,23 @@ Route::prefix('agents')->name('agents.')->group(function () {
         ->put('/{userId}/limits', [$anc, 'updateLimits'])->name('limits');
 });
 // AMIAL-OPERATOR-RBAC-003: اعتمادُ تسويةٍ تحريكُ مالٍ حقيقيّ.
-Route::prefix('settlements')->name('settlements.')->middleware(['platform:platform.money.move', 'amial.idempotency'])
+Route::prefix('settlements')->name('settlements.')->middleware(['platform:platform.money.view', 'amial.idempotency'])
     ->group(function () {
     Route::get('/pending', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'pendingSettlements'])->name('pending');
-    Route::post('/{ulid}/approve', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'approveSettlement'])->name('approve');
+    // **والقرارُ يزيد على القراءة ولا يكتفي بها.** أوّلُ تعديلٍ في
+    // AMIAL-MONEY-KEY-SPLIT-001 نقل صلاحيّةَ المجموعة إلى `money.view`،
+    // فصار اعتمادُ تسويةٍ خلف **قراءةٍ فقط** — وهو ما تمنعه القسمةُ
+    // نفسُها. فيُضاف القرارُ صراحةً على كلّ مسارِ كتابةٍ فيها.
+    Route::post('/{ulid}/approve', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'approveSettlement'])
+        ->middleware('platform:platform.settlements.decide')->name('approve');
 
     // AMIAL-CASH-HANDOVER-001 — الساقُ الورقيّة. والتأكيدُ تحريكُ عهدةٍ
     // فعليّة، فهو تحت الصلاحيّة نفسِها التي يُعتمَد بها المال.
     Route::get('/handovers/pending', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'pendingHandovers'])->name('handovers.pending');
-    Route::post('/handovers/{ulid}/confirm', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'confirmHandover'])->name('handovers.confirm');
-    Route::post('/handovers/{ulid}/dispute', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'disputeHandover'])->name('handovers.dispute');
+    Route::post('/handovers/{ulid}/confirm', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'confirmHandover'])
+        ->middleware('platform:platform.settlements.decide')->name('handovers.confirm');
+    Route::post('/handovers/{ulid}/dispute', [App\Http\Controllers\Admin\AdminAgentNetworkController::class, 'disputeHandover'])
+        ->middleware('platform:platform.settlements.decide')->name('handovers.dispute');
 });
 
 // ============ AMIAL-MERCHANT-RISK-001 (v2.10) ============
@@ -758,7 +777,7 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     // AMIAL-OPERATOR-RBAC-003: الصفحة لا الفعلَ وحده — صفحةٌ تعرض أرصدة
     // المنصّة وحركتها تُسرّب ما لا يجوز، وإن كان زرُّها محروساً.
     Route::get('/finance', [$hc, 'finance'])
-        ->middleware('platform:platform.money.move')->name('finance');
+        ->middleware('platform:platform.money.view')->name('finance');
 
     // JSON قوائم
     Route::get('/{slug}/users.json', [$hc, 'usersJson'])
@@ -796,10 +815,10 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     // محروس؟»**.
     // ══════════════════════════════════════════════════════════════
     Route::post('/transfer', [$hc, 'transfer'])
-        ->middleware('platform:platform.money.move')->name('transfer');
+        ->middleware('platform:platform.treasury.issue')->name('transfer');
     Route::post('/agents/{id}/credit', [$hc, 'agentCredit'])
         ->where('id', '[0-9]+')
-        ->middleware('platform:platform.money.move')->name('agents.credit');
+        ->middleware('platform:platform.treasury.issue')->name('agents.credit');
 
     // AMIAL-AGENT-SUPERVISION-001 — إشراف الإدارة على شبكة شركات الصرافة
     $asc = App\Http\Controllers\Admin\AgentSupervisionController::class;
@@ -827,20 +846,20 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     // **والقبولُ والرفضُ وفكُّ القفل يُقفلون يومَ شبكةٍ بمالِه** — قرارُ
     // مالٍ لا اطّلاع، فيلحقان بـ`settlements.approve` في صلاحيّتهما.
     Route::post('/agents/daily/{ulid}/accept', [$asc, 'dailyAccept'])
-        ->middleware('platform:platform.money.move')->name('agents.daily.accept');
+        ->middleware('platform:platform.settlements.decide')->name('agents.daily.accept');
     Route::post('/agents/daily/{ulid}/reject', [$asc, 'dailyReject'])
-        ->middleware('platform:platform.money.move')->name('agents.daily.reject');
+        ->middleware('platform:platform.settlements.decide')->name('agents.daily.reject');
     Route::post('/agents/daily/unlock', [$asc, 'dailyUnlock'])
-        ->middleware('platform:platform.money.move')->name('agents.daily.unlock');
+        ->middleware('platform:platform.settlements.decide')->name('agents.daily.unlock');
 
     // المالية
     // AMIAL-OPERATOR-RBAC-003: شحنُ محفظة وكيلٍ من المنصّة.
     Route::post('/finance/topup', [$hc, 'adminTopup'])
-        ->middleware('platform:platform.money.move')->name('finance.topup');
+        ->middleware('platform:platform.treasury.issue')->name('finance.topup');
     Route::get('/finance/stats.json', [$hc, 'financeStats'])
-        ->middleware('platform:platform.money.move')->name('finance.stats');
+        ->middleware('platform:platform.money.view')->name('finance.stats');
     Route::get('/finance/feed.json', [$hc, 'financeFeed'])
-        ->middleware('platform:platform.money.move')->name('finance.feed');
+        ->middleware('platform:platform.money.view')->name('finance.feed');
 
     // لوحة الاشتراكات (الباقات) — حقيقية عبر SubscriptionService
     Route::get('/subscriptions', [$hc, 'subscriptions'])
@@ -889,17 +908,17 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
 
     // لوحة التسويات — تسويات الوكلاء (اعتماد/رفض مع دفتر القيود)
     Route::get('/settlements', [$hc, 'settlements'])
-        ->middleware('platform:platform.money.move')->name('settlements');
+        ->middleware('platform:platform.money.view')->name('settlements');
     // والـJSON كذلك: حراسةُ الصفحة وحدها تترك البيانات مفتوحةً لمن يعرف
     // عنوانها — وهو أوّل ما يُجرَّب.
     Route::get('/settlements/list.json', [$hc, 'settlementsJson'])
-        ->middleware('platform:platform.money.move')->name('settlements.list');
+        ->middleware('platform:platform.money.view')->name('settlements.list');
     Route::post('/settlements/{ulid}/approve', [$hc, 'settlementApprove'])
         ->where('ulid', '[A-Z0-9]{26}')
-        ->middleware('platform:platform.money.move')->name('settlements.approve');
+        ->middleware('platform:platform.settlements.decide')->name('settlements.approve');
     Route::post('/settlements/{ulid}/reject', [$hc, 'settlementReject'])
         ->where('ulid', '[A-Z0-9]{26}')
-        ->middleware('platform:platform.money.move')->name('settlements.reject');
+        ->middleware('platform:platform.settlements.decide')->name('settlements.reject');
 
     // لوحة الموظفين — طاقم نقاط بيع التجّار (تفعيل/تعطيل)
     Route::get('/staff', [$hc, 'staff'])

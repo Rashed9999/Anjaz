@@ -87,7 +87,7 @@
                 ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), 'platform.merchants.compliance'],
                 ['💎 لوحة الاشتراكات', route('admin.amial.hub.subscriptions'), 'platform.settings.manage'],
                 ['🎚️ الباقات والقدرات (ماذا تفتح كل باقة)', route('admin.amial.entitlements.page'), 'platform.settings.manage'],
-                ['🧾 فواتير التجّار ومدفوعاتها', route('admin.amial.invoices.page'), 'platform.money.move'],
+                ['🧾 فواتير التجّار ومدفوعاتها', route('admin.amial.invoices.page'), 'platform.money.view'],
                 ['📦 كتالوج المنتجات (الباركود)', route('admin.amial.catalog.page'), 'platform.settings.update'],
             ],
         ],
@@ -129,7 +129,7 @@
             'match' => ['admin/amial/hub/agents*', 'admin/amial/hub/settlements*'],
             'links' => [
                 ['🤝 مركز الوكلاء (الفروع والخزائن)', route('admin.amial.hub.agents'), 'platform.customers.view'],
-                ['🧾 تسويات الوكلاء', route('admin.amial.hub.settlements'), 'platform.money.move'],
+                ['🧾 تسويات الوكلاء', route('admin.amial.hub.settlements'), 'platform.money.view'],
                 // البوّابة يدخلها الوكيلُ من كمبيوتره؛ وهذا الرابطُ يُري
                 // المديرَ العنوانَ ليمرّره لشركة الصرافة.
                 ['🏦 بوّابة الوكيل (شركات الصرافة)', route('agent.login'), null, '_blank'],
@@ -142,12 +142,12 @@
                         'admin/amial/fees*', 'admin/transaction*', 'admin/emoney*',
                         'admin/expense*', 'admin/withdraw*', 'admin/amial/hub/finance*'],
             'links' => [
-                ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), 'platform.money.move'],
+                ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), 'platform.money.view'],
                 ['📚 مركز الدفتر (ميزان المراجعة)', route('admin.amial.ledger.page'), 'platform.audit.view'],
                 ['📊 كشف المعاملات (فلاتر + تصدير)', route('admin.transaction.index'), 'platform.transactions.view'],
-                ['🤝 تسويات الشركاء (الموافقة المزدوجة)', route('admin.amial.partner-settlements.page'), 'platform.money.move'],
-                ['🏦 رصيد المنصّة (إنشاء/شحن)', route('admin.emoney.index'), 'platform.money.move'],
-                ['💸 مصاريف المنصّة', route('admin.expense.index'), 'platform.money.move'],
+                ['🤝 تسويات الشركاء (الموافقة المزدوجة)', route('admin.amial.partner-settlements.page'), 'platform.money.view'],
+                ['🏦 رصيد المنصّة (إنشاء/شحن)', route('admin.emoney.index'), 'platform.money.view'],
+                ['💸 مصاريف المنصّة', route('admin.expense.index'), 'platform.money.view'],
                 // AMIAL-FEE-TRUTH-010 — **الرابطُ بصلاحيّة القراءة لا الكتابة.**
                 //
                 // كان مشروطاً بـ`platform.fees.update`، فمن يملك `fees.view`
@@ -223,7 +223,7 @@
             'links' => [
                 ['🏢 إعدادات الأعمال (عام/رسوم/حدود)', route('admin.business-settings.business-setup'), 'platform.settings.update'],
                 ['⚙️ مفاتيح سريعة (تشغيل/إيقاف)', route('admin.amial.hub.settings'), 'platform.settings.update'],
-                ['💬 حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.money.move'],
+                ['💬 حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.settings.update'],
                 ['🗺️ نطاق التشغيل والمخالفات', route('admin.amial.hub.zones.index'), 'platform.zones.view'],
                 ['🔥 إعداد Firebase', route('admin.business-settings.fcm-index'), 'platform.settings.update'],
                 ['📜 الشروط القانونية', route('admin.amial.legal.index'), 'platform.ops.view'],
