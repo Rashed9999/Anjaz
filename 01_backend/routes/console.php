@@ -98,6 +98,8 @@ Schedule::command('amial:reconcile-nightly')
 // يمسح `app/Console/Commands` وحدَه، وأوامرُ ساهر تحت `app/Saher/Console`
 // — فهي **مبنيّةٌ ولا تُنادى** ما لم تُسجَّل. وأمرٌ لا يُنفَّذ ليس أمراً.
 Artisan::registerCommand(app(\App\Saher\Console\ScanGuardsCommand::class));
+Artisan::registerCommand(app(\App\Saher\Console\ScanGateCommand::class));
+Artisan::registerCommand(app(\App\Saher\Console\RecordGateCommand::class));
 
 // **ولا يُجدوَل ساهر بعد.** إدراجُ جدولةٍ الآن يُنتج جولاتٍ تُكتب في
 // قاعدةٍ لا شاشةَ تقرؤها — «مبنيٌّ ولا يُوصَل إليه». تُضاف الجدولةُ حين
