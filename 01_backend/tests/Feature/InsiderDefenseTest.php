@@ -289,7 +289,11 @@ class InsiderDefenseTest extends TestCase
         $out = Artisan::output();
 
         $this->assertStringContainsString('تحتاج تحقيقاً', $out);
-        $this->assertStringContainsString('البصمة لا تطابق محتوى السجل', $out);
+        // **والاتّجاهُ يُقال صحيحاً.** الحقلُ هنا **مُلئ** بعد البصم — وهي
+        // صورةُ تزوير الأثر بعد الحادثة. وتسميتُها «أُفرغ» تُقرأ فقدَ
+        // بياناتٍ بريئاً فتدفع المحقّقَ عن الأثر.
+        $this->assertStringContainsString('أُضيف بعد البصم', $out);
+        $this->assertStringNotContainsString('أُفرغ بعد الكتابة', $out);
 
         // **ولا يُقترَح محوُ الدليل** — إعادةُ البصم تجعل الحالةَ خضراءَ
         // وتمحو ما صُمّمت السلسلةُ لحفظه.
