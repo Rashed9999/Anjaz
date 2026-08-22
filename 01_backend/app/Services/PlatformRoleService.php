@@ -46,10 +46,28 @@ class PlatformRoleService
     public const RISK       = 'platform_risk';
     public const COMPLIANCE = 'platform_compliance';
 
-    /** رموز أدوار المنصّة كلّها — أدوار التجّار لها `merchant_user_id`. */
+    // AMIAL-READONLY-AUDITOR-001 · AMIAL-SECURITY-ANALYST-001 — دورا الرقابة.
+    //
+    // المدقّقُ يقرأ ولا يكتب — **مُثبَتاً بثابتٍ يُقاس من الموجِّه** لا
+    // بتسميةٍ. ومحلّلُ الأمن يحقّق في الاختراق ويقطع الوصولَ، ولا يقرأ
+    // معاملاتٍ ولا أرصدة. وهما مفصولان عن الصيانة والامتثال عمداً.
+    public const AUDITOR  = 'platform_auditor';
+    public const SECURITY = 'platform_security';
+
+    /**
+     * رموز أدوار المنصّة كلّها — أدوار التجّار لها `merchant_user_id`.
+     *
+     * **وقائمةٌ مكتوبةٌ تشيخ.** أُضيف `platform_auditor` في هجرةٍ ونُسي
+     * هنا، فبقي خارج فحص «كلُّ دورٍ له صلاحيّةٌ واحدةٌ على الأقلّ» —
+     * ودورٌ لا يفحصه شيءٌ يولد فارغاً ولا يُعلَم. فيحرسها الآن
+     * `the_role_registry_knows_every_platform_role_in_the_database`.
+     *
+     * @var list<string>
+     */
     public const ALL = [
         self::ADMIN, self::SUPERVISOR, self::SUPPORT, self::MAINTENANCE,
         self::FINANCE, self::RISK, self::COMPLIANCE,
+        self::AUDITOR, self::SECURITY,
     ];
 
     /** معرّف دورٍ برمزه، أو `null` إن لم تُشغَّل هجرة الأدوار بعد. */
