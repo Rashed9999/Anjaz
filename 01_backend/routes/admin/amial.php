@@ -225,22 +225,22 @@ Route::prefix('aml')->name('aml.')
     // Rules
     Route::get('/rules', [AdminAmlController::class, 'indexRules'])->name('rules.index');
     Route::get('/rules/{id}', [AdminAmlController::class, 'showRule'])->name('rules.show');
-    Route::post('/rules/{id}/toggle', [AdminAmlController::class, 'toggleRule'])->name('rules.toggle');
-    Route::patch('/rules/{id}', [AdminAmlController::class, 'updateRule'])->name('rules.update');
+    Route::post('/rules/{id}/toggle', [AdminAmlController::class, 'toggleRule'])->middleware('platform:platform.aml.decide')->name('rules.toggle');
+    Route::patch('/rules/{id}', [AdminAmlController::class, 'updateRule'])->middleware('platform:platform.aml.decide')->name('rules.update');
 
     // Flagged transactions
     Route::get('/flagged', [AdminAmlController::class, 'indexFlagged'])->name('flagged.index');
     Route::get('/flagged/{ulid}', [AdminAmlController::class, 'showFlagged'])
         ->where('ulid', '[A-Z0-9]{26}')->name('flagged.show');
     Route::post('/flagged/{ulid}/approve', [AdminAmlController::class, 'approveFlagged'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('flagged.approve');
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.aml.decide')->name('flagged.approve');
     Route::post('/flagged/{ulid}/reject', [AdminAmlController::class, 'rejectFlagged'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('flagged.reject');
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.aml.decide')->name('flagged.reject');
 
     // Alerts
     Route::get('/alerts', [AdminAmlController::class, 'indexAlerts'])->name('alerts.index');
     Route::post('/alerts/{ulid}/resolve', [AdminAmlController::class, 'resolveAlert'])
-        ->where('ulid', '[A-Z0-9]{26}')->name('alerts.resolve');
+        ->where('ulid', '[A-Z0-9]{26}')->middleware('platform:platform.aml.decide')->name('alerts.resolve');
 
     // AMIAL-AML-DASHBOARD-001 — المؤشّرات والتبويبات ٢ و٣ و٦
     Route::get('/dashboard', [AdminAmlController::class, 'dashboard'])->name('dashboard');
@@ -248,35 +248,35 @@ Route::prefix('aml')->name('aml.')
     Route::get('/structuring', [AdminAmlController::class, 'structuring'])->name('structuring.index');
     Route::get('/sanctions', [AdminAmlController::class, 'sanctions'])->name('sanctions.index');
     Route::post('/sanctions/{id}/review', [AdminAmlController::class, 'reviewSanction'])
-        ->where('id', '[0-9]+')->name('sanctions.review');
+        ->where('id', '[0-9]+')->middleware('platform:platform.aml.investigate')->name('sanctions.review');
 
     // AMIAL-AML-INVESTIGATION-001 — مركز التحقيقات (الفصل ١٠، التبويب ٧)
     Route::get('/investigations', [AdminAmlController::class, 'indexInvestigations'])->name('investigations.index');
-    Route::post('/investigations', [AdminAmlController::class, 'openInvestigation'])->name('investigations.open');
+    Route::post('/investigations', [AdminAmlController::class, 'openInvestigation'])->middleware('platform:platform.aml.investigate')->name('investigations.open');
     Route::get('/investigations/{id}', [AdminAmlController::class, 'showInvestigation'])
         ->where('id', '[0-9]+')->name('investigations.show');
     Route::post('/investigations/{id}/evidence', [AdminAmlController::class, 'investigationEvidence'])
-        ->where('id', '[0-9]+')->name('investigations.evidence');
+        ->where('id', '[0-9]+')->middleware('platform:platform.aml.investigate')->name('investigations.evidence');
     Route::post('/investigations/{id}/action', [AdminAmlController::class, 'investigationAction'])
-        ->where('id', '[0-9]+')->name('investigations.action');
+        ->where('id', '[0-9]+')->middleware('platform:platform.aml.investigate')->name('investigations.action');
     Route::post('/investigations/{id}/close', [AdminAmlController::class, 'closeInvestigation'])
-        ->where('id', '[0-9]+')->name('investigations.close');
+        ->where('id', '[0-9]+')->middleware('platform:platform.aml.investigate')->name('investigations.close');
     Route::post('/investigations/{id}/reopen', [AdminAmlController::class, 'reopenInvestigation'])
-        ->where('id', '[0-9]+')->name('investigations.reopen');
+        ->where('id', '[0-9]+')->middleware('platform:platform.aml.investigate')->name('investigations.reopen');
     Route::post('/investigations/{id}/str', [AdminAmlController::class, 'generateStr'])
-        ->where('id', '[0-9]+')->name('investigations.str');
+        ->where('id', '[0-9]+')->middleware('platform:platform.aml.decide')->name('investigations.str');
 
     // AMIAL-AML-REGREPORT-001 — التقارير التنظيمية (الفصل ١٠، التبويب ٨)
     Route::get('/reports', [AdminAmlController::class, 'indexReports'])->name('reports.index');
-    Route::post('/reports/ctr', [AdminAmlController::class, 'generateCtr'])->name('reports.ctr');
+    Route::post('/reports/ctr', [AdminAmlController::class, 'generateCtr'])->middleware('platform:platform.aml.decide')->name('reports.ctr');
     Route::post('/reports/{id}/submit', [AdminAmlController::class, 'submitReport'])
-        ->where('id', '[0-9]+')->name('reports.submit');
+        ->where('id', '[0-9]+')->middleware('platform:platform.aml.decide')->name('reports.submit');
 
     // User risk profiles
     Route::get('/users/{userId}/profile', [AdminAmlController::class, 'showUserProfile'])
         ->where('userId', '[0-9]+')->name('users.profile');
     Route::post('/users/{userId}/override', [AdminAmlController::class, 'setUserOverride'])
-        ->where('userId', '[0-9]+')->name('users.override');
+        ->where('userId', '[0-9]+')->middleware('platform:platform.aml.decide')->name('users.override');
 });
 
 // ============ AMIAL-CUSTOMER-CENTER-001 — مركز العملاء (الفصل ٠٢) ============
@@ -348,7 +348,10 @@ Route::prefix('merchant-center')->name('merchant-center.')->group(function () {
         Route::get('/{id}/staff', [$mc, 'staff'])->where('id', '[0-9]+')->name('staff');
         Route::get('/{id}/support', [$mc, 'support'])->where('id', '[0-9]+')->name('support');
         Route::get('/{id}/subscription', [$mc, 'subscription'])->where('id', '[0-9]+')->name('subscription');
-        Route::post('/{id}/note', [$mc, 'addNote'])->where('id', '[0-9]+')->name('note');
+        // AMIAL-ADMIN-DOORS-002 — إضافةُ ملاحظةٍ فعلٌ، ولها صلاحيّتُها
+        // المبنيّةُ سلفاً (`customers.notes.create`) — وكانت خلف قراءة.
+        Route::post('/{id}/note', [$mc, 'addNote'])->where('id', '[0-9]+')
+            ->middleware('platform:platform.customers.notes.create')->name('note');
     });
 
     // ── المال: لفريق المالية ومدير النظام وحدهما ──
@@ -366,8 +369,10 @@ Route::prefix('merchant-center')->name('merchant-center.')->group(function () {
         Route::get('/{id}/devices', [$mc, 'devices'])->where('id', '[0-9]+')->name('devices');
         // AMIAL-RISK-TIER-DOOR-001 — `risk.tier` كان مُعلَناً في
         // `MerchantAdminAction::ACTIONS` بلا مسارٍ يفعله.
+        // ورفعُ درجة خطرِ تاجرٍ يُغيّر ما يُسمح له به — قرارُ مخاطر لا قراءةً.
         Route::post('/{id}/risk-tier', [$mc, 'setRiskTier'])
-            ->where('id', '[0-9]+')->name('risk.tier');
+            ->where('id', '[0-9]+')
+            ->middleware('platform:platform.risk.investigations.create')->name('risk.tier');
     });
 
     // ── الامتثال والتوثيق: لفريق الامتثال ──
@@ -753,8 +758,9 @@ Route::prefix('fees')->name('fees.')->group(function () {
 Route::prefix('sentinel')->name('sentinel.')
     ->middleware('platform:platform.audit.view')->group(function () {
     Route::get('/', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'index'])->name('index');
-    Route::post('/block', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'block'])->name('block');
-    Route::post('/unblock', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'unblock'])->name('unblock');
+    Route::post('/block', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'block'])
+        ->middleware('platform:platform.security.act')->name('block');
+    Route::post('/unblock', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'unblock'])->middleware('platform:platform.security.act')->name('unblock');
 });
 
 // ============ AMIAL-EXEC-DASHBOARD-001 — Executive Dashboard ============
@@ -984,4 +990,4 @@ Route::get('/system/health', [\App\Http\Controllers\Admin\SystemHealthController
 
 Route::post('/system/errors/{id}', [\App\Http\Controllers\Admin\SystemHealthController::class, 'updateError'])
     ->where('id', '[0-9]+')
-    ->middleware('platform:platform.audit.view')->name('system.errors.update');
+    ->middleware('platform:platform.security.act')->name('system.errors.update');

@@ -239,7 +239,16 @@ Route::group(['as' => 'admin.'], function () {
             'middleware' => 'platform:platform.transactions.view'], function () {
             Route::get('index', [TransactionController::class, 'index'])->name('index');
             Route::get('export', [TransactionController::class, 'exportTransactions'])->name('export');
-            Route::post('store', [TransactionController::class, 'store'])->name('store');
+            // AMIAL-ADMIN-DOORS-002 — **مسارٌ ميّتٌ أُزيل.**
+            //
+            // كان `POST admin/transaction/store` مسجَّلاً ويشير إلى
+            // `TransactionController::store` — **ودالّةٌ بهذا الاسم لا
+            // وجودَ لها في الصنف**. فالمسارُ يُسجَّل ويُحسَب في كلّ مسحٍ
+            // أمنيٍّ «مسارَ كتابةٍ خلف صلاحيّةِ قراءة»، ولا يفعل شيئاً
+            // سوى أن يرمي عند أوّل استدعاء.
+            //
+            // ولا مرجعَ له في قالبٍ ولا شيفرة. **ومسارٌ ميّتٌ ليس آمناً:
+            // هو ضجيجٌ يُخفي الحيَّ بين مثله.**
 
         });
 
