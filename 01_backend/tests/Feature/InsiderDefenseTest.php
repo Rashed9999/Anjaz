@@ -260,8 +260,13 @@ class InsiderDefenseTest extends TestCase
             ]);
         }
 
-        $this->assertSame(0, Artisan::call('amial:audit-verify'));
-        $this->assertStringContainsString('السلسلة سليمة', Artisan::output());
+        // **ويُحرَس رمزُ الخروج والمعنى، لا نصُّ الرسالة.**
+        // أُعيدت صياغةُ مخرجات الأمر لتكون أدقّ (لا تستنتج نيّةً من
+        // اختلاف بصمة)، **فسقط توكيدٌ كان يطلب نصّاً بعينه** — ومقياسٌ
+        // يمنع تحسينَ صياغةٍ ولا يحرس معناها ليس حارساً.
+        $this->assertSame(0, Artisan::call('amial:audit-verify'),
+            'رمزُ الخروج ليس صفراً على سلسلةٍ سليمة');
+        $this->assertStringContainsString('سليمة', Artisan::output());
     }
 
     public function test_tampering_with_audit_record_is_detected(): void
@@ -276,8 +281,19 @@ class InsiderDefenseTest extends TestCase
         DB::table('audit_decisions')->where('action', 'ORIGINAL')
             ->update(['reason' => 'أثر مُزوَّر بعد الحادثة']);
 
-        $this->assertSame(1, Artisan::call('amial:audit-verify'));
-        $this->assertStringContainsString('عُدِّل بعد كتابته', Artisan::output());
+        // **والفشلُ يُقاس برمز الخروج أوّلاً** — فهو ما يقرؤه المجدوِل.
+        $this->assertSame(1, Artisan::call('amial:audit-verify'),
+            'تعديلٌ مباشرٌ في القاعدة لم يُنتج فشلاً — وحارسٌ يمرّ '
+            . 'والعطلُ قائم أسوأ من غيابه');
+
+        $out = Artisan::output();
+
+        $this->assertStringContainsString('تحتاج تحقيقاً', $out);
+        $this->assertStringContainsString('البصمة لا تطابق محتوى السجل', $out);
+
+        // **ولا يُقترَح محوُ الدليل** — إعادةُ البصم تجعل الحالةَ خضراءَ
+        // وتمحو ما صُمّمت السلسلةُ لحفظه.
+        $this->assertStringContainsString('لا تُعد كتابة البصمات', $out);
     }
 
     public function test_deleting_audit_record_breaks_the_chain(): void
