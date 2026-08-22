@@ -13,7 +13,6 @@
         <span class="badge badge-soft-info ms-auto text-monospace">audit_decisions</span>
     </div>
 
-    {{-- إحصاءُ آخر أربعٍ وعشرين ساعة — بالعربيّة وبترتيب الشدّة --}}
     <div class="row mb-4">
         @foreach(['critical' => 'danger', 'warning' => 'warning', 'notice' => 'info', 'info' => 'primary'] as $sev => $color)
             <div class="col-md-3">
@@ -27,104 +26,143 @@
         @endforeach
     </div>
 
-    {{-- ══════════════════════════════════════════════════════════════
-         **حالةُ السلسلة — ثلاثُ حالاتٍ لا اثنتان.**
-
-         كانت اللافتةُ تقول «كُسرت السلسلة في ٧ مواضع — عُبث بالسجلّ»
-         على سجلٍّ لم يمسّه أحد: عمودا البصمة أُضيفا بعد إنشاء الجدول
-         بشهرٍ ونصف، فكلُّ قرارٍ أقدمَ منهما بلا بصمة — **ولم يُوقَّع
-         قطّ، لا وُقّع ثمّ غُيّر**.
-
-         وحارسٌ يكذب أسوأ من غيابه: يُرسل في تحقيقٍ خلف عبثٍ لا وجودَ
-         له، ثمّ يُعوّد القارئَ أن يتجاهل اللافتةَ يومَ تصدق.
-         ══════════════════════════════════════════════════════════ --}}
+    {{--
+        AMIAL-AUDIT-GUIDANCE-001
+        هذه اللافتة لا تستنتج النية من اختلاف البصمة. اختلاف البصمة دليل سلامة
+        يحتاج تحقيقاً، لكنه لا يثبت وحده عبثاً متعمداً أو خسارة مالية.
+    --}}
     @if($chain['state'] === 'broken')
         <div class="alert alert-danger" data-testid="audit-chain-panel">
-            <div class="d-flex align-items-center gap-2 mb-2">
-                <strong data-testid="audit-chain">⚠ عُبث بالسجلّ — {{ $chain['broken'] }} موضعاً</strong>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <strong data-testid="audit-chain">
+                    ⚠ سلامة سجل التدقيق تحتاج تحقيقًا — {{ number_format($chain['broken']) }} سجلًا غير مفسر
+                </strong>
                 <span class="ms-auto small">فُحص آخرُ {{ number_format($chain['checked']) }} قرار</span>
             </div>
+
+            <div class="row g-2 mb-3" data-testid="audit-chain-guidance">
+                <div class="col-md-4">
+                    <div class="bg-white rounded p-2 h-100 border">
+                        <div class="small text-muted">ما الذي نعرفه؟</div>
+                        <strong class="small">يوجد اختلاف سلامة حقيقي في السجلات المفحوصة.</strong>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="bg-white rounded p-2 h-100 border">
+                        <div class="small text-muted">ما الذي لا نعرفه بعد؟</div>
+                        <strong class="small">السبب والنية غير محسومين من فحص البصمة وحده.</strong>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="bg-white rounded p-2 h-100 border">
+                        <div class="small text-muted">هل ثبت أثر مالي؟</div>
+                        <strong class="small">لا. هذا الفحص وحده لا يثبت أثرًا ماليًا.</strong>
+                    </div>
+                </div>
+            </div>
+
             <div class="small">
                 @if($chain['tampered'] > 0)
-                    <div>· <strong>{{ $chain['tampered'] }}</strong> صفّاً بصمتُه لا تطابق محتواه <b>ولا تفسيرَ تقنيّاً له</b> — يُحقَّق فيها.</div>
+                    <div>
+                        · <strong>{{ number_format($chain['tampered']) }}</strong> سجلًا بصمتها لا تطابق محتواها الحالي،
+                        ولم يجد الفحص تفسيرًا تقنيًا معروفًا لها — <b>تحتاج تحقيقًا، ولا تُعدّ تلقائيًا عبثًا متعمدًا.</b>
+                    </div>
                 @endif
                 @if($chain['link_breaks'] > 0)
-                    <div>· <strong>{{ $chain['link_breaks'] }}</strong> حلقةً لا تصل بسابقتها — <b>صفٌّ حُذف بينهما</b>.</div>
+                    <div>
+                        · <strong>{{ number_format($chain['link_breaks']) }}</strong> حلقة لا ترتبط ببصمة سابقتها —
+                        <b>السبب غير محسوم</b> وقد يكون حذفًا أو إدراجًا أو ترحيلًا غير مفسر؛ يلزم التحقق.
+                    </div>
                 @endif
                 @if($chain['rewritten'] > 0)
-                    <div class="text-muted">· و{{ $chain['rewritten'] }} صفّاً تفسّرها هجرةٌ من هجراتنا — <b>ليست عبثاً</b>.</div>
+                    <div class="text-muted">
+                        · {{ number_format($chain['rewritten']) }} سجلًا تغيّرت بسبب تقني معروف — <b>مفسّرة ولا تحتاج تحقيق سلامة.</b>
+                    </div>
                 @endif
                 @if($chain['unsigned'] > 0)
-                    <div class="text-muted">· و{{ $chain['unsigned'] }} صفّاً بلا بصمةٍ أصلاً (أقدمُ من السلسلة) — <b>ليست عبثاً</b>.</div>
+                    <div class="text-muted">
+                        · {{ number_format($chain['unsigned']) }} سجلًا أقدم من سلسلة البصمات ولم تُوقّع أصلًا — <b>ليست دليل عبث.</b>
+                    </div>
                 @endif
             </div>
-            <a class="btn btn-sm btn-outline-danger mt-2" data-testid="audit-filter-broken"
-               href="{{ route('admin.amial.audit.index', ['integrity' => 'broken']) }}">
-                أرِني الصفوفَ غيرَ المفسَّرة
-            </a>
+
+            <div class="bg-white border rounded p-3 mt-3" data-testid="audit-next-action">
+                <div class="fw-bold mb-1">ماذا أفعل الآن؟</div>
+                <ol class="small mb-2 ps-3">
+                    <li>افتح السجلات غير المفسرة وافحص الموضوع والمعاملة والسياق لكل سجل.</li>
+                    <li>اربط وقت أول اختلاف بعمليات النشر والهجرات وأخطاء النظام في الفترة نفسها.</li>
+                    <li>شغّل الفحص الكامل للسلسلة قبل الحكم النهائي؛ فهذه الصفحة تفحص نافذة سريعة فقط.</li>
+                    <li><b>لا تعد كتابة البصمات ولا تعدّل السجلات لإخفاء التحذير.</b> احتفظ بالدليل حتى يُحسم السبب.</li>
+                </ol>
+                <div class="small text-muted">
+                    الفحص الكامل الهندسي: <code dir="ltr">php artisan amial:audit-verify</code>
+                </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <a class="btn btn-sm btn-danger" data-testid="audit-filter-broken"
+                   href="{{ route('admin.amial.audit.index', ['integrity' => 'broken']) }}">
+                    ابدأ التحقيق: اعرض السجلات غير المفسرة
+                </a>
+                <a class="btn btn-sm btn-outline-danger"
+                   href="{{ route('admin.amial.audit.export', ['integrity' => 'broken']) }}">
+                    ⬇ تصدير السجلات غير المفسرة
+                </a>
+            </div>
         </div>
     @elseif($chain['state'] === 'rewritten')
-        {{-- **بصمةٌ لا تطابق، والسببُ معروفٌ ومن عندنا.**
-
-             وقع هذا فعلاً: `down()` في هجرة `2026_07_05_110000` تكتب
-             `subject_type = 'user'` على كلّ صفٍّ خارج التعداد. فتراجُعُ
-             هجراتٍ على خادمِ تجربةٍ يُعيد كتابةَ عمودٍ **مبصومٍ عليه**،
-             فتصرخ اللافتةُ «عُبث بالسجلّ» على أثرِ فعلٍ من عندنا.
-
-             ولافتةٌ تصرخ على ما نفعله نحن تُعتاد، فتُتجاهَل يومَ تصدق. --}}
-        <div class="alert alert-warning" data-testid="audit-chain-panel">
-            <strong data-testid="audit-chain">
-                ⓘ {{ $chain['rewritten'] }} صفّاً تغيّر بعد بصمِه — <b>والسببُ معروفٌ وليس عبثاً</b>
-            </strong>
+        <div class="alert alert-info" data-testid="audit-chain-panel">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <strong data-testid="audit-chain">
+                    ⓘ تغيير معروف السبب — لا يحتاج إجراء
+                </strong>
+                <span class="ms-auto small">فُحص آخرُ {{ number_format($chain['checked']) }} قرار</span>
+            </div>
             <div class="small mt-2">
-                فُحص آخرُ {{ number_format($chain['checked']) }} قرار، ولا صفَّ واحداً بلا تفسير.
+                {{ number_format($chain['rewritten']) }} سجلًا تغيّرت بعد بصمها، لكن الفحص وجد لها سببًا تقنيًا معروفًا ومفسرًا.
                 <div class="mt-1">
                     @foreach($chain['causes'] as $cause => $count)
-                        <div>· <strong>{{ $count }}</strong> — {{ $cause }}</div>
+                        <div>· <strong>{{ number_format($count) }}</strong> — {{ $cause }}</div>
                     @endforeach
                 </div>
                 <div class="mt-2">
-                    <b>وما العمل؟</b> لا شيء: القيمُ الماليّةُ والقراراتُ سليمة، والذي تغيّر
-                    عمودُ تصنيفٍ أعادت هجرةٌ كتابتَه. ولا تُعاد البصماتُ حسبةً —
-                    فبصمةٌ تُعاد كتابتُها تُبطل الغرضَ من السلسلة كلِّها.
+                    <b>الإجراء:</b> لا شيء ما لم تظهر أدلة أخرى. لا تُعاد كتابة البصمات لمجرد جعل الحالة خضراء؛
+                    إعادة البصمة تمحو الدليل الذي صُممت السلسلة لحفظه.
                 </div>
             </div>
-            <a class="btn btn-sm btn-outline-secondary mt-2"
+            <a class="btn btn-sm btn-outline-info mt-2"
                href="{{ route('admin.amial.audit.index', ['integrity' => 'rewritten']) }}">
-                أرِني هذه الصفوف
+                أرني السجلات المفسرة
             </a>
         </div>
     @elseif($chain['state'] === 'legacy')
         <div class="alert alert-secondary" data-testid="audit-chain-panel">
-            <strong data-testid="audit-chain">✓ لا عبثَ — ولا سلسلةَ على القديم</strong>
+            <strong data-testid="audit-chain">ⓘ تغطية السلامة جزئية — سجلات قديمة بلا بصمة</strong>
             <div class="small mt-1">
-                فُحص آخرُ {{ number_format($chain['checked']) }} قرار: <b>لا بصمةَ مكسورة</b>، و{{ $chain['unsigned'] }}
-                منها كُتبت <b>قبل إنشاء السلسلة</b> فلا بصمةَ لها.
+                فُحص آخرُ {{ number_format($chain['checked']) }} قرار: لا توجد بصمة مكسورة داخل الجزء الموقع،
+                لكن {{ number_format($chain['unsigned']) }} سجلًا كُتبت قبل إنشاء سلسلة البصمات ولم تُوقّع أصلًا.
+                <b>هذا لا يعني أنها سليمة أو معبث بها؛ يعني فقط أنه لا توجد بصمة تاريخية يمكن التحقق منها.</b>
                 @if($chain['first_signed_id'])
-                    وأوّلُ قرارٍ موقَّعٍ هو <span class="text-monospace">#{{ $chain['first_signed_id'] }}</span> — وما بعده محروس.
+                    وأول قرار موقّع هو <span class="text-monospace">#{{ $chain['first_signed_id'] }}</span> — وما بعده محروس.
                 @endif
             </div>
             <a class="btn btn-sm btn-outline-secondary mt-2"
                href="{{ route('admin.amial.audit.index', ['integrity' => 'unsigned']) }}">
-                أرِني غيرَ الموقَّع
+                أرني السجلات غير الموقعة
             </a>
         </div>
     @elseif($chain['state'] === 'ok')
         <div class="alert alert-success py-2" data-testid="audit-chain-panel">
-            <strong data-testid="audit-chain">✓ سلسلةُ التدقيق سليمة</strong>
-            <span class="small text-muted">— فُحص آخرُ {{ number_format($chain['checked']) }} قرار، وكلُّها موقَّعةٌ ومتّصلة.</span>
+            <strong data-testid="audit-chain">✓ سلسلة التدقيق سليمة</strong>
+            <span class="small text-muted">— فُحص آخرُ {{ number_format($chain['checked']) }} قرار، وكلها موقعة ومتّصلة.</span>
         </div>
     @else
-        {{-- «غير معروف» ليس «سليم» (القاعدة السابعة). --}}
         <div class="alert alert-secondary py-2" data-testid="audit-chain-panel">
-            <strong data-testid="audit-chain">لا قرارات لتُفحص</strong>
-            <span class="small text-muted">— والجدولُ فارغٌ، وهذا ليس «سليماً» بل «لا يُعرف».</span>
+            <strong data-testid="audit-chain">لا توجد بيانات كافية للحكم على سلامة السلسلة</strong>
+            <span class="small text-muted">— غياب القرارات ليس حالة «سليمة» ولا «معطلة»؛ الحالة غير معروفة.</span>
         </div>
     @endif
 
-    {{-- ══════════════════════════════════════════════════════════════
-         المرشِّحات
-         ══════════════════════════════════════════════════════════ --}}
     <div class="card mb-3">
         <div class="card-body">
             <form action="{{ url()->current() }}" method="GET" class="row g-3">
@@ -160,16 +198,12 @@
                     <label class="form-label">السلامة</label>
                     <select name="integrity" class="form-control" data-testid="audit-integrity-filter">
                         <option value="">الكلّ</option>
-                        <option value="broken" @selected(($filters['integrity'] ?? '') === 'broken')>المشبوهُ فقط</option>
-                        <option value="rewritten" @selected(($filters['integrity'] ?? '') === 'rewritten')>مفسَّرٌ بهجرة</option>
-                        <option value="unsigned" @selected(($filters['integrity'] ?? '') === 'unsigned')>غيرُ الموقَّع</option>
+                        <option value="broken" @selected(($filters['integrity'] ?? '') === 'broken')>يحتاج تحقيقًا</option>
+                        <option value="rewritten" @selected(($filters['integrity'] ?? '') === 'rewritten')>مفسّر تقنيًا</option>
+                        <option value="unsigned" @selected(($filters['integrity'] ?? '') === 'unsigned')>غير موقّع</option>
                     </select>
                 </div>
 
-                {{-- **الفعلُ قائمةٌ مجمّعةٌ لا حقلَ نصّ.**
-                     كان حقلاً حرّاً يُطابَق بـ`like`، فمن لا يحفظ تهجئةَ
-                     `CHARITY_SETTLEMENT_GENERATED` لا يجد شيئاً — ولا رسالةَ
-                     تقول لماذا. والحقلُ الحرُّ باقٍ تحت «بحثٌ حرّ». --}}
                 <div class="col-md-4">
                     <label class="form-label">الفعل</label>
                     <select name="action" class="form-control">
@@ -206,10 +240,6 @@
                            value="{{ $filters['actor_user_id'] ?? '' }}">
                 </div>
 
-                {{-- **رقمُ المعاملة — كان مبنيّاً في المتحكّم ولا مدخلَ له.**
-                     يعمل `filtered()` عليه منذ كُتب، ولم يكن في النموذج ولا
-                     في قائمة `$filters` — فلا يُكتب ولا يعود. وهو أهمُّ مدخلٍ
-                     في أيّ تحقيق: «أرني كلَّ ما جرى على هذا التحويل». --}}
                 <div class="col-md-3">
                     <label class="form-label">رقمُ المعاملة</label>
                     <input type="text" name="transaction_id" class="form-control" dir="ltr"
@@ -253,8 +283,6 @@
             <span class="badge badge-soft-secondary text-dark">{{ number_format($decisions->total()) }}</span>
 
             @if(($filters['integrity'] ?? '') !== '')
-                {{-- **ويُقال إنّ المرشِّح على نافذة.** فمرشِّحٌ يبدو شاملاً
-                     وهو على آخر خمس مئةٍ يُخفي ما قبلها بلا أن يقول. --}}
                 <span class="badge bg-warning text-dark">
                     ضمن آخر {{ number_format($chain['checked']) }} قرارٍ مفحوصٍ فقط
                 </span>
@@ -308,8 +336,6 @@
                             @if($act['translated'])
                                 <small class="text-muted text-monospace" dir="ltr">{{ $act['raw'] }}</small>
                             @else
-                                {{-- **ولا يُخترَع معنى.** رمزٌ بلا ترجمةٍ يُقال إنّه كذلك،
-                                     فترجمةٌ مخترَعةٌ تُمرّر القارئَ واثقاً من معنىً لم يقصده أحد. --}}
                                 <small class="badge badge-soft-warning">بلا ترجمة</small>
                             @endif
                         </td>
@@ -353,9 +379,6 @@
     </div>
 </div>
 
-{{-- ══════════════════════════════════════════════════════════════════
-     لوحُ القرار الكامل — الباقي من سبعةَ عشرَ عموداً.
-     ══════════════════════════════════════════════════════════════════ --}}
 <div class="modal fade" id="audit-detail" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -406,7 +429,6 @@
 
             const d = j.data;
 
-            // **الموضوعُ رابطٌ يُنقر** — رقمٌ لا يُفضي إلى صاحبه ليس تتبّعاً.
             const subject = d.subject.url
                 ? `<a href="${esc(d.subject.url)}">${esc(d.subject.label)}</a>`
                 : esc(d.subject.label);
@@ -416,14 +438,10 @@
                    <span class="text-muted">· ${esc(d.actor_type_ar)} · ${esc(d.actor.phone ?? '')}</span>`
                 : esc(d.actor_type_ar || '—');
 
-            // **وحالةُ البصمة تُقال بثلاث حالاتٍ لا حالتين.**
-            //
-            // «لم يُوقَّع قطّ» ليست «وُقّع ثمّ غُيّر»، وخلطُهما يُرسل
-            // في تحقيقٍ خلف عبثٍ لا وجودَ له.
             const verdict = {
                 ok:        ['success',   '✓ '],
                 unsigned:  ['secondary', 'ⓘ '],
-                rewritten: ['warning text-dark', 'ⓘ '],
+                rewritten: ['info text-dark', 'ⓘ '],
                 tampered:  ['danger',    '⚠ '],
             }[d.integrity.verdict] || ['secondary', ''];
 
