@@ -138,13 +138,17 @@ flutter_native_splash:
   android: true
   web: false
 
-# AMIAL-BRANDING-001: launcher icons configuration
+# AMIAL-ICON-003: launcher icon visual balance.
+# استخدم wordmark الشفاف كمقدّمة للأيقونة التكيّفية بدل الصورة التي كانت
+# تحمل شريطاً أبيض داخلياً، وقلّل الحاشية من 16% إلى 4% حتى يظهر الشعار
+# أكبر على شاشة الهاتف. يجب إعادة توليد الأيقونات قبل الدمج.
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
   image_path: "assets/branding/icon_square_master.png"
   min_sdk_android: 21
   adaptive_icon_background: "#FECA1E"
-  adaptive_icon_foreground: "assets/branding/icon_foreground.png"
+  adaptive_icon_foreground: "assets/branding/wordmark.png"
+  adaptive_icon_foreground_inset: 4
   remove_alpha_ios: true
   background_color_ios: "#FECA1E"
