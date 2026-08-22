@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:amial_pay/common/widgets/amial_donut_chart.dart';
+import 'package:amial_pay/common/widgets/amial_form.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/history/controllers/transaction_history_controller.dart';
 import 'package:amial_pay/features/history/domain/models/transaction_model.dart';
+import 'package:amial_pay/features/reports/screens/amial_account_statement_screen.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/helper/pdf_downloader_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/app_constants.dart';
-import 'package:amial_pay/common/widgets/amial_donut_chart.dart';
-import 'package:amial_pay/common/widgets/amial_form.dart';
-import 'package:amial_pay/features/reports/screens/amial_account_statement_screen.dart';
 
 /// AMIAL-REPORTS-002 — تقرير العميل الاحترافي.
 ///
-/// الحقيقة الماليّة واحدة: نفس سجلّ العمليات يكوّن الملخّص والتوزيع وكشف
-/// الحساب. وإذا تعذّرت القراءة لا نعرض صفراً؛ نعرض سبب عدم المعرفة صراحةً.
+/// نفس سجل العمليات يغذي الملخص والتوزيع وكشف الحساب. وإذا تعذرت القراءة
+/// لا نعرض صفراً؛ نعرض حالة عدم المعرفة صراحةً.
 class AmialReportsScreen extends StatefulWidget {
   const AmialReportsScreen({super.key});
 
@@ -129,7 +129,9 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
       if (!mounted || epoch != _loadEpoch) return;
 
       if (response.statusCode == 200 && response.body is Map) {
-        final model = TransactionModel.fromJson(response.body);
+        final model = TransactionModel.fromJson(
+          Map<String, dynamic>.from(response.body as Map),
+        );
         final transactions = model.transactions ?? [];
         setState(() {
           _txs = transactions;
@@ -152,7 +154,8 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
       if (response.statusCode == 503) {
         setState(() {
           _viewState = _ReportViewState.maintenance;
-          _stateMessage = 'خدمة التقارير تحت الصيانة حالياً. بياناتك لم تُستبدل بأصفار.';
+          _stateMessage =
+              'خدمة التقارير تحت الصيانة حالياً. بياناتك لم تُستبدل بأصفار.';
         });
         return;
       }
@@ -160,7 +163,8 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
       if (response.statusCode == 1) {
         setState(() {
           _viewState = _ReportViewState.offline;
-          _stateMessage = 'تعذّر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.';
+          _stateMessage =
+              'تعذّر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.';
         });
         return;
       }
@@ -168,7 +172,8 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
       if (response.statusCode == -1) {
         setState(() {
           _viewState = _ReportViewState.error;
-          _stateMessage = 'تعذّر تحميل التقارير أثناء اتصال VPN. أوقفه ثم أعد المحاولة.';
+          _stateMessage =
+              'تعذّر تحميل التقارير أثناء اتصال VPN. أوقفه ثم أعد المحاولة.';
         });
         return;
       }
@@ -176,7 +181,8 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
       if (response.statusCode == 401) {
         setState(() {
           _viewState = _ReportViewState.error;
-          _stateMessage = 'انتهت جلسة الدخول أو لم تعد صالحة. أعد تسجيل الدخول ثم جرّب مجدداً.';
+          _stateMessage =
+              'انتهت جلسة الدخول أو لم تعد صالحة. أعد تسجيل الدخول ثم جرّب مجدداً.';
         });
         return;
       }
@@ -189,7 +195,8 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
       if (!mounted || epoch != _loadEpoch) return;
       setState(() {
         _viewState = _ReportViewState.offline;
-        _stateMessage = 'تعذّر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.';
+        _stateMessage =
+            'تعذّر الاتصال بالخادم. تحقق من الشبكة ثم أعد المحاولة.';
       });
     }
   }
@@ -249,10 +256,8 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
     for (final t in _txs) {
       final value = debit ? (t.debit ?? 0) : (t.credit ?? 0);
       if (value <= 0) continue;
-      final key = _typeLabels[t.transactionType ?? ''] ??
-          (t.transactionType?.trim().isNotEmpty == true
-              ? t.transactionType!.trim()
-              : 'أخرى');
+      final rawType = t.transactionType?.trim() ?? '';
+      final key = _typeLabels[rawType] ?? (rawType.isNotEmpty ? rawType : 'أخرى');
       map[key] = (map[key] ?? 0) + value;
     }
     final entries = map.entries.toList()
@@ -305,7 +310,6 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
   }
 
   Widget _reportTabs(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.all(AmialSpacing.xxs),
       decoration: BoxDecoration(
@@ -346,11 +350,6 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
     required _ReportType type,
   }) {
     final selected = _type == type;
-    final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
-          color: selected ? AmialColors.cardSurface : AmialColors.primary,
-        );
-
     return Expanded(
       child: InkWell(
         onTap: () => setState(() => _type = type),
@@ -379,7 +378,13 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: textStyle,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight:
+                            selected ? FontWeight.w800 : FontWeight.w700,
+                        color: selected
+                            ? AmialColors.cardSurface
+                            : AmialColors.primary,
+                      ),
                 ),
               ),
             ],
@@ -678,7 +683,7 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
 
   Widget _summaryCards(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: _summaryCard(
@@ -862,9 +867,8 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
           const SizedBox(height: AmialSpacing.sm),
           ...List.generate(entries.length, (index) {
             final entry = entries[index];
-            final ratio = total > 0
-                ? (entry.value / total).clamp(0.0, 1.0)
-                : 0.0;
+            final ratio =
+                total > 0 ? (entry.value / total).clamp(0.0, 1.0) : 0.0;
             final color = _analyticsPalette[index % _analyticsPalette.length];
             return _breakdownRow(
               context,
@@ -1036,9 +1040,9 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
                     ),
                   )
                 : const Icon(Icons.picture_as_pdf_outlined),
-            label: Text(_downloading
-                ? 'جارٍ تجهيز الملف…'
-                : 'تنزيل كشف الحساب PDF'),
+            label: Text(
+              _downloading ? 'جارٍ تجهيز الملف…' : 'تنزيل كشف الحساب PDF',
+            ),
             style: FilledButton.styleFrom(
               backgroundColor: AmialColors.primary,
               minimumSize: const Size.fromHeight(AmialSpacing.buttonHeight),
@@ -1069,7 +1073,8 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
   Widget _insightCard(BuildContext context) {
     final positive = _net >= 0;
     final accent = positive ? AmialColors.success : AmialColors.danger;
-    final surface = positive ? AmialColors.successSurface : AmialColors.dangerSurface;
+    final surface =
+        positive ? AmialColors.successSurface : AmialColors.dangerSurface;
 
     String title;
     String message;
@@ -1081,7 +1086,8 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
           : 'المصروفات تعادل ${ratio.toStringAsFixed(1)}% من الإيرادات، والفارق ${AmialMoney.yer(_net.abs())}.';
     } else {
       title = 'لا توجد إيرادات في الفترة';
-      message = 'المصروفات المقروءة هي ${AmialMoney.yer(_totalDebit)}، ولا توجد إيرادات مسجلة ضمن $_periodLabel.';
+      message =
+          'المصروفات المقروءة هي ${AmialMoney.yer(_totalDebit)}، ولا توجد إيرادات مسجلة ضمن $_periodLabel.';
     }
 
     return Container(
@@ -1100,7 +1106,9 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
               borderRadius: BorderRadius.circular(AmialSpacing.radiusMd),
             ),
             child: Icon(
-              positive ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+              positive
+                  ? Icons.trending_up_rounded
+                  : Icons.trending_down_rounded,
               color: accent,
               size: AmialSpacing.xl,
             ),
@@ -1136,7 +1144,8 @@ class _AmialReportsScreenState extends State<AmialReportsScreen> {
   Widget _lastUpdated(BuildContext context) {
     final time = _lastUpdatedAt!;
     final minute = time.minute.toString().padLeft(2, '0');
-    final hour = time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
+    final hour =
+        time.hour > 12 ? time.hour - 12 : (time.hour == 0 ? 12 : time.hour);
     final period = time.hour >= 12 ? 'م' : 'ص';
 
     return Row(
