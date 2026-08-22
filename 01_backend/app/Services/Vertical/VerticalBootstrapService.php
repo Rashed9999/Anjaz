@@ -139,13 +139,21 @@ class VerticalBootstrapService
         try {
             $perm = app(\App\Services\Merchant\MerchantPermissionService::class);
 
+            // AMIAL-VERTICAL-RBAC-001 — **لكلّ قطاعٍ قالبُه.**
+            //
+            // كان هنا `default => seedRetailRoles`، وتعليقُه يقول: «ولا
+            // تُخترع قائمةٌ لكلّ نشاطٍ قبل أن تُكتب صلاحيّاتُه».
+            // **وقد كُتبت الآن** — للصيدليّة والجملة والمطعم فهرسُ أفعالٍ
+            // وقوالبُ أدوارٍ بأسماء وظائفها.
+            //
+            // ويبقى البيعُ السريع على أدوار التجزئة **عن قصد**: هو تجزئةٌ
+            // بلا مخزونٍ ولا فروع، ويعمل على الجداول نفسِها، فقالبٌ ثانٍ
+            // بالأسماء نفسِها تكرارٌ لا فصل.
             match ($type) {
                 A::BIZ_FUEL => $perm->seedFuelRoles($merchant),
-
-                // التجزئةُ والبيعُ السريع والصيدليّةُ والجملةُ والمطعم
-                // تعمل على شبكة أدوار التجزئة نفسِها (كاشير · مخزون ·
-                // مشرف…)، وهي المبنيّةُ اليوم. ولا تُخترع قائمةٌ لكلّ
-                // نشاطٍ قبل أن تُكتب صلاحيّاتُه.
+                A::BIZ_PHARMACY => $perm->seedPharmacyRoles($merchant),
+                A::BIZ_WHOLESALE => $perm->seedWholesaleRoles($merchant),
+                A::BIZ_RESTAURANT => $perm->seedRestaurantRoles($merchant),
                 default => $perm->seedRetailRoles($merchant),
             };
         } catch (\Throwable $e) {

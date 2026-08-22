@@ -9,8 +9,11 @@ use App\Models\RestaurantOrder;
 use App\Models\RestaurantTable;
 use App\Models\User;
 use App\Services\FeatureAccessService;
+use App\Services\Merchant\MerchantPermissionService;
 use App\Services\RestaurantService;
 use App\Support\Access\AccessConstants as A;
+use App\Support\Merchant\MerchantPermissions as P;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -22,18 +25,45 @@ use Illuminate\Support\Facades\Validator;
  *   الطلبات:  GET /restaurant/orders · POST /orders · GET/POST /orders/{id}
  *             POST /orders/{id}/status · POST /orders/{id}/close
  *   المطبخ:   GET /restaurant/kitchen
+ *
+ * ══════════════════════════════════════════════════════════════════════
+ * AMIAL-VERTICAL-RBAC-001 — **والطلبُ يمرّ بأيدٍ ثلاث.**
+ *
+ * وقِيس قبل هذا التغيير: **أحدَ عشرَ فعلاً وصفرُ فحصِ صلاحيّة**. فطاهٍ
+ * يُغلق طلباً — **والإغلاقُ قبضٌ**: يُنهي الطلبَ ويُثبت مبلغَه. ونادلٌ
+ * يحذف طاولةً عليها طلبٌ مفتوح.
+ *
+ * فالنادلُ يفتح ويُعدّل، والمطبخُ يُغيّر الحالةَ ولا يمسّ الأصناف،
+ * والكاشيرُ يُغلق ويقبض.
  */
 class RestaurantController extends Controller
 {
     public function __construct(
         private FeatureAccessService $access,
         private RestaurantService $svc,
+        private MerchantPermissionService $perm,
     ) {}
+
+    /** يفحص الصلاحيّة — ويردّ ٤٠٣ برسالةِ المحرّك، أو `null` فيمضي. */
+    private function guard(Request $request, string $permission, ?string $amount = null): ?JsonResponse
+    {
+        try {
+            $this->perm->assert($request->user(), $permission, [], $amount);
+
+            return null;
+        } catch (DomainException $e) {
+            return $this->err('FORBIDDEN', $e->getMessage(), 403);
+        }
+    }
 
     // ---------- الطاولات ----------
 
     public function tables(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::RESTAURANT_TABLE_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -44,6 +74,10 @@ class RestaurantController extends Controller
 
     public function createTable(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::RESTAURANT_TABLE_MANAGE)) {
+            return $deny;
+        }
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -64,6 +98,10 @@ class RestaurantController extends Controller
 
     public function updateTable(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::RESTAURANT_TABLE_MANAGE)) {
+            return $deny;
+        }
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -84,6 +122,10 @@ class RestaurantController extends Controller
 
     public function deleteTable(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::RESTAURANT_TABLE_MANAGE)) {
+            return $deny;
+        }
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -98,6 +140,10 @@ class RestaurantController extends Controller
 
     public function orders(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::RESTAURANT_ORDER_VIEW_ALL)) {
+            return $deny;
+        }
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -107,6 +153,10 @@ class RestaurantController extends Controller
 
     public function openOrder(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::RESTAURANT_ORDER_OPEN)) {
+            return $deny;
+        }
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant, $posId] = $ctx;
@@ -132,6 +182,10 @@ class RestaurantController extends Controller
 
     public function showOrder(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::RESTAURANT_ORDER_VIEW_ALL)) {
+            return $deny;
+        }
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -142,6 +196,10 @@ class RestaurantController extends Controller
 
     public function updateOrder(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::RESTAURANT_ORDER_UPDATE)) {
+            return $deny;
+        }
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -167,6 +225,10 @@ class RestaurantController extends Controller
 
     public function setStatus(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::RESTAURANT_ORDER_STATUS)) {
+            return $deny;
+        }
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -186,6 +248,10 @@ class RestaurantController extends Controller
 
     public function closeOrder(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::RESTAURANT_ORDER_CLOSE)) {
+            return $deny;
+        }
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant, $posId] = $ctx;
@@ -214,6 +280,10 @@ class RestaurantController extends Controller
 
     public function kitchen(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::RESTAURANT_KITCHEN_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;

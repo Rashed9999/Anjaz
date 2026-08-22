@@ -14,15 +14,34 @@ use App\Models\PharmacySale;
 use App\Models\PharmacyStockAlert;
 use App\Models\PosUser;
 use App\Models\User;
+use App\Services\Merchant\MerchantPermissionService;
 use App\Services\PharmacyAlertService;
 use App\Services\PharmacySaleService;
 use App\Services\PharmacyService;
+use App\Support\Merchant\MerchantPermissions as P;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 /**
  * AMIAL-PHARMACY-001 — Controller الصيدلية.
+ *
+ * ══════════════════════════════════════════════════════════════════════
+ * AMIAL-VERTICAL-RBAC-001 — **وكلُّ فعلٍ خلفَه صلاحيّة.**
+ *
+ * وقِيس قبل هذا التغيير: **سبعةَ عشرَ فعلاً وصفرُ فحصِ صلاحيّة**. فكلُّ
+ * موظّفٍ نشِطٍ في `pos_users` يبلغ كلَّ باب: يُعدّل الأصناف، ويستلم
+ * التشغيلات، **ويُغلق تنبيهَ انتهاء صلاحيّة**، ويقرأ ويكتب السجلَّ
+ * الطبّيّ للمريض — حساسيّاتِه وأمراضَه المزمنة وحملَه.
+ *
+ * ولا خطأَ في أيّ سجلّ: الطلبُ ينجح ويردّ ٢٠٠. **والقالبُ الذي كان
+ * يُزرع للصيدليّة أدوارُ تجزئة** — «مدير متجر · موظّف مستودع · مندوب
+ * مبيعات» — فيها أسماءُ وظائفَ لا وجودَ لها في صيدليّة، وصلاحيّاتٌ **لا
+ * يقرؤها متحكّمٌ واحد**. فكان قالباً بلا أثر، وذاك أسوأ من غيابه:
+ * **يُوهم بضبطٍ لا وجود له.**
+ *
+ * وإخفاءُ الزرّ في الواجهة ليس أماناً: من يعرف المسار ينادي بلا زرّ.
  */
 class PharmacyController extends Controller
 {
@@ -32,7 +51,26 @@ class PharmacyController extends Controller
         private readonly PharmacyService $svc,
         private readonly PharmacySaleService $saleSvc,
         private readonly PharmacyAlertService $alerts,
+        private readonly MerchantPermissionService $perm,
     ) {}
+
+    /**
+     * يفحص الصلاحيّة — ويردّ ٤٠٣ برسالةٍ تقول لماذا، أو `null` فيمضي.
+     *
+     * **والرسالةُ من المحرّك لا مخترَعة**: «خارج نطاقك» غير «يتجاوز حدّك»
+     * غير «لا تملك الصلاحيّة»، ورفضٌ لا يقول سببَه يُرسل الموظّفَ إلى
+     * الدعم بلا معلومة.
+     */
+    private function guard(Request $request, string $permission, ?string $amount = null): ?JsonResponse
+    {
+        try {
+            $this->perm->assert($request->user(), $permission, [], $amount);
+
+            return null;
+        } catch (DomainException $e) {
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
+        }
+    }
 
     // ============ Pharmacy ============
 
@@ -48,6 +86,10 @@ class PharmacyController extends Controller
 
     public function upsertPharmacy(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::SETTINGS_MANAGE)) {
+            return $deny;
+        }
         $v = Validator::make($request->all(), [
             'pharmacy_name' => 'required|string|max:200',
             'license_number' => 'sometimes|nullable|string|max:64',
@@ -70,6 +112,10 @@ class PharmacyController extends Controller
 
     public function listProducts(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_PRODUCT_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -107,6 +153,10 @@ class PharmacyController extends Controller
 
     public function addProduct(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_PRODUCT_MANAGE)) {
+            return $deny;
+        }
         // ══════════════════════════════════════════════════════════════
         // AMIAL-PHARMACY-RX-001 — **إدارةُ الوصفات مبنيّةٌ ولم تكن موصولة.**
         //
@@ -155,6 +205,10 @@ class PharmacyController extends Controller
 
     public function updateProduct(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_PRODUCT_MANAGE)) {
+            return $deny;
+        }
         // **والتعديلُ بابٌ ثانٍ للفعل نفسِه** — يُنشأ الصنفُ عاديّاً
         // ثمّ يُعلَّم بالتعديل. فيُحرس البابان.
         if ($request->boolean('requires_prescription')
@@ -179,6 +233,10 @@ class PharmacyController extends Controller
 
     public function listBatches(Request $request, int $productId): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_BATCH_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -200,6 +258,10 @@ class PharmacyController extends Controller
 
     public function addBatch(Request $request, int $productId): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_BATCH_RECORD)) {
+            return $deny;
+        }
         $v = Validator::make($request->all(), [
             'batch_number' => 'required|string|max:64',
             'expiry_date' => 'required|date|after:today',
@@ -232,6 +294,10 @@ class PharmacyController extends Controller
 
     public function listCustomers(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_PATIENT_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -249,6 +315,10 @@ class PharmacyController extends Controller
 
     public function findCustomerByPhone(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_PATIENT_VIEW)) {
+            return $deny;
+        }
         $phone = $request->query('phone');
         if (!$phone) return $this->error('INVALID', 'الهاتف مطلوب', 422);
 
@@ -263,6 +333,10 @@ class PharmacyController extends Controller
 
     public function addCustomer(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_PATIENT_MANAGE)) {
+            return $deny;
+        }
         $v = Validator::make($request->all(), [
             'full_name' => 'required|string|max:200',
             'phone' => 'sometimes|nullable|string|max:32',
@@ -292,6 +366,10 @@ class PharmacyController extends Controller
 
     public function updateCustomer(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_PATIENT_MANAGE)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -309,6 +387,25 @@ class PharmacyController extends Controller
 
     public function recordSale(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_SALE_CREATE)) {
+            return $deny;
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // **وقيدان مستقلّان على الوصفة، ولا يُغني أحدُهما عن الآخر:**
+        //
+        //   · الباقة  — `pharmacy_prescriptions` تُشترى (أدناه)
+        //   · الدور   — `pharmacy.prescription.record` تُمنح لمن يوثّق
+        //
+        // فصيدليّةٌ اشترت الميزةَ لا يعني أنّ كاشيرَها يوثّق وصفة، وصيدليٌّ
+        // يملك الصلاحيّةَ لا يوثّق في صيدليّةٍ لم تشترِها. **وخلطُهما
+        // يجعل شراءَ الميزة منحاً لكلّ الموظّفين.**
+        if (($request->filled('prescription_number') || $request->filled('prescribing_doctor'))
+            && ($deny = $this->guard($request, P::PHARMACY_PRESCRIPTION_RECORD))) {
+            return $deny;
+        }
+
         // **وتسجيلُ بيانات الوصفة على البيعة هو الفعلُ المدفوع** — والبيعُ
         // نفسُه مجّانيّ. فمن لم يشترِ الميزةَ يبيع ولا يوثّق وصفة.
         if (($request->filled('prescription_number') || $request->filled('prescribing_doctor'))
@@ -353,6 +450,10 @@ class PharmacyController extends Controller
 
     public function listSales(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_SALE_VIEW_ALL)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -370,6 +471,10 @@ class PharmacyController extends Controller
 
     public function listAlerts(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_ALERT_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -390,6 +495,10 @@ class PharmacyController extends Controller
 
     public function scanExpiringBatches(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_ALERT_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -401,6 +510,10 @@ class PharmacyController extends Controller
 
     public function dismissAlert(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::PHARMACY_ALERT_DISMISS)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -418,6 +531,10 @@ class PharmacyController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::REPORT_SALES)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;

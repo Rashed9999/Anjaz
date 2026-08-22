@@ -14,17 +14,33 @@ use App\Models\WholesalePriceTier;
 use App\Models\WholesaleProduct;
 use App\Models\WholesaleProductPrice;
 use App\Models\WholesaleSalesRep;
+use App\Services\Merchant\MerchantPermissionService;
 use App\Services\WholesaleCollectionService;
 use App\Services\WholesaleInvoicePdfService;
 use App\Services\WholesaleInvoiceService;
 use App\Services\WholesaleReportsService;
 use App\Services\WholesaleService;
+use App\Support\Merchant\MerchantPermissions as P;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 /**
  * AMIAL-WHOLESALE-001 — Controller الجملة.
+ *
+ * ══════════════════════════════════════════════════════════════════════
+ * AMIAL-VERTICAL-RBAC-001 — **والجملةُ ديونٌ قبل أن تكون بضاعة.**
+ *
+ * وقِيس قبل هذا التغيير: **خمسةٌ وعشرون فعلاً وصفرُ فحصِ صلاحيّة**.
+ * فمندوبُ مبيعاتٍ يُبطل فاتورةَ مليونٍ بسببٍ يكتبه هو، ويُسجّل تحصيلاً لم
+ * يُقبَض، ويُغيّر سعرَ صنفٍ لشريحة، ويُعدّل المخزونَ مباشرة. **ولا يمرّ
+ * ذلك بأحد.**
+ *
+ * والفصلُ الحاكم هنا: **من يبيع لا يُحصّل، ومن يُحصّل لا يُبطل**.
+ * وثلاثتُها في يدٍ واحدةٍ تُخفي اختلاساً بلا أثر: يُسجَّل بيعٌ، ويُقبَض
+ * نقداً، ثمّ تُبطَل الفاتورة — فيختفي الدَّينُ والمقبوض معاً، ويتوازن
+ * الدفترُ على نقصٍ لا يظهر.
  */
 class WholesaleController extends Controller
 {
@@ -36,7 +52,26 @@ class WholesaleController extends Controller
         private readonly WholesaleCollectionService $colSvc,
         private readonly WholesaleReportsService $reportsSvc,
         private readonly WholesaleInvoicePdfService $pdfSvc,
+        private readonly MerchantPermissionService $perm,
     ) {}
+
+    /**
+     * يفحص الصلاحيّة — ويردّ ٤٠٣ برسالةِ المحرّك، أو `null` فيمضي.
+     *
+     * **و`$amount` ليس زينة**: حدُّ الفاتورة وحدُّ التحصيل يُقاسان عليه
+     * في `merchant_role_permissions.max_amount`. وتمريرُ `null` حيث يوجد
+     * مبلغٌ يُلغي الحدَّ صامتاً — **حارسٌ يمرّ والعطلُ قائم.**
+     */
+    private function guard(Request $request, string $permission, ?string $amount = null): ?JsonResponse
+    {
+        try {
+            $this->perm->assert($request->user(), $permission, [], $amount);
+
+            return null;
+        } catch (DomainException $e) {
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
+        }
+    }
 
     // ============ Business ============
 
@@ -53,6 +88,10 @@ class WholesaleController extends Controller
 
     public function upsertBusiness(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::SETTINGS_MANAGE)) {
+            return $deny;
+        }
         $v = Validator::make($request->all(), [
             'business_name' => 'required|string|max:200',
             'commercial_register' => 'sometimes|nullable|string|max:64',
@@ -77,6 +116,10 @@ class WholesaleController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::REPORT_SALES)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -118,6 +161,10 @@ class WholesaleController extends Controller
 
     public function addPriceTier(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_TIER_MANAGE)) {
+            return $deny;
+        }
         $v = Validator::make($request->all(), [
             'code' => 'required|string|max:32',
             'name' => 'required|string|max:80',
@@ -143,6 +190,10 @@ class WholesaleController extends Controller
 
     public function listProducts(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_PRODUCT_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -170,6 +221,10 @@ class WholesaleController extends Controller
 
     public function addProduct(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_PRODUCT_MANAGE)) {
+            return $deny;
+        }
         $v = Validator::make($request->all(), [
             'name' => 'required|string|max:200',
             'sku' => 'sometimes|nullable|string|max:64',
@@ -199,6 +254,10 @@ class WholesaleController extends Controller
 
     public function updateProduct(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_PRODUCT_MANAGE)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -214,6 +273,10 @@ class WholesaleController extends Controller
 
     public function adjustStock(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_STOCK_ADJUST)) {
+            return $deny;
+        }
         $v = Validator::make($request->all(), [
             'new_stock' => 'required|numeric|min:0',
             'reason' => 'required|string|max:200',
@@ -243,6 +306,10 @@ class WholesaleController extends Controller
 
     public function listProductPrices(Request $request, int $productId): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_PRICE_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -266,6 +333,10 @@ class WholesaleController extends Controller
 
     public function setProductPrice(Request $request, int $productId): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_PRICE_SET)) {
+            return $deny;
+        }
         $v = Validator::make($request->all(), [
             'tier_id' => 'required|integer',
             'price' => 'required|numeric|min:0.01',
@@ -299,6 +370,10 @@ class WholesaleController extends Controller
 
     public function listCustomers(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_CUSTOMER_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -320,6 +395,10 @@ class WholesaleController extends Controller
 
     public function addCustomer(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_CUSTOMER_MANAGE)) {
+            return $deny;
+        }
         $v = Validator::make($request->all(), [
             'full_name' => 'required|string|max:200',
             'company_name' => 'sometimes|nullable|string|max:200',
@@ -350,6 +429,10 @@ class WholesaleController extends Controller
 
     public function updateCustomer(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_CUSTOMER_MANAGE)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -366,6 +449,10 @@ class WholesaleController extends Controller
 
     public function listInvoices(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_INVOICE_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -385,6 +472,10 @@ class WholesaleController extends Controller
 
     public function showInvoice(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_INVOICE_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -399,6 +490,10 @@ class WholesaleController extends Controller
 
     public function createInvoice(Request $request): JsonResponse
     {
+        if ($deny = $this->guard($request, P::WHOLESALE_INVOICE_CREATE)) {
+            return $deny;
+        }
+
         $v = Validator::make($request->all(), [
             'customer_id' => 'required|integer',
             'payment_type' => 'required|in:cash,credit',
@@ -423,11 +518,32 @@ class WholesaleController extends Controller
         $branchId = app(\App\Services\BranchResolverService::class)
             ->resolveBranchId($request, $merchant);
 
+        // ══════════════════════════════════════════════════════════════
+        // **وحدُّ الفاتورة يُقاس على إجماليّها لا على ما أُرسل.**
+        //
+        // الإجماليُّ لا يعرفه المنادي: الأسعارُ من شريحة العميل والضريبةُ
+        // من إعدادات المؤسّسة، والخدمةُ هي التي تحسبه. **ففحصُ الحدّ قبل
+        // الحساب فحصٌ على رقمٍ لا وجود له** — يمرّ دائماً.
+        //
+        // فيُبنى القيدُ ثمّ يُقاس داخل معاملةٍ واحدة: إن تجاوز الحدَّ رُدّ
+        // الاستثناءُ فتُلغى المعاملةُ كلُّها، **فلا تبقى فاتورةٌ فوق
+        // الحدّ ولا رقمٌ متسلسلٌ محروق.**
         try {
-            $inv = $this->invSvc->createInvoice(
-                $merchant, $biz, $request->input('items'),
-                array_merge($request->all(), ['branch_id' => $branchId]),
-            );
+            $inv = \Illuminate\Support\Facades\DB::transaction(function () use (
+                $request, $merchant, $biz, $branchId,
+            ) {
+                $inv = $this->invSvc->createInvoice(
+                    $merchant, $biz, $request->input('items'),
+                    array_merge($request->all(), ['branch_id' => $branchId]),
+                );
+
+                $this->perm->assert($request->user(), P::WHOLESALE_INVOICE_CREATE,
+                    [], (string) $inv->total_amount);
+
+                return $inv;
+            });
+        } catch (DomainException $e) {
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
         } catch (\InvalidArgumentException $e) {
             return $this->error('INVALID', $e->getMessage(), 422);
         } catch (\RuntimeException $e) {
@@ -438,6 +554,10 @@ class WholesaleController extends Controller
 
     public function voidInvoice(Request $request, int $id): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_INVOICE_VOID)) {
+            return $deny;
+        }
         $v = Validator::make($request->all(), [
             'reason' => 'required|string|max:500',
         ]);
@@ -463,6 +583,13 @@ class WholesaleController extends Controller
 
     public function recordCollection(Request $request, int $invoiceId): JsonResponse
     {
+        // **والمبلغُ هنا في الطلب** — بخلاف الفاتورة. فيُقاس عليه الحدُّ
+        // قبل أن يُلمَس شيء.
+        if ($deny = $this->guard($request, P::WHOLESALE_COLLECTION_RECORD,
+            $request->filled('amount') ? (string) $request->input('amount') : null)) {
+            return $deny;
+        }
+
         $v = Validator::make($request->all(), [
             'amount' => 'required|numeric|min:0.01',
             'payment_method' => 'required|in:cash,bank_transfer,amial_pay,check',
@@ -493,6 +620,10 @@ class WholesaleController extends Controller
 
     public function listCollections(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_COLLECTION_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -510,6 +641,10 @@ class WholesaleController extends Controller
 
     public function listSalesReps(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_REP_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -523,6 +658,10 @@ class WholesaleController extends Controller
 
     public function addSalesRep(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_REP_MANAGE)) {
+            return $deny;
+        }
         $v = Validator::make($request->all(), [
             'full_name' => 'required|string|max:200',
             'phone' => 'sometimes|nullable|string|max:32',
@@ -552,6 +691,10 @@ class WholesaleController extends Controller
      */
     public function downloadInvoicePdf(Request $request, int $id)
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_INVOICE_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -595,6 +738,10 @@ class WholesaleController extends Controller
 
     public function agingReport(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_REPORT_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -605,6 +752,10 @@ class WholesaleController extends Controller
 
     public function customerStatement(Request $request, int $customerId): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_REPORT_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -622,6 +773,10 @@ class WholesaleController extends Controller
 
     public function salesRepsPerformance(Request $request): JsonResponse
     {
+
+        if ($deny = $this->guard($request, P::WHOLESALE_REPORT_VIEW)) {
+            return $deny;
+        }
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;

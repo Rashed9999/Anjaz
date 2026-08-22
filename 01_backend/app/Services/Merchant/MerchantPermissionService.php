@@ -253,6 +253,46 @@ class MerchantPermissionService
     }
 
     /**
+     * **الصيدليّةُ ترث أدوارَ التجزئة — وذاك ما كان.**
+     *
+     * AMIAL-VERTICAL-RBAC-001. فمالكُ صيدليّةٍ يفتح شاشةَ الأدوار فيجد
+     * «مدير متجر · موظّف مستودع · مندوب مبيعات»، وليس فيها صيدليٌّ ولا
+     * فنّيّ. **والصيدليُّ ليس الكاشير**: هو وحدَه يوثّق الوصفةَ ويقرأ
+     * الملفَّ الطبّيّ.
+     *
+     * @return array<int,MerchantRole>
+     */
+    public function seedPharmacyRoles(User $merchant): array
+    {
+        return $this->seedRoles($merchant, P::pharmacySeedRoles(), P::pharmacySeedScopes());
+    }
+
+    /**
+     * **والجملةُ ديونٌ قبل أن تكون بضاعة.**
+     *
+     * فالفصلُ الحاكم: من يبيع لا يُحصّل، ومن يُحصّل لا يُبطل. وثلاثتُها
+     * في يدٍ واحدةٍ تُخفي اختلاساً بلا أثر — يُسجَّل بيعٌ ويُقبَض نقداً
+     * ثمّ تُبطَل الفاتورة، فيختفي الدَّينُ والمقبوض معاً.
+     *
+     * @return array<int,MerchantRole>
+     */
+    public function seedWholesaleRoles(User $merchant): array
+    {
+        return $this->seedRoles($merchant, P::wholesaleSeedRoles(), P::wholesaleSeedScopes());
+    }
+
+    /**
+     * **والطلبُ في المطعم يمرّ بأيدٍ ثلاث** — نادلٌ ومطبخٌ وكاشير.
+     * وطاهٍ يُغلق طلباً يُثبت مبلغاً لم يُقبَض.
+     *
+     * @return array<int,MerchantRole>
+     */
+    public function seedRestaurantRoles(User $merchant): array
+    {
+        return $this->seedRoles($merchant, P::restaurantSeedRoles(), P::restaurantSeedScopes());
+    }
+
+    /**
      * @param  array<string,array{name:string,permissions:array<int,string>}>  $roles
      * @param  array<string,array<string,array{scope:string,limit?:string,approval?:string}>>  $scopes
      * @return array<int,MerchantRole>
