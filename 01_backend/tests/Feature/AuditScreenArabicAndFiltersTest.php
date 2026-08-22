@@ -285,9 +285,35 @@ class AuditScreenArabicAndFiltersTest extends TestCase
         $r = $this->actingAs($this->auditor(), 'user')->get(route('admin.amial.audit.index'));
 
         $r->assertOk();
+
+        // **ويُقاس العقدُ لا الصياغة.**
+        //
+        // أوّلُ صيغةٍ لهذه التوكيدات كانت تطلب نصّاً بعينه («لا عبثَ»)،
+        // **فسقطت على تحسينٍ صحيح**: أُعيدت صياغةُ اللافتة فصارت أدقّ —
+        // لا تستنتج نيّةً من اختلاف بصمة، وتقول «تحتاج تحقيقًا» لا «عُبث».
+        // **ومقياسٌ يحرس صياغةً يمنع تحسينَها ولا يحرس معناها.**
+        //
+        // فالحالةُ تُقرأ من `data-chain-state` — عقدٌ آليٌّ لا يتغيّر
+        // بالكلمات، والمعنى يُفحص بما يجب أن يغيب وما يجب أن يحضر.
+        $this->assertChainState($r, 'legacy');
+
         $r->assertDontSee('عُبث بالسجلّ', false);
-        $r->assertSee('لا عبثَ', false);
-        $r->assertSee('قبل إنشاء السلسلة', false);
+        $r->assertSee('لم تُوقّع', false);
+    }
+
+    /**
+     * حالةُ سلسلة التدقيق كما تعلنها الشاشةُ آليّاً.
+     *
+     * `ok` سليمة · `legacy` غيرُ موقَّعةٍ وليست عبثاً · `broken` تحتاج
+     * تحقيقاً · وما عداها: **لا حكم** — وغيابُ البيانات ليس سلامة.
+     */
+    private function assertChainState($response, string $expected): void
+    {
+        $this->assertMatchesRegularExpression(
+            '~data-chain-state="' . preg_quote($expected, '~') . '"~',
+            $response->getContent(),
+            "حالةُ السلسلة المعلَنة ليست «{$expected}» — والفرقُ بينها "
+            . 'وبين «broken» هو الفرقُ بين تحقيقٍ داخليٍّ وسجلٍّ لم يمسّه أحد');
     }
 
     /** @test */
@@ -312,8 +338,11 @@ class AuditScreenArabicAndFiltersTest extends TestCase
         $r = $this->actingAs($this->auditor(), 'user')->get(route('admin.amial.audit.index'));
 
         $r->assertOk();
-        $r->assertSee('عُبث بالسجلّ', false);
-        $r->assertSee('ولا تفسيرَ تقنيّاً له', false);
+
+        // **شرطُ صحّة التصحيح كلِّه**: لو اكتفينا بإسكات اللافتة على غير
+        // الموقَّع لصار العبثُ الحقيقيُّ صامتاً معه.
+        $this->assertChainState($r, 'broken');
+        $r->assertSee('تحتاج تحقيقًا', false);
     }
 
     /** @test */
@@ -342,9 +371,21 @@ class AuditScreenArabicAndFiltersTest extends TestCase
         $r = $this->actingAs($this->auditor(), 'user')->get(route('admin.amial.audit.index'));
 
         $r->assertOk();
+
+        // **والفرقُ هو كلُّ الفائدة**: «شيءٌ تغيّر» تُوقف القارئَ بين
+        // جريمةٍ داخليّةٍ وهجرةٍ من هجراتنا. فالمفسَّرُ يُعزَل عن غيره.
+        $this->assertChainState($r, 'rewritten');
+
         $r->assertDontSee('عُبث بالسجلّ', false);
-        $r->assertSee('والسببُ معروفٌ وليس عبثاً', false);
+        $r->assertSee('سببًا تقنيًا معروفًا', false);
+
+        // **ويُسمّى السببُ بعينه** — «شيءٌ تغيّر لسببٍ معروف» بلا تسميته
+        // تُبقي القارئَ حيث كان: لا يعرف أهي هجرتُنا أم غيرُها.
         $r->assertSee('تراجُع هجرة التعداد', false);
+
+        // **ولا يُقترَح محوُ الدليل.** إعادةُ بصمِ الصفوف تجعل الشاشةَ
+        // خضراءَ وتمحو ما صُمّمت السلسلةُ لحفظه.
+        $r->assertSee('لا تُعاد كتابة البصمات', false);
     }
 
     /** @test */
@@ -365,8 +406,10 @@ class AuditScreenArabicAndFiltersTest extends TestCase
         $r = $this->actingAs($this->auditor(), 'user')->get(route('admin.amial.audit.index'));
 
         $r->assertOk();
-        $r->assertSee('عُبث بالسجلّ', false);
-        $r->assertSee('ولا تفسيرَ تقنيّاً له', false);
+
+        // **وحارسٌ يفسّر كلَّ شيءٍ لا يحرس شيئاً.**
+        $this->assertChainState($r, 'broken');
+        $r->assertSee('لم يجد الفحص تفسيرًا تقنيًا معروفًا', false);
     }
 
     /** @test */
@@ -400,8 +443,11 @@ class AuditScreenArabicAndFiltersTest extends TestCase
         $r = $this->actingAs($this->auditor(), 'user')->get(route('admin.amial.audit.index'));
 
         $r->assertOk();
-        $r->assertSee('لا قرارات لتُفحص', false);
-        $r->assertDontSee('سلسلةُ التدقيق سليمة', false);
+
+        // القاعدة السابعة: «غير معروف» ليس صفراً، وجدولٌ فارغٌ ليس «سليماً».
+        $this->assertChainState($r, 'empty');
+        $r->assertSee('غياب القرارات ليس حالة', false);
+        $r->assertDontSee('سلسلة التدقيق سليمة', false);
     }
 
     /** @test */

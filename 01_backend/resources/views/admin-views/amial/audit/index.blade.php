@@ -32,7 +32,7 @@
         يحتاج تحقيقاً، لكنه لا يثبت وحده عبثاً متعمداً أو خسارة مالية.
     --}}
     @if($chain['state'] === 'broken')
-        <div class="alert alert-danger" data-testid="audit-chain-panel">
+        <div class="alert alert-danger" data-testid="audit-chain-panel" data-chain-state="{{ $chain['state'] }}">
             <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
                 <strong data-testid="audit-chain">
                     ⚠ سلامة سجل التدقيق تحتاج تحقيقًا — {{ number_format($chain['broken']) }} سجلًا غير مفسر
@@ -111,7 +111,7 @@
             </div>
         </div>
     @elseif($chain['state'] === 'rewritten')
-        <div class="alert alert-info" data-testid="audit-chain-panel">
+        <div class="alert alert-info" data-testid="audit-chain-panel" data-chain-state="{{ $chain['state'] }}">
             <div class="d-flex flex-wrap align-items-center gap-2">
                 <strong data-testid="audit-chain">
                     ⓘ تغيير معروف السبب — لا يحتاج إجراء
@@ -136,7 +136,7 @@
             </a>
         </div>
     @elseif($chain['state'] === 'legacy')
-        <div class="alert alert-secondary" data-testid="audit-chain-panel">
+        <div class="alert alert-secondary" data-testid="audit-chain-panel" data-chain-state="{{ $chain['state'] }}">
             <strong data-testid="audit-chain">ⓘ تغطية السلامة جزئية — سجلات قديمة بلا بصمة</strong>
             <div class="small mt-1">
                 فُحص آخرُ {{ number_format($chain['checked']) }} قرار: لا توجد بصمة مكسورة داخل الجزء الموقع،
@@ -152,12 +152,12 @@
             </a>
         </div>
     @elseif($chain['state'] === 'ok')
-        <div class="alert alert-success py-2" data-testid="audit-chain-panel">
+        <div class="alert alert-success py-2" data-testid="audit-chain-panel" data-chain-state="{{ $chain['state'] }}">
             <strong data-testid="audit-chain">✓ سلسلة التدقيق سليمة</strong>
             <span class="small text-muted">— فُحص آخرُ {{ number_format($chain['checked']) }} قرار، وكلها موقعة ومتّصلة.</span>
         </div>
     @else
-        <div class="alert alert-secondary py-2" data-testid="audit-chain-panel">
+        <div class="alert alert-secondary py-2" data-testid="audit-chain-panel" data-chain-state="{{ $chain['state'] }}">
             <strong data-testid="audit-chain">لا توجد بيانات كافية للحكم على سلامة السلسلة</strong>
             <span class="small text-muted">— غياب القرارات ليس حالة «سليمة» ولا «معطلة»؛ الحالة غير معروفة.</span>
         </div>
