@@ -57,7 +57,9 @@ Route::group(['as' => 'admin.'], function () {
         Route::get('/', [DashboardController::class, 'dashboard'])->name('dashboard');
 
         // AMIAL-OPS-CONSOLE-001 — منصة عمليات الموظفين (واجهة ويب + JSON بجلسة الأدمن)
-        Route::group(['prefix' => 'support-center', 'as' => 'support-center.'], function () {
+        // AMIAL-ADMIN-DOORS-001 — مركزُ الدعم عملُ الدعم، وله صلاحيّتُه.
+        Route::group(['prefix' => 'support-center', 'as' => 'support-center.',
+            'middleware' => 'platform:platform.tickets.manage'], function () {
             $sc = \App\Http\Controllers\Api\V1\Amial\SupportConsoleController::class;
             Route::get('/', [$sc, 'page'])->name('index');
             Route::get('search', [$sc, 'search'])->middleware('platform:platform.customers.view')->name('search');
@@ -111,7 +113,13 @@ Route::group(['as' => 'admin.'], function () {
         Route::group(['prefix' => 'landing-settings', 'as' => 'landing-settings.'], function () {
         });
 
-        Route::group(['prefix' => 'business-settings', 'as' => 'business-settings.'], function () {
+        // AMIAL-ADMIN-DOORS-001 — **الرسومُ والحدودُ وFirebase واللغات.**
+        //
+        // كانت مفتوحةً لكلّ حسابِ إدارة: موظّفُ دعمٍ يفتح «إعدادات الأعمال»
+        // فيعدّل حدَّ معاملةٍ أو نسبةَ رسم. والوسيطُ على المجموعة كلِّها لا
+        // على مسارٍ مسار — فبابٌ واحدٌ منسيٌّ داخلها يُبطل الباقي.
+        Route::group(['prefix' => 'business-settings', 'as' => 'business-settings.',
+            'middleware' => 'platform:platform.settings.update'], function () {
             Route::post('update-business-setting-data', [BusinessSettingsController::class, 'updateBusinessSettingData'])->name('update-business-setting-data');
 
             Route::get('business-setup', [BusinessSettingsController::class, 'businessIndex'])->name('business-setup');
@@ -177,7 +185,9 @@ Route::group(['as' => 'admin.'], function () {
         });
 
 
-        Route::group(['prefix' => 'notification', 'as' => 'notification.'], function () {
+        // AMIAL-ADMIN-DOORS-001 — إشعارٌ يُرسَل إلى كلّ هاتفٍ في المنصّة.
+        Route::group(['prefix' => 'notification', 'as' => 'notification.',
+            'middleware' => 'platform:platform.settings.update'], function () {
             Route::get('add-new', [NotificationController::class, 'index'])->name('add-new');
             Route::post('store', [NotificationController::class, 'store'])->name('store');
             Route::get('edit/{id}', [NotificationController::class, 'edit'])->name('edit');
@@ -186,7 +196,8 @@ Route::group(['as' => 'admin.'], function () {
             Route::delete('delete/{id}', [NotificationController::class, 'delete'])->name('delete');
         });
 
-        Route::group(['prefix' => 'banner', 'as' => 'banner.'], function () {
+        Route::group(['prefix' => 'banner', 'as' => 'banner.',
+            'middleware' => 'platform:platform.settings.update'], function () {
             Route::get('add-new', [BannerController::class, 'index'])->name('index');
             Route::post('store', [BannerController::class, 'store'])->name('store');
             Route::get('edit/{id}', [BannerController::class, 'edit'])->name('edit');
@@ -215,14 +226,17 @@ Route::group(['as' => 'admin.'], function () {
         Route::group(['prefix' => 'user', 'as' => 'user.'], function () {
         });
 
-        Route::group(['prefix' => 'transaction', 'as' => 'transaction.'], function () {
+        Route::group(['prefix' => 'transaction', 'as' => 'transaction.',
+            'middleware' => 'platform:platform.transactions.view'], function () {
             Route::get('index', [TransactionController::class, 'index'])->name('index');
             Route::get('export', [TransactionController::class, 'exportTransactions'])->name('export');
             Route::post('store', [TransactionController::class, 'store'])->name('store');
 
         });
 
-        Route::group(['prefix' => 'expense', 'as' => 'expense.'], function () {
+        // AMIAL-ADMIN-DOORS-001 — مصاريفُ المنصّة مالٌ يخرج منها.
+        Route::group(['prefix' => 'expense', 'as' => 'expense.',
+            'middleware' => 'platform:platform.money.move'], function () {
             Route::get('index', [ExpenseController::class, 'index'])->name('index');
         });
 
@@ -263,7 +277,11 @@ Route::group(['as' => 'admin.'], function () {
         Route::group(['prefix' => 'transfer', 'as' => 'transfer.'], function () {
         });
 
-        Route::group(['prefix' => 'emoney', 'as' => 'emoney.'], function () {
+        // AMIAL-ADMIN-DOORS-001 — **إنشاءُ رصيدٍ للمنصّة وشحنُه: خلقُ مال.**
+        // كان الرابطُ مخفيّاً بصلاحيّةٍ والمسارُ مفتوحاً — وإخفاءُ الواجهة
+        // ليس حماية، فمن يعرف العنوان يفتحه.
+        Route::group(['prefix' => 'emoney', 'as' => 'emoney.',
+            'middleware' => 'platform:platform.money.move'], function () {
             Route::get('index', [EMoneyController::class, 'index'])->name('index');
             Route::post('store', [EMoneyController::class, 'store'])
                 ->middleware('platform:platform.money.move')
@@ -290,7 +308,8 @@ Route::group(['as' => 'admin.'], function () {
             });
         });
 
-        Route::group(['prefix' => 'faq', 'as' => 'faq.'], function () {
+        Route::group(['prefix' => 'faq', 'as' => 'faq.',
+            'middleware' => 'platform:platform.settings.update'], function () {
             Route::get('index', [FAQController::class, 'index'])->name('index');
             Route::get('create', [FAQController::class, 'create'])->name('create');
             Route::post('store', [FAQController::class, 'store'])->name('store');

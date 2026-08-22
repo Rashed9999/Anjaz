@@ -81,6 +81,13 @@
     $canMoney = (bool) $viewer?->hasPlatformPermission('platform.money.move');
     $canTransactions = (bool) $viewer?->hasPlatformPermission('platform.transactions.view');
     $canCustomers = (bool) $viewer?->hasPlatformPermission('platform.customers.view');
+    // AMIAL-ADMIN-DOORS-001 — **مجاميعُ المنصّة صلاحيّةٌ مستقلّة.**
+    //
+    // والقالبُ يحسب صلاحيّاتِه بنفسه، فتصحيحُ المتحكّم وحدَه يترك
+    // العناوينَ والبطاقاتِ معروضةً بأصفارٍ — والعنوانُ نفسُه إفشاء:
+    // «أعلى العملاء تعاملاً» تقول إنّ ها هنا ترتيباً، ويبقى الرقمُ
+    // وحدَه محجوباً.
+    $canAnalytics = (bool) $viewer?->hasPlatformPermission('platform.analytics.view');
     $canTickets = (bool) $viewer?->hasPlatformPermission('platform.tickets.manage');
     $canAudit = (bool) $viewer?->hasPlatformPermission('platform.audit.view');
 
@@ -286,14 +293,14 @@
                         'href' => route('admin.amial.hub.finance')];
                 }
 
-                if ($canTransactions) {
+                if ($canAnalytics) {
                     $kpis[] = ['k' => 'year', 'lbl' => 'حجم السنة',
                         'val' => number_format($yearTotal, 0),
                         'ic' => '📊', 'bg' => '#eafaf1', 'fg' => '#12694E',
                         'href' => $range($year . '-01-01', $year . '-12-31')];
                 }
 
-                if ($canCustomers) {
+                if ($canAnalytics) {
                     $kpis[] = ['k' => 'customers', 'lbl' => 'العملاء',
                         'val' => number_format($data['counts']['customers'] ?? 0),
                         'ic' => '👤', 'bg' => '#f0ecff', 'fg' => '#5B2A9E',
@@ -334,7 +341,7 @@
     <div class="row g-3">
         <div class="col-lg-7">
             <div class="a-card p-3 h-100">
-                @if ($canTransactions)
+                @if ($canAnalytics)
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <span class="fw-bold" style="color:var(--ink)">{{ translate('حجم المعاملات') }} — {{ $year }}</span>
                         <small class="text-muted">{{ translate('الإجمالي') }}: {{ number_format($yearTotal, 0) }} ر.ي</small>
@@ -376,7 +383,7 @@
         </div>
 
         <div class="col-lg-5">
-            @if ($canTransactions && $canCustomers)
+            @if ($canAnalytics && $canCustomers)
                 @php
                     $boards = [
                         ['t' => '🏆 ' . translate('أعلى الوكلاء تعاملاً'),  'rows' => $data['top_agents'] ?? [],    'tid' => 'list-agents'],

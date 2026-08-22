@@ -20,7 +20,17 @@ class FcmSettingsTest extends TestCase
 
     private function admin(): User
     {
-        return User::factory()->create(['type' => ADMIN_TYPE]);
+        // AMIAL-ADMIN-DOORS-001 — **نوعُ الحساب لم يعد يفتح الصفحة.**
+        //
+        // كان `ADMIN_TYPE` وحدَه يكفي، فكان موظّفُ دعمٍ يفتح هذه الشاشةَ
+        // ويعدّل فيها. فصار البابُ يسأل «هل يحقّ له؟» لا «أهو موظّف؟» —
+        // ويُمنح هذا الاختبارُ الدورَ الذي يفعل ذلك حقيقةً في الإنتاج.
+        $u = User::factory()->create(['type' => ADMIN_TYPE]);
+
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($u, \App\Services\PlatformRoleService::ADMIN);
+
+        return $u->refresh();
     }
 
     /** مفتاح خدمة صالح الشكل — بمفتاح RSA مولّد فعلياً لا نصّ وهمي. */

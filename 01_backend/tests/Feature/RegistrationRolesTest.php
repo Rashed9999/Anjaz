@@ -106,7 +106,12 @@ class RegistrationRolesTest extends TestCase
         $merchant = User::where('phone', '967771500005')->first();
 
         // أدمن
+        // AMIAL-ADMIN-DOORS-001 — لوحةُ التحقّق صارت خلف `approvals.decide`:
+        // اعتمادُ حسابٍ جديدٍ قرارٌ لا قراءة.
         $admin = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770009100']);
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
+        $admin->refresh();
 
         // يظهر في لوحة التحقق
         $this->actingAs($admin, 'user')->get('/admin/amial/hub/verification')->assertOk();

@@ -28,7 +28,12 @@ class AdminTransactionIndexTest extends TestCase
             'password' => Hash::make('admin12345'), 'is_active' => 1,
         ])->save();
 
-        return $admin;
+        // AMIAL-ADMIN-DOORS-001 — كشفُ المعاملات صار خلف `transactions.view`.
+        // ونوعُ الحساب لم يعد يفتحه: «أهو موظّف؟» ليس «هل يحقّ له؟».
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
+
+        return $admin->refresh();
     }
 
     /** @test */

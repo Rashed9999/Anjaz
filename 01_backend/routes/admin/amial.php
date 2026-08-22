@@ -65,17 +65,24 @@ Route::prefix('zones')->name('zones.')->group(function () {
 });
 
 // ============ Legal Terms ============
+// AMIAL-ADMIN-DOORS-001 — **نصٌّ يوافق عليه كلُّ عميلٍ ليس إعداداً عاديّاً.**
 Route::prefix('legal')->name('legal.')->group(function () {
-    Route::get('/', [LegalTermsController::class, 'webIndex'])->name('index');
-    Route::get('/create', [LegalTermsController::class, 'webCreate'])->name('create');
-    Route::post('/', [LegalTermsController::class, 'webStore'])->name('store');
+    Route::get('/', [LegalTermsController::class, 'webIndex'])
+        ->middleware('platform:platform.ops.view')->name('index');
+    Route::get('/create', [LegalTermsController::class, 'webCreate'])
+        ->middleware('platform:platform.settings.update')->name('create');
+    Route::post('/', [LegalTermsController::class, 'webStore'])
+        ->middleware('platform:platform.settings.update')->name('store');
     Route::get('/{id}', [LegalTermsController::class, 'webShow'])
         ->where('id', '[0-9]+')
         ->name('show');
 });
 
 // ============ Account Recovery ============
-Route::prefix('recovery')->name('recovery.')->group(function () {
+// AMIAL-ADMIN-DOORS-001 — **استعادةُ حسابٍ تُسلّم مالَ صاحبِه لمن يدّعيه.**
+// فهي من جنس اعتماد التوثيق لا من جنس قراءة تذكرة.
+Route::prefix('recovery')->name('recovery.')
+    ->middleware('platform:platform.approvals.decide')->group(function () {
     Route::get('/', [AccountRecoveryController::class, 'webIndex'])->name('index');
     Route::get('/{ulid}', [AccountRecoveryController::class, 'webShow'])
         ->where('ulid', '[A-Z0-9]{26}')
@@ -100,7 +107,8 @@ Route::middleware('platform:platform.audit.view')->group(function () {
 });
 
 // ============ Security Events ============
-Route::get('/security-events', [SecurityEventsController::class, 'index'])->name('security-events.index');
+Route::get('/security-events', [SecurityEventsController::class, 'index'])
+    ->middleware('platform:platform.audit.view')->name('security-events.index');
 
 // ============ AMIAL-SAFE-PAYMENT-001 (v1.1) — Disputes resolution ============
 // النزاع يكشف بيانات ومعاملات حساسة؛ القراءة ليست حق كل موظف، والحسم حركة
@@ -128,15 +136,19 @@ Route::prefix('safe-payments')->name('safe-payments.')->group(function () {
 // AMIAL-SURFACE-002 — لوحات الأنظمة اليتيمة الأربع
 Route::prefix('surface')->name('surface.')->group(function () {
     $sc = App\Http\Controllers\Admin\AdminSurfaceController::class;
-    Route::get('/bill-providers', [$sc, 'billProviders'])->name('bill-providers');
+    Route::get('/bill-providers', [$sc, 'billProviders'])
+        ->middleware('platform:platform.settings.update')->name('bill-providers');
     Route::post('/bill-providers/{id}/toggle', [$sc, 'toggleBillProvider'])->where('id', '[0-9]+')->name('bill-providers.toggle');
-    Route::get('/funds', [$sc, 'funds'])->name('funds');
+    Route::get('/funds', [$sc, 'funds'])
+        ->middleware('platform:platform.transactions.view')->name('funds');
     // AMIAL-FUND-DETAIL-001 — «أين اختفى المال ومن سحبه؟». والصلاحيّةُ
     // `audit.view`: قراءةُ حركةِ صندوقٍ اطّلاعٌ على مالِ أُسرةٍ بعينها.
     Route::get('/funds/{id}', [$sc, 'fundDetail'])->where('id', '[0-9]+')
         ->middleware('platform:platform.audit.view')->name('funds.detail');
-    Route::get('/payment-requests', [$sc, 'paymentRequests'])->name('payment-requests');
-    Route::get('/rbac', [$sc, 'rbac'])->name('rbac');
+    Route::get('/payment-requests', [$sc, 'paymentRequests'])
+        ->middleware('platform:platform.transactions.view')->name('payment-requests');
+    Route::get('/rbac', [$sc, 'rbac'])
+        ->middleware('platform:platform.settings.update')->name('rbac');
 });
 
 Route::prefix('charity')->name('charity.')->middleware(['platform:platform.transactions.view', 'amial.idempotency'])->group(function () {
@@ -203,7 +215,9 @@ Route::prefix('charity')->name('charity.')->middleware(['platform:platform.trans
 });
 
 // ============ AMIAL-AML-001 (v1.4) ============
-Route::prefix('aml')->name('aml.')->group(function () {
+// AMIAL-ADMIN-DOORS-001 — بلاغاتُ الاشتباه وقوائمُ العقوبات ليست قراءةَ دعم.
+Route::prefix('aml')->name('aml.')
+    ->middleware('platform:platform.audit.view')->group(function () {
     // AMIAL-AML-PANEL-001 — الصفحة. كلّ ما تحتها كان JSON بلا مُشغِّل.
     Route::get('/', [AdminAmlController::class, 'page'])->name('page');
 
@@ -537,7 +551,9 @@ Route::prefix('otp')->name('otp.')->middleware('platform:platform.settings.updat
 // غير `settlements` أدناه: تلك تسويات الوكلاء (`AgentSettlement`). هذه
 // تسويات الشركاء (`Settlement`) — وعليها بُنيت الموافقة المزدوجة، وكان
 // سطحها الوحيد الـAPI فبقي الضابط بلا شاشة تُظهره.
-Route::prefix('partner-settlements')->name('partner-settlements.')->middleware('amial.idempotency')->group(function () {
+// AMIAL-ADMIN-DOORS-001 — تسوياتُ الشركاء مالٌ يخرج من المنصّة.
+Route::prefix('partner-settlements')->name('partner-settlements.')
+    ->middleware(['amial.idempotency', 'platform:platform.money.move'])->group(function () {
     $st = App\Http\Controllers\Api\V1\Amial\SettlementController::class;
 
     Route::get('/', [$st, 'page'])->name('page');
@@ -706,7 +722,9 @@ Route::prefix('fees')->name('fees.')->group(function () {
 });
 
 // ============ AMIAL-SENTINEL-001 — Security Sentinel Dashboard ============
-Route::prefix('sentinel')->name('sentinel.')->group(function () {
+// AMIAL-ADMIN-DOORS-001 — الحجبُ وفكُّه قرارُ مخاطر، والقراءةُ اطّلاعٌ عليها.
+Route::prefix('sentinel')->name('sentinel.')
+    ->middleware('platform:platform.audit.view')->group(function () {
     Route::get('/', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'index'])->name('index');
     Route::post('/block', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'block'])->name('block');
     Route::post('/unblock', [App\Http\Controllers\Admin\SentinelDashboardController::class, 'unblock'])->name('unblock');
@@ -723,9 +741,12 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     $hc = App\Http\Controllers\Admin\AdminHubController::class;
 
     // الصفحات
-    Route::get('/customers', [$hc, 'customers'])->name('customers');
-    Route::get('/agents', [$hc, 'agents'])->name('agents');
-    Route::get('/merchants', [$hc, 'merchants'])->name('merchants');
+    Route::get('/customers', [$hc, 'customers'])
+        ->middleware('platform:platform.customers.view')->name('customers');
+    Route::get('/agents', [$hc, 'agents'])
+        ->middleware('platform:platform.customers.view')->name('agents');
+    Route::get('/merchants', [$hc, 'merchants'])
+        ->middleware('platform:platform.merchants.compliance')->name('merchants');
     // AMIAL-OPERATOR-RBAC-003: الصفحة لا الفعلَ وحده — صفحةٌ تعرض أرصدة
     // المنصّة وحركتها تُسرّب ما لا يجوز، وإن كان زرُّها محروساً.
     Route::get('/finance', [$hc, 'finance'])
@@ -783,7 +804,8 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         ->middleware('platform:platform.money.move')->name('finance.feed');
 
     // لوحة الاشتراكات (الباقات) — حقيقية عبر SubscriptionService
-    Route::get('/subscriptions', [$hc, 'subscriptions'])->name('subscriptions');
+    Route::get('/subscriptions', [$hc, 'subscriptions'])
+        ->middleware('platform:platform.settings.manage')->name('subscriptions');
     Route::get('/subscriptions/list.json', [$hc, 'subsList'])->name('subscriptions.list');
     Route::post('/subscriptions/{merchantId}/plan', [$hc, 'subsChangePlan'])
         ->where('merchantId', '[0-9]+')->name('subscriptions.plan');
@@ -820,7 +842,8 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
             ->middleware('platform:platform.zones.assign')->name('reassign');
     });
 
-    Route::get('/verification', [$hc, 'verification'])->name('verification');
+    Route::get('/verification', [$hc, 'verification'])
+        ->middleware('platform:platform.approvals.decide')->name('verification');
     Route::get('/verification/list.json', [$hc, 'verificationJson'])->name('verification.list');
 
     // لوحة التسويات — تسويات الوكلاء (اعتماد/رفض مع دفتر القيود)
@@ -838,13 +861,15 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         ->middleware('platform:platform.money.move')->name('settlements.reject');
 
     // لوحة الموظفين — طاقم نقاط بيع التجّار (تفعيل/تعطيل)
-    Route::get('/staff', [$hc, 'staff'])->name('staff');
+    Route::get('/staff', [$hc, 'staff'])
+        ->middleware('platform:platform.merchants.compliance')->name('staff');
     Route::get('/staff/list.json', [$hc, 'staffJson'])->name('staff.list');
     Route::post('/staff/{id}/toggle-active', [$hc, 'staffToggle'])
         ->where('id', '[0-9]+')->name('staff.toggle');
 
     // لوحة الإعدادات — تحكّم بضغطة زر (بلا كود)
-    Route::get('/settings', [$hc, 'settings'])->name('settings');
+    Route::get('/settings', [$hc, 'settings'])
+        ->middleware('platform:platform.settings.update')->name('settings');
     Route::post('/settings/flag', [$hc, 'settingsToggle'])->name('settings.flag');
 });
 

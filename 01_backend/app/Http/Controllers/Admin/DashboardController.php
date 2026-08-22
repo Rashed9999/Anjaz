@@ -37,15 +37,35 @@ class DashboardController extends Controller
         // والتفصيل والقياس في `AdminDashboardService`.
         $dash = app(\App\Services\AdminDashboardService::class);
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-ADMIN-DOORS-001 — **مجاميعُ المنصّة خلف صلاحيّتها.**
+        //
+        // **الثمن:** أنشأ صاحبُ المشروع حسابَ دعمٍ ودخل به فرأى حجمَ
+        // معاملات السنة كاملاً، ورسماً بيانيّاً شهريّاً، **وأعلى العملاء
+        // والوكلاء تعاملاً بالأسماء والمبالغ**.
+        //
+        // واللوحةُ كانت تعمل كما صُمّمت: تحجب الأرصدةَ بـ`money.move`،
+        // وتبني الباقيَ على `transactions.view` — **ودورُ الدعم يملكها**.
+        //
+        // والخلطُ في الحبّة نفسِها: `transactions.view` مبنيّةٌ لـ«أرِني
+        // حركةَ هذا العميل» وهي عملُ الدعم اليوميّ؛ أمّا حجمُ المنصّة
+        // وترتيبُ عملائها فسؤالُ إدارة. ومن يعرف من أكبرُ عملائنا وكم
+        // يُحرّكون يملك ما يُباع — **ولا يحتاج الأرصدةَ ليضرّ**.
+        // ══════════════════════════════════════════════════════════════
+        $canAnalytics = $can('platform.analytics.view');
+
         $balance = $can('platform.money.move') ? $dash->balances() : [];
-        $transaction = $canTransactions ? $dash->monthlyVolume() : [];
-        $leaders = ($canTransactions && $canCustomers) ? $dash->leaderboards() : [];
+        $transaction = $canAnalytics ? $dash->monthlyVolume() : [];
+        $leaders = ($canAnalytics && $canCustomers) ? $dash->leaderboards() : [];
         $data['top_agents'] = $leaders['agents'] ?? [];
         $data['top_customers'] = $leaders['customers'] ?? [];
 
         // AMIAL-ADMIN-DASH-002: عدّادات حقيقية للوحة (عملاء/وكلاء/تجار + اليوم)
-        $data['counts'] = $canCustomers ? $dash->populationCounts() : [];
-        $data['today'] = $canTransactions ? $dash->today() : null;
+        //
+        // والعدّادُ مجموعٌ أيضاً — «كم عميلاً في المنصّة» ليس «أرِني هذا
+        // العميل». فيتبع `analytics.view` لا `customers.view`.
+        $data['counts'] = $canAnalytics ? $dash->populationCounts() : [];
+        $data['today'] = $canAnalytics ? $dash->today() : null;
         $data['attention'] = $dash->attentionQueue([
             'kyc' => $can('platform.approvals.decide'),
             'tickets' => $can('platform.tickets.manage'),
