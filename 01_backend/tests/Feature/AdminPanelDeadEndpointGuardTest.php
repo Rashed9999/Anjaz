@@ -43,7 +43,16 @@ class AdminPanelDeadEndpointGuardTest extends TestCase
      */
     private const PANELS = [
         'admin/amial/aml' => 'admin-views/amial/aml/index.blade.php',
-        'admin/amial/kyc' => 'admin-views/amial/kyc/index.blade.php',
+        // AMIAL-PROFILE-CHANGE-004 — **ولوحةُ الهويّة صارت شاشتين.**
+        //
+        // طلباتُ تحديث البيانات تُسجَّل تحت البادئة نفسِها وتخدمها شاشةٌ
+        // ثانية. **والصوابُ توسيعُ النطاق لا كتابةُ إعفاء** — وهو نصُّ ما
+        // يقوله شرحُ هذه القائمة: «فيُسكَت الحارس بإعفاءاتٍ كاذبة بدل أن
+        // يُوسَّع نطاقه».
+        'admin/amial/kyc' => [
+            'admin-views/amial/kyc/index.blade.php',
+            'admin-views/amial/kyc/change-requests.blade.php',
+        ],
         'admin/amial/partner-settlements' => 'admin-views/amial/settlements_partners/index.blade.php',
         'admin/amial/ledger' => 'admin-views/amial/ledger/index.blade.php',
         'admin/amial/hub/agents' => [
@@ -103,6 +112,25 @@ class AdminPanelDeadEndpointGuardTest extends TestCase
                 $blade .= $this->codeOnly((string) file_get_contents($path)) . "\n";
             }
 
+            // ══════════════════════════════════════════════════════════
+            // **والشريطُ الجانبيُّ جزءٌ من كلّ شاشة، لا ملفٌّ خارجَها.**
+            //
+            // الحارسُ يستثني **جذرَ** اللوحة صراحةً لأنّ «القائمةَ الجانبيّة
+            // هي التي تناديه». والعلّةُ نفسُها تنطبق على **صفحةٍ ثانيةٍ
+            // داخل اللوحة**: تُبلَغ من الشريط لا من قالبِ أختها.
+            //
+            // فبلا هذا يُبلَّغ عن كلّ شاشةٍ ثانيةٍ في أيّ لوحةٍ أنّها ميّتة
+            // — **وهي حيّةٌ يفتحها المستعملُ كلَّ يوم**. وسلبيّةٌ كاذبةٌ
+            // تدفع لكتابة إعفاءٍ على شيفرةٍ سليمة، ثمّ يصير الإعفاءُ عادةً
+            // فيُقبَل الحقيقيُّ بلا نظر.
+            //
+            // **ولا يُضعف هذا الحارس:** رابطٌ في الشريط نداءٌ حقيقيّ —
+            // يُرسَم على الصفحة ويُضغَط. وبلوغُ الصفحة نفسِها يفحصه
+            // `AdminPanelReachabilityGuardTest`.
+            // ══════════════════════════════════════════════════════════
+            $blade .= $this->codeOnly((string) file_get_contents(resource_path(
+                'views/admin-views/amial/partials/_sidebar.blade.php'))) . "\n";
+
             foreach (Route::getRoutes() as $route) {
                 $uri = $route->uri();
 
@@ -119,6 +147,27 @@ class AdminPanelDeadEndpointGuardTest extends TestCase
                 }
 
                 if (isset(self::EXEMPT[$uri])) {
+                    continue;
+                }
+
+                // ══════════════════════════════════════════════════
+                // **والقالبُ ينادي بالاسم لا بالمقاطع.**
+                //
+                // Blade يكتب `route('admin.amial.kyc.changes.open')`، ولا
+                // يرد فيه مقطعُ `change-requests` أبداً. فمطابقةُ المقاطع
+                // وحدَها **تُخرج سلبيّةً كاذبة**: نقطةٌ يناديها القالبُ
+                // فعلاً تُعَدّ ميّتة.
+                //
+                // **وسلبيّةٌ كاذبةٌ في حارسٍ أسوأ من ثغرةٍ فيه**: تدفع
+                // لكتابة إعفاءٍ على شيفرةٍ سليمة، ثمّ يصير الإعفاءُ
+                // عادةً — فيُقبَل الإعفاءُ الحقيقيُّ بلا نظر.
+                //
+                // فيُقبَل الاسمُ دليلَ نداءٍ كالمقاطع سواءً بسواء. وقوّتُه
+                // نفسُها: كلاهما نصٌّ يجب أن يرد في الشيفرة لا في تعليق.
+                // ══════════════════════════════════════════════════
+                $name = (string) $route->getName();
+
+                if ($name !== '' && str_contains($blade, $name)) {
                     continue;
                 }
 

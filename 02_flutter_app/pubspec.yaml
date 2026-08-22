@@ -148,7 +148,19 @@ flutter_launcher_icons:
   image_path: "assets/branding/icon_square_master.png"
   min_sdk_android: 21
   adaptive_icon_background: "#FECA1E"
-  adaptive_icon_foreground: "assets/branding/wordmark.png"
-  adaptive_icon_foreground_inset: 4
+  # AMIAL-ICON-004 — **النسبةُ لا تُشوَّه، والقناعُ لا يقصّ.**
+  #
+  # قِيس على المولَّد قبل تغيير سطر:
+  #
+  #   wordmark.png  562×384 (نسبة 1.464)  →  مُدّ قسراً إلى 432×432
+  #   ⇒ سحقٌ أفقيٌّ 46٪ — والحروفُ تُقرأ ممطوطة
+  #
+  #   وبحاشية 4٪: يقصّ القناعُ الدائريُّ 9.8٪ من الشعار (وبـ16٪: صفر)
+  #
+  # فالمصدرُ صار لوحةً مربّعةً يحتلّ الشعارُ **٦٦.٧٪** من عرضها بنسبته
+  # الأصليّة — وهو المربّعُ الآمن في مواصفة الأيقونة التكيّفية (72 من
+  # 108). والحاشيةُ صفرٌ لأنّ الاحتواءَ صار داخل الأصل نفسِه.
+  adaptive_icon_foreground: "assets/branding/icon_foreground_wordmark.png"
+  adaptive_icon_foreground_inset: 0
   remove_alpha_ios: true
   background_color_ios: "#FECA1E"

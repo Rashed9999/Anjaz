@@ -610,6 +610,30 @@ Route::prefix('kyc')->name('kyc.')->group(function () {
         ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('approve');
     Route::post('/documents/{id}/reject', [$kyc, 'reject'])
         ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('reject');
+
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-PROFILE-CHANGE-003 — طلباتُ تحديث البيانات.
+    //
+    // **ولا مسارَ `update` ولا `edit` ها هنا عمداً.** من يستطيع كتابةَ
+    // `identification_number` مباشرةً يستطيع تحويلَ حسابٍ موثَّقٍ إلى
+    // شخصٍ آخرَ ثمّ سحبَ رصيده. فالأفعالُ: يُفتح الطلبُ، ويحسمه مراجع —
+    // **والقيمةُ يملؤها صاحبُ الحساب من التطبيق**.
+    //
+    // والصلاحيّةُ هي `platform.customers.freeze` نفسُها: تغييرُ بيانٍ في
+    // ملفٍّ موثَّقٍ من جنس القرارات التي تمسّ حسابَ العميل.
+    // ══════════════════════════════════════════════════════════════════
+    $pcr = App\Http\Controllers\Admin\ProfileChangeRequestController::class;
+
+    Route::get('/change-requests', [$pcr, 'page'])
+        ->middleware('platform:platform.customers.freeze')->name('changes.page');
+    Route::post('/change-requests', [$pcr, 'open'])
+        ->middleware('platform:platform.customers.freeze')->name('changes.open');
+    Route::post('/change-requests/{id}/decide', [$pcr, 'decide'])
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.customers.freeze')->name('changes.decide');
+    Route::get('/identity-state/{userId}', [$pcr, 'identityState'])
+        ->where('userId', '[0-9]+')
+        ->middleware('platform:platform.customers.freeze')->name('identity.state');
 });
 
 // ============ AMIAL-2FA-001 (v1.8) ============

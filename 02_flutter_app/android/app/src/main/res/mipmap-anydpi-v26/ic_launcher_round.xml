@@ -1,13 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  AMIAL-ICON-003 — المستديرة والمربّعة تستخدمان المصدر والحاشية نفسيهما.
-  خُفّضت الحاشية من 16% إلى 4% حتى لا يظهر شعار أميال صغيراً على الهاتف.
+  AMIAL-ICON-004 — المستديرة تطابق المربّعة، ولا تعيش وحدها.
+
+  **ولمَ هذا الملفّ بيدٍ والآخرُ مولَّد:** `flutter_launcher_icons` يكتب
+  `ic_launcher.xml` ولا يكتب هذا. فلمّا جُدّد الشعارُ مرّةً تغيّرت
+  المربّعةُ وحدَها وبقيت المستديرةُ على القديم — **وهي ما يعرضه معظمُ
+  مشغّلات أندرويد**، بلا خطأٍ في أيّ بناء.
+
+  فيُنسَخ منه حرفاً بحرف: المصدرُ نفسُه والحاشيةُ نفسُها. وحارسُ
+  `LauncherIconParityGuardTest` يمنع افتراقَهما ثانية.
 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
   <background android:drawable="@color/ic_launcher_background"/>
   <foreground>
       <inset
           android:drawable="@drawable/ic_launcher_foreground"
-          android:inset="4%" />
+          android:inset="0%" />
   </foreground>
 </adaptive-icon>
