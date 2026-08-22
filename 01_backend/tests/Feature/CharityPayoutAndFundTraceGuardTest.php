@@ -778,12 +778,35 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
             ->post('/admin/amial/ops/operators', [
                 'f_name' => 'موظّف', 'l_name' => 'جديد',
                 'phone' => '967771900010',
+                // **والبريدُ صار إلزاميّاً** (AMIAL-AUTH-PIN): رمزُ دخول
+                // الموظّف يُرسَل إليه، فحسابٌ بلا بريدٍ لا يستطيع الدخول.
+                'email' => 'new.operator@amialpay.test',
                 'password' => 'Passw0rd!2026',
                 'role_ids' => [$roleId],
             ])->assertRedirect();
 
         $created = User::whereIn('phone', \App\Support\Phone::variants('967771900010'))->first();
         $this->assertNotNull($created, 'اللوحةُ ردّت بنجاح ولا حسابَ في القاعدة');
+
+        // ══════════════════════════════════════════════════════════════
+        // **وحسابٌ بلا دورٍ يولد أعمى.**
+        //
+        // جُرّب هذا المقياسُ بالعكس فمرّ: خُفّف `role_ids` إلى `nullable`
+        // ولم يسقط — لأنّه يفحص أنّ الدورَ أُسند حين يُرسَل، **ولا يفحص
+        // أنّ إرسالَه إلزاميّ**. فحسابٌ يُنشأ بلا دورٍ يدخل اللوحةَ ويرى
+        // ٤٠٣ في كلّ باب، بلا رسالةٍ تقول لماذا — وهو العطلُ الذي أدخل
+        // `PlatformRoleService` أصلاً.
+        $this->actingAs($this->admin, 'user')
+            ->post('/admin/amial/ops/operators', [
+                'f_name' => 'بلا دور',
+                'phone' => '967771900019',
+                'email' => 'roleless@amialpay.test',
+                'password' => 'Passw0rd!2026',
+            ])->assertSessionHasErrors('role_ids');
+
+        $this->assertNull(
+            User::whereIn('phone', \App\Support\Phone::variants('967771900019'))->first(),
+            'أُنشئ حسابُ إدارةٍ بلا دور — يدخل ولا يرى شيئاً');
         $this->assertSame(ADMIN_TYPE, (int) $created->type, 'الموظّفُ أُنشئ بنوعٍ لا يدخل اللوحة');
 
         // **الصلاحيّةُ تُسند مع الإنشاء** — وحسابٌ بلا دورٍ يدخل ولا يرى شيئاً،
@@ -811,6 +834,7 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
             ->post('/admin/amial/ops/operators', [
                 'f_name' => 'مكرَّر',
                 'phone' => '967771900011',
+                'email' => 'dup.operator@amialpay.test',
                 'password' => 'Passw0rd!2026',
                 'role_ids' => [$roleId],
             ])->assertSessionHasErrors('phone');
