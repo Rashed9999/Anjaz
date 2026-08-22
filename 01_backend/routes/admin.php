@@ -63,7 +63,11 @@ Route::group(['as' => 'admin.'], function () {
             $sc = \App\Http\Controllers\Api\V1\Amial\SupportConsoleController::class;
             Route::get('/', [$sc, 'page'])->name('index');
             Route::get('search', [$sc, 'search'])->middleware('platform:platform.customers.view')->name('search');
-            Route::get('ops-dashboard', [$sc, 'opsDashboard'])->middleware('platform:platform.ops.view')->name('ops-dashboard');
+            // AMIAL-SUPPORT-REACH-001 — **حالةُ التشغيل لا وحدةُ التشغيل.**
+            // ملخّصٌ يقول أالطوابيرُ تسير وكم نُفِّذ اليوم — لا المهامُّ
+            // الفاشلةُ بآثار أخطائها. فيكفيه `ops.status.view`.
+            Route::get('ops-dashboard', [$sc, 'opsDashboard'])
+                ->middleware('platform:platform.ops.status.view')->name('ops-dashboard');
             Route::get('customers/{id}', [$sc, 'customer'])->where('id', '[0-9]+')->middleware('platform:platform.customers.view')->name('customers.show');
             Route::get('customers/{id}/transactions', [$sc, 'customerTransactions'])->where('id', '[0-9]+')->middleware('platform:platform.transactions.view')->name('customers.transactions');
             Route::get('transactions/{ref}', [$sc, 'transaction'])->middleware('platform:platform.transactions.view')->name('transactions.show');

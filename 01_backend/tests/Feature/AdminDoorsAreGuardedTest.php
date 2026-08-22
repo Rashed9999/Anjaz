@@ -358,6 +358,47 @@ class AdminDoorsAreGuardedTest extends TestCase
     }
 
     /** @test */
+    public function support_can_read_whether_the_system_is_up(): void
+    {
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-SUPPORT-REACH-001 — الحالةُ ٣٧ في وثيقة حالات الدعم:
+        // «التطبيق متوقف، هل ما زالت العمليات تنفذ؟» — والمطلوبُ فيها
+        // **«operational/system status لا التخمين»**.
+        //
+        // وتخمينُ الدعم أسوأ من صمته: «العمليّاتُ تعمل» فيُعيد العميلُ
+        // إرسالَ تحويلٍ نُفِّذ.
+        //
+        // **والقراءةُ وحدَها** — `ops.retry` لا تُمنح.
+        // ══════════════════════════════════════════════════════════════
+        $support = $this->operator(PlatformRoleService::SUPPORT);
+
+        $this->assertTrue($support->hasPlatformPermission('platform.ops.status.view'),
+            'الدعمُ لا يعرف أالنظامُ يعمل — فيُجيب من عنده');
+
+        // **ولا تُفتح له وحدةُ التشغيل.** أوّلُ علاجٍ كتبتُه منحه
+        // `ops.view` فسقط `OpsConsoleTest` — وهو عقدٌ مقصودٌ مكتوبٌ
+        // سببُه: «فتحُها يُطلعه على ما لا يخصّه». فالحبّةُ تُفصَل ولا
+        // يُكسَر العقد.
+        $this->assertFalse($support->hasPlatformPermission('platform.ops.view'),
+            'الدعمُ يفتح وحدةَ التشغيل بمهامّها الفاشلة — وليست من عمله');
+        $this->assertFalse($support->hasPlatformPermission('platform.ops.retry'),
+            'القراءةُ فُتحت ومعها إعادةُ تشغيل المهامّ — والقارئُ ليس المُشغِّل');
+
+        $this->actingAs($support, 'user')->get('/admin/amial/ops')->assertForbidden();
+
+        // **ومن يملك وحدةَ التشغيل يملك حالتَها** — فحاجزٌ أضيقُ لا
+        // يُشلّ به عملٌ قائم.
+        foreach ([PlatformRoleService::MAINTENANCE, PlatformRoleService::SUPERVISOR] as $role) {
+            $this->assertTrue(
+                $this->operator($role)->hasPlatformPermission('platform.ops.status.view'),
+                "دورُ {$role} فقد حالةَ التشغيل وهو يملك وحدتَها");
+        }
+
+        $this->actingAs($support, 'user')
+            ->get(route('admin.support-center.ops-dashboard'))->assertOk();
+    }
+
+    /** @test */
     public function support_keeps_the_doors_its_work_needs(): void
     {
         // **وحاجزٌ يحجب كلَّ شيء يجتاز نصفَ الفحص ثمّ يشلّ كلَّ عملٍ سليم.**
