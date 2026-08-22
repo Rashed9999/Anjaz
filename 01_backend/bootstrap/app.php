@@ -66,7 +66,17 @@ $app = Application::configure(basePath: dirname(__DIR__))
                 ->group(base_path('routes/api/amial.php'));
 
             // AMIAL-ADMIN-001 (v0.8): Admin Blade views
-            \Illuminate\Support\Facades\Route::middleware(['web', 'admin'])
+            //
+            // AMIAL-AUTH-PIN-FORCE-001 — **وحاجزُ الرمز الأوّليّ هنا أيضاً.**
+            //
+            // صفحاتُ أميال تُسجَّل في هذه المجموعة لا في `routes/admin.php`،
+            // **فحاجزٌ يُوضَع هناك وحدَه يغطّي جزءاً من اللوحة**: مركزُ
+            // التدقيق وساهر والأدوار كلُّها هنا. **وحاجزٌ يغطّي بعضَ
+            // الأبواب يُوهم بتغطيةِ كلِّها** — وذاك أخطرُ من غيابه.
+            //
+            // (كشفه مقياسٌ يفتح ثلاثَ صفحاتٍ لا صفحةً واحدة — القاعدةُ
+            // الرابعة: ميزةٌ لها مدخلان تُختبَر من مدخليها.)
+            \Illuminate\Support\Facades\Route::middleware(['web', 'admin', 'amial.force-pin-change'])
                 ->prefix('admin/amial')
                 ->name('admin.amial.')
                 ->group(base_path('routes/admin/amial.php'));
@@ -208,6 +218,7 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'amial.rate-limit' => PerUserRateLimit::class,
             'amial.usage' => EnforceUsageLimit::class,
             'amial.pos-permission' => \App\Http\Middleware\PosPermission::class,
+            'amial.force-pin-change' => \App\Http\Middleware\ForcePlatformPinChange::class,
             // AMIAL-API-ACCESS-001 — مصادقة الشركاء بمفتاح API
             'amial.api-key' => \App\Http\Middleware\AuthenticateApiKey::class,
             'amial.agent' => \App\Http\Middleware\EnsureAgent::class,  // AMIAL-FIX-004

@@ -190,6 +190,18 @@ class PlatformLoginPinService
         ]);
     }
 
+    /**
+     * بصمةُ الرمز الحاليّ — **لمنع «تغييرٍ» لا يُغيّر شيئاً**.
+     *
+     * و«غيّرتُه» التي تُعيد الرمزَ نفسَه تُطفئ وسمَ `must_change` وتُبقي
+     * الخطر، وهي أسوأ من عدم التغيير لأنّها تُخفيه.
+     */
+    public function hashFor(int $userId): ?string
+    {
+        return DB::table('platform_login_pins')
+            ->where('user_id', $userId)->value('pin_hash');
+    }
+
     public function exists(int $userId): bool
     {
         return DB::table('platform_login_pins')->where('user_id', $userId)->exists();

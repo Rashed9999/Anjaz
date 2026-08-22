@@ -51,9 +51,26 @@ Route::group(['as' => 'admin.'], function () {
             ->name('two-factor.verify');
         Route::get('two-factor/cancel', [\App\Http\Controllers\Admin\Auth\TwoFactorChallengeController::class, 'cancel'])
             ->name('two-factor.cancel');
+
+        // AMIAL-AUTH-PIN-FORCE-002 — شاشةُ تغيير الرمز.
+        //
+        // **خلف حارس `admin`** (الجلسةُ مفتوحةٌ فعلاً) و**خارج حاجزِ
+        // الإجبار** — وإلّا صارت حلقةَ توجيهٍ مغلقة: الحاجزُ يُحوّل إليها
+        // وهي تُحوّل إليه.
+        Route::middleware('admin')->group(function () {
+            Route::get('change-pin', [\App\Http\Controllers\Admin\Auth\ChangeLoginPinController::class, 'show'])
+                ->name('pin.change');
+            Route::post('change-pin', [\App\Http\Controllers\Admin\Auth\ChangeLoginPinController::class, 'update'])
+                ->name('pin.update');
+        });
     });
 
-    Route::group(['middleware' => ['admin']], function () {
+    // AMIAL-AUTH-PIN-FORCE-001 — **الحاجزُ على المجموعة لا على الباب.**
+    //
+    // الدخولُ بابٌ واحدٌ واللوحةُ مئةٌ وستّون صفحة. وفحصٌ عند الدخول
+    // وحدَه يترك جلسةً قائمةً تعمل بعد أن يُوسَم الرمزُ «يجب تغييره» —
+    // فمن أُعيد تعيينُ رمزِه لاشتباهٍ يبقى داخلاً حتّى يخرج بنفسه.
+    Route::group(['middleware' => ['admin', 'amial.force-pin-change']], function () {
         Route::get('/', [DashboardController::class, 'dashboard'])->name('dashboard');
 
         // AMIAL-OPS-CONSOLE-001 — منصة عمليات الموظفين (واجهة ويب + JSON بجلسة الأدمن)
