@@ -138,7 +138,8 @@ Route::prefix('surface')->name('surface.')->group(function () {
     $sc = App\Http\Controllers\Admin\AdminSurfaceController::class;
     Route::get('/bill-providers', [$sc, 'billProviders'])
         ->middleware('platform:platform.settings.update')->name('bill-providers');
-    Route::post('/bill-providers/{id}/toggle', [$sc, 'toggleBillProvider'])->where('id', '[0-9]+')->name('bill-providers.toggle');
+    Route::post('/bill-providers/{id}/toggle', [$sc, 'toggleBillProvider'])->where('id', '[0-9]+')
+        ->middleware('platform:platform.settings.update')->name('bill-providers.toggle');
     Route::get('/funds', [$sc, 'funds'])
         ->middleware('platform:platform.transactions.view')->name('funds');
     // AMIAL-FUND-DETAIL-001 — «أين اختفى المال ومن سحبه؟». والصلاحيّةُ
@@ -673,12 +674,19 @@ Route::prefix('settlements')->name('settlements.')->middleware(['platform:platfo
 });
 
 // ============ AMIAL-MERCHANT-RISK-001 (v2.10) ============
+// AMIAL-ADMIN-DOORS-002 — القراءةُ مخاطرُ تاجر، والشريحةُ تُغيّر حدودَه
+// ورسومَه، والتوثيقُ قرارُ اعتماد. وكانت الخمسةُ بلا صلاحيّة.
 Route::prefix('merchants')->name('merchants.')->group(function () {
-    Route::get('/high-risk', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'highRisk'])->name('high-risk');
-    Route::get('/risk-stats', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'riskStats'])->name('risk-stats');
-    Route::get('/{userId}/risk', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'riskDashboard'])->name('risk');
-    Route::put('/{userId}/tier', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'setTier'])->name('tier');
-    Route::post('/{userId}/verify', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'verify'])->name('verify');
+    Route::get('/high-risk', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'highRisk'])
+        ->middleware('platform:platform.merchants.risk')->name('high-risk');
+    Route::get('/risk-stats', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'riskStats'])
+        ->middleware('platform:platform.merchants.risk')->name('risk-stats');
+    Route::get('/{userId}/risk', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'riskDashboard'])
+        ->middleware('platform:platform.merchants.risk')->name('risk');
+    Route::put('/{userId}/tier', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'setTier'])
+        ->middleware('platform:platform.merchants.compliance')->name('tier');
+    Route::post('/{userId}/verify', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'verify'])
+        ->middleware('platform:platform.approvals.decide')->name('verify');
 });
 
 // ============ AMIAL-FEE-ENGINE-001 (v2.12) ============
@@ -767,32 +775,63 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
 
     // إجراءات
     Route::post('/{slug}/users', [$hc, 'storeUser'])
-        ->where('slug', 'customers|agents|merchants')->name('users.store');
+        ->where('slug', 'customers|agents|merchants')
+        ->middleware('platform:platform.customers.lifecycle.manage')->name('users.store');
     Route::post('/users/{id}/toggle-active', [$hc, 'toggleActive'])
-        ->where('id', '[0-9]+')->name('users.toggle-active');
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.customers.lifecycle.manage')->name('users.toggle-active');
+    // تغييرُ حالة التوثيق قرارُ اعتمادٍ لا تعديلُ حقل.
     Route::post('/users/{id}/kyc', [$hc, 'kycStatus'])
-        ->where('id', '[0-9]+')->name('users.kyc');
-    Route::post('/transfer', [$hc, 'transfer'])->name('transfer');
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.approvals.decide')->name('users.kyc');
+    // ══════════════════════════════════════════════════════════════
+    // AMIAL-ADMIN-DOORS-002 — **مساراتُ مالٍ كانت بلا صلاحيّةٍ إطلاقاً.**
+    //
+    // و`finance/topup` أسفلَ هذه الكتلة بأسطر **محروسةٌ بـ`money.move`
+    // منذ AMIAL-OPERATOR-RBAC-003** — فحُرس جارٌ ونُسي جاران يفعلان
+    // الشيءَ نفسَه: تحويلُ محفظةٍ من الإدارة، وشحنُ محفظة وكيل.
+    //
+    // **وهذا نمطُ الثغرة الأخطر:** لا تظهر في مسحٍ يسأل «أفي القطاع
+    // حراسة؟» — فالجوابُ نعم. تظهر في مسحٍ يسأل **«أكلُّ بابٍ فيه
+    // محروس؟»**.
+    // ══════════════════════════════════════════════════════════════
+    Route::post('/transfer', [$hc, 'transfer'])
+        ->middleware('platform:platform.money.move')->name('transfer');
     Route::post('/agents/{id}/credit', [$hc, 'agentCredit'])
-        ->where('id', '[0-9]+')->name('agents.credit');
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.money.move')->name('agents.credit');
 
     // AMIAL-AGENT-SUPERVISION-001 — إشراف الإدارة على شبكة شركات الصرافة
     $asc = App\Http\Controllers\Admin\AgentSupervisionController::class;
-    Route::get('/agents/network.json', [$asc, 'network'])->name('agents.network');
-    Route::get('/agents/branches.json', [$asc, 'branches'])->name('agents.branches');
-    Route::get('/agents/movements.json', [$asc, 'movements'])->name('agents.movements');
+    // قراءاتُ الإشراف تُظهر مواقعَ النقد والرصيد في الشبكة كلِّها —
+    // اطّلاعُ رقابةٍ لا اطّلاعُ دعم.
+    Route::get('/agents/network.json', [$asc, 'network'])
+        ->middleware('platform:platform.audit.view')->name('agents.network');
+    Route::get('/agents/branches.json', [$asc, 'branches'])
+        ->middleware('platform:platform.audit.view')->name('agents.branches');
+    Route::get('/agents/movements.json', [$asc, 'movements'])
+        ->middleware('platform:platform.audit.view')->name('agents.movements');
 
     // AMIAL-SETTLEMENT-ENGINE-001 — التوازن بين الرصيد والنقد
-    Route::get('/agents/settlement.json', [$asc, 'settlementScan'])->name('agents.settlement');
+    Route::get('/agents/settlement.json', [$asc, 'settlementScan'])
+        ->middleware('platform:platform.audit.view')->name('agents.settlement');
     Route::get('/agents/{id}/settlement.json', [$asc, 'agentSettlement'])
-        ->where('id', '[0-9]+')->name('agents.settlement.one');
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.audit.view')->name('agents.settlement.one');
 
     // AMIAL-DAILY-SETTLEMENT-001 — إقفال يوم الشبكة والتحوّل ورقاً/رصيداً
-    Route::get('/agents/daily.json', [$asc, 'dailyBoard'])->name('agents.daily');
-    Route::get('/agents/daily/{ulid}.json', [$asc, 'dailyOne'])->name('agents.daily.one');
-    Route::post('/agents/daily/{ulid}/accept', [$asc, 'dailyAccept'])->name('agents.daily.accept');
-    Route::post('/agents/daily/{ulid}/reject', [$asc, 'dailyReject'])->name('agents.daily.reject');
-    Route::post('/agents/daily/unlock', [$asc, 'dailyUnlock'])->name('agents.daily.unlock');
+    Route::get('/agents/daily.json', [$asc, 'dailyBoard'])
+        ->middleware('platform:platform.audit.view')->name('agents.daily');
+    Route::get('/agents/daily/{ulid}.json', [$asc, 'dailyOne'])
+        ->middleware('platform:platform.audit.view')->name('agents.daily.one');
+    // **والقبولُ والرفضُ وفكُّ القفل يُقفلون يومَ شبكةٍ بمالِه** — قرارُ
+    // مالٍ لا اطّلاع، فيلحقان بـ`settlements.approve` في صلاحيّتهما.
+    Route::post('/agents/daily/{ulid}/accept', [$asc, 'dailyAccept'])
+        ->middleware('platform:platform.money.move')->name('agents.daily.accept');
+    Route::post('/agents/daily/{ulid}/reject', [$asc, 'dailyReject'])
+        ->middleware('platform:platform.money.move')->name('agents.daily.reject');
+    Route::post('/agents/daily/unlock', [$asc, 'dailyUnlock'])
+        ->middleware('platform:platform.money.move')->name('agents.daily.unlock');
 
     // المالية
     // AMIAL-OPERATOR-RBAC-003: شحنُ محفظة وكيلٍ من المنصّة.
@@ -808,9 +847,11 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         ->middleware('platform:platform.settings.manage')->name('subscriptions');
     Route::get('/subscriptions/list.json', [$hc, 'subsList'])->name('subscriptions.list');
     Route::post('/subscriptions/{merchantId}/plan', [$hc, 'subsChangePlan'])
-        ->where('merchantId', '[0-9]+')->name('subscriptions.plan');
+        ->where('merchantId', '[0-9]+')
+        ->middleware('platform:platform.settings.manage')->name('subscriptions.plan');
     Route::post('/subscriptions/{merchantId}/extend', [$hc, 'subsExtend'])
-        ->where('merchantId', '[0-9]+')->name('subscriptions.extend');
+        ->where('merchantId', '[0-9]+')
+        ->middleware('platform:platform.settings.manage')->name('subscriptions.extend');
 
     // لوحة النزاعات — واجهة فوق مسارات safe-payments الموجودة (JSON)
     Route::get('/disputes', [$hc, 'disputes'])
@@ -865,12 +906,15 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
         ->middleware('platform:platform.merchants.compliance')->name('staff');
     Route::get('/staff/list.json', [$hc, 'staffJson'])->name('staff.list');
     Route::post('/staff/{id}/toggle-active', [$hc, 'staffToggle'])
-        ->where('id', '[0-9]+')->name('staff.toggle');
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.merchants.compliance')->name('staff.toggle');
 
     // لوحة الإعدادات — تحكّم بضغطة زر (بلا كود)
     Route::get('/settings', [$hc, 'settings'])
         ->middleware('platform:platform.settings.update')->name('settings');
-    Route::post('/settings/flag', [$hc, 'settingsToggle'])->name('settings.flag');
+    // مفتاحُ ميزةٍ يُطفئ خدمةً على المنصّة كلِّها.
+    Route::post('/settings/flag', [$hc, 'settingsToggle'])
+        ->middleware('platform:platform.settings.update')->name('settings.flag');
 });
 
 // ============ AMIAL-OPS-CONSOLE-001 — حالة التشغيل (فريق الصيانة) ============

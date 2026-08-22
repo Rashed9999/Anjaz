@@ -91,7 +91,9 @@ Route::group(['as' => 'admin.'], function () {
         });
 
         // AMIAL-MAINT-001 — لوحة «الصيانة الأولية» (تشغيل/إيقاف الميزات)
-        Route::group(['prefix' => 'maintenance', 'as' => 'maintenance.'], function () {
+        // AMIAL-ADMIN-DOORS-002 — **وضعُ الصيانة يُوقف المنصّةَ على الجميع.**
+        Route::group(['prefix' => 'maintenance', 'as' => 'maintenance.',
+            'middleware' => 'platform:platform.settings.update'], function () {
             $mc = \App\Http\Controllers\Api\V1\Amial\MaintenanceController::class;
             Route::get('/', fn () => view('admin-views.maintenance.index'))->name('index');
             Route::get('list', [$mc, 'index'])->name('list');
@@ -179,7 +181,9 @@ Route::group(['as' => 'admin.'], function () {
 
         // AMIAL-CLEANUP: أُزيلت مجموعة مسارات addon (نظام إضافات 6cash — بلا وحدات)
 
-        Route::group(['prefix' => 'merchant-config', 'as' => 'merchant-config.'], function () {
+        // AMIAL-ADMIN-DOORS-002 — إعداداتُ التجّار: رسومُهم وتحقّقُ الدفع.
+        Route::group(['prefix' => 'merchant-config', 'as' => 'merchant-config.',
+            'middleware' => 'platform:platform.settings.update'], function () {
             Route::post('merchant-payment-otp-verification-update', [BusinessSettingsController::class, 'merchantPaymentOtpUpdate'])->middleware('amial.idempotency')->name('merchant-payment-otp-verification-update');
             Route::post('settings-update', [BusinessSettingsController::class, 'merchantSettingUpdate'])->name('settings-update');
         });
@@ -219,7 +223,8 @@ Route::group(['as' => 'admin.'], function () {
         });
 
         Route::group(['prefix' => 'merchant', 'as' => 'merchant.'], function () {
-            Route::post('search', [MerchantController::class, 'search'])->name('search');
+            Route::post('search', [MerchantController::class, 'search'])
+                ->middleware('platform:platform.merchants.compliance')->name('search');
 
         });
 
@@ -297,7 +302,8 @@ Route::group(['as' => 'admin.'], function () {
 
         });
 
-        Route::group(['prefix' => 'blog', 'as' => 'blog.'], function () {
+        Route::group(['prefix' => 'blog', 'as' => 'blog.',
+            'middleware' => 'platform:platform.settings.update'], function () {
 
             Route::group(['prefix' => 'category', 'as' => 'category.'], function () {
                 Route::post('store', [BlogCategoryController::class, 'store'])->name('store');

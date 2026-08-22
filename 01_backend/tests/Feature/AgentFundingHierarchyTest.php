@@ -59,6 +59,13 @@ class AgentFundingHierarchyTest extends TestCase
         $this->admin = User::factory()->create([
             'type' => ADMIN_TYPE, 'role' => 'super_admin', 'phone' => '967770008800',
         ]);
+        // AMIAL-ADMIN-DOORS-002 — شحنُ محفظةٍ وتحويلُها صارا خلف
+        // `money.move`. ويُمنَح الدورُ ولا يُبدَّل التأكيدُ إلى ٤٠٣:
+        // **هذا الملفُّ يحرس القاعدةَ العاشرة** — «لا تمويلَ مباشرَ من
+        // المنصّة إلى فرع» — وردُّ ٤٠٣ يُمرّره بلا أن يمسّها.
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($this->admin, \App\Services\PlatformRoleService::ADMIN);
+        $this->admin->refresh();
         EMoney::updateOrCreate(['user_id' => $this->admin->id], ['current_balance' => '5000000']);
 
         $this->company = new User();

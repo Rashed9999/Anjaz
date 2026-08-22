@@ -46,6 +46,11 @@ class AgentDailySettlementTest extends TestCase
             'type' => ADMIN_TYPE, 'role' => 'super_admin', 'phone' => '967770007700',
         ]);
         EMoney::updateOrCreate(['user_id' => $this->admin->id], ['current_balance' => '9000000']);
+        // AMIAL-ADMIN-DOORS-002 — لوحةُ الإقفال اليوميّ وقراراتُها صارت
+        // خلف صلاحيّتها: القراءةُ رقابةٌ والقبولُ قرارُ مال.
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($this->admin, \App\Services\PlatformRoleService::ADMIN);
+        $this->admin->refresh();
 
         $this->company = new User();
         $this->company->forceFill([

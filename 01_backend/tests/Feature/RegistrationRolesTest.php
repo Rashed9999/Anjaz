@@ -163,6 +163,9 @@ class RegistrationRolesTest extends TestCase
 
         // بعد اعتماده من الأدمن = موثّق
         $admin = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770009200']);
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
+        $admin->refresh();
         // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
         $this->establishKycEvidence($pending);
         $this->actingAs($admin, 'user')
@@ -182,6 +185,9 @@ class RegistrationRolesTest extends TestCase
         $user = User::where('phone', '967771500008')->first();
 
         $admin = User::factory()->create(['type' => ADMIN_TYPE, 'phone' => '967770009201']);
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
+        $admin->refresh();
         // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
         $this->establishKycEvidence($user);
         $this->actingAs($admin, 'user')

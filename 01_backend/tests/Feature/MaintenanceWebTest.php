@@ -16,6 +16,11 @@ class MaintenanceWebTest extends TestCase
     public function test_admin_sees_maintenance_page(): void
     {
         $admin = User::factory()->create(['type' => 0, 'phone' => '967770008001']);
+        // AMIAL-ADMIN-DOORS-002 — وضعُ الصيانة يُوقف المنصّةَ على الجميع،
+        // فصار خلف `settings.update`.
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
+        $admin->refresh();
         $this->seed(\Database\Seeders\FeatureFlagsSeeder::class);
 
         $this->actingAs($admin, 'user')
@@ -28,6 +33,11 @@ class MaintenanceWebTest extends TestCase
     public function test_web_list_endpoint_returns_features(): void
     {
         $admin = User::factory()->create(['type' => 0, 'phone' => '967770008002']);
+        // AMIAL-ADMIN-DOORS-002 — وضعُ الصيانة يُوقف المنصّةَ على الجميع،
+        // فصار خلف `settings.update`.
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($admin, \App\Services\PlatformRoleService::ADMIN);
+        $admin->refresh();
         $this->seed(\Database\Seeders\FeatureFlagsSeeder::class);
 
         $this->actingAs($admin, 'user')

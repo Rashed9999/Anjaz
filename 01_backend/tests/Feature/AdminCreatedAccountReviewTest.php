@@ -23,7 +23,16 @@ class AdminCreatedAccountReviewTest extends TestCase
 
     private function admin(): User
     {
-        return User::factory()->create(['type' => ADMIN_TYPE]);
+        // AMIAL-ADMIN-DOORS-002 — **نوعُ الحساب لم يعد يفتح الباب.**
+        //
+        // ويُمنَح الدورُ ولا يُبدَّل التأكيد: هذه الاختباراتُ تُثبت
+        // **قواعدَ عمل** (٤٢٢/٢٠٠)، فلو قُرئ ردُّها ٤٠٣ لمرّت لسببٍ
+        // خاطئ — وتوقّفت عن حراسة القاعدة التي كُتبت لها.
+        $u = User::factory()->create(['type' => ADMIN_TYPE]);
+        app(\App\Services\PlatformRoleService::class)
+            ->assign($u, \App\Services\PlatformRoleService::ADMIN);
+
+        return $u->refresh();
     }
 
     private function create(string $slug, array $extra = []): array

@@ -109,6 +109,122 @@ class AdminDoorsAreGuardedTest extends TestCase
         return array_values(array_unique($out));
     }
 
+
+    // ══════════════════════════════════════════════════════════════════
+    //  ⓪ كلُّ بابٍ في اللوحة — لا أبوابُ القائمة وحدَها
+    // ══════════════════════════════════════════════════════════════════
+
+    /**
+     * **أبوابٌ مفتوحةٌ عمداً، ولكلٍّ سببُه مكتوباً.**
+     *
+     * وكلُّها من صنفٍ واحد: **الموظّفُ يفعلها بحسابِ نفسِه**، أو تقع قبل
+     * المصادقة أصلاً. وحجبُها بصلاحيّةٍ يمنع من لا يملكها من تسجيل
+     * الدخول أو تأمين حسابه — وهو عكسُ المقصود.
+     *
+     * @var array<string,string>
+     */
+    private const WRITE_OPEN_BY_DESIGN = [
+        'admin.auth.' => 'تسجيلُ الدخول — قبل المصادقة',
+        'admin.auth.two-factor.verify' => 'تحقّقُ الخطوة الثانية — قبل اكتمال الدخول',
+        'admin.amial.2fa.setup' => 'مصادقةُ الموظّف الثنائيّة لحسابه',
+        'admin.amial.2fa.confirm' => 'مصادقةُ الموظّف الثنائيّة لحسابه',
+        'admin.amial.2fa.disable' => 'مصادقةُ الموظّف الثنائيّة لحسابه',
+        'admin.amial.2fa.regenerate' => 'رموزُ تعافي الموظّف لحسابه',
+        'admin.amial.locale' => 'لغةُ جلسة الموظّف نفسِه',
+        'admin.settings-password' => 'كلمةُ مرور الموظّف نفسِه',
+    ];
+
+    /**
+     * @test
+     *
+     * **لا مسارَ كتابةٍ إداريٌّ بلا صلاحيّة.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **وهذا ما لم يره الحارسُ الأوّل.** ذاك يفحص وجهاتِ القائمة، وهذه
+     * أبوابٌ لا تظهر في قائمةٍ إطلاقاً — تُطلَب من شاشةٍ بجافاسكربت.
+     *
+     * وقِيس عند أوّل تشغيلٍ فكانت **واحداً وثلاثين مسارَ كتابةٍ بلا
+     * صلاحيّة**، وفيها:
+     *
+     *   · `hub/transfer` — تحويلُ محفظةٍ من الإدارة.
+     *   · `hub/agents/{id}/credit` — **شحنُ محفظة وكيل: خلقُ مال.**
+     *   · `agents/daily/{ulid}/accept` — إقفالُ يوم شبكةٍ بمالِه.
+     *   · `variances/{id}/resolve` — حسمُ فرقٍ ماليّ.
+     *   · `maintenance/enable` — إيقافُ المنصّة على الجميع.
+     *
+     * **وأبلغُها أنّ `finance/topup` أسفلَ اثنين منها بأسطر محروسةٌ بـ
+     * `money.move` منذ شهور.** فحُرس جارٌ ونُسي جاران يفعلان الشيءَ
+     * نفسَه — وهو نمطُ الثغرة الذي لا يظهر في مسحٍ يسأل «أفي القطاع
+     * حراسة؟»، بل في مسحٍ يسأل **«أكلُّ بابٍ فيه محروس؟»**.
+     */
+    public function no_admin_write_route_is_left_without_a_permission(): void
+    {
+        $naked = [];
+        $seen = 0;
+
+        foreach (app('router')->getRoutes() as $route) {
+            $name = (string) $route->getName();
+
+            if (! str_starts_with($name, 'admin.')) {
+                continue;
+            }
+
+            if (! array_intersect(['POST', 'PUT', 'PATCH', 'DELETE'], $route->methods())) {
+                continue;
+            }
+
+            $seen++;
+
+            if (array_key_exists($name, self::WRITE_OPEN_BY_DESIGN)) {
+                continue;
+            }
+
+            $guarded = false;
+
+            foreach ($route->gatherMiddleware() as $mw) {
+                if (is_string($mw) && str_starts_with($mw, 'platform:')) {
+                    $guarded = true;
+                    break;
+                }
+            }
+
+            if (! $guarded) {
+                $naked[] = $name . '  [' . implode('|', $route->methods()) . ' ' . $route->uri() . ']';
+            }
+        }
+
+        // **وحارسٌ لا يجد ما يفحص ليس حارساً.**
+        $this->assertGreaterThan(100, $seen,
+            "لم يُلتقط إلّا {$seen} مسارَ كتابةٍ إداريّاً — والمشروعُ فيه أضعافُها.");
+
+        sort($naked);
+
+        $this->assertSame([], $naked,
+            "مساراتُ كتابةٍ إداريّةٌ بلا صلاحيّة — **يستدعيها كلُّ من يدخل "
+            . "اللوحة**:\n  " . implode("\n  ", $naked) . "\n\n"
+            . "وإخفاءُ الزرّ ليس حماية: من يعرف العنوان يستدعيه.\n"
+            . 'وإن كان البابُ مفتوحاً عمداً فيُضاف إلى WRITE_OPEN_BY_DESIGN بسببه.');
+    }
+
+    /** @test */
+    public function money_writes_are_never_open_to_support(): void
+    {
+        // **جرّبها بالطلب لا بقراءة الوسائط.** فالوسيطُ قد يكون مسجَّلاً
+        // ولا يعمل، والقياسُ الصادقُ هو الردّ نفسُه.
+        $support = $this->operator(PlatformRoleService::SUPPORT);
+
+        $this->actingAs($support, 'user')
+            ->post(route('admin.amial.hub.transfer'))->assertForbidden();
+
+        $this->actingAs($support, 'user')
+            ->post(route('admin.amial.hub.agents.credit', ['id' => 1]))->assertForbidden();
+
+        $this->actingAs($support, 'user')
+            ->post(route('admin.amial.hub.agents.daily.accept',
+                ['ulid' => strtoupper((string) \Illuminate\Support\Str::ulid())]))
+            ->assertForbidden();
+    }
+
     // ══════════════════════════════════════════════════════════════════
     //  ① لا بابَ بلا حارس
     // ══════════════════════════════════════════════════════════════════

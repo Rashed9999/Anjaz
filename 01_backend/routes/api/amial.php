@@ -258,10 +258,14 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Api\V1\Amial\AdminPanelController::class, 'dashboard'])->name('dashboard');
         Route::get('/merchants', [\App\Http\Controllers\Api\V1\Amial\AdminPanelController::class, 'listMerchants'])->name('merchants.list');
         Route::get('/variances/pending', [\App\Http\Controllers\Api\V1\Amial\AdminPanelController::class, 'pendingVariances'])->name('variances.pending');
+        // AMIAL-ADMIN-DOORS-002 — حسمُ فرقٍ ماليٍّ قرارُ مال، وتوثيقُ
+        // تاجرٍ قرارُ اعتماد. وكانا بلا صلاحيّة.
         Route::post('/variances/{id}/resolve', [\App\Http\Controllers\Api\V1\Amial\AdminPanelController::class, 'resolveVariance'])
-            ->where('id', '[0-9]+')->name('variances.resolve');
+            ->where('id', '[0-9]+')
+            ->middleware('platform:platform.money.move')->name('variances.resolve');
         Route::post('/merchants/{id}/verify', [\App\Http\Controllers\Api\V1\Amial\AdminPanelController::class, 'verifyMerchant'])
-            ->where('id', '[0-9]+')->name('merchants.verify');
+            ->where('id', '[0-9]+')
+            ->middleware('platform:platform.approvals.decide')->name('merchants.verify');
 
         // AMIAL-WHATSAPP-OTP-001 — إدارة قناة واتساب (مزوّدون + تفضيل + إرسال تجريبي)
         Route::prefix('whatsapp')->name('whatsapp.')->group(function () {
