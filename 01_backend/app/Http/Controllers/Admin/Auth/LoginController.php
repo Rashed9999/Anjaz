@@ -6,6 +6,7 @@ use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\PlatformLoginPinService;
+use App\Services\TwoFactorAuthService;
 use App\Support\Phone;
 use Gregwar\Captcha\CaptchaBuilder;
 use Gregwar\Captcha\PhraseBuilder;
@@ -19,14 +20,17 @@ use Illuminate\Support\Facades\Session;
 
 class LoginController extends Controller
 {
-    public function __construct(private readonly PlatformLoginPinService $loginPins)
-    {
+    public function __construct(
+        private readonly PlatformLoginPinService $loginPins,
+        private readonly TwoFactorAuthService $twoFactor,
+    ) {
         $this->middleware('guest:user', ['except' => ['logout']]);
     }
 
     /**
      * مسار CAPTCHA القديم يبقى مؤقتاً حتى لا نكسر روابط قديمة، لكنه لم يعد
-     * جزءاً من عقد دخول الإدارة. الدخول الجديد: هاتف + كلمة مرور + PIN.
+     * جزءاً من عقد دخول الإدارة. الدخول الجديد: هاتف + كلمة مرور + PIN،
+     * ومع حسابات 2FA يمكن إدخال رمز Google Authenticator في الشاشة نفسها.
      */
     public function captcha($tmp)
     {
@@ -71,9 +75,14 @@ class LoginController extends Controller
             'phone' => 'required|string|min:5|max:20',
             'password' => 'required|string|min:8',
             'login_pin' => ['required', 'regex:/^\d{4}$/'],
+            // اختياري في النموذج لأن بعض الموظفين لم يفعّلوا 2FA؛ يصبح
+            // إلزامياً منطقياً بعد معرفة الحساب وأنه مفعّل ومؤكّد.
+            'two_factor_code' => 'nullable|string|min:6|max:20',
         ], [
             'login_pin.required' => 'أدخل رمز PIN الخاص بحسابك الوظيفي.',
             'login_pin.regex' => 'رمز PIN يجب أن يتكون من 4 أرقام.',
+            'two_factor_code.min' => 'رمز المصادقة الثنائية غير مكتمل.',
+            'two_factor_code.max' => 'رمز المصادقة الثنائية غير صالح.',
         ]);
 
         $phone = Helpers::filter_phone($data['phone']);
@@ -124,13 +133,29 @@ class LoginController extends Controller
 
         RateLimiter::clear($rateKey);
 
-        // TOTP الموجود يبقى طبقة إضافية عند تفعيله، ولا نستبدله بالـPIN.
-        // PIN هنا هو credential وظيفي ثابت؛ TOTP يظل العامل الأقوى المتغير.
+        // AMIAL-2FA-INLINE-001 — لا نكتفي بكون Google Authenticator مربوطاً؛
+        // يجب أن يوجد موضعٌ فعلي لإدخال الرمز المتغيّر عند الدخول.
+        // إذا أدخله المستخدم هنا نتحقق منه فوراً. وإذا تركه فارغاً لحساب
+        // مفعّل، نبقي شاشة التحدي القديمة كمسار احتياطي ومتوافق مع الروابط.
         if ($admin->two_factor_enabled && $admin->two_factor_confirmed_at) {
-            $request->session()->put('amial.2fa.pending_user', $admin->id);
-            $request->session()->put('amial.2fa.remember', (bool) $request->boolean('remember'));
+            $code = trim((string) ($data['two_factor_code'] ?? ''));
 
-            return redirect()->route('admin.auth.two-factor');
+            if ($code !== '') {
+                try {
+                    if (! $this->twoFactor->verify($admin, $code)) {
+                        return back()->withInput($request->only('phone', 'remember'))
+                            ->withErrors(['two_factor_code' => 'رمز Google Authenticator أو رمز الاسترداد غير صحيح.']);
+                    }
+                } catch (\RuntimeException $e) {
+                    return back()->withInput($request->only('phone', 'remember'))
+                        ->withErrors(['two_factor_code' => $e->getMessage()]);
+                }
+            } else {
+                $request->session()->put('amial.2fa.pending_user', $admin->id);
+                $request->session()->put('amial.2fa.remember', (bool) $request->boolean('remember'));
+
+                return redirect()->route('admin.auth.two-factor');
+            }
         }
 
         auth('user')->login($admin, $request->boolean('remember'));

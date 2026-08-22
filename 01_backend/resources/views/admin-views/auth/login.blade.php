@@ -1,5 +1,7 @@
 <!doctype html>
-{{-- AMIAL-PLATFORM-LOGIN-PIN-001 — دخول الإدارة: هاتف + كلمة مرور + PIN وظيفي. --}}
+{{-- AMIAL-PLATFORM-LOGIN-PIN-001 · AMIAL-2FA-INLINE-001
+     دخول الإدارة: هاتف + كلمة مرور + PIN وظيفي، ومع الحسابات المفعّلة
+     يوجد موضع صريح لرمز Google Authenticator المتغيّر. --}}
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="utf-8">
@@ -33,7 +35,10 @@
         .auth-card { padding:clamp(1.25rem,3vw,2rem); border:1px solid var(--amial-border); border-radius:1.25rem; background:var(--amial-surface); box-shadow:0 18px 45px rgba(5,51,145,.10); }
         .form-label { margin-bottom:.45rem; font-weight:600; font-size:.9rem; }.form-control { min-height:3rem; border-color:var(--amial-border); border-radius:.7rem; }.form-control:focus { border-color:var(--amial-primary-light); box-shadow:0 0 0 .22rem rgba(29,79,184,.15); }
         .pin-control { text-align:center; direction:ltr; letter-spacing:.75rem; padding-left:1.2rem; font-size:1.15rem; font-weight:800; font-variant-numeric:tabular-nums; }
-        .pin-help { margin-top:.4rem; color:var(--amial-text-secondary); font-size:.76rem; line-height:1.6; }
+        .totp-control { text-align:center; direction:ltr; letter-spacing:.38rem; font-size:1.08rem; font-weight:800; font-variant-numeric:tabular-nums; }
+        .pin-help,.totp-help { margin-top:.4rem; color:var(--amial-text-secondary); font-size:.76rem; line-height:1.6; }
+        .totp-box { padding:.8rem; border:1px dashed var(--amial-border); border-radius:.8rem; background:#f8faff; }
+        .totp-label-row { display:flex; align-items:center; justify-content:space-between; gap:.7rem; }.optional-badge { padding:.2rem .45rem; border-radius:999px; background:#eaf1ff; color:var(--amial-primary); font-size:.68rem; font-weight:700; }
         .remember-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; color:var(--amial-text-secondary); font-size:.86rem; }.form-check-input:checked { background-color:var(--amial-primary); border-color:var(--amial-primary); }
         .login-submit { min-height:3.15rem; border:0; border-radius:.75rem; font-weight:700; background:var(--amial-primary); box-shadow:0 8px 18px rgba(5,51,145,.22); }.login-submit:hover,.login-submit:focus { background:var(--amial-primary-dark); }.login-submit[aria-busy="true"] { opacity:.8; cursor:wait; }
         .security-note { display:flex; gap:.65rem; margin:1.2rem 0 0; padding:.8rem .9rem; border-radius:.75rem; background:#f4f7ff; color:var(--amial-text-secondary); font-size:.78rem; line-height:1.65; }.security-note b { color:var(--amial-primary); }
@@ -51,11 +56,11 @@
             </a>
             <div class="eyebrow">بوابة داخلية محمية</div>
             <h1>إدارة المنصة تبدأ بدخولٍ آمن.</h1>
-            <p>بوابة موظفي أميال باي تعتمد ثلاث بيانات مستقلة للدخول: رقم الهاتف، كلمة المرور، ورمز PIN الوظيفي.</p>
+            <p>بوابة موظفي أميال باي تعتمد رقم الهاتف وكلمة المرور وPIN الموظف، ويمكن للحساب الذي فعّل المصادقة الثنائية إدخال رمز Google Authenticator المتغيّر من الشاشة نفسها.</p>
             <div class="brand-points" aria-label="خصائص الحماية">
                 <span><i>✓</i>هاتف + كلمة مرور + PIN موظف من 4 أرقام</span>
-                <span><i>✓</i>قفل تلقائي لمحاولات PIN والتخمين المتكرر</span>
-                <span><i>✓</i>التحقق الثنائي يبقى طبقة إضافية عند تفعيله</span>
+                <span><i>✓</i>Google Authenticator للحسابات التي فعّلته</span>
+                <span><i>✓</i>قفل تلقائي لمحاولات PIN و2FA المتكررة</span>
             </div>
         </div>
         <div class="brand-footer">أميال باي · بوابة موظفين داخلية</div>
@@ -65,7 +70,7 @@
         <div class="admin-form-wrap">
             <a class="back-link" href="{{ url('/') }}">← العودة إلى الموقع</a>
             <h2 id="admin-login-title">تسجيل دخول الإدارة</h2>
-            <p>أدخل رقم الهاتف وكلمة المرور ورمز PIN الخاص بحسابك الوظيفي.</p>
+            <p>أدخل بيانات حسابك. إذا فعّلت المصادقة الثنائية فأدخل أيضاً الرمز المتغيّر الظاهر في تطبيق Google Authenticator.</p>
             <div class="auth-card" data-testid="login-card">
                 @if($errors->any())
                     <div class="alert alert-danger auth-error py-2 mb-3" role="alert" data-testid="login-error">{{ $errors->first() }}</div>
@@ -94,7 +99,21 @@
                                inputmode="numeric" pattern="[0-9]{4}" minlength="4" maxlength="4"
                                autocomplete="off" placeholder="••••" required>
                         <div class="pin-help">
-                            الرمز مكوّن من 4 أرقام. الموظف الجديد يستلمه على بريده، وإذا نسيه يعيد مدير المنصة إصداره.
+                            الرمز ثابت من 4 أرقام لحساب الموظف. الموظف الجديد يستلمه على بريده، وإذا نسيه يعيد مدير المنصة إصداره.
+                        </div>
+                    </div>
+
+                    <div class="mb-3 totp-box">
+                        <div class="totp-label-row mb-2">
+                            <label class="form-label mb-0" for="login-two-factor">رمز Google Authenticator</label>
+                            <span class="optional-badge">للحسابات المفعّلة فقط</span>
+                        </div>
+                        <input id="login-two-factor" type="text" name="two_factor_code"
+                               class="form-control totp-control" data-testid="login-two-factor"
+                               inputmode="text" autocomplete="one-time-code" minlength="6" maxlength="20"
+                               placeholder="123456 أو رمز الاسترداد">
+                        <div class="totp-help">
+                            الرمز المكوّن من 6 أرقام يتغيّر عادةً كل 30 ثانية. يمكنك أيضاً استخدام رمز استرداد صالح. إذا كان 2FA غير مفعّل على حسابك فاترك الحقل فارغاً.
                         </div>
                     </div>
 
@@ -114,7 +133,7 @@
 
                 <div class="security-note">
                     <span aria-hidden="true">🛡️</span>
-                    <span><b>تنبيه أمني:</b> لا تشارك PIN أو كلمة المرور. بعد محاولات PIN غير صحيحة يُقفل الرمز مؤقتاً. وإذا كان التحقق الثنائي مفعلاً فسيطلبه النظام بعد نجاح البيانات الثلاث.</span>
+                    <span><b>تنبيه أمني:</b> PIN الوظيفي يختلف عن رمز Google Authenticator. الأول ثابت لحساب الموظف، والثاني متغيّر ويُطلب فقط للحساب الذي فعّل المصادقة الثنائية.</span>
                 </div>
             </div>
         </div>
@@ -125,9 +144,14 @@
         const form = document.getElementById('admin-login-form');
         const submit = document.getElementById('admin-login-submit');
         const pin = document.getElementById('login-pin');
+        const twoFactor = document.getElementById('login-two-factor');
 
         pin?.addEventListener('input', () => {
             pin.value = pin.value.replace(/\D/g, '').slice(0, 4);
+        });
+
+        twoFactor?.addEventListener('input', () => {
+            twoFactor.value = twoFactor.value.trimStart().slice(0, 20);
         });
 
         form?.addEventListener('submit', () => {
