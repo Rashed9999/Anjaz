@@ -17,21 +17,66 @@ use Illuminate\Support\Facades\Validator;
 /**
  * P1-RBAC — Endpoints إدارة الأدوار والصلاحيات.
  *
- * /merchant/rbac/permissions          — قائمة كل الصلاحيات (للـ UI)
+ * /merchant/rbac/permissions          — قائمة صلاحيات التاجر (للـ UI)
  * /merchant/rbac/roles                — قائمة الأدوار (system + الخاصّة)
  * /merchant/rbac/pos-users/{id}/roles — أدوار موظّف
  * /merchant/rbac/pos-users/{id}/assign-role — تعيين دور
  * /merchant/rbac/pos-users/{id}/revoke-role — إزالة دور
+ *
+ * ══════════════════════════════════════════════════════════════════════
+ * AMIAL-RBAC-SPLIT-001 — **«نظاميّ» كانت تعني اثنين، والشرطُ يقرأ أحدَهما.**
+ *
+ * جداولُ `roles` و`permissions` و`role_permissions` **مشتركةٌ بين
+ * محرّكين**: أدوارُ المنصّة (`platform_admin` · `platform_finance` ·
+ * `platform_security`…) وأدوارُ التاجر القديمة (`cashier` ·
+ * `branch_manager`…). **وكلا الصنفين `is_system = 1` و
+ * `merchant_user_id = null`** — فهما لا يفترقان بشكلٍ في الجدول.
+ *
+ * وكان الشرطُ هنا `where('is_system', true)`، فيصدق على الصنفين معاً:
+ *
+ *   · `GET /merchant/rbac/permissions` **يُخرج كلَّ صفٍّ في `permissions`**
+ *     — ومنها `platform.money.move` و`platform.aml.decide` و
+ *     `platform.security.act`. أي **مصفوفةُ صلاحيّات المنصّة كاملةً لكلّ
+ *     تاجر**، بأسمائها العربيّة وتصنيفها.
+ *
+ *   · `GET /merchant/rbac/roles` يُخرج أدوارَ المنصّة ومعها صلاحيّاتُها.
+ *
+ *   · و`assign-role` **تقبل معرِّفَ دورِ منصّةٍ** فتكتب صفّاً في
+ *     `pos_user_roles`.
+ *
+ * **والأخيرةُ لا تُصعّد اليوم** — قِيس: الإنفاذُ في
+ * `PlatformPermissionMiddleware` يقرأ `admin_user_roles` لا
+ * `pos_user_roles`، و`PosPermission` (التي تقرأ الأخير) **مسجَّلةٌ في
+ * `bootstrap/app.php` وتحرس صفرَ مسار**.
+ *
+ * **وهذا لغمٌ لا أمان**: أوّلُ من يُلبس تلك الوسيطةَ مساراً يجعل صفَّ
+ * `pos_user_roles` نافذاً، فيصير تاجرٌ يملك `platform_admin`. والحمايةُ
+ * القائمةُ اليوم **مصادفةُ موتِ محرّك**، لا حاجزٌ قُصد.
+ *
+ * فيُقطع الأمران معاً: **يُقصَر هذا المتحكّم على أدوار التاجر وصلاحيّاته**
+ * — والقائمةُ موجبةٌ (`Role::ALL_SYSTEM_ROLES`) لا نفيَ بادئة: قائمةُ
+ * منعٍ تُنسى عند إضافة دورٍ جديد، وقائمةُ سماحٍ تُوقفه.
  */
 class RbacController extends AmialApiController // AMIAL-FIX-007
 {
+    /**
+     * **صلاحيّاتُ المنصّة ليست من شأن التاجر.**
+     *
+     * وتُميَّز بالبادئة لأنّ عمود `category` تسميةٌ لا إنفاذ — وقد سبق أن
+     * أخطأ مِقياسٌ بُني عليه (انظر `ReadOnlyAuditorTest`). والبادئةُ
+     * `platform.` يفرضها كلُّ ما في `PlatformPermissionMiddleware`.
+     */
+    private const PLATFORM_PERMISSION_PREFIX = 'platform.';
+
     public function permissions(Request $request): JsonResponse
     {
         $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
+        $all = Permission::where('code', 'not like', self::PLATFORM_PERMISSION_PREFIX . '%')
+            ->orderBy('category')->orderBy('code')->get();
+
         // تجميع حسب category لسهولة العرض
-        $all = Permission::orderBy('category')->orderBy('code')->get();
         $byCategory = $all->groupBy('category')->map(fn($items) => $items->values())->toArray();
 
         return $this->ok([
@@ -46,16 +91,29 @@ class RbacController extends AmialApiController // AMIAL-FIX-007
         $merchant = $this->resolveMerchantPos($request);
         if ($merchant instanceof JsonResponse) return $merchant;
 
-        // الأدوار النظامية + الأدوار الخاصّة بهذا التاجر
-        $roles = Role::query()
-            ->where(function ($q) use ($merchant) {
-                $q->where('is_system', true)
-                  ->orWhere('merchant_user_id', $merchant->id);
-            })
+        // أدوارُ التاجر النظاميّة + أدوارُه الخاصّة — **لا أدوارَ المنصّة**.
+        $roles = $this->assignableRoles($merchant)
             ->with(['permissions' => function ($q) { $q->select('permissions.id', 'code', 'label_ar', 'category'); }])
             ->get();
 
         return $this->ok(['roles' => $roles]);
+    }
+
+    /**
+     * الأدوارُ التي يجوز لهذا التاجر رؤيتُها وإسنادُها — **مصدرٌ واحد**.
+     *
+     * فشرطان متطابقان في موضعين ينحرفان عند أوّل تعديل: يُضيَّق العرضُ
+     * ويبقى الإسنادُ واسعاً، أو العكس. وهو نمطُ «بابان لفعلٍ واحد»
+     * (القاعدة الرابعة).
+     */
+    private function assignableRoles(User $merchant)
+    {
+        return Role::query()->where(function ($q) use ($merchant) {
+            $q->where(function ($w) {
+                $w->where('is_system', true)
+                  ->whereIn('code', Role::ALL_SYSTEM_ROLES);
+            })->orWhere('merchant_user_id', $merchant->id);
+        });
     }
 
     public function posUserRoles(Request $request, int $posUserId): JsonResponse
@@ -102,12 +160,11 @@ class RbacController extends AmialApiController // AMIAL-FIX-007
             ->where('merchant_user_id', $merchant->id)->first();
         if (!$pos) return $this->error('NOT_FOUND', 'الموظّف غير موجود', 404);
 
-        // تحقّق من الدور (إمّا system، أو خاصّ بنفس التاجر)
-        $role = Role::where('id', $request->input('role_id'))
-            ->where(function ($q) use ($merchant) {
-                $q->where('is_system', true)
-                  ->orWhere('merchant_user_id', $merchant->id);
-            })->first();
+        // تحقّق من الدور — **من المصدر نفسِه الذي يُعرَض منه** (`roles()`)،
+        // فلا يُسنَد ما لا يُعرَض ولا يُعرَض ما لا يُسنَد. **ودورُ المنصّة
+        // مردودٌ هنا** ولو حمل `is_system`.
+        $role = $this->assignableRoles($merchant)
+            ->where('id', $request->input('role_id'))->first();
         if (!$role) return $this->error('INVALID_ROLE', 'الدور غير صالح', 422);
 
         // تحقّق من الفرع (إن وُجد)
