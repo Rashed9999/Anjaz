@@ -7,6 +7,7 @@ use App\Models\User;
 use DomainException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -244,6 +245,57 @@ class KycDocumentService
                 $account->is_kyc_verified = 2;
             }
             $account->save();
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-ZONE-REG-001 — **والاعتمادُ يحسم المنطقةَ أيضاً.**
+            //
+            // قِيس: هذا هو **مسارُ اعتماد الهويّة الرئيس**، ولم يكن يمسّ
+            // `zone_code` بحرف. و`assignFromKyc()` مبنيّةٌ ويناديها ثلاثةُ
+            // مسارات إداريّةٍ **جانبيّة** — لا هذا.
+            //
+            // **وبلا هذا السطر يصير التوثيقُ نصفَ توثيق**: يُرفع
+            // `is_kyc_verified` فيُقال للعميل «وُثِّق حسابُك»، ويبقى
+            // `zone_code` على ما هو فيُرفض استقبالُه بلا سببٍ مفهوم.
+            //
+            // **وهو الحاجزُ الذي يشلّ عملاً سليماً** — وذاك أسوأ من ثغرة.
+            //
+            // ولا تُعطَّل: فشلُ إسنادٍ لا يجوز أن يُسقط قرارَ توثيقٍ مكتمل.
+            if ($approve) {
+                try {
+                    $city = trim((string) ($account->residence_governorate ?? ''));
+
+                    if ($city !== '') {
+                        app(ZoneAssignmentService::class)
+                            ->assignFromKyc($account, $city, (int) $reviewer->id);
+                    } elseif ((string) $account->zone_code === ZoneAssignmentService::ZONE_UNKNOWN) {
+                        // **وحالةٌ تبقى قاتلةً إن سُكت عنها:** اعتُمدت
+                        // الهويّةُ ولا محافظةَ سكنٍ في الملفّ، فتبقى
+                        // المنطقةُ `UNKNOWN` — **والحسابُ موثَّقٌ وممنوع**،
+                        // وهي أسوأُ حالةٍ ممكنة لأنّها تبدو مكتملة.
+                        //
+                        // فلا تُحسم بالتخمين — **تُقال**. (القاعدة السابعة:
+                        // الغيابُ يُقال صراحةً مع سببه، ولا يُملأ بصفر.)
+                        $this->audit->record([
+                            'actor_type' => 'admin',
+                            'actor_user_id' => $reviewer->id,
+                            'subject_type' => 'user',
+                            'subject_id' => (string) $account->id,
+                            'action' => 'KYC_ZONE_UNRESOLVED',
+                            'decision_code' => 'MISSING_RESIDENCE_GOVERNORATE',
+                            'reason' => 'اعتُمدت الهويّةُ ولا محافظةَ سكنٍ في الملفّ — '
+                                . 'المنطقةُ غيرُ محسومةٍ والحسابُ لا يستقبل تحويلاتٍ '
+                                . 'حتّى تُسنَد يدويّاً من مركز المناطق',
+                            'severity' => 'warning',
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    // ولا يُسقَط قرارُ توثيقٍ مكتملٍ بفشل إسنادٍ — الإسنادُ
+                    // أثرٌ لا شرط.
+                    Log::warning('zone assignment on kyc approval failed', [
+                        'user_id' => $account->id, 'error' => $e->getMessage(),
+                    ]);
+                }
+            }
 
             $this->audit->record([
                 'actor_type' => 'admin',

@@ -50,7 +50,40 @@ class _AmialRegistrationWizardScreenState
   String? _agentNumber;
   String? _merchantNumber;
   final _phone = TextEditingController();
-  final String _dialCode = '+967';
+
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-PHONE-002 — **مفتاحُ الدولة يُختار، ولا يُعرَض ثابتاً.**
+  //
+  // كان `final String _dialCode = '+967'` — **ثابتاً لا يُغيَّر**، ومعه
+  // في الشاشة نصُّ «967+» **معروضٌ لا يُضغط**. فمن سجّل من خارج اليمن
+  // لم يجد أين يقول ذلك.
+  //
+  // (وخلفَه في الخادم كان `canonical()` تُلصق 967 بأيّ رقم — فحتّى لو
+  // أُرسل مفتاحٌ آخر لَابتُلع. أُصلح الاثنان معاً، فبابٌ نصفُه مفتوحٌ
+  // ليس باباً.)
+  // ══════════════════════════════════════════════════════════════════
+  String _dialCode = '+967';
+
+  /// المفاتيحُ الأكثرُ وروداً — اليمنُ أوّلاً، ثمّ وجهاتُ المغتربين.
+  static const List<({String code, String label})> _dialCodes = [
+    (code: '+967', label: '🇾🇪 اليمن'),
+    (code: '+966', label: '🇸🇦 السعوديّة'),
+    (code: '+971', label: '🇦🇪 الإمارات'),
+    (code: '+968', label: '🇴🇲 عُمان'),
+    (code: '+974', label: '🇶🇦 قطر'),
+    (code: '+965', label: '🇰🇼 الكويت'),
+    (code: '+973', label: '🇧🇭 البحرين'),
+    (code: '+962', label: '🇯🇴 الأردنّ'),
+    (code: '+20', label: '🇪🇬 مصر'),
+    (code: '+253', label: '🇩🇯 جيبوتي'),
+    (code: '+252', label: '🇸🇴 الصومال'),
+    (code: '+249', label: '🇸🇩 السودان'),
+    (code: '+90', label: '🇹🇷 تركيا'),
+    (code: '+44', label: '🇬🇧 بريطانيا'),
+    (code: '+1', label: '🇺🇸 أمريكا/كندا'),
+    (code: '+49', label: '🇩🇪 ألمانيا'),
+    (code: '+60', label: '🇲🇾 ماليزيا'),
+  ];
 
   final _idNumber = TextEditingController();
   String _idType = 'nid';
@@ -660,8 +693,31 @@ class _AmialRegistrationWizardScreenState
         const SizedBox(height: 14),
         _field(_occupation, 'المهنة (اختياري)'),
         _field(_email, 'البريد الإلكتروني (اختياري)', type: TextInputType.emailAddress),
-        Row(children: [
-          const SizedBox(width: 70, child: Text('967+', textAlign: TextAlign.center)),
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // **ويُضغط فعلاً** — عنصرٌ معروضٌ لا يعمل يُقرأ عطلاً.
+          SizedBox(
+            width: 132,
+            child: DropdownButtonFormField<String>(
+              key: const Key('reg-dial-code'),
+              initialValue: _dialCode,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'الدولة',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+              ),
+              items: [
+                for (final c in _dialCodes)
+                  DropdownMenuItem(
+                    value: c.code,
+                    child: Text('${c.label}  ${c.code}',
+                        overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: (v) => setState(() => _dialCode = v ?? '+967'),
+            ),
+          ),
+          const SizedBox(width: 8),
           Expanded(child: _field(_phone, 'رقم الجوال *', type: TextInputType.phone)),
         ]),
       ]);

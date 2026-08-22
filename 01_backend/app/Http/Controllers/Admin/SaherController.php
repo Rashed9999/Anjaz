@@ -111,35 +111,69 @@ class SaherController extends Controller
 
     /**
      * تشغيلُ جولةٍ يدويّاً — **وفشلُها يُقال، ولا يُقرأ صفراً**.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ويشغّل الجوامعَ كلَّها لا واحداً منها.**
+     *
+     * كان يشغّل `guards` وحدَه، وجامعا `gate` و`data_truth` **بلا زرٍّ
+     * واحدٍ يبلغهما** — يُشغَّلان بأمرٍ في الطرفيّة لا غير. وهو نمطُ
+     * العطل الأكثرُ تكراراً في هذا المشروع: مبنيٌّ ولا يُوصَل إليه،
+     * واقعاً على الأداة التي بُنيت لتمسكه.
+     *
+     * **وكلُّ جامعٍ يُحاسَب وحدَه**: سقوطُ واحدٍ لا يُسقط الباقين، ولا
+     * يُبتلَع في رسالةٍ واحدةٍ تقول «تمّ». فالصمتُ عن مصدرٍ ساقطٍ
+     * يُنتج شاشةً خضراءَ فوق رادارٍ نصفُه ميّت.
      */
-    public function scan(Request $request, FindingStore $store,
-        GuardCoverageCollector $collector): RedirectResponse
+    public function scan(Request $request, FindingStore $store): RedirectResponse
     {
-        $source = GuardCoverageCollector::SOURCE;
-        $runId = $store->beginRun($source, 'manual', $request->user()?->id);
+        /** @var list<array{0:string,1:object,2:string}> */
+        $collectors = [
+            [GuardCoverageCollector::SOURCE, app(GuardCoverageCollector::class), 'مسارَ كتابة'],
+            [\App\Saher\Collectors\GateCoverageCollector::SOURCE,
+                app(\App\Saher\Collectors\GateCoverageCollector::class), 'التزاماً'],
+            [\App\Saher\Collectors\DataTruthCollector::SOURCE,
+                app(\App\Saher\Collectors\DataTruthCollector::class), 'أصلَ بيانات'],
+        ];
 
-        try {
-            $result = $collector->collect();
+        $done = [];
+        $failed = [];
 
-            if ($result['assets_seen'] === 0) {
-                $store->failRun($runId, $source, 'جولةٌ عمياء — صفرُ مسارات');
+        foreach ($collectors as [$source, $collector, $unit]) {
+            $runId = $store->beginRun($source, 'manual', $request->user()?->id);
 
-                return back()->with('error',
-                    'جولةٌ عمياء: لم يُقرأ مسارٌ واحد. لم تُسجَّل نتيجة — '
-                    . 'وصفرُ اكتشافاتٍ من فحصٍ أعمى ليس سلامة.');
+            try {
+                $result = $collector->collect();
+
+                if ($result['assets_seen'] === 0) {
+                    // **وصفرُ اكتشافاتٍ من فحصٍ أعمى ليس سلامة.**
+                    $store->failRun($runId, $source, 'جولةٌ عمياء — صفرُ أصول');
+                    $failed[] = "{$source}: جولةٌ عمياء (صفرُ أصول)";
+
+                    continue;
+                }
+
+                $c = $store->commitRun($runId, $source,
+                    $result['findings'], $result['assets_seen']);
+
+                $done[] = sprintf('%s — %d %s · جديد %d · عاد %d · أُغلق %d',
+                    $source, $result['assets_seen'], $unit,
+                    $c['opened'], $c['reopened'], $c['resolved']);
+            } catch (\Throwable $e) {
+                $store->failRun($runId, $source, $e->getMessage());
+                $failed[] = "{$source}: " . $e->getMessage();
             }
-
-            $c = $store->commitRun($runId, $source, $result['findings'], $result['assets_seen']);
-        } catch (\Throwable $e) {
-            $store->failRun($runId, $source, $e->getMessage());
-
-            return back()->with('error', 'سقط الفحص: ' . $e->getMessage()
-                . ' — والاكتشافاتُ السابقةُ تبقى مفتوحة.');
         }
 
-        return back()->with('success', sprintf(
-            'فُحص %d مسارَ كتابة · جديد %d · عاد %d · أُغلق %d',
-            $result['assets_seen'], $c['opened'], $c['reopened'], $c['resolved'],
-        ));
+        // **والفشلُ يُقال أوّلاً** — ولافتةُ نجاحٍ فوق مصدرٍ ساقطٍ تُطمئن
+        // ولا تحرس.
+        if ($failed !== []) {
+            return back()->with('error',
+                'سقط ' . count($failed) . ' من ' . count($collectors) . ': '
+                . implode(' · ', $failed)
+                . ($done === [] ? '' : ' — ونجح: ' . implode(' · ', $done))
+                . ' والاكتشافاتُ السابقةُ لمن سقط تبقى مفتوحة.');
+        }
+
+        return back()->with('success', implode(' · ', $done));
     }
 }

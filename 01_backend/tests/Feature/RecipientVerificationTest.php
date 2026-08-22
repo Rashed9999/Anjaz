@@ -80,9 +80,28 @@ class RecipientVerificationTest extends TestCase
         $sender = User::factory()->create(['zone_code' => 'SOUTH']);
         User::factory()->create(['phone' => '777333444', 'zone_code' => 'NORTH']);
 
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('غير مؤهل');
-        $this->service->verifyRecipient('777333444', $sender->id);
+        // ══════════════════════════════════════════════════════════════
+        // **ومقياسٌ يحرس صياغةً لا معنىً يسقط على تحسينٍ صحيح.**
+        //
+        // كان هذا السطرُ `expectExceptionMessage('غير مؤهل')` — يحرس
+        // نصَّ رسالةٍ واحدةٍ كانت تُقال في كلّ حال. وقد قُسّمت (AMIAL-
+        // ZONE-REG-001) لأنّها **لم تكن تفرّق بين «لم يُوثَّق بعد»
+        // و«خارج النطاق»**، والفرقُ هو كلُّ ما يحتاجه القارئ: الأوّلُ
+        // ينتظر مراجعةً تنتهي، والثاني لن يُخدَم أبداً.
+        //
+        // فصار المقياسُ على **المعنى**: يُرفَض، ويُقال أنّه رفضُ نطاقٍ
+        // لا رفضُ توثيق.
+        // ══════════════════════════════════════════════════════════════
+        try {
+            $this->service->verifyRecipient('777333444', $sender->id);
+
+            $this->fail('قُبل مستلمٌ خارج النطاق');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('خارجَ نطاق الخدمة', $e->getMessage());
+
+            $this->assertStringNotContainsString('لم يُوثَّق', $e->getMessage(),
+                'خُلط «خارج النطاق» بـ«لم يُوثَّق» — والأوّلُ نهائيٌّ والثاني مؤقَّت');
+        }
     }
 
     /** @test */

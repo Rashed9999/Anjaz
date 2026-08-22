@@ -223,6 +223,30 @@ class RegisterController extends Controller
             $user->unique_id = $user->id . mt_rand(1111, 99999);
             $user->save();
 
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-ZONE-REG-001 — **إسنادُ المنطقة عند التسجيل.**
+            //
+            // `ZoneAssignmentService::assignOnRegistration()` مبنيّةٌ منذ
+            // v2.0 **ولم يُنادِها أحدٌ قطّ** — قِيس: صفرُ صفوفٍ في
+            // `zone_assignment_logs`. فكلُّ حسابٍ يولد `UNKNOWN` **بلا
+            // أثرٍ يقول لماذا ولا إشاراتٍ تُبنى عليها**.
+            //
+            // **والمنطقةُ تبقى `UNKNOWN` عمداً** — «ممنوعٌ حتّى يثبت»،
+            // وتُحسم عند اعتماد التوثيق بـ`assignFromKyc`. لكنّ الفرقَ
+            // كبير: الإشاراتُ (المحافظةُ المصرَّحة، عنوانُ التسجيل،
+            // مقدّمةُ الرقم) تُلتقط الآن وتُحفظ، **فيرى المدقّقُ على أيّ
+            // شيءٍ يبني قرارَه** بدل أن يبدأ من فراغ.
+            //
+            // ولا تُعطَّل: فشلُ إسنادٍ لا يجوز أن يمنع إنشاء حساب.
+            try {
+                app(\App\Services\ZoneAssignmentService::class)
+                    ->assignOnRegistration($user, $request);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('zone assignment on registration failed', [
+                    'user_id' => $user->id, 'error' => $e->getMessage(),
+                ]);
+            }
+
             $emoney = $this->eMoney;
             $emoney->user_id = $user->id;
             $emoney->save();

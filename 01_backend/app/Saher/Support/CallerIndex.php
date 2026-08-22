@@ -1,0 +1,95 @@
+<?php
+
+namespace App\Saher\Support;
+
+/**
+ * SAHER-DATA-001 — **فهرسُ المنادين: من يُنادي هذه الدالّة؟**
+ *
+ * ══════════════════════════════════════════════════════════════════════
+ * **ولمَ فهرسٌ واحدٌ لا بحثٌ لكلّ دالّة:** الخدماتُ فيها مئاتُ الدوالّ،
+ * والبحثُ عن كلٍّ على حدةٍ يقرأ الشجرةَ مئاتِ المرّات. فتُقرأ مرّةً
+ * وتُعدّ الأسماءُ كلُّها في مرورٍ واحد.
+ *
+ * **وحدُّه يُقال ولا يُسكَت عنه:** يعدّ **الاسمَ** لا الاستدعاءَ المربوطَ
+ * بصنفه. فدالّةُ `handle()` في خدمةٍ ستبدو منادَاةً آلافَ المرّات لأنّ
+ * الاسمَ شائع. **وهذا يُنتج سلبيّاتٍ كاذبة — لا إيجابيّاتٍ كاذبة**:
+ * أي أنّه يُسكت عن دوالَّ ميّتةٍ ولا يتّهم دالّةً حيّة. **وهذا هو
+ * الاتّجاهُ الآمن**، فالاتّهامُ الكاذب يُنتج حذفَ شيفرةٍ عاملة.
+ *
+ * ولذلك كلُّ ما يُبنى عليه `SUSPECTED` أبداً — لا `PROVEN`.
+ */
+final class CallerIndex
+{
+    /** @var array<string,int> */
+    private array $counts = [];
+
+    /** @var array<string,list<string>> اسمُ الدالّة ← الملفّاتُ التي تناديها */
+    private array $files = [];
+
+    /** @param list<string> $roots مساراتٌ مطلقةٌ تُمسح */
+    public function __construct(array $roots)
+    {
+        foreach ($roots as $root) {
+            if (! is_dir($root)) {
+                continue;
+            }
+
+            $it = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
+            );
+
+            foreach ($it as $file) {
+                /** @var \SplFileInfo $file */
+                $ext = $file->getExtension();
+
+                if (! in_array($ext, ['php', 'blade'], true)
+                    && ! str_ends_with($file->getFilename(), '.blade.php')) {
+                    continue;
+                }
+
+                $this->ingest($file->getPathname());
+            }
+        }
+    }
+
+    private function ingest(string $path): void
+    {
+        $src = @file_get_contents($path);
+
+        if ($src === false) {
+            return;
+        }
+
+        // `->name(` و`::name(` — وهما صيغتا النداء في PHP وBlade معاً.
+        if (! preg_match_all('/(?:->|::)\s*([a-zA-Z_]\w*)\s*\(/', $src, $m)) {
+            return;
+        }
+
+        foreach (array_unique($m[1]) as $name) {
+            $this->counts[$name] = ($this->counts[$name] ?? 0) + 1;
+            $this->files[$name][] = $path;
+        }
+    }
+
+    /**
+     * كم ملفّاً ينادي هذا الاسمَ — **مستثنىً منها ملفُّ التعريف نفسُه**.
+     *
+     * فالدالّةُ التي تنادي نفسَها أو تناديها أختُها في الصنف نفسِه
+     * **ليست مبلوغةً من خارج**، وهو ما يُسأل عنه هنا.
+     */
+    public function callersOutside(string $name, string $declaringFile): int
+    {
+        $hits = $this->files[$name] ?? [];
+
+        return count(array_filter($hits, fn ($f) => $f !== $declaringFile));
+    }
+
+    /** @return list<string> */
+    public function callerFiles(string $name, string $declaringFile): array
+    {
+        return array_values(array_filter(
+            $this->files[$name] ?? [],
+            fn ($f) => $f !== $declaringFile,
+        ));
+    }
+}

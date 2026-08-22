@@ -100,6 +100,7 @@ Schedule::command('amial:reconcile-nightly')
 Artisan::registerCommand(app(\App\Saher\Console\ScanGuardsCommand::class));
 Artisan::registerCommand(app(\App\Saher\Console\ScanGateCommand::class));
 Artisan::registerCommand(app(\App\Saher\Console\RecordGateCommand::class));
+Artisan::registerCommand(app(\App\Saher\Console\ScanDataTruthCommand::class));
 
 // **ولا يُجدوَل ساهر بعد.** إدراجُ جدولةٍ الآن يُنتج جولاتٍ تُكتب في
 // قاعدةٍ لا شاشةَ تقرؤها — «مبنيٌّ ولا يُوصَل إليه». تُضاف الجدولةُ حين
