@@ -74,7 +74,13 @@ final class GitTree
         $root = $root ?? base_path('..');
 
         $out = self::run('cd ' . escapeshellarg($root)
-            . ' && git log --no-merges -n ' . (int) $limit
+            // **والدمجُ يُقرأ ولا يُتخطّى.**
+            //
+            // كان هنا `--no-merges`، **وهو يُعمي الجامعَ عن أخطر ما يدخل
+            // الفرع**: الدمجُ يجمع شيفرةً لم تُفحَص معاً قطّ، وشجرتُه هي
+            // ما يصير عليه الفرعُ فعلاً. وكلُّ ما كُشف اليوم من أعطالٍ
+            // خرج من دمجٍ لا من التزامٍ مفرد.
+            . ' && git log -n ' . (int) $limit
             . ' --format=%H%x09%T%x09%an%x09%aI%x09%s');
 
         if ($out === null) {

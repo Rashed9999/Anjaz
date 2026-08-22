@@ -36,6 +36,9 @@ class AdminTwoFactorDoorGuardTest extends TestCase
             'password' => Hash::make(self::PASSWORD),
         ]);
 
+        app(\App\Services\PlatformLoginPinService::class)
+            ->issue($u, self::LOGIN_PIN, null, 'تهيئةُ اختبار');
+
         if ($withTwoFactor) {
             $svc = app(TwoFactorAuthService::class);
             $secret = $svc->generateSecret();
@@ -56,13 +59,24 @@ class AdminTwoFactorDoorGuardTest extends TestCase
         return $u->fresh();
     }
 
+    /** رمزُ دخولِ الموظّف — حلّ محلَّ الكابتشا في `AMIAL-AUTH-PIN`. */
+    private const LOGIN_PIN = '4271';
+
     private function login(): \Illuminate\Testing\TestResponse
     {
+        // **وعقدُ الباب تغيّر، فيُختبَر بعقده الجديد.**
+        //
+        // كان المساعِدُ يُرسل حقلَي الكابتشا، وقد استُبدلا برمز PIN
+        // يُصدَره مديرُ المنصّة. **فالدخولُ صار يفشل صامتاً**، ولا تُكتب
+        // حالةُ انتظار المصادقة الثنائيّة — فيُقرأ ذلك «الرمزُ الصحيح لا
+        // يُكمل الدخول» وهو تشخيصٌ خاطئ لعطلٍ في بابٍ سابق.
+        //
+        // **ومقياسٌ يُشخّص خطأً أسوأ من مقياسٍ يسقط**: يُرسل من يصدّقه
+        // إلى المصادقة الثنائيّة والعطلُ في كلمة المرور.
         return $this->post(route('admin.auth.login'), [
             'phone' => '+967711900001',
             'password' => self::PASSWORD,
-            'set_default_captcha' => 1,
-            'default_captcha_value' => '',
+            'login_pin' => self::LOGIN_PIN,
         ]);
     }
 
@@ -85,8 +99,19 @@ class AdminTwoFactorDoorGuardTest extends TestCase
     {
         $this->admin(false)->forceFill(['is_active' => 0])->save();
 
-        $this->login()->assertRedirect(route('admin.auth.login'));
-        $this->assertFalse(auth('user')->check());
+        // **والثابتُ أن لا جلسةَ تُفتح، لا أن تكون الوجهةُ عنواناً بعينه.**
+        //
+        // ردُّ الرفض صار `back()` — يعود إلى صفحة الدخول في متصفّحٍ
+        // حقيقيّ، وإلى الجذر في اختبارٍ بلا مُحيل. **ومقياسٌ يحرس عنوانَ
+        // إعادةِ توجيهٍ يسقط على تغييرٍ لا يمسّ الأمان**، ويُخفي حين
+        // يُصادف العنوانُ الصحيحَ أنّ الجلسةَ فُتحت.
+        $this->login();
+
+        $this->assertFalse(auth('user')->check(),
+            'حسابٌ معطَّلٌ فُتحت له جلسة');
+
+        $this->get(route('admin.dashboard'))
+            ->assertRedirect(route('admin.auth.login'));
     }
 
     public function test_the_password_alone_does_not_open_the_panel_when_two_factor_is_on(): void
