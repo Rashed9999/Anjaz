@@ -64,6 +64,40 @@ class RegisterController extends Controller
             'kin_name' => 'sometimes|nullable|string|max:150',
             'kin_phone' => 'sometimes|nullable|string|max:30',
             'kin_relation' => 'sometimes|nullable|string|max:60',
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-KYC-INTL-001 — حقولُ «اعرف عميلك» الرقابيّة.
+            //
+            // **كلُّها `sometimes`** — مئاتُ الحسابات قائمةٌ بلا هذه
+            // البيانات، وإلزامُها هنا يُقفل التسجيلَ على من سبق الميزة.
+            // **وشاشةُ اعتماد الهويّة هي التي تطالب بها**، فالإلزامُ
+            // موضعُه بوّابةُ الاعتماد لا بوّابةُ الدخول.
+            // ══════════════════════════════════════════════════════════
+            'name_en' => 'sometimes|nullable|string|max:150|regex:/^[A-Za-z\s.\-\x27]+$/',
+            'father_name' => 'sometimes|nullable|string|max:60',
+            'grandfather_name' => 'sometimes|nullable|string|max:60',
+            'country_of_birth' => 'sometimes|nullable|string|max:60',
+            'dual_nationality' => 'sometimes|nullable|string|max:60',
+            'id_place_of_issue' => 'sometimes|nullable|string|max:80',
+            'marital_status' => 'sometimes|nullable|in:single,married,divorced,widowed',
+            'residence_district' => 'sometimes|nullable|string|max:80',
+            'residence_area' => 'sometimes|nullable|string|max:120',
+            'residence_landmark' => 'sometimes|nullable|string|max:150',
+            'housing_type' => 'sometimes|nullable|in:owned,rented,family,other',
+            'employer_name' => 'sometimes|nullable|string|max:150',
+            'job_title' => 'sometimes|nullable|string|max:80',
+            'work_address' => 'sometimes|nullable|string|max:200',
+            'income_source' => 'sometimes|nullable|in:'
+                . implode(',', \App\Support\Kyc\KycProfileFields::INCOME_SOURCES),
+            'account_purpose' => 'sometimes|nullable|in:'
+                . implode(',', \App\Support\Kyc\KycProfileFields::ACCOUNT_PURPOSES),
+            'monthly_income' => 'sometimes|nullable|numeric|min:0|max:9999999999999',
+            'kin2_name' => 'sometimes|nullable|string|max:150',
+            'kin2_phone' => 'sometimes|nullable|string|max:30',
+            'kin2_relation' => 'sometimes|nullable|string|max:60',
+            // **وثلاثيُّ الحالة**: غيابُ الحقل «لم يُسأل»، لا «لا».
+            'is_pep' => 'sometimes|nullable|boolean',
+            'pep_position' => 'sometimes|nullable|string|max:200',
             'declaration_accepted' => 'sometimes',
             'date_of_birth' => 'sometimes|nullable|date',
             'identification_issue_date' => 'sometimes|nullable|date',
@@ -188,6 +222,16 @@ class RegisterController extends Controller
                     $user->{$kc} = $request->input($kc);
                 }
             }
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-KYC-INTL-001 — **وحقلٌ يُطلَب في النموذج ولا يُحفَظ
+            // أسوأ من غيابه**: يُوهم بأنّ البيانَ عندنا فلا يُطلَب ثانية.
+            //
+            // ويُقرأ الجردُ من مصدرٍ واحد (`KycProfileFields`) لا يُكتب
+            // ها هنا — فقائمتان تفترقان بحقلٍ تُنتجان حقلاً يُرسَل ولا
+            // يصل، وهو عطلٌ صامت.
+            // ══════════════════════════════════════════════════════════
+            \App\Support\Kyc\KycProfileFields::fill($user, $request);
             // AMIAL-GOVERNORATES-001: نخزّن رمز ISO لا النصّ الحرّ — الرمز
             // يُقارَن ويُفهرَس، والنصّ الحرّ («صنعا»، «Sanaa»، «امانة العاصمة»)
             // لا يُقارَن بشيء. codeFromName يبتلع الصيغ كلها.

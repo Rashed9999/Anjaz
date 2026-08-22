@@ -30,8 +30,11 @@ class _AmialRegistrationWizardScreenState
   bool _submitting = false;
   bool _otpSent = false;
 
-  static const int _lastInputStep = 8; // خطوة OTP (يليها النجاح)
-  static const int _successStep = 9;
+  // AMIAL-KYC-INTL-001: أُدرجت خطوةُ «العمل ومصدر الدخل» في الموضع ٣،
+  // فانزاح ما بعدها واحداً. **والفهارسُ مكتوبةٌ يدويّاً هنا** — فنقلُ
+  // خطوةٍ بلا نقلِ كلِّ مرجعٍ لها يُنتج تحقّقاً يقع على الشاشة الخطأ.
+  static const int _lastInputStep = 9; // خطوة OTP (يليها النجاح)
+  static const int _successStep = 10;
 
   // ── الحقول ──────────────────────────────────────────────
   // الاسم الرباعي
@@ -103,6 +106,35 @@ class _AmialRegistrationWizardScreenState
 
   final List<XFile> _idImages = [];
 
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-KYC-INTL-001 — حقولُ «اعرف عميلك» الرقابيّة.
+  //
+  // مصدرُها نموذجُ فتح حساب أفراد في بنك عدن. **وأُخذ منه ما يخدم إلزاماً
+  // رقابيّاً أو قرارَ مخاطر، ورُدّ ما عداه** — فكلُّ حقلٍ زائدٍ يُطيل
+  // التسجيلَ ويرفع الانسحاب.
+  // ══════════════════════════════════════════════════════════════════
+  final _nameEn = TextEditingController();
+  final _countryOfBirth = TextEditingController(text: 'اليمن');
+  final _idPlaceOfIssue = TextEditingController();
+  final _employerName = TextEditingController();
+  final _jobTitle = TextEditingController();
+  final _workAddress = TextEditingController();
+  final _monthlyIncome = TextEditingController();
+  final _pepPosition = TextEditingController();
+  final _kin2Name = TextEditingController();
+  final _kin2Phone = TextEditingController();
+  final _kin2Relation = TextEditingController();
+
+  String _maritalStatus = 'single';
+  String _housingType = 'owned';
+  String _incomeSource = 'salary';
+  String _accountPurpose = 'savings';
+
+  /// **ثلاثيُّ الحالة عمداً:** `null` = لم يُجَب · `false` = أنكر ·
+  /// `true` = أقرّ. **و«لم يُسأل» ليس «لا»** — والفرقُ هو كلُّ ما يحتاجه
+  /// المدقّق: الأوّلُ ثغرةٌ في الإجراء، والثاني إجابةٌ تُراجَع.
+  bool? _isPep;
+
   final _kinName = TextEditingController();
   final _kinPhone = TextEditingController();
   final _kinRelation = TextEditingController();
@@ -127,6 +159,9 @@ class _AmialRegistrationWizardScreenState
       _name1, _name2, _name3, _name4, _dob, _email, _occupation, _phone,
       _idNumber, _idIssue, _idExpiry,
       _addrDir, _addrArea, _addrStreet, _addrLandmark,
+      _nameEn, _countryOfBirth, _idPlaceOfIssue, _employerName, _jobTitle,
+      _workAddress, _monthlyIncome, _pepPosition,
+      _kin2Name, _kin2Phone, _kin2Relation,
       _kinName, _kinPhone, _kinRelation, _pin, _pinConfirm, _otp, _storeName,
     ]) {
       c.dispose();
@@ -201,18 +236,31 @@ class _AmialRegistrationWizardScreenState
         }
         return true;
       case 3:
+        // **والإفصاحُ عن المنصب السياسيّ يُسأل ولا يُفترَض جوابُه.**
+        // مربّعٌ يُترك فارغاً يُقرأ «لا»، وذاك يُحوّل ثغرةً في الإجراء
+        // إلى إجابةٍ مطمئنّة — وهو أسوأُ ما يقع في ملفّ امتثال.
+        if (_isPep == null) {
+          _snack('أجب عن سؤال المنصب السياسيّ — لا يُترك بلا جواب');
+          return false;
+        }
+        if (_isPep == true && _pepPosition.text.trim().isEmpty) {
+          _snack('اذكر المنصب صراحةً — «نعم» وحدها لا تُحقَّق');
+          return false;
+        }
+        return true;
+      case 4:
         if (_idImages.isEmpty) {
           _snack('أرفق صورة وثيقة الهوية');
           return false;
         }
         return true;
-      case 4:
+      case 5:
         if (_kinName.text.trim().isEmpty || _kinPhone.text.trim().isEmpty) {
           _snack('أدخل بيانات الشخص القريب');
           return false;
         }
         return true;
-      case 5:
+      case 6:
         if ((_sigKey1.currentState?.isEmpty ?? true) ||
             (_sigKey2.currentState?.isEmpty ?? true) ||
             (_sigKey3.currentState?.isEmpty ?? true)) {
@@ -220,13 +268,13 @@ class _AmialRegistrationWizardScreenState
           return false;
         }
         return true;
-      case 6:
+      case 7:
         if (!_agreeTerms || !_agreePolicy || !_declareAccuracy) {
           _snack('الرجاء الموافقة على جميع الإقرارات');
           return false;
         }
         return true;
-      case 7:
+      case 8:
         if (_pin.text.length != 4) {
           _snack('رمز PIN يجب أن يكون 4 أرقام');
           return false;
@@ -236,7 +284,7 @@ class _AmialRegistrationWizardScreenState
           return false;
         }
         return true;
-      case 8:
+      case 9:
         if (_otp.text.trim().isEmpty) {
           _snack('أدخل رمز التحقق المرسل إلى هاتفك');
           return false;
@@ -252,7 +300,7 @@ class _AmialRegistrationWizardScreenState
     if (!_validateStep(_step)) return;
 
     // بعد خطوة PIN → أرسل OTP قبل الانتقال لخطوة OTP
-    if (_step == 7 && !_otpSent) {
+    if (_step == 8 && !_otpSent) {
       await _sendOtp();
     }
 
@@ -399,6 +447,41 @@ class _AmialRegistrationWizardScreenState
       final fields = <String, String>{
         'f_name': _name1.text.trim(),
         'l_name': lastName,
+
+        // ══════════════════════════════════════════════════════════════
+        // **والبنيةُ تُرسَل مع المدموج لا بدلاً منه.**
+        //
+        // كان الاسمُ الرباعيُّ يُدمج في `l_name` بفواصل، والعنوانُ
+        // المفصَّلُ في `address` كذلك — **فتُجمع البنيةُ ثمّ تُتلَف**.
+        // ومطابقةُ قوائم العقوبات تحتاج المقاطعَ منفصلة: «راشد محمد عوض»
+        // و«راشد عوض محمد» شخصان، والدمجُ يُخفي الفرق.
+        //
+        // ويبقى المدموجُ للتوافق الخلفيّ — فشاشاتٌ كثيرةٌ تقرؤه.
+        // ══════════════════════════════════════════════════════════════
+        'father_name': _name2.text.trim(),
+        'grandfather_name': _name3.text.trim(),
+        'name_en': _nameEn.text.trim(),
+        'country_of_birth': _countryOfBirth.text.trim(),
+        'id_place_of_issue': _idPlaceOfIssue.text.trim(),
+        'marital_status': _maritalStatus,
+        'residence_district': _addrDir.text.trim(),
+        'residence_area': _addrArea.text.trim(),
+        'residence_landmark': _addrLandmark.text.trim(),
+        'housing_type': _housingType,
+        'employer_name': _employerName.text.trim(),
+        'job_title': _jobTitle.text.trim(),
+        'work_address': _workAddress.text.trim(),
+        'income_source': _incomeSource,
+        'account_purpose': _accountPurpose,
+        'monthly_income': _monthlyIncome.text.trim(),
+        // **والعملةُ تُقال ولا تُفترَض** — «١٠٠٠٠٠» بلا عملةٍ رقمٌ صحيحٌ
+        // بمعنىً مجهول.
+        'monthly_income_currency': 'YER',
+        'kin2_name': _kin2Name.text.trim(),
+        'kin2_phone': _kin2Phone.text.trim(),
+        'kin2_relation': _kin2Relation.text.trim(),
+        if (_isPep != null) 'is_pep': _isPep! ? '1' : '0',
+        if (_isPep == true) 'pep_position': _pepPosition.text.trim(),
         'gender': _gender,
         'occupation': _occupation.text.trim(),
         'dial_country_code': _dialCode,
@@ -545,6 +628,7 @@ class _AmialRegistrationWizardScreenState
                 _stepPersonal(),
                 _stepIdentity(),
                 _stepAddress(),
+                _stepWork(),
                 _stepDocuments(),
                 _stepKin(),
                 _stepSignature(),
@@ -680,6 +764,24 @@ class _AmialRegistrationWizardScreenState
         _field(_name2, 'اسم الأب *'),
         _field(_name3, 'اسم الجد *'),
         _field(_name4, 'اسم العائلة *'),
+        // **ولا فحصَ عقوباتٍ بلا صيغةٍ لاتينيّة** — القوائمُ الدوليّةُ
+        // كلُّها بها، ومطابقةُ العربيّ وحدَه تمرّ على كلّ اسم.
+        _field(_nameEn, 'الاسم بالإنجليزيّة (كما في الجواز) *'),
+        _field(_countryOfBirth, 'بلد الميلاد'),
+        DropdownButtonFormField<String>(
+          key: const Key('reg-marital-status'),
+          initialValue: _maritalStatus,
+          decoration: const InputDecoration(
+              labelText: 'الحالة الاجتماعيّة', border: OutlineInputBorder()),
+          items: const [
+            DropdownMenuItem(value: 'single', child: Text('أعزب')),
+            DropdownMenuItem(value: 'married', child: Text('متزوّج')),
+            DropdownMenuItem(value: 'divorced', child: Text('مطلّق')),
+            DropdownMenuItem(value: 'widowed', child: Text('أرمل')),
+          ],
+          onChanged: (v) => setState(() => _maritalStatus = v ?? 'single'),
+        ),
+        const SizedBox(height: 14),
         _dateField(_dob, 'تاريخ الميلاد *'),
         DropdownButtonFormField<String>(
           value: _gender,
@@ -750,6 +852,88 @@ class _AmialRegistrationWizardScreenState
         _dateField(_idExpiry, 'تاريخ الانتهاء', future: true),
       ]);
 
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-KYC-INTL-001 — **خطوةُ العمل ومصدر المال.**
+  //
+  // وهي أهمُّ ما أُضيف: عليها يُبنى **سقفُ المعاملات المتوقَّع**، وبها
+  // يُقاس الانحرافُ عنه. وبلا مصدرِ دخلٍ مصرَّحٍ به لا يعني «حوّل مليوناً»
+  // شيئاً — لا يُعرَف أهو معتادٌ لهذا العميل أم شاذّ.
+  // ══════════════════════════════════════════════════════════════════
+  Widget _stepWork() => _wrap([
+        _sectionNote('بيانات عملك ومصدر دخلك — تُبنى عليها حدودُ حسابك، '
+            'وتُقاس بها العمليّاتُ غيرُ المعتادة.'),
+        _field(_jobTitle, 'المسمّى الوظيفيّ / المنصب'),
+        _field(_employerName, 'جهة العمل'),
+        _field(_workAddress, 'عنوان العمل'),
+        DropdownButtonFormField<String>(
+          key: const Key('reg-income-source'),
+          initialValue: _incomeSource,
+          decoration: const InputDecoration(
+              labelText: 'المصدر الأساسيّ للدخل *', border: OutlineInputBorder()),
+          items: const [
+            DropdownMenuItem(value: 'salary', child: Text('راتب')),
+            DropdownMenuItem(value: 'business', child: Text('تجارة')),
+            DropdownMenuItem(value: 'investment', child: Text('استثمار')),
+            DropdownMenuItem(value: 'rent', child: Text('إيجارات')),
+            DropdownMenuItem(value: 'asset_sale', child: Text('بيع أصول')),
+            DropdownMenuItem(value: 'inheritance', child: Text('ميراث')),
+            DropdownMenuItem(value: 'remittance', child: Text('حوالات')),
+            DropdownMenuItem(value: 'other', child: Text('أخرى')),
+          ],
+          onChanged: (v) => setState(() => _incomeSource = v ?? 'salary'),
+        ),
+        const SizedBox(height: 14),
+        // **والعملةُ مكتوبةٌ في التسمية لا مفترَضة.**
+        _field(_monthlyIncome, 'الدخل الشهريّ التقريبيّ (ريال يمنيّ)',
+            type: TextInputType.number),
+        DropdownButtonFormField<String>(
+          key: const Key('reg-account-purpose'),
+          initialValue: _accountPurpose,
+          decoration: const InputDecoration(
+              labelText: 'الغرض من فتح الحساب *', border: OutlineInputBorder()),
+          items: const [
+            DropdownMenuItem(value: 'savings', child: Text('توفير')),
+            DropdownMenuItem(value: 'salary', child: Text('استلام راتب')),
+            DropdownMenuItem(value: 'business', child: Text('نشاط تجاريّ')),
+            DropdownMenuItem(value: 'remittance', child: Text('استلام حوالات')),
+            DropdownMenuItem(value: 'payments', child: Text('مدفوعات يوميّة')),
+            DropdownMenuItem(value: 'other', child: Text('أخرى')),
+          ],
+          onChanged: (v) => setState(() => _accountPurpose = v ?? 'savings'),
+        ),
+        const SizedBox(height: 20),
+
+        // ══════════════════════════════════════════════════════════════
+        // **الإفصاحُ عن المنصب السياسيّ — أخطرُ حقلٍ في النموذج كلِّه.**
+        //
+        // عليه تقوم **العنايةُ الواجبةُ المشدّدة** في كلّ نظامٍ لمكافحة
+        // غسل الأموال. وغيابُه يعني أنّ المنصّةَ لا تستطيع أن تقول إنّها
+        // فحصت — لا أنّها فحصت فلم تجد.
+        //
+        // **ولا قيمةَ افتراضيّةَ له**: مربّعٌ يبدأ مُفرَغاً يُقرأ «لا»،
+        // وذاك يُحوّل ثغرةً في الإجراء إلى إجابةٍ مطمئنّة.
+        // ══════════════════════════════════════════════════════════════
+        const Text('هل تشغل أنت أو أحد أقاربك منصباً سياسيّاً أو حكوميّاً رفيعاً؟ *',
+            style: TextStyle(fontWeight: FontWeight.w600, height: 1.6)),
+        const SizedBox(height: 8),
+        // **و`emptySelectionAllowed` مقصودةٌ لا سهو**: لا خيارَ منتقىً
+        // ابتداءً، فلا يُقرأ صمتُ المستعمل جواباً.
+        SegmentedButton<bool>(
+          key: const Key('reg-pep-choice'),
+          segments: const [
+            ButtonSegment(value: false, label: Text('لا')),
+            ButtonSegment(value: true, label: Text('نعم')),
+          ],
+          selected: _isPep == null ? <bool>{} : {_isPep!},
+          emptySelectionAllowed: true,
+          showSelectedIcon: false,
+          onSelectionChanged: (sel) =>
+              setState(() => _isPep = sel.isEmpty ? null : sel.first),
+        ),
+        // **وإقرارٌ بلا منصبٍ ناقص** — «نعم» وحدَها لا تُحقَّق.
+        if (_isPep == true) _field(_pepPosition, 'المنصب — يُذكر صراحةً *'),
+      ]);
+
   Widget _stepAddress() => _wrap([
         _sectionNote('أدخل عنوان سكنك بالتفصيل لتسهيل التحقّق.'),
 
@@ -809,6 +993,19 @@ class _AmialRegistrationWizardScreenState
         _field(_addrArea, 'الحي / العزلة *'),
         _field(_addrStreet, 'الشارع'),
         _field(_addrLandmark, 'أقرب معلم بارز'),
+        DropdownButtonFormField<String>(
+          key: const Key('reg-housing-type'),
+          initialValue: _housingType,
+          decoration: const InputDecoration(
+              labelText: 'نوع السكن', border: OutlineInputBorder()),
+          items: const [
+            DropdownMenuItem(value: 'owned', child: Text('ملك')),
+            DropdownMenuItem(value: 'rented', child: Text('إيجار')),
+            DropdownMenuItem(value: 'family', child: Text('سكن عائلة')),
+            DropdownMenuItem(value: 'other', child: Text('أخرى')),
+          ],
+          onChanged: (v) => setState(() => _housingType = v ?? 'owned'),
+        ),
       ]);
 
   Widget _stepDocuments() => _wrap([
@@ -850,6 +1047,15 @@ class _AmialRegistrationWizardScreenState
         _field(_kinName, 'اسم الشخص القريب *'),
         _field(_kinPhone, 'هاتف الشخص القريب *', type: TextInputType.phone),
         _field(_kinRelation, 'صلة القرابة (مثل: أخ، أب)'),
+        const SizedBox(height: 20),
+        // **ومرجعٌ واحدٌ لا يكفي** — النموذجُ المصرفيُّ يطلب اثنين،
+        // وواحدٌ لا يُبلَغ يترك الحسابَ بلا سبيلِ تواصلٍ بديل.
+        const Text('شخصٌ ثانٍ (اختياريّ لكن يُنصح به)',
+            style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        _field(_kin2Name, 'اسم الشخص الثاني'),
+        _field(_kin2Phone, 'هاتفه', type: TextInputType.phone),
+        _field(_kin2Relation, 'صلة القرابة'),
       ]);
 
   Widget _stepSignature() => _wrap([

@@ -258,6 +258,17 @@ class KycDocumentTest extends TestCase
             'kyc_tier' => 0,
             'kyc_update_required' => 1,
             'kyc_update_previous_tier' => 3,
+            // AMIAL-KYC-INTL-001: الفئةُ الثالثةُ تشترط الحقولَ الرقابيّة
+            // (هي التي تُوسَّع بها حدودُ المال). فتُملأ ها هنا **لأنّ هذا
+            // المقياسَ عن الوثائق لا عن الحقول** — ومقياسٌ يسقط لسببٍ
+            // غير الذي يدّعيه لا يحرس ما يقول إنّه يحرسه.
+            'name_en' => 'TEST CUSTOMER',
+            'father_name' => 'محمد',
+            'grandfather_name' => 'عوض',
+            'residence_district' => 'سيحوت',
+            'income_source' => 'salary',
+            'account_purpose' => 'savings',
+            'is_pep' => false,
         ])->save();
 
         foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE] as $type) {
