@@ -8,34 +8,19 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
- * AMIAL-REFACTOR-CORE-001
- *
  * AuditService — الواجهة الوحيدة لكتابة سجل القرارات.
  *
- * هدفه:
- *   - تبسيط كتابة audit_decisions (model أحياناً مع حقول كثيرة).
- *   - تنظيف PII الحساس من الـ context قبل التخزين.
- *   - failover إلى Laravel Log إن فشل DB.
- *
- * مهم: لا يجب أن يفشل audit الـ flow الرئيسي. نلتقط أي exception
- * ونلوغها فقط — نموت بصمت ولا نعطل عملية مالية بسبب فشل audit.
+ * السجل append-only ومربوط بسلسلة SHA-256. لا يجوز أن يفشل التدفق
+ * الرئيسي بسبب تعذر كتابة التدقيق، لذلك يكون Laravel log هو fallback.
  */
 class AuditService
 {
-    /** قائمة المفاتيح الممنوع لها الدخول للـ context (PII حساس) */
     private const FORBIDDEN_KEYS = [
         'password', 'pin', 'old_pin', 'new_pin', 'transaction_pin',
         'otp', 'token', 'access_token', 'refresh_token', 'authorization',
         'card_number', 'cvv', 'cvc', 'iban', 'private_key', 'secret',
     ];
 
-    /**
-     * يكتب decision. الـ payload:
-     *   actor_type, actor_user_id, subject_type, subject_id,
-     *   action, decision_code, reason, severity, context,
-     *   transaction_id, idempotency_key, zone_code
-     */
-    /** الشدّات المقبولة في العمود — وما يُرادفها ممّا يُكتب عادةً. */
     private const SEVERITY_MAP = [
         'low' => 'info', 'debug' => 'info', 'info' => 'info',
         'medium' => 'notice', 'notice' => 'notice',
@@ -43,86 +28,48 @@ class AuditService
         'critical' => 'critical', 'severe' => 'critical', 'fatal' => 'critical',
     ];
 
-    private function normalizeSeverity(?string $value): string
-    {
-        return self::SEVERITY_MAP[mb_strtolower(trim((string) $value))] ?? 'info';
-    }
-
-    /**
-     * مفاتيحُ الحمولة المعروفة — وما عداها يُسقَط.
-     *
-     * **يُقرأ في `assertKnownKeys()`، وهي سببُ وجوده.**
-     */
     public const KNOWN_KEYS = [
         'actor_type', 'actor_user_id', 'subject_type', 'subject_id',
         'action', 'decision_code', 'reason', 'severity', 'context',
         'transaction_id', 'idempotency_key', 'zone_code',
-        // مرادفٌ تاريخيّ — انظر أدناه.
         'metadata',
     ];
+
+    private function normalizeSeverity(?string $value): string
+    {
+        return self::SEVERITY_MAP[mb_strtolower(trim((string) $value))] ?? 'info';
+    }
 
     public function record(array $payload): ?string
     {
         try {
             $this->assertKnownKeys($payload);
 
-            // ══════════════════════════════════════════════════════════
-            // **`metadata` مرادفٌ لـ`context` — وهذا إصلاحُ فقدٍ صامت.**
-            //
-            // **الثمن الذي دُفع:** سبعةَ عشرَ موضعاً في جانب الوكيل تكتب
-            // `'metadata' => [...]` — الورديّاتُ والتسوياتُ والموظّفون
-            // وطلباتُ الشبّاك وأحداثُه. و`record()` لا تقرأ إلّا
-            // `context`، فكان كلُّ ما فيها **يُسقَط بلا رسالة**:
-            // `staff_id` و`branch_id` و`opening_float` و`reference`.
-            //
-            // فالسجلُّ يقول «فُتحت ورديّة» ولا يقول **من ولا في أيّ فرعٍ
-            // ولا بكم عهدة**. وشاشةُ التدقيق تقول «لا سياق مسجَّل» —
-            // وهي صادقةٌ فيما تقرأ، والفقدُ وقع قبلها بطبقة.
-            //
-            // ولا يُعاد كتابةُ سبعةَ عشرَ موضعاً وتُترَك الفجوةُ مفتوحةً
-            // للثامنَ عشر: **يُقبل الاسمان، ويُحرَس أن لا يدخل ثالثٌ
-            // مجهولٌ صامتاً** (`assertKnownKeys`).
-            // ══════════════════════════════════════════════════════════
+            // metadata اسم تاريخي لـ context. قبول الاثنين يمنع فقد أدلة قديمة.
             $context = $payload['context'] ?? $payload['metadata'] ?? [];
-
             if (is_array($context)) {
                 $context = $this->sanitizeContext($context);
             }
 
             $decisionId = (string) Str::ulid();
-
             $attributes = [
                 'decision_id' => $decisionId,
                 'actor_type' => $payload['actor_type'] ?? 'system',
                 'actor_user_id' => $payload['actor_user_id'] ?? null,
                 'subject_type' => $payload['subject_type'] ?? 'user',
-                'subject_id' => isset($payload['subject_id']) ? (string)$payload['subject_id'] : null,
+                'subject_id' => isset($payload['subject_id']) ? (string) $payload['subject_id'] : null,
                 'action' => $payload['action'] ?? 'UNKNOWN',
                 'decision_code' => $payload['decision_code'] ?? 'UNKNOWN',
                 'reason' => isset($payload['reason']) ? mb_substr($payload['reason'], 0, 255) : null,
-                'context' => !empty($context) ? json_encode($context, JSON_UNESCAPED_UNICODE) : null,
+                'context' => ! empty($context) ? json_encode($context, JSON_UNESCAPED_UNICODE) : null,
                 'transaction_id' => $payload['transaction_id'] ?? null,
                 'idempotency_key' => $payload['idempotency_key'] ?? null,
                 'zone_code' => $payload['zone_code'] ?? null,
-                // **الشدّة تُطبَّع ولا تُمرَّر كما جاءت.**
-                //
-                // العمود محصورٌ بأربع قيم، وقيمةٌ خارجها تُسقط الإدراج
-                // كلَّه — و`catch` أدناه يبتلع الاستثناء. فالنتيجة أنّ
-                // **سطر التدقيق يُفقد بصمت** بسبب كلمة.
-                //
-                // ووقع هذا فعلاً: ثلاثة مواضع كتبت `high` و`medium`،
-                // فكان رفعُ حدِّ صرّافٍ وقرارُ موافقةٍ يمرّان بلا أثر —
-                // وهما بالضبط ما يُبحث عنه في أيّ تحقيق.
-                //
-                // وفقدُ سطرٍ لأجل كلمة أسوأ من الكلمة: فتُترجَم.
                 'severity' => $this->normalizeSeverity($payload['severity'] ?? null),
             ];
 
-            // AMIAL-INSIDER-001: سلسلة تجزئة — كل سجل يحمل بصمة سابقه.
-            // أي حذف/تعديل لاحق يكسر السلسلة ويُكشف بـ amial:audit-verify.
             DB::transaction(function () use ($attributes) {
                 $head = DB::table('audit_chain_head')->where('id', 1)->lockForUpdate()->first();
-
                 $prevHash = $head?->last_hash ?? hash('sha256', 'AMIAL-AUDIT-CHAIN-GENESIS');
                 $entryHash = self::computeEntryHash($prevHash, $attributes);
 
@@ -141,49 +88,21 @@ class AuditService
             });
 
             return $decisionId;
-
         } catch (\Throwable $e) {
-            // لا نسمح لـ audit بإفشال الـ flow الرئيسي.
-            // نلوغ إلى Laravel log كـ fallback.
             Log::channel('stack')->error('AuditService failed to persist decision', [
                 'error' => $e->getMessage(),
                 'payload_action' => $payload['action'] ?? null,
                 'payload_code' => $payload['decision_code'] ?? null,
             ]);
+
             return null;
         }
     }
 
     /**
-     * بصمة السجل: SHA-256(بصمة السابق + الحقول الجوهرية بترتيب ثابت).
-     * تُستخدم عند الكتابة وعند التحقق (amial:audit-verify) — يجب أن تبقى متطابقة.
-     */
-    /**
-     * AMIAL-AUDIT-JSON-001 — **صيغةٌ قانونيّةٌ لِـ`context` قبل البصم.**
-     *
-     * ══════════════════════════════════════════════════════════════════
-     * **الثمن — كشفته بوّابةُ GitHub في أوّل تشغيلٍ حقيقيّ:**
-     *
-     *   AdminCommandCenterGuardTest → «بصمةُ قرارٍ سليمٍ لا تطابق»
-     *   SafePaymentAdminAuditTest   → amial:audit-verify يخرج بـ١ بدل ٠
-     *
-     * يمرّان محلّيّاً ويسقطان في CI. **والفرقُ محرّكُ القاعدة:**
-     *
-     *   · MariaDB : `json()` مرادفٌ لـ`LONGTEXT` — يُخزَّن النصُّ حرفاً بحرف.
-     *   · MySQL 8 : نوعُ JSON أصليّ — **يُعيد ترتيبَ المفاتيح ويحذف
-     *               الفراغات** عند التخزين.
-     *
-     * والبصمةُ تُحسب **قبل** الحفظ من نصّ PHP، وتُقارَن **بعد** القراءة
-     * من نصّ المحرّك. فعلى MySQL 8 لا يتطابقان أبداً.
-     *
-     * **وليس هذا عطلَ اختبار:** `docker-compose.prod.yml` يستعمل `mysql:8.0`.
-     * أي أنّ سلسلةَ التدقيق هناك **تُبلّغ عن كلّ سجلٍّ سليمٍ أنّه معبوثٌ
-     * به** — وحارسٌ يصرخ على كلّ شيءٍ لا يصدّقه أحدٌ حين يصرخ على الحقّ.
-     *
-     * فتُوحَّد الصيغةُ قبل البصم: تُفكَّك، وتُرتَّب مفاتيحُها ترتيباً
-     * ثابتاً على كلّ عمق، ثمّ تُعاد. فتستوي القاعدتان.
-     *
-     * وما ليس JSON صالحاً يُترَك كما هو — فلا تُغيَّر بصمةُ نصٍّ حرّ.
+     * صيغة JSON قانونية مستقلة عن MariaDB/MySQL.
+     * MySQL 8 قد يعيد ترتيب مفاتيح JSON؛ لذلك لا تدخل الصيغة الخام في
+     * البصمات الجديدة.
      */
     public static function canonicalContext(?string $context): string
     {
@@ -192,34 +111,28 @@ class AuditService
         }
 
         $decoded = json_decode($context, true);
-
         if (! is_array($decoded)) {
             return $context;
         }
 
         $sort = static function (array &$a) use (&$sort): void {
-            ksort($a);
+            if (! array_is_list($a)) {
+                ksort($a);
+            }
             foreach ($a as &$v) {
                 if (is_array($v)) {
                     $sort($v);
                 }
             }
         };
-
         $sort($decoded);
 
-        return (string) json_encode($decoded,
-            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return (string) json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     /**
-     * **أتطابق بصمةُ الصفّ؟** — بالصيغة القانونيّة، أو بالصيغة القديمة.
-     *
-     * والتراجعُ مقصود: السجلّاتُ المكتوبةُ قبل هذا الإصلاح بُصمت بالنصّ
-     * الخام. فرفضُها الآن يجعل كلَّ تاريخٍ سابقٍ «معبوثاً به» — وهو
-     * العطلُ نفسُه مقلوباً.
-     *
-     * **والعبثُ يبقى مكشوفاً**: تعديلُ صفٍّ يكسر الصيغتين معاً.
+     * يقبل البصمة القانونية الحالية أو البصمة الخام القديمة إذا ظل النص
+     * الخام نفسه كما كُتب.
      */
     public static function hashMatches(string $prevHash, array $a, string $stored): bool
     {
@@ -231,29 +144,11 @@ class AuditService
     }
 
     /**
-     * **أيُّ حقلٍ تغيّر؟** — أو `null` إن لم يُفسَّر.
-     *
-     * ══════════════════════════════════════════════════════════════════
-     * **الثمن الذي دُفع:** فتح صاحبُ المشروع الشاشةَ فرأى «عُبث بالسجلّ —
-     * ٤٢ موضعاً» وسأل: «ما هذا التحذير وماذا أفعل إن ظهر مرّة أخرى؟».
-     *
-     * **والسؤالُ في محلّه، ولا جوابَ له في الشاشة.** «البصمةُ لا تطابق»
-     * تقول إنّ **شيئاً** تغيّر ولا تقول **ماذا**. فيقف من يقرؤها بين
-     * احتمالين لا سبيلَ له بينهما: جريمةٌ داخليّة، أو هجرةٌ من هجراتنا
-     * أعادت كتابةَ عمود.
-     *
-     * **والبصمةُ لا تُعيد ما مُحي — لكنّها تُجرَّب.** تُعاد الحسبةُ على
-     * فرضيّاتٍ معدودةٍ لكلٍّ سببٌ معروف؛ فإن طابقت إحداها **عُرف الحقلُ
-     * والسبب**، وإن لم تُطابق واحدةٌ منها فالإنذارُ حقيقيٌّ ويستحقّ
-     * تحقيقاً.
-     *
-     * وأوّلُ الفرضيّات أخطرُها لأنّها **من صنعنا**: `down()` في هجرة
-     * `2026_07_05_110000` تكتب `subject_type = 'user'` على كلّ صفٍّ خارج
-     * التعداد. فتراجُعُ هجراتٍ على خادمِ تجربةٍ يُعيد كتابةَ عمودٍ
-     * **مبصومٍ عليه** — والنتيجةُ لافتةٌ حمراءُ تتّهم بريئاً.
+     * يفسر اختلاف البصمة عندما يمكن إثبات السبب بإعادة بناء محتوى قديم
+     * معروف، ولا يخمن النية.
      *
      * @param  array<string,mixed>  $a
-     * @return array{field:string,cause:string,benign:bool}|null
+     * @return array{field:string,cause:string,benign:bool,code?:string}|null
      */
     public static function explainMismatch(string $prevHash, array $a, string $stored): ?array
     {
@@ -268,7 +163,6 @@ class AuditService
         $decoded = $rawContext !== '' ? json_decode($rawContext, true) : null;
 
         $hypotheses = [
-            // ① هجرتُنا نحن — `down()` تكتب `user` على كلّ نوعٍ خارج التعداد.
             [['subject_type' => 'safe_payment'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
             [['subject_type' => 'e_payment'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
             [['subject_type' => 'family_fund'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
@@ -277,12 +171,10 @@ class AuditService
             [['subject_type' => 'agent_shift'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
             [['subject_type' => 'agent_staff'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
             [['subject_type' => 'support_ticket'], 'نوعُ الموضوع', 'أُعيدت كتابتُه بتراجُع هجرة التعداد (كان نوعاً خارج القائمة القديمة)', true],
-
-            // ② قُصّ إلى الفراغ حين كان العمودُ تعداداً ووضعُ الصرامة مُطفأ.
             [['subject_type' => ''], 'نوعُ الموضوع', 'قُصّ إلى فراغٍ عند الكتابة — العمودُ كان تعداداً لا يقبل القيمة', true],
         ];
 
-        // ③ فروقُ ترميز `context` بين محرّك القاعدة وPHP.
+        // فروق encoding البسيطة التي لا تغيّر ترتيب المفاتيح.
         if (is_array($decoded)) {
             foreach ([
                 JSON_UNESCAPED_UNICODE,
@@ -290,16 +182,14 @@ class AuditService
                 JSON_UNESCAPED_SLASHES,
                 0,
             ] as $flags) {
-                $hypotheses[] = [['context' => json_encode($decoded, $flags)],
-                    'السياق', 'فرقُ ترميزٍ في تخزين JSON — لا تغييرَ في القيم', true];
+                $hypotheses[] = [
+                    ['context' => json_encode($decoded, $flags)],
+                    'السياق',
+                    'فرقُ ترميزٍ في تخزين JSON — لا تغييرَ في القيم',
+                    true,
+                ];
             }
         }
-
-        // ④ حقولٌ فُقدت أو أُفرغت.
-        $hypotheses[] = [['context' => null], 'السياق', 'أُفرغ بعد الكتابة', false];
-        $hypotheses[] = [['reason' => null], 'السبب', 'أُفرغ بعد الكتابة', false];
-        $hypotheses[] = [['zone_code' => null], 'النطاق', 'أُفرغ بعد الكتابة', false];
-        $hypotheses[] = [['transaction_id' => null], 'رقمُ المعاملة', 'أُفرغ بعد الكتابة', false];
 
         foreach ($hypotheses as [$patch, $field, $cause, $benign]) {
             if ($try($patch)) {
@@ -307,7 +197,95 @@ class AuditService
             }
         }
 
+        // AMIAL-AUDIT-LEGACY-JSON-002
+        // قبل canonicalContext كانت البصمة تُحسب من json_encode() بترتيب
+        // PHP، ثم يحفظ MySQL 8 JSON بصيغة قد تعيد ترتيب المفاتيح. عند
+        // القراءة تصبح القيم نفسها ولكن لا يمكن استعادة ترتيب المصدر من
+        // النص المخزن. لذلك نجرب *فقط* تبديلات ترتيب مفاتيح object مسطح
+        // وبحد صارم؛ فإذا أعاد أحدها البصمة القديمة فهذا إثبات أن القيم
+        // نفسها كانت موجودة وأن الاختلاف Serialization فقط.
+        if (is_array($decoded)
+            && ! array_is_list($decoded)
+            && count($decoded) >= 2
+            && count($decoded) <= 7
+            && self::legacyJsonKeyOrderMatches($prevHash, $a, $stored, $decoded)) {
+            return [
+                'field' => 'السياق',
+                'cause' => 'اختلاف تاريخي في ترتيب مفاتيح JSON قبل توحيد البصمة — القيم نفسها',
+                'benign' => true,
+                'code' => 'legacy_json_key_order',
+            ];
+        }
+
+        // فرضيات فقد بيانات — ليست benign.
+        foreach ([
+            [['context' => null], 'السياق', 'أُفرغ بعد الكتابة'],
+            [['reason' => null], 'السبب', 'أُفرغ بعد الكتابة'],
+            [['zone_code' => null], 'النطاق', 'أُفرغ بعد الكتابة'],
+            [['transaction_id' => null], 'رقمُ المعاملة', 'أُفرغ بعد الكتابة'],
+        ] as [$patch, $field, $cause]) {
+            if ($try($patch)) {
+                return ['field' => $field, 'cause' => $cause, 'benign' => false];
+            }
+        }
+
         return null;
+    }
+
+    /**
+     * يحاول استعادة ترتيب object القديم دون تغيير أي قيمة.
+     * الحد الأعلى 7 مفاتيح = 5040 احتمالاً فقط، ويُستدعى عند mismatch.
+     *
+     * @param array<string,mixed> $decoded
+     */
+    private static function legacyJsonKeyOrderMatches(
+        string $prevHash,
+        array $a,
+        string $stored,
+        array $decoded,
+    ): bool {
+        $keys = array_keys($decoded);
+        $count = count($keys);
+        $used = array_fill(0, $count, false);
+        $orderedKeys = [];
+
+        $walk = function () use (&$walk, &$used, &$orderedKeys, $keys, $count, $decoded, $prevHash, $a, $stored): bool {
+            if (count($orderedKeys) === $count) {
+                $candidateContext = [];
+                foreach ($orderedKeys as $key) {
+                    $candidateContext[$key] = $decoded[$key];
+                }
+
+                $json = json_encode($candidateContext, JSON_UNESCAPED_UNICODE);
+                if ($json === false) {
+                    return false;
+                }
+
+                $candidate = array_replace($a, ['context' => $json]);
+
+                return self::computeEntryHash($prevHash, $candidate, legacy: true) === $stored;
+            }
+
+            for ($i = 0; $i < $count; $i++) {
+                if ($used[$i]) {
+                    continue;
+                }
+
+                $used[$i] = true;
+                $orderedKeys[] = $keys[$i];
+
+                if ($walk()) {
+                    return true;
+                }
+
+                array_pop($orderedKeys);
+                $used[$i] = false;
+            }
+
+            return false;
+        };
+
+        return $walk();
     }
 
     public static function computeEntryHash(string $prevHash, array $a, bool $legacy = false): string
@@ -335,24 +313,9 @@ class AuditService
         return hash('sha256', $canonical);
     }
 
-    /**
-     * **مفتاحٌ مجهولٌ في الحمولة يُصرَّح به ولا يُبتلع.**
-     *
-     * ══════════════════════════════════════════════════════════════════
-     * **ولا يُرمى استثناء.** فـ`record()` كلُّها داخل `try`، ورميٌ هنا
-     * يُبتلع في `catch` أدناه **فيُفقَد سطرُ التدقيق كلُّه** — أي عقوبةٌ
-     * على خطأٍ صغيرٍ بفقدِ الأثر نفسِه، وهو ما يُفترض أن نحميه.
-     *
-     * فالأثرُ سطرُ سجلٍّ هنا، **والمنعُ حارسٌ ساكنٌ يمسح الشيفرة**
-     * (`AuditPayloadKeysGuardTest`) — يقرأ نداءات `record([...])` كلَّها
-     * ويسقط إن دخل مفتاحٌ ليس في `KNOWN_KEYS`. فالفحصُ قبل النشر لا بعده.
-     *
-     * @param  array<string,mixed>  $payload
-     */
     private function assertKnownKeys(array $payload): void
     {
         $unknown = array_diff(array_keys($payload), self::KNOWN_KEYS);
-
         if ($unknown === []) {
             return;
         }
@@ -363,9 +326,6 @@ class AuditService
         ]);
     }
 
-    /**
-     * Sanitize context recursively. كل قيمة لمفتاح محظور تُستبدل بـ '[REDACTED]'.
-     */
     private function sanitizeContext(array $ctx): array
     {
         foreach ($ctx as $k => $v) {
@@ -378,6 +338,7 @@ class AuditService
                 $ctx[$k] = $this->sanitizeContext($v);
             }
         }
+
         return $ctx;
     }
 }
