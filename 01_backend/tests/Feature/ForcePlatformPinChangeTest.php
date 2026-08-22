@@ -111,6 +111,43 @@ class ForcePlatformPinChangeTest extends TestCase
     // ══════════════════════════════════════════════════════════════════
 
     /** @test */
+    public function the_exemption_is_for_the_action_not_the_whole_route(): void
+    {
+        // **ومسارُ شاشة الأدوار يُسنِد الأدوارَ ويُعيد تعيينَ رموزِ
+        // الآخرين.** فاستثناؤه كلِّه يفتح لمن رمزُه أوّليٌّ أن يمنح نفسَه
+        // أدواراً — وهو تصعيدُ امتيازٍ من داخل الحاجز.
+        //
+        // فالاستثناءُ على قيمة `operator_action` وحدَها.
+        $admin = $this->admin(mustChange: true);
+
+        $this->actingAs($admin, 'user')->post(
+            route('admin.amial.ops.roles.update', $admin->id),
+            ['operator_action' => 'assign_roles', 'role_ids' => []],
+        )->assertRedirect(route('admin.auth.pin.change'));
+    }
+
+    /** @test */
+    public function the_second_change_path_stays_usable_while_blocked(): void
+    {
+        // **وحاجزٌ يمنع الفعلَ الذي يطالب به سجنٌ لا حاجز.**
+        $admin = $this->admin(mustChange: true);
+
+        $this->actingAs($admin, 'user')->post(
+            route('admin.amial.ops.roles.update', $admin->id),
+            [
+                'operator_action' => 'change_own_login_pin',
+                'current_login_pin' => '1234',
+                'new_login_pin' => '8642',
+                'new_login_pin_confirmation' => '8642',
+            ],
+        )->assertRedirect();
+
+        $this->assertSame(0, (int) DB::table('platform_login_pins')
+            ->where('user_id', $admin->id)->value('must_change'),
+            'المسارُ الثاني لم يرفع الوسم');
+    }
+
+    /** @test */
     public function the_change_screen_itself_stays_reachable(): void
     {
         // **وإلّا صارت حلقةَ توجيهٍ مغلقة** — وهي عطلٌ وقع في هذا المشروع
