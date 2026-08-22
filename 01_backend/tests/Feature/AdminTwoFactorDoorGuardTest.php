@@ -3,47 +3,51 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\PlatformLoginPinService;
+use App\Services\PlatformRoleService;
 use App\Services\TwoFactorAuthService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 /**
- * AMIAL-2FA-DOOR-001 — **حمايةٌ تُخزَّن ولا تُقرأ.**
+ * AMIAL-2FA-DOOR-001 · AMIAL-2FA-INLINE-001
  *
- * ══════════════════════════════════════════════════════════════════════
- * `TwoFactorAuthService` و`Admin2FAController` مكتملان منذ v1.8: سرٌّ
- * ورمزُ QR ورموزُ استرداد وتأكيدٌ وتعطيلٌ وتحقّق. والأعمدةُ الخمسةُ في
- * `users`.
- *
- * **ولم يكن لها شاشةٌ واحدة، ولا سطرٌ واحدٌ يفحصها عند الدخول.**
- *
- * أي أنّ من فعّلها — لو استطاع بأداةٍ خارجيّة — يدخل بكلمة المرور وحدها
- * كأنّه لم يفعّلها. وهي أسوأ من غيابها: **تُطمئن صاحبَها إلى بابٍ
- * مفتوح**، فيستعمل كلمةَ مرورٍ أضعف واثقاً بحاجزٍ لا وجود له.
+ * 2FA ليس مجرد QR يُربط ثم يُنسى: عند كل دخول لحساب فعّله يجب أن يُتحقق
+ * من رمز TOTP المتغيّر. يمكن إدخاله في شاشة الدخول نفسها، وإن تُرك فارغاً
+ * تبقى شاشة التحدي الثانية مساراً احتياطياً.
  */
 class AdminTwoFactorDoorGuardTest extends TestCase
 {
     use RefreshDatabase;
 
     private const PASSWORD = 'Str0ngAdminPass!2026';
+    private const LOGIN_PIN = '4821';
 
     private function admin(bool $withTwoFactor): User
     {
         $u = User::factory()->create([
-            'type' => ADMIN_TYPE, 'role' => 'admin',
+            'type' => ADMIN_TYPE,
+            'role' => 'admin',
             'phone' => '+967711900001',
             'password' => Hash::make(self::PASSWORD),
         ]);
 
+        // عقد الدخول الحالي يتطلب PIN وظيفياً حقيقياً، فلا يجوز أن تختبر
+        // 2FA عبر مسار قديم يتجاوز credential أضيف بعد بناء هذا الاختبار.
+        app(PlatformRoleService::class)->assign($u, PlatformRoleService::ADMIN);
+        app(PlatformLoginPinService::class)->issue(
+            $u,
+            self::LOGIN_PIN,
+            null,
+            'two_factor_guard_test',
+            false,
+            'not_required',
+        );
+
         if ($withTwoFactor) {
             $svc = app(TwoFactorAuthService::class);
             $secret = $svc->generateSecret();
-
-            // **تُشفَّر بالخدمة نفسِها لا بـ`encrypt()`**: `TwoFactorAuthService`
-            // يستعمل `EncryptionService` بمفتاحٍ منفصلٍ للبيانات الحسّاسة.
-            // وتهيئةٌ تُشفّر بطريقةٍ أخرى تُنتج `Unsupported ciphertext
-            // version` — وهو فشلُ تهيئةٍ يُقرأ عطلاً في الشيفرة.
             $enc = app(\App\Services\EncryptionService::class);
 
             $u->forceFill([
@@ -56,14 +60,19 @@ class AdminTwoFactorDoorGuardTest extends TestCase
         return $u->fresh();
     }
 
-    private function login(): \Illuminate\Testing\TestResponse
+    private function login(?string $twoFactorCode = null): \Illuminate\Testing\TestResponse
     {
-        return $this->post(route('admin.auth.login'), [
+        $payload = [
             'phone' => '+967711900001',
             'password' => self::PASSWORD,
-            'set_default_captcha' => 1,
-            'default_captcha_value' => '',
-        ]);
+            'login_pin' => self::LOGIN_PIN,
+        ];
+
+        if ($twoFactorCode !== null) {
+            $payload['two_factor_code'] = $twoFactorCode;
+        }
+
+        return $this->post(route('admin.auth.login'), $payload);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -72,34 +81,28 @@ class AdminTwoFactorDoorGuardTest extends TestCase
 
     public function test_an_admin_without_two_factor_still_gets_in(): void
     {
-        // **ولا يُقفل الباب على أحدٍ بتغييرٍ صامت** — من لم يفعّلها يدخل
-        // كما كان.
-        $this->admin(false);
+        $admin = $this->admin(false);
 
         $this->login()->assertRedirect(route('admin.dashboard'));
-        $this->assertTrue(auth('user')->check());
+        $this->assertAuthenticatedAs($admin, 'user');
     }
 
-    /** حساب أوقفه مدير المنصّة لا يبقى نافذاً بكلمة المرور القديمة. */
     public function test_a_disabled_admin_cannot_open_a_session(): void
     {
         $this->admin(false)->forceFill(['is_active' => 0])->save();
 
-        $this->login()->assertRedirect(route('admin.auth.login'));
+        $this->login()->assertRedirect();
         $this->assertFalse(auth('user')->check());
     }
 
-    public function test_the_password_alone_does_not_open_the_panel_when_two_factor_is_on(): void
+    public function test_password_and_pin_do_not_open_the_panel_when_two_factor_is_on_and_code_is_missing(): void
     {
         $this->admin(true);
 
         $this->login()->assertRedirect(route('admin.auth.two-factor'));
 
-        // **والجلسةُ لم تُفتح** — لا مجرّد إعادةِ توجيه. فالطريقةُ الشائعة
-        // أن تُفتح الجلسةُ ثمّ يُطلب الرمز، ومن يعرف عنوانَ أيّ صفحةٍ
-        // يتخطّى الشاشة.
         $this->assertFalse(auth('user')->check(),
-            'الجلسةُ فُتحت قبل الرمز — فمن يفتح /admin مباشرةً يتخطّى البوّابة');
+            'الجلسة فُتحت قبل رمز المصادقة الثنائية');
     }
 
     public function test_the_pending_admin_cannot_reach_the_dashboard(): void
@@ -112,17 +115,50 @@ class AdminTwoFactorDoorGuardTest extends TestCase
     }
 
     // ══════════════════════════════════════════════════════════════════
-    //  ② البوّابة نفسُها
+    //  ② الإدخال الصريح في شاشة الدخول
+    // ══════════════════════════════════════════════════════════════════
+
+    public function test_login_page_has_a_google_authenticator_input(): void
+    {
+        $this->get(route('admin.auth.login'))
+            ->assertOk()
+            ->assertSee('name="two_factor_code"', false)
+            ->assertSee('Google Authenticator');
+    }
+
+    public function test_a_correct_google_authenticator_code_can_complete_login_inline(): void
+    {
+        $admin = $this->admin(true);
+        $secret = app(\App\Services\EncryptionService::class)
+            ->decrypt($admin->two_factor_secret);
+        $code = app(TwoFactorAuthService::class)->generateTotp($secret);
+
+        $this->login($code)->assertRedirect(route('admin.dashboard'));
+
+        $this->assertAuthenticatedAs($admin, 'user');
+    }
+
+    public function test_a_wrong_inline_authenticator_code_keeps_the_door_shut(): void
+    {
+        $this->admin(true);
+
+        $this->login('000000')
+            ->assertSessionHasErrors('two_factor_code');
+
+        $this->assertFalse(auth('user')->check());
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  ③ شاشة التحدي الاحتياطية
     // ══════════════════════════════════════════════════════════════════
 
     public function test_the_challenge_screen_is_not_a_door_of_its_own(): void
     {
-        // من يفتح عنوانَ البوّابة بلا مرورٍ بكلمة المرور يُعاد.
         $this->get(route('admin.auth.two-factor'))
             ->assertRedirect(route('admin.auth.login'));
     }
 
-    public function test_a_correct_code_completes_the_login(): void
+    public function test_a_correct_code_on_the_second_step_completes_the_login(): void
     {
         $admin = $this->admin(true);
         $this->login();
@@ -134,11 +170,10 @@ class AdminTwoFactorDoorGuardTest extends TestCase
         $this->post(route('admin.auth.two-factor.verify'), ['code' => $code])
             ->assertRedirect(route('admin.dashboard'));
 
-        $this->assertTrue(auth('user')->check());
-        $this->assertSame($admin->id, auth('user')->id());
+        $this->assertAuthenticatedAs($admin, 'user');
     }
 
-    public function test_a_wrong_code_keeps_the_door_shut(): void
+    public function test_a_wrong_code_on_the_second_step_keeps_the_door_shut(): void
     {
         $this->admin(true);
         $this->login();
@@ -149,7 +184,6 @@ class AdminTwoFactorDoorGuardTest extends TestCase
         $this->assertFalse(auth('user')->check());
     }
 
-    /** التعطيل بعد كلمة المرور وقبل TOTP لا يمرّ من الجلسة المعلّقة. */
     public function test_a_disabled_pending_admin_cannot_finish_two_factor(): void
     {
         $admin = $this->admin(true);
@@ -164,8 +198,6 @@ class AdminTwoFactorDoorGuardTest extends TestCase
 
     public function test_cancelling_clears_the_pending_identity(): void
     {
-        // معرّفٌ معلّقٌ يبقى في الجلسة يعني أنّ من يفتح البوّابة لاحقاً
-        // يجد حساباً جاهزاً ينتظر رمزاً.
         $this->admin(true);
         $this->login();
 
@@ -189,31 +221,23 @@ class AdminTwoFactorDoorGuardTest extends TestCase
 
         $this->assertStringContainsString('تجاوزت',
             (string) session('errors')?->first(),
-            'ستُّ محاولاتٍ ولا حدّ — ومساحةُ ستّة أرقامٍ مليون، '
-            . 'تُكسر في أسبوعٍ بمئة محاولةٍ في الدقيقة');
+            'محاولات 2FA المتكررة بلا حد');
     }
 
     // ══════════════════════════════════════════════════════════════════
-    //  ③ يُوصَل إليها — القاعدة ١٢
+    //  ④ يُوصَل إلى الإعداد من اللوحة
     // ══════════════════════════════════════════════════════════════════
 
-    /**
-     * **والشاشةُ تُفتح من الشريط الجانبيّ.**
-     *
-     * فالميزةُ كانت مبنيّةً بلا مدخل، وإصلاحُها بمسارٍ بلا رابطٍ يُعيد
-     * العطلَ نفسه بصورةٍ أحدث.
-     */
     public function test_the_setup_screen_is_reachable_from_the_sidebar(): void
     {
         $sidebar = file_get_contents(resource_path(
             'views/admin-views/amial/partials/_sidebar.blade.php'));
 
         $this->assertStringContainsString("admin.amial.2fa.page", $sidebar,
-            'شاشةُ المصادقة الثنائية بلا رابطٍ في الشريط — مبنيّةٌ ولا يُوصل إليها');
+            'شاشة المصادقة الثنائية بلا رابط في الشريط');
 
-        // وطلباتُ السحب كذلك: المسارُ سُجّل في الجولة السابقة والرابطُ أُجّل.
         $this->assertStringContainsString('admin.withdraw.index', $sidebar,
-            'شاشةُ طلبات السحب بلا رابطٍ في الشريط');
+            'شاشة طلبات السحب بلا رابط في الشريط');
     }
 
     public function test_the_setup_screen_opens(): void
