@@ -3,30 +3,30 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Mail\PlatformLoginPinMail;
 use App\Models\User;
 use App\Services\AuditService;
+use App\Services\PlatformLoginPinService;
+use App\Services\PlatformRoleService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 /**
- * AMIAL-OPERATOR-RBAC-003 — إسناد أدوار فريق المنصّة.
+ * AMIAL-OPERATOR-RBAC-003 + AMIAL-PLATFORM-LOGIN-PIN-001
  *
- * **الفجوة التي يسدّها:** الهجرة تُسند دور مدير المنصّة لحسابات الإدارة
- * القائمة، فلا تُقفل اللوحة على مالكها. أمّا الحساب الذي يُنشأ **بعدها**
- * فيولد بلا دور — والافتراض منعٌ لا سماح، فلا يستطيع شيئاً.
- *
- * وذلك صحيحٌ أمنياً وقاتلٌ عملياً بلا هذه الصفحة: يُضاف موظّف دعم فلا يفتح
- * شيئاً، ولا سبيل إلى منحه إلا بكتابة صفٍّ في قاعدة البيانات يدوياً.
- *
- * **وإسناد الصلاحية فعلٌ أخطر من استعمالها:** من يمنح دور مدير المنصّة يمنح
- * كل شيء دفعةً واحدة. فلا يملكه إلا مدير المنصّة نفسه، وكل منح وسحب يُكتب
- * في سجلّ التدقيق باسم فاعله.
+ * إدارة موظفي المنصّة وأدوارهم وPIN دخولهم. PIN الدخول ليس transaction_pin
+ * ولا يُعرض بعد الإصدار، ولا يُكتب في التدقيق أو الـlogs.
  */
 class OperatorRolesController extends Controller
 {
-    public function __construct(private readonly AuditService $audit)
-    {
+    public function __construct(
+        private readonly AuditService $audit,
+        private readonly PlatformLoginPinService $loginPins,
+        private readonly PlatformRoleService $platformRoles,
+    ) {
     }
 
     public function index()
@@ -38,34 +38,33 @@ class OperatorRolesController extends Controller
 
         $operators = User::where('type', 0)
             ->orderBy('id')
-            ->get(['id', 'f_name', 'l_name', 'phone', 'email', 'is_active'])
-            ->map(function ($u) {
-                $u->role_ids = DB::table('admin_user_roles')
-                    ->where('user_id', $u->id)->pluck('role_id')->all();
-                return $u;
-            });
+            ->get(['id', 'f_name', 'l_name', 'phone', 'email', 'is_active']);
+
+        $pinStatuses = $this->loginPins->statusForUsers($operators->pluck('id')->all());
+
+        $operators = $operators->map(function ($u) use ($pinStatuses) {
+            $u->role_ids = DB::table('admin_user_roles')
+                ->where('user_id', $u->id)->pluck('role_id')->all();
+            $u->login_pin_status = $pinStatuses[$u->id] ?? null;
+
+            return $u;
+        });
+
+        $viewer = request()->user();
+        $canResetPins = $viewer
+            && $this->platformRoles->has($viewer, PlatformRoleService::ADMIN);
 
         return view('admin-views.amial.ops.roles', [
             'roles' => $roles,
             'operators' => $operators,
+            'can_reset_pins' => $canResetPins,
+            'current_user_id' => (int) ($viewer?->id ?? 0),
         ]);
     }
 
     /**
-     * **إنشاءُ موظّفِ منصّةٍ بأدواره في خطوةٍ واحدة.**
-     *
-     * ══════════════════════════════════════════════════════════════════
-     * **الثمن الذي دُفع:** فتح صاحبُ المشروع «أدوار الموظّفين» فوجد
-     * جدولاً يُسند الأدوارَ **لحساباتٍ قائمةٍ فقط** — ولا سبيلَ إلى إنشاء
-     * موظّفٍ من هنا. وقال: «يجب إنشاء موظّف مع اختيار صلاحياته ورقم
-     * الهاتف وكلمة المرور».
-     *
-     * وكان البديلُ أن يُنشأ الحسابُ من «قائمة العملاء» بنوعِ إدارة — وهي
-     * شاشةٌ لا تعرف الأدوارَ أصلاً — ثمّ يُبحث عنه هنا ليُسنَد. **خطوتان
-     * في شاشتين، وبينهما حسابُ إدارةٍ حيٌّ بلا دور.**
-     *
-     * **والدورُ يُسند في المعاملة نفسِها**: حسابُ إدارةٍ يُنشأ ثمّ يسقط
-     * إسنادُ دوره يبقى قائماً بلا صلاحيّة — بابٌ مفتوحٌ بلا حارس.
+     * إنشاء موظف مع دوره وPIN عشوائي في معاملة واحدة، ثم إرسال PIN بالبريد.
+     * البريد إلزامي لأن PIN لا يُعرض للمدير ولا يُخزن كنص صريح.
      */
     public function store(Request $request): RedirectResponse
     {
@@ -73,41 +72,41 @@ class OperatorRolesController extends Controller
             'f_name' => 'required|string|max:100',
             'l_name' => 'nullable|string|max:100',
             'phone' => 'required|string|min:6|max:20',
-            'email' => 'nullable|email|max:190',
-            // **ثمانيةٌ حدٌّ أدنى**: هذا حسابٌ يفتح لوحةَ الإدارة.
+            'email' => 'required|email|max:190|unique:users,email',
             'password' => 'required|string|min:8',
             'role_ids' => 'required|array|min:1',
             'role_ids.*' => 'integer|exists:roles,id',
+        ], [
+            'email.required' => 'البريد الإلكتروني إلزامي لإرسال PIN الموظف.',
+            'email.unique' => 'البريد الإلكتروني مستخدم في حساب آخر.',
         ]);
 
         $phone = \App\CentralLogics\Helpers::filter_phone($data['phone']);
         $roleIds = $this->platformRoleIds($data['role_ids']);
         if (count($roleIds) !== count(array_unique(array_map('intval', $data['role_ids'])))) {
-            return back()->withInput()->withErrors(['role_ids' => 'لا يجوز إسناد دورٍ غير تابع لموظفي المنصّة']);
+            return back()->withInput()->withErrors([
+                'role_ids' => 'لا يجوز إسناد دور غير تابع لموظفي المنصّة',
+            ]);
         }
 
-        // **ولا يُنشأ حسابٌ برقمٍ مأخوذ** — وإلّا صار للرقم حسابان
-        // ودخولٌ لا يُعرف أيَّهما يفتح.
         $taken = User::whereIn('phone', \App\Support\Phone::variants($phone))->exists();
-
         if ($taken) {
-            // **الخطأُ يعود على الحقل نفسِه** لا في شريطٍ عامّ: `withErrors`
-            // يُعيد المدخلاتِ ويضع الرسالةَ تحت خانة الهاتف، فيصحّح من أخطأ
-            // رقماً واحداً بلا إعادة كتابة النموذج كلِّه.
             return back()->withInput()
-                ->withErrors(['phone' => 'الرقم مستعملٌ في حسابٍ آخر']);
+                ->withErrors(['phone' => 'الرقم مستعمل في حساب آخر']);
         }
 
-        $operator = DB::transaction(function () use ($data, $phone, $roleIds, $request) {
+        $pin = $this->loginPins->generate();
+
+        $operator = DB::transaction(function () use ($data, $phone, $roleIds, $request, $pin) {
             $u = new User();
             $u->f_name = $data['f_name'];
             $u->l_name = $data['l_name'] ?? '';
             $u->phone = $phone;
-            $u->email = $data['email'] ?? null;
+            $u->email = $data['email'];
             $u->password = \Illuminate\Support\Facades\Hash::make($data['password']);
-            $u->type = 0;              // حسابُ إدارة
+            $u->type = 0;
             $u->is_active = 1;
-            $u->is_phone_verified = 1; // أدخله مديرٌ بنفسه، ولا OTP في هذا المسار
+            $u->is_phone_verified = 1;
             $u->save();
 
             foreach ($roleIds as $roleId) {
@@ -115,14 +114,26 @@ class OperatorRolesController extends Controller
                     'user_id' => $u->id,
                     'role_id' => $roleId,
                     'granted_by_user_id' => $request->user()->id,
-                    'created_at' => now(), 'updated_at' => now(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ]);
             }
+
+            // الموظف الجديد، حتى لو حمل دور platform_admin، يأخذ PIN عشوائياً.
+            $this->loginPins->issue(
+                $u,
+                $pin,
+                (int) $request->user()->id,
+                'operator_created',
+                mustChange: false,
+                deliveryStatus: 'pending',
+            );
 
             return $u;
         });
 
-        // **وإنشاءُ حسابِ إدارةٍ يُسجَّل** — هو أخطرُ ما يُنشأ في المنصّة.
+        $delivery = $this->sendPin($operator, $pin, 'issued');
+
         $this->audit->record([
             'actor_type' => 'admin',
             'actor_user_id' => $request->user()->id,
@@ -130,64 +141,76 @@ class OperatorRolesController extends Controller
             'subject_id' => (string) $operator->id,
             'action' => 'ADMIN_OPERATOR_CREATED',
             'decision_code' => 'OPERATOR_CREATED',
-            'reason' => 'إنشاءُ موظّف منصّةٍ من شاشة الأدوار',
-            'context' => ['roles' => $roleIds],
+            'reason' => 'إنشاء موظف منصة من شاشة الأدوار',
+            'context' => [
+                'roles' => $roleIds,
+                'login_pin_issued' => true,
+                'pin_delivery' => $delivery,
+                // PIN نفسه ممنوع من سجل التدقيق.
+            ],
             'severity' => 'warning',
         ]);
 
+        if ($delivery !== 'sent') {
+            return back()->with('error',
+                'أُنشئ الموظف «' . $operator->f_name . '» لكن تعذر إرسال PIN إلى بريده. '
+                . 'أصلح إعدادات البريد ثم استخدم «إعادة إصدار PIN»؛ لن يظهر الرمز في اللوحة.');
+        }
+
         return back()->with('success',
-            'أُنشئ الموظّف «' . $operator->f_name . '» — يدخل بالهاتف وكلمة المرور');
+            'أُنشئ الموظف «' . $operator->f_name . '» وأُرسل PIN عشوائي من 4 أرقام إلى ' . $operator->email);
     }
 
     public function update(Request $request, int $userId): RedirectResponse
     {
-        // AMIAL-OPERATOR-LASTADMIN-001 — **الحارسُ الذي كان يحرسه غيرُه.**
-        //
-        // كان الشرطُ `required|array|min:1`، فقائمةٌ فارغةٌ تُردّ **بخطأ
-        // تحقّقٍ من الحقل** قبل أن يُسأل «أيترك هذا المنصّةَ بلا مدير؟».
-        // فالنتيجةُ ردٌّ صحيحٌ لسببٍ خاطئ: يُردّ سحبُ الأدوار عن **أيّ**
-        // موظّفٍ كما يُردّ عن آخر مدير — والحمايةُ الحقيقيّةُ لم تُشغَّل قطّ.
-        // وحارسٌ لم يُشغَّل لا يُعرف أيعمل أم لا. (‏القاعدة الثانية.)
-        //
-        // فالإفراغُ صار **مقبولاً شكلاً** ليردّه من يملك ردَّه: `wouldLeaveNoAdmin`
-        // و`keepsAdminRole` أدناه — وهما يقولان السببَ الحقيقيّ للموظّف.
+        $operator = User::where('type', 0)->find($userId);
+        if (! $operator) {
+            return back()->with('error', 'الحساب غير موجود أو ليس حساب إدارة');
+        }
+
+        $action = (string) $request->input('operator_action', 'roles');
+
+        if ($action === 'reset_login_pin') {
+            return $this->resetLoginPin($request, $operator);
+        }
+
+        if ($action === 'change_own_login_pin') {
+            return $this->changeOwnLoginPin($request, $operator);
+        }
+
+        if ($action !== 'roles') {
+            abort(422, 'إجراء موظف غير معروف');
+        }
+
         $data = $request->validate([
             'role_ids' => 'present|array',
             'role_ids.*' => 'integer|exists:roles,id',
         ]);
 
-        $operator = User::where('type', 0)->find($userId);
-        if (!$operator) {
-            return back()->with('error', 'الحساب غير موجود أو ليس حساب إدارة');
-        }
-
         $before = DB::table('admin_user_roles')->where('user_id', $userId)
             ->pluck('role_id')->all();
         $after = $this->platformRoleIds($data['role_ids']);
         if (count($after) !== count(array_unique(array_map('intval', $data['role_ids'])))) {
-            return back()->withErrors(['role_ids' => 'لا يجوز إسناد دورٍ غير تابع لموظفي المنصّة']);
+            return back()->withErrors([
+                'role_ids' => 'لا يجوز إسناد دور غير تابع لموظفي المنصّة',
+            ]);
         }
 
-        // من يسحب دوره عن نفسه يُقفل الباب وهو داخله، ولا أحد يفتحه له.
         if ($operator->id === $request->user()->id
-            && !$this->keepsAdminRole($after)) {
+            && ! $this->keepsAdminRole($after)) {
             return back()->with('error',
                 'لا يمكنك سحب دور مدير المنصّة عن نفسك — اطلب من مدير آخر فعلها');
         }
 
-        // ولا يبقى النظام بلا مدير واحد على الأقلّ.
         if ($this->wouldLeaveNoAdmin($operator->id, $after)) {
             return back()->with('error',
-                'لا يمكن ترك المنصّة بلا مدير — أسنِد الدور إلى حساب آخر أوّلاً');
+                'لا يمكن ترك المنصّة بلا مدير — أسند الدور إلى حساب آخر أولاً');
         }
 
-        // **وحسابُ إدارةٍ نشطٌ بلا دورٍ حالةٌ غامضة**: يدخل اللوحةَ ولا يرى
-        // شيئاً، فيعود صاحبُه يسأل «لماذا لا تعمل؟». الصحيحُ تعطيلُ الحساب
-        // لا تفريغُه. وموضعُ هذا الفحص **بعد** الحارسين أعلاه مقصود: آخرُ
-        // مديرٍ يفرّغ دورَه يستحقّ الرسالةَ التي تخصّه، لا رسالةَ حقلٍ عامّة.
         if ($after === []) {
-            return back()->withErrors(['role_ids' =>
-                'لا يُترك حسابُ إدارةٍ نشطٌ بلا دور — عطّل الحساب إن لم يعد يعمل']);
+            return back()->withErrors([
+                'role_ids' => 'لا يُترك حساب إدارة نشط بلا دور — عطّل الحساب إن لم يعد يعمل',
+            ]);
         }
 
         DB::transaction(function () use ($userId, $after, $request) {
@@ -197,7 +220,8 @@ class OperatorRolesController extends Controller
                     'user_id' => $userId,
                     'role_id' => $roleId,
                     'granted_by_user_id' => $request->user()->id,
-                    'created_at' => now(), 'updated_at' => now(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ]);
             }
         });
@@ -209,7 +233,7 @@ class OperatorRolesController extends Controller
             'subject_id' => (string) $userId,
             'action' => 'roles_changed',
             'decision_code' => 'ROLES_CHANGED',
-            'reason' => 'تعديل أدوار موظّف من لوحة الإدارة',
+            'reason' => 'تعديل أدوار موظف من لوحة الإدارة',
             'severity' => 'critical',
             'context' => [
                 'before' => $before,
@@ -219,7 +243,144 @@ class OperatorRolesController extends Controller
             ],
         ]);
 
-        return back()->with('success', 'حُدِّثت أدوار الموظّف');
+        return back()->with('success', 'حُدِّثت أدوار الموظف');
+    }
+
+    /**
+     * نسيان PIN: لا يملك إعادة الإصدار إلا من يحمل دور platform_admin فعلياً.
+     * امتلاك settings.update وحده لا يكفي.
+     */
+    private function resetLoginPin(Request $request, User $operator): RedirectResponse
+    {
+        $actor = $request->user();
+        if (! $actor || ! $this->platformRoles->has($actor, PlatformRoleService::ADMIN)) {
+            abort(403, 'إعادة إصدار PIN متاحة لمدير المنصّة فقط');
+        }
+
+        if (! $operator->email) {
+            return back()->with('error',
+                'لا يمكن إعادة إصدار PIN قبل إضافة بريد إلكتروني صالح لهذا الموظف.');
+        }
+
+        $pin = $this->loginPins->generate();
+        $this->loginPins->issue(
+            $operator,
+            $pin,
+            (int) $actor->id,
+            'admin_reset',
+            mustChange: false,
+            deliveryStatus: 'pending',
+        );
+
+        $delivery = $this->sendPin($operator, $pin, 'reset');
+
+        $this->audit->record([
+            'actor_type' => 'admin',
+            'actor_user_id' => $actor->id,
+            'subject_type' => 'operator',
+            'subject_id' => (string) $operator->id,
+            'action' => 'PLATFORM_LOGIN_PIN_RESET',
+            'decision_code' => $delivery === 'sent' ? 'PIN_RESET' : 'PIN_RESET_DELIVERY_FAILED',
+            'reason' => 'إعادة إصدار PIN دخول موظف بواسطة مدير المنصّة',
+            'severity' => 'warning',
+            'context' => [
+                'delivery' => $delivery,
+                'email_configured' => true,
+            ],
+        ]);
+
+        if ($delivery !== 'sent') {
+            return back()->with('error',
+                'تم تغيير PIN داخلياً لكن تعذر إرساله إلى بريد الموظف. '
+                . 'أصلح البريد ثم أعد الإصدار مرة أخرى؛ لا تُرسل الرمز يدوياً من اللوحة.');
+        }
+
+        return back()->with('success',
+            'أُصدر PIN جديد للموظف «' . $operator->f_name . '» وأُرسل إلى بريده. PIN السابق لم يعد صالحاً.');
+    }
+
+    /**
+     * من يعرف PIN الحالي يستطيع تغييره لنفسه. من نسيه لا يوجد bypass:
+     * يحتاج مدير المنصة إلى resetLoginPin ثم يصل الرمز الجديد بالبريد.
+     */
+    private function changeOwnLoginPin(Request $request, User $operator): RedirectResponse
+    {
+        $actor = $request->user();
+        if (! $actor || (int) $actor->id !== (int) $operator->id) {
+            abort(403, 'يمكنك تغيير PIN لحسابك فقط');
+        }
+
+        $data = $request->validate([
+            'current_login_pin' => ['required', 'regex:/^\d{4}$/'],
+            'new_login_pin' => ['required', 'regex:/^\d{4}$/', 'confirmed'],
+        ], [
+            'current_login_pin.required' => 'أدخل PIN الحالي.',
+            'current_login_pin.regex' => 'PIN الحالي يجب أن يتكون من 4 أرقام.',
+            'new_login_pin.required' => 'أدخل PIN الجديد.',
+            'new_login_pin.regex' => 'PIN الجديد يجب أن يتكون من 4 أرقام.',
+            'new_login_pin.confirmed' => 'تأكيد PIN الجديد غير مطابق.',
+        ]);
+
+        if ($data['current_login_pin'] === $data['new_login_pin']) {
+            return back()->withErrors([
+                'new_login_pin' => 'اختر PIN جديداً مختلفاً عن الرمز الحالي.',
+            ]);
+        }
+
+        $verified = $this->loginPins->verify($operator, $data['current_login_pin']);
+        if (! $verified['ok']) {
+            return back()->withErrors([
+                'current_login_pin' => $verified['reason'] === 'locked'
+                    ? 'PIN مقفل مؤقتاً بعد محاولات غير صحيحة. انتظر ثم أعد المحاولة.'
+                    : 'PIN الحالي غير صحيح.',
+            ]);
+        }
+
+        $this->loginPins->issue(
+            $operator,
+            $data['new_login_pin'],
+            (int) $actor->id,
+            'self_change',
+            mustChange: false,
+            deliveryStatus: 'not_required',
+        );
+
+        $this->audit->record([
+            'actor_type' => 'admin',
+            'actor_user_id' => $actor->id,
+            'subject_type' => 'operator',
+            'subject_id' => (string) $operator->id,
+            'action' => 'PLATFORM_LOGIN_PIN_CHANGED',
+            'decision_code' => 'PIN_CHANGED',
+            'reason' => 'غيّر الموظف PIN دخول حسابه بعد التحقق من الرمز الحالي',
+            'severity' => 'notice',
+            'context' => ['self_service' => true],
+        ]);
+
+        return back()->with('success', 'تم تغيير PIN الخاص بحسابك.');
+    }
+
+    /** لا يعيد PIN مطلقاً؛ النتيجة تصف نجاح القناة فقط. */
+    private function sendPin(User $operator, string $pin, string $reason): string
+    {
+        try {
+            $name = trim(($operator->f_name ?? '') . ' ' . ($operator->l_name ?? ''));
+            Mail::to((string) $operator->email)
+                ->send(new PlatformLoginPinMail($name, $pin, $reason));
+
+            $this->loginPins->markDelivered((int) $operator->id);
+
+            return 'sent';
+        } catch (\Throwable $e) {
+            $this->loginPins->markDeliveryFailed((int) $operator->id);
+            Log::warning('platform-login-pin: delivery failed', [
+                'operator_id' => $operator->id,
+                'error_class' => get_class($e),
+                // لا PIN ولا بريد كامل ولا نص الاستثناء في السجل.
+            ]);
+
+            return 'failed';
+        }
     }
 
     private function adminRoleId(): ?int
@@ -228,13 +389,14 @@ class OperatorRolesController extends Controller
             ->where('code', 'platform_admin')->value('id');
     }
 
-    /** لا يقبل POST مُزوّراً دور تاجرٍ أو دوراً محلياً باسم موظف منصة. */
+    /** لا يقبل POST مزوراً دور تاجر أو دوراً محلياً باسم موظف منصة. */
     private function platformRoleIds(array $roleIds): array
     {
         $requested = array_values(array_unique(array_map('intval', $roleIds)));
 
         return DB::table('roles')->whereIn('id', $requested)
-            ->whereNull('merchant_user_id')->where('code', 'like', 'platform_%')
+            ->whereNull('merchant_user_id')
+            ->where('code', 'like', 'platform_%')
             ->pluck('id')->map(fn ($id) => (int) $id)->all();
     }
 
@@ -243,7 +405,7 @@ class OperatorRolesController extends Controller
         return in_array($this->adminRoleId(), $roleIds, true);
     }
 
-    /** هل يبقى مديرٌ واحد على الأقلّ بعد هذا التعديل؟ */
+    /** هل يبقى مدير واحد على الأقل بعد هذا التعديل؟ */
     private function wouldLeaveNoAdmin(int $userId, array $after): bool
     {
         $adminRoleId = $this->adminRoleId();
@@ -256,6 +418,6 @@ class OperatorRolesController extends Controller
             ->where('user_id', '!=', $userId)
             ->count();
 
-        return $others === 0 && !in_array($adminRoleId, $after, true);
+        return $others === 0 && ! in_array($adminRoleId, $after, true);
     }
 }

@@ -29,14 +29,17 @@ return new class extends Migration
         });
 
         // AMIAL-PLATFORM-LOGIN-PIN-001
-        // حساب الإدارة الجذري الموجود قبل هذه الميزة يحصل على PIN البداية 1234
-        // كما طلب صاحب المشروع. نخزنه Hash فقط ولا نضع الرقم الصريح في DB.
-        // الموظفون الآخرون لا يحصلون على قيمة مشتركة؛ يصدر لهم PIN عشوائي من
-        // شاشة أدوار الموظفين ويرسل إلى بريدهم.
+        // 1234 خاص بحساب مدير المنصة الجذري الموجود قبل هذه الميزة فقط.
+        // لا يُعمّم على كل حساب type=0 ولا على كل موظف يحمل دوراً لاحقاً.
+        // القيمة الصريحة لا تُخزّن؛ الموجود في DB هو Hash فقط.
         $rootAdminId = DB::table('users')
-            ->where('type', 0)
-            ->orderBy('id')
-            ->value('id');
+            ->join('admin_user_roles', 'admin_user_roles.user_id', '=', 'users.id')
+            ->join('roles', 'roles.id', '=', 'admin_user_roles.role_id')
+            ->where('users.type', 0)
+            ->where('roles.code', 'platform_admin')
+            ->whereNull('roles.merchant_user_id')
+            ->orderBy('users.id')
+            ->value('users.id');
 
         if ($rootAdminId) {
             DB::table('platform_login_pins')->insert([
