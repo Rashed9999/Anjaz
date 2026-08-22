@@ -86,10 +86,12 @@ class ZoneAssignmentService
         $user->zone_code = $zone;
         $user->save();
 
+        // والنطاقُ ها هنا **مشتقٌّ من الوثيقة نفسِها**، فهو يساويها ولا
+        // يخالفها أبداً — ويُمرَّر ليُكتب `kyc_zone` صراحةً لا ليُستنتَج.
         $this->logAssignment($user->id, $zone, 'kyc_verification', [
             'declared_city' => $declaredCity,
             'admin_id' => $adminId,
-        ]);
+        ], kycZone: $zone);
 
         Log::info('Zone assigned from KYC', [
             'user_id' => $user->id, 'zone' => $zone, 'city' => $declaredCity,
@@ -111,6 +113,12 @@ class ZoneAssignmentService
         }
 
         $oldZone = $user->zone_code;
+
+        // **يُقرأ ما تقوله الوثيقةُ قبل الكتابة** — فالكتابةُ تُغيّر
+        // `zone_code`، ولا تُغيّر محافظةَ السكن، لكنّ القراءةَ بعدها
+        // تختلط على من يقرأ الشيفرة. والترتيبُ ها هنا يقول المقصود.
+        $kycZone = $this->zoneFromDocuments($user);
+
         $user->zone_code = $zone;
         $user->save();
 
@@ -118,7 +126,10 @@ class ZoneAssignmentService
             'admin_id' => $adminId,
             'reason' => $reason,
             'old_zone' => $oldZone,
-        ]);
+            // **ولا تُمحى حقيقةُ الوثيقة** — تُحفظ نصّاً كما قُرئت،
+            // فالرمزُ وحدَه لا يقول من أيّ مدينةٍ اشتُقّ.
+            'documented_city' => $user->residence_governorate,
+        ], kycZone: $kycZone);
 
         Log::warning('Zone manually assigned by admin', [
             'user_id' => $user->id, 'old' => $oldZone, 'new' => $zone, 'admin' => $adminId,
@@ -307,13 +318,69 @@ class ZoneAssignmentService
         return preg_replace('/\s+/', '', $city);
     }
 
-    private function logAssignment(int $userId, string $zone, string $method, array $signals): void
+    /**
+     * **درجةُ الثقة لكلّ مصدر — قاعدةٌ مكتوبةٌ لا رقمٌ مخترَع.**
+     *
+     * ولا يُكتب «٨٧٪»: رقمٌ مئويٌّ لا حسبةَ خلفه **يُقرأ قياساً وليس
+     * قياساً**، ومن يراه يبني عليه قراراً. والتعدادُ يقول ما يعرفه:
+     *
+     *   · `high`   — وثيقةٌ موثّقةٌ راجعها إنسان.
+     *   · `medium` — قرارُ موظّفٍ بسببٍ مكتوب: متعمَّدٌ، وقد يخالف الوثيقة.
+     *   · `low`    — إشاراتٌ ظرفيّة (هاتفٌ · عنوانُ شبكة) بلا وثيقة.
+     */
+    public const CONFIDENCE = [
+        'kyc_verification' => 'high',
+        'admin_decision' => 'medium',
+        'registration' => 'low',
+    ];
+
+    /**
+     * **ما تقوله الوثيقةُ الآن** — أو `null` إن لا وثيقةَ لها.
+     *
+     * ولا يُقاس التعارضُ بـ`old_zone`: ذاك ما كان مكتوباً قبل لحظة، وقد
+     * يكون `UNKNOWN` من التسجيل أو أثرَ تجاوزٍ سابق. **والوثيقةُ شيءٌ
+     * آخر**، ومنها وحدَها يُعرف أنّ الإسنادَ خالفها.
+     */
+    public function zoneFromDocuments(User $user): ?string
     {
+        $city = trim((string) ($user->residence_governorate ?? ''));
+
+        if ($city === '') {
+            return null;
+        }
+
+        $zone = $this->cityToZone($city);
+
+        // **و`UNKNOWN` ليست رأياً للوثيقة** — هي عجزٌ عن قراءتها.
+        // فمخالفةُ «لا أعرف» ليست مخالفة.
+        return $zone === self::ZONE_UNKNOWN ? null : $zone;
+    }
+
+    private function logAssignment(
+        int $userId,
+        string $zone,
+        string $method,
+        array $signals,
+        ?string $kycZone = null,
+    ): void {
         try {
+            // ══════════════════════════════════════════════════════════
+            // **التعارضُ يُحسب ويُخزَّن — لا يُترَك ليُشتقّ لاحقاً.**
+            //
+            // فاشتقاقُه بعد شهرٍ يقرأ محافظةَ سكنٍ **قد تكون تغيّرت هي
+            // الأخرى**، فيُخرج جواباً عن لحظةٍ غير اللحظة التي وقع فيها
+            // القرار. والسجلُّ يُجيب عن وقتِه لا عن وقتِ قراءته.
+            // ══════════════════════════════════════════════════════════
+            $isOverride = $kycZone !== null && $kycZone !== $zone;
+
             DB::table('zone_assignment_logs')->insert([
                 'user_id' => $userId,
                 'assigned_zone' => $zone,
                 'method' => $method,
+                'is_override' => $isOverride,
+                'overrides_source' => $isOverride ? 'kyc_verification' : null,
+                'kyc_zone' => $kycZone,
+                'confidence' => self::CONFIDENCE[$method] ?? null,
                 'signals' => json_encode($signals, JSON_UNESCAPED_UNICODE),
                 'created_at' => now(),
             ]);

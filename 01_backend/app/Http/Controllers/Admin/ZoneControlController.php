@@ -162,22 +162,53 @@ class ZoneControlController extends Controller
         })->all();
     }
 
+    /**
+     * AMIAL-ZONE-PROVENANCE-001 — **والتعارضُ يُعرَض لا يُخزَّن فقط.**
+     *
+     * فصفٌّ يقول `admin_decision` لا يقول إن كان القرارُ **يخالف وثيقةً
+     * موثّقة**. ومن يقرأ اللوحةَ يرى إسناداً إداريّاً عاديّاً بينما هو
+     * نطاقٌ أُعطي ضدَّ ما تقوله الهويّة — **والنطاقُ يحكم حركةَ المال**.
+     */
     private function assignmentRows(int $limit): array
     {
         $rows = DB::table('zone_assignment_logs')
             ->latest('created_at')->limit($limit)
-            ->get(['user_id', 'assigned_zone', 'method', 'signals', 'created_at']);
+            ->get(['user_id', 'assigned_zone', 'method', 'is_override',
+                'overrides_source', 'kyc_zone', 'confidence', 'signals', 'created_at']);
 
         $names = User::whereIn('id', $rows->pluck('user_id')->unique())->pluck('phone', 'id');
 
-        return $rows->map(fn ($r) => [
-            'user_id' => $r->user_id,
-            'phone' => $names[$r->user_id] ?? '—',
-            'zone' => $r->assigned_zone,
-            'method' => $r->method,
-            'at' => (string) $r->created_at,
-        ])->all();
+        return $rows->map(function ($r) use ($names) {
+            $signals = json_decode((string) $r->signals, true) ?: [];
+
+            return [
+                'user_id' => $r->user_id,
+                'phone' => $names[$r->user_id] ?? '—',
+                'zone' => $r->assigned_zone,
+                'method' => $r->method,
+                'method_ar' => self::METHOD_LABELS[$r->method] ?? $r->method,
+                'is_override' => (bool) $r->is_override,
+                'kyc_zone' => $r->kyc_zone,
+                'documented_city' => $signals['documented_city'] ?? ($signals['declared_city'] ?? null),
+                'reason' => $signals['reason'] ?? null,
+                // **و«غير معروف» ليس «موثوقاً»** (القاعدة السابعة):
+                // الصفوفُ الأقدمُ من هذه الأعمدة تُعيد `null`، فتقولها
+                // الشاشةُ «لم يُقَس» ولا تعرضها درجةً.
+                'confidence' => $r->confidence,
+                'note' => (bool) $r->is_override
+                    ? 'يخالف الوثيقة: تقول ' . ($r->kyc_zone ?? '—')
+                    : null,
+                'at' => (string) $r->created_at,
+            ];
+        })->all();
     }
+
+    /** @var array<string,string> */
+    private const METHOD_LABELS = [
+        'registration' => 'عند التسجيل',
+        'kyc_verification' => 'من وثيقة موثّقة',
+        'admin_decision' => 'قرارُ موظّف',
+    ];
 
     private function sinkRows(int $limit): array
     {
