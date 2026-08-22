@@ -991,3 +991,27 @@ Route::get('/system/health', [\App\Http\Controllers\Admin\SystemHealthController
 Route::post('/system/errors/{id}', [\App\Http\Controllers\Admin\SystemHealthController::class, 'updateError'])
     ->where('id', '[0-9]+')
     ->middleware('platform:platform.security.act')->name('system.errors.update');
+
+// ══════════════════════════════════════════════════════════════════════
+// SAHER-FOUNDATION-008 — ساهر
+// ══════════════════════════════════════════════════════════════════════
+//
+// **والصلاحيّاتُ ثلاثٌ لا واحدة، والفرقُ مقصود:**
+//
+//   · `saher.view`          — يفتح الرادار ويرى الأعداد والعناوين
+//   · `saher.findings.view` — يفتح تفصيلَ اكتشاف
+//   · `saher.scan.run`      — يشغّل جولةً بيده
+//
+// والدليلُ نفسُه خلف `saher.evidence.view` **ويُفحص في المتحكّم لا على
+// المسار**: الصفحةُ تُفتح ويُحجب الدليلُ وحدَه، فمن يراقب يرى العدد ومن
+// يُصلح يرى الموضع. وحاجزٌ على المسار كلِّه يشلّ الأوّل ليحمي الثاني.
+Route::get('/saher', [\App\Http\Controllers\Admin\SaherController::class, 'index'])
+    ->middleware('platform:saher.view')->name('saher.index');
+
+Route::get('/saher/findings/{id}', [\App\Http\Controllers\Admin\SaherController::class, 'show'])
+    ->where('id', '[0-9]+')
+    ->middleware('platform:saher.findings.view')->name('saher.show');
+
+// **وتشغيلُ فحصٍ فعلٌ لا قراءة** — يُسجَّل على فاعله ويحتاج صلاحيّتَه.
+Route::post('/saher/scan', [\App\Http\Controllers\Admin\SaherController::class, 'scan'])
+    ->middleware('platform:saher.scan.run')->name('saher.scan');
