@@ -67,8 +67,8 @@ class PlatformLoginPinService
     }
 
     /**
-     * fallback لحساب الجذر إذا شُغلت الهجرة قبل وجوده أو أُنشئ من بذرة لاحقة.
-     * لا نعمّم 1234 على كل platform_admin: الموظف الجديد يأخذ PIN عشوائياً.
+     * fallback لحساب مدير المنصّة الجذري إذا أنشئ بعد الهجرة.
+     * نحدد الجذر من أول مستخدم يحمل platform_admin فعلياً، لا من أول type=0.
      */
     public function ensureBootstrapCredential(User $user): bool
     {
@@ -76,7 +76,15 @@ class PlatformLoginPinService
             return true;
         }
 
-        $rootAdminId = (int) (User::query()->where('type', ADMIN_TYPE)->min('id') ?: 0);
+        $rootAdminId = (int) (DB::table('users')
+            ->join('admin_user_roles', 'admin_user_roles.user_id', '=', 'users.id')
+            ->join('roles', 'roles.id', '=', 'admin_user_roles.role_id')
+            ->where('users.type', ADMIN_TYPE)
+            ->where('roles.code', PlatformRoleService::ADMIN)
+            ->whereNull('roles.merchant_user_id')
+            ->orderBy('users.id')
+            ->value('users.id') ?: 0);
+
         if ($rootAdminId <= 0 || (int) $user->id !== $rootAdminId) {
             return false;
         }
@@ -97,9 +105,7 @@ class PlatformLoginPinService
         return true;
     }
 
-    /**
-     * @return array{ok:bool,reason:string,retry_after?:int}
-     */
+    /** @return array{ok:bool,reason:string,retry_after?:int} */
     public function verify(User $user, string $pin): array
     {
         if (! $this->exists($user->id) && ! $this->ensureBootstrapCredential($user)) {
