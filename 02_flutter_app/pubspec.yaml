@@ -13,7 +13,6 @@ dependencies:
     sdk: flutter
   intl: ^0.20.2
   get: ^4.7.3
-  # AMIAL-QR-001 (v1.8): QR generation + scanning
   qr_flutter: ^4.1.0
   mobile_scanner: ^5.2.3
   shared_preferences: ^2.5.4
@@ -63,31 +62,19 @@ dependencies:
   skeletonizer: ^2.1.2
   open_file: ^3.5.10
   flutter_currency_input_formatter: ^1.0.1
-  # AMIAL-BRANDING-001: UUID لـ Idempotency-Key (v0.7-C)
   uuid: ^4.5.1
-  # AMIAL-THERMAL-PRINT-001: طباعة الإيصالات على طابعة حرارية (بلوتوث ESC/POS).
-  # نطبع الإيصال كصورة raster (نولّد أوامر GS v 0 يدوياً عبر dart:ui) لدعم
-  # العربية سليمةً — تبعية واحدة فقط لتقليل مخاطر البناء.
   print_bluetooth_thermal: ^1.2.2
-  # AMIAL-BUILD-STAMP: قراءة إصدار التطبيق تلقائياً (بلا نصّ ثابت يتقادم)
   package_info_plus: ^8.0.0
-  # AMIAL-GEO-ZONE-001: تحديد الموقع لاستنتاج المحافظة عند التسجيل.
-  # الموقع اختياري تماماً: رفض الإذن يُبقي إدخال العنوان يدوياً كما هو.
   geolocator: ^14.0.2
-  # AMIAL-CRASH-001: قبلها كان المستخدم هو جهاز كشف الأعطال الوحيد — لا يُعرف
-  # أن شيئاً انكسر إلا إذا اصطدم به وأبلغ. الآن يصل الأثر مع رقم السطر تلقائياً.
   firebase_crashlytics: ^5.2.6
 
 dev_dependencies:
   flutter_lints: ^6.0.0
   flutter_test:
     sdk: flutter
-  # محاكاة المستودعات في اختبارات الواجهة
   mocktail: ^1.0.4
-  # اختبارات E2E (integration_test/)
   integration_test:
     sdk: flutter
-  # AMIAL-BRANDING-001
   flutter_launcher_icons: ^0.14.4
   flutter_native_splash: ^2.4.6
 
@@ -105,17 +92,6 @@ flutter:
     - assets/fonts/
 
   fonts:
-    # AMIAL-TYPE-001 — الخطُّ يغطّي العربيّة.
-    #
-    # **العطل المقيس:** كان التطبيق يُضمِّن Rubik ويضبطه عائلةً افتراضيّة،
-    # و`Rubik-Regular.ttf` فيه **٦٩٠ محرفاً وصفرُ حرفٍ عربيّ**. فكلُّ نصٍّ
-    # عربيٍّ — أي كلُّ نصٍّ في التطبيق — يسقط على خطّ الجهاز، والوضعُ
-    # المظلم على Roboto وفيه صفرٌ أيضاً. **ثلاثةُ خطوطٍ في تطبيقٍ واحد،
-    # ولا واحدَ منها يكتب العربيّة.**
-    #
-    # وIBM Plex Sans Arabic يكتبها ويكتب اللاتينيّة والأرقامَ العربيّةَ
-    # وعلامةَ الريال ﷼ — قِيس: ١٠٣٢ محرفاً، ولا محرفَ ناقصاً في الفحص.
-    # ورخصتُه SIL OFL (الملفّ بجانبه).
     - family: IBMPlexSansArabic
       fonts:
         - asset: assets/fonts/IBMPlexSansArabic-Regular.ttf
@@ -125,7 +101,6 @@ flutter:
         - asset: assets/fonts/IBMPlexSansArabic-Bold.ttf
           weight: 700
 
-# AMIAL-BRANDING-001: native splash configuration
 flutter_native_splash:
   color: "#FECA1E"
   image: assets/branding/splash_icon.png
@@ -138,13 +113,18 @@ flutter_native_splash:
   android: true
   web: false
 
-# AMIAL-BRANDING-001: launcher icons configuration
+# AMIAL-ICON-003 — launcher icon visual balance.
+# The previous adaptive foreground had a built-in white strip and the generated
+# icon added a further 16% inset, so the Amial mark looked tiny on real launchers.
+# Use the transparent wordmark as the adaptive foreground and keep only a small
+# safety inset; the pre-generated v26 XML mirrors the same 4% value.
 flutter_launcher_icons:
   android: "ic_launcher"
   ios: true
   image_path: "assets/branding/icon_square_master.png"
   min_sdk_android: 21
   adaptive_icon_background: "#FECA1E"
-  adaptive_icon_foreground: "assets/branding/icon_foreground.png"
+  adaptive_icon_foreground: "assets/branding/wordmark.png"
+  adaptive_icon_foreground_inset: 4
   remove_alpha_ios: true
   background_color_ios: "#FECA1E"
