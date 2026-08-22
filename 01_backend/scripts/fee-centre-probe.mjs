@@ -81,6 +81,16 @@ try {
         await captcha.fill('probe');
     }
 
+    // **ورمزُ PIN حلّ محلَّ الكابتشا** (AMIAL-AUTH-PIN).
+    //
+    // ولا يُستبدَل أحدُهما بالآخر بل يُملآن معاً: النموذجُ قد يحمل
+    // أيَّهما بحسب النشرة، **ومسبارٌ يعرف صيغةً واحدةً يعمى عند أوّل
+    // تغيير**. ويُصدَر الرمزُ لحساب المسبار في `amial:ensure-probe-admin`.
+    const pin = page.locator('input[name="login_pin"]');
+    if (await pin.count() > 0) {
+        await pin.fill(process.env.PROBE_ADMIN_PIN || '4321');
+    }
+
     await Promise.all([
         page.waitForLoadState('networkidle'),
         page.click('button[type="submit"]'),

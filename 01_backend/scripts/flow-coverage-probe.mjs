@@ -86,6 +86,19 @@ try {
 
     // الكابتشا `required` في HTML وإن أُلغي فحصُها في الخادم.
     const captcha = page.locator('input[name="default_captcha_value"]');
+    if (await captcha.count() > 0) {
+        await captcha.fill('probe');
+    }
+
+    // **ورمزُ PIN حلّ محلَّ الكابتشا** (AMIAL-AUTH-PIN).
+    //
+    // ولا يُستبدَل أحدُهما بالآخر بل يُملآن معاً: النموذجُ قد يحمل
+    // أيَّهما بحسب النشرة، **ومسبارٌ يعرف صيغةً واحدةً يعمى عند أوّل
+    // تغيير**. ويُصدَر الرمزُ لحساب المسبار في `amial:ensure-probe-admin`.
+    const pin = page.locator('input[name="login_pin"]');
+    if (await pin.count() > 0) {
+        await pin.fill(process.env.PROBE_ADMIN_PIN || '4321');
+    }
     if (await captcha.count() > 0) await captcha.fill('probe');
 
     await Promise.all([

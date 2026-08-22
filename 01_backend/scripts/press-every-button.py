@@ -173,6 +173,14 @@ def main() -> int:
         if captcha.count():
             captcha.first.fill("000000")
 
+        # **ورمزُ PIN حلّ محلَّ الكابتشا** (AMIAL-AUTH-PIN). ويُملآن معاً
+        # لا أحدُهما: النموذجُ قد يحمل أيَّهما بحسب النشرة، **ومسبارٌ يعرف
+        # صيغةً واحدةً يعمى عند أوّل تغيير** — وهو ما وقع فعلاً فعميت
+        # ثلاثةُ مسابرَ دفعةً واحدة.
+        pin = page.locator('input[name="login_pin"]')
+        if pin.count():
+            pin.first.fill(os.environ.get("PROBE_ADMIN_PIN", "4321"))
+
         page.click('button[type="submit"]')
         page.wait_for_load_state("networkidle")
 

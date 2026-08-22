@@ -31,7 +31,8 @@ class EnsureProbeAdmin extends Command
 {
     protected $signature = 'amial:probe-admin
                             {--phone=967700000000 : هاتفُ حساب المسبار}
-                            {--password=Admin@2026 : كلمةُ مروره}';
+                            {--password=Admin@2026 : كلمةُ مروره}
+                            {--pin=4321 : رمزُ دخوله الوظيفيّ — أربعةُ أرقام}';
 
     protected $description = 'يُنشئ حسابَ مسبارٍ للوحة الإدارة (بيئاتُ التطوير والاختبار وحدَها)';
 
@@ -101,7 +102,24 @@ class EnsureProbeAdmin extends Command
             $seeded++;
         }
 
-        $this->info(sprintf('حسابُ المسبار #%d جاهزٌ (%s) · تسعيراتٌ مضافة: %d',
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-AUTH-PIN — **ورمزُ الدخول يُصدَر لحساب المسبار.**
+        //
+        // حلّ رمزُ PIN محلَّ الكابتشا في باب اللوحة، **فعميت ثلاثةُ
+        // مسابرَ دفعةً واحدة**: مركزُ الرسوم، وتغطيةُ التدفّقات، وضغطُ
+        // كلّ زرّ. وقالت البوّابةُ صادقةً «الطبقةُ مُخطّاةٌ ولا تُعدّ
+        // نجاحاً» — فلم تكذب، لكنّ فحصين اختفيا من ٣٣.
+        //
+        // **ومسبارٌ لا يدخل ليس مسباراً** — وقد سبق أن بقي
+        // `press-every-button.py` سنةً بلا نتيجةٍ واحدةٍ لسرٍّ مخترَع.
+        $pin = (string) $this->option('pin');
+
+        app(\App\Services\PlatformLoginPinService::class)->issue(
+            $user, $pin, null, 'probe_admin', mustChange: false,
+            deliveryStatus: 'not_required',
+        );
+
+        $this->info(sprintf('حسابُ المسبار #%d جاهزٌ (%s) · تسعيراتٌ مضافة: %d · PIN مُصدَر',
             $user->id, $phone, $seeded));
 
         return self::SUCCESS;
