@@ -41,23 +41,29 @@ class PlatformLoginPinService
             throw new \InvalidArgumentException('Platform login PIN must contain exactly four digits');
         }
 
-        DB::table('platform_login_pins')->updateOrInsert(
-            ['user_id' => $user->id],
-            [
-                'pin_hash' => Hash::make($pin),
-                'must_change' => $mustChange,
-                'failed_attempts' => 0,
-                'locked_until' => null,
-                'last_verified_at' => null,
-                'issued_by_user_id' => $issuedByUserId,
-                'issued_reason' => mb_substr($reason, 0, 40),
-                'delivery_status' => $deliveryStatus,
-                'delivered_at' => $deliveryStatus === 'sent' ? now() : null,
-                'delivery_failed_at' => $deliveryStatus === 'failed' ? now() : null,
-                'updated_at' => now(),
-                'created_at' => DB::raw('COALESCE(created_at, CURRENT_TIMESTAMP)'),
-            ],
-        );
+        $values = [
+            'pin_hash' => Hash::make($pin),
+            'must_change' => $mustChange,
+            'failed_attempts' => 0,
+            'locked_until' => null,
+            'last_verified_at' => null,
+            'issued_by_user_id' => $issuedByUserId,
+            'issued_reason' => mb_substr($reason, 0, 40),
+            'delivery_status' => $deliveryStatus,
+            'delivered_at' => $deliveryStatus === 'sent' ? now() : null,
+            'delivery_failed_at' => $deliveryStatus === 'failed' ? now() : null,
+            'updated_at' => now(),
+        ];
+
+        if ($this->exists($user->id)) {
+            DB::table('platform_login_pins')->where('user_id', $user->id)->update($values);
+            return;
+        }
+
+        DB::table('platform_login_pins')->insert($values + [
+            'user_id' => $user->id,
+            'created_at' => now(),
+        ]);
     }
 
     /**
@@ -110,12 +116,15 @@ class PlatformLoginPinService
                 return ['ok' => false, 'reason' => 'not_configured'];
             }
 
-            if ($row->locked_until && now()->lt(\Illuminate\Support\Carbon::parse($row->locked_until))) {
-                return [
-                    'ok' => false,
-                    'reason' => 'locked',
-                    'retry_after' => max(1, now()->diffInSeconds(\Illuminate\Support\Carbon::parse($row->locked_until), false)),
-                ];
+            if ($row->locked_until) {
+                $lockedUntil = \Illuminate\Support\Carbon::parse($row->locked_until);
+                if (now()->lt($lockedUntil)) {
+                    return [
+                        'ok' => false,
+                        'reason' => 'locked',
+                        'retry_after' => max(1, (int) now()->diffInSeconds($lockedUntil)),
+                    ];
+                }
             }
 
             if (Hash::check($pin, (string) $row->pin_hash)) {
