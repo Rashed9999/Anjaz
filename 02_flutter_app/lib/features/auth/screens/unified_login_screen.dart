@@ -14,10 +14,6 @@ import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/images.dart';
 import 'package:amial_pay/util/secure_screen.dart';
 
-/// AMIAL-LOGIN-UI-004
-///
-/// شاشة دخول واحدة تقنياً، وثلاث تجارب متخصصة بصرياً ووظيفياً:
-/// العميل / التاجر / نقطة البيع. لا وكيل ولا Admin في تطبيق الهاتف.
 enum AccountKind { customer, merchant, pos }
 
 extension _KindMeta on AccountKind {
@@ -61,6 +57,7 @@ extension _KindMeta on AccountKind {
       };
 }
 
+/// AMIAL-LOGIN-UI-004 — شاشة واحدة تقنياً وثلاث تجارب متخصصة.
 class UnifiedLoginScreen extends StatefulWidget {
   const UnifiedLoginScreen({super.key});
 
@@ -118,7 +115,6 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-
     final controller = Get.find<UnifiedAuthController>();
     var ok = false;
 
@@ -149,9 +145,12 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
 
     if (!mounted) return;
     if (!ok) {
-      _error(controller.lastError.value.isNotEmpty
-          ? controller.lastError.value
-          : 'تعذّر تسجيل الدخول');
+      _snack(
+        controller.lastError.value.isNotEmpty
+            ? controller.lastError.value
+            : 'تعذّر تسجيل الدخول',
+        danger: true,
+      );
       return;
     }
 
@@ -170,7 +169,10 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         final phone = _phoneCtrl.text.trim();
         final password = _passwordCtrl.text;
         if (phone.isEmpty || password.length < 4) {
-          _error('أدخل رقم الهاتف وكلمة المرور أولاً لتفعيل الدخول بالبصمة');
+          _snack(
+            'أدخل رقم الهاتف وكلمة المرور أولاً لتفعيل الدخول بالبصمة',
+            danger: true,
+          );
           return;
         }
         if (!mounted) return;
@@ -181,18 +183,15 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         if (!await AmialBiometricSetupScreen.isEnabled()) return;
       }
 
-      final localAuth = LocalAuthentication();
-      final accepted = await localAuth.authenticate(
+      final accepted = await LocalAuthentication().authenticate(
         localizedReason: 'الدخول إلى أميال باي',
         biometricOnly: true,
         persistAcrossBackgrounding: true,
       );
       if (!accepted || !mounted) return;
 
-      final credentials =
-          await AmialBiometricSetupScreen.savedCredentials();
+      final credentials = await AmialBiometricSetupScreen.savedCredentials();
       if (credentials == null) return;
-
       final controller = Get.find<UnifiedAuthController>();
       final ok = await controller.loginCustomer(
         nationalId: '',
@@ -203,10 +202,10 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       if (ok) {
         controller.navigateToHomeForRole();
       } else {
-        _error(controller.lastError.value);
+        _snack(controller.lastError.value, danger: true);
       }
     } catch (_) {
-      _error('تعذّر التحقق الحيوي على هذا الجهاز');
+      _snack('تعذّر التحقق الحيوي على هذا الجهاز', danger: true);
     }
   }
 
@@ -218,17 +217,17 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           ));
       return;
     }
-    _info(
+    _snack(
       _kind == AccountKind.merchant
-          ? 'استرداد حساب التاجر يتم عبر قناة استرداد الحساب أو الدعم المعتمد.'
-          : 'بيانات نقطة البيع يعيدها مالك الحساب أو مدير المتجر من إدارة نقاط البيع.',
+          ? 'استرداد حساب التاجر يتم عبر قناة الاسترداد أو الدعم المعتمد.'
+          : 'بيانات نقطة البيع يعيدها مالك الحساب أو مدير المتجر.',
     );
   }
 
   void _openQuickReceive() {
     final last = _lastUser;
     if (last == null || last.kind != 'customer' || last.phone.trim().isEmpty) {
-      _info('سجّل دخول العميل مرة واحدة على هذا الجهاز لتفعيل الاستلام السريع.');
+      _snack('سجّل دخول العميل مرة واحدة على هذا الجهاز لتفعيل الاستلام السريع.');
       return;
     }
     Get.to(() => QuickReceiveScreen(
@@ -237,23 +236,19 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         ));
   }
 
-  void _error(String message) {
+  void _snack(String message, {bool danger = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AmialColors.danger),
-    );
-  }
-
-  void _info(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: AmialColors.info),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: danger ? AmialColors.danger : AmialColors.info,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDarkHero = _kind != AccountKind.customer;
+    final dark = _kind != AccountKind.customer;
     return Scaffold(
       backgroundColor: AmialColors.background,
       body: SafeArea(
@@ -262,7 +257,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           child: ListView(
             padding: EdgeInsets.zero,
             children: [
-              _hero(context, isDarkHero: isDarkHero),
+              _hero(context, dark: dark),
               Transform.translate(
                 offset: const Offset(0, -AmialSpacing.lg),
                 child: Padding(
@@ -294,12 +289,10 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     );
   }
 
-  Widget _hero(BuildContext context, {required bool isDarkHero}) {
-    final background =
-        isDarkHero ? AmialColors.primaryDark : AmialColors.cardSurface;
-    final titleColor =
-        isDarkHero ? AmialColors.cardSurface : AmialColors.primary;
-    final textColor = isDarkHero
+  Widget _hero(BuildContext context, {required bool dark}) {
+    final bg = dark ? AmialColors.primaryDark : AmialColors.cardSurface;
+    final fg = dark ? AmialColors.cardSurface : AmialColors.primary;
+    final secondary = dark
         ? AmialColors.cardSurface.withValues(alpha: 0.82)
         : AmialColors.textSecondary;
 
@@ -311,7 +304,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         AmialSpacing.xxl + AmialSpacing.xl,
       ),
       decoration: BoxDecoration(
-        color: background,
+        color: bg,
         borderRadius: const BorderRadius.vertical(
           bottom: Radius.circular(AmialSpacing.radiusXl),
         ),
@@ -320,9 +313,9 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         children: [
           Row(
             children: [
-              const AmialLanguageSwitch(),
+              AmialLanguageChip(onDark: dark),
               const Spacer(),
-              _kindSelector(context, dark: isDarkHero),
+              _kindSelector(context, dark: dark),
             ],
           ),
           const SizedBox(height: AmialSpacing.xl),
@@ -338,41 +331,15 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             child: Image.asset(Images.logo, fit: BoxFit.contain),
           ),
           const SizedBox(height: AmialSpacing.lg),
-          if (_kind != AccountKind.customer)
-            Container(
-              margin: const EdgeInsets.only(bottom: AmialSpacing.sm),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AmialSpacing.md,
-                vertical: AmialSpacing.xs,
-              ),
-              decoration: BoxDecoration(
-                color: AmialColors.yellow.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(AmialSpacing.radiusXl),
-                border: Border.all(color: AmialColors.yellow),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(_kind.icon,
-                      color: AmialColors.yellow, size: AmialSpacing.lg),
-                  const SizedBox(width: AmialSpacing.xs),
-                  Text(
-                    _kind == AccountKind.merchant
-                        ? 'بوابة التاجر'
-                        : 'أميال باي POS',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AmialColors.yellow,
-                          fontWeight: FontWeight.w800,
-                        ),
-                  ),
-                ],
-              ),
-            ),
+          if (_kind != AccountKind.customer) ...[
+            _roleBadge(context),
+            const SizedBox(height: AmialSpacing.sm),
+          ],
           Text(
             _kind.title,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: titleColor,
+                  color: fg,
                   fontWeight: FontWeight.w900,
                   height: 1.25,
                 ),
@@ -382,7 +349,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             _kind.subtitle,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: textColor,
+                  color: secondary,
                   height: 1.65,
                   fontWeight: FontWeight.w500,
                 ),
@@ -410,18 +377,16 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       tooltip: 'نوع الحساب',
       onSelected: _switchKind,
       itemBuilder: (_) => AccountKind.values
-          .map(
-            (kind) => PopupMenuItem<AccountKind>(
-              value: kind,
-              child: Row(
-                children: [
-                  Icon(kind.icon, color: AmialColors.primary),
-                  const SizedBox(width: AmialSpacing.sm),
-                  Text(kind.label),
-                ],
-              ),
-            ),
-          )
+          .map((kind) => PopupMenuItem<AccountKind>(
+                value: kind,
+                child: Row(
+                  children: [
+                    Icon(kind.icon, color: AmialColors.primary),
+                    const SizedBox(width: AmialSpacing.sm),
+                    Text(kind.label),
+                  ],
+                ),
+              ))
           .toList(),
       child: Container(
         padding: const EdgeInsets.symmetric(
@@ -464,6 +429,34 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _roleBadge(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AmialSpacing.md,
+        vertical: AmialSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: AmialColors.yellow.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(AmialSpacing.radiusXl),
+        border: Border.all(color: AmialColors.yellow),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_kind.icon, color: AmialColors.yellow, size: AmialSpacing.lg),
+          const SizedBox(width: AmialSpacing.xs),
+          Text(
+            _kind == AccountKind.merchant ? 'بوابة التاجر' : 'أميال باي POS',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AmialColors.yellow,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ],
       ),
     );
   }
@@ -527,70 +520,58 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             const SizedBox(height: AmialSpacing.lg),
             if (_kind != AccountKind.customer) ...[
               _field(
-                context,
                 controller: _merchantNumCtrl,
                 label: 'رقم التاجر',
                 hint: 'AM-XXXX-000',
                 icon: Icons.storefront_outlined,
-                textInputAction: TextInputAction.next,
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'أدخل رقم التاجر'
-                    : null,
+                validator: _required('أدخل رقم التاجر'),
               ),
               const SizedBox(height: AmialSpacing.sm),
             ],
             if (_kind == AccountKind.pos) ...[
               _field(
-                context,
                 controller: _posNumCtrl,
                 label: 'رقم نقطة البيع',
                 hint: 'POS-000123',
                 icon: Icons.point_of_sale_outlined,
-                textInputAction: TextInputAction.next,
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'أدخل رقم نقطة البيع'
-                    : null,
+                validator: _required('أدخل رقم نقطة البيع'),
               ),
               const SizedBox(height: AmialSpacing.sm),
             ],
             _field(
-              context,
               controller: _phoneCtrl,
               label: 'رقم الهاتف',
               hint: '7XXXXXXXX',
               icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
-              textInputAction: TextInputAction.next,
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
               ],
               validator: (value) {
                 final digits = (value ?? '').replaceAll(RegExp(r'[^0-9]'), '');
-                if (digits.length < 7) return 'أدخل رقم هاتف صحيح';
-                return null;
+                return digits.length < 7 ? 'أدخل رقم هاتف صحيح' : null;
               },
             ),
             const SizedBox(height: AmialSpacing.sm),
             _field(
-              context,
               controller: _passwordCtrl,
               label: 'كلمة المرور',
               hint: 'أدخل كلمة المرور',
               icon: Icons.lock_outline,
               obscureText: _obscure,
-              textInputAction: TextInputAction.done,
+              validator: (value) =>
+                  (value ?? '').length < 4 ? 'أدخل كلمة المرور' : null,
               onSubmitted: (_) => _submit(),
               suffix: IconButton(
                 tooltip: _obscure ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور',
                 onPressed: () => setState(() => _obscure = !_obscure),
                 icon: Icon(
-                  _obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                  _obscure
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
                   color: AmialColors.textMuted,
                 ),
               ),
-              validator: (value) => (value ?? '').length < 4
-                  ? 'أدخل كلمة المرور'
-                  : null,
             ),
             Align(
               alignment: Alignment.centerLeft,
@@ -601,7 +582,8 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             ),
             const SizedBox(height: AmialSpacing.xs),
             Obx(() {
-              final loading = Get.find<UnifiedAuthController>().isSubmitting.value;
+              final loading =
+                  Get.find<UnifiedAuthController>().isSubmitting.value;
               return FilledButton.icon(
                 onPressed: loading ? null : _submit,
                 icon: loading
@@ -677,20 +659,22 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
 
   String get _formSubtitle => switch (_kind) {
         AccountKind.customer => 'أدخل بياناتك للوصول إلى محفظتك بأمان.',
-        AccountKind.merchant => 'استخدم بيانات حساب المالك أو الحساب الإداري للتاجر.',
+        AccountKind.merchant =>
+          'استخدم بيانات حساب المالك أو الحساب الإداري للتاجر.',
         AccountKind.pos =>
-          'أدخل بيانات نقطة البيع المسجلة. ربط PIN الموظف يحتاج عقد الخادم المخصص.',
+          'أدخل بيانات نقطة البيع المسجلة. PIN الموظف يحتاج عقداً مخصصاً من الخادم.',
       };
 
-  Widget _field(
-    BuildContext context, {
+  String? Function(String?) _required(String message) =>
+      (value) => value == null || value.trim().isEmpty ? message : null;
+
+  Widget _field({
     required TextEditingController controller,
     required String label,
     required String hint,
     required IconData icon,
     required String? Function(String?) validator,
     TextInputType? keyboardType,
-    TextInputAction? textInputAction,
     bool obscureText = false,
     Widget? suffix,
     List<TextInputFormatter>? inputFormatters,
@@ -699,7 +683,6 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
-      textInputAction: textInputAction,
       obscureText: obscureText,
       inputFormatters: inputFormatters,
       onFieldSubmitted: onSubmitted,
@@ -727,23 +710,21 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     );
   }
 
-  Widget _divider(BuildContext context) {
-    return Row(
-      children: [
-        const Expanded(child: Divider(color: AmialColors.border)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AmialSpacing.sm),
-          child: Text(
-            'أو',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AmialColors.textMuted,
-                ),
+  Widget _divider(BuildContext context) => Row(
+        children: [
+          const Expanded(child: Divider(color: AmialColors.border)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AmialSpacing.sm),
+            child: Text(
+              'أو',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AmialColors.textMuted,
+                  ),
+            ),
           ),
-        ),
-        const Expanded(child: Divider(color: AmialColors.border)),
-      ],
-    );
-  }
+          const Expanded(child: Divider(color: AmialColors.border)),
+        ],
+      );
 
   Widget _quickReceiveCard(BuildContext context) {
     final available = _lastUser?.kind == 'customer' &&
@@ -754,9 +735,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       child: Container(
         padding: const EdgeInsets.all(AmialSpacing.md),
         decoration: BoxDecoration(
-          color: available
-              ? AmialColors.warningSurface
-              : AmialColors.background,
+          color: available ? AmialColors.warningSurface : AmialColors.background,
           borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
           border: Border.all(
             color: available ? AmialColors.yellowDark : AmialColors.border,
@@ -830,10 +809,8 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           Expanded(
             child: Text(
               pos
-                  ? 'هذه الواجهة لا تدّعي وجود PIN موظف قبل أن يدعمه الخادم. '
-                      'حالياً تستخدم عقد نقطة البيع الحقيقي المسجل في أميال.'
-                  : 'بعد الدخول يوجهك أميال إلى قطاع تجارتك الصحيح '
-                      'ويطبق الباقة والصلاحيات على العمليات الفعلية.',
+                  ? 'لا نعرض PIN موظف وهمياً قبل أن يدعمه الخادم. حالياً تستخدم الشاشة عقد نقطة البيع الحقيقي.'
+                  : 'بعد الدخول يوجهك أميال إلى قطاع تجارتك الصحيح ويطبق الباقة والصلاحيات.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AmialColors.textSecondary,
                     height: 1.6,
@@ -845,28 +822,26 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     );
   }
 
-  Widget _securityStrip(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AmialSpacing.md),
-      decoration: BoxDecoration(
-        color: AmialColors.cardSurface,
-        borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-        border: Border.all(color: AmialColors.border),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.security_outlined, color: AmialColors.primary),
-          const SizedBox(width: AmialSpacing.sm),
-          Expanded(
-            child: Text(
-              'بيانات الدخول محمية، ولا يتم حفظ كلمة المرور في شاشة الدخول.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AmialColors.textSecondary,
-                  ),
+  Widget _securityStrip(BuildContext context) => Container(
+        padding: const EdgeInsets.all(AmialSpacing.md),
+        decoration: BoxDecoration(
+          color: AmialColors.cardSurface,
+          borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
+          border: Border.all(color: AmialColors.border),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.security_outlined, color: AmialColors.primary),
+            const SizedBox(width: AmialSpacing.sm),
+            Expanded(
+              child: Text(
+                'بيانات الدخول محمية ولا تُحفظ كلمة المرور في شاشة الدخول.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AmialColors.textSecondary,
+                    ),
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+          ],
+        ),
+      );
 }
