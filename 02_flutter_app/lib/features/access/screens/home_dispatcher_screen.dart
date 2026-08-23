@@ -10,6 +10,7 @@ import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.da
 import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
 import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_adaptive_shell.dart';
 
 /// CRITICAL-001 — Home Dispatcher.
 ///
@@ -46,6 +47,8 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
     });
   }
 
+  Widget _merchantShell(Widget child) => MerchantAdaptiveShell(child: child);
+
   @override
   Widget build(BuildContext context) {
     return Obx(() {
@@ -75,32 +78,38 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
       // السبعة، والكاشيرُ يرى البيعَ وورديّتَه، وموظّفُ المخزون يرى
       // الخزّاناتِ ولا يرى ريالاً.
       if (_access.isMerchant && _access.isFuel) {
-        return const FuelOwnerConsoleScreen();
+        return _merchantShell(const FuelOwnerConsoleScreen());
       }
 
       // Merchant + pharmacy → Pharmacy Dashboard
       if (_access.isMerchant && _access.isPharmacy) {
-        return const PharmacyDashboardScreen();
+        return _merchantShell(const PharmacyDashboardScreen());
       }
 
       // Merchant + wholesale → Wholesale Dashboard
       if (_access.isMerchant && _access.isWholesale) {
-        return const WholesaleDashboardScreen();
+        return _merchantShell(const WholesaleDashboardScreen());
       }
 
       // Merchant + quick_sale → بسيط جداً
       if (_access.isMerchant && _access.isQuickSale) {
-        return const MerchantQuickSaleHomeScreen();
+        return _merchantShell(const MerchantQuickSaleHomeScreen());
       }
 
       // Merchant + retail → POS متوسط
       if (_access.isMerchant && _access.isRetail) {
-        return const MerchantRetailHomeScreen();
+        return _merchantShell(const MerchantRetailHomeScreen());
       }
 
       // Merchant + restaurant → operational restaurant workspace.
       if (_access.isMerchant && _access.isRestaurant) {
-        return const RestaurantScreen();
+        return _merchantShell(const RestaurantScreen());
+      }
+
+      // أي نشاط تاجر جديد لم يُضف له Dispatcher متخصص بعد يحصل على القائمة
+      // الذكية أيضاً، لكن يبقى محتوى Home هو fallback الحقيقي القائم.
+      if (_access.isMerchant) {
+        return _merchantShell(widget.userHomeFallback);
       }
 
       // AMIAL-WEB-ONLY-PORTALS-001: الوكيل والأدمن لوحتاهما على المتصفّح.
@@ -118,7 +127,6 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
       return widget.userHomeFallback;
     });
   }
-
 }
 
 /// Helper: غلاف لاستخدام Dispatcher مع home_screen الأصلي بدون الحاجة لتغيير routing.
