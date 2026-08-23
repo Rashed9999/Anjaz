@@ -109,6 +109,94 @@ class SaherController extends Controller
         ]);
     }
 
+
+    /**
+     * **الفرزُ فعلٌ يُسجَّل على فاعله، لا زرٌّ يُخفي صفّاً.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * `HUMAN_HELD` مبنيّةٌ في `FindingStore` وتنجو من كلّ مسح، والشاشةُ
+     * تترجم حالاتِها الثلاث، والصلاحيّتان معرَّفتان — **ولم يكن ثمّة ما
+     * يضعها**. فبقيت ٩٦ نتيجةً تُقرأ من الصفر في كلّ تدقيق، ومعها
+     * إغراءُ الحذف الجَماعيّ.
+     *
+     * وثلاثةُ شروطٍ تجعل الحكمَ حكماً لا كتماناً:
+     *
+     *   ① **سببٌ نصّيٌّ لا علامة.** حكمٌ بلا سببٍ يُقرأ بعد شهرين
+     *      «أحدُهم رآه ولم يقل لماذا» — وهو أسوأ من قائمةٍ مفتوحة.
+     *
+     *   ② **ينتهي بتغيّر الشيفرة.** يُحفَظ تجزيءُ الملفّ المُصرِّح وقتَ
+     *      الحكم؛ فحكمٌ صدر على شيفرةٍ لا يسري على خَلَفٍ لم يره أحد.
+     *      («وإقرارٌ لا ينتهي صمتٌ مؤجَّل» — درسُ `gradle-floor-waiver`.)
+     *
+     *   ③ **وأثرٌ في السجلّ وفي التدقيق.** فمن كتم يُعرَف ومتى ولماذا.
+     */
+    public function rule(Request $request, int $id): RedirectResponse
+    {
+        $finding = DB::table('saher_findings')->where('id', $id)->first();
+
+        abort_if($finding === null, 404);
+
+        $data = $request->validate([
+            'status' => 'required|in:FALSE_POSITIVE,ACCEPTED_RISK,SUPPRESSED,OPEN',
+            // **وسببٌ من كلمةٍ ليس سبباً.** عشرون محرفاً حدٌّ أدنى يمنع
+            // «تمام» و«معروف» — وهما كتمانٌ بثوب حكم.
+            'reason' => 'required|string|min:20|max:2000',
+        ]);
+
+        $isHold = $data['status'] !== 'OPEN';
+
+        // **وتجزيءُ الملفّ يُقرأ عند الحكم لا عند القراءة.** فإن غاب
+        // الملفُّ فلا تجزيء — والحكمُ يبقى، لكنّه لا يدّعي ما لا يعرف.
+        $path = $finding->file_path ? base_path($finding->file_path) : null;
+        $hash = ($isHold && $path && is_file($path))
+            ? hash_file('sha256', $path)
+            : null;
+
+        DB::transaction(function () use ($finding, $data, $isHold, $hash, $request, $id) {
+            DB::table('saher_findings')->where('id', $id)->update([
+                'status' => $data['status'],
+                'ruling_reason' => $data['reason'],
+                'ruling_by_user_id' => $request->user()?->id,
+                'ruled_at' => now(),
+                'ruling_source_hash' => $hash,
+                'updated_at' => now(),
+            ]);
+
+            DB::table('saher_finding_events')->insert([
+                'finding_id' => $id,
+                'event' => $isHold ? 'RULED_HELD' : 'REOPENED_BY_HUMAN',
+                'from_status' => $finding->status,
+                'to_status' => $data['status'],
+                'note' => mb_substr($data['reason'], 0, 2000),
+                'actor_user_id' => $request->user()?->id,
+                'actor_type' => 'platform_user',
+                'occurred_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }, 3);
+
+        app(\App\Services\AuditService::class)->record([
+            'actor_type' => 'platform_user',
+            'actor_user_id' => $request->user()?->id,
+            'subject_type' => 'saher_finding',
+            'subject_id' => (string) $id,
+            'action' => $isHold ? 'SAHER_FINDING_HELD' : 'SAHER_FINDING_REOPENED',
+            'decision_code' => $data['status'],
+            'reason' => mb_substr($data['reason'], 0, 500),
+            'severity' => $isHold ? 'warning' : 'info',
+            'context' => [
+                'rule_id' => $finding->rule_id,
+                'symbol' => $finding->symbol,
+                'source_hash' => $hash,
+            ],
+        ]);
+
+        return back()->with('success', $isHold
+            ? 'سُجّل الحكم — ويُرفَع من تلقائه إن تغيّرت الشيفرة.'
+            : 'أُعيد فتحُ الاكتشاف.');
+    }
+
     /**
      * تشغيلُ جولةٍ يدويّاً — **وفشلُها يُقال، ولا يُقرأ صفراً**.
      *

@@ -1036,6 +1036,13 @@ Route::get('/saher/findings/{id}', [\App\Http\Controllers\Admin\SaherController:
     ->where('id', '[0-9]+')
     ->middleware('platform:saher.findings.view')->name('saher.show');
 
+// **والفرزُ فعلٌ لا قراءة.** حالاتُ `HUMAN_HELD` كانت مبنيّةً وتنجو من
+// كلّ مسح، والصلاحيّةُ معرَّفةً — **ولا مسارَ يضعها**. فبقيت ٩٦ نتيجةً
+// تُقرأ من الصفر في كلّ تدقيق. (النمطُ نفسُه داخل الأداة التي تكشفه.)
+Route::post('/saher/findings/{id}/rule', [\App\Http\Controllers\Admin\SaherController::class, 'rule'])
+    ->where('id', '[0-9]+')
+    ->middleware('platform:saher.findings.suppress')->name('saher.rule');
+
 // **وتشغيلُ فحصٍ فعلٌ لا قراءة** — يُسجَّل على فاعله ويحتاج صلاحيّتَه.
 Route::post('/saher/scan', [\App\Http\Controllers\Admin\SaherController::class, 'scan'])
     ->middleware('platform:saher.scan.run')->name('saher.scan');
