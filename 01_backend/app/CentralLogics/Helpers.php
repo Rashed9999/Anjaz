@@ -330,9 +330,51 @@ class Helpers
         return $constant;
     }
 
-    public static function file_uploader(string $dir, string $format, ?object $image = null, ?string $old_image = null): string
+    /**
+     * AMIAL-UPLOAD-BYTES-001 — **رفعٌ لم يعمل مرّةً، وبابٌ كان يُفتَح لو عمل.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ما قِيس بالتشغيل لا بالقراءة:**
+     *
+     *     Helpers::file_uploader("probe/", "png", "/etc/hostname")
+     *     →  TypeError: Argument #3 must be of type ?object, string given
+     *
+     * والمُنادُون الثلاثةُ كلُّهم يمرّرون **سلسلة**:
+     *
+     *   `MerchantReceiptSettingsController::uploadLogo`  — base64 من التطبيق
+     *   `RegisterController` (تسجيلٌ عامّ)               — مصفوفةُ صور هويّة
+     *   `AgentController::submitKyc`                     — مثلُها
+     *
+     * فالأوّلُ يردّ «تعذّر رفع الشعار» **في كلّ مرّة** (و`catch (\Throwable)`
+     * يبتلع السبب)، والثاني يتجاهل كلَّ صورةٍ بصمت، والثالثُ بلا التقاطٍ
+     * أصلاً فيخرج ٥٠٠. **أي أنّ رفعَ الشعار لم يعمل منذ بُني**، والفاتورةُ
+     * المطبوعةُ بلا شعارٍ أبداً. (القاعدةُ التاسعة: زرٌّ يعمل ويفعل الشيء
+     * الخطأ — والضغطةُ هنا تصل الخادمَ وتعود بخطأٍ ثابت.)
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ولمَ لا يُصلَح بتوسيع النوع وحدَه:** السطرُ القديم كان
+     * `file_get_contents($image)` — ولو قُبلت السلسلةُ لصار المُدخَلُ
+     * **مساراً يفتحه الخادم**: `../../.env` يقرأ `APP_KEY` و`DB_PASSWORD`
+     * ومفاتيحَ تشفير بيانات العملاء، و`http://…` يخرج بطلبٍ من داخل
+     * الشبكة — **ثمّ يُنشَر الناتجُ صورةً علنيّة**. ومسارُ التسجيل عامٌّ
+     * بلا مصادقة.
+     *
+     * فالحمايةُ اليومَ **تصريحُ نوعٍ لا تنقية**، وهي تسقط مع أوّل من
+     * يوسّعه بحسن نيّةٍ ليُصلح العطل. ولذلك يُنقل الفحصُ إلى المحتوى:
+     * **لا سلسلةٌ تصل `file_get_contents` أبداً**.
+     *
+     * @param  \Illuminate\Http\UploadedFile|\SplFileInfo|string|null  $image
+     *         ملفٌّ مرفوع، أو base64 (بترويسة data: أو بدونها).
+     */
+    public static function file_uploader(string $dir, string $format, mixed $image = null, ?string $old_image = null): string
     {
-        if ($image == null) return $old_image ?? 'def.png';
+        if ($image === null || $image === '' || $image === []) {
+            return $old_image ?? 'def.png';
+        }
+
+        // **البايتاتُ تُستخرَج قبل أيّ لمسٍ للقرص** — فإن رُفض المُدخَل
+        // لم تُحذف الصورةُ القديمة ولم يُنشأ مجلَّد.
+        $bytes = self::imageBytesFrom($image);
 
         if (isset($old_image)) Storage::disk('public')->delete($dir . $old_image);
 
@@ -340,9 +382,58 @@ class Helpers
         if (!Storage::disk('public')->exists($dir)) {
             Storage::disk('public')->makeDirectory($dir);
         }
-        Storage::disk('public')->put($dir . $imageName, file_get_contents($image));
+        Storage::disk('public')->put($dir . $imageName, $bytes);
 
         return $imageName;
+    }
+
+    /** أقصى حجمٍ مقبولٍ بعد فكّ الترميز — ٥ ميجابايت. */
+    private const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+    /**
+     * بايتاتُ صورةٍ من ملفٍّ مرفوعٍ أو من base64 — **ولا شيءَ غيرهما**.
+     *
+     * ولا يُفتح مسارٌ ولا عنوانٌ يأتي من الطلب: `file_get_contents` تُنادى
+     * على `getRealPath()` لملفٍّ رفعه PHP نفسُه، لا على نصٍّ من المستعمل.
+     */
+    private static function imageBytesFrom(mixed $image): string
+    {
+        $bytes = null;
+
+        if ($image instanceof \Illuminate\Http\UploadedFile) {
+            if (! $image->isValid()) {
+                throw new \InvalidArgumentException('الملفّ المرفوع تالف');
+            }
+            $bytes = (string) file_get_contents($image->getRealPath());
+        } elseif ($image instanceof \SplFileInfo) {
+            $bytes = (string) file_get_contents($image->getRealPath());
+        } elseif (is_string($image)) {
+            // **ترويسةُ data: تُنزَع ولا تُتَّبع.** و`data://` وسيطٌ صالحٌ
+            // في PHP، فتمريرُ النصّ كما هو إلى `file_get_contents` يجعل
+            // `http://` و`file://` صالحَين معه بالقدر نفسِه.
+            $payload = preg_replace('~^data:[^,]*,~i', '', trim($image)) ?? '';
+            $decoded = base64_decode($payload, true);
+
+            if ($decoded === false || $decoded === '') {
+                throw new \InvalidArgumentException('الصورة ليست بترميز base64 صالح');
+            }
+
+            $bytes = $decoded;
+        } else {
+            throw new \InvalidArgumentException('نوعُ الصورة غيرُ مدعوم');
+        }
+
+        if (strlen($bytes) > self::MAX_UPLOAD_BYTES) {
+            throw new \InvalidArgumentException('حجمُ الصورة يتجاوز ٥ ميجابايت');
+        }
+
+        // **وأنّها صورةٌ فعلاً لا مجرّدَ بايتاتٍ فُكَّ ترميزُها.** بلا هذا
+        // يُرفَع PHP مُرمَّزٌ بامتداد png ويُخدَم من مجلَّدٍ عامّ.
+        if (@getimagesizefromstring($bytes) === false) {
+            throw new \InvalidArgumentException('المحتوى المرفوع ليس صورة');
+        }
+
+        return $bytes;
     }
 
     public static function currency_code(): string
