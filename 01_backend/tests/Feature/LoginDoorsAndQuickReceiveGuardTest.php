@@ -188,9 +188,38 @@ class LoginDoorsAndQuickReceiveGuardTest extends TestCase
         // الهاتفَ **خاماً**، و`verifyRecipient` في الخادم يقبل الاثنين.
         // فالحمولةُ متوافقةٌ — والادّعاءُ قِيس ولم يُصدَّق.
         // ══════════════════════════════════════════════════════════════
-        $this->assertStringContainsString('data: paymentAddress',
-            $this->quickReceive(),
-            'حمولةُ الرمز ليست عنوانَ الاستلام الخام — فلا يقرؤها الماسح');
+        // ══════════════════════════════════════════════════════════════
+        // **ولا يُطابَق اسمُ المتغيّر.**
+        //
+        // كُتب أوّلَ مرّةٍ `'data: paymentAddress'` حرفاً — **فسقط على
+        // تحسينٍ صحيح**: أعاد كودكس تسميتَه `receiveAddress` والحمولةُ
+        // هي هي. وحارسٌ يمنع إعادةَ تسميةٍ سليمةٍ يُطفَأ عند أوّل مرّة،
+        // وهو الصنفُ المسجَّل في `CLAUDE.md`.
+        //
+        // فالعقدُ الذي يهمّ اثنان، ويُقاسان لا يُفترضان:
+        //
+        //   ١) الحمولةُ **قيمةٌ خام**، لا غلافُ JSON ولا رابط — فماسحُ
+        //      المنتج يقرأ النصَّ كما هو ويرسله إلى `verifyRecipient`.
+        //   ٢) وهي **ليست الهاتف** — والشاشةُ تُفتح قبل الدخول، فرمزٌ
+        //      يحمل الرقمَ يُفشيه لكلّ من يمسحه.
+        // ══════════════════════════════════════════════════════════════
+        $qr = $this->quickReceive();
+
+        $this->assertMatchesRegularExpression(
+            '~Qr(?:ImageView|DisplayWidget)\(.{0,400}?\bdata:\s*([A-Za-z_][A-Za-z0-9_.]*)\s*,~s', $qr,
+            'حمولةُ الرمز ليست متغيّراً مفرداً — فإمّا غلافٌ أو نصٌّ مركَّب، '
+            . 'وماسحُ المنتج يقرأ القيمةَ الخام');
+
+        preg_match('~Qr(?:ImageView|DisplayWidget)\(.{0,400}?\bdata:\s*([A-Za-z_][A-Za-z0-9_.]*)\s*,~s', $qr, $m);
+        $payloadVar = $m[1] ?? '';
+
+        $this->assertMatchesRegularExpression('~(?i)address~', $payloadVar,
+            "حمولةُ الرمز «{$payloadVar}» ليست عنوانَ استلام — "
+            . 'والماسحُ يتوقّع معرّفَ الحساب');
+
+        $this->assertDoesNotMatchRegularExpression('~(?i)phone~', $payloadVar,
+            "حمولةُ الرمز «{$payloadVar}» تحمل الهاتفَ — والشاشةُ تُفتح "
+            . 'قبل الدخول، فيُفشى الرقمُ لكلّ من يمسح');
 
         $profileQr = base_path(
             '../02_flutter_app/lib/features/setting/screens/qr_code_download_or_share_screen.dart');

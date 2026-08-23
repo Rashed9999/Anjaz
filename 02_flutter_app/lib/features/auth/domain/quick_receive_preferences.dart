@@ -55,7 +55,16 @@ class QuickReceivePreferences {
   }) async {
     final prefs = _prefs;
     final address = receiveAddress.trim();
-    if (prefs == null || address.isEmpty) return false;
+
+    // AMIAL-QUICK-RECEIVE-003 — **ومالكٌ فارغٌ يُبطل حارسَ الحساب القديم.**
+    //
+    // `disableIfOwnedByAnother` تخرج صامتةً إن كان المالكُ المخزَّن
+    // فارغاً — فتفعيلٌ بلا هاتفٍ يُنتج تفضيلاً **لا يُنظَّف أبداً**
+    // مهما تبدّل صاحبُ الجهاز. فيُشترط هنا لا هناك: الفحصُ عند الكتابة
+    // أضمنُ من الفحص عند القراءة.
+    if (prefs == null || address.isEmpty || _digits(ownerPhone).isEmpty) {
+      return false;
+    }
 
     try {
       await prefs.setString(_addressKey, address);
@@ -82,14 +91,38 @@ class QuickReceivePreferences {
     }
   }
 
+  /// الأرقامُ وحدَها — فالرقمُ الواحد يصل بأربع صيغ.
+  static String _digits(String v) => v.replaceAll(RegExp(r'[^0-9]'), '');
+
+  /// آخرُ تسعةِ أرقام — وهي الجزءُ الوطنيُّ في اليمن، الثابتُ بين الصيغ.
+  static String _nationalTail(String v) {
+    final d = _digits(v);
+
+    return d.length <= 9 ? d : d.substring(d.length - 9);
+  }
+
   /// يمنع عرض عنوان حسابٍ سابق بعد أن يصبح الجهاز لحساب عميل آخر.
+  ///
+  /// ══════════════════════════════════════════════════════════════════
+  /// **ولا تُقارَن الأرقامُ حرفيّاً.** المخزَّنُ يأتي من الملفّ الشخصيّ
+  /// (`967777100001`)، والداخلُ يأتي رمزَ اتّصالٍ + رقماً (`+967` و
+  /// `777100001`). فمطابقةٌ حرفيّةٌ **تُطفئ الميزةَ على صاحبها في كلّ
+  /// دخول** — حاجزٌ يشلّ عملاً سليماً، ويُطفَأ عند أوّل شكوى.
+  ///
+  /// وهو العطلُ المسجَّل في المشروع مرّتين: «مقارنةٌ حرفيّةٌ تجعل الحساب
+  /// يعمل من شاشةٍ ويُرفض من أخرى».
+  ///
+  /// **وحين يتعذّر التعرّف يُطفأ لا يُترك.** رقمٌ داخلٌ لا يُقرأ منه شيء
+  /// يعني أنّنا لا نعرف صاحبَ الجهاز — و«غير معروف» هنا ليس «هو نفسُه».
+  /// ══════════════════════════════════════════════════════════════════
   static Future<void> disableIfOwnedByAnother(String currentPhone) async {
     final data = read();
     if (data == null) return;
 
-    final current = currentPhone.trim();
-    if (current.isEmpty || data.ownerPhone.isEmpty) return;
-    if (data.ownerPhone != current) {
+    final current = _nationalTail(currentPhone);
+    final owner = _nationalTail(data.ownerPhone);
+
+    if (current.isEmpty || owner.isEmpty || owner != current) {
       await disable();
     }
   }

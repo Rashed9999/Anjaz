@@ -18,6 +18,7 @@ import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/common/models/signup_body_model.dart';
 import 'package:amial_pay/common/models/response_model.dart';
 import 'package:amial_pay/features/auth/domain/models/user_short_data_model.dart';
+import 'package:amial_pay/features/auth/domain/quick_receive_preferences.dart';
 import 'package:amial_pay/features/auth/domain/reposotories/auth_repo.dart';
 import 'package:amial_pay/helper/route_helper.dart';
 import 'package:amial_pay/util/app_constants.dart';
@@ -310,6 +311,24 @@ class AuthController extends GetxController implements GetxService {
     Response response = await authRepo.login(phone: phone, password: password, dialCode: code);
 
     if (response.statusCode == 200 && response.body['response_code'] == 'auth_login_200' && response.body['content'] != null) {
+       // ══════════════════════════════════════════════════════════════
+       // AMIAL-QUICK-RECEIVE-003 — **حارسٌ مبنيٌّ ولا يُنادى.**
+       //
+       // `QuickReceivePreferences.disableIfOwnedByAnother` كُتبت في
+       // التزامٍ عنوانُه «prevent stale-account quick receive exposure»،
+       // **وقِيس أنّ لا مُنادِيَ لها في التطبيق كلِّه**. فالحمايةُ
+       // المُعلَنةُ لم تكن تقع: جهازٌ فُعّل عليه الاستلامُ السريع لحسابٍ،
+       // ثمّ دخله حسابٌ آخر — تبقى شاشةُ ما قبل الدخول تعرض **عنوانَ
+       // الحساب الأوّل واسمَه**، ويستقبل عليه من يمسحه.
+       //
+       // وموضعُها الدخول لا فتحُ الشاشة: من لا يفتح ورقةَ الـQR لا
+       // يُنظَّف جهازُه أبداً. (القاعدةُ الثانيةَ عشرة: مبنيٌّ ولا
+       // يُوصَل إليه — والالتزامُ يَعِد بالحماية.)
+       // ══════════════════════════════════════════════════════════════
+       await QuickReceivePreferences.disableIfOwnedByAnother(
+         '${code ?? ''}${phone ?? ''}',
+       );
+
        authRepo.saveUserToken(response.body['content']).then((value) async {
          await updateToken();
        });
