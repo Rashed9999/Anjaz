@@ -52,10 +52,30 @@ trap 'rm -rf "$WORK"' EXIT
 # لا علاقةَ له بالشيفرة، وهو أسوأُ من البطء.
 BASE_DB="$(php -r 'echo (require "config/database.php")["connections"]["mysql"]["database"] ?? "forge";' 2>/dev/null || echo forge)"
 
+# **وتُبنى من الصفر في كلّ جولة، لا `IF NOT EXISTS` وحدَها.**
+#
+# كان السطرُ ينشئها إن غابت ويتركها كما هي إن وُجدت. **فقاعدةُ شريحةٍ
+# تركتها جولةٌ منقطعةٌ في منتصف هجرةٍ تبقى منجرفةً إلى الأبد** — وقِيس:
+# `forge_s1` حملت ٢٣٦ هجرةً «تمّت» و٢٥٤ جدولاً **وينقصها `addon_settings`**،
+# فسقطت ثلاثةُ اختباراتٍ سليمةٍ تماماً.
+#
+# **وذاك أسوأُ من البطء**: أرسلني خلف عطلٍ لا وجودَ له، وهو الصنفُ
+# المسجَّل في `CLAUDE.md` («٢١٧٣ اختباراً فاشلاً ولا واحدٌ منها مكسور»).
+#
+# والكلفةُ صفرٌ عمليّاً: `RefreshDatabase` يُشغّل `migrate:fresh` في كلّ
+# عمليّةٍ أصلاً، فالحذفُ والإنشاءُ لا يضيفان إلّا أجزاءَ ثانية.
+DB_CLI=""
+for c in mariadb mysql; do command -v "$c" >/dev/null 2>&1 && { DB_CLI="$c"; break; }; done
+
+if [ -z "$DB_CLI" ]; then
+  echo "⛔ لا عميلَ قاعدةِ بياناتٍ متاح — لا تقسيم."
+  exit 3
+fi
+
 for i in $(seq 1 "$SHARDS"); do
-  mariadb -uroot -e "CREATE DATABASE IF NOT EXISTS \`${BASE_DB}_s${i}\`" 2>/dev/null \
-    || mysql -uroot -e "CREATE DATABASE IF NOT EXISTS \`${BASE_DB}_s${i}\`" 2>/dev/null \
-    || { echo "⛔ تعذّر إنشاءُ قاعدة الشريحة ${i} — لا تقسيم."; exit 3; }
+  "$DB_CLI" -uroot -e "DROP DATABASE IF EXISTS \`${BASE_DB}_s${i}\`;
+                       CREATE DATABASE \`${BASE_DB}_s${i}\`" 2>/dev/null \
+    || { echo "⛔ تعذّر بناءُ قاعدة الشريحة ${i} — لا تقسيم."; exit 3; }
 done
 
 # ── التقسيم ───────────────────────────────────────────────────────────

@@ -190,17 +190,29 @@ class OtpDemoSplitTest extends TestCase
      */
     public function connecting_a_provider_makes_delivery_ready(): void
     {
-        \Illuminate\Support\Facades\Schema::dropIfExists('addon_settings');
-        \Illuminate\Support\Facades\Schema::create('addon_settings', function ($t) {
-            $t->string('id', 36)->primary();
-            $t->string('key_name', 191)->nullable();
-            $t->longText('live_values')->nullable();
-            $t->longText('test_values')->nullable();
-            $t->string('settings_type', 255)->nullable();
-            $t->string('mode', 20)->default('live');
-            $t->boolean('is_active')->default(true);
-            $t->timestamps();
-        });
+                // ══════════════════════════════════════════════════════════
+        // AMIAL-TEST-DDL-LEAK-001 — **عزلٌ بحذف الصفوف لا بحذف الجدول.**
+        //
+        // كان هنا `dropIfExists` ثمّ `Schema::create('addon_settings')`
+        // بمخطَّطٍ محلّيّ، وتعليقُه: «جدولُ قاعدة 6cash (ليس هجرة)». وقد
+        // **صار هجرةً** في `2026_07_26_000006` ولم يُنزَع البناءُ المحلّيّ.
+        //
+        // وثمنُه اثنان:
+        //
+        //   ① **المخطَّطُ المحلّيُّ يخالف الإنتاج**: `key_name` ١٩١ قابلٌ
+        //      للفراغ و**بلا فهرسٍ فريد**. فما كان يُختبَر جدولٌ لا يمنع
+        //      التكرار، والإنتاجُ يمنعه.
+        //
+        //   ② **و`tearDown` يحذف الجدول ولا يُعيده.** وDDL لا يتراجع مع
+        //      معاملة `RefreshDatabase` — فيختفي **لبقيّة العمليّة**،
+        //      وتسقط كلُّ اختباراتِ الإعدادات التي تليه. ولم يظهر
+        //      متتابعاً إلّا بحظِّ الترتيب؛ وأوّلُ إعادةِ ترتيبٍ كشفته.
+        //
+        // **والعزلُ لا يُنزَع مع العلّة.** هذا الصنفُ يعتمد على جدولٍ
+        // نظيفٍ في كلّ اختبار، وكان يناله بإعادة الإنشاء. فيُنال الآن
+        // بحذف الصفوف: العزلُ نفسُه، والمخطَّطُ مخطَّطُ الإنتاج.
+        // ══════════════════════════════════════════════════════════
+        DB::table('addon_settings')->delete();
 
         DB::table('addon_settings')->insert([
             'id' => (string) \Illuminate\Support\Str::uuid(),
@@ -214,7 +226,6 @@ class OtpDemoSplitTest extends TestCase
         $this->assertTrue($this->policy()->deliveryReady(),
             'وُصلت بوّابةٌ ولم تُعدّ جاهزة');
 
-        \Illuminate\Support\Facades\Schema::dropIfExists('addon_settings');
     }
 
     // ══════════════════════════════════════════════════════════════

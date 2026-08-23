@@ -96,7 +96,16 @@ class GateShardingGuardTest extends TestCase
         $this->assertMatchesRegularExpression('~DB_DATABASE="\$\{BASE_DB\}_s\$\{i\}"~', $src,
             'الشرائحُ تتقاسم قاعدةً — فتمحو بيانات بعضها');
 
-        $this->assertStringContainsString('CREATE DATABASE IF NOT EXISTS', $src,
+        // ══════════════════════════════════════════════════════════════
+        // **وتُبنى من الصفر لا `IF NOT EXISTS` وحدَها.** قاعدةُ شريحةٍ
+        // تركتها جولةٌ منقطعةٌ في منتصف هجرةٍ تبقى منجرفةً إلى الأبد،
+        // فتُخرج إخفاقاً لا علاقةَ له بالشيفرة — وقد وقع: `forge_s1`
+        // حملت ٢٣٦ هجرةً «تمّت» وينقصها جدول.
+        // ══════════════════════════════════════════════════════════════
+        $this->assertStringContainsString('DROP DATABASE IF EXISTS', $src,
+            'قاعدةُ الشريحة لا تُبنى من الصفر — فحالةٌ منجرفةٌ تبقى بين الجولات');
+
+        $this->assertStringContainsString('CREATE DATABASE', $src,
             'لا تُنشأ قاعدةُ الشريحة — فأوّلُ تشغيلٍ يسقط');
     }
 

@@ -123,11 +123,68 @@ class DataTruthCollector
                     continue;
                 }
 
-                $findings[] = $this->unreachedMethod($path, $name, $line);
+                // **وصنفان لا صنفٌ واحد.** دالّةٌ تناديها أختُها في
+                // الصنف نفسِه **تعمل** — وتسميتُها «لا يناديها أحد»
+                // كذبٌ يدفن الحقيقيَّ بين الضجيج.
+                $findings[] = $index->calledWithin($name, $path)
+                    ? $this->overExposedMethod($path, $name, $line)
+                    : $this->unreachedMethod($path, $name, $line);
             }
         }
 
         return [$findings, $seen];
+    }
+
+    /**
+     * دالّةٌ عامّةٌ **تعمل** ولا تُنادى إلّا من صنفها.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ليست عطلاً، ولا تُخلَط بالعطل.** كانت تُبلَّغ
+     * `SERVICE_METHOD_UNREACHED` بشدّةٍ متوسّطة — و**٥٥ من ١٠٩ كذلك**،
+     * فصار نصفُ التقرير ضجيجاً يدفن النصفَ الآخر.
+     *
+     * وأثرُها الحقيقيُّ سطحُ تعامُلٍ أوسعَ ممّا يحتاجه أحد: من يقرأ الصنفَ
+     * يظنُّ الدالّةَ عقداً خارجيّاً فيبني عليها، ثمّ يُقيَّد تغييرُها بلا
+     * سبب. وعلاجُها `private` أو `protected` — تجميلٌ لا أمان.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    private function overExposedMethod(string $path, string $name, int $line): Finding
+    {
+        $rel = str_replace(base_path() . '/', '', $path);
+        $class = basename($path, '.php');
+
+        return (new Finding(
+            ruleId: 'SAHER.DATA.SERVICE_METHOD_OVER_EXPOSED',
+            sourceCode: self::SOURCE,
+            category: 'maintainability',
+            title: 'دالّةٌ عامّةٌ تُنادى من صنفها وحدَه',
+            severity: 'LOW',
+            confidence: 'SUSPECTED',
+            assetKey: $class . '::' . $name,
+            assetType: 'method',
+            expected: 'ما لا يُنادى من خارج الصنف يُعلَن `private` أو `protected`',
+            actual: '`' . $name . '(` تُنادى داخل ' . $rel . ' وحدَه',
+            impact: '**ليست عطلاً — الدالّةُ تعمل.** لكنّ سطحَ التعامُل أوسعُ '
+                . 'ممّا يحتاجه أحد: من يقرأ الصنفَ يظنُّها عقداً خارجيّاً '
+                . 'فيبني عليها، فيُقيَّد تغييرُها بلا سبب.',
+            suggestedAction: 'تُخفَّض إلى `private` أو `protected`. '
+                . '**ولا تُحذف** — هي مُنادَاةٌ فعلاً.',
+            filePath: $rel,
+            lineStart: $line,
+            symbol: $class . '::' . $name,
+        ))->withEvidence(
+            new Evidence(
+                'CODE_LINE',
+                'موضعُ التعريف',
+                $rel . ':' . $line . "\npublic function {$name}(…)",
+                $rel,
+            ),
+            Evidence::absence(
+                'ما بُحث عنه ولم يوجد',
+                "أيُّ ملفٍّ **خارج** {$rel} يحوي `->{$name}(` أو `::{$name}(`",
+                'CallerIndex',
+            ),
+        );
     }
 
     private function unreachedMethod(string $path, string $name, int $line): Finding
