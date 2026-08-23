@@ -434,6 +434,20 @@ $app = Application::configure(basePath: dirname(__DIR__))
             ->everyFiveMinutes()
             ->name('health-check')
             ->withoutOverlapping();
+
+        // AMIAL-RETAIL-RESERVATION-002 — فكُّ حجوزات المخزون المنتهية.
+        //
+        // **بلا هذا `expires_at` عمودٌ يُكتَب ولا يُقرأ**، والتعليقُ عند
+        // نقطة الحجز يَعِد بمهلةٍ لا تنتهي أبداً. فسلّةٌ مهجورةٌ تقتطع من
+        // مخزون التاجر بلا رجعة، ويرى «٠ متاح» والرفُّ ملآن.
+        //
+        // وخمسٌ لا ساعة: زبونٌ يُعاود الشراءَ بعد دقائقَ يجب أن يجد
+        // البضاعةَ متاحة، **وحجزٌ يبقى ساعةً بعد انتهائه يمنع بيعاً حقيقيّاً**.
+        $schedule->command('amial:release-expired-reservations')
+            ->everyFiveMinutes()
+            ->name('retail-release-expired-reservations')
+            ->withoutOverlapping()
+            ->onOneServer();
     })
     ->create();
 
