@@ -51,9 +51,13 @@ class ReadinessScoreCommand extends Command
     {
         $base = rtrim((string) $this->option('base'), '/');
 
+        // **وتُقاس البيئةُ حين نكون عليها**: على الخادم نفسِه، أو حين
+        // يُعطى عنوانُه فيُسأل مباشرةً.
+        $onTarget = $base !== '' || app()->environment('production');
+
         $checks = array_merge(
             $this->codeChecks(),
-            $this->configChecks(),
+            $this->configChecks($onTarget),
             $this->deployChecks($base),
         );
 
@@ -69,14 +73,33 @@ class ReadinessScoreCommand extends Command
         $unknown = count($checks) - count($counted);
 
         $this->newLine();
-        $this->line(sprintf('  <options=bold>الجاهزيّة: %d / 10</>  (%d من %d شرطاً مقيساً)',
-            $score, count($passed), count($counted)));
 
+        // ══════════════════════════════════════════════════════════════
+        // **ولا يُطبَع رقمٌ ما دام شرطٌ لم يُقَس.**
+        //
+        // أوّلُ تشغيلٍ بعد فصل البيئة أخرج «الجاهزيّة: 10 / 10 (3 من 3)»
+        // وسبعةٌ مجهولة. **وذاك أخطرُ من كلّ ما بُني المقياسُ لمنعه**:
+        // عينٌ تقرأ العشرةَ ولا تقرأ القوسَ بعدها، فتفتح التسجيلَ لألفي
+        // عميلٍ على خادمٍ لم يُسأل.
+        //
+        // ونسبةُ ثلاثةٍ إلى ثلاثةٍ ليست جاهزيّةً — هي **عيّنة**. فيُقال
+        // ما قِيس وما لم يُقَس، ولا يُختصر الاثنان في رقم.
+        //
+        // (القاعدةُ الأولى: «الطبقةُ المُخطّاةُ لا تُعدّ نجاحاً».)
+        // ══════════════════════════════════════════════════════════════
         if ($unknown > 0) {
             $this->line(sprintf(
-                '  <fg=yellow>و%d شرطاً «غيرُ معروف» — لا يُقاس من هنا، ولا يُحسَب نجاحاً.</>',
-                $unknown));
-            $this->line('  <fg=gray>شغّله بـ--base=https://amialpay.com ليُسأل الخادمُ نفسُه.</>');
+                '  <options=bold>الجاهزيّة: غيرُ محسوبة</>  (%d من %d شرطاً قِيس · %d مجهولاً)',
+                count($passed), count($checks), $unknown));
+
+            $this->line('  <fg=yellow>ولا يُختصر المقيسُ والمجهولُ في رقم — '
+                . 'فثلاثةٌ من ثلاثةٍ عيّنةٌ لا جاهزيّة.</>');
+
+            $this->line('  <fg=gray>على الخادم، أو بـ--base=https://amialpay.com، '
+                . 'تُقاس البقيّةُ ويُحسَب الرقم.</>');
+        } else {
+            $this->line(sprintf('  <options=bold>الجاهزيّة: %d / 10</>  (%d من %d شرطاً)',
+                $score, count($passed), count($counted)));
         }
 
         if ($score < 10 || $unknown > 0) {
@@ -135,35 +158,59 @@ class ReadinessScoreCommand extends Command
         return $out;
     }
 
-    /** @return list<array{name:string,state:string,detail:string}> */
-    private function configChecks(): array
+    /**
+     * **وهذه تقرأ بيئةَ الآلة التي تجري عليها — لا الإنتاج.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * كُتب المقياسُ أوّلَ مرّةٍ يقرأ `.env` **جهازِ التطوير** ويحسبه
+     * جاهزيّةَ الإنتاج. فقال «التنقيحُ مفتوح» عن حاويةٍ محلّيّةٍ يجب أن
+     * يكون فيها مفتوحاً، **ونسب الرقمَ إلى الخادم**.
+     *
+     * وذاك خطأٌ في المقياس لا في المشروع: **قِيست الآلةُ الخطأ**.
+     * والحاجزُ في `docker/entrypoint.sh` يمنع `APP_DEBUG=true` على
+     * الخادم أصلاً، فلا يُقلع.
+     *
+     * **فما لا يُقرأ من هنا يُقال «غيرُ معروف».** والصفرُ يُقرأ «فحصنا
+     * فلم نجد» — ونحن لم نفحص. (القاعدةُ السابعة.)
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * @return list<array{name:string,state:string,detail:string}>
+     */
+    private function configChecks(bool $onTarget): array
     {
         $out = [];
+        $away = 'لا يُقاس من جهاز التطوير — شغّله على الخادم أو بـ--base';
 
         $out[] = [
             'name' => 'التنقيحُ مغلق',
-            'state' => config('app.debug') ? 'fail' : 'pass',
-            'detail' => 'APP_DEBUG=' . (config('app.debug') ? 'true' : 'false'),
+            'state' => ! $onTarget ? 'unknown' : (config('app.debug') ? 'fail' : 'pass'),
+            'detail' => ! $onTarget
+                ? $away . ' (وحاجزُ entrypoint يمنعه هناك)'
+                : 'APP_DEBUG=' . (config('app.debug') ? 'true' : 'false'),
         ];
 
         $out[] = [
             'name' => 'قناةُ إنذارٍ خارجيّةٌ مضبوطة',
-            'state' => OpsAlertService::hasExternalChannel() ? 'pass' : 'fail',
-            'detail' => OpsAlertService::hasExternalChannel()
-                ? 'مضبوطة — وأثبِت وصولَها بـphp artisan amial:alert-test'
-                : 'AMIAL_RECON_ALERT_TO غيرُ مضبوط — المصالحةُ تجد الفرقَ ٠٢:٠٠ ولا يُوقَظ أحد',
+            'state' => ! $onTarget ? 'unknown' : (OpsAlertService::hasExternalChannel() ? 'pass' : 'fail'),
+            'detail' => ! $onTarget
+                ? $away . ' (AMIAL_RECON_ALERT_TO)'
+                : (OpsAlertService::hasExternalChannel()
+                    ? 'مضبوطة — وأثبِت وصولَها بـphp artisan amial:alert-test'
+                    : 'AMIAL_RECON_ALERT_TO غيرُ مضبوط — المصالحةُ تجد الفرقَ ٠٢:٠٠ ولا يُوقَظ أحد'),
         ];
 
         $remote = (string) env('AMIAL_BACKUP_REMOTE', '');
 
         $out[] = [
             'name' => 'نسخةٌ احتياطيّةٌ خارج الخادم',
-            'state' => $remote !== '' ? 'pass' : 'fail',
+            'state' => ! $onTarget ? 'unknown' : ($remote !== '' ? 'pass' : 'fail'),
             // **وسطرُ الفشل يسمّي ما يُضبَط.** «غيرُ مضبوط» وحدَها تُرسل
             // قارئَها يبحث عن اسم المتغيّر في الشيفرة.
-            'detail' => $remote !== ''
-                ? 'AMIAL_BACKUP_REMOTE مضبوط'
-                : 'AMIAL_BACKUP_REMOTE غيرُ مضبوط — النسخُ كلُّها على الخادم الذي قد يسقط',
+            'detail' => ! $onTarget
+                ? $away . ' (AMIAL_BACKUP_REMOTE)'
+                : ($remote !== ''
+                    ? 'AMIAL_BACKUP_REMOTE مضبوط'
+                    : 'AMIAL_BACKUP_REMOTE غيرُ مضبوط — النسخُ كلُّها على الخادم الذي قد يسقط'),
         ];
 
         // **ورمزٌ افتراضيٌّ على حسابٍ جذرٍ يفتح اللوحةَ كلَّها.**
@@ -183,10 +230,12 @@ class ReadinessScoreCommand extends Command
 
         $out[] = [
             'name' => 'لا حسابَ إدارةٍ برمزٍ افتراضيّ',
-            'state' => $weak < 0 ? 'unknown' : ($weak === 0 ? 'pass' : 'fail'),
-            'detail' => $weak < 0
+            'state' => (! $onTarget || $weak < 0) ? 'unknown' : ($weak === 0 ? 'pass' : 'fail'),
+            'detail' => ! $onTarget
+                ? $away . ' (القاعدةُ هنا قاعدةُ تطوير)'
+                : ($weak < 0
                 ? 'تعذّرت القراءة'
-                : ($weak === 0 ? 'لا رمزَ معروفاً' : $weak . ' حساباً برمزٍ معروف'),
+                : ($weak === 0 ? 'لا رمزَ معروفاً' : $weak . ' حساباً برمزٍ معروف')),
         ];
 
         return $out;
