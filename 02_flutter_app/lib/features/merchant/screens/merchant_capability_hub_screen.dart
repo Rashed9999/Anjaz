@@ -286,7 +286,6 @@ class _MerchantCapabilityHubScreenState
         ? Map<String, dynamic>.from(row['capability'] as Map)
         : <String, dynamic>{};
     final state = '${row['state'] ?? ''}';
-    final code = '${cap['code'] ?? ''}';
     final name = '${cap['name'] ?? 'خدمة'}';
     final comingSoon = '${cap['status'] ?? 'available'}' == 'coming_soon';
     final available =
