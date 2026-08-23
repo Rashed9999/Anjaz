@@ -217,26 +217,81 @@ class AgentController extends Controller
             return response()->json(['errors' => Helpers::error_processor($validator)], 403);
         }
 
-        if (!Helpers::pin_check($request->user()->id, $request->old_pin)) {
-            return response()->json(['message' => translate('Old PIN is incorrect')], 401);
-        }
-
         if ($request->new_pin != $request->confirm_pin) {
             return response()->json(['message' => translate('PIN Mismatch')], 404);
         }
 
-        // AMIAL-PIN-SEPARATION-001 — نفس خلل حساب العميل: الرمز كان يُكتب في
-        // password فيمحو كلمة مرور دخول الوكيل ويهبط بها إلى أربعة أرقام،
-        // بينما رمز المعاملات الحقيقي لا يتغيّر.
+        // ══════════════════════════════════════════════════════════════════
+        // AMIAL-PIN-BRUTEFORCE-001 — **البابُ الثاني، وهو أخطرُ من الأوّل.**
+        //
+        // القاعدةُ الرابعة: ميزةٌ لها مدخلان تُختبَر من مدخليها. وقفلٌ
+        // يوضَع على باب العميل وحدَه يُقرأ «الرمزُ محميّ» بينما بابُ
+        // الوكيل مفتوحٌ على مصراعيه.
+        //
+        // **وحسابُ الوكيل أثمن**: رمزُه يُقرّ إيداعاً وسحباً نقديّاً على
+        // شبّاكٍ حقيقيّ، لا تحويلاً بين محفظتين.
+        //
+        // العلّةُ نفسُها: `pin_check` تُطابق ولا تعدّ ولا تقفل، والمسارُ
+        // بلا `throttle`. والعلاجُ نفسُه: `changePin` تنادي `verify` التي
+        // تعدّ وتقفل وتُدوّن في التدقيق وفي «أمان الحساب».
+        // ══════════════════════════════════════════════════════════════════
+        // **ورفضُ الصيغة يبقى ٤٠٣ لا ٥٠٠.** `setPin` ترمي
+        // `InvalidArgumentException` على رمزٍ سهل التخمين، وكان المسارُ
+        // القديم يلتقطها. ونزعُها في الإصلاح أخرج **٥٠٠ في وجه من اختار
+        // ١٢٣٤** — رفضٌ سليمٌ يصل المستعملَ عطلاً. (وأمسكه
+        // `ChangePinEndpointTest` القائم، لا حارسٌ جديد.)
         try {
             $user = $this->user->find($request->user()->id);
-            app(\App\Services\TransactionPinService::class)->setPin($user, (string) $request->confirm_pin);
+            $pinService = app(\App\Services\TransactionPinService::class);
+
+            // ══════════════════════════════════════════════════════════
+            // **ومن لا رمزَ له بعدُ يُعيّن، ولا يُقفَل عليه الطريق.**
+            //
+            // `verify()` تسقط على حسابٍ بلا `transaction_pin` لأنّ
+            // `FALLBACK_DEADLINE` (٢٠٢٦-٠٦-١٥) **انقضى منذ شهرين** —
+            // فردُّ هذا الباب كلِّه إليها يمنع صاحبَ الحساب القديم من
+            // إنشاء رمزٍ أصلاً. **وهو بعينه العطلُ المكتوبُ في هذا
+            // الملفّ قبل أشهر**: «الطريق إلى البنية الصحيحة كان مقفلاً
+            // على من هو أحوج الناس إليه».
+            //
+            // والقفلُ لا يخسر شيئاً بهذا: هدفُه فضاءُ الأربعة أرقام
+            // (١٠٠٠٠)، ومن لا رمزَ له يُصادَق بكلمة مروره — وفضاؤها
+            // أكبرُ بمراتب. والحدُّ على الباب (٦/د) قائمٌ على الحالتين.
+            //
+            // **وقاعدةُ التطوير فارغةٌ فلا يُقال «لا حساباتِ قديمة»** —
+            // «غير معروف» ليس صفراً.
+            // ══════════════════════════════════════════════════════════
+            if (empty($user->transaction_pin)) {
+                if (! Helpers::pin_check($user->id, (string) $request->old_pin)) {
+                    return response()->json(['message' => translate('Old PIN is incorrect')], 401);
+                }
+
+                $pinService->setPin($user, (string) $request->confirm_pin);
+
+                return response()->json(['message' => translate('PIN updated successfully')], 200);
+            }
+
+            if (! $pinService->changePin($user, (string) $request->old_pin, (string) $request->confirm_pin)) {
+                $user->refresh();
+
+                if ($user->pin_locked_until !== null && $user->pin_locked_until->isFuture()) {
+                    $mins = max(1, (int) ceil(now()->diffInMinutes($user->pin_locked_until, false)));
+
+                    return response()->json([
+                        'message' => "تم قفل الرمز مؤقّتاً بعد محاولات خاطئة. أعد المحاولة بعد {$mins} دقيقة.",
+                    ], 429);
+                }
+
+                if ((string) $request->old_pin === (string) $request->confirm_pin) {
+                    return response()->json(['message' => 'الرمز الجديد مطابق للقديم'], 422);
+                }
+
+                return response()->json(['message' => translate('Old PIN is incorrect')], 401);
+            }
 
             return response()->json(['message' => translate('PIN updated successfully')], 200);
         } catch (\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 403);
-        } catch (\Exception $e) {
-            return response()->json(['message' => translate('PIN updated failed')], 401);
         }
     }
 

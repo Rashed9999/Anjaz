@@ -64,8 +64,21 @@ Route::middleware(['throttle:100,1'])->group(function () {
                 Route::post('verify-otp', [OTPController::class, 'verifyOtp'])
                     ->middleware('throttle:10,1');
 
-                Route::post('verify-pin', [CustomerAuthController::class, 'verifyPin']);
-                Route::post('change-pin', [CustomerAuthController::class, 'changePin']);
+                // ══════════════════════════════════════════════════
+                // AMIAL-PIN-BRUTEFORCE-001 — **حدٌّ على بابَي الرمز.**
+                //
+                // كانا وحدَهما بلا `throttle` بين جيرانٍ كلُّهم محدود
+                // (`check-otp` ٥/د · `verify-otp` ١٠/د)، ورمزُ العمليّات
+                // أربعةُ أرقام ⇒ ١٠٠٠٠ احتمال.
+                //
+                // **والقفلُ على الحساب لا يُغني عن الحدّ**: ذاك يحمي
+                // رقماً واحداً، وهذا يمنع مسحاً عريضاً على آلاف الحسابات
+                // من جلسةٍ واحدة. (الدرسُ نفسُه في `EscalatingLockoutGuardTest`.)
+                // ══════════════════════════════════════════════════
+                Route::post('verify-pin', [CustomerAuthController::class, 'verifyPin'])
+                    ->middleware('throttle:10,1');
+                Route::post('change-pin', [CustomerAuthController::class, 'changePin'])
+                    ->middleware('throttle:6,1');
 
                 Route::put( 'update-profile', [CustomerAuthController::class, 'updateProfile']);
                 Route::post('update-two-factor', [CustomerAuthController::class, 'updateTwoFactor']);
@@ -142,8 +155,21 @@ Route::middleware(['throttle:100,1'])->group(function () {
                 Route::post('verify-otp', [OTPController::class, 'verifyOtp'])
                     ->middleware('throttle:10,1');
 
-                Route::post('verify-pin', [AgentController::class, 'verifyPin']);
-                Route::post('change-pin', [AgentController::class, 'changePin']);
+                // ══════════════════════════════════════════════════
+                // AMIAL-PIN-BRUTEFORCE-001 — **حدٌّ على بابَي الرمز.**
+                //
+                // كانا وحدَهما بلا `throttle` بين جيرانٍ كلُّهم محدود
+                // (`check-otp` ٥/د · `verify-otp` ١٠/د)، ورمزُ العمليّات
+                // أربعةُ أرقام ⇒ ١٠٠٠٠ احتمال.
+                //
+                // **والقفلُ على الحساب لا يُغني عن الحدّ**: ذاك يحمي
+                // رقماً واحداً، وهذا يمنع مسحاً عريضاً على آلاف الحسابات
+                // من جلسةٍ واحدة. (الدرسُ نفسُه في `EscalatingLockoutGuardTest`.)
+                // ══════════════════════════════════════════════════
+                Route::post('verify-pin', [AgentController::class, 'verifyPin'])
+                    ->middleware('throttle:10,1');
+                Route::post('change-pin', [AgentController::class, 'changePin'])
+                    ->middleware('throttle:6,1');
 
                 Route::put('update-profile', [AgentController::class, 'updateProfile']);
                 Route::post('update-two-factor', [AgentController::class, 'updateTwoFactor']);

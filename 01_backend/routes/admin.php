@@ -60,7 +60,15 @@ Route::group(['as' => 'admin.'], function () {
         Route::middleware('admin')->group(function () {
             Route::get('change-pin', [\App\Http\Controllers\Admin\Auth\ChangeLoginPinController::class, 'show'])
                 ->name('pin.change');
+            // AMIAL-PIN-BRUTEFORCE-001 — **وهذا البابُ الثالث، أخرجه
+            // الحارسُ لا القراءة.** كُتب المسح على بابَي العميل والوكيل،
+            // ومرّ هذا لأنّه في ملفٍّ آخر — و`PinBruteForceGuardTest`
+            // يمسح **كلَّ** مسارٍ ينتهي بـ`change-pin` لا مسارَين
+            // بأعيانهما، فوقع عليه.
+            //
+            // ورمزُ دخول الإدارة أثمنُ من كليهما: من كسره فتح اللوحة.
             Route::post('change-pin', [\App\Http\Controllers\Admin\Auth\ChangeLoginPinController::class, 'update'])
+                ->middleware('throttle:6,1')
                 ->name('pin.update');
         });
     });

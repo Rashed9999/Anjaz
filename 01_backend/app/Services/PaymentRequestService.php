@@ -490,6 +490,27 @@ class PaymentRequestService
             }
 
             $this->guard()->lockWalletsOrdered([$payer->id, $requesterId]);
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-MERCHANT-RECEIVE-LIMIT-001 — **المدخلُ الثاني.**
+            //
+            // القاعدةُ الرابعة: ميزةٌ لها مدخلان تُختبَر من مدخليها.
+            // الدفعُ بـQR/POS يمرّ بـ`merchant_payment_transaction`،
+            // **ورابطُ الدفع والفاتورةُ يمرّان من هنا ولا يمرّان بها
+            // إطلاقاً**. فحدٌّ يُطبَّق على أحد البابين يُقرأ «مطبَّق»
+            // ويُلتفّ عليه من الآخر بفاتورةٍ واحدة.
+            //
+            // **والشرطُ هو الهويّة لا القائمة**: `type === 3` من صفّ
+            // المستخدم المخزَّن، لا من شيءٍ يرسله الطلب. (القاعدةُ
+            // الثامنة.)
+            //
+            // وبعدَ القفل عمداً — كما في المدخل الأوّل، وللسبب نفسِه.
+            // ══════════════════════════════════════════════════════════
+            if ((int) ($requester->type ?? 0) === 3) {
+                app(\App\Services\MerchantRiskService::class)
+                    ->assertReceiveAllowed($requesterId, $recipientCredit);
+            }
+
             $payerWallet = $this->guard()->debit(
                 $payer->id, $totalDebit, "payment_request:{$locked->request_ulid}",
             );
