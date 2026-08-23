@@ -482,6 +482,10 @@ trait TransactionTrait
         if ($txId) {
             // AMIAL-MERCHANT-RISK-001 (v2.10): مراقبة المستلم إن كان تاجراً (خلفية)
             $this->maybeAnalyzeMerchantRisk($to_user_id, $from_user_id, $amount);
+
+            // AMIAL-MERCHANT-RISK-002: والمرسِلُ كذلك — بلا هذا لا يشتعل
+            // نمطُ pass-through أبداً. المخرجُ الأوّل من ثلاثة.
+            $this->maybeRecordMerchantTransferOut($from_user_id, $amount);
         }
 
         return $txId;
@@ -500,6 +504,51 @@ trait TransactionTrait
             }
         } catch (\Throwable $e) {
             \Log::warning('Merchant risk dispatch failed', ['err' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * AMIAL-MERCHANT-RISK-002 — **الطرفُ الآخر من طبقة المخاطر.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **العطلُ الذي أغلقه هذا:** `analyzeReceived` تحسب أقوى مؤشّرات
+     * الغسيل — نمطَ pass-through (استلامٌ ثمّ تحويلٌ فوريّ، ‎+٣٥ نقطة) —
+     * من `passThroughRatio()`، وهي تقسم `total_transferred_out` على
+     * المستلَم. **و`recordTransferOut` هي الكاتبُ الوحيدُ لذلك العمود،
+     * ولم يكن يناديها أحد.**
+     *
+     * فالعمودُ صفرٌ أبداً ⇒ النسبةُ صفرٌ أبداً ⇒ **النمطُ الثالثُ لا
+     * يمكن أن يشتعل بحالٍ من الأحوال**. حاجزٌ مبنيٌّ ومُختبَرٌ وعاجزٌ
+     * بنيويّاً عن العمل، ولا سطرَ خطأٍ في أيّ سجلّ.
+     *
+     * **وأخطرُ من ذلك أنّ الرقمَ يُعرَض.** لوحةُ مخاطر التجّار تكتب
+     * `pass_through_ratio: 0.0%` لكلّ تاجر — رقمٌ يبدو مقيساً ولم
+     * يُقَس قطّ. فمن يقرأ «صفر بالمئة» يفهم «فُحص فلم يوجد»، والحقيقةُ
+     * «لم يُعَدّ شيءٌ أصلاً». (القاعدةُ السابعة.)
+     *
+     * **وطبقةٌ باتّجاهٍ واحدٍ ليست مراقبة.** كانت تراقب المستلمَ إن كان
+     * تاجراً ولا تراقب المرسِل — وهو شكلُ القاعدة العاشرة نفسِه.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **وثلاثةُ مخارجَ لا مخرجٌ واحد** (القاعدةُ الرابعة): التحويلُ
+     * للنظير، والصرفُ النقديُّ عند الوكيل، والسحبُ الذي تقرّه الإدارة.
+     * ومخرجٌ منسيٌّ يجعل النسبةَ أقلَّ من حقيقتها — **وحاجزٌ يقرأ أقلَّ
+     * من الواقع يمرّر ما بُني ليمسكه.**
+     *
+     * **ولا يُسقِط العمليّةَ الماليّة.** رميٌ هنا يمنع تحويلاً سليماً؛
+     * والرصدُ لا يُسقط ما يرصده.
+     */
+    protected function maybeRecordMerchantTransferOut(int $fromUserId, string $amount): void
+    {
+        try {
+            $sender = User::find($fromUserId);
+
+            if ($sender && (int) $sender->type === 3) { // 3 = merchant
+                app(\App\Services\MerchantRiskService::class)
+                    ->recordTransferOut($fromUserId, $amount);
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('Merchant transfer-out record failed', ['err' => $e->getMessage()]);
         }
     }
 
@@ -742,6 +791,11 @@ trait TransactionTrait
                 'fee' => $charge,
                 'zone_code' => 'SOUTH',
             ]);
+
+            // AMIAL-MERCHANT-RISK-002: المخرجُ الثاني — الصرفُ النقديُّ
+            // عند الوكيل. وهو **أوجهُ صور الغسيل**: رصيدٌ يُستلَم
+            // إلكترونيّاً ثمّ يخرج ورقاً.
+            $this->maybeRecordMerchantTransferOut($from_user_id, $amount);
         }
 
         return $cashOutTxId;
@@ -1470,6 +1524,10 @@ trait TransactionTrait
                 charge: $charge,
                 sourceId: $primaryId,
             );
+
+            // AMIAL-MERCHANT-RISK-002: المخرجُ الثالث — السحبُ الذي تقرّه
+            // الإدارة. والمالُ خرج من محفظة صاحبِ الطلب لا من الإدارة.
+            $this->maybeRecordMerchantTransferOut($receiver_user_id, (string) $amount);
         }, self::TX_ATTEMPTS);
     }
 

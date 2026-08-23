@@ -294,7 +294,10 @@ class MerchantRiskService
             'risk_level' => $risk->risk_level,
             'tier' => $profile?->tier,
             'verification_status' => $profile?->verification_status,
-            'pass_through_ratio' => round($risk->passThroughRatio() * 100, 1),
+            // **ولا يُقرأ المجهولُ صفراً** (القاعدةُ السابعة).
+            'pass_through_ratio' => $risk->hasOutboundRecord()
+                ? round($risk->passThroughRatio() * 100, 1)
+                : null,
             'avg_daily_volume' => (string)$risk->avg_daily_volume,
             'peak_daily_volume' => (string)$risk->peak_daily_volume,
             'aml_flags_count' => $risk->aml_flags_count,
