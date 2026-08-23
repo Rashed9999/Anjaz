@@ -40,6 +40,38 @@ class UnifiedAuthService
     private const MAX_FAILED_ATTEMPTS_WINDOW = 5;
     private const FAILED_ATTEMPTS_LOCKOUT_MINUTES = 1;
 
+    /**
+     * AMIAL-SEC-LOGIN-002 — **قفلٌ متصاعد، لأنّ الثابتَ يُتلِف نفسَه.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ما كان، وقد حُسب لا خُمّن:**
+     *
+     *   خمسُ محاولاتٍ ثمّ قفلُ **دقيقةٍ واحدة**، والعدّادُ ينتهي معها
+     *   ⇒ المهاجمُ يعود من الصفر كلَّ دقيقة
+     *   ⇒ 5 × 60 × 24 = **7200 محاولةٍ يوميّاً** على حسابٍ واحد
+     *   ورمزُ PIN أربعةُ أرقامٍ ⇒ فضاؤه 10000 ⇒ **يُكسَر في ~33 ساعة**
+     *
+     * ومسارُ الدخول الموحّد — وهو الحيُّ الذي يستعمله التطبيق — **بلا
+     * حدِّ معدّلٍ على الـIP إطلاقاً**، فلا شيءَ يبطّئ الحجم.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **والتصاعدُ لا التشديدُ المسطَّح.**
+     *
+     * قفلٌ طويلٌ من أوّل خطأ يشلّ من أخطأ في رمزه — وهو الأكثرُ وقوعاً
+     * بفارقٍ كبير. **وحاجزٌ يشلّ عملاً سليماً يُطفَأ عند أوّل شكوى.**
+     *
+     * فالأولى دقيقةٌ (تحتمل الخطأ)، والثانيةُ ربعُ ساعة، والثالثةُ ساعة،
+     * وما بعدها أربع. **والعدّادُ الطويلُ يعيش أطولَ من القفل** — فلا
+     * يعود المهاجمُ من الصفر بانتظار انقضائه.
+     *
+     * والحسابُ بعدها: 5 + 5 + 5 + 5×6 = 50 محاولةً يوميّاً ⇒ **الفضاءُ
+     * نفسُه يحتاج أكثر من خمس سنوات**.
+     */
+    private const LOCKOUT_LADDER_MINUTES = [1, 15, 60, 240];
+
+    /** **ذاكرةُ التصعيد تعيش يوماً** — فمن عاد غداً يبدأ من الدرجة الأولى. */
+    private const LOCKOUT_MEMORY_MINUTES = 1440;
+
     public function __construct(
         private readonly EncryptionService $encryption,
         private readonly AuditService $audit,
@@ -566,11 +598,23 @@ class UnifiedAuthService
     private function guardRateLimit(string $role, string $identifier, Request $request): void
     {
         $key = "auth_attempts:{$role}:" . md5($identifier);
-        $attempts = Cache::get($key, 0);
+        $lockKey = "auth_locked:{$role}:" . md5($identifier);
 
-        if ($attempts >= self::MAX_FAILED_ATTEMPTS_WINDOW) {
+        // **والقفلُ يُقرأ قبل العدّاد** — فمن قُفل لا يزيد عدّادَه بمحاولةٍ
+        // مرفوضةٍ أصلاً، وإلّا صعّد المهاجمُ نفسَه إلى الأبد بلا فائدة.
+        $until = Cache::get($lockKey);
+
+        if ($until !== null && now()->lt($until)) {
+            $left = max(1, (int) ceil(now()->diffInSeconds($until) / 60));
+
             throw new \RuntimeException(
-                "تم تجاوز عدد المحاولات المسموح. حاول بعد " . self::FAILED_ATTEMPTS_LOCKOUT_MINUTES . " دقيقة"
+                "تم تجاوز عدد المحاولات المسموح. حاول بعد {$left} دقيقة"
+            );
+        }
+
+        if ((int) Cache::get($key, 0) >= self::MAX_FAILED_ATTEMPTS_WINDOW) {
+            throw new \RuntimeException(
+                'تم تجاوز عدد المحاولات المسموح. حاول بعد قليل'
             );
         }
     }
@@ -578,9 +622,29 @@ class UnifiedAuthService
     private function recordFailure(string $role, string $identifier, Request $request, string $reason, ?int $userId = null): void
     {
         $key = "auth_attempts:{$role}:" . md5($identifier);
-        $current = Cache::get($key, 0);
+        $lockKey = "auth_locked:{$role}:" . md5($identifier);
+        $stepKey = "auth_lock_step:{$role}:" . md5($identifier);
+
+        $current = (int) Cache::get($key, 0);
         $newCount = $current + 1;
-        Cache::put($key, $newCount, now()->addMinutes(self::FAILED_ATTEMPTS_LOCKOUT_MINUTES));
+
+        // **والعدّادُ يعيش أطولَ من القفل** — وإلّا عاد المهاجمُ من الصفر
+        // بانتظار انقضائه، وهو ما جعل القفلَ القديمَ يُتلِف نفسَه.
+        Cache::put($key, $newCount, now()->addMinutes(self::LOCKOUT_MEMORY_MINUTES));
+
+        if ($newCount >= self::MAX_FAILED_ATTEMPTS_WINDOW) {
+            $step = (int) Cache::get($stepKey, 0);
+            $minutes = self::LOCKOUT_LADDER_MINUTES[
+                min($step, count(self::LOCKOUT_LADDER_MINUTES) - 1)
+            ];
+
+            Cache::put($lockKey, now()->addMinutes($minutes),
+                now()->addMinutes($minutes));
+            Cache::put($stepKey, $step + 1, now()->addMinutes(self::LOCKOUT_MEMORY_MINUTES));
+
+            // والعدّادُ يُصفَّر ليبدأ الشوطُ التالي — والدرجةُ تبقى.
+            Cache::put($key, 0, now()->addMinutes(self::LOCKOUT_MEMORY_MINUTES));
+        }
 
         // AMIAL-SEC-LOGIN-001: عند بلوغ الحدّ بالضبط → حدث قفل (سجلّ تدقيق + إشعار
         // أمني) مرّة واحدة، لا في كلّ محاولة لاحقة محظورة.

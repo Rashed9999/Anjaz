@@ -410,18 +410,33 @@ class DataTruthCollector
                 continue;
             }
 
-            // اسمُ الدالّة: أوّلُ رمزٍ نصّيٍّ بعد `function`.
-            for ($j = $i + 1; $j < $i + 6; $j++) {
-                if (! isset($tokens[$j])) {
-                    break;
-                }
+            // ══════════════════════════════════════════════════════
+            // **اسمُ الدالّة ما يلي `function` مباشرةً — لا أوّلُ نصٍّ
+            // بعدها.**
+            //
+            // كان المسحُ يقفز حتّى خمسةَ رموزٍ بحثاً عن أوّل `T_STRING`.
+            // **والإغلاقُ بلا اسم**: `function (int $a) {…}` — فيلتقط
+            // `int`، أي **نوعَ أوّل مُعامِل**. وكذلك `function (Promotion
+            // $p)` تُقرأ دالّةً اسمُها `Promotion`.
+            //
+            // وقِيس فأنتج ستّةَ أسماءٍ كاذبةٍ في تقرير «شيفرةٌ ميّتة»:
+            // `LedgerEntryLine` · `PaymentRequest` · `Promotion` · `int`
+            // · `AgentShift` · `AgentBranch`. **واسمٌ مخترَعٌ في تقريرِ
+            // موتٍ يُرسل من يقرؤه يحذف ما لا وجودَ له.**
+            //
+            // فيُقبَل الرمزُ إن جاء بعد `function` وفراغٍ لا غير، ويُردّ
+            // ما جاء بعد `(`.
+            // ══════════════════════════════════════════════════════
+            $j = $i + 1;
 
-                if (is_array($tokens[$j]) && $tokens[$j][0] === T_STRING) {
-                    if ($visibility === 'public' && ! $isStaticOrAbstract) {
-                        $out[] = [$tokens[$j][1], $tokens[$j][2]];
-                    }
+            while (isset($tokens[$j]) && is_array($tokens[$j])
+                && in_array($tokens[$j][0], [T_WHITESPACE, T_AMPERSAND_FOLLOWED_BY_VAR_OR_VARARG], true)) {
+                $j++;
+            }
 
-                    break;
+            if (isset($tokens[$j]) && is_array($tokens[$j]) && $tokens[$j][0] === T_STRING) {
+                if ($visibility === 'public' && ! $isStaticOrAbstract) {
+                    $out[] = [$tokens[$j][1], $tokens[$j][2]];
                 }
             }
 

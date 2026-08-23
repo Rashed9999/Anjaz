@@ -267,6 +267,37 @@ class SaherDataTruthTest extends TestCase
     }
 
     /** @test */
+    public function an_anonymous_closure_is_not_read_as_a_method(): void
+    {
+        // ══════════════════════════════════════════════════════════════
+        // **عطلٌ حقيقيٌّ أنتجه هذا الجامعُ في أوّل مسحٍ شامل.**
+        //
+        // كان يقفز حتّى خمسةَ رموزٍ بعد `function` بحثاً عن أوّل اسم.
+        // **والإغلاقُ بلا اسم**، فيلتقط **نوعَ أوّل مُعامِل**:
+        //
+        //     function (int $a) {…}          →  دالّةٌ اسمُها «int»
+        //     function (Promotion $p) {…}    →  دالّةٌ اسمُها «Promotion»
+        //
+        // فخرجت ستّةُ أسماءٍ كاذبةٍ في تقرير «شيفرةٌ ميّتة». **واسمٌ
+        // مخترَعٌ في تقريرِ موتٍ أخطرُ من صمت**: يُرسل من يقرؤه يبحث عن
+        // شيءٍ لا وجودَ له، ثمّ يتعلّم أن يتجاهل التقريرَ كلَّه.
+        // ══════════════════════════════════════════════════════════════
+        $collector = new DataTruthCollector();
+
+        $src = "<?php\nclass X {\n"
+            . "  public function real(): int { return 1; }\n"
+            . "  public function withClosure() {\n"
+            . "    \$f = function (int \$a) { return \$a; };\n"
+            . "    \$g = function (Promotion \$p) { return \$p; };\n"
+            . "    return [\$f, \$g];\n  }\n}\n";
+
+        $names = array_column($this->invoke($collector, 'publicMethodsOf', $src), 0);
+
+        $this->assertSame(['real', 'withClosure'], $names,
+            'قُرئ نوعُ مُعامِلٍ في إغلاقٍ اسمَ دالّة — فيُبلَّغ عن موتِ ما لا وجودَ له');
+    }
+
+    /** @test */
     public function a_signature_inside_a_comment_is_not_read_as_a_definition(): void
     {
         // ══════════════════════════════════════════════════════════════

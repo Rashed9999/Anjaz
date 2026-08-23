@@ -76,7 +76,31 @@ RUN echo "upload_max_filesize=50M"  >> /usr/local/etc/php/conf.d/amial.ini \
 # clear_env=no: العمّال يرثون بيئة الحاوية (متغيّرات Railway: DB_*، APP_KEY المُصدَّر…).
 # افتراضياً clear_env=yes يُفرّغ بيئة العامل فلا يرى env('APP_KEY') → 500 على الدخول.
 # (نكتب أيضاً APP_KEY في .env كضمان مزدوج — انظر entrypoint.sh).
-RUN printf "[www]\nlisten = 127.0.0.1:9001\ncatch_workers_output = yes\ndecorate_workers_output = no\nclear_env = no\n" > /usr/local/etc/php-fpm.d/zz-amial-port.conf
+# ══════════════════════════════════════════════════════════════════════
+# AMIAL-CAPACITY-001 — **سقفُ التزامن كان خمسةً، ولم يكن مضبوطاً.**
+#
+# صورةُ `php:8.4-fpm-alpine` تشحن `www.conf` بـ`pm.max_children = 5`،
+# **ولم يُغيَّر في هذا الملفّ قطّ**. فالمنصّةُ كلُّها — لوحةُ الإدارة
+# وبوّابةُ الوكيل وواجهةُ التطبيق — تخدم **خمسةَ طلباتٍ متزامنة**، وما
+# زاد ينتظر في طابور nginx حتّى تنتهي مهلتُه.
+#
+# **ولا يظهر هذا في أيّ اختبار:** الاختباراتُ تجري في عمليّةٍ واحدة،
+# واختبارُ الضغط الماليّ يستدعي الخدماتِ مباشرةً ولا يمرّ بـFPM أصلاً
+# (وقد قاس ٣٠٦ عمليّة/ث — فالمحرّكُ ليس العنق). والعنقُ هنا وحدَه.
+#
+# **والأرقامُ محسوبةٌ لا مخترَعة:**
+#
+#   memory_limit = 256M   ·   ذاكرةُ الطلب الوسطى في Laravel ≈ 40–60M
+#   حاويةُ 2 جيجا  ⇒  2048 / 60 ≈ 34 عاملاً بهامشٍ للنظام وMySQL
+#   وسقفُ اتّصالات MySQL 151 ⇒ 24 عاملاً + عاملَي طابور آمنان
+#
+# فـ`pm.max_children = 24` تُعطي ~٢٤ طلباً متزامناً. وبزمن استجابةٍ
+# مقيسٍ ٢٠–٤٠ms للنداء الواحد ⇒ **~٦٠٠–١٢٠٠ طلبٍ في الثانية نظريّاً**،
+# وهو أكثرُ من كافٍ لألفي مستخدمٍ (ذروتُهم المعتادة ٢–٥٪ متزامنين).
+#
+# **و`pm.max_requests` تمنع تسرّبَ الذاكرة** من إسقاط العامل بعد ساعات.
+# ══════════════════════════════════════════════════════════════════════
+RUN printf "[www]\nlisten = 127.0.0.1:9001\ncatch_workers_output = yes\ndecorate_workers_output = no\nclear_env = no\npm = dynamic\npm.max_children = 24\npm.start_servers = 6\npm.min_spare_servers = 4\npm.max_spare_servers = 12\npm.max_requests = 500\n" > /usr/local/etc/php-fpm.d/zz-amial-port.conf
 
 # ── Nginx config ────────────────────────────────────────
 COPY docker/nginx.conf /etc/nginx/nginx.conf
