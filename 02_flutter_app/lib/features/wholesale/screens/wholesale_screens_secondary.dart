@@ -140,7 +140,9 @@ class _WholesaleInvoiceDetailsState extends State<WholesaleInvoiceDetailsScreen>
             tooltip: 'تحميل PDF',
             onPressed: c.isSubmitting.value ? null : () async {
               final ok = await c.downloadInvoicePdf(widget.invoiceId);
-              if (!mounted) return;
+              // **والسياقُ المُلتقَط يُفحَص بنفسه.** `mounted` حالةُ الودجة،
+              // وهذا `context` من باني `Obx` لا من الحالة — فقد يموت وهي حيّة.
+              if (!mounted || !context.mounted) return;
               if (!ok) {
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   content: Text(c.lastError.value),
@@ -308,8 +310,21 @@ class _WholesaleInvoiceDetailsState extends State<WholesaleInvoiceDetailsScreen>
               'amount': amount, 'payment_method': method,
               if (refCtrl.text.isNotEmpty) 'reference_number': refCtrl.text.trim(),
             });
+            // ══════════════════════════════════════════════════════════
+            // **حارسان منفصلان، ولا يبتلع أحدُهما الآخر.**
+            //
+            // هذا مسارُ **تحصيلِ مال**. وكان الحارسُ `if (!mounted)` —
+            // وهو حالةُ الودجة — ثمّ `Navigator.pop(ctx)` على سياق حوارٍ
+            // **قد يكون أُغلق أثناء انتظار الشبكة**. فيرمي، أو **يُغلق
+            // الصفحةَ التي تحته**، والمالُ حُصِّل فعلاً.
+            //
+            // **ولا يُعالَج بخروجٍ مبكِّر واحد.** لو خرجنا عند موت `ctx`
+            // لضاعت رسالةُ «تم التحصيل» على تحصيلٍ وقع — **وعميلٌ دفع ولم
+            // يرَ تأكيداً يدفع ثانية**. فالإغلاقُ بحارسه والرسالةُ بحارسها.
+            // ══════════════════════════════════════════════════════════
             if (!mounted) return;
-            if (ok) Navigator.pop(ctx);
+            if (ok && ctx.mounted) Navigator.pop(ctx);
+            if (!context.mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(ok ? 'تم التحصيل' : c.lastError.value),
               backgroundColor: ok ? Colors.green : AmialColors.red,

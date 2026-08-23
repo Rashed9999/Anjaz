@@ -796,7 +796,8 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
                                   ? await c.addProduct(data)
                                   : await c.updateProduct(
                                       (product['id'] as num).toInt(), data);
-                              if (!mounted) return;
+                              // **وسياقٌ فرعيٌّ يُفحَص بنفسه.** `mounted` حالةُ الودجة، و`sheetContext` سياقُ ورقةٍ قد تُغلَق أثناء الانتظار — فـNavigator.pop عليه بعدها يرمي أو يُغلق الصفحةَ تحته.
+                              if (!mounted || !sheetContext.mounted) return;
                               if (ok) {
                                 Navigator.pop(sheetContext);
                                 _snack(context,
@@ -1083,7 +1084,8 @@ class _WholesaleProCustomersScreenState extends State<WholesaleProCustomersScree
                                 ? await c.addCustomer(data)
                                 : await c.updateCustomer(
                                     (customer['id'] as num).toInt(), data);
-                            if (!mounted) return;
+                            // **وسياقٌ فرعيٌّ يُفحَص بنفسه.** `mounted` حالةُ الودجة، و`sheetContext` سياقُ ورقةٍ قد تُغلَق أثناء الانتظار — فـNavigator.pop عليه بعدها يرمي أو يُغلق الصفحةَ تحته.
+                            if (!mounted || !sheetContext.mounted) return;
                             if (ok) {
                               Navigator.pop(sheetContext);
                               _snack(context,
@@ -1348,7 +1350,10 @@ class _WholesaleProInvoiceDetailsScreenState
                     ? null
                     : () async {
                         final ok = await c.downloadInvoicePdf(widget.invoiceId);
-                        if (!mounted || ok) return;
+                        // **والسياقُ المُلتقَط في الإغلاق يُفحَص بنفسه.**
+                        // `mounted` حالةُ الودجة، وهذا `context` من باني
+                        // `Obx` لا من الحالة — فقد يموت وهي حيّة.
+                        if (!mounted || ok || !context.mounted) return;
                         _snack(context, c.lastError.value, error: true);
                       },
                 icon: c.isSubmitting.value
@@ -1693,7 +1698,8 @@ class _WholesaleProInvoiceDetailsScreenState
                               if (reference.text.trim().isNotEmpty)
                                 'reference_number': reference.text.trim(),
                             });
-                            if (!mounted) return;
+                            // **وسياقٌ فرعيٌّ يُفحَص بنفسه.** `mounted` حالةُ الودجة، و`sheetContext` سياقُ ورقةٍ قد تُغلَق أثناء الانتظار — فـNavigator.pop عليه بعدها يرمي أو يُغلق الصفحةَ تحته.
+                            if (!mounted || !sheetContext.mounted) return;
                             if (ok) {
                               Navigator.pop(sheetContext);
                               _snack(context, 'تم تسجيل التحصيل');
@@ -2440,7 +2446,8 @@ class _WholesaleStockAlertsScreenState extends State<WholesaleStockAlertsScreen>
               if (v == null || v < 0) return;
               final ok = await c.updateProduct((p['id'] as num).toInt(),
                   {'low_stock_threshold': v});
-              if (!mounted) return;
+              // **وسياقٌ فرعيٌّ يُفحَص بنفسه.** `mounted` حالةُ الودجة، و`dialogContext` سياقُ ورقةٍ قد تُغلَق أثناء الانتظار — فـNavigator.pop عليه بعدها يرمي أو يُغلق الصفحةَ تحته.
+              if (!mounted || !dialogContext.mounted) return;
               Navigator.pop(dialogContext);
               _snack(context, ok ? 'تم تحديث حد التنبيه' : c.lastError.value,
                   error: !ok);
@@ -2475,7 +2482,8 @@ class _WholesaleStockAlertsScreenState extends State<WholesaleStockAlertsScreen>
               if (v < 0 || reason.text.trim().isEmpty) return;
               final ok = await c.adjustStock((p['id'] as num).toInt(), v,
                   reason.text.trim());
-              if (!mounted) return;
+              // **وسياقٌ فرعيٌّ يُفحَص بنفسه.** `mounted` حالةُ الودجة، و`dialogContext` سياقُ ورقةٍ قد تُغلَق أثناء الانتظار — فـNavigator.pop عليه بعدها يرمي أو يُغلق الصفحةَ تحته.
+              if (!mounted || !dialogContext.mounted) return;
               Navigator.pop(dialogContext);
               _snack(context, ok ? 'تم تعديل المخزون' : c.lastError.value,
                   error: !ok);
