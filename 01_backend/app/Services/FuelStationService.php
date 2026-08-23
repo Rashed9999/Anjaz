@@ -345,6 +345,42 @@ class FuelStationService
                     (float)$newBalance > (float)$companyAccount->credit_limit) {
                     throw new RuntimeException('تجاوزت الحد الائتماني المتاح للشركة');
                 }
+                // ══════════════════════════════════════════════════════
+                // AMIAL-FUEL-CARD-LIMIT-001 — **حدُّ البطاقة كان يُضبَط
+                // ولا يُطبَّق.**
+                //
+                // الحدُّ **على مستوى الحساب** مفروضٌ أعلاه، **وعلى مستوى
+                // البطاقة لا**. و`FuelCompanyCardService::assertCardLimits`
+                // مبنيّةٌ وتفرض اثنين — أنّ البطاقةَ نشطةٌ وأنّ يومَها لم
+                // يُستنفَد — **وقِيس أنّ لا مُنادِيَ لها في المشروع كلِّه**.
+                //
+                // فبطاقةُ سائقٍ **مسحوبةٌ أو ملغاةٌ تشتري** حتّى سقف
+                // الشركة كلِّه، وحدُّها اليوميُّ يُعرَض في اللوحة ولا يقع.
+                // والوقودُ بالأجل — فالتعرّضُ الائتمانيُّ بلا سقفٍ فعليّ.
+                //
+                // **وموضعُها داخلَ القفل** الذي أخذه الحسابُ أعلاه: العدُّ
+                // اليوميُّ يجمع مبيعاتِ البطاقة، ودفعتان متزامنتان تقرآن
+                // المجموعَ نفسَه فتمرّان معاً. (الطبقةُ الثامنة.)
+                //
+                // **ورقمُ بطاقةٍ لا يخصّ هذا الحساب يُرفَض** — فالهويّة
+                // تحدّد النطاق لا ما يرسله الطلب. (القاعدةُ الثامنة.)
+                // ══════════════════════════════════════════════════════
+                $cardNumber = trim((string) ($data['company_card_id'] ?? ''));
+
+                if ($cardNumber !== '') {
+                    $card = \App\Models\FuelCompanyCard::where('card_number', $cardNumber)
+                        ->where('company_account_id', $companyAccount->id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (! $card) {
+                        throw new RuntimeException('البطاقة غير موجودة في حساب هذه الشركة');
+                    }
+
+                    app(\App\Services\FuelCompanyCardService::class)
+                        ->assertCardLimits($card, $totalAmount);
+                }
+
                 $companyAccount->update(['current_balance' => $newBalance]);
             }
 
