@@ -122,7 +122,7 @@ class ReconciliationService
      * وهذا فحصٌ مستقلٌّ عن الأوّل: محافظُ العملاء قد تطابق الدفتر وهو
      * غيرُ متوازنٍ في ذاته، لو كان النقصُ في حسابٍ ليس محفظةَ عميل.
      */
-    public function ledgerBalance(): array
+    private function ledgerBalance(): array
     {
         $sums = DB::table('ledger_entry_lines')
             ->selectRaw("COALESCE(SUM(CASE WHEN direction='debit'  THEN amount ELSE 0 END),0) d")

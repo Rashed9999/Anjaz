@@ -43,7 +43,7 @@ class CashierShiftService
     }
 
     /** يحسب نقد المبيعات منذ بدء الوردية (نقدي + الجزء النقدي من المختلط). */
-    public function computeCash(CashierShift $shift): array
+    private function computeCash(CashierShift $shift): array
     {
         $q = MerchantSale::where('merchant_user_id', $shift->merchant_user_id)
             ->where('created_at', '>=', $shift->opened_at)

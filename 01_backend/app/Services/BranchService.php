@@ -145,7 +145,7 @@ class BranchService
      * يتحقّق من حدّ الخطّة قبل إنشاء فرع.
      * @throws UsageLimitExceededException
      */
-    public function ensureWithinPlanLimit(User $merchant): void
+    private function ensureWithinPlanLimit(User $merchant): void
     {
         $plan = $this->planFor($merchant);
         $max = A::maxBranches($plan);

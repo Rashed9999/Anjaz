@@ -48,7 +48,7 @@ class UsageLimitService
     /**
      * تسجيل عام لأي counter_type مع فحص الحدّ.
      */
-    public function recordOperation(
+    private function recordOperation(
         User $merchant,
         string $counterType,
         string $limitKey,

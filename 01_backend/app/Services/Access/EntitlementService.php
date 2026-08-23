@@ -112,7 +112,7 @@ class EntitlementService
     }
 
     /** أفي الظلّ هي؟ — قائمةٌ لا مفتاحٌ عامّ (والسببُ في `config/amial.php`). */
-    public function isShadowed(string $code): bool
+    private function isShadowed(string $code): bool
     {
         return in_array($code, (array) config('amial.entitlements.shadow', []), true);
     }

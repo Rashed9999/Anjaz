@@ -132,6 +132,33 @@ class FindingStore
                 'confidence' => $confidence,
                 'title' => $finding->title,
                 'actual_behavior' => $finding->actual,
+
+                // ══════════════════════════════════════════════════════
+                // **وسردُ الاكتشاف يُعاد كتابتُه من الجامع في كلّ جولة.**
+                //
+                // كانت `title` و`actual_behavior` وحدَهما تُحدَّثان،
+                // و`suggested_action` و`impact` و`expected_behavior`
+                // تُكتَب مرّةً عند أوّل ظهورٍ وتبقى أبداً. **فتصحيحُ
+                // نصيحةٍ خاطئةٍ لا يصل قارئَها إطلاقاً**: تُصلَح القاعدةُ
+                // في الشيفرة، ويقرأ الإنسانُ الجملةَ القديمة.
+                //
+                // وقِيس حيّاً: صُحّحت نصيحةُ «تُخفَّض إلى private» لأنّها
+                // تكسر ٢٥ من ٤٩ — فتغيّر العنوانُ والوصفُ في اللوحة،
+                // **وبقيت النصيحةُ الكاسرةُ كما هي.**
+                //
+                // والموضعُ كذلك: دالّةٌ انتقلت أسطرُها يظلّ التقريرُ
+                // يشير إلى سطرها القديم — **ومؤشِّرٌ يشير إلى الخطأ
+                // يُرسل قارئَه يبحث.**
+                //
+                // (وحكمُ الإنسان لا يُمَسّ — هو في `ruling_reason`،
+                // وانتهاؤه محكومٌ ببصمة الملفّ أعلاه لا بهذا.)
+                // ══════════════════════════════════════════════════════
+                'expected_behavior' => $finding->expected,
+                'impact' => $finding->impact,
+                'suggested_action' => $finding->suggestedAction,
+                'file_path' => $finding->filePath,
+                'line_start' => $finding->lineStart,
+
                 'risk_score' => $this->risk($finding->severity, $confidence),
                 'status' => $reopened ? 'REOPENED' : $existing->status,
                 'resolved_at' => $reopened ? null : $existing->resolved_at,

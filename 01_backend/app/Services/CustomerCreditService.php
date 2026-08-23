@@ -246,7 +246,7 @@ class CustomerCreditService
      *   silver: سدّد خلال 90 يوم آخر  +  استهلاك < 90%
      *   bronze: غير ذلك (افتراضي/تجاوز/متأخّر).
      */
-    public function calculateClassification(CustomerCreditAccount $account): string
+    private function calculateClassification(CustomerCreditAccount $account): string
     {
         $util = $account->utilizationPercent();
         $lastPay = $account->last_payment_at;

@@ -164,7 +164,7 @@ class PlatformTreasuryService
      *
      * @return array<string,mixed>
      */
-    public function issuancePreview(string $amount, string $fundingSource): array
+    private function issuancePreview(string $amount, string $fundingSource): array
     {
         $src = self::FUNDING_SOURCES[$fundingSource] ?? self::FUNDING_SOURCES['treasury_supply'];
 

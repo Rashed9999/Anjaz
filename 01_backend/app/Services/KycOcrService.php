@@ -42,7 +42,7 @@ class KycOcrService
         return (bool) config('amial.kyc.ocr.enabled', true);
     }
 
-    public function minConfidence(): float
+    private function minConfidence(): float
     {
         return (float) config('amial.kyc.ocr.min_confidence', 70);
     }
@@ -246,7 +246,7 @@ class KycOcrService
         ], static fn ($v) => $v !== null);
     }
 
-    public function verifiedFields(KycDocument $doc): array
+    private function verifiedFields(KycDocument $doc): array
     {
         if (!$doc->verified_fields) {
             return [];
