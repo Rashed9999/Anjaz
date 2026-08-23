@@ -61,8 +61,38 @@ class SettlementController extends AmialApiController
         $perPage = min(100, max(10, (int) $request->query('per_page', 20)));
         $data    = $q->paginate($perPage);
 
+        // ══════════════════════════════════════════════════════════════════
+        // AMIAL-SETTLE-SECOND-SIG-001 — **قاعدةٌ ماليّةٌ مكتوبةٌ أربعَ مرّات.**
+        //
+        // `UniversalSettlementService::awaitingSecondApproval` مبنيّةٌ
+        // **وبصفرِ مُنادٍ**، والشاشةُ تُعيد اشتقاقَها في جافاسكربت **ثلاثَ
+        // مرّات** (شارةُ العدّ، ولونُ الصفّ، وخليّةُ التوقيعين).
+        //
+        // **والنسخُ الثلاثُ تخالف الأصلَ في شرطٍ واحد:**
+        //
+        //     PHP : approvals_required >= 2  &&  approved_by
+        //           &&  ! second_approved_by  &&  **status = PENDING_APPROVAL**
+        //     JS  : الثلاثةُ الأُوَل فقط
+        //
+        // و`reject()` **لا يمسح `approved_by`**. فتسويةٌ وُقّعت مرّةً ثمّ
+        // رُفضت تبقى في الشاشة «بانتظار التوقيع الثاني»، **وتُعدّ في
+        // الشارة العليا**. فيفتح مسؤولُ المال طابوراً فيه ما ليس فيه.
+        //
+        // وهو ما تمنعه `amial-admin-command` بنصّها: «لوحةُ الإدارة يجب
+        // ألّا تصير مصدرَ حقيقةٍ ماليّةٍ ثانياً». فيُحسَب هنا مرّةً
+        // **من الخدمة نفسِها**، وتقرأ الشاشةُ الحقلَ ولا تشتقّ.
+        // ══════════════════════════════════════════════════════════════════
+        $svc = app(\App\Services\UniversalSettlementService::class);
+
+        $items = collect($data->items())->map(function (Settlement $s) use ($svc) {
+            $row = $s->toArray();
+            $row['awaiting_second_approval'] = $svc->awaitingSecondApproval($s);
+
+            return $row;
+        })->all();
+
         return $this->ok([
-            'settlements' => $data->items(),
+            'settlements' => $items,
             'pagination'  => [
                 'current_page' => $data->currentPage(),
                 'last_page'    => $data->lastPage(),

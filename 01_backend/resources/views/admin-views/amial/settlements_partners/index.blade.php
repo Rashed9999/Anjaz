@@ -104,7 +104,7 @@
         if (!s.approved_by) {
             return '<span class="badge bg-warning text-dark">يحتاج توقيعين — لم يوقّع أحد</span>';
         }
-        if (!s.second_approved_by) {
+        if (s.awaiting_second_approval) {
             return `<div>
                 <span class="badge bg-warning text-dark">بانتظار التوقيع الثاني</span>
                 <div class="small text-muted mt-1">وقّع أوّلاً: ${nm(s.approver)}</div>
@@ -159,14 +159,16 @@
 
         // ما ينتظر توقيعاً ثانياً يُعدّ ويُقال في الأعلى: هو أخطر ما في
         // الطابور — مالٌ اعتُمد نصفَ اعتماد وتوقّف، وقد يُنسى.
-        const awaiting = items.filter(s =>
-            parseInt(s.approvals_required || 1, 10) >= 2 && s.approved_by && !s.second_approved_by);
+        // **يُقرأ الحقلُ ولا يُشتقّ.** كان هذا السطرُ يُعيد كتابة قاعدة
+        // `awaitingSecondApproval` بلا شرطِ الحالة — فتسويةٌ وُقّعت مرّةً
+        // ثمّ رُفضت كانت تُعدّ هنا، والطابورُ يُظهر ما ليس فيه.
+        const awaiting = items.filter(s => s.awaiting_second_approval);
         document.getElementById('ps-awaiting-badge').innerHTML = awaiting.length
             ? `<span class="badge bg-warning text-dark" data-testid="ps-awaiting">${awaiting.length} تنتظر توقيعاً ثانياً</span>`
             : '';
 
         const rows = items.map(s => `
-            <tr class="${(parseInt(s.approvals_required || 1, 10) >= 2 && s.approved_by && !s.second_approved_by) ? 'table-warning' : ''}">
+            <tr class="${s.awaiting_second_approval ? 'table-warning' : ''}">
                 <td class="font-monospace small">#${s.id}</td>
                 <td>${esc(s.partner ? s.partner.name_ar : '—')}</td>
                 <td class="fw-bold">${esc(s.amount)} <span class="small text-muted">${esc(s.currency || 'YER')}</span></td>
