@@ -68,6 +68,24 @@ Schedule::call(function () {
 // ============================================================
 Schedule::command('amial:reconcile-fees')->everyMinute()->withoutOverlapping();
 
+// ══════════════════════════════════════════════════════════════════════
+// AMIAL-RECOVERY-APPLY-001 — **استعادةٌ معتمَدةٌ لا تُطبَّق نفسَها.**
+//
+// `applyApprovedChange` وُثِّقت «يُستدعى من Job بعد انتهاء
+// security_hold» — **وقِيس أنّ لا مُنادِيَ لها في المشروع كلِّه**.
+//
+// وعند الموافقة تُبطَل رموزُ العميل ويُمحى `fcm_token` **فوراً**، ثمّ
+// لا يُكتب الرقمُ الجديد أبداً. فلا يدخل بالقديم (فقده) ولا بالجديد
+// (لم يُسجَّل) ولا يصله إشعار — **ومسارُ الإنقاذ يقفل الحسابَ الذي
+// بُني لإنقاذه**.
+//
+// وكلَّ عشر دقائق لا كلَّ يوم: المهلةُ تنقضي في لحظةٍ بعينها، وعميلٌ
+// مقفولٌ ينتظر يوماً كاملاً يتّصل بالدعم قبل أن يفتح حسابُه.
+// ══════════════════════════════════════════════════════════════════════
+Schedule::command('amial:recovery:apply-approved')
+    ->everyTenMinutes()
+    ->withoutOverlapping();
+
 Schedule::call(function () {
     app(\App\Services\CustomerWithdrawService::class)->expireStale();
 })->everyMinute()->name('amial-expire-withdrawals')->withoutOverlapping();
