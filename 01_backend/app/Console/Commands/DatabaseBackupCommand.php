@@ -127,6 +127,22 @@ class DatabaseBackupCommand extends Command
             'duration_seconds' => $duration,
         ]);
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-BACKUP-OFFSITE-001 — **نسخةٌ بجانب القاعدة تموت معها.**
+        //
+        // النسخُ كلُّه على الخادم نفسِه. وقرصٌ يُفسَد أو خادمٌ يُحذَف أو
+        // مزوّدٌ يُغلق حساباً — **يذهب الأصلُ والنسخةُ في لحظة**، والزمنُ
+        // المقيسُ للاستعادة (٣ ثوانٍ) لا يعني شيئاً بلا ما يُستعاد منه.
+        //
+        // **ولا يُشحَن إلّا بعد التحقّق** — فرفعُ أرشيفٍ مقطوعٍ إلى مخزنٍ
+        // بعيدٍ يُنتج طمأنينةً كاذبةً في مكانين بدل واحد.
+        //
+        // **وغيابُ الوجهة ليس فشلاً** — هو حالةٌ تُقال: من لم يضبط
+        // `AMIAL_BACKUP_REMOTE` يبقى على نسخةٍ محلّيّةٍ صالحة، **ويُرفع
+        // عطلٌ يقول ذلك** فلا يُقرأ الصمتُ أماناً. (القاعدة السابعة.)
+        // ══════════════════════════════════════════════════════════════
+        $this->shipOffsite($outFile);
+
         // 6) Cleanup retention policy
         if (!$this->option('no-cleanup')) {
             $deleted = $this->cleanup($backupDir);
@@ -216,5 +232,83 @@ class DatabaseBackupCommand extends Command
             if (unlink($file)) $deleted++;
         }
         return $deleted;
+    }
+
+    /**
+     * يشحن النسخةَ إلى مخزنٍ خارج الخادم — **بعد التحقّق لا قبله**.
+     *
+     * `AMIAL_BACKUP_REMOTE` وجهةُ `rclone` (مثل `s3:amial-backups/db`).
+     * و`rclone` اختيرت لأنّها **تتكلّم كلَّ المخازن** — S3 وBackblaze
+     * وGoogle Drive — فلا يُقيَّد صاحبُ المشروع بمزوّدٍ واحد، والخادمُ
+     * في اليمن فالخيارُ الرخيصُ يتغيّر.
+     *
+     * **ولا يُسقَط النسخُ بفشل الشحن:** النسخةُ المحلّيّةُ سليمةٌ ومحقَّقة،
+     * وفشلُ الرفع يُرفَع عطلاً ويُقال — ولا يُلغي ما نجح.
+     */
+    private function shipOffsite(string $file): void
+    {
+        $remote = trim((string) env('AMIAL_BACKUP_REMOTE', ''));
+
+        if ($remote === '') {
+            $this->warn('⚠️  لا وجهةَ خارجيّة — النسخةُ على الخادم وحدَه.');
+
+            $this->raiseOps(
+                'backup.offsite.unconfigured',
+                'لا نسخةَ خارج الخادم',
+                'كلُّ النسخ على الخادم نفسِه. اضبط `AMIAL_BACKUP_REMOTE` '
+                . '(وجهةُ rclone) — وقرصٌ واحدٌ يُفقِد الأصلَ والنسخةَ معاً.',
+            );
+
+            return;
+        }
+
+        exec('command -v rclone 2>/dev/null', $probe, $hasRclone);
+
+        if ($hasRclone !== 0) {
+            $this->error('⛔ الوجهةُ مضبوطةٌ و`rclone` غيرُ مثبَّتة.');
+
+            $this->raiseOps(
+                'backup.offsite.tool-missing',
+                'أداةُ الشحن غائبة',
+                '`AMIAL_BACKUP_REMOTE` مضبوطةٌ ولا `rclone` في الصورة — '
+                . '**فالوجهةُ تُوهم بنسخةٍ بعيدةٍ لا وجودَ لها.**',
+            );
+
+            return;
+        }
+
+        foreach ([$file, $file . '.sha256'] as $one) {
+            if (! is_file($one)) {
+                continue;
+            }
+
+            exec('rclone copy ' . escapeshellarg($one) . ' '
+                . escapeshellarg($remote) . ' 2>&1', $out, $rc);
+
+            if ($rc !== 0) {
+                $this->error('⛔ فشل الشحن: ' . implode(' ', array_slice($out, -3)));
+
+                $this->raiseOps(
+                    'backup.offsite.failed',
+                    'فشل شحنُ النسخة خارج الخادم',
+                    'النسخةُ المحلّيّةُ سليمةٌ ومحقَّقة، **ولا نسخةَ بعيدةً '
+                    . 'لهذه الليلة**: ' . implode(' ', array_slice($out, -3)),
+                );
+
+                return;
+            }
+        }
+
+        $this->info('☁️  شُحنت النسخةُ إلى ' . $remote);
+    }
+
+    /** يرفع عطلاً ولا يُسقط الأمر — فالأثرُ أهمُّ من التبليغ. */
+    private function raiseOps(string $key, string $title, string $detail): void
+    {
+        try {
+            app(\App\Services\OpsAlertService::class)->raise($key, $title, $detail);
+        } catch (\Throwable $e) {
+            \Log::warning('[Backup] ops alert failed', ['err' => $e->getMessage()]);
+        }
     }
 }

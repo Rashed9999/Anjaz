@@ -102,7 +102,40 @@
     $range = fn ($from, $to) => route('admin.transaction.index', [
         'date_type' => 'custom', 'start_date' => $from, 'end_date' => $to,
     ]);
+
+    /* AMIAL-OBSERVABILITY-DEPLOY-002 — **الفجوةُ تُقال حيث تُقرأ.**
+
+       `OpsAlertService::hasExternalChannel()` مبنيّةٌ ووصفُها يقول
+       «تقرؤه اللوحةُ لتقول الفجوةَ صراحةً» — **وقِيس فلم يقرأها أحد**.
+       واللافتةُ الوحيدةُ في صفحة «صحّة النظام»، وهي صفحةٌ فرعيّةٌ لا
+       تُفتح يوميّاً. فالفجوةُ مكتوبةٌ حيث لا تُقرأ.
+
+       وهذه هي الصفحةُ الأولى — يراها كلُّ مشرفٍ في كلّ دخول. */
+    $hasAlertChannel = \App\Services\OpsAlertService::hasExternalChannel();
 @endphp
+
+@unless ($hasAlertChannel)
+    {{-- **ولا يُخفى هذا خلف صلاحيّة:** من يدخل اللوحةَ يجب أن يعرف أنّ
+         الإنذارَ لا يخرج، أيّاً كان دورُه. --}}
+    <div class="alert alert-danger d-flex align-items-start gap-2 mb-3"
+         data-testid="dash-no-alert-channel">
+        <span style="font-size:20px;line-height:1">🔕</span>
+        <div style="line-height:1.9">
+            <strong>لا قناةَ إنذارٍ خارجيّةٌ مضبوطة — لن يصلك شيءٌ حين ينكسر شيء.</strong>
+            <br>
+            فروقُ المصالحة الليليّة وسقوطُ القطع وفشلُ النسخ الاحتياطيّ
+            <em>تُسجَّل في مركز الأعطال ولا يُنبَّه بها أحد</em> — فلا تُعرَف
+            إلّا بفتح صفحةٍ يدويّاً.
+            <br>
+            اضبط <code>AMIAL_ALERT_EMAIL</code> أو <code>AMIAL_RECON_ALERT_TO</code>
+            ثمّ <strong>أثبِت الوصول</strong> بـ<code>php artisan amial:alert-test</code>
+            وافتح هاتفَك — <em>فقناةٌ مضبوطةٌ لا تصل ليست قناة</em>.
+            @if (Route::has('admin.amial.system.health'))
+                <a href="{{ route('admin.amial.system.health') }}" class="ms-2">صحّة النظام ←</a>
+            @endif
+        </div>
+    </div>
+@endunless
 
 <div class="content container-fluid amdash" dir="rtl">
 
