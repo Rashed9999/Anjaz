@@ -17,23 +17,34 @@ class QuickReceivePreferences {
   static const _nameKey = 'amial_quick_receive_name';
   static const _ownerPhoneKey = 'amial_quick_receive_owner_phone';
 
-  static SharedPreferences get _prefs => Get.find<SharedPreferences>();
+  static SharedPreferences? get _prefs {
+    try {
+      return Get.find<SharedPreferences>();
+    } catch (_) {
+      return null;
+    }
+  }
 
-  static bool get isEnabled =>
-      (_prefs.getBool(_enabledKey) ?? false) &&
-      (_prefs.getString(_addressKey) ?? '').trim().isNotEmpty;
+  static bool get isEnabled {
+    final prefs = _prefs;
+    if (prefs == null) return false;
+    return (prefs.getBool(_enabledKey) ?? false) &&
+        (prefs.getString(_addressKey) ?? '').trim().isNotEmpty;
+  }
 
   static ({String displayName, String receiveAddress, String ownerPhone})?
       read() {
-    if (!isEnabled) return null;
+    final prefs = _prefs;
+    if (prefs == null) return null;
 
-    final address = (_prefs.getString(_addressKey) ?? '').trim();
-    if (address.isEmpty) return null;
+    final enabled = prefs.getBool(_enabledKey) ?? false;
+    final address = (prefs.getString(_addressKey) ?? '').trim();
+    if (!enabled || address.isEmpty) return null;
 
     return (
-      displayName: (_prefs.getString(_nameKey) ?? '').trim(),
+      displayName: (prefs.getString(_nameKey) ?? '').trim(),
       receiveAddress: address,
-      ownerPhone: (_prefs.getString(_ownerPhoneKey) ?? '').trim(),
+      ownerPhone: (prefs.getString(_ownerPhoneKey) ?? '').trim(),
     );
   }
 
@@ -42,21 +53,33 @@ class QuickReceivePreferences {
     required String receiveAddress,
     required String ownerPhone,
   }) async {
+    final prefs = _prefs;
     final address = receiveAddress.trim();
-    if (address.isEmpty) return false;
+    if (prefs == null || address.isEmpty) return false;
 
-    await _prefs.setString(_addressKey, address);
-    await _prefs.setString(_nameKey, displayName.trim());
-    await _prefs.setString(_ownerPhoneKey, ownerPhone.trim());
-    await _prefs.setBool(_enabledKey, true);
-    return true;
+    try {
+      await prefs.setString(_addressKey, address);
+      await prefs.setString(_nameKey, displayName.trim());
+      await prefs.setString(_ownerPhoneKey, ownerPhone.trim());
+      await prefs.setBool(_enabledKey, true);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<void> disable() async {
-    await _prefs.setBool(_enabledKey, false);
-    await _prefs.remove(_addressKey);
-    await _prefs.remove(_nameKey);
-    await _prefs.remove(_ownerPhoneKey);
+    final prefs = _prefs;
+    if (prefs == null) return;
+
+    try {
+      await prefs.setBool(_enabledKey, false);
+      await prefs.remove(_addressKey);
+      await prefs.remove(_nameKey);
+      await prefs.remove(_ownerPhoneKey);
+    } catch (_) {
+      // Fail closed: read() still requires enabled=true + non-empty address.
+    }
   }
 
   /// يمنع عرض عنوان حسابٍ سابق بعد أن يصبح الجهاز لحساب عميل آخر.
