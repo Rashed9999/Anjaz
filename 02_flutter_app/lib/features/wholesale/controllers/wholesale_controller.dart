@@ -8,6 +8,10 @@ import 'package:amial_pay/features/wholesale/domain/repositories/wholesale_repo.
 import 'package:amial_pay/features/plans/screens/my_usage_screen.dart';
 
 /// AMIAL-WHOLESALE-001 — متحكّم الجملة.
+///
+/// AMIAL-WHOLESALE-UI-002 — لا تُحوَّل قراءةٌ فاشلة إلى صفرٍ صامت.
+/// تحمل [loadState] الحالة التشغيلية الأخيرة لكي تفرّق الشاشات بين:
+/// loading / ready / empty / permission / offline / maintenance / error.
 class WholesaleController extends GetxController implements GetxService {
   final WholesaleRepo repo;
   WholesaleController({required this.repo});
@@ -32,6 +36,7 @@ class WholesaleController extends GetxController implements GetxService {
   final RxBool isLoading = false.obs;
   final RxBool isSubmitting = false.obs;
   final RxString lastError = ''.obs;
+  final RxString loadState = 'idle'.obs;
 
   // ============ Business + Dashboard ============
 
@@ -39,51 +44,93 @@ class WholesaleController extends GetxController implements GetxService {
     try {
       final r = await repo.getBusiness();
       if (_ok(r)) {
-        business.value = Map<String, dynamic>.from((r.body['meta']?['business'] ?? {}) as Map);
+        business.value = Map<String, dynamic>.from(
+            (r.body['meta']?['business'] ?? {}) as Map);
         final tiers = ((business.value?['price_tiers'] ?? []) as List);
-        priceTiers.assignAll(tiers.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        priceTiers.assignAll(
+            tiers.map((e) => Map<String, dynamic>.from(e as Map)).toList());
       }
-    } catch (_) {}
+    } catch (_) {
+      // ملف النشاط مساعد للعنوان، فلا يغيّر حالة الشاشة الرئيسية وحده.
+    }
   }
 
   Future<void> loadDashboard() async {
+    _startLoad();
     try {
       final r = await repo.dashboard();
-      if (_ok(r)) dashboardData.value = Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
-    } catch (_) {}
+      if (_ok(r)) {
+        dashboardData.value =
+            Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+        loadState.value = 'ready';
+      } else {
+        _classifyFailure(r);
+      }
+    } catch (_) {
+      _offline();
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   // ============ Products ============
 
   Future<void> loadProducts({String? search, bool lowStockOnly = false}) async {
+    _startLoad();
     try {
-      isLoading.value = true;
       final r = await repo.listProducts(search: search, lowStockOnly: lowStockOnly);
       if (_ok(r)) {
         final list = (r.body['meta']?['products'] ?? []) as List;
-        products.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        products.assignAll(
+            list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        loadState.value = products.isEmpty ? 'empty' : 'ready';
+      } else {
+        _classifyFailure(r);
       }
-    } catch (_) {} finally { isLoading.value = false; }
+    } catch (_) {
+      _offline();
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   Future<bool> addProduct(Map<String, dynamic> data) async =>
       _doAndReload(() => repo.addProduct(data), () => loadProducts());
 
+  Future<bool> updateProduct(int id, Map<String, dynamic> data) async =>
+      _doAndReload(() => repo.updateProduct(id, data), () => loadProducts());
+
+  Future<bool> adjustStock(int id, double newStock, String reason) async =>
+      _doAndReload(
+          () => repo.adjustStock(id, newStock, reason), () => loadProducts());
+
   // ============ Customers ============
 
   Future<void> loadCustomers({String? search, bool withBalanceOnly = false}) async {
+    _startLoad();
     try {
-      isLoading.value = true;
-      final r = await repo.listCustomers(search: search, withBalanceOnly: withBalanceOnly);
+      final r = await repo.listCustomers(
+          search: search, withBalanceOnly: withBalanceOnly);
       if (_ok(r)) {
         final list = (r.body['meta']?['customers'] ?? []) as List;
-        customers.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        customers.assignAll(
+            list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        loadState.value = customers.isEmpty ? 'empty' : 'ready';
+      } else {
+        _classifyFailure(r);
       }
-    } catch (_) {} finally { isLoading.value = false; }
+    } catch (_) {
+      _offline();
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   Future<bool> addCustomer(Map<String, dynamic> data) async =>
       _doAndReload(() => repo.addCustomer(data), () => loadCustomers());
+
+  Future<bool> updateCustomer(int id, Map<String, dynamic> data) async =>
+      _doAndReload(() => repo.updateCustomer(id, data), () => loadCustomers());
 
   // ============ Cart ============
 
@@ -136,18 +183,22 @@ class WholesaleController extends GetxController implements GetxService {
       return false;
     }
 
-    final items = cart.map((c) => {
-      'product_id': c['product_id'],
-      'quantity': c['quantity'],
-      if ((c['discount_per_unit'] ?? 0) > 0) 'discount_per_unit': c['discount_per_unit'],
-    }).toList();
+    final items = cart
+        .map((c) => {
+              'product_id': c['product_id'],
+              'quantity': c['quantity'],
+              if ((c['discount_per_unit'] ?? 0) > 0)
+                'discount_per_unit': c['discount_per_unit'],
+            })
+        .toList();
 
     final data = <String, dynamic>{
       'items': items,
       'customer_id': selectedCustomer.value!['id'],
       'payment_type': paymentType,
       'due_date': ?dueDate,
-      if (discountAmount != null && discountAmount.isNotEmpty) 'discount_amount': discountAmount,
+      if (discountAmount != null && discountAmount.isNotEmpty)
+        'discount_amount': discountAmount,
       if (taxRate != null && taxRate.isNotEmpty) 'tax_rate': taxRate,
       'sales_rep_id': ?salesRepId,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
@@ -157,10 +208,10 @@ class WholesaleController extends GetxController implements GetxService {
       isSubmitting.value = true;
       lastError.value = '';
       final r = await repo.createInvoice(data);
-      // CRITICAL-001-USAGE — التقاط 402 وعرض الحوار
       if (await UsageLimitDialog.handleIfLimitExceeded(r)) return false;
       if (_ok(r)) {
-        currentInvoice.value = Map<String, dynamic>.from((r.body['meta']?['invoice'] ?? {}) as Map);
+        currentInvoice.value = Map<String, dynamic>.from(
+            (r.body['meta']?['invoice'] ?? {}) as Map);
         clearCart();
         await loadDashboard();
         return true;
@@ -170,30 +221,49 @@ class WholesaleController extends GetxController implements GetxService {
     } catch (_) {
       lastError.value = 'خطأ في الشبكة';
       return false;
-    } finally { isSubmitting.value = false; }
+    } finally {
+      isSubmitting.value = false;
+    }
   }
 
   Future<void> loadInvoices({String? status, bool overdueOnly = false}) async {
+    _startLoad();
     try {
-      isLoading.value = true;
       final r = await repo.listInvoices(status: status, overdueOnly: overdueOnly);
       if (_ok(r)) {
         final list = (r.body['meta']?['invoices'] ?? []) as List;
-        invoices.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        invoices.assignAll(
+            list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        loadState.value = invoices.isEmpty ? 'empty' : 'ready';
+      } else {
+        _classifyFailure(r);
       }
-    } catch (_) {} finally { isLoading.value = false; }
+    } catch (_) {
+      _offline();
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   Future<bool> loadInvoiceDetails(int id) async {
+    _startLoad();
+    currentInvoice.value = null;
     try {
-      isLoading.value = true;
       final r = await repo.showInvoice(id);
       if (_ok(r)) {
-        currentInvoice.value = Map<String, dynamic>.from((r.body['meta']?['invoice'] ?? {}) as Map);
+        currentInvoice.value = Map<String, dynamic>.from(
+            (r.body['meta']?['invoice'] ?? {}) as Map);
+        loadState.value = 'ready';
         return true;
       }
+      _classifyFailure(r);
       return false;
-    } catch (_) { return false; } finally { isLoading.value = false; }
+    } catch (_) {
+      _offline();
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   Future<bool> voidInvoice(int id, String reason) async =>
@@ -215,25 +285,22 @@ class WholesaleController extends GetxController implements GetxService {
     } catch (_) {
       lastError.value = 'خطأ في الشبكة';
       return false;
-    } finally { isSubmitting.value = false; }
+    } finally {
+      isSubmitting.value = false;
+    }
   }
 
   // ============ PDF Download ============
 
-  /// يحمّل الـ PDF binary ويفتحه بـ open_file.
-  /// يستخدم نفس الـ helper الموجود في المشروع.
-  ///
-  /// يُرجع true عند النجاح، false عند الفشل (مع تعبئة lastError).
   Future<bool> downloadInvoicePdf(int invoiceId) async {
     try {
       isSubmitting.value = true;
       lastError.value = '';
 
       final apiClient = Get.find<ApiClient>();
-      final url = '${AppConstants.baseUrl}/api/v1/amial/merchant/wholesale/invoices/$invoiceId/pdf';
-      final headers = <String, String>{
-        'Accept': 'application/pdf',
-      };
+      final url =
+          '${AppConstants.baseUrl}/api/v1/amial/merchant/wholesale/invoices/$invoiceId/pdf';
+      final headers = <String, String>{'Accept': 'application/pdf'};
       if (apiClient.token != null && apiClient.token!.isNotEmpty) {
         headers['Authorization'] = 'Bearer ${apiClient.token}';
       }
@@ -250,53 +317,117 @@ class WholesaleController extends GetxController implements GetxService {
       lastError.value = 'تعذّر تحميل الـ PDF (${res.statusCode})';
       return false;
     } catch (e) {
-      lastError.value = 'خطأ في التحميل: ${e.toString().substring(0, 50)}';
+      final detail = e.toString();
+      lastError.value =
+          'خطأ في التحميل: ${detail.substring(0, detail.length.clamp(0, 50))}';
       return false;
-    } finally { isSubmitting.value = false; }
+    } finally {
+      isSubmitting.value = false;
+    }
   }
 
   // ============ Reports ============
 
   Future<void> loadAgingReport() async {
+    _startLoad();
+    agingReport.value = null;
     try {
-      isLoading.value = true;
       final r = await repo.agingReport();
-      if (_ok(r)) agingReport.value = Map<String, dynamic>.from((r.body['meta']?['report'] ?? {}) as Map);
-    } catch (_) {} finally { isLoading.value = false; }
+      if (_ok(r)) {
+        agingReport.value = Map<String, dynamic>.from(
+            (r.body['meta']?['report'] ?? {}) as Map);
+        loadState.value = 'ready';
+      } else {
+        _classifyFailure(r);
+      }
+    } catch (_) {
+      _offline();
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   Future<void> loadCustomerStatement(int customerId) async {
+    _startLoad();
+    currentStatement.value = null;
     try {
-      isLoading.value = true;
       final r = await repo.customerStatement(customerId);
-      if (_ok(r)) currentStatement.value = Map<String, dynamic>.from((r.body['meta']?['statement'] ?? {}) as Map);
-    } catch (_) {} finally { isLoading.value = false; }
+      if (_ok(r)) {
+        currentStatement.value = Map<String, dynamic>.from(
+            (r.body['meta']?['statement'] ?? {}) as Map);
+        loadState.value = 'ready';
+      } else {
+        _classifyFailure(r);
+      }
+    } catch (_) {
+      _offline();
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   // ============ Helpers ============
 
-  Future<bool> _doAndReload(Future<Response> Function() action, Future<void> Function() reload) async {
+  void _startLoad() {
+    isLoading.value = true;
+    lastError.value = '';
+    loadState.value = 'loading';
+  }
+
+  void _offline() {
+    lastError.value = 'تعذّر الاتصال بالخادم — تحقّق من الشبكة';
+    loadState.value = 'offline';
+  }
+
+  void _classifyFailure(Response r) {
+    lastError.value = _msg(r) ?? 'تعذّر تحميل البيانات';
+    switch (r.statusCode) {
+      case 403:
+        loadState.value = 'permission';
+        break;
+      case 503:
+        loadState.value = 'maintenance';
+        break;
+      case 0:
+      case -1:
+      case null:
+        loadState.value = 'offline';
+        break;
+      default:
+        loadState.value = 'error';
+    }
+  }
+
+  Future<bool> _doAndReload(
+      Future<Response> Function() action, Future<void> Function() reload) async {
     try {
       isSubmitting.value = true;
       lastError.value = '';
       final r = await action();
-      // CRITICAL-001-USAGE — التقاط 402 (يصيب add_product)
       if (await UsageLimitDialog.handleIfLimitExceeded(r)) return false;
-      if (_ok(r)) { await reload(); return true; }
+      if (_ok(r)) {
+        await reload();
+        return true;
+      }
       lastError.value = _msg(r) ?? 'فشلت العملية';
       return false;
     } catch (_) {
       lastError.value = 'خطأ في الشبكة';
       return false;
-    } finally { isSubmitting.value = false; }
+    } finally {
+      isSubmitting.value = false;
+    }
   }
 
   bool _ok(Response r) =>
       (r.statusCode == 200 || r.statusCode == 201) &&
-      r.body is Map && r.body['success'] == true;
+      r.body is Map &&
+      r.body['success'] == true;
 
   String? _msg(Response r) {
-    try { if (r.body is Map) return r.body['message']?.toString(); } catch (_) {}
+    try {
+      if (r.body is Map) return r.body['message']?.toString();
+    } catch (_) {}
     return null;
   }
 }
