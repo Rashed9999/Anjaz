@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:amial_pay/features/auth/controllers/unified_auth_controller.dart';
 import 'package:amial_pay/features/auth/domain/quick_receive_preferences.dart';
 import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
@@ -36,12 +37,29 @@ class QuickReceiveScreen extends StatelessWidget {
         .toList();
     if (parts.isEmpty) return 'حساب أميال';
     if (parts.length == 1) return parts.first;
-    return '${parts.first} ${parts[1].characters.first}.';
+    final initial = parts[1].substring(0, 1);
+    return '${parts.first} $initial.';
+  }
+
+  ({String displayName, String receiveAddress, String ownerPhone})?
+      _trustedData() {
+    final saved = QuickReceivePreferences.read();
+    if (saved == null) return null;
+
+    final last = UnifiedAuthController.readLastUser();
+    if (last == null || last.kind != 'customer') return null;
+
+    final owner = saved.ownerPhone.trim();
+    final lastPhone = last.phone.trim();
+    if (owner.isNotEmpty && lastPhone.isNotEmpty && owner != lastPhone) {
+      return null;
+    }
+    return saved;
   }
 
   @override
   Widget build(BuildContext context) {
-    final data = QuickReceivePreferences.read();
+    final data = _trustedData();
 
     return Scaffold(
       backgroundColor: AmialColors.background,
