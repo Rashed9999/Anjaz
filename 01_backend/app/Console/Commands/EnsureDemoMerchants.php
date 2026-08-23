@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Support\DemoAccountPolicy;
 use App\Models\EMoney;
 use App\Models\FuelProduct;
 use App\Models\FuelPump;
@@ -137,7 +138,13 @@ class EnsureDemoMerchants extends Command
         // التفعيل/الدور) دون المساس بالرصيد أو النشاط — وإلا فشل الدخول بـ«بيانات
         // غير صحيحة» إن كان السرّ قديماً على النشر الحالي.
         if ($existing) {
-            $existing->password = Hash::make(self::PASSWORD);
+            // AMIAL-DEMO-CREDENTIALS-001 — الإنشاءُ يبقى، وإعادةُ الضبط تتوقّف
+            // في الإنتاج: هي التي تمحو تغييراً متعمَّداً في كلّ نشرة، بصمت.
+            if (DemoAccountPolicy::mayResetExisting()) {
+                $existing->password = Hash::make(self::PASSWORD);
+            } else {
+                $this->warn(DemoAccountPolicy::skipNotice('تاجر'));
+            }
             $existing->transaction_pin = Hash::make(self::PIN);
             $existing->is_active = 1;
             if (Schema::hasColumn('users', 'role') && $existing->role !== 'merchant') {
@@ -152,7 +159,8 @@ class EnsureDemoMerchants extends Command
         $user->l_name = $m['l'];
         $user->phone = $m['phone'];
         $user->type = MERCHANT_TYPE;
-        $user->password = Hash::make(self::PASSWORD);
+        $user->password = Hash::make(DemoAccountPolicy::passwordForNewAccount(
+            self::PASSWORD, 'AMIAL_BOOTSTRAP_MERCHANT_PASSWORD'));
         $user->transaction_pin = Hash::make(self::PIN);
         $user->is_active = 1;
         if (Schema::hasColumn('users', 'is_kyc_verified')) {

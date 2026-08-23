@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Support\DemoAccountPolicy;
 use App\Models\EMoney;
 use App\Models\User;
 use App\Services\PlatformRoleService;
@@ -78,7 +79,13 @@ class EnsureDemoStaff extends Command
                 if (empty($admin->phone)) {
                     $admin->phone = '967777000001';
                 }
-                $admin->password = Hash::make(self::PASSWORD);
+                // AMIAL-DEMO-CREDENTIALS-001 — الإنشاءُ يبقى، وإعادةُ الضبط تتوقّف
+                // في الإنتاج: هي التي تمحو تغييراً متعمَّداً في كلّ نشرة، بصمت.
+                if (DemoAccountPolicy::mayResetExisting()) {
+                    $admin->password = Hash::make(self::PASSWORD);
+                } else {
+                    $this->warn(DemoAccountPolicy::skipNotice('أدمن'));
+                }
                 $admin->is_active = 1;
                 if (Schema::hasColumn('users', 'two_factor_enabled')) {
                     $admin->two_factor_enabled = 0;
@@ -91,7 +98,10 @@ class EnsureDemoStaff extends Command
                 // وشبكةُ الأمان لكلّ حسابات الإدارة انتقلت إلى
                 // `healOrphanAdmins()` في `handle()` — فهي لا تخصّ هذا
                 // الفرع، وبقاؤها هنا كان يُعطّلها في المسار الآخر.
-                $this->info("✓ أدمن تجريبي مضمون — جوال {$admin->phone} / " . self::PASSWORD);
+                $this->info("✓ أدمن تجريبي مضمون — جوال {$admin->phone} / "
+                    . DemoAccountPolicy::describe(
+                        DemoAccountPolicy::mayResetExisting() ? self::PASSWORD : null,
+                        'AMIAL_BOOTSTRAP_ADMIN_PASSWORD'));
                 return;
             }
             $admin = new User();
@@ -102,7 +112,9 @@ class EnsureDemoStaff extends Command
             // AMIAL-WEB-ADMIN: لوحة الويب (admin/auth/login) تدخل بالجوال
             $admin->phone = '967777000001';
             $admin->type = ADMIN_TYPE; // 0
-            $admin->password = Hash::make(self::PASSWORD);
+            $adminPass = DemoAccountPolicy::passwordForNewAccount(
+                self::PASSWORD, 'AMIAL_BOOTSTRAP_ADMIN_PASSWORD');
+            $admin->password = Hash::make($adminPass);
             $admin->is_active = 1;
             // بلا مصادقة ثنائية ليسهل الدخول التجريبي
             if (Schema::hasColumn('users', 'two_factor_enabled')) {
@@ -117,7 +129,8 @@ class EnsureDemoStaff extends Command
             // فحسابُ إدارةٍ بلا دورٍ يُقفل عليه ٤١ مساراً بلا رسالة.
             app(PlatformRoleService::class)->ensureHasSomeRole($admin);
 
-            $this->info("✓ أدمن تجريبي جاهز — {$email} / " . self::PASSWORD);
+            $this->info("✓ أدمن تجريبي جاهز — {$email} / "
+                . DemoAccountPolicy::describe($adminPass, 'AMIAL_BOOTSTRAP_ADMIN_PASSWORD'));
         } catch (\Throwable $e) {
             $this->error('❌ فشل إنشاء الأدمن: ' . $e->getMessage());
         }
@@ -136,7 +149,13 @@ class EnsureDemoStaff extends Command
             if ($agent) {
                 // AMIAL-DEMO-FIX: نفرض بيانات الدخول للوكيل التجريبي (سرّ/رمز/
                 // تفعيل/دور) دون المساس بالرصيد — وإلا فشل الدخول بسرّ قديم.
-                $agent->password = Hash::make(self::PASSWORD);
+                // AMIAL-DEMO-CREDENTIALS-001 — الإنشاءُ يبقى، وإعادةُ الضبط تتوقّف
+                // في الإنتاج: هي التي تمحو تغييراً متعمَّداً في كلّ نشرة، بصمت.
+                if (DemoAccountPolicy::mayResetExisting()) {
+                    $agent->password = Hash::make(self::PASSWORD);
+                } else {
+                    $this->warn(DemoAccountPolicy::skipNotice('وكيل'));
+                }
                 $agent->is_active = 1;
                 if (Schema::hasColumn('users', 'transaction_pin')) {
                     $agent->transaction_pin = Hash::make('1237');
@@ -168,7 +187,9 @@ class EnsureDemoStaff extends Command
             $agent->l_name = 'الوكيل';
             $agent->phone = $phone;
             $agent->type = AGENT_TYPE; // 1
-            $agent->password = Hash::make(self::PASSWORD);
+            $agentPass = DemoAccountPolicy::passwordForNewAccount(
+                self::PASSWORD, 'AMIAL_BOOTSTRAP_AGENT_PASSWORD');
+            $agent->password = Hash::make($agentPass);
             $agent->is_active = 1;
             if (Schema::hasColumn('users', 'agent_number')) {
                 $agent->agent_number = $agentNumber;
@@ -198,7 +219,9 @@ class EnsureDemoStaff extends Command
             );
 
             $otpHint = config('amial.otp.demo_code') ?: '(اضبط AMIAL_DEMO_OTP)';
-            $this->info("✓ وكيل تجريبي جاهز — {$agentNumber} / {$phone} / " . self::PASSWORD . " — OTP: {$otpHint}");
+            $this->info("✓ وكيل تجريبي جاهز — {$agentNumber} / {$phone} / "
+                . DemoAccountPolicy::describe($agentPass ?? null, 'AMIAL_BOOTSTRAP_AGENT_PASSWORD')
+                . " — OTP: {$otpHint}");
         } catch (\Throwable $e) {
             $this->error('❌ فشل إنشاء الوكيل: ' . $e->getMessage());
         }

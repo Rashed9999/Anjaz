@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Support\DemoAccountPolicy;
 use App\Models\EMoney;
 use App\Models\User;
 use App\Services\UnifiedAuthService;
@@ -41,7 +42,13 @@ class EnsureDemoUsers extends Command
                 // المعروفة. سابقاً «لم يُمسّ» → إن كان السرّ قديماً/مختلفاً فشل
                 // الدخول بـ«بيانات غير صحيحة» للأبد. نفرض بيانات الدخول فقط
                 // (كلمة المرور/الرمز/التفعيل/التوثيق) دون المساس بالرصيد والنشاط.
-                $user->password = Hash::make($password);
+                // AMIAL-DEMO-CREDENTIALS-001 — الإنشاءُ يبقى، وإعادةُ الضبط تتوقّف
+                // في الإنتاج: هي التي تمحو تغييراً متعمَّداً في كلّ نشرة، بصمت.
+                if (DemoAccountPolicy::mayResetExisting()) {
+                    $user->password = Hash::make($password);
+                } else {
+                    $this->warn(DemoAccountPolicy::skipNotice('عميل'));
+                }
                 $user->transaction_pin = Hash::make('1237');
                 $user->is_active = 1;
                 $user->is_kyc_verified = 1;
@@ -65,7 +72,8 @@ class EnsureDemoUsers extends Command
             $user->l_name = 'سالم';
             $user->phone = $phone;
             $user->type = 2;
-            $user->password = Hash::make($password);
+            $user->password = Hash::make(DemoAccountPolicy::passwordForNewAccount(
+                $password, 'AMIAL_BOOTSTRAP_CUSTOMER_PASSWORD'));
             $user->transaction_pin = Hash::make('1237');
             $user->is_active = 1;
             // AMIAL-DEMO: موثّق KYC (=1) ليعمل إرسال الأموال (يشترط التوثيق)
@@ -104,7 +112,13 @@ class EnsureDemoUsers extends Command
             });
             if ($existingRx) {
                 // AMIAL-DEMO-FIX: فرض بيانات الدخول لحساب المستلِم التجريبي أيضاً.
-                $existingRx->password = Hash::make($password);
+                // AMIAL-DEMO-CREDENTIALS-001 — الإنشاءُ يبقى، وإعادةُ الضبط تتوقّف
+                // في الإنتاج: هي التي تمحو تغييراً متعمَّداً في كلّ نشرة، بصمت.
+                if (DemoAccountPolicy::mayResetExisting()) {
+                    $existingRx->password = Hash::make($password);
+                } else {
+                    $this->warn(DemoAccountPolicy::skipNotice('مستلِم'));
+                }
                 $existingRx->transaction_pin = Hash::make('1237');
                 $existingRx->is_active = 1;
                 $existingRx->is_kyc_verified = 1;
@@ -128,7 +142,8 @@ class EnsureDemoUsers extends Command
             $recipient->l_name = 'علي';
             $recipient->phone = $rxPhone;
             $recipient->type = 2;
-            $recipient->password = Hash::make($password);
+            $recipient->password = Hash::make(DemoAccountPolicy::passwordForNewAccount(
+                $password, 'AMIAL_BOOTSTRAP_CUSTOMER_PASSWORD'));
             $recipient->transaction_pin = Hash::make('1237');
             $recipient->is_active = 1;
             $recipient->is_kyc_verified = 1;
@@ -237,7 +252,8 @@ class EnsureDemoUsers extends Command
             ]);
             // نجرّب بالصيغة التي يدخلها المستخدم (بلا 967)
             $result = $svc->loginCustomer('777100001', $password, $req);
-            $this->info('✅✅✅ اختبار الدخول نجح — التطبيق سيدخل بـ 777100001 / ' . $password);
+            $this->info('✅✅✅ اختبار الدخول نجح — التطبيق سيدخل بـ 777100001 / '
+                . DemoAccountPolicy::describe($password, 'AMIAL_BOOTSTRAP_CUSTOMER_PASSWORD'));
             $this->info('    token صدر: ' . (isset($result['token']) ? 'نعم' : 'لا'));
             return self::SUCCESS;
         } catch (\Throwable $e) {
