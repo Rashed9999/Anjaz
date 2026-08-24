@@ -219,3 +219,73 @@ jobs:
       - name: بناء ${{ matrix.dockerfile }}
         working-directory: 01_backend
         run: docker build -f ${{ matrix.dockerfile }} -t amial-pay:ci-${{ matrix.dockerfile }} .
+
+  # ──────────────────────────────────────────────────────────
+  # AMIAL-CD-TRIGGER-001 — **الدفعُ لا ينشر، وهذا آخرُ بابٍ مغلق.**
+  #
+  # **الثمنُ الذي دُفع، بنصّ صاحب المشروع:** «منذ أيّامٍ وأنا لم أستطع
+  # عملَ بناءٍ للتطبيق أو نشرَ المشروع».
+  #
+  # Coolify على `Source: Manual` في كلّ نشراته — فالدفعُ إلى الفرع
+  # المنشور لا يُطلق شيئاً، وكلُّ ما في المستودع يقف حتّى يفتح إنسانٌ
+  # البابَ بيده. **وبابٌ يُفتَح باليد يُنسى**، فتبقى الشيفرةُ الجديدةُ
+  # في git والقديمةُ تخدم العملاء، ولا سطرَ يقول ذلك.
+  #
+  # **ولا يُضبَط Coolify من مستودع** — هو لوحةٌ خارجيّة. لكنّه يقبل
+  # خطّافَ نشرٍ بعنوانٍ واحد. فيُوضَع العنوانُ سرّاً واحداً، ويصير
+  # النشرُ تلقائيّاً إلى الأبد:
+  #
+  #     Coolify ← المشروع ← Webhooks ← انسخ «Deploy Webhook»
+  #     GitHub  ← Settings ← Secrets ← New secret
+  #                 الاسم : COOLIFY_DEPLOY_HOOK
+  #
+  # ══════════════════════════════════════════════════════════
+  # **وثلاثةُ حدودٍ مقصودةٌ تُقرأ ولا تُخمَّن:**
+  #
+  # ① **بعد البوّابة لا معها** (`needs`) — نشرٌ يسبق الفحصَ يشحن ما
+  #    لم يُفحَص، وهو أسوأ من نشرٍ يدويّ.
+  #
+  # ② **فرعُ النشر وحدَه.** Coolify يستورد
+  #    `claude/project-code-review-yjagv`؛ وخطّافٌ يُطلَق من كلّ فرعٍ
+  #    ينشر شيفرةً ليست هي المقصودة.
+  #
+  # ③ **وغيابُ السرّ ليس فشلاً.** الخطوةُ تُخطَّى وتقول لماذا — فوظيفةٌ
+  #    حمراءُ على إعدادٍ لم يُضبَط بعد تُعوّد القارئَ على تجاهل الأحمر.
+  #    (وهي القاعدةُ السابعة: «غيرُ معروف» ليس فشلاً، ويُقال بسببه.)
+  # ──────────────────────────────────────────────────────────
+  deploy:
+    name: إطلاق نشرة Coolify
+    runs-on: ubuntu-latest
+    needs: [structural, backend, flutter, docker]
+    if: github.ref == 'refs/heads/claude/project-code-review-yjagv'
+    steps:
+      - name: نداء خطّاف النشر
+        env:
+          HOOK: ${{ secrets.COOLIFY_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::notice title=النشر التلقائي غير مضبوط::" \
+              "السرُّ COOLIFY_DEPLOY_HOOK غيرُ موجود، فالنشرُ ما زال يدويّاً." \
+              "اضبطه مرّةً واحدةً: Coolify ← Webhooks ← Deploy Webhook،" \
+              "ثمّ GitHub ← Settings ← Secrets ← COOLIFY_DEPLOY_HOOK."
+            exit 0
+          fi
+
+          # `--fail-with-body` لا `--fail` وحدَها: ٤٠٤ على خطّافٍ خاطئ
+          # يجب أن يُظهر نصَّ الردّ، وإلّا صار «فشل» بلا سبب.
+          code=$(curl -sS --fail-with-body -o /tmp/hook.out -w '%{http_code}' \
+                   --max-time 60 -X GET "$HOOK") || {
+            echo "::error title=تعذّر إطلاق النشرة::$(head -c 400 /tmp/hook.out)"
+            exit 1
+          }
+
+          echo "::notice title=أُطلقت النشرة::ردّ Coolify $code على ${GITHUB_SHA::7}"
+          head -c 400 /tmp/hook.out || true
+
+      # **وإطلاقُ النشرة ليس نجاحَها.** Coolify يردّ فورَ القبول، والبناءُ
+      # يجري بعده دقائق. فيُقال ذلك صراحةً لئلّا تُقرأ الخضرةُ «نُشر».
+      - name: ما بعد الإطلاق
+        run: |
+          echo "::notice title=الخطوة التالية::" \
+            "الإطلاقُ ليس اكتمالاً — تابِع Coolify حتّى Running (healthy)،" \
+            "ثمّ شغّل: php artisan amial:readiness --base=https://amialpay.com"
