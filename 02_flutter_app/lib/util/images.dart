@@ -1,11 +1,13 @@
 class Images {
-  /// AMIAL-BRAND-UI-001 — لا ترجع إلى assets/image/logo.png.
+  /// AMIAL-BRAND-UI-001 — مسار التوافق القديم يعرض الرمز الرسمي فقط.
   ///
-  /// هذا مسار توافق للشاشات القديمة التي ما زالت تطلب صورة واحدة؛ المصدر
-  /// هنا هو الـwordmark الشفاف المنظّف من المستطيل الأبيض. الشاشات الجديدة
-  /// تستخدم AmialBrandLogo، وللرمز وحده يوجد [logoSymbol].
-  static const String logo = 'assets/branding/wordmark.png';
+  /// الشاشات التي تطلب صورة واحدة عادةً تعرض مساحة صغيرة؛ لذلك نعطيها
+  /// الـsymbol الشفاف بلا خلفية ولا كتابة قد تُقصّ. الشعار الكامل يُعرض
+  /// عبر AmialBrandLogo.full من طبقاته الرسمية، و[logoWordmark] متاح
+  /// فقط لمن يحتاج الصورة المسطّحة الشفافة صراحةً.
+  static const String logo = 'assets/branding/icon_foreground.png';
   static const String logoSymbol = 'assets/branding/icon_foreground.png';
+  static const String logoWordmark = 'assets/branding/wordmark.png';
   static const String logoArabicWordmark = 'assets/brand/logo_wordmark.png';
   static const String logoSwoosh = 'assets/brand/logo_swoosh.png';
   static const String logoLatin = 'assets/brand/logo_latin.png';
