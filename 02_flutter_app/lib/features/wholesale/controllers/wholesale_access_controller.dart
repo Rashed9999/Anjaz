@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
 
 /// AMIAL-WHOLESALE-ACCESS-001 — نفس قرار الخادم في Flutter.
 ///
@@ -17,6 +18,7 @@ class WholesaleAccessController extends GetxController implements GetxService {
   final RxBool isOwner = false.obs;
   final RxString plan = 'free'.obs;
   final RxString lastError = ''.obs;
+  int? _loadedForUserId;
 
   static const available = 'available';
   static const lockedByPlan = 'locked_by_plan';
@@ -29,13 +31,36 @@ class WholesaleAccessController extends GetxController implements GetxService {
     }
     return Get.put(
       WholesaleAccessController(apiClient: Get.find<ApiClient>()),
-      permanent: true,
     );
   }
 
+  int? get _currentUserId {
+    try {
+      return Get.find<AccessController>().userId.value;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _clearSnapshot() {
+    actions.clear();
+    isLoaded.value = false;
+    isOwner.value = false;
+    plan.value = 'free';
+    lastError.value = '';
+  }
+
   Future<bool> load({bool force = false}) async {
+    final userId = _currentUserId;
+
+    // لا تحمل صلاحيات حساب سابق بعد logout/login أو تبديل المستخدم.
+    if (_loadedForUserId != null && _loadedForUserId != userId) {
+      _clearSnapshot();
+      force = true;
+    }
+
     if (isLoading.value) return false;
-    if (isLoaded.value && !force) return true;
+    if (isLoaded.value && !force && _loadedForUserId == userId) return true;
 
     try {
       isLoading.value = true;
@@ -58,6 +83,7 @@ class WholesaleAccessController extends GetxController implements GetxService {
         }
         isOwner.value = raw['is_owner'] == true;
         plan.value = '${raw['subscription_plan'] ?? 'free'}';
+        _loadedForUserId = userId;
         isLoaded.value = true;
         return true;
       }
@@ -72,6 +98,11 @@ class WholesaleAccessController extends GetxController implements GetxService {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  void reset() {
+    _loadedForUserId = null;
+    _clearSnapshot();
   }
 
   Map<String, dynamic>? row(String action) => actions[action];
