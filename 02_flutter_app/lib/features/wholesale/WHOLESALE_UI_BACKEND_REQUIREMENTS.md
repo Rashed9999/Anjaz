@@ -1,175 +1,189 @@
-# Wholesale UI — package-aware scope and backend requirements
+# Wholesale UI — A→Z contracts still missing
 
-> AMIAL-WHOLESALE-SCOPE-001
+> AMIAL-WHOLESALE-ACCESS-001
 >
-> هذه التصاميم تخص **تاجر الجملة (`business_type=wholesale`) فقط**. لا يجوز
-> تعميمها على التجزئة أو الصيدلية أو الوقود أو المطعم أو البيع السريع.
->
-> قاعدة التنفيذ: **نوع النشاط يحدد ما ينطبق، والباقة تحدد عمق المزايا**.
-> Flutter لا يقرر أن شاشة ما "Starter" أو "Business" من عنده؛ يطلب capability
-> ويقرأ حالتها من `/me/entitlements`، والخادم هو مصدر الحقيقة.
+> هذه التصاميم تخص **merchant + `business_type=wholesale` فقط**.
+> نوع النشاط يحدد القطاع، والباقة تحدد العمق، وصلاحية الموظف تحدد الفعل.
+> Flutter لا يقرر الباقة محلياً؛ يقرأ `/merchant/wholesale/access`.
 
-## Approved visual surfaces
+## What is already enforced
 
-The supplied design set describes these Wholesale surfaces:
+The current operational policy is action-level, not screen-level:
 
-1. Wholesale dashboard.
-2. Products list + rich product create/edit.
-3. Low-stock alerts.
-4. Expiry alerts.
-5. Wholesale customers + customer credit terms.
-6. Wholesale invoices list.
-7. Wholesale invoice details / PDF / print / share.
-8. Debt-aging report.
-9. Returns workflow.
+- backend middleware protects every `/api/v1/amial/merchant/wholesale/*` path fail-closed;
+- Flutter public entries use `WholesalePolicy*` screens;
+- package lock and employee permission are independent;
+- owner sees upgrade locks; role-locked staff do not get misleading buttons;
+- invoice detail shows collection only with `wholesale.collection.record`;
+- invoice detail shows void only with `wholesale.invoice.void`;
+- read-only product/customer surfaces remain available to authorized actors after downgrade so historical business data is not confiscated by subscription expiry.
 
-They are design targets, not permission grants. A screen or control is operational only when its server capability and backend contract exist.
+### Current package depth for writes/advanced actions
 
-## Package/capability matrix
+| Action | Required depth |
+|---|---|
+| Read old products/customers/invoices | archival read + exact Wholesale permission |
+| Collect an existing receivable | invoice core + `wholesale.collection.record` |
+| Create/update products | Starter `products` |
+| Adjust stock / low-stock alerts | Starter `inventory` / `low_stock_alerts` |
+| Manage customers/credit | Business `customers` |
+| Current invoice builder | Business in practice: `wholesale_invoices + products + customers` |
+| Aging/advanced reports | Business `advanced_reports` |
+| Excel export | Business `excel_export` |
+| Multi-pricing | Merchant Pro `wholesale_multi_pricing` |
 
-The UI uses the capability code, never a hard-coded plan check. Today the server catalog resolves the following depth:
+The current invoice builder requires a selected customer and product catalog, so a “New invoice” button before those dependencies are entitled would be a dead-end even though `wholesale_invoices` itself is core.
 
-| Wholesale surface | Capability | Current depth |
-|---|---|---|
-| Dashboard / invoices / collections / debts | `wholesale_invoices`, `wholesale_collections`, `debts` | Wholesale vertical core |
-| Returns entry | `refunds` | Core |
-| Products / basic stock / barcode | `products`, `inventory`, `barcode` | Starter+ |
-| Stock audit / low-stock alerts | `inventory_audit`, `low_stock_alerts` | Starter+ |
-| Customers | `customers` | Business+ |
-| Suppliers / purchase orders | `suppliers`, `purchases` | Business+ |
-| Aging / advanced reporting | `advanced_reports` | Business+ |
-| Excel export | `excel_export` | Business+ |
-| Wholesale multi-pricing | `wholesale_multi_pricing` | Merchant Pro+ |
-| Branch / multi-currency / audit depth | `branches`, `multi_currency`, `audit_log` | Merchant Pro+ |
-| Corporate/API depth | enterprise capabilities | Enterprise |
+---
 
-The exact unlock plan shown to the user must come from the entitlement manifest (`unlock.plan_name` / `unlock.plan_code`) so a pricing change does not require a new app release.
+## 1. Product categories
 
-## Current Flutter enforcement
+The approved product design includes category selection. Wholesale currently has no authoritative category contract.
 
-`wholesale_screens.dart` public/deep-link entries are wrapped with `WholesaleEntitlementGate`.
+Build either merchant-scoped Wholesale categories or intentionally reuse a shared catalogue with ownership validation. Required API behavior:
 
-The gate enforces both axes:
+- list/create/update/archive categories;
+- category must belong to the same merchant/business;
+- archived category cannot be newly assigned but historical products remain readable;
+- category changes audited.
 
-- role/business scope: merchant + wholesale only;
-- capability state: `available`, `locked_by_plan`, `locked_by_role`, `limit_reached`, or unknown.
+Do not ship a local-only dropdown.
 
-Unknown entitlement state is never converted to allowed or denied. The UI asks the user to refresh instead of inventing access.
+## 2. Unit conversion graph
 
-The Wholesale dashboard already gates internal action navigation by the same manifest. Public wrappers prevent bypass through a known route name/deep link.
-
-## Server enforcement gaps Claude must close before calling the package model complete
-
-UI gating is not security. The following Wholesale routes currently need a server-side entitlement audit so direct API calls cannot bypass what the plans sell:
-
-- product list/create/update/stock operations must enforce the relevant `products` / `inventory` capabilities in addition to usage limits and employee permissions;
-- customer list/create/update and customer statements must enforce `customers`;
-- aging report must enforce `advanced_reports`;
-- Excel/export endpoints must enforce `excel_export`;
-- multi-pricing endpoints must enforce `wholesale_multi_pricing` on **read and write**, not only on the entry button;
-- low-stock filtered list must remain protected by `low_stock_alerts`;
-- dashboard payload must not leak paid-feature metadata after downgrade (for example old product/customer counts) if the caller no longer owns those capabilities.
-
-Employee RBAC and plan entitlement are separate checks: possessing a plan does not grant a cashier permission to edit stock, void invoices, or record collections.
-
-## 1. Unit conversion graph
-
-Current `WholesaleProduct` supports one `unit` string only. The UI now offers practical base units (`قطعة`, `شدة`, `درزن`, `كرتون`, `طبلية`, etc.) through that existing field.
-
-The richer approved product design also shows conversions such as:
+The approved design requires conversions such as:
 
 - `1 كرتون = 12 شدة`
 - `1 شدة = 12 قطعة`
 
-Do **not** persist these only in Flutter. Add a server-owned model/API for product unit conversions with validation against cycles, zero/negative factors, and duplicate units. Invoice quantities and stock movements must resolve to the canonical base unit server-side.
+Required server invariants:
 
-Recommended invariants:
-
-- exactly one canonical/base unit per product;
-- conversion graph is acyclic;
-- factors are positive decimal values;
+- one canonical base unit per product;
+- factors must be positive decimals;
+- no cycles;
 - no duplicate source→target edge;
-- stock ledger is stored in the canonical unit;
-- every invoice line records both entered unit/quantity and normalized quantity for auditability.
+- invoice and stock movements normalize server-side;
+- invoice/audit records keep entered unit/quantity and normalized quantity;
+- deleting/changing a conversion cannot rewrite historical invoice quantities.
 
-Until this exists, the app may choose a base unit but must not show conversion rows as if they are saved.
+Until this exists, Flutter may save one base `unit` only; conversion rows must not pretend to persist.
 
-## 2. Product category and purchase/sale price semantics
+## 3. Lots/batches and expiry
 
-The approved create-product design contains category, purchase price, and sale price. `cost_price` and `base_price` already have real server fields; category must not be a local-only dropdown.
-
-If Wholesale categories are to be used, provide a merchant-scoped category contract and validate that a category belongs to the same Wholesale business before assigning it to a product.
-
-## 3. Expiry / batch tracking for Wholesale products
-
-Current `wholesale_products` does not expose a reliable expiry/batch contract. The expiry-alert screen therefore renders an explicit unavailable state when the server does not supply `expiry_date`/`expires_at`; it never converts absence to zero expired products.
-
-The approved expiry-alert design should be backed by lots/batches rather than one expiry date per SKU:
+Do not model the approved expiry screen with one expiry date on the SKU. Use lots/batches:
 
 - product_id
 - lot/batch number
 - quantity
 - received_at
 - expiry_date
-- location/warehouse when applicable
-- state (active/quarantined/expired/disposed)
+- warehouse/location where applicable
+- state: active / quarantined / expired / disposed
 
-Expiry counts must be calculated server-side from real lot quantities. Stock disposal must create an inventory movement/audit reason; a red “إزالة” button must never delete quantity silently.
+Server calculates expired / 7-day / 30-day counts from real lot quantities. “إزالة” must create a disposal inventory movement with actor/reason; never silently delete stock.
 
-## 4. Persistent low-stock notification preferences
+## 4. Persistent low-stock notification settings
 
-Existing Wholesale backend supports `low_stock_threshold` per product and a package-gated `low_stock_only=1` query. The Flutter screen uses those real values.
-
-The supplied design also shows notification settings/channels. For actual push/SMS/email preferences, add a server-owned settings contract for:
+`low_stock_threshold` already exists per product. The approved settings panel additionally needs a server-owned preference contract:
 
 - enabled/disabled;
-- channels (in-app/push/SMS/email as actually supported);
+- in-app/push/SMS/email only when a real provider exists;
 - merchant/branch scope;
-- default threshold;
-- per-product override;
-- quiet hours / deduplication window;
-- last-notified threshold state.
+- default threshold + per-product override;
+- quiet hours;
+- deduplication window;
+- last-notified state;
+- delivery failure/audit state.
 
-Do not make a local Flutter toggle look authoritative before this exists. SMS must not be displayed as enabled if there is no SMS provider/billing contract.
+Do not show SMS as operational without provider + billing/delivery feedback.
 
-Supplier/reorder actions on the stock-alert screen belong to `suppliers` / `purchases` (Business+), even though viewing low-stock alerts can be available earlier.
+Supplier/reorder actions are separately gated by Business `suppliers` / `purchases`.
 
-## 5. Wholesale return workflow
+## 5. Wholesale returns lifecycle
 
-The current UI opens the existing real `MerchantRefundScreen` for the `refunds` capability. The supplied design describes a richer merchandise-return lifecycle:
+The generic `MerchantRefundScreen` is not the approved Wholesale return workflow and is intentionally not advertised on the new policy dashboard.
+
+Build:
 
 `requested → under_review → accepted/rejected → stock disposition → refund/credit note`
 
-Build it as a backend workflow before replacing the generic entry. Required audit data includes invoice/line references, quantity, reason, actor, review decision, returned-stock disposition, financial adjustment, and immutable references.
+Required links:
 
-A return must not both restock inventory and refund money unless both effects are committed atomically according to the chosen disposition.
+- source invoice;
+- source invoice line;
+- quantity/unit;
+- reason/evidence;
+- requester/reviewer actors;
+- decision reason;
+- restock/quarantine/dispose decision;
+- financial refund or credit note;
+- immutable reference/audit events.
 
-## 6. Debt aging
+Inventory and financial effects must commit consistently. A failed refund may not leave stock restored, and a failed stock disposition may not leave money refunded.
 
-The visual aging report maps to `advanced_reports` (Business+), not merely to the existence of Wholesale debt invoices.
+## 6. Wholesale Excel exports shown in approved designs
 
-Server buckets must be calculated from invoice due dates and outstanding balances, not recomputed from formatted Flutter dates. Totals across buckets must reconcile to the total receivable for the same filter/snapshot.
+The supplied stock-alert and expiry-alert screens show export buttons, but current Wholesale API has no dedicated export endpoints for those reports. Do not add decorative buttons.
 
-Excel export is a second entitlement (`excel_export`) and must be gated independently from viewing the report.
+Claude must create real exports before Flutter exposes them, for example:
 
-## 7. Invoice/PDF actions
+- `GET /merchant/wholesale/reports/stock-alerts/export?format=xlsx`
+- `GET /merchant/wholesale/reports/expiry/export?format=xlsx`
+- `GET /merchant/wholesale/reports/aging/export?format=xlsx`
 
-Wholesale invoice list/details are core Wholesale capabilities. Download/print/share must use real generated documents. The UI must format money for display without changing stored precision or invoice totals.
+Requirements:
 
-PDF generation remains subject to the existing brand/document weight guards and must not reintroduce the legacy logo asset.
+- `excel_export` entitlement independently enforced;
+- same filters/snapshot as the on-screen report;
+- merchant/branch ownership enforced;
+- file contains real server data, not client-reconstructed rows;
+- stable filename/content type;
+- large reports streamed/queued as appropriate;
+- audit export actor/time/filter;
+- tests ensure a role allowed to view but not export cannot download the file.
 
-## Required validation matrix
+## 7. Multi-pricing Flutter screen
 
-Before deployment, Claude should test at minimum:
+Backend product-price/price-tier endpoints already exist and are policy-gated as Merchant Pro. The previous UI only showed a SnackBar telling the merchant to go elsewhere; this violates the no-fake-button rule and is intentionally absent from the operational dashboard.
 
-- non-wholesale merchant cannot open any Wholesale surface by route/deep link;
-- Free Wholesale sees core invoice/debt/refund surfaces but not paid product/customer/report depth;
-- Starter unlocks products/inventory/low-stock without customers/aging;
-- Business unlocks customers/suppliers/purchases/advanced reports/Excel without Pro multi-pricing;
-- Merchant Pro unlocks multi-pricing/branch depth;
-- Enterprise inherits all prior Wholesale depth;
-- plan downgrade preserves data but blocks paid reads/writes according to policy without leaking counts/details;
-- employee permission denial still works even when the plan owns the feature;
-- direct API calls cannot bypass the UI entitlement gate;
-- limit reached is distinct from plan locked and from role locked;
-- no unavailable feature is represented as a working button that fails only after tapping.
+Build a real screen against the existing endpoints:
+
+- list price tiers;
+- list product prices by tier/min quantity;
+- create/manage tier only with `wholesale.tier.manage`;
+- set price only with `wholesale.price.set`;
+- read-only mode with `wholesale.price.view`;
+- validation for positive price/min quantity and duplicate tier ranges;
+- loading/error/empty/403/402 states;
+- refresh after write from server truth.
+
+## 8. Debt-aging correctness
+
+Aging belongs to Business `advanced_reports`.
+
+Server buckets must be calculated from due dates + outstanding balances, and all buckets must reconcile to total receivable for the same snapshot/filter. Flutter must not rebucket formatted dates.
+
+## 9. Invoice documents
+
+List/details/PDF are real invoice data. Validate:
+
+- paid/partial/overdue state is server truth;
+- display formatting never mutates stored precision;
+- PDF/print/share refer to the same committed invoice/reference;
+- official AMIAL branding only;
+- existing PDF/brand weight guards still pass.
+
+## Claude validation gate
+
+Before deployment run direct HTTP and Flutter tests for:
+
+- all five Wholesale demo plans;
+- owner, sales_manager, sales_rep, collector, accountant, warehouse_staff;
+- non-wholesale merchants blocked from Wholesale APIs;
+- downgrade preserves historical rows/read rights and blocks new paid writes;
+- product quota blocks create but not edit;
+- collection/void/create separation by role;
+- every Wholesale route discovered from Laravel route collection maps to `WholesaleAccessPolicyService`;
+- `flutter analyze` passes;
+- no public route opens `WholesalePro*` directly;
+- no missing contract above is represented as a working control.
