@@ -74,20 +74,19 @@ class WholesaleEntitlementGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    AccessController? access;
-    try {
-      access = Get.find<AccessController>();
-    } catch (_) {
-      return _WholesaleBlockedSurface(
+    final access = _accessController();
+    if (access == null) {
+      return const _WholesaleBlockedSurface(
         icon: Icons.sync_problem_rounded,
         title: 'تعذر التحقق من الحساب',
-        message: 'لم تُحمّل بيانات الوصول بعد. أعد المحاولة بعد تحديث الجلسة.',
+        message: 'خدمة الوصول غير جاهزة في هذه الجلسة. أعد فتح الحساب.',
       );
     }
 
-    final accessController = access;
     return Obx(() {
-      if (accessController.isLoading.value && !accessController.isLoaded.value) {
+      // Deep-link بارد: لا نحكم من القيم الافتراضية قبل وصول /me/access.
+      if (!access.isLoaded.value) {
+        _scheduleAccessLoad(access);
         return const Scaffold(
           backgroundColor: AmialColors.background,
           body: Center(child: CircularProgressIndicator()),
@@ -95,7 +94,7 @@ class WholesaleEntitlementGate extends StatelessWidget {
       }
 
       // أول حارس: هذه الواجهات لا تُستعمل كقالب عام لكل التجار.
-      if (!accessController.isMerchant || !accessController.isWholesale) {
+      if (!access.isMerchant || !access.isWholesale) {
         return const _WholesaleBlockedSurface(
           icon: Icons.warehouse_outlined,
           title: 'واجهة خاصة بتاجر الجملة',
@@ -107,11 +106,26 @@ class WholesaleEntitlementGate extends StatelessWidget {
       final capability = surface.capability;
       if (capability == null) return child;
 
-      final row = _entitlementRow(capability);
+      final entitlements = _entitlementsController();
+      if (entitlements != null && entitlements.manifest.value == null) {
+        _scheduleEntitlementsLoad(entitlements);
+
+        // AccessController يحمل قائمة الميزات الفعلية أيضاً. نستعملها فقط
+        // للسماح المؤقت إن كانت القدرة موجودة صراحةً؛ أما الغياب فلا نفسره
+        // كقفل قبل وصول manifest لأنه قد يكون قفل باقة أو دور أو حد.
+        if (access.has(capability)) return child;
+
+        return const Scaffold(
+          backgroundColor: AmialColors.background,
+          body: Center(child: CircularProgressIndicator()),
+        );
+      }
+
+      final row = entitlements == null ? null : _entitlementRow(entitlements, capability);
       final state = row?['state']?.toString();
 
       if (state == EntitlementsController.stAvailable ||
-          (row == null && accessController.has(capability))) {
+          (row == null && access.has(capability))) {
         return child;
       }
 
@@ -120,9 +134,9 @@ class WholesaleEntitlementGate extends StatelessWidget {
             ? Map<String, dynamic>.from(row!['unlock'] as Map)
             : const <String, dynamic>{};
         final planName =
-            '${unlock['plan_name'] ?? unlock['plan_label'] ?? 'باقة أعلى'}';
+            '${unlock['plan_name'] ?? unlock['plan_label'] ?? unlock['name'] ?? 'باقة أعلى'}';
         final suggested =
-            '${unlock['plan_code'] ?? unlock['plan'] ?? ''}'.trim();
+            '${unlock['plan_code'] ?? unlock['plan'] ?? unlock['code'] ?? ''}'.trim();
 
         return _WholesaleBlockedSurface(
           icon: Icons.workspace_premium_outlined,
@@ -137,7 +151,7 @@ class WholesaleEntitlementGate extends StatelessWidget {
       }
 
       if (state == EntitlementsController.stLockedByRole) {
-        return _WholesaleBlockedSurface(
+        return const _WholesaleBlockedSurface(
           icon: Icons.admin_panel_settings_outlined,
           title: 'تحتاج صلاحية',
           message:
@@ -169,14 +183,46 @@ class WholesaleEntitlementGate extends StatelessWidget {
     });
   }
 
-  Map<String, dynamic>? _entitlementRow(String capability) {
+  AccessController? _accessController() {
     try {
-      final controller = Get.find<EntitlementsController>();
-      final row = controller.stateOf(capability);
-      return row == null ? null : Map<String, dynamic>.from(row);
+      return Get.find<AccessController>();
     } catch (_) {
       return null;
     }
+  }
+
+  EntitlementsController? _entitlementsController() {
+    try {
+      return Get.find<EntitlementsController>();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Map<String, dynamic>? _entitlementRow(
+    EntitlementsController controller,
+    String capability,
+  ) {
+    final row = controller.stateOf(capability);
+    return row == null ? null : Map<String, dynamic>.from(row);
+  }
+
+  void _scheduleAccessLoad(AccessController controller) {
+    if (controller.isLoading.value) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!controller.isLoaded.value && !controller.isLoading.value) {
+        controller.load();
+      }
+    });
+  }
+
+  void _scheduleEntitlementsLoad(EntitlementsController controller) {
+    if (controller.isLoading.value) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (controller.manifest.value == null && !controller.isLoading.value) {
+        controller.load();
+      }
+    });
   }
 }
 
