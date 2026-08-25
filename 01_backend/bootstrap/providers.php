@@ -14,6 +14,10 @@ return [
     App\Providers\RouteServiceProvider::class,
     App\Providers\ConfigServiceProvider::class,
 
+    // AMIAL-WHOLESALE-ACCESS-001 — policy واحدة تحرس كل endpoint للجملة
+    // وتزوّد Flutter بنفس snapshot الباقات/الصلاحيات.
+    App\Providers\WholesaleAccessServiceProvider::class,
+
     /*
     |--------------------------------------------------------------------------
     | Third-Party Service Providers
