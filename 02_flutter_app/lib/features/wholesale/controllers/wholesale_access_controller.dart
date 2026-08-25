@@ -19,6 +19,7 @@ class WholesaleAccessController extends GetxController implements GetxService {
   final RxString plan = 'free'.obs;
   final RxString lastError = ''.obs;
   int? _loadedForUserId;
+  String? _loadedForToken;
 
   static const available = 'available';
   static const lockedByPlan = 'locked_by_plan';
@@ -52,15 +53,25 @@ class WholesaleAccessController extends GetxController implements GetxService {
 
   Future<bool> load({bool force = false}) async {
     final userId = _currentUserId;
+    final token = apiClient.token;
 
-    // لا تحمل صلاحيات حساب سابق بعد logout/login أو تبديل المستخدم.
-    if (_loadedForUserId != null && _loadedForUserId != userId) {
+    // لا تحمل صلاحيات حساب سابق بعد logout/login أو تبديل المستخدم. نعتمد
+    // token أيضاً لأن AccessController قد يكون في طور إعادة التحميل وuserId
+    // ما زال null لحظياً.
+    final sessionChanged = (_loadedForToken != null && _loadedForToken != token) ||
+        (_loadedForUserId != null && userId != null && _loadedForUserId != userId);
+    if (sessionChanged) {
       _clearSnapshot();
       force = true;
     }
 
     if (isLoading.value) return false;
-    if (isLoaded.value && !force && _loadedForUserId == userId) return true;
+    if (isLoaded.value &&
+        !force &&
+        _loadedForToken == token &&
+        (_loadedForUserId == userId || userId == null)) {
+      return true;
+    }
 
     try {
       isLoading.value = true;
@@ -84,6 +95,7 @@ class WholesaleAccessController extends GetxController implements GetxService {
         isOwner.value = raw['is_owner'] == true;
         plan.value = '${raw['subscription_plan'] ?? 'free'}';
         _loadedForUserId = userId;
+        _loadedForToken = token;
         isLoaded.value = true;
         return true;
       }
@@ -102,6 +114,7 @@ class WholesaleAccessController extends GetxController implements GetxService {
 
   void reset() {
     _loadedForUserId = null;
+    _loadedForToken = null;
     _clearSnapshot();
   }
 
