@@ -19,6 +19,9 @@ use RuntimeException;
  * لا تُضاف إلى DatabaseSeeder عمداً. في production لا تعمل إلا بعد تفعيل
  * AMIAL_ALLOW_PRODUCTION_DEMO_MERCHANTS=true بشكل صريح، لأن كلمات المرور
  * معروفة ومخصصة للاختبار فقط.
+ *
+ * الحسابات settlement-safe افتراضياً: لها رصيد عرض لكن لا يُسمح لها
+ * بالتحويل الخارجي. أي اختبار مالي E2E يحتاج حساباً مخصصاً منفصلاً.
  */
 class MerchantDemoMatrixSeeder extends Seeder
 {
@@ -180,8 +183,8 @@ class MerchantDemoMatrixSeeder extends Seeder
                         . ' | ' . (string) $row['business_type']
                         . ' | ' . (string) $row['plan'],
                     'extra_features' => [],
-                    'can_transfer_out' => true,
-                    'requires_settlement_only' => false,
+                    'can_transfer_out' => false,
+                    'requires_settlement_only' => true,
                     'zone_code' => 'SOUTH',
                     'verified_at' => now(),
                 ],
