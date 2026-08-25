@@ -7,8 +7,8 @@ use Tests\TestCase;
 /**
  * AMIAL-BRAND-ROUTING-001 — يمنع رجوع التطبيق إلى الشعار المسطّح القديم.
  *
- * المشكلة لم تكن غياب ملفات الهوية الجديدة؛ كانت الشاشات تستدعي
- * assets/image/logo.png مباشرةً فتتجاوز كل إصلاحات الشفافية والهوية.
+ * المشكلة لم تكن غياب ملفات الهوية الجديدة؛ كانت بعض الشاشات تتجاوز
+ * حزمة الهوية الرسمية وتطلب ملف legacy مباشرةً.
  */
 class BrandAssetRoutingGuardTest extends TestCase
 {
@@ -21,14 +21,18 @@ class BrandAssetRoutingGuardTest extends TestCase
         $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($lib));
         foreach ($it as $file) {
             if ($file->isFile() && $file->getExtension() === 'dart') {
-                $sources .= file_get_contents($file->getPathname());
+                $source = file_get_contents($file->getPathname());
+                // التعليقات ليست تنفيذًا؛ لا نسمح لها أن تصنع إيجابية كاذبة.
+                $source = preg_replace('~/\*.*?\*/~s', '', $source) ?? $source;
+                $source = preg_replace('~//.*$~m', '', $source) ?? $source;
+                $sources .= $source;
             }
         }
 
         $this->assertStringNotContainsString(
-            "'assets/image/logo.png'",
+            'assets/image/logo.png',
             $sources,
-            'عاد مسار شعار قديم إلى Dart. استخدم AmialBrandLogo أو assets/branding الشفافة.',
+            'عاد مسار شعار legacy إلى Dart. استخدم AmialBrandLogo أو assets/branding الشفافة.',
         );
     }
 
