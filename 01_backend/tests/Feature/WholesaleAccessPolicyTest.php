@@ -29,7 +29,6 @@ class WholesaleAccessPolicyTest extends TestCase
 
         MerchantProfile::create([
             'user_id' => $m->id,
-            'business_name' => 'جملة اختبار',
             'business_type' => A::BIZ_WHOLESALE,
             'subscription_plan' => $plan,
             'verification_status' => 'verified',
@@ -42,13 +41,16 @@ class WholesaleAccessPolicyTest extends TestCase
 
     private function staff(User $merchant, string $roleCode): User
     {
-        $u = User::factory()->create(['type' => 3]);
+        // role=pos صريح حتى يرث Business Type/Plan من صاحب المنشأة ولا
+        // يُفسَّر كتاجر مستقل بلا MerchantProfile.
+        $u = User::factory()->create(['type' => 3, 'role' => 'pos']);
 
         PosUser::create([
             'merchant_user_id' => $merchant->id,
             'user_id' => $u->id,
             'pos_number' => 'W-' . $u->id,
             'is_active' => true,
+            'permissions' => [],
         ]);
 
         $role = DB::table('merchant_roles')
