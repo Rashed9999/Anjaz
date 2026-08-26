@@ -366,6 +366,48 @@ class WholesaleController extends Controller
         return $this->ok(['price' => $price], 'SAVED', 'تم الحفظ');
     }
 
+    /**
+     * معاينة السعر حسب شريحة العميل والكمية.
+     * هذه للعرض فقط؛ createInvoice يعيد التسعير تحت القفل ولا يثق بها.
+     */
+    public function quoteProduct(Request $request, int $productId): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_PRODUCT_VIEW)) {
+            return $deny;
+        }
+        $v = Validator::make($request->query(), [
+            'customer_id' => 'required|integer',
+            'quantity' => 'required|numeric|min:0.001',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $customer = WholesaleCustomer::where('id', $request->query('customer_id'))
+            ->where('business_id', $biz->id)->where('is_active', true)->first();
+        $product = WholesaleProduct::where('id', $productId)
+            ->where('business_id', $biz->id)->where('is_active', true)->first();
+        if (!$customer || !$product) return $this->error('NOT_FOUND', 'العميل أو المنتج غير موجود', 404);
+
+        $tierId = $customer->default_tier_id ?? WholesalePriceTier::where('business_id', $biz->id)
+            ->where('is_default', true)->where('is_active', true)->value('id');
+        if (!$tierId) return $this->error('PRICE_TIER_MISSING', 'لا توجد شريحة سعر افتراضية', 422);
+        $quantity = (float) $request->query('quantity');
+        $unitPrice = \App\Services\MoneyService::normalize((string) $product->priceFor((int) $tierId, $quantity));
+        $normalizedQuantity = \App\Services\MoneyService::normalize((string) $request->query('quantity'));
+
+        return $this->ok(['quote' => [
+            'product_id' => $product->id,
+            'customer_id' => $customer->id,
+            'tier_id' => (int) $tierId,
+            'quantity' => $normalizedQuantity,
+            'unit_price' => $unitPrice,
+            'line_total' => \App\Services\MoneyService::mul($unitPrice, $normalizedQuantity),
+        ]]);
+    }
+
     // ============ Customers ============
 
     public function listCustomers(Request $request): JsonResponse

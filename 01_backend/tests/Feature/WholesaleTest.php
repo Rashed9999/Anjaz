@@ -160,6 +160,33 @@ class WholesaleTest extends TestCase
     }
 
     /** @test */
+    public function invoice_applies_line_and_invoice_discounts_without_accepting_a_client_price(): void
+    {
+        $biz = $this->svc->getOrCreateBusiness($this->merchant);
+        $tier = $biz->priceTiers->where('code', 'wholesale')->first();
+        $product = $this->svc->addProduct($biz, [
+            'name' => 'صنف الخصم', 'base_price' => '1000', 'initial_stock' => 20,
+        ]);
+        // يجب أن يختار الخادم سعر الشريحة (900) لا سعراً يرسله التطبيق.
+        $this->svc->setProductPrice($product, $tier->id, 900, 1);
+        $customer = $this->svc->addCustomer($biz, [
+            'full_name' => 'عميل الخصم', 'credit_limit' => 100000, 'default_tier_id' => $tier->id,
+        ]);
+
+        $invoice = $this->invSvc->createInvoice($this->merchant, $biz,
+            [['product_id' => $product->id, 'quantity' => 5, 'discount_per_unit' => 100]],
+            ['customer_id' => $customer->id, 'payment_type' => 'credit', 'discount_amount' => 200],
+        );
+
+        // (900 - 100) × 5 - 200 = 3,800
+        $this->assertEquals('4000.0000', (string)$invoice->subtotal);
+        $this->assertEquals('200.0000', (string)$invoice->discount_amount);
+        $this->assertEquals('3800.0000', (string)$invoice->total_amount);
+        $this->assertEquals('900.0000', (string)$invoice->items()->first()->unit_price);
+        $this->assertEquals('100.0000', (string)$invoice->items()->first()->discount_per_unit);
+    }
+
+    /** @test */
     public function collection_reduces_invoice_balance_and_customer_debt(): void
     {
         $biz = $this->svc->getOrCreateBusiness($this->merchant);

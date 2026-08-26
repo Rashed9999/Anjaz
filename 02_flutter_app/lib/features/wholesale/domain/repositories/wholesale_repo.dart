@@ -33,6 +33,13 @@ class WholesaleRepo extends GetxService {
   Future<Response> setProductPrice(int productId, int tierId, double price, double minQty) =>
       apiClient.postData('$_base/products/$productId/prices',
           {'tier_id': tierId, 'price': price, 'min_quantity': minQty});
+  /// سعرٌ إرشاديٌّ من الخادم لنفس العميل والكمية. لا يُرسل السعر من التطبيق
+  /// عند إنشاء الفاتورة؛ الخادم يعيد حسابه داخل المعاملة.
+  Future<Response> quoteProduct(int productId, int customerId, double quantity) =>
+      apiClient.getData('$_base/products/$productId/quote', query: {
+        'customer_id': '$customerId',
+        'quantity': '$quantity',
+      });
 
   // Customers
   Future<Response> listCustomers({String? search, bool withBalanceOnly = false}) {

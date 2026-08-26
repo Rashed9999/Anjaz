@@ -1137,9 +1137,13 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
 
             // Multi-Pricing
             Route::get('/products/{id}/prices', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'listProductPrices'])
+                ->middleware('capability:wholesale_multi_pricing')
                 ->where('id', '[0-9]+')->name('products.prices');
             Route::post('/products/{id}/prices', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'setProductPrice'])
+                ->middleware('capability:wholesale_multi_pricing')
                 ->where('id', '[0-9]+')->name('products.price.set');
+            Route::get('/products/{id}/quote', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'quoteProduct'])
+                ->where('id', '[0-9]+')->name('products.quote');
 
             // Customers
             Route::get('/customers', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'listCustomers'])->name('customers.index');

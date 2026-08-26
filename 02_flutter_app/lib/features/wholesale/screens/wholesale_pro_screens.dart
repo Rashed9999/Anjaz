@@ -4,6 +4,8 @@ import 'package:get/get.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/entitlements/controllers/entitlements_controller.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
@@ -402,6 +404,12 @@ class _WholesaleProDashboardScreenState
           () => Get.to(() => const WholesaleProInvoicesScreen())),
       _WholesaleAction('تقادم الديون', Icons.bar_chart_rounded,
           'advanced_reports', () => Get.to(() => const WholesaleProAgingScreen())),
+      _WholesaleAction('أداء المندوبين', Icons.leaderboard_outlined,
+          'advanced_reports', () => Get.to(() => const WholesaleProSalesRepsReportScreen())),
+      _WholesaleAction('الموظفون وصلاحياتهم', Icons.manage_accounts_outlined,
+          'employees', () => Get.to(() => const MerchantStaffScreen())),
+      _WholesaleAction('أجهزة نقاط البيع', Icons.point_of_sale_outlined,
+          'multi_pos', () => Get.to(() => const MerchantPosDevicesScreen())),
       _WholesaleAction('الاسترجاع', Icons.keyboard_return_rounded, 'refunds',
           () => Get.to(() => const MerchantRefundScreen())),
       _WholesaleAction('تنبيهات المخزون', Icons.notifications_active_outlined,
@@ -434,9 +442,7 @@ class _WholesaleProDashboardScreenState
   }
 
   void _openMultiPricing(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('افتح «مزايا الباقة» للوصول إلى إدارة أسعار الجملة المتقدمة.'),
-    ));
+    Get.to(() => const WholesaleProProductsScreen());
   }
 }
 
@@ -575,6 +581,13 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
             ),
           ),
           IconButton(
+            tooltip: 'أسعار الجملة',
+            onPressed: () => _openCapability(context, 'wholesale_multi_pricing',
+                () => _pricingSheet(context, p)),
+            icon: const Icon(Icons.price_change_outlined,
+                color: AmialColors.cash),
+          ),
+          IconButton(
             tooltip: 'تعديل',
             onPressed: () => _productSheet(context, product: p),
             icon: const Icon(Icons.edit_outlined,
@@ -583,6 +596,76 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
         ],
       ),
     );
+  }
+
+  Future<void> _pricingSheet(BuildContext context, Map<String, dynamic> product) async {
+    final data = await c.loadProductPrices((product['id'] as num).toInt());
+    if (!context.mounted) return;
+    if (data == null) {
+      _snack(context, c.lastError.value, error: true);
+      return;
+    }
+    final tiers = (data['tiers'] as List? ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final prices = (data['prices'] as List? ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    if (tiers.isEmpty) {
+      _snack(context, 'لا توجد شرائح أسعار متاحة', error: true);
+      return;
+    }
+    int selectedTier = (tiers.first['id'] as num).toInt();
+    final price = TextEditingController(text: '${product['base_price'] ?? ''}');
+    final minimum = TextEditingController(text: '1');
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AmialColors.cardSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AmialSpacing.radiusXl))),
+      builder: (sheetContext) => StatefulBuilder(builder: (_, setSheet) => Padding(
+        padding: EdgeInsets.fromLTRB(AmialSpacing.screen, AmialSpacing.lg, AmialSpacing.screen,
+            MediaQuery.viewInsetsOf(sheetContext).bottom + AmialSpacing.lg),
+        child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('أسعار ${product['name']}', textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: AmialSpacing.sm),
+          ...prices.map((row) => ListTile(
+            dense: true,
+            leading: const Icon(Icons.sell_outlined, color: AmialColors.primary),
+            title: Text('${(row['tier'] as Map?)?['name'] ?? 'شريحة'}'),
+            subtitle: Text('من كمية ${_qty(_num(row['min_quantity']))}'),
+            trailing: Text('${_money(row['price'])} ر.ي',
+                style: const TextStyle(fontWeight: FontWeight.w900, color: AmialColors.primary)),
+          )),
+          const Divider(),
+          DropdownButtonFormField<int>(value: selectedTier,
+            decoration: const InputDecoration(labelText: 'شريحة السعر'),
+            items: tiers.map((t) => DropdownMenuItem<int>(value: (t['id'] as num).toInt(),
+                child: Text('${t['name']}'))).toList(),
+            onChanged: (v) => setSheet(() => selectedTier = v ?? selectedTier)),
+          const SizedBox(height: AmialSpacing.sm),
+          _Field(price, 'السعر', Icons.payments_outlined, number: true),
+          _Field(minimum, 'الحد الأدنى للكمية', Icons.numbers_rounded, number: true),
+          Obx(() => FilledButton(
+            onPressed: c.isSubmitting.value ? null : () async {
+              final ok = await c.setProductPrice((product['id'] as num).toInt(), selectedTier,
+                  _num(price.text), _num(minimum.text));
+              if (!mounted || !sheetContext.mounted) return;
+              if (ok) {
+                Navigator.pop(sheetContext);
+                _snack(context, 'تم حفظ سعر الشريحة');
+              } else {
+                _snack(context, c.lastError.value, error: true);
+              }
+            },
+            child: const Text('حفظ سعر الشريحة'),
+          )),
+        ])),
+      )),
+    );
+    price.dispose();
+    minimum.dispose();
   }
 
   Future<void> _productSheet(BuildContext context,
@@ -1730,6 +1813,13 @@ class _WholesaleProInvoiceCreateScreenState
     extends State<WholesaleProInvoiceCreateScreen> {
   WholesaleController get c => Get.find<WholesaleController>();
   String paymentType = 'credit';
+  final _invoiceDiscount = TextEditingController();
+  final _notes = TextEditingController();
+  int? _salesRepId;
+
+  double get _invoiceDiscountValue => _num(_invoiceDiscount.text);
+  double get _invoiceTotal => (c.cartSubtotal - _invoiceDiscountValue)
+      .clamp(0, double.infinity).toDouble();
 
   @override
   void initState() {
@@ -1738,7 +1828,15 @@ class _WholesaleProInvoiceCreateScreenState
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await c.loadProducts();
       await c.loadCustomers();
+      await c.loadSalesReps();
     });
+  }
+
+  @override
+  void dispose() {
+    _invoiceDiscount.dispose();
+    _notes.dispose();
+    super.dispose();
   }
 
   @override
@@ -1809,7 +1907,8 @@ class _WholesaleProInvoiceCreateScreenState
                   final item = c.cart[i];
                   final p = item['product'] as Map;
                   final qty = _num(item['quantity']);
-                  final price = _num(p['base_price']);
+                  final price = _num(p['quoted_unit_price'] ?? p['base_price']);
+                  final lineDiscount = _num(item['discount_per_unit']);
                   return Card(
                     color: AmialColors.cardSurface,
                     child: ListTile(
@@ -1820,11 +1919,23 @@ class _WholesaleProInvoiceCreateScreenState
                       ),
                       title: Text('${p['name'] ?? '—'}',
                           style: const TextStyle(fontWeight: FontWeight.w800)),
-                      subtitle: Text('${_qty(qty)} ${p['unit'] ?? 'وحدة'}'),
-                      trailing: Text('${_money(qty * price)} ر.ي',
-                          style: const TextStyle(
-                              color: AmialColors.primary,
-                              fontWeight: FontWeight.w900)),
+                      subtitle: Text(
+                          '${_qty(qty)} ${p['unit'] ?? 'وحدة'} • سعر العميل ${_money(price)}'
+                          '${lineDiscount > 0 ? ' • خصم ${_money(lineDiscount)} / وحدة' : ''}'),
+                      trailing: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('${_money((price - lineDiscount).clamp(0, double.infinity).toDouble() * qty)} ر.ي',
+                              style: const TextStyle(
+                                  color: AmialColors.primary,
+                                  fontWeight: FontWeight.w900)),
+                          TextButton(
+                            onPressed: () => _lineDiscountDialog(context, item),
+                            child: const Text('خصم الصنف'),
+                          ),
+                        ],
+                      ),
                     ),
                   );
                 },
@@ -1855,6 +1966,29 @@ class _WholesaleProInvoiceCreateScreenState
                                 fontWeight: FontWeight.w900)),
                       ],
                     ),
+                    const SizedBox(height: AmialSpacing.sm),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _invoiceDiscountValue > 0
+                                ? 'خصم الفاتورة ${_money(_invoiceDiscountValue)} ر.ي'
+                                : 'لا يوجد خصم إضافي على الفاتورة',
+                            style: const TextStyle(color: AmialColors.textSecondary),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'تفاصيل وخصم',
+                          onPressed: () => _invoiceOptions(context),
+                          icon: const Icon(Icons.tune_rounded),
+                        ),
+                      ],
+                    ),
+                    Text('الإجمالي ${_money(_invoiceTotal)} ر.ي',
+                        style: const TextStyle(
+                            color: AmialColors.primary,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900)),
                     const SizedBox(height: AmialSpacing.sm),
                     Row(
                       children: [
@@ -1903,7 +2037,16 @@ class _WholesaleProInvoiceCreateScreenState
       _snack(context, 'اختر العميل أولاً', error: true);
       return;
     }
-    final ok = await c.createInvoice(paymentType: paymentType);
+    if (_invoiceDiscountValue > c.cartSubtotal) {
+      _snack(context, 'خصم الفاتورة لا يمكن أن يتجاوز إجمالي الأصناف', error: true);
+      return;
+    }
+    final ok = await c.createInvoice(
+      paymentType: paymentType,
+      discountAmount: _invoiceDiscount.text.trim(),
+      salesRepId: _salesRepId,
+      notes: _notes.text.trim(),
+    );
     if (!mounted) return;
     if (ok) {
       final inv = c.currentInvoice.value;
@@ -1938,6 +2081,7 @@ class _WholesaleProInvoiceCreateScreenState
                       title: Text('${cust['full_name'] ?? '—'}'),
                       subtitle: Text('${cust['phone'] ?? ''}'),
                       onTap: () {
+                        c.clearCart();
                         c.selectedCustomer.value = cust;
                         Navigator.pop(context);
                       },
@@ -1996,15 +2140,91 @@ class _WholesaleProInvoiceCreateScreenState
               onPressed: () => Navigator.pop(dialogContext),
               child: const Text('إلغاء')),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               final qty = _num(q.text);
               if (qty <= 0) return;
-              c.addToCart(p, qty);
+              final ok = await c.addToCart(p, qty);
+              if (!dialogContext.mounted) return;
+              if (!ok) {
+                _snack(context, c.lastError.value, error: true);
+                return;
+              }
               Navigator.pop(dialogContext);
             },
             child: const Text('إضافة'),
           ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _lineDiscountDialog(BuildContext context, Map<String, dynamic> item) async {
+    final ctrl = TextEditingController(text: '${item['discount_per_unit'] ?? 0}');
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('خصم الصنف لكل وحدة'),
+        content: _Field(ctrl, 'قيمة الخصم', Icons.discount_outlined, number: true),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+          FilledButton(
+            onPressed: () {
+              final discount = _num(ctrl.text);
+              final price = _num((item['product'] as Map)['quoted_unit_price'] ??
+                  (item['product'] as Map)['base_price']);
+              if (discount < 0 || discount > price) {
+                _snack(context, 'الخصم يجب أن يكون بين صفر وسعر الوحدة', error: true);
+                return;
+              }
+              final index = c.cart.indexWhere((x) => x['product_id'] == item['product_id']);
+              if (index >= 0) {
+                c.cart[index] = {...c.cart[index], 'discount_per_unit': discount};
+                c.cart.refresh();
+              }
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('تطبيق الخصم'),
+          ),
+        ],
+      ),
+    );
+    ctrl.dispose();
+  }
+
+  Future<void> _invoiceOptions(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AmialColors.cardSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AmialSpacing.radiusXl)),
+      ),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(AmialSpacing.screen, AmialSpacing.lg,
+            AmialSpacing.screen, MediaQuery.viewInsetsOf(sheetContext).bottom + AmialSpacing.lg),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const Text('تفاصيل الفاتورة', textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+            const SizedBox(height: AmialSpacing.md),
+            _Field(_invoiceDiscount, 'خصم إضافي على الفاتورة', Icons.discount_rounded, number: true),
+            _Field(_notes, 'ملاحظات (اختياري)', Icons.notes_outlined, maxLines: 3),
+            const Text('مندوب المبيعات (اختياري)', style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: AmialSpacing.xs),
+            Wrap(spacing: AmialSpacing.xs, runSpacing: AmialSpacing.xs, children: [
+              ChoiceChip(label: const Text('بدون مندوب'), selected: _salesRepId == null,
+                  onSelected: (_) => setState(() => _salesRepId = null)),
+              ...c.salesReps.map((rep) => ChoiceChip(
+                label: Text('${rep['full_name'] ?? 'مندوب'}'),
+                selected: _salesRepId == (rep['id'] as num?)?.toInt(),
+                onSelected: (_) => setState(() => _salesRepId = (rep['id'] as num?)?.toInt()),
+              )),
+            ]),
+            const SizedBox(height: AmialSpacing.md),
+            FilledButton(onPressed: () { setState(() {}); Navigator.pop(sheetContext); },
+                child: const Text('حفظ التفاصيل')),
+          ]),
+        ),
       ),
     );
   }
@@ -2146,6 +2366,117 @@ class _WholesaleProAgingScreenState extends State<WholesaleProAgingScreen> {
                   color: tone, fontWeight: FontWeight.w900, fontSize: 18)),
         ],
       ),
+    );
+  }
+}
+
+/// تقريرٌ تنفيذيٌّ للمندوبين من مصدر تقارير الجملة، وليس بطاقاتٍ ثابتة.
+class WholesaleProSalesRepsReportScreen extends StatefulWidget {
+  const WholesaleProSalesRepsReportScreen({super.key});
+
+  @override
+  State<WholesaleProSalesRepsReportScreen> createState() =>
+      _WholesaleProSalesRepsReportScreenState();
+}
+
+class _WholesaleProSalesRepsReportScreenState
+    extends State<WholesaleProSalesRepsReportScreen> {
+  WholesaleController get c => Get.find<WholesaleController>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => c.loadSalesRepsReport());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AmialColors.background,
+      appBar: AppBar(
+        backgroundColor: AmialColors.background,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text('أداء مندوبي المبيعات'),
+      ),
+      body: Obx(() {
+        final state = _loadState(c, retry: c.loadSalesRepsReport);
+        final report = c.salesRepsReport.value;
+        if (report == null) return state ?? const SizedBox.shrink();
+        final period = report['period'] is Map ? report['period'] as Map : const {};
+        final reps = report['reps'] is List ? report['reps'] as List : const [];
+        final totalSales = reps.fold<double>(0, (sum, raw) =>
+            sum + _num((raw as Map)['period'] is Map ? (raw['period'] as Map)['total_sales'] : 0));
+        final totalCommission = reps.fold<double>(0, (sum, raw) =>
+            sum + _num((raw as Map)['period'] is Map ? (raw['period'] as Map)['total_commission'] : 0));
+        return RefreshIndicator(
+          onRefresh: c.loadSalesRepsReport,
+          color: AmialColors.primary,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(AmialSpacing.screen),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AmialSpacing.lg),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [AmialColors.primaryDark, AmialColors.primary]),
+                  borderRadius: BorderRadius.circular(AmialSpacing.radiusXl),
+                ),
+                child: Column(children: [
+                  const Icon(Icons.leaderboard_rounded, color: AmialColors.yellow, size: 38),
+                  const SizedBox(height: AmialSpacing.xs),
+                  Text('الفترة ${_date(period['from'])} — ${_date(period['to'])}',
+                      style: const TextStyle(color: AmialColors.cardSurface)),
+                  const SizedBox(height: AmialSpacing.sm),
+                  Text('${_money(totalSales)} ر.ي', style: const TextStyle(
+                      color: AmialColors.cardSurface, fontSize: 28, fontWeight: FontWeight.w900)),
+                  const Text('إجمالي المبيعات', style: TextStyle(color: AmialColors.cardSurface)),
+                ]),
+              ),
+              const SizedBox(height: AmialSpacing.md),
+              Row(children: [
+                Expanded(child: _MetricCard(icon: Icons.people_outline, label: 'المندوبون',
+                    value: '${reps.length}', tone: AmialColors.primary, surface: AmialColors.cardSurface)),
+                const SizedBox(width: AmialSpacing.sm),
+                Expanded(child: _MetricCard(icon: Icons.workspace_premium_outlined, label: 'العمولات',
+                    value: '${_money(totalCommission)} ر.ي', tone: AmialColors.success, surface: AmialColors.cardSurface)),
+              ]),
+              const SizedBox(height: AmialSpacing.lg),
+              const Text('الترتيب حسب المبيعات', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+              const SizedBox(height: AmialSpacing.sm),
+              if (reps.isEmpty)
+                const _SurfaceState(icon: Icons.group_off_outlined, title: 'لا يوجد مندوبون نشطون',
+                    message: 'أضف مندوباً عند الحاجة ثم ستظهر نتائجه في هذا التقرير.'),
+              ...reps.asMap().entries.map((entry) {
+                final rep = entry.value as Map;
+                final metrics = rep['period'] is Map ? rep['period'] as Map : const {};
+                final allTime = rep['all_time'] is Map ? rep['all_time'] as Map : const {};
+                return Container(
+                  margin: const EdgeInsets.only(bottom: AmialSpacing.sm),
+                  padding: const EdgeInsets.all(AmialSpacing.md),
+                  decoration: BoxDecoration(color: AmialColors.cardSurface,
+                      borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
+                      border: Border.all(color: AmialColors.border)),
+                  child: Row(children: [
+                    CircleAvatar(backgroundColor: AmialColors.primary.withValues(alpha: 0.10),
+                      child: Text('${entry.key + 1}', style: const TextStyle(color: AmialColors.primary, fontWeight: FontWeight.w900))),
+                    const SizedBox(width: AmialSpacing.sm),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('${rep['full_name'] ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w900)),
+                      Text('${metrics['invoices_count'] ?? 0} فاتورة • عمولة معلقة ${_money(allTime['pending_commission'])} ر.ي',
+                          style: const TextStyle(color: AmialColors.textSecondary, fontSize: 11)),
+                    ])),
+                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                      Text('${_money(metrics['total_sales'])} ر.ي', style: const TextStyle(color: AmialColors.primary, fontWeight: FontWeight.w900)),
+                      Text('عمولة ${_money(metrics['total_commission'])}', style: const TextStyle(color: AmialColors.success, fontSize: 11)),
+                    ]),
+                  ]),
+                );
+              }),
+            ],
+          ),
+        );
+      }),
     );
   }
 }

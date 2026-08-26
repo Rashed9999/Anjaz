@@ -28,6 +28,7 @@ class WholesaleController extends GetxController implements GetxService {
   final Rx<Map<String, dynamic>?> currentInvoice = Rx<Map<String, dynamic>?>(null);
   final Rx<Map<String, dynamic>?> agingReport = Rx<Map<String, dynamic>?>(null);
   final Rx<Map<String, dynamic>?> currentStatement = Rx<Map<String, dynamic>?>(null);
+  final Rx<Map<String, dynamic>?> salesRepsReport = Rx<Map<String, dynamic>?>(null);
 
   // سلّة فاتورة جديدة
   final RxList<Map<String, dynamic>> cart = <Map<String, dynamic>>[].obs;
@@ -104,6 +105,21 @@ class WholesaleController extends GetxController implements GetxService {
       _doAndReload(
           () => repo.adjustStock(id, newStock, reason), () => loadProducts());
 
+  Future<Map<String, dynamic>?> loadProductPrices(int productId) async {
+    try {
+      final r = await repo.listProductPrices(productId);
+      if (_ok(r)) return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      lastError.value = _msg(r) ?? 'تعذر تحميل أسعار المنتج';
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    }
+    return null;
+  }
+
+  Future<bool> setProductPrice(int productId, int tierId, double price, double minQty) async =>
+      _doAndReload(() => repo.setProductPrice(productId, tierId, price, minQty),
+          () => loadProducts());
+
   // ============ Customers ============
 
   Future<void> loadCustomers({String? search, bool withBalanceOnly = false}) async {
@@ -132,21 +148,57 @@ class WholesaleController extends GetxController implements GetxService {
   Future<bool> updateCustomer(int id, Map<String, dynamic> data) async =>
       _doAndReload(() => repo.updateCustomer(id, data), () => loadCustomers());
 
+  Future<void> loadSalesReps() async {
+    try {
+      final r = await repo.listSalesReps();
+      if (_ok(r)) {
+        final list = (r.body['meta']?['sales_reps'] ?? []) as List;
+        salesReps.assignAll(
+            list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+      }
+    } catch (_) {
+      // المندوب اختياري في الفاتورة؛ لا نمنع البيع إذا تعذر تحميل قائمته.
+    }
+  }
+
   // ============ Cart ============
 
-  void addToCart(Map<String, dynamic> product, double qty) {
+  Future<bool> addToCart(Map<String, dynamic> product, double qty) async {
+    if (selectedCustomer.value == null) {
+      lastError.value = 'اختر العميل أولاً لتطبيق شريحة السعر الصحيحة';
+      return false;
+    }
+    Map<String, dynamic> quote = {};
+    try {
+      final r = await repo.quoteProduct(
+        (product['id'] as num).toInt(),
+        (selectedCustomer.value!['id'] as num).toInt(),
+        qty,
+      );
+      if (_ok(r)) {
+        quote = Map<String, dynamic>.from((r.body['meta']?['quote'] ?? {}) as Map);
+      } else {
+        lastError.value = _msg(r) ?? 'تعذر تسعير الصنف للعميل';
+        return false;
+      }
+    } catch (_) {
+      lastError.value = 'تعذر الاتصال لتسعير الصنف';
+      return false;
+    }
     final idx = cart.indexWhere((c) => c['product_id'] == product['id']);
+    final pricedProduct = {...product, 'quoted_unit_price': quote['unit_price']};
     if (idx >= 0) {
-      cart[idx] = {...cart[idx], 'quantity': qty};
+      cart[idx] = {...cart[idx], 'quantity': qty, 'product': pricedProduct};
     } else {
       cart.add({
         'product_id': product['id'],
-        'product': product,
+        'product': pricedProduct,
         'quantity': qty,
         'discount_per_unit': 0.0,
       });
     }
     cart.refresh();
+    return true;
   }
 
   void removeFromCart(int productId) {
@@ -161,9 +213,10 @@ class WholesaleController extends GetxController implements GetxService {
   double get cartSubtotal {
     double total = 0;
     for (final item in cart) {
-      final price = double.tryParse('${item['product']?['base_price']}') ?? 0;
+      final price = double.tryParse('${item['product']?['quoted_unit_price'] ?? item['product']?['base_price']}') ?? 0;
       final qty = double.tryParse('${item['quantity']}') ?? 0;
-      total += price * qty;
+      final discount = double.tryParse('${item['discount_per_unit']}') ?? 0;
+      total += (price - discount).clamp(0, double.infinity).toDouble() * qty;
     }
     return total;
   }
@@ -355,6 +408,25 @@ class WholesaleController extends GetxController implements GetxService {
       if (_ok(r)) {
         currentStatement.value = Map<String, dynamic>.from(
             (r.body['meta']?['statement'] ?? {}) as Map);
+        loadState.value = 'ready';
+      } else {
+        _classifyFailure(r);
+      }
+    } catch (_) {
+      _offline();
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> loadSalesRepsReport({String? from, String? to}) async {
+    _startLoad();
+    salesRepsReport.value = null;
+    try {
+      final r = await repo.salesRepsReport(from: from, to: to);
+      if (_ok(r)) {
+        salesRepsReport.value = Map<String, dynamic>.from(
+            (r.body['meta']?['report'] ?? {}) as Map);
         loadState.value = 'ready';
       } else {
         _classifyFailure(r);
