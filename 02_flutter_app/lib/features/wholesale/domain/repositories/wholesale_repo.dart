@@ -65,6 +65,17 @@ class WholesaleRepo extends GetxService {
   Future<Response> voidInvoice(int id, String reason) =>
       apiClient.postData('$_base/invoices/$id/void', {'reason': reason});
 
+  // Returns — workflow خاص بالجملة، منفصل عن MerchantRefundScreen العام.
+  Future<Response> listReturns({String? status}) => apiClient.getData('$_base/returns',
+      query: status == null ? null : {'status': status});
+  Future<Response> requestReturn(int invoiceId, Map<String, dynamic> data) =>
+      apiClient.postData('$_base/invoices/$invoiceId/returns', data);
+  Future<Response> resolveReturn(int returnId, bool approve, {String? note}) =>
+      apiClient.postData('$_base/returns/$returnId/resolve', {
+        'approve': approve,
+        if (note != null && note.isNotEmpty) 'decision_note': note,
+      });
+
   /// AMIAL-WHOLESALE-PDF — تحميل PDF الفاتورة (binary).
   /// نستخدم http مباشرة بدلاً من apiClient.getData لأنّ الردّ binary وليس JSON.
   String invoicePdfUrl(int invoiceId) => '$_base/invoices/$invoiceId/pdf';

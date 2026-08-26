@@ -24,6 +24,7 @@ class WholesaleController extends GetxController implements GetxService {
   final RxList<Map<String, dynamic>> customers = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> invoices = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> collections = <Map<String, dynamic>>[].obs;
+  final RxList<Map<String, dynamic>> returns = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> salesReps = <Map<String, dynamic>>[].obs;
   final Rx<Map<String, dynamic>?> currentInvoice = Rx<Map<String, dynamic>?>(null);
   final Rx<Map<String, dynamic>?> agingReport = Rx<Map<String, dynamic>?>(null);
@@ -160,6 +161,9 @@ class WholesaleController extends GetxController implements GetxService {
       // المندوب اختياري في الفاتورة؛ لا نمنع البيع إذا تعذر تحميل قائمته.
     }
   }
+
+  Future<bool> addSalesRep(Map<String, dynamic> data) async =>
+      _doAndReload(() => repo.addSalesRep(data), loadSalesReps);
 
   // ============ Cart ============
 
@@ -321,6 +325,30 @@ class WholesaleController extends GetxController implements GetxService {
 
   Future<bool> voidInvoice(int id, String reason) async =>
       _doAndReload(() => repo.voidInvoice(id, reason), () => loadInvoices());
+
+  Future<void> loadReturns({String? status}) async {
+    _startLoad();
+    try {
+      final r = await repo.listReturns(status: status);
+      if (_ok(r)) {
+        final list = (r.body['meta']?['returns'] ?? []) as List;
+        returns.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        loadState.value = returns.isEmpty ? 'empty' : 'ready';
+      } else {
+        _classifyFailure(r);
+      }
+    } catch (_) {
+      _offline();
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<bool> requestReturn(int invoiceId, Map<String, dynamic> data) async =>
+      _doAndReload(() => repo.requestReturn(invoiceId, data), () => loadReturns());
+
+  Future<bool> resolveReturn(int returnId, bool approve, {String? note}) async =>
+      _doAndReload(() => repo.resolveReturn(returnId, approve, note: note), () => loadReturns());
 
   // ============ Collections ============
 

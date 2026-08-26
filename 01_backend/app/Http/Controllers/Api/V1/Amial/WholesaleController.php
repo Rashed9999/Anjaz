@@ -14,11 +14,13 @@ use App\Models\WholesalePriceTier;
 use App\Models\WholesaleProduct;
 use App\Models\WholesaleProductPrice;
 use App\Models\WholesaleSalesRep;
+use App\Models\WholesaleReturn;
 use App\Services\Merchant\MerchantPermissionService;
 use App\Services\WholesaleCollectionService;
 use App\Services\WholesaleInvoicePdfService;
 use App\Services\WholesaleInvoiceService;
 use App\Services\WholesaleReportsService;
+use App\Services\WholesaleReturnService;
 use App\Services\WholesaleService;
 use App\Support\Merchant\MerchantPermissions as P;
 use DomainException;
@@ -51,6 +53,7 @@ class WholesaleController extends Controller
         private readonly WholesaleInvoiceService $invSvc,
         private readonly WholesaleCollectionService $colSvc,
         private readonly WholesaleReportsService $reportsSvc,
+        private readonly WholesaleReturnService $returnSvc,
         private readonly WholesaleInvoicePdfService $pdfSvc,
         private readonly MerchantPermissionService $perm,
     ) {}
@@ -619,6 +622,69 @@ class WholesaleController extends Controller
             return $this->error('FAILED', $e->getMessage(), 422);
         }
         return $this->ok(['invoice' => $voided], 'VOIDED', 'تم الإبطال');
+    }
+
+    // ============ Returns ============
+
+    public function listReturns(Request $request): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_RETURN_VIEW)) return $deny;
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $q = WholesaleReturn::where('business_id', $biz->id)
+            ->with(['invoice:id,invoice_number', 'customer:id,full_name', 'items']);
+        if ($request->filled('status') && in_array($request->query('status'), WholesaleReturn::STATUSES, true)) {
+            $q->where('status', $request->query('status'));
+        }
+        return $this->ok(['returns' => $q->orderByDesc('id')->limit(100)->get()]);
+    }
+
+    public function requestReturn(Request $request, int $invoiceId): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_RETURN_REQUEST)) return $deny;
+        $v = Validator::make($request->all(), [
+            'reason' => 'required|string|max:500',
+            'items' => 'required|array|min:1',
+            'items.*.invoice_item_id' => 'required|integer',
+            'items.*.quantity' => 'required|numeric|min:0.001',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $invoice = WholesaleInvoice::where('id', $invoiceId)->where('business_id', $biz->id)->first();
+        if (!$invoice) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
+        try {
+            $return = $this->returnSvc->request($request->user(), $invoice, $request->input('items'), $request->input('reason'));
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            return $this->error('INVALID_RETURN', $e->getMessage(), 422);
+        }
+        return $this->ok(['return' => $return], 'RETURN_REQUESTED', 'تم إرسال طلب المرتجع للمراجعة', 201);
+    }
+
+    public function resolveReturn(Request $request, int $returnId): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_RETURN_APPROVE)) return $deny;
+        $v = Validator::make($request->all(), [
+            'approve' => 'required|boolean',
+            'decision_note' => 'sometimes|nullable|string|max:500',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $return = WholesaleReturn::where('id', $returnId)->where('business_id', $biz->id)->first();
+        if (!$return) return $this->error('NOT_FOUND', 'طلب المرتجع غير موجود', 404);
+        try {
+            $resolved = $this->returnSvc->resolve($request->user(), $return, $request->boolean('approve'), $request->input('decision_note'));
+        } catch (\RuntimeException $e) {
+            return $this->error('INVALID_RETURN', $e->getMessage(), 422);
+        }
+        return $this->ok(['return' => $resolved], 'RETURN_RESOLVED', 'تم حفظ قرار المرتجع');
     }
 
     // ============ Collections ============

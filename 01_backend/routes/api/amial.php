@@ -1163,6 +1163,13 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::post('/invoices/{id}/void', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'voidInvoice'])
                 ->where('id', '[0-9]+')->name('invoices.void');
 
+            // Returns — طلبٌ ومراجعةٌ منفصلان؛ لا تُستعمل مرتجعات التاجر العامة.
+            Route::get('/returns', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'listReturns'])->name('returns.index');
+            Route::post('/invoices/{id}/returns', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'requestReturn'])
+                ->where('id', '[0-9]+')->name('returns.request');
+            Route::post('/returns/{id}/resolve', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'resolveReturn'])
+                ->where('id', '[0-9]+')->name('returns.resolve');
+
             // Collections
             Route::get('/collections', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'listCollections'])->name('collections.index');
             Route::post('/invoices/{id}/collect', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'recordCollection'])

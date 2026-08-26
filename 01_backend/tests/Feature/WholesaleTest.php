@@ -10,6 +10,7 @@ use App\Services\MoneyService;
 use App\Services\WholesaleCollectionService;
 use App\Services\WholesaleInvoiceService;
 use App\Services\WholesaleReportsService;
+use App\Services\WholesaleReturnService;
 use App\Services\WholesaleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -25,6 +26,7 @@ class WholesaleTest extends TestCase
     private WholesaleInvoiceService $invSvc;
     private WholesaleCollectionService $colSvc;
     private WholesaleReportsService $repSvc;
+    private WholesaleReturnService $returnSvc;
     private User $merchant;
 
     protected function setUp(): void
@@ -34,6 +36,7 @@ class WholesaleTest extends TestCase
         $this->invSvc = app(WholesaleInvoiceService::class);
         $this->colSvc = app(WholesaleCollectionService::class);
         $this->repSvc = app(WholesaleReportsService::class);
+        $this->returnSvc = app(WholesaleReturnService::class);
 
         $this->merchant = User::factory()->create(['type' => 3, 'zone_code' => 'SOUTH']);
         MerchantProfile::create([
@@ -184,6 +187,58 @@ class WholesaleTest extends TestCase
         $this->assertEquals('3800.0000', (string)$invoice->total_amount);
         $this->assertEquals('900.0000', (string)$invoice->items()->first()->unit_price);
         $this->assertEquals('100.0000', (string)$invoice->items()->first()->discount_per_unit);
+    }
+
+    /** @test */
+    public function wholesale_return_requires_review_then_restores_stock_and_credits_only_the_outstanding_debt(): void
+    {
+        $biz = $this->svc->getOrCreateBusiness($this->merchant);
+        $tier = $biz->priceTiers->where('code', 'wholesale')->first();
+        $product = $this->svc->addProduct($biz, ['name' => 'صنف مرتجع', 'base_price' => '1000', 'initial_stock' => 10]);
+        $customer = $this->svc->addCustomer($biz, [
+            'full_name' => 'عميل مرتجع', 'credit_limit' => 50000, 'default_tier_id' => $tier->id,
+        ]);
+        $invoice = $this->invSvc->createInvoice($this->merchant, $biz,
+            [['product_id' => $product->id, 'quantity' => 5]],
+            ['customer_id' => $customer->id, 'payment_type' => 'credit'],
+        );
+        $line = $invoice->items()->first();
+
+        $return = $this->returnSvc->request($this->merchant, $invoice,
+            [['invoice_item_id' => $line->id, 'quantity' => 2]], 'تالف عند الاستلام');
+        $this->assertSame('requested', $return->status);
+        $this->assertEquals('2000.0000', (string) $return->total_amount);
+        $product->refresh();
+        $this->assertEquals('5.0000', (string) $product->current_stock); // لا تغيير قبل الاعتماد
+
+        $this->returnSvc->resolve($this->merchant, $return, true, 'تم الفحص');
+        $product->refresh(); $customer->refresh(); $invoice->refresh();
+        $this->assertEquals('7.0000', (string) $product->current_stock);
+        $this->assertEquals('3000.0000', (string) $customer->current_balance);
+        $this->assertEquals('3000.0000', (string) $invoice->balance_due);
+        $this->assertEquals('3000.0000', (string) $invoice->total_amount);
+    }
+
+    /** @test */
+    public function paid_wholesale_return_is_marked_as_refund_due_instead_of_faking_a_cash_refund(): void
+    {
+        $biz = $this->svc->getOrCreateBusiness($this->merchant);
+        $tier = $biz->priceTiers->where('code', 'wholesale')->first();
+        $product = $this->svc->addProduct($biz, ['name' => 'مرتجع نقدي', 'base_price' => '1000', 'initial_stock' => 4]);
+        $customer = $this->svc->addCustomer($biz, [
+            'full_name' => 'عميل نقدي', 'credit_limit' => 0, 'default_tier_id' => $tier->id,
+        ]);
+        $invoice = $this->invSvc->createInvoice($this->merchant, $biz,
+            [['product_id' => $product->id, 'quantity' => 2]],
+            ['customer_id' => $customer->id, 'payment_type' => 'cash'],
+        );
+        $return = $this->returnSvc->request($this->merchant, $invoice,
+            [['invoice_item_id' => $invoice->items()->first()->id, 'quantity' => 1]], 'العميل أعاد الصنف');
+        $resolved = $this->returnSvc->resolve($this->merchant, $return, true);
+
+        $this->assertSame('refund_pending', $resolved->settlement_type);
+        $this->assertEquals('1000.0000', (string) $resolved->refund_due_amount);
+        $this->assertEquals('0.0000', (string) $resolved->credited_amount);
     }
 
     /** @test */

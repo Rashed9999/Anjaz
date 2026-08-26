@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/entitlements/controllers/entitlements_controller.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
@@ -406,12 +405,14 @@ class _WholesaleProDashboardScreenState
           'advanced_reports', () => Get.to(() => const WholesaleProAgingScreen())),
       _WholesaleAction('أداء المندوبين', Icons.leaderboard_outlined,
           'advanced_reports', () => Get.to(() => const WholesaleProSalesRepsReportScreen())),
+      _WholesaleAction('إدارة المندوبين', Icons.badge_outlined,
+          'wholesale_invoices', () => Get.to(() => const WholesaleProSalesRepsScreen())),
       _WholesaleAction('الموظفون وصلاحياتهم', Icons.manage_accounts_outlined,
           'employees', () => Get.to(() => const MerchantStaffScreen())),
       _WholesaleAction('أجهزة نقاط البيع', Icons.point_of_sale_outlined,
           'multi_pos', () => Get.to(() => const MerchantPosDevicesScreen())),
-      _WholesaleAction('الاسترجاع', Icons.keyboard_return_rounded, 'refunds',
-          () => Get.to(() => const MerchantRefundScreen())),
+      _WholesaleAction('المرتجعات', Icons.keyboard_return_rounded, 'wholesale_invoices',
+          () => Get.to(() => const WholesaleProReturnsScreen())),
       _WholesaleAction('تنبيهات المخزون', Icons.notifications_active_outlined,
           'low_stock_alerts',
           () => Get.to(() => const WholesaleStockAlertsScreen())),
@@ -1487,6 +1488,16 @@ class _WholesaleProInvoiceDetailsScreenState
                 const SizedBox(height: AmialSpacing.md),
                 _collectionsCard(collections),
               ],
+              if (inv['status'] != 'voided') ...[
+                const SizedBox(height: AmialSpacing.md),
+                OutlinedButton.icon(
+                  onPressed: items.isEmpty
+                      ? null
+                      : () => Get.to(() => WholesaleProReturnRequestScreen(invoice: inv)),
+                  icon: const Icon(Icons.keyboard_return_rounded),
+                  label: const Text('طلب مرتجع من هذه الفاتورة'),
+                ),
+              ],
               if (balance > 0 && inv['status'] != 'voided') ...[
                 const SizedBox(height: AmialSpacing.lg),
                 FilledButton.icon(
@@ -1797,6 +1808,198 @@ class _WholesaleProInvoiceDetailsScreenState
         ),
       ),
     );
+  }
+}
+
+/// قائمة مرتجعات الجملة: الطلب لا يغيّر مالاً أو مخزوناً قبل قرار المراجع.
+class WholesaleProReturnsScreen extends StatefulWidget {
+  const WholesaleProReturnsScreen({super.key});
+
+  @override
+  State<WholesaleProReturnsScreen> createState() => _WholesaleProReturnsScreenState();
+}
+
+class _WholesaleProReturnsScreenState extends State<WholesaleProReturnsScreen> {
+  WholesaleController get c => Get.find<WholesaleController>();
+  String? _filter;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => c.loadReturns());
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AmialColors.background,
+    appBar: AppBar(backgroundColor: AmialColors.background, elevation: 0,
+      centerTitle: true, title: const Text('مرتجعات الجملة')),
+    body: Obx(() {
+      final state = _loadState(c, retry: () => c.loadReturns(status: _filter));
+      if (c.returns.isEmpty && state != null) return state;
+      return RefreshIndicator(
+        onRefresh: () => c.loadReturns(status: _filter),
+        color: AmialColors.primary,
+        child: ListView(physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(AmialSpacing.screen), children: [
+          const Text('كل طلب يمر بالمراجعة قبل إعادة المخزون أو تخفيض دين العميل.',
+              style: TextStyle(color: AmialColors.textSecondary)),
+          const SizedBox(height: AmialSpacing.sm),
+          Wrap(spacing: AmialSpacing.xs, children: [
+            for (final f in const <(String?, String)>[(null, 'الكل'), ('requested', 'بانتظار المراجعة'), ('approved', 'معتمدة'), ('rejected', 'مرفوضة')])
+              ChoiceChip(label: Text(f.$2), selected: _filter == f.$1,
+                onSelected: (_) { setState(() => _filter = f.$1); c.loadReturns(status: f.$1); }),
+          ]),
+          const SizedBox(height: AmialSpacing.md),
+          if (c.returns.isEmpty) const _SurfaceState(
+              icon: Icons.assignment_return_outlined, title: 'لا توجد طلبات مرتجع',
+              message: 'افتح فاتورة ثم اختر «طلب مرتجع» لبدء دورة صحيحة.'),
+          ...c.returns.map((row) => _returnCard(context, row)),
+        ]),
+      );
+    }),
+  );
+
+  Widget _returnCard(BuildContext context, Map<String, dynamic> row) {
+    final status = '${row['status'] ?? ''}';
+    final tone = switch (status) {
+      'approved' => AmialColors.success,
+      'rejected' => AmialColors.danger,
+      _ => AmialColors.warning,
+    };
+    final invoice = row['invoice'] is Map ? row['invoice'] as Map : const {};
+    final customer = row['customer'] is Map ? row['customer'] as Map : const {};
+    return Container(margin: const EdgeInsets.only(bottom: AmialSpacing.sm),
+      padding: const EdgeInsets.all(AmialSpacing.md),
+      decoration: BoxDecoration(color: AmialColors.cardSurface,
+        borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
+        border: Border(right: BorderSide(color: tone, width: 4))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          _returnStatus(status), const Spacer(),
+          Text('${invoice['invoice_number'] ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w900)),
+        ]),
+        const SizedBox(height: AmialSpacing.xs),
+        Text('${customer['full_name'] ?? '—'} • ${row['reason'] ?? ''}',
+            style: const TextStyle(color: AmialColors.textSecondary)),
+        const SizedBox(height: AmialSpacing.xs),
+        Row(children: [
+          Text('${_money(row['total_amount'])} ر.ي', style: TextStyle(color: tone, fontWeight: FontWeight.w900, fontSize: 18)),
+          const Spacer(),
+          Text('${((row['items'] as List?) ?? const []).length} أصناف', style: const TextStyle(color: AmialColors.textMuted)),
+        ]),
+        if (status == 'approved' && _num(row['refund_due_amount']) > 0) ...[
+          const SizedBox(height: AmialSpacing.xs),
+          Text('مبلغ مستحق للرد: ${_money(row['refund_due_amount'])} ر.ي — لا يُدفع تلقائياً.',
+              style: const TextStyle(color: AmialColors.danger, fontWeight: FontWeight.w700)),
+        ],
+        if (status == 'requested') ...[
+          const SizedBox(height: AmialSpacing.sm),
+          Row(children: [
+            Expanded(child: OutlinedButton(onPressed: () => _resolve(context, row, false), child: const Text('رفض'))),
+            const SizedBox(width: AmialSpacing.sm),
+            Expanded(child: FilledButton(onPressed: () => _resolve(context, row, true), child: const Text('اعتماد'))),
+          ]),
+        ],
+      ]),
+    );
+  }
+
+  Widget _returnStatus(String status) => _miniLabel(Icons.assignment_return_outlined,
+      switch (status) { 'approved' => 'معتمد', 'rejected' => 'مرفوض', _ => 'بانتظار المراجعة' },
+      status == 'approved' ? AmialColors.success : status == 'rejected' ? AmialColors.danger : AmialColors.warning);
+
+  Future<void> _resolve(BuildContext context, Map<String, dynamic> row, bool approve) async {
+    final note = TextEditingController();
+    await showDialog<void>(context: context, builder: (dialogContext) => AlertDialog(
+      title: Text(approve ? 'اعتماد المرتجع' : 'رفض المرتجع'),
+      content: _Field(note, 'ملاحظة القرار (اختياري)', Icons.notes_outlined, maxLines: 3),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+        FilledButton(onPressed: () async {
+          final ok = await c.resolveReturn((row['id'] as num).toInt(), approve, note: note.text.trim());
+          if (!mounted || !dialogContext.mounted) return;
+          if (ok) { Navigator.pop(dialogContext); _snack(context, approve ? 'تم اعتماد المرتجع' : 'تم رفض المرتجع'); }
+          else { _snack(context, c.lastError.value, error: true); }
+        }, child: Text(approve ? 'اعتماد' : 'رفض')),
+      ],
+    ));
+    note.dispose();
+  }
+}
+
+class WholesaleProReturnRequestScreen extends StatefulWidget {
+  const WholesaleProReturnRequestScreen({super.key, required this.invoice});
+  final Map<String, dynamic> invoice;
+
+  @override
+  State<WholesaleProReturnRequestScreen> createState() => _WholesaleProReturnRequestScreenState();
+}
+
+class _WholesaleProReturnRequestScreenState extends State<WholesaleProReturnRequestScreen> {
+  WholesaleController get c => Get.find<WholesaleController>();
+  final _reason = TextEditingController();
+  final Map<int, TextEditingController> _quantities = {};
+  final Set<int> _selected = {};
+
+  @override
+  void initState() {
+    super.initState();
+    for (final raw in (widget.invoice['items'] as List? ?? const [])) {
+      final item = raw as Map;
+      _quantities[(item['id'] as num).toInt()] = TextEditingController(text: '0');
+    }
+  }
+
+  @override
+  void dispose() {
+    _reason.dispose();
+    for (final ctrl in _quantities.values) { ctrl.dispose(); }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final items = widget.invoice['items'] as List? ?? const [];
+    return Scaffold(backgroundColor: AmialColors.background,
+      appBar: AppBar(backgroundColor: AmialColors.background, elevation: 0, title: const Text('طلب مرتجع')),
+      body: ListView(padding: const EdgeInsets.all(AmialSpacing.screen), children: [
+        Container(padding: const EdgeInsets.all(AmialSpacing.md), decoration: BoxDecoration(
+            color: AmialColors.warningSurface, borderRadius: BorderRadius.circular(AmialSpacing.radiusLg)),
+          child: Text('الفاتورة ${widget.invoice['invoice_number'] ?? '—'}. لن يتغير المخزون أو الدين حتى يعتمد مسؤول مخول الطلب.',
+              style: const TextStyle(color: AmialColors.warning, fontWeight: FontWeight.w700))),
+        const SizedBox(height: AmialSpacing.md),
+        ...items.map((raw) {
+          final item = raw as Map;
+          final id = (item['id'] as num).toInt();
+          return Card(child: Padding(padding: const EdgeInsets.all(AmialSpacing.sm), child: Row(children: [
+            Checkbox(value: _selected.contains(id), onChanged: (v) => setState(() { if (v == true) _selected.add(id); else _selected.remove(id); })),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${item['product_name'] ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w800)),
+              Text('المباع ${_qty(_num(item['quantity']))} ${item['unit'] ?? ''}', style: const TextStyle(color: AmialColors.textSecondary)),
+            ])),
+            SizedBox(width: 90, child: _Field(_quantities[id]!, 'كمية', Icons.numbers_rounded, number: true)),
+          ])));
+        }),
+        const SizedBox(height: AmialSpacing.sm),
+        _Field(_reason, 'سبب المرتجع *', Icons.notes_outlined, maxLines: 3),
+        Obx(() => FilledButton.icon(
+          onPressed: c.isSubmitting.value ? null : _submit,
+          icon: const Icon(Icons.send_rounded), label: const Text('إرسال للمراجعة'),
+        )),
+      ]),
+    );
+  }
+
+  Future<void> _submit() async {
+    final items = _selected.map((id) => {'invoice_item_id': id, 'quantity': _quantities[id]!.text.trim()}).toList();
+    if (items.isEmpty || _reason.text.trim().isEmpty) {
+      _snack(context, 'اختر الأصناف وأدخل سبب المرتجع', error: true); return;
+    }
+    final ok = await c.requestReturn((widget.invoice['id'] as num).toInt(), {'items': items, 'reason': _reason.text.trim()});
+    if (!mounted) return;
+    if (ok) { _snack(context, 'تم إرسال طلب المرتجع للمراجعة'); Get.back(); }
+    else { _snack(context, c.lastError.value, error: true); }
   }
 }
 
@@ -2377,6 +2580,103 @@ class WholesaleProSalesRepsReportScreen extends StatefulWidget {
   @override
   State<WholesaleProSalesRepsReportScreen> createState() =>
       _WholesaleProSalesRepsReportScreenState();
+}
+
+class WholesaleProSalesRepsScreen extends StatefulWidget {
+  const WholesaleProSalesRepsScreen({super.key});
+
+  @override
+  State<WholesaleProSalesRepsScreen> createState() => _WholesaleProSalesRepsScreenState();
+}
+
+class _WholesaleProSalesRepsScreenState extends State<WholesaleProSalesRepsScreen> {
+  WholesaleController get c => Get.find<WholesaleController>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => c.loadSalesReps());
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AmialColors.background,
+    appBar: AppBar(backgroundColor: AmialColors.background, elevation: 0,
+      centerTitle: true, title: const Text('إدارة المندوبين')),
+    floatingActionButton: FloatingActionButton.extended(
+      backgroundColor: AmialColors.primary, foregroundColor: AmialColors.cardSurface,
+      onPressed: () => _addSheet(context), icon: const Icon(Icons.person_add_alt_1_outlined),
+      label: const Text('مندوب جديد'),
+    ),
+    body: Obx(() => RefreshIndicator(
+      onRefresh: c.loadSalesReps,
+      color: AmialColors.primary,
+      child: c.salesReps.isEmpty
+          ? ListView(physics: const AlwaysScrollableScrollPhysics(), children: const [
+              SizedBox(height: 120),
+              _SurfaceState(icon: Icons.badge_outlined, title: 'لا يوجد مندوبون',
+                  message: 'أضف مندوباً ثم اختره عند إنشاء فاتورة الجملة.'),
+            ])
+          : ListView.builder(physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(AmialSpacing.screen), itemCount: c.salesReps.length,
+              itemBuilder: (_, i) {
+                final rep = c.salesReps[i];
+                return Container(margin: const EdgeInsets.only(bottom: AmialSpacing.sm),
+                  padding: const EdgeInsets.all(AmialSpacing.md),
+                  decoration: BoxDecoration(color: AmialColors.cardSurface,
+                      borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
+                      border: Border.all(color: AmialColors.border)),
+                  child: Row(children: [
+                    CircleAvatar(backgroundColor: AmialColors.primary.withValues(alpha: 0.1),
+                      child: const Icon(Icons.badge_outlined, color: AmialColors.primary)),
+                    const SizedBox(width: AmialSpacing.sm),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('${rep['full_name'] ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w900)),
+                      Text('${rep['phone'] ?? 'بدون رقم'} • عمولة ${_pct(rep['default_commission_rate'])}',
+                          style: const TextStyle(color: AmialColors.textSecondary)),
+                    ])),
+                    Text('${_money(rep['total_sales'])} ر.ي', style: const TextStyle(color: AmialColors.primary, fontWeight: FontWeight.w900)),
+                  ]),
+                );
+              }),
+    )),
+  );
+
+  Future<void> _addSheet(BuildContext context) async {
+    final name = TextEditingController();
+    final phone = TextEditingController();
+    final rate = TextEditingController(text: '0');
+    await showModalBottomSheet<void>(context: context, isScrollControlled: true,
+      backgroundColor: AmialColors.cardSurface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(AmialSpacing.radiusXl))),
+      builder: (sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(AmialSpacing.screen, AmialSpacing.lg, AmialSpacing.screen,
+            MediaQuery.viewInsetsOf(sheetContext).bottom + AmialSpacing.lg),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('مندوب جديد', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: AmialSpacing.md),
+          _Field(name, 'اسم المندوب *', Icons.person_outline),
+          _Field(phone, 'رقم الهاتف (اختياري)', Icons.phone_outlined, number: true),
+          _Field(rate, 'نسبة العمولة %', Icons.percent_rounded, number: true),
+          Obx(() => FilledButton(
+            onPressed: c.isSubmitting.value ? null : () async {
+              if (name.text.trim().isEmpty || _num(rate.text) < 0 || _num(rate.text) > 100) {
+                _snack(context, 'أدخل الاسم ونسبة عمولة بين 0 و100', error: true); return;
+              }
+              final ok = await c.addSalesRep({
+                'full_name': name.text.trim(),
+                if (phone.text.trim().isNotEmpty) 'phone': phone.text.trim(),
+                'default_commission_rate': rate.text.trim(),
+              });
+              if (!mounted || !sheetContext.mounted) return;
+              if (ok) { Navigator.pop(sheetContext); _snack(context, 'تمت إضافة المندوب'); }
+              else { _snack(context, c.lastError.value, error: true); }
+            }, child: const Text('إضافة المندوب'),
+          )),
+        ]),
+      ));
+    name.dispose(); phone.dispose(); rate.dispose();
+  }
 }
 
 class _WholesaleProSalesRepsReportScreenState
