@@ -5,6 +5,7 @@ import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/entitlements/controllers/entitlements_controller.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
+import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
@@ -1768,7 +1769,15 @@ class _WholesaleProInvoiceDetailsScreenState
                 ],
               ),
               const SizedBox(height: AmialSpacing.sm),
-              _Field(reference, 'رقم المرجع (اختياري)', Icons.tag_rounded),
+              if (method != 'amial_pay')
+                _Field(reference, 'رقم المرجع (اختياري)', Icons.tag_rounded),
+              if (method == 'amial_pay')
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: AmialSpacing.xs),
+                  child: Text('سيُنشأ QR للتحصيل وتُسجّل الحركة تلقائياً في محفظة التاجر.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AmialColors.textSecondary, fontSize: 12)),
+                ),
               const SizedBox(height: AmialSpacing.md),
               Obx(() => FilledButton(
                     style: FilledButton.styleFrom(
@@ -1784,6 +1793,34 @@ class _WholesaleProInvoiceDetailsScreenState
                               _snack(context,
                                   'المبلغ يجب أن يكون أكبر من صفر ولا يتجاوز المتبقي.',
                                   error: true);
+                              return;
+                            }
+                            if (method == 'amial_pay') {
+                              if (!sheetContext.mounted) return;
+                              Navigator.pop(sheetContext);
+                              await Get.to(() => AmialQrCollectScreen(
+                                    amount: v,
+                                    title: 'تحصيل دين جملة — أميال باي',
+                                    note: 'تحصيل فاتورة جملة',
+                                    createPaymentRequest: (amount, note) =>
+                                        c.createCollectionPaymentRequest(
+                                            widget.invoiceId, amount, note),
+                                    cancelPaymentRequest:
+                                        c.cancelWholesalePaymentRequest,
+                                    onPaid: (paidTransactionId) async {
+                                      final ok = await c.recordCollection(widget.invoiceId, {
+                                        'amount': v,
+                                        'payment_method': 'amial_pay',
+                                        'paid_transaction_id': paidTransactionId,
+                                      });
+                                      if (mounted) {
+                                        _snack(context, ok ? 'تم تسجيل تحصيل أميال باي' : c.lastError.value,
+                                            error: !ok);
+                                      }
+                                      if (ok) Get.back();
+                                      return ok;
+                                    },
+                                  ));
                               return;
                             }
                             final ok = await c.recordCollection(widget.invoiceId, {
@@ -2021,8 +2058,11 @@ class _WholesaleProInvoiceCreateScreenState
   int? _salesRepId;
 
   double get _invoiceDiscountValue => _num(_invoiceDiscount.text);
-  double get _invoiceTotal => (c.cartSubtotal - _invoiceDiscountValue)
+  double get _netBeforeTax => (c.cartSubtotal - _invoiceDiscountValue)
       .clamp(0, double.infinity).toDouble();
+  double get _taxRate => _num(c.business.value?['default_tax_rate']);
+  double get _invoiceTotal =>
+      double.parse((_netBeforeTax * (1 + _taxRate / 100)).toStringAsFixed(4));
 
   @override
   void initState() {
@@ -2032,6 +2072,7 @@ class _WholesaleProInvoiceCreateScreenState
       await c.loadProducts();
       await c.loadCustomers();
       await c.loadSalesReps();
+      await c.loadBusiness();
     });
   }
 
@@ -2187,7 +2228,9 @@ class _WholesaleProInvoiceCreateScreenState
                         ),
                       ],
                     ),
-                    Text('الإجمالي ${_money(_invoiceTotal)} ر.ي',
+                    Text(_taxRate > 0
+                            ? 'الإجمالي شامل ضريبة ${_taxRate.toStringAsFixed(0)}٪: ${_money(_invoiceTotal)} ر.ي'
+                            : 'الإجمالي ${_money(_invoiceTotal)} ر.ي',
                         style: const TextStyle(
                             color: AmialColors.primary,
                             fontSize: 18,
@@ -2196,6 +2239,8 @@ class _WholesaleProInvoiceCreateScreenState
                     Row(
                       children: [
                         Expanded(child: _payChoice('cash', 'نقد')),
+                        const SizedBox(width: AmialSpacing.sm),
+                        Expanded(child: _payChoice('amial_pay', 'أميال باي')),
                         const SizedBox(width: AmialSpacing.sm),
                         Expanded(child: _payChoice('credit', 'آجل')),
                       ],
@@ -2244,21 +2289,39 @@ class _WholesaleProInvoiceCreateScreenState
       _snack(context, 'خصم الفاتورة لا يمكن أن يتجاوز إجمالي الأصناف', error: true);
       return;
     }
+    if (paymentType == 'amial_pay') {
+      await Get.to(() => AmialQrCollectScreen(
+            amount: _invoiceTotal,
+            title: 'تحصيل فاتورة جملة — أميال باي',
+            note: _notes.text.trim().isEmpty
+                ? 'تحصيل فاتورة جملة'
+                : _notes.text.trim(),
+            createPaymentRequest: c.createInvoicePaymentRequest,
+            cancelPaymentRequest: c.cancelWholesalePaymentRequest,
+            onPaid: (paidTransactionId) => _createPaidInvoice(paidTransactionId),
+          ));
+      return;
+    }
+    await _createPaidInvoice();
+  }
+
+  Future<bool> _createPaidInvoice([String? paidTransactionId]) async {
     final ok = await c.createInvoice(
       paymentType: paymentType,
+      paidTransactionId: paidTransactionId,
       discountAmount: _invoiceDiscount.text.trim(),
       salesRepId: _salesRepId,
       notes: _notes.text.trim(),
     );
-    if (!mounted) return;
+    if (!mounted) return false;
     if (ok) {
       final inv = c.currentInvoice.value;
-      _snack(context,
-          'تم إنشاء الفاتورة ${inv?['invoice_number'] ?? ''} بنجاح');
+      _snack(context, 'تم إنشاء الفاتورة ${inv?['invoice_number'] ?? ''} بنجاح');
       Get.back();
-    } else {
-      _snack(context, c.lastError.value, error: true);
+      return true;
     }
+    _snack(context, c.lastError.value, error: true);
+    return false;
   }
 
   void _selectCustomer(BuildContext context) {

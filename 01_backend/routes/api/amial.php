@@ -1160,8 +1160,16 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::post('/invoices', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'createInvoice'])
                 ->middleware(['amial.rate-limit:wholesale_invoice,200,1', 'amial.usage:sale_operation'])
                 ->name('invoices.create');
+            Route::post('/invoices/amial-payment-request', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'createInvoicePaymentRequest'])
+                ->middleware('amial.rate-limit:wholesale_invoice,200,1')
+                ->name('invoices.amial-payment-request');
             Route::post('/invoices/{id}/void', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'voidInvoice'])
                 ->where('id', '[0-9]+')->name('invoices.void');
+            Route::post('/invoices/{id}/amial-payment-request', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'createCollectionPaymentRequest'])
+                ->middleware('amial.rate-limit:wholesale_invoice,200,1')
+                ->where('id', '[0-9]+')->name('invoices.collection-amial-payment-request');
+            Route::post('/payment-requests/{id}/cancel', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'cancelWholesalePaymentRequest'])
+                ->where('id', '[0-9]+')->name('payment-requests.cancel');
 
             // Returns — طلبٌ ومراجعةٌ منفصلان؛ لا تُستعمل مرتجعات التاجر العامة.
             Route::get('/returns', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'listReturns'])->name('returns.index');

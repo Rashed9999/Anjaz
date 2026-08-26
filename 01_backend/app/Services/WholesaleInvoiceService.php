@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Models\PaymentRequest;
 use App\Models\WholesaleBusiness;
 use App\Models\WholesaleCustomer;
 use App\Models\WholesaleInvoice;
@@ -39,7 +40,8 @@ class WholesaleInvoiceService
      * ]
      * @param array $data {
      *   customer_id: int,
-     *   payment_type: cash|credit,
+     *   payment_type: cash|amial_pay|credit,
+     *   paid_transaction_id?: string,    // إلزامي لأميال باي بعد تحصيل QR فعلي
      *   sales_rep_id?: int,
      *   discount_amount?: float,           // خصم إضافي على الإجمالي
      *   tax_rate?: float,                  // افتراضياً من business
@@ -63,8 +65,12 @@ class WholesaleInvoiceService
         if (!in_array($paymentType, WholesaleInvoice::PAYMENT_TYPES, true)) {
             throw new InvalidArgumentException('نوع الدفع غير صحيح');
         }
+        $paidTransactionId = trim((string) ($data['paid_transaction_id'] ?? ''));
+        if ($paymentType === 'amial_pay' && $paidTransactionId === '') {
+            throw new InvalidArgumentException('دفع أميال باي يحتاج مرجع التحصيل الفعلي');
+        }
 
-        return DB::transaction(function () use ($merchant, $business, $items, $data, $paymentType) {
+        return DB::transaction(function () use ($merchant, $business, $items, $data, $paymentType, $paidTransactionId) {
             // 1) اقفل العميل
             $customer = WholesaleCustomer::where('id', $data['customer_id'])
                 ->where('business_id', $business->id)
@@ -144,6 +150,28 @@ class WholesaleInvoiceService
 
             $totalAmount = MoneyService::add($afterDiscount, $taxAmount);
 
+            // أميال باي ليس خياراً شكلياً. مرجع الدفع يجب أن يكون لطلب QR
+            // مكتمل، أنشئ باسم مالك التاجر (لا موظف نقطة البيع)، وبالمبلغ
+            // نفسه. وبذلك لا يستطيع عميل إرسال رقم حركة أجنبي أو إعادة
+            // استخدام حركة من فاتورة أخرى.
+            if ($paymentType === 'amial_pay') {
+                $paymentRequest = PaymentRequest::where('paid_transaction_id', $paidTransactionId)
+                    ->where('requester_user_id', $merchant->id)
+                    ->where('status', 'paid')
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$paymentRequest) {
+                    throw new RuntimeException('مرجع أميال باي غير صالح لهذه المحفظة أو لم يكتمل الدفع');
+                }
+                if (MoneyService::compare((string) $paymentRequest->amount, $totalAmount) !== 0) {
+                    throw new RuntimeException('مبلغ تحصيل أميال باي لا يطابق إجمالي الفاتورة');
+                }
+                if (WholesaleInvoice::where('paid_transaction_id', $paidTransactionId)->exists()) {
+                    throw new RuntimeException('تم ربط حركة أميال باي هذه بفاتورة مسبقاً');
+                }
+            }
+
             // 4) فحص الائتمان إن credit
             if ($paymentType === 'credit') {
                 if (!$customer->canChargeCredit((float)$totalAmount)) {
@@ -185,7 +213,7 @@ class WholesaleInvoiceService
                 'branch_id' => $data['branch_id'] ?? null, // P1-BRANCHES
                 'customer_id' => $customer->id,
                 'sales_rep_id' => $salesRep?->id,
-                'created_by_user_id' => $merchant->id,
+                'created_by_user_id' => $data['created_by_user_id'] ?? $merchant->id,
                 'invoice_date' => now()->toDateString(),
                 'due_date' => $dueDate,
                 'subtotal' => $subtotal,
@@ -193,10 +221,11 @@ class WholesaleInvoiceService
                 'tax_rate' => $taxRate,
                 'tax_amount' => $taxAmount,
                 'total_amount' => $totalAmount,
-                'paid_amount' => $paymentType === 'cash' ? $totalAmount : '0',
-                'balance_due' => $paymentType === 'cash' ? '0' : $totalAmount,
-                'status' => $paymentType === 'cash' ? 'paid' : 'issued',
+                'paid_amount' => in_array($paymentType, ['cash', 'amial_pay'], true) ? $totalAmount : '0',
+                'balance_due' => in_array($paymentType, ['cash', 'amial_pay'], true) ? '0' : $totalAmount,
+                'status' => in_array($paymentType, ['cash', 'amial_pay'], true) ? 'paid' : 'issued',
                 'payment_type' => $paymentType,
+                'paid_transaction_id' => $paymentType === 'amial_pay' ? $paidTransactionId : null,
                 'sales_rep_commission_rate' => $commissionRate,
                 'sales_rep_commission_amount' => $commissionAmount,
                 'notes' => $data['notes'] ?? null,
@@ -247,6 +276,22 @@ class WholesaleInvoiceService
                         (string)$salesRep->total_commission_earned, $commissionAmount,
                     ),
                 ]);
+            }
+
+            // إيصال الحركة الموجود مسبقاً هو وثيقة دفع أميال باي؛ نربطه
+            // بالفاتورة بعد نجاح إنشاء السجل فقط، من دون إنشاء قيد أو رصيد
+            // جديد. النقد والآجل لديهما الفاتورة نفسها لكن لا حركة محفظة.
+            if ($paymentType === 'amial_pay') {
+                app(ReceiptService::class)->attachBusinessReference(
+                    $paidTransactionId,
+                    'wholesale_invoice',
+                    (int) $invoice->id,
+                    [
+                        'merchant_vertical' => 'wholesale',
+                        'invoice_number' => $invoice->invoice_number,
+                        'payment_channel' => 'amial_pay',
+                    ],
+                );
             }
 
             return $invoice->fresh(['items', 'customer', 'salesRep']);

@@ -229,6 +229,7 @@ class WholesaleController extends GetxController implements GetxService {
 
   Future<bool> createInvoice({
     required String paymentType,
+    String? paidTransactionId,
     String? dueDate,
     String? discountAmount,
     String? taxRate,
@@ -253,6 +254,8 @@ class WholesaleController extends GetxController implements GetxService {
       'items': items,
       'customer_id': selectedCustomer.value!['id'],
       'payment_type': paymentType,
+      if (paidTransactionId != null && paidTransactionId.isNotEmpty)
+        'paid_transaction_id': paidTransactionId,
       'due_date': ?dueDate,
       if (discountAmount != null && discountAmount.isNotEmpty)
         'discount_amount': discountAmount,
@@ -280,6 +283,39 @@ class WholesaleController extends GetxController implements GetxService {
       return false;
     } finally {
       isSubmitting.value = false;
+    }
+  }
+
+  /// طلب تحصيل QR خاص بالجملة: الخادم ينشئه باسم مالك التاجر حتى عند
+  /// تشغيل الشاشة من حساب نقطة البيع.
+  Future<Map<String, dynamic>?> createInvoicePaymentRequest(
+      double amount, String? note) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.createInvoicePaymentRequest(amount, note: note);
+      if (_ok(r)) {
+        return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      }
+      lastError.value = _msg(r) ?? 'تعذّر إنشاء طلب تحصيل أميال باي';
+      return null;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return null;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  Future<bool> cancelWholesalePaymentRequest(int requestId) async {
+    try {
+      final r = await repo.cancelWholesalePaymentRequest(requestId);
+      if (_ok(r)) return true;
+      lastError.value = _msg(r) ?? 'تعذّر إلغاء طلب التحصيل';
+      return false;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return false;
     }
   }
 
@@ -366,6 +402,24 @@ class WholesaleController extends GetxController implements GetxService {
     } catch (_) {
       lastError.value = 'خطأ في الشبكة';
       return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> createCollectionPaymentRequest(
+      int invoiceId, double amount, String? note) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.createCollectionPaymentRequest(invoiceId, amount,
+          note: note);
+      if (_ok(r)) return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      lastError.value = _msg(r) ?? 'تعذّر إنشاء طلب تحصيل أميال باي';
+      return null;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return null;
     } finally {
       isSubmitting.value = false;
     }

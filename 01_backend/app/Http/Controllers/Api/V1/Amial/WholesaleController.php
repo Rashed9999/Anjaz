@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Concerns\DeniesByPlan;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
+use App\Models\PaymentRequest;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Models\WholesaleCollection;
@@ -16,9 +17,11 @@ use App\Models\WholesaleProductPrice;
 use App\Models\WholesaleSalesRep;
 use App\Models\WholesaleReturn;
 use App\Services\Merchant\MerchantPermissionService;
+use App\Services\MoneyService;
 use App\Services\WholesaleCollectionService;
 use App\Services\WholesaleInvoicePdfService;
 use App\Services\WholesaleInvoiceService;
+use App\Services\PaymentRequestService;
 use App\Services\WholesaleReportsService;
 use App\Services\WholesaleReturnService;
 use App\Services\WholesaleService;
@@ -55,6 +58,7 @@ class WholesaleController extends Controller
         private readonly WholesaleReportsService $reportsSvc,
         private readonly WholesaleReturnService $returnSvc,
         private readonly WholesaleInvoicePdfService $pdfSvc,
+        private readonly PaymentRequestService $paymentRequestSvc,
         private readonly MerchantPermissionService $perm,
     ) {}
 
@@ -541,7 +545,8 @@ class WholesaleController extends Controller
 
         $v = Validator::make($request->all(), [
             'customer_id' => 'required|integer',
-            'payment_type' => 'required|in:cash,credit',
+            'payment_type' => 'required|in:cash,amial_pay,credit',
+            'paid_transaction_id' => 'required_if:payment_type,amial_pay|nullable|string|max:64',
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|integer',
             'items.*.quantity' => 'required|numeric|min:0.001',
@@ -579,7 +584,12 @@ class WholesaleController extends Controller
             ) {
                 $inv = $this->invSvc->createInvoice(
                     $merchant, $biz, $request->input('items'),
-                    array_merge($request->all(), ['branch_id' => $branchId]),
+                    array_merge($request->all(), [
+                        'branch_id' => $branchId,
+                        // المحاسبة تعرف مالك المتجر، والمراجعة تعرف الموظف
+                        // أو مالك الحساب الذي أصدر الفاتورة فعلاً.
+                        'created_by_user_id' => $request->user()->id,
+                    ]),
                 );
 
                 $this->perm->assert($request->user(), P::WHOLESALE_INVOICE_CREATE,
@@ -595,6 +605,103 @@ class WholesaleController extends Controller
             return $this->error('FAILED', $e->getMessage(), 422);
         }
         return $this->ok(['invoice' => $inv], 'CREATED', 'تم إنشاء الفاتورة', 201);
+    }
+
+    /**
+     * ينشئ QR تحصيل جملة باسم محفظة مالك التاجر دائماً. لا نستخدم endpoint
+     * طلب المال العام هنا، لأن جلسة POS كانت ستنشئ الطلب باسم الموظف فتذهب
+     * الحصيلة إلى محفظته بدلاً من محفظة التاجر.
+     */
+    public function createInvoicePaymentRequest(Request $request): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_INVOICE_CREATE)) return $deny;
+
+        $v = Validator::make($request->all(), [
+            'amount' => 'required|numeric|min:0.01|lt:100000000',
+            'note' => 'sometimes|nullable|string|max:255',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        try {
+            $paymentRequest = $this->paymentRequestSvc->create(
+                requester: $merchant,
+                amount: (string) $request->input('amount'),
+                note: $request->input('note') ?: 'تحصيل فاتورة جملة',
+                shareMethod: 'qr',
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('INVALID_PAYMENT_REQUEST', $e->getMessage(), 422);
+        }
+
+        return $this->ok([
+            'request' => $paymentRequest,
+            'short_code' => $paymentRequest->short_code,
+        ], 'PAYMENT_REQUEST_CREATED', 'تم إنشاء طلب تحصيل أميال باي', 201);
+    }
+
+    /** ينشئ تحصيل QR لدين قائم بعد التأكد من أن المبلغ لا يتجاوز المتبقي. */
+    public function createCollectionPaymentRequest(Request $request, int $invoiceId): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_COLLECTION_RECORD,
+            $request->filled('amount') ? (string) $request->input('amount') : null)) return $deny;
+
+        $v = Validator::make($request->all(), [
+            'amount' => 'required|numeric|min:0.01|lt:100000000',
+            'note' => 'sometimes|nullable|string|max:255',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $invoice = WholesaleInvoice::where('id', $invoiceId)->where('business_id', $biz->id)->first();
+        if (!$invoice) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
+        if ($invoice->status === 'voided' || MoneyService::compare((string) $invoice->balance_due, '0') <= 0) {
+            return $this->error('INVOICE_NOT_COLLECTABLE', 'لا يوجد رصيد قابل للتحصيل في هذه الفاتورة', 422);
+        }
+        if (MoneyService::compare((string) $request->input('amount'), (string) $invoice->balance_due) > 0) {
+            return $this->error('AMOUNT_EXCEEDS_BALANCE', 'مبلغ التحصيل يتجاوز المتبقي في الفاتورة', 422);
+        }
+
+        try {
+            $paymentRequest = $this->paymentRequestSvc->create(
+                requester: $merchant,
+                amount: (string) $request->input('amount'),
+                note: $request->input('note') ?: "تحصيل فاتورة جملة {$invoice->invoice_number}",
+                shareMethod: 'qr',
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('INVALID_PAYMENT_REQUEST', $e->getMessage(), 422);
+        }
+        return $this->ok([
+            'request' => $paymentRequest,
+            'short_code' => $paymentRequest->short_code,
+        ], 'PAYMENT_REQUEST_CREATED', 'تم إنشاء طلب تحصيل أميال باي', 201);
+    }
+
+    /** إلغاء QR جملة أنشئ باسم المالك عندما تكون الجلسة لموظف نقطة بيع. */
+    public function cancelWholesalePaymentRequest(Request $request, int $requestId): JsonResponse
+    {
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $paymentRequest = PaymentRequest::where('id', $requestId)
+            ->where('requester_user_id', $merchant->id)
+            ->first();
+        if (!$paymentRequest) return $this->error('NOT_FOUND', 'طلب التحصيل غير موجود', 404);
+        try {
+            $cancelled = $this->paymentRequestSvc->cancel($merchant, $paymentRequest);
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
+        } catch (\RuntimeException $e) {
+            return $this->error('CANCEL_FAILED', $e->getMessage(), 422);
+        }
+        return $this->ok(['request' => $cancelled], 'CANCELLED', 'تم إلغاء طلب التحصيل');
     }
 
     public function voidInvoice(Request $request, int $id): JsonResponse

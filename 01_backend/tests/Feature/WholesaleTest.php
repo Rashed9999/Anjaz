@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
+use App\Models\PaymentRequest;
 use App\Models\User;
 use App\Models\WholesaleCustomer;
 use App\Models\WholesaleProduct;
@@ -160,6 +161,129 @@ class WholesaleTest extends TestCase
 
         $customer->refresh();
         $this->assertEquals('0.0000', (string)$customer->current_balance);
+    }
+
+    /** @test */
+    public function amial_pay_invoice_requires_a_paid_request_for_the_merchant_wallet_and_links_it_once(): void
+    {
+        $biz = $this->svc->getOrCreateBusiness($this->merchant);
+        $tier = $biz->priceTiers->where('code', 'wholesale')->first();
+        $product = $this->svc->addProduct($biz, ['name' => 'تحصيل محفظة', 'base_price' => '2500', 'initial_stock' => 10]);
+        $customer = $this->svc->addCustomer($biz, [
+            'full_name' => 'عميل المحفظة', 'credit_limit' => 0, 'default_tier_id' => $tier->id,
+        ]);
+        PaymentRequest::create([
+            'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
+            'short_code' => 'WHQR-1001',
+            'requester_user_id' => $this->merchant->id,
+            'amount' => '5000.0000',
+            'share_method' => 'qr',
+            'status' => 'paid',
+            'paid_transaction_id' => 'TX-WHOLESALE-1001',
+            'paid_at' => now(),
+            'expires_at' => now()->addMinutes(5),
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $invoice = $this->invSvc->createInvoice($this->merchant, $biz,
+            [['product_id' => $product->id, 'quantity' => 2]],
+            [
+                'customer_id' => $customer->id,
+                'payment_type' => 'amial_pay',
+                'paid_transaction_id' => 'TX-WHOLESALE-1001',
+            ],
+        );
+
+        $this->assertSame('amial_pay', $invoice->payment_type);
+        $this->assertSame('paid', $invoice->status);
+        $this->assertSame('5000.0000', (string) $invoice->paid_amount);
+        $this->assertSame('0.0000', (string) $invoice->balance_due);
+        $this->assertSame('TX-WHOLESALE-1001', $invoice->paid_transaction_id);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('تم ربط حركة أميال باي');
+        $this->invSvc->createInvoice($this->merchant, $biz,
+            [['product_id' => $product->id, 'quantity' => 1]],
+            [
+                'customer_id' => $customer->id,
+                'payment_type' => 'amial_pay',
+                'paid_transaction_id' => 'TX-WHOLESALE-1001',
+            ],
+        );
+    }
+
+    /** @test */
+    public function amial_pay_invoice_rejects_a_paid_request_with_a_different_amount(): void
+    {
+        $biz = $this->svc->getOrCreateBusiness($this->merchant);
+        $tier = $biz->priceTiers->where('code', 'wholesale')->first();
+        $product = $this->svc->addProduct($biz, ['name' => 'مبلغ غير مطابق', 'base_price' => '1000', 'initial_stock' => 10]);
+        $customer = $this->svc->addCustomer($biz, [
+            'full_name' => 'عميل', 'credit_limit' => 0, 'default_tier_id' => $tier->id,
+        ]);
+        PaymentRequest::create([
+            'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
+            'short_code' => 'WHQR-1002',
+            'requester_user_id' => $this->merchant->id,
+            'amount' => '999.0000',
+            'share_method' => 'qr',
+            'status' => 'paid',
+            'paid_transaction_id' => 'TX-WHOLESALE-1002',
+            'paid_at' => now(),
+            'expires_at' => now()->addMinutes(5),
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('لا يطابق إجمالي الفاتورة');
+        $this->invSvc->createInvoice($this->merchant, $biz,
+            [['product_id' => $product->id, 'quantity' => 1]],
+            [
+                'customer_id' => $customer->id,
+                'payment_type' => 'amial_pay',
+                'paid_transaction_id' => 'TX-WHOLESALE-1002',
+            ],
+        );
+    }
+
+    /** @test */
+    public function amial_pay_collection_requires_a_paid_owner_wallet_request_and_reduces_the_existing_debt(): void
+    {
+        $biz = $this->svc->getOrCreateBusiness($this->merchant);
+        $tier = $biz->priceTiers->where('code', 'wholesale')->first();
+        $product = $this->svc->addProduct($biz, ['name' => 'دين أميال', 'base_price' => '1000', 'initial_stock' => 10]);
+        $customer = $this->svc->addCustomer($biz, [
+            'full_name' => 'عميل دين', 'credit_limit' => 10000, 'default_tier_id' => $tier->id,
+        ]);
+        $invoice = $this->invSvc->createInvoice($this->merchant, $biz,
+            [['product_id' => $product->id, 'quantity' => 5]],
+            ['customer_id' => $customer->id, 'payment_type' => 'credit'],
+        );
+        PaymentRequest::create([
+            'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
+            'short_code' => 'WHQR-2001',
+            'requester_user_id' => $this->merchant->id,
+            'amount' => '2000.0000',
+            'share_method' => 'qr',
+            'status' => 'paid',
+            'paid_transaction_id' => 'TX-WHOLESALE-2001',
+            'paid_at' => now(),
+            'expires_at' => now()->addMinutes(5),
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $collection = $this->colSvc->recordCollection($this->merchant, $invoice, [
+            'amount' => '2000',
+            'payment_method' => 'amial_pay',
+            'paid_transaction_id' => 'TX-WHOLESALE-2001',
+        ]);
+
+        $this->assertSame('amial_pay', $collection->payment_method);
+        $this->assertSame('TX-WHOLESALE-2001', $collection->paid_transaction_id);
+        $invoice->refresh();
+        $customer->refresh();
+        $this->assertSame('3000.0000', (string) $invoice->balance_due);
+        $this->assertSame('3000.0000', (string) $customer->current_balance);
     }
 
     /** @test */

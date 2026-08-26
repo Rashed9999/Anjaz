@@ -62,6 +62,13 @@ class WholesaleRepo extends GetxService {
   }
   Future<Response> showInvoice(int id) => apiClient.getData('$_base/invoices/$id');
   Future<Response> createInvoice(Map<String, dynamic> data) => apiClient.postData('$_base/invoices', data);
+  Future<Response> createInvoicePaymentRequest(double amount, {String? note}) =>
+      apiClient.postData('$_base/invoices/amial-payment-request', {
+        'amount': amount.toStringAsFixed(4),
+        if (note != null && note.isNotEmpty) 'note': note,
+      });
+  Future<Response> cancelWholesalePaymentRequest(int requestId) =>
+      apiClient.postData('$_base/payment-requests/$requestId/cancel', {});
   Future<Response> voidInvoice(int id, String reason) =>
       apiClient.postData('$_base/invoices/$id/void', {'reason': reason});
 
@@ -83,6 +90,12 @@ class WholesaleRepo extends GetxService {
   // Collections
   Future<Response> recordCollection(int invoiceId, Map<String, dynamic> data) =>
       apiClient.postData('$_base/invoices/$invoiceId/collect', data);
+  Future<Response> createCollectionPaymentRequest(int invoiceId, double amount,
+          {String? note}) =>
+      apiClient.postData('$_base/invoices/$invoiceId/amial-payment-request', {
+        'amount': amount.toStringAsFixed(4),
+        if (note != null && note.isNotEmpty) 'note': note,
+      });
   Future<Response> listCollections({int? customerId}) {
     final q = <String, dynamic>{};
     if (customerId != null) q['customer_id'] = '$customerId';

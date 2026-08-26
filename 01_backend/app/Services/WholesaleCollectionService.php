@@ -5,6 +5,7 @@ namespace App\Services;
 use App\CentralLogics\Helpers;
 
 use App\Models\User;
+use App\Models\PaymentRequest;
 use App\Models\WholesaleCollection;
 use App\Models\WholesaleCustomer;
 use App\Models\WholesaleInvoice;
@@ -48,8 +49,12 @@ class WholesaleCollectionService
             || !in_array($data['payment_method'], WholesaleCollection::PAYMENT_METHODS, true)) {
             throw new InvalidArgumentException('طريقة دفع غير صحيحة');
         }
+        $paidTransactionId = trim((string) ($data['paid_transaction_id'] ?? ''));
+        if (($data['payment_method'] ?? null) === 'amial_pay' && $paidTransactionId === '') {
+            throw new InvalidArgumentException('تحصيل أميال باي يحتاج مرجع دفع فعلي');
+        }
 
-        return DB::transaction(function () use ($receiver, $invoice, $data) {
+        return DB::transaction(function () use ($receiver, $invoice, $data, $paidTransactionId) {
             // اقفل الفاتورة + العميل
             $inv = WholesaleInvoice::lockForUpdate()->find($invoice->id);
             $customer = WholesaleCustomer::lockForUpdate()->find($inv->customer_id);
@@ -70,6 +75,27 @@ class WholesaleCollectionService
                 );
             }
 
+            // لا يكفي أن يقول الموظف إن التحصيل «أميال». لا يُقبل إلا طلب
+            // QR مكتمل إلى محفظة مالك التاجر وبالمبلغ نفسه، ولا يعاد استعماله
+            // كتحصيل ثانٍ أو كفاتورة بيع أولى.
+            if ($data['payment_method'] === 'amial_pay') {
+                $paymentRequest = PaymentRequest::where('paid_transaction_id', $paidTransactionId)
+                    ->where('requester_user_id', $receiver->id)
+                    ->where('status', 'paid')
+                    ->lockForUpdate()
+                    ->first();
+                if (!$paymentRequest) {
+                    throw new RuntimeException('مرجع أميال باي غير صالح لهذه المحفظة أو لم يكتمل الدفع');
+                }
+                if (MoneyService::compare((string) $paymentRequest->amount, $amount) !== 0) {
+                    throw new RuntimeException('مبلغ تحصيل أميال باي لا يطابق مبلغ التسوية');
+                }
+                if (WholesaleInvoice::where('paid_transaction_id', $paidTransactionId)->exists()
+                    || WholesaleCollection::where('paid_transaction_id', $paidTransactionId)->exists()) {
+                    throw new RuntimeException('تم ربط حركة أميال باي هذه بتحصيل أو فاتورة مسبقاً');
+                }
+            }
+
             // أنشئ التحصيل
             $collection = WholesaleCollection::create([
                 'collection_ulid' => (string) Str::ulid(),
@@ -81,7 +107,7 @@ class WholesaleCollectionService
                 'amount' => $amount,
                 'payment_method' => $data['payment_method'],
                 'reference_number' => $data['reference_number'] ?? null,
-                'paid_transaction_id' => $data['paid_transaction_id'] ?? null,
+                'paid_transaction_id' => $data['payment_method'] === 'amial_pay' ? $paidTransactionId : null,
                 'notes' => $data['notes'] ?? null,
             ]);
 
