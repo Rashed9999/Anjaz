@@ -1429,25 +1429,17 @@ class _WholesaleProInvoiceDetailsScreenState
         centerTitle: true,
         title: const Text('تفاصيل الفاتورة'),
         actions: [
-          Obx(() => IconButton(
-                tooltip: 'تحميل PDF',
-                onPressed: c.isSubmitting.value
-                    ? null
-                    : () async {
-                        final ok = await c.downloadInvoicePdf(widget.invoiceId);
-                        // **والسياقُ المُلتقَط في الإغلاق يُفحَص بنفسه.**
-                        // `mounted` حالةُ الودجة، وهذا `context` من باني
-                        // `Obx` لا من الحالة — فقد يموت وهي حيّة.
-                        if (!mounted || ok || !context.mounted) return;
-                        _snack(context, c.lastError.value, error: true);
-                      },
+          Obx(() => TextButton.icon(
+                tooltip: 'عرض وطباعة الفاتورة PDF',
+                onPressed: c.isSubmitting.value ? null : _openPrintableInvoice,
                 icon: c.isSubmitting.value
                     ? const SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.picture_as_pdf_outlined),
+                    : const Icon(Icons.print_outlined),
+                label: const Text('طباعة'),
               )),
         ],
       ),
@@ -1481,6 +1473,23 @@ class _WholesaleProInvoiceDetailsScreenState
             ),
             children: [
               _invoiceHero(context, inv, customer),
+              const SizedBox(height: AmialSpacing.md),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  minimumSize:
+                      const Size.fromHeight(AmialSpacing.buttonHeight),
+                ),
+                onPressed: c.isSubmitting.value ? null : _openPrintableInvoice,
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                label: const Text('عرض / طباعة الفاتورة PDF'),
+              ),
+              const SizedBox(height: AmialSpacing.xs),
+              const Text(
+                'يفتح نموذجاً جاهزاً للطباعة والمشاركة؛ اختر «طباعة» من عارض PDF.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    color: AmialColors.textSecondary, fontSize: 11),
+              ),
               const SizedBox(height: AmialSpacing.md),
               _itemsCard(context, items),
               const SizedBox(height: AmialSpacing.md),
@@ -1518,6 +1527,14 @@ class _WholesaleProInvoiceDetailsScreenState
         );
       }),
     );
+  }
+
+  Future<void> _openPrintableInvoice() async {
+    final ok = await c.downloadInvoicePdf(widget.invoiceId);
+    // زرٌ ظاهر لا يكفي: إن فشل إنشاء/فتح المستند تظهر الرسالة على الشاشة
+    // نفسها بدلاً من أن يبدو «زر الطباعة» صامتاً.
+    if (!mounted || ok) return;
+    _snack(context, c.lastError.value, error: true);
   }
 
   Widget _invoiceHero(
@@ -2316,8 +2333,17 @@ class _WholesaleProInvoiceCreateScreenState
     if (!mounted) return false;
     if (ok) {
       final inv = c.currentInvoice.value;
+      final invoiceId = int.tryParse('${inv?['id'] ?? ''}');
+      if (invoiceId == null) {
+        _snack(context, 'تم إنشاء الفاتورة لكن تعذّر فتح نموذجها؛ افتحها من قائمة الفواتير.',
+            error: true);
+        Get.off(() => const WholesaleProInvoicesScreen());
+        return true;
+      }
       _snack(context, 'تم إنشاء الفاتورة ${inv?['invoice_number'] ?? ''} بنجاح');
-      Get.back();
+      // لا نعيد المستخدم إلى الشاشة السابقة: النتيجة العملية لإنشاء الفاتورة
+      // هي نموذجها، ومنه تظهر تفاصيلها وPDF وخيار الطباعة بوضوح.
+      Get.off(() => WholesaleProInvoiceDetailsScreen(invoiceId: invoiceId));
       return true;
     }
     _snack(context, c.lastError.value, error: true);
