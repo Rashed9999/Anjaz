@@ -26,6 +26,14 @@ class WholesaleRepo extends GetxService {
   Future<Response> adjustStock(int id, double newStock, String reason) =>
       apiClient.postData('$_base/products/$id/adjust-stock',
           {'new_stock': newStock, 'reason': reason});
+  Future<Response> listProductUnits(int id) =>
+      apiClient.getData('$_base/products/$id/units');
+  Future<Response> saveProductUnit(int id, Map<String, dynamic> data) =>
+      apiClient.postData('$_base/products/$id/units', data);
+  Future<Response> listProductLots(int id) =>
+      apiClient.getData('$_base/products/$id/lots');
+  Future<Response> receiveProductLot(int id, Map<String, dynamic> data) =>
+      apiClient.postData('$_base/products/$id/lots', data);
 
   // Multi-Pricing
   Future<Response> listProductPrices(int productId) =>
@@ -35,10 +43,12 @@ class WholesaleRepo extends GetxService {
           {'tier_id': tierId, 'price': price, 'min_quantity': minQty});
   /// سعرٌ إرشاديٌّ من الخادم لنفس العميل والكمية. لا يُرسل السعر من التطبيق
   /// عند إنشاء الفاتورة؛ الخادم يعيد حسابه داخل المعاملة.
-  Future<Response> quoteProduct(int productId, int customerId, double quantity) =>
+  Future<Response> quoteProduct(int productId, int customerId, double quantity,
+      {int? unitId}) =>
       apiClient.getData('$_base/products/$productId/quote', query: {
         'customer_id': '$customerId',
         'quantity': '$quantity',
+        if (unitId != null) 'unit_id': '$unitId',
       });
 
   // Customers

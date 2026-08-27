@@ -290,6 +290,22 @@ class PharmacyController extends Controller
         return $this->ok(['batch' => $batch], 'ADDED', 'تم إضافة الـ Batch', 201);
     }
 
+    public function recallBatch(Request $request, int $id): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::PHARMACY_BATCH_RECALL)) return $deny;
+        $v = Validator::make($request->all(), ['reason' => 'required|string|max:1000']);
+        if ($v->fails()) return $this->validationError($v);
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $pharmacy = $this->svc->getOrCreatePharmacy($merchant);
+        $batch = PharmacyBatch::whereHas('product', fn ($q) => $q->where('pharmacy_id', $pharmacy->id))->find($id);
+        if (!$batch) return $this->error('NOT_FOUND', 'التشغيلة غير موجودة', 404);
+        try { $recalled = $this->svc->recallBatch($batch, $request->user(), $request->input('reason')); }
+        catch (\InvalidArgumentException $e) { return $this->error('INVALID', $e->getMessage(), 422); }
+        return $this->ok(['batch' => $recalled], 'RECALLED', 'تم سحب التشغيلة ومنع بيعها');
+    }
+
     // ============ Customers ============
 
     public function listCustomers(Request $request): JsonResponse

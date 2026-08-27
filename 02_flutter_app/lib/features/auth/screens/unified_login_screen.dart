@@ -9,6 +9,7 @@ import 'package:amial_pay/features/auth/screens/amial_registration_wizard_screen
 import 'package:amial_pay/features/auth/screens/quick_receive_screen.dart';
 import 'package:amial_pay/features/forget_pin/screens/forget_pin_screen.dart';
 import 'package:amial_pay/features/language/widgets/amial_language_switch.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/images.dart';
@@ -95,6 +96,9 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
 
   AccountKind _kind = AccountKind.customer;
   bool _obscure = true;
+  // يُضبط من باب نقطة البيع فقط. لا نُنشئ مسار تسجيل عام للموظف؛ المالك
+  // يدخل بحسابه ثم يسجّل **الجهاز الحالي** من الشاشة الرسمية المقيدة بالباقة.
+  bool _continueToPosRegistration = false;
   ({String name, String phone, String kind})? _lastUser;
 
   @override
@@ -132,6 +136,15 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         _posNumCtrl.clear();
       }
     });
+  }
+
+  void _startPosRegistration() {
+    setState(() {
+      _continueToPosRegistration = true;
+      _kind = AccountKind.merchant;
+      _passwordCtrl.clear();
+    });
+    _snack('سجّل دخول مالك المتجر الآن. بعد ذلك ستفتح شاشة تسجيل هذا الجهاز.');
   }
 
   Future<void> _submit() async {
@@ -180,6 +193,11 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       phone: _phoneCtrl.text.trim(),
       kind: _kind.name,
     );
+    if (_continueToPosRegistration && _kind == AccountKind.merchant) {
+      setState(() => _continueToPosRegistration = false);
+      await Get.off(() => const MerchantPosDevicesScreen());
+      return;
+    }
     controller.navigateToHomeForRole();
   }
 
@@ -631,6 +649,23 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
                 ),
               );
             }),
+            if (_kind == AccountKind.pos) ...[
+              const SizedBox(height: AmialSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: _startPosRegistration,
+                icon: const Icon(Icons.add_to_home_screen_outlined),
+                label: const Text('تسجيل هذا الجهاز أولاً'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AmialColors.primary,
+                  side: const BorderSide(color: AmialColors.border),
+                  minimumSize:
+                      const Size.fromHeight(AmialSpacing.buttonHeight),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AmialSpacing.radiusMd),
+                  ),
+                ),
+              ),
+            ],
             if (_kind == AccountKind.customer) ...[
               const SizedBox(height: AmialSpacing.md),
               _divider(context),
@@ -830,7 +865,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           Expanded(
             child: Text(
               pos
-                  ? 'لا نعرض PIN موظف وهمياً قبل أن يدعمه الخادم. حالياً تستخدم الشاشة عقد نقطة البيع الحقيقي.'
+                  ? 'إن ظهرت رسالة «الجهاز غير مسجّل»، اضغط «تسجيل هذا الجهاز أولاً». يدخل مالك المتجر مرة واحدة ليسجّل هذا الجهاز ضمن مقاعد الباقة، ثم يعود الموظف لدخول نقطة البيع.'
                   : 'بعد الدخول يوجهك أميال إلى قطاع تجارتك الصحيح ويطبق الباقة والصلاحيات.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AmialColors.textSecondary,

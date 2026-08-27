@@ -42,7 +42,7 @@ import 'package:amial_pay/features/merchant/screens/merchant_loyalty_screen.dart
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_shift_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
-import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_excel_export_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_expenses_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
@@ -319,7 +319,7 @@ class RouteHelper {
     GetPage(name: retailRoles, page: () => const MerchantStaffScreen()),
     GetPage(name: shifts, page: () => const CashierShiftScreen()),
     GetPage(name: reportsDaily, page: () => const CashierReportScreen()),
-    GetPage(name: reportsProfit, page: () => const ProfitReportScreen()),
+    GetPage(name: reportsProfit, page: () => const FinancialTruthReportScreen()),
     GetPage(name: reports, page: () => const AmialReportsScreen()),
     GetPage(name: export, page: () => const MerchantExcelExportScreen()),
     GetPage(name: expenses, page: () => const MerchantExpensesScreen()),

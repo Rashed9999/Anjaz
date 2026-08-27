@@ -164,6 +164,39 @@ class WholesaleTest extends TestCase
     }
 
     /** @test */
+    public function unit_conversion_and_lot_fifo_are_resolved_server_side_in_the_invoice(): void
+    {
+        $biz = $this->svc->getOrCreateBusiness($this->merchant);
+        $tier = $biz->priceTiers->where('code', 'wholesale')->first();
+        $product = $this->svc->addProduct($biz, [
+            'name' => 'ماء معبأ', 'unit' => 'قطعة', 'base_price' => '10', 'initial_stock' => 0,
+        ]);
+        $carton = $this->svc->saveUnit($product, [
+            'code' => 'carton', 'name' => 'كرتون', 'factor_to_base' => '12',
+        ]);
+        $lot = $this->svc->receiveLot($product, [
+            'lot_number' => 'W-LOT-01', 'quantity' => '2', 'unit_id' => $carton->id,
+            'expiry_date' => now()->addYear()->toDateString(),
+        ]);
+        $customer = $this->svc->addCustomer($biz, [
+            'full_name' => 'عميل الكراتين', 'credit_limit' => '10000', 'default_tier_id' => $tier->id,
+        ]);
+
+        $invoice = $this->invSvc->createInvoice($this->merchant, $biz, [[
+            'product_id' => $product->id, 'unit_id' => $carton->id, 'quantity' => '1',
+        ]], ['customer_id' => $customer->id, 'payment_type' => 'credit']);
+
+        $line = $invoice->items->first();
+        $this->assertSame('12.0000', (string) $line->base_quantity);
+        $this->assertSame('120.0000', (string) $line->unit_price);
+        $this->assertSame('120.0000', (string) $invoice->total_amount);
+        $product->refresh(); $lot->refresh();
+        $this->assertSame('12.0000', (string) $product->current_stock);
+        $this->assertSame('12.0000', (string) $lot->quantity_available);
+        $this->assertCount(1, $line->lotAllocations);
+    }
+
+    /** @test */
     public function amial_pay_invoice_requires_a_paid_request_for_the_merchant_wallet_and_links_it_once(): void
     {
         $biz = $this->svc->getOrCreateBusiness($this->merchant);

@@ -27,7 +27,7 @@ import 'package:amial_pay/features/access/screens/role_based_home_screens.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/merchant/screens/offline_sales_screen.dart';
-import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/split_bill_create_screen.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
 import 'package:amial_pay/features/suppliers/screens/purchase_order_create_screen.dart';
@@ -106,8 +106,8 @@ class CapabilityScreens {
     // ── المال والتقارير ────────────────────────────────────────────
     'shift_close': () => const CashierShiftScreen(),
     'daily_reports': () => const CashierReportScreen(),
-    'profit_reports': () => const ProfitReportScreen(),
-    'advanced_reports': () => const ProfitReportScreen(),
+    'profit_reports': () => const FinancialTruthReportScreen(),
+    'advanced_reports': () => const FinancialTruthReportScreen(),
     'excel_export': () => const MerchantExcelExportScreen(),
     'expenses': () => const MerchantExpensesScreen(),
     'audit_log': () => const MerchantAuditLogScreen(),

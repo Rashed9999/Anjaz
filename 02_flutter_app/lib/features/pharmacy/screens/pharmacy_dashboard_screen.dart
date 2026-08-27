@@ -326,7 +326,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
               return ListView.builder(
                 controller: scroll,
                 itemCount: c.batches.length,
-                itemBuilder: (_, i) => _batchTile(c.batches[i]),
+                itemBuilder: (_, i) => _batchTile(product, c.batches[i]),
               );
             })),
           ]),
@@ -335,16 +335,17 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
     );
   }
 
-  Widget _batchTile(Map<String, dynamic> b) {
+  Widget _batchTile(Map<String, dynamic> product, Map<String, dynamic> b) {
     final status = b['status']?.toString() ?? '';
     final expiry = b['expiry_date']?.toString() ?? '';
     final isExpired = status == 'expired';
     final isExhausted = status == 'exhausted';
+    final isRecalled = status == 'recalled';
 
     Color cardColor = Colors.white;
     if (isExpired) {
       cardColor = Colors.red.shade50;
-    } else if (isExhausted) {
+    } else if (isExhausted || isRecalled) {
       cardColor = Colors.grey.shade100;
     }
 
@@ -353,8 +354,8 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(8)),
       child: Row(children: [
-        Icon(isExpired ? Icons.dangerous : Icons.inventory,
-            color: isExpired ? Colors.red : (isExhausted ? Colors.grey : AmialColors.primary), size: 22),
+        Icon(isRecalled ? Icons.remove_shopping_cart_outlined : (isExpired ? Icons.dangerous : Icons.inventory),
+            color: isExpired ? Colors.red : ((isExhausted || isRecalled) ? Colors.grey : AmialColors.primary), size: 22),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('#${b['batch_number']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
@@ -364,8 +365,39 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
           Text('${b['quantity_remaining']}', style: const TextStyle(fontWeight: FontWeight.bold)),
           Text('من ${b['quantity_received']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 10)),
         ]),
+        if (!isRecalled && !isExhausted) ...[
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: 'سحب التشغيلة',
+            color: AmialColors.red,
+            icon: const Icon(Icons.report_gmailerrorred_outlined),
+            onPressed: () => _recallBatch(product, b),
+          ),
+        ],
       ]),
     );
+  }
+
+  Future<void> _recallBatch(Map<String, dynamic> product, Map<String, dynamic> batch) async {
+    final reason = TextEditingController();
+    final approve = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+      title: const Text('سحب تشغيلة من البيع'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('سيُمنع بيع التشغيلة #${batch['batch_number']} فوراً وتُخصم كميتها المتبقية من المخزون المتاح. هذا الإجراء لا يُحذف من السجل.'),
+        const SizedBox(height: 12),
+        TextField(controller: reason, maxLines: 3, decoration: const InputDecoration(labelText: 'سبب السحب *', border: OutlineInputBorder())),
+      ]),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
+        FilledButton(style: FilledButton.styleFrom(backgroundColor: AmialColors.red), onPressed: () => Navigator.pop(ctx, true), child: const Text('سحب التشغيلة'))],
+    ));
+    if (approve != true || reason.text.trim().isEmpty) { reason.dispose(); return; }
+    final ok = await c.recallBatch((product['id'] as num).toInt(), (batch['id'] as num).toInt(), reason.text.trim());
+    reason.dispose();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? 'تم سحب التشغيلة ومنع بيعها' : c.lastError.value),
+      backgroundColor: ok ? Colors.green : AmialColors.red,
+    ));
   }
 
   void _addBatchDialog(Map<String, dynamic> product) {

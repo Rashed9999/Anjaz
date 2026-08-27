@@ -83,6 +83,23 @@ class PharmacyTest extends TestCase
     }
 
     /** @test */
+    public function recalled_batch_is_removed_from_saleable_stock_without_erasing_its_audit_record(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, ['trade_name' => 'دواء مسحوب', 'sale_price' => '100']);
+        $batch = $this->svc->addBatch($product, [
+            'batch_number' => 'RECALL-001', 'expiry_date' => now()->addYear()->toDateString(),
+            'quantity_received' => '20',
+        ]);
+        $recalled = $this->svc->recallBatch($batch, $this->merchant, 'تعميم سحب من المورد');
+
+        $this->assertSame('recalled', $recalled->status);
+        $this->assertSame('تعميم سحب من المورد', $recalled->recall_reason);
+        $this->assertSame($this->merchant->id, $recalled->recalled_by_user_id);
+        $product->refresh();
+        $this->assertSame('0.0000', (string) $product->current_stock);
+    }
+
+    /** @test */
     public function past_expiry_batch_is_rejected(): void
     {
         $product = $this->svc->addProduct($this->pharmacy, [

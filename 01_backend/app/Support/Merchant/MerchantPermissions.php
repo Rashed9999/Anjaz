@@ -130,6 +130,8 @@ final class MerchantPermissions
     /** **إضافةُ تشغيلةٍ استلامُ مخزونٍ بتاريخ صلاحيّة** — لا إدخالُ بيانات. */
     public const PHARMACY_BATCH_VIEW = 'pharmacy.batch.view';
     public const PHARMACY_BATCH_RECORD = 'pharmacy.batch.record';
+    /** سحب دفعة من البيع قرار سلامة، لا مجرد تعديل مخزون. */
+    public const PHARMACY_BATCH_RECALL = 'pharmacy.batch.recall';
 
     public const PHARMACY_SALE_CREATE = 'pharmacy.sale.create';
     public const PHARMACY_SALE_VIEW_ALL = 'pharmacy.sale.view_all';
@@ -313,6 +315,7 @@ final class MerchantPermissions
 
             self::PHARMACY_BATCH_VIEW => $g('الصيدليّة — التشغيلات', 'عرض التشغيلات وتواريخ الصلاحية'),
             self::PHARMACY_BATCH_RECORD => $g('الصيدليّة — التشغيلات', 'استلام تشغيلة جديدة', true),
+            self::PHARMACY_BATCH_RECALL => $g('الصيدليّة — التشغيلات', 'سحب تشغيلة ومنع بيعها', true),
 
             self::PHARMACY_SALE_CREATE => $g('الصيدليّة — البيع', 'بيع دواء'),
             self::PHARMACY_SALE_VIEW_ALL => $g('الصيدليّة — البيع', 'عرض مبيعات الجميع'),

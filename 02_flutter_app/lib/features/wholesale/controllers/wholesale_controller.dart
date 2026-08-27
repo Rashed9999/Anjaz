@@ -121,6 +121,30 @@ class WholesaleController extends GetxController implements GetxService {
       _doAndReload(() => repo.setProductPrice(productId, tierId, price, minQty),
           () => loadProducts());
 
+  Future<Map<String, dynamic>?> loadProductUnits(int productId) async {
+    try {
+      final r = await repo.listProductUnits(productId);
+      if (_ok(r)) return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      lastError.value = _msg(r) ?? 'تعذر تحميل وحدات المنتج';
+    } catch (_) { lastError.value = 'خطأ في الشبكة'; }
+    return null;
+  }
+
+  Future<Map<String, dynamic>?> loadProductLots(int productId) async {
+    try {
+      final r = await repo.listProductLots(productId);
+      if (_ok(r)) return Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      lastError.value = _msg(r) ?? 'تعذر تحميل دفعات المنتج';
+    } catch (_) { lastError.value = 'خطأ في الشبكة'; }
+    return null;
+  }
+
+  Future<bool> saveProductUnit(int productId, Map<String, dynamic> data) async =>
+      _doAndReload(() => repo.saveProductUnit(productId, data), () => loadProducts());
+
+  Future<bool> receiveProductLot(int productId, Map<String, dynamic> data) async =>
+      _doAndReload(() => repo.receiveProductLot(productId, data), () => loadProducts());
+
   // ============ Customers ============
 
   Future<void> loadCustomers({String? search, bool withBalanceOnly = false}) async {
@@ -167,7 +191,8 @@ class WholesaleController extends GetxController implements GetxService {
 
   // ============ Cart ============
 
-  Future<bool> addToCart(Map<String, dynamic> product, double qty) async {
+  Future<bool> addToCart(Map<String, dynamic> product, double qty,
+      {Map<String, dynamic>? unit}) async {
     if (selectedCustomer.value == null) {
       lastError.value = 'اختر العميل أولاً لتطبيق شريحة السعر الصحيحة';
       return false;
@@ -178,6 +203,7 @@ class WholesaleController extends GetxController implements GetxService {
         (product['id'] as num).toInt(),
         (selectedCustomer.value!['id'] as num).toInt(),
         qty,
+        unitId: unit?['id'] is num ? (unit!['id'] as num).toInt() : null,
       );
       if (_ok(r)) {
         quote = Map<String, dynamic>.from((r.body['meta']?['quote'] ?? {}) as Map);
@@ -189,14 +215,17 @@ class WholesaleController extends GetxController implements GetxService {
       lastError.value = 'تعذر الاتصال لتسعير الصنف';
       return false;
     }
-    final idx = cart.indexWhere((c) => c['product_id'] == product['id']);
-    final pricedProduct = {...product, 'quoted_unit_price': quote['unit_price']};
+    final unitId = quote['unit_id'] ?? unit?['id'];
+    final idx = cart.indexWhere((c) => c['product_id'] == product['id'] && c['unit_id'] == unitId);
+    final pricedProduct = {...product, 'quoted_unit_price': quote['unit_price'],
+      'quoted_unit': quote['unit'] ?? unit?['name'] ?? product['unit']};
     if (idx >= 0) {
       cart[idx] = {...cart[idx], 'quantity': qty, 'product': pricedProduct};
     } else {
       cart.add({
         'product_id': product['id'],
         'product': pricedProduct,
+        if (unitId != null) 'unit_id': unitId,
         'quantity': qty,
         'discount_per_unit': 0.0,
       });
@@ -205,8 +234,8 @@ class WholesaleController extends GetxController implements GetxService {
     return true;
   }
 
-  void removeFromCart(int productId) {
-    cart.removeWhere((c) => c['product_id'] == productId);
+  void removeFromCart(int productId, {dynamic unitId}) {
+    cart.removeWhere((c) => c['product_id'] == productId && c['unit_id'] == unitId);
   }
 
   void clearCart() {
@@ -245,6 +274,7 @@ class WholesaleController extends GetxController implements GetxService {
         .map((c) => {
               'product_id': c['product_id'],
               'quantity': c['quantity'],
+              if (c['unit_id'] != null) 'unit_id': c['unit_id'],
               if ((c['discount_per_unit'] ?? 0) > 0)
                 'discount_per_unit': c['discount_per_unit'],
             })

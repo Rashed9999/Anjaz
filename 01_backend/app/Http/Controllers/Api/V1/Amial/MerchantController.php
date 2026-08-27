@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Controller;
 use App\Models\PosUser;
 use App\Services\MerchantService;
+use App\Services\MerchantFinancialTruthReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -16,6 +17,7 @@ class MerchantController extends AmialApiController // AMIAL-FIX-007
 {
     public function __construct(
         private readonly MerchantService $service,
+        private readonly MerchantFinancialTruthReportService $financialTruth,
     ) {}
 
     /** POST /api/v1/amial/merchant/refund */
@@ -62,6 +64,23 @@ class MerchantController extends AmialApiController // AMIAL-FIX-007
     {
         $stats = $this->service->getDailyStats($this->resolveMerchantPos($request));
         return $this->ok($stats);
+    }
+
+    /** تقرير تشغيل موحّد: البيع والتحصيل والمحفظة ليست الرقم نفسه. */
+    public function financialReport(Request $request): JsonResponse
+    {
+        if (PosUser::where('user_id', $request->user()->id)->where('is_active', true)->exists()) {
+            return $this->error('OWNER_ONLY', 'التقرير المالي الكامل متاح لمالك المتجر فقط', 403);
+        }
+        $v = Validator::make($request->query(), ['from' => 'sometimes|date', 'to' => 'sometimes|date']);
+        if ($v->fails()) return $this->validationError($v);
+        try {
+            return $this->ok(['report' => $this->financialTruth->report(
+                $this->resolveMerchantPos($request), $request->query('from'), $request->query('to'),
+            )]);
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('INVALID_PERIOD', $e->getMessage(), 422);
+        }
     }
 
     // ============================================================

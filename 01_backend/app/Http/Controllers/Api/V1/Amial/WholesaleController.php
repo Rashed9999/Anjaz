@@ -13,6 +13,7 @@ use App\Models\WholesaleCustomer;
 use App\Models\WholesaleInvoice;
 use App\Models\WholesalePriceTier;
 use App\Models\WholesaleProduct;
+use App\Models\WholesaleProductLot;
 use App\Models\WholesaleProductPrice;
 use App\Models\WholesaleSalesRep;
 use App\Models\WholesaleReturn;
@@ -309,6 +310,71 @@ class WholesaleController extends Controller
         return $this->ok(['product' => $updated], 'ADJUSTED', 'تم تعديل المخزون');
     }
 
+    // ============ Units & Lots (server-owned wholesale stock truth) ============
+
+    public function listProductUnits(Request $request, int $id): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_PRODUCT_VIEW)) return $deny;
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $biz = $this->svc->getOrCreateBusiness($merchant);
+        $product = WholesaleProduct::where('business_id', $biz->id)->find($id);
+        if (!$product) return $this->error('NOT_FOUND', 'المنتج غير موجود', 404);
+        return $this->ok(['product' => $product, 'units' => $this->svc->listUnits($product)]);
+    }
+
+    public function saveProductUnit(Request $request, int $id): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_PRODUCT_MANAGE)) return $deny;
+        $v = Validator::make($request->all(), [
+            'code' => 'required|string|max:32', 'name' => 'required|string|max:64',
+            'factor_to_base' => 'required|numeric|gt:0', 'is_base' => 'sometimes|boolean',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $product = WholesaleProduct::where('business_id', $this->svc->getOrCreateBusiness($merchant)->id)->find($id);
+        if (!$product) return $this->error('NOT_FOUND', 'المنتج غير موجود', 404);
+        try { $unit = $this->svc->saveUnit($product, $request->all()); }
+        catch (\InvalidArgumentException $e) { return $this->error('INVALID', $e->getMessage(), 422); }
+        return $this->ok(['unit' => $unit], 'SAVED', 'تم حفظ وحدة التحويل');
+    }
+
+    public function listProductLots(Request $request, int $id): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_PRODUCT_VIEW)) return $deny;
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $product = WholesaleProduct::where('business_id', $this->svc->getOrCreateBusiness($merchant)->id)->find($id);
+        if (!$product) return $this->error('NOT_FOUND', 'المنتج غير موجود', 404);
+        return $this->ok(['product' => $product, 'lots' => WholesaleProductLot::where('product_id', $product->id)
+            ->orderByRaw('expiry_date is null')->orderBy('expiry_date')->orderBy('received_at')->get()]);
+    }
+
+    public function receiveProductLot(Request $request, int $id): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::WHOLESALE_STOCK_ADJUST)) return $deny;
+        $v = Validator::make($request->all(), [
+            'lot_number' => 'required|string|max:80', 'quantity' => 'required|numeric|gt:0',
+            'unit_id' => 'sometimes|nullable|integer', 'location' => 'sometimes|nullable|string|max:120',
+            'received_at' => 'sometimes|date', 'expiry_date' => 'sometimes|nullable|date',
+            'cost_per_unit' => 'sometimes|nullable|numeric|min:0',
+            'supplier_reference' => 'sometimes|nullable|string|max:120',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $product = WholesaleProduct::where('business_id', $this->svc->getOrCreateBusiness($merchant)->id)->find($id);
+        if (!$product) return $this->error('NOT_FOUND', 'المنتج غير موجود', 404);
+        try { $lot = $this->svc->receiveLot($product, $request->all()); }
+        catch (\Throwable $e) { return $this->error('INVALID', $e->getMessage(), 422); }
+        return $this->ok(['lot' => $lot, 'product' => $product->fresh()], 'RECEIVED', 'تم استلام الدفعة وإضافتها للمخزون', 201);
+    }
+
     // ============ Multi-Pricing ============
 
     public function listProductPrices(Request $request, int $productId): JsonResponse
@@ -385,6 +451,7 @@ class WholesaleController extends Controller
         $v = Validator::make($request->query(), [
             'customer_id' => 'required|integer',
             'quantity' => 'required|numeric|min:0.001',
+            'unit_id' => 'sometimes|nullable|integer',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -401,17 +468,26 @@ class WholesaleController extends Controller
         $tierId = $customer->default_tier_id ?? WholesalePriceTier::where('business_id', $biz->id)
             ->where('is_default', true)->where('is_active', true)->value('id');
         if (!$tierId) return $this->error('PRICE_TIER_MISSING', 'لا توجد شريحة سعر افتراضية', 422);
-        $quantity = (float) $request->query('quantity');
-        $unitPrice = \App\Services\MoneyService::normalize((string) $product->priceFor((int) $tierId, $quantity));
-        $normalizedQuantity = \App\Services\MoneyService::normalize((string) $request->query('quantity'));
+        try {
+            $unit = $this->svc->unitFor($product, $request->query('unit_id'));
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('INVALID_UNIT', $e->getMessage(), 422);
+        }
+        $quantity = \App\Services\MoneyService::normalize((string) $request->query('quantity'));
+        $baseQuantity = \App\Services\MoneyService::mul($quantity, (string) $unit->factor_to_base);
+        $basePrice = \App\Services\MoneyService::normalize((string) $product->priceFor((int) $tierId, (float) $baseQuantity));
+        $unitPrice = \App\Services\MoneyService::mul($basePrice, (string) $unit->factor_to_base);
 
         return $this->ok(['quote' => [
             'product_id' => $product->id,
             'customer_id' => $customer->id,
             'tier_id' => (int) $tierId,
-            'quantity' => $normalizedQuantity,
+            'unit_id' => $unit->id,
+            'unit' => $unit->name,
+            'quantity' => $quantity,
+            'base_quantity' => $baseQuantity,
             'unit_price' => $unitPrice,
-            'line_total' => \App\Services\MoneyService::mul($unitPrice, $normalizedQuantity),
+            'line_total' => \App\Services\MoneyService::mul($unitPrice, $quantity),
         ]]);
     }
 

@@ -53,7 +53,9 @@ class WholesaleReturnService
                     throw new InvalidArgumentException("كمية مرتجع {$line->product_name} تتجاوز المتاح للإرجاع");
                 }
                 $lineAmount = MoneyService::div(MoneyService::mul((string) $line->line_total, $qty), (string) $line->quantity);
-                $resolved[] = compact('line', 'qty', 'lineAmount');
+                $factor = (string) ($line->unit_factor ?: '1');
+                $baseQty = MoneyService::mul($qty, $factor);
+                $resolved[] = compact('line', 'qty', 'baseQty', 'factor', 'lineAmount');
                 $subtotal = MoneyService::add($subtotal, $lineAmount);
             }
 
@@ -87,6 +89,7 @@ class WholesaleReturnService
                     'return_id' => $return->id, 'invoice_item_id' => $line->id,
                     'product_id' => $line->product_id, 'product_name' => $line->product_name,
                     'unit' => $line->unit, 'quantity' => $r['qty'],
+                    'unit_factor' => $r['factor'], 'base_quantity' => $r['baseQty'],
                     'unit_price' => $line->unit_price, 'discount_per_unit' => $line->discount_per_unit,
                     'line_total' => $r['lineAmount'],
                 ]);
@@ -116,7 +119,10 @@ class WholesaleReturnService
             foreach ($ret->items as $item) {
                 if (!$item->product_id) continue;
                 $product = WholesaleProduct::lockForUpdate()->find($item->product_id);
-                if ($product) $product->update(['current_stock' => MoneyService::add((string) $product->current_stock, (string) $item->quantity)]);
+                if ($product) $product->update(['current_stock' => MoneyService::add(
+                    (string) $product->current_stock,
+                    (string) ($item->base_quantity ?: $item->quantity),
+                )]);
             }
             $newTotal = MoneyService::sub((string) $invoice->total_amount, (string) $ret->total_amount);
             $newBalance = MoneyService::sub((string) $invoice->balance_due, $credited);

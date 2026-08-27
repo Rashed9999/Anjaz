@@ -13,6 +13,8 @@ class MerchantController extends GetxController implements GetxService {
       AmialMerchantDashboardStats.empty().obs;
   final RxList<AmialMerchantTransaction> transactions =
       <AmialMerchantTransaction>[].obs;
+  final Rx<Map<String, dynamic>?> financialReport = Rx<Map<String, dynamic>?>(null);
+  final RxBool isLoadingFinancialReport = false.obs;
 
   final RxBool isLoading = false.obs;
   final RxBool isSubmitting = false.obs;
@@ -55,6 +57,25 @@ class MerchantController extends GetxController implements GetxService {
       }
     } catch (e) {
       if (kDebugMode) debugPrint('_loadDailyStats (merchant): $e');
+    }
+  }
+
+  Future<void> loadFinancialReport({String? from, String? to}) async {
+    try {
+      isLoadingFinancialReport.value = true;
+      lastError.value = '';
+      final r = await repo.financialReport(from: from, to: to);
+      if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        final meta = r.body['meta'] ?? {};
+        final report = meta is Map ? meta['report'] : null;
+        if (report is Map) financialReport.value = Map<String, dynamic>.from(report);
+      } else {
+        lastError.value = _msg(r) ?? 'تعذر تحميل التقرير المالي';
+      }
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    } finally {
+      isLoadingFinancialReport.value = false;
     }
   }
 

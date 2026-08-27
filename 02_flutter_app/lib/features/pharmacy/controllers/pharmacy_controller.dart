@@ -87,6 +87,12 @@ class PharmacyController extends GetxController implements GetxService {
         await loadProducts(); // current_stock تحدّث
       });
 
+  Future<bool> recallBatch(int productId, int batchId, String reason) async =>
+      _doAndReload(() => repo.recallBatch(batchId, reason), () async {
+        await loadBatches(productId);
+        await loadProducts();
+      });
+
   // ============ Customers ============
 
   Future<void> loadCustomers({String? search}) async {

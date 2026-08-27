@@ -28,6 +28,8 @@ class PharmacyRepo extends GetxService {
   Future<Response> listBatches(int productId) => apiClient.getData('$_base/products/$productId/batches');
   Future<Response> addBatch(int productId, Map<String, dynamic> data) =>
       apiClient.postData('$_base/products/$productId/batches', data);
+  Future<Response> recallBatch(int batchId, String reason) =>
+      apiClient.postData('$_base/batches/$batchId/recall', {'reason': reason});
 
   // Customers
   Future<Response> listCustomers({String? search}) {

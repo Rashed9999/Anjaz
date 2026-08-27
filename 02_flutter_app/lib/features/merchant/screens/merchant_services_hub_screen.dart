@@ -6,7 +6,7 @@ import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 // شاشات الخدمات
-import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_excel_export_screen.dart';
@@ -525,7 +525,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
         Icons.swap_vert, 'المجانية', () => const MerchantTransactionsScreen()),
     _Svc('profit_reports', 'تقارير الأرباح',
         'تقارير مبيعات وأرباح مفصّلة لمتجرك، بمقارنات يومية وشهرية لتعرف أداءك الحقيقي.',
-        Icons.trending_up, 'الأعمال', () => const ProfitReportScreen()),
+        Icons.trending_up, 'الأعمال', () => const FinancialTruthReportScreen()),
     _Svc('expenses', 'المصروفات والصندوق',
         'سجّل مصروفات المتجر والصندوق النثري وصنّفها، لتحسب صافي ربحك بدقّة بعد المصاريف.',
         Icons.receipt_long, 'الأعمال', () => const MerchantExpensesScreen()),

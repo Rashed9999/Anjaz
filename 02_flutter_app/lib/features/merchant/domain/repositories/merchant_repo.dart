@@ -13,6 +13,11 @@ class MerchantRepo extends GetxService {
   // ====== Profile ======
   Future<Response> getProfile() => apiClient.getData('$_customerBase/get-customer');
   Future<Response> dailyStats() => apiClient.getData('/api/v1/amial/merchant/daily-stats');
+  Future<Response> financialReport({String? from, String? to}) =>
+      apiClient.getData('/api/v1/amial/merchant/financial-report', query: {
+        if (from != null) 'from': from,
+        if (to != null) 'to': to,
+      });
   Future<Response> updateProfile(Map<String, dynamic> data) =>
       apiClient.putData('$_customerBase/update-profile', data);
   Future<Response> logout() => apiClient.postData('$_customerBase/logout', {});

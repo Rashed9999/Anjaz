@@ -1,23 +1,32 @@
-# Wholesale UI — Backend requirements not implemented in Flutter
+# Wholesale UI — contract status
 
-The approved Wholesale UI is implemented against existing server contracts. The following pieces require server contracts before the Flutter UI can make them operational. The app must not invent or locally persist financial/inventory truth for them.
+The approved Wholesale UI uses server-owned contracts. This document records
+what is implemented and the remaining server requirement; the app must not
+invent or locally persist financial/inventory truth.
 
-## 1. Unit conversion graph
+## 1. Unit conversion graph — implemented
 
-Current `WholesaleProduct` supports one `unit` string only. The UI now offers practical base units (`قطعة`, `شدة`, `درزن`, `كرتون`, `طبلية`, etc.) through that existing field.
+The server now owns `wholesale_product_units`. Every factor resolves to the
+product's canonical base unit and invoice stock movements save both the chosen
+unit and `base_quantity`. The Flutter product flow manages the conversion and
+the invoice flow requests a server quote for the chosen unit.
 
-To support conversions such as:
+For a product whose base is `قطعة`, those practical display units become:
 
-- `1 كرتون = 12 شدة`
 - `1 شدة = 12 قطعة`
+- `1 كرتون = 144 قطعة`
 
-add a server-owned model/API for product unit conversions with validation against cycles, zero/negative factors, and duplicate units. Invoice quantities and stock movements must resolve to the canonical base unit server-side.
+The supported model is intentionally a flat factor-to-base list rather than an
+arbitrary graph; this prevents cycles by construction.
 
-## 2. Expiry / batch tracking for Wholesale products
+## 2. Expiry / batch tracking for Wholesale products — implemented
 
-Current `wholesale_products` does not expose an expiry field. The expiry-alert screen therefore renders an explicit unavailable state when the server does not supply `expiry_date`/`expires_at`; it never converts absence to zero expired products.
+The server now owns `wholesale_product_lots`; products have no fake single
+expiry field. Receiving converts quantities to base units, and invoice issue
+allocates active, non-expired lots FIFO under the same transaction as stock
+deduction. The invoice stores its lot allocations for audit and reversal.
 
-Required server contract should preferably model batches/lots rather than one expiry date per SKU:
+The lot contract contains:
 
 - product_id
 - lot/batch number
@@ -43,6 +52,9 @@ For actual push/SMS/email notification preferences, add a server-owned settings 
 
 Do not make a local Flutter toggle look authoritative before this exists.
 
-## 4. Wholesale return workflow
+## 4. Wholesale return workflow — implemented
 
-The current UI opens the existing real `MerchantRefundScreen` for the `refunds` capability. If Wholesale requires a distinct merchandise-return lifecycle (requested → reviewed → accepted/rejected → stock disposition → refund/credit note), build it as a backend workflow first and then replace the generic entry.
+Wholesale now has its own request → review → approve/reject workflow. Approval
+updates inventory and the customer balance while paid amounts become an
+explicit `refund_pending`, not a fabricated cash refund. Return quantities now
+also retain the unit-to-base conversion used by the source invoice.
