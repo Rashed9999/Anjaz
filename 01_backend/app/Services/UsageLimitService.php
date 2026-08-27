@@ -200,7 +200,7 @@ class UsageLimitService
         $profile = MerchantProfile::where('user_id', $merchant->id)->first();
         if (!$profile) return A::PLAN_FREE;
 
-        $plan = $profile->subscription_plan ?? A::PLAN_FREE;
+        $plan = A::canonicalPlan($profile->subscription_plan);
 
         // فحص انتهاء — يعود لـ FREE
         if ($plan !== A::PLAN_FREE

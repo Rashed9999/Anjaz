@@ -23,11 +23,11 @@ use Illuminate\Support\Facades\Schema;
  *
  * الدخول (تبويب تاجر): رقم التاجر + الجوال + Pass@2026 — رمز PIN: 1237
  *
- *   AM-GROC-001  / 777200001  بقالة النور        (starter)
+ *   AM-GROC-001  / 777200001  بقالة النور        (business)
  *   AM-REST-002  / 777200002  مطعم الضيافة       (business)
- *   AM-PHAR-003  / 777200003  صيدلية الشفاء      (merchant_pro)
+ *   AM-PHAR-003  / 777200003  صيدلية الشفاء      (enterprise)
  *   AM-FUEL-004  / 777200004  محطة الأمل للوقود  (enterprise)
- *   AM-WHOL-005  / 777200005  النخبة للجملة      (merchant_pro)
+ *   AM-WHOL-005  / 777200005  النخبة للجملة      (enterprise)
  *
  * idempotent — يُعاد تشغيله مع كل نشر بأمان.
  */
@@ -44,7 +44,7 @@ class EnsureDemoMerchants extends Command
         [
             'phone' => '967777200001', 'f' => 'صالح', 'l' => 'النور',
             'store' => 'بقالة النور', 'number' => 'AM-GROC-001',
-            'type' => 'retail', 'plan' => 'starter',
+            'type' => 'retail', 'plan' => 'business',
             'products' => [
                 ['مياه شملان 750 مل', 'مشروبات', '6291000101', 180, 250, null, 120],
                 ['خبز توست أبيض', 'مواد غذائية', '6291000102', 900, 1200, null, 25],
@@ -66,7 +66,7 @@ class EnsureDemoMerchants extends Command
         [
             'phone' => '967777200003', 'f' => 'أمين', 'l' => 'الشفاء',
             'store' => 'صيدلية الشفاء', 'number' => 'AM-PHAR-003',
-            'type' => 'pharmacy', 'plan' => 'merchant_pro',
+            'type' => 'pharmacy', 'plan' => 'enterprise',
             'products' => [
                 ['باراسيتامول 500 ملجم', 'أدوية', '8291000301', 600, 1000, null, 200],
                 ['فيتامين سي فوّار', 'مكملات', '8291000302', 1800, 3000, 2500, 45],
@@ -97,7 +97,7 @@ class EnsureDemoMerchants extends Command
         [
             'phone' => '967777200005', 'f' => 'وليد', 'l' => 'النخبة',
             'store' => 'النخبة للتجارة بالجملة', 'number' => 'AM-WHOL-005',
-            'type' => 'wholesale', 'plan' => 'merchant_pro',
+            'type' => 'wholesale', 'plan' => 'enterprise',
             'products' => [
                 ['كرتون مياه شملان (24)', 'مشروبات', '9391000501', 4300, 5500, null, 400],
                 ['كيس دقيق السنابل 10كجم', 'مواد غذائية', '9391000502', 9500, 12000, null, 150],

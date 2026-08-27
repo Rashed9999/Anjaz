@@ -86,8 +86,8 @@ class AccessPresets
 
             // محطة وقود
             A::BIZ_FUEL => [
-                A::F_FUEL_POS, A::F_FUEL_PUMPS, A::F_FUEL_PRODUCTS,
-                A::F_FUEL_COMPANIES, A::F_FUEL_SHIFTS, A::F_DAILY_REPORTS,
+                A::F_FUEL_POS, A::F_FUEL_PUMPS, A::F_FUEL_SHIFTS,
+                A::F_DAILY_REPORTS,
                 A::F_RECEIPTS,
             ],
 
@@ -104,7 +104,7 @@ class AccessPresets
             // كانت: `F_PRODUCTS` و`F_CUSTOMERS` في التجزئة والجملة.)
             A::BIZ_PHARMACY => [
                 A::F_PHARMACY_POS, A::F_PHARMACY_PRODUCTS,
-                A::F_PHARMACY_CUSTOMERS, A::F_PHARMACY_ALERTS,
+                A::F_PHARMACY_BATCHES, A::F_PHARMACY_ALERTS,
                 A::F_DEBTS, A::F_DAILY_REPORTS, A::F_RECEIPTS,
             ],
 
@@ -126,43 +126,18 @@ class AccessPresets
     }
 
     // ============ Features لكل Subscription Plan ============
-    // وفق جدول التسعير الرسمي v1.0
+    // ثلاث باقات فقط: مجاني، أعمال، مؤسسة. نوع النشاط يحدد الانطباق؛
+    // هذه الدالة تحدد العمق المدفوع ولا تمنح قدرة قطاعية لقطاع آخر.
     public static function planFeatures(string $plan): array
     {
         return match ($plan) {
-            // FREE — أساسيات فقط (بيع سريع + QR + نقد + آجل بسيط + تقارير يوم/شهر)
-            // الحدّ: 100 عملية شهرياً، أرشيف 30 يوم
             A::PLAN_FREE => [
                 A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
             ],
-
-            // STARTER (15 SAR/شهر) — يفتح المنتجات + الباركود + المخزون
-            A::PLAN_STARTER => [
-                A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
-                A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
-                A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
-                // **دفعاتُ الصيدليّة تُباع من «البداية»** — والسجلُّ يقولها.
-                // وكانت تُمنح بـ`business_type` مجّاناً، فنُزعت من هناك؛
-                // ولو لم تُضَف هنا لصارت **بلا بابٍ إطلاقاً**: لا باقةَ
-                // تمنحها ولا نوعَ نشاط. (‏وقد وقع ذلك فعلاً وأمسكه
-                // اختباران قائمان — والانطباقُ على الصيدليّة وحدَها
-                // يفرضه `businessTypes` في السجلّ لا هذا الجدول.)
-                A::F_PHARMACY_BATCHES,
-                A::F_PROMOTIONS,
-            ],
-
-            // BUSINESS (35 SAR/شهر) — يفتح إدارة العملاء + الموردين + الموظفين
             A::PLAN_BUSINESS => [
                 A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
-                // **دفعاتُ الصيدليّة تُباع من «البداية»** — والسجلُّ يقولها.
-                // وكانت تُمنح بـ`business_type` مجّاناً، فنُزعت من هناك؛
-                // ولو لم تُضَف هنا لصارت **بلا بابٍ إطلاقاً**: لا باقةَ
-                // تمنحها ولا نوعَ نشاط. (‏وقد وقع ذلك فعلاً وأمسكه
-                // اختباران قائمان — والانطباقُ على الصيدليّة وحدَها
-                // يفرضه `businessTypes` في السجلّ لا هذا الجدول.)
-                A::F_PHARMACY_BATCHES,
                 A::F_PROMOTIONS,
                 A::F_OFFLINE_POS,
                 A::F_GIFT_CARDS,
@@ -171,52 +146,13 @@ class AccessPresets
                 A::F_CUSTOMERS, A::F_SUPPLIERS, A::F_PURCHASES,
                 A::F_PROFIT_REPORTS, A::F_EXCEL_EXPORT, A::F_ADVANCED_REPORTS,
                 A::F_EMPLOYEES, A::F_EMPLOYEE_PERMISSIONS, A::F_MULTI_POS,
-                A::F_FUEL_CARDS, A::F_FUEL_VARIANCE,
                 A::F_LOYALTY,
             ],
-
-            // MERCHANT_PRO (65 SAR/شهر) — كل ما في Business + فروع + متعدّد العملات + audit
-            A::PLAN_MERCHANT_PRO => [
-                A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
-                A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
-                A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
-                // **دفعاتُ الصيدليّة تُباع من «البداية»** — والسجلُّ يقولها.
-                // وكانت تُمنح بـ`business_type` مجّاناً، فنُزعت من هناك؛
-                // ولو لم تُضَف هنا لصارت **بلا بابٍ إطلاقاً**: لا باقةَ
-                // تمنحها ولا نوعَ نشاط. (‏وقد وقع ذلك فعلاً وأمسكه
-                // اختباران قائمان — والانطباقُ على الصيدليّة وحدَها
-                // يفرضه `businessTypes` في السجلّ لا هذا الجدول.)
-                A::F_PHARMACY_BATCHES,
-                A::F_PROMOTIONS,
-                A::F_OFFLINE_POS,
-                A::F_GIFT_CARDS,
-                A::F_SHIFT_CLOSE,
-                A::F_EXPENSES,
-                A::F_CUSTOMERS, A::F_SUPPLIERS, A::F_PURCHASES,
-                A::F_PROFIT_REPORTS, A::F_EXCEL_EXPORT, A::F_ADVANCED_REPORTS,
-                A::F_EMPLOYEES, A::F_EMPLOYEE_PERMISSIONS, A::F_MULTI_POS,
-                A::F_FUEL_CARDS, A::F_FUEL_VARIANCE,
-                A::F_LOYALTY,
-                A::F_BRANCHES, A::F_BRANCH_REPORTS,
-                A::F_MULTI_CURRENCY,
-                A::F_INSTALLMENTS,
-                A::F_AUDIT_LOG, A::F_ADVANCED_BACKUP,
-                A::F_RBAC, A::F_PHARMACY_PRESCRIPTIONS,
-                A::F_WHOLESALE_MULTI_PRICING,
-            ],
-
-            // ENTERPRISE (150 SAR/شهر) — يضيف API + corporate accounts + managers
+            // مؤسسة (99 ر.س/شهر): كل الأعمال + نمو متعدد الفروع وحوكمة مؤسسية.
             A::PLAN_ENTERPRISE => [
                 A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
-                // **دفعاتُ الصيدليّة تُباع من «البداية»** — والسجلُّ يقولها.
-                // وكانت تُمنح بـ`business_type` مجّاناً، فنُزعت من هناك؛
-                // ولو لم تُضَف هنا لصارت **بلا بابٍ إطلاقاً**: لا باقةَ
-                // تمنحها ولا نوعَ نشاط. (‏وقد وقع ذلك فعلاً وأمسكه
-                // اختباران قائمان — والانطباقُ على الصيدليّة وحدَها
-                // يفرضه `businessTypes` في السجلّ لا هذا الجدول.)
-                A::F_PHARMACY_BATCHES,
                 A::F_PROMOTIONS,
                 A::F_OFFLINE_POS,
                 A::F_GIFT_CARDS,
@@ -225,19 +161,35 @@ class AccessPresets
                 A::F_CUSTOMERS, A::F_SUPPLIERS, A::F_PURCHASES,
                 A::F_PROFIT_REPORTS, A::F_EXCEL_EXPORT, A::F_ADVANCED_REPORTS,
                 A::F_EMPLOYEES, A::F_EMPLOYEE_PERMISSIONS, A::F_MULTI_POS,
-                A::F_FUEL_CARDS, A::F_FUEL_VARIANCE,
                 A::F_LOYALTY,
                 A::F_BRANCHES, A::F_BRANCH_REPORTS,
                 A::F_MULTI_CURRENCY,
                 A::F_INSTALLMENTS,
                 A::F_AUDIT_LOG, A::F_ADVANCED_BACKUP,
-                A::F_RBAC, A::F_PHARMACY_PRESCRIPTIONS,
-                A::F_WHOLESALE_MULTI_PRICING,
+                A::F_RBAC,
                 A::F_API_ACCESS,
                 A::F_CORPORATE_ACCOUNTS, A::F_CORPORATE_CREDIT_LIMITS,
                 A::F_OPERATIONS_MANAGER, A::F_FINANCIAL_MANAGER,
             ],
 
+            default => [],
+        };
+    }
+
+    /** ميزات مدفوعة لا تنطبق إلا على قطاعها؛ لا تدخل planFeatures العامة. */
+    public static function verticalPlanFeatures(?string $type, string $plan): array
+    {
+        if ($plan === A::PLAN_FREE) {
+            return [];
+        }
+
+        return match ($type) {
+            A::BIZ_FUEL => [
+                A::F_FUEL_PRODUCTS, A::F_FUEL_COMPANIES,
+                A::F_FUEL_CARDS, A::F_FUEL_VARIANCE,
+            ],
+            A::BIZ_PHARMACY => [A::F_PHARMACY_CUSTOMERS, A::F_PHARMACY_PRESCRIPTIONS],
+            A::BIZ_WHOLESALE => [A::F_WHOLESALE_MULTI_PRICING],
             default => [],
         };
     }

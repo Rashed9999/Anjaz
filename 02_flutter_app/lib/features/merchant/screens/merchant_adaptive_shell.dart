@@ -84,16 +84,12 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
     final server = access.subscriptionPlanLabel.value?.trim();
     if (server != null && server.isNotEmpty) return server;
     switch (access.subscriptionPlan.value) {
-      case 'starter':
-        return 'STARTER';
       case 'business':
-        return 'BUSINESS';
-      case 'merchant_pro':
-        return 'MERCHANT PRO';
+        return 'الأعمال';
       case 'enterprise':
-        return 'ENTERPRISE';
+        return 'مؤسسة';
       default:
-        return 'FREE';
+        return 'مجاني';
     }
   }
 
@@ -568,12 +564,8 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
   String? _nextPlan(String current) {
     switch (current) {
       case 'free':
-        return 'starter';
-      case 'starter':
         return 'business';
       case 'business':
-        return 'merchant_pro';
-      case 'merchant_pro':
         return 'enterprise';
       default:
         return null;

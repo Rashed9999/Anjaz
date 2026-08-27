@@ -1903,11 +1903,9 @@ Color _statusTone(String status) => switch (status) {
     };
 
 String _planLabel(String code) => switch (code) {
-      'starter' => 'STARTER',
-      'business' => 'BUSINESS',
-      'merchant_pro' => 'MERCHANT PRO',
-      'enterprise' => 'ENTERPRISE',
-      _ => 'FREE',
+      'business' => 'الأعمال',
+      'enterprise' => 'مؤسسة',
+      _ => 'مجاني',
     };
 
 double _num(dynamic value) {

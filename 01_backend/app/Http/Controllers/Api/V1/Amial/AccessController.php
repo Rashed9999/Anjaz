@@ -44,7 +44,7 @@ class AccessController extends Controller
         $planInfo = null;
         $profile = MerchantProfile::where('user_id', $user->id)->first();
         if ($profile) {
-            $plan = $profile->subscription_plan ?? A::PLAN_FREE;
+            $plan = A::canonicalPlan($profile->subscription_plan);
             $expiresAt = $profile->subscription_expires_at;
 
             $isExpired = $expiresAt !== null && $expiresAt->isPast() && $plan !== A::PLAN_FREE;
@@ -157,7 +157,7 @@ class AccessController extends Controller
         $profile = \App\Models\MerchantProfile::where('user_id', $request->user()->id)->first();
         if ($profile) {
             $currentPlan = [
-                'code' => $profile->subscription_plan ?? A::PLAN_FREE,
+                'code' => A::canonicalPlan($profile->subscription_plan),
                 'expires_at' => $profile->subscription_expires_at?->toIso8601String(),
                 'extra_features' => $profile->extra_features ?? [],
             ];
