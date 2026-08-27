@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 28520)
-Total output lines: 1535
-
 <?php
 
 use App\Http\Controllers\Admin\AccountRecoveryController as AdminRecoveryController;
@@ -89,17 +86,6 @@ Route::prefix('legal-docs')->name('amial.legal-docs.')->group(function () {
 // وهي صامتةٌ لمن لا مقعدَ له ولا هو موظّفُ نقطة بيع — فالعميلُ والتاجرُ
 // يمرّان بلا أثر.
 Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
-
-    // -------- AMIAL-POS-DEVICES-010 — الأجهزة ككيان مستقل عن الموظفين --------
-    Route::prefix('merchant/pos-devices')->name('amial.merchant.pos-devices.')->group(function () {
-        $c = \App\Http\Controllers\Api\V1\Amial\PosDeviceController::class;
-        Route::get('/', [$c, 'index'])->name('index');
-        Route::post('/', [$c, 'store'])->name('store');
-        Route::post('/pair', [$c, 'pair'])->name('pair');
-        Route::post('/activation-codes', [$c, 'createActivationCode'])->name('activation-codes.store');
-        Route::patch('/{id}', [$c, 'update'])->where('id', '[0-9]+')->name('update');
-        Route::delete('/{id}', [$c, 'destroy'])->where('id', '[0-9]+')->name('destroy');
-    });
 
     // -------- AMIAL-PIN-GATE-001: تحقّق رمز المعاملات (بوّابة بعد الدخول
     // وقبل العمليات المالية في التطبيق) --------
@@ -539,7 +525,419 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
         Route::post('/verify-seller', [SafePaymentController::class, 'verifySeller'])
             ->middleware('amial.rate-limit:safe_pay_verify_seller,10,1')
             ->name('verify-seller');
-        Route::get('…8520 tokens truncated…) و٤٠٣ لنقص الدور (يذهب لمديره ليمنحه). وردُّ
+        Route::get('/evidence/{id}/file', [SafePaymentController::class, 'evidenceFile'])
+            ->where('id', '[0-9]+')->name('evidence.file');
+        Route::post('/', [SafePaymentController::class, 'create'])
+            ->middleware(['amial.zone:safe_payment_create', 'amial.rate-limit:safe_pay_create,5,1'])
+            ->name('create');
+        Route::get('/{ulid}', [SafePaymentController::class, 'show'])
+            ->where('ulid', '[A-Z0-9]{26}')->name('show');
+        // AMIAL-SAFEPAY-EVIDENCE-001 — أدلّة حقيقية (ملفات) للطرفين معاً
+        Route::post('/{ulid}/evidence', [SafePaymentController::class, 'uploadEvidence'])
+            ->where('ulid', '[A-Z0-9]{26}')
+            ->middleware('amial.rate-limit:safe_pay_evidence,20,1')->name('evidence.upload');
+        Route::get('/{ulid}/evidence', [SafePaymentController::class, 'listEvidence'])
+            ->where('ulid', '[A-Z0-9]{26}')->name('evidence.list');
+        // AMIAL-SAFEPAY-CODE-001 — تأكيد التسليم برمز المشتري
+        Route::post('/{ulid}/verify-delivery', [SafePaymentController::class, 'verifyDelivery'])
+            ->where('ulid', '[A-Z0-9]{26}')
+            ->middleware('amial.rate-limit:safe_pay_delivery,10,1')->name('verify-delivery');
+        // Seller actions
+        Route::post('/{ulid}/seller-accept', [SafePaymentController::class, 'sellerAccept'])
+            ->where('ulid', '[A-Z0-9]{26}')
+            ->middleware('amial.rate-limit:safe_pay_seller_response,10,1')->name('seller-accept');
+        Route::post('/{ulid}/seller-reject', [SafePaymentController::class, 'sellerReject'])
+            ->where('ulid', '[A-Z0-9]{26}')
+            ->middleware('amial.rate-limit:safe_pay_seller_response,10,1')->name('seller-reject');
+        Route::post('/{ulid}/seller-mark-in-delivery', [SafePaymentController::class, 'sellerMarkInDelivery'])
+            ->where('ulid', '[A-Z0-9]{26}')->name('seller-in-delivery');
+        Route::post('/{ulid}/seller-mark-delivered', [SafePaymentController::class, 'sellerMarkDelivered'])
+            ->where('ulid', '[A-Z0-9]{26}')->name('seller-delivered');
+        // Buyer actions
+        // AMIAL-ZONE-GAP-001: كان الإنشاء محروساً بـ amial.zone والتحرير بلا
+        // حارس — أي حُرس فتح الصندوق ولم يُحرس إخراج المال منه. buyer-confirm
+        // هو ما ينقل المبلغ فعلاً إلى البائع.
+        Route::post('/{ulid}/buyer-confirm', [SafePaymentController::class, 'buyerConfirm'])
+            ->middleware(['amial.zone:safe_payment_release', 'amial.rate-limit:safe_pay_confirm,5,1'])
+            ->where('ulid', '[A-Z0-9]{26}')->name('buyer-confirm');
+        Route::post('/{ulid}/buyer-cancel', [SafePaymentController::class, 'buyerCancel'])
+            ->where('ulid', '[A-Z0-9]{26}')
+            ->middleware('amial.rate-limit:safe_pay_cancel,5,1')->name('buyer-cancel');
+        Route::post('/{ulid}/buyer-dispute', [SafePaymentController::class, 'buyerDispute'])
+            ->where('ulid', '[A-Z0-9]{26}')
+            ->middleware('amial.rate-limit:safe_pay_dispute,5,1')->name('buyer-dispute');
+    });
+    // -------- AMIAL-RECIPIENT-VERIFY-001 (v2.6) --------
+    Route::prefix('transfer')->name('amial.transfer.')->middleware('amial.idempotency')->group(function () {
+        // AMIAL-PILOT-IDEM-002 — **استثناءٌ مُعلَن: هذه قراءةٌ لا حركة.**
+        // مفتاحُ التفرّد يحفظ الردَّ أربعاً وعشرين ساعة ويُعيده. فلو شمل
+        // هذه لأظهرت اسمَ مستلِمٍ قديماً بعد تغيّره — **حارسٌ يُنتج كذباً
+        // بدل أن يمنع ضرراً.** والاستثناءُ يُكتب ولا يُترك صمتاً.
+        Route::post('/verify-recipient', [RecipientVerificationController::class, 'verify'])
+            ->middleware('amial.rate-limit:verify_recipient,30,1')
+            ->withoutMiddleware('amial.idempotency')
+            ->name('verify-recipient');
+        // -------- AMIAL-TRANSFER-COOLDOWN-001 (v2.7) --------
+        Route::post('/initiate', [PendingTransferController::class, 'initiate'])
+            ->middleware(['amial.zone:send_money', 'amial.idempotency', 'amial.rate-limit:transfer_initiate,20,1'])
+            ->name('initiate');
+        Route::post('/{ulid}/cancel', [PendingTransferController::class, 'cancel'])
+            ->name('cancel');
+        Route::get('/{ulid}/status', [PendingTransferController::class, 'status'])
+            ->name('status');
+    });
+    // -------- AMIAL-REPORTS-001 (v2.11) --------
+    Route::prefix('reports')->name('amial.reports.')->group(function () {
+        Route::get('/', [ReportController::class, 'index'])->name('index');
+        Route::post('/request', [ReportController::class, 'request'])
+            ->middleware('amial.rate-limit:report_request,10,5')
+            ->name('request');
+        Route::get('/{ulid}/status', [ReportController::class, 'status'])->name('status');
+        Route::get('/{ulid}/download', [ReportController::class, 'download'])->name('download');
+    });
+    // -------- AMIAL-MERCHANT-001 (v1.7) --------
+    Route::prefix('merchant')->name('amial.merchant.')->middleware('amial.idempotency')->group(function () {
+        // ══════════════════════════════════════════════════════════
+        // AMIAL-POS-DEVICES-004 — **مقاعدُ أجهزة نقاط البيع.**
+        //
+        // `capability:multi_pos` يحمل `limit('max_pos_devices')`، فالحدُّ
+        // يُقرأ من مصدرٍ واحد. **والقراءةُ خارج البوّابة عمداً**: تاجرٌ
+        // بلغ حدَّه يجب أن **يرى أجهزتَه ليُلغي واحداً** — ولو حُرست
+        // القائمةُ لصار الحدُّ بابَ سجنٍ لا بابَ ترقية: يُمنع من الدخول
+        // ويُمنع من الإصلاح، ولا مخرجَ إلّا الدعم.
+        Route::prefix('pos-devices')->name('pos-devices.')->group(function () {
+            $c = \App\Http\Controllers\Api\V1\Amial\PosDeviceController::class;
+            Route::get('/', [$c, 'index'])->name('index');
+            // ══════════════════════════════════════════════════════
+            // **والحدُّ يُفرَض في المُسجِّل لا في وسيطٍ عامّ.**
+            //
+            // `capability:multi_pos` يحمل `limit('max_pos_devices')`،
+            // ووسيطُ القدرات يعرف «مشغولٌ ١ من ١» **ولا يعرف أيَّ جهازٍ
+            // يطرق**. فكان يقع هذا — وقِيس بالتشغيل:
+            //
+            //   تاجرٌ بلغ حدَّه ⇒ جهازُه المسجَّلُ نفسُه يُعيد الاقتران
+            //     ⇒ الوسيطُ يردّ ٤٠٢ قبل أن يُسأل «أهو جهازٌ جديد؟»
+            //       ⇒ **جهازٌ يملك مقعدَه لا يستطيع استعمالَه**
+            //
+            // وهو نفسُ العطل الذي أُصلح داخل المُسجِّل («العودةُ بالبصمة
+            // نفسِها لا تستهلك مقعداً») ثمّ أُعيد من باب المسار.
+            //
+            // **فالمُسجِّلُ وحدَه يفرض**: يعرف الهويّة، ويعدّ داخل معاملةٍ
+            // بقفلٍ على صفّ التاجر، ويردّ ٤٠٢ بالصيغة نفسِها. وهو أمتنُ
+            // من الوسيط لا أضعف: الوسيطُ يقرأ ثمّ يُمرّر — **وبين
+            // القراءة والكتابة يمرّ طلبٌ آخر**.
+            //
+            // (‏ولا بوّابةَ باقةٍ هنا: `multi_pos` أدناها «مجّاني» لأنّ
+            // جدولَ الحدود يبيع للمجّانيّ مقعداً واحداً.)
+            Route::post('/', [$c, 'store'])
+                ->middleware('amial.rate-limit:pos_device_register,10,1')
+                ->name('store');
+            Route::post('/pair', [$c, 'pair'])
+                ->middleware('amial.rate-limit:pos_device_register,10,1')
+                ->name('pair');
+            // رمزٌ يصدره المالك ويُستخدم مرةً واحدة لتسجيل جهاز الكاشير.
+            Route::post('/activation-codes', [$c, 'createActivationCode'])
+                ->middleware('amial.rate-limit:pos_device_register,10,1')
+                ->name('activation-codes.store');
+            // وتغييرُ الاسم لا يستهلك مقعداً — فلا يُسأل عن الحدّ أصلاً.
+            // **PUT وPATCH كلاهما** — عميلُ فلاتر لا يملك PATCH، وإضافةُ
+            // فعلٍ إلى العميل المشترك أوسعُ أثراً من قبولِ مرادفٍ هنا.
+            // (‏ولولا هذا لكان زرُّ «تسمية» زرّاً ميّتاً: يُضغط فلا يصل طلب.)
+            Route::match(['put', 'patch'], '/{id}', [$c, 'update'])
+                ->where('id', '[0-9]+')->name('update');
+            // **والإلغاءُ بلا حارسِ باقة** — من هبطت باقتُه يجب أن يستطيع
+            // تقليصَ أجهزته إلى الحدّ الجديد. وحراستُه تحبسه فوق الحدّ
+            // بلا سبيلٍ إلى النزول.
+            Route::delete('/{id}', [$c, 'destroy'])
+                ->where('id', '[0-9]+')->name('destroy');
+        });
+        // P1-BRANCHES — إدارة الفروع
+        Route::prefix('branches')->name('branches.')
+            ->middleware('capability:' . \App\Support\Access\AccessConstants::F_BRANCHES)
+            ->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\V1\Amial\BranchController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Api\V1\Amial\BranchController::class, 'store'])
+                ->middleware('amial.rate-limit:branch_create,10,1')->name('store');
+            Route::get('/{id}', [\App\Http\Controllers\Api\V1\Amial\BranchController::class, 'show'])
+                ->where('id', '[0-9]+')->name('show');
+            Route::put('/{id}', [\App\Http\Controllers\Api\V1\Amial\BranchController::class, 'update'])
+                ->where('id', '[0-9]+')->name('update');
+            Route::delete('/{id}', [\App\Http\Controllers\Api\V1\Amial\BranchController::class, 'destroy'])
+                ->where('id', '[0-9]+')->name('destroy');
+            Route::post('/{id}/default', [\App\Http\Controllers\Api\V1\Amial\BranchController::class, 'setDefault'])
+                ->where('id', '[0-9]+')->name('default');
+            // P1-BRANCHES — تقرير سريع لكل فرع (إجمالي البيع + عدد الفواتير)
+            Route::get('/{id}/report', [\App\Http\Controllers\Api\V1\Amial\BranchController::class, 'report'])
+                ->middleware('capability:branch_reports')
+                ->where('id', '[0-9]+')->name('report');
+        });
+        // P1-RBAC — إدارة الأدوار والصلاحيات
+        Route::prefix('rbac')->name('rbac.')->group(function () {
+            Route::get('/permissions', [\App\Http\Controllers\Api\V1\Amial\RbacController::class, 'permissions'])->name('permissions');
+            Route::get('/roles', [\App\Http\Controllers\Api\V1\Amial\RbacController::class, 'roles'])->name('roles');
+            Route::get('/pos-users/{id}/roles', [\App\Http\Controllers\Api\V1\Amial\RbacController::class, 'posUserRoles'])
+                ->where('id', '[0-9]+')->name('pos-user.roles');
+            Route::post('/pos-users/{id}/assign-role', [\App\Http\Controllers\Api\V1\Amial\RbacController::class, 'assignRole'])
+                ->where('id', '[0-9]+')->name('pos-user.assign');
+            Route::post('/pos-users/{id}/revoke-role', [\App\Http\Controllers\Api\V1\Amial\RbacController::class, 'revokeRole'])
+                ->where('id', '[0-9]+')->name('pos-user.revoke');
+        });
+        // AMIAL-MERCHANT-PAY-001 — دفع العميل للتاجر (QR/POS)
+        Route::post('/quote', [\App\Http\Controllers\Api\V1\Amial\MerchantPaymentController::class, 'quote'])
+            ->withoutMiddleware('amial.idempotency')
+            ->name('quote');
+        Route::post('/pay', [\App\Http\Controllers\Api\V1\Amial\MerchantPaymentController::class, 'pay'])
+            ->middleware(['amial.zone:merchant_payment', 'amial.idempotency', 'amial.rate-limit:merchant_pay,30,1'])
+            ->name('pay');
+        // AMIAL-SPLIT-BILL-001 — التاجر/POS ينشئ ويعرض الفواتير المقسّمة
+        Route::post('/split-bills', [\App\Http\Controllers\Api\V1\Amial\SplitBillController::class, 'create'])
+            ->middleware('amial.rate-limit:split_create,20,1')->name('split-bills.create');
+        Route::get('/split-bills/{ulid}', [\App\Http\Controllers\Api\V1\Amial\SplitBillController::class, 'show'])
+            ->name('split-bills.show');
+        // AMIAL-CASHIER-001 — كاشير التاجر (منتجات + بيع + تقرير)
+        Route::prefix('cashier')->name('cashier.')->group(function () {
+            Route::get('/products', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'products'])->name('products');
+            Route::get('/products/lookup', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'lookupBarcode'])->name('products.lookup');
+            // ══════════════════════════════════════════════════════════
+            //  AMIAL-PRODUCT-QUOTA-001 — **حدُّ الأصناف يُفرَض عند بابه.**
+            //
+            //  **الثمن الذي دُفع:** قال صاحبُ المشروع: «لا تنسَ أنّ عدد
+            //  المنتجات مرتبطٌ بالباقات». وقِيس فوُجد أنّ كلَّ شيءٍ مبنيٌّ
+            //  **إلّا الفحص**:
+            //
+            //    · `PLAN_LIMITS` تقول: مجّانيّة ٠ · ناشئة ١٠٠ · نموّ ٣٠٠ ·
+            //      ما فوقها بلا حدّ.
+            //    · `EntitlementService::usageFor` تعدّ الأصناف فعلاً.
+            //    · `evaluate()` تُرجع `LIMIT_REACHED` عند البلوغ.
+            //    · `EnsureCapability` تردّ ٤٠٢ برسالةٍ فيها المستعمَل والحدّ
+            //      وسعرُ الباقة التالية.
+            //
+            //  **وبابُ الإنشاء لا يمرّ بشيءٍ من ذلك.** فتاجرٌ في الباقة
+            //  المجّانيّة يضيف ألفَ صنف، والباقاتُ المدفوعةُ لا تبيع شيئاً
+            //  لأنّ المجّانيّة تعطي كلَّ شيء. محرّكٌ كاملٌ بلا مفتاح.
+            //
+            //  **وعلى الإنشاء وحده**: تاجرٌ بلغ ١٠٠/١٠٠ يجب أن يبقى قادراً
+            //  على تعديل صنفٍ قائمٍ وتصحيح سعره — ومنعُه عقوبةٌ لا حدّ.
+            // ══════════════════════════════════════════════════════════
+            Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'addProduct'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_PRODUCTS)
+                ->name('products.add');
+            // AMIAL-CATALOG-ADOPT-001 — **الاتّفاقُ المسبق**: يُمسح الباركودُ
+            // فيُضاف الصنفُ من الكتالوج العامّ بضغطة. **وهو بابُ إنشاءٍ
+            // فيُحرَس بحدّ الباقة نفسِه** — وإلّا صار طريقاً يلتفّ عليها.
+            Route::post('/products/adopt', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'adoptFromCatalog'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_PRODUCTS)
+                ->name('products.adopt');
+            Route::put('/products/{id}', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'updateProduct'])->name('products.update');
+            Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'recordSale'])
+                ->middleware('amial.rate-limit:cashier_sale,120,1')->name('sales');
+            Route::post('/sales/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'settleCredit'])->name('sales.settle');
+            // AMIAL-CASHIER-REFUND-001 — قائمة مبيعات اليوم (مدخل شاشة الاسترجاع)
+            Route::get('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'listSales'])->name('sales.list');
+            Route::get('/report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'report'])->name('report');
+            // AMIAL-PROFIT-001 — تقرير الربحية (إيراد/تكلفة/ربح/هامش + اتجاه + منتجات)
+            Route::get('/profit-report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'profitReport'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_PROFIT_REPORTS)
+                ->name('profit-report');
+        });
+        // AMIAL-SUPPLIERS-001 — الموردون وأوامر الشراء (تصاميم 53/57/67/68)
+        // AMIAL-ENTITLEMENTS-002 — حارسُ الباقة، ويبدأ في وضع الظلّ
+        // (‏`AMIAL_ENTITLEMENTS_ENFORCE=false`): يُكتب المنعُ ولا يقع.
+        Route::prefix('suppliers')->name('suppliers.')
+            ->middleware('capability:' . \App\Support\Access\AccessConstants::F_SUPPLIERS)
+            ->group(function () {
+            $sc = \App\Http\Controllers\Api\V1\Amial\SupplierController::class;
+            Route::get('/', [$sc, 'index'])->name('index');
+            Route::post('/', [$sc, 'store'])->name('store');
+            Route::get('/{id}', [$sc, 'show'])->where('id', '[0-9]+')->name('show');
+            Route::post('/{id}/payment', [$sc, 'payment'])
+                ->where('id', '[0-9]+')
+                ->middleware('amial.rate-limit:supplier_payment,30,1')->name('payment');
+        });
+        Route::prefix('purchase-orders')->name('purchase-orders.')
+            ->middleware('capability:' . \App\Support\Access\AccessConstants::F_PURCHASES)
+            ->group(function () {
+            $sc = \App\Http\Controllers\Api\V1\Amial\SupplierController::class;
+            Route::get('/', [$sc, 'poIndex'])->name('index');
+            Route::post('/', [$sc, 'poStore'])
+                ->middleware('amial.rate-limit:po_create,30,1')->name('store');
+            Route::get('/{id}', [$sc, 'poShow'])->where('id', '[0-9]+')->name('show');
+            Route::post('/{id}/approve', [$sc, 'poApprove'])->where('id', '[0-9]+')->name('approve');
+            Route::post('/{id}/receive', [$sc, 'poReceive'])
+                ->where('id', '[0-9]+')
+                ->middleware('amial.rate-limit:po_receive,30,1')->name('receive');
+            Route::post('/{id}/cancel', [$sc, 'poCancel'])->where('id', '[0-9]+')->name('cancel');
+        });
+        // AMIAL-CUSTOMER-CREDIT-001 — نظام ديون العملاء
+        Route::prefix('credit')->name('credit.')->group(function () {
+            Route::get('/dashboard', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'dashboard'])->name('dashboard');
+            // AMIAL-ENTITLEMENTS-006 — **الحدُّ على الفعل لا على البادئة.**
+            //
+            // `credit/*` تخدم قدرتين: `debts` **مجّانيّة** و`customers`
+            // من باقة الأعمال. فحراسةُ البادئة كلِّها كانت تُقفل دفترَ
+            // الديون في وجه كلّ تاجرٍ مجّانيّ.
+            //
+            // فالمحروسُ **إدارةُ العملاء** (قائمةٌ وإنشاءٌ وملفٌّ وكشف)،
+            // و**عملياتُ الدين تبقى مجّانيّة**: تسديدٌ ومرتجعٌ وتسوية —
+            // فمن باع بالآجل يجب أن يُحصّل دينَه مهما كانت باقتُه.
+            Route::get('/customers', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'listCustomers'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_CUSTOMERS)->name('customers');
+            Route::post('/customers', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'upsertCustomer'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_CUSTOMERS)->name('customers.upsert');
+            Route::get('/customers/{id}', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'showCustomer'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_CUSTOMERS)->name('customers.show');
+            Route::get('/customers/{id}/statement', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'statement'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_CUSTOMERS)->name('customers.statement');
+            Route::get('/customers/{id}/statement/pdf', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'statementPdf'])->name('customers.statement-pdf');
+            Route::post('/customers/{id}/payment', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'recordPayment'])
+                ->middleware('amial.rate-limit:credit_payment,60,1')->name('customers.payment');
+            Route::post('/customers/{id}/return', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'recordReturn'])->name('customers.return');
+            Route::post('/customers/{id}/adjustment', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'recordAdjustment'])->name('customers.adjustment');
+        });
+        // AMIAL-CASHIER-REFUND-001 — مرتجعات بيوع الكاشير
+        Route::prefix('cashier/refunds')->name('cashier.refunds.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\V1\Amial\CashierRefundController::class, 'index'])->name('index');
+            Route::get('/{id}', [\App\Http\Controllers\Api\V1\Amial\CashierRefundController::class, 'show'])
+                ->where('id', '[0-9]+')->name('show');
+        });
+        Route::prefix('cashier/sales')->name('cashier.sales.')->group(function () {
+            // AMIAL-RETAIL-VERTICAL-001 · المرحلة ١ — تفصيلُ البيعة سطراً سطراً
+            Route::get('/{ulid}', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'showSale'])
+                ->where('ulid', '[A-Z0-9]{26}')->name('show');
+            Route::get('/{ulid}/refundable', [\App\Http\Controllers\Api\V1\Amial\CashierRefundController::class, 'refundable'])
+                ->where('ulid', '[A-Z0-9]{26}')->name('refundable');
+            Route::post('/{ulid}/refund', [\App\Http\Controllers\Api\V1\Amial\CashierRefundController::class, 'create'])
+                ->where('ulid', '[A-Z0-9]{26}')
+                ->middleware('amial.rate-limit:cashier_refund,30,1')
+                ->name('refund');
+        });
+        // AMIAL-MERCHANT-VERIFY-001 — توثيق التاجر (§13)
+        Route::prefix('verification')->name('verification.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Api\V1\Amial\MerchantVerificationController::class, 'status'])->name('status');
+            Route::post('/', [\App\Http\Controllers\Api\V1\Amial\MerchantVerificationController::class, 'submit'])
+                ->middleware('amial.rate-limit:verification_submit,5,1')->name('submit');
+            Route::get('/document/{type}', [\App\Http\Controllers\Api\V1\Amial\MerchantVerificationController::class, 'document'])
+                ->where('type', '[a-z_]+')->name('document');
+        });
+        // AMIAL-FUEL-001 — قطاع محطات الوقود
+        Route::prefix('fuel')->name('fuel.')->group(function () {
+            // Station
+            Route::get('/station', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'getStation'])->name('station.show');
+            Route::post('/station', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'upsertStation'])->name('station.upsert');
+            // Pumps
+            Route::get('/pumps', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listPumps'])->name('pumps.index');
+            Route::post('/pumps', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addPump'])->name('pumps.add');
+            Route::put('/pumps/{id}', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'updatePump'])
+                ->where('id', '[0-9]+')->name('pumps.update');
+            Route::post('/pumps/{id}/link-products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'linkPumpToProducts'])
+                ->where('id', '[0-9]+')->name('pumps.link');
+            // Products + Prices
+            Route::get('/products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listProducts'])->name('products.index');
+            // AMIAL-PRODUCT-QUOTA-002 — **البابُ الرابع.** كان بلا حدٍّ
+            // إطلاقاً بينما إخوتُه الثلاثة محروسة — والباقةُ لا تُباع بحدٍّ
+            // يلتفّ عليه من يفتح محطّة.
+            Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addProduct'])
+                ->middleware('amial.usage:add_product')->name('products.add');
+            Route::get('/price-history', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'priceHistory'])->name('price-history');
+            Route::put('/products/{id}/price', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'updateProductPrice'])
+                ->where('id', '[0-9]+')->name('products.price');
+            // Sales (الجوهر)
+            Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'recordSale'])
+                ->middleware(['amial.rate-limit:fuel_sale,300,1', 'amial.usage:sale_operation'])
+                ->name('sales.record');
+            Route::get('/sales', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listSales'])->name('sales.index');
+            Route::get('/sales/{ulid}', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'showSale'])
+                ->where('ulid', '[A-Z0-9]{26}')->name('sales.show');
+            Route::get('/dashboard', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'dashboard'])->name('dashboard');
+            // Company Accounts
+            Route::get('/companies', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listCompanies'])->name('companies.index');
+            Route::post('/companies', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addCompany'])->name('companies.add');
+            Route::post('/companies/{id}/payment', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'recordCompanyPayment'])
+                ->where('id', '[0-9]+')->name('companies.payment');
+            // Cards (AMIAL-FUEL-CARDS-001)
+            Route::get('/companies/{id}/cards', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listCards'])
+                ->middleware('capability:fuel_cards')
+                ->where('id', '[0-9]+')->name('companies.cards.index');
+            Route::post('/companies/{id}/cards', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addCard'])
+                ->middleware('capability:fuel_cards')
+                ->where('id', '[0-9]+')->name('companies.cards.add');
+            Route::put('/companies/{id}/cards/{cardId}', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'updateCard'])
+                ->middleware('capability:fuel_cards')
+                ->where(['id' => '[0-9]+', 'cardId' => '[0-9]+'])->name('companies.cards.update');
+            // Shifts (AMIAL-FUEL-002)
+            Route::get('/shifts/current', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'currentShift'])->name('shifts.current');
+            Route::post('/shifts/open', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'openShift'])->name('shifts.open');
+            Route::post('/shifts/{id}/close', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'closeShift'])
+                ->where('id', '[0-9]+')->name('shifts.close');
+            Route::get('/shifts', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listShifts'])->name('shifts.index');
+            Route::get('/shifts/{id}', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'showShift'])
+                ->where('id', '[0-9]+')->name('shifts.show');
+            // Variance Records
+            Route::get('/variances', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listVarianceRecords'])->name('variances.index');
+            // Receipt PDF
+            Route::get('/sales/{ulid}/receipt', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'downloadReceipt'])
+                ->where('ulid', '[A-Z0-9]{26}')->name('sales.receipt');
+            // ══ AMIAL-FUEL-VERTICAL-001 · المراحل ١–٧ ══════════════════
+            //
+            // وكلُّ فعلٍ خلفَه صلاحيّةٌ تُفحص في المتحكّم بنطاقها وحدّها —
+            // إخفاءُ الزرّ ليس أماناً.
+            $FV = \App\Http\Controllers\Api\V1\Amial\FuelVerticalController::class;
+            // مركز العمليّات — الحالةُ الآن في نداءٍ واحد
+            Route::get('/ops', [$FV, 'operationsCenter'])->name('ops');
+            // الخزّانات والمسدسات
+            Route::get('/tanks', [$FV, 'tanks'])->name('tanks.index');
+            Route::post('/tanks', [$FV, 'addTank'])->name('tanks.add');
+            Route::post('/tanks/{id}/dip', [$FV, 'recordDip'])
+                ->where('id', '[0-9]+')->name('tanks.dip');
+            Route::post('/pumps/{pumpId}/nozzles', [$FV, 'addNozzle'])
+                ->where('pumpId', '[0-9]+')->name('nozzles.add');
+            Route::post('/nozzles/{id}/tank', [$FV, 'linkNozzleToTank'])
+                ->where('id', '[0-9]+')->name('nozzles.link-tank');
+            // التوريدات
+            Route::get('/deliveries', [$FV, 'deliveries'])->name('deliveries.index');
+            Route::post('/deliveries', [$FV, 'receiveDelivery'])->name('deliveries.receive');
+            Route::post('/deliveries/{id}/verify', [$FV, 'verifyDelivery'])
+                ->where('id', '[0-9]+')->name('deliveries.verify');
+            Route::post('/deliveries/{id}/post', [$FV, 'postDelivery'])
+                ->where('id', '[0-9]+')->name('deliveries.post');
+            Route::post('/suppliers', [$FV, 'addSupplier'])->name('suppliers.add');
+            // مصالحة المخزون الرطب
+            Route::get('/tanks/{id}/reconciliation', [$FV, 'reconciliationPreview'])
+                ->middleware('capability:fuel_variance')
+                ->where('id', '[0-9]+')->name('recon.preview');
+            Route::post('/tanks/{id}/reconcile', [$FV, 'reconcile'])
+                ->middleware('capability:fuel_variance')
+                ->where('id', '[0-9]+')->name('recon.run');
+            Route::get('/stock-variances', [$FV, 'variances'])
+                ->middleware('capability:fuel_variance')->name('recon.index');
+            Route::post('/stock-variances/{id}/resolve', [$FV, 'resolveVariance'])
+                ->middleware('capability:fuel_variance')
+                ->where('id', '[0-9]+')->name('recon.resolve');
+            // الأسعار — اقتراحٌ ثمّ اعتماد
+            Route::post('/prices/propose', [$FV, 'proposePrice'])->name('prices.propose');
+            Route::get('/prices/pending', [$FV, 'pendingPrices'])->name('prices.pending');
+            Route::post('/prices/{id}/approve', [$FV, 'approvePrice'])
+                ->where('id', '[0-9]+')->name('prices.approve');
+            // نقد الوردية
+            Route::get('/shifts/{id}/cash', [$FV, 'shiftCash'])
+                ->where('id', '[0-9]+')->name('shifts.cash');
+            Route::post('/shifts/{id}/cash', [$FV, 'recordCashMovement'])
+                ->where('id', '[0-9]+')->name('shifts.cash.add');
+            // الأدوار والصلاحيّات
+            Route::get('/me/permissions', [$FV, 'myPermissions'])->name('me.permissions');
+            Route::get('/roles', [$FV, 'roles'])->name('roles.index');
+            Route::post('/roles/seed', [$FV, 'seedRoles'])->name('roles.seed');
+        });
+        // ══ AMIAL-RETAIL-VERTICAL-001 · المراحل ٢–٩ ════════════════════
+        //
+        // وكلُّ فعلٍ خلفَه صلاحيّةٌ تُفحص في المتحكّم بنطاقها وحدّها —
+        // إخفاءُ الزرّ ليس أماناً.
+        Route::prefix('retail')->name('retail.')->group(function () {
+            $RV = \App\Http\Controllers\Api\V1\Amial\RetailVerticalController::class;
+            // AMIAL-ENTITLEMENTS-001 — **الباقة تُفحص هنا، والدور في المتحكّم**.
+            //
+            // ورقمان مختلفان لبابين مختلفين: ٤٠٢ لنقص الباقة (يذهب لصاحب
+            // المتجر ليرقّي) و٤٠٣ لنقص الدور (يذهب لمديره ليمنحه). وردُّ
             // ٤٠٣ على نقص الباقة يُرسل التاجر يبحث عن دورٍ لن يجده.
 
             // مركز العمليّات — الحالةُ كلُّها في نداءٍ واحد
