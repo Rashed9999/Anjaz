@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:amial_pay/common/widgets/vertical_state_view.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/entitlements/capability_screens.dart';
 import 'package:amial_pay/features/entitlements/controllers/entitlements_controller.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_owner_console_screen.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
@@ -39,10 +41,17 @@ class MerchantCapabilityHubScreen extends StatefulWidget {
 class _MerchantCapabilityHubScreenState
     extends State<MerchantCapabilityHubScreen> {
   EntitlementsController get c => Get.find<EntitlementsController>();
+  AccessController? get _access => Get.isRegistered<AccessController>()
+      ? Get.find<AccessController>()
+      : null;
+
+  bool get _wrongFuelSection =>
+      _access?.isFuel == true && !widget.groups.contains('الوقود');
 
   @override
   void initState() {
     super.initState();
+    if (_wrongFuelSection) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (c.manifest.value == null && !c.isLoading.value) {
         c.load();
@@ -58,6 +67,8 @@ class _MerchantCapabilityHubScreenState
 
   @override
   Widget build(BuildContext context) {
+    if (_wrongFuelSection) return const FuelOwnerConsoleScreen();
+
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(

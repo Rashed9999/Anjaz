@@ -16,7 +16,7 @@ import 'package:amial_pay/features/requested_money/screens/incoming_requests_scr
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amial_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
 import 'package:amial_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_owner_console_screen.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
 import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
 import 'package:amial_pay/features/plans/screens/my_usage_screen.dart';
@@ -314,7 +314,7 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
                     color: Colors.teal, onTap: () => Get.to(() => const MerchantVerificationScreen())),
               if (access.has('fuel_pos'))
                 _serviceCard(icon: Icons.local_gas_station, label: 'محطة وقود', subtitle: 'كاشير متخصّص',
-                    color: const Color(0xFF1B5E20), onTap: () => Get.to(() => const FuelStationDashboardScreen())),
+                    color: const Color(0xFF1B5E20), onTap: () => Get.to(() => const FuelOwnerConsoleScreen())),
               if (access.has('pharmacy_pos'))
                 _serviceCard(icon: Icons.local_pharmacy, label: 'الصيدلية', subtitle: 'بيع + Batches',
                     color: const Color(0xFF7B1FA2), onTap: () => Get.to(() => const PharmacyDashboardScreen())),

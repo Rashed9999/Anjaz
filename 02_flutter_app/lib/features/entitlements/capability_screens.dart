@@ -4,7 +4,7 @@ import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.
 import 'package:amial_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amial_pay/features/corporate/screens/corporate_accounts_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_ops_center_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_owner_console_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_tanks_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_variances_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
@@ -116,7 +116,7 @@ class CapabilityScreens {
     'api_access': () => const MerchantApiKeysScreen(),
 
     // ── أصنافُ التجّار ─────────────────────────────────────────────
-    'fuel_pos': () => const FuelStationDashboardScreen(),
+    'fuel_pos': () => const FuelOwnerConsoleScreen(),
     'fuel_pumps': () => const FuelTanksScreen(),
     'fuel_variance': () => const FuelVariancesScreen(),
     'fuel_cards': () => const FuelOpsCenterScreen(),

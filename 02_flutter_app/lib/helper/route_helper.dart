@@ -61,7 +61,7 @@ import 'package:amial_pay/features/retail/screens/retail_wastes_screen.dart';
 import 'package:amial_pay/features/suppliers/screens/suppliers_screen.dart';
 import 'package:amial_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amial_pay/features/reports/screens/amial_reports_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_owner_console_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_tanks_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_variances_screen.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
@@ -328,7 +328,7 @@ class RouteHelper {
     GetPage(name: branches, page: () => const BranchesManagementScreen()),
     GetPage(name: currencies, page: () => const MerchantCurrenciesScreen()),
     GetPage(name: installments, page: () => const MerchantInstallmentsScreen()),
-    GetPage(name: fuel, page: () => const FuelStationDashboardScreen()),
+    GetPage(name: fuel, page: () => const FuelOwnerConsoleScreen()),
     GetPage(name: fuelTanks, page: () => const FuelTanksScreen()),
     GetPage(name: fuelVariances, page: () => const FuelVariancesScreen()),
     GetPage(name: pharmacy, page: () => const PharmacyDashboardScreen()),
