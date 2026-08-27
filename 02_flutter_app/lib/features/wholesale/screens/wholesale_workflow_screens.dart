@@ -345,7 +345,37 @@ class _WholesaleProSalesRepsScreenState extends State<WholesaleProSalesRepsScree
     final saved = await c.addSalesRep({'full_name': name.text.trim(), 'phone': phone.text.trim(), 'default_commission_rate': rate.text.trim().isEmpty ? '0' : rate.text.trim()});
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(saved ? 'تم إضافة المندوب' : c.lastError.value), backgroundColor: saved ? AmialColors.success : AmialColors.red));
   }
-  @override Widget build(BuildContext context) => Scaffold(backgroundColor: AmialColors.background, appBar: AppBar(title: const Text('مندوبي المبيعات'), centerTitle: true), floatingActionButton: FloatingActionButton.extended(onPressed: _add, icon: const Icon(Icons.person_add_alt), label: const Text('مندوب جديد')), body: Obx(() => RefreshIndicator(onRefresh: c.loadSalesReps, child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.fromLTRB(16, 12, 16, 90), children: [if (c.salesReps.isEmpty) const _EmptyState(icon: Icons.badge_outlined, text: 'لا يوجد مندوبون'), ...c.salesReps.map((x) => Card(child: ListTile(leading: const CircleAvatar(child: Icon(Icons.badge_outlined)), title: Text('${x['full_name'] ?? '—'}'), subtitle: Text('${x['phone'] ?? ''}'), trailing: Text('عمولة ${x['default_commission_rate'] ?? 0}%')))]))));
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AmialColors.background,
+      appBar: AppBar(title: const Text('مندوبي المبيعات'), centerTitle: true),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _add,
+        icon: const Icon(Icons.person_add_alt),
+        label: const Text('مندوب جديد'),
+      ),
+      body: Obx(() => RefreshIndicator(
+        onRefresh: c.loadSalesReps,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 90),
+          children: [
+            if (c.salesReps.isEmpty)
+              const _EmptyState(icon: Icons.badge_outlined, text: 'لا يوجد مندوبون'),
+            ...c.salesReps.map((x) => Card(
+              child: ListTile(
+                leading: const CircleAvatar(child: Icon(Icons.badge_outlined)),
+                title: Text('${x['full_name'] ?? '—'}'),
+                subtitle: Text('${x['phone'] ?? ''}'),
+                trailing: Text('عمولة ${x['default_commission_rate'] ?? 0}%'),
+              ),
+            )),
+          ],
+        ),
+      )),
+    );
+  }
 }
 
 class WholesaleProSalesRepsReportScreen extends StatefulWidget {

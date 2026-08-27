@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 43155)
-Total output lines: 4036
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -908,38 +905,142 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
                     style: TextStyle(fontWeight: FontWeight.w800)),
                 const SizedBox(height: AmialSpacing.xs),
                 Wrap(
-                  spacing:…23155 tokens truncated…        const _SurfaceState(icon: Icons.group_off_outlined, title: 'لا يوجد مندوبون نشطون',
-                    message: 'أضف مندوباً عند الحاجة ثم ستظهر نتائجه في هذا التقرير.'),
-              ...reps.asMap().entries.map((entry) {
-                final rep = entry.value as Map;
-                final metrics = rep['period'] is Map ? rep['period'] as Map : const {};
-                final allTime = rep['all_time'] is Map ? rep['all_time'] as Map : const {};
-                return Container(
-                  margin: const EdgeInsets.only(bottom: AmialSpacing.sm),
-                  padding: const EdgeInsets.all(AmialSpacing.md),
-                  decoration: BoxDecoration(color: AmialColors.cardSurface,
-                      borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-                      border: Border.all(color: AmialColors.border)),
-                  child: Row(children: [
-                    CircleAvatar(backgroundColor: AmialColors.primary.withValues(alpha: 0.10),
-                      child: Text('${entry.key + 1}', style: const TextStyle(color: AmialColors.primary, fontWeight: FontWeight.w900))),
+                  spacing: AmialSpacing.xs,
+                  runSpacing: AmialSpacing.xs,
+                  children: units
+                      .map((u) => ChoiceChip(
+                            label: Text(u),
+                            selected: unit == u,
+                            selectedColor:
+                                AmialColors.primary.withValues(alpha: 0.12),
+                            side: BorderSide(
+                                color: unit == u
+                                    ? AmialColors.primary
+                                    : AmialColors.border),
+                            onSelected: (_) => setSheet(() => unit = u),
+                          ))
+                      .toList(),
+                ),
+                const SizedBox(height: AmialSpacing.sm),
+                Text(
+                  'الوحدة الأساسية هي التي سيُقاس بها مخزون هذا المنتج في النظام.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AmialColors.textMuted,
+                      ),
+                ),
+                const SizedBox(height: AmialSpacing.md),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _Field(stock, 'المخزون الابتدائي',
+                          Icons.inventory_outlined,
+                          number: true,
+                          enabled: product == null),
+                    ),
                     const SizedBox(width: AmialSpacing.sm),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text('${rep['full_name'] ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w900)),
-                      Text('${metrics['invoices_count'] ?? 0} فاتورة • عمولة معلقة ${_money(allTime['pending_commission'])} ر.ي',
-                          style: const TextStyle(color: AmialColors.textSecondary, fontSize: 11)),
-                    ])),
-                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text('${_money(metrics['total_sales'])} ر.ي', style: const TextStyle(color: AmialColors.primary, fontWeight: FontWeight.w900)),
-                      Text('عمولة ${_money(metrics['total_commission'])}', style: const TextStyle(color: AmialColors.success, fontSize: 11)),
-                    ]),
-                  ]),
-                );
-              }),
-            ],
+                    Expanded(
+                      child: _Field(low, 'حد التنبيه قرب النفاد *',
+                          Icons.notification_important_outlined,
+                          number: true),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.all(AmialSpacing.sm),
+                  decoration: BoxDecoration(
+                    color: AmialColors.warningSurface,
+                    borderRadius: BorderRadius.circular(AmialSpacing.radiusMd),
+                  ),
+                  child: const Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.notifications_active_outlined,
+                          color: AmialColors.warning),
+                      SizedBox(width: AmialSpacing.xs),
+                      Expanded(
+                        child: Text(
+                          'عند بلوغ المخزون هذا الحد سيظهر المنتج في «تنبيهات المخزون» إذا كانت الميزة متاحة في باقتك.',
+                          style: TextStyle(
+                              color: AmialColors.warning, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AmialSpacing.md),
+                _Field(description, 'الوصف (اختياري)', Icons.notes_rounded,
+                    maxLines: 3),
+                const SizedBox(height: AmialSpacing.md),
+                Obx(() => FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AmialColors.primary,
+                        foregroundColor: AmialColors.cardSurface,
+                        minimumSize:
+                            const Size.fromHeight(AmialSpacing.buttonHeight),
+                      ),
+                      onPressed: c.isSubmitting.value
+                          ? null
+                          : () async {
+                              if (name.text.trim().isEmpty ||
+                                  _num(price.text) <= 0) {
+                                _snack(context,
+                                    'أدخل اسم المنتج وسعر بيع أكبر من صفر.',
+                                    error: true);
+                                return;
+                              }
+                              final data = <String, dynamic>{
+                                'name': name.text.trim(),
+                                if (sku.text.trim().isNotEmpty)
+                                  'sku': sku.text.trim(),
+                                if (barcode.text.trim().isNotEmpty)
+                                  'barcode': barcode.text.trim(),
+                                if (manufacturer.text.trim().isNotEmpty)
+                                  'manufacturer': manufacturer.text.trim(),
+                                'unit': unit,
+                                'base_price': price.text.trim(),
+                                if (cost.text.trim().isNotEmpty)
+                                  'cost_price': cost.text.trim(),
+                                'low_stock_threshold':
+                                    int.tryParse(low.text.trim()) ?? 10,
+                                if (product == null)
+                                  'initial_stock': stock.text.trim().isEmpty
+                                      ? '0'
+                                      : stock.text.trim(),
+                                if (description.text.trim().isNotEmpty)
+                                  'description': description.text.trim(),
+                              };
+                              final ok = product == null
+                                  ? await c.addProduct(data)
+                                  : await c.updateProduct(
+                                      (product['id'] as num).toInt(), data);
+                              // **وسياقٌ فرعيٌّ يُفحَص بنفسه.** `mounted` حالةُ الودجة، و`sheetContext` سياقُ ورقةٍ قد تُغلَق أثناء الانتظار — فـNavigator.pop عليه بعدها يرمي أو يُغلق الصفحةَ تحته.
+                              if (!mounted || !sheetContext.mounted) return;
+                              if (ok) {
+                                Navigator.pop(sheetContext);
+                                _snack(context,
+                                    product == null
+                                        ? 'تمت إضافة المنتج'
+                                        : 'تم تحديث المنتج');
+                              } else {
+                                _snack(context, c.lastError.value, error: true);
+                              }
+                            },
+                      icon: c.isSubmitting.value
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AmialColors.cardSurface),
+                            )
+                          : const Icon(Icons.save_outlined),
+                      label: Text(product == null ? 'حفظ المنتج' : 'حفظ التعديل'),
+                    )),
+              ],
+            ),
           ),
-        );
-      }),
+        ),
+      ),
     );
   }
 }
