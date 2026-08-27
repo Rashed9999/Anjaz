@@ -5,6 +5,7 @@ namespace App\Services\Merchant;
 use App\Models\Merchant\MerchantRole;
 use App\Models\Merchant\MerchantRolePermission;
 use App\Models\Merchant\MerchantUserRole;
+use App\Models\MerchantProfile;
 use App\Models\User;
 use App\Support\Merchant\MerchantPermissions as P;
 use DomainException;
@@ -40,6 +41,17 @@ class MerchantPermissionService
      */
     public function merchantIdFor(User $user): int
     {
+        // ملف التاجر هو تعريفُ المالك، لا صفّ وظيفة. قد يبقى لصاحب
+        // المنشأة ربطٌ قديم في `merchant_user_roles` أو `pos_users` من
+        // تجربة/استيراد سابقة؛ تقديم ذلك الربط على ملفّه يجعله موظفاً في
+        // منشأته بلا دور، فتُبنى لوحة الوقود فارغة رغم أنّه المالك الحقيقي.
+        //
+        // نتحقق منه أولاً: الموظف لا يملك MerchantProfile باسمه، أمّا
+        // التاجر الذي يملك ملفاً فلا يجوز أن يفقد ملكيته بسبب ربطٍ تابع.
+        if (MerchantProfile::where('user_id', $user->id)->exists()) {
+            return (int) $user->id;
+        }
+
         $viaRole = MerchantUserRole::where('user_id', $user->id)
             ->where('is_active', true)->value('merchant_user_id');
 

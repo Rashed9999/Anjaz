@@ -8,6 +8,16 @@ import 'package:amial_pay/features/merchant/screens/merchant_capability_hub_scre
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/features/setting/screens/profile_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_companies_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_deliveries_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_ops_center_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_prices_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_roles_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_settings_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_shifts_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_tanks_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/images.dart';
@@ -144,72 +154,7 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
                       selected: true,
                       onTap: () => Navigator.of(context).pop(),
                     ),
-                    _item(
-                      context,
-                      icon: Icons.point_of_sale_outlined,
-                      label: 'البيع',
-                      onTap: () => _openHub(
-                        context,
-                        title: 'البيع',
-                        subtitle: 'عمليات البيع والتحصيل والمرتجعات حسب باقتك.',
-                        groups: const ['البيع'],
-                        icon: Icons.point_of_sale_outlined,
-                      ),
-                    ),
-                    _item(
-                      context,
-                      icon: Icons.inventory_2_outlined,
-                      label: 'المنتجات والمخزون',
-                      onTap: () => _openHub(
-                        context,
-                        title: 'المنتجات والمخزون',
-                        subtitle:
-                            'الأصناف والباركود والمخزون والموردون والمواقع — يظهر المتاح والمقفل بسببه الحقيقي.',
-                        groups: const ['الأصناف', 'المخزون'],
-                        icon: Icons.inventory_2_outlined,
-                      ),
-                    ),
-                    _item(
-                      context,
-                      icon: Icons.groups_2_outlined,
-                      label: 'العملاء والفريق',
-                      onTap: () => _openHub(
-                        context,
-                        title: 'العملاء والفريق',
-                        subtitle:
-                            'العملاء والموظفون والورديات والأدوار والأجهزة حسب صلاحيات الحساب وباقته.',
-                        groups: const ['الناس'],
-                        icon: Icons.groups_2_outlined,
-                      ),
-                    ),
-                    _item(
-                      context,
-                      icon: Icons.analytics_outlined,
-                      label: 'التقارير والمالية',
-                      onTap: () => _openHub(
-                        context,
-                        title: 'التقارير والمالية',
-                        subtitle:
-                            'التقارير والمصروفات والتدقيق والعملات والنسخ الاحتياطي بلا خلط بين غير المتاح والصفر.',
-                        groups: const ['التقارير'],
-                        icon: Icons.analytics_outlined,
-                      ),
-                    ),
-                    _item(
-                      context,
-                      icon: Icons.apps_rounded,
-                      label: 'خدمات نشاطي',
-                      onTap: verticalGroups.isEmpty
-                          ? () => _open(context, const MyCapabilitiesScreen())
-                          : () => _openHub(
-                                context,
-                                title: 'خدمات $businessLabel',
-                                subtitle:
-                                    'تظهر هنا خدمات نشاطك فقط؛ الباقة تحدد عمق المزايا ولا تغيّر نوع النشاط.',
-                                groups: verticalGroups,
-                                icon: _businessIcon(),
-                              ),
-                    ),
+                    ..._activityItems(context, businessLabel, verticalGroups),
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: AmialSpacing.xs),
                       child: Divider(color: AmialColors.border),
@@ -264,6 +209,150 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
         }),
       ),
     );
+  }
+
+  /// محطّة الوقود ليست متجراً عاماً. القائمة العامة كانت تقود «البيع» إلى
+  /// مجموعة entitlement اسمها «البيع» (الفارغة لحساب الوقود) وتعرض مسارات
+  /// مخزون وعملاء لا تخصّ محطة الوقود. لهذه المحطة مسارات تشغيل حقيقية،
+  /// لذلك نعرضها مباشرةً بدلاً من مركز عام لا يطابق قطاعها.
+  List<Widget> _activityItems(
+    BuildContext context,
+    String businessLabel,
+    List<String> verticalGroups,
+  ) {
+    if (access.businessType.value == 'fuel') {
+      return [
+        _item(
+          context,
+          icon: Icons.local_gas_station_rounded,
+          label: 'بيع الوقود',
+          onTap: () => _open(context, const FuelSaleScreen()),
+        ),
+        _item(
+          context,
+          icon: Icons.dashboard_rounded,
+          label: 'تشغيل المضخات والخزانات',
+          onTap: () => _open(context, const FuelOpsCenterScreen()),
+        ),
+        _item(
+          context,
+          icon: Icons.propane_tank_outlined,
+          label: 'الخزانات والقياسات',
+          onTap: () => _open(context, const FuelTanksScreen()),
+        ),
+        _item(
+          context,
+          icon: Icons.local_shipping_outlined,
+          label: 'توريدات الوقود',
+          onTap: () => _open(context, const FuelDeliveriesScreen()),
+        ),
+        _item(
+          context,
+          icon: Icons.access_time_rounded,
+          label: 'الورديات وسجل البيع',
+          onTap: () => _open(context, const FuelShiftsScreen()),
+        ),
+        _item(
+          context,
+          icon: Icons.price_change_outlined,
+          label: 'أسعار الوقود',
+          onTap: () => _open(context, const FuelPricesScreen()),
+        ),
+        _item(
+          context,
+          icon: Icons.business_outlined,
+          label: 'حسابات الشركات والبطاقات',
+          onTap: () => _open(context, const FuelCompaniesScreen()),
+        ),
+        _item(
+          context,
+          icon: Icons.receipt_long_outlined,
+          label: 'فواتير ومبيعات الوقود',
+          onTap: () => _open(context, const FuelSalesHistoryScreen()),
+        ),
+        _item(
+          context,
+          icon: Icons.manage_accounts_outlined,
+          label: 'فريق المحطة وصلاحياته',
+          onTap: () => _open(context, const FuelRolesScreen()),
+        ),
+        _item(
+          context,
+          icon: Icons.settings_outlined,
+          label: 'إعدادات المحطة',
+          onTap: () => _open(context, const FuelSettingsScreen()),
+        ),
+      ];
+    }
+
+    return [
+      _item(
+        context,
+        icon: Icons.point_of_sale_outlined,
+        label: 'البيع',
+        onTap: () => _openHub(
+          context,
+          title: 'البيع',
+          subtitle: 'عمليات البيع والتحصيل والمرتجعات حسب باقتك.',
+          groups: const ['البيع'],
+          icon: Icons.point_of_sale_outlined,
+        ),
+      ),
+      _item(
+        context,
+        icon: Icons.inventory_2_outlined,
+        label: 'المنتجات والمخزون',
+        onTap: () => _openHub(
+          context,
+          title: 'المنتجات والمخزون',
+          subtitle:
+              'الأصناف والباركود والمخزون والموردون والمواقع — يظهر المتاح والمقفل بسببه الحقيقي.',
+          groups: const ['الأصناف', 'المخزون'],
+          icon: Icons.inventory_2_outlined,
+        ),
+      ),
+      _item(
+        context,
+        icon: Icons.groups_2_outlined,
+        label: 'العملاء والفريق',
+        onTap: () => _openHub(
+          context,
+          title: 'العملاء والفريق',
+          subtitle:
+              'العملاء والموظفون والورديات والأدوار والأجهزة حسب صلاحيات الحساب وباقته.',
+          groups: const ['الناس'],
+          icon: Icons.groups_2_outlined,
+        ),
+      ),
+      _item(
+        context,
+        icon: Icons.analytics_outlined,
+        label: 'التقارير والمالية',
+        onTap: () => _openHub(
+          context,
+          title: 'التقارير والمالية',
+          subtitle:
+              'التقارير والمصروفات والتدقيق والعملات والنسخ الاحتياطي بلا خلط بين غير المتاح والصفر.',
+          groups: const ['التقارير'],
+          icon: Icons.analytics_outlined,
+        ),
+      ),
+      _item(
+        context,
+        icon: Icons.apps_rounded,
+        label: 'خدمات نشاطي',
+        onTap: verticalGroups.isEmpty
+            ? () => _open(context, const MyCapabilitiesScreen())
+            : () => _openHub(
+                  context,
+                  title: 'خدمات $businessLabel',
+                  subtitle:
+                      'تظهر هنا خدمات نشاطك فقط؛ الباقة تحدد عمق المزايا ولا تغيّر نوع النشاط.',
+                  groups: verticalGroups,
+                  icon: _businessIcon(),
+                ),
+      ),
+    ];
   }
 
   Widget _header(BuildContext context, String businessLabel, String expiry) {
