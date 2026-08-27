@@ -50,19 +50,25 @@ class WholesaleFlutterPolicyGuardTest extends TestCase
             $this->assertStringContainsString($guard, $src,
                 "زر/فعل حساس بلا حارس Flutter: {$guard}");
         }
+
+        // تحصيل أميال يفتح QR ثم يمرر الحركة المدفوعة؛ لا يقبل مرجعاً
+        // يكتبه الموظف لتحصيلٍ لم يحدث.
+        $this->assertStringContainsString('AmialQrCollectScreen', $src);
+        $this->assertStringContainsString("'paid_transaction_id': transactionId", $src);
     }
 
     /** @test */
-    public function wholesale_dashboard_does_not_advertise_fake_return_or_fake_multi_pricing_ui(): void
+    public function wholesale_dashboard_exposes_only_the_real_return_workflow(): void
     {
         $src = file_get_contents(base_path(
             '../02_flutter_app/lib/features/wholesale/screens/wholesale_policy_screens.dart'
         ));
 
-        // المرتجع الحالي العام ليس دورة مرتجع جملة، وواجهة التسعير القديمة
-        // كانت SnackBar يحيل إلى مكان آخر. لا نبيعهما كبطاقتين تعملان.
+        // لا نعيد استعمال مرتجع التاجر العام: هذا طلب مرتبط بفاتورة جملة
+        // ثم مراجعة واعتماد مستقلان.
         $this->assertStringNotContainsString('MerchantRefundScreen', $src);
-        $this->assertStringNotContainsString("action: 'price.view'", $src);
+        $this->assertStringContainsString("action: 'return.view'", $src);
+        $this->assertStringContainsString("access.allows('return.request')", $src);
     }
 
     /** @test */

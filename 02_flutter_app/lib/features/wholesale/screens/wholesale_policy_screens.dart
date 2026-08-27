@@ -3,9 +3,11 @@ import 'package:get/get.dart';
 
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
+import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_access_controller.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
 import 'package:amial_pay/features/wholesale/screens/wholesale_pro_screens.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_workflow_screens.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 
@@ -208,6 +210,9 @@ class _WholesalePolicyDashboardScreenState
       (label: 'المنتجات', icon: Icons.inventory_2_outlined, action: 'product.view', page: () => const WholesalePolicyProductsScreen()),
       (label: 'العملاء', icon: Icons.groups_2_outlined, action: 'customer.view', page: () => const WholesalePolicyCustomersScreen()),
       (label: 'تقادم الديون', icon: Icons.analytics_outlined, action: 'report.view', page: () => const WholesalePolicyAgingScreen()),
+      (label: 'أداء المندوبين', icon: Icons.leaderboard_outlined, action: 'report.view', page: () => const WholesaleProSalesRepsReportScreen()),
+      (label: 'إدارة المندوبين', icon: Icons.badge_outlined, action: 'rep.view', page: () => const WholesaleProSalesRepsScreen()),
+      (label: 'مرتجعات الجملة', icon: Icons.assignment_return_outlined, action: 'return.view', page: () => const WholesaleProReturnsScreen()),
       (label: 'تنبيهات المخزون', icon: Icons.notifications_active_outlined, action: 'stock_alert.view', page: () => const WholesalePolicyStockAlertsScreen()),
       (label: 'صلاحية المنتجات', icon: Icons.event_busy_outlined, action: 'expiry.view', page: () => const WholesalePolicyExpiryScreen()),
     ];
@@ -562,6 +567,14 @@ class _WholesalePolicyInvoiceDetailsScreenState
                     label: const Text('إبطال الفاتورة'),
                   ),
                 ],
+                if (active && access.allows('return.request')) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => Get.to(() => WholesaleProReturnRequestScreen(invoice: inv)),
+                    icon: const Icon(Icons.assignment_return_outlined),
+                    label: const Text('طلب مرتجع'),
+                  ),
+                ],
               ],
             ),
           ),
@@ -614,6 +627,33 @@ class _WholesalePolicyInvoiceDetailsScreenState
                   final value = double.tryParse(amount.text.trim()) ?? 0;
                   if (value <= 0 || value > max) {
                     _snack(context, 'المبلغ غير صحيح', true);
+                    return;
+                  }
+                  // «أميال» ليس رقم مرجع يكتبه الموظف: نفتح QR باسم
+                  // محفظة المالك، ثم نسجل التحصيل فقط بعد حركة مدفوعة.
+                  if (method == 'amial_pay') {
+                    if (sheet.mounted) Navigator.pop(sheet);
+                    await Get.to(() => AmialQrCollectScreen(
+                          amount: value,
+                          title: 'تحصيل دين جملة — أميال باي',
+                          createPaymentRequest: (amount, note) =>
+                              c.createCollectionPaymentRequest(
+                                  widget.invoiceId, amount, note),
+                          cancelPaymentRequest:
+                              c.cancelWholesalePaymentRequest,
+                          onPaid: (transactionId) async {
+                            final settled = await c.recordCollection(
+                              widget.invoiceId,
+                              {
+                                'amount': value,
+                                'payment_method': 'amial_pay',
+                                'paid_transaction_id': transactionId,
+                              },
+                            );
+                            if (settled && mounted) await _load();
+                            return settled;
+                          },
+                        ));
                     return;
                   }
                   final ok = await c.recordCollection(widget.invoiceId, {

@@ -94,18 +94,18 @@ class WholesaleAccessPolicyTest extends TestCase
     }
 
     /** @test */
-    public function starter_opens_catalog_and_stock_but_invoice_create_waits_for_customer_depth(): void
+    public function business_opens_the_complete_wholesale_sales_flow(): void
     {
-        $m = $this->merchant(A::PLAN_STARTER);
+        $m = $this->merchant(A::PLAN_BUSINESS);
 
-        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'product.create'));
-        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'product.update'));
-        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'stock_alert.view'));
-        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'stock.adjust'));
-
-        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'customer.manage'));
-        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'invoice.create'));
-        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'report.view'));
+        foreach ([
+            'product.create', 'product.update', 'stock.adjust', 'unit.manage',
+            'lot.receive', 'stock_alert.view', 'customer.manage', 'invoice.create',
+            'report.view', 'rep.manage', 'return.request', 'price.view', 'price.set',
+            'tier.manage',
+        ] as $action) {
+            $this->assertSame(Policy::AVAILABLE, $this->state($m, $action), $action);
+        }
     }
 
     /** @test */
@@ -113,21 +113,17 @@ class WholesaleAccessPolicyTest extends TestCase
     {
         $m = $this->merchant(A::PLAN_BUSINESS);
 
-        foreach (['product.create', 'customer.manage', 'invoice.create', 'report.view', 'export', 'rep.manage'] as $action) {
+        foreach (['product.create', 'customer.manage', 'invoice.create', 'report.view', 'export', 'rep.manage', 'price.view', 'price.set', 'tier.manage'] as $action) {
             $this->assertSame(Policy::AVAILABLE, $this->state($m, $action), $action);
         }
-
-        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'price.view'));
-        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'price.set'));
-        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'tier.manage'));
     }
 
     /** @test */
-    public function merchant_pro_opens_multi_pricing(): void
+    public function enterprise_keeps_the_same_wholesale_depth_without_artificially_hiding_business_features(): void
     {
-        $m = $this->merchant(A::PLAN_MERCHANT_PRO);
+        $m = $this->merchant(A::PLAN_ENTERPRISE);
 
-        foreach (['price.view', 'price.set', 'tier.manage'] as $action) {
+        foreach (['price.view', 'price.set', 'tier.manage', 'invoice.create', 'report.view'] as $action) {
             $this->assertSame(Policy::AVAILABLE, $this->state($m, $action), $action);
         }
     }
@@ -184,12 +180,20 @@ class WholesaleAccessPolicyTest extends TestCase
             ['GET', "$base/products"], ['POST', "$base/products"],
             ['PUT', "$base/products/12"],
             ['POST', "$base/products/12/adjust-stock"],
+            ['GET', "$base/products/12/units"], ['POST', "$base/products/12/units"],
+            ['GET', "$base/products/12/lots"], ['POST', "$base/products/12/lots"],
+            ['GET', "$base/products/12/quote"],
             ['GET', "$base/products/12/prices"], ['POST', "$base/products/12/prices"],
             ['GET', "$base/customers"], ['POST', "$base/customers"],
             ['PUT', "$base/customers/7"],
             ['GET', "$base/invoices"], ['POST', "$base/invoices"],
             ['GET', "$base/invoices/3"], ['GET', "$base/invoices/3/pdf"],
             ['POST', "$base/invoices/3/void"], ['POST', "$base/invoices/3/collect"],
+            ['POST', "$base/invoices/amial-payment-request"],
+            ['POST', "$base/invoices/3/amial-payment-request"],
+            ['POST', "$base/payment-requests/17/cancel"],
+            ['GET', "$base/returns"], ['POST', "$base/invoices/3/returns"],
+            ['POST', "$base/returns/7/resolve"],
             ['GET', "$base/collections"],
             ['GET', "$base/sales-reps"], ['POST', "$base/sales-reps"],
             ['GET', "$base/reports/aging"],

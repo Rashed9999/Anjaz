@@ -11,6 +11,7 @@ import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_workflow_screens.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/images.dart';
