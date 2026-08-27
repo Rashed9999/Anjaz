@@ -347,20 +347,25 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
           color: full ? AmialColors.red : AmialColors.border,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.devices, color: full ? AmialColors.red : AmialColors.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
+          Row(children: [
+            Icon(Icons.devices, color: full ? AmialColors.red : AmialColors.primary),
+            const SizedBox(width: 12),
+            Expanded(child: Text(
               _unlimited
                   ? 'المقاعد المستعملة: $_used (بلا حدّ في باقتك)'
                   : 'المقاعد المستعملة: $_used من $_max',
               style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+            )),
+            if (full) const Text('ممتلئ', style: TextStyle(color: AmialColors.red)),
+          ]),
+          const SizedBox(height: 6),
+          const Text(
+            'هذا جهاز تشغيل فقط: لا يملك حساب دخول أو محفظة. أضف حساب الموظف من شاشة «الموظفون وحساباتهم».',
+            style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
           ),
-          if (full)
-            const Text('ممتلئ', style: TextStyle(color: AmialColors.red)),
         ],
       ),
     );

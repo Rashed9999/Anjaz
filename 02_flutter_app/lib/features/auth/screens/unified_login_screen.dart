@@ -42,7 +42,7 @@ extension _KindMeta on AccountKind {
   String get label => switch (this) {
         AccountKind.customer => 'العميل',
         AccountKind.merchant => 'التاجر',
-        AccountKind.pos => 'نقطة البيع',
+        AccountKind.pos => 'حساب الموظف',
       };
 
   IconData get icon => switch (this) {
@@ -54,7 +54,7 @@ extension _KindMeta on AccountKind {
   String get title => switch (this) {
         AccountKind.customer => 'مرحباً بك في أميال باي',
         AccountKind.merchant => 'إدارة أعمالك بنمو وثقة',
-        AccountKind.pos => 'نقطة بيع جاهزة للعمل',
+        AccountKind.pos => 'دخول موظف على جهاز نقطة بيع مُفعّل',
       };
 
   String get subtitle => switch (this) {
@@ -63,19 +63,19 @@ extension _KindMeta on AccountKind {
         AccountKind.merchant =>
           'دخول آمن إلى حساب متجرك، العمليات والتقارير.',
         AccountKind.pos =>
-          'دخول تشغيلي مخصص لنقطة البيع دون كشف حساب المالك.',
+          'حساب موظف بصلاحياته؛ الجهاز يُفعّله المالك بشكل مستقل.',
       };
 
   String get formTitle => switch (this) {
         AccountKind.customer => 'تسجيل الدخول',
         AccountKind.merchant => 'دخول التاجر',
-        AccountKind.pos => 'دخول نقطة البيع',
+        AccountKind.pos => 'دخول الموظف',
       };
 
   String get submitLabel => switch (this) {
         AccountKind.customer => 'تسجيل الدخول',
         AccountKind.merchant => 'دخول التاجر',
-        AccountKind.pos => 'فتح نقطة البيع',
+        AccountKind.pos => 'دخول الموظف',
       };
 }
 
@@ -172,7 +172,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           merchantNumber: _merchantNumCtrl.text.trim(),
           phone: _phoneCtrl.text.trim(),
           password: _passwordCtrl.text,
-          posNumber: _posNumCtrl.text.trim(),
+          employeeCode: _posNumCtrl.text.trim(),
         );
         break;
     }
@@ -570,10 +570,10 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             if (_kind == AccountKind.pos) ...[
               _field(
                 controller: _posNumCtrl,
-                label: 'رقم نقطة البيع',
-                hint: 'POS-000123',
-                icon: Icons.point_of_sale_outlined,
-                validator: _required('أدخل رقم نقطة البيع'),
+                label: 'رمز الموظف',
+                hint: 'EMP-000123',
+                icon: Icons.badge_outlined,
+                validator: _required('أدخل رمز الموظف'),
               ),
               const SizedBox(height: AmialSpacing.sm),
             ],
@@ -654,7 +654,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
               OutlinedButton.icon(
                 onPressed: _startPosRegistration,
                 icon: const Icon(Icons.add_to_home_screen_outlined),
-                label: const Text('تسجيل هذا الجهاز أولاً'),
+                label: const Text('تفعيل جهاز نقطة البيع'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AmialColors.primary,
                   side: const BorderSide(color: AmialColors.border),
