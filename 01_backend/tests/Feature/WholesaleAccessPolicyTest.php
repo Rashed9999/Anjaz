@@ -1,0 +1,218 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\MerchantProfile;
+use App\Models\PosUser;
+use App\Models\User;
+use App\Services\Merchant\MerchantPermissionService;
+use App\Services\Vertical\VerticalBootstrapService;
+use App\Services\Wholesale\WholesaleAccessPolicyService as Policy;
+use App\Support\Access\AccessConstants as A;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+
+/** AMIAL-WHOLESALE-ACCESS-001 — الباقة + الدور + تغطية كل endpoint. */
+class WholesaleAccessPolicyTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private function merchant(string $plan): User
+    {
+        $m = User::factory()->create([
+            'type' => 3,
+            'role' => A::ROLE_MERCHANT,
+            'verification_level' => A::VERIFICATION_PREMIUM,
+            'is_kyc_verified' => 1,
+        ]);
+
+        MerchantProfile::create([
+            'user_id' => $m->id,
+            'business_type' => A::BIZ_WHOLESALE,
+            'subscription_plan' => $plan,
+            'verification_status' => 'verified',
+        ]);
+
+        app(VerticalBootstrapService::class)->ensureFor($m);
+
+        return $m->refresh();
+    }
+
+    private function staff(User $merchant, string $roleCode): User
+    {
+        // role=pos صريح حتى يرث Business Type/Plan من صاحب المنشأة ولا
+        // يُفسَّر كتاجر مستقل بلا MerchantProfile.
+        $u = User::factory()->create(['type' => 3, 'role' => 'pos']);
+
+        PosUser::create([
+            'merchant_user_id' => $merchant->id,
+            'user_id' => $u->id,
+            'pos_number' => 'W-' . $u->id,
+            'is_active' => true,
+            'permissions' => [],
+        ]);
+
+        $role = DB::table('merchant_roles')
+            ->where('merchant_user_id', $merchant->id)
+            ->where('code', $roleCode)
+            ->first();
+        $this->assertNotNull($role, "دور الجملة {$roleCode} غير موجود");
+
+        DB::table('merchant_user_roles')->insert([
+            'merchant_user_id' => $merchant->id,
+            'user_id' => $u->id,
+            'merchant_role_id' => $role->id,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $u->refresh();
+    }
+
+    private function state(User $user, string $action): string
+    {
+        return (string) app(Policy::class)->state($user, $action)['state'];
+    }
+
+    /** @test */
+    public function free_wholesale_keeps_history_but_cannot_create_catalog_dependent_invoice(): void
+    {
+        $m = $this->merchant(A::PLAN_FREE);
+
+        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'product.view'));
+        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'customer.view'));
+        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'invoice.view'));
+        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'collection.record'));
+
+        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'product.create'));
+        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'customer.manage'));
+        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'invoice.create'));
+        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'report.view'));
+        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'stock_alert.view'));
+    }
+
+    /** @test */
+    public function starter_opens_catalog_and_stock_but_invoice_create_waits_for_customer_depth(): void
+    {
+        $m = $this->merchant(A::PLAN_STARTER);
+
+        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'product.create'));
+        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'product.update'));
+        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'stock_alert.view'));
+        $this->assertSame(Policy::AVAILABLE, $this->state($m, 'stock.adjust'));
+
+        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'customer.manage'));
+        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'invoice.create'));
+        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'report.view'));
+    }
+
+    /** @test */
+    public function business_is_the_first_plan_that_can_complete_current_invoice_flow(): void
+    {
+        $m = $this->merchant(A::PLAN_BUSINESS);
+
+        foreach (['product.create', 'customer.manage', 'invoice.create', 'report.view', 'export', 'rep.manage'] as $action) {
+            $this->assertSame(Policy::AVAILABLE, $this->state($m, $action), $action);
+        }
+
+        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'price.view'));
+        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'price.set'));
+        $this->assertSame(Policy::LOCKED_BY_PLAN, $this->state($m, 'tier.manage'));
+    }
+
+    /** @test */
+    public function merchant_pro_opens_multi_pricing(): void
+    {
+        $m = $this->merchant(A::PLAN_MERCHANT_PRO);
+
+        foreach (['price.view', 'price.set', 'tier.manage'] as $action) {
+            $this->assertSame(Policy::AVAILABLE, $this->state($m, $action), $action);
+        }
+    }
+
+    /** @test */
+    public function sales_rep_can_sell_but_cannot_void_an_invoice(): void
+    {
+        $owner = $this->merchant(A::PLAN_BUSINESS);
+        $rep = $this->staff($owner, 'sales_rep');
+
+        $this->assertSame(Policy::AVAILABLE, $this->state($rep, 'invoice.create'));
+        $this->assertSame(Policy::AVAILABLE, $this->state($rep, 'collection.record'));
+        $this->assertSame(Policy::LOCKED_BY_ROLE, $this->state($rep, 'invoice.void'));
+        $this->assertSame(Policy::LOCKED_BY_ROLE, $this->state($rep, 'customer.manage'));
+    }
+
+    /** @test */
+    public function collector_collects_and_reads_aging_but_cannot_create_or_void_invoices(): void
+    {
+        $owner = $this->merchant(A::PLAN_BUSINESS);
+        $collector = $this->staff($owner, 'collector');
+
+        $this->assertSame(Policy::AVAILABLE, $this->state($collector, 'invoice.view'));
+        $this->assertSame(Policy::AVAILABLE, $this->state($collector, 'collection.record'));
+        $this->assertSame(Policy::AVAILABLE, $this->state($collector, 'report.view'));
+        $this->assertSame(Policy::LOCKED_BY_ROLE, $this->state($collector, 'invoice.create'));
+        $this->assertSame(Policy::LOCKED_BY_ROLE, $this->state($collector, 'invoice.void'));
+        $this->assertSame(Policy::LOCKED_BY_ROLE, $this->state($collector, 'dashboard.metrics'));
+    }
+
+    /** @test */
+    public function accountant_can_void_but_cannot_sell_or_claim_a_collection(): void
+    {
+        $owner = $this->merchant(A::PLAN_BUSINESS);
+        $accountant = $this->staff($owner, 'accountant');
+
+        $this->assertSame(Policy::AVAILABLE, $this->state($accountant, 'invoice.void'));
+        $this->assertSame(Policy::AVAILABLE, $this->state($accountant, 'invoice.view'));
+        $this->assertSame(Policy::AVAILABLE, $this->state($accountant, 'report.view'));
+        $this->assertSame(Policy::LOCKED_BY_ROLE, $this->state($accountant, 'invoice.create'));
+        $this->assertSame(Policy::LOCKED_BY_ROLE, $this->state($accountant, 'collection.record'));
+    }
+
+    /** @test */
+    public function every_current_wholesale_endpoint_is_mapped_to_an_action(): void
+    {
+        $p = app(Policy::class);
+        $base = 'api/v1/amial/merchant/wholesale';
+        $cases = [
+            ['GET', "$base/access"],
+            ['GET', "$base/dashboard"],
+            ['GET', $base], ['POST', $base],
+            ['POST', "$base/price-tiers"],
+            ['GET', "$base/products"], ['POST', "$base/products"],
+            ['PUT', "$base/products/12"],
+            ['POST', "$base/products/12/adjust-stock"],
+            ['GET', "$base/products/12/prices"], ['POST', "$base/products/12/prices"],
+            ['GET', "$base/customers"], ['POST', "$base/customers"],
+            ['PUT', "$base/customers/7"],
+            ['GET', "$base/invoices"], ['POST', "$base/invoices"],
+            ['GET', "$base/invoices/3"], ['GET', "$base/invoices/3/pdf"],
+            ['POST', "$base/invoices/3/void"], ['POST', "$base/invoices/3/collect"],
+            ['GET', "$base/collections"],
+            ['GET', "$base/sales-reps"], ['POST', "$base/sales-reps"],
+            ['GET', "$base/reports/aging"],
+            ['GET', "$base/reports/customer/9/statement"],
+            ['GET', "$base/reports/sales-reps"],
+        ];
+
+        foreach ($cases as [$method, $path]) {
+            $this->assertNotNull($p->actionFor($method, $path), "$method $path غير محروس بالسياسة");
+        }
+
+        $this->assertNull($p->actionFor('POST', "$base/new-unmapped-action"));
+    }
+
+    /** @test */
+    public function wholesale_role_permissions_are_not_replaced_by_generic_retail_patterns(): void
+    {
+        $owner = $this->merchant(A::PLAN_BUSINESS);
+        $warehouse = $this->staff($owner, 'warehouse_staff');
+        $perm = app(MerchantPermissionService::class);
+
+        $this->assertTrue($perm->can($warehouse, \App\Support\Merchant\MerchantPermissions::WHOLESALE_PRODUCT_MANAGE));
+        $this->assertSame(Policy::AVAILABLE, $this->state($warehouse, 'product.update'));
+        $this->assertSame(Policy::LOCKED_BY_ROLE, $this->state($warehouse, 'stock.adjust'));
+    }
+}

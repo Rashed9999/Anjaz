@@ -9,7 +9,7 @@ import 'package:amial_pay/features/auth/screens/amial_registration_wizard_screen
 import 'package:amial_pay/features/auth/screens/quick_receive_screen.dart';
 import 'package:amial_pay/features/forget_pin/screens/forget_pin_screen.dart';
 import 'package:amial_pay/features/language/widgets/amial_language_switch.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.dart';
+import 'package:amial_pay/features/merchant/screens/pos_device_activation_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/images.dart';
@@ -96,9 +96,6 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
 
   AccountKind _kind = AccountKind.customer;
   bool _obscure = true;
-  // يُضبط من باب نقطة البيع فقط. لا نُنشئ مسار تسجيل عام للموظف؛ المالك
-  // يدخل بحسابه ثم يسجّل **الجهاز الحالي** من الشاشة الرسمية المقيدة بالباقة.
-  bool _continueToPosRegistration = false;
   ({String name, String phone, String kind})? _lastUser;
 
   @override
@@ -139,12 +136,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   }
 
   void _startPosRegistration() {
-    setState(() {
-      _continueToPosRegistration = true;
-      _kind = AccountKind.merchant;
-      _passwordCtrl.clear();
-    });
-    _snack('سجّل دخول مالك المتجر الآن. بعد ذلك ستفتح شاشة تسجيل هذا الجهاز.');
+    Get.to(() => const PosDeviceActivationScreen());
   }
 
   Future<void> _submit() async {
@@ -193,11 +185,6 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       phone: _phoneCtrl.text.trim(),
       kind: _kind.name,
     );
-    if (_continueToPosRegistration && _kind == AccountKind.merchant) {
-      setState(() => _continueToPosRegistration = false);
-      await Get.off(() => const MerchantPosDevicesScreen());
-      return;
-    }
     controller.navigateToHomeForRole();
   }
 

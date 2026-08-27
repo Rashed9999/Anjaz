@@ -42,7 +42,11 @@ use Illuminate\Support\Facades\Route;
 // PUBLIC / UNAUTHENTICATED
 // ============================================================
 
-// (لا شيء عام في v0.7 — كل endpoint يحتاج مصادقة على الأقل)
+// تفعيل جهاز POS لا يتطلب دخول المالك على جهاز الكاشير: الرمز قصير العمر
+// وأحادي الاستعمال ومحدود المعدّل، فلا يكشف حساباً ولا ينشئ جهازاً بلا إذن.
+Route::post('/pos-devices/activate', [\App\Http\Controllers\Api\V1\Amial\PosDeviceController::class, 'activate'])
+    ->middleware('throttle:10,1')
+    ->name('amial.pos-devices.activate');
 
 // P0-MONITORING — ping عام لخدمات المراقبة الخارجية (UptimeRobot)
 Route::get('/ping', [\App\Http\Controllers\Api\V1\Amial\HealthController::class, 'ping'])
@@ -85,6 +89,17 @@ Route::prefix('legal-docs')->name('amial.legal-docs.')->group(function () {
 // وهي صامتةٌ لمن لا مقعدَ له ولا هو موظّفُ نقطة بيع — فالعميلُ والتاجرُ
 // يمرّان بلا أثر.
 Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
+
+    // -------- AMIAL-POS-DEVICES-010 — الأجهزة ككيان مستقل عن الموظفين --------
+    Route::prefix('merchant/pos-devices')->name('amial.merchant.pos-devices.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\PosDeviceController::class;
+        Route::get('/', [$c, 'index'])->name('index');
+        Route::post('/', [$c, 'store'])->name('store');
+        Route::post('/pair', [$c, 'pair'])->name('pair');
+        Route::post('/activation-codes', [$c, 'createActivationCode'])->name('activation-codes.store');
+        Route::patch('/{id}', [$c, 'update'])->where('id', '[0-9]+')->name('update');
+        Route::delete('/{id}', [$c, 'destroy'])->where('id', '[0-9]+')->name('destroy');
+    });
 
     // -------- AMIAL-PIN-GATE-001: تحقّق رمز المعاملات (بوّابة بعد الدخول
     // وقبل العمليات المالية في التطبيق) --------
