@@ -16,6 +16,7 @@ use App\Support\Merchant\MerchantPermissions as P;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 /**
@@ -159,7 +160,7 @@ class RestaurantController extends Controller
         }
         $ctx = $this->resolve($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant, $posId] = $ctx;
+        [$merchant] = $ctx;
 
         $v = Validator::make($request->all(), [
             'table_id' => 'sometimes|nullable|integer',
@@ -173,7 +174,7 @@ class RestaurantController extends Controller
 
         try {
             $o = $this->svc->openOrder($merchant, $request->input('table_id'),
-                $request->input('items', []), $request->input('notes'), $posId ?? $merchant->id);
+                $request->input('items', []), $request->input('notes'), $request->user()->id);
         } catch (\InvalidArgumentException $e) {
             return $this->err('ORDER_INVALID', $e->getMessage(), 422);
         }
@@ -268,7 +269,8 @@ class RestaurantController extends Controller
 
         try {
             $res = $this->svc->closeOrder($merchant, $o, $request->input('payment_method'),
-                $request->input('customer'), $request->input('paid_transaction_id'), $posId);
+                $request->input('customer'), $request->input('paid_transaction_id'), $posId,
+                $request->user()->id);
         } catch (\InvalidArgumentException | \RuntimeException $e) {
             return $this->err('CLOSE_FAILED', $e->getMessage(), 422);
         }
@@ -305,6 +307,12 @@ class RestaurantController extends Controller
             $merchant = User::find($pos->merchant_user_id);
             if (!$merchant) return $this->err('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
             $posId = $pos->id;
+        } elseif ($merchantId = DB::table('merchant_user_roles')
+            ->where('user_id', $authUser->id)
+            ->where('is_active', true)
+            ->value('merchant_user_id')) {
+            $merchant = User::find($merchantId);
+            if (!$merchant) return $this->err('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
         } elseif (!MerchantProfile::where('user_id', $authUser->id)->exists()) {
             return $this->err('NOT_A_MERCHANT', 'متاح للمطاعم وموظفيها فقط', 403);
         }

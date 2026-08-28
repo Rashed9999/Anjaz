@@ -120,13 +120,14 @@ class RestaurantService
         ?array $customer = null,
         ?string $paidTransactionId = null,
         ?int $posUserId = null,
+        ?int $closedByUserId = null,
     ): array {
         if ($order->merchant_user_id !== $merchant->id) throw new InvalidArgumentException('الطلب لا يخصّك');
         if ($order->status === 'closed') throw new RuntimeException('الطلب مُغلق مسبقاً');
         if ($order->status === 'cancelled') throw new RuntimeException('الطلب ملغى');
         if (empty($order->items)) throw new RuntimeException('لا يمكن إغلاق طلب فارغ');
 
-        return DB::transaction(function () use ($merchant, $order, $paymentMethod, $customer, $paidTransactionId, $posUserId) {
+        return DB::transaction(function () use ($merchant, $order, $paymentMethod, $customer, $paidTransactionId, $posUserId, $closedByUserId) {
             $locked = RestaurantOrder::where('id', $order->id)->lockForUpdate()->first();
             if ($locked->status === 'closed') throw new RuntimeException('الطلب مُغلق مسبقاً');
 
@@ -142,6 +143,7 @@ class RestaurantService
 
             $locked->status = 'closed';
             $locked->closed_at = now();
+            $locked->closed_by_user_id = $closedByUserId ?? $merchant->id;
             $locked->sale_ulid = $sale->sale_ulid;
             $locked->save();
 
