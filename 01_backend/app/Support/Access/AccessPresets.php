@@ -117,8 +117,8 @@ class AccessPresets
 
             // مطعم (v2 — placeholder للآن)
             A::BIZ_RESTAURANT => [
-                A::F_RESTAURANT_TABLES, A::F_RESTAURANT_ORDERS,
-                A::F_RESTAURANT_KITCHEN, A::F_DEBTS, A::F_DAILY_REPORTS,
+                // المطعم غير مكتمل من أ إلى ي؛ لا نمنح طلبات/مطبخ كميزات جاهزة.
+                A::F_RESTAURANT_TABLES, A::F_DEBTS, A::F_DAILY_REPORTS,
             ],
 
             default => [],
