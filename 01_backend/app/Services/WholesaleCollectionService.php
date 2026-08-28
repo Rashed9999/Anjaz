@@ -97,12 +97,16 @@ class WholesaleCollectionService
             }
 
             // أنشئ التحصيل
+            // $receiver هو مالك المحفظة/المنشأة. أمّا الفاعل في الأثر فهو
+            // الموظف أو المالك الذي نفّذ التحصيل، ويُحقن من المتحكم بعد
+            // المصادقة ولا يأتي من التطبيق كحقل يمكن تزويره.
+            $receivedByUserId = (int) ($data['received_by_user_id'] ?? $receiver->id);
             $collection = WholesaleCollection::create([
                 'collection_ulid' => (string) Str::ulid(),
                 'invoice_id' => $inv->id,
                 'customer_id' => $customer->id,
                 'business_id' => $inv->business_id,
-                'received_by_user_id' => $receiver->id,
+                'received_by_user_id' => $receivedByUserId,
                 'collection_date' => $data['collection_date'] ?? now()->toDateString(),
                 'amount' => $amount,
                 'payment_method' => $data['payment_method'],

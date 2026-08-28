@@ -5,8 +5,11 @@ namespace Tests\Feature;
 use App\Models\MerchantProfile;
 use App\Models\PosUser;
 use App\Models\User;
+use App\Models\WholesaleCollection;
 use App\Services\Merchant\MerchantPermissionService;
 use App\Services\Vertical\VerticalBootstrapService;
+use App\Services\WholesaleInvoiceService;
+use App\Services\WholesaleService;
 use App\Services\Wholesale\WholesaleAccessPolicyService as Policy;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -59,6 +62,27 @@ class WholesaleAccessPolicyTest extends TestCase
             ->first();
         $this->assertNotNull($role, "دور الجملة {$roleCode} غير موجود");
 
+        DB::table('merchant_user_roles')->insert([
+            'merchant_user_id' => $merchant->id,
+            'user_id' => $u->id,
+            'merchant_role_id' => $role->id,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return $u->refresh();
+    }
+
+    /** موظف دورٍ مستقل، لا حساب POS: مهم لفصل الدخول عن الجهاز. */
+    private function roleStaff(User $merchant, string $roleCode): User
+    {
+        $u = User::factory()->create(['type' => 3, 'role' => 'merchant_staff']);
+        $role = DB::table('merchant_roles')
+            ->where('merchant_user_id', $merchant->id)
+            ->where('code', $roleCode)
+            ->first();
+        $this->assertNotNull($role, "دور الجملة {$roleCode} غير موجود");
         DB::table('merchant_user_roles')->insert([
             'merchant_user_id' => $merchant->id,
             'user_id' => $u->id,
@@ -152,6 +176,39 @@ class WholesaleAccessPolicyTest extends TestCase
         $this->assertSame(Policy::LOCKED_BY_ROLE, $this->state($collector, 'invoice.create'));
         $this->assertSame(Policy::LOCKED_BY_ROLE, $this->state($collector, 'invoice.void'));
         $this->assertSame(Policy::LOCKED_BY_ROLE, $this->state($collector, 'dashboard.metrics'));
+    }
+
+    /** @test */
+    public function a_non_pos_collector_can_record_for_the_business_and_is_the_audited_receiver(): void
+    {
+        $owner = $this->merchant(A::PLAN_BUSINESS);
+        $collector = $this->roleStaff($owner, 'collector');
+        $service = app(WholesaleService::class);
+        $business = $service->getOrCreateBusiness($owner);
+        $product = $service->addProduct($business, [
+            'name' => 'صنف تحصيل الموظف', 'base_price' => '1000', 'initial_stock' => 5,
+        ]);
+        $customer = $service->addCustomer($business, [
+            'full_name' => 'عميل التحصيل', 'credit_limit' => '10000',
+        ]);
+        $invoice = app(WholesaleInvoiceService::class)->createInvoice($owner, $business, [[
+            'product_id' => $product->id, 'quantity' => '2',
+        ]], ['customer_id' => $customer->id, 'payment_type' => 'credit']);
+
+        // لا يملك الموظف MerchantProfile ولا PosUser؛ نجاحه هنا يثبت أن
+        // دور الموظف لم يعد يُعامل كتاجر مفقود. ولا يمرر received_by من
+        // التطبيق: المتحكم يحقن المستخدم المصدّق بعد الحارس.
+        $this->actingAs($collector, 'api')
+            ->postJson("/api/v1/amial/merchant/wholesale/invoices/{$invoice->id}/collect", [
+                'amount' => '500', 'payment_method' => 'cash',
+                'received_by_user_id' => $owner->id,
+            ])
+            ->assertCreated()
+            ->assertJsonPath('code', 'RECORDED');
+
+        $collection = WholesaleCollection::query()->sole();
+        $this->assertSame($collector->id, (int) $collection->received_by_user_id,
+            'سجل التحصيل نسب المال للمالك بدل الموظف الذي نفذه');
     }
 
     /** @test */

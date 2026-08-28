@@ -900,7 +900,11 @@ class WholesaleController extends Controller
         if (!$inv) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
 
         try {
-            $col = $this->colSvc->recordCollection($merchant, $inv, $request->all());
+            // المحفظة والحساب المالي للمنشأة، لكن أثر التحصيل يجب أن يحمل
+            // الموظف الذي استلم المال فعلاً؛ لا نأخذه من جسم طلب العميل.
+            $data = $request->all();
+            $data['received_by_user_id'] = $request->user()->id;
+            $col = $this->colSvc->recordCollection($merchant, $inv, $data);
         } catch (\InvalidArgumentException $e) {
             return $this->error('INVALID', $e->getMessage(), 422);
         } catch (\RuntimeException $e) {
@@ -1090,6 +1094,21 @@ class WholesaleController extends Controller
             $merchant = User::find($pos->merchant_user_id);
             if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
             return [$merchant, $pos->id];
+        }
+
+        // موظف الجملة ليس بالضرورة حساب POS. أدوار المبيعات والتحصيل
+        // والمحاسبة تسكن merchant_user_roles وتَرِث المنشأة والباقة من
+        // مالكها، ثم تُقيَّد لاحقاً بـ MerchantPermissionService. رفضها هنا
+        // لأن لا MerchantProfile باسم الموظف يجعل شاشة صحيحة تنتهي 403.
+        $assignment = \Illuminate\Support\Facades\DB::table('merchant_user_roles')
+            ->where('user_id', $authUser->id)
+            ->where('is_active', true)
+            ->orderByDesc('id')
+            ->first();
+        if ($assignment !== null) {
+            $merchant = User::find($assignment->merchant_user_id);
+            if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
+            return [$merchant, null];
         }
         if (!MerchantProfile::where('user_id', $authUser->id)->exists()) {
             return $this->error('NOT_A_MERCHANT', 'متاح للتجار وموظفي الجملة فقط', 403);
