@@ -180,11 +180,9 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       return;
     }
 
-    await UnifiedAuthController.rememberLastUser(
-      name: controller.displayName,
-      phone: _phoneCtrl.text.trim(),
-      kind: _kind.name,
-    );
+    // **ولا يُكتب هنا ثانيةً** — التذكُّرُ صار في `_execute`، المخرجِ
+    // الواحدِ لكلّ دخولٍ ناجح. وكاتبان لحقيقةٍ واحدةٍ يفترقان أوّلَ ما
+    // يتغيّر أحدُهما.
     controller.navigateToHomeForRole();
   }
 

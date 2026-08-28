@@ -5,6 +5,7 @@ import 'package:camera/camera.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -99,6 +100,27 @@ Future<void> main() async {
   // AMIAL-SESSION-GUARD-001: مراقبة دورة حياة التطبيق — إغلاق الجلسة عند
   // إطفاء الشاشة أو ضغط زرّ البيت أو نقل التطبيق إلى نافذة.
   SessionGuard.instance.attach();
+
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-INSETS-001 — **شريطا النظام يُلوَّنان، وإلّا بقيا أسودين.**
+  //
+  // الثيمُ الأصلُ على أندرويد `Theme.Black.NoTitleBar`، فشريطُ الحالة
+  // وشريطُ التنقّل أسودان. ولُوّنا في `styles.xml` — **وهذا وحدَه لا
+  // يكفي**: بعضُ الأجهزة تُعيد ضبطهما بعد أوّل إطار، ولا شيءَ في
+  // ٥١١ ملفَّ دارت كان ينادي `SystemChrome` مرّةً واحدة.
+  //
+  // **وسطوعُ الأيقونات يُقال صراحةً**: شريطُ حالةٍ أزرقُ داكنٌ يحتاج
+  // أيقوناتٍ فاتحة، وشريطُ تنقّلٍ أبيضُ يحتاج داكنة. وتركُه للنظام
+  // يجعل الأيقوناتِ تختفي على نصف الأجهزة — أبيضُ على أبيض.
+  // ══════════════════════════════════════════════════════════════════
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Color(0xFF053391),
+    statusBarIconBrightness: Brightness.light,   // أندرويد
+    statusBarBrightness: Brightness.dark,        // iOS
+    systemNavigationBarColor: Color(0xFFFFFFFF),
+    systemNavigationBarIconBrightness: Brightness.dark,
+    systemNavigationBarDividerColor: Color(0xFFE3E6EF),
+  ));
 
   runApp(MyApp(languages: languages, orderID: orderID));
 

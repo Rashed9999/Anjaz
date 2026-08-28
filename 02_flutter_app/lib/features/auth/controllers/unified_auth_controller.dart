@@ -164,6 +164,29 @@ class UnifiedAuthController extends GetxController implements GetxService {
         verificationState.value =
             (user['verification_state'] ?? 'verified').toString();
         _displayName = (user['name'] ?? '').toString();
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-QUICK-RECEIVE-002 — **المخرجُ الواحد يتذكّر، لا كلُّ شاشة.**
+        //
+        // كانت `rememberLastUser` تُنادى من `_submit` في شاشة الدخول
+        // وحدَها. والدخولُ بالبصمة ينجح ويذهب إلى الرئيسيّة **بلا أن
+        // يتذكّر** — فبطاقةُ «استلام سريع» في شاشة الدخول تبقى ميّتةً
+        // أبداً لمن يدخل ببصمته، وهو المسارُ المتكرّر لا الاستثناء.
+        //
+        // **وهي القاعدةُ الرابعة بنصّها**: ميزةٌ لها مدخلان تُختبَر من
+        // مدخليها. فجُرّب المدخلُ الأوّل ونجح، والمستعمِلُ يسلك الآخر.
+        //
+        // فنُقل التذكُّرُ إلى **المخرج الواحد** الذي يمرّ به كلُّ دخولٍ
+        // ناجحٍ لكلّ دور. ومدخلٌ ثالثٌ يُضاف غداً يرثه بلا أن يتذكّره
+        // أحد — وهذا هو المقصود.
+        // ══════════════════════════════════════════════════════════════
+        final rememberedPhone = (body['phone'] ?? '').toString().trim();
+        if (rememberedPhone.isNotEmpty) {
+          await rememberLastUser(
+            name: _displayName,
+            phone: rememberedPhone,
+            kind: (body['role'] ?? meta['role'] ?? '').toString(),
+          );
+        }
         // CRITICAL-001 — حمّل access بعد تسجيل الدخول الناجح
         try { await Get.find<AccessController>().load(); } catch (_) {}
         return true;
