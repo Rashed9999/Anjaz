@@ -120,6 +120,9 @@ class ReceiptsController extends GetxController implements GetxService {
 
   String getDocumentUrl(int id, String route) => repo.documentUrl(id, route);
 
+  String getPublicVerificationUrl(String verificationCode) =>
+      repo.publicVerificationUrl(verificationCode);
+
   Future<void> recordPrint({required int id, required String format, required String printerName}) async {
     try {
       await repo.recordPrint(id, format: format, printerName: printerName);

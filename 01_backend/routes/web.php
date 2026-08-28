@@ -6,6 +6,7 @@ use App\Http\Controllers\PageController;
 use App\Http\Controllers\NewsLetterController;
 use App\Http\Controllers\LandingPageController;
 use App\Http\Controllers\Web\RegistrationController;
+use App\Http\Controllers\Api\V1\Amial\ReceiptController;
 
 /*
 |--------------------------------------------------------------------------
@@ -61,6 +62,13 @@ Route::get('/login/captcha', [\App\Http\Controllers\Web\UnifiedLoginController::
 Route::get('/home', function () {
     return redirect()->route('site.home');
 });
+
+// رابط التحقق الذي يشارك من سند العميل. مستقل عن API المحمي: لا يتطلب
+// تسجيل دخول ولا يعرض الأطراف أو أي بيانات شخصية.
+Route::get('/v/{code}', [ReceiptController::class, 'verifyPublicPage'])
+    ->where('code', '[A-Za-z0-9 \-]{16,32}')
+    ->middleware('throttle:20,1')
+    ->name('receipt.verify.public-page');
 
 Route::get('authentication-failed', function () {
     $errors = [];
