@@ -87,4 +87,24 @@ class RegistrationDossierTest extends TestCase
             'state' => RegistrationDossier::SUBMITTED,
         ]);
     }
+
+    /** @test */
+    public function assisted_opening_archives_one_immutable_snapshot_linked_to_the_account(): void
+    {
+        $staff = User::factory()->create(['type' => ADMIN_TYPE]);
+        $customer = User::factory()->create(['type' => CUSTOMER_TYPE]);
+
+        $dossier = app(RegistrationDossierService::class)->archiveAssistedRegistration(
+            $staff, $customer, 'customer', '967771700004', [
+                'schema_version' => 'opening-dossier-v1', 'full_name' => 'سارة أحمد',
+                'identification_number' => 'ID-704', 'declaration_accepted' => '1',
+            ],
+        );
+
+        $this->assertSame(RegistrationDossier::SUBMITTED, $dossier->state);
+        $this->assertSame($customer->id, $dossier->subject_user_id);
+        $this->assertSame('staff_assisted', $dossier->source);
+        $this->assertSame('opening-dossier-v1', $dossier->payload_encrypted['schema_version']);
+        $this->assertDatabaseMissing('registration_dossiers', ['payload_encrypted' => 'سارة أحمد']);
+    }
 }

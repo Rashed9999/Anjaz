@@ -15,7 +15,10 @@ use App\Services\AuditService;
 use App\Services\MoneyService;
 use App\Services\PlatformTreasuryService;
 use App\Services\KycDocumentService;
+use App\Services\RegistrationDossierService;
 use App\Services\ZoneAssignmentService;
+use App\Support\Kyc\KycProfileFields;
+use App\Support\Phone;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -465,12 +468,11 @@ class AdminHubController extends Controller
     }
 
     /**
-     * POST hub/{slug}/users — إضافة عميل/وكيل/تاجر «حقيقي».
+     * POST hub/{slug}/users — ملف فتح واحد للعميل أو المنشأة.
      *
-     * الحساب المُنشأ هنا جاهز للدخول من التطبيق فوراً بنفس وصفة الحسابات
-     * التجريبية العاملة: هاتف موثّق + PIN معاملات + KYC معتمد + محفظة، وللوكيل
-     * رقم وكيل، وللتاجر سجلّ Merchant + ملف MerchantProfile موثّق بنشاطه
-     * وباقته وحدوده — فيفتح التطبيق لوحة القطاع الصحيحة مباشرة.
+     * لا توجد هنا «طريقة تسجيل» ثانية: الموظف يجمع النموذج الكامل من نفس
+     * نافذة الإضافة، ثم نحفظ لقطة أرشيفية مشفّرة ونربطها بالحساب. الحساب لا
+     * يخرج معتمداً، والورقة الموقعة لا تُحوّل إلى تحقق هاتف مزعوم.
      */
     public function storeUser(Request $request, string $slug): JsonResponse
     {
@@ -479,40 +481,109 @@ class AdminHubController extends Controller
 
         $v = Validator::make($request->all(), [
             'f_name' => 'required|string|max:100',
-            'l_name' => 'nullable|string|max:100',
-            'phone' => 'required|string|min:6|max:20',
-            'password' => 'required|string|min:8',
+            'l_name' => 'required|string|max:100',
+            'dial_country_code' => 'required|string|max:8',
+            'phone' => 'required|string|min:5|max:20',
+            'password' => 'required|string|min:8|max:255',
             'pin' => 'nullable|digits:4',
+            'gender' => 'nullable|in:male,female,other',
+            'date_of_birth' => 'nullable|date|before:today',
+            'email' => 'nullable|email|max:150',
+            'name_en' => ['nullable', 'string', 'max:150', 'regex:/^[A-Za-z\s.\-\x27]+$/'],
+            'father_name' => 'nullable|string|max:60',
+            'grandfather_name' => 'nullable|string|max:60',
+            'country_of_birth' => 'nullable|string|max:60',
+            'dual_nationality' => 'nullable|string|max:60',
+            'marital_status' => 'nullable|in:single,married,divorced,widowed',
+            'identification_type' => 'nullable|in:passport,driving_licence,nid,trade_license',
+            'identification_number' => 'nullable|string|max:50',
+            'identification_issue_date' => 'nullable|date',
+            'identification_expiry_date' => 'nullable|date|after:identification_issue_date',
+            'id_place_of_issue' => 'nullable|string|max:80',
+            'address' => 'nullable|string|max:500',
+            'residence_district' => 'nullable|string|max:80',
+            'residence_area' => 'nullable|string|max:120',
+            'residence_landmark' => 'nullable|string|max:150',
+            'housing_type' => 'nullable|in:owned,rented,family,other',
+            'occupation' => 'nullable|string|max:100',
+            'employer_name' => 'nullable|string|max:150',
+            'job_title' => 'nullable|string|max:80',
+            'work_address' => 'nullable|string|max:200',
+            'income_source' => 'nullable|in:' . implode(',', KycProfileFields::INCOME_SOURCES),
+            'monthly_income' => 'nullable|numeric|min:0|max:9999999999999',
+            'monthly_income_currency' => 'nullable|string|size:3',
+            'account_purpose' => 'nullable|in:' . implode(',', KycProfileFields::ACCOUNT_PURPOSES),
+            'is_pep' => 'nullable|boolean',
+            'pep_position' => 'nullable|string|max:200',
+            'kin_name' => 'nullable|string|max:150', 'kin_phone' => 'nullable|string|max:30', 'kin_relation' => 'nullable|string|max:60',
+            'kin2_name' => 'nullable|string|max:150', 'kin2_phone' => 'nullable|string|max:30', 'kin2_relation' => 'nullable|string|max:60',
+            'declaration_accepted' => 'nullable|boolean',
+            'signed_paper_form' => 'nullable|file|max:8192|mimes:pdf,jpg,jpeg,png',
+            'identity_front' => 'nullable|file|max:8192|mimetypes:image/jpeg,image/png,image/heic,image/heif,application/pdf',
+            'identity_back' => 'nullable|file|max:8192|mimetypes:image/jpeg,image/png,image/heic,image/heif,application/pdf',
+            'selfie' => 'nullable|file|max:8192|mimetypes:image/jpeg,image/png,image/heic,image/heif',
+            'address_proof' => 'nullable|file|max:8192|mimetypes:image/jpeg,image/png,image/heic,image/heif,application/pdf',
             // حقول التاجر
             'store_name' => 'nullable|string|max:120',
             'business_type' => 'nullable|string|in:' . implode(',', \App\Support\Access\AccessConstants::ALL_BUSINESS_TYPES),
             'plan' => 'nullable|string|in:' . implode(',', \App\Support\Access\AccessConstants::ALL_PLANS),
+            'business_registration_number' => 'nullable|string|max:100',
+            'business_legal_form' => 'nullable|string|max:80',
+            'business_category' => 'nullable|string|max:120',
+            'authorized_signatory_name' => 'nullable|string|max:150',
+            'authorized_signatory_id' => 'nullable|string|max:50',
             // AMIAL-GOVERNORATES-001: محافظتا الأصل والسكن (رموز ISO)
             'origin_governorate' => 'nullable|string|in:' . implode(',', \App\Support\YemenGovernorates::codes()),
             'residence_governorate' => 'nullable|string|in:' . implode(',', \App\Support\YemenGovernorates::codes()),
         ]);
         if ($v->fails()) return response()->json(['message' => $v->errors()->first()], 422);
 
-        if ($type === MERCHANT_TYPE && trim((string) $request->input('store_name', '')) === '') {
-            return response()->json(['message' => 'اسم المتجر مطلوب للتاجر'], 422);
-        }
+        $v->after(function ($v) use ($request, $type) {
+            if (!in_array($type, [CUSTOMER_TYPE, MERCHANT_TYPE], true)) return;
+            foreach (['gender' => 'الجنس', 'date_of_birth' => 'تاريخ الميلاد', 'identification_type' => 'نوع الهوية',
+                'identification_number' => 'رقم الهوية', 'address' => 'العنوان', 'residence_district' => 'المديرية',
+                'income_source' => 'مصدر الدخل', 'account_purpose' => 'الغرض من الحساب'] as $field => $label) {
+                if (!$request->filled($field)) $v->errors()->add($field, $label . ' مطلوب في ملف فتح الحساب');
+            }
+            if (!$request->has('is_pep')) $v->errors()->add('is_pep', 'يجب الإفصاح عن المنصب السياسي');
+            if ($request->boolean('is_pep') && !$request->filled('pep_position')) $v->errors()->add('pep_position', 'صفة المنصب السياسي مطلوبة');
+            if (!$request->boolean('declaration_accepted')) $v->errors()->add('declaration_accepted', 'إقرار صحة البيانات وموافقة صاحبها مطلوبان');
+            foreach (['identity_front' => 'وجه الهوية', 'identity_back' => 'ظهر الهوية', 'selfie' => 'الصورة الشخصية'] as $field => $label) {
+                if (!$request->hasFile($field)) $v->errors()->add($field, $label . ' مطلوب لملف التحقق');
+            }
+            if ($type === MERCHANT_TYPE) {
+                foreach (['store_name' => 'اسم المنشأة', 'business_type' => 'نوع النشاط',
+                    'business_registration_number' => 'رقم السجل أو الترخيص',
+                    'authorized_signatory_name' => 'اسم المفوض بالتوقيع',
+                    'authorized_signatory_id' => 'هوية المفوض بالتوقيع'] as $field => $label) {
+                    if (!$request->filled($field)) $v->errors()->add($field, $label . ' مطلوب للتاجر');
+                }
+            }
+        });
+        if ($v->fails()) return response()->json(['message' => $v->errors()->first(), 'errors' => $v->errors()], 422);
 
-        $phone = Helpers::filter_phone($request->input('phone'));
+        $phone = Phone::canonical((string) $request->input('phone'), (string) $request->input('dial_country_code'));
         if (User::where('phone', $phone)->exists()) {
             return response()->json(['message' => 'رقم الهاتف مستخدم مسبقاً'], 422);
         }
 
         $schema = \Illuminate\Support\Facades\Schema::class;
-        $user = DB::transaction(function () use ($request, $type, $phone, $schema) {
+        $dossierReference = null;
+        $user = DB::transaction(function () use ($request, $type, $phone, $schema, &$dossierReference) {
             $user = new User();
             $user->f_name = $request->input('f_name');
             $user->l_name = $request->input('l_name', '');
             $user->phone = $phone;
+            $user->dial_country_code = $request->input('dial_country_code');
+            $user->gender = $request->input('gender');
+            $user->email = $request->input('email');
+            $user->occupation = $request->input('occupation');
             $user->password = Hash::make($request->input('password'));
             $user->type = $type;
             $user->is_active = 1;
-            // الهاتف يُعدّ متحقّقاً منه: الأدمن أدخله بنفسه، ولا OTP في هذا المسار.
-            $user->is_phone_verified = 1;
+            // إدخال الموظف أو الورقة الموقّعة لا يثبتان ملكية الهاتف.
+            // يظلّ الهاتف غير متحقق حتى يؤكده صاحبه في تطبيقه.
+            $user->is_phone_verified = 0;
 
             // AMIAL-ADMIN-KYC-001: كان هنا is_kyc_verified = 1 بتعليق يقول
             // «حساب أنشأه الأدمن = موثّق (نفس وصفة الحسابات التجريبية)».
@@ -545,7 +616,21 @@ class AdminHubController extends Controller
                 $user->origin_governorate = $origin;
             }
             if ($schema::hasColumn('users', 'transaction_pin')) {
-                $user->transaction_pin = Hash::make($request->input('pin') ?: '1234');
+                $user->transaction_pin = $request->input('pin') ?: '1234';
+            }
+            if ($schema::hasColumn('users', 'identification_number')) $user->identification_number = $request->input('identification_number');
+            if ($schema::hasColumn('users', 'identification_type')) $user->identification_type = $request->input('identification_type');
+            if ($schema::hasColumn('users', 'address')) $user->address = $request->input('address');
+            foreach (['kin_name', 'kin_phone', 'kin_relation'] as $field) {
+                if ($schema::hasColumn('users', $field) && $request->filled($field)) $user->{$field} = $request->input($field);
+            }
+            KycProfileFields::fill($user, $request);
+            foreach (['date_of_birth', 'identification_issue_date', 'identification_expiry_date'] as $field) {
+                if ($schema::hasColumn('users', $field) && $request->filled($field)) $user->{$field} = $request->input($field);
+            }
+            if ($schema::hasColumn('users', 'kyc_declaration_accepted')) {
+                $user->kyc_declaration_accepted = $request->boolean('declaration_accepted');
+                $user->kyc_declared_at = now();
             }
             if ($type === AGENT_TYPE && $schema::hasColumn('users', 'agent_number')) {
                 $seq = User::where('type', AGENT_TYPE)->count() + 1;
@@ -599,6 +684,34 @@ class AdminHubController extends Controller
                 app(\App\Services\Vertical\VerticalBootstrapService::class)
                     ->ensureFor($user);
             }
+
+            // الوثائق تدخل طابور التحقق من الخدمة الموحدة نفسها؛ لا نكتب
+            // مسارات صور في الحساب ولا نخلق أرشيفاً موازياً لها.
+            if (in_array($type, [CUSTOMER_TYPE, MERCHANT_TYPE], true)) {
+                $documents = app(KycDocumentService::class);
+                foreach ([
+                    \App\Models\KycDocument::TYPE_ID_FRONT => 'identity_front',
+                    \App\Models\KycDocument::TYPE_ID_BACK => 'identity_back',
+                    \App\Models\KycDocument::TYPE_SELFIE => 'selfie',
+                    \App\Models\KycDocument::TYPE_ADDRESS_PROOF => 'address_proof',
+                ] as $documentType => $field) {
+                    if ($request->hasFile($field)) $documents->upload($user, $documentType, $request->file($field), $request->user());
+                }
+            }
+
+            // اللقطة جزء من فتح الحساب، لا خطوة تجميلية بعده: أي فشل في
+            // التشفير أو الأرشفة يرجع المعاملة فلا يولد حساب بلا ملف.
+            if (in_array($type, [CUSTOMER_TYPE, MERCHANT_TYPE], true)) {
+                $payload = $request->except(['password', 'pin', 'signed_paper_form', 'identity_front', 'identity_back', 'selfie', 'address_proof']);
+                $payload['full_name'] = trim((string) ($user->f_name . ' ' . $user->l_name));
+                $payload['phone_canonical'] = $phone;
+                $payload['subject_type'] = $type === MERCHANT_TYPE ? 'merchant' : 'customer';
+                $payload['schema_version'] = 'opening-dossier-v1';
+                $payload['business_name'] = $type === MERCHANT_TYPE ? $request->input('store_name') : null;
+                $dossierReference = app(RegistrationDossierService::class)->archiveAssistedRegistration(
+                    $request->user(), $user, $payload['subject_type'], $phone, $payload, $request->file('signed_paper_form')
+                )->reference;
+            }
             return $user;
         });
 
@@ -606,7 +719,7 @@ class AdminHubController extends Controller
             'actor_type' => 'admin', 'actor_user_id' => $request->user()?->id,
             'subject_type' => 'user', 'subject_id' => $user->id,
             'action' => 'ADMIN_CREATE_USER', 'decision_code' => 'USER_CREATED',
-            'context' => ['type' => $type], 'severity' => 'info',
+            'context' => ['type' => $type, 'opening_dossier' => in_array($type, [CUSTOMER_TYPE, MERCHANT_TYPE], true)], 'severity' => 'info',
         ]);
 
         // أرقام الدخول التي يسلّمها الأدمن لصاحب الحساب — التطبيق يطلبها:
@@ -624,7 +737,8 @@ class AdminHubController extends Controller
             'id' => $user->id,
             'agent_number' => $user->agent_number ?? null,
             'merchant_number' => $merchantNumber,
-            'message' => "تم إنشاء الحساب — {$loginHint}",
+            'opening_dossier_reference' => $dossierReference,
+            'message' => "تم إنشاء الحساب وملف فتحه قيد مراجعة الامتثال — {$loginHint}",
         ], 201);
     }
 

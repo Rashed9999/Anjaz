@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Services\AuditService;
 use App\Services\PlatformLoginPinService;
 use App\Services\PlatformRoleService;
+use App\Services\PlatformTabAccessService;
+use App\Support\PlatformAccessTabs;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +28,7 @@ class OperatorRolesController extends Controller
         private readonly AuditService $audit,
         private readonly PlatformLoginPinService $loginPins,
         private readonly PlatformRoleService $platformRoles,
+        private readonly PlatformTabAccessService $tabAccess,
     ) {
     }
 
@@ -46,6 +49,7 @@ class OperatorRolesController extends Controller
             $u->role_ids = DB::table('admin_user_roles')
                 ->where('user_id', $u->id)->pluck('role_id')->all();
             $u->login_pin_status = $pinStatuses[$u->id] ?? null;
+            $u->tab_access = $this->tabAccess->for($u);
 
             return $u;
         });
@@ -56,8 +60,10 @@ class OperatorRolesController extends Controller
 
         return view('admin-views.amial.ops.roles', [
             'roles' => $roles,
+            'tabs' => PlatformAccessTabs::all(),
             'operators' => $operators,
             'can_reset_pins' => $canResetPins,
+            'can_manage' => $viewer && $viewer->hasPlatformPermission('platform.staff.manage'),
             'current_user_id' => (int) ($viewer?->id ?? 0),
         ]);
     }
@@ -74,21 +80,13 @@ class OperatorRolesController extends Controller
             'phone' => 'required|string|min:6|max:20',
             'email' => 'required|email|max:190|unique:users,email',
             'password' => 'required|string|min:8',
-            'role_ids' => 'required|array|min:1',
-            'role_ids.*' => 'integer|exists:roles,id',
+            'tab_access' => 'required|array|min:1',
         ], [
             'email.required' => 'البريد الإلكتروني إلزامي لإرسال PIN الموظف.',
             'email.unique' => 'البريد الإلكتروني مستخدم في حساب آخر.',
         ]);
 
         $phone = \App\CentralLogics\Helpers::filter_phone($data['phone']);
-        $roleIds = $this->platformRoleIds($data['role_ids']);
-        if (count($roleIds) !== count(array_unique(array_map('intval', $data['role_ids'])))) {
-            return back()->withInput()->withErrors([
-                'role_ids' => 'لا يجوز إسناد دور غير تابع لموظفي المنصّة',
-            ]);
-        }
-
         $taken = User::whereIn('phone', \App\Support\Phone::variants($phone))->exists();
         if ($taken) {
             return back()->withInput()
@@ -97,7 +95,7 @@ class OperatorRolesController extends Controller
 
         $pin = $this->loginPins->generate();
 
-        $operator = DB::transaction(function () use ($data, $phone, $roleIds, $request, $pin) {
+        $operator = DB::transaction(function () use ($data, $phone, $request, $pin) {
             $u = new User();
             $u->f_name = $data['f_name'];
             $u->l_name = $data['l_name'] ?? '';
@@ -108,16 +106,6 @@ class OperatorRolesController extends Controller
             $u->is_active = 1;
             $u->is_phone_verified = 1;
             $u->save();
-
-            foreach ($roleIds as $roleId) {
-                DB::table('admin_user_roles')->insert([
-                    'user_id' => $u->id,
-                    'role_id' => $roleId,
-                    'granted_by_user_id' => $request->user()->id,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
 
             // الموظف الجديد، حتى لو حمل دور platform_admin، يأخذ PIN عشوائياً.
             $this->loginPins->issue(
@@ -132,6 +120,14 @@ class OperatorRolesController extends Controller
             return $u;
         });
 
+        try {
+            $tabs = $this->tabAccess->sync($operator, (array) $data['tab_access'], (int) $request->user()->id);
+        } catch (\Throwable $e) {
+            // لا يبقى حساب دخول بلا صلاحيات إذا فشل تحويل التبويبات.
+            $operator->delete();
+            return back()->withInput()->withErrors(['tab_access' => $e->getMessage()]);
+        }
+
         $delivery = $this->sendPin($operator, $pin, 'issued');
 
         $this->audit->record([
@@ -143,7 +139,7 @@ class OperatorRolesController extends Controller
             'decision_code' => 'OPERATOR_CREATED',
             'reason' => 'إنشاء موظف منصة من شاشة الأدوار',
             'context' => [
-                'roles' => $roleIds,
+                'tabs' => $tabs,
                 'login_pin_issued' => true,
                 'pin_delivery' => $delivery,
                 // PIN نفسه ممنوع من سجل التدقيق.
@@ -176,6 +172,24 @@ class OperatorRolesController extends Controller
 
         if ($action === 'change_own_login_pin') {
             return $this->changeOwnLoginPin($request, $operator);
+        }
+
+        if ($action === 'tabs') {
+            if ((int) $operator->id === (int) $request->user()->id) {
+                return back()->with('error', 'لا تعدّل تبويبات حسابك من حسابك؛ يحتاج ذلك مدير منصة آخر.');
+            }
+            try {
+                $tabs = $this->tabAccess->sync($operator, (array) $request->input('tab_access', []), (int) $request->user()->id);
+            } catch (\Throwable $e) {
+                return back()->withErrors(['tab_access' => $e->getMessage()]);
+            }
+            $this->audit->record([
+                'actor_type' => 'admin', 'actor_user_id' => $request->user()->id,
+                'subject_type' => 'operator', 'subject_id' => (string) $operator->id,
+                'action' => 'OPERATOR_TAB_ACCESS_CHANGED', 'decision_code' => 'TAB_ACCESS_CHANGED',
+                'severity' => 'critical', 'context' => ['tabs' => $tabs],
+            ]);
+            return back()->with('success', 'حُدّثت تبويبات الموظف وصلاحيات القراءة/الكتابة.');
         }
 
         if ($action !== 'roles') {

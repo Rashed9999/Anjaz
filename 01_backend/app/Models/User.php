@@ -323,11 +323,23 @@ class User extends Authenticatable
     public function hasPlatformPermission(string $code): bool
     {
         if (!isset($this->cachedPlatformPermissions)) {
-            $this->cachedPlatformPermissions = $this->platformRoles()
-                ->join('role_permissions', 'roles.id', '=', 'role_permissions.role_id')
-                ->join('permissions', 'permissions.id', '=', 'role_permissions.permission_id')
-                ->pluck('permissions.code')
-                ->all();
+            // الحساب الذي اختيرت له تبويبات عمل يستخدمها حصراً؛ لا تعود
+            // أدوار قديمة واسعة لتفتح شيئاً لم يُعلّم له في «قراءة/كتابة».
+            // الحسابات السابقة بلا صفوف تبويبات تبقى على RBAC القديم حتى
+            // ينقلها مدير المنصة عمداً، فلا ينقطع تشغيل قائم وقت النشر.
+            $tabAccessExists = \Illuminate\Support\Facades\Schema::hasTable('platform_operator_tab_access')
+                && \Illuminate\Support\Facades\DB::table('platform_operator_tab_access')
+                    ->where('user_id', $this->id)->exists();
+
+            $this->cachedPlatformPermissions = $tabAccessExists
+                ? \Illuminate\Support\Facades\DB::table('admin_user_permissions')
+                    ->join('permissions', 'permissions.id', '=', 'admin_user_permissions.permission_id')
+                    ->where('admin_user_permissions.user_id', $this->id)
+                    ->pluck('permissions.code')->all()
+                : $this->platformRoles()
+                    ->join('role_permissions', 'roles.id', '=', 'role_permissions.role_id')
+                    ->join('permissions', 'permissions.id', '=', 'role_permissions.permission_id')
+                    ->pluck('permissions.code')->all();
         }
 
         return in_array($code, $this->cachedPlatformPermissions, true);

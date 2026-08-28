@@ -32,32 +32,10 @@ class RegistrationDossierController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        $v = Validator::make($request->all(), [
-            'subject_type' => 'required|in:customer,merchant',
-            'source' => 'required|in:staff_assisted,paper_archive',
-            'dial_country_code' => 'required|string|max:8', 'phone' => 'required|string|min:5|max:20',
-            'full_name' => 'required|string|max:200', 'gender' => 'nullable|in:male,female,other',
-            'identification_number' => 'nullable|string|max:50', 'identification_type' => 'nullable|in:passport,driving_licence,nid,trade_license',
-            'address' => 'nullable|string|max:500', 'business_name' => 'nullable|string|max:255',
-            'business_type' => 'nullable|string|max:80', 'paper_form' => 'nullable|file|max:8192|mimes:pdf,jpg,jpeg,png',
-        ]);
-        $v->after(function ($v) use ($request) {
-            if ($request->input('subject_type') === 'merchant' && trim((string) $request->input('business_name')) === '') $v->errors()->add('business_name', 'اسم المنشأة مطلوب للتاجر');
-            if ($request->input('source') === 'paper_archive' && !$request->hasFile('paper_form')) $v->errors()->add('paper_form', 'ارفع نسخة النموذج الورقي الموقّع');
-        });
-        if ($v->fails()) return response()->json(['success' => false, 'message' => 'تحقق من الحقول', 'errors' => $v->errors()], 422);
-
-        $phone = Phone::canonical($request->input('dial_country_code') . $request->input('phone'));
-        $payload = $request->only([
-            'full_name', 'gender', 'dial_country_code', 'phone', 'identification_number',
-            'identification_type', 'address', 'business_name', 'business_type',
-        ]);
-        try {
-            $dossier = $this->dossiers->create($request->user(), (string) $request->input('subject_type'), (string) $request->input('source'), $phone, $payload, $request->file('paper_form'));
-        } catch (\InvalidArgumentException $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
-        }
-        return response()->json(['success' => true, 'message' => 'حُفظ ملف التسجيل. على العميل تأكيد الرقم عبر OTP قبل فتح الحساب.', 'data' => $this->summary($dossier)]);
+        return response()->json([
+            'success' => false,
+            'message' => 'أُغلق مسار الإنشاء المنفصل. افتح الملف من مركز العملاء أو مركز التجّار ليُنشأ الحساب والأرشيف معاً.',
+        ], 410);
     }
 
     public function show(Request $request, string $reference): JsonResponse

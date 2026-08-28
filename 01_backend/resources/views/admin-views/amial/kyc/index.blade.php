@@ -63,6 +63,8 @@
 (function () {
     const BASE = '{{ url('admin/amial/kyc') }}';
     const CSRF = '{{ csrf_token() }}';
+    // واجهة القارئ لا تعرض أزرار القرار. والحارس في الخادم يبقى الحكم النهائي.
+    const CAN_DECIDE = @json((bool) auth('user')->user()?->hasPlatformPermission('platform.customers.freeze'));
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
     let current = null;
@@ -135,10 +137,10 @@
                         <div class="small text-muted font-monospace">#${esc(current.user)} • ${esc(current.phone)}</div>
                         <span class="badge badge-soft-primary mt-1">${esc(current.label)}</span>
                     </div>
-                    <div class="d-flex gap-2">
+                    ${CAN_DECIDE ? `<div class="d-flex gap-2">
                         <button class="btn btn-outline-danger" id="kyc-reject" data-testid="kyc-reject">رفض</button>
                         <button class="btn btn-success" id="kyc-approve" data-testid="kyc-approve">اعتماد</button>
-                    </div>
+                    </div>` : '<span class="badge badge-soft-secondary">قراءة فقط</span>'}
                 </div>
                 <iframe src="${BASE}/documents/${encodeURIComponent(current.id)}/file?reason=${encodeURIComponent(reason)}"
                         style="width:100%;height:420px;border:1px solid #ddd;border-radius:8px;background:#fafafa"
@@ -147,8 +149,10 @@
                 <div id="kyc-completeness" class="mt-3"></div>
             </div>`;
 
-        document.getElementById('kyc-approve').onclick = approve;
-        document.getElementById('kyc-reject').onclick = reject;
+        if (CAN_DECIDE) {
+            document.getElementById('kyc-approve').onclick = approve;
+            document.getElementById('kyc-reject').onclick = reject;
+        }
         loadOcr();
     }
 
@@ -201,7 +205,7 @@
             <div class="col-md-6 mb-2">
                 <label class="form-label small mb-1">${FIELD_LABELS[k]} ${hint}</label>
                 <input type="text" class="form-control form-control-sm js-ocr-field"
-                       data-field="${k}" value="${esc(v)}" data-testid="ocr-field-${k}">
+                       data-field="${k}" value="${esc(v)}" data-testid="ocr-field-${k}" ${CAN_DECIDE ? '' : 'readonly'}>
             </div>`;
         }).join('');
 
@@ -211,7 +215,7 @@
                     <strong class="small">الحقول المستخرَجة</strong>
                     <span class="badge bg-${st[0]}">${st[1]}</span>
                     ${o.confidence ? `<span class="small text-muted">الثقة ${o.confidence}٪ (الحدّ ${o.min_confidence}٪)</span>` : ''}
-                    <button class="btn btn-sm btn-outline-secondary ms-auto" id="kyc-reread">إعادة القراءة</button>
+                    ${CAN_DECIDE ? '<button class="btn btn-sm btn-outline-secondary ms-auto" id="kyc-reread">إعادة القراءة</button>' : ''}
                 </div>
                 <div class="card-body">
                     ${findings}
@@ -220,7 +224,7 @@
                     </div>
                     <div class="row">${rows}</div>
                     <div class="d-flex gap-2 align-items-center mt-2">
-                        <button class="btn btn-sm btn-primary" id="kyc-confirm-fields" data-testid="kyc-confirm-fields">إقرار الحقول</button>
+                        ${CAN_DECIDE ? '<button class="btn btn-sm btn-primary" id="kyc-confirm-fields" data-testid="kyc-confirm-fields">إقرار الحقول</button>' : '<span class="small text-muted">عرض حقول المستند فقط</span>'}
                         ${o.raw_text ? `<button class="btn btn-sm btn-link" type="button"
                             data-bs-toggle="collapse" data-bs-target="#kyc-raw">النصّ الخام</button>` : ''}
                     </div>
@@ -230,19 +234,21 @@
                 </div>
             </div>`;
 
-        document.getElementById('kyc-reread').onclick = async () => {
-            await post(`/documents/${current.id}/reread`, {});
-            loadOcr();
-        };
+        if (CAN_DECIDE) {
+            document.getElementById('kyc-reread').onclick = async () => {
+                await post(`/documents/${current.id}/reread`, {});
+                loadOcr();
+            };
 
-        document.getElementById('kyc-confirm-fields').onclick = async () => {
-            const fields = {};
-            document.querySelectorAll('.js-ocr-field').forEach(i => {
-                if (i.value.trim()) fields[i.dataset.field] = i.value.trim();
-            });
-            const r = await post(`/documents/${current.id}/fields`, {fields});
-            alert(r.message || (r.success ? 'أُقرّت الحقول' : 'فشل'));
-        };
+            document.getElementById('kyc-confirm-fields').onclick = async () => {
+                const fields = {};
+                document.querySelectorAll('.js-ocr-field').forEach(i => {
+                    if (i.value.trim()) fields[i.dataset.field] = i.value.trim();
+                });
+                const r = await post(`/documents/${current.id}/fields`, {fields});
+                alert(r.message || (r.success ? 'أُقرّت الحقول' : 'فشل'));
+            };
+        }
     }
 
     function clearViewer(msg) {

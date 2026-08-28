@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\AdminSafePaymentController;
 use App\Http\Controllers\Admin\AuditDecisionsController;
 use App\Http\Controllers\Admin\LegalTermsController;
 use App\Http\Controllers\Admin\OperatorRolesController;
+use App\Http\Controllers\Admin\OperatorWorkspaceController;
 use App\Http\Controllers\Admin\OpsConsoleController;
 use App\Http\Controllers\Admin\SecurityEventsController;
 use App\Http\Controllers\Admin\SupervisionController;
@@ -601,18 +602,18 @@ Route::prefix('partner-settlements')->name('partner-settlements.')
 // ============ AMIAL-KYC-PANEL-001 — مراجعة مستندات الهوية ============
 //
 // كانت هذه النقاط مسجَّلة على سطح الـAPI وحده، فبقي المستند يصل بلا مراجع.
-// الصلاحية هي `platform.customers.freeze` نفسها المستعملة في الـAPI: اعتماد
-// هويّة يفتح حدوداً مالية أعلى، فهو من جنس القرارات التي تمسّ حساب العميل.
+// فصل القراءة عن القرار: المراجع يرى المستندات بـ`customers.kyc.view`،
+// أمّا اعتمادها أو رفضها فيبقى قراراً حساساً خلف `customers.freeze`.
 Route::prefix('kyc')->name('kyc.')->group(function () {
     $kyc = App\Http\Controllers\Api\V1\Amial\KycDocumentController::class;
 
-    Route::get('/', [$kyc, 'page'])->middleware('platform:platform.customers.freeze')->name('page');
-    Route::get('/queue', [$kyc, 'queue'])->middleware('platform:platform.customers.freeze')->name('queue');
+    Route::get('/', [$kyc, 'page'])->middleware('platform:platform.customers.kyc.view')->name('page');
+    Route::get('/queue', [$kyc, 'queue'])->middleware('platform:platform.customers.kyc.view')->name('queue');
     Route::get('/documents/{id}/file', [$kyc, 'file'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('file');
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.kyc.view')->name('file');
     // AMIAL-KYC-OCR-001 — الحقول المستخرَجة وإقرارها
     Route::get('/documents/{id}/ocr', [$kyc, 'ocr'])
-        ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('ocr');
+        ->where('id', '[0-9]+')->middleware('platform:platform.customers.kyc.view')->name('ocr');
     Route::post('/documents/{id}/fields', [$kyc, 'confirmFields'])
         ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('fields');
     Route::post('/documents/{id}/reread', [$kyc, 'reread'])
@@ -801,8 +802,10 @@ Route::prefix('sentinel')->name('sentinel.')
 
 // ============ AMIAL-EXEC-DASHBOARD-001 — Executive Dashboard ============
 Route::prefix('executive')->name('executive.')->group(function () {
-    Route::get('/', [App\Http\Controllers\Admin\ExecutiveDashboardController::class, 'index'])->name('index');
-    Route::get('/summary', [App\Http\Controllers\Admin\ExecutiveDashboardController::class, 'summary'])->name('summary');
+    Route::get('/', [App\Http\Controllers\Admin\ExecutiveDashboardController::class, 'index'])
+        ->middleware('platform:platform.audit.view')->name('index');
+    Route::get('/summary', [App\Http\Controllers\Admin\ExecutiveDashboardController::class, 'summary'])
+        ->middleware('platform:platform.audit.view')->name('summary');
 });
 
 // ============ AMIAL-ADMIN-HUB-001 — اللوحات المركزية الأربع ============
@@ -982,6 +985,8 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
 //
 // العرض يحتاج ops.view، وإعادة التشغيل تحتاج ops.retry — فمن يراقب ليس
 // بالضرورة من يتدخّل، وفصلُهما يسمح بمنح المراقبة لمن لا يُؤذن له بالتغيير.
+Route::get('/workspace', [OperatorWorkspaceController::class, 'index'])->name('workspace.index');
+
 Route::prefix('ops')->name('ops.')->group(function () {
     Route::get('/', [OpsConsoleController::class, 'index'])
         ->middleware('platform:platform.ops.view')->name('index');
@@ -995,16 +1000,16 @@ Route::prefix('ops')->name('ops.')->group(function () {
     // إسناد الأدوار: من يمنح دور مدير المنصّة يمنح كل شيء دفعةً واحدة،
     // فلا يملكه إلا مدير المنصّة. ولذلك رُبط بأخطر صلاحية لا بصلاحية تشغيل.
     Route::get('/roles', [OperatorRolesController::class, 'index'])
-        ->middleware('platform:platform.settings.update')->name('roles.index');
+        ->middleware('platform:platform.staff.view')->name('roles.index');
 
     Route::post('/roles/{userId}', [OperatorRolesController::class, 'update'])
         ->where('userId', '[0-9]+')
-        ->middleware('platform:platform.settings.update')->name('roles.update');
+        ->middleware('platform:platform.staff.manage')->name('roles.update');
 
     // AMIAL-OPERATOR-CREATE-001 — إنشاءُ موظّفِ منصّةٍ بأدواره.
     // وبالصلاحيّة نفسِها: من يُسند الأدوار هو من يُنشئ من يحملها.
     Route::post('/operators', [OperatorRolesController::class, 'store'])
-        ->middleware('platform:platform.settings.update')->name('operators.store');
+        ->middleware('platform:platform.staff.manage')->name('operators.store');
 });
 
 // ============ AMIAL-SUPERVISION-001 — لوحة الإشراف ============
