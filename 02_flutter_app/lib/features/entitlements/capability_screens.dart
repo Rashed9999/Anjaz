@@ -4,6 +4,8 @@ import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.
 import 'package:amial_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amial_pay/features/corporate/screens/corporate_accounts_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_ops_center_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_companies_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_shifts_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_owner_console_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_tanks_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_variances_screen.dart';
@@ -120,13 +122,21 @@ class CapabilityScreens {
     'fuel_pumps': () => const FuelTanksScreen(),
     'fuel_variance': () => const FuelVariancesScreen(),
     'fuel_cards': () => const FuelOpsCenterScreen(),
+    'fuel_products': () => const FuelOpsCenterScreen(),
+    'fuel_companies': () => const FuelCompaniesScreen(),
+    'fuel_shifts': () => const FuelShiftsScreen(),
     'pharmacy_pos': () => const PharmacyDashboardScreen(),
+    'pharmacy_products': () => const PharmacyDashboardScreen(),
+    'pharmacy_batches': () => const PharmacyDashboardScreen(),
+    'pharmacy_alerts': () => const PharmacyDashboardScreen(),
+    'pharmacy_customers': () => const PharmacyDashboardScreen(),
     // **الوصفاتُ تُدار من لوحة الصيدليّة نفسِها** — وسمُ الصنف وحقولُ
     // الوصفة في البيعة. ولا شاشةَ ثالثةٌ لها، فتُوجَّه إلى موضع عملها.
     // (‏وبلا هذا السطر يظهر سهمُ الدخول ويُضغط فلا يفتح — أمسكه
     // `CapabilityScreenMapGuardTest`.)
     'pharmacy_prescriptions': () => const PharmacyDashboardScreen(),
     'wholesale_invoices': () => const WholesaleDashboardScreen(),
+    'wholesale_collections': () => const WholesaleDashboardScreen(),
     'restaurant_tables': () => const RestaurantScreen(),
 
     // ── تجزئةٌ: أرمزٌ منقّطةٌ فاتت أوّلَ مسحٍ لي ─────────────────────
