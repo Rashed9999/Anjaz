@@ -4,7 +4,6 @@ import 'package:amial_pay/data/api/api_client.dart';
 import 'package:camera/camera.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -67,6 +66,21 @@ Future<void> main() async {
     // (‏وضعٌ صامتٌ أو منعٌ صريح)، وتعطيلُ التطبيق كلِّه أسوأُ من كليهما.
   }
 
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-NOTIFY-DEEPLINK-001 — **الإشعارُ يُفتح ولا يذهب بك إلى شيء.**
+  //
+  // `body` تُملأ من الإشعار الذي أطلق التطبيق ثمّ **تُرمى**، و`orderID`
+  // تُعلَن ولا تُسنَد أبداً ثمّ تُمرَّر إلى `MyApp` فتُخزَّن ولا تُقرأ.
+  // فمن ضغط إشعارَ «وصلك تحويل» يفتح الشاشةَ الافتراضيّة كأنّه فتح
+  // التطبيقَ من أيقونته — ولا خطأَ في أيّ سجلّ.
+  //
+  // **ويُترك ظاهراً عمداً**: المحلّلُ يُنذر بـ«متغيّرٌ لا يُستعمل»، وهو
+  // أثرُ ميزةٍ ناقصةٍ لا فضلةُ شيفرة. وحذفُه يُسكت الإنذارَ ويمحو
+  // الدليل، فتُنسى الميزةُ إلى الأبد. (وصنفُها «مبنيٌّ ولا يُوصَل
+  // إليه» — الميزةُ الناقصة، لا الميّتة.)
+  //
+  // ولا يُوصَل قبل قرارِ الوجهات: أيُّ إشعارٍ يفتح أيَّ شاشة.
+  // ══════════════════════════════════════════════════════════════════
   int? orderID;
   NotificationBody? body;
   try {

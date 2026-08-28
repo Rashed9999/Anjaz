@@ -26,7 +26,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   void initState() {
     super.initState();
     Get.find<AuthController>().bioAthPinSetup(widget.password).then((_) {
-      UserShortDataModel? userData = Get.find<AuthController>().getUserData();
       Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
     });
   }

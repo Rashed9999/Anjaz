@@ -382,7 +382,6 @@ class _AmialRegistrationWizardScreenState
         return;
       }
 
-      final governorate = data['governorate'];
       setState(() {
         _inServiceArea = data['in_service_area'] == true;
         _locationNotice = (data['notice'] as String?) ??

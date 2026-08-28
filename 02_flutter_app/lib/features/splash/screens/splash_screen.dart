@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amial_pay/data/api/api_checker.dart';
 import 'package:amial_pay/helper/route_helper.dart';
