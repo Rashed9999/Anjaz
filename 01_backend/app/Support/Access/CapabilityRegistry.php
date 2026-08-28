@@ -577,7 +577,22 @@ final class CapabilityRegistry
 
             C::make(A::F_PHARMACY_PRODUCTS)->nameAr('أصناف الصيدلية')->group('الصيدلية')->icon('medication')->minPlan(A::PLAN_FREE)->businessTypes([A::BIZ_PHARMACY]),
             C::make(A::F_PHARMACY_ALERTS)->nameAr('تنبيهات الصيدلية')->group('الصيدلية')->icon('warning_amber')->minPlan(A::PLAN_FREE)->businessTypes([A::BIZ_PHARMACY]),
-            C::make(A::F_PHARMACY_CUSTOMERS)->nameAr('عملاء الصيدلية')->group('الصيدلية')->icon('people')->minPlan(A::PLAN_BUSINESS)->businessTypes([A::BIZ_PHARMACY]),
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-SOLD-UNBUILT-001 — **تُباع ولا وجودَ لها.**
+            //
+            // «عملاء الصيدلية» مُعلَنةٌ بـ`minPlan(BUSINESS)` — تظهر في
+            // صفحة التسعير وفي «قدراتي» كأنّها جاهزة. **ولا نقطةَ نهايةٍ
+            // لها في المشروع كلِّه**: لا مسار، ولا متحكّم، ولا حارس.
+            //
+            // فيدفع صاحبُ الصيدليّة ثمنَ الترقية، ويفتح الشاشةَ فلا يجد
+            // شيئاً. **ووعدٌ في صفحة تسعيرٍ لا يُوفّى أسوأ من ميزةٍ
+            // غائبةٍ معلنة.**
+            //
+            // فتُعلَن «قريباً» فتخرج من الباقات حتّى تُبنى — ولا تُحذف،
+            // لأنّ الحذفَ يُنسيها.
+            // ══════════════════════════════════════════════════════════
+            C::make(A::F_PHARMACY_CUSTOMERS)->nameAr('عملاء الصيدلية')->group('الصيدلية')->icon('people')->minPlan(A::PLAN_BUSINESS)->businessTypes([A::BIZ_PHARMACY])
+                ->comingSoon(),
 
             C::make(A::F_PHARMACY_PRESCRIPTIONS)
                 ->nameAr('الوصفات الطبية')

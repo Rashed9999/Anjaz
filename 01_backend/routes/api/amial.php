@@ -832,7 +832,23 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::post('/pumps/{id}/link-products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'linkPumpToProducts'])
                 ->where('id', '[0-9]+')->name('pumps.link');
             // Products + Prices
-            Route::get('/products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listProducts'])->name('products.index');
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-SOLD-UNGATED-001 — **تُباع في الباقة ومفتوحةٌ للجميع.**
+            //
+            // `fuel_products` و`fuel_companies` مُعلَنتان في سجلّ القدرات
+            // بـ`minPlan(BUSINESS)` — أي **تُعرضان في صفحة التسعير ثمناً
+            // للترقية**. والنقطتان كانتا بلا حارسٍ إطلاقاً: يفتحهما تاجرُ
+            // الباقة المجّانيّة كما يفتحهما المشترك.
+            //
+            // فلا التاجرُ الذي دفع نال شيئاً، ولا الذي لم يدفع مُنع.
+            // **والوعدُ في صفحة التسعير أسوأ من غيابه**: يُباع ما لا
+            // يُحجَب، فتفقد الباقةُ معناها.
+            //
+            // (وهو عكسُ «مبنيٌّ ولا يُوصَل إليه»: **موصولٌ ولا يُحرَس**.)
+            // ══════════════════════════════════════════════════════════
+            Route::get('/products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listProducts'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_FUEL_PRODUCTS)
+                ->name('products.index');
             // AMIAL-PRODUCT-QUOTA-002 — **البابُ الرابع.** كان بلا حدٍّ
             // إطلاقاً بينما إخوتُه الثلاثة محروسة — والباقةُ لا تُباع بحدٍّ
             // يلتفّ عليه من يفتح محطّة.
@@ -850,7 +866,10 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
                 ->where('ulid', '[A-Z0-9]{26}')->name('sales.show');
             Route::get('/dashboard', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'dashboard'])->name('dashboard');
             // Company Accounts
-            Route::get('/companies', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listCompanies'])->name('companies.index');
+            // AMIAL-SOLD-UNGATED-001 — انظر `/products` أعلاه.
+            Route::get('/companies', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listCompanies'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_FUEL_COMPANIES)
+                ->name('companies.index');
             Route::post('/companies', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addCompany'])->name('companies.add');
             Route::post('/companies/{id}/payment', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'recordCompanyPayment'])
                 ->where('id', '[0-9]+')->name('companies.payment');

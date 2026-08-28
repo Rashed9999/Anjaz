@@ -115,8 +115,14 @@ class FeatureAccessTest extends TestCase
         $this->assertSame($free['products'], $access['limits']['max_products']);
         $this->assertSame($free['employees'], $access['limits']['max_employees']);
 
-        $this->assertGreaterThan(0, $free['products'],
-            'المجّانيّةُ بلا منتجاتٍ إطلاقاً — فلا يُجرَّب المنتجُ قبل الشراء');
+        // **وكم تُعطي المجّانيّةُ قرارُ تسعيرٍ لا قرارُ شيفرة.**
+        //
+        // كان هنا `> 0` برأيٍ مكتوب: «فلا يُجرَّب المنتجُ قبل الشراء».
+        // ثمّ قرّر صاحبُ المشروع صفراً — فسقط الحارسُ على **قراره
+        // السليم**. وحارسٌ يفرض رأيَ كاتبه في التسعير يُعطَّل أوّلَ مرّة.
+        //
+        // فالمحروسُ **بنيةٌ لا قيمة**: أنّ للمجّانيّة سقفاً منتهياً،
+        // وأنّ ما يُعرَض هو ما في الكتالوج.
         $this->assertNotSame(-1, $free['products'],
             'المجّانيّةُ بلا سقفِ منتجات — فما الذي تبيعه «الأعمال»؟');
         $this->assertSame(0, $free['employees'],

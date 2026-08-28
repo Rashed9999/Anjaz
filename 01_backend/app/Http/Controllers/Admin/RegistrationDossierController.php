@@ -71,7 +71,17 @@ class RegistrationDossierController extends Controller
     {
         $dossier = RegistrationDossier::where('reference', $reference)->firstOrFail();
         $this->pii->logAccess($request->user()->id, 'registration_dossier', $dossier->id, 'registration_pdf', 'export', 'طباعة ملف تسجيل');
-        return response($this->pdf->render($dossier), 200, ['Content-Type' => 'application/pdf', 'Content-Disposition' => 'inline; filename="amial-registration-'.$dossier->reference.'.pdf"']);
+        // **والطولُ يُحسب من البايتات المُرسَلة نفسِها** — لا بنداءٍ ثانٍ
+        // إلى المُصيِّر. فبلا `Content-Length` لا يميّز المتصفّحُ ملفّاً
+        // اكتمل من ملفٍّ انقطع في منتصفه: يُحفَظ نصفُ ملفٍّ ويُفتح فيُرى
+        // تالفاً بلا سببٍ ظاهر. ومعلَنٌ يفترق عن المُرسَل هو العطلُ نفسُه.
+        $bytes = $this->pdf->render($dossier);
+
+        return response($bytes, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Length' => (string) strlen($bytes),
+            'Content-Disposition' => 'inline; filename="amial-registration-'.$dossier->reference.'.pdf"',
+        ]);
     }
 
     public function paper(Request $request, string $reference)

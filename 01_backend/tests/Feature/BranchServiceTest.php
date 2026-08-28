@@ -63,12 +63,31 @@ class BranchServiceTest extends TestCase
      */
     public function a_finite_plan_is_capped_at_its_declared_branch_limit(): void
     {
-        $limit = A::maxBranches(A::PLAN_BUSINESS);
+        // ══════════════════════════════════════════════════════════════
+        // **والحدُّ يُقرأ من الكتالوج، والباقةُ تُختار به لا بالاسم.**
+        //
+        // كان هذا يفترض أنّ «الأعمال» لها حدُّ فروعٍ موجب. ثمّ صارت صفراً
+        // بقرارِ تسعير — فسقط الحارسُ على قرارٍ سليم. **ولا باقةَ اليوم
+        // لها حدٌّ منتهٍ موجب**: صفرٌ في المجّانيّة والأعمال، وبلا حدٍّ في
+        // مؤسسة.
+        //
+        // فيُختار أوّلُ ما له حدٌّ منتهٍ — أيّاً كان اسمُه — ويُحرَس أنّ
+        // الحدَّ **يُفرَض**: صفرٌ يعني المنعَ من أوّل فرع، لا سقفاً لاحقاً.
+        // ══════════════════════════════════════════════════════════════
+        $plan = null;
+        foreach (A::ALL_PLANS as $candidate) {
+            if (A::maxBranches($candidate) !== -1) {
+                $plan = $candidate;
+                break;
+            }
+        }
 
-        $this->assertGreaterThan(0, $limit,
-            'باقةُ الأعمال بلا حدِّ فروعٍ منتهٍ — فالحارسُ لا يقيس شيئاً');
+        $this->assertNotNull($plan,
+            'كلُّ الباقات بلا حدِّ فروع — فلا حدَّ يُفرَض أصلاً');
 
-        $this->setPlan(A::PLAN_BUSINESS);
+        $limit = A::maxBranches($plan);
+
+        $this->setPlan($plan);
 
         for ($i = 1; $i <= $limit; $i++) {
             $this->svc->create($this->merchant, ['name' => "فرع {$i}"]);

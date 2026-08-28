@@ -239,7 +239,6 @@ class EntitlementsGuardTest extends TestCase
 
     public function test_reaching_the_product_limit_says_the_two_numbers(): void
     {
-        $m = $this->merchant(A::PLAN_FREE);
 
         // **الطبقتان تعملان معاً**: الإدارةُ تفتح «الأصناف» على المجّاني،
         // **وحدُّ الباقة يبقى صفراً**. فالفتحُ ليس رفعاً للحدّ — ومن خلطهما
@@ -252,10 +251,24 @@ class EntitlementsGuardTest extends TestCase
         // **والسقفُ يُقرأ من الكتالوج لا يُكتَب رقماً.** كان مكتوباً
         // صفراً، ثمّ فتح توحيدُ الباقات للمجّاني خمسةً وعشرين — فسقط
         // الحارسُ على تغييرٍ مقصود. (وهو أحدُ ثلاثةَ عشرَ سقطت معه.)
-        $max = A::maxProducts(A::PLAN_FREE);
+        // **والباقةُ تُختار بحدِّها لا باسمها** — صارت المجّانيّةُ صفراً
+        // بقرارِ تسعير، فلا يُقاس بها «بلوغُ حدّ»: صفرٌ يمنع من الأوّل.
+        $plan = null;
+        foreach (A::ALL_PLANS as $candidate) {
+            if (A::maxProducts($candidate) > 0) {
+                $plan = $candidate;
+                break;
+            }
+        }
 
-        $this->assertGreaterThan(0, $max,
-            'المجّانيُّ بلا سقفِ أصنافٍ منتهٍ — فالحارسُ لا يقيس بلوغَ حدّ');
+        $this->assertNotNull($plan,
+            'لا باقةَ لها سقفُ أصنافٍ منتهٍ موجب — فلا يُقاس بلوغُ حدٍّ أصلاً');
+
+        $max = A::maxProducts($plan);
+
+        // **والتاجرُ يُنشأ بالباقة المختارة** — كان يُنشأ بالمجّانيّة
+        // ثمّ يُقاس سقفُ غيرِها، فيُقارَن حدٌّ بحدِّ باقةٍ أخرى.
+        $m = $this->merchant($plan);
 
         for ($i = 0; $i <= $max; $i++) {   // سقفٌ + واحد
             \App\Models\MerchantProduct::create([

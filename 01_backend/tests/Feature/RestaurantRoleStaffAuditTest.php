@@ -59,7 +59,13 @@ class RestaurantRoleStaffAuditTest extends TestCase
         $cashier = $this->roleStaff($merchant, 'cashier');
 
         $opened = $this->actingAs($waiter, 'api')
-            ->postJson('/api/v1/amial/merchant/restaurant/orders', [
+            ->postJson(// **والمسارُ يُقرأ من `route:list` لا يُفترَض.**
+            //
+            // كُتب هنا `/merchant/restaurant/...`، والمجموعةُ مسجَّلةٌ
+            // خارج بادئة `merchant`: `/api/v1/amial/restaurant/...`.
+            // فردَّ الخادمُ 404، **وسقط الاختبارُ على مسارٍ لا وجودَ له
+            // لا على عطلٍ في التدقيق** الذي جاء ليحرسه.
+            '/api/v1/amial/restaurant/orders', [
                 'items' => [['name' => 'وجبة اختبار', 'qty' => '1', 'price' => '120']],
             ])
             ->assertCreated()
@@ -71,7 +77,7 @@ class RestaurantRoleStaffAuditTest extends TestCase
             'سجل فتح الطلب نسبه إلى جهاز POS أو المالك بدلاً من النادل');
 
         $this->actingAs($cashier, 'api')
-            ->postJson("/api/v1/amial/merchant/restaurant/orders/{$orderId}/close", [
+            ->postJson("/api/v1/amial/restaurant/orders/{$orderId}/close", [
                 'payment_method' => 'cash',
             ])
             ->assertOk()
