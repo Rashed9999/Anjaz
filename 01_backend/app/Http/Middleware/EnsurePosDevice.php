@@ -5,6 +5,8 @@ namespace App\Http\Middleware;
 use App\Models\Merchant\PosDevice;
 use App\Models\Merchant\PosDeviceSession;
 use App\Models\PosUser;
+use App\Models\User;
+use App\Services\Merchant\MerchantPermissionService;
 use App\Services\OpsAlertService;
 use Closure;
 use Illuminate\Http\JsonResponse;
@@ -68,7 +70,7 @@ class EnsurePosDevice
         // ══════════════════════════════════════════════════════════════
         // لا ربط. **والتاجرُ نفسُه لا يحتاج مقعداً** — المقعدُ للأجهزة
         // العاملة على نقطة البيع، ومالكُ الحساب يدير من أيّ متصفّح.
-        if (! $this->isPosActor($user->id)) {
+        if (! $this->isPosActor($user)) {
             return $next($request);
         }
 
@@ -156,9 +158,31 @@ class EnsurePosDevice
         }
     }
 
-    private function isPosActor(int $userId): bool
+    /**
+     * **صفُّ `pos_users` وحدَه لا يجعل صاحبَه موظّفَ نقطةِ بيع.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * قد يبقى لصاحب المنشأة ربطٌ قديمٌ في `pos_users` من تجربةٍ أو
+     * استيرادٍ سابق. وقراءةُ الصفّ وحدَه تجعله **موظَّفاً في منشأته**،
+     * فيُطلَب منه مقعدُ جهازٍ ويُردّ بـ403.
+     *
+     * **والبابُ يُقفل عليه من الطرفين**: التسجيلُ فعلُ مالكِ المقعد
+     * (مكتوبٌ في `config/amial.php`)، والوسيطُ على مجموعة `auth:api`
+     * كلِّها — فلا يصل إلى شاشة الأجهزة ليُسجّل، ولا إلى غيرها. حسابٌ
+     * مسدودٌ بلا مخرجٍ إلّا الدعم. وهو بعينه ما حذّر منه شرطُ الخروج:
+     * «فالإنفاذُ الفوريُّ يُقفل المتاجرَ لا يحميها».
+     *
+     * **والمِلكيّةُ تُسأل من مصدرها الواحد** — `merchantIdFor` التي
+     * تقدّم `MerchantProfile` على كلّ ربطٍ تابع. وسؤالٌ ثانٍ هنا يعني
+     * تعريفين للمالك يفترقان أوّلَ ما يتغيّر أحدُهما.
+     */
+    private function isPosActor(User $user): bool
     {
-        return PosUser::where('user_id', $userId)->where('is_active', true)->exists();
+        if (! PosUser::where('user_id', $user->id)->where('is_active', true)->exists()) {
+            return false;
+        }
+
+        return ! app(MerchantPermissionService::class)->isOwner($user);
     }
 
     /**

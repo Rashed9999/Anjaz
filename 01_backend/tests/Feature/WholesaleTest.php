@@ -207,7 +207,10 @@ class WholesaleTest extends TestCase
         ]);
         PaymentRequest::create([
             'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
-            'short_code' => 'WHQR-1001',
+            // **ورمزُ الطلب ستّةُ محارفَ من أبجديّةٍ بلا التباس** — كما
+            // يولّده `PaymentRequestService::generateShortCode`، والعمودُ
+            // `varchar(8)`. وكان هنا تسعةٌ، فسقط الإدراجُ بـ1406.
+            'short_code' => 'WHQRAA',
             'requester_user_id' => $this->merchant->id,
             'amount' => '5000.0000',
             'share_method' => 'qr',
@@ -256,7 +259,7 @@ class WholesaleTest extends TestCase
         ]);
         PaymentRequest::create([
             'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
-            'short_code' => 'WHQR-1002',
+            'short_code' => 'WHQRAB',
             'requester_user_id' => $this->merchant->id,
             'amount' => '999.0000',
             'share_method' => 'qr',
@@ -294,7 +297,7 @@ class WholesaleTest extends TestCase
         );
         PaymentRequest::create([
             'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
-            'short_code' => 'WHQR-2001',
+            'short_code' => 'WHQRBA',
             'requester_user_id' => $this->merchant->id,
             'amount' => '2000.0000',
             'share_method' => 'qr',

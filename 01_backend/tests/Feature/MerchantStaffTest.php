@@ -64,11 +64,21 @@ class MerchantStaffTest extends TestCase
             'pos_number' => 'POS-01', 'display_name' => 'أحمد', 'is_active' => true,
         ]);
 
-        // القائمة
+        // ══════════════════════════════════════════════════════════════
+        // **والعقدُ الجديد اسمُه `employee_code`.**
+        //
+        // فُصل حسابُ الموظّف عن جهاز نقطة البيع، فصار الردُّ يقول
+        // `employee_code` — والعمودُ في القاعدة `pos_number` كما هو لئلّا
+        // تنكسر المبيعاتُ القديمة. وكان هذا الفحصُ يقرأ الاسمَ القديم من
+        // الردّ فيجد `null`.
+        //
+        // **والمدخلُ يُجرَّب من بابيه**: الإنشاءُ أعلاه أُرسل بـ`pos_number`
+        // ونجح، وهو عهدُ التوافق الخلفيّ. (القاعدة الرابعة.)
+        // ══════════════════════════════════════════════════════════════
         $this->getJson('/api/v1/amial/merchant/staff')
             ->assertOk()
             ->assertJsonPath('meta.count', 1)
-            ->assertJsonPath('meta.staff.0.pos_number', 'POS-01');
+            ->assertJsonPath('meta.staff.0.employee_code', 'POS-01');
 
         // تعطيل
         $this->postJson("/api/v1/amial/merchant/staff/{$staffId}/toggle")

@@ -309,11 +309,26 @@ class AdminHubTest extends TestCase
             ->getJson('/admin/amial/hub/subscriptions/list.json')
             ->assertOk()->assertJsonStructure(['summary', 'data']);
 
-        // تغيير الباقة يمرّ عبر SubscriptionService الحقيقي ويغيّر الملف فعلاً
+        // ══════════════════════════════════════════════════════════════
+        // تغيير الباقة يمرّ عبر SubscriptionService الحقيقي ويغيّر الملف فعلاً.
+        //
+        // **والرمزُ يُقرأ من الفهرس لا يُكتب نصّاً.** كان مكتوباً هنا
+        // `'merchant_pro'` حرفاً، فلمّا وحّد صاحبُ المشروع الباقاتِ في
+        // ثلاثٍ سقط الاختبارُ بـ422 على **قرارِ تسعيرٍ سليم** لا على عطل.
+        // واختبارٌ يحرس صيغةَ رمزٍ بدل أن يحرس أنّ التغييرَ يقع
+        // **يمنع تصحيحاً صحيحاً**. (القاعدة السادسة بمعناها: يُقرأ من
+        // مصدره لا من نسخةٍ مجمَّدة.)
+        // ══════════════════════════════════════════════════════════════
+        $plans = \App\Support\Access\AccessConstants::ALL_PLANS;
+        $target = $plans[count($plans) - 1];
+
+        $this->assertNotSame(\App\Support\Access\AccessConstants::PLAN_FREE, $target,
+            'أعلى الباقات هي المجّانيّة — فالفهرسُ فارغٌ أو مقلوب، والاختبارُ لا يغيّر شيئاً');
+
         $this->actingAs($this->admin, 'user')
-            ->postJson("/admin/amial/hub/subscriptions/{$merchant->id}/plan", ['plan' => 'merchant_pro'])
+            ->postJson("/admin/amial/hub/subscriptions/{$merchant->id}/plan", ['plan' => $target])
             ->assertOk();
-        $this->assertSame('merchant_pro',
+        $this->assertSame($target,
             \App\Models\MerchantProfile::where('user_id', $merchant->id)->value('subscription_plan'));
 
         // والتمديد يحرّك تاريخ الانتهاء

@@ -11,8 +11,10 @@ import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen
 import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
+import 'package:amial_pay/features/kyc_verification/screens/my_profile_changes_screen.dart';
 import 'package:amial_pay/features/reports/screens/amial_account_statement_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
 import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
@@ -180,6 +182,16 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
           subtitle: 'وافق أو ارفض',
           onTap: () => Get.to(() => const IncomingRequestsScreen()),
         ),
+      // تبسيطُ شاشة الخدمات أسقط هذا البابَ وأبقى أخاه، فصار المستخدم
+      // يرى ما طُلب منه ولا يرى ما طلبه — والبابُ الباقي إلى «الصادرة»
+      // داخلَ طلبٍ مفتوحٍ سلفاً، أي لا يُوصَل إليها من التنقّل أصلاً.
+      if (access.has('payment_requests'))
+        _serviceCard(
+          icon: Icons.outbox,
+          label: 'طلبات صادرة',
+          subtitle: 'ما طلبتَه من غيرك',
+          onTap: () => Get.to(() => const OutgoingRequestsScreen()),
+        ),
       _serviceCard(
         icon: Icons.account_balance_wallet_outlined,
         label: 'كشف حساب',
@@ -200,6 +212,23 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
           subtitle: 'الإعدادات والخدمات',
           onTap: () => Get.to(() => const MerchantServicesHubScreen()),
         ),
+      // ══════════════════════════════════════════════════════════════
+      // **الحلقةُ الأخيرة — وكانت مقطوعة.**
+      //
+      // الخادمُ يفتح طلبَ تحديثِ البيانات، واللوحةُ تعرض الطابور،
+      // **والشاشةُ مبنيّةٌ ولا بطاقةَ تقود إليها**. فيبقى الطلبُ
+      // `PENDING_CUSTOMER` إلى الأبد: العميلُ مطلوبٌ منه شيءٌ ولا يعلم،
+      // ولا سطرَ خطأٍ في أيّ سجلّ.
+      //
+      // وهو النمطُ الأكثرُ تكراراً في المشروع: مبنيٌّ ولا يُوصَل إليه.
+      // **وصفحةٌ لا يُوصل إليها ليست مبنيّة.**
+      // ══════════════════════════════════════════════════════════════
+      _serviceCard(
+        icon: Icons.assignment_ind_outlined,
+        label: 'تحديث بياناتي',
+        subtitle: 'ما هو مطلوب منك · وصلاحية هويّتك',
+        onTap: () => Get.to(() => const MyProfileChangesScreen()),
+      ),
       _serviceCard(
         icon: Icons.support_agent_outlined,
         label: 'الدعم والمساعدة',

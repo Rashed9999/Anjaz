@@ -66,7 +66,7 @@ class EntitlementsGuardTest extends TestCase
             'قفلُ الباقة يُقال «صلاحية» — فيبحث التاجر عن دورٍ يمنحه لنفسه ولن يجد');
         $this->assertGreaterThan(0, $r['unlock']['price_monthly'],
             'رسالةٌ بلا سعرٍ ولا اسمِ باقة ليست طريقَ خروج');
-        $this->assertSame('تاجر محترف', $r['unlock']['plan_name']);
+        $this->assertSame(A::PLAN_LABELS[A::PLAN_ENTERPRISE], $r['unlock']['plan_name']);
     }
 
     public function test_a_pro_merchant_gets_the_same_capability(): void
@@ -249,16 +249,26 @@ class EntitlementsGuardTest extends TestCase
             'is_enabled' => true, 'reason' => 'تجربة: أصناف على المجّاني',
         ]);
 
-        \App\Models\MerchantProduct::create([
-            'merchant_user_id' => $m->id, 'name' => 'صنف',
-            'price' => '10', 'cost_price' => '5', 'quantity' => '1', 'is_active' => true,
-        ]);
+        // **والسقفُ يُقرأ من الكتالوج لا يُكتَب رقماً.** كان مكتوباً
+        // صفراً، ثمّ فتح توحيدُ الباقات للمجّاني خمسةً وعشرين — فسقط
+        // الحارسُ على تغييرٍ مقصود. (وهو أحدُ ثلاثةَ عشرَ سقطت معه.)
+        $max = A::maxProducts(A::PLAN_FREE);
+
+        $this->assertGreaterThan(0, $max,
+            'المجّانيُّ بلا سقفِ أصنافٍ منتهٍ — فالحارسُ لا يقيس بلوغَ حدّ');
+
+        for ($i = 0; $i <= $max; $i++) {   // سقفٌ + واحد
+            \App\Models\MerchantProduct::create([
+                'merchant_user_id' => $m->id, 'name' => "صنف {$i}",
+                'price' => '10', 'cost_price' => '5', 'quantity' => '1', 'is_active' => true,
+            ]);
+        }
 
         $r = $this->svc()->state($m->fresh(), A::F_PRODUCTS);
 
         $this->assertSame(EntitlementService::LIMIT_REACHED, $r['state']);
-        $this->assertSame(1, $r['usage']['used']);
-        $this->assertSame(0, $r['usage']['max']);
+        $this->assertSame($max + 1, $r['usage']['used']);
+        $this->assertSame($max, $r['usage']['max']);
         $this->assertNotNull($r['unlock'],
             'بلغ الحدَّ ولا يُقال أيّ باقةٍ ترفعه — منعٌ بلا طريق خروج');
     }

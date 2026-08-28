@@ -763,6 +763,22 @@ class WholesaleController extends Controller
     /** إلغاء QR جملة أنشئ باسم المالك عندما تكون الجلسة لموظف نقطة بيع. */
     public function cancelWholesalePaymentRequest(Request $request, int $requestId): JsonResponse
     {
+        // ══════════════════════════════════════════════════════════════
+        // **السياسةُ تُعلن الصلاحيّةَ لهذا الفعل والنقطةُ لا تسألها.**
+        //
+        // `WholesaleAccessPolicyService` فيها `payment_request.cancel`
+        // مربوطاً بـ`WHOLESALE_INVOICE_CREATE` — ومع ذلك كانت هذه
+        // الدالّةُ تلغي **طلبَ تحصيلِ مال** بلا فحصٍ واحد.
+        //
+        // وإخفاءُ الزرّ في الواجهة ليس أماناً: من يعرف المسارَ يناديه بلا
+        // زرّ. (القاعدةُ الثامنة.) وموظّفُ مبيعاتٍ لا يملك إنشاءَ فاتورة
+        // كان يستطيع إلغاءَ تحصيلِ غيره.
+        //
+        // والصلاحيّةُ **تُؤخَذ من السياسة لا تُخترَع** — فقيمتان لفعلٍ
+        // واحدٍ في موضعين تفترقان مع أوّل تعديل.
+        // ══════════════════════════════════════════════════════════════
+        if ($deny = $this->guard($request, P::WHOLESALE_INVOICE_CREATE)) return $deny;
+
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;

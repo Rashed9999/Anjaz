@@ -194,10 +194,25 @@ class SoldButUnbuiltGuardTest extends TestCase
             ->getJson('/api/v1/amial/merchant/pharmacy/alerts')
             ->assertStatus(402);
 
-        // والوصفاتُ — من «تاجر محترف».
-        $starter = $this->merchant(A::BIZ_PHARMACY, A::PLAN_STARTER);
+        // ══════════════════════════════════════════════════════════════
+        // **والباقةُ تُقرأ من سجلّ القدرات لا تُكتَب اسماً.**
+        //
+        // كان مكتوباً «من تاجر محترف»، ثمّ نزل `minPlan` للوصفات إلى
+        // «الأعمال» في توحيد الكتالوج — **قرارُ تسعيرٍ لا ثغرةُ جدار**.
+        // فسقط الحارسُ على تغييرٍ مقصود، وأوهم أنّ جداراً مدفوعاً انكسر.
+        //
+        // فيُجرَّب على **الباقة التي دون الحدّ المُعلَن** أيّاً كانت:
+        // يبقى الجدارُ محروساً، ويتبع الكتالوجَ حيثما ذهب.
+        // ══════════════════════════════════════════════════════════════
+        $min = \App\Support\Access\CapabilityRegistry::find(A::F_PHARMACY_PRESCRIPTIONS)?->minimumPlan();
 
-        $this->actingAs($starter, 'api')
+        $this->assertNotNull($min, 'الوصفاتُ بلا حدِّ باقةٍ مُعلَن');
+
+        $below = $min === A::PLAN_ENTERPRISE ? A::PLAN_BUSINESS : A::PLAN_FREE;
+
+        $under = $this->merchant(A::BIZ_PHARMACY, $below);
+
+        $this->actingAs($under, 'api')
             ->postJson('/api/v1/amial/merchant/pharmacy/products', [
                 'trade_name' => 'دواء', 'sale_price' => 10,
                 'requires_prescription' => true,

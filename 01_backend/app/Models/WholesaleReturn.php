@@ -27,6 +27,5 @@ class WholesaleReturn extends Model
 
     public function invoice(): BelongsTo { return $this->belongsTo(WholesaleInvoice::class, 'invoice_id'); }
     public function customer(): BelongsTo { return $this->belongsTo(WholesaleCustomer::class, 'customer_id'); }
-    public function customer(): BelongsTo { return $this->belongsTo(WholesaleCustomer::class, 'customer_id'); }
     public function items(): HasMany { return $this->hasMany(WholesaleReturnItem::class, 'return_id'); }
 }

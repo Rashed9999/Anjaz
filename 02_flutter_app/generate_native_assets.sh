@@ -19,7 +19,7 @@ echo "=== Amial Pay — Native Assets Generator ==="
 echo "[1/4] flutter pub get..."
 flutter pub get
 
-# 2) توحيد الأصل قبل أي توليد: لا نسخة AMYAL أو إطار أبيض قديم.
+# 2) توحيد الأصل قبل أي توليد: لا نسخة بالهجاء القديم (بالياء) ولا إطار أبيض.
 echo "[2/5] Generating canonical brand assets..."
 python3 scripts/generate_brand_assets.py
 python3 scripts/generate_launch_logo.py

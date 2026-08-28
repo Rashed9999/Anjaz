@@ -87,12 +87,16 @@ class WholesaleCollectionService
                 if (!$paymentRequest) {
                     throw new RuntimeException('مرجع أميال باي غير صالح لهذه المحفظة أو لم يكتمل الدفع');
                 }
-                if (MoneyService::compare((string) $paymentRequest->amount, $amount) !== 0) {
-                    throw new RuntimeException('مبلغ تحصيل أميال باي لا يطابق مبلغ التسوية');
-                }
+                // **والترتيبُ نفسُه هنا** — انظر `WholesaleInvoiceService`:
+                // المستهلَكُ يُقال قبل غير المطابق، وإلّا أُرسل التاجرُ
+                // يُطابق مبلغاً لن يُقبل بأيّ حال. وبابان لحقيقةٍ واحدة
+                // يجب أن يقولاها بالترتيب نفسِه. (القاعدة الرابعة.)
                 if (WholesaleInvoice::where('paid_transaction_id', $paidTransactionId)->exists()
                     || WholesaleCollection::where('paid_transaction_id', $paidTransactionId)->exists()) {
                     throw new RuntimeException('تم ربط حركة أميال باي هذه بتحصيل أو فاتورة مسبقاً');
+                }
+                if (MoneyService::compare((string) $paymentRequest->amount, $amount) !== 0) {
+                    throw new RuntimeException('مبلغ تحصيل أميال باي لا يطابق مبلغ التسوية');
                 }
             }
 
