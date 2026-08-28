@@ -237,21 +237,37 @@ class PlatformRoleEnforcementTest extends TestCase
         $admin   = $this->admin('967770000108', PlatformRoleService::ADMIN);
 
         $seenBySupport = $this->actingAs($support, 'user')
-            ->get(route('admin.dashboard'))->assertOk()->getContent();
+            ->get(route('admin.amial.workspace.index'))->assertOk()->getContent();
 
-        foreach (['مركز الرسوم والأرباح', 'تسويات الوكلاء', 'المركز المالي'] as $label) {
-            $this->assertStringNotContainsString($label, $seenBySupport,
-                "«{$label}» ظهر لموظّف الدعم — ويردّ ٤٠٣ حين يضغطه");
+        // ══════════════════════════════════════════════════════════════
+        // **وتُقاس الوجهةُ لا التسمية.**
+        //
+        // كانت هذه تبحث عن «مركز الرسوم والأرباح» نصّاً، فلمّا نُقلت
+        // الروابطُ إلى مساحة العمل صارت التسميةُ «الرسوم والأرباح» —
+        // **فسقط الحارسُ على إعادة تنظيمٍ سليمة**، والوجهةُ لم تتغيّر.
+        //
+        // والمحروسُ أن **لا يبلغ الدعمُ شاشةَ المال**، لا أن تُكتب
+        // بصياغةٍ بعينها. وحارسٌ يمنع تسميةً أفضلَ يُعطَّل ثمّ لا يحرس.
+        // ══════════════════════════════════════════════════════════════
+        $moneyDoors = [
+            route('admin.amial.fees.index'),
+            route('admin.amial.hub.settlements'),
+            route('admin.amial.hub.finance'),
+        ];
+
+        foreach ($moneyDoors as $url) {
+            $this->assertStringNotContainsString($url, $seenBySupport,
+                "«{$url}» ظهر لموظّف الدعم — ويردّ ٤٠٣ حين يضغطه");
         }
 
         // والضبط المقابل: تظهر لمن يملكها، وإلّا كان الاختبار يفحص قالباً
         // فارغاً لا فلترةً تعمل.
         $seenByAdmin = $this->actingAs($admin, 'user')
-            ->get(route('admin.dashboard'))->assertOk()->getContent();
+            ->get(route('admin.amial.workspace.index'))->assertOk()->getContent();
 
-        foreach (['مركز الرسوم والأرباح', 'تسويات الوكلاء'] as $label) {
-            $this->assertStringContainsString($label, $seenByAdmin,
-                "«{$label}» اختفى عن مدير المنصّة — الفلترة تُخفي عن الجميع");
+        foreach ([$moneyDoors[0], $moneyDoors[1]] as $url) {
+            $this->assertStringContainsString($url, $seenByAdmin,
+                "«{$url}» اختفى عن مدير المنصّة — الفلترة تُخفي عن الجميع");
         }
     }
 }

@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Tests\Support\ReadsAdminNavigation;
 use Tests\TestCase;
 
 /**
@@ -22,6 +23,7 @@ use Tests\TestCase;
 class AdminSidebarIntegrityTest extends TestCase
 {
     use RefreshDatabase;
+    use ReadsAdminNavigation;
 
     private function admin(): User
     {
@@ -40,69 +42,79 @@ class AdminSidebarIntegrityTest extends TestCase
         return $u;
     }
 
-    /** كلّ روابط القائمة كما تُصيَّر فعلاً لمدير منصّة. */
-    private function renderedLinks(): array
-    {
-        $html = $this->actingAs($this->admin(), 'user')
-            ->get('/admin')->assertOk()->getContent();
-
-        // من داخل الشريط الجانبي وحده: الصفحة كلّها فيها روابط أخرى.
-        preg_match('~<aside[^>]*amial-sidebar.*?</aside>~s', $html, $m);
-        $this->assertNotEmpty($m, 'تعذّر العثور على الشريط الجانبي في الصفحة');
-
-        // الفاصل `~` لا `#`: الأخير يظهر داخل صنف المحارف `[^"#]` فيُنهي
-        // التعبير قبل أوانه — «Unknown modifier». (سقط الاختبار عليه فعلاً.)
-        preg_match_all('~<a[^>]+href="([^"#]+)"~', $m[0], $hrefs);
-
-        return array_values(array_filter(
-            $hrefs[1],
-            // روابط المجموعات (`#amial-grp-0`) ليست وجهات — تُستبعد.
-            static fn (string $h): bool => $h !== '' && !str_starts_with($h, '#'),
-        ));
-    }
-
     /** @test */
     public function no_destination_appears_twice_in_the_menu(): void
     {
         // وجهةٌ واحدة باسمين ليست إزعاجاً بصريّاً فحسب — انظر شرح الصنف.
-        $links = $this->renderedLinks();
+        //
+        // ══════════════════════════════════════════════════════════════
+        // **ويُقاس داخلَ كلّ سطحٍ لا بينهما.** فـ«الموظفون والصلاحيات»
+        // و«أمان حسابي» مقصودتان في الشريط **و** في مساحة العمل: البابُ
+        // السريعُ لأكثرِ ما يُفتح ليس تكراراً بل تصميم. والمحروسُ أن لا
+        // تظهر الوجهةُ مرّتين **في الصفحة الواحدة** — فهناك يظنّها
+        // القارئُ شاشتين فيجرّب الاثنتين.
+        // ══════════════════════════════════════════════════════════════
+        $admin = $this->admin();
 
-        $counts = array_count_values($links);
-        $dupes = array_keys(array_filter($counts, static fn (int $n): bool => $n > 1));
+        foreach ([
+            'الشريط الجانبي' => $this->sidebarLinks($admin),
+            'مساحة العمل' => $this->workspaceLinks($admin),
+        ] as $surface => $links) {
+            $counts = array_count_values($links);
+            $dupes = array_keys(array_filter($counts, static fn (int $n): bool => $n > 1));
 
-        $this->assertSame([], $dupes,
-            "وجهاتٌ مكرّرة في القائمة الجانبية:\n  " . implode("\n  ", $dupes)
-            . "\n\nكلّ وجهةٍ تظهر مرّة واحدة باسمٍ واحد.");
+            $this->assertSame([], $dupes,
+                "وجهاتٌ مكرّرة في «{$surface}»:\n  " . implode("\n  ", $dupes)
+                . "\n\nكلّ وجهةٍ تظهر مرّة واحدة باسمٍ واحد.");
+        }
     }
 
     /** @test */
     public function every_menu_link_points_at_a_route_that_exists(): void
     {
         // رابطٌ إلى مسارٍ محذوف يُسقط **الصفحة كلّها** لا الرابط وحده:
-        // `route()` ترمي استثناءً عند التصيير. فالفحص هنا أنّ الصفحة صُيّرت
-        // أصلاً — وهو ما تفعله `renderedLinks()` بـ`assertOk()`.
-        $links = $this->renderedLinks();
+        // `route()` ترمي استثناءً عند التصيير. فالفحص هنا أنّ الصفحتين
+        // صُيّرتا أصلاً — وهو ما يفعله `reachableAdminLinks()` بـ`assertOk()`.
+        $links = $this->reachableAdminLinks($this->admin());
 
         $this->assertGreaterThan(25, count($links),
-            'عدد روابط القائمة أقلّ ممّا يجب — هل سقطت مجموعة صامتةً؟');
+            'عدد الوجهات المتاحة أقلّ ممّا يجب — هل سقطت مجموعة صامتةً؟');
     }
 
     /** @test */
     public function the_menu_is_grouped_not_one_flat_column(): void
     {
-        $html = $this->actingAs($this->admin(), 'user')->get('/admin')->getContent();
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-ADMIN-NAV-SURFACE-001 — **يُقاس التجميعُ لا أسماؤه.**
+        //
+        // كانت هذه تبحث عن عشرة عناوينَ عربيّةٍ نصّاً («المال والدفتر» …)،
+        // فسقطت مرّتين على إعادتَي تنظيمٍ **سليمتين**: مرّةً حين صار
+        // التجميعُ بالموضوع فتغيّرت الأسماء، ومرّةً حين انتقلت المجموعاتُ
+        // من الشريط إلى تبويبات مساحة العمل.
+        //
+        // **والمحروسُ أن لا تعود خمسون وجهةً عموداً واحداً** — لا أن
+        // تُكتب المجموعةُ بصياغةٍ بعينها. فيُقاس عددُ المجموعات وأن لا
+        // تبتلعَ واحدةٌ كلَّ شيء.
+        // ══════════════════════════════════════════════════════════════
+        $html = $this->workspaceHtml($this->admin());
 
-        // AMIAL-SIDEBAR-SUBJECT-001 — **الأسماءُ تغيّرت مع التجميع بالموضوع**
-        // (عملاء · تجّار · وكلاء …) بدل التجميع بالنظام (مراكز · أمان …).
-        // وبقيت هذه القائمةُ على الأسماء القديمة، **فسقط الحارسُ منذ ذلك
-        // التغيير ولم يره أحد**: مجموعةُ الاختبارات كانت تنهار قبل بلوغه.
-        foreach ([
-            'العملاء', 'التجّار', 'رقابة عمل التجّار', 'الوكلاء',
-            'المال والدفتر', 'الامتثال والمخاطر', 'الصلاحيات',
-            'خدمات المنصّة', 'المحتوى والتواصل', 'الإعدادات والتشغيل',
-        ] as $group) {
-            $this->assertStringContainsString($group, $html,
-                "مجموعة «{$group}» غائبة عن القائمة");
+        preg_match_all('~data-bs-target="#workspace-([a-z-]+)"~', $html, $m);
+        $groups = array_unique($m[1]);
+
+        $this->assertGreaterThanOrEqual(6, count($groups),
+            'الوجهات عادت عموداً واحداً — التجميع سقط: ' . implode(' · ', $groups));
+
+        // ولا تبتلع مجموعةٌ واحدةٌ أكثرَ من ثلث الوجهات: تجميعٌ بالاسم
+        // وحده وقائمةٌ مسطّحةٌ تحته.
+        $total = count($this->workspaceLinks($this->admin()));
+
+        preg_match_all('~id="workspace-[a-z-]+".*?(?=<div class="tab-pane|\z)~s', $html, $panes);
+
+        foreach ($panes[0] as $pane) {
+            $inPane = preg_match_all('~<a[^>]+href="[^"#]+"~', $pane);
+
+            $this->assertLessThanOrEqual((int) ceil($total / 3), $inPane,
+                "مجموعةٌ واحدةٌ تحمل {$inPane} من {$total} وجهة — تجميعٌ بالاسم لا بالمعنى");
         }
     }
 
@@ -148,18 +160,33 @@ class AdminSidebarIntegrityTest extends TestCase
      */
     public function reorganising_did_not_drop_a_critical_panel(): void
     {
-        $links = $this->renderedLinks();
+        // **ولا يعنيها في أيّ الصفحتين وُجد الرابط** — بل أن يبلغه المدير
+        // من مكانٍ يمرّ به. وهذا هو الاختبارُ الوحيدُ هنا الذي تُقاس فيه
+        // الصفحتان معاً: المحروسُ الوصولُ لا الموضع.
+        // ══════════════════════════════════════════════════════════════
+        // **والمسارُ يُطابَق كاملاً لا جزءاً منه.**
+        //
+        // كان `str_contains` هو المقياس، فجُرّب هذا الحارسُ بالعكس —
+        // حُذفت بطاقةُ «مراجعة الهوية» من مساحة العمل — **فمرّ**: لأنّ
+        // «طلبات تحديث بيانات العملاء» تشير إلى `admin/amial/kyc/changes`
+        // وفيها المسارُ المطلوب نصّاً.
+        //
+        // فكان يقول «مراجعةُ الهويّة موصولة» وهي غيرُ موصولة — وحارسٌ
+        // يمرّ والعطلُ قائم أسوأ من غيابه.
+        // ══════════════════════════════════════════════════════════════
+        $paths = array_map(
+            static fn (string $l): string => rtrim((string) parse_url($l, PHP_URL_PATH), '/'),
+            $this->reachableAdminLinks($this->admin()),
+        );
 
         foreach ([
-            'admin/amial/kyc' => 'مراجعة الهوية',
-            'admin/amial/aml' => 'مكافحة غسل الأموال',
-            'admin/amial/ledger' => 'مركز الدفتر',
-            'admin/amial/partner-settlements' => 'تسويات الشركاء',
-            'admin/support-center' => 'مركز الدعم',
-        ] as $needle => $label) {
-            $found = array_filter($links, static fn (string $l): bool => str_contains($l, $needle));
-
-            $this->assertNotEmpty($found,
+            '/admin/amial/kyc' => 'مراجعة الهوية',
+            '/admin/amial/aml' => 'مكافحة غسل الأموال',
+            '/admin/amial/ledger' => 'مركز الدفتر',
+            '/admin/amial/partner-settlements' => 'تسويات الشركاء',
+            '/admin/support-center' => 'مركز الدعم',
+        ] as $path => $label) {
+            $this->assertContains($path, $paths,
                 "«{$label}» اختفت من القائمة بعد إعادة التنظيم — تعمل ولا أحد يصل إليها");
         }
     }

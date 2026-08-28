@@ -206,6 +206,41 @@
                                     <button class="btn btn-sm btn-primary" type="submit" @disabled((int)$op->id === $current_user_id)>حفظ التبويبات</button>
                                 </form>@endif
 
+                                {{-- ══════════════════════════════════════════════════════
+                                     AMIAL-OPS-ROLES-NAV-001 — **دورٌ يُسنَد في الخادم ولا
+                                     نموذجَ له في الشاشة.**
+
+                                     نُقلت هذه الصفحةُ إلى «التبويبات»، فسقط نموذجُ إسناد
+                                     الأدوار — **والمتحكّمُ ما زال يقبله**
+                                     (`operator_action=roles`)، و`$roles` ما زالت تُمرَّر
+                                     إلى القالب ولا تُعرَض.
+
+                                     **والصلاحيّاتُ تُشتقّ من الأدوار لا من التبويبات**
+                                     (`hasPlatformPermission` تقرأ `role_permissions`).
+                                     فموظّفٌ جديدٌ بلا دورٍ لا يفتح شيئاً، **ولا سبيلَ
+                                     لمنحه دوراً من أيّ شاشة**. ودورٌ لا يُسنَد ليس
+                                     موجوداً عمليّاً — وهي القاعدة الثانية عشرة.
+                                     ══════════════════════════════════════════════════════ --}}
+                                @if($can_manage)
+                                    <form method="POST" action="{{ route('admin.amial.ops.roles.update', $op->id) }}"
+                                          class="d-flex flex-wrap align-items-center gap-2">
+                                        @csrf
+                                        <input type="hidden" name="operator_action" value="roles">
+                                        <select name="role_ids[]" multiple size="3"
+                                                class="form-select form-select-sm" style="min-width:220px"
+                                                @disabled((int)$op->id === $current_user_id)>
+                                            @foreach ($roles as $role)
+                                                <option value="{{ $role->id }}"
+                                                    @selected(in_array($role->id, $op->platform_role_ids ?? [], true))>
+                                                    {{ $role->label_ar ?? $role->code }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                        <button class="btn btn-sm btn-outline-primary" type="submit"
+                                                @disabled((int)$op->id === $current_user_id)>حفظ الأدوار</button>
+                                    </form>
+                                @endif
+
                                 @if($can_reset_pins && (int)$op->id !== $current_user_id)
                                     <form method="POST" action="{{ route('admin.amial.ops.roles.update', $op->id) }}"
                                           onsubmit="return confirm('سيُلغى PIN الحالي ويُرسل PIN جديد إلى بريد الموظف. متابعة؟')">

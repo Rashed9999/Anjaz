@@ -8,6 +8,7 @@ use App\Services\KycGeoConsistencyService;
 use App\Support\YemenGovernorates;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\EstablishesKycEvidence;
+use Tests\Support\OpensAccountsFromHub;
 use Tests\TestCase;
 
 /**
@@ -20,6 +21,7 @@ use Tests\TestCase;
  */
 class ZoneEnforcementGapsTest extends TestCase
 {
+    use OpensAccountsFromHub;
     use RefreshDatabase;
     use EstablishesKycEvidence;
 
@@ -39,12 +41,18 @@ class ZoneEnforcementGapsTest extends TestCase
 
     private function createViaHub(array $extra = []): User
     {
+        // AMIAL-KYC-DOSSIER-FIXTURE-001 — **الهاتفُ يُلتقط قبل أن يُرسَل.**
+        //
+        // كان يُولَّد داخلَ المصفوفة، وملفُّ «اعرف عميلك» يشتقّ منه رقمَ
+        // الهويّة — فلو وُلّد مرّتين لاختلف الرقمان وسقط الاتّساق.
+        $phone = $extra['phone'] ?? '77' . random_int(1000000, 9999999);
+
         $this->actingAs($this->admin(), 'user')
             ->postJson('/admin/amial/hub/customers/users', array_merge([
                 'f_name' => 'اختبار', 'l_name' => 'مناطق',
-                'phone' => '77' . random_int(1000000, 9999999),
+                'phone' => $phone,
                 'password' => 'Passw0rd!123',
-            ], $extra))->assertSuccessful();
+            ] + $this->kycDossier($phone), $extra))->assertSuccessful();
 
         return User::latest('id')->first();
     }

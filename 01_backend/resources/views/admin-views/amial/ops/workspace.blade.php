@@ -53,7 +53,31 @@
     <div class="d-flex align-items-center gap-3 mb-4"><div><h2 class="page-header-title mb-1">مساحة عمل المنصّة</h2><p class="text-muted mb-0">كل الخدمات في تبويبات واضحة. ما لا يملكه الموظف لا يظهر ولا يفتح.</p></div></div>
     @if($tabs === [])<div class="alert alert-warning">لا توجد تبويبات ممنوحة لهذا الحساب. راجع مدير المنصة.</div>@else
     <ul class="nav nav-pills gap-2 mb-4 flex-wrap" role="tablist">@foreach($tabs as $index => $tab)<li class="nav-item"><button class="nav-link {{ $index === 0 ? 'active' : '' }}" data-bs-toggle="tab" data-bs-target="#workspace-{{ $tab['id'] }}" type="button">{{ $tab['icon'] }} {{ $tab['title'] }}</button></li>@endforeach</ul>
-    <div class="tab-content">@foreach($tabs as $index => $tab)<div class="tab-pane fade {{ $index === 0 ? 'show active' : '' }}" id="workspace-{{ $tab['id'] }}"><div class="row g-3">@foreach($tab['items'] as $item)@if($can($item[2]))<div class="col-md-6 col-xl-4"><a class="card h-100 text-decoration-none" href="{{ $item[1] }}" @if(($item[3] ?? null) === '_blank') target="_blank" rel="noopener" @endif><div class="card-body d-flex align-items-center justify-content-between"><strong>{{ $item[0] }}</strong><span>←</span></div></a></div>@endif@endforeach</div></div>@endforeach</div>
+    <div class="tab-content">@foreach($tabs as $index => $tab)<div class="tab-pane fade {{ $index === 0 ? 'show active' : '' }}" id="workspace-{{ $tab['id'] }}"><div class="row g-3">@foreach($tab['items'] as $item)
+                @continue(! $can($item[2]))
+                @php $blank = ($item[3] ?? null) === '_blank'; @endphp
+                <div class="col-md-6 col-xl-4">
+                    {{-- AMIAL-WORKSPACE-BLADE-001 — **الشرطُ يُحسَب قبل الوسم.**
+
+                         كان مكتوباً داخل الوسم:
+                           @if(($item[3] ?? null) === '_blank') …
+
+                         ومحلّلُ Blade يقف عند أوّل قوسٍ متوازن، فيقرأ
+                         `(($item[3] ?? null)` شرطاً ويترك `=== '_blank')`
+                         نصّاً خارجه — فينكسر القالبُ بـ«unexpected endif».
+
+                         **والنتيجةُ 500 على مساحة العمل كلِّها**، وهي
+                         الصفحةُ التي صارت تحمل كلَّ روابط اللوحة بعد نقلها
+                         من الشريط الجانبيّ. أي أنّ لوحةَ الإدارة كلَّها
+                         بلا مدخل. --}}
+                    <a class="card h-100 text-decoration-none" href="{{ $item[1] }}"
+                       @if($blank) target="_blank" rel="noopener" @endif>
+                        <div class="card-body d-flex align-items-center justify-content-between">
+                            <strong>{{ $item[0] }}</strong><span>←</span>
+                        </div>
+                    </a>
+                </div>
+            @endforeach</div></div>@endforeach</div>
     @endif
 </div>
 @endsection

@@ -58,10 +58,46 @@ class MerchantAccountIsUsableGuardTest extends TestCase
             ->postJson('/admin/amial/hub/merchants/users', [
                 'f_name' => 'صاحب',
                 'l_name' => 'الحساب',
+                // **ورمزُ الدولة صار إلزاميّاً** — أضافه التزامُ صاحب
+                // المشروع في لوحة الإنشاء، فردَّت التجهيزةُ 422 على حقلٍ
+                // لم تكن تعرفه. والتجهيزةُ تتبع العقدَ لا تسبقه.
+                // ══════════════════════════════════════════════════════
+                // **وملفُّ فتح الحساب صار عقداً كاملاً.**
+                //
+                // شدّد صاحبُ المشروع إنشاءَ الحسابات من اللوحة: ثمانيةُ
+                // حقولِ «اعرف عميلك» + إفصاحُ المنصب السياسيّ + إقرارُ
+                // صحّة البيانات + ثلاثُ صور. وهو تشديدٌ سليمٌ في منتجٍ
+                // ماليّ — **والتجهيزةُ تتبع العقدَ لا تسبقه**.
+                //
+                // والحقولُ تُقرأ من المتحكّم (`AdminHubController`) لا
+                // تُخمَّن، فحقلٌ يُضاف غداً يُسقط هذا الاختبار برسالته
+                // لا بصمت.
+                // ══════════════════════════════════════════════════════
+                'dial_country_code' => '+967',
                 'phone' => $phone,
                 'store_name' => 'منشأة الاختبار',
                 'business_type' => $businessType,
                 'password' => 'Passw0rd!2026',
+
+                'gender' => 'male',
+                'date_of_birth' => '1990-01-01',
+                'identification_type' => 'nid',
+                'identification_number' => '0100' . substr($phone, -6),
+                'address' => 'صنعاء — شارع الاختبار',
+                'residence_district' => 'الصافية',
+                'income_source' => 'business',
+                'account_purpose' => 'business',
+                'is_pep' => 0,
+                "declaration_accepted" => 1,
+
+                // وثلاثةٌ تخصّ التاجرَ وحدَه — سجلٌّ ومفوَّضٌ بالتوقيع.
+                'business_registration_number' => 'REG-' . substr($phone, -6),
+                'authorized_signatory_name' => 'صاحبُ المنشأة',
+                'authorized_signatory_id' => '0100' . substr($phone, -6),
+
+                'identity_front' => \Illuminate\Http\UploadedFile::fake()->image('front.jpg'),
+                'identity_back' => \Illuminate\Http\UploadedFile::fake()->image('back.jpg'),
+                'selfie' => \Illuminate\Http\UploadedFile::fake()->image('selfie.jpg'),
             ])->assertCreated();
 
         $user = User::where('phone', 'like', '%' . ltrim($phone, '0') . '%')->latest('id')->first();

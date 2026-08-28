@@ -6,6 +6,7 @@ use App\Models\EMoney;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\EstablishesKycEvidence;
+use Tests\Support\OpensAccountsFromHub;
 use Tests\TestCase;
 
 /**
@@ -13,6 +14,7 @@ use Tests\TestCase;
  */
 class AdminHubTest extends TestCase
 {
+    use OpensAccountsFromHub;
     use RefreshDatabase;
     use EstablishesKycEvidence;
 
@@ -82,7 +84,7 @@ class AdminHubTest extends TestCase
             ->postJson('/admin/amial/hub/customers/users', [
                 'f_name' => 'اختبار', 'l_name' => 'عميل',
                 'phone' => '967771009010', 'password' => 'Secret@123',
-            ])
+            ] + $this->kycDossier('967771009010'))
             ->assertCreated();
 
         $user = User::where('phone', '967771009010')->first();
@@ -99,7 +101,7 @@ class AdminHubTest extends TestCase
         $this->actingAs($this->admin, 'user')
             ->postJson('/admin/amial/hub/customers/users', [
                 'f_name' => 'مكرر', 'phone' => '967771009011', 'password' => 'Secret@123',
-            ])
+            ] + $this->kycDossier('967771009011'))
             ->assertStatus(422);
     }
 
@@ -219,7 +221,7 @@ class AdminHubTest extends TestCase
             ->postJson('/admin/amial/hub/customers/users', [
                 'f_name' => 'عميل', 'l_name' => 'حقيقي',
                 'phone' => '967771009050', 'password' => 'Secret@123', 'pin' => '5678',
-            ])->assertCreated();
+            ] + $this->kycDossier('967771009050'))->assertCreated();
 
         \Illuminate\Support\Facades\Artisan::call('passport:install', ['--no-interaction' => true]);
         $this->postJson('/api/v1/auth/login', [
@@ -235,7 +237,7 @@ class AdminHubTest extends TestCase
                 'f_name' => 'تاجر', 'l_name' => 'حقيقي',
                 'phone' => '967771009051', 'password' => 'Secret@123',
                 'store_name' => 'بقالة الاختبار', 'business_type' => 'retail', 'plan' => 'business',
-            ])->assertCreated();
+            ] + $this->kycDossier('967771009051', merchant: true))->assertCreated();
 
         // دخول التطبيق بدور تاجر — التطبيق يطلب رقم التاجر الذي تعيده اللوحة
         \Illuminate\Support\Facades\Artisan::call('passport:install', ['--no-interaction' => true]);
@@ -277,7 +279,7 @@ class AdminHubTest extends TestCase
             ->postJson('/admin/amial/hub/agents/users', [
                 'f_name' => 'وكيل', 'l_name' => 'حقيقي',
                 'phone' => '967771009052', 'password' => 'Secret@123',
-            ])->assertCreated();
+            ] + $this->kycDossier('967771009052'))->assertCreated();
 
         $agent = User::where('phone', '967771009052')->first();
         $this->assertNotNull($agent->agent_number, 'رقم الوكيل يُولَّد تلقائياً');
@@ -299,7 +301,8 @@ class AdminHubTest extends TestCase
                 'f_name' => 'تاجر', 'l_name' => 'باقات',
                 'phone' => '967771009053', 'password' => 'Secret@123',
                 'store_name' => 'متجر الباقات', 'plan' => 'free',
-            ])->assertCreated();
+                'business_type' => \App\Support\Access\AccessConstants::BIZ_RETAIL,
+            ] + $this->kycDossier('967771009053', merchant: true))->assertCreated();
         $merchant = User::where('phone', '967771009053')->first();
 
         $this->actingAs($this->admin, 'user')
