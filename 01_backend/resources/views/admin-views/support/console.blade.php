@@ -323,22 +323,42 @@
         box.innerHTML = '<div class="text-muted">جارٍ الفحص…</div>';
         const j = await get('/transactions/' + encodeURIComponent(ref));
         if (!j.success) { box.innerHTML = `<div class="alert alert-warning">${esc(j.message)}</div>`; return; }
-        const t = j.meta.transaction;
+        const t = j.meta.transaction, receipt = j.meta.receipt, parties = j.meta.parties || [];
+        const card = (label, value, cls = 'col-md-3 col-6') => `<div class="${cls}"><div class="border rounded p-2 h-100"><div class="small text-muted">${esc(label)}</div><div class="text-break">${value}</div></div></div>`;
+        const val = v => esc(v === null || v === undefined || v === '' ? '—' : v);
+        const recordLabels = {payment_requests:'طلبات الدفع', merchant_sales:'مبيعات التجزئة/البيع السريع', fuel_sales:'مبيعات الوقود', pharmacy_sales:'مبيعات الصيدلية', wholesale_invoices:'فواتير الجملة', wholesale_collections:'تحصيلات الجملة', split_bill_participants:'حصص الفاتورة المقسّمة'};
+        const business = Object.entries(j.meta.business_records || {}).filter(([, rows]) => rows && rows.length).map(([kind, rows]) => `
+            <div class="card mb-2"><div class="card-header py-2"><strong>${esc(recordLabels[kind] || kind)}</strong></div><div class="table-responsive"><table class="table table-sm mb-0"><tbody>${rows.map(row => {
+                const details = Object.entries(row).filter(([key, value]) => !['items','clinical_details_restricted'].includes(key) && value !== null && value !== '').map(([key, value]) => `<div><span class="text-muted">${esc(key)}:</span> ${val(value)}</div>`).join('');
+                const items = Array.isArray(row.items) && row.items.length ? `<details class="mt-2"><summary>الأصناف (${row.items.length})</summary><pre class="small mb-0">${esc(JSON.stringify(row.items, null, 2))}</pre></details>` : '';
+                const restricted = row.clinical_details_restricted ? '<div class="small text-muted mt-2">تفاصيل الوصفة والأصناف الطبية محمية ولا تُعرض في تتبع المعاملة العام.</div>' : '';
+                return `<tr><td>${details}${items}${restricted}</td></tr>`;
+            }).join('')}</tbody></table></div></div>`).join('');
         box.innerHTML = `
-            <div class="row g-2 mb-3">
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">المرجع</div><div class="font-monospace">${esc(t.transaction_id)}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">النوع</div><div>${esc(t.type)}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">مدين / دائن</div><div>${esc(t.debit)} / ${esc(t.credit)}</div></div></div>
-                <div class="col-md-3 col-6"><div class="border rounded p-2"><div class="small text-muted">القرار</div><div>${esc(t.decision_code ?? 'OK')} ${t.decision_reason ? '— ' + esc(t.decision_reason) : ''}</div></div></div>
+            <div class="alert alert-light border small">هذا تتبّع كامل للعملية من سجلّ العملية والإيصال والدفتر المحاسبي والسجلات المرتبطة. الحقول الشخصية تظهر فقط لمن يملك صلاحية كشف PII.</div>
+            <h6>هوية العملية وحالتها</h6><div class="row g-2 mb-3">
+                ${card('رقم العملية الرسمي', `<span class="font-monospace">${val(t.transaction_no)}</span>`)}
+                ${card('مرجع العملية', `<span class="font-monospace">${val(t.transaction_id)}</span>`)}
+                ${card('المرجع المرتبط', `<span class="font-monospace">${val(t.ref_trans_id)}</span>`)}
+                ${card('الرقم الداخلي', val(t.id))}
+                ${card('النوع', val(t.type))}${card('الحالة / القرار', val(t.decision_code || 'لم يُسجل قرار'))}
+                ${card('سبب القرار', val(t.decision_reason))}${card('أنشئت', val(t.created_at))}
+                ${card('آخر تحديث', val(t.updated_at))}${card('منطقة التنفيذ', val(t.zone_code))}
+                ${card('منطقة الطلب', val(t.request_zone))}${card('منطقة الطرف الآخر', val(t.counterparty_zone))}
             </div>
+            <h6>الأثر المالي</h6><div class="row g-2 mb-3">
+                ${card('المبلغ', val(t.amount))}${card('مدين', val(t.debit))}${card('دائن', val(t.credit))}${card('الرسوم', val(t.charge))}
+                ${card('الرصيد بعد العملية', val(t.balance_after))}${card('ملاحظة العملية', val(t.note), 'col-md-6 col-12')}
+            </div>
+            <h6>الأطراف</h6><div class="row g-2 mb-3">${parties.map(p => card(p.role, `<strong>${val(p.name)}</strong><div class="small">#${val(p.user_id)} · ${val(p.type)} · ${val(p.phone)} · ${val(p.zone_code)}</div>`)).join('') || '<div class="text-muted">لا توجد أطراف مرتبطة في السجل القديم.</div>'}</div>
+            ${j.meta.pos_actor ? `<h6>منفّذ POS</h6><div class="row g-2 mb-3">${card('جهاز/موظف POS', `<strong>${val(j.meta.pos_actor.display_name)}</strong><div class="small">${val(j.meta.pos_actor.pos_number)} · ${val(j.meta.pos_actor.operator)}</div>`)}${card('مالك المنشأة', `<strong>${val(j.meta.pos_actor.merchant_owner)}</strong><div class="small">#${val(j.meta.pos_actor.merchant_owner_id)}</div>`)}</div>` : ''}
+            <h6>الإيصال</h6>${receipt ? `<div class="row g-2 mb-3">${card('رقم الإيصال', `<span class="font-monospace">${val(receipt.receipt_number)}</span>`)}${card('رمز التحقق', `<span class="font-monospace">${val(receipt.verification_code)}</span>`)}${card('حالة العملية', val(receipt.op_status))}${card('حالة PDF', val(receipt.status))}${card('إجمالي الإيصال', val(receipt.amount))}${card('صافي / رسم', `${val(receipt.net_amount)} / ${val(receipt.fee)}`)}${card('الاتجاه', val(receipt.direction))}${card('أصدر في', val(receipt.issued_at))}${card('تنزيلات PDF', val(receipt.download_count))}${card('آخر تنزيل', val(receipt.last_downloaded_at))}</div>` : '<div class="alert alert-warning py-2 mb-3">لا يوجد إيصال مرتبط بهذه العملية.</div>'}
+            ${business ? `<h6>سجلات النشاط المرتبطة</h6>${business}` : ''}
             <h6>الدليل المحاسبي</h6>
-            <div class="table-responsive mb-3"><table class="table table-sm"><thead><tr><th>القيد</th><th>المصدر</th><th>الحالة</th><th>الحركة</th></tr></thead><tbody>${(j.meta.ledger_entries || []).map(e => `<tr><td class="font-monospace">${esc(e.ulid)}</td><td>${esc(e.source_type)} / ${esc(e.source_id)}</td><td>${esc(e.status)}${e.is_reversal ? ' — عكسي' : ''}</td><td>${e.lines.map(l => `${esc(l.direction)} ${esc(l.amount)} (${esc(l.account)})`).join('<br>')}</td></tr>`).join('') || '<tr><td colspan="4" class="text-muted">لا يوجد قيد مرتبط — يلزم تحقيق مالي.</td></tr>'}</tbody></table></div>
+            <div class="table-responsive mb-3"><table class="table table-sm"><thead><tr><th>القيد</th><th>المصدر</th><th>الحالة</th><th>الأسطر والأرصدة</th></tr></thead><tbody>${(j.meta.ledger_entries || []).map(e => `<tr><td class="font-monospace">${esc(e.ulid)}</td><td>${esc(e.source_type)} / ${esc(e.source_id)}</td><td>${esc(e.status)}${e.is_reversal ? ' — عكسي' : ''}</td><td>${e.lines.map(l => `${esc(l.direction)} ${esc(l.amount)} (${esc(l.account)})<br><small class="text-muted">قبل: ${esc(l.balance_before)} · بعد: ${esc(l.balance_after)}${l.description ? ' · ' + esc(l.description) : ''}</small>`).join('<hr class="my-1">')}</td></tr>`).join('') || '<tr><td colspan="4" class="text-muted">لا يوجد قيد مرتبط — يلزم تحقيق مالي.</td></tr>'}</tbody></table></div>
+            ${(j.meta.disputes || []).length || (j.meta.tickets || []).length ? `<h6>النزاعات والتذاكر</h6><div class="row g-2 mb-3">${(j.meta.disputes || []).map(d => card('نزاع #'+d.id, `${val(d.status)}<div class="small">${val(d.reason)} · ${val(d.created_at)}</div>`)).join('')}${(j.meta.tickets || []).map(x => card('تذكرة '+x.number, `${val(x.status)} · ${val(x.category)} · ${val(x.priority)}<div class="small">${val(x.created_at)}</div>`)).join('')}</div>` : ''}
             <h6>الخط الزمني</h6>
-            <ul class="list-group">${j.meta.timeline.map(e => `
-                <li class="list-group-item d-flex justify-content-between">
-                    <span><strong>${esc(e.event)}</strong> — ${esc(e.detail)}</span>
-                    <span class="text-muted small">${esc(e.at)}</span>
-                </li>`).join('')}</ul>`;
+            <ul class="list-group">${j.meta.timeline.map(e => `<li class="list-group-item d-flex justify-content-between gap-3"><span><strong>${esc(e.event)}</strong> — ${esc(e.detail)}</span><span class="text-muted small text-nowrap">${esc(e.at)}</span></li>`).join('')}</ul>`;
     };
 
     // ---------- التذاكر ----------
