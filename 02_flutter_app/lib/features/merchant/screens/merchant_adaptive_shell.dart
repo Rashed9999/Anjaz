@@ -383,9 +383,11 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      access.userName.value?.trim().isNotEmpty == true
-                          ? access.userName.value!.trim()
-                          : 'تاجر أميال باي',
+                      access.merchantDisplayName.value?.trim().isNotEmpty == true
+                          ? access.merchantDisplayName.value!.trim()
+                          : (access.userName.value?.trim().isNotEmpty == true
+                              ? access.userName.value!.trim()
+                              : 'تاجر أميال باي'),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(

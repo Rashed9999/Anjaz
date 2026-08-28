@@ -34,6 +34,7 @@ class AccessController extends GetxController implements GetxService {
   final RxnInt userId = RxnInt();
   final RxnString userName = RxnString();
   final RxnString userPhone = RxnString();
+  final RxnString merchantDisplayName = RxnString();
 
   // حالات
   final RxBool isLoading = false.obs;
@@ -70,6 +71,7 @@ class AccessController extends GetxController implements GetxService {
     subscriptionPlanLabel.value = access['subscription_plan_label']?.toString();
     subscriptionPriceSar.value = (access['subscription_price_sar'] as num?)?.toInt() ?? 0;
     subscriptionExpiresAt.value = access['subscription_expires_at']?.toString();
+    merchantDisplayName.value = access['merchant_display_name']?.toString();
 
     final fList = (access['features'] as List?)?.cast<String>() ?? [];
     features
@@ -154,6 +156,7 @@ class AccessController extends GetxController implements GetxService {
     userId.value = null;
     userName.value = null;
     userPhone.value = null;
+    merchantDisplayName.value = null;
     isLoaded.value = false;
     lastError.value = '';
   }

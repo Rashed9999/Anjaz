@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/data/api/pos_device_identity.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-POS-DEVICES-008 — إدارة أجهزة نقاط البيع.
@@ -485,11 +486,11 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
   String _when(dynamic iso) {
     if (iso == null) return '—';
 
-    final t = DateTime.tryParse(iso.toString());
+    final t = DateConverterHelper.tryParseApiInstant(iso.toString());
 
     if (t == null) return '—';
 
-    final d = DateTime.now().difference(t);
+    final d = DateTime.now().toUtc().difference(t);
 
     if (d.inMinutes < 1) return 'الآن';
     if (d.inMinutes < 60) return 'قبل ${d.inMinutes} دقيقة';

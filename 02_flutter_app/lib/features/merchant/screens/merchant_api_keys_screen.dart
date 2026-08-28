@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/util/app_constants.dart';
 
@@ -235,9 +236,8 @@ class _MerchantApiKeysScreenState extends State<MerchantApiKeysScreen> {
   }
 
   String _shortDate(String iso) {
-    final d = DateTime.tryParse(iso);
+    final d = DateConverterHelper.tryFromApi(iso);
     if (d == null) return iso;
-    final l = d.toLocal();
-    return '${l.year}/${l.month.toString().padLeft(2, '0')}/${l.day.toString().padLeft(2, '0')}';
+    return '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}';
   }
 }

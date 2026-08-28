@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
+use App\Models\Merchant;
 use App\Models\User;
 use App\Services\FeatureAccessService;
 use App\Support\Access\AccessConstants as A;
@@ -39,6 +40,17 @@ class AccessController extends Controller
         if (!$user) return $this->error('UNAUTHENTICATED', 'يجب تسجيل الدخول', 401);
 
         $access = $this->svc->accessFor($user);
+
+        // هوية واجهة التاجر هي اسم المنشأة، لا الاسم الشخصي. نقرأها من
+        // مالك النشاط أيضاً عند دخول موظف أو نقطة بيع، حتى لا تتبدل الهوية
+        // بين لوحة المالك وقائمة الموظف.
+        $merchantOwnerId = (int) ($access['merchant_user_id'] ?? $user->id);
+        $merchantDisplayName = trim((string) Merchant::query()
+            ->where('user_id', $merchantOwnerId)
+            ->value('store_name'));
+        $access['merchant_display_name'] = $merchantDisplayName !== ''
+            ? $merchantDisplayName
+            : trim(($user->f_name ?? '') . ' ' . ($user->l_name ?? ''));
 
         // أضف plan_info إن كان تاجراً
         $planInfo = null;

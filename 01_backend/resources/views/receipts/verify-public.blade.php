@@ -38,7 +38,7 @@
                 <div class="row"><span class="label">رقم السند</span><span class="value">{{ $receipt['receipt_number'] }}</span></div>
                 <div class="row"><span class="label">نوع العملية</span><span>{{ $receipt['receipt_type_label'] }}</span></div>
                 <div class="row"><span class="label">المبلغ</span><span class="value amount">{{ number_format((float) $receipt['amount'], 2) }} ر.ي</span></div>
-                <div class="row"><span class="label">التاريخ</span><span class="value">{{ \Illuminate\Support\Carbon::parse($receipt['issued_at'])->format('Y-m-d H:i') }}</span></div>
+                <div class="row"><span class="label">التاريخ</span><span class="value">{{ \Illuminate\Support\Carbon::parse($receipt['issued_at'])->setTimezone(config('amial.time.display_timezone'))->format('Y-m-d H:i') }} (مكة)</span></div>
             </div>
         @else
             <div class="mark">!</div>

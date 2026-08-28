@@ -130,9 +130,11 @@ class _WholesalePolicyDashboardScreenState
 
   Widget _hero(Map<String, dynamic>? b) {
     String planLabel;
+    String? merchantDisplayName;
     try {
       final a = Get.find<AccessController>();
       planLabel = a.subscriptionPlanLabel.value ?? access.plan.value;
+      merchantDisplayName = a.merchantDisplayName.value;
     } catch (_) {
       planLabel = access.plan.value;
     }
@@ -161,7 +163,9 @@ class _WholesalePolicyDashboardScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${b?['business_name'] ?? 'متجر جملة'}',
+                Text(merchantDisplayName?.trim().isNotEmpty == true
+                    ? merchantDisplayName!.trim()
+                    : '${b?['business_name'] ?? 'متجر جملة'}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(

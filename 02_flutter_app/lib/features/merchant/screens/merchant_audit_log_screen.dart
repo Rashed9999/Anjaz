@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 
 /// AMIAL-MERCHANT-AUDIT-001 — «سجلّ التدقيق» للتاجر (باقة التاجر برو فأعلى).
 ///
@@ -54,7 +55,7 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
 
   String _dt(String? iso) {
     if (iso == null) return '';
-    final d = DateTime.tryParse(iso)?.toLocal();
+    final d = DateConverterHelper.tryFromApi(iso);
     if (d == null) return '';
     return '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')} '
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
