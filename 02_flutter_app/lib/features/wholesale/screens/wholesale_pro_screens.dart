@@ -150,8 +150,8 @@ class _WholesaleProDashboardScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  access.merchantDisplayName.value?.trim().isNotEmpty == true
-                      ? access.merchantDisplayName.value!.trim()
+                  access.businessName.isNotEmpty
+                      ? access.businessName
                       : '${b?['business_name'] ?? 'متجر جملة'}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,

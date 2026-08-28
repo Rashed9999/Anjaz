@@ -134,7 +134,7 @@ class _WholesalePolicyDashboardScreenState
     try {
       final a = Get.find<AccessController>();
       planLabel = a.subscriptionPlanLabel.value ?? access.plan.value;
-      merchantDisplayName = a.merchantDisplayName.value;
+      merchantDisplayName = a.businessName;
     } catch (_) {
       planLabel = access.plan.value;
     }

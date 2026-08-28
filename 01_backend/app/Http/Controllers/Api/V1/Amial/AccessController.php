@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
-use App\Models\Merchant;
 use App\Models\User;
 use App\Services\FeatureAccessService;
+use App\Services\Merchant\MerchantContextService;
 use App\Support\Access\AccessConstants as A;
 use App\Support\Access\AccessPresets;
 use Illuminate\Http\JsonResponse;
@@ -30,6 +30,7 @@ class AccessController extends Controller
 {
     public function __construct(
         private readonly FeatureAccessService $svc,
+        private readonly MerchantContextService $merchantContext,
     ) {}
 
     // ============ /me/access ============
@@ -41,16 +42,8 @@ class AccessController extends Controller
 
         $access = $this->svc->accessFor($user);
 
-        // هوية واجهة التاجر هي اسم المنشأة، لا الاسم الشخصي. نقرأها من
-        // مالك النشاط أيضاً عند دخول موظف أو نقطة بيع، حتى لا تتبدل الهوية
-        // بين لوحة المالك وقائمة الموظف.
-        $merchantOwnerId = (int) ($access['merchant_user_id'] ?? $user->id);
-        $merchantDisplayName = trim((string) Merchant::query()
-            ->where('user_id', $merchantOwnerId)
-            ->value('store_name'));
-        $access['merchant_display_name'] = $merchantDisplayName !== ''
-            ? $merchantDisplayName
-            : trim(($user->f_name ?? '') . ' ' . ($user->l_name ?? ''));
+        $merchantContext = $this->merchantContext->for($user, $access);
+        $access['merchant_display_name'] = $merchantContext['business']['name'];
 
         // أضف plan_info إن كان تاجراً
         $planInfo = null;
@@ -75,6 +68,7 @@ class AccessController extends Controller
 
         return $this->ok([
             'access' => $access,
+            'merchant_context' => $merchantContext,
             'plan_info' => $planInfo,
             'user' => [
                 'id' => $user->id,
