@@ -540,6 +540,10 @@ final class CapabilityRegistry
                 ->routes(['fuel/tanks', 'fuel/pumps', 'fuel/nozzles'])
                 ->screen('/fuel/tanks'),
 
+            C::make(A::F_FUEL_PRODUCTS)->nameAr('منتجات الوقود')->group('الوقود')->icon('inventory_2')->minPlan(A::PLAN_BUSINESS)->businessTypes([A::BIZ_FUEL]),
+            C::make(A::F_FUEL_COMPANIES)->nameAr('شركات الوقود')->group('الوقود')->icon('business')->minPlan(A::PLAN_BUSINESS)->businessTypes([A::BIZ_FUEL]),
+            C::make(A::F_FUEL_SHIFTS)->nameAr('ورديات المحطة')->group('الوقود')->icon('schedule')->minPlan(A::PLAN_FREE)->businessTypes([A::BIZ_FUEL]),
+
             C::make(A::F_FUEL_VARIANCE)
                 ->nameAr('مصالحة المخزون الرطب')
                 ->descAr('الفرق بين ما خرج من المسدسات وما نقص من الخزان — '
@@ -571,6 +575,10 @@ final class CapabilityRegistry
                 ->businessTypes([A::BIZ_PHARMACY])
                 ->routes(['pharmacy/products/{id}/batches']),
 
+            C::make(A::F_PHARMACY_PRODUCTS)->nameAr('أصناف الصيدلية')->group('الصيدلية')->icon('medication')->minPlan(A::PLAN_FREE)->businessTypes([A::BIZ_PHARMACY]),
+            C::make(A::F_PHARMACY_ALERTS)->nameAr('تنبيهات الصيدلية')->group('الصيدلية')->icon('warning_amber')->minPlan(A::PLAN_FREE)->businessTypes([A::BIZ_PHARMACY]),
+            C::make(A::F_PHARMACY_CUSTOMERS)->nameAr('عملاء الصيدلية')->group('الصيدلية')->icon('people')->minPlan(A::PLAN_BUSINESS)->businessTypes([A::BIZ_PHARMACY]),
+
             C::make(A::F_PHARMACY_PRESCRIPTIONS)
                 ->nameAr('الوصفات الطبية')
                 ->descAr('وسمُ الصنف «يحتاج وصفة» فيُوقَف بيعُه بلا رقمها، '
@@ -586,6 +594,8 @@ final class CapabilityRegistry
                 ->group('الجملة')->icon('request_quote')
                 ->minPlan(A::PLAN_FREE)
                 ->businessTypes([A::BIZ_WHOLESALE])->screen('/wholesale'),
+
+            C::make(A::F_WHOLESALE_COLLECTIONS)->nameAr('تحصيلات الجملة')->group('الجملة')->icon('payments')->minPlan(A::PLAN_FREE)->businessTypes([A::BIZ_WHOLESALE]),
 
             C::make(A::F_WHOLESALE_MULTI_PRICING)
                 ->nameAr('تسعير متعدد المستويات')
