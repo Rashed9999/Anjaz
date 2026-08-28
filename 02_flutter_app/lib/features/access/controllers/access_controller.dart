@@ -116,9 +116,7 @@ class AccessController extends GetxController implements GetxService {
 
   // فحوصات على الخطّة
   bool get isFreePlan => subscriptionPlan.value == 'free';
-  bool get isStarterPlan => subscriptionPlan.value == 'starter';
   bool get isBusinessPlan => subscriptionPlan.value == 'business';
-  bool get isProPlan => subscriptionPlan.value == 'merchant_pro';
   bool get isEnterprisePlan => subscriptionPlan.value == 'enterprise';
 
   // ============ تحديث ============

@@ -155,6 +155,24 @@ class UsageLimitService
         }
     }
 
+    /** حساب الموظف مورد مستقل عن مقعد جهاز POS. */
+    public function assertCanAddEmployee(User $merchant): void
+    {
+        $plan = $this->planFor($merchant);
+        $max = A::PLAN_LIMITS[$plan]['employees'] ?? 0;
+
+        if ($max < 0) return;
+
+        $current = $this->countEmployees($merchant);
+        if ($current >= $max) {
+            throw new UsageLimitExceededException(
+                limitType: 'employees', currentValue: $current, maxValue: $max,
+                currentPlan: $plan,
+                suggestedPlan: UsageLimitExceededException::suggestUpgrade($plan),
+            );
+        }
+    }
+
     /**
      * snapshot الاستخدام الحالي (لشاشة "خطّتي").
      */
@@ -200,7 +218,7 @@ class UsageLimitService
         $profile = MerchantProfile::where('user_id', $merchant->id)->first();
         if (!$profile) return A::PLAN_FREE;
 
-        $plan = $profile->subscription_plan ?? A::PLAN_FREE;
+        $plan = A::canonicalPlan($profile->subscription_plan);
 
         // فحص انتهاء — يعود لـ FREE
         if ($plan !== A::PLAN_FREE

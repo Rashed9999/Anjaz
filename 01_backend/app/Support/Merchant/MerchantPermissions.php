@@ -130,6 +130,8 @@ final class MerchantPermissions
     /** **إضافةُ تشغيلةٍ استلامُ مخزونٍ بتاريخ صلاحيّة** — لا إدخالُ بيانات. */
     public const PHARMACY_BATCH_VIEW = 'pharmacy.batch.view';
     public const PHARMACY_BATCH_RECORD = 'pharmacy.batch.record';
+    /** سحب دفعة من البيع قرار سلامة، لا مجرد تعديل مخزون. */
+    public const PHARMACY_BATCH_RECALL = 'pharmacy.batch.recall';
 
     public const PHARMACY_SALE_CREATE = 'pharmacy.sale.create';
     public const PHARMACY_SALE_VIEW_ALL = 'pharmacy.sale.view_all';
@@ -177,6 +179,11 @@ final class MerchantPermissions
 
     /** **الإبطالُ ليس تعديلاً** — يمحو ديناً قائماً بسطرِ سبب. */
     public const WHOLESALE_INVOICE_VOID = 'wholesale.invoice.void';
+
+    /** المرتجع يمرّ بطلب ثم قرار؛ لا يُستبدل بإبطال الفاتورة. */
+    public const WHOLESALE_RETURN_VIEW = 'wholesale.return.view';
+    public const WHOLESALE_RETURN_REQUEST = 'wholesale.return.request';
+    public const WHOLESALE_RETURN_APPROVE = 'wholesale.return.approve';
 
     public const WHOLESALE_COLLECTION_VIEW = 'wholesale.collection.view';
     public const WHOLESALE_COLLECTION_RECORD = 'wholesale.collection.record';
@@ -308,6 +315,7 @@ final class MerchantPermissions
 
             self::PHARMACY_BATCH_VIEW => $g('الصيدليّة — التشغيلات', 'عرض التشغيلات وتواريخ الصلاحية'),
             self::PHARMACY_BATCH_RECORD => $g('الصيدليّة — التشغيلات', 'استلام تشغيلة جديدة', true),
+            self::PHARMACY_BATCH_RECALL => $g('الصيدليّة — التشغيلات', 'سحب تشغيلة ومنع بيعها', true),
 
             self::PHARMACY_SALE_CREATE => $g('الصيدليّة — البيع', 'بيع دواء'),
             self::PHARMACY_SALE_VIEW_ALL => $g('الصيدليّة — البيع', 'عرض مبيعات الجميع'),
@@ -333,6 +341,9 @@ final class MerchantPermissions
             self::WHOLESALE_INVOICE_VIEW => $g('الجملة — الفواتير', 'عرض الفواتير'),
             self::WHOLESALE_INVOICE_CREATE => $g('الجملة — الفواتير', 'إنشاء فاتورة'),
             self::WHOLESALE_INVOICE_VOID => $g('الجملة — الفواتير', 'إبطال فاتورة', true),
+            self::WHOLESALE_RETURN_VIEW => $g('الجملة — المرتجعات', 'عرض طلبات المرتجع'),
+            self::WHOLESALE_RETURN_REQUEST => $g('الجملة — المرتجعات', 'إنشاء طلب مرتجع', true),
+            self::WHOLESALE_RETURN_APPROVE => $g('الجملة — المرتجعات', 'اعتماد أو رفض المرتجع', true),
 
             self::WHOLESALE_COLLECTION_VIEW => $g('الجملة — التحصيل', 'عرض التحصيلات'),
             self::WHOLESALE_COLLECTION_RECORD => $g('الجملة — التحصيل', 'تسجيل تحصيل', true),
@@ -791,6 +802,7 @@ final class MerchantPermissions
                     self::STAFF_VIEW, self::ROLE_VIEW,
                     self::WHOLESALE_CUSTOMER_MANAGE,
                     self::WHOLESALE_INVOICE_VIEW, self::WHOLESALE_INVOICE_CREATE,
+                    self::WHOLESALE_RETURN_VIEW, self::WHOLESALE_RETURN_REQUEST,
                     self::WHOLESALE_COLLECTION_VIEW,
                     self::WHOLESALE_REP_VIEW, self::WHOLESALE_REP_MANAGE,
                     self::WHOLESALE_REPORT_VIEW,
@@ -807,6 +819,7 @@ final class MerchantPermissions
                 'name' => 'مندوب مبيعات',
                 'permissions' => array_merge($core, [
                     self::WHOLESALE_INVOICE_VIEW, self::WHOLESALE_INVOICE_CREATE,
+                    self::WHOLESALE_RETURN_VIEW, self::WHOLESALE_RETURN_REQUEST,
                     self::WHOLESALE_COLLECTION_RECORD,
                     self::REPORT_SALES,
                 ]),
@@ -828,6 +841,7 @@ final class MerchantPermissions
                 'name' => 'محاسب',
                 'permissions' => array_merge($core, [
                     self::WHOLESALE_INVOICE_VIEW, self::WHOLESALE_INVOICE_VOID,
+                    self::WHOLESALE_RETURN_VIEW, self::WHOLESALE_RETURN_APPROVE,
                     self::WHOLESALE_COLLECTION_VIEW,
                     self::WHOLESALE_REPORT_VIEW,
                     self::CASH_COUNT, self::SHIFT_VIEW_ALL,

@@ -1,4 +1,3 @@
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/common/widgets/custom_pop_scope_widget.dart';
@@ -66,12 +65,7 @@ class _NavBarScreenState extends State<NavBarScreen> {
         },
         isExit: menuController.currentTabIndex == 0 && !Get.find<AuthController>().getTourWidgetStatus(),
         child: ShowCaseWidget(
-          onFinish: (){
-            Get.find<AuthController>().setTourWidgetStatus(false);
-            if(GetPlatform.isAndroid){
-              FirebaseMessaging.instance.requestPermission();
-            }
-          },
+          onFinish: () => Get.find<AuthController>().setTourWidgetStatus(false),
           // AMIAL-NAV-003: شريط تنقّل «كبسولة عائمة» (كما في مراجع المحافظ
           // الاحترافية): حاوية داكنة مستديرة بالكامل تطفو فوق المحتوى، وزرّ
           // المسح في مركزها بلون البراند الأصفر. كان شريطاً أبيض بعرض الشاشة.
@@ -211,6 +205,5 @@ class _NavBarScreenState extends State<NavBarScreen> {
   }
 
 }
-
 
 

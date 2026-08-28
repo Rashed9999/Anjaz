@@ -300,7 +300,10 @@
         <div class="info-label">معلومات الفاتورة</div>
         <div class="meta-line"><strong>تاريخ الإصدار:</strong> {{ $invoice->invoice_date?->format('Y-m-d') }}</div>
         <div class="meta-line"><strong>تاريخ الاستحقاق:</strong> {{ $invoice->due_date?->format('Y-m-d') }}</div>
-        <div class="meta-line"><strong>نوع الدفع:</strong> {{ $invoice->payment_type === 'cash' ? 'نقد' : 'آجل' }}</div>
+        <div class="meta-line"><strong>نوع الدفع:</strong> {{ $invoice->payment_type === 'amial_pay' ? 'أميال باي' : ($invoice->payment_type === 'cash' ? 'نقد' : 'آجل') }}</div>
+        @if($invoice->payment_type === 'amial_pay' && $invoice->paid_transaction_id)
+            <div class="meta-line"><strong>مرجع أميال:</strong> {{ $invoice->paid_transaction_id }}</div>
+        @endif
         @if($salesRep)
             <div class="meta-line"><strong>المندوب:</strong> {{ $salesRep->full_name }}</div>
         @endif

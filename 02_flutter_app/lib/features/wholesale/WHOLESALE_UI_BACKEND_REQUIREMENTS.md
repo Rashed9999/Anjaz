@@ -1,48 +1,53 @@
-# Wholesale UI — Backend requirements not implemented in Flutter
+# Wholesale UI — contract status
 
-The approved Wholesale UI is implemented against existing server contracts. The following pieces require server contracts before the Flutter UI can make them operational. The app must not invent or locally persist financial/inventory truth for them.
+The approved Wholesale UI uses server-owned contracts. The app must not invent
+or locally persist financial or inventory truth. Sector eligibility, plan depth
+and employee permissions are independently enforced by the Wholesale policy.
 
-## 1. Unit conversion graph
+## 1. Unit conversion graph — implemented
 
-Current `WholesaleProduct` supports one `unit` string only. The UI now offers practical base units (`قطعة`, `شدة`, `درزن`, `كرتون`, `طبلية`, etc.) through that existing field.
+The server owns `wholesale_product_units`. Every factor resolves to the
+product's canonical base unit and invoice stock movements save both the chosen
+unit and `base_quantity`. Flutter manages the conversion and the invoice flow
+requests a server quote for the chosen unit.
 
-To support conversions such as:
+For a product whose base is `قطعة`, practical display units include:
 
-- `1 كرتون = 12 شدة`
 - `1 شدة = 12 قطعة`
+- `1 كرتون = 144 قطعة`
 
-add a server-owned model/API for product unit conversions with validation against cycles, zero/negative factors, and duplicate units. Invoice quantities and stock movements must resolve to the canonical base unit server-side.
+The model is a flat factor-to-base list rather than an arbitrary graph, so
+cycles are impossible by construction and historical invoice quantities remain
+unchanged.
 
-## 2. Expiry / batch tracking for Wholesale products
+## 2. Expiry / batch tracking — implemented
 
-Current `wholesale_products` does not expose an expiry field. The expiry-alert screen therefore renders an explicit unavailable state when the server does not supply `expiry_date`/`expires_at`; it never converts absence to zero expired products.
+The server owns `wholesale_product_lots`; products have no fake single expiry
+field. Receiving converts quantities to base units, and invoice issue allocates
+active, non-expired lots FIFO in the same transaction as stock deduction. The
+invoice stores lot allocations for audit and reversal.
 
-Required server contract should preferably model batches/lots rather than one expiry date per SKU:
+The lot contract contains product, batch number, quantity, received date,
+expiry, warehouse/location and an active/quarantined/expired/disposed state.
+Expiry counts are calculated server-side from real lot quantities.
 
-- product_id
-- lot/batch number
-- quantity
-- received_at
-- expiry_date
-- location/warehouse when applicable
-- state (active/quarantined/expired/disposed)
+## 3. Low-stock notification preferences
 
-Expiry counts must be calculated server-side from real lot quantities.
+The backend supports `low_stock_threshold` per product and a package-gated
+`low_stock_only=1` query. Flutter reads those real values. Push, SMS or email
+preferences must not be shown as operational until the server has a provider,
+delivery/audit state, merchant/branch scope, quiet hours and deduplication.
 
-## 3. Persistent low-stock notification preferences
+## 4. Wholesale return workflow — implemented
 
-Existing Wholesale backend already supports `low_stock_threshold` per product and a package-gated `low_stock_only=1` query. The Flutter screen uses those real values.
+Wholesale has its own request → review → approve/reject workflow. Approval
+updates inventory and the customer balance while paid amounts become an explicit
+`refund_pending`, never a fabricated cash refund. Return quantities retain the
+unit-to-base conversion used by the source invoice.
 
-For actual push/SMS/email notification preferences, add a server-owned settings contract for:
+## Deployment gate
 
-- enabled/disabled
-- channels (in-app/push/SMS/email as supported)
-- merchant/branch scope
-- quiet hours / deduplication window
-- last-notified threshold state
-
-Do not make a local Flutter toggle look authoritative before this exists.
-
-## 4. Wholesale return workflow
-
-The current UI opens the existing real `MerchantRefundScreen` for the `refunds` capability. If Wholesale requires a distinct merchandise-return lifecycle (requested → reviewed → accepted/rejected → stock disposition → refund/credit note), build it as a backend workflow first and then replace the generic entry.
+Before release, validate every Wholesale API against a wholesale merchant only,
+the three plans (Free, Business, Enterprise), and the exact employee permission.
+Historical reads remain available where policy allows; paid writes must fail
+closed after downgrade. No visible action may point to a local-only state.

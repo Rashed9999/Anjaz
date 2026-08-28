@@ -31,17 +31,13 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
   // ألوان لكل خطّة
   static const _planColors = {
     'free': Color(0xFF6B7280),          // رمادي
-    'starter': Color(0xFF059669),       // أخضر
     'business': AmialColors.primary,    // أزرق
-    'merchant_pro': Color(0xFFF59E0B),  // برتقالي
     'enterprise': Color(0xFF7C3AED),    // بنفسجي
   };
 
   static const _planEmojis = {
     'free': '🆓',
-    'starter': '🌱',
     'business': '💼',
-    'merchant_pro': '⭐',
     'enterprise': '👑',
   };
 

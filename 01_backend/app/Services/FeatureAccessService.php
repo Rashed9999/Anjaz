@@ -72,7 +72,7 @@ class FeatureAccessService
             $merchantProfile = MerchantProfile::where('user_id', $user->id)->first();
             if ($merchantProfile) {
                 $businessType = $merchantProfile->business_type;
-                $plan = $merchantProfile->subscription_plan ?? A::PLAN_FREE;
+                $plan = A::canonicalPlan($merchantProfile->subscription_plan);
                 $extraFeatures = is_array($merchantProfile->extra_features)
                     ? $merchantProfile->extra_features : [];
                 $expiresAt = $merchantProfile->subscription_expires_at?->toIso8601String();
@@ -110,7 +110,7 @@ class FeatureAccessService
 
                 if ($merchantProfile) {
                     $businessType = $merchantProfile->business_type;
-                    $plan = $merchantProfile->subscription_plan ?? A::PLAN_FREE;
+                    $plan = A::canonicalPlan($merchantProfile->subscription_plan);
 
                     if ($plan !== A::PLAN_FREE
                         && $merchantProfile->subscription_expires_at !== null
@@ -152,7 +152,7 @@ class FeatureAccessService
 
                 if ($ownerProfile) {
                     $businessType = $ownerProfile->business_type;
-                    $plan = $ownerProfile->subscription_plan ?? A::PLAN_FREE;
+                    $plan = A::canonicalPlan($ownerProfile->subscription_plan);
 
                     if ($plan !== A::PLAN_FREE
                         && $ownerProfile->subscription_expires_at !== null
@@ -264,6 +264,9 @@ class FeatureAccessService
         // 3. Plan
         if ($role === A::ROLE_MERCHANT) {
             foreach (AccessPresets::planFeatures($plan) as $f) $features[$f] = true;
+            foreach (AccessPresets::verticalPlanFeatures($businessType, $plan) as $f) {
+                $features[$f] = true;
+            }
         }
 
         // 4. Verification

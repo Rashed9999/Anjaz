@@ -159,7 +159,14 @@ COPY . .
 
 # وهنا تُبنى الخريطةُ وتُطلق السكربتاتُ (`package:discover`) — والصورةُ
 # هذه تملك كلَّ الامتدادات، بخلاف مرحلةِ `composer:2.7` في `Dockerfile.prod`.
-RUN composer dump-autoload --no-dev --optimize --no-interaction
+#
+# بعض مساحات Coolify القديمة كانت تُلحق `config/initial.php` من مُثبّت
+# 6cash خارج Git رغم .dockerignore. Laravel يحمّل كل config/*.php، فيسقط
+# النشر على خطأ نحوي في ملف ليس جزءاً من أميال باي. الحذف داخل الصورة هو
+# الحارس الأخير: لا يمس المستودع أو بيانات التشغيل، لكنه يمنع ملفاً دخيلاً
+# من الوصول إلى artisan.
+RUN rm -f config/initial.php \
+ && composer dump-autoload --no-dev --optimize --no-interaction
 
 # صلاحيات storage
 # AMIAL-PDF-DURABLE-001: تُنشأ هنا للنشرات بلا volume، ويُعاد إنشاؤها في

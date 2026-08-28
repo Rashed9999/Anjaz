@@ -42,10 +42,10 @@ class _ProfileQRCodeBottomSheetWidgetState
       return;
     }
 
-    final address = (info?.uniqueId ?? '').trim();
+    final address = _receiveAddress(info);
     if (address.isEmpty) {
       _show(
-        'لا يمكن تفعيل الاستلام السريع الآن لأن معرّف الاستلام العام غير متاح. '
+        'لا يمكن تفعيل الاستلام السريع الآن لأن رقم الحساب غير متاح. '
         'أعد تحميل بيانات الحساب ثم حاول مرة أخرى.',
         danger: true,
       );
@@ -92,6 +92,14 @@ class _ProfileQRCodeBottomSheetWidgetState
     final v = value.trim();
     if (v.length <= 6) return '••••••';
     return '••••••${v.substring(v.length - 6)}';
+  }
+
+  /// رقم الحساب هو العنوان العام الفعلي للتحويل. unique_id يبقى توافقاً
+  /// للحسابات الأقدم فقط، ولا نستخدم رقم الهاتف كبديل لأنه ليس QR استقبال.
+  String _receiveAddress(dynamic info) {
+    final accountNumber = '${info?.accountNumber ?? ''}'.trim();
+    if (accountNumber.isNotEmpty) return accountNumber;
+    return '${info?.uniqueId ?? ''}'.trim();
   }
 
   @override
@@ -168,9 +176,7 @@ class _ProfileQRCodeBottomSheetWidgetState
                       );
                     }
 
-                    final uniqueId = (info.uniqueId ?? '').trim();
-                    final phone = (info.phone ?? '').trim();
-                    final payload = uniqueId.isNotEmpty ? uniqueId : phone;
+                    final payload = _receiveAddress(info);
 
                     if (payload.isEmpty) {
                       return _unavailable(controller);
@@ -181,32 +187,8 @@ class _ProfileQRCodeBottomSheetWidgetState
                         QrDisplayWidget(
                           data: payload,
                           size: size.width * 0.5,
-                          caption: uniqueId.isNotEmpty
-                              ? 'معرّف الحساب ${_mask(uniqueId)}'
-                              : 'رمز الحساب داخل التطبيق',
+                          caption: 'رقم الحساب ${_mask(payload)}',
                         ),
-                        if (uniqueId.isEmpty) ...[
-                          const SizedBox(height: AmialSpacing.sm),
-                          Container(
-                            padding: const EdgeInsets.all(AmialSpacing.sm),
-                            decoration: BoxDecoration(
-                              color: AmialColors.warningSurface,
-                              borderRadius: BorderRadius.circular(
-                                AmialSpacing.radiusMd,
-                              ),
-                            ),
-                            child: const Text(
-                              'يمكن عرض هذا الرمز أثناء تسجيل الدخول، لكن '
-                              'الاستلام السريع قبل الدخول لن يُفعَّل حتى يتوفر '
-                              'معرّف استلام عام للحساب.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: AmialColors.warning,
-                                height: 1.5,
-                              ),
-                            ),
-                          ),
-                        ],
                       ],
                     );
                   },
@@ -224,8 +206,13 @@ class _ProfileQRCodeBottomSheetWidgetState
                         backgroundColor: AmialColors.warningSurface,
                         onTap: () {
                           final info = Get.find<ProfileController>().userInfo;
+                          final address = _receiveAddress(info);
+                          if (address.isEmpty) {
+                            _show('رقم الحساب غير متاح. أعد تحميل بيانات الحساب ثم حاول مرة أخرى.', danger: true);
+                            return;
+                          }
                           Get.find<ShareController>().qrCodeDownloadAndShare(
-                            qrCode: info?.qrCode ?? '',
+                            qrCode: address,
                             phoneNumber: info?.phone ?? '',
                             isShare: false,
                           );
@@ -241,8 +228,13 @@ class _ProfileQRCodeBottomSheetWidgetState
                         backgroundColor: AmialColors.primary,
                         onTap: () {
                           final info = Get.find<ProfileController>().userInfo;
+                          final address = _receiveAddress(info);
+                          if (address.isEmpty) {
+                            _show('رقم الحساب غير متاح. أعد تحميل بيانات الحساب ثم حاول مرة أخرى.', danger: true);
+                            return;
+                          }
                           Get.find<ShareController>().qrCodeDownloadAndShare(
-                            qrCode: info?.qrCode ?? '',
+                            qrCode: address,
                             phoneNumber: info?.phone ?? '',
                             isShare: true,
                           );

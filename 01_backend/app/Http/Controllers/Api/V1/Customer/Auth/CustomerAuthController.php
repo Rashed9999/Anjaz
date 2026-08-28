@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
 use App\Models\BusinessSetting;
 use App\Models\WithdrawRequest;
 use App\Models\KycDocument;
+use App\Services\AccountNumberService;
 use App\Services\KycDocumentService;
 use App\Models\TransactionLimit;
 use App\CentralLogics\SmsModule;
@@ -477,6 +478,12 @@ class CustomerAuthController extends Controller
     {
         try {
             $customer = $this->user->with('emoney')->customer()->find($request->user()->id);
+            // الحسابات القديمة سُجّلت قبل اعتماد رقم الحساب العام. لا نعرض
+            // QR قابلاً للتحويل إلى رقم هاتف ولا نترك الاستلام السريع معطلاً؛
+            // نمنحها عنوان الاستلام الرسمي نفسه الذي يستخدمه التحويل.
+            if (empty($customer->account_number)) {
+                app(AccountNumberService::class)->assign($customer);
+            }
             $pendingWithdraw = $this->withdrawRequest->where(['user_id' => $customer->id, 'request_status' => 'pending'])->count();
 
             $data = [];
@@ -558,6 +565,8 @@ class CustomerAuthController extends Controller
                     'balance' => (float)$customer->emoney->current_balance,
                     'pending_balance' => (float)$customer->emoney->pending_balance,
                     'pending_withdraw_count' => $pendingWithdraw,
+                    'account_number' => $customer->account_number,
+                    'receive_address' => $customer->account_number,
                     'unique_id' => $customer->unique_id,
                     'qr_code' => strval($qr),
                     'is_kyc_verified' => (int)$customer->is_kyc_verified,

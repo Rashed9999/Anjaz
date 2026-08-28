@@ -5,9 +5,9 @@ import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_performance_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
-/// AMIAL-MERCHANT-STAFF-001 — إدارة موظفي نقاط البيع (باقة الأعمال فأعلى).
+/// AMIAL-MERCHANT-STAFF-001 — إدارة الموظفين وحساباتهم (باقة الأعمال فأعلى).
 ///
-/// التاجر يضيف موظفاً برقم نقطة بيع + كلمة مرور + صلاحيات، ويفعّل/يعطّل.
+/// التاجر يضيف موظفاً برمز دخول + كلمة مرور + صلاحيات، ويفعّل/يعطّل.
 /// موصولة بالخادم الحقيقي (/merchant/staff).
 class MerchantStaffScreen extends StatefulWidget {
   const MerchantStaffScreen({super.key});
@@ -70,7 +70,7 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
       SnackBar(content: Text(m), backgroundColor: ok ? AmialColors.success : AmialColors.red));
 
   Future<void> _addDialog() async {
-    final posCtrl = TextEditingController();
+    final employeeCodeCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
     final passCtrl = TextEditingController();
     final perms = <String>{'sell'};
@@ -85,8 +85,8 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
               TextField(controller: nameCtrl, decoration: const InputDecoration(
                   labelText: 'اسم الموظف', border: OutlineInputBorder())),
               const SizedBox(height: 10),
-              TextField(controller: posCtrl, decoration: const InputDecoration(
-                  labelText: 'رقم نقطة البيع (POS)', hintText: 'POS-01', border: OutlineInputBorder())),
+              TextField(controller: employeeCodeCtrl, decoration: const InputDecoration(
+                  labelText: 'رمز الموظف', hintText: 'EMP-01', border: OutlineInputBorder())),
               const SizedBox(height: 10),
               TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(
                   labelText: 'كلمة مرور الموظف', border: OutlineInputBorder())),
@@ -111,12 +111,12 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
     );
     if (ok != true || !mounted) return;
 
-    if (nameCtrl.text.trim().isEmpty || posCtrl.text.trim().isEmpty || passCtrl.text.length < 4) {
+    if (nameCtrl.text.trim().isEmpty || employeeCodeCtrl.text.trim().isEmpty || passCtrl.text.length < 4) {
       _snack('أكمل البيانات (كلمة المرور 4 أحرف على الأقل)');
       return;
     }
     final r = await _api.postData('/api/v1/amial/merchant/staff', {
-      'pos_number': posCtrl.text.trim(),
+      'employee_code': employeeCodeCtrl.text.trim(),
       'display_name': nameCtrl.text.trim(),
       'password': passCtrl.text,
       'permissions': perms.toList(),
@@ -135,7 +135,7 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('الموظفون'),
+        title: const Text('الموظفون وحساباتهم'),
         actions: [
           IconButton(
             icon: const Icon(Icons.bar_chart),
@@ -212,7 +212,7 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
             ),
           ],
         ]),
-        subtitle: Text('POS: ${s['pos_number']}${perms.isEmpty ? '' : '  •  $perms'}',
+        subtitle: Text('رمز الموظف: ${s['employee_code'] ?? s['pos_number'] ?? ''}${perms.isEmpty ? '' : '  •  $perms'}',
             style: const TextStyle(fontSize: 11)),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
           AccessGate(

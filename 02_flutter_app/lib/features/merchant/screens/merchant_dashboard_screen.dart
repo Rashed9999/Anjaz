@@ -4,10 +4,10 @@ import 'package:amial_pay/features/merchant/controllers/merchant_controller.dart
 import 'package:amial_pay/features/merchant/screens/merchant_accept_payment_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_transactions_screen.dart';
+import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amial_pay/features/merchant/screens/inventory_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
-import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
 import 'package:amial_pay/features/suppliers/screens/suppliers_screen.dart';
 import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
@@ -344,18 +344,18 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                         onTap: () => Get.to(() => const InventoryScreen()),
                       ),
                     ),
-                    // AMIAL-PROFIT-001 (التصميم 48): تقارير الربحية — باقة الأعمال فأعلى
+                    // التقرير المالي لا يخلط البيع بالتحصيل أو حركة المحفظة.
                     AccessGate(
                       feature: 'profit_reports',
                       fallback: _LinkTile(
                         icon: Icons.trending_up_rounded,
-                        label: 'تقارير الربحية 🔒 (ترقية)',
+                        label: 'التقرير المالي 🔒 (ترقية)',
                         onTap: () => Get.to(() => const PlansCatalogScreen()),
                       ),
                       child: _LinkTile(
                         icon: Icons.trending_up_rounded,
-                        label: 'تقارير الربحية',
-                        onTap: () => Get.to(() => const ProfitReportScreen()),
+                        label: 'التقرير المالي',
+                        onTap: () => Get.to(() => const FinancialTruthReportScreen()),
                       ),
                     ),
                     // AMIAL-SUPPLIERS-001 (68): الموردون — لباقات Business فأعلى

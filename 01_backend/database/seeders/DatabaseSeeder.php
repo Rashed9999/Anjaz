@@ -14,8 +14,10 @@ use Illuminate\Database\Seeder;
  *   - بيانات مرجعية افتراضية (رسوم، حدود KYC، قواعد AML، فئات التبرّع، مزوّدو الفواتير)
  *
  * البذور التالية لا تُشغّل تلقائياً (شغّلها يدوياً عند الحاجة):
- *   - LoadTestSeeder            (بيانات اختبار حمل فقط)
- *   - MerchantProfileBackfillSeeder (backfill لبيانات قائمة)
+ *   - DemoDataSeeder                 (حسابات العرض القديمة)
+ *   - MerchantDemoMatrixSeeder       (30 حساب تاجر × قطاع/باقة؛ بيئات Demo/Test فقط)
+ *   - LoadTestSeeder                 (بيانات اختبار حمل فقط)
+ *   - MerchantProfileBackfillSeeder  (backfill لبيانات قائمة)
  */
 class DatabaseSeeder extends Seeder
 {

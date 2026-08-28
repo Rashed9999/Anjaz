@@ -73,14 +73,24 @@ class Helpers
             'message' => [
                 "token" => $fcm_token,
                 "data" => [
-                    "title" => (string)$data['title'],
+                    "title" => trim((string)($data['title'] ?? '')) ?: 'أميال باي',
                     "body" => (string)$data['description'],
                     "image" => (string)$data['image'],
                     "type" => (string)$data['type']
                 ],
                 "notification" => [
-                    'title' => (string)$data['title'],
+                    'title' => trim((string)($data['title'] ?? '')) ?: 'أميال باي',
                     'body' => (string)$data['description'],
+                ],
+                // إشعار الخلفية يعرضه Android نفسه عندما لا تكون Flutter
+                // نشطة؛ يجب أن يذهب إلى القناة التي ينشئها التطبيق حتى
+                // يحتفظ بالصوت والأولوية، لا إلى قناة FCM الافتراضية الصامتة.
+                'android' => [
+                    'priority' => 'HIGH',
+                    'notification' => [
+                        'channel_id' => 'amial_pay_default',
+                        'sound' => 'notification',
+                    ],
                 ],
                 "apns" => [
                     "payload" => [
@@ -102,15 +112,22 @@ class Helpers
             'message' => [
                 "topic" => $data['receiver'],
                 "data" => [
-                    "title" => (string)$data['title'],
+                    "title" => trim((string)($data['title'] ?? '')) ?: 'أميال باي',
                     "body" => (string)$data['description'],
                     "image" => (string)$image,
                     "type" => (string)$data['type']
                 ],
                 "notification" => [
-                    "title" => (string)$data['title'],
+                    "title" => trim((string)($data['title'] ?? '')) ?: 'أميال باي',
                     "body" => (string)$data['description'],
                     "image" => (string)$image,
+                ],
+                'android' => [
+                    'priority' => 'HIGH',
+                    'notification' => [
+                        'channel_id' => 'amial_pay_default',
+                        'sound' => 'notification',
+                    ],
                 ],
                 "apns" => [
                     "payload" => [
@@ -1092,5 +1109,3 @@ function translate(string $key): string
 
     return $result;
 }
-
-

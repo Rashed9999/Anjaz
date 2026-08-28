@@ -115,6 +115,8 @@ class UnifiedAuthController extends Controller
             'phone' => 'required|string|min:6|max:30',
             // كلمة السرّ قد تكون PIN من 4 أرقام (معيار التسجيل الذاتي)
             'password' => 'required|string|min:4|max:200',
+            'employee_code' => 'sometimes|nullable|string|max:50',
+            // اسم الحقل القديم مدعوم لنسخ التطبيق السابقة فقط.
             'pos_number' => 'sometimes|nullable|string|max:50',
         ]);
         if ($v->fails()) return $this->validationError($v);
@@ -123,7 +125,7 @@ class UnifiedAuthController extends Controller
             $request->input('merchant_number'),
             $request->input('phone'),
             $request->input('password'),
-            $request->input('pos_number'),
+            $request->input('employee_code', $request->input('pos_number')),
             $request,
         );
         return $this->success($result);

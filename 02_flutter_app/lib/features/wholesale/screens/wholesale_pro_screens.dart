@@ -3,9 +3,12 @@ import 'package:get/get.dart';
 
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/entitlements/controllers/entitlements_controller.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
+import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_workflow_screens.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/images.dart';
@@ -402,8 +405,16 @@ class _WholesaleProDashboardScreenState
           () => Get.to(() => const WholesaleProInvoicesScreen())),
       _WholesaleAction('تقادم الديون', Icons.bar_chart_rounded,
           'advanced_reports', () => Get.to(() => const WholesaleProAgingScreen())),
-      _WholesaleAction('الاسترجاع', Icons.keyboard_return_rounded, 'refunds',
-          () => Get.to(() => const MerchantRefundScreen())),
+      _WholesaleAction('أداء المندوبين', Icons.leaderboard_outlined,
+          'advanced_reports', () => Get.to(() => const WholesaleProSalesRepsReportScreen())),
+      _WholesaleAction('إدارة المندوبين', Icons.badge_outlined,
+          'wholesale_invoices', () => Get.to(() => const WholesaleProSalesRepsScreen())),
+      _WholesaleAction('الموظفون وصلاحياتهم', Icons.manage_accounts_outlined,
+          'employees', () => Get.to(() => const MerchantStaffScreen())),
+      _WholesaleAction('أجهزة نقاط البيع', Icons.point_of_sale_outlined,
+          'multi_pos', () => Get.to(() => const MerchantPosDevicesScreen())),
+      _WholesaleAction('المرتجعات', Icons.keyboard_return_rounded, 'wholesale_invoices',
+          () => Get.to(() => const WholesaleProReturnsScreen())),
       _WholesaleAction('تنبيهات المخزون', Icons.notifications_active_outlined,
           'low_stock_alerts',
           () => Get.to(() => const WholesaleStockAlertsScreen())),
@@ -434,9 +445,7 @@ class _WholesaleProDashboardScreenState
   }
 
   void _openMultiPricing(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-      content: Text('افتح «مزايا الباقة» للوصول إلى إدارة أسعار الجملة المتقدمة.'),
-    ));
+    Get.to(() => const WholesaleProProductsScreen());
   }
 }
 
@@ -575,6 +584,18 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
             ),
           ),
           IconButton(
+            tooltip: 'أسعار الجملة',
+            onPressed: () => _openCapability(context, 'wholesale_multi_pricing',
+                () => _pricingSheet(context, p)),
+            icon: const Icon(Icons.price_change_outlined,
+                color: AmialColors.cash),
+          ),
+          IconButton(
+            tooltip: 'الوحدات والدفعات',
+            onPressed: () => _inventorySheet(context, p),
+            icon: const Icon(Icons.layers_outlined, color: AmialColors.success),
+          ),
+          IconButton(
             tooltip: 'تعديل',
             onPressed: () => _productSheet(context, product: p),
             icon: const Icon(Icons.edit_outlined,
@@ -582,6 +603,202 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _pricingSheet(BuildContext context, Map<String, dynamic> product) async {
+    final data = await c.loadProductPrices((product['id'] as num).toInt());
+    if (!context.mounted) return;
+    if (data == null) {
+      _snack(context, c.lastError.value, error: true);
+      return;
+    }
+    final tiers = (data['tiers'] as List? ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final prices = (data['prices'] as List? ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    if (tiers.isEmpty) {
+      _snack(context, 'لا توجد شرائح أسعار متاحة', error: true);
+      return;
+    }
+    int selectedTier = (tiers.first['id'] as num).toInt();
+    final price = TextEditingController(text: '${product['base_price'] ?? ''}');
+    final minimum = TextEditingController(text: '1');
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AmialColors.cardSurface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AmialSpacing.radiusXl))),
+      builder: (sheetContext) => StatefulBuilder(builder: (_, setSheet) => Padding(
+        padding: EdgeInsets.fromLTRB(AmialSpacing.screen, AmialSpacing.lg, AmialSpacing.screen,
+            MediaQuery.viewInsetsOf(sheetContext).bottom + AmialSpacing.lg),
+        child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('أسعار ${product['name']}', textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const SizedBox(height: AmialSpacing.sm),
+          ...prices.map((row) => ListTile(
+            dense: true,
+            leading: const Icon(Icons.sell_outlined, color: AmialColors.primary),
+            title: Text('${(row['tier'] as Map?)?['name'] ?? 'شريحة'}'),
+            subtitle: Text('من كمية ${_qty(_num(row['min_quantity']))}'),
+            trailing: Text('${_money(row['price'])} ر.ي',
+                style: const TextStyle(fontWeight: FontWeight.w900, color: AmialColors.primary)),
+          )),
+          const Divider(),
+          DropdownButtonFormField<int>(value: selectedTier,
+            decoration: const InputDecoration(labelText: 'شريحة السعر'),
+            items: tiers.map((t) => DropdownMenuItem<int>(value: (t['id'] as num).toInt(),
+                child: Text('${t['name']}'))).toList(),
+            onChanged: (v) => setSheet(() => selectedTier = v ?? selectedTier)),
+          const SizedBox(height: AmialSpacing.sm),
+          _Field(price, 'السعر', Icons.payments_outlined, number: true),
+          _Field(minimum, 'الحد الأدنى للكمية', Icons.numbers_rounded, number: true),
+          Obx(() => FilledButton(
+            onPressed: c.isSubmitting.value ? null : () async {
+              final ok = await c.setProductPrice((product['id'] as num).toInt(), selectedTier,
+                  _num(price.text), _num(minimum.text));
+              if (!mounted || !sheetContext.mounted) return;
+              if (ok) {
+                Navigator.pop(sheetContext);
+                _snack(context, 'تم حفظ سعر الشريحة');
+              } else {
+                _snack(context, c.lastError.value, error: true);
+              }
+            },
+            child: const Text('حفظ سعر الشريحة'),
+          )),
+        ])),
+      )),
+    );
+    price.dispose();
+    minimum.dispose();
+  }
+
+  /// إدارة تحويلات الوحدات والاستلام من المصدر الخادمي. لا يُخزَّن عامل
+  /// التحويل أو الصلاحية داخل الهاتف، ولا تتحول شاشة الصلاحية إلى رقم صفر
+  /// عند غياب دفعات حقيقية.
+  Future<void> _inventorySheet(BuildContext context, Map<String, dynamic> product) async {
+    final productId = (product['id'] as num).toInt();
+    final results = await Future.wait([
+      c.loadProductUnits(productId),
+      c.loadProductLots(productId),
+    ]);
+    if (!context.mounted) return;
+    final unitData = results[0];
+    final lotData = results[1];
+    if (unitData == null || lotData == null) {
+      _snack(context, c.lastError.value.isEmpty ? 'تعذر تحميل بيانات المخزون' : c.lastError.value,
+          error: true);
+      return;
+    }
+    var units = (unitData['units'] as List? ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    var lots = (lotData['lots'] as List? ?? const [])
+        .map((e) => Map<String, dynamic>.from(e as Map)).toList();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AmialColors.cardSurface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AmialSpacing.radiusXl))),
+      builder: (sheetContext) => StatefulBuilder(builder: (_, setSheet) => SizedBox(
+        height: MediaQuery.sizeOf(sheetContext).height * .78,
+        child: DefaultTabController(
+          length: 2,
+          child: Column(children: [
+            const SizedBox(height: AmialSpacing.sm),
+            Row(children: [
+              IconButton(onPressed: () => Navigator.pop(sheetContext), icon: const Icon(Icons.close_rounded)),
+              Expanded(child: Text('مخزون ${product['name']}', textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18))),
+              const SizedBox(width: 48),
+            ]),
+            const TabBar(tabs: [Tab(text: 'وحدات البيع'), Tab(text: 'دفعات وصلاحية')]),
+            Expanded(child: TabBarView(children: [
+              ListView(padding: const EdgeInsets.all(AmialSpacing.md), children: [
+                const Text('عامل التحويل إلى وحدة الأساس. الفاتورة والمخزون يحسبان في الخادم بهذه القيمة.',
+                    style: TextStyle(color: AmialColors.textSecondary, height: 1.5)),
+                const SizedBox(height: AmialSpacing.sm),
+                ...units.map((u) => ListTile(
+                  leading: Icon(u['is_base'] == true ? Icons.straighten_rounded : Icons.layers_outlined,
+                      color: u['is_base'] == true ? AmialColors.primary : AmialColors.success),
+                  title: Text('${u['name']}'),
+                  subtitle: Text('عامل التحويل: ${_qty(_num(u['factor_to_base']))}'),
+                  trailing: u['is_base'] == true ? const Text('أساس') : null,
+                )),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.add_rounded), label: const Text('إضافة وحدة بيع'),
+                  onPressed: () async {
+                    final code = TextEditingController();
+                    final name = TextEditingController();
+                    final factor = TextEditingController();
+                    final ok = await showDialog<bool>(context: sheetContext, builder: (d) => AlertDialog(
+                      title: const Text('وحدة بيع جديدة'),
+                      content: Column(mainAxisSize: MainAxisSize.min, children: [
+                        _Field(code, 'رمز مختصر مثل carton', Icons.code_rounded),
+                        _Field(name, 'الاسم مثل كرتون', Icons.inventory_2_outlined),
+                        _Field(factor, 'عدد وحدات الأساس فيها', Icons.numbers_rounded, number: true),
+                      ]),
+                      actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('إلغاء')),
+                        FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('حفظ'))],
+                    ));
+                    if (ok == true) {
+                      final saved = await c.saveProductUnit(productId, {'code': code.text.trim(), 'name': name.text.trim(), 'factor_to_base': factor.text.trim()});
+                      if (!sheetContext.mounted) return;
+                      if (!saved) { _snack(context, c.lastError.value, error: true); return; }
+                      final refreshed = await c.loadProductUnits(productId);
+                      if (refreshed != null && sheetContext.mounted) setSheet(() => units = (refreshed['units'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList());
+                    }
+                    code.dispose(); name.dispose(); factor.dispose();
+                  },
+                ),
+              ]),
+              ListView(padding: const EdgeInsets.all(AmialSpacing.md), children: [
+                const Text('تُسحب الدفعات الصالحة بالأقدم انتهاءً أولاً. الدفعة المنتهية أو المحجوزة لا تدخل الفاتورة.',
+                    style: TextStyle(color: AmialColors.textSecondary, height: 1.5)),
+                const SizedBox(height: AmialSpacing.sm),
+                ...lots.map((lot) => ListTile(
+                  leading: const Icon(Icons.medication_liquid_outlined, color: AmialColors.primary),
+                  title: Text('دفعة ${lot['lot_number']}'),
+                  subtitle: Text('المتاح ${_qty(_num(lot['quantity_available']))} • الصلاحية ${lot['expiry_date'] ?? 'غير محددة'}'),
+                  trailing: Text('${lot['status'] ?? ''}'),
+                )),
+                FilledButton.icon(
+                  icon: const Icon(Icons.add_box_outlined), label: const Text('استلام دفعة'),
+                  onPressed: () async {
+                    final lot = TextEditingController(); final qty = TextEditingController();
+                    final expiry = TextEditingController(); final supplier = TextEditingController();
+                    var selectedUnit = units.firstWhere((u) => u['is_base'] == true, orElse: () => units.first);
+                    final ok = await showDialog<bool>(context: sheetContext, builder: (d) => StatefulBuilder(builder: (_, setDialog) => AlertDialog(
+                      title: const Text('استلام دفعة'), content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                        _Field(lot, 'رقم الدفعة *', Icons.confirmation_number_outlined),
+                        DropdownButtonFormField<int>(value: (selectedUnit['id'] as num).toInt(), decoration: const InputDecoration(labelText: 'الوحدة'),
+                          items: units.map((u) => DropdownMenuItem<int>(value: (u['id'] as num).toInt(), child: Text('${u['name']}'))).toList(),
+                          onChanged: (id) => setDialog(() => selectedUnit = units.firstWhere((u) => (u['id'] as num).toInt() == id))),
+                        _Field(qty, 'الكمية *', Icons.numbers_rounded, number: true),
+                        _Field(expiry, 'الصلاحية YYYY-MM-DD (اختياري)', Icons.event_outlined),
+                        _Field(supplier, 'مرجع المورد/الفاتورة', Icons.receipt_long_outlined),
+                      ])), actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('إلغاء')),
+                        FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('استلام'))],
+                    )));
+                    if (ok == true) {
+                      final received = await c.receiveProductLot(productId, {'lot_number': lot.text.trim(), 'quantity': qty.text.trim(), 'unit_id': selectedUnit['id'], if (expiry.text.trim().isNotEmpty) 'expiry_date': expiry.text.trim(), if (supplier.text.trim().isNotEmpty) 'supplier_reference': supplier.text.trim()});
+                      if (!sheetContext.mounted) return;
+                      if (!received) { _snack(context, c.lastError.value, error: true); return; }
+                      final refreshed = await c.loadProductLots(productId);
+                      if (refreshed != null && sheetContext.mounted) setSheet(() => lots = (refreshed['lots'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList());
+                    }
+                    lot.dispose(); qty.dispose(); expiry.dispose(); supplier.dispose();
+                  },
+                ),
+              ]),
+            ])),
+          ]),
+        ),
+      )),
     );
   }
 
@@ -823,1328 +1040,6 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class WholesaleProCustomersScreen extends StatefulWidget {
-  const WholesaleProCustomersScreen({super.key});
-
-  @override
-  State<WholesaleProCustomersScreen> createState() =>
-      _WholesaleProCustomersScreenState();
-}
-
-class _WholesaleProCustomersScreenState extends State<WholesaleProCustomersScreen> {
-  final _search = TextEditingController();
-  bool _withBalance = false;
-  WholesaleController get c => Get.find<WholesaleController>();
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => c.loadCustomers());
-  }
-
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
-
-  Future<void> _load() => c.loadCustomers(
-      search: _search.text.trim(), withBalanceOnly: _withBalance);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AmialColors.background,
-      appBar: AppBar(
-        backgroundColor: AmialColors.background,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text('العملاء'),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AmialColors.primary,
-        foregroundColor: AmialColors.cardSurface,
-        onPressed: () => _customerSheet(context),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('عميل جديد'),
-      ),
-      body: Obx(() {
-        final state = _loadState(c, retry: _load);
-        if (state != null && c.customers.isEmpty) return state;
-        return RefreshIndicator(
-          onRefresh: _load,
-          color: AmialColors.primary,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              AmialSpacing.screen,
-              AmialSpacing.sm,
-              AmialSpacing.screen,
-              104,
-            ),
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _SearchBar(
-                      controller: _search,
-                      hint: 'ابحث باسم العميل أو رقم الهاتف',
-                      onSubmitted: (_) => _load(),
-                      onClear: () {
-                        _search.clear();
-                        _load();
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: AmialSpacing.sm),
-                  FilterChip(
-                    label: const Text('عليه دين'),
-                    selected: _withBalance,
-                    selectedColor:
-                        AmialColors.dangerSurface,
-                    onSelected: (v) {
-                      setState(() => _withBalance = v);
-                      _load();
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: AmialSpacing.md),
-              ...c.customers.map((cust) => _customerCard(context, cust)),
-              if (c.customers.isEmpty)
-                _SurfaceState(
-                  icon: Icons.groups_2_outlined,
-                  title: 'لا يوجد عملاء',
-                  message: 'أضف أول عميل جملة أو غيّر التصفية.',
-                  onRetry: _load,
-                ),
-            ],
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _customerCard(BuildContext context, Map<String, dynamic> cust) {
-    final balance = _num(cust['current_balance']);
-    final limit = _num(cust['credit_limit']);
-    return InkWell(
-      borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-      onTap: () => Get.to(() => WholesaleProCustomerStatementScreen(
-            customer: cust,
-          )),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AmialSpacing.sm),
-        padding: const EdgeInsets.all(AmialSpacing.md),
-        decoration: BoxDecoration(
-          color: AmialColors.cardSurface,
-          borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-          border: Border.all(color: AmialColors.border),
-          boxShadow: AmialSpacing.cardShadow,
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: AmialColors.primary.withValues(alpha: 0.08),
-              child: const Icon(Icons.groups_2_outlined,
-                  color: AmialColors.primary),
-            ),
-            const SizedBox(width: AmialSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('${cust['full_name'] ?? '—'}',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          color: AmialColors.textPrimary)),
-                  if ('${cust['company_name'] ?? ''}'.isNotEmpty)
-                    Text('${cust['company_name']}',
-                        style: const TextStyle(
-                            color: AmialColors.textSecondary, fontSize: 12)),
-                  if ('${cust['phone'] ?? ''}'.isNotEmpty)
-                    Text('${cust['phone']}',
-                        style: const TextStyle(
-                            color: AmialColors.textMuted, fontSize: 11)),
-                  const SizedBox(height: AmialSpacing.xs),
-                  Wrap(
-                    spacing: AmialSpacing.sm,
-                    children: [
-                      if (balance > 0)
-                        _miniLabel(Icons.account_balance_wallet_outlined,
-                            'عليه ${_money(balance)} ر.ي', AmialColors.danger),
-                      _miniLabel(Icons.credit_score_outlined,
-                          'حد ${_money(limit)} ر.ي', AmialColors.primary),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: 'تعديل',
-              onPressed: () => _customerSheet(context, customer: cust),
-              icon: const Icon(Icons.more_vert_rounded),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _customerSheet(BuildContext context,
-      {Map<String, dynamic>? customer}) async {
-    final name =
-        TextEditingController(text: '${customer?['full_name'] ?? ''}');
-    final company =
-        TextEditingController(text: '${customer?['company_name'] ?? ''}');
-    final phone = TextEditingController(text: '${customer?['phone'] ?? ''}');
-    final credit =
-        TextEditingController(text: '${customer?['credit_limit'] ?? 0}');
-    final terms = TextEditingController(
-        text: '${customer?['payment_terms_days'] ?? 30}');
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AmialColors.cardSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(AmialSpacing.radiusXl)),
-      ),
-      builder: (sheetContext) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          AmialSpacing.screen,
-          AmialSpacing.md,
-          AmialSpacing.screen,
-          MediaQuery.viewInsetsOf(sheetContext).bottom + AmialSpacing.lg,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                      onPressed: () => Navigator.pop(sheetContext),
-                      icon: const Icon(Icons.close_rounded)),
-                  const Spacer(),
-                  Text(customer == null ? 'عميل جديد' : 'تعديل العميل',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w900,
-                          )),
-                  const Spacer(),
-                  const Icon(Icons.person_add_alt_1_rounded,
-                      color: AmialColors.primary),
-                ],
-              ),
-              const SizedBox(height: AmialSpacing.md),
-              _Field(name, 'الاسم *', Icons.person_outline_rounded),
-              _Field(company, 'اسم الشركة (اختياري)', Icons.business_outlined),
-              _Field(phone, 'الهاتف', Icons.phone_outlined,
-                  number: true),
-              _Field(credit, 'حد الائتمان — 0 = نقد فقط',
-                  Icons.credit_score_outlined,
-                  number: true),
-              _Field(terms, 'مهلة السداد (يوم)', Icons.calendar_month_outlined,
-                  number: true),
-              const SizedBox(height: AmialSpacing.md),
-              Obx(() => FilledButton.icon(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AmialColors.primary,
-                      foregroundColor: AmialColors.cardSurface,
-                      minimumSize:
-                          const Size.fromHeight(AmialSpacing.buttonHeight),
-                    ),
-                    onPressed: c.isSubmitting.value
-                        ? null
-                        : () async {
-                            if (name.text.trim().isEmpty) {
-                              _snack(context, 'اسم العميل مطلوب', error: true);
-                              return;
-                            }
-                            final data = <String, dynamic>{
-                              'full_name': name.text.trim(),
-                              if (company.text.trim().isNotEmpty)
-                                'company_name': company.text.trim(),
-                              if (phone.text.trim().isNotEmpty)
-                                'phone': phone.text.trim(),
-                              'credit_limit': credit.text.trim().isEmpty
-                                  ? '0'
-                                  : credit.text.trim(),
-                              'payment_terms_days':
-                                  int.tryParse(terms.text.trim()) ?? 30,
-                            };
-                            final ok = customer == null
-                                ? await c.addCustomer(data)
-                                : await c.updateCustomer(
-                                    (customer['id'] as num).toInt(), data);
-                            // **وسياقٌ فرعيٌّ يُفحَص بنفسه.** `mounted` حالةُ الودجة، و`sheetContext` سياقُ ورقةٍ قد تُغلَق أثناء الانتظار — فـNavigator.pop عليه بعدها يرمي أو يُغلق الصفحةَ تحته.
-                            if (!mounted || !sheetContext.mounted) return;
-                            if (ok) {
-                              Navigator.pop(sheetContext);
-                              _snack(context,
-                                  customer == null
-                                      ? 'تمت إضافة العميل'
-                                      : 'تم تحديث العميل');
-                            } else {
-                              _snack(context, c.lastError.value, error: true);
-                            }
-                          },
-                    icon: const Icon(Icons.save_outlined),
-                    label: Text(customer == null ? 'إضافة' : 'حفظ'),
-                  )),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class WholesaleProInvoicesScreen extends StatefulWidget {
-  const WholesaleProInvoicesScreen({super.key, this.initialFilter = 'all'});
-  final String initialFilter;
-
-  @override
-  State<WholesaleProInvoicesScreen> createState() =>
-      _WholesaleProInvoicesScreenState();
-}
-
-class _WholesaleProInvoicesScreenState extends State<WholesaleProInvoicesScreen> {
-  WholesaleController get c => Get.find<WholesaleController>();
-  final _search = TextEditingController();
-  late String _filter;
-
-  @override
-  void initState() {
-    super.initState();
-    _filter = widget.initialFilter;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
-  }
-
-  @override
-  void dispose() {
-    _search.dispose();
-    super.dispose();
-  }
-
-  Future<void> _load() {
-    if (_filter == 'overdue') return c.loadInvoices(overdueOnly: true);
-    if (_filter == 'all') return c.loadInvoices();
-    return c.loadInvoices(status: _filter);
-  }
-
-  List<Map<String, dynamic>> get _visible {
-    final q = _search.text.trim().toLowerCase();
-    if (q.isEmpty) return c.invoices.toList();
-    return c.invoices.where((inv) {
-      final cust = inv['customer'] is Map ? inv['customer'] as Map : const {};
-      return '${inv['invoice_number'] ?? ''}'.toLowerCase().contains(q) ||
-          '${cust['full_name'] ?? ''}'.toLowerCase().contains(q);
-    }).toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AmialColors.background,
-      appBar: AppBar(
-        backgroundColor: AmialColors.background,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text('الفواتير'),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AmialColors.primary,
-        foregroundColor: AmialColors.cardSurface,
-        onPressed: () => Get.to(() => const WholesaleProInvoiceCreateScreen()),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('فاتورة جديدة'),
-      ),
-      body: Obx(() {
-        final state = _loadState(c, retry: _load);
-        if (state != null && c.invoices.isEmpty) return state;
-        final rows = _visible;
-        return RefreshIndicator(
-          onRefresh: _load,
-          color: AmialColors.primary,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              AmialSpacing.screen,
-              AmialSpacing.sm,
-              AmialSpacing.screen,
-              104,
-            ),
-            children: [
-              _SearchBar(
-                controller: _search,
-                hint: 'ابحث برقم الفاتورة أو اسم العميل',
-                onSubmitted: (_) => setState(() {}),
-                onClear: () => setState(() => _search.clear()),
-              ),
-              const SizedBox(height: AmialSpacing.sm),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _filterChip('الكل', 'all'),
-                    _filterChip('مدفوعة', 'paid'),
-                    _filterChip('جزئية', 'partial_paid'),
-                    _filterChip('قيد السداد', 'issued'),
-                    _filterChip('متأخرة', 'overdue'),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AmialSpacing.md),
-              ...rows.map((inv) => _invoiceCard(context, inv)),
-              if (rows.isEmpty)
-                const _SurfaceState(
-                  icon: Icons.receipt_long_outlined,
-                  title: 'لا توجد فواتير مطابقة',
-                  message: 'غيّر البحث أو حالة الفاتورة.',
-                ),
-            ],
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _filterChip(String label, String code) {
-    final selected = _filter == code;
-    return Padding(
-      padding: const EdgeInsets.only(left: AmialSpacing.xs),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        selectedColor: AmialColors.primary,
-        labelStyle: TextStyle(
-          color: selected ? AmialColors.cardSurface : AmialColors.textPrimary,
-          fontWeight: FontWeight.w700,
-        ),
-        onSelected: (_) {
-          setState(() => _filter = code);
-          _load();
-        },
-      ),
-    );
-  }
-
-  Widget _invoiceCard(BuildContext context, Map<String, dynamic> inv) {
-    final status = '${inv['status'] ?? ''}';
-    final balance = _num(inv['balance_due']);
-    final cust = inv['customer'] is Map ? inv['customer'] as Map : const {};
-    final tone = _statusTone(status);
-    return InkWell(
-      borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-      onTap: () => Get.to(() => WholesaleProInvoiceDetailsScreen(
-            invoiceId: (inv['id'] as num).toInt(),
-          )),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: AmialSpacing.sm),
-        padding: const EdgeInsets.all(AmialSpacing.md),
-        decoration: BoxDecoration(
-          color: AmialColors.cardSurface,
-          borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-          border: Border(right: BorderSide(color: tone, width: 4)),
-          boxShadow: AmialSpacing.cardShadow,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                _statusPill(status),
-                const Spacer(),
-                const Icon(Icons.description_outlined,
-                    color: AmialColors.primary),
-                const SizedBox(width: AmialSpacing.xs),
-                Text('${inv['invoice_number'] ?? '—'}',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        color: AmialColors.textPrimary)),
-              ],
-            ),
-            const SizedBox(height: AmialSpacing.sm),
-            Text('${cust['full_name'] ?? '—'}',
-                style: const TextStyle(color: AmialColors.textSecondary)),
-            const SizedBox(height: AmialSpacing.xs),
-            Row(
-              children: [
-                if (balance > 0)
-                  Text('المتبقي ${_money(balance)} ر.ي',
-                      style: const TextStyle(
-                          color: AmialColors.danger,
-                          fontWeight: FontWeight.w800)),
-                const Spacer(),
-                Text('${_money(inv['total_amount'])} ر.ي',
-                    style: const TextStyle(
-                        color: AmialColors.primary,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900)),
-              ],
-            ),
-            if ('${inv['invoice_date'] ?? inv['created_at'] ?? ''}'.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: AmialSpacing.xs),
-                child: Row(
-                  children: [
-                    const Icon(Icons.calendar_today_outlined,
-                        size: 16, color: AmialColors.textMuted),
-                    const SizedBox(width: AmialSpacing.xxs),
-                    Text(
-                      _date(inv['invoice_date'] ?? inv['created_at']),
-                      style: const TextStyle(
-                          color: AmialColors.textMuted, fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class WholesaleProInvoiceDetailsScreen extends StatefulWidget {
-  const WholesaleProInvoiceDetailsScreen({super.key, required this.invoiceId});
-  final int invoiceId;
-
-  @override
-  State<WholesaleProInvoiceDetailsScreen> createState() =>
-      _WholesaleProInvoiceDetailsScreenState();
-}
-
-class _WholesaleProInvoiceDetailsScreenState
-    extends State<WholesaleProInvoiceDetailsScreen> {
-  WholesaleController get c => Get.find<WholesaleController>();
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => c.loadInvoiceDetails(widget.invoiceId));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AmialColors.background,
-      appBar: AppBar(
-        backgroundColor: AmialColors.background,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text('تفاصيل الفاتورة'),
-        actions: [
-          Obx(() => IconButton(
-                tooltip: 'تحميل PDF',
-                onPressed: c.isSubmitting.value
-                    ? null
-                    : () async {
-                        final ok = await c.downloadInvoicePdf(widget.invoiceId);
-                        // **والسياقُ المُلتقَط في الإغلاق يُفحَص بنفسه.**
-                        // `mounted` حالةُ الودجة، وهذا `context` من باني
-                        // `Obx` لا من الحالة — فقد يموت وهي حيّة.
-                        if (!mounted || ok || !context.mounted) return;
-                        _snack(context, c.lastError.value, error: true);
-                      },
-                icon: c.isSubmitting.value
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.picture_as_pdf_outlined),
-              )),
-        ],
-      ),
-      body: Obx(() {
-        final state = _loadState(c,
-            retry: () => c.loadInvoiceDetails(widget.invoiceId));
-        final inv = c.currentInvoice.value;
-        if (inv == null) {
-          return state ??
-              _SurfaceState(
-                icon: Icons.receipt_long_outlined,
-                title: 'الفاتورة غير متاحة',
-                message: 'تعذر قراءة تفاصيل الفاتورة.',
-                onRetry: () => c.loadInvoiceDetails(widget.invoiceId),
-              );
-        }
-        final items = (inv['items'] ?? []) as List;
-        final collections = (inv['collections'] ?? []) as List;
-        final customer = inv['customer'] is Map ? inv['customer'] as Map : const {};
-        final balance = _num(inv['balance_due']);
-        return RefreshIndicator(
-          onRefresh: () async => c.loadInvoiceDetails(widget.invoiceId),
-          color: AmialColors.primary,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(
-              AmialSpacing.screen,
-              AmialSpacing.sm,
-              AmialSpacing.screen,
-              AmialSpacing.xxl,
-            ),
-            children: [
-              _invoiceHero(context, inv, customer),
-              const SizedBox(height: AmialSpacing.md),
-              _itemsCard(context, items),
-              const SizedBox(height: AmialSpacing.md),
-              _totalsCard(inv, balance),
-              if (collections.isNotEmpty) ...[
-                const SizedBox(height: AmialSpacing.md),
-                _collectionsCard(collections),
-              ],
-              if (balance > 0 && inv['status'] != 'voided') ...[
-                const SizedBox(height: AmialSpacing.lg),
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AmialColors.primary,
-                    foregroundColor: AmialColors.cardSurface,
-                    minimumSize:
-                        const Size.fromHeight(AmialSpacing.buttonHeight),
-                  ),
-                  onPressed: () => _collectSheet(context, balance),
-                  icon: const Icon(Icons.payments_outlined),
-                  label: Text('تسجيل تحصيل ${_money(balance)} ر.ي'),
-                ),
-              ],
-            ],
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _invoiceHero(
-      BuildContext context, Map inv, Map customer) {
-    return Container(
-      padding: const EdgeInsets.all(AmialSpacing.lg),
-      decoration: BoxDecoration(
-        color: AmialColors.cardSurface,
-        borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-        border: Border.all(color: AmialColors.border),
-        boxShadow: AmialSpacing.cardShadow,
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              _statusPill('${inv['status'] ?? ''}'),
-              const Spacer(),
-              Text('${inv['invoice_number'] ?? '—'}',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      )),
-            ],
-          ),
-          const SizedBox(height: AmialSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('إجمالي الفاتورة',
-                        style: TextStyle(color: AmialColors.textMuted)),
-                    Text('${_money(inv['total_amount'])} ر.ي',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              color: AmialColors.primary,
-                              fontWeight: FontWeight.w900,
-                            )),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('العميل: ${customer['full_name'] ?? '—'}',
-                        style: const TextStyle(
-                            color: AmialColors.textPrimary,
-                            fontWeight: FontWeight.w700)),
-                    const SizedBox(height: AmialSpacing.xs),
-                    Text('الإصدار: ${_date(inv['invoice_date'])}',
-                        style: const TextStyle(
-                            color: AmialColors.textMuted, fontSize: 11)),
-                    Text('الاستحقاق: ${_date(inv['due_date'])}',
-                        style: const TextStyle(
-                            color: AmialColors.textMuted, fontSize: 11)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _itemsCard(BuildContext context, List items) {
-    return Container(
-      padding: const EdgeInsets.all(AmialSpacing.md),
-      decoration: BoxDecoration(
-        color: AmialColors.cardSurface,
-        borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-        border: Border.all(color: AmialColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text('الأصناف',
-              style: TextStyle(
-                  fontWeight: FontWeight.w900, color: AmialColors.textPrimary)),
-          const SizedBox(height: AmialSpacing.sm),
-          if (items.isEmpty)
-            const Text('لا توجد أصناف في الرد الحالي',
-                style: TextStyle(color: AmialColors.textMuted))
-          else
-            ...items.map((raw) {
-              final item = raw as Map;
-              return Container(
-                padding: const EdgeInsets.symmetric(vertical: AmialSpacing.sm),
-                decoration: const BoxDecoration(
-                    border: Border(
-                        bottom: BorderSide(color: AmialColors.border))),
-                child: Row(
-                  children: [
-                    Text('${_money(item['line_total'])} ر.ي',
-                        style: const TextStyle(
-                            color: AmialColors.primary,
-                            fontWeight: FontWeight.w900)),
-                    const Spacer(),
-                    Text('${item['quantity']} × ${_money(item['unit_price'])}',
-                        style: const TextStyle(
-                            color: AmialColors.textMuted, fontSize: 11)),
-                    const SizedBox(width: AmialSpacing.sm),
-                    Flexible(
-                      child: Text('${item['product_name'] ?? '—'}',
-                          textAlign: TextAlign.end,
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          const SizedBox(height: AmialSpacing.xs),
-          Text('عدد الأصناف: ${items.length}',
-              textAlign: TextAlign.end,
-              style: const TextStyle(
-                  color: AmialColors.textMuted, fontSize: 11)),
-        ],
-      ),
-    );
-  }
-
-  Widget _totalsCard(Map inv, double balance) {
-    return Container(
-      padding: const EdgeInsets.all(AmialSpacing.md),
-      decoration: BoxDecoration(
-        color: AmialColors.cardSurface,
-        borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-        border: Border.all(color: AmialColors.border),
-      ),
-      child: Column(
-        children: [
-          _totalLine('المجموع الفرعي', inv['subtotal']),
-          if (_num(inv['discount_amount']) > 0)
-            _totalLine('الخصم', -_num(inv['discount_amount'])),
-          if (_num(inv['tax_amount']) > 0)
-            _totalLine('الضريبة', inv['tax_amount']),
-          const Divider(color: AmialColors.border),
-          _totalLine('إجمالي الفاتورة', inv['total_amount'], strong: true),
-          _totalLine('المدفوع', inv['paid_amount'], tone: AmialColors.success),
-          _totalLine('المتبقي', balance,
-              tone: balance > 0 ? AmialColors.danger : AmialColors.success,
-              strong: true),
-        ],
-      ),
-    );
-  }
-
-  Widget _collectionsCard(List collections) {
-    return Container(
-      padding: const EdgeInsets.all(AmialSpacing.md),
-      decoration: BoxDecoration(
-        color: AmialColors.cardSurface,
-        borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-        border: Border.all(color: AmialColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text('التحصيلات',
-              style: TextStyle(fontWeight: FontWeight.w900)),
-          const SizedBox(height: AmialSpacing.xs),
-          ...collections.map((raw) {
-            final col = raw as Map;
-            return ListTile(
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.check_circle_outline_rounded,
-                  color: AmialColors.success),
-              title: Text('${_money(col['amount'])} ر.ي',
-                  style: const TextStyle(
-                      color: AmialColors.success,
-                      fontWeight: FontWeight.w800)),
-              subtitle: Text('${col['payment_method'] ?? ''}'),
-              trailing: Text(_date(col['collection_date']),
-                  style: const TextStyle(
-                      color: AmialColors.textMuted, fontSize: 10)),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _totalLine(String label, dynamic value,
-      {Color? tone, bool strong = false}) {
-    final color = tone ?? AmialColors.textPrimary;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AmialSpacing.xs),
-      child: Row(
-        children: [
-          Text('${_money(value)} ر.ي',
-              style: TextStyle(
-                  color: color,
-                  fontWeight: strong ? FontWeight.w900 : FontWeight.w600)),
-          const Spacer(),
-          Text(label,
-              style: const TextStyle(color: AmialColors.textSecondary)),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _collectSheet(BuildContext context, double maxAmount) async {
-    final amount = TextEditingController(text: _qty(maxAmount));
-    final reference = TextEditingController();
-    String method = 'cash';
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AmialColors.cardSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(AmialSpacing.radiusXl)),
-      ),
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (_, setSheet) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            AmialSpacing.screen,
-            AmialSpacing.lg,
-            AmialSpacing.screen,
-            MediaQuery.viewInsetsOf(sheetContext).bottom + AmialSpacing.lg,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('تسجيل تحصيل',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      )),
-              const SizedBox(height: AmialSpacing.md),
-              _Field(amount, 'المبلغ *', Icons.payments_outlined, number: true),
-              Wrap(
-                spacing: AmialSpacing.xs,
-                children: [
-                  for (final m in const [
-                    ('cash', 'نقد'),
-                    ('bank_transfer', 'تحويل'),
-                    ('amial_pay', 'أميال'),
-                    ('check', 'شيك')
-                  ])
-                    ChoiceChip(
-                      label: Text(m.$2),
-                      selected: method == m.$1,
-                      onSelected: (_) => setSheet(() => method = m.$1),
-                    ),
-                ],
-              ),
-              const SizedBox(height: AmialSpacing.sm),
-              _Field(reference, 'رقم المرجع (اختياري)', Icons.tag_rounded),
-              const SizedBox(height: AmialSpacing.md),
-              Obx(() => FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AmialColors.primary,
-                      minimumSize:
-                          const Size.fromHeight(AmialSpacing.buttonHeight),
-                    ),
-                    onPressed: c.isSubmitting.value
-                        ? null
-                        : () async {
-                            final v = _num(amount.text);
-                            if (v <= 0 || v > maxAmount) {
-                              _snack(context,
-                                  'المبلغ يجب أن يكون أكبر من صفر ولا يتجاوز المتبقي.',
-                                  error: true);
-                              return;
-                            }
-                            final ok = await c.recordCollection(widget.invoiceId, {
-                              'amount': v,
-                              'payment_method': method,
-                              if (reference.text.trim().isNotEmpty)
-                                'reference_number': reference.text.trim(),
-                            });
-                            // **وسياقٌ فرعيٌّ يُفحَص بنفسه.** `mounted` حالةُ الودجة، و`sheetContext` سياقُ ورقةٍ قد تُغلَق أثناء الانتظار — فـNavigator.pop عليه بعدها يرمي أو يُغلق الصفحةَ تحته.
-                            if (!mounted || !sheetContext.mounted) return;
-                            if (ok) {
-                              Navigator.pop(sheetContext);
-                              _snack(context, 'تم تسجيل التحصيل');
-                            } else {
-                              _snack(context, c.lastError.value, error: true);
-                            }
-                          },
-                    child: const Text('تأكيد التحصيل'),
-                  )),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// واجهة إنشاء الفاتورة تحتفظ بالعقد المالي الحالي ولا تضيف حقولاً وهمية.
-class WholesaleProInvoiceCreateScreen extends StatefulWidget {
-  const WholesaleProInvoiceCreateScreen({super.key});
-
-  @override
-  State<WholesaleProInvoiceCreateScreen> createState() =>
-      _WholesaleProInvoiceCreateScreenState();
-}
-
-class _WholesaleProInvoiceCreateScreenState
-    extends State<WholesaleProInvoiceCreateScreen> {
-  WholesaleController get c => Get.find<WholesaleController>();
-  String paymentType = 'credit';
-
-  @override
-  void initState() {
-    super.initState();
-    c.clearCart();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await c.loadProducts();
-      await c.loadCustomers();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AmialColors.background,
-      appBar: AppBar(
-        backgroundColor: AmialColors.background,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text('فاتورة جديدة'),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(
-                AmialSpacing.screen, AmialSpacing.sm, AmialSpacing.screen, 0),
-            child: Obx(() {
-              final cust = c.selectedCustomer.value;
-              return InkWell(
-                borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-                onTap: () => _selectCustomer(context),
-                child: Container(
-                  padding: const EdgeInsets.all(AmialSpacing.md),
-                  decoration: BoxDecoration(
-                    color: AmialColors.cardSurface,
-                    borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-                    border: Border.all(
-                        color: cust == null
-                            ? AmialColors.border
-                            : AmialColors.primary),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(cust == null
-                          ? Icons.person_add_alt_1_outlined
-                          : Icons.verified_user_outlined,
-                          color: AmialColors.primary),
-                      const SizedBox(width: AmialSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          cust?['full_name'] ?? 'اختر العميل *',
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                      const Icon(Icons.expand_more_rounded),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          ),
-          Expanded(
-            child: Obx(() {
-              if (c.cart.isEmpty) {
-                return _SurfaceState(
-                  icon: Icons.shopping_cart_outlined,
-                  title: 'السلة فارغة',
-                  message: 'أضف المنتجات التي تريد إصدار الفاتورة لها.',
-                  actionLabel: 'إضافة منتج',
-                  onAction: () => _selectProduct(context),
-                );
-              }
-              return ListView.builder(
-                padding: const EdgeInsets.all(AmialSpacing.screen),
-                itemCount: c.cart.length,
-                itemBuilder: (_, i) {
-                  final item = c.cart[i];
-                  final p = item['product'] as Map;
-                  final qty = _num(item['quantity']);
-                  final price = _num(p['base_price']);
-                  return Card(
-                    color: AmialColors.cardSurface,
-                    child: ListTile(
-                      leading: IconButton(
-                        onPressed: () => c.removeFromCart(item['product_id']),
-                        icon: const Icon(Icons.delete_outline_rounded,
-                            color: AmialColors.danger),
-                      ),
-                      title: Text('${p['name'] ?? '—'}',
-                          style: const TextStyle(fontWeight: FontWeight.w800)),
-                      subtitle: Text('${_qty(qty)} ${p['unit'] ?? 'وحدة'}'),
-                      trailing: Text('${_money(qty * price)} ر.ي',
-                          style: const TextStyle(
-                              color: AmialColors.primary,
-                              fontWeight: FontWeight.w900)),
-                    ),
-                  );
-                },
-              );
-            }),
-          ),
-          Obx(() => Container(
-                padding: const EdgeInsets.all(AmialSpacing.screen),
-                decoration: const BoxDecoration(
-                  color: AmialColors.cardSurface,
-                  border: Border(top: BorderSide(color: AmialColors.border)),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        OutlinedButton.icon(
-                          onPressed: () => _selectProduct(context),
-                          icon: const Icon(Icons.add_rounded),
-                          label: const Text('إضافة صنف'),
-                        ),
-                        const Spacer(),
-                        Text('${_money(c.cartSubtotal)} ر.ي',
-                            style: const TextStyle(
-                                color: AmialColors.primary,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900)),
-                      ],
-                    ),
-                    const SizedBox(height: AmialSpacing.sm),
-                    Row(
-                      children: [
-                        Expanded(child: _payChoice('cash', 'نقد')),
-                        const SizedBox(width: AmialSpacing.sm),
-                        Expanded(child: _payChoice('credit', 'آجل')),
-                      ],
-                    ),
-                    const SizedBox(height: AmialSpacing.sm),
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: AmialColors.primary,
-                        minimumSize:
-                            const Size.fromHeight(AmialSpacing.buttonHeight),
-                      ),
-                      onPressed: c.isSubmitting.value || c.cart.isEmpty
-                          ? null
-                          : _submit,
-                      icon: const Icon(Icons.check_rounded),
-                      label: const Text('إنشاء الفاتورة'),
-                    ),
-                  ],
-                ),
-              )),
-        ],
-      ),
-    );
-  }
-
-  Widget _payChoice(String value, String label) {
-    final selected = paymentType == value;
-    return ChoiceChip(
-      label: SizedBox(width: double.infinity, child: Text(label, textAlign: TextAlign.center)),
-      selected: selected,
-      selectedColor: AmialColors.primary,
-      labelStyle: TextStyle(
-        color: selected ? AmialColors.cardSurface : AmialColors.textPrimary,
-        fontWeight: FontWeight.w800,
-      ),
-      onSelected: (_) => setState(() => paymentType = value),
-    );
-  }
-
-  Future<void> _submit() async {
-    if (c.selectedCustomer.value == null) {
-      _snack(context, 'اختر العميل أولاً', error: true);
-      return;
-    }
-    final ok = await c.createInvoice(paymentType: paymentType);
-    if (!mounted) return;
-    if (ok) {
-      final inv = c.currentInvoice.value;
-      _snack(context,
-          'تم إنشاء الفاتورة ${inv?['invoice_number'] ?? ''} بنجاح');
-      Get.back();
-    } else {
-      _snack(context, c.lastError.value, error: true);
-    }
-  }
-
-  void _selectCustomer(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AmialColors.cardSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(AmialSpacing.radiusXl)),
-      ),
-      builder: (_) => SafeArea(
-        child: Obx(() => ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.all(AmialSpacing.md),
-              children: [
-                const Text('اختر العميل',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-                const SizedBox(height: AmialSpacing.sm),
-                ...c.customers.map((cust) => ListTile(
-                      leading: const CircleAvatar(
-                          child: Icon(Icons.person_outline_rounded)),
-                      title: Text('${cust['full_name'] ?? '—'}'),
-                      subtitle: Text('${cust['phone'] ?? ''}'),
-                      onTap: () {
-                        c.selectedCustomer.value = cust;
-                        Navigator.pop(context);
-                      },
-                    )),
-              ],
-            )),
-      ),
-    );
-  }
-
-  void _selectProduct(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: AmialColors.cardSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(AmialSpacing.radiusXl)),
-      ),
-      builder: (_) => SafeArea(
-        child: Obx(() => ListView(
-              shrinkWrap: true,
-              padding: const EdgeInsets.all(AmialSpacing.md),
-              children: [
-                const Text('إضافة صنف',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-                const SizedBox(height: AmialSpacing.sm),
-                ...c.products.map((p) => ListTile(
-                      leading: const Icon(Icons.inventory_2_outlined,
-                          color: AmialColors.primary),
-                      title: Text('${p['name'] ?? '—'}'),
-                      subtitle: Text(
-                          '${_money(p['base_price'])} ر.ي • متوفر ${_qty(_num(p['current_stock']))} ${p['unit'] ?? 'وحدة'}'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _quantityDialog(context, p);
-                      },
-                    )),
-              ],
-            )),
-      ),
-    );
-  }
-
-  void _quantityDialog(BuildContext context, Map<String, dynamic> p) {
-    final q = TextEditingController(text: '1');
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('${p['name'] ?? 'المنتج'}'),
-        content: _Field(q, 'الكمية (${p['unit'] ?? 'وحدة'})',
-            Icons.numbers_rounded,
-            number: true),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('إلغاء')),
-          FilledButton(
-            onPressed: () {
-              final qty = _num(q.text);
-              if (qty <= 0) return;
-              c.addToCart(p, qty);
-              Navigator.pop(dialogContext);
-            },
-            child: const Text('إضافة'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class WholesaleProAgingScreen extends StatefulWidget {
-  const WholesaleProAgingScreen({super.key});
-
-  @override
-  State<WholesaleProAgingScreen> createState() => _WholesaleProAgingScreenState();
-}
-
-class _WholesaleProAgingScreenState extends State<WholesaleProAgingScreen> {
-  WholesaleController get c => Get.find<WholesaleController>();
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => c.loadAgingReport());
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AmialColors.background,
-      appBar: AppBar(
-        backgroundColor: AmialColors.background,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text('تقرير تقادم الديون'),
-      ),
-      body: Obx(() {
-        final state = _loadState(c, retry: c.loadAgingReport);
-        final r = c.agingReport.value;
-        if (r == null) return state ?? const SizedBox.shrink();
-        final buckets = r['buckets'] is Map ? r['buckets'] as Map : const {};
-        final pct = r['percentages'] is Map ? r['percentages'] as Map : const {};
-        final customers = r['by_customer'] is List ? r['by_customer'] as List : const [];
-        return RefreshIndicator(
-          onRefresh: c.loadAgingReport,
-          color: AmialColors.primary,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(AmialSpacing.screen),
-            children: [
-              Container(
-                padding: const EdgeInsets.all(AmialSpacing.xl),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AmialColors.primaryDark, AmialColors.primary],
-                  ),
-                  borderRadius: BorderRadius.circular(AmialSpacing.radiusXl),
-                ),
-                child: Column(
-                  children: [
-                    const Icon(Icons.query_stats_rounded,
-                        color: AmialColors.yellow, size: 42),
-                    const SizedBox(height: AmialSpacing.sm),
-                    const Text('إجمالي المستحقات',
-                        style: TextStyle(color: AmialColors.cardSurface)),
-                    Text('${_money(r['total_receivable'])} ر.ي',
-                        style: const TextStyle(
-                            color: AmialColors.cardSurface,
-                            fontSize: 32,
-                            fontWeight: FontWeight.w900)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AmialSpacing.md),
-              _agingBucket('الحالي (0-30 يوم)', buckets['current'], pct['current'],
-                  AmialColors.success, Icons.schedule_rounded),
-              _agingBucket('30-60 يوم', buckets['30_60'], pct['30_60'],
-                  AmialColors.warning, Icons.schedule_rounded),
-              _agingBucket('60-90 يوم', buckets['60_90'], pct['60_90'],
-                  AmialColors.cash, Icons.schedule_rounded),
-              _agingBucket('أكثر من 90 يوم', buckets['over_90'], pct['over_90'],
-                  AmialColors.danger, Icons.error_outline_rounded),
-              const SizedBox(height: AmialSpacing.lg),
-              const Text('بحسب العميل',
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-              const SizedBox(height: AmialSpacing.sm),
-              ...customers.map((raw) {
-                final m = raw as Map;
-                return Card(
-                  color: AmialColors.cardSurface,
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: AmialColors.primary.withValues(alpha: 0.08),
-                      child: const Icon(Icons.person_outline_rounded,
-                          color: AmialColors.primary),
-                    ),
-                    title: Text('${m['customer_name'] ?? '—'}'),
-                    subtitle: Text('${m['invoices_count'] ?? '—'} فاتورة'),
-                    trailing: Text('${_money(m['total'])} ر.ي',
-                        style: const TextStyle(
-                            color: AmialColors.danger,
-                            fontWeight: FontWeight.w900)),
-                  ),
-                );
-              }),
-            ],
-          ),
-        );
-      }),
-    );
-  }
-
-  Widget _agingBucket(
-      String label, dynamic amount, dynamic pct, Color tone, IconData icon) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: AmialSpacing.sm),
-      padding: const EdgeInsets.all(AmialSpacing.md),
-      decoration: BoxDecoration(
-        color: AmialColors.cardSurface,
-        borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
-        border: Border(right: BorderSide(color: tone, width: 4)),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: tone.withValues(alpha: 0.08),
-            child: Icon(icon, color: tone),
-          ),
-          const SizedBox(width: AmialSpacing.sm),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: const TextStyle(fontWeight: FontWeight.w900)),
-                Text('${_pct(pct)} من الإجمالي',
-                    style: const TextStyle(
-                        color: AmialColors.textMuted, fontSize: 11)),
-              ],
-            ),
-          ),
-          Text('${_money(amount)} ر.ي',
-              style: TextStyle(
-                  color: tone, fontWeight: FontWeight.w900, fontSize: 18)),
-        ],
       ),
     );
   }
@@ -3110,11 +2005,9 @@ Color _statusTone(String status) => switch (status) {
     };
 
 String _planLabel(String code) => switch (code) {
-      'starter' => 'STARTER',
-      'business' => 'BUSINESS',
-      'merchant_pro' => 'MERCHANT PRO',
-      'enterprise' => 'ENTERPRISE',
-      _ => 'FREE',
+      'business' => 'الأعمال',
+      'enterprise' => 'مؤسسة',
+      _ => 'مجاني',
     };
 
 double _num(dynamic value) {

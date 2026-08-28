@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\DeniesByPlan;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\Merchant\PosDevice;
+use App\Models\Merchant\PosDeviceActivation;
 use App\Models\Merchant\PosDeviceSession;
 use App\Models\PosUser;
 use App\Models\User;
@@ -13,6 +14,7 @@ use App\Services\Merchant\PosDeviceRegistrar;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 /**
  * AMIAL-POS-DEVICES-004 — **إدارةُ مقاعد أجهزة نقاط البيع.**
@@ -84,6 +86,110 @@ class PosDeviceController extends Controller
     public function pair(Request $request): JsonResponse
     {
         return $this->registerThrough($request, 'device_uuid');
+    }
+
+    /**
+     * ينشئه المالك من حسابه ثم يُدخل مرة واحدة في جهاز الكاشير.
+     * لا يحجز مقعداً: المقعد يُستهلك فقط عند تفعيل جهاز فعلي.
+     */
+    public function createActivationCode(Request $request): JsonResponse
+    {
+        $owner = $this->owner($request);
+        if ($owner instanceof JsonResponse) return $owner;
+
+        $v = Validator::make($request->all(), [
+            'display_name' => 'required|string|max:120',
+            'branch_id' => 'sometimes|nullable|integer',
+        ]);
+        if ($v->fails()) return $this->error('VALIDATION_ERROR', $v->errors()->first(), 422);
+
+        $branch = $this->resolveBranch($owner, $request->input('branch_id'));
+        if ($branch instanceof JsonResponse) return $branch;
+
+        // لا نكشف الكود إلا في هذه الاستجابة؛ القاعدة تحتفظ ببصمته فقط.
+        do {
+            $code = (string) random_int(10000000, 99999999);
+            $hash = $this->activationHash($code);
+        } while (PosDeviceActivation::where('code_hash', $hash)->exists());
+
+        $activation = PosDeviceActivation::create([
+            'merchant_user_id' => $owner->id,
+            'branch_id' => $branch,
+            'created_by_user_id' => $request->user()->id,
+            'code_hash' => $hash,
+            'display_name' => trim((string) $request->input('display_name')),
+            'expires_at' => now()->addMinutes(15),
+        ]);
+
+        return $this->ok([
+            'activation_code' => $code,
+            'expires_at' => $activation->expires_at->toIso8601String(),
+            'instructions' => 'افتح أميال باي على جهاز الكاشير، اختر «تفعيل جهاز نقطة البيع»، ثم أدخل هذا الرمز.',
+        ]);
+    }
+
+    /**
+     * بوابة عامة محدودة المعدّل: الجهاز لا يحتاج حساب المالك ليُفعّل.
+     * الرمز قصير العمر، أحادي الاستعمال، ولا يربط الجهاز بموظف بعينه.
+     */
+    public function activate(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'activation_code' => 'required|string|digits:8',
+            'device_uuid' => 'required|string|min:8|max:200',
+            'platform' => 'sometimes|nullable|string|max:32',
+            'app_version' => 'sometimes|nullable|string|max:32',
+        ]);
+        if ($v->fails()) return $this->error('VALIDATION_ERROR', $v->errors()->first(), 422);
+
+        $result = DB::transaction(function () use ($request) {
+            $activation = PosDeviceActivation::where('code_hash', $this->activationHash((string) $request->input('activation_code')))
+                ->lockForUpdate()->first();
+
+            if ($activation === null || $activation->consumed_at !== null || $activation->expires_at->isPast()) {
+                return ['error' => ['ACTIVATION_CODE_INVALID', 'رمز التفعيل غير صالح أو انتهت صلاحيته.', 422]];
+            }
+
+            $owner = User::find($activation->merchant_user_id);
+            if ($owner === null || ! $owner->is_active) {
+                return ['error' => ['MERCHANT_INACTIVE', 'حساب التاجر غير متاح لتفعيل جهاز.', 403]];
+            }
+
+            $registered = $this->registrar->register($owner, (string) $request->input('device_uuid'), [
+                'branch_id' => $activation->branch_id,
+                'display_name' => $activation->display_name,
+                'platform' => $request->input('platform'),
+                'app_version' => $request->input('app_version'),
+            ]);
+
+            if ($registered['result'] === PosDeviceRegistrar::RESULT_LIMIT) {
+                return ['limit' => $registered];
+            }
+
+            $activation->forceFill([
+                'consumed_at' => now(),
+                'consumed_by_device_id' => $registered['device']->id,
+            ])->save();
+
+            return ['registered' => $registered];
+        });
+
+        if (isset($result['error'])) {
+            [$code, $message, $status] = $result['error'];
+            return $this->error($code, $message, $status);
+        }
+        if (isset($result['limit'])) {
+            $limit = $result['limit'];
+            return $this->error('PLAN_LIMIT_REACHED', sprintf(
+                'بلغتَ حدّ أجهزة نقاط البيع في باقتك (%d من %d).', $limit['used'], $limit['max']
+            ), 402);
+        }
+
+        $registered = $result['registered'];
+        return $this->ok([
+            'device' => $this->present($registered['device']),
+            'created' => $registered['result'] === PosDeviceRegistrar::RESULT_REGISTERED,
+        ]);
     }
 
     /** PATCH — الاسمُ والفرعُ وحدَهما؛ ولا تُغيَّر الهويّة ولا الحالة. */
@@ -252,7 +358,16 @@ class PosDeviceController extends Controller
             return User::findOrFail($pos->merchant_user_id);
         }
 
+        if ($user->role !== 'merchant') {
+            return $this->error('NOT_A_MERCHANT', 'إدارة أجهزة نقاط البيع متاحة للتاجر فقط.', 403);
+        }
+
         return $user;
+    }
+
+    private function activationHash(string $code): string
+    {
+        return hash_hmac('sha256', trim($code), (string) config('app.key'));
     }
 
     /**

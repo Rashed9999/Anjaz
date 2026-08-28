@@ -112,6 +112,10 @@ class PharmacyService
         }
 
         return DB::transaction(function () use ($product, $data, $expiry) {
+            if (PharmacyBatch::where('product_id', $product->id)
+                ->where('batch_number', $data['batch_number'])->exists()) {
+                throw new InvalidArgumentException('رقم التشغيلة مسجّل لهذا الدواء مسبقاً');
+            }
             $qty = MoneyService::normalize((string)$data['quantity_received']);
 
             $batch = PharmacyBatch::create([
@@ -134,6 +138,33 @@ class PharmacyService
             $product->update(['current_stock' => $newStock]);
 
             return $batch->fresh();
+        });
+    }
+
+    /**
+     * السحب يمنع البيع فوراً ويُنقص الرصيد المتاح، مع حفظ السبب وصاحب
+     * القرار. لا نحذف الدفعة كي تبقى البيوع السابقة قابلة للتدقيق.
+     */
+    public function recallBatch(PharmacyBatch $batch, User $actor, string $reason): PharmacyBatch
+    {
+        $reason = trim($reason);
+        if ($reason === '') throw new InvalidArgumentException('سبب سحب التشغيلة مطلوب');
+        return DB::transaction(function () use ($batch, $actor, $reason) {
+            $locked = PharmacyBatch::lockForUpdate()->findOrFail($batch->id);
+            if ($locked->status === 'recalled') {
+                throw new InvalidArgumentException('هذه التشغيلة مسحوبة مسبقاً');
+            }
+            $product = PharmacyProduct::lockForUpdate()->findOrFail($locked->product_id);
+            $remaining = (string) $locked->quantity_remaining;
+            if (MoneyService::compare((string) $product->current_stock, $remaining) < 0) {
+                throw new InvalidArgumentException('رصيد الدواء لا يطابق رصيد التشغيلة؛ لا يمكن سحبها قبل مراجعة الجرد');
+            }
+            $locked->update([
+                'status' => 'recalled', 'recall_reason' => $reason,
+                'recalled_by_user_id' => $actor->id, 'recalled_at' => now(),
+            ]);
+            $product->update(['current_stock' => MoneyService::sub((string) $product->current_stock, $remaining)]);
+            return $locked->fresh();
         });
     }
 

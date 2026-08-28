@@ -9,6 +9,7 @@ import 'package:amial_pay/features/auth/screens/amial_registration_wizard_screen
 import 'package:amial_pay/features/auth/screens/quick_receive_screen.dart';
 import 'package:amial_pay/features/forget_pin/screens/forget_pin_screen.dart';
 import 'package:amial_pay/features/language/widgets/amial_language_switch.dart';
+import 'package:amial_pay/features/merchant/screens/pos_device_activation_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/images.dart';
@@ -41,7 +42,7 @@ extension _KindMeta on AccountKind {
   String get label => switch (this) {
         AccountKind.customer => 'العميل',
         AccountKind.merchant => 'التاجر',
-        AccountKind.pos => 'نقطة البيع',
+        AccountKind.pos => 'حساب الموظف',
       };
 
   IconData get icon => switch (this) {
@@ -53,7 +54,7 @@ extension _KindMeta on AccountKind {
   String get title => switch (this) {
         AccountKind.customer => 'مرحباً بك في أميال باي',
         AccountKind.merchant => 'إدارة أعمالك بنمو وثقة',
-        AccountKind.pos => 'نقطة بيع جاهزة للعمل',
+        AccountKind.pos => 'دخول موظف على جهاز نقطة بيع مُفعّل',
       };
 
   String get subtitle => switch (this) {
@@ -62,19 +63,19 @@ extension _KindMeta on AccountKind {
         AccountKind.merchant =>
           'دخول آمن إلى حساب متجرك، العمليات والتقارير.',
         AccountKind.pos =>
-          'دخول تشغيلي مخصص لنقطة البيع دون كشف حساب المالك.',
+          'حساب موظف بصلاحياته؛ الجهاز يُفعّله المالك بشكل مستقل.',
       };
 
   String get formTitle => switch (this) {
         AccountKind.customer => 'تسجيل الدخول',
         AccountKind.merchant => 'دخول التاجر',
-        AccountKind.pos => 'دخول نقطة البيع',
+        AccountKind.pos => 'دخول الموظف',
       };
 
   String get submitLabel => switch (this) {
         AccountKind.customer => 'تسجيل الدخول',
         AccountKind.merchant => 'دخول التاجر',
-        AccountKind.pos => 'فتح نقطة البيع',
+        AccountKind.pos => 'دخول الموظف',
       };
 }
 
@@ -134,6 +135,10 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     });
   }
 
+  void _startPosRegistration() {
+    Get.to(() => const PosDeviceActivationScreen());
+  }
+
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     final controller = Get.find<UnifiedAuthController>();
@@ -159,7 +164,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           merchantNumber: _merchantNumCtrl.text.trim(),
           phone: _phoneCtrl.text.trim(),
           password: _passwordCtrl.text,
-          posNumber: _posNumCtrl.text.trim(),
+          employeeCode: _posNumCtrl.text.trim(),
         );
         break;
     }
@@ -552,10 +557,10 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             if (_kind == AccountKind.pos) ...[
               _field(
                 controller: _posNumCtrl,
-                label: 'رقم نقطة البيع',
-                hint: 'POS-000123',
-                icon: Icons.point_of_sale_outlined,
-                validator: _required('أدخل رقم نقطة البيع'),
+                label: 'رمز الموظف',
+                hint: 'EMP-000123',
+                icon: Icons.badge_outlined,
+                validator: _required('أدخل رمز الموظف'),
               ),
               const SizedBox(height: AmialSpacing.sm),
             ],
@@ -631,6 +636,23 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
                 ),
               );
             }),
+            if (_kind == AccountKind.pos) ...[
+              const SizedBox(height: AmialSpacing.sm),
+              OutlinedButton.icon(
+                onPressed: _startPosRegistration,
+                icon: const Icon(Icons.add_to_home_screen_outlined),
+                label: const Text('تفعيل جهاز نقطة البيع'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AmialColors.primary,
+                  side: const BorderSide(color: AmialColors.border),
+                  minimumSize:
+                      const Size.fromHeight(AmialSpacing.buttonHeight),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AmialSpacing.radiusMd),
+                  ),
+                ),
+              ),
+            ],
             if (_kind == AccountKind.customer) ...[
               const SizedBox(height: AmialSpacing.md),
               _divider(context),
@@ -830,7 +852,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           Expanded(
             child: Text(
               pos
-                  ? 'لا نعرض PIN موظف وهمياً قبل أن يدعمه الخادم. حالياً تستخدم الشاشة عقد نقطة البيع الحقيقي.'
+                  ? 'إن ظهرت رسالة «الجهاز غير مسجّل»، اضغط «تسجيل هذا الجهاز أولاً». يدخل مالك المتجر مرة واحدة ليسجّل هذا الجهاز ضمن مقاعد الباقة، ثم يعود الموظف لدخول نقطة البيع.'
                   : 'بعد الدخول يوجهك أميال إلى قطاع تجارتك الصحيح ويطبق الباقة والصلاحيات.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AmialColors.textSecondary,

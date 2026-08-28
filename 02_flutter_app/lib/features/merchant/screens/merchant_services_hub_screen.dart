@@ -6,7 +6,7 @@ import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 // شاشات الخدمات
-import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_excel_export_screen.dart';
@@ -420,10 +420,8 @@ class MerchantServicesHubScreen extends StatelessWidget {
 
   String _planName(String code) {
     switch (code) {
-      case 'starter': return 'البداية';
       case 'business': return 'الأعمال';
-      case 'merchant_pro': return 'التاجر برو';
-      case 'enterprise': return 'المؤسسات';
+      case 'enterprise': return 'مؤسسة';
       default: return 'المجانية';
     }
   }
@@ -473,13 +471,13 @@ class MerchantServicesHubScreen extends StatelessWidget {
     // رسالة: شاشةٌ خاطئة تعمل بثقة. وInventoryScreen مبنيّة وكانت مهملة.
     _Svc('inventory', 'المخزون',
         'أضِف منتجاتك وتابع كمياتها، مع تنبيه عند اقتراب النفاد وجردٍ دوريّ.',
-        Icons.inventory_2, 'البداية', () => const InventoryScreen()),
+        Icons.inventory_2, 'الأعمال', () => const InventoryScreen()),
     _Svc('promotions', 'العروض والخصومات',
         'أنشئ كوبونات وخصومات (نسبة مئوية أو مبلغ ثابت) تُطبَّق تلقائياً عند الدفع في الكاشير.',
-        Icons.local_offer, 'ستارتر', () => const MerchantPromotionsScreen()),
+        Icons.local_offer, 'الأعمال', () => const MerchantPromotionsScreen()),
     _Svc('installments', 'البيع بالتقسيط',
         'بِع بالتقسيط بشروط وضمانات عالمية: دفعة أولى، كفيل، حدّ ائتماني، هامش مرابحة، ورسوم تأخير.',
-        Icons.handshake, 'التاجر برو', () => const MerchantInstallmentsScreen()),
+        Icons.handshake, 'مؤسسة', () => const MerchantInstallmentsScreen()),
     _Svc('gift_cards', 'بطاقات الهدايا',
         'أصدر بطاقات هدايا برصيد مخزَّن يستخدمها العملاء لدى متجرك بكود فريد — تزيد ولاءهم وإنفاقهم.',
         Icons.card_giftcard, 'الأعمال', () => const MerchantGiftCardsScreen()),
@@ -497,7 +495,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
         Icons.assignment_return, 'المجانية', () => const MerchantRefundScreen()),
     _Svc('products', 'المنتجات والأسعار',
         'كتالوج منتجاتك: السعر والتكلفة والباركود وتاريخ الانتهاء — يُستخدم في الكاشير مباشرة.',
-        Icons.sell, 'البداية', () => const CashierProductsScreen()),
+        Icons.sell, 'الأعمال', () => const CashierProductsScreen()),
     _Svc('receipts', 'إعدادات الفاتورة',
         'اسم المتجر وشعاره وبيانات التواصل التي تُطبع أعلى كل إيصال، مع رسالة ختامية للعميل.',
         Icons.receipt, 'المجانية', () => const ReceiptSettingsScreen()),
@@ -507,10 +505,10 @@ class MerchantServicesHubScreen extends StatelessWidget {
         onlyFor: {'retail'}),
     _Svc('inventory_audit', 'الجرد',
         'جردٌ دوريّ يقارن الكمية الدفترية بالكمية الفعلية على الرفّ ويُظهر الفروق صنفاً صنفاً.',
-        Icons.checklist, 'البداية', () => const InventoryAuditScreen()),
+        Icons.checklist, 'الأعمال', () => const InventoryAuditScreen()),
     _Svc('low_stock_alerts', 'تنبيهات النفاد',
         'حدّد لكل صنف حدّاً أدنى، ونبّهك قبل نفاده بوقتٍ يكفي لإعادة الطلب.',
-        Icons.notification_important, 'البداية', () => const StockAlertsScreen()),
+        Icons.notification_important, 'الأعمال', () => const StockAlertsScreen()),
     _Svc('debts', 'البيع بالآجل',
         'لوحة الآجل: كم لك على العملاء، ومن تأخّر، وسدادٌ جزئيّ أو كامل بكشف حساب لكل عميل.',
         Icons.account_balance_wallet, 'المجانية', () => const CreditDashboardScreen()),
@@ -525,7 +523,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
         Icons.swap_vert, 'المجانية', () => const MerchantTransactionsScreen()),
     _Svc('profit_reports', 'تقارير الأرباح',
         'تقارير مبيعات وأرباح مفصّلة لمتجرك، بمقارنات يومية وشهرية لتعرف أداءك الحقيقي.',
-        Icons.trending_up, 'الأعمال', () => const ProfitReportScreen()),
+        Icons.trending_up, 'الأعمال', () => const FinancialTruthReportScreen()),
     _Svc('expenses', 'المصروفات والصندوق',
         'سجّل مصروفات المتجر والصندوق النثري وصنّفها، لتحسب صافي ربحك بدقّة بعد المصاريف.',
         Icons.receipt_long, 'الأعمال', () => const MerchantExpensesScreen()),
@@ -534,10 +532,10 @@ class MerchantServicesHubScreen extends StatelessWidget {
         Icons.grid_on, 'الأعمال', () => const MerchantExcelExportScreen()),
     _Svc('multi_currency', 'تعدّد العملات',
         'اعرض الأسعار وبِع بأكثر من عملة، مع أسعار صرف قابلة للتحديث يدوياً.',
-        Icons.currency_exchange, 'التاجر برو', () => const MerchantCurrenciesScreen()),
+        Icons.currency_exchange, 'مؤسسة', () => const MerchantCurrenciesScreen()),
     _Svc('advanced_backup', 'النسخ الاحتياطي',
         'أنشئ نسخاً احتياطية لبيانات متجرك واستعِدها عند الحاجة — أمان لبياناتك.',
-        Icons.backup, 'التاجر برو', () => const MerchantBackupScreen()),
+        Icons.backup, 'مؤسسة', () => const MerchantBackupScreen()),
     _Svc('loyalty', 'برنامج الولاء',
         'كافئ عملاءك بنقاط على كل عملية شراء يستبدلونها بخصومات — وسيلة مثبتة لزيادة تكرار الشراء.',
         Icons.stars, 'الأعمال', () => const MerchantLoyaltyScreen()),
@@ -546,7 +544,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
         Icons.business_center, 'المؤسسات', () => const CorporateAccountsScreen()),
     _Svc('branches', 'الفروع',
         'أدر عدّة فروع لمتجرك تحت حساب واحد، مع تقارير منفصلة لكل فرع.',
-        Icons.account_tree, 'التاجر برو', () => const BranchesManagementScreen()),
+        Icons.account_tree, 'مؤسسة', () => const BranchesManagementScreen()),
     _Svc('employees', 'الموظفون',
         'أضِف موظفي الكاشير بصلاحيات محدّدة، وتابع مبيعات وأداء كل موظف.',
         Icons.badge, 'الأعمال', () => const MerchantStaffScreen()),
@@ -556,7 +554,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
         Icons.point_of_sale, 'حسب الباقة', () => const MerchantPosDevicesScreen()),
     _Svc('audit_log', 'سجلّ التدقيق',
         'سجلّ كامل لكل عملية حسّاسة في متجرك: من فعل ماذا ومتى — للرقابة والأمان.',
-        Icons.fact_check, 'التاجر برو', () => const MerchantAuditLogScreen()),
+        Icons.fact_check, 'مؤسسة', () => const MerchantAuditLogScreen()),
     _Svc('api_access', 'مفاتيح API',
         'اربط متجرك بأنظمتك الخارجية (محاسبة، مواقع) عبر مفاتيح API آمنة.',
         Icons.api, 'المؤسسات', () => const MerchantApiKeysScreen()),

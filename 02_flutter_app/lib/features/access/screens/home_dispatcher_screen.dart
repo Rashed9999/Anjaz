@@ -16,7 +16,7 @@ import 'package:amial_pay/features/merchant/screens/merchant_adaptive_shell.dart
 /// نقطة الدخول الموحّدة بعد تسجيل الدخول.
 /// يفحص access ويعرض الشاشة المناسبة:
 ///   - تاجر بدون business_type → BusinessTypeSelectionScreen (إلزامي)
-///   - Fuel → FuelStationDashboardScreen
+///   - Fuel → FuelOwnerConsoleScreen
 ///   - Pharmacy → PharmacyDashboardScreen
 ///   - Quick Sale → MerchantQuickSaleHomeScreen
 ///   - Retail/Wholesale → MerchantRetailHomeScreen

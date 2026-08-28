@@ -15,7 +15,7 @@ class PharmacyBatch extends Model
         'batch_number', 'expiry_date', 'received_date',
         'quantity_received', 'quantity_remaining',
         'cost_per_unit', 'supplier_name', 'supplier_invoice',
-        'status',
+        'status', 'recall_reason', 'recalled_by_user_id', 'recalled_at',
     ];
 
     protected $casts = [
@@ -25,6 +25,7 @@ class PharmacyBatch extends Model
         'quantity_received' => 'decimal:4',
         'quantity_remaining' => 'decimal:4',
         'cost_per_unit' => 'decimal:4',
+        'recalled_by_user_id' => 'integer', 'recalled_at' => 'datetime',
     ];
 
     public const STATUSES = ['active', 'exhausted', 'expired', 'recalled'];

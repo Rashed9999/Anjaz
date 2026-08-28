@@ -13,7 +13,6 @@ import 'package:amial_pay/features/fuel_station/screens/fuel_shifts_screen.dart'
 import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_companies_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
 
 /// AMIAL-FUEL-VERTICAL-001 · المرحلة ٨ — **لوحةُ المحطّة**.
 ///
@@ -215,10 +214,9 @@ class _FuelOwnerConsoleScreenState extends State<FuelOwnerConsoleScreen> {
             () => const FuelSalesHistoryScreen()),
         _Item('الورديات', Icons.access_time_rounded, 'shift.close',
             () => const FuelShiftsScreen()),
-        // **اللوحةُ القديمة لا تُهجَر** — فيها ملخّصُ اليوم ورسومُه،
-        // وصارت بنداً بصلاحيّته بدل أن تكون بابَ الجميع.
-        _Item('ملخص اليوم', Icons.insights_rounded, 'report.sales',
-            () => const FuelStationDashboardScreen()),
+        // التقرير هنا سجلّ مبيعات الوقود نفسه، لا لوحة «بيع سريع» عامة.
+        _Item('سجل وتقارير المبيعات', Icons.insights_rounded, 'report.sales',
+            () => const FuelSalesHistoryScreen()),
       ]),
 
       _Group('المخزون', Icons.propane_tank_rounded, [

@@ -63,14 +63,14 @@ class UnifiedAuthController extends GetxController implements GetxService {
     required String merchantNumber,
     required String phone,
     required String password,
-    String? posNumber,
+    String? employeeCode,
   }) async {
     return _execute({
       'role': 'merchant',
       'merchant_number': merchantNumber,
       'phone': phone,
       'password': password,
-      if (posNumber != null && posNumber.isNotEmpty) 'pos_number': posNumber,
+      if (employeeCode != null && employeeCode.isNotEmpty) 'employee_code': employeeCode,
     });
   }
 

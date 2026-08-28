@@ -81,10 +81,8 @@ final class CapabilityRegistry
     /** ترتيبُ الباقات من الأدنى إلى الأعلى — **به يُقارَن `minPlan`**. */
     public const PLAN_ORDER = [
         A::PLAN_FREE => 0,
-        A::PLAN_STARTER => 1,
-        A::PLAN_BUSINESS => 2,
-        A::PLAN_MERCHANT_PRO => 3,
-        A::PLAN_ENTERPRISE => 4,
+        A::PLAN_BUSINESS => 1,
+        A::PLAN_ENTERPRISE => 2,
     ];
 
     public static function planRank(?string $plan): int
@@ -169,7 +167,7 @@ final class CapabilityRegistry
                 ->nameAr('مرتجع صنف واحد من فاتورة')
                 ->descAr('ارتجاع سطر بعينه بكمّيته وقرار إعادته للرفّ — والتالف لا يعود.')
                 ->group('البيع')->icon('assignment_return')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.return.*'])
                 ->routes(['retail/returns', 'retail/sales'])
                 ->screen('/retail/returns'),
@@ -227,7 +225,7 @@ final class CapabilityRegistry
                 ->nameAr('الأصناف')
                 ->descAr('كتالوج المتجر بأسعاره وتكلفته.')
                 ->group('الأصناف')->icon('inventory_2')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.product.*'])
                 ->limit('max_products')->screen('/products'),
 
@@ -236,7 +234,7 @@ final class CapabilityRegistry
                 ->descAr('مسح الأصناف بالباركود — وصنف واحد بأكثر من رمز: '
                     . 'رمز الحبّة ورمز الكرتون بحجم عبوته.')
                 ->group('الأصناف')->icon('qr_code_scanner')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_BUSINESS)
                 ->routes(['retail/scan'])
                 ->permissions(['retail.product.*']),
 
@@ -245,7 +243,7 @@ final class CapabilityRegistry
                 ->descAr('شجرة تصنيفات تُجيب «كم بعتُ من المواد الغذائية؟»، وعلامات '
                     . 'تجارية، ووحدات قياس تعرف أنّ نصف كيلو صواب ونصف حبّة خطأ.')
                 ->group('الأصناف')->icon('category')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.catalog.*', 'retail.product.*'])
                 ->routes(['retail/categories', 'retail/brands', 'retail/units'])
                 ->screen('/retail/catalog'),
@@ -265,7 +263,7 @@ final class CapabilityRegistry
                 ->descAr('السعر نسخة لها تاريخ سريان ومعتمِد — تُجدوَل زيادةٌ فجر السبت '
                     . 'وتُقرأ «بكم كنّا نبيعه في رمضان؟».')
                 ->group('الأصناف')->icon('sell')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.price.*'])
                 ->routes(['retail/prices'])
                 ->screen('/retail/prices'),
@@ -273,7 +271,7 @@ final class CapabilityRegistry
             C::make(A::F_PROMOTIONS)
                 ->nameAr('العروض والخصومات')
                 ->group('الأصناف')->icon('local_offer')
-                ->minPlan(A::PLAN_STARTER)->screen('/promotions'),
+                ->minPlan(A::PLAN_BUSINESS)->screen('/promotions'),
 
             C::make(A::F_LOYALTY)
                 ->nameAr('نقاط الولاء')
@@ -291,7 +289,7 @@ final class CapabilityRegistry
                 ->nameAr('المخزون')
                 ->descAr('كمّية كل صنف ورصيده الحالي.')
                 ->group('المخزون')->icon('warehouse')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.stock.*'])
                 ->routes(['retail/ops', 'retail/products'])
                 ->screen('/retail'),
@@ -300,7 +298,7 @@ final class CapabilityRegistry
                 ->nameAr('تنبيه نفاد المخزون')
                 ->descAr('ما نزل تحت حدّ إعادة الطلب — ومن لم يُضبط له حدّ لا يُعدّ منخفضاً.')
                 ->group('المخزون')->icon('warning_amber')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_BUSINESS)
                 ->routes(['pharmacy/alerts'])
                 ->screen('/retail'),
 
@@ -309,7 +307,7 @@ final class CapabilityRegistry
                 ->descAr('مخزون كل فرع ومستودع على حدة — فبيعٌ في عدن لا ينقص مخزون المكلا، '
                     . 'ولا يُطلب توريد لفرع ممتلئ بينما يقف فرع فارغ.')
                 ->group('المخزون')->icon('store_mall_directory')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
                 ->permissions(['retail.location.*', 'retail.stock.view'])
                 ->routes(['retail/locations'])
                 ->limit('max_locations')
@@ -320,7 +318,7 @@ final class CapabilityRegistry
                 ->descAr('نقل البضاعة بمراحلها: طلب ← اعتماد ← إرسال ← في الطريق ← استلام. '
                     . 'وما نقص في الطريق يُسجَّل بسببه ولا يُساوى بالقوّة.')
                 ->group('المخزون')->icon('swap_horiz')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
                 ->permissions(['retail.transfer.*'])
                 ->routes(['retail/transfers'])
                 ->screen('/retail/transfers'),
@@ -330,7 +328,7 @@ final class CapabilityRegistry
                 ->descAr('عدّ المخزون ومقارنته بالنظام — ولكلّ فرق سبب واعتماد، '
                     . 'وما لم يُعدّ لا يُصفَّر.')
                 ->group('المخزون')->icon('rule')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.count.*'])
                 ->routes(['retail/counts'])
                 ->screen('/retail/counts'),
@@ -390,7 +388,7 @@ final class CapabilityRegistry
                 ->descAr('أدوار يبنيها المالك بنطاق وحدّ: «الكاشير يخصم حتى ٥٠٠ '
                     . 'ويغلق ورديّته هو وحدها».')
                 ->group('الناس')->icon('admin_panel_settings')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
                 ->permissions(['role.*'])
                 ->routes(['retail/roles'])
                 ->screen('/retail/roles'),
@@ -405,7 +403,7 @@ final class CapabilityRegistry
                 ->descAr('حدّ أعلى لما يخصمه كل دور — مبلغ لا نسبة، فالنسبة تُقاس '
                     . 'على إجمالي يكتبه الكاشير نفسه.')
                 ->group('الناس')->icon('percent')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
                 ->permissions(['retail.discount.apply'])
                 ->comingSoon(),
 
@@ -489,36 +487,36 @@ final class CapabilityRegistry
                 ->nameAr('سجلّ التدقيق المفصَّل')
                 ->descAr('من فعل ماذا ومتى ومن أيّ جهاز.')
                 ->group('التقارير')->icon('fact_check')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
                 ->permissions(['audit.view'])->screen('/audit-log'),
 
             C::make(A::F_ADVANCED_BACKUP)
                 ->nameAr('النسخ الاحتياطي المتقدم')
                 ->group('التقارير')->icon('backup')
-                ->minPlan(A::PLAN_MERCHANT_PRO)->screen('/backup'),
+                ->minPlan(A::PLAN_ENTERPRISE)->screen('/backup'),
 
             C::make(A::F_BRANCHES)
                 ->nameAr('الفروع')
                 ->group('التقارير')->icon('account_tree')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
                 ->routes(['branches'])
                 ->limit('max_branches')->screen('/branches'),
 
             C::make(A::F_BRANCH_REPORTS)
                 ->nameAr('تقارير الفروع')
                 ->group('التقارير')->icon('leaderboard')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
                 ->routes(['branches/{id}/report']),
 
             C::make(A::F_MULTI_CURRENCY)
                 ->nameAr('تعدد العملات')
                 ->group('التقارير')->icon('currency_exchange')
-                ->minPlan(A::PLAN_MERCHANT_PRO)->screen('/currencies'),
+                ->minPlan(A::PLAN_ENTERPRISE)->screen('/currencies'),
 
             C::make(A::F_INSTALLMENTS)
                 ->nameAr('الأقساط')
                 ->group('التقارير')->icon('event_repeat')
-                ->minPlan(A::PLAN_MERCHANT_PRO)->screen('/installments'),
+                ->minPlan(A::PLAN_ENTERPRISE)->screen('/installments'),
         ];
     }
 
@@ -569,7 +567,7 @@ final class CapabilityRegistry
             C::make(A::F_PHARMACY_BATCHES)
                 ->nameAr('الدفعات وتواريخ الصلاحية')
                 ->group('الصيدلية')->icon('event_busy')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_FREE)
                 ->businessTypes([A::BIZ_PHARMACY])
                 ->routes(['pharmacy/products/{id}/batches']),
 
@@ -578,7 +576,7 @@ final class CapabilityRegistry
                 ->descAr('وسمُ الصنف «يحتاج وصفة» فيُوقَف بيعُه بلا رقمها، '
                     . 'وتوثيقُ الطبيب وتاريخِ الوصفة على البيعة.')
                 ->group('الصيدلية')->icon('description')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_BUSINESS)
                 ->businessTypes([A::BIZ_PHARMACY])
                 ->routes(['pharmacy/products', 'pharmacy/sales'])
                 ->screen('/pharmacy'),
@@ -592,7 +590,7 @@ final class CapabilityRegistry
             C::make(A::F_WHOLESALE_MULTI_PRICING)
                 ->nameAr('تسعير متعدد المستويات')
                 ->group('الجملة')->icon('price_change')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_BUSINESS)
                 ->businessTypes([A::BIZ_WHOLESALE])
                 ->routes(['wholesale/price-tiers']),
 

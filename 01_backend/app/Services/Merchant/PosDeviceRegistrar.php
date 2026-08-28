@@ -221,7 +221,7 @@ class PosDeviceRegistrar
     {
         $profile = \App\Models\MerchantProfile::where('user_id', $merchant->id)->first();
 
-        $plan = $profile?->subscription_plan ?? A::PLAN_FREE;
+        $plan = A::canonicalPlan($profile?->subscription_plan);
 
         // **الاشتراكُ المنتهي يعود مجّانيّاً** — كما في `FeatureAccessService`.
         if ($plan !== A::PLAN_FREE

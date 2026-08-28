@@ -3,6 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
+use App\Models\Merchant\MerchantRole;
+use App\Models\Merchant\MerchantUserRole;
+use App\Models\PosUser;
 use App\Models\User;
 use App\Services\PlatformRoleService;
 use App\Support\Access\AccessConstants as A;
@@ -112,6 +115,55 @@ class MerchantAccountIsUsableGuardTest extends TestCase
 
         $this->assertNotEmpty($data['permissions'],
             'المالكُ بلا صلاحيّات — الشاشةُ تُفتح فارغةً');
+    }
+
+    /**
+     * الربط القديم كموظف أو POS لا يسبق ملف التاجر. بدونه يُرى مالك المحطة
+     * «موظفاً بلا دور»، فتظهر له رسالة الصورة نفسها رغم أن حسابه صحيح.
+     */
+    public function test_a_merchant_profile_wins_over_a_stale_staff_assignment(): void
+    {
+        $merchant = $this->createFromAdminPanel(A::BIZ_FUEL, '967771000211');
+        $otherMerchant = $this->createFromAdminPanel(A::BIZ_FUEL, '967771000212');
+
+        $role = MerchantRole::where('merchant_user_id', $otherMerchant->id)->firstOrFail();
+        MerchantUserRole::create([
+            'merchant_user_id' => $otherMerchant->id,
+            'user_id' => $merchant->id,
+            'merchant_role_id' => $role->id,
+            'is_active' => true,
+        ]);
+
+        $data = $this->actingAs($merchant, 'api')
+            ->getJson('/api/v1/amial/merchant/fuel/me/permissions')
+            ->assertOk()->json('data');
+
+        $this->assertTrue($data['is_owner'],
+            'ربط موظف قديم سلب مالك المحطة ملكيته وأفرغ لوحته');
+        $this->assertNotEmpty($data['permissions']);
+    }
+
+    /** ونفس الحارس لربط نقطة بيع قديم — المساران كانا يسلبان الملكية. */
+    public function test_a_merchant_profile_wins_over_a_stale_pos_assignment(): void
+    {
+        $merchant = $this->createFromAdminPanel(A::BIZ_FUEL, '967771000221');
+        $otherMerchant = $this->createFromAdminPanel(A::BIZ_FUEL, '967771000222');
+
+        PosUser::create([
+            'user_id' => $merchant->id,
+            'merchant_user_id' => $otherMerchant->id,
+            'pos_number' => 'STALE-OWNER-LINK',
+            'display_name' => 'ربط قديم',
+            'is_active' => true,
+        ]);
+
+        $data = $this->actingAs($merchant, 'api')
+            ->getJson('/api/v1/amial/merchant/fuel/me/permissions')
+            ->assertOk()->json('data');
+
+        $this->assertTrue($data['is_owner'],
+            'ربط POS قديم سلب مالك المحطة ملكيته وأفرغ لوحته');
+        $this->assertNotEmpty($data['permissions']);
     }
 
     // ══════════════════════════════════════════════════════════════════

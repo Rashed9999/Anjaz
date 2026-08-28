@@ -4,7 +4,7 @@ import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.
 import 'package:amial_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amial_pay/features/corporate/screens/corporate_accounts_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_ops_center_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_owner_console_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_tanks_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_variances_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
@@ -27,7 +27,7 @@ import 'package:amial_pay/features/access/screens/role_based_home_screens.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/merchant/screens/offline_sales_screen.dart';
-import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/split_bill_create_screen.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
 import 'package:amial_pay/features/suppliers/screens/purchase_order_create_screen.dart';
@@ -106,8 +106,8 @@ class CapabilityScreens {
     // ── المال والتقارير ────────────────────────────────────────────
     'shift_close': () => const CashierShiftScreen(),
     'daily_reports': () => const CashierReportScreen(),
-    'profit_reports': () => const ProfitReportScreen(),
-    'advanced_reports': () => const ProfitReportScreen(),
+    'profit_reports': () => const FinancialTruthReportScreen(),
+    'advanced_reports': () => const FinancialTruthReportScreen(),
     'excel_export': () => const MerchantExcelExportScreen(),
     'expenses': () => const MerchantExpensesScreen(),
     'audit_log': () => const MerchantAuditLogScreen(),
@@ -116,7 +116,7 @@ class CapabilityScreens {
     'api_access': () => const MerchantApiKeysScreen(),
 
     // ── أصنافُ التجّار ─────────────────────────────────────────────
-    'fuel_pos': () => const FuelStationDashboardScreen(),
+    'fuel_pos': () => const FuelOwnerConsoleScreen(),
     'fuel_pumps': () => const FuelTanksScreen(),
     'fuel_variance': () => const FuelVariancesScreen(),
     'fuel_cards': () => const FuelOpsCenterScreen(),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_payment_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_scan_screen.dart';
@@ -30,6 +32,10 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
   @override
   void initState() {
     super.initState();
+    if (Get.isRegistered<AccessController>() &&
+        Get.find<AccessController>().isFuel) {
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       c.loadProducts();
       // AMIAL-OFFLINE-POS-001 — حاول مزامنة أي مبيعات معلّقة عند فتح الكاشير.
@@ -224,6 +230,12 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // حاجز قطاعي أخير: رابط كاشير تجزئة لا يعرض منتجات عامة داخل حساب
+    // محطة الوقود؛ مسار البيع الصحيح هناك FuelSaleScreen فقط.
+    if (Get.isRegistered<AccessController>() &&
+        Get.find<AccessController>().isFuel) {
+      return const FuelSaleScreen();
+    }
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(

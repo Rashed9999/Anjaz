@@ -290,6 +290,7 @@ class ReceiptService
                 return [
                     'receipt_number' => $receipt->receipt_number,
                     'receipt_type' => $receipt->receipt_type,
+                    'receipt_type_label' => $this->publicTypeLabel($receipt->receipt_type),
                     'amount' => $receipt->amount,
                     'fee' => $receipt->fee,
                     'issued_at' => $receipt->issued_at?->toIso8601String(),
@@ -298,5 +299,20 @@ class ReceiptService
                 ];
             }
         );
+    }
+
+    private function publicTypeLabel(string $type): string
+    {
+        return match ($type) {
+            'send_money' => 'تحويل أموال',
+            'cash_in' => 'إيداع نقدي',
+            'cash_out', 'withdraw' => 'سحب نقدي',
+            'add_money' => 'إضافة رصيد',
+            'pay_merchant' => 'دفع لتاجر',
+            'pos_payment' => 'دفع نقطة بيع',
+            'qr_payment' => 'دفع عبر رمز QR',
+            'refund' => 'استرجاع',
+            default => 'عملية مالية',
+        };
     }
 }

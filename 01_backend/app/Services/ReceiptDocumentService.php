@@ -617,7 +617,7 @@ class ReceiptDocumentService
             'items' => $items,
             'context_fields' => [
                 ['label' => 'تاريخ الاستحقاق', 'value' => $invoice->due_date?->format('Y-m-d') ?: '—'],
-                ['label' => 'نوع البيع', 'value' => $invoice->payment_type === 'credit' ? 'آجل' : 'نقدي'],
+                ['label' => 'نوع البيع', 'value' => $invoice->payment_type === 'amial_pay' ? 'أميال باي' : ($invoice->payment_type === 'credit' ? 'آجل' : 'نقدي')],
             ],
             'subtotal' => (string) $invoice->subtotal,
             'discount' => (string) $invoice->discount_amount,
@@ -625,7 +625,7 @@ class ReceiptDocumentService
             'total' => (string) $invoice->total_amount,
             'paid' => (string) $invoice->paid_amount,
             'balance_due' => (string) $invoice->balance_due,
-            'payment_method' => $invoice->payment_type === 'credit' ? 'آجل' : 'نقدي',
+            'payment_method' => $invoice->payment_type === 'amial_pay' ? 'أميال باي' : ($invoice->payment_type === 'credit' ? 'آجل' : 'نقدي'),
             'status' => (string) $invoice->status,
             'status_label' => $this->saleStatusLabel((string) $invoice->status),
             'customer' => $invoice->customer ? [

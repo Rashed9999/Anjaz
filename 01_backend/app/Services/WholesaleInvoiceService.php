@@ -3,12 +3,16 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Models\PaymentRequest;
 use App\Models\WholesaleBusiness;
 use App\Models\WholesaleCustomer;
 use App\Models\WholesaleInvoice;
 use App\Models\WholesaleInvoiceItem;
+use App\Models\WholesaleInvoiceItemLot;
 use App\Models\WholesalePriceTier;
 use App\Models\WholesaleProduct;
+use App\Models\WholesaleProductLot;
+use App\Models\WholesaleProductUnit;
 use App\Models\WholesaleSalesRep;
 use App\Traits\TransactionTrait;
 use Illuminate\Support\Facades\DB;
@@ -39,7 +43,8 @@ class WholesaleInvoiceService
      * ]
      * @param array $data {
      *   customer_id: int,
-     *   payment_type: cash|credit,
+     *   payment_type: cash|amial_pay|credit,
+     *   paid_transaction_id?: string,    // إلزامي لأميال باي بعد تحصيل QR فعلي
      *   sales_rep_id?: int,
      *   discount_amount?: float,           // خصم إضافي على الإجمالي
      *   tax_rate?: float,                  // افتراضياً من business
@@ -63,8 +68,12 @@ class WholesaleInvoiceService
         if (!in_array($paymentType, WholesaleInvoice::PAYMENT_TYPES, true)) {
             throw new InvalidArgumentException('نوع الدفع غير صحيح');
         }
+        $paidTransactionId = trim((string) ($data['paid_transaction_id'] ?? ''));
+        if ($paymentType === 'amial_pay' && $paidTransactionId === '') {
+            throw new InvalidArgumentException('دفع أميال باي يحتاج مرجع التحصيل الفعلي');
+        }
 
-        return DB::transaction(function () use ($merchant, $business, $items, $data, $paymentType) {
+        return DB::transaction(function () use ($merchant, $business, $items, $data, $paymentType, $paidTransactionId) {
             // 1) اقفل العميل
             $customer = WholesaleCustomer::where('id', $data['customer_id'])
                 ->where('business_id', $business->id)
@@ -91,26 +100,37 @@ class WholesaleInvoiceService
                 if (!$product) {
                     throw new RuntimeException("المنتج #{$idx} غير موجود");
                 }
-                $qty = (float)($item['quantity'] ?? 0);
-                if ($qty <= 0) {
+                $qty = MoneyService::normalize((string) ($item['quantity'] ?? '0'));
+                if (MoneyService::compare($qty, '0') <= 0) {
                     throw new InvalidArgumentException("كمية {$product->name} غير صحيحة");
                 }
-                if ((float)$product->current_stock < $qty) {
+                $unit = $this->resolveUnit($product, $item['unit_id'] ?? null);
+                $baseQty = MoneyService::mul($qty, (string) $unit->factor_to_base);
+                if (MoneyService::compare((string) $product->current_stock, $baseQty) < 0) {
                     throw new RuntimeException(
                         "المخزون غير كاف لـ {$product->name} (المتاح: {$product->current_stock})"
                     );
                 }
 
-                $unitPrice = $product->priceFor($tierId, $qty);
-                $discountPerUnit = (float)($item['discount_per_unit'] ?? 0);
-                $effectivePrice = max(0, $unitPrice - $discountPerUnit);
-                $lineTotal = MoneyService::normalize((string)($effectivePrice * $qty));
+                // شرائح السعر ومخزون الجملة يُقاسان بوحدة الأساس دائماً؛
+                // سعر الكرتون هو سعر القطعة الخادمي × عامل التحويل، لا رقم
+                // يرسله التطبيق ولا شريحة منفصلة يمكن أن تتناقض مع المخزون.
+                $baseUnitPrice = MoneyService::normalize((string) $product->priceFor($tierId, (float) $baseQty));
+                $unitPrice = MoneyService::mul($baseUnitPrice, (string) $unit->factor_to_base);
+                $discountPerUnit = MoneyService::normalize((string) ($item['discount_per_unit'] ?? '0'));
+                if (MoneyService::compare($discountPerUnit, $unitPrice) > 0) {
+                    throw new InvalidArgumentException("خصم {$product->name} أكبر من سعر الوحدة");
+                }
+                $effectivePrice = MoneyService::sub($unitPrice, $discountPerUnit);
+                $lineTotal = MoneyService::mul($effectivePrice, $qty);
 
                 $resolvedItems[] = [
                     'product' => $product,
                     'quantity' => $qty,
-                    'unit_price' => MoneyService::normalize((string)$unitPrice),
-                    'discount_per_unit' => MoneyService::normalize((string)$discountPerUnit),
+                    'base_quantity' => $baseQty,
+                    'unit' => $unit,
+                    'unit_price' => $unitPrice,
+                    'discount_per_unit' => $discountPerUnit,
                     'line_total' => $lineTotal,
                 ];
                 $subtotal = MoneyService::add($subtotal, $lineTotal);
@@ -143,6 +163,28 @@ class WholesaleInvoiceService
                 : '0';
 
             $totalAmount = MoneyService::add($afterDiscount, $taxAmount);
+
+            // أميال باي ليس خياراً شكلياً. مرجع الدفع يجب أن يكون لطلب QR
+            // مكتمل، أنشئ باسم مالك التاجر (لا موظف نقطة البيع)، وبالمبلغ
+            // نفسه. وبذلك لا يستطيع عميل إرسال رقم حركة أجنبي أو إعادة
+            // استخدام حركة من فاتورة أخرى.
+            if ($paymentType === 'amial_pay') {
+                $paymentRequest = PaymentRequest::where('paid_transaction_id', $paidTransactionId)
+                    ->where('requester_user_id', $merchant->id)
+                    ->where('status', 'paid')
+                    ->lockForUpdate()
+                    ->first();
+
+                if (!$paymentRequest) {
+                    throw new RuntimeException('مرجع أميال باي غير صالح لهذه المحفظة أو لم يكتمل الدفع');
+                }
+                if (MoneyService::compare((string) $paymentRequest->amount, $totalAmount) !== 0) {
+                    throw new RuntimeException('مبلغ تحصيل أميال باي لا يطابق إجمالي الفاتورة');
+                }
+                if (WholesaleInvoice::where('paid_transaction_id', $paidTransactionId)->exists()) {
+                    throw new RuntimeException('تم ربط حركة أميال باي هذه بفاتورة مسبقاً');
+                }
+            }
 
             // 4) فحص الائتمان إن credit
             if ($paymentType === 'credit') {
@@ -185,7 +227,7 @@ class WholesaleInvoiceService
                 'branch_id' => $data['branch_id'] ?? null, // P1-BRANCHES
                 'customer_id' => $customer->id,
                 'sales_rep_id' => $salesRep?->id,
-                'created_by_user_id' => $merchant->id,
+                'created_by_user_id' => $data['created_by_user_id'] ?? $merchant->id,
                 'invoice_date' => now()->toDateString(),
                 'due_date' => $dueDate,
                 'subtotal' => $subtotal,
@@ -193,10 +235,11 @@ class WholesaleInvoiceService
                 'tax_rate' => $taxRate,
                 'tax_amount' => $taxAmount,
                 'total_amount' => $totalAmount,
-                'paid_amount' => $paymentType === 'cash' ? $totalAmount : '0',
-                'balance_due' => $paymentType === 'cash' ? '0' : $totalAmount,
-                'status' => $paymentType === 'cash' ? 'paid' : 'issued',
+                'paid_amount' => in_array($paymentType, ['cash', 'amial_pay'], true) ? $totalAmount : '0',
+                'balance_due' => in_array($paymentType, ['cash', 'amial_pay'], true) ? '0' : $totalAmount,
+                'status' => in_array($paymentType, ['cash', 'amial_pay'], true) ? 'paid' : 'issued',
                 'payment_type' => $paymentType,
+                'paid_transaction_id' => $paymentType === 'amial_pay' ? $paidTransactionId : null,
                 'sales_rep_commission_rate' => $commissionRate,
                 'sales_rep_commission_amount' => $commissionAmount,
                 'notes' => $data['notes'] ?? null,
@@ -206,21 +249,28 @@ class WholesaleInvoiceService
             // 7) أنشئ العناصر + اخصم من المخزون
             foreach ($resolvedItems as $r) {
                 $product = $r['product'];
-                WholesaleInvoiceItem::create([
+                $invoiceItem = WholesaleInvoiceItem::create([
                     'invoice_id' => $invoice->id,
                     'product_id' => $product->id,
+                    'product_unit_id' => $r['unit']->id,
                     'product_name' => $product->name,
                     'product_sku' => $product->sku,
-                    'unit' => $product->unit,
-                    'quantity' => MoneyService::normalize((string)$r['quantity']),
+                    'unit' => $r['unit']->name,
+                    'quantity' => $r['quantity'],
+                    'unit_factor' => $r['unit']->factor_to_base,
+                    'base_quantity' => $r['base_quantity'],
                     'unit_price' => $r['unit_price'],
                     'discount_per_unit' => $r['discount_per_unit'],
                     'line_total' => $r['line_total'],
                     'tier_id' => $tierId,
                 ]);
 
-                // اخصم من المخزون
-                $newStock = MoneyService::sub((string)$product->current_stock, (string)$r['quantity']);
+                // إن بدأ التاجر تتبُّع الدُفعات، لا نبيع من مخزونٍ مجهول
+                // الصلاحية. تخصيص FIFO يحدث تحت القفل نفسه مع الخصم.
+                $this->allocateLotsIfTracked($product, $invoiceItem, $r['base_quantity']);
+
+                // اخصم من مخزون الأساس، لا من عدد الكراتين/الشدات المعروض.
+                $newStock = MoneyService::sub((string)$product->current_stock, $r['base_quantity']);
                 $product->update(['current_stock' => $newStock]);
             }
 
@@ -249,8 +299,70 @@ class WholesaleInvoiceService
                 ]);
             }
 
+            // إيصال الحركة الموجود مسبقاً هو وثيقة دفع أميال باي؛ نربطه
+            // بالفاتورة بعد نجاح إنشاء السجل فقط، من دون إنشاء قيد أو رصيد
+            // جديد. النقد والآجل لديهما الفاتورة نفسها لكن لا حركة محفظة.
+            if ($paymentType === 'amial_pay') {
+                app(ReceiptService::class)->attachBusinessReference(
+                    $paidTransactionId,
+                    'wholesale_invoice',
+                    (int) $invoice->id,
+                    [
+                        'merchant_vertical' => 'wholesale',
+                        'invoice_number' => $invoice->invoice_number,
+                        'payment_channel' => 'amial_pay',
+                    ],
+                );
+            }
+
             return $invoice->fresh(['items', 'customer', 'salesRep']);
         });
+    }
+
+    /** يعيد وحدة الأساس تلقائياً للمنتجات القديمة ثم يقفل وحدة البيع المطلوبة. */
+    private function resolveUnit(WholesaleProduct $product, mixed $unitId): WholesaleProductUnit
+    {
+        $base = WholesaleProductUnit::where('product_id', $product->id)->where('is_base', true)->first();
+        if ($base === null) {
+            $base = WholesaleProductUnit::firstOrCreate(
+                ['product_id' => $product->id, 'code' => 'base'],
+                ['name' => $product->unit ?: 'قطعة', 'factor_to_base' => '1', 'is_base' => true, 'is_active' => true],
+            );
+        }
+        $query = WholesaleProductUnit::where('product_id', $product->id)->where('is_active', true)->lockForUpdate();
+        $unit = $unitId ? $query->where('id', (int) $unitId)->first() : $query->where('is_base', true)->first();
+        if ($unit === null) throw new InvalidArgumentException("وحدة بيع {$product->name} غير صالحة");
+        return $unit;
+    }
+
+    /**
+     * لا نفرض الدُفعات على منتجات قديمة لم تبدأ تتبُّعها بعد. لكن عند وجود
+     * أي دفعة لا يسمح بالخروج من رصيدٍ لا يعرف صلاحيته أو حالته.
+     */
+    private function allocateLotsIfTracked(WholesaleProduct $product, WholesaleInvoiceItem $item, string $baseQty): void
+    {
+        $hasLots = WholesaleProductLot::where('product_id', $product->id)->exists();
+        if (! $hasLots) return;
+
+        $remaining = $baseQty;
+        $lots = WholesaleProductLot::where('product_id', $product->id)
+            ->where('status', 'active')->where('quantity_available', '>', 0)
+            ->where(fn ($q) => $q->whereNull('expiry_date')->orWhereDate('expiry_date', '>', now()->toDateString()))
+            ->orderByRaw('expiry_date is null')->orderBy('expiry_date')->orderBy('received_at')
+            ->lockForUpdate()->get();
+        foreach ($lots as $lot) {
+            if (MoneyService::compare($remaining, '0') <= 0) break;
+            $take = MoneyService::compare((string) $lot->quantity_available, $remaining) >= 0
+                ? $remaining : (string) $lot->quantity_available;
+            WholesaleInvoiceItemLot::create([
+                'invoice_item_id' => $item->id, 'lot_id' => $lot->id, 'base_quantity' => $take,
+            ]);
+            $lot->update(['quantity_available' => MoneyService::sub((string) $lot->quantity_available, $take)]);
+            $remaining = MoneyService::sub($remaining, $take);
+        }
+        if (MoneyService::compare($remaining, '0') > 0) {
+            throw new RuntimeException("لا توجد دفعات صالحة كافية لـ {$product->name}");
+        }
     }
 
     /** إبطال فاتورة (للأخطاء الإدخالية). */
@@ -271,9 +383,18 @@ class WholesaleInvoiceService
                     if ($product) {
                         $product->update([
                             'current_stock' => MoneyService::add(
-                                (string)$product->current_stock, (string)$item->quantity,
+                                (string)$product->current_stock,
+                                (string) ($item->base_quantity ?: $item->quantity),
                             ),
                         ]);
+                    }
+                }
+                foreach ($item->lotAllocations as $allocation) {
+                    $lot = WholesaleProductLot::lockForUpdate()->find($allocation->lot_id);
+                    if ($lot) {
+                        $lot->update(['quantity_available' => MoneyService::add(
+                            (string) $lot->quantity_available, (string) $allocation->base_quantity,
+                        )]);
                     }
                 }
             }

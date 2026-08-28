@@ -147,8 +147,8 @@ class MerchantCenterService
             'kyc_status' => $p?->verification_status ?? 'pending',
             'verification_level' => $m->verification_level ?? 'basic',
             'zone_code' => $m->zone_code,
-            'plan' => $p?->subscription_plan ?? A::PLAN_FREE,
-            'plan_name' => A::PLAN_LABELS[$p?->subscription_plan ?? A::PLAN_FREE] ?? '—',
+            'plan' => A::canonicalPlan($p?->subscription_plan),
+            'plan_name' => A::PLAN_LABELS[A::canonicalPlan($p?->subscription_plan)] ?? '—',
             'plan_expires' => $p?->subscription_expires_at?->format('Y-m-d'),
             // بياناتٌ تشغيليّةٌ **عدداً لا تفصيلاً**
             'branches_count' => Branch::where('merchant_user_id', $m->id)->count(),
