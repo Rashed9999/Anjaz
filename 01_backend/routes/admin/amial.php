@@ -298,6 +298,18 @@ Route::prefix('customer')->name('customer.')->middleware('platform:platform.cust
             ->middleware('amial.idempotency')->name('action');
     });
 
+// ملفات تسجيل الموظف والنماذج الورقية: بوابتان منفصلتان للقراءة والكتابة؛
+// ولا توجد هنا صلاحية اعتماد KYC أو فتح محفظة.
+Route::prefix('registration-dossiers')->name('registration-dossiers.')->group(function () {
+    $rd = App\Http\Controllers\Admin\RegistrationDossierController::class;
+    Route::get('/', [$rd, 'page'])->middleware('platform:platform.registrations.view')->name('page');
+    Route::get('/index', [$rd, 'index'])->middleware('platform:platform.registrations.view')->name('index');
+    Route::post('/', [$rd, 'store'])->middleware('platform:platform.registrations.create')->name('store');
+    Route::get('/{reference}', [$rd, 'show'])->middleware('platform:platform.registrations.view')->name('show');
+    Route::get('/{reference}/pdf', [$rd, 'pdf'])->middleware('platform:platform.registrations.view')->name('pdf');
+    Route::get('/{reference}/paper', [$rd, 'paper'])->middleware('platform:platform.registrations.view')->name('paper');
+});
+
 // ============ AMIAL-FUEL-VERTICAL-001 — مركز محطات الوقود (المرحلة ٩) ============
 //
 // **رقابةٌ لا إدارة**: تُرى المحطّاتُ وخزّاناتُها وفروقاتُها، ولا يُدار

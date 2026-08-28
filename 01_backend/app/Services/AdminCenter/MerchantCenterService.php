@@ -6,6 +6,7 @@ use App\Models\AdminCenter\MerchantDataAccessGrant;
 use App\Models\Branch;
 use App\Models\EMoney;
 use App\Models\KycDocument;
+use App\Models\RegistrationDossier;
 use App\Models\MerchantProfile;
 use App\Models\MerchantSale;
 use App\Models\PosUser;
@@ -471,6 +472,13 @@ class MerchantCenterService
                 'expires_at' => optional($d->document_expires_at)?->format('Y-m-d')
                     ?? 'بلا تاريخ انتهاء',
             ])->all(),
+            'registration_dossiers' => RegistrationDossier::query()
+                ->where('subject_user_id', $m->id)->latest()->limit(10)->get()
+                ->map(fn (RegistrationDossier $d) => [
+                    'reference' => $d->reference, 'source' => $d->source, 'state' => $d->state,
+                    'has_paper_form' => (bool) $d->paper_form_encrypted_path,
+                    'created_at' => $d->created_at?->format('Y-m-d H:i'),
+                ])->all(),
         ];
     }
 

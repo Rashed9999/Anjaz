@@ -323,7 +323,12 @@
                         <td class="small">${esc(d.expires_at || '—')}</td>
                         <td class="small">${esc(d.reviewer || '—')}</td>
                         <td class="small">${dt(d.uploaded_at)}</td></tr>`).join(''),
-                    'لا مستندات', 'cc-kyc')}`;
+                    'لا مستندات', 'cc-kyc')}
+                ${card('ملفات التسجيل المؤرشفة',
+                    table(['المرجع', 'المصدر', 'الحالة', 'ورقي', 'أنشئ'],
+                        (m.registration_dossiers || []).map(d => `<tr><td class="font-monospace">${esc(d.reference)}</td><td>${esc(d.source)}</td><td>${esc(d.state)}</td><td>${d.has_paper_form ? 'نعم' : '—'}</td><td>${dt(d.created_at)}</td></tr>`),
+                        'لا ملف تسجيل مرتبط بهذا العميل', 'cc-registration-dossiers'),
+                    'تُفتح النسخة الكاملة والطباعة من «ملفات التسجيل والأرشفة» بحسب صلاحيتك.')}`;
         },
 
         risk(m, body) {

@@ -163,12 +163,13 @@
         [
             'title' => 'الامتثال والمخاطر',
             'icon' => '🛡️',
-            'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*',
+            'match' => ['admin/amial/kyc*', 'admin/amial/registration-dossiers*', 'admin/amial/aml*', 'admin/amial/audit*',
                         'admin/amial/supervision*', 'admin/amial/security-events*',
                         'admin/amial/sentinel*', 'admin/amial/system*'],
             'links' => [
                 ['🪪 مراجعة مستندات الهوية', route('admin.amial.kyc.page'), 'platform.customers.freeze'],
                 ['🔄 طلبات تحديث بيانات العملاء', route('admin.amial.kyc.changes.page'), 'platform.customers.freeze'],
+                ['🗂️ ملفات التسجيل والأرشفة', route('admin.amial.registration-dossiers.page'), 'platform.registrations.view'],
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), 'platform.audit.view'],
                 ['🔍 سجلّ تدقيق النظام', route('admin.amial.audit.index'), 'platform.audit.view'],
                 ['👁️ لوحة الإشراف (الفريق والقرارات)', route('admin.amial.supervision.index'), 'platform.audit.view'],
