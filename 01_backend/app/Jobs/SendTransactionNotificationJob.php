@@ -84,15 +84,22 @@ class SendTransactionNotificationJob implements ShouldQueue
             'message' => [
                 'token' => $user->fcm_token,
                 'data' => [
-                    'title' => '',
+                    'title' => 'أميال باي',
                     'body' => $description,
                     'image' => '',
                     'type' => $this->notificationType ?? $this->transactionType,
                     'transaction_id' => $this->transactionId ?? '',
                 ],
                 'notification' => [
-                    'title' => '',
+                    'title' => 'أميال باي',
                     'body' => $description,
+                ],
+                'android' => [
+                    'priority' => 'HIGH',
+                    'notification' => [
+                        'channel_id' => 'amial_pay_default',
+                        'sound' => 'notification',
+                    ],
                 ],
                 'apns' => [
                     'payload' => ['aps' => ['sound' => 'notification.wav']],

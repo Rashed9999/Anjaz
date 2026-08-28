@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amial_pay/data/api/api_checker.dart';
@@ -133,12 +132,6 @@ class _SplashScreenState extends State<SplashScreen>
       /* غير حرج */
     }
 
-    if (GetPlatform.isAndroid &&
-        Get.find<AuthController>().getUserData() != null) {
-      try {
-        await FirebaseMessaging.instance.requestPermission();
-      } catch (_) {}
-    }
     _dataReady = true;
     _goIfReady();
   }
