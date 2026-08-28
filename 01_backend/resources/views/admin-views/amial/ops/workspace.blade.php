@@ -33,7 +33,7 @@
             ['إعدادات الأعمال', route('admin.business-settings.business-setup'), 'platform.settings.update'], ['مفاتيح التشغيل', route('admin.amial.hub.settings'), 'platform.settings.update'], ['حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.settings.update'], ['نطاق التشغيل', route('admin.amial.hub.zones.index'), 'platform.zones.view'], ['إعداد Firebase', route('admin.business-settings.fcm-index'), 'platform.settings.update'], ['الشروط القانونية', route('admin.amial.legal.index'), 'platform.ops.view'], ['حالة التشغيل', route('admin.amial.ops.index'), 'platform.ops.view'],
         ]],
         ['id'=>'staff','title'=>'الموظفون والصلاحيات','icon'=>'🔐','items'=>[
-            ['موظفو المنصة وتبويباتهم', route('admin.amial.ops.roles.index'), 'platform.staff.view'], ['مصفوفة RBAC', route('admin.amial.surface.rbac'), 'platform.staff.manage'], ['المصادقة الثنائية لحسابي', route('admin.amial.2fa.page'), null],
+            ['موظفو المنصة وتبويباتهم', route('admin.amial.ops.roles.index'), 'platform.staff.view'], ['مصفوفة RBAC', route('admin.amial.surface.rbac'), 'platform.settings.update'], ['المصادقة الثنائية لحسابي', route('admin.amial.2fa.page'), null],
         ]],
     ];
     $tabs = array_values(array_filter($tabs, fn($tab) => collect($tab['items'])->contains(fn($item) => $can($item[2]))));
