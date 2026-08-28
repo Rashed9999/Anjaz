@@ -270,7 +270,7 @@ class ReadinessScoreCommand extends Command
             'detail' => ! $onTarget
                 ? $away . ' (AMIAL_BACKUP_REMOTE)'
                 : ($remote !== ''
-                    ? 'AMIAL_BACKUP_REMOTE مضبوط'
+                    ? 'AMIAL_BACKUP_REMOTE مضبوط' . $this->measuredRto()
                     : 'AMIAL_BACKUP_REMOTE غيرُ مضبوط — النسخُ كلُّها على الخادم الذي قد يسقط'),
         ];
 
@@ -400,6 +400,32 @@ class ReadinessScoreCommand extends Command
                     . 'والنقطةُ تفحص بالعمل (قاعدة · تخزين · طابور)'
                 : 'الفحصُ موصولٌ والنقطةُ لا تفحص شيئاً',
         ];
+    }
+
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-RTO-ORPHAN-001 — **رقمٌ يُقاس ويُحفَظ ولا يقرؤه أحد.**
+     *
+     * مرشدُ الإطلاق يطلب تمرينَ تعافٍ **على الخادم** ويكتب زمنَه في
+     * `AMIAL_MEASURED_RTO_SECONDS`. **ولم يكن له قارئٌ في المشروع كلِّه.**
+     *
+     * فيقيس صاحبُ المشروع أثمنَ رقمٍ في خطّة التعافي — كم يبقى النظامُ
+     * ساقطاً يومَ يسقط — ثمّ **لا يظهر في أيّ تقرير ولا شاشة**. وهو نمطُ
+     * «مبنيٌّ ولا يُوصَل إليه» واقعاً على قيمةِ إعداد.
+     *
+     * فيُقرأ هنا: **الوجهةُ وحدَها ليست تعافياً**؛ نسخةٌ لم تُستعَد لا
+     * يُعرف زمنُها. وغيابُ الرقم يُقال صراحةً ولا يُفترَض صفراً.
+     * (القاعدةُ السابعة.)
+     */
+    private function measuredRto(): string
+    {
+        $rto = trim((string) env('AMIAL_MEASURED_RTO_SECONDS', ''));
+
+        if ($rto === '' || ! is_numeric($rto)) {
+            return ' · وزمنُ التعافي لم يُقَس على الخادم بعد';
+        }
+
+        return sprintf(' · RTO المقيس على الخادم: %d ثانية', (int) $rto);
     }
 
     private function fetch(string $url): array

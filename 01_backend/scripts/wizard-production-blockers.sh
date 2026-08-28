@@ -74,8 +74,29 @@ open_url() {
   } >/dev/null 2>&1 || warn "couldn't open a browser — visit it manually: $url"
 }
 
-# pause "msg" — wait for the human to confirm they've done the manual part.
+# ══════════════════════════════════════════════════════════════════════
+# **والوقفةُ لا تُتخطّى بـ`AMIAL_WIZARD_YES`.**
+#
+# `confirm` سؤالُ إذنٍ يملكه المشغِّل، فيصحّ أن يُجاب مقدَّماً.
+# **و`pause` إقرارٌ بأنّ خطوةً يدويّةً وقعت فعلاً** — في لوحة Coolify،
+# أو على هاتف. وافتراضُ وقوعها يجعل المرشدَ **يدّعي ما لم يحدث**، ثمّ
+# يُقرأ تقريرُه «تمّ» وقد لم يتمّ.
+#
+# وهذا نفسُ عطل تمرين التعافي: أخرج `VERDICT: PASS` على قاعدةٍ غيرِ
+# موجودة. **ومرشدٌ يكذب أسوأ من غيابه.**
+#
+# فتُعلَن الخطوةُ وتُعدّ **غيرَ مثبَتة**، ويُذكَر عددُها في الخاتمة.
+# ══════════════════════════════════════════════════════════════════════
+UNVERIFIED_STEPS=0
+
 pause() {
+  if [[ "${AMIAL_WIZARD_NONINTERACTIVE:-}" == "1" || ! -t 0 ]]; then
+    UNVERIFIED_STEPS=$((UNVERIFIED_STEPS + 1))
+    warn "خطوةٌ يدويّةٌ لم تُثبَت: ${1:-…}"
+    note "  (لا طرفيّةَ تفاعليّة — تُنفَّذ بيدك ثمّ يُعاد التشغيل)"
+    return 0
+  fi
+
   printf '  %s%s%s ' "$DIM" "${1:-Press Enter to continue}" "$RESET"
   read -r _ || true
 }
@@ -83,6 +104,11 @@ pause() {
 # confirm "question" — y/N gate; returns success on yes.
 confirm() {
   local reply=""
+  if [[ "${AMIAL_WIZARD_YES:-}" == "1" ]]; then
+    printf '  %s? %s [y/N] y (AMIAL_WIZARD_YES)%s\n' "$YELLOW" "$1" "$RESET"
+    return 0
+  fi
+
   printf '  %s? %s [y/N] ' "$YELLOW" "$1"
   read -r reply || true
   [[ "$reply" =~ ^[Yy] ]]
@@ -95,11 +121,41 @@ _existing() {
   printf '%s' "${line#*=}"
 }
 
+# ══════════════════════════════════════════════════════════════════════
+# AMIAL-WIZARD-NONINTERACTIVE-001 — **خطواتٌ تُملى مرّةً بدل حوارٍ طويل.**
+#
+# المرشدُ يسأل سؤالاً سؤالاً — وهو الصواب لمن يمشي فيه أوّلَ مرّة.
+# **لكنّه يُلزم صاحبَ المشروع بجلسةٍ كاملةٍ أمام الطرفيّة**، ويمنع
+# تشغيلَه من نصٍّ أو من CI.
+#
+# فصار كلُّ مفتاحٍ يُقرأ من البيئة إن كان مضبوطاً فيها: تُمرَّر القيمُ
+# في أمرٍ واحد، ويمضي المرشدُ بلا سؤال:
+#
+#   AMIAL_RECON_ALERT_TO=967xxxxxxxxx \
+#   AMIAL_BACKUP_REMOTE=s3:amial-backups/db \
+#   AMIAL_WIZARD_YES=1 bash scripts/wizard-production-blockers.sh
+#
+# **والافتراضُ يبقى الحوار** — فمن شغّله بلا متغيّراتٍ لا يتغيّر عليه
+# شيء. والقيمةُ الممرَّرةُ تعلو على ما في `.env`، وغيابُها يُعيد السؤال.
+#
+# **ولا يُفترَض «نعم» صامتاً:** `AMIAL_WIZARD_YES` تُمرَّر صراحةً، ولا
+# تُستنتَج من غياب طرفيّةٍ تفاعليّة. فموافقةٌ تُنتزَع من الصمت ليست
+# موافقة — وخطواتُ هذا المرشد تمسّ إنتاجاً.
+# ══════════════════════════════════════════════════════════════════════
+
 # ask KEY "Prompt" — read a value into $KEY. Offers the existing .env value as
 # a default on re-runs (Enter keeps it). Visible input (non-secret).
 ask() {
   local key="$1" prompt="$2" current input
   current=$(_existing "$key" || true)
+
+  # قيمةٌ من البيئة ⇒ لا سؤال. وتُقال لئلّا يظنّ القارئُ أنّها من `.env`.
+  if [[ -n "${!key:-}" ]]; then
+    printf -v "$key" '%s' "${!key}"
+    note "$prompt ← من البيئة (بلا سؤال)"
+    return 0
+  fi
+
   if [[ -n "$current" ]]; then
     printf '  %s%s%s %s[Enter keeps current]%s ' "$BOLD" "$prompt" "$RESET" "$DIM" "$RESET"
   else
@@ -114,6 +170,14 @@ ask() {
 ask_secret() {
   local key="$1" prompt="$2" current input
   current=$(_existing "$key" || true)
+
+  # **والسرُّ كذلك** — ولا تُطبَع قيمتُه، فسجلُّ الطرفيّة يُقرأ ويُنسَخ.
+  if [[ -n "${!key:-}" ]]; then
+    printf -v "$key" '%s' "${!key}"
+    note "$prompt ← من البيئة (بلا سؤال · القيمةُ لا تُطبَع)"
+    return 0
+  fi
+
   if [[ -n "$current" ]]; then
     printf '  %s%s%s %s[Enter keeps current]%s ' "$BOLD" "$prompt" "$RESET" "$DIM" "$RESET"
   else
@@ -385,18 +449,36 @@ stage "نسخةٌ خارج الخادم"
 say "النسخةُ المجدولة (٠٣:٠٠) تُكتب في storage/app/backups — **القرصِ نفسِه**."
 say "وضياعُ الخادم يعني ضياعَ النسخة معه."
 say ""
-note "و scripts/backup.sh يدعم الرفعَ إلى S3 أصلاً عبر BACKUP_S3_BUCKET —"
-note "الناقصُ الإعدادُ لا الشيفرة."
+# ══════════════════════════════════════════════════════════════════════
+# AMIAL-BACKUP-KEY-001 — **مفتاحان لشيءٍ واحد، والمرشدُ يضبط الخطأ.**
+#
+# للنسخة الخارجيّة مساران بُنيا في وقتين:
+#
+#   `scripts/backup.sh`          → `BACKUP_S3_BUCKET`   (aws CLI)
+#   `amial:backup` (المجدوَل)     → `AMIAL_BACKUP_REMOTE` (rclone)
+#
+# **والمقياسُ يقرأ الثاني.** وكان هذا المرشدُ يسأل عن الأوّل وحدَه —
+# فمن اتّبعه ضبط مفتاحاً **لا يقرؤه الأمرُ الذي يجري كلَّ ليلة**، ثمّ
+# قرأ في `amial:readiness`: «لا نسخةَ خارج الخادم» ولم يفهم لماذا.
+#
+# وأسوأُ منه أنّه قد **يظنّ أنّ له نسخةً بعيدةً ولا شيء** — إلى ليلةِ
+# الحاجة. فيُسأل عن المفتاح الذي يقرؤه المجدوِل، ويبقى الآخرُ مذكوراً
+# لمن يشغّل النصَّ القديم بيده.
+# ══════════════════════════════════════════════════════════════════════
+note "للنسخة الخارجيّة مساران: الأمرُ المجدوَل (٠٣:٠٠) يشحن بـrclone عبر"
+note "AMIAL_BACKUP_REMOTE — **وهو ما يقرؤه مقياسُ الجاهزيّة**. و"
+note "scripts/backup.sh القديمُ يرفع بـaws عبر BACKUP_S3_BUCKET."
 say ""
-step "جهّز دلوَ S3 (أو أيّ خدمةٍ متوافقة) وبيانات aws CLI على الخادم."
-ask BACKUP_S3_BUCKET "اسمُ الدلو (اتركه فارغاً لتأجيل هذه الخطوة):"
-if [[ -n "${BACKUP_S3_BUCKET:-}" ]]; then
-  write_env BACKUP_S3_BUCKET "$BACKUP_S3_BUCKET"
-  step "أضِف BACKUP_S3_BUCKET=$BACKUP_S3_BUCKET في Coolify أيضاً."
-  step "وتأكّد أنّ aws CLI مُعتمَدٌ على الخادم: aws s3 ls s3://$BACKUP_S3_BUCKET"
+step "جهّز وجهةً (S3 أو أيّ خدمةٍ يدعمها rclone) واعتمادَها على الخادم."
+ask AMIAL_BACKUP_REMOTE "وجهةُ rclone (مثل s3:amial-backups/db — فارغٌ = تأجيل):"
+if [[ -n "${AMIAL_BACKUP_REMOTE:-}" ]]; then
+  write_env AMIAL_BACKUP_REMOTE "$AMIAL_BACKUP_REMOTE"
+  step "أضِف AMIAL_BACKUP_REMOTE=$AMIAL_BACKUP_REMOTE في Coolify أيضاً."
+  step "و`rclone` مشحونةٌ في الصورة — تحقّق: rclone lsd ${AMIAL_BACKUP_REMOTE%%:*}:"
+  step "ثمّ أثبِتها بالتشغيل: php artisan amial:backup"
   pause "جاهز؟ اضغط Enter."
 else
-  SKIPPED+=("نسخةٌ خارج الخادم (BACKUP_S3_BUCKET) — حتّى تُضبَط، ضياعُ الخادم = ضياعُ النسخة")
+  SKIPPED+=("نسخةٌ خارج الخادم (AMIAL_BACKUP_REMOTE) — حتّى تُضبَط، ضياعُ الخادم = ضياعُ النسخة")
   warn "مؤجَّلة. وهذا قرارٌ مقبولٌ ما دام معلوماً — لا مسكوتاً عنه."
 fi
 
