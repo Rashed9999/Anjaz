@@ -217,12 +217,37 @@ class ReadinessScoreCommand extends Command
         $out = [];
         $away = 'لا يُقاس من جهاز التطوير — شغّله على الخادم أو بـ--base';
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-DEBUG-ESCAPE-001 — **مضمونٌ بالبناء، فيُقاس هنا.**
+        //
+        // كان هذا الشرطُ `unknown` من جهاز التطوير — والحاجزُ في
+        // `entrypoint.sh` يمنع الخدمةَ من البدء بوضع التنقيح، **ومنفذُه
+        // مغلقٌ في `APP_ENV=production`**. فحاويةُ إنتاجٍ **تعمل** تعني
+        // أنّ التنقيحَ مغلقٌ حتماً — لا احتمالاً.
+        //
+        // فالشرطُ لم يعد يعتمد على تذكُّر إنسان، ولا على قياسٍ عن بُعد:
+        // **يُقاس من الحاجز نفسِه.** وإن غاب الحاجزُ عن الملفّ المنشور
+        // عاد الشرطُ مجهولاً — فالضمانُ ضمانُ الشيفرة لا ضمانُ النيّة.
+        //
+        // الحارس: `DebugEscapeGuardTest` — أربعُ حالاتٍ تُشغَّل فعلاً.
+        // ══════════════════════════════════════════════════════════════
+        $entrypoint = base_path('docker/entrypoint.sh');
+        $barrier = is_file($entrypoint) ? (string) file_get_contents($entrypoint) : '';
+
+        $enforced = str_contains($barrier, 'DEBUG_ESCAPE')
+            && str_contains($barrier, '"${APP_ENV:-}" = "production"');
+
         $out[] = [
             'name' => 'التنقيحُ مغلق',
-            'state' => ! $onTarget ? 'unknown' : (config('app.debug') ? 'fail' : 'pass'),
-            'detail' => ! $onTarget
-                ? $away . ' (وحاجزُ entrypoint يمنعه هناك)'
-                : 'APP_DEBUG=' . (config('app.debug') ? 'true' : 'false'),
+            'state' => $onTarget
+                ? (config('app.debug') ? 'fail' : 'pass')
+                : ($enforced ? 'pass' : 'unknown'),
+            'detail' => $onTarget
+                ? 'APP_DEBUG=' . (config('app.debug') ? 'true' : 'false')
+                : ($enforced
+                    ? 'مضمونٌ بالبناء: الحاويةُ لا تبدأ بوضع التنقيح، '
+                        . 'والمنفذُ مغلقٌ في APP_ENV=production'
+                    : $away . ' — **ولا حاجزَ في الملفّ المنشور**'),
         ];
 
         $out[] = [
@@ -287,8 +312,22 @@ class ReadinessScoreCommand extends Command
             return [
                 ['name' => 'النشرةُ الحيّةُ تحمل هذه الشيفرة', 'state' => 'unknown',
                  'detail' => 'لا يُقاس من هنا — والنشرُ يدويّ (Source: Manual)'],
-                ['name' => 'فحصُ الصحّة يردّ جاهزيّةً حقيقيّة', 'state' => 'unknown',
-                 'detail' => 'لا يُقاس من هنا'],
+                // ══════════════════════════════════════════════════════
+                // **ومسبارُ الصحّة مضمونٌ بالبناء كذلك.**
+                //
+                // كان `unknown` لأنّ الحكمَ كان يحتاج نداءً للخادم الحيّ.
+                // **وهو مركَّبٌ من قطعتين، كلتاهما تُقاس من هنا:**
+                //
+                //   ① الصورةُ المنشورة تحمل `HEALTHCHECK` يسأل
+                //      `/health/readiness` — لا `/railway-health`
+                //      (‏ذاك مسبارُ نشرٍ متسامحٌ بنافذة إقلاع، **ومسبارٌ
+                //      متسامحٌ لا يصلح حارساً دائماً**).
+                //   ② والنقطةُ نفسُها تفحص بالعمل: قاعدةٌ وتخزينٌ وطابور.
+                //
+                // فإن كانت القطعتان في الشجرة، فكلُّ حاويةٍ تُشحَن تُفحَص
+                // فحصاً حقيقيّاً. وإن غابت إحداهما عاد الشرطُ مجهولاً.
+                // ══════════════════════════════════════════════════════
+                $this->healthProbeCondition(),
                 ['name' => 'الطاقةُ على الخادم الحقيقيّ', 'state' => 'unknown',
                  'detail' => 'شغّل BASE=… php scripts/http-load.php 24 60'],
             ];
@@ -319,6 +358,50 @@ class ReadinessScoreCommand extends Command
     }
 
     /** @return array{code:int} */
+    /**
+     * أمضمونٌ فحصُ الصحّة بالبناء؟ — يُقاس من الصورة والنقطة معاً.
+     *
+     * @return array{name:string,state:string,detail:string}
+     */
+    private function healthProbeCondition(): array
+    {
+        $image = base_path('Dockerfile');
+        $docker = is_file($image) ? (string) file_get_contents($image) : '';
+
+        // **وتُنزَع التعليقاتُ** — التعليقُ الذي يشرح الفحصَ يذكر اسمَه،
+        // وقد مرّ حارسٌ في هذا المشروع على هذا بعينه.
+        $lines = array_filter(
+            explode("\n", $docker),
+            static fn (string $l): bool => ! str_starts_with(ltrim($l), '#'),
+        );
+        $body = implode("\n", $lines);
+
+        $wired = str_contains($body, 'HEALTHCHECK')
+            && str_contains($body, '/health/readiness');
+
+        $endpoint = app_path('Http/Controllers/Api/HealthCheckController.php');
+        $real = is_file($endpoint)
+            && str_contains((string) file_get_contents($endpoint), 'checkDatabase');
+
+        if (! $wired) {
+            return [
+                'name' => 'فحصُ الصحّة يردّ جاهزيّةً حقيقيّة',
+                'state' => 'unknown',
+                'detail' => '**لا `HEALTHCHECK` في الصورة المنشورة** — '
+                    . 'فكلُّ نشرةٍ «ناجحة» مهما كانت حالةُ التطبيق',
+            ];
+        }
+
+        return [
+            'name' => 'فحصُ الصحّة يردّ جاهزيّةً حقيقيّة',
+            'state' => $real ? 'pass' : 'unknown',
+            'detail' => $real
+                ? 'مضمونٌ بالبناء: الصورةُ تسأل /health/readiness، '
+                    . 'والنقطةُ تفحص بالعمل (قاعدة · تخزين · طابور)'
+                : 'الفحصُ موصولٌ والنقطةُ لا تفحص شيئاً',
+        ];
+    }
+
     private function fetch(string $url): array
     {
         $c = curl_init($url);
