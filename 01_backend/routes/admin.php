@@ -83,10 +83,9 @@ Route::group(['as' => 'admin.'], function () {
 
         // AMIAL-OPS-CONSOLE-001 — منصة عمليات الموظفين (واجهة ويب + JSON بجلسة الأدمن)
         // AMIAL-ADMIN-DOORS-001 — مركزُ الدعم عملُ الدعم، وله صلاحيّتُه.
-        Route::group(['prefix' => 'support-center', 'as' => 'support-center.',
-            'middleware' => 'platform:platform.tickets.manage'], function () {
+        Route::group(['prefix' => 'support-center', 'as' => 'support-center.'], function () {
             $sc = \App\Http\Controllers\Api\V1\Amial\SupportConsoleController::class;
-            Route::get('/', [$sc, 'page'])->name('index');
+            Route::get('/', [$sc, 'page'])->middleware('platform:platform.tickets.view')->name('index');
             Route::get('search', [$sc, 'search'])->middleware('platform:platform.customers.view')->name('search');
             // AMIAL-SUPPORT-REACH-001 — **حالةُ التشغيل لا وحدةُ التشغيل.**
             // ملخّصٌ يقول أالطوابيرُ تسير وكم نُفِّذ اليوم — لا المهامُّ
@@ -106,9 +105,9 @@ Route::group(['as' => 'admin.'], function () {
             Route::get('customers/{id}/devices', [$sc, 'devices'])->where('id', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('customers.devices');
             Route::post('devices/{deviceRowId}/block', [$sc, 'blockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.block');
             Route::post('devices/{deviceRowId}/unblock', [$sc, 'unblockDevice'])->where('deviceRowId', '[0-9]+')->middleware('platform:platform.customers.sessions')->name('devices.unblock');
-            Route::get('tickets', [$sc, 'tickets'])->middleware('platform:platform.tickets.manage')->name('tickets.index');
+            Route::get('tickets', [$sc, 'tickets'])->middleware('platform:platform.tickets.view')->name('tickets.index');
             Route::post('tickets', [$sc, 'createTicket'])->middleware('platform:platform.tickets.manage')->name('tickets.create');
-            Route::get('tickets/{id}', [$sc, 'showTicket'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.show');
+            Route::get('tickets/{id}', [$sc, 'showTicket'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.view')->name('tickets.show');
             Route::post('tickets/{id}/update', [$sc, 'updateTicket'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.update');
             Route::post('tickets/{id}/note', [$sc, 'addTicketNote'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.note');
             // AMIAL-INSIDER-001: Maker-Checker + مراقبة الموظفين

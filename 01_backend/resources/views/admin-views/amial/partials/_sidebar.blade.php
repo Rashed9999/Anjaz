@@ -242,6 +242,24 @@
     ];
 @endphp
 
+{{-- القائمة الجانبية باب سريع فقط. تفاصيل العمل انتقلت إلى «مساحة العمل»
+     بتبويبات، فلا يعود الموظف يبحث في 50 رابطاً أو يرى ما لا يخصه. --}}
+<li class="nav-item">
+    <a class="nav-link {{ Request::is('admin/amial/workspace') ? 'active' : '' }}"
+       href="{{ route('admin.amial.workspace.index') }}" data-testid="nav-workspace">
+        <i class="tio-dashboard-vs nav-icon"></i><span class="text-truncate">🗂️ مساحة العمل</span>
+    </a>
+</li>
+@if($can('platform.staff.view'))
+<li class="nav-item"><a class="nav-link {{ Request::is('admin/amial/ops/roles*') ? 'active' : '' }}"
+    href="{{ route('admin.amial.ops.roles.index') }}"><i class="tio-user-switch nav-icon"></i><span class="text-truncate">👥 الموظفون والصلاحيات</span></a></li>
+@endif
+<li class="nav-item"><a class="nav-link {{ Request::is('admin/amial/2fa*') ? 'active' : '' }}"
+    href="{{ route('admin.amial.2fa.page') }}"><i class="tio-lock nav-icon"></i><span class="text-truncate">🔐 أمان حسابي</span></a></li>
+
+{{-- احتُفظ بتعريف الوجهات أدناه ليكون مرجع التغطية، لكن لم يعد يُعرض كقائمة
+     جانبية. كل هذه الوجهات باتت بطاقات داخل صفحة مساحة العمل. --}}
+@if(false)
 {{-- لوحة القيادة التنفيذية تبقى خارج المجموعات: هي ما يُفتح أوّلاً كلّ صباح،
      ودفنُها داخل مجموعةٍ مطويّة يجعل أكثر الروابط استعمالاً أبعدها. --}}
 <li class="nav-item">
@@ -289,3 +307,4 @@
         </div>
     </li>
 @endforeach
+@endif
