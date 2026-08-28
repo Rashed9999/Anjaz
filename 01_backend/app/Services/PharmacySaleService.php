@@ -58,6 +58,7 @@ class PharmacySaleService
         ?int $posUserId,
         array $items,
         array $data,
+        ?int $createdByUserId = null,
     ): PharmacySale {
         if (empty($items)) {
             throw new InvalidArgumentException('السلّة فارغة');
@@ -146,8 +147,10 @@ class PharmacySaleService
         }
 
         // ===== 3) تنفيذ DB transaction =====
+        $createdByUserId ??= $merchant->id;
+
         return DB::transaction(function () use (
-            $merchant, $pharmacy, $posUserId, $resolvedItems, $data, $customer, $allergyWarnings,
+            $merchant, $pharmacy, $posUserId, $createdByUserId, $resolvedItems, $data, $customer, $allergyWarnings,
         ) {
             // احسب الإجمالي
             $subtotal = '0';
@@ -166,6 +169,9 @@ class PharmacySaleService
                 'sale_ulid' => (string) Str::ulid(),
                 'merchant_user_id' => $merchant->id,
                 'pos_user_id' => $posUserId,
+                // جهاز POS اختياري للموظف، لكن منفذ البيع لا يجوز أن
+                // يضيع من سجل التدقيق حين يعمل بحساب موظف مستقل.
+                'created_by_user_id' => $createdByUserId,
                 'pharmacy_id' => $pharmacy->id,
                 'customer_id' => $customer?->id,
                 'prescription_number' => $data['prescription_number'] ?? null,
