@@ -11,7 +11,7 @@ class PharmacySale extends Model
     protected $table = 'pharmacy_sales';
 
     protected $fillable = [
-        'sale_ulid', 'merchant_user_id', 'pos_user_id', 'pharmacy_id', 'customer_id',
+        'sale_ulid', 'merchant_user_id', 'pos_user_id', 'created_by_user_id', 'pharmacy_id', 'customer_id',
         'prescription_number', 'prescribing_doctor', 'prescription_date',
         'subtotal', 'discount_amount', 'total_amount',
         'payment_method', 'paid_transaction_id',
@@ -22,6 +22,7 @@ class PharmacySale extends Model
     protected $casts = [
         'merchant_user_id' => 'integer',
         'pos_user_id' => 'integer',
+        'created_by_user_id' => 'integer',
         'pharmacy_id' => 'integer',
         'customer_id' => 'integer',
         'prescription_date' => 'date',

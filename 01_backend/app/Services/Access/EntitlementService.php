@@ -59,6 +59,7 @@ class EntitlementService
     public const LOCKED_BY_ROLE = 'locked_by_role';
     public const LIMIT_REACHED = 'limit_reached';
     public const NOT_APPLICABLE = 'not_applicable';
+    public const COMING_SOON = 'coming_soon';
 
     public function allows(User $user, string $code): bool
     {
@@ -236,6 +237,11 @@ class EntitlementService
         // ── ٠) قطاعٌ آخر ──────────────────────────────────────────────
         if (! $cap->appliesTo($ctx['business_type'])) {
             return $row(self::NOT_APPLICABLE);
+        }
+
+        // لا تُباع القدرة المعلنة قبل اكتمال مسارها الفعلي.
+        if ($cap->isComingSoon()) {
+            return $row(self::COMING_SOON);
         }
 
         // ── ①) الأساسيّة لا تُقفَل بباقةٍ ولا بأمرٍ من اللوحة ─────────

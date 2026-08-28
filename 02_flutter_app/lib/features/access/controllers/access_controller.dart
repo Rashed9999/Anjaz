@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 import 'package:amial_pay/features/access/domain/repositories/access_repo.dart';
+import 'package:amial_pay/features/access/domain/models/merchant_context.dart';
 
 /// CRITICAL-001 — Access Controller.
 ///
@@ -34,6 +35,8 @@ class AccessController extends GetxController implements GetxService {
   final RxnInt userId = RxnInt();
   final RxnString userName = RxnString();
   final RxnString userPhone = RxnString();
+  final RxnString merchantDisplayName = RxnString();
+  final Rxn<MerchantContext> merchantContext = Rxn<MerchantContext>();
 
   // حالات
   final RxBool isLoading = false.obs;
@@ -70,6 +73,14 @@ class AccessController extends GetxController implements GetxService {
     subscriptionPlanLabel.value = access['subscription_plan_label']?.toString();
     subscriptionPriceSar.value = (access['subscription_price_sar'] as num?)?.toInt() ?? 0;
     subscriptionExpiresAt.value = access['subscription_expires_at']?.toString();
+    merchantDisplayName.value = access['merchant_display_name']?.toString();
+    final rawContext = meta['merchant_context'];
+    merchantContext.value = rawContext is Map ? MerchantContext.fromJson(rawContext) : null;
+    if (merchantContext.value != null) {
+      merchantDisplayName.value = merchantContext.value!.businessName;
+      businessType.value = merchantContext.value!.businessType ?? businessType.value;
+      businessTypeLabel.value = merchantContext.value!.businessTypeLabel ?? businessTypeLabel.value;
+    }
 
     final fList = (access['features'] as List?)?.cast<String>() ?? [];
     features
@@ -118,6 +129,7 @@ class AccessController extends GetxController implements GetxService {
   bool get isFreePlan => subscriptionPlan.value == 'free';
   bool get isBusinessPlan => subscriptionPlan.value == 'business';
   bool get isEnterprisePlan => subscriptionPlan.value == 'enterprise';
+  String get businessName => merchantContext.value?.businessName ?? merchantDisplayName.value ?? userName.value ?? 'تاجر أميال باي';
 
   // ============ تحديث ============
 
@@ -154,6 +166,8 @@ class AccessController extends GetxController implements GetxService {
     userId.value = null;
     userName.value = null;
     userPhone.value = null;
+    merchantDisplayName.value = null;
+    merchantContext.value = null;
     isLoaded.value = false;
     lastError.value = '';
   }

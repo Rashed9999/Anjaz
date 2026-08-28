@@ -57,6 +57,50 @@ class WholesaleController extends GetxController implements GetxService {
     }
   }
 
+  /// إعدادات المنشأة وشرائح العملاء حقائق خادمية؛ لا نحفظها محلياً كي لا
+  /// يختلف سعر العميل بين جهاز وآخر.
+  Future<bool> saveBusiness(Map<String, dynamic> data) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.upsertBusiness(data);
+      if (_ok(r)) {
+        business.value = Map<String, dynamic>.from(
+            (r.body['meta']?['business'] ?? {}) as Map);
+        final tiers = (business.value?['price_tiers'] ?? []) as List;
+        priceTiers.assignAll(
+            tiers.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'تعذر حفظ إعدادات المنشأة';
+      return false;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
+  Future<bool> addPriceTier(Map<String, dynamic> data) async {
+    try {
+      isSubmitting.value = true;
+      lastError.value = '';
+      final r = await repo.addPriceTier(data);
+      if (_ok(r)) {
+        await loadBusiness();
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'تعذر إضافة شريحة السعر';
+      return false;
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+      return false;
+    } finally {
+      isSubmitting.value = false;
+    }
+  }
+
   Future<void> loadDashboard() async {
     _startLoad();
     try {

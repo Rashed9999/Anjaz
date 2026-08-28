@@ -11,6 +11,8 @@ class WholesaleRepo extends GetxService {
   // Business + Dashboard
   Future<Response> getBusiness() => apiClient.getData(_base);
   Future<Response> upsertBusiness(Map<String, dynamic> data) => apiClient.postData(_base, data);
+  Future<Response> addPriceTier(Map<String, dynamic> data) =>
+      apiClient.postData('$_base/price-tiers', data);
   Future<Response> dashboard() => apiClient.getData('$_base/dashboard');
 
   // Products

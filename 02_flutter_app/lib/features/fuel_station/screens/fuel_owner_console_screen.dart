@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/features/fuel_station/controllers/fuel_vertical_controller.dart';
 import 'package:amial_pay/features/fuel_station/widgets/fuel_state_view.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_ops_center_screen.dart';
@@ -286,10 +287,10 @@ class _FuelOwnerConsoleScreenState extends State<FuelOwnerConsoleScreen> {
 
   String _shortTime(dynamic iso) {
     if (iso == null) return '—';
-    final t = DateTime.tryParse('$iso');
+    final t = DateConverterHelper.tryParseApiInstant('$iso');
     if (t == null) return '—';
 
-    final d = DateTime.now().difference(t);
+    final d = DateTime.now().toUtc().difference(t);
     if (d.inMinutes < 60) return '${d.inMinutes} دقيقة';
     if (d.inHours < 24) return '${d.inHours} ساعة';
     return '${d.inDays} يوم';

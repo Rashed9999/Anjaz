@@ -9,6 +9,7 @@ use App\Models\AmialNotification;
 use App\Models\EMoney;
 use App\Models\KycDocument;
 use App\Models\PaymentRequest;
+use App\Models\RegistrationDossier;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -577,6 +578,15 @@ class CustomerCenterService
                         ? trim((string) ($d->reviewer->f_name . ' ' . $d->reviewer->l_name)) : null,
                     'reviewed_at' => $d->reviewed_at?->toIso8601String(),
                     'uploaded_at' => $d->created_at?->toIso8601String(),
+                ])->all(),
+            // لا نكشف payload هنا؛ التبويب يثبت وجود ملفه ويقود إلى شاشة
+            // الأرشيف المحروسة التي تسجّل فتح البيانات الحساسة.
+            'registration_dossiers' => RegistrationDossier::query()
+                ->where('subject_user_id', $customer->id)->latest()->limit(10)->get()
+                ->map(fn (RegistrationDossier $d) => [
+                    'reference' => $d->reference, 'source' => $d->source,
+                    'state' => $d->state, 'has_paper_form' => (bool) $d->paper_form_encrypted_path,
+                    'created_at' => $d->created_at?->toIso8601String(),
                 ])->all(),
         ]);
     }

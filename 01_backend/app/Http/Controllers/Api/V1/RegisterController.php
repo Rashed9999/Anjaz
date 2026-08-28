@@ -26,6 +26,21 @@ class RegisterController extends Controller
 
     public function customerRegistration(Request $request): JsonResponse
     {
+        // التسجيل بمساعدة موظف لا يفتح محفظة خلف ظهر صاحب الرقم: يُستعاد
+        // ما كتبه الموظف *قبل* التحقق، ثم يبقى OTP وPIN إلزاميين في هذا
+        // المسار نفسه. مدخلات العميل الحالية تتقدّم دائماً على المسودة.
+        if ($request->filled('dial_country_code') && $request->filled('phone')) {
+            $phoneForDossier = \App\Support\Phone::canonical(
+                (string) $request->input('dial_country_code') . (string) $request->input('phone')
+            );
+            $dossierType = $request->input('account_type') === 'merchant' ? 'merchant' : 'customer';
+            $prefill = app(\App\Services\RegistrationDossierService::class)
+                ->prefillForPhone($dossierType, $phoneForDossier);
+            if ($prefill) {
+                $request->merge(array_replace($prefill, $request->all()));
+            }
+        }
+
         $check = $this->validateUploadedFile($request, ['image']);
         if ($check !== true) {
             return $check;
@@ -324,6 +339,23 @@ class RegisterController extends Controller
             }
             if ($accountType === AGENT_TYPE) {
                 $loginNumbers['agent_number'] = $user->agent_number;
+            }
+
+            $dossierType = $accountType === MERCHANT_TYPE ? 'merchant' : 'customer';
+            $dossierService = app(\App\Services\RegistrationDossierService::class);
+            $claimed = $dossierService->claimForConfirmedRegistration($dossierType, $phone, $user);
+            // التسجيل الذاتي يستحق أرشفة قابلة للطباعة هو أيضاً. أما إن بدأ
+            // الملف لدى موظف فلا ننشئ نسخة ثانية؛ يبقى مرجع الموظف هو الأصل.
+            if (!$claimed && $accountType !== AGENT_TYPE) {
+                $dossierService->archiveSelfRegistration($dossierType, $phone, $user, [
+                    'full_name' => trim((string) ($user->f_name . ' ' . $user->l_name)),
+                    'gender' => $user->gender, 'phone' => $phone,
+                    'identification_number' => $user->identification_number,
+                    'identification_type' => $user->identification_type,
+                    'address' => $user->address ?? null,
+                    'business_name' => $accountType === MERCHANT_TYPE ? $request->input('store_name') : null,
+                    'business_type' => $accountType === MERCHANT_TYPE ? $request->input('business_type') : null,
+                ]);
             }
         });
 

@@ -22,6 +22,7 @@ use App\Support\Merchant\MerchantPermissions as P;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 /**
@@ -455,6 +456,7 @@ class PharmacyController extends Controller
                 $merchant, $pharmacy, $posUserId,
                 $request->input('items'),
                 $request->all(),
+                $request->user()->id,
             );
         } catch (\InvalidArgumentException $e) {
             return $this->error('INVALID', $e->getMessage(), 422);
@@ -587,6 +589,20 @@ class PharmacyController extends Controller
             if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
             return [$merchant, $pos->id];
         }
+
+        // الموظفُ حسابٌ بصلاحيّات، وليس بالضرورة حسابَ POS. فربط الدور
+        // في merchant_user_roles هو مصدرُ انتمائه إلى المنشأة، ويجب أن
+        // يمرّ في المسار نفسه بعد أن يتحقق guard من الفعل المسموح.
+        $merchantId = DB::table('merchant_user_roles')
+            ->where('user_id', $authUser->id)
+            ->where('is_active', true)
+            ->value('merchant_user_id');
+        if ($merchantId) {
+            $merchant = User::find($merchantId);
+            if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
+            return [$merchant, null];
+        }
+
         if (!MerchantProfile::where('user_id', $authUser->id)->exists()) {
             return $this->error('NOT_A_MERCHANT', 'متاح للتجار وموظفي الصيدلية فقط', 403);
         }

@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/features/withdraw/controllers/customer_withdraw_controller.dart';
 
 /// AMIAL-CUSTOMER-WITHDRAW-001 — شاشة الطلب المعلّق.
@@ -52,8 +53,8 @@ class _WithdrawPendingScreenState extends State<WithdrawPendingScreen> {
       return;
     }
     try {
-      final dt = DateTime.parse(exp.toString()).toLocal();
-      final diff = dt.difference(DateTime.now());
+      final dt = DateConverterHelper.parseApiInstant(exp.toString());
+      final diff = dt.difference(DateTime.now().toUtc());
       _remaining = diff.isNegative ? Duration.zero : diff;
     } catch (_) {
       _remaining = Duration.zero;

@@ -1,5 +1,6 @@
 import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -132,7 +133,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
     final settings = payload['settings'] is Map
         ? Map<String, dynamic>.from(payload['settings'])
         : <String, dynamic>{};
-    final issuedAt = DateTime.tryParse('${payload['issued_at'] ?? ''}');
+    final issuedAt = DateConverterHelper.tryFromApi('${payload['issued_at'] ?? ''}');
     PrintResult result;
 
     if (descriptor.isMerchantInvoice) {
@@ -706,8 +707,9 @@ ${Get.find<ReceiptsController>().getPublicVerificationUrl(receipt.verificationCo
   }
 
   String _fmtDate(DateTime d) {
-    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} '
-        '(${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')})';
+    final mecca = DateConverterHelper.toMecca(d);
+    return '${mecca.day.toString().padLeft(2, '0')}/${mecca.month.toString().padLeft(2, '0')}/${mecca.year} '
+        '(${mecca.hour.toString().padLeft(2, '0')}:${mecca.minute.toString().padLeft(2, '0')})';
   }
 
 

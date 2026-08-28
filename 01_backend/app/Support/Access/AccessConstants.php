@@ -123,7 +123,8 @@ class AccessConstants
         self::PLAN_FREE => [
             'monthly_operations' => 100,    // عمليات بيع شهرياً
             'archive_days' => 30,
-            'products' => 25,
+            // إدارة الأصناف تبدأ في الأعمال؛ لا نعرض حدّاً لميزة مقفلة.
+            'products' => 0,
             'employees' => 0,
             'branches' => 0,
             'pos_devices' => 1,
@@ -133,7 +134,8 @@ class AccessConstants
             'archive_days' => 365,
             'products' => 500,
             'employees' => 5,
-            'branches' => 1,
+            // الفروع قدرة مؤسسة؛ لا نعد بفرع في الأعمال قبل فتحها.
+            'branches' => 0,
             'pos_devices' => 3,
         ],
         self::PLAN_ENTERPRISE => [

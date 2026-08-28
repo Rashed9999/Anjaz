@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
+import 'package:amial_pay/features/wholesale/controllers/wholesale_access_controller.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
@@ -22,7 +23,10 @@ class _WholesaleProCustomersScreenState extends State<WholesaleProCustomersScree
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => c.loadCustomers());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await c.loadBusiness();
+      await c.loadCustomers();
+    });
   }
 
   @override
@@ -32,11 +36,21 @@ class _WholesaleProCustomersScreenState extends State<WholesaleProCustomersScree
   }
 
   Future<void> _edit([Map<String, dynamic>? customer]) async {
+    // شرائح الأسعار تُحمّل من المنشأة نفسها، فلا تُخترع أسماء أو معرّفات
+    // محلياً ثم تُرسل لفاتورة بسعر لا يطابق عقد الخادم.
+    if (c.business.value == null) await c.loadBusiness();
     final name = TextEditingController(text: '${customer?['full_name'] ?? ''}');
     final phone = TextEditingController(text: '${customer?['phone'] ?? ''}');
     final company = TextEditingController(text: '${customer?['company_name'] ?? ''}');
     final limit = TextEditingController(text: '${customer?['credit_limit'] ?? '0'}');
     final days = TextEditingController(text: '${customer?['payment_terms_days'] ?? '0'}');
+    final tiers = c.priceTiers.toList();
+    int? tierId = customer?['default_tier_id'] is num
+        ? (customer!['default_tier_id'] as num).toInt()
+        : null;
+    if (tierId != null && !tiers.any((tier) => tier['id'] == tierId)) {
+      tierId = null;
+    }
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialog) => AlertDialog(
@@ -47,6 +61,20 @@ class _WholesaleProCustomersScreenState extends State<WholesaleProCustomersScree
           _Input(controller: company, label: 'اسم المنشأة', icon: Icons.business_outlined),
           _Input(controller: limit, label: 'حد الائتمان', icon: Icons.account_balance_wallet_outlined, number: true),
           _Input(controller: days, label: 'أيام السداد', icon: Icons.calendar_month_outlined, number: true),
+          if (tiers.isNotEmpty)
+            DropdownButtonFormField<int>(
+              value: tierId,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'شريحة السعر',
+                prefixIcon: Icon(Icons.price_change_outlined),
+              ),
+              items: tiers.map((tier) => DropdownMenuItem<int>(
+                value: (tier['id'] as num).toInt(),
+                child: Text('${tier['name']}'),
+              )).toList(),
+              onChanged: (value) => tierId = value,
+            ),
         ])),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialog, false), child: const Text('إلغاء')),
@@ -65,6 +93,7 @@ class _WholesaleProCustomersScreenState extends State<WholesaleProCustomersScree
       if (company.text.trim().isNotEmpty) 'company_name': company.text.trim(),
       'credit_limit': limit.text.trim().isEmpty ? '0' : limit.text.trim(),
       'payment_terms_days': days.text.trim().isEmpty ? '0' : days.text.trim(),
+      if (tierId != null) 'default_tier_id': tierId,
     };
     final ok = customer == null
         ? await c.addCustomer(body)
@@ -337,8 +366,10 @@ class WholesaleProSalesRepsScreen extends StatefulWidget {
 
 class _WholesaleProSalesRepsScreenState extends State<WholesaleProSalesRepsScreen> {
   WholesaleController get c => Get.find<WholesaleController>();
+  final access = WholesaleAccessController.ensureRegistered();
   @override void initState() { super.initState(); WidgetsBinding.instance.addPostFrameCallback((_) => c.loadSalesReps()); }
   Future<void> _add() async {
+    if (!access.allows('rep.manage')) return;
     final name = TextEditingController(); final phone = TextEditingController(); final rate = TextEditingController(text: '0');
     final ok = await showDialog<bool>(context: context, builder: (d) => AlertDialog(title: const Text('مندوب مبيعات جديد'), content: Column(mainAxisSize: MainAxisSize.min, children: [_Input(controller: name, label: 'الاسم *', icon: Icons.badge_outlined), _Input(controller: phone, label: 'الهاتف', icon: Icons.phone_outlined), _Input(controller: rate, label: 'نسبة العمولة', icon: Icons.percent, number: true)]), actions: [TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('إلغاء')), FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('حفظ'))]));
     if (ok != true || name.text.trim().isEmpty) return;
@@ -350,11 +381,13 @@ class _WholesaleProSalesRepsScreenState extends State<WholesaleProSalesRepsScree
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('مندوبي المبيعات'), centerTitle: true),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _add,
-        icon: const Icon(Icons.person_add_alt),
-        label: const Text('مندوب جديد'),
-      ),
+      floatingActionButton: access.allows('rep.manage')
+          ? FloatingActionButton.extended(
+              onPressed: _add,
+              icon: const Icon(Icons.person_add_alt),
+              label: const Text('مندوب جديد'),
+            )
+          : null,
       body: Obx(() => RefreshIndicator(
         onRefresh: c.loadSalesReps,
         child: ListView(
@@ -396,9 +429,10 @@ class WholesaleProReturnsScreen extends StatefulWidget {
 
 class _WholesaleProReturnsScreenState extends State<WholesaleProReturnsScreen> {
   WholesaleController get c => Get.find<WholesaleController>();
+  final access = WholesaleAccessController.ensureRegistered();
   @override void initState() { super.initState(); WidgetsBinding.instance.addPostFrameCallback((_) => c.loadReturns()); }
-  Future<void> _resolve(Map<String, dynamic> item, bool approve) async { final ok = await c.resolveReturn(_id(item), approve); if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? (approve ? 'تم اعتماد المرتجع' : 'تم رفض المرتجع') : c.lastError.value), backgroundColor: ok ? AmialColors.success : AmialColors.red)); }
-  @override Widget build(BuildContext context) => Scaffold(backgroundColor: AmialColors.background, appBar: AppBar(title: const Text('مرتجعات الجملة'), centerTitle: true), body: Obx(() => RefreshIndicator(onRefresh: c.loadReturns, child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(16), children: [const _Info(text: 'المرتجع لا يعيد المخزون ولا يخفض الدين قبل اعتماد مسؤول مخوّل.'), const SizedBox(height: 12), if (c.returns.isEmpty) const _EmptyState(icon: Icons.assignment_return_outlined, text: 'لا توجد طلبات مرتجع'), ...c.returns.map((x) { final status = '${x['status'] ?? ''}'; return Card(child: Padding(padding: const EdgeInsets.all(8), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [ListTile(title: Text('${(x['invoice'] as Map?)?['invoice_number'] ?? '—'}'), subtitle: Text('${(x['customer'] as Map?)?['full_name'] ?? '—'}\n${x['reason'] ?? ''}'), isThreeLine: true, trailing: Text(status)), if (status == 'requested') Row(children: [Expanded(child: OutlinedButton(onPressed: () => _resolve(x, false), child: const Text('رفض'))), const SizedBox(width: 8), Expanded(child: FilledButton(onPressed: () => _resolve(x, true), child: const Text('اعتماد')))])]))); })]))));
+  Future<void> _resolve(Map<String, dynamic> item, bool approve) async { if (!access.allows('return.resolve')) return; final ok = await c.resolveReturn(_id(item), approve); if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(ok ? (approve ? 'تم اعتماد المرتجع' : 'تم رفض المرتجع') : c.lastError.value), backgroundColor: ok ? AmialColors.success : AmialColors.red)); }
+  @override Widget build(BuildContext context) => Scaffold(backgroundColor: AmialColors.background, appBar: AppBar(title: const Text('مرتجعات الجملة'), centerTitle: true), body: Obx(() => RefreshIndicator(onRefresh: c.loadReturns, child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(16), children: [const _Info(text: 'المرتجع لا يعيد المخزون ولا يخفض الدين قبل اعتماد مسؤول مخوّل.'), const SizedBox(height: 12), if (c.returns.isEmpty) const _EmptyState(icon: Icons.assignment_return_outlined, text: 'لا توجد طلبات مرتجع'), ...c.returns.map((x) { final status = '${x['status'] ?? ''}'; return Card(child: Padding(padding: const EdgeInsets.all(8), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [ListTile(title: Text('${(x['invoice'] as Map?)?['invoice_number'] ?? '—'}'), subtitle: Text('${(x['customer'] as Map?)?['full_name'] ?? '—'}\n${x['reason'] ?? ''}'), isThreeLine: true, trailing: Text(status)), if (status == 'requested' && access.allows('return.resolve')) Row(children: [Expanded(child: OutlinedButton(onPressed: () => _resolve(x, false), child: const Text('رفض'))), const SizedBox(width: 8), Expanded(child: FilledButton(onPressed: () => _resolve(x, true), child: const Text('اعتماد')))])]))); })]))));
 }
 
 class WholesaleProReturnRequestScreen extends StatefulWidget {

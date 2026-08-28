@@ -8,6 +8,7 @@ import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
+import 'package:amial_pay/features/wholesale/controllers/wholesale_access_controller.dart';
 import 'package:amial_pay/features/wholesale/screens/wholesale_workflow_screens.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
@@ -150,7 +151,9 @@ class _WholesaleProDashboardScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${b?['business_name'] ?? 'متجر جملة'}',
+                  access.businessName.isNotEmpty
+                      ? access.businessName
+                      : '${b?['business_name'] ?? 'متجر جملة'}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -460,6 +463,7 @@ class WholesaleProProductsScreen extends StatefulWidget {
 class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen> {
   final _search = TextEditingController();
   WholesaleController get c => Get.find<WholesaleController>();
+  final access = WholesaleAccessController.ensureRegistered();
 
   @override
   void initState() {
@@ -483,13 +487,15 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
         centerTitle: true,
         title: const Text('المنتجات'),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: AmialColors.primary,
-        foregroundColor: AmialColors.cardSurface,
-        onPressed: () => _productSheet(context),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('منتج جديد'),
-      ),
+      floatingActionButton: access.allows('product.create')
+          ? FloatingActionButton.extended(
+              backgroundColor: AmialColors.primary,
+              foregroundColor: AmialColors.cardSurface,
+              onPressed: () => _productSheet(context),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('منتج جديد'),
+            )
+          : null,
       body: Obx(() {
         final state = _loadState(c, retry: () => c.loadProducts(search: _search.text));
         if (state != null && c.products.isEmpty) return state;
@@ -583,24 +589,26 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
               ],
             ),
           ),
-          IconButton(
-            tooltip: 'أسعار الجملة',
-            onPressed: () => _openCapability(context, 'wholesale_multi_pricing',
-                () => _pricingSheet(context, p)),
-            icon: const Icon(Icons.price_change_outlined,
-                color: AmialColors.cash),
-          ),
-          IconButton(
-            tooltip: 'الوحدات والدفعات',
-            onPressed: () => _inventorySheet(context, p),
-            icon: const Icon(Icons.layers_outlined, color: AmialColors.success),
-          ),
-          IconButton(
-            tooltip: 'تعديل',
-            onPressed: () => _productSheet(context, product: p),
-            icon: const Icon(Icons.edit_outlined,
-                color: AmialColors.primary),
-          ),
+          if (access.allows('price.view'))
+            IconButton(
+              tooltip: 'أسعار الجملة',
+              onPressed: () => _pricingSheet(context, p),
+              icon: const Icon(Icons.price_change_outlined,
+                  color: AmialColors.cash),
+            ),
+          if (access.allows('unit.view') && access.allows('lot.view'))
+            IconButton(
+              tooltip: 'الوحدات والدفعات',
+              onPressed: () => _inventorySheet(context, p),
+              icon: const Icon(Icons.layers_outlined, color: AmialColors.success),
+            ),
+          if (access.allows('product.update'))
+            IconButton(
+              tooltip: 'تعديل',
+              onPressed: () => _productSheet(context, product: p),
+              icon: const Icon(Icons.edit_outlined,
+                  color: AmialColors.primary),
+            ),
         ],
       ),
     );
@@ -655,8 +663,9 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
           const SizedBox(height: AmialSpacing.sm),
           _Field(price, 'السعر', Icons.payments_outlined, number: true),
           _Field(minimum, 'الحد الأدنى للكمية', Icons.numbers_rounded, number: true),
-          Obx(() => FilledButton(
-            onPressed: c.isSubmitting.value ? null : () async {
+          if (access.allows('price.set'))
+            Obx(() => FilledButton(
+              onPressed: c.isSubmitting.value ? null : () async {
               final ok = await c.setProductPrice((product['id'] as num).toInt(), selectedTier,
                   _num(price.text), _num(minimum.text));
               if (!mounted || !sheetContext.mounted) return;
@@ -666,9 +675,12 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
               } else {
                 _snack(context, c.lastError.value, error: true);
               }
-            },
-            child: const Text('حفظ سعر الشريحة'),
-          )),
+              },
+              child: const Text('حفظ سعر الشريحة'),
+            ))
+          else
+            const Text('لديك صلاحية عرض الأسعار فقط.',
+                style: TextStyle(color: AmialColors.textSecondary)),
         ])),
       )),
     );
@@ -729,9 +741,10 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
                   subtitle: Text('عامل التحويل: ${_qty(_num(u['factor_to_base']))}'),
                   trailing: u['is_base'] == true ? const Text('أساس') : null,
                 )),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.add_rounded), label: const Text('إضافة وحدة بيع'),
-                  onPressed: () async {
+                if (access.allows('unit.manage'))
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.add_rounded), label: const Text('إضافة وحدة بيع'),
+                    onPressed: () async {
                     final code = TextEditingController();
                     final name = TextEditingController();
                     final factor = TextEditingController();
@@ -753,8 +766,8 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
                       if (refreshed != null && sheetContext.mounted) setSheet(() => units = (refreshed['units'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList());
                     }
                     code.dispose(); name.dispose(); factor.dispose();
-                  },
-                ),
+                    },
+                  ),
               ]),
               ListView(padding: const EdgeInsets.all(AmialSpacing.md), children: [
                 const Text('تُسحب الدفعات الصالحة بالأقدم انتهاءً أولاً. الدفعة المنتهية أو المحجوزة لا تدخل الفاتورة.',
@@ -766,9 +779,10 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
                   subtitle: Text('المتاح ${_qty(_num(lot['quantity_available']))} • الصلاحية ${lot['expiry_date'] ?? 'غير محددة'}'),
                   trailing: Text('${lot['status'] ?? ''}'),
                 )),
-                FilledButton.icon(
-                  icon: const Icon(Icons.add_box_outlined), label: const Text('استلام دفعة'),
-                  onPressed: () async {
+                if (access.allows('lot.receive'))
+                  FilledButton.icon(
+                    icon: const Icon(Icons.add_box_outlined), label: const Text('استلام دفعة'),
+                    onPressed: () async {
                     final lot = TextEditingController(); final qty = TextEditingController();
                     final expiry = TextEditingController(); final supplier = TextEditingController();
                     var selectedUnit = units.firstWhere((u) => u['is_base'] == true, orElse: () => units.first);
@@ -792,8 +806,8 @@ class _WholesaleProProductsScreenState extends State<WholesaleProProductsScreen>
                       if (refreshed != null && sheetContext.mounted) setSheet(() => lots = (refreshed['lots'] as List).map((e) => Map<String, dynamic>.from(e as Map)).toList());
                     }
                     lot.dispose(); qty.dispose(); expiry.dispose(); supplier.dispose();
-                  },
-                ),
+                    },
+                  ),
               ]),
             ])),
           ]),

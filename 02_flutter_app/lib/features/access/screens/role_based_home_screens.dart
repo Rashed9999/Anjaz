@@ -47,7 +47,7 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: Obx(() => Text(access.userName.value ?? 'مرحباً')),
+        title: Obx(() => Text(access.businessName)),
         actions: [
           IconButton(
             icon: const Icon(Icons.menu),
@@ -106,7 +106,7 @@ class MerchantRetailHomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: Obx(() => Text(access.userName.value ?? 'متجري')),
+        title: Obx(() => Text(access.businessName)),
         actions: [
           // AMIAL-ENTITLEMENTS-001 — **ملفّ خدماتي**: كلُّ ما في المنصّة
           // بحالته لهذا الحساب، والمقفلُ يُعرض بسعر فتحه. وما يُخفى لا
@@ -307,7 +307,7 @@ class _GreetingCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: Obx(() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(access.userName.value ?? 'مرحباً',
+        Text(access.businessName,
             style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
         Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 13)),
