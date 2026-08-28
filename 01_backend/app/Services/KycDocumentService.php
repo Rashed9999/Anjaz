@@ -51,7 +51,7 @@ class KycDocumentService
 
     // ── رفع ────────────────────────────────────────────────────────────
 
-    public function upload(User $user, string $docType, UploadedFile $file): KycDocument
+    public function upload(User $user, string $docType, UploadedFile $file, ?User $operator = null): KycDocument
     {
         if (!in_array($docType, KycDocument::ALL_TYPES, true)) {
             throw new DomainException('نوع مستند غير معروف');
@@ -73,7 +73,7 @@ class KycDocumentService
 
         $path = $this->storage->encryptAndStore($file, 'kyc');
 
-        return DB::transaction(function () use ($user, $docType, $path, $mime, $file, $sha) {
+        return DB::transaction(function () use ($user, $docType, $path, $mime, $file, $sha, $operator) {
             // الأحدث هو النافذ — انظر شرح الصنف.
             KycDocument::where('user_id', $user->id)
                 ->where('doc_type', $docType)
@@ -95,14 +95,15 @@ class KycDocumentService
             ]);
 
             $this->audit->record([
-                'actor_type' => 'customer',
-                'actor_user_id' => $user->id,
+                'actor_type' => $operator ? 'platform_user' : 'customer',
+                'actor_user_id' => $operator?->id ?? $user->id,
                 'subject_type' => 'kyc_document',
                 'subject_id' => (string) $doc->id,
                 'action' => 'KYC_DOCUMENT_UPLOADED',
                 'decision_code' => 'KYC_UPLOAD',
                 'severity' => 'info',
-                'context' => ['doc_type' => $docType, 'size' => $file->getSize()],
+                'context' => ['doc_type' => $docType, 'size' => $file->getSize(),
+                    'subject_user_id' => $user->id, 'assisted_opening' => $operator !== null],
             ]);
 
             return $doc;

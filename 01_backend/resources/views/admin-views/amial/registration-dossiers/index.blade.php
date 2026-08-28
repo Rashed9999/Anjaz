@@ -1,19 +1,20 @@
 @extends('layouts.admin.app')
-@section('title','ملفات التسجيل')
+@section('title', 'سجل ملفات فتح الحسابات')
 @section('content')
-<div class="content container-fluid" id="registration-dossiers"><div class="card mb-3"><div class="card-body"><h2 class="mb-1">ملفات التسجيل والأرشفة</h2><p class="text-muted mb-0">للعميل والمنشأة: إدخال موظف، نسخة ورقية موقعة، وملف إلكتروني قابل للطباعة. لا يعتمد هذا الإجراء الحساب.</p></div></div>
-<div class="card mb-3"><div class="card-body"><form id="rd-form" enctype="multipart/form-data"><div class="row g-3">
-<div class="col-md-3"><label class="form-label">النوع</label><select class="form-select" name="subject_type" id="rd-type"><option value="customer">عميل</option><option value="merchant">تاجر / منشأة</option></select></div>
-<div class="col-md-3"><label class="form-label">طريقة الإدخال</label><select class="form-select" name="source"><option value="staff_assisted">بمساعدة موظف</option><option value="paper_archive">نموذج ورقي موقّع</option></select></div>
-<div class="col-md-3"><label class="form-label">مفتاح الدولة</label><input class="form-control" name="dial_country_code" value="+967" required></div><div class="col-md-3"><label class="form-label">الجوال</label><input class="form-control" name="phone" required></div>
-<div class="col-md-6"><label class="form-label">الاسم الكامل</label><input class="form-control" name="full_name" required></div><div class="col-md-3"><label class="form-label">الجنس</label><select class="form-select" name="gender"><option value="">—</option><option value="male">ذكر</option><option value="female">أنثى</option></select></div>
-<div class="col-md-3"><label class="form-label">نوع الهوية</label><select class="form-select" name="identification_type"><option value="">—</option><option value="nid">هوية وطنية</option><option value="passport">جواز</option><option value="trade_license">ترخيص</option></select></div>
-<div class="col-md-6"><label class="form-label">رقم الهوية</label><input class="form-control" name="identification_number"></div><div class="col-md-6"><label class="form-label">العنوان</label><input class="form-control" name="address"></div>
-<div class="col-md-6 merchant-only d-none"><label class="form-label">اسم المنشأة</label><input class="form-control" name="business_name"></div><div class="col-md-6 merchant-only d-none"><label class="form-label">نوع النشاط</label><input class="form-control" name="business_type" placeholder="تجزئة، مطعم، صيدلية…"></div>
-<div class="col-md-6"><label class="form-label">النموذج الورقي الموقّع (PDF/صورة، حتى 8MB)</label><input class="form-control" name="paper_form" type="file" accept="application/pdf,image/jpeg,image/png"></div>
-<div class="col-12"><button class="btn btn-primary" type="submit">حفظ الملف</button></div></div></form><div id="rd-message" class="mt-3"></div></div></div>
-<div class="card"><div class="card-header"><h4 class="mb-0">الأرشيف</h4></div><div class="table-responsive"><table class="table mb-0"><thead><tr><th>المرجع</th><th>النوع</th><th>المصدر</th><th>الحالة</th><th>ورقي</th><th>أنشئ بواسطة</th><th>إجراءات</th></tr></thead><tbody id="rd-rows"></tbody></table></div></div></div>
-<script nonce="{{ request()->attributes->get('csp_nonce') }}">(() => { const root='{{ url('admin/amial/registration-dossiers') }}', csrf='{{ csrf_token() }}', q=s=>document.querySelector(s), esc=s=>String(s??'—').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-const load=async()=>{let r=await fetch(root+'/index',{headers:{Accept:'application/json'}}),j=await r.json();q('#rd-rows').innerHTML=(j.data||[]).map(d=>`<tr><td class="font-monospace">${esc(d.reference)}</td><td>${esc(d.type)}</td><td>${esc(d.source)}</td><td>${esc(d.state)}</td><td>${d.has_paper_form?'نعم':'—'}</td><td>${esc(d.creator)}</td><td><a class="btn btn-sm btn-outline-primary" target="_blank" href="${root}/${d.reference}/pdf">طباعة PDF</a> ${d.has_paper_form?`<a class="btn btn-sm btn-outline-secondary" target="_blank" href="${root}/${d.reference}/paper">الأصل الورقي</a>`:''}</td></tr>`).join('')||'<tr><td colspan="7" class="text-center p-4 text-muted">لا ملفات</td></tr>'};
-q('#rd-type').onchange=e=>document.querySelectorAll('.merchant-only').forEach(x=>x.classList.toggle('d-none',e.target.value!=='merchant'));q('#rd-form').onsubmit=async e=>{e.preventDefault();let r=await fetch(root,{method:'POST',headers:{Accept:'application/json','X-CSRF-TOKEN':csrf},body:new FormData(e.target)}),j=await r.json();q('#rd-message').innerHTML=`<div class="alert alert-${r.ok?'success':'danger'}">${esc(j.message||'تعذر الحفظ')}</div>`;if(r.ok){e.target.reset();load()}};load(); })();</script>
+<div class="content container-fluid" id="registration-dossiers">
+    <div class="card mb-3"><div class="card-body">
+        <h2 class="mb-1">سجل ملفات فتح الحسابات</h2>
+        <p class="text-muted mb-0">أرشيف قراءة فقط. يبدأ فتح العميل أو المنشأة من «مركز العملاء» أو «مركز التجّار»؛ لا توجد شاشة إنشاء ثانية هنا.</p>
+    </div></div>
+    <div class="card"><div class="table-responsive"><table class="table align-middle mb-0">
+        <thead class="table-light"><tr><th>المرجع</th><th>الملف</th><th>الحساب</th><th>الحالة</th><th>أُنشئ بواسطة</th><th>التاريخ</th><th>الأرشيف</th></tr></thead>
+        <tbody id="dossiers-body"><tr><td colspan="7" class="text-center text-muted py-4">جارٍ التحميل…</td></tr></tbody>
+    </table></div></div>
+</div>
 @endsection
+@push('script')
+<script nonce="{{ request()->attributes->get('csp_nonce') }}">
+(() => { const root='{{ url('admin/amial/registration-dossiers') }}', body=document.getElementById('dossiers-body'), esc=s=>String(s??'—').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+fetch(root+'/index',{headers:{Accept:'application/json'}}).then(r=>r.json()).then(j=>{ const rows=j.data||[]; body.innerHTML=rows.length?rows.map(d=>`<tr><td class="font-monospace small">${esc(d.reference)}</td><td>${d.type==='merchant'?'منشأة':'عميل'}</td><td>${d.subject_user_id?`#${d.subject_user_id}`:'—'}</td><td>${esc(d.state)}</td><td>${esc(d.creator)}</td><td class="small">${esc(d.created_at)}</td><td><a class="btn btn-sm btn-outline-primary" target="_blank" href="${root}/${encodeURIComponent(d.reference)}/pdf">طباعة PDF</a>${d.has_paper_form?` <a class="btn btn-sm btn-outline-secondary" target="_blank" href="${root}/${encodeURIComponent(d.reference)}/paper">النسخة الموقعة</a>`:''}</td></tr>`).join(''):'<tr><td colspan="7" class="text-center text-muted py-4">لا ملفات بعد</td></tr>'; }).catch(()=>body.innerHTML='<tr><td colspan="7" class="text-center text-danger py-4">تعذر تحميل الأرشيف</td></tr>'); })();
+</script>
+@endpush

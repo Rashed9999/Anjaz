@@ -347,7 +347,20 @@ class RegisterController extends Controller
             // التسجيل الذاتي يستحق أرشفة قابلة للطباعة هو أيضاً. أما إن بدأ
             // الملف لدى موظف فلا ننشئ نسخة ثانية؛ يبقى مرجع الموظف هو الأصل.
             if (!$claimed && $accountType !== AGENT_TYPE) {
-                $dossierService->archiveSelfRegistration($dossierType, $phone, $user, [
+                // نفس مخطط الملف الذي تستعمله لوحة الموظف؛ لا نطبع نسخة
+                // مبتورة للتسجيل الإلكتروني ثم ندّعي أن الأرشيف موحّد.
+                $dossierPayload = $request->only([
+                    'dial_country_code', 'phone', 'gender', 'email', 'name_en', 'father_name', 'grandfather_name',
+                    'date_of_birth', 'country_of_birth', 'dual_nationality', 'marital_status',
+                    'identification_type', 'identification_number', 'identification_issue_date',
+                    'identification_expiry_date', 'id_place_of_issue', 'address', 'origin_governorate',
+                    'residence_governorate', 'residence_district', 'residence_area', 'residence_landmark',
+                    'housing_type', 'occupation', 'employer_name', 'job_title', 'work_address',
+                    'income_source', 'monthly_income', 'monthly_income_currency', 'account_purpose',
+                    'is_pep', 'pep_position', 'kin_name', 'kin_phone', 'kin_relation', 'kin2_name',
+                    'kin2_phone', 'kin2_relation', 'store_name', 'business_type', 'declaration_accepted',
+                ]);
+                $dossierPayload += [
                     'full_name' => trim((string) ($user->f_name . ' ' . $user->l_name)),
                     'gender' => $user->gender, 'phone' => $phone,
                     'identification_number' => $user->identification_number,
@@ -355,7 +368,11 @@ class RegisterController extends Controller
                     'address' => $user->address ?? null,
                     'business_name' => $accountType === MERCHANT_TYPE ? $request->input('store_name') : null,
                     'business_type' => $accountType === MERCHANT_TYPE ? $request->input('business_type') : null,
-                ]);
+                    'phone_canonical' => $phone,
+                    'subject_type' => $dossierType,
+                    'schema_version' => 'opening-dossier-v1',
+                ];
+                $dossierService->archiveSelfRegistration($dossierType, $phone, $user, $dossierPayload);
             }
         });
 

@@ -109,52 +109,72 @@
 
 {{-- ===== Modal: إضافة مستخدم ===== --}}
 <div class="modal fade" id="modal-add" tabindex="-1">
-    <div class="modal-dialog"><div class="modal-content">
-        <div class="modal-header"><h5 class="modal-title">إضافة حساب جديد</h5>
+    <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+        <div class="modal-header"><div><h5 class="modal-title mb-1">ملف فتح {{ $hubType == 3 ? 'منشأة' : ($hubType == 1 ? 'وكيل' : 'عميل') }}</h5>
+            <small class="text-muted">نموذج واحد: تُحفظ البيانات في الحساب ونسخة إلكترونية قابلة للطباعة في الأرشيف.</small></div>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body">
-            <div class="mb-2"><label class="form-label">الاسم الأول</label>
-                <input class="form-control" id="add-fname"></div>
-            <div class="mb-2"><label class="form-label">الاسم الأخير</label>
-                <input class="form-control" id="add-lname"></div>
-            <div class="mb-2"><label class="form-label">الهاتف</label>
-                <input class="form-control" id="add-phone" dir="ltr" placeholder="9677xxxxxxxx"></div>
-            <div class="mb-2"><label class="form-label">كلمة السر (8+ أحرف)</label>
-                <input class="form-control" id="add-password" dir="ltr"></div>
-            <div class="mb-2"><label class="form-label">رمز PIN للمعاملات (4 أرقام — الافتراضي 1234)</label>
-                <input class="form-control" id="add-pin" dir="ltr" maxlength="4" placeholder="1234"></div>
-
-            @if($hubType == 3)
-            {{-- حقول التاجر: تفتح لوحة القطاع الصحيحة والباقة في التطبيق --}}
-            <div class="mb-2"><label class="form-label">اسم المتجر</label>
-                <input class="form-control" id="add-store"></div>
-            <div class="mb-2"><label class="form-label">نوع النشاط</label>
-                <select class="form-select" id="add-biz">
-                    <option value="retail">بقالة / سوبرماركت</option>
-                    <option value="quick_sale">بيع سريع (بسطة/خضار/أسماك)</option>
-                    <option value="fuel">محطة وقود</option>
-                    <option value="pharmacy">صيدلية</option>
-                    <option value="wholesale">جملة</option>
-                    <option value="restaurant">مطعم</option>
-                </select></div>
-            <div class="mb-2"><label class="form-label">الباقة</label>
-                <select class="form-select" id="add-plan">
-                    <option value="free">مجاني</option>
-                    <option value="starter">البداية</option>
-                    <option value="business">الأعمال</option>
-                    <option value="merchant_pro">تاجر محترف</option>
-                    <option value="enterprise">مؤسسة</option>
-                </select></div>
-            @endif
-
-            <div class="alert alert-info small py-2">
-                الحساب يُنشأ جاهزاً للدخول من التطبيق فوراً: الهاتف + كلمة السر أعلاه،
-                وPIN المعاملات المدخل، والتوثيق معتمد تلقائياً.
+        <form class="modal-body" id="opening-dossier-form" enctype="multipart/form-data">
+            <div class="alert alert-warning small py-2">الحساب يُنشأ <strong>قيد مراجعة الامتثال</strong>، ولا تُعدّ الورقة الموقعة أو إدخال الموظف تحققاً من ملكية الهاتف. لا تُحفظ كلمة السر أو PIN في الأرشيف.</div>
+            <div class="accordion" id="opening-dossier-sections">
+                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#opening-owner">1. صاحب الحساب والاتصال</button></h2>
+                    <div id="opening-owner" class="accordion-collapse collapse show"><div class="accordion-body"><div class="row g-3">
+                        <div class="col-md-4"><label class="form-label">الاسم الأول *</label><input class="form-control" name="f_name" required></div>
+                        <div class="col-md-4"><label class="form-label">اسم الأب</label><input class="form-control" name="father_name"></div>
+                        <div class="col-md-4"><label class="form-label">الاسم الأخير *</label><input class="form-control" name="l_name" required></div>
+                        <div class="col-md-6"><label class="form-label">الاسم بالإنجليزية</label><input class="form-control" name="name_en" dir="ltr"></div>
+                        <div class="col-md-3"><label class="form-label">الجنس *</label><select class="form-select" name="gender" required><option value="">اختر</option><option value="male">ذكر</option><option value="female">أنثى</option><option value="other">آخر</option></select></div>
+                        <div class="col-md-3"><label class="form-label">تاريخ الميلاد *</label><input class="form-control" name="date_of_birth" type="date" required></div>
+                        <div class="col-md-3"><label class="form-label">مفتاح الدولة *</label><input class="form-control" name="dial_country_code" value="+967" dir="ltr" required></div>
+                        <div class="col-md-4"><label class="form-label">رقم الجوال *</label><input class="form-control" name="phone" dir="ltr" placeholder="771234567" required></div>
+                        <div class="col-md-5"><label class="form-label">البريد الإلكتروني</label><input class="form-control" name="email" type="email" dir="ltr"></div>
+                    </div></div></div></div>
+                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-identity">2. الهوية والعنوان</button></h2>
+                    <div id="opening-identity" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3">
+                        <div class="col-md-3"><label class="form-label">نوع الهوية *</label><select class="form-select" name="identification_type" required><option value="">اختر</option><option value="nid">بطاقة شخصية</option><option value="passport">جواز سفر</option><option value="driving_licence">رخصة قيادة</option><option value="trade_license">ترخيص تجاري</option></select></div>
+                        <div class="col-md-3"><label class="form-label">رقم الهوية *</label><input class="form-control" name="identification_number" required></div>
+                        <div class="col-md-3"><label class="form-label">تاريخ الإصدار</label><input class="form-control" name="identification_issue_date" type="date"></div>
+                        <div class="col-md-3"><label class="form-label">تاريخ الانتهاء</label><input class="form-control" name="identification_expiry_date" type="date"></div>
+                        <div class="col-md-4"><label class="form-label">مكان الإصدار</label><input class="form-control" name="id_place_of_issue"></div>
+                        <div class="col-md-4"><label class="form-label">بلد الميلاد</label><input class="form-control" name="country_of_birth" value="اليمن"></div>
+                        <div class="col-md-4"><label class="form-label">الحالة الاجتماعية</label><select class="form-select" name="marital_status"><option value="">غير محدد</option><option value="single">أعزب</option><option value="married">متزوج</option><option value="divorced">مطلق</option><option value="widowed">أرمل</option></select></div>
+                        <div class="col-md-6"><label class="form-label">العنوان التفصيلي *</label><input class="form-control" name="address" required></div>
+                        <div class="col-md-3"><label class="form-label">محافظة السكن</label><select class="form-select" name="residence_governorate"><option value="">اختر</option>@foreach(\App\Support\YemenGovernorates::all() as $code => $name)<option value="{{ $code }}">{{ $name }}</option>@endforeach</select></div>
+                        <div class="col-md-3"><label class="form-label">المديرية *</label><input class="form-control" name="residence_district" required></div>
+                        <div class="col-md-6"><label class="form-label">المنطقة / الحي</label><input class="form-control" name="residence_area"></div>
+                        <div class="col-md-6"><label class="form-label">علامة مميزة</label><input class="form-control" name="residence_landmark"></div>
+                        <div class="col-md-3"><label class="form-label">وجه الهوية *</label><input class="form-control" name="identity_front" type="file" accept="image/*,application/pdf" required></div>
+                        <div class="col-md-3"><label class="form-label">ظهر الهوية *</label><input class="form-control" name="identity_back" type="file" accept="image/*,application/pdf" required></div>
+                        <div class="col-md-3"><label class="form-label">صورة شخصية *</label><input class="form-control" name="selfie" type="file" accept="image/*" required></div>
+                        <div class="col-md-3"><label class="form-label">إثبات العنوان</label><input class="form-control" name="address_proof" type="file" accept="image/*,application/pdf"></div>
+                    </div></div></div></div>
+                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-financial">3. العمل والامتثال والمراجع</button></h2>
+                    <div id="opening-financial" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3">
+                        <div class="col-md-4"><label class="form-label">المهنة</label><input class="form-control" name="occupation"></div><div class="col-md-4"><label class="form-label">جهة العمل</label><input class="form-control" name="employer_name"></div><div class="col-md-4"><label class="form-label">المسمى الوظيفي</label><input class="form-control" name="job_title"></div>
+                        <div class="col-md-6"><label class="form-label">عنوان العمل</label><input class="form-control" name="work_address"></div>
+                        <div class="col-md-3"><label class="form-label">مصدر الدخل *</label><select class="form-select" name="income_source" required><option value="">اختر</option><option value="salary">راتب</option><option value="business">تجارة</option><option value="remittance">حوالات</option><option value="investment">استثمار</option><option value="rent">إيجار</option><option value="other">أخرى</option></select></div>
+                        <div class="col-md-3"><label class="form-label">الغرض من الحساب *</label><select class="form-select" name="account_purpose" required><option value="">اختر</option><option value="payments">مدفوعات</option><option value="remittance">حوالات</option><option value="business">تجارة</option><option value="savings">ادخار</option><option value="salary">راتب</option><option value="other">أخرى</option></select></div>
+                        <div class="col-md-4"><label class="form-label">الدخل الشهري</label><input class="form-control" name="monthly_income" type="number" min="0"></div><div class="col-md-2"><label class="form-label">العملة</label><input class="form-control" name="monthly_income_currency" value="YER" maxlength="3" dir="ltr"></div>
+                        <div class="col-md-3"><label class="form-label">شخص سياسي بارز؟ *</label><select class="form-select" name="is_pep" required><option value="">اختر</option><option value="0">لا</option><option value="1">نعم</option></select></div><div class="col-md-9"><label class="form-label">المنصب أو الصلة (إن وجدت)</label><input class="form-control" name="pep_position"></div>
+                        <div class="col-md-4"><label class="form-label">مرجع أول: الاسم</label><input class="form-control" name="kin_name"></div><div class="col-md-4"><label class="form-label">جوال المرجع</label><input class="form-control" name="kin_phone" dir="ltr"></div><div class="col-md-4"><label class="form-label">الصلة</label><input class="form-control" name="kin_relation"></div>
+                        <div class="col-md-4"><label class="form-label">مرجع ثانٍ: الاسم</label><input class="form-control" name="kin2_name"></div><div class="col-md-4"><label class="form-label">جوال المرجع</label><input class="form-control" name="kin2_phone" dir="ltr"></div><div class="col-md-4"><label class="form-label">الصلة</label><input class="form-control" name="kin2_relation"></div>
+                    </div></div></div></div>
+                @if($hubType == 3)
+                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-business">4. هوية المنشأة</button></h2>
+                    <div id="opening-business" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3">
+                        <div class="col-md-6"><label class="form-label">اسم المنشأة / المتجر *</label><input class="form-control" name="store_name" required></div>
+                        <div class="col-md-3"><label class="form-label">نوع النشاط *</label><select class="form-select" name="business_type" required><option value="">اختر</option><option value="quick_sale">بيع سريع</option><option value="retail">تجزئة</option><option value="fuel">محطة وقود</option><option value="pharmacy">صيدلية</option><option value="wholesale">جملة</option><option value="restaurant">مطعم</option></select></div>
+                        <div class="col-md-3"><label class="form-label">الباقة</label><select class="form-select" name="plan"><option value="free">مجاني — 0 ر.س</option><option value="business">الأعمال — 35 ر.س</option><option value="enterprise">مؤسسة — 99 ر.س</option></select></div>
+                        <div class="col-md-4"><label class="form-label">رقم السجل / الترخيص *</label><input class="form-control" name="business_registration_number" required></div><div class="col-md-4"><label class="form-label">الشكل القانوني</label><input class="form-control" name="business_legal_form" placeholder="مؤسسة فردية، شركة…"></div><div class="col-md-4"><label class="form-label">فئة النشاط</label><input class="form-control" name="business_category"></div>
+                        <div class="col-md-6"><label class="form-label">المفوض بالتوقيع *</label><input class="form-control" name="authorized_signatory_name" required></div><div class="col-md-6"><label class="form-label">هوية المفوض *</label><input class="form-control" name="authorized_signatory_id" required></div>
+                    </div></div></div></div>
+                @endif
+                <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-consent">{{ $hubType == 3 ? '5' : '4' }}. الإقرار والأرشفة</button></h2>
+                    <div id="opening-consent" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3"><div class="col-md-6"><label class="form-label">نسخة النموذج الورقي الموقّع (اختياري)</label><input class="form-control" name="signed_paper_form" type="file" accept="application/pdf,image/jpeg,image/png"><small class="text-muted">PDF أو JPG/PNG حتى 8MB. تُشفّر النسخة وتُربط بهذا الملف.</small></div><div class="col-md-6"><label class="form-label">بيانات الدخول الأولية</label><input class="form-control mb-2" name="password" type="password" minlength="8" placeholder="كلمة سر مؤقتة (8 أحرف على الأقل)" required dir="ltr"><input class="form-control" name="pin" inputmode="numeric" maxlength="4" placeholder="PIN معاملات من 4 أرقام (اختياري)" dir="ltr"></div><div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="declaration_accepted" value="1" id="declaration-accepted" required><label class="form-check-label" for="declaration-accepted">أقرّ بأن البيانات قُدّمت من صاحبها أو مفوضه، وبأنه اطّلع على الموافقات المطلوبة. ستُراجع الهوية والهاتف قبل اعتماد الحساب.</label></div></div></div></div></div>
             </div>
             <div class="text-danger small" id="add-error"></div>
-        </div>
+        </form>
         <div class="modal-footer">
-            <button class="btn btn-primary" id="add-submit">إنشاء الحساب</button>
+            <button class="btn btn-primary" id="add-submit">حفظ ملف الفتح وإنشاء الحساب</button>
         </div>
     </div></div>
 </div>
@@ -516,19 +536,14 @@
         const errEl = document.getElementById('add-error');
         errEl.textContent = '';
         try {
-            const payload = {
-                f_name: document.getElementById('add-fname').value,
-                l_name: document.getElementById('add-lname').value,
-                phone: document.getElementById('add-phone').value,
-                password: document.getElementById('add-password').value,
-                pin: document.getElementById('add-pin').value || undefined,
-            };
-            if (slug === 'merchants') {
-                payload.store_name = document.getElementById('add-store').value;
-                payload.business_type = document.getElementById('add-biz').value;
-                payload.plan = document.getElementById('add-plan').value;
-            }
-            const j = await post(`${base}/${slug}/users`, payload);
+            const form = document.getElementById('opening-dossier-form');
+            if (!form.reportValidity()) return;
+            const r = await fetch(`${base}/${slug}/users`, {
+                method: 'POST', headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'},
+                body: new FormData(form),
+            });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(j.message || ('خطأ ' + r.status));
             bootstrap.Modal.getInstance(document.getElementById('modal-add')).hide();
             alert(j.message); loadUsers();
         } catch (err) { errEl.textContent = err.message; }

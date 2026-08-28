@@ -46,6 +46,47 @@ class RegistrationDossierService
         return $dossier;
     }
 
+    /**
+     * أرشفة لقطة فتح الحساب الذي أدخله موظف من شاشة الحساب نفسها.
+     *
+     * لا تستعمل هذه الدالة مسار "مسودة قبل التسجيل": الحساب موجود بالفعل
+     * واللقطة مرتبطة به فوراً. لا نحدّثها لاحقاً كي تبقى النسخة المطبوعة
+     * دليلاً مطابقاً لما قُدِّم يوم الفتح.
+     *
+     * @param array<string,mixed> $payload
+     */
+    public function archiveAssistedRegistration(User $actor, User $subject, string $type, string $phone, array $payload, ?UploadedFile $paper = null): RegistrationDossier
+    {
+        $file = $this->storePaper($paper);
+        $dossier = DB::transaction(function () use ($actor, $subject, $type, $phone, $payload, $file) {
+            return RegistrationDossier::create([
+                'reference' => (string) Str::ulid(),
+                'subject_type' => $type,
+                'subject_user_id' => $subject->id,
+                'source' => 'staff_assisted',
+                'state' => RegistrationDossier::SUBMITTED,
+                'phone_hash' => hash('sha256', $phone),
+                'payload_encrypted' => $payload,
+                'paper_form_encrypted_path' => $file['path'] ?? null,
+                'paper_form_mime' => $file['mime'] ?? null,
+                'paper_form_sha256' => $file['sha256'] ?? null,
+                'created_by_user_id' => $actor->id,
+                'confirmed_at' => now(),
+            ]);
+        });
+
+        $this->audit->record([
+            'actor_type' => 'platform_user', 'actor_user_id' => $actor->id,
+            'subject_type' => 'registration_dossier', 'subject_id' => $dossier->id,
+            'action' => 'ACCOUNT_OPENING_DOSSIER_ARCHIVED', 'decision_code' => 'OPENING_DOSSIER_ARCHIVED',
+            'severity' => 'notice',
+            'context' => ['reference' => $dossier->reference, 'type' => $type, 'subject_user_id' => $subject->id,
+                'paper_attached' => $paper !== null],
+        ]);
+
+        return $dossier;
+    }
+
     /** لا يملأ السجل المحمي حساباً ولا يتجاوز OTP؛ يربط فقط بعد تسجيل العميل بنفس الرقم. */
     public function claimForConfirmedRegistration(string $type, string $phone, User $subject): ?RegistrationDossier
     {
