@@ -26,6 +26,8 @@ import 'package:amial_pay/features/requested_money/screens/outgoing_requests_scr
 import 'package:amial_pay/features/setting/screens/transaction_limit_screen.dart';
 import 'package:amial_pay/features/language/widgets/amial_language_switch.dart';
 import 'package:amial_pay/common/widgets/amial_build_stamp.dart';
+import 'package:amial_pay/features/setting/screens/about_amial_screen.dart';
+import 'package:amial_pay/features/setting/screens/public_legal_document_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({ super.key });
@@ -262,16 +264,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ProfileHeader(title: 'support'.tr),
 
                 Column(children: [
-                  if(((splashController.configModel?.companyEmail != null) || (splashController.configModel?.companyPhone != null)))
-                    CustomInkWellWidget(
-                      child: widget.MenuItem(image: Images.supportLogo,title: '24_support'.tr),
-                      onTap: () => Get.toNamed(RouteHelper.getSupportRoute()),
-                    ),
+                  CustomInkWellWidget(
+                    child: widget.MenuItem(image: Images.supportLogo,title: '24_support'.tr),
+                    onTap: () => Get.toNamed(RouteHelper.getSupportRoute()),
+                  ),
 
-                 if(splashController.configModel?.systemFeature?.faqStatus ?? false) CustomInkWellWidget(
+                 CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.questionLogo, title: 'faq'.tr),
                     onTap:()=> Get.toNamed(RouteHelper.faq),
-                  )
+                  ),
                 ],),
 
                 ProfileHeader(title: 'policies'.tr),
@@ -280,17 +281,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.aboutUs,title: 'about_us'.tr),
-                    onTap:()=> Get.toNamed(RouteHelper.aboutUs),
+                    onTap:()=> Get.to(() => const AboutAmialScreen()),
                   ),
 
                   CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.terms,title: 'terms'.tr),
-                    onTap:()=> Get.toNamed(RouteHelper.terms),
+                    onTap:()=> Get.to(() => const PublicLegalDocumentScreen(
+                      title: 'شروط الاستخدام',
+                      slug: 'terms',
+                    )),
                   ),
 
                   CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.privacy, title: 'privacy_policy'.tr),
-                    onTap:()=> Get.toNamed(RouteHelper.privacy),
+                    onTap:()=> Get.to(() => const PublicLegalDocumentScreen(
+                      title: 'سياسة الخصوصية',
+                      slug: 'privacy',
+                    )),
                   ),
                 ],),
 
@@ -339,7 +346,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
-
 
 
 
