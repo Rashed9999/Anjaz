@@ -3,7 +3,18 @@
 @section('content')
 @php
     $u = auth('user')->user();
-    $can = fn (?string $permission) => $permission === null || ($u && $u->hasPlatformPermission($permission));
+    // لا تتحول مساحة العمل إلى 500 إن تعذر فحص استحقاق واحد؛ الافتراض منع
+    // لا سماح، ويُسجّل الخطأ في سجل Laravel ليبقى التشخيص ممكناً.
+    $can = function (?string $permission) use ($u): bool {
+        if ($permission === null) return true;
+        try {
+            return $u && method_exists($u, 'hasPlatformPermission')
+                && $u->hasPlatformPermission($permission);
+        } catch (\Throwable $e) {
+            report($e);
+            return false;
+        }
+    };
     $tabs = [
         ['id'=>'overview','title'=>'نظرة عامة','icon'=>'📊','items'=>[
             ['لوحة القيادة التنفيذية', route('admin.amial.executive.index'), 'platform.audit.view'],
