@@ -217,6 +217,7 @@ class _WholesalePolicyDashboardScreenState
       (label: 'أداء المندوبين', icon: Icons.leaderboard_outlined, action: 'report.view', page: () => const WholesaleProSalesRepsReportScreen()),
       (label: 'إدارة المندوبين', icon: Icons.badge_outlined, action: 'rep.view', page: () => const WholesaleProSalesRepsScreen()),
       (label: 'مرتجعات الجملة', icon: Icons.assignment_return_outlined, action: 'return.view', page: () => const WholesaleProReturnsScreen()),
+      (label: 'إعدادات الجملة', icon: Icons.settings_outlined, action: 'business.manage', page: () => const WholesalePolicyBusinessSettingsScreen()),
       (label: 'تنبيهات المخزون', icon: Icons.notifications_active_outlined, action: 'stock_alert.view', page: () => const WholesalePolicyStockAlertsScreen()),
       (label: 'صلاحية المنتجات', icon: Icons.event_busy_outlined, action: 'expiry.view', page: () => const WholesalePolicyExpiryScreen()),
     ];
@@ -772,6 +773,235 @@ class WholesalePolicyExpiryScreen extends StatelessWidget {
   Widget build(BuildContext context) => const _ActionGate(
         action: 'expiry.view',
         child: WholesaleExpiryAlertsScreen(),
+      );
+}
+
+/// إعدادات المنشأة وشرائح السعر ليستا شاشةً تجميلية: كل حفظ يمر إلى API
+/// الجملة، وتستخدم الفاتورة لاحقاً الشريحة المختارة للعميل عند التسعير.
+class WholesalePolicyBusinessSettingsScreen extends StatefulWidget {
+  const WholesalePolicyBusinessSettingsScreen({super.key});
+
+  @override
+  State<WholesalePolicyBusinessSettingsScreen> createState() =>
+      _WholesalePolicyBusinessSettingsScreenState();
+}
+
+class _WholesalePolicyBusinessSettingsScreenState
+    extends State<WholesalePolicyBusinessSettingsScreen> {
+  final access = WholesaleAccessController.ensureRegistered();
+  WholesaleController get c => Get.find<WholesaleController>();
+  final _name = TextEditingController();
+  final _register = TextEditingController();
+  final _taxNumber = TextEditingController();
+  final _city = TextEditingController();
+  final _address = TextEditingController();
+  final _phone = TextEditingController();
+  final _email = TextEditingController();
+  final _taxRate = TextEditingController();
+  final _prefix = TextEditingController();
+  final _terms = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  @override
+  void dispose() {
+    for (final controller in [
+      _name, _register, _taxNumber, _city, _address, _phone, _email,
+      _taxRate, _prefix, _terms,
+    ]) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    await access.load();
+    if (!access.allows('business.view')) return;
+    await c.loadBusiness();
+    if (!mounted) return;
+    final b = c.business.value;
+    if (b == null) return;
+    _name.text = '${b['business_name'] ?? ''}';
+    _register.text = '${b['commercial_register'] ?? ''}';
+    _taxNumber.text = '${b['tax_number'] ?? ''}';
+    _city.text = '${b['city'] ?? ''}';
+    _address.text = '${b['address'] ?? ''}';
+    _phone.text = '${b['phone'] ?? ''}';
+    _email.text = '${b['email'] ?? ''}';
+    _taxRate.text = '${b['default_tax_rate'] ?? 0}';
+    _prefix.text = '${b['invoice_prefix'] ?? 'INV'}';
+    _terms.text = '${b['default_payment_terms_days'] ?? 30}';
+    setState(() {});
+  }
+
+  Future<void> _save() async {
+    if (_name.text.trim().isEmpty) {
+      _snack(context, 'اسم المنشأة مطلوب', true);
+      return;
+    }
+    final ok = await c.saveBusiness({
+      'business_name': _name.text.trim(),
+      'commercial_register': _register.text.trim(),
+      'tax_number': _taxNumber.text.trim(),
+      'city': _city.text.trim(),
+      'address': _address.text.trim(),
+      'phone': _phone.text.trim(),
+      'email': _email.text.trim(),
+      'default_tax_rate': _taxRate.text.trim().isEmpty ? '0' : _taxRate.text.trim(),
+      'invoice_prefix': _prefix.text.trim(),
+      'default_payment_terms_days': _terms.text.trim().isEmpty ? '30' : _terms.text.trim(),
+    });
+    if (!mounted) return;
+    _snack(context, ok ? 'تم حفظ إعدادات المنشأة' : c.lastError.value, !ok);
+  }
+
+  Future<void> _addTier() async {
+    final code = TextEditingController();
+    final name = TextEditingController();
+    var isDefault = false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => StatefulBuilder(
+        builder: (_, setDialog) => AlertDialog(
+          title: const Text('شريحة سعر جديدة'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: name,
+                decoration: const InputDecoration(
+                  labelText: 'اسم الشريحة *', prefixIcon: Icon(Icons.sell_outlined),
+                ),
+              ),
+              TextField(
+                controller: code,
+                textDirection: TextDirection.ltr,
+                decoration: const InputDecoration(
+                  labelText: 'رمز الشريحة * (مثل vip)', prefixIcon: Icon(Icons.code_rounded),
+                ),
+              ),
+              CheckboxListTile(
+                value: isDefault,
+                contentPadding: EdgeInsets.zero,
+                title: const Text('اجعلها الشريحة الافتراضية'),
+                onChanged: (value) => setDialog(() => isDefault = value == true),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialog, false), child: const Text('إلغاء')),
+            FilledButton(
+              onPressed: () {
+                if (name.text.trim().isNotEmpty && code.text.trim().isNotEmpty) {
+                  Navigator.pop(dialog, true);
+                }
+              },
+              child: const Text('إضافة'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) {
+      code.dispose();
+      name.dispose();
+      return;
+    }
+    final ok = await c.addPriceTier({
+      'name': name.text.trim(),
+      'code': code.text.trim(),
+      'is_default': isDefault,
+    });
+    code.dispose();
+    name.dispose();
+    if (!mounted) return;
+    _snack(context, ok ? 'تمت إضافة شريحة السعر' : c.lastError.value, !ok);
+  }
+
+  @override
+  Widget build(BuildContext context) => Obx(() {
+    if (!access.isLoaded.value) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (!access.allows('business.view')) {
+      return const _ActionBlocked(action: 'business.view');
+    }
+    final canManageBusiness = access.allows('business.manage');
+    final canManageTiers = access.allows('tier.manage');
+    final b = c.business.value;
+    return Scaffold(
+      backgroundColor: AmialColors.background,
+      appBar: AppBar(title: const Text('إعدادات الجملة'), centerTitle: true),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 32),
+          children: [
+            const _InfoBox(
+              icon: Icons.verified_user_outlined,
+              text: 'هذه البيانات تظهر في مستندات الجملة وتبقى مصدراً واحداً للحسابات والفواتير.',
+            ),
+            const SizedBox(height: 16),
+            Text('بيانات المنشأة', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+            const SizedBox(height: 10),
+            if (b == null)
+              const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+            else ...[
+              _settingsField(_name, 'اسم المنشأة *', Icons.business_outlined, enabled: canManageBusiness),
+              _settingsField(_register, 'السجل التجاري', Icons.article_outlined, enabled: canManageBusiness),
+              _settingsField(_taxNumber, 'الرقم الضريبي', Icons.receipt_long_outlined, enabled: canManageBusiness),
+              _settingsField(_city, 'المدينة', Icons.location_city_outlined, enabled: canManageBusiness),
+              _settingsField(_address, 'العنوان', Icons.location_on_outlined, enabled: canManageBusiness, lines: 2),
+              _settingsField(_phone, 'الهاتف', Icons.phone_outlined, enabled: canManageBusiness),
+              _settingsField(_email, 'البريد الإلكتروني', Icons.email_outlined, enabled: canManageBusiness),
+              Row(children: [
+                Expanded(child: _settingsField(_taxRate, 'الضريبة %', Icons.percent, enabled: canManageBusiness, number: true)),
+                const SizedBox(width: 10),
+                Expanded(child: _settingsField(_terms, 'أيام السداد', Icons.calendar_month_outlined, enabled: canManageBusiness, number: true)),
+              ]),
+              _settingsField(_prefix, 'بادئة الفاتورة', Icons.tag_outlined, enabled: canManageBusiness),
+              if (canManageBusiness)
+                Obx(() => FilledButton.icon(
+                  onPressed: c.isSubmitting.value ? null : _save,
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('حفظ بيانات المنشأة'),
+                )),
+            ],
+            const SizedBox(height: 24),
+            Row(children: [
+              Expanded(child: Text('شرائح الأسعار', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900))),
+              if (canManageTiers)
+                TextButton.icon(onPressed: _addTier, icon: const Icon(Icons.add_rounded), label: const Text('إضافة')),
+            ]),
+            const SizedBox(height: 6),
+            const Text('تُسند الشريحة للعميل، ثم يحدد الخادم السعر الفعلي داخل الفاتورة.', style: TextStyle(color: AmialColors.textSecondary)),
+            const SizedBox(height: 8),
+            ...c.priceTiers.map((tier) => Card(child: ListTile(
+              leading: const Icon(Icons.price_change_outlined, color: AmialColors.primary),
+              title: Text('${tier['name'] ?? '—'}'),
+              subtitle: Text('${tier['code'] ?? ''}'),
+              trailing: tier['is_default'] == true ? const Chip(label: Text('افتراضية')) : null,
+            ))),
+          ],
+        ),
+      ),
+    );
+  });
+
+  Widget _settingsField(TextEditingController controller, String label, IconData icon,
+      {required bool enabled, bool number = false, int lines = 1}) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: TextField(
+          controller: controller,
+          enabled: enabled,
+          maxLines: lines,
+          keyboardType: number ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+          decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon), border: const OutlineInputBorder()),
+        ),
       );
 }
 

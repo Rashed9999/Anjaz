@@ -20,6 +20,15 @@ The model is a flat factor-to-base list rather than an arbitrary graph, so
 cycles are impossible by construction and historical invoice quantities remain
 unchanged.
 
+## 1.5 Business profile and customer price tiers — implemented
+
+The owner can update the wholesale business profile through `POST /wholesale`.
+The same policy snapshot gates the creation of price tiers through
+`POST /wholesale/price-tiers`. Customer add/edit sends only an ID returned by
+that business profile as `default_tier_id`; the mobile app never sends a price
+or tier name as invoice truth. Invoice quoting and issue recalculate the price
+on the server under the selected customer's tier.
+
 ## 2. Expiry / batch tracking — implemented
 
 The server owns `wholesale_product_lots`; products have no fake single expiry
