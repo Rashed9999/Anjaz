@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_qr_collect_screen.dart';
 
 /// AMIAL-FUEL-001 — شاشة بيع وقود (الجوهر).
 ///
@@ -39,11 +40,10 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
   // لـ company_card
   Map<String, dynamic>? _selectedCompany;
   final _cardIdCtrl = TextEditingController();
+  final _creditPhoneCtrl = TextEditingController();
+  final _creditNameCtrl = TextEditingController();
 
   // لـ amial_pay
-  final _paidTxIdCtrl = TextEditingController();
-  // AMIAL-FUEL-PAY-001: هاتف العميل للشحن المباشر عبر أميال باي
-  final _customerPhoneCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -62,8 +62,8 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
     _plateCtrl.dispose();
     _driverCtrl.dispose();
     _cardIdCtrl.dispose();
-    _paidTxIdCtrl.dispose();
-    _customerPhoneCtrl.dispose();
+    _creditPhoneCtrl.dispose();
+    _creditNameCtrl.dispose();
     super.dispose();
   }
 
@@ -114,16 +114,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
       if (_driverCtrl.text.isNotEmpty) 'driver_name': _driverCtrl.text.trim(),
     };
 
-    if (_paymentMethod == 'amial_pay') {
-      // AMIAL-FUEL-PAY-001: هاتف العميل يشحن مباشرةً؛ أو مرجع دفع مسبق
-      final phone = _customerPhoneCtrl.text.trim();
-      final ref = _paidTxIdCtrl.text.trim();
-      if (phone.isEmpty && ref.isEmpty) {
-        return _snack('أدخل رقم هاتف العميل (أو مرجع دفع مسبق)');
-      }
-      if (phone.isNotEmpty) data['customer_phone'] = phone;
-      if (ref.isNotEmpty) data['paid_transaction_id'] = ref;
-    }
+    if (_paymentMethod == 'amial_pay') return Get.to(() => FuelQrCollectScreen(saleData: data, amount: _computedTotal, stationName: c.station.value?['station_name'] ?? 'محطة الوقود', pumpLabel: 'المضخّة #${_selectedPump!['pump_number']}', productName: _selectedProduct?['name']?.toString()));
 
     if (_paymentMethod == 'company_card') {
       if (_selectedCompany == null) return _snack('اختر الشركة');
@@ -131,6 +122,12 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
       if (_cardIdCtrl.text.trim().isNotEmpty) {
         data['company_card_id'] = _cardIdCtrl.text.trim();
       }
+    }
+
+    if (_paymentMethod == 'credit') {
+      if (_creditPhoneCtrl.text.trim().isEmpty) return _snack('أدخل رقم العميل للبيع الآجل');
+      data['customer_phone'] = _creditPhoneCtrl.text.trim();
+      if (_creditNameCtrl.text.trim().isNotEmpty) data['customer_name'] = _creditNameCtrl.text.trim();
     }
 
     if (_isMechanical && _meterAfterCtrl.text.trim().isNotEmpty) {
@@ -211,8 +208,8 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
     _plateCtrl.clear();
     _driverCtrl.clear();
     _cardIdCtrl.clear();
-    _paidTxIdCtrl.clear();
-    _customerPhoneCtrl.clear();
+    _creditPhoneCtrl.clear();
+    _creditNameCtrl.clear();
     setState(() {
       _selectedPump = null;
       _selectedProduct = null;
@@ -316,22 +313,26 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
               Expanded(child: _payMethodTile('amial_pay', Icons.qr_code, 'أميال باي')),
               const SizedBox(width: 6),
               Expanded(child: _payMethodTile('company_card', Icons.business, 'شركة')),
+              const SizedBox(width: 6),
+              Expanded(child: _payMethodTile('credit', Icons.event_note, 'آجل')),
             ]),
 
             if (_paymentMethod == 'amial_pay') ...[
               const SizedBox(height: 12),
-              _textField(_customerPhoneCtrl, 'رقم هاتف العميل',
-                  type: TextInputType.phone),
-              const SizedBox(height: 6),
-              const Text(
-                'يُخصم المبلغ من محفظة العميل فوراً ويُضاف لك (بعد الرسوم).',
-                style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
-              ),
+              const Text('سيظهر QR مرتبط بمحفظة المحطة؛ العميل يمسحه ويؤكد الدفع من تطبيقه.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: AmialColors.textMuted)),
             ],
 
             if (_paymentMethod == 'company_card') ...[
               const SizedBox(height: 12),
               _companySelector(),
+            ],
+            if (_paymentMethod == 'credit') ...[
+              const SizedBox(height: 12),
+              _textField(_creditPhoneCtrl, 'رقم العميل *', type: TextInputType.phone),
+              const SizedBox(height: 8),
+              _textField(_creditNameCtrl, 'اسم العميل (اختياري)'),
+              const SizedBox(height: 6),
+              const Text('تُنشأ فاتورة آجل في حساب العميل، ويمكنه سدادها جزئياً أو كلياً من «فواتيري الآجلة».', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
             ],
 
             const SizedBox(height: 24),
