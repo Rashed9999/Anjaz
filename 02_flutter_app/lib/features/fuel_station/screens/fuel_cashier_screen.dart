@@ -10,7 +10,7 @@ import 'package:amial_pay/features/fuel_station/screens/fuel_qr_collect_screen.d
 ///
 /// كاشير سريع للعامل: يختار المضخّة ونوع الوقود، يُدخل المبلغ (بالريال) أو
 /// الكمية (باللتر) عبر لوحة أرقام أو أزرار سريعة، ثم يدفع نقداً أو «QR الفوري»
-/// (أميال باي بهاتف العميل — دفع حقيقي يحرّك المال). موصول بـ recordSale.
+/// (أميال باي عبر QR يؤكده العميل من محفظته). موصول بـ recordSale.
 class FuelCashierScreen extends StatefulWidget {
   const FuelCashierScreen({super.key});
 
@@ -302,16 +302,11 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
             )),
             const SizedBox(width: 8),
             Expanded(child: OutlinedButton.icon(
-              onPressed: c.isSubmitting.value ? null : _payAmial,
-              icon: const Icon(Icons.phone_iphone),
-              label: const Text('بالهاتف'),
-            )),
-            const SizedBox(width: 8),
-            Expanded(child: OutlinedButton.icon(
               onPressed: () => Get.to(() => const FuelSalesHistoryScreen()),
               icon: const Icon(Icons.history),
               label: const Text('السجل'),
             )),
+            const SizedBox(width: 8),
           ]),
           const SizedBox(height: 20),
 

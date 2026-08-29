@@ -8,6 +8,7 @@ use App\Models\FuelPump;
 use App\Models\FuelSale;
 use App\Models\FuelShift;
 use App\Models\FuelStation;
+use App\Models\PaymentRequest;
 use App\Models\User;
 use App\Traits\TransactionTrait;
 use Illuminate\Support\Facades\DB;
@@ -385,37 +386,13 @@ class FuelStationService
             }
 
             if ($paymentMethod === 'amial_pay') {
-                $paidTxId = $data['paid_transaction_id'] ?? null;
-                // AMIAL-FUEL-PAY-001: الدفع الحقيقي في خطوة واحدة — التاجر يُدخل
-                // هاتف العميل، فنشحن العميل مباشرةً عبر محرّك دفع التاجر (يحرّك
-                // المال + الرسوم + دفتر القيود + الإيصال) ونربط المرجع بالبيع.
-                // يبقى تمرير paid_transaction_id مدعوماً (دفع مسبق من تطبيق العميل).
-                $customerPhone = trim((string) ($data['customer_phone'] ?? ''));
-                if (empty($paidTxId) && $customerPhone !== '') {
-                    $customer = User::whereIn('phone', \App\Support\Phone::variants($customerPhone))
-                        ->where('type', CUSTOMER_TYPE)->first();
-                    if (!$customer) {
-                        throw new RuntimeException('لا يوجد عميل بهذا الرقم');
-                    }
-                    if ($customer->id === $merchant->id) {
-                        throw new RuntimeException('لا يمكن الدفع لنفسك');
-                    }
-                    $paidTxId = $this->merchant_payment_transaction(
-                        $customer->id,
-                        $merchant->id,
-                        $totalAmount,
-                        'pos',
-                        $posUserId,
-                        'دفع وقود',
-                        context: ['sector' => 'fuel'],
-                    );
-                    if (empty($paidTxId)) {
-                        throw new RuntimeException('تعذّر تنفيذ دفع أميال باي');
-                    }
-                }
-                if (empty($paidTxId)) {
-                    throw new InvalidArgumentException('أدخل رقم هاتف العميل أو مرجع الدفع لـ أميال باي');
-                }
+                if (!empty($data['customer_phone'])) throw new InvalidArgumentException('دفع الوقود يتم عبر QR يؤكده العميل بنفسه');
+                $paidTxId = trim((string) ($data['paid_transaction_id'] ?? ''));
+                if ($paidTxId === '') throw new InvalidArgumentException('أنشئ رمز QR وانتظر تأكيد العميل للدفع');
+                $request = PaymentRequest::where('paid_transaction_id', $paidTxId)->where('requester_user_id', $merchant->id)->where('status', 'paid')->lockForUpdate()->first();
+                if (!$request) throw new RuntimeException('مرجع أميال باي غير صالح لمحفظة المحطة أو لم يكتمل الدفع');
+                if (MoneyService::compare((string) $request->amount, $totalAmount) !== 0) throw new RuntimeException('مبلغ رمز الدفع لا يطابق قيمة تعبئة الوقود');
+                if (FuelSale::where('paid_transaction_id', $paidTxId)->exists()) throw new RuntimeException('تم استخدام رمز الدفع في عملية وقود سابقة');
             }
 
             // ====== أنشئ سجل البيع ======

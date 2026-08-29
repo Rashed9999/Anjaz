@@ -474,8 +474,6 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
             'amount' => 'sometimes|nullable|numeric|min:0.01',
             'payment_method' => 'required|in:cash,amial_pay,company_card',
             'paid_transaction_id' => 'sometimes|nullable|string|max:64',
-            // AMIAL-FUEL-PAY-001: هاتف العميل — شحن مباشر في خطوة واحدة
-            'customer_phone' => 'sometimes|nullable|string|min:6|max:20',
             'company_account_id' => 'sometimes|nullable|integer',
             'company_card_id' => 'sometimes|nullable|string|max:40',
             'vehicle_plate' => 'sometimes|nullable|string|max:32',
@@ -484,6 +482,9 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
             'notes' => 'sometimes|nullable|string|max:500',
         ]);
         if ($v->fails()) return $this->validationError($v);
+        if ($request->filled('customer_phone')) {
+            return $this->error('CUSTOMER_CONSENT_REQUIRED', 'لا يُقبل الخصم برقم العميل. استخدم QR ليؤكد العميل الدفع بنفسه.', 422);
+        }
 
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
