@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:get/get.dart';
-import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amial_pay/common/models/signup_body_model.dart';
 import 'package:amial_pay/common/models/contact_model.dart';
 import 'package:amial_pay/features/auth/screens/unified_login_screen.dart';
@@ -16,7 +15,6 @@ import 'package:amial_pay/features/setting/screens/profile_screen.dart';
 import 'package:amial_pay/features/setting/widgets/change_pin_screen.dart';
 import 'package:amial_pay/features/setting/screens/edit_profile_screen.dart';
 import 'package:amial_pay/features/setting/widgets/faq_screen.dart';
-import 'package:amial_pay/features/setting/screens/html_view_screen.dart';
 import 'package:amial_pay/features/setting/screens/qr_code_download_or_share_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
 import 'package:amial_pay/features/splash/screens/splash_screen.dart';
@@ -278,9 +276,6 @@ class RouteHelper {
     GetPage(name: choseLanguageScreen, page: () => const ChooseLanguageScreen()),
     GetPage(name: editProfileScreen, page: () => const EditProfileScreen()),
     GetPage(name: faq, page: () => FaqScreen(title: 'faq'.tr)),
-    GetPage(name: terms, page: () => HtmlViewScreen(title: 'terms'.tr, url: Get.find<SplashController>().configModel!.termsAndConditions)),
-    GetPage(name: aboutUs, page: () => HtmlViewScreen(title: 'about_us'.tr, url: Get.find<SplashController>().configModel!.aboutUs)),
-    GetPage(name: privacy, page: () => HtmlViewScreen(title: 'privacy_policy'.tr, url: Get.find<SplashController>().configModel!.privacyPolicy)),
     GetPage(name: support, page: () => const SupportScreen()),
     GetPage(name: qrCodeDownloadOrShare, page: () => QrCodeDownloadOrShareScreen(qrCode:  utf8.decode(base64Url.decode(Get.parameters['qr-code']!.replaceAll(' ', '+'))),
         phoneNumber: utf8.decode(base64Url.decode(Get.parameters['phone-number']!.replaceAll(' ', '+'))),)),
