@@ -36,7 +36,6 @@ final class VerticalRegistry
         return self::$memo ??= [
             A::BIZ_QUICK_SALE => new class extends MerchantVertical {
                 public function code(): string { return A::BIZ_QUICK_SALE; }
-                public function nameAr(): string { return 'بيعٌ سريع'; }
 
                 /** بائعُ السمك والخضار: بساطةٌ قصوى — بيعٌ ودَينٌ ومرتجع. */
                 public function own(): array
@@ -47,7 +46,6 @@ final class VerticalRegistry
 
             A::BIZ_RETAIL => new class extends MerchantVertical {
                 public function code(): string { return A::BIZ_RETAIL; }
-                public function nameAr(): string { return 'تجزئة'; }
 
                 /**
                  * **ولا `F_PRODUCTS` ولا `F_CUSTOMERS` هنا** — قرارُ صاحب
@@ -65,7 +63,6 @@ final class VerticalRegistry
 
             A::BIZ_WHOLESALE => new class extends MerchantVertical {
                 public function code(): string { return A::BIZ_WHOLESALE; }
-                public function nameAr(): string { return 'جملة'; }
 
                 public function own(): array
                 {
@@ -83,7 +80,6 @@ final class VerticalRegistry
 
             A::BIZ_PHARMACY => new class extends MerchantVertical {
                 public function code(): string { return A::BIZ_PHARMACY; }
-                public function nameAr(): string { return 'صيدليّة'; }
 
                 /**
                  * **والدفعاتُ وتنبيهاتُ الصلاحيّة نواةٌ لا عمق**: صيدليّةٌ
@@ -110,7 +106,6 @@ final class VerticalRegistry
 
             A::BIZ_FUEL => new class extends MerchantVertical {
                 public function code(): string { return A::BIZ_FUEL; }
-                public function nameAr(): string { return 'محطّةُ وقود'; }
 
                 /** **ولا `F_DEBTS`** — ائتمانُ المحطّة ببطاقاتٍ لا بدفترِ دَين. */
                 public function own(): array
@@ -129,7 +124,6 @@ final class VerticalRegistry
 
             A::BIZ_RESTAURANT => new class extends MerchantVertical {
                 public function code(): string { return A::BIZ_RESTAURANT; }
-                public function nameAr(): string { return 'مطعم'; }
 
                 /**
                  * **والثلاثةُ نواةٌ معاً.** مُنحت «الطاولات» وحدَها يوماً،

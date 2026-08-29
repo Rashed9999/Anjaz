@@ -4,6 +4,7 @@ namespace App\Services\Admin;
 
 use App\Models\MerchantProfile;
 use App\Models\User;
+use App\Domain\Verticals\VerticalRegistry;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -195,7 +196,7 @@ class MerchantThreeSixtyService
 
         if (! $station) {
             // **حسابُ محطّةٍ بلا محطّة** — يُقال ولا يُعرض صفراً.
-            return ['vertical' => A::BIZ_FUEL, 'label' => 'محطّة وقود',
+            return ['vertical' => A::BIZ_FUEL, 'label' => $this->verticalName(A::BIZ_FUEL),
                     'metrics' => [], 'missing' => 'لا سجلّ محطّةٍ لهذا الحساب'];
         }
 
@@ -207,7 +208,7 @@ class MerchantThreeSixtyService
 
         return [
             'vertical' => A::BIZ_FUEL,
-            'label' => 'محطّة وقود',
+            'label' => $this->verticalName(A::BIZ_FUEL),
             'station_name' => $station->name ?? null,
             'metrics' => array_values(array_filter([
                 ['label' => 'الخزّانات', 'value' => Schema::hasTable('fuel_tanks')
@@ -232,13 +233,13 @@ class MerchantThreeSixtyService
         $ph = DB::table('pharmacies')->where('merchant_user_id', $m->id)->first();
 
         if (! $ph) {
-            return ['vertical' => A::BIZ_PHARMACY, 'label' => 'صيدليّة',
+            return ['vertical' => A::BIZ_PHARMACY, 'label' => $this->verticalName(A::BIZ_PHARMACY),
                     'metrics' => [], 'missing' => 'لا سجلّ صيدليّةٍ لهذا الحساب'];
         }
 
         return [
             'vertical' => A::BIZ_PHARMACY,
-            'label' => 'صيدليّة',
+            'label' => $this->verticalName(A::BIZ_PHARMACY),
             'metrics' => array_values(array_filter([
                 ['label' => 'الأدوية', 'value' => Schema::hasTable('pharmacy_medicines')
                     ? DB::table('pharmacy_medicines')->where('pharmacy_id', $ph->id)->count() : null],
@@ -254,13 +255,13 @@ class MerchantThreeSixtyService
         $b = DB::table('wholesale_businesses')->where('merchant_user_id', $m->id)->first();
 
         if (! $b) {
-            return ['vertical' => A::BIZ_WHOLESALE, 'label' => 'تجارة جملة',
+            return ['vertical' => A::BIZ_WHOLESALE, 'label' => $this->verticalName(A::BIZ_WHOLESALE),
                     'metrics' => [], 'missing' => 'لا سجلّ منشأةٍ لهذا الحساب'];
         }
 
         return [
             'vertical' => A::BIZ_WHOLESALE,
-            'label' => 'تجارة جملة',
+            'label' => $this->verticalName(A::BIZ_WHOLESALE),
             'metrics' => array_values(array_filter([
                 ['label' => 'فواتير الجملة', 'value' => Schema::hasTable('wholesale_invoices')
                     ? DB::table('wholesale_invoices')->where('business_id', $b->id)->count() : null],
@@ -276,7 +277,7 @@ class MerchantThreeSixtyService
     {
         return [
             'vertical' => $vertical,
-            'label' => $vertical === A::BIZ_QUICK_SALE ? 'بيع سريع' : 'تجزئة',
+            'label' => $this->verticalName($vertical),
             'metrics' => array_values(array_filter([
                 ['label' => 'المنتجات', 'value' => Schema::hasTable('merchant_products')
                     ? DB::table('merchant_products')->where('merchant_user_id', $m->id)->count() : null],
@@ -295,7 +296,7 @@ class MerchantThreeSixtyService
     {
         return [
             'vertical' => A::BIZ_RESTAURANT,
-            'label' => 'مطعم',
+            'label' => $this->verticalName(A::BIZ_RESTAURANT),
             'metrics' => array_values(array_filter([
                 ['label' => 'الطلبات', 'value' => Schema::hasTable('restaurant_orders')
                     ? DB::table('restaurant_orders')->where('merchant_user_id', $m->id)->count() : null],
@@ -343,4 +344,18 @@ class MerchantThreeSixtyService
             'can_transfer_out' => $p ? (bool) $p->can_transfer_out : null,
         ];
     }
+
+    /**
+     * AMIAL-VERTICAL-OOP-004 — **اسمُ القطاع من مصدره الواحد.**
+     *
+     * كانت هذه اللوحةُ تكتب أسماءَ القطاعات بيدها، فافترقت عمّا يراه
+     * المديرُ في قائمة إنشاء الحساب: يُنشئ «محطة وقود» ثمّ تعرض لوحتُه
+     * «محطّة وقود». **واختلافُ الهجاء في لوحةٍ ماليّةٍ يُقرأ نظامين.**
+     */
+    private function verticalName(?string $biz): string
+    {
+        return VerticalRegistry::find($biz)?->nameAr()
+            ?? (A::BUSINESS_TYPE_LABELS[$biz] ?? (string) $biz);
+    }
+
 }

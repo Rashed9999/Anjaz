@@ -212,4 +212,64 @@ class CapabilityBoxAgreementGuardTest extends TestCase
             . implode("\n  ", $orphans) . "\n\n"
             . 'فتُفتح في الخادم ولا تظهر في «خدماتي» — بلا اسمٍ ولا شاشة.');
     }
+
+    /**
+     * @test
+     *
+     * **واسمُ القطاع يُكتب في موضعٍ واحد.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * كان يُكتب في أربعة: `BUSINESS_TYPE_LABELS` (المصدر)، ولوحةُ ٣٦٠،
+     * وقائمةُ إنشاء الحساب، ومربّعُ القطاع نفسُه. **وبثلاث هجاءات**:
+     * «محطة وقود» · «محطّة وقود» · «محطّةُ وقود».
+     *
+     * فيُنشئ المديرُ التاجرَ باسمٍ ويراه في لوحته بآخر — **واختلافُ
+     * الهجاء في لوحةٍ ماليّةٍ يُقرأ نظامين لا نظاماً**.
+     *
+     * فصار الاسمُ يُشتقّ من الثابت، وهذا يمنع عودةَ هجاءٍ خامس: كلُّ
+     * اسمٍ قطاعيٍّ مكتوبٍ نصّاً خارج الثابت يسقط هنا.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    public function the_vertical_name_is_written_in_exactly_one_place(): void
+    {
+        $offenders = [];
+
+        // الملفّاتُ التي تعرض اسمَ القطاع — والمصدرُ نفسُه مستثنىً.
+        $files = [
+            app_path('Services/Admin/MerchantThreeSixtyService.php'),
+            app_path('Domain/Verticals/VerticalRegistry.php'),
+            resource_path('views/admin-views/amial/hub/users.blade.php'),
+        ];
+
+        foreach ($files as $file) {
+            $this->assertFileExists($file);
+
+            // يُنزع التعليقُ أوّلاً: اسمٌ في شرحٍ ليس اسماً معروضاً —
+            // وهذا الفخُّ أوقع المشروعَ من قبل.
+            $src = (string) preg_replace(
+                '~//[^\n]*|/\*.*?\*/|\{\{--.*?--\}\}~s', '',
+                (string) file_get_contents($file));
+
+            foreach (A::ALL_BUSINESS_TYPES as $biz) {
+                $name = VerticalRegistry::find($biz)?->nameAr();
+
+                if ($name === null || $name === '') {
+                    continue;
+                }
+
+                if (str_contains($src, "'{$name}'") || str_contains($src, ">{$name}<")) {
+                    $offenders[] = sprintf('  %s → «%s» مكتوبٌ نصّاً',
+                        basename($file), $name);
+                }
+            }
+        }
+
+        $this->assertSame([], $offenders,
+            "**اسمُ قطاعٍ مكتوبٌ نصّاً خارج مصدره:**\n"
+            . implode("\n", $offenders) . "\n\n"
+            . 'ويُقرأ من `AccessConstants::BUSINESS_TYPE_LABELS` أو '
+            . '`VerticalRegistry::find($biz)->nameAr()` — فهجاءان لشيءٍ '
+            . 'واحدٍ يجعلان التاجرَ يُنشَأ باسمٍ ويُعرَض بآخر.');
+    }
+
 }

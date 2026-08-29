@@ -162,7 +162,15 @@
                 <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-business">4. هوية المنشأة</button></h2>
                     <div id="opening-business" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3">
                         <div class="col-md-6"><label class="form-label">اسم المنشأة / المتجر *</label><input class="form-control" name="store_name" required></div>
-                        <div class="col-md-3"><label class="form-label">نوع النشاط *</label><select class="form-select" name="business_type" required><option value="">اختر</option><option value="quick_sale">بيع سريع</option><option value="retail">تجزئة</option><option value="fuel">محطة وقود</option><option value="pharmacy">صيدلية</option><option value="wholesale">جملة</option><option value="restaurant">مطعم</option></select></div>
+                        <div class="col-md-3"><label class="form-label">نوع النشاط *</label>{{-- AMIAL-VERTICAL-OOP-004 — **القائمةُ تُولَّد من مصدر الأسماء.**
+
+                                 كانت ستّةَ خياراتٍ مكتوبةً بيدها، وهجاؤها
+                                 يخالف ما تعرضه اللوحاتُ الأخرى («محطة وقود»
+                                 هنا و«محطّة وقود» في ٣٦٠). **فالتاجرُ يُنشَأ
+                                 باسمٍ ويُعرَض بآخر.** والأخطرُ أنّ قطاعاً
+                                 يُضاف في الشيفرة لا يظهر هنا أبداً: يُنشئه
+                                 المديرُ فلا يجده في القائمة. --}}
+                            <select class="form-select" name="business_type" required><option value="">اختر</option>@foreach(\App\Support\Access\AccessConstants::BUSINESS_TYPE_LABELS as $bizCode => $bizLabel)<option value="{{ $bizCode }}">{{ $bizLabel }}</option>@endforeach</select></div>
                         <div class="col-md-3"><label class="form-label">الباقة</label><select class="form-select" name="plan"><option value="free">مجاني — 0 ر.س</option><option value="business">الأعمال — 35 ر.س</option><option value="enterprise">مؤسسة — 99 ر.س</option></select></div>
                         <div class="col-md-4"><label class="form-label">رقم السجل / الترخيص *</label><input class="form-control" name="business_registration_number" required></div><div class="col-md-4"><label class="form-label">الشكل القانوني</label><input class="form-control" name="business_legal_form" placeholder="مؤسسة فردية، شركة…"></div><div class="col-md-4"><label class="form-label">فئة النشاط</label><input class="form-control" name="business_category"></div>
                         <div class="col-md-6"><label class="form-label">المفوض بالتوقيع *</label><input class="form-control" name="authorized_signatory_name" required></div><div class="col-md-6"><label class="form-label">هوية المفوض *</label><input class="form-control" name="authorized_signatory_id" required></div>
