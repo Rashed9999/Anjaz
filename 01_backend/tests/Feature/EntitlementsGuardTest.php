@@ -446,26 +446,65 @@ class EntitlementsGuardTest extends TestCase
             'الشاشةُ لا تُرسم من الملفّ — قائمةٌ مكتوبةٌ تعود بنا إلى ٢٦ بوّابة');
     }
 
-    /** كلُّ بادئةِ مسارٍ في السجلّ تخصّ مساراً حقيقيّاً — **ولا حراسةَ للهواء**. */
+    /**
+     * كلُّ بادئةِ مسارٍ في السجلّ تخصّ مساراً حقيقيّاً — **ولا حراسةَ للهواء**.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-ENTITLEMENTS-007 — **حارسان لحقلٍ واحدٍ بعُرفين متناقضين.**
+     *
+     * كان هذا يُركّب `amial/merchant/` + البادئة، أي **يفترض أنّ كلَّ
+     * قدرةٍ تحرس مساراً تاجريّاً**. وقد صحّ ذلك عرَضاً: كلُّ ما كان
+     * مربوطاً حتّى اليوم تحت `merchant/`.
+     *
+     * و`EntitlementGateReachabilityGuardTest` كان قد كشف هذا التناقضَ
+     * ووحّد العُرفَ **عندَه وحدَه** — وبقي هذا على القديم. فأوّلُ قدرةٍ
+     * تحرس مساراً غيرَ تاجريّ (`payment-requests`، ومثلُها
+     * `restaurant`) **يستحيل إرضاءُ الحارسين فيها معاً**: ما يقبله
+     * أحدُهما يُسقط الآخر.
+     *
+     * وهو نفسُ عطل «مصدرَي حقيقةٍ يفترقان» الذي يحاربه المشروع كلُّه —
+     * واقعاً على الحرّاس أنفسِهم، **وتوثيقُ التوحيد في أحدهما جعله يبدو
+     * محسوماً وهو قائم**.
+     *
+     * فصار المقياسُ **وجودَ المسار تحت `amial/`** حيثما كان: البادئةُ
+     * التاجريّةُ تفصيلُ ترتيبٍ لا شرطُ صحّة.
+     * ══════════════════════════════════════════════════════════════════
+     */
     public function test_every_declared_route_prefix_exists(): void
     {
         $uris = collect(Route::getRoutes())->map(fn ($r) => $r->uri())->all();
+
+        $this->assertNotEmpty($uris, 'لم يُقرأ مسارٌ واحد — الحارسُ يفحص فراغاً');
+
         $missing = [];
+        $checked = 0;
 
         foreach (CapabilityRegistry::all() as $cap) {
             foreach ($cap->routePrefixes() as $prefix) {
+                $checked++;
+                $needle = trim($prefix, '/');
+
                 $found = false;
                 foreach ($uris as $u) {
-                    if (str_contains($u, 'amial/merchant/' . trim($prefix, '/'))) {
+                    // تحت `amial/` — سواءٌ أكانت تاجريّةً (`amial/merchant/…`)
+                    // أم مشتركةً بين العميل والتاجر (`amial/payment-requests`).
+                    if (str_contains($u, 'amial/' . $needle)
+                        || str_contains($u, 'amial/merchant/' . $needle)) {
                         $found = true;
                         break;
                     }
                 }
+
                 if (! $found) {
                     $missing[] = $cap->code . ' → ' . $prefix;
                 }
             }
         }
+
+        // **ولا يُفحص فراغ.** لو أفرغ أحدُهم `routes()` من السجلّ كلِّه
+        // لخرج هذا أخضرَ ولم يحرس شيئاً.
+        $this->assertGreaterThan(10, $checked,
+            "لم تُفحص إلّا {$checked} بادئة — أفُرِّغت `routes()` من السجلّ؟");
 
         $this->assertSame([], $missing,
             "قدرات تحرس مساراتٍ لا وجود لها:\n" . implode("\n", $missing));

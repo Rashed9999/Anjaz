@@ -139,6 +139,13 @@ class CapabilityScreens {
     'wholesale_collections': () => const WholesaleDashboardScreen(),
     'restaurant_tables': () => const RestaurantScreen(),
 
+    // **والقدرتان الأخريان تُفتحان على موضع عملهما.** القطاعُ كلُّه شاشةٌ
+    // واحدةٌ بتبويبين، فالطلباتُ مع الطاولات (الطلبُ يُفتَح على طاولة)
+    // والمطبخُ تبويبُه الثاني. وتوجيهُ «شاشة المطبخ» إلى الطاولات زرٌّ
+    // يعمل ويفتح غيرَ ما يقول.
+    'restaurant_orders': () => const RestaurantScreen(),
+    'restaurant_kitchen': () => const RestaurantScreen(initialTab: 1),
+
     // ── تجزئةٌ: أرمزٌ منقّطةٌ فاتت أوّلَ مسحٍ لي ─────────────────────
     //
     // **أمسكها الحارسُ لا أنا.** كان تعبيري `[a-z_0-9]+` فأسقط كلَّ رمزٍ
