@@ -48,6 +48,13 @@
     @if(session('error'))
         <div class="alert alert-danger">{{ session('error') }}</div>
     @endif
+    {{-- SAHER-GATE-005 — **«غيرُ متاحٍ هنا» ليس فشلاً.** مصدرُ البوّابة
+         يقرأ تاريخَ git، وصورةُ النشر تُبنى بلا `.git`. فكان يُرفع أحمرَ
+         في كلّ ضغطة ولا شيءَ مكسور — ولافتةٌ حمراءُ دائمةٌ تُعوّد القارئَ
+         تجاهلَها يومَ تصدق. --}}
+    @if(session('warning'))
+        <div class="alert alert-warning">{{ session('warning') }}</div>
+    @endif
     @if(session('success'))
         <div class="alert alert-success">{{ session('success') }}</div>
     @endif

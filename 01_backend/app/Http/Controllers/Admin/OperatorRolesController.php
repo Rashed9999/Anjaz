@@ -50,6 +50,10 @@ class OperatorRolesController extends Controller
                 ->where('user_id', $u->id)->pluck('role_id')->all();
             $u->login_pin_status = $pinStatuses[$u->id] ?? null;
             $u->tab_access = $this->tabAccess->for($u);
+            // **وما مُنح فعلاً** — ملخّصُ التبويبات لا يعرف أنّ الموظّف
+            // مُنح صلاحيّةً واحدةً منه، فرسمُ الشاشة منه يُظهره مالكاً
+            // للتبويب كلِّه، ويُوسّع المنحَ عند أوّل حفظ.
+            $u->granted_permissions = $this->tabAccess->permissionsFor($u);
 
             return $u;
         });
@@ -61,6 +65,7 @@ class OperatorRolesController extends Controller
         return view('admin-views.amial.ops.roles', [
             'roles' => $roles,
             'tabs' => PlatformAccessTabs::all(),
+            'all_permissions' => PlatformAccessTabs::allPermissions(),
             'operators' => $operators,
             'can_reset_pins' => $canResetPins,
             'can_manage' => $viewer && $viewer->hasPlatformPermission('platform.staff.manage'),
@@ -80,7 +85,11 @@ class OperatorRolesController extends Controller
             'phone' => 'required|string|min:6|max:20',
             'email' => 'required|email|max:190|unique:users,email',
             'password' => 'required|string|min:8',
-            'tab_access' => 'required|array|min:1',
+            // **أحدُهما يكفي**: تبويبٌ كامل، أو صلاحيّاتٌ مفرَّقة.
+            // واشتراطُ التبويب يُبطل المنحَ الدقيقَ من بابه.
+            'tab_access' => 'array',
+            'permissions' => 'array',
+            'permissions.*' => 'string|max:64',
         ], [
             'email.required' => 'البريد الإلكتروني إلزامي لإرسال PIN الموظف.',
             'email.unique' => 'البريد الإلكتروني مستخدم في حساب آخر.',
@@ -121,7 +130,12 @@ class OperatorRolesController extends Controller
         });
 
         try {
-            $tabs = $this->tabAccess->sync($operator, (array) $data['tab_access'], (int) $request->user()->id);
+            $tabs = $this->tabAccess->sync(
+                $operator,
+                (array) ($data['tab_access'] ?? []),
+                (int) $request->user()->id,
+                (array) ($data['permissions'] ?? []),
+            );
         } catch (\Throwable $e) {
             // لا يبقى حساب دخول بلا صلاحيات إذا فشل تحويل التبويبات.
             $operator->delete();
@@ -179,7 +193,12 @@ class OperatorRolesController extends Controller
                 return back()->with('error', 'لا تعدّل تبويبات حسابك من حسابك؛ يحتاج ذلك مدير منصة آخر.');
             }
             try {
-                $tabs = $this->tabAccess->sync($operator, (array) $request->input('tab_access', []), (int) $request->user()->id);
+                $tabs = $this->tabAccess->sync(
+                    $operator,
+                    (array) $request->input('tab_access', []),
+                    (int) $request->user()->id,
+                    (array) $request->input('permissions', []),
+                );
             } catch (\Throwable $e) {
                 return back()->withErrors(['tab_access' => $e->getMessage()]);
             }

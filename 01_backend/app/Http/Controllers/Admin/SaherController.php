@@ -225,12 +225,30 @@ class SaherController extends Controller
 
         $done = [];
         $failed = [];
+        $unavailable = [];
 
         foreach ($collectors as [$source, $collector, $unit]) {
             $runId = $store->beginRun($source, 'manual', $request->user()?->id);
 
             try {
                 $result = $collector->collect();
+
+                // ══════════════════════════════════════════════════
+                // SAHER-GATE-005 — **ثلاثُ حالاتٍ لا اثنتان.**
+                //
+                //   نجح · **غيرُ متاحٍ هنا** · جولةٌ عمياء
+                //
+                // و«غيرُ متاح» ليس فشلاً: مصدرُ البوّابة يقرأ تاريخَ git،
+                // وصورةُ النشر تُبنى بلا `.git`. فكان يُرفع أحمرَ في كلّ
+                // ضغطة، **ولا شيءَ مكسور** — ولافتةٌ حمراءُ دائمةٌ تُعوّد
+                // القارئَ تجاهلَها يومَ تصدق.
+                // ══════════════════════════════════════════════════
+                if (isset($result['unavailable'])) {
+                    $store->failRun($runId, $source, $result['unavailable']);
+                    $unavailable[] = "{$source}: " . $result['unavailable'];
+
+                    continue;
+                }
 
                 if ($result['assets_seen'] === 0) {
                     // **وصفرُ اكتشافاتٍ من فحصٍ أعمى ليس سلامة.**
@@ -259,7 +277,18 @@ class SaherController extends Controller
                 'سقط ' . count($failed) . ' من ' . count($collectors) . ': '
                 . implode(' · ', $failed)
                 . ($done === [] ? '' : ' — ونجح: ' . implode(' · ', $done))
+                . ($unavailable === [] ? ''
+                    : ' — وغيرُ متاحٍ هنا: ' . implode(' · ', $unavailable))
                 . ' والاكتشافاتُ السابقةُ لمن سقط تبقى مفتوحة.');
+        }
+
+        // **وغيرُ المتاح يُقال ولا يُرفع أحمر.** لافتةٌ تحذيريّةٌ تُفرّق
+        // بين «مصدرٌ لا يعمل في هذه البيئة» و«مصدرٌ انكسر».
+        if ($unavailable !== []) {
+            return back()->with('warning',
+                'نجح ' . count($done) . ' من ' . count($collectors) . ': '
+                . implode(' · ', $done)
+                . ' — وغيرُ متاحٍ في هذه البيئة: ' . implode(' · ', $unavailable));
         }
 
         return back()->with('success', implode(' · ', $done));

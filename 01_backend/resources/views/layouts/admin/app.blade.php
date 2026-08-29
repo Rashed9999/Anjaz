@@ -71,6 +71,38 @@
             <header class="d-flex justify-content-between align-items-center mb-4">
                 <div class="d-flex align-items-center gap-2">
                     <button type="button" class="admin-mobile-toggle" data-admin-sidebar-open aria-label="فتح القائمة">☰</button>
+
+                    {{-- ══════════════════════════════════════════════════
+                         AMIAL-ADMIN-BACK-001 — **زرُّ الرجوع، وكان مفقوداً.**
+
+                         قاله صاحب المشروع: «مساحة العمل لا يوجد أزرار رجوع
+                         للخلف».
+
+                         وقِيس فكان محقّاً: مساحةُ العمل تقود إلى **نيّفٍ
+                         وخمسين شاشة**، وليس في أيٍّ منها بابُ عودة. والقائمةُ
+                         الجانبيّةُ تحمل خمسةَ بنودٍ فقط، فمن دخل «سجلّ
+                         التدقيق» لا يجد طريقاً إلى «الامتثال والمخاطر» إلّا
+                         بزرّ المتصفّح — وهو غيرُ موجودٍ في تطبيق الويب
+                         المثبَّت على الشاشة الرئيسة.
+
+                         **ويوضع في المخطَّط لا في كلّ شاشة**: نثرُه في
+                         الشاشات يُنتج ما أنتجه غيرُه في هذا المشروع —
+                         شاشةٌ فيها بابٌ وأختُها بلا باب، ولا يُعرف السببُ
+                         إلّا بالتجربة.
+
+                         **ولا يظهر في مساحة العمل نفسِها ولا في اللوحة** —
+                         زرُّ رجوعٍ إلى الصفحة التي أنت فيها عطلٌ صغير.
+                         ══════════════════════════════════════════════════ --}}
+                    @php($amialBackHidden = request()->routeIs(
+                        'admin.amial.workspace.index', 'admin.dashboard', 'admin.amial.dashboard'))
+                    @unless($amialBackHidden)
+                        <a href="{{ route('admin.amial.workspace.index') }}"
+                           class="btn btn-sm btn-outline-secondary py-0 px-2"
+                           data-testid="admin-back"
+                           data-amial-back
+                           title="رجوع">← رجوع</a>
+                    @endunless
+
                     <h4 class="m-0" data-testid="page-title">@yield('title', 'الإدارة')</h4>
                 </div>
                 <div class="d-flex align-items-center gap-3">
