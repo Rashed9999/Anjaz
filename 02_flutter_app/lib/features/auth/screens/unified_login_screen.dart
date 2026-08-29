@@ -6,6 +6,7 @@ import 'package:amial_pay/common/widgets/amial_build_stamp.dart';
 import 'package:amial_pay/features/auth/controllers/unified_auth_controller.dart';
 import 'package:amial_pay/features/auth/screens/amial_biometric_setup_screen.dart';
 import 'package:amial_pay/features/auth/screens/amial_registration_wizard_screen.dart';
+import 'package:amial_pay/features/auth/domain/quick_receive_preferences.dart';
 import 'package:amial_pay/features/auth/screens/quick_receive_screen.dart';
 import 'package:amial_pay/features/forget_pin/screens/forget_pin_screen.dart';
 import 'package:amial_pay/features/language/widgets/amial_language_switch.dart';
@@ -252,6 +253,13 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     final last = _lastUser;
     if (last == null || last.kind != 'customer' || last.phone.trim().isEmpty) {
       _snack('سجّل دخول العميل مرة واحدة على هذا الجهاز لتفعيل الاستلام السريع.');
+      return;
+    }
+    // **والسببُ يُسمّى بعينه.** «سجّل دخولاً» جوابٌ خاطئٌ لمن سجّل ولم
+    // يُفعّل — يُرسله يعيد الدخولَ مراراً ولا شيءَ يتغيّر.
+    if (!_quickReceiveReady) {
+      _snack('الاستلام السريع غير مُفعَّل على هذا الجهاز. '
+          'افتحه من «حسابي» ← رمز الاستلام ← فعّل الاستلام السريع.');
       return;
     }
     Get.to(() => QuickReceiveScreen(
@@ -767,9 +775,21 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
         ],
       );
 
+  /// AMIAL-QUICK-RECEIVE-004 — **البطاقةُ تسأل ما تسأله الشاشة.**
+  ///
+  /// كانت تُضيء بمجرّد وجود «آخر مستخدمٍ عميل» — **بلا أن تسأل هل
+  /// فُعّلت الميزةُ أصلاً**. فتقول «اعرض رمز الاستلام دون تسجيل الدخول»
+  /// ثمّ تفتح شاشةً تقول «مُعطَّل». وعدٌ ونكرانٌ في ضغطةٍ واحدة.
+  bool get _quickReceiveReady =>
+      _lastUser?.kind == 'customer' &&
+      (_lastUser?.phone.trim().isNotEmpty ?? false) &&
+      QuickReceivePreferences.isSameOwner(
+        storedOwner: QuickReceivePreferences.read()?.ownerPhone ?? '',
+        currentPhone: _lastUser?.phone ?? '',
+      );
+
   Widget _quickReceiveCard(BuildContext context) {
-    final available = _lastUser?.kind == 'customer' &&
-        (_lastUser?.phone.trim().isNotEmpty ?? false);
+    final available = _quickReceiveReady;
     return InkWell(
       onTap: _openQuickReceive,
       borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),

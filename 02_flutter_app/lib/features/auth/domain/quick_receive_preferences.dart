@@ -119,11 +119,41 @@ class QuickReceivePreferences {
     final data = read();
     if (data == null) return;
 
-    final current = _nationalTail(currentPhone);
-    final owner = _nationalTail(data.ownerPhone);
-
-    if (current.isEmpty || owner.isEmpty || owner != current) {
+    if (!isSameOwner(storedOwner: data.ownerPhone, currentPhone: currentPhone)) {
       await disable();
     }
+  }
+
+  /// AMIAL-QUICK-RECEIVE-004 — **مقارنةُ المالك، في موضعٍ واحد.**
+  ///
+  /// ══════════════════════════════════════════════════════════════════
+  /// كانت المقارنةُ مكتوبةً مرّتين: هنا **بآخر تسعة أرقام**، وفي
+  /// `quick_receive_screen.dart` **حرفيّةً** (`owner != lastPhone`).
+  ///
+  /// والمصدران لا يتّفقان أبداً في الاستعمال الحقيقيّ:
+  ///
+  ///     المخزَّن  ← الملفّ الشخصيّ    : 967777100001
+  ///     الأخير   ← ما كتبه في الدخول : 777100001
+  ///
+  /// فالمقارنةُ الحرفيّةُ تُخرج «مختلفان» **في كلّ مرّة**، فتردّ الشاشةُ
+  /// `null` وتعرض حالةَ «مُعطَّل» — **وقد فُعّلت الميزةُ فعلاً**. أي أنّ
+  /// البطاقةَ في شاشة الدخول تَعِد، والشاشةُ تنكر.
+  ///
+  /// **وهو حاجزٌ يشلّ عملاً سليماً، وذاك أسوأ من ثغرة**: لا خطأَ في أيّ
+  /// سجلّ، ولا شيءَ يُشتكى منه إلّا «لا تعمل».
+  ///
+  /// **و«لا أعرف» ليس «هو نفسُه»**: رقمٌ لا يُقرأ منه شيءٌ يعني أنّنا لا
+  /// نعرف صاحبَ الجهاز، فيُغلق لا يُفتح. (القاعدة السابعة.)
+  /// ══════════════════════════════════════════════════════════════════
+  static bool isSameOwner({
+    required String storedOwner,
+    required String currentPhone,
+  }) {
+    final owner = _nationalTail(storedOwner);
+    final current = _nationalTail(currentPhone);
+
+    if (owner.isEmpty || current.isEmpty) return false;
+
+    return owner == current;
   }
 }

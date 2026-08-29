@@ -7,6 +7,7 @@ import 'package:amial_pay/features/merchant/screens/cashier_receipt_screen.dart'
 import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/payment_feedback.dart';
 
 /// AMIAL-POS-002 — «تأكيد الدفع» (التصميم 37):
 /// بطاقة الإجمالي المطلوب سداده + اختيار وسيلة واحدة:
@@ -229,10 +230,16 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     );
     if (!mounted) return;
     setState(() => _busy = false);
+    // AMIAL-PAY-SOUND-001 — شبّاكُ البيع لا يمرّ بورقة النتيجة
+    // الموحّدة، فتُنادى النغمةُ صراحةً. والكاشيرُ لا ينظر إلى الشاشة
+    // وهو يناول الزبونَ ويعدّ النقد — فنتيجةٌ تُعرَض ولا تُسمَع
+    // تُقرأ بعد أن يكون قد تصرّف.
     if (sale == null) {
+      PaymentFeedback.failure();
       if (c.lastError.value.isNotEmpty) _snack(c.lastError.value);
       return;
     }
+    PaymentFeedback.success();
     Get.off(() => CashierReceiptScreen(
           sale: sale,
           total: _net,
@@ -254,10 +261,16 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     );
     if (!mounted) return;
     setState(() => _busy = false);
+    // AMIAL-PAY-SOUND-001 — شبّاكُ البيع لا يمرّ بورقة النتيجة
+    // الموحّدة، فتُنادى النغمةُ صراحةً. والكاشيرُ لا ينظر إلى الشاشة
+    // وهو يناول الزبونَ ويعدّ النقد — فنتيجةٌ تُعرَض ولا تُسمَع
+    // تُقرأ بعد أن يكون قد تصرّف.
     if (sale == null) {
+      PaymentFeedback.failure();
       if (c.lastError.value.isNotEmpty) _snack(c.lastError.value);
       return;
     }
+    PaymentFeedback.success();
     Get.off(() => CashierReceiptScreen(
           sale: sale,
           total: _net,

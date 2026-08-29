@@ -6,6 +6,7 @@ import 'package:amial_pay/features/merchant/controllers/merchant_controller.dart
 import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/helper/payment_feedback.dart';
 
 /// AMIAL-MERCHANT-APP-001 (v1.6)
 ///
@@ -48,8 +49,10 @@ class _MerchantAcceptPaymentScreenState
 
     if (!mounted) return;
     if (success) {
+      PaymentFeedback.success();
       _showSuccessSheet(ctrl);
     } else {
+      PaymentFeedback.failure();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content: Text(ctrl.lastError.value),

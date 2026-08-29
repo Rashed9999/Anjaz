@@ -49,9 +49,20 @@ class QuickReceiveScreen extends StatelessWidget {
     final last = UnifiedAuthController.readLastUser();
     if (last == null || last.kind != 'customer') return null;
 
-    final owner = saved.ownerPhone.trim();
-    final lastPhone = last.phone.trim();
-    if (owner.isNotEmpty && lastPhone.isNotEmpty && owner != lastPhone) {
+    // AMIAL-QUICK-RECEIVE-004 — **ولا تُقارَن الأرقامُ حرفيّاً ها هنا.**
+    //
+    // المخزَّنُ يأتي من الملفّ الشخصيّ (`967777100001`)، والأخيرُ يأتي
+    // **كما كتبه صاحبُه في الدخول** (`777100001`) — فالمقارنةُ الحرفيّةُ
+    // تقول «مختلفان» في كلّ مرّة، فتردّ هذه الدالّةُ `null` وتُعرَض
+    // حالةُ «مُعطَّل» **والميزةُ مفعَّلة**. وهو ما شُكي منه: «لا تعمل».
+    //
+    // والمقارنةُ الصحيحةُ كانت مكتوبةً في `disableIfOwnedByAnother` منذ
+    // AMIAL-QUICK-RECEIVE-003 — **وبابٌ ثانٍ تُرك على الحرفيّة**.
+    // (القاعدة الرابعة: ميزةٌ لها مدخلان تُختبَر من مدخليها.)
+    if (!QuickReceivePreferences.isSameOwner(
+      storedOwner: saved.ownerPhone,
+      currentPhone: last.phone,
+    )) {
       return null;
     }
     return saved;
