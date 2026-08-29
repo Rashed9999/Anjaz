@@ -11,6 +11,9 @@ import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amial_pay/features/suppliers/screens/suppliers_screen.dart';
 import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
+import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
 import 'package:amial_pay/features/merchant/screens/split_bill_create_screen.dart';
 import 'package:amial_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
 import 'package:amial_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
@@ -378,20 +381,38 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       label: 'حصصي في الفواتير المقسّمة',
                       onTap: () => Get.to(() => const SplitBillMySharesScreen()),
                     ),
+                    // ══════════════════════════════════════════════════
+                    // AMIAL-PROFILE-ROLE-001 — **ثلاثةُ أبوابٍ كانت تقول
+                    // «قريباً» واثنان منها مبنيّان منذ شهور.**
+                    //
+                    // `MerchantStaffScreen` و`MerchantServicesHubScreen`
+                    // قائمتان وتُفتحان من شاشة الخدمات — **وهنا تقولان
+                    // «قريباً»**. فالتاجرُ الذي يبدأ من لوحته يقرأ أنّ
+                    // الميزةَ غيرُ موجودة، وهي موجودة.
+                    //
+                    // **و«سحب للبنك» أسوأُها**: لا سحبَ بنكيّاً في
+                    // المنصّة إطلاقاً، **والسحبُ عبر الوكيل مبنيٌّ ويعمل**
+                    // (`WithdrawRequestScreen`). فالتاجرُ يقرأ «قريباً»
+                    // فيظنّ أنّه لا يستطيع إخراجَ مال بيعه أصلاً —
+                    // وهو يستطيع.
+                    //
+                    // **وقولُ «قريباً» عن مبنيٍّ أسوأ من غياب الزرّ**:
+                    // الغيابُ يُسأل عنه، و«قريباً» تُصدَّق فيُكفّ عن السؤال.
+                    // ══════════════════════════════════════════════════
                     _LinkTile(
-                      icon: Icons.account_balance,
-                      label: 'سحب للبنك',
-                      onTap: () => _comingSoon(context),
+                      icon: Icons.account_balance_wallet_outlined,
+                      label: 'سحب رصيدي (عبر وكيل)',
+                      onTap: () => Get.to(() => const WithdrawRequestScreen()),
                     ),
                     _LinkTile(
                       icon: Icons.people,
                       label: 'موظفو نقاط البيع',
-                      onTap: () => _comingSoon(context),
+                      onTap: () => Get.to(() => const MerchantStaffScreen()),
                     ),
                     _LinkTile(
                       icon: Icons.settings,
                       label: 'إعدادات المتجر',
-                      onTap: () => _comingSoon(context),
+                      onTap: () => Get.to(() => const MerchantServicesHubScreen()),
                     ),
                   ],
                 ),
@@ -401,12 +422,6 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
           );
         }),
       ),
-    );
-  }
-
-  void _comingSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('قريباً')),
     );
   }
 }
