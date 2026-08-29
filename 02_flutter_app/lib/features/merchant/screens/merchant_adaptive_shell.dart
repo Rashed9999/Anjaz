@@ -13,6 +13,7 @@ import 'package:amial_pay/features/fuel_station/screens/fuel_deliveries_screen.d
 import 'package:amial_pay/features/fuel_station/screens/fuel_ops_center_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_prices_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_roles_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_cashier_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_settings_screen.dart';
@@ -197,10 +198,36 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
   List<Widget> _activityItems(BuildContext context) {
     if (access.businessType.value == 'fuel') {
       return [
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-FUEL-KEYPAD-001 — **اللوحةُ الرقميّةُ عادت إلى بابها.**
+        //
+        // قال صاحبُ المشروع: «شاشةُ بيع الوقود كانت تحتوي على لوحة أرقام،
+        // الآن اختفت». وقِيس فلم تُحذف اللوحة: `FuelCashierScreen`
+        // (تصميم #103) قائمةٌ كاملةً بلوحتها وأزرارها السريعة
+        // (10k/5k/50k/20k) وتبديلِ «بالريال/باللتر».
+        //
+        // **لكنّ لا سطرَ واحداً في التطبيق كلِّه يفتحها** — قِيس: صفرُ
+        // مراجع. وهذا نمطُ العطل الأكثر تكراراً هنا: **مبنيٌّ ولا يُوصَل
+        // إليه**. فالبابُ كان يقود إلى النموذج المطوّل بدلاً منها.
+        //
+        // **والشاشتان تبقيان — ولا تُستبدل إحداهما بالأخرى**: اللوحةُ
+        // تدعم النقدَ وQR (٩٥٪ من يوم المحطّة)، والمطوّلةُ وحدَها تدعم
+        // **بطاقةَ الشركة والبيعَ الآجل**. فتوجيهُ الباب إلى اللوحة
+        // وحدَها كان يُعيد اللوحةَ ويُسقط طريقتَي دفعٍ مبنيّتين.
+        // ══════════════════════════════════════════════════════════════
+        _item(
+          context,
+          icon: Icons.dialpad_rounded,
+          // **والاسمُ يبقى «بيع الوقود» بنصّه** — فهو ما يعرفه صاحبُ
+          // المحطّة، وحارسُ التنقّل يشترطه حرفاً. واللوحةُ هي المقصودةُ
+          // بالاسم، والمطوّلةُ تُسمّى بما تنفرد به.
+          label: 'بيع الوقود',
+          onTap: () => _open(context, const FuelCashierScreen()),
+        ),
         _item(
           context,
           icon: Icons.local_gas_station_rounded,
-          label: 'بيع الوقود',
+          label: 'بيع آجل وبطاقة شركة',
           onTap: () => _open(context, const FuelSaleScreen()),
         ),
         _item(

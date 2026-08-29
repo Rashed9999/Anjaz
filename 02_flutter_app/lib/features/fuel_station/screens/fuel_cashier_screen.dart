@@ -105,49 +105,22 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
         ));
   }
 
-  /// دفع أميال باي بهاتف العميل (شحن مباشر) — خيار بديل سريع.
-  Future<void> _payAmial() async {
-    if (!_validate()) return;
-    final phoneCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('دفع أميال باي'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('المبلغ: ${_fmt(_amount)} ر.ي',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 12),
-          TextField(
-            controller: phoneCtrl,
-            keyboardType: TextInputType.phone,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'رقم هاتف العميل',
-              hintText: '9677xxxxxxxx',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text('يُخصم من محفظة العميل فوراً ويُضاف لك بعد الرسوم.',
-              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تأكيد الدفع')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    if (phoneCtrl.text.trim().isEmpty) { _snack('أدخل رقم هاتف العميل'); return; }
-    _lastCustomerPhone = phoneCtrl.text.trim();
-    final data = _baseData()
-      ..['payment_method'] = 'amial_pay'
-      ..['customer_phone'] = phoneCtrl.text.trim();
-    await _submit(data);
-  }
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-FUEL-QR-002 — **حُذفت `_payAmial`: شحنٌ مباشرٌ بهاتف العميل.**
+  //
+  // كانت تُرسل `payment_method = 'amial_pay'` مع `customer_phone` — أي
+  // **يخصم موظّفُ المحطّة من محفظة عميلٍ بكتابة رقمه**، بلا مسحٍ ولا
+  // تأكيد. وشُدّد ذلك في الخادم بحقّ، فصار يردّ: «دفع الوقود يتم عبر QR
+  // يؤكده العميل بنفسه».
+  //
+  // **ولم يكن يناديها زرٌّ** — شيفرةٌ ميّتة. لكنّ بقاءَها فخّ: من وصلها
+  // بزرٍّ غداً يُعيد الثغرةَ ويرى ٤٢٢ لا يفهم سببه. **وشيفرةٌ ميّتةٌ
+  // تناقض قاعدةً حيّةً تُحذف ولا تُعلَّق.**
+  //
+  // والمسارُ الباقي `_payByQr` هو الصحيح: يعرض رمزاً بمبلغٍ ثابت،
+  // ويمسحه العميلُ ويؤكّد من تطبيقه، ثمّ يُسجَّل البيعُ بمرجع دفعه.
+  // ══════════════════════════════════════════════════════════════════
 
-  /// هاتف العميل لآخر عملية أميال باي — يُمرَّر للفاتورة (إرسال واتساب).
-  String? _lastCustomerPhone;
 
   Future<void> _submit(Map<String, dynamic> data) async {
     final ok = await c.recordSale(data);
@@ -172,9 +145,7 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
           sale: s,
           stationName: c.station.value?['station_name'] ?? 'محطة الوقود',
           pumpLabel: _pump == null ? null : 'المضخّة #${_pump!['pump_number']}',
-          customerPhone: _lastCustomerPhone,
         ));
-    _lastCustomerPhone = null;
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
