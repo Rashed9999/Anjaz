@@ -25,6 +25,19 @@ use Illuminate\Support\Facades\Validator;
  */
 class CashierController extends AmialApiController // AMIAL-FIX-007
 {
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-PROD-DEFECTS-001 — **السمةُ كانت مستورَدةً ولا مستعمَلة.**
+    //
+    // `use App\Http\Controllers\Concerns\DeniesByPlan;` في رأس الملفّ
+    // **استيرادُ اسمٍ لا ضمُّ سمة**. والصنفُ يُنادي `$this->denyUnless()`
+    // في مسار البيع، فيُلقي `BadMethodCallException` — وهو ما بلّغ عنه
+    // مركزُ الأعطال على `/amial/merchant/cashier/sales`.
+    //
+    // **ولا يُمسَك بالقراءة السريعة**: السطرُ موجودٌ في أعلى الملفّ
+    // ويبدو صحيحاً، والفرقُ حرفٌ واحدٌ وموضعٌ واحد.
+    // ══════════════════════════════════════════════════════════════════
+    use DeniesByPlan;
+
     public function __construct(
         private readonly CashierService $cashier,
     ) {}
