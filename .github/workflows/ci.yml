@@ -194,6 +194,87 @@ jobs:
         run: flutter test
 
   # ──────────────────────────────────────────────────────────
+  # 3ب) بناء APK على Linux — AMIAL-CI-APK-001
+  #
+  # **الثمنُ الذي دُفع، بنصّ صاحب المشروع:** «فقط هكذا ولا يتم أيّ عملية
+  # بناء». وشاشةُ الفوترة تحسم السبب:
+  #
+  #     Free macOS minutes personal use: 501 / 500
+  #
+  # **الرصيدُ نفد**، والبناءُ واقفٌ في الطابور إلى ١ سبتمبر. فالمشروعُ
+  # كلُّه معلّقٌ على مورِدٍ نادرٍ يُشترى بالدقيقة.
+  #
+  # **وبناءُ أندرويد لا يحتاج Mac إطلاقاً.** آلةُ `ubuntu-latest` تحمل
+  # Android SDK مثبَّتاً، وGitHub يمنح ٢٠٠٠ دقيقةً شهريّاً على Linux —
+  # أربعةَ أضعاف ما تمنحه الخطّةُ المجانيّةُ على Mac، ولدقيقةِ Linux
+  # وزنٌ واحدٌ لا عشرة.
+  #
+  # وCI هنا كان **يحلّل ويختبر Flutter على Linux منذ زمن** ولا يبني
+  # ملفّاً واحداً — أي أنّ الآلةَ القادرةَ كانت قائمةً ولم تُستعمل.
+  #
+  # **والتوقيعُ ليس عائقاً**: `build.gradle.kts` يضبط
+  # `signingConfig = signingConfigs.getByName("debug")` للإصدار — فالـAPK
+  # يُنتَج ويُثبَّت على الهاتف بلا مفتاح، وهو نفسُ ما ينتجه Codemagic
+  # اليوم حرفاً بحرف.
+  #
+  # **ولا يجري على كلّ طلب دمج**: على الدفع وحدَه. فالبناءُ ثلاثُ دقائق،
+  # ومضاعفتُه بلا حاجةٍ هي العطلُ الذي أُصلح في `codemagic.yaml`.
+  # ──────────────────────────────────────────────────────────
+  apk:
+    name: بناء APK (Linux — بديل Codemagic)
+    runs-on: ubuntu-latest
+    needs: flutter
+    if: github.event_name == 'push'
+    defaults:
+      run:
+        working-directory: 02_flutter_app
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java 17 — نفسُ ما يطلبه `codemagic.yaml`، فلا يفترق البناءان.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - run: flutter pub get
+
+      - name: بصمة المصدر (فرع + التزام + إصدار)
+        run: |
+          echo "======== بصمة بناء أميال باي ========"
+          echo "الفرع    : ${GITHUB_REF_NAME}"
+          echo "الالتزام : $(git rev-parse --short HEAD)"
+          echo "الرسالة  : $(git log -1 --format=%s)"
+          echo "الإصدار  : $(grep '^version:' pubspec.yaml)"
+          echo "===================================="
+
+      # --split-per-abi: ملفٌّ لكلّ معالج، فحجمُ كلٍّ منها ~الثلث.
+      # ونزّل `arm64-v8a` للهواتف الحديثة.
+      - name: بناء APK release مقسّم حسب المعالج
+        run: flutter build apk --release --split-per-abi
+
+      - name: قياسُ ما بُني — فمهمّةٌ تنجح بلا ملفٍّ ليست بناءً
+        run: |
+          ls -lh build/app/outputs/flutter-apk/*.apk
+          COUNT=$(ls build/app/outputs/flutter-apk/*.apk 2>/dev/null | wc -l)
+          if [ "$COUNT" -lt 1 ]; then
+            echo "::error::خرجت المهمّةُ بنجاحٍ ولا APK — بناءٌ صامتٌ لا بناء"
+            exit 1
+          fi
+          echo "✓ $COUNT ملفَّ APK"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: amial-apk-${{ github.sha }}
+          path: 02_flutter_app/build/app/outputs/flutter-apk/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+  # ──────────────────────────────────────────────────────────
   # 4) التحقّق من بناء الصورتين (بلا تشغيل)
   #
   # AMIAL-PROD-READINESS-001 — **الصورةُ المفحوصةُ هي الصورةُ المشحونة.**
