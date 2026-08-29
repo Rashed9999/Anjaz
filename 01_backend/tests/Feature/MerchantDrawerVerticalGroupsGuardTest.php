@@ -48,6 +48,17 @@ class MerchantDrawerVerticalGroupsGuardTest extends TestCase
     /**
      * ما يُعلنه الدرجُ لكلّ قطاع.
      *
+     * ══════════════════════════════════════════════════════════════════
+     * **وقد تغيّرت البنيةُ مرّةً بالفعل، وهذا الحارسُ قالها ولم يسقط
+     * صامتاً.** كانت `_verticalGroups()` تُعيد قائمةً واحدةً لكلّ قطاع،
+     * فأُعيد بناءُ الدرج إلى **أقسامٍ لكلّ قطاع** (`_MerchantDrawerSection`)
+     * ولكلّ قسمٍ `groups:` خاصّةٌ به.
+     *
+     * **وهي بنيةٌ أفضل — وأكثرُ عرضةً للشيخوخة**: أسماءُ المجموعات صارت
+     * مكتوبةً في مواضعَ أكثرَ لا أقلّ. فالحارسُ يبقى، ويقرأ من الموضع
+     * الجديد.
+     * ══════════════════════════════════════════════════════════════════
+     *
      * @return array<string,list<string>>
      */
     private function declaredInDrawer(): array
@@ -56,29 +67,54 @@ class MerchantDrawerVerticalGroupsGuardTest extends TestCase
 
         $src = (string) file_get_contents(self::SHELL);
 
-        // تُقتطع دالّةُ `_verticalGroups` وحدَها: الملفُّ فيه `switch`
-        // أخرى على النشاط (الأيقونة)، وقراءةُ الملفّ كلِّه تخلطهما.
-        $start = mb_strpos($src, 'List<String> _verticalGroups()');
+        $start = mb_strpos($src, 'List<_MerchantDrawerSection> _sectionsForBusiness()');
 
         $this->assertNotFalse($start,
-            '`_verticalGroups` لم تعد في الدرج — راجع هذا الحارس قبل حذفه: '
-            . 'إمّا اشتُقّت من الملفّ (فيُستبدل بحارسٍ على الاشتقاق) وإمّا سقطت.');
+            '`_sectionsForBusiness` لم تعد في الدرج — راجع هذا الحارس قبل حذفه: '
+            . 'إمّا اشتُقّت الأقسامُ من الملفّ (فيُستبدل بحارسٍ على الاشتقاق) '
+            . 'وإمّا سقط تخصيصُ الدرج بالنشاط.');
 
-        $end = mb_strpos($src, "\n  }", $start);
-        $block = mb_substr($src, $start, $end - $start);
+        // إلى نهاية الدالّة: أوّلُ سطرٍ مستقلٍّ بإغلاقٍ على مستوى الصنف.
+        $end = mb_strpos($src, "\n  }\n", $start);
+        $body = mb_substr($src, $start, $end - $start);
 
-        preg_match_all(
-            "~case '([a-z_]+)':\s*return const \[([^\]]*)\];~u",
-            $block, $m, PREG_SET_ORDER);
+        // **الأقسامُ المشتركةُ تسبق `switch`** (البيع · الناس · التقارير)
+        // وتنطبق على كلّ قطاع — فتُقرأ مرّةً وتُضاف للجميع.
+        $switchAt = mb_strpos($body, 'switch (access.businessType.value)');
+
+        $this->assertNotFalse($switchAt, 'لم يعد الدرجُ يتفرّع بالنشاط — راجع هذا الحارس');
+
+        $shared = $this->groupsIn(mb_substr($body, 0, $switchAt));
+        $tail = mb_substr($body, $switchAt);
+
+        preg_match_all("~case '([a-z_]+)':~u", $tail, $cases, PREG_OFFSET_CAPTURE);
 
         $out = [];
 
-        foreach ($m as $case) {
-            preg_match_all("~'([^']+)'~u", $case[2], $names);
-            $out[$case[1]] = $names[1];
+        foreach ($cases[1] as $i => [$biz, $_]) {
+            $from = $cases[0][$i][1];
+            $to = $cases[0][$i + 1][1] ?? mb_strlen($tail);
+
+            $out[$biz] = array_values(array_unique(array_merge(
+                $shared, $this->groupsIn(substr($tail, $from, $to - $from)))));
         }
 
         return $out;
+    }
+
+    /** أسماءُ المجموعات المكتوبةُ في `groups:` داخل مقطعٍ من الشيفرة. */
+    private function groupsIn(string $chunk): array
+    {
+        preg_match_all("~groups:\s*(?:const\s*)?\[([^\]]*)\]~u", $chunk, $m);
+
+        $names = [];
+
+        foreach ($m[1] as $list) {
+            preg_match_all("~'([^']+)'~u", $list, $q);
+            $names = array_merge($names, $q[1]);
+        }
+
+        return array_values(array_unique($names));
     }
 
     /**
@@ -208,7 +244,25 @@ class MerchantDrawerVerticalGroupsGuardTest extends TestCase
 
         $missing = [];
 
+        $direct = $this->verticalsWithTheirOwnScreens();
+
         foreach (A::ALL_BUSINESS_TYPES as $biz) {
+            // ══════════════════════════════════════════════════════════
+            // **وبابٌ مباشرٌ بابٌ كذلك.**
+            //
+            // محطّةُ الوقود لا تمرّ بمجموعات القدرات إطلاقاً: لها في
+            // الدرج **مداخلُ مباشرةٌ إلى شاشاتها** (بيعُ الوقود ·
+            // المضخّاتُ · الخزّاناتُ · الورديّات)، وذاك قرارٌ مكتوبٌ في
+            // الدرج نفسِه — «المحطّةُ ليست متجراً عامّاً».
+            //
+            // وكان هذا الحارسُ يشترط `groups:` فاتّهم درجَ الوقود بأنّه
+            // بلا باب **وهو أغنى الأدراج باباً**. فالمحروسُ **الوصولُ
+            // لا شكلُه**: إمّا مجموعةٌ وإمّا مداخلُ مباشرةٌ غيرُ فارغة.
+            // ══════════════════════════════════════════════════════════
+            if (in_array($biz, $direct, true)) {
+                continue;
+            }
+
             // المجموعاتُ التي تمنحها الباقةُ لها مداخلُها المستقلّةُ في
             // الدرج («البيع» · «المنتجات والمخزون» · «التقارير») —
             // فالمطلوبُ هنا ما يخصّ القطاعَ وحدَه.
@@ -225,4 +279,60 @@ class MerchantDrawerVerticalGroupsGuardTest extends TestCase
             . 'فتُبنى شاشاتُ القطاع كلُّها ولا يصل إليها صاحبُه — وهو نمطُ '
             . 'العطل الأكثر تكراراً في هذا المشروع.');
     }
+
+    /**
+     * القطاعاتُ التي يفتح لها الدرجُ **شاشاتِها مباشرةً** لا مجموعاتِ قدرات.
+     *
+     * ويُشترط أن يكون فرعُها غيرَ فارغ: فرعٌ بلا مدخلٍ واحدٍ ليس باباً
+     * مباشراً، بل قطاعٌ بلا درج.
+     *
+     * @return list<string>
+     */
+    private function verticalsWithTheirOwnScreens(): array
+    {
+        $src = (string) file_get_contents(self::SHELL);
+
+        $start = mb_strpos($src, 'List<Widget> _activityItems(');
+        $this->assertNotFalse($start, '`_activityItems` غائبة — راجع هذا الحارس');
+
+        $body = mb_substr($src, $start, mb_strpos($src, "\n  }\n", $start) - $start);
+
+        preg_match_all(
+            "~businessType\.value == '([a-z_]+)'~u", $body, $m, PREG_OFFSET_CAPTURE);
+
+        $out = [];
+
+        foreach ($m[1] as $i => [$biz, $_]) {
+            $from = $m[0][$i][1];
+
+            // ══════════════════════════════════════════════════════════
+            // **ويُحَدُّ المقطعُ بفرعه لا بآخر الدالّة.**
+            //
+            // جُرّب هذا بالعكس فمرّ: أُفرغ فرعُ الوقود من مداخله كلِّها
+            // (`return [];`) **ولم يسقط** — لأنّ المقطعَ كان يمتدّ إلى
+            // نهاية الدالّة فيبتلع `_item(` من الفرع العامّ تحته.
+            //
+            // فكان يعدّ مداخلَ غيرِه ويقول «للوقود باب». وحارسٌ يقيس
+            // خارجَ ما يحرسه يمرّ دائماً.
+            // ══════════════════════════════════════════════════════════
+            $close = mb_strpos($body, "\n    }", $from);
+            $to = min(
+                $m[0][$i + 1][1] ?? mb_strlen($body),
+                $close === false ? mb_strlen($body) : $close);
+
+            $chunk = substr($body, $from, $to - $from);
+
+            // مدخلٌ واحدٌ على الأقلّ — وإلّا فالفرعُ إعلانٌ بلا باب.
+            $items = preg_match_all("~_item\(~u", $chunk);
+
+            $this->assertGreaterThan(0, $items,
+                "«{$biz}» له فرعٌ خاصٌّ في الدرج **بلا مدخلٍ واحد** — "
+                . 'فيُستثنى من فحص المجموعات ولا يُعوَّض عنه بشيء.');
+
+            $out[] = $biz;
+        }
+
+        return $out;
+    }
+
 }
