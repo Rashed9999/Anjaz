@@ -38,7 +38,7 @@ class FuelSale extends Model
     ];
 
     public const SALE_TYPES = ['by_liters', 'by_amount'];
-    public const PAYMENT_METHODS = ['cash', 'amial_pay', 'company_card'];
+    public const PAYMENT_METHODS = ['cash', 'amial_pay', 'company_card', 'credit'];
     public const STATUSES = ['completed', 'refunded', 'voided'];
 
     public function pump(): BelongsTo

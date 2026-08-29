@@ -40,6 +40,8 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
   // لـ company_card
   Map<String, dynamic>? _selectedCompany;
   final _cardIdCtrl = TextEditingController();
+  final _creditPhoneCtrl = TextEditingController();
+  final _creditNameCtrl = TextEditingController();
 
   // لـ amial_pay
 
@@ -60,6 +62,8 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
     _plateCtrl.dispose();
     _driverCtrl.dispose();
     _cardIdCtrl.dispose();
+    _creditPhoneCtrl.dispose();
+    _creditNameCtrl.dispose();
     super.dispose();
   }
 
@@ -118,6 +122,12 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
       if (_cardIdCtrl.text.trim().isNotEmpty) {
         data['company_card_id'] = _cardIdCtrl.text.trim();
       }
+    }
+
+    if (_paymentMethod == 'credit') {
+      if (_creditPhoneCtrl.text.trim().isEmpty) return _snack('أدخل رقم العميل للبيع الآجل');
+      data['customer_phone'] = _creditPhoneCtrl.text.trim();
+      if (_creditNameCtrl.text.trim().isNotEmpty) data['customer_name'] = _creditNameCtrl.text.trim();
     }
 
     if (_isMechanical && _meterAfterCtrl.text.trim().isNotEmpty) {
@@ -198,6 +208,8 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
     _plateCtrl.clear();
     _driverCtrl.clear();
     _cardIdCtrl.clear();
+    _creditPhoneCtrl.clear();
+    _creditNameCtrl.clear();
     setState(() {
       _selectedPump = null;
       _selectedProduct = null;
@@ -301,6 +313,8 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
               Expanded(child: _payMethodTile('amial_pay', Icons.qr_code, 'أميال باي')),
               const SizedBox(width: 6),
               Expanded(child: _payMethodTile('company_card', Icons.business, 'شركة')),
+              const SizedBox(width: 6),
+              Expanded(child: _payMethodTile('credit', Icons.event_note, 'آجل')),
             ]),
 
             if (_paymentMethod == 'amial_pay') ...[
@@ -311,6 +325,14 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
             if (_paymentMethod == 'company_card') ...[
               const SizedBox(height: 12),
               _companySelector(),
+            ],
+            if (_paymentMethod == 'credit') ...[
+              const SizedBox(height: 12),
+              _textField(_creditPhoneCtrl, 'رقم العميل *', type: TextInputType.phone),
+              const SizedBox(height: 8),
+              _textField(_creditNameCtrl, 'اسم العميل (اختياري)'),
+              const SizedBox(height: 6),
+              const Text('تُنشأ فاتورة آجل في حساب العميل، ويمكنه سدادها جزئياً أو كلياً من «فواتيري الآجلة».', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
             ],
 
             const SizedBox(height: 24),

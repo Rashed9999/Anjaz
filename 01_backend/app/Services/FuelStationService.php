@@ -434,6 +434,23 @@ class FuelStationService
                 );
             }
 
+            // بيع آجل واحد = حركة دين واحدة مرتبطة برقم فاتورة الوقود.
+            // ربط الحساب برقم العميل يجعلها تظهر فوراً في «فواتيري الآجلة»
+            // ويتيح للعميل السداد الجزئي أو الكامل عبر المسار الموحد.
+            if ($paymentMethod === 'credit') {
+                $phone = trim((string) ($data['customer_phone'] ?? ''));
+                if ($phone === '') throw new InvalidArgumentException('رقم العميل مطلوب للبيع الآجل');
+                $credit = app(CustomerCreditService::class);
+                $account = $credit->findOrCreateAccount(
+                    $merchant->id, $phone, (string) ($data['customer_name'] ?? 'عميل محطة الوقود')
+                );
+                $credit->recordSale(
+                    $account, $totalAmount, $data['due_date'] ?? null, 'فاتورة وقود آجل',
+                    $posUserId ?? $merchant->id, 'fuel_sale', $sale->sale_ulid,
+                    '#' . substr($sale->sale_ulid, -8)
+                );
+            }
+
             // حدّث عدّاد المضخّة
             if ($pump->isMechanical() && $meterAfter !== null) {
                 $pump->update(['current_meter_reading' => $meterAfter]);
