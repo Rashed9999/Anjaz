@@ -902,7 +902,27 @@ trait TransactionTrait
             array_merge(['applies_to' => 'merchant'], $context)
         );
         $fee = $breakdown['fee'];
-        $net = MoneyService::sub($amount, $fee); // ما يصل للتاجر
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-FEE-MERCHANT-FREE-001 — **المتحمِّلُ يُقرأ ولا يُفترَض.**
+        //
+        // كان هنا `$net = amount - fee` و`debit(amount)` — أي **التاجرُ
+        // يتحمّل الرسمَ دائماً**، مهما قال `bearer` في النسخة.
+        //
+        // و`FeeService` تحسب الطرفين بحسب المتحمّل منذ زمن
+        // (`total_debit` / `net_credit`)، وهذا المسارُ **يتجاهلهما
+        // ويعيد الحساب بيده**. فالبذرةُ تقول `bearer => 'sender'`
+        // («التاجر يستلم المبلغ كاملاً») والشيفرةُ تخصم منه.
+        //
+        // **ولم يعضّ بعدُ لأنّ النسخة مفقودةٌ فالرسمُ صفر** — ويعضّ صامتاً
+        // أوّلَ ما يُسعَّر أحدٌ هذا الرمزَ من اللوحة: يُخصَم من التاجر بلا
+        // أن يقرّر ذلك أحد، وقرارُ صاحب المشروع صريح: **لا رسمَ على
+        // التاجر، الدخلُ من الاشتراكات**.
+        //
+        // فصار المصدرُ واحداً: ما تحسبه `FeeService`.
+        // ══════════════════════════════════════════════════════════════
+        $customerDebit = (string) $breakdown['total_debit'];  // ما يُخصم من العميل
+        $net = (string) $breakdown['net_credit'];             // ما يصل للتاجر
 
         $this->assertFinancialEligibility($customer_user_id);
 
@@ -913,6 +933,7 @@ trait TransactionTrait
 
         $txId = DB::transaction(function () use (
             $customer_user_id, $merchant_user_id, $amount, $fee, $net,
+            $customerDebit,
             $note, $idempotencyKey, $breakdown, $pos_user_id,
             $split_bill_id, $split_participant_id
         ) {
@@ -941,10 +962,11 @@ trait TransactionTrait
             app(\App\Services\MerchantRiskService::class)
                 ->assertReceiveAllowed($merchant_user_id, $amount);
 
-            // 1) خصم العميل (المبلغ كاملاً — التاجر يتحمّل الرسم)
+            // 1) خصم العميل — بما تقوله النسخةُ لا بما يُفترَض.
+            //    (`bearer=sender` ⇒ المبلغ + الرسم · `receiver` ⇒ المبلغ.)
             $customerWallet = $this->guard()->debit(
                 userId: $customer_user_id,
-                amount: $amount,
+                amount: $customerDebit,
                 reason: 'merchant_payment',
             );
 
@@ -957,7 +979,10 @@ trait TransactionTrait
                 'debit' => $amount,
                 'credit' => '0',
                 'charge' => $fee,
-                'amount' => $amount,
+                // **والمسجَّلُ ما خرج من المحفظة فعلاً** — لا المبلغَ
+                // قبل الرسم. فرقمٌ في كشفٍ يخالف ما نقص من الرصيد يُرسل
+                // العميلَ إلى الدعم، ولا يوازن الدفترَ إن اختلفا.
+                'amount' => $customerDebit,
                 'balance' => (string)$customerWallet->current_balance,
                 'from_user_id' => $customer_user_id,
                 'to_user_id' => $merchant_user_id,
