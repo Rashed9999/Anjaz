@@ -161,22 +161,66 @@ class FuelStationTest extends TestCase
         $pump = $this->svc->addPump($this->station, ['pump_number' => 1]);
         $product = $this->svc->addProduct($this->station, ['name' => 'بنزين', 'price_per_liter' => '500']);
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-FUEL-QR-001 — **العميلُ يؤكّد بنفسه، ولا يكتب الموظّفُ هاتفَه.**
+        //
+        // كان هذا الاختبارُ يمرّر `customer_phone` فيُخصَم من العميل
+        // مباشرةً — أي أنّ **موظّفَ المحطّة يخصم من محفظة عميلٍ بكتابة
+        // رقمه**، بلا مسحٍ ولا تأكيد. وشُدّد ذلك في الخدمة بحقّ.
+        //
+        // فبقي الاختبارُ على المسار القديم، فصار يُثبت أنّ الرفضَ يقع —
+        // لا أنّ البيعَ يعمل. **واختبارٌ يشترط ما مُنع عمداً يمنع الإصلاح
+        // بدل أن يحرسه.**
+        //
+        // فصار يسلك المسارَ الحيّ: التاجرُ ينشئ طلباً، والعميلُ يدفعه،
+        // ثمّ يُربَط البيعُ بمرجع الدفع الذي نفّذه العميلُ بنفسه.
+        // ══════════════════════════════════════════════════════════════
+        $requests = app(\App\Services\PaymentRequestService::class);
+
+        $request = $requests->create(
+            requester: $this->merchant,
+            amount: '10000',
+            note: 'دفع وقود — بنزين',
+            shareMethod: 'qr',
+        );
+
+        $paid = $requests->pay($customer, $request);
+        $paidTxId = $paid['transaction_id'];
+
+        $this->assertNotEmpty($paidTxId, 'لم يُنتج دفعُ العميل مرجعاً — الاختبار يفحص فراغاً');
+
         $sale = $this->svc->recordSale($this->merchant, null, [
             'pump_id' => $pump->id,
             'fuel_product_id' => $product->id,
             'sale_type' => 'by_amount',
             'amount' => '10000',
             'payment_method' => 'amial_pay',
-            'customer_phone' => '967771700001',
+            'paid_transaction_id' => $paidTxId,
         ]);
 
         // المرجع ارتبط بالبيع
-        $this->assertNotNull($sale->paid_transaction_id);
-        // العميل خُصم منه 10000 (الرسم على التاجر — bearer=receiver)
+        $this->assertSame($paidTxId, $sale->paid_transaction_id);
+
+        // العميل خُصم منه 10000 تماماً
         $this->assertSame('40000.0000',
             (string) \App\Models\EMoney::where('user_id', $customer->id)->value('current_balance'));
-        // التاجر استلم الصافي (10000 - 1% = 9900)
-        $this->assertSame('9900.0000',
+
+        // ══════════════════════════════════════════════════════════════
+        // **والتاجرُ يستلم المبلغَ كاملاً — ولا رسمَ على هذا المسار.**
+        //
+        // كان المتوقَّعُ هنا ٩٩٠٠ (‏١٪ من `MERCHANT_POS`)، وذاك صحيحٌ
+        // للمسار القديم: الخصمُ المباشرُ من محفظة العميل.
+        //
+        // **ومسارُ QR يمرّ بـ`PaymentRequestService::pay()` وهي بلا رسمٍ
+        // عمداً** — «يحافظ على العقد القديم بلا رسم مفاجئ»، وهو قرارٌ
+        // مكتوبٌ في الخدمة نفسِها.
+        //
+        // **وأثرُه الماليُّ يُقال ولا يُسكت عنه:** تحوُّلُ بيع الوقود إلى
+        // QR يُسقط رسمَ المنصّة عن كلّ بيعةٍ بمحفظة أميال. فإن كان
+        // المقصودُ تحصيلَ الرسم على هذا المسار أيضاً، فذاك قرارُ تسعيرٍ
+        // يُتّخذ صراحةً — لا يُدسّ في اختبار.
+        // ══════════════════════════════════════════════════════════════
+        $this->assertSame('10000.0000',
             (string) \App\Models\EMoney::where('user_id', $this->merchant->id)->value('current_balance'));
     }
 
