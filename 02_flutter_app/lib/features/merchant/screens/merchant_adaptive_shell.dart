@@ -93,25 +93,6 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
     }
   }
 
-  List<String> _verticalGroups() {
-    switch (access.businessType.value) {
-      case 'fuel':
-        return const ['الوقود'];
-      case 'pharmacy':
-        return const ['الصيدلية'];
-      case 'wholesale':
-        return const ['الجملة'];
-      case 'restaurant':
-        return const ['المطاعم'];
-      case 'quick_sale':
-        return const ['البيع'];
-      case 'retail':
-        return const ['البيع', 'الأصناف', 'المخزون'];
-      default:
-        return const [];
-    }
-  }
-
   String _expiryText() {
     final raw = access.subscriptionExpiresAt.value?.trim() ?? '';
     if (raw.isEmpty) return '';
@@ -126,7 +107,6 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
       child: SafeArea(
         child: Obx(() {
           final expiry = _expiryText();
-          final verticalGroups = _verticalGroups();
           final business = access.businessTypeLabel.value?.trim();
           final businessLabel =
               business == null || business.isEmpty ? 'نشاط تجاري' : business;
@@ -150,7 +130,7 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
                       selected: true,
                       onTap: () => Navigator.of(context).pop(),
                     ),
-                    ..._activityItems(context, businessLabel, verticalGroups),
+                    ..._activityItems(context),
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: AmialSpacing.xs),
                       child: Divider(color: AmialColors.border),
@@ -207,15 +187,14 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
     );
   }
 
-  /// محطّة الوقود ليست متجراً عاماً. القائمة العامة كانت تقود «البيع» إلى
-  /// مجموعة entitlement اسمها «البيع» (الفارغة لحساب الوقود) وتعرض مسارات
-  /// مخزون وعملاء لا تخصّ محطة الوقود. لهذه المحطة مسارات تشغيل حقيقية،
-  /// لذلك نعرضها مباشرةً بدلاً من مركز عام لا يطابق قطاعها.
-  List<Widget> _activityItems(
-    BuildContext context,
-    String businessLabel,
-    List<String> verticalGroups,
-  ) {
+  /// AMIAL-MERCHANT-NAV-002
+  ///
+  /// لا توجد «قائمة متجر» واحدة تُعاد تسميتها لكل الأنشطة. البيع السريع
+  /// لا يدير طاولات، والجملة لا تدير مضخات، والصيدلية تحتاج وصفات وصلاحية.
+  /// الباقة تحدد عمق كل قسم، بينما هذا الـ manifest يحدد الأقسام المنطبقة
+  /// على نوع المنشأة. والبطاقات داخل المركز تبقى مربوطة بحالة الاستحقاق
+  /// الفعلية (متاح / صلاحية / حد / باقة) ولا يُستبدل ذلك بواجهة فقط.
+  List<Widget> _activityItems(BuildContext context) {
     if (access.businessType.value == 'fuel') {
       return [
         _item(
@@ -281,74 +260,148 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
       ];
     }
 
-    return [
-      _item(
+    return _sectionsForBusiness().map((section) {
+      return _item(
         context,
-        icon: Icons.point_of_sale_outlined,
-        label: 'البيع',
+        icon: section.icon,
+        label: section.title,
         onTap: () => _openHub(
           context,
-          title: 'البيع',
-          subtitle: 'عمليات البيع والتحصيل والمرتجعات حسب باقتك.',
-          groups: const ['البيع'],
-          icon: Icons.point_of_sale_outlined,
+          title: section.title,
+          subtitle: section.subtitle,
+          groups: section.groups,
+          icon: section.icon,
         ),
-      ),
-      _item(
-        context,
-        icon: Icons.inventory_2_outlined,
-        label: 'المنتجات والمخزون',
-        onTap: () => _openHub(
-          context,
-          title: 'المنتجات والمخزون',
-          subtitle:
-              'الأصناف والباركود والمخزون والموردون والمواقع — يظهر المتاح والمقفل بسببه الحقيقي.',
-          groups: const ['الأصناف', 'المخزون'],
-          icon: Icons.inventory_2_outlined,
-        ),
-      ),
-      _item(
-        context,
-        icon: Icons.groups_2_outlined,
-        label: 'العملاء والفريق',
-        onTap: () => _openHub(
-          context,
-          title: 'العملاء والفريق',
-          subtitle:
-              'العملاء والموظفون والورديات والأدوار والأجهزة حسب صلاحيات الحساب وباقته.',
-          groups: const ['الناس'],
-          icon: Icons.groups_2_outlined,
-        ),
-      ),
-      _item(
-        context,
-        icon: Icons.analytics_outlined,
-        label: 'التقارير والمالية',
-        onTap: () => _openHub(
-          context,
-          title: 'التقارير والمالية',
-          subtitle:
-              'التقارير والمصروفات والتدقيق والعملات والنسخ الاحتياطي بلا خلط بين غير المتاح والصفر.',
-          groups: const ['التقارير'],
-          icon: Icons.analytics_outlined,
-        ),
-      ),
-      _item(
-        context,
-        icon: Icons.apps_rounded,
-        label: 'خدمات نشاطي',
-        onTap: verticalGroups.isEmpty
-            ? () => _open(context, const MyCapabilitiesScreen())
-            : () => _openHub(
-                  context,
-                  title: 'خدمات $businessLabel',
-                  subtitle:
-                      'تظهر هنا خدمات نشاطك فقط؛ الباقة تحدد عمق المزايا ولا تغيّر نوع النشاط.',
-                  groups: verticalGroups,
-                  icon: _businessIcon(),
-                ),
-      ),
-    ];
+      );
+    }).toList();
+  }
+
+  List<_MerchantDrawerSection> _sectionsForBusiness() {
+    const sale = _MerchantDrawerSection(
+      title: 'البيع والتحصيل',
+      subtitle: 'البيع والتحصيل والمرتجعات والبيع الآجل بحسب استحقاق حسابك.',
+      groups: ['البيع'],
+      icon: Icons.point_of_sale_outlined,
+    );
+    const people = _MerchantDrawerSection(
+      title: 'العملاء والفريق',
+      subtitle: 'العملاء والموظفون والأدوار والأجهزة والورديات وفق صلاحياتك.',
+      groups: ['الناس'],
+      icon: Icons.groups_2_outlined,
+    );
+    const reports = _MerchantDrawerSection(
+      title: 'التقارير والمالية',
+      subtitle: 'التقارير والمصروفات والتدقيق والنسخ الاحتياطي حسب الباقة والدور.',
+      groups: ['التقارير'],
+      icon: Icons.analytics_outlined,
+    );
+
+    switch (access.businessType.value) {
+      case 'pharmacy':
+        return [
+          _MerchantDrawerSection(
+            title: 'بيع الصيدلية والوصفات',
+            subtitle: 'بيع الأدوية والوصفات والدفعات والصلاحية لخدمات الصيدلية فقط.',
+            groups: ['الصيدلية'],
+            icon: Icons.local_pharmacy_outlined,
+          ),
+          sale,
+          _MerchantDrawerSection(
+            title: 'الأدوية والمخزون',
+            subtitle: 'الأصناف والباركود والمخزون والموردون، مع بقاء ضوابط الصيدلية في قسمها.',
+            groups: ['الأصناف', 'المخزون'],
+            icon: Icons.medication_outlined,
+          ),
+          people,
+          reports,
+        ];
+      case 'wholesale':
+        return [
+          _MerchantDrawerSection(
+            title: 'فواتير الجملة والتحصيل',
+            subtitle: 'فواتير الجملة والتحصيلات والتسعير متعدد المستويات لهذا النشاط.',
+            groups: ['الجملة'],
+            icon: Icons.request_quote_outlined,
+          ),
+          sale,
+          _MerchantDrawerSection(
+            title: 'الأصناف ومخزون الجملة',
+            subtitle: 'الأصناف والباركود والمخزون والموردون ومواقع التخزين.',
+            groups: ['الأصناف', 'المخزون'],
+            icon: Icons.inventory_2_outlined,
+          ),
+          people,
+          reports,
+        ];
+      case 'restaurant':
+        return [
+          _MerchantDrawerSection(
+            title: 'الطلبات والطاولات',
+            subtitle: 'الطاولات والطلبات وتشغيل المطعم فقط.',
+            groups: ['المطاعم'],
+            icon: Icons.restaurant_outlined,
+          ),
+          sale,
+          _MerchantDrawerSection(
+            title: 'الفريق والعملاء',
+            subtitle: 'الفريق والعملاء والأدوار والأجهزة بحسب الصلاحية.',
+            groups: ['الناس'],
+            icon: Icons.groups_2_outlined,
+          ),
+          reports,
+        ];
+      case 'quick_sale':
+        return [
+          _MerchantDrawerSection(
+            title: 'البيع السريع',
+            subtitle: 'مبيعات سريعة وتحصلات ومرتجعات وبيع آجل عند توافره.',
+            groups: ['البيع'],
+            icon: Icons.bolt_outlined,
+          ),
+          people,
+          _MerchantDrawerSection(
+            title: 'الوردية والتقارير',
+            subtitle: 'إقفال الوردية والتقارير والمالية المتاحة لحسابك.',
+            groups: ['التقارير'],
+            icon: Icons.receipt_long_outlined,
+          ),
+        ];
+      case 'retail':
+        return [
+          _MerchantDrawerSection(
+            title: 'نقطة البيع والمرتجعات',
+            subtitle: 'الكاشير والبيع والمرتجعات والبيع الآجل.',
+            groups: ['البيع'],
+            icon: Icons.point_of_sale_outlined,
+          ),
+          _MerchantDrawerSection(
+            title: 'الأصناف والباركود',
+            subtitle: 'الأصناف والتصنيفات والباركود والأسعار والعروض.',
+            groups: ['الأصناف'],
+            icon: Icons.qr_code_scanner_outlined,
+          ),
+          _MerchantDrawerSection(
+            title: 'المخزون والموردون',
+            subtitle: 'المخزون والجرد والموردون وأوامر الشراء والتحويلات.',
+            groups: ['المخزون'],
+            icon: Icons.warehouse_outlined,
+          ),
+          people,
+          reports,
+        ];
+      default:
+        return [
+          sale,
+          _MerchantDrawerSection(
+            title: 'المنتجات والمخزون',
+            subtitle: 'الأصناف والباركود والمخزون والموردون والمواقع.',
+            groups: ['الأصناف', 'المخزون'],
+            icon: Icons.inventory_2_outlined,
+          ),
+          people,
+          reports,
+        ];
+    }
   }
 
   Widget _header(BuildContext context, String businessLabel, String expiry) {
@@ -542,23 +595,6 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
     );
   }
 
-  IconData _businessIcon() {
-    switch (access.businessType.value) {
-      case 'fuel':
-        return Icons.local_gas_station_outlined;
-      case 'pharmacy':
-        return Icons.local_pharmacy_outlined;
-      case 'wholesale':
-        return Icons.inventory_outlined;
-      case 'restaurant':
-        return Icons.restaurant_outlined;
-      case 'quick_sale':
-        return Icons.bolt_outlined;
-      default:
-        return Icons.storefront_outlined;
-    }
-  }
-
   String? _nextPlan(String current) {
     switch (current) {
       case 'free':
@@ -622,4 +658,20 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
       access.reset();
     }
   }
+}
+
+/// تعريفٌ صغير للقسم الظاهر في القائمة. لا يحمل صلاحيةً محلية: الحسم يبقى
+/// في manifest الاستحقاقات والخادم عند فتح البطاقة أو تنفيذ الفعل.
+class _MerchantDrawerSection {
+  const _MerchantDrawerSection({
+    required this.title,
+    required this.subtitle,
+    required this.groups,
+    required this.icon,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<String> groups;
+  final IconData icon;
 }
