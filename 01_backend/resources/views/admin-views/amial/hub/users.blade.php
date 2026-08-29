@@ -206,6 +206,149 @@
     </div></div>
 </div>
 
+{{-- ═══════════════════════════════════════════════════════════════════
+     AMIAL-ADMIN-EDIT-001 — **نافذةُ تعديل الحساب وفكِّه.**
+
+     الثمنُ بنصّ صاحب المشروع: «دخلتُ للحساب من لوحة الأدمن أردتُ رفعَ
+     مستنداتٍ من أجل يعمل — لا طريقة للرفع … أنني أصرخُ من شهر يجب
+     إضافة زرّ لتعديل حساب المستخدم».
+
+     **وثلاثةُ أقسامٍ بترتيب المعالجة لا بترتيب الجداول:**
+       ① ما ينقص — يُقرأ أوّلاً، فمن لا يعرف الناقصَ يجرّب ويعيد.
+       ② الوثائق — رفعٌ واعتمادٌ في موضعٍ واحد.
+       ③ البيانات — وفيها محافظةُ السكن، وهي **الغموضُ بعينه**:
+          بدونها يُعتمد الحسابُ ويبقى غيرَ مستقبِل.
+     ══════════════════════════════════════════════════════════════════ --}}
+<div class="modal fade" id="modal-edit" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title" id="edit-title">تعديل الحساب</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+            <div id="edit-loading" class="text-muted py-3">جارٍ قراءة حالة الحساب…</div>
+
+            <div id="edit-body" class="d-none">
+                {{-- ① ما ينقص --}}
+                <div class="mb-4">
+                    <h6 class="fw-bold mb-2">ما ينقص هذا الحساب ليعمل</h6>
+                    <div id="edit-blockers"></div>
+                </div>
+
+                {{-- ② الوثائق --}}
+                <div class="mb-4">
+                    <h6 class="fw-bold mb-2">وثائق الهويّة</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle">
+                            <thead class="table-light"><tr>
+                                <th>الوثيقة</th><th>الحالة</th><th class="text-end">الاعتماد</th>
+                            </tr></thead>
+                            <tbody id="edit-docs"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="row g-2 align-items-end">
+                        <div class="col-sm-5">
+                            <label class="form-label small">نوع الوثيقة</label>
+                            <select class="form-select form-select-sm" id="edit-doc-type"></select>
+                        </div>
+                        <div class="col-sm-5">
+                            <label class="form-label small">الملفّ (صورة أو PDF — حتّى 8 ميجا)</label>
+                            <input class="form-control form-control-sm" id="edit-doc-file" type="file"
+                                   accept="image/*,application/pdf">
+                        </div>
+                        <div class="col-sm-2 d-grid">
+                            <button class="btn btn-sm btn-outline-primary" id="edit-doc-upload">رفع</button>
+                        </div>
+                    </div>
+                    <div class="form-text">
+                        الرفعُ لا يعتمد. المستندُ يُراجَع ويُعتمد قراراً منفصلاً — وهو ما يمنع
+                        توثيقَ حسابٍ بضغطةٍ واحدة.
+                    </div>
+                </div>
+
+                {{-- ③ البيانات --}}
+                <div>
+                    <h6 class="fw-bold mb-2">بيانات الحساب</h6>
+                    <div class="row g-2">
+                        <div class="col-sm-6">
+                            <label class="form-label small">الاسم الأوّل</label>
+                            <input class="form-control form-control-sm" id="ed-f_name">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label small">اسم العائلة</label>
+                            <input class="form-control form-control-sm" id="ed-l_name">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small">الاسم بالإنجليزيّة</label>
+                            <input class="form-control form-control-sm" id="ed-name_en" dir="ltr">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small">اسم الأب</label>
+                            <input class="form-control form-control-sm" id="ed-father_name">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small">اسم الجدّ</label>
+                            <input class="form-control form-control-sm" id="ed-grandfather_name">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label small">محافظة السكن</label>
+                            <select class="form-select form-select-sm" id="ed-residence_governorate"></select>
+                            <div class="form-text" id="edit-zone-hint"></div>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label small">المديريّة</label>
+                            <input class="form-control form-control-sm" id="ed-residence_district">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label small">الحيّ / المنطقة</label>
+                            <input class="form-control form-control-sm" id="ed-residence_area">
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label small">أقرب معلَم</label>
+                            <input class="form-control form-control-sm" id="ed-residence_landmark">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small">المهنة</label>
+                            <input class="form-control form-control-sm" id="ed-occupation">
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small">الجنس</label>
+                            <select class="form-select form-select-sm" id="ed-gender">
+                                <option value="">—</option>
+                                <option value="male">ذكر</option>
+                                <option value="female">أنثى</option>
+                            </select>
+                        </div>
+                        <div class="col-sm-4">
+                            <label class="form-label small">مصدر الدخل</label>
+                            <select class="form-select form-select-sm" id="ed-income_source"></select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small">الغرض من فتح الحساب</label>
+                            <select class="form-select form-select-sm" id="ed-account_purpose"></select>
+                        </div>
+                    </div>
+
+                    {{-- الهاتفُ يُعرَض ولا يُعدَّل — وسببُه مكتوبٌ لا مسكوتٌ عنه. --}}
+                    <div class="alert alert-secondary small mt-3 mb-0">
+                        <strong>الهاتف:</strong> <span dir="ltr" id="edit-phone"></span> —
+                        لا يُعدَّل من هنا. هو مفتاحُ الدخول ومعرّفُ التحويل، وتغييرُه يُسلّم
+                        حساباً بتاريخه الماليّ لشخصٍ آخر. وله مسارُه الخاصّ بموافقةٍ وسجلّ.
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-danger small mt-2" id="edit-error"></div>
+            <div class="text-success small mt-2" id="edit-ok"></div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline-success" id="edit-approve-account">اعتماد الحساب</button>
+            <button class="btn btn-primary" id="edit-save">حفظ البيانات</button>
+        </div>
+    </div></div>
+</div>
+
 {{-- ===== Modal: سجل العمليات ===== --}}
 <div class="modal fade" id="modal-tx" tabindex="-1">
     <div class="modal-dialog modal-lg"><div class="modal-content">
@@ -415,6 +558,8 @@
                 <td>${u.is_active ? '<span class="badge bg-success">نشِط</span>' : '<span class="badge bg-danger">مجمَّد</span>'}</td>
                 <td class="text-nowrap">
                     <button class="btn btn-sm btn-primary" data-act="open" data-id="${u.id}">التفاصيل</button>
+                    <button class="btn btn-sm btn-outline-secondary" data-act="edit"
+                            data-id="${u.id}" data-name="${esc(u.name)}">✏️ تعديل</button>
                     ${isMerchants ? centerMenu(u) : ''}
                     ${isAgents ? networkMenu(u) : ''}
                     ${transferControl(u)}
@@ -498,6 +643,9 @@
                 alert(j.message); loadUsers();
             } catch (err) { alert(err.message); }
 
+        } else if (btn.dataset.act === 'edit') {
+            openEdit(id, btn.dataset.name);
+
         } else if (btn.dataset.act === 'transfer') {
             transferUserId = id;
             document.getElementById('transfer-target').textContent = `إلى: ${btn.dataset.name} (#${id})`;
@@ -524,6 +672,204 @@
                 </tr>`).join('')
                 : '<tr><td colspan="6" class="text-center text-muted py-3">لا عمليات</td></tr>';
         }
+    });
+
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-ADMIN-EDIT-001 — نافذةُ التعديل: تُقرأ الحالةُ ثمّ يُفعَل.
+    //
+    // **ولا تُعاد رسمُ الحقول من قيمٍ محلّيّة بعد كلّ فعل** — تُعاد
+    // القراءةُ من الخادم: رفعُ وثيقةٍ يغيّر «ما ينقص»، واعتمادُها
+    // يغيّره، وحفظُ المحافظة يغيّر المنطقةَ المتوقَّعة. فشاشةٌ تُحدّث
+    // نفسَها بالتخمين تقول «تمّ» على ما لم يتمّ.
+    // ══════════════════════════════════════════════════════════════════
+    let editUserId = null;
+    let editFields = [];
+
+    const ZONE_LABELS = {
+        SOUTH: 'داخل نطاق الخدمة', NORTH: 'خارج نطاق الخدمة',
+        MIDDLE: 'خارج نطاق الخدمة', OTHER: 'خارج نطاق الخدمة',
+        UNKNOWN: 'غير معروفة',
+    };
+
+    // **والرمزُ بلا ترجمةٍ يُعرَض خاماً ولا يُخترَع له معنى** — ترجمةٌ
+    // مخترَعةٌ في ملفّ امتثالٍ تُمرّر القارئَ واثقاً من معنىً لم يقصده أحد.
+    const INCOME_LABELS = {
+        salary: 'راتب', business: 'تجارة', investment: 'استثمار',
+        rent: 'إيجارات', asset_sale: 'بيع أصول', inheritance: 'ميراث',
+        remittance: 'حوالات', other: 'أخرى',
+    };
+    const PURPOSE_LABELS = {
+        savings: 'ادّخار', salary: 'استلام راتب', business: 'أعمال',
+        remittance: 'حوالات', payments: 'مدفوعات', other: 'أخرى',
+    };
+
+    function fillOptions(elId, values, labels) {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        el.innerHTML = '<option value="">— لم يُحدَّد —</option>'
+            + (values || []).map(v =>
+                `<option value="${esc(v)}">${esc(labels[v] || v)}</option>`).join('');
+    }
+
+    function openEdit(id, name) {
+        editUserId = id;
+        document.getElementById('edit-title').textContent = `تعديل الحساب — ${name || '#' + id}`;
+        document.getElementById('edit-error').textContent = '';
+        document.getElementById('edit-ok').textContent = '';
+        document.getElementById('edit-loading').classList.remove('d-none');
+        document.getElementById('edit-body').classList.add('d-none');
+        new bootstrap.Modal('#modal-edit').show();
+        loadEdit();
+    }
+
+    async function loadEdit() {
+        const r = await fetch(`${base}/users/${editUserId}/readiness.json`,
+            {headers: {'Accept': 'application/json'}});
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            document.getElementById('edit-error').textContent = j.message || ('خطأ ' + r.status);
+            return;
+        }
+        const d = j.data;
+
+        // ① ما ينقص
+        const blockers = document.getElementById('edit-blockers');
+        blockers.innerHTML = d.can_receive
+            ? '<div class="alert alert-success py-2 mb-0 small">لا يمنعُ هذا الحسابَ شيء — '
+              + 'موثَّقٌ وداخلَ النطاق ونشِط، ويستقبل التحويلات.</div>'
+            : '<ul class="list-group list-group-flush small">'
+              + d.blockers.map(b =>
+                  `<li class="list-group-item px-0 py-1">⛔ ${esc(b.text).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</li>`
+                ).join('') + '</ul>';
+
+        // ② الوثائق
+        document.getElementById('edit-docs').innerHTML = d.documents.map(doc => `
+            <tr>
+                <td>${esc(doc.label)}</td>
+                <td>${doc.usable
+                    ? `<span class="badge bg-success">${esc(doc.status_label)}</span>`
+                    : `<span class="badge bg-${doc.id ? 'warning text-dark' : 'secondary'}">${esc(doc.status_label)}</span>`}</td>
+                <td class="text-end">${doc.id && !doc.usable
+                    ? `<button class="btn btn-sm btn-outline-success" data-doc-approve="${doc.id}">اعتماد</button>`
+                    : (doc.id ? '' : '<span class="text-muted small">—</span>')}</td>
+            </tr>`).join('');
+
+        const typeSel = document.getElementById('edit-doc-type');
+        typeSel.innerHTML = d.doc_types.map(t =>
+            `<option value="${esc(t.value)}">${esc(t.label)}</option>`).join('');
+
+        // ③ البيانات
+        //
+        // **والحقولُ تُرسَم ممّا وصل لا ممّا كُتب في الشاشة.** حقلٌ يُحذف
+        // من الخادم ويبقى مرسوماً هنا يقرأ `null.value` فيموت المعالجُ
+        // صامتاً — تُضغط الأزرارُ ولا يحدث شيء. (القاعدة التاسعة.)
+        const p = d.profile;
+        editFields = Object.keys(p);
+
+        fillOptions('ed-income_source', d.income_sources, INCOME_LABELS);
+        fillOptions('ed-account_purpose', d.account_purposes, PURPOSE_LABELS);
+
+        for (const k of Object.keys(p)) {
+            const el = document.getElementById('ed-' + k);
+            if (el && k !== 'residence_governorate') el.value = p[k] ?? '';
+        }
+
+        // **والمحافظةُ ومعها منطقتُها** — فمن اختار شمالاً يعرف قبل الحفظ
+        // أنّ الحسابَ لن يستقبل، ولا يظنّ العطلَ في مكانٍ آخر.
+        const gov = document.getElementById('ed-residence_governorate');
+        gov.innerHTML = '<option value="">— لم تُحدَّد —</option>'
+            + d.governorates.map(g =>
+                `<option value="${esc(g.code)}" data-zone="${esc(g.zone)}"
+                    ${g.code === p.residence_governorate ? 'selected' : ''}>${esc(g.name)}</option>`
+              ).join('');
+        gov.onchange = showZoneHint;
+        showZoneHint();
+
+        document.getElementById('edit-phone').textContent = d.phone || '';
+        document.getElementById('edit-approve-account').disabled = d.kyc === 1;
+        document.getElementById('edit-loading').classList.add('d-none');
+        document.getElementById('edit-body').classList.remove('d-none');
+    }
+
+    function showZoneHint() {
+        const sel = document.getElementById('ed-residence_governorate');
+        const zone = sel.selectedOptions[0]?.dataset.zone || 'UNKNOWN';
+        const hint = document.getElementById('edit-zone-hint');
+        hint.textContent = sel.value
+            ? `المنطقة المشتقّة: ${ZONE_LABELS[zone] || zone}`
+            : 'بلا محافظةٍ يبقى الحسابُ خارجَ النطاق ولو اعتُمدت وثائقُه.';
+        hint.className = 'form-text ' + (zone === 'SOUTH' ? 'text-success' : 'text-danger');
+    }
+
+    document.getElementById('edit-docs').addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-doc-approve]');
+        if (!btn) return;
+        document.getElementById('edit-error').textContent = '';
+        document.getElementById('edit-ok').textContent = '';
+        try {
+            const j = await post(
+                `{{ url('admin/amial/kyc') }}/documents/${btn.dataset.docApprove}/approve`, {});
+            document.getElementById('edit-ok').textContent = j.message || 'اعتُمد المستند';
+            await loadEdit(); loadUsers();
+        } catch (err) { document.getElementById('edit-error').textContent = err.message; }
+    });
+
+    document.getElementById('edit-doc-upload').addEventListener('click', async () => {
+        const errEl = document.getElementById('edit-error');
+        const okEl = document.getElementById('edit-ok');
+        errEl.textContent = ''; okEl.textContent = '';
+
+        const fileInput = document.getElementById('edit-doc-file');
+        if (!fileInput.files.length) { errEl.textContent = 'اختر ملفّاً أوّلاً'; return; }
+
+        const form = new FormData();
+        form.append('doc_type', document.getElementById('edit-doc-type').value);
+        form.append('file', fileInput.files[0]);
+
+        try {
+            const r = await fetch(`${base}/users/${editUserId}/documents`, {
+                method: 'POST', headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json'},
+                body: form,
+            });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(j.message || ('خطأ ' + r.status));
+            okEl.textContent = j.message || 'رُفعت الوثيقة';
+            fileInput.value = '';
+            await loadEdit(); loadUsers();
+        } catch (err) { errEl.textContent = err.message; }
+    });
+
+    document.getElementById('edit-save').addEventListener('click', async () => {
+        const errEl = document.getElementById('edit-error');
+        const okEl = document.getElementById('edit-ok');
+        errEl.textContent = ''; okEl.textContent = '';
+
+        // ما وصل من الخادم هو ما يُرسَل إليه — لا قائمةٌ ثانيةٌ تفترق عنه.
+        const body = {};
+        for (const k of editFields) {
+            const el = document.getElementById('ed-' + k);
+            if (el) body[k] = el.value || null;
+        }
+
+        try {
+            const j = await post(`${base}/users/${editUserId}/profile`, body);
+            okEl.textContent = j.message || 'حُدّثت البيانات';
+            await loadEdit(); loadUsers();
+        } catch (err) { errEl.textContent = err.message; }
+    });
+
+    document.getElementById('edit-approve-account').addEventListener('click', async () => {
+        const errEl = document.getElementById('edit-error');
+        const okEl = document.getElementById('edit-ok');
+        errEl.textContent = ''; okEl.textContent = '';
+
+        if (!confirm('اعتمادُ الحساب يرفع حدودَه ويفتح استقبالَ التحويلات. متابعة؟')) return;
+
+        try {
+            const j = await post(`${base}/users/${editUserId}/kyc`, {status: 1});
+            okEl.textContent = j.message || 'اعتُمد الحساب';
+            await loadEdit(); loadUsers();
+        } catch (err) { errEl.textContent = err.message; }
     });
 
     document.getElementById('transfer-submit').addEventListener('click', async () => {
