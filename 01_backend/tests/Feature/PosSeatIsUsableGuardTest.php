@@ -3,57 +3,91 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
+use App\Models\PosUser;
 use App\Models\User;
-use App\Services\UsageLimitService;
 use App\Support\Access\AccessConstants as A;
+use App\Support\Access\CapabilityRegistry;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * AMIAL-POS-SEAT-001 — **مقعدُ نقطة البيع يُشغَّل، لا يُباع فقط.**
+ * AMIAL-POS-SEAT-002 — **المقعدُ يُشغَّل بالضغط، لا يُقرأ في جدول.**
  *
  * ══════════════════════════════════════════════════════════════════════
- * **كشفه صاحبُ المشروع بالمحاولة:** «لم أستطع التجربة بحساب نقطة بيع —
- * ليس هناك طريقة لإنشاء موظّف نقطة بيع».
+ * **كشفه صاحبُ المشروع مرّتين، والثانيةُ لأنّ حارسي كذب.**
  *
- * وقِيس فلم يكن الخللُ في غياب شاشةٍ ولا مسار — **كلاهما مبنيٌّ**:
- * `POST /amial/merchant/staff` يُنشئ الحساب (`type = 4`) برمز موظّفٍ
- * وكلمةِ مرور، و`merchant_staff_screen.dart` تناديه.
+ * ① أوّلاً: «لم أستطع التجربة بحساب نقطة بيع — ليس هناك طريقة لإنشاء
+ *    موظّف نقطة بيع». وقِيس فكان `employees => 0` مع `pos_devices => 1`:
+ *    مقعدٌ يُباع ولا يُشغَّل.
  *
- * **بل في تركيبةِ حدودٍ لا تجتمع:**
+ * ② فرُفع `employees` إلى ١، **وكُتبت الصياغةُ الأولى من هذا الحارس
+ *    تقرأ `PLAN_LIMITS` وتقارن رقمين**. فمرّت خضراء — **والمسارُ ما زال
+ *    يردّ ٤٠٢**: قدرةُ `employees` أرضيّتُها `PLAN_BUSINESS` في
+ *    `CapabilityRegistry`، والحدُّ في الجدول لا يعرف شيئاً عن ذلك.
  *
- *     الباقة المجّانيّة :  pos_devices = 1   ·   employees = 0
- *
- * والدخولُ إلى نقطة البيع يكون **برمز موظّف** (`pos_users.pos_number`).
- * فـ`assertCanAddEmployee` تقارن `0 >= 0` وترفض أوّلَ إنشاء — **والمقعدُ
- * المُعلَن في الباقة لا يُملأ أبداً**، لا بترقيةٍ ولا بغيرها، لأنّ العطل
- * في الجمع لا في العدد.
+ *    فبقي صاحبُ المشروع عاجزاً عن التجربة **وبوّابتي خضراء**، حتّى صرخ:
+ *    «حرام عليك، نسيتَ أهمّ مسار».
  *
  * ══════════════════════════════════════════════════════════════════════
- * **وهذا صنفٌ لا تمسكه الاختبارات المعتادة:** كلُّ رقمٍ منهما صحيحٌ
- * وحدَه، ولا سطرَ يكسر، ولا خطأَ في أيّ سجلّ. **والتناقضُ في العلاقة
- * بينهما** — ولا يظهر إلّا لمن حاول أن يستعمل ما اشترى.
+ * **والدرسُ في صنف الحارس لا في رقمه:** جدولُ الحدود مصدرٌ واحدٌ من
+ * ثلاثة يحكم المقعد — ومعه أرضيّةُ القدرة، والصلاحيّةُ على المسار.
+ * **وحارسٌ يقرأ أحدَها يقول «سليم» ولم يضغط.** (القاعدة السادسة: يُقاس
+ * بالتشغيل. والتاسعة: زرٌّ لم يُضغط ليس مبنيّاً.)
  *
- * فالحارسُ يسأل سؤالاً واحداً عن **كلّ باقة**: أَوعَدْتَ بمقعدٍ؟ فهل
- * تسمح بمن يجلس فيه؟
+ * فصار يُنشئ تاجراً حقيقيّاً و**يطلب موظّفاً من المسار نفسِه** الذي
+ * يطلبه التطبيق.
  */
 class PosSeatIsUsableGuardTest extends TestCase
 {
     use RefreshDatabase;
 
+    private int $seq = 0;
+
+    private function merchantOn(string $plan): User
+    {
+        $this->seq++;
+
+        $m = User::factory()->create([
+            'type' => 3, 'role' => A::ROLE_MERCHANT, 'zone_code' => 'SOUTH',
+            'is_active' => 1,
+            'phone' => '9677002' . str_pad((string) $this->seq, 5, '0', STR_PAD_LEFT),
+        ]);
+
+        MerchantProfile::create([
+            'user_id' => $m->id, 'business_type' => A::BIZ_RETAIL,
+            'verification_status' => 'verified', 'subscription_plan' => $plan,
+        ]);
+
+        return $m->fresh();
+    }
+
+    /** يطلب موظّفاً من المسار الحقيقيّ، ويُعيد الردّ. */
+    private function askForEmployee(User $merchant, string $code): \Illuminate\Testing\TestResponse
+    {
+        return $this->actingAs($merchant, 'api')
+            ->postJson('/api/v1/amial/merchant/staff', [
+                'employee_code' => $code,
+                'display_name' => 'كاشير ' . $code,
+                'password' => 'pos12345',
+                'permissions' => [],
+            ]);
+    }
+
     /**
      * @test
      *
-     * **كلُّ باقةٍ تعِد بنقطة بيعٍ تسمح بموظّفٍ يشغّلها.**
+     * **كلُّ باقةٍ تعِد بمقعدٍ تُسلّمه فعلاً — والقياسُ بالمسار.**
+     *
+     * ولا يُقرأ الجدولُ وحدَه: ثلاثةُ مصادرَ تحكم المقعد، والاتّفاقُ
+     * بينها هو ما يُشتكى من غيابه.
      */
-    public function a_plan_that_sells_a_pos_seat_allows_someone_to_fill_it(): void
+    public function every_plan_that_sells_a_seat_actually_delivers_it(): void
     {
         $broken = [];
         $checked = 0;
 
         foreach (A::ALL_PLANS as $plan) {
             $limits = A::PLAN_LIMITS[$plan] ?? null;
-
             $this->assertNotNull($limits, "باقةٌ بلا حدود: {$plan}");
 
             $checked++;
@@ -65,10 +99,34 @@ class PosSeatIsUsableGuardTest extends TestCase
             $sellsSeat = $seats !== 0;
             $allowsStaff = $staff !== 0;
 
-            if ($sellsSeat && ! $allowsStaff) {
+            // ── ① الجدولُ متّسقٌ مع نفسه ──
+            if ($sellsSeat !== $allowsStaff) {
                 $broken[] = sprintf(
-                    '  %-11s → نقاط بيع: %d · موظّفون: %d',
+                    '  %-11s جدولُ الحدود يناقض نفسَه: نقاط بيع %d · موظّفون %d',
                     $plan, $seats, $staff);
+
+                continue;
+            }
+
+            // ── ② والمسارُ يوافق الجدول ──
+            //
+            // **وهذه هي الخطوةُ التي لم تكن.** الجدولُ يقول «واحد»
+            // والقدرةُ أرضيّتُها الأعمال، فيردّ المسارُ ٤٠٢ ولا يعلم
+            // الجدولُ شيئاً.
+            $response = $this->askForEmployee($this->merchantOn($plan), 'E1');
+            $accepted = $response->status() === 201;
+
+            if ($sellsSeat && !$accepted) {
+                $broken[] = sprintf(
+                    "  %-11s تَعِد بمقعدٍ **والمسارُ يردّ %d**: %s",
+                    $plan, $response->status(),
+                    (string) ($response->json('message') ?? ''));
+            }
+
+            if (!$sellsSeat && $accepted) {
+                $broken[] = sprintf(
+                    '  %-11s لا تَعِد بمقعدٍ **والمسارُ يقبل** — فالحدُّ زينة',
+                    $plan);
             }
         }
 
@@ -76,39 +134,49 @@ class PosSeatIsUsableGuardTest extends TestCase
             'لم تُفحص كلُّ الباقات — وحارسٌ يفحص بعضَها يقول «سليم» ولم ينظر');
 
         $this->assertSame([], $broken,
-            "**باقاتٌ تبيع مقعدَ نقطة بيعٍ ولا تسمح بمن يشغله:**\n"
+            "**باقاتٌ تَعِد بما لا تُسلّم، أو تُسلّم ما لا تَعِد به:**\n"
             . implode("\n", $broken) . "\n\n"
-            . 'والدخولُ إلى نقطة البيع برمزِ موظّف، فمقعدٌ بلا موظّفٍ '
-            . "**لا يُستعمل أبداً**.\n"
-            . 'فإمّا يُسمح بموظّفٍ واحدٍ على الأقلّ، وإمّا يُنزَل '
-            . '`pos_devices` إلى صفرٍ — ولا يُترك تناقضاً صامتاً.');
+            . "وثلاثةُ مصادرَ تحكم المقعد ولا يعرف بعضُها بعضاً:\n"
+            . "  `PLAN_LIMITS`  · أرضيّةُ القدرة في `CapabilityRegistry` "
+            . "· الصلاحيّةُ على المسار.\n"
+            . 'فيُرفع أحدُها ويُترك الآخر، ويبقى التاجرُ عاجزاً وبوّابتنا خضراء.');
     }
 
     /**
      * @test
      *
-     * **ويُقاس بالتشغيل لا بالجدول.**
-     *
-     * جدولُ الحدود قد يقول «واحد» ويرفض المسارُ لسببٍ آخر. فيُنشأ تاجرٌ
-     * مجّانيٌّ ويُطلب منه موظّفٌ فعلاً. (القاعدة السادسة.)
+     * **وأرضيّةُ القدرة توافق الجدول — وهو ما فات الصياغةَ الأولى.**
      */
-    public function a_free_merchant_can_actually_create_its_first_pos_employee(): void
+    public function the_capability_floor_agrees_with_the_plan_limits(): void
     {
-        $merchant = User::factory()->create(['type' => 3, 'zone_code' => 'SOUTH']);
+        $cap = CapabilityRegistry::find('employees');
 
-        MerchantProfile::create([
-            'user_id' => $merchant->id,
-            'business_type' => A::BIZ_PHARMACY,
-            'verification_status' => 'verified',
-            'subscription_plan' => A::PLAN_FREE,
-        ]);
+        $this->assertNotNull($cap, 'قدرةُ «الموظفون» اختفت من الكتالوج');
 
-        // لا يرمي = المقعدُ الأوّلُ مسموح.
-        app(UsageLimitService::class)->assertCanAddEmployee($merchant->fresh());
+        $floor = $cap->minimumPlan();
+        $order = array_flip(A::ALL_PLANS);
 
-        $this->assertTrue(true,
-            'تاجرٌ مجّانيٌّ لا يستطيع إنشاء موظّفه الأوّل — ونقطةُ البيع '
-            . 'المُعلَنةُ في باقته لا تُستعمل');
+        $this->assertArrayHasKey($floor, $order,
+            "أرضيّةُ القدرة «{$floor}» ليست باقةً معروفة");
+
+        $mismatch = [];
+
+        foreach (A::ALL_PLANS as $plan) {
+            $sells = (int) (A::PLAN_LIMITS[$plan]['employees'] ?? 0) !== 0;
+            $reaches = $order[$plan] >= $order[$floor];
+
+            if ($sells !== $reaches) {
+                $mismatch[] = sprintf('  %-11s الجدول: %s · القدرة: %s',
+                    $plan, $sells ? 'يبيع' : 'لا يبيع',
+                    $reaches ? 'مفتوحة' : 'مقفلة');
+            }
+        }
+
+        $this->assertSame([], $mismatch,
+            "**جدولُ الحدود وأرضيّةُ القدرة يفترقان:**\n"
+            . implode("\n", $mismatch) . "\n\n"
+            . 'فباقةٌ تبيع مقعداً وقدرتُه مقفلةٌ تردّ ٤٠٢ أبداً — '
+            . '**والجدولُ وحدَه لا يكشف ذلك**، وهو ما مرّ على الحارس السابق.');
     }
 
     /**
@@ -116,40 +184,60 @@ class PosSeatIsUsableGuardTest extends TestCase
      *
      * **والحدُّ يبقى حدّاً — لا يُلغى بحجّة التشغيل.**
      *
-     * فالمقصودُ فتحُ المقعد الأوّل لا فتحُ الباب على مصراعيه: الثاني
-     * يُردّ في المجّانيّة، وإلّا صارت الباقاتُ بلا معنى.
+     * فالمقصودُ تسليمُ ما بيع لا فتحُ الباب على مصراعيه: الموظّفُ الذي
+     * يتجاوز سقفَ الباقة يُردّ، وإلّا صارت الباقاتُ بلا معنى.
      */
-    public function the_free_plan_still_stops_at_its_declared_ceiling(): void
+    public function a_plan_still_stops_at_its_declared_ceiling(): void
     {
-        $merchant = User::factory()->create(['type' => 3, 'zone_code' => 'SOUTH']);
+        $ceiling = (int) (A::PLAN_LIMITS[A::PLAN_BUSINESS]['employees'] ?? 0);
 
-        MerchantProfile::create([
-            'user_id' => $merchant->id,
-            'business_type' => A::BIZ_PHARMACY,
-            'verification_status' => 'verified',
-            'subscription_plan' => A::PLAN_FREE,
-        ]);
+        $this->assertGreaterThan(0, $ceiling,
+            'سقفُ باقة الأعمال صفرٌ — الاختبار يفحص فراغاً');
 
-        $ceiling = (int) A::PLAN_LIMITS[A::PLAN_FREE]['employees'];
+        $merchant = $this->merchantOn(A::PLAN_BUSINESS);
 
-        $this->assertGreaterThan(0, $ceiling, 'السقفُ صفرٌ — الاختبار يفحص فراغاً');
-
-        // يُملأ السقفُ بموظّفين حقيقيّين.
         for ($i = 0; $i < $ceiling; $i++) {
-            $staff = User::factory()->create(['type' => 4, 'zone_code' => 'SOUTH']);
-
-            \App\Models\PosUser::create([
-                'user_id' => $staff->id,
-                'merchant_user_id' => $merchant->id,
-                'pos_number' => 'E' . $i,
-                'display_name' => 'موظّف ' . $i,
-                'is_active' => true,
-                'permissions' => [],
-            ]);
+            $this->askForEmployee($merchant, 'E' . $i)->assertStatus(201);
         }
 
-        $this->expectException(\App\Exceptions\UsageLimitExceededException::class);
+        $this->assertSame($ceiling,
+            PosUser::where('merchant_user_id', $merchant->id)->count(),
+            'لم يُنشأ العددُ المسموح — الحارسُ يفحص حالةً غير قائمة');
 
-        app(UsageLimitService::class)->assertCanAddEmployee($merchant->fresh());
+        $over = $this->askForEmployee($merchant, 'E-OVER');
+
+        $this->assertNotSame(201, $over->status(),
+            '**تجاوز التاجرُ سقفَ باقته** — فالحدُّ مكتوبٌ ولا يُطبَّق، '
+            . 'والباقاتُ تُباع بلا معنى.');
+    }
+
+    /**
+     * @test
+     *
+     * **وباقةُ الأعمال تُسلّم فعلاً — وإلّا كان الحارسُ قفلاً.**
+     *
+     * فحارسٌ يمنع ما دُفع ثمنُه عطلٌ لا حماية.
+     */
+    public function a_business_merchant_really_creates_a_pos_employee(): void
+    {
+        $merchant = $this->merchantOn(A::PLAN_BUSINESS);
+
+        $r = $this->askForEmployee($merchant, 'E01');
+
+        $r->assertStatus(201);
+
+        $pos = PosUser::where('merchant_user_id', $merchant->id)->first();
+
+        $this->assertNotNull($pos, 'ردّ المسارُ نجاحاً ولم يُنشئ شيئاً');
+        $this->assertSame('E01', $pos->pos_number);
+        $this->assertTrue((bool) $pos->is_active,
+            'أُنشئ الموظّفُ معطَّلاً — فلا يدخل، والدخولُ يشترط `active()`');
+
+        // **وحسابُ الدخول يُنشأ معه** — فرمزُ موظّفٍ بلا حسابٍ لا يدخل.
+        $user = User::find($pos->user_id);
+
+        $this->assertNotNull($user, 'مقعدٌ بلا حسابِ دخول');
+        $this->assertSame(4, (int) $user->type, 'حسابُ الموظّف ليس من نوع نقطة بيع');
+        $this->assertSame(1, (int) $user->is_active, 'حسابُ الموظّف معطَّل');
     }
 }
