@@ -131,13 +131,33 @@ abstract class MerchantVertical
      */
     public function featuresFor(string $plan): array
     {
-        $out = array_merge(self::shared(), $this->own());
+        return array_values(array_unique(
+            array_merge(self::shared(), $this->own(), $this->depthFor($plan))));
+    }
 
-        if ($plan !== A::PLAN_FREE) {
-            foreach ($this->paidDepth() as $atPlan => $features) {
-                if ($this->planReaches($plan, $atPlan)) {
-                    $out = array_merge($out, $features);
-                }
+    /**
+     * **عمقُ هذا القطاع الذي تبلغه هذه الباقةُ وحدَه.**
+     *
+     * وهي مدخلُ `AccessPresets::verticalPlanFeatures` — فصلٌ عن
+     * `featuresFor` لأنّ `resolveFeatures` تجمع المصادرَ بنفسها، فلو
+     * أعادت النواةَ والمشتركَ معها لَما تغيّر الاتّحادُ **لكنّ كلَّ مصدرٍ
+     * صار يمنح كلَّ شيء** — ونزعُ ميزةٍ من موضعها يصير بلا أثر.
+     *
+     * @return array<int,string>
+     */
+    final public function depthFor(string $plan): array
+    {
+        // **والمجّانيّةُ لا عمقَ لها**: العمقُ هو ما يُباع، ومنحُه مجّاناً
+        // يُفرغ الباقاتِ من معناها.
+        if ($plan === A::PLAN_FREE) {
+            return [];
+        }
+
+        $out = [];
+
+        foreach ($this->paidDepth() as $atPlan => $features) {
+            if ($this->planReaches($plan, $atPlan)) {
+                $out = array_merge($out, $features);
             }
         }
 

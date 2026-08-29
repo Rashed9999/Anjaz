@@ -41,10 +41,69 @@ class VerticalParityGuardTest extends TestCase
     //  ① الثمانيَ عشرةَ تركيبة
     // ══════════════════════════════════════════════════════════════════
 
+    /**
+     * **المرجعُ المجمَّد — ما كان يمنحه المحرّكُ يومَ النقل.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ولمَ مجمَّدٌ لا محسوب:** كان هذا الحارسُ يقارن
+     * `AccessPresets` بالسجلّ. فلمّا وُصلت `AccessPresets` بالسجلّ صار
+     * **يقارن الشيءَ بنفسِه**: يخرج أخضرَ مهما تغيّرت القطاعاتُ كلُّها.
+     *
+     * وهو أخطرُ صنفٍ في هذا المشروع — حارسٌ يمرّ والعطلُ قائم — وقد وقع
+     * هنا **لحظةَ نجاح** النقل الذي بُني ليحرسه.
+     *
+     * فصار الطرفُ الأوّلُ **نصّاً مجمَّداً** مأخوذاً من المحرّك القديم
+     * قبل الوصل (‏`git show` على الالتزام السابق). فأيُّ انزلاقٍ في
+     * القطاعات يظهر رقماً بعينه، ولا شيءَ يقيسه بنفسه.
+     *
+     * **وتغييرُ هذه القائمة قرارُ منتَجٍ لا إصلاحُ اختبار:** من غيّرها
+     * يقول ماذا غيّر ولماذا — فالمنحُ يفتح ميزةً على من لم يشترها،
+     * والنزعُ يُقفلها على من اشتراها.
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * @return array<string,array<string,array<int,string>>>
+     */
+    private function frozenEngineOutput(): array
+    {
+        return [
+            'quick_sale' => [
+                'free' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'quick_sale', 'receipts', 'receive', 'refunds', 'transfer', 'wallet'],
+                'business' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'quick_sale', 'receipts', 'receive', 'refunds', 'transfer', 'wallet'],
+                'enterprise' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'quick_sale', 'receipts', 'receive', 'refunds', 'transfer', 'wallet'],
+            ],
+            'retail' => [
+                'free' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'payment_requests', 'profile', 'qr_pay', 'receipts', 'receive', 'refunds', 'split_bill', 'transfer', 'wallet'],
+                'business' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'payment_requests', 'profile', 'qr_pay', 'receipts', 'receive', 'refunds', 'split_bill', 'transfer', 'wallet'],
+                'enterprise' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'payment_requests', 'profile', 'qr_pay', 'receipts', 'receive', 'refunds', 'split_bill', 'transfer', 'wallet'],
+            ],
+            'fuel' => [
+                'free' => ['daily_reports', 'fuel_pos', 'fuel_pumps', 'fuel_shifts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
+                'business' => ['daily_reports', 'fuel_cards', 'fuel_companies', 'fuel_pos', 'fuel_products', 'fuel_pumps', 'fuel_shifts', 'fuel_variance', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
+                'enterprise' => ['daily_reports', 'fuel_cards', 'fuel_companies', 'fuel_pos', 'fuel_products', 'fuel_pumps', 'fuel_shifts', 'fuel_variance', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
+            ],
+            'pharmacy' => [
+                'free' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_pos', 'pharmacy_products', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
+                'business' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_pos', 'pharmacy_prescriptions', 'pharmacy_products', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
+                'enterprise' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_pos', 'pharmacy_prescriptions', 'pharmacy_products', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
+            ],
+            'wholesale' => [
+                'free' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet', 'wholesale_collections', 'wholesale_invoices'],
+                'business' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet', 'wholesale_collections', 'wholesale_invoices', 'wholesale_multi_pricing'],
+                'enterprise' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet', 'wholesale_collections', 'wholesale_invoices', 'wholesale_multi_pricing'],
+            ],
+            'restaurant' => [
+                'free' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'restaurant_kitchen', 'restaurant_orders', 'restaurant_tables', 'transfer', 'wallet'],
+                'business' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'restaurant_kitchen', 'restaurant_orders', 'restaurant_tables', 'transfer', 'wallet'],
+                'enterprise' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'restaurant_kitchen', 'restaurant_orders', 'restaurant_tables', 'transfer', 'wallet'],
+            ],
+        ];
+    }
+
     /** @test */
     public function every_vertical_and_plan_pair_matches_the_current_engine(): void
     {
         $checked = 0;
+        $frozen = $this->frozenEngineOutput();
 
         foreach (A::ALL_BUSINESS_TYPES as $biz) {
             $vertical = VerticalRegistry::find($biz);
@@ -53,17 +112,16 @@ class VerticalParityGuardTest extends TestCase
                 "**قطاع «{$biz}» ليس في السجلّ الجديد** — فمن يسأله عنه "
                 . 'يجده فارغاً، ويُقفل نشاطُ صاحبه كلُّه.');
 
+            $this->assertArrayHasKey($biz, $frozen,
+                "**قطاعٌ جديدٌ بلا مرجعٍ مجمَّد: «{$biz}»** — فلا شيءَ "
+                . 'يقول ماذا يجب أن يمنح، والحارسُ يفحص فراغاً.');
+
             foreach (A::ALL_PLANS as $plan) {
                 $checked++;
 
-                // القديم: ما يمنحه المحرّكُ القائم اليوم.
-                $old = array_unique(array_merge(
-                    AccessPresets::roleBase(A::ROLE_MERCHANT),
-                    AccessPresets::businessTypeFeatures($biz),
-                    AccessPresets::verticalPlanFeatures($biz, $plan),
-                ));
+                $old = $frozen[$biz][$plan];
 
-                // الجديد: المشترك + النواة + عمقُ الباقة.
+                // والجديد: المشترك + النواة + عمقُ الباقة.
                 $new = $vertical->featuresFor($plan);
 
                 sort($old);
@@ -74,8 +132,7 @@ class VerticalParityGuardTest extends TestCase
                     . "  ينقص الجديدَ : %s\n"
                     . "  ويزيد فيه   : %s\n\n"
                     . 'والنقصُ يُقفل ميزةً على صاحبها، والزيادةُ تفتح ما '
-                    . 'لم يُشترَ. فلا يُحوَّل المدخلُ قبل أن تُطابق '
-                    . 'الثمانيَ عشرةَ تركيبةُ كلُّها.',
+                    . 'لم يُشترَ.',
                     $biz, $plan,
                     implode('، ', array_diff($old, $new)) ?: '—',
                     implode('، ', array_diff($new, $old)) ?: '—'));
@@ -85,6 +142,33 @@ class VerticalParityGuardTest extends TestCase
         $this->assertSame(
             count(A::ALL_BUSINESS_TYPES) * count(A::ALL_PLANS), $checked,
             'لم تُفحص كلُّ التركيبات — وحارسٌ يفحص بعضَها يقول «تطابق» ولم ينظر');
+    }
+
+    /**
+     * @test
+     *
+     * **والمدخلُ العامُّ يُخرج ما يُخرجه المربّع.**
+     *
+     * فالمرجعُ المجمَّد يحرس السجلَّ، وهذا يحرس **الوصلَ نفسَه**: أن
+     * تبقى `AccessPresets` — وهي ما تسأله الخدمةُ فعلاً — تقول ما يقوله
+     * المربّع. فلو فُكّ الوصلُ غداً وعادت القوائمُ مكتوبةً بالاسم، سقط
+     * هذا وحدَه.
+     */
+    public function the_public_entrance_still_answers_from_the_boxes(): void
+    {
+        foreach (A::ALL_BUSINESS_TYPES as $biz) {
+            $vertical = VerticalRegistry::find($biz);
+
+            $this->assertSame($vertical->own(), AccessPresets::businessTypeFeatures($biz),
+                "«{$biz}»: المدخلُ العامُّ لا يُخرج نواةَ المربّع — الوصلُ انفكّ");
+
+            foreach (A::ALL_PLANS as $plan) {
+                $this->assertSame(
+                    $vertical->depthFor($plan),
+                    AccessPresets::verticalPlanFeatures($biz, $plan),
+                    "«{$biz}» × «{$plan}»: العمقُ المُباع لا يأتي من المربّع");
+            }
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════

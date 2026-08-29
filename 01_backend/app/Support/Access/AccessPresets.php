@@ -2,6 +2,7 @@
 
 namespace App\Support\Access;
 
+use App\Domain\Verticals\VerticalRegistry;
 use App\Support\Access\AccessConstants as A;
 
 /**
@@ -54,109 +55,34 @@ class AccessPresets
     }
 
     // ============ Features لكل Business Type ============
+
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-VERTICAL-OOP-001 — **نواةُ القطاع تُسأل من مربّعها.**
+     *
+     * كانت هنا ستُّ قوائمَ مكتوبةً بالاسم. وصارت تُقرأ من
+     * `VerticalRegistry` — **موضعٌ واحدٌ يقول ما هذا القطاع**، بعد أن كان
+     * منطقُ «صنف النشاط» متفرّقاً في ستّة ملفّاتٍ و٧٨ موضعَ تفرّع.
+     *
+     * **والتحويلُ آمنٌ بالقياس لا بالظنّ:** `VerticalParityGuardTest`
+     * يقارن المخرجَ القديمَ بالجديد في **ثماني عشرةَ تركيبة**
+     * (ستّةُ قطاعاتٍ × ثلاثُ باقات) فيثبت التطابقَ التامّ.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **والفارقُ الوحيدُ مقصود:** لم تعد تُعاد هنا `receipts` و
+     * `daily_reports`. يمنحهما `roleBase(ROLE_MERCHANT)` لكلّ تاجرٍ
+     * أصلاً، وكان كلُّ قطاعٍ يُعيد منحَهما.
+     *
+     * **والاتّحادُ لا يتغيّر** (`resolveFeatures` يجمع الدورَ أوّلاً)،
+     * لكنّ **نزعَهما من الدور صار له أثر**: كان من ينزعهما يظنّ أنّه
+     * أغلقهما وهما مفتوحتان من ستّة أبوابٍ أخرى.
+     *
+     * والحارس: `MerchantSharedBoxGuardTest`.
+     * ══════════════════════════════════════════════════════════════════
+     */
     public static function businessTypeFeatures(?string $type): array
     {
-        if ($type === null) return [];
-
-        return match ($type) {
-            // بائع السمك/الخضار: بساطة قصوى
-            A::BIZ_QUICK_SALE => [
-                A::F_QUICK_SALE, A::F_DEBTS, A::F_DAILY_REPORTS, A::F_REFUNDS,
-            ],
-
-            // ══════════════════════════════════════════════════════════
-            // AMIAL-ENTITLEMENTS-006 — **صنفُ النشاط يقول ما ينطبق، لا ما
-            // اشتُري.** (قرارُ صاحب المشروع، ٢٠٢٦-٠٨-١٦.)
-            //
-            // كان `F_PRODUCTS` و`F_CUSTOMERS` هنا، ويُوحَّدان مع الباقة في
-            // `resolveFeatures` — **فيحصل عليهما تاجرُ التجزئة مجّاناً**
-            // بينما تبيعهما الباقةُ: المنتجاتُ من «البداية» والعملاءُ من
-            // «الأعمال».
-            //
-            // وهو ستُّ تركيباتٍ مقيسة (تجزئةٌ وجملةٌ × ثلاثِ باقات).
-            //
-            // **وبقيّةُ القائمة تبقى**: الكاشيرُ والإيصالاتُ والتقاريرُ
-            // اليوميّةُ وتقسيمُ الفاتورة **لا تبيعها أيُّ باقة** — فهي
-            // البابُ الأوّلُ للقطاع لا عمقُه.
-            A::BIZ_RETAIL => [
-                A::F_CASHIER, A::F_DEBTS,
-                A::F_REFUNDS, A::F_PAYMENT_REQUESTS, A::F_SPLIT_BILL,
-                A::F_DAILY_REPORTS, A::F_RECEIPTS,
-            ],
-
-            // محطة وقود
-            A::BIZ_FUEL => [
-                A::F_FUEL_POS, A::F_FUEL_PUMPS, A::F_FUEL_SHIFTS,
-                A::F_DAILY_REPORTS,
-                A::F_RECEIPTS,
-            ],
-
-            // صيدلية
-            // صيدليّة — و`F_PHARMACY_BATCHES` نُزعت للسبب نفسِه:
-            //
-            // السجلُّ يبيعها من **البداية** (`min_plan = starter`)، وهذا
-            // السطرُ كان يمنحها **مجّاناً** لكلّ صيدليّة. فمصدرا حقيقةٍ
-            // لشيءٍ واحدٍ يتناقضان، **والاتّحادُ يُرجّح الأسخى دائماً** —
-            // فالقدرةُ المدفوعةُ تُسلَّم بلا ثمن، والسجلُّ يقول إنّها محروسة.
-            //
-            // (‏قِيست بمصفوفة `PlanEntitlementMatrixTest`: حالتان — صيدليّةٌ
-            // مجّانيّةٌ موثَّقةٌ وغيرُ موثَّقة. وهي آخرُ تسرُّبٍ من ستّةٍ
-            // كانت: `F_PRODUCTS` و`F_CUSTOMERS` في التجزئة والجملة.)
-            A::BIZ_PHARMACY => [
-                A::F_PHARMACY_POS, A::F_PHARMACY_PRODUCTS,
-                A::F_PHARMACY_BATCHES, A::F_PHARMACY_ALERTS,
-                A::F_DEBTS, A::F_DAILY_REPORTS, A::F_RECEIPTS,
-            ],
-
-            // جملة — و`F_PRODUCTS`/`F_CUSTOMERS` نُزعتا للسبب أعلاه.
-            A::BIZ_WHOLESALE => [
-                A::F_CASHIER, A::F_DEBTS,
-                A::F_WHOLESALE_INVOICES, A::F_WHOLESALE_COLLECTIONS,
-                A::F_DAILY_REPORTS, A::F_RECEIPTS,
-            ],
-
-            // مطعم (v2 — placeholder للآن)
-            A::BIZ_RESTAURANT => [
-                // ══════════════════════════════════════════════════════
-                // AMIAL-RESTAURANT-GATE-001 — **طاولاتٌ بلا طلبات.**
-                //
-                // كان القطاعُ يمنح `restaurant_tables` ولا يمنح
-                // `restaurant_orders` ولا `restaurant_kitchen`. فيفتح
-                // صاحبُ المطعم حسابَه، ويرى طاولاتِه، **ولا يستطيع فتحَ
-                // طلبٍ واحد**: يردّ الخادمُ 402 «قطاع المطاعم متاح
-                // لحسابات المطاعم» — وهو **حسابُ مطعمٍ فعلاً**.
-                //
-                // ورسالةٌ تنفي عن الحساب صفتَه وهو يحملها ترسل صاحبَها
-                // إلى الدعم بلا معلومة. والقطاعُ كلُّه معطَّلٌ عمليّاً:
-                // الطاولةُ بلا طلبٍ لا تبيع شيئاً.
-                //
-                // **وهي الثلاثةُ نواةُ القطاع** — لا عمقَه المُباع
-                // بالباقة. (والعمقُ يبقى في `verticalPlanFeatures`.)
-                //
-                // ══════════════════════════════════════════════════════
-                // **وقرارٌ سابقٌ يُذكَر لا يُمحى.** كان مكتوباً هنا:
-                //
-                //   «المطعم غير مكتمل من أ إلى ي؛ لا نمنح طلبات/مطبخ
-                //    كميزات جاهزة.»
-                //
-                // وهو حرصٌ في محلِّه يومَ كُتب. **وتجاوزَته نيّةُ صاحب
-                // المشروع الأحدث**: التزامُه `fix(restaurant): audit
-                // independent role staff` يضيف اختباراً يشترط أن يفتح
-                // موظّفُ المطعم طلباً وينغلقَ عليه أثرُه — أي أنّ القطاع
-                // صار يُبنى لا يُؤجَّل.
-                //
-                // فمن قرأ هذا لاحقاً يعرف أنّ المنعَ كان قراراً، وأنّ
-                // رفعَه كان قراراً كذلك — لا سهواً.
-                // ══════════════════════════════════════════════════════
-                A::F_RESTAURANT_TABLES,
-                A::F_RESTAURANT_ORDERS,
-                A::F_RESTAURANT_KITCHEN,
-                A::F_DEBTS,
-                A::F_DAILY_REPORTS,
-            ],
-
-            default => [],
-        };
+        return VerticalRegistry::find($type)?->own() ?? [];
     }
 
     // ============ Features لكل Subscription Plan ============
@@ -210,30 +136,18 @@ class AccessPresets
         };
     }
 
-    /** ميزات مدفوعة لا تنطبق إلا على قطاعها؛ لا تدخل planFeatures العامة. */
+    /**
+     * ميزات مدفوعة لا تنطبق إلا على قطاعها؛ لا تدخل planFeatures العامة.
+     *
+     * AMIAL-VERTICAL-OOP-001 — **والعمقُ يُسأل من مربّع القطاع كذلك.**
+     *
+     * وسُلَّمُ الباقات يُقرأ من `AccessConstants::ALL_PLANS` داخل
+     * `planReaches` — فباقةٌ تُضاف غداً تأخذ موضعَها بلا تعديلٍ هنا،
+     * وسُلَّمٌ مكتوبٌ بيدٍ يشيخ مع أوّل قرارِ تسعير.
+     */
     public static function verticalPlanFeatures(?string $type, string $plan): array
     {
-        if ($plan === A::PLAN_FREE) {
-            return [];
-        }
-
-        return match ($type) {
-            A::BIZ_FUEL => [
-                A::F_FUEL_PRODUCTS, A::F_FUEL_COMPANIES,
-                A::F_FUEL_CARDS, A::F_FUEL_VARIANCE,
-            ],
-            // AMIAL-SOLD-UNBUILT-001 — **و«قريباً» لا تُمنَح.**
-            //
-            // `F_PHARMACY_CUSTOMERS` أُعلنت `comingSoon()` لأنّها بلا نقطة
-            // نهاية. ومنحُها هنا يُبقيها في `features` — فتُرسَم الشاشةُ
-            // ويُضغَط الزرُّ ولا شيءَ خلفه.
-            //
-            // **وإعلانُ «قريباً» في السجلّ وحدَه لا يكفي**: المنحُ من
-            // مصدرٍ آخر يتجاوزه. فيُنزَع من المصدرين معاً.
-            A::BIZ_PHARMACY => [A::F_PHARMACY_PRESCRIPTIONS],
-            A::BIZ_WHOLESALE => [A::F_WHOLESALE_MULTI_PRICING],
-            default => [],
-        };
+        return VerticalRegistry::find($type)?->depthFor($plan) ?? [];
     }
 
     // ============ Features لكل Verification Level ============
