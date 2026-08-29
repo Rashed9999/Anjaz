@@ -239,6 +239,15 @@ class CapabilityBoxAgreementGuardTest extends TestCase
             app_path('Services/Admin/MerchantThreeSixtyService.php'),
             app_path('Domain/Verticals/VerticalRegistry.php'),
             resource_path('views/admin-views/amial/hub/users.blade.php'),
+
+            // **وأُضيف هذا بعد أن أفلتت منه نسخةٌ خامسة.** كان في
+            // `ReceiptDocumentService` جدولُ أسماءٍ خاصٌّ به يوافق المصدرَ
+            // حرفاً بحرف — **فلم يُنبّه أحداً**، وهو على الإيصال المطبوع:
+            // ورقةٌ في يد العميل لا تُصحَّح بتحديث.
+            //
+            // فالحارسُ لا يُفيد إلّا حيث ينظر، **وقائمةُ ما ينظر فيه
+            // تُراجَع كلّما ظهر موضعٌ جديد**.
+            app_path('Services/ReceiptDocumentService.php'),
         ];
 
         foreach ($files as $file) {

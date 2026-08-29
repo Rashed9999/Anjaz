@@ -11,6 +11,7 @@ use App\Models\Receipt;
 use App\Models\RestaurantOrder;
 use App\Models\WholesaleCollection;
 use App\Models\WholesaleInvoice;
+use App\Domain\Verticals\VerticalRegistry;
 use App\Support\Access\AccessConstants as A;
 use App\Support\ArabicTafqit;
 use Illuminate\Support\Facades\Cache;
@@ -33,14 +34,23 @@ class ReceiptDocumentService
         'pay_merchant', 'pos_payment', 'qr_payment', 'split_bill_payment',
     ];
 
-    private const VERTICAL_LABELS = [
-        A::BIZ_QUICK_SALE => 'بيع سريع',
-        A::BIZ_RETAIL => 'تجزئة',
-        A::BIZ_FUEL => 'محطة وقود',
-        A::BIZ_PHARMACY => 'صيدلية',
-        A::BIZ_WHOLESALE => 'تجارة جملة',
-        A::BIZ_RESTAURANT => 'مطعم',
-    ];
+    /**
+     * AMIAL-VERTICAL-OOP-004 — **اسمُ القطاع على الإيصال من مصدره.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * كانت هنا **نسخةٌ خامسةٌ** لأسماء القطاعات، مكتوبةً بيدها. ووافقت
+     * المصدرَ يومَ كُتبت — **وهذا بالضبط ما يجعلها خطرة**: نسخةٌ تُوافق
+     * لا تُنبّه أحداً، ثمّ يتغيّر المصدرُ وحدَه فتفترق بصمت.
+     *
+     * **وأثرُها هنا أدومُ من غيره:** الإيصالُ يُطبع ويُسلَّم ويُحفَظ. فاسمٌ
+     * على ورقةٍ في يد العميل لا يُصحَّح بتحديثٍ — ويبقى شاهداً على
+     * نظامين مختلفين.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    private function verticalLabel(?string $vertical, string $fallback): string
+    {
+        return VerticalRegistry::find($vertical)?->nameAr() ?? $fallback;
+    }
 
     public function __construct(
         private readonly ReceiptNoticeService $notice,
@@ -264,9 +274,9 @@ class ReceiptDocumentService
         return array_merge($base, [
             'kind' => 'merchant_invoice',
             'title' => $source['title'] ?? $this->invoiceTitle($vertical),
-            'subtitle' => self::VERTICAL_LABELS[$vertical] ?? 'فاتورة بيع',
+            'subtitle' => $this->verticalLabel($vertical, 'فاتورة بيع'),
             'vertical' => $vertical,
-            'vertical_label' => self::VERTICAL_LABELS[$vertical] ?? 'تاجر',
+            'vertical_label' => $this->verticalLabel($vertical, 'تاجر'),
             'document_number' => (string) ($source['document_number'] ?? $receipt->receipt_number),
             'status' => (string) ($source['status'] ?? $base['status']),
             'status_label' => $source['status_label'] ?? $base['status_label'],
