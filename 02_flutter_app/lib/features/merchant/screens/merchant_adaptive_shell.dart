@@ -5,6 +5,7 @@ import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/features/entitlements/screens/my_capabilities_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_capability_hub_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/features/setting/screens/profile_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
@@ -131,6 +132,25 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
                       selected: true,
                       onTap: () => Navigator.of(context).pop(),
                     ),
+                    // ══════════════════════════════════════════════════
+                    // AMIAL-MERCHANT-WALLET-001 — **محفظةُ المتجر في
+                    // الدرج، لأنّ الدرجَ هو ما يُفتَح من كلّ شاشة.**
+                    //
+                    // كان الرصيدُ بطاقةً في ترويسة اللوحة وحدَها، والسحبُ
+                    // رابطاً في أسفلها، والحركاتُ شاشةً ثالثة —
+                    // **وأحدَ عشرَ بنداً في الدرج وليس بينها المال**.
+                    //
+                    // ولمالك المتجر وحدَه: الكاشيرُ لا درجَ له أصلاً
+                    // (شاشتُه خارج هذا الهيكل)، والحدُّ هنا احتياطٌ ثانٍ.
+                    // ══════════════════════════════════════════════════
+                    if (access.isMerchantOwner)
+                      _item(
+                        context,
+                        icon: Icons.account_balance_wallet_rounded,
+                        label: 'محفظة المتجر',
+                        onTap: () =>
+                            _open(context, const MerchantWalletScreen()),
+                      ),
                     ..._activityItems(context),
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: AmialSpacing.xs),

@@ -32,7 +32,7 @@ import 'package:amial_pay/features/merchant/screens/stock_alerts_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_transactions_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 
 /// AMIAL-MERCHANT-SERVICES-HUB-001 — «مركز خدمات التاجر».
 ///
@@ -518,9 +518,16 @@ class MerchantServicesHubScreen extends StatelessWidget {
     _Svc('daily_reports', 'تقرير اليوم',
         'مبيعات اليوم بالتفصيل: عدد الفواتير، النقد مقابل المحفظة، وأعلى الأصناف مبيعاً.',
         Icons.today, 'المجانية', () => const CashierReportScreen()),
-    _Svc('wallet', 'حركات المتجر',
-        'كل ما دخل محفظة متجرك وخرج منها: مقبوضات، تحويلات، رسوم — بترتيب زمنيّ وبحث.',
-        Icons.swap_vert, 'المجانية', () => const MerchantTransactionsScreen()),
+    // AMIAL-MERCHANT-WALLET-001 — **اسمٌ واحدٌ للشيء الواحد.**
+    //
+    // كان اسمُها هنا «حركات المتجر» وعنوانُ شاشتها «المبيعات والعمليات»
+    // ورابطُها في اللوحة «سحب رصيدي» — **ثلاثةُ أسماءٍ لمالٍ واحد**،
+    // ولا شاشةَ تجمعها. فصارت «محفظة المتجر» تفتح المحفظةَ نفسَها،
+    // ومنها بابٌ إلى الحركات كاملةً.
+    _Svc('wallet', 'محفظة المتجر',
+        'رصيدُك من البيع: كم لديك، وسحبٌ عبر وكيل، وتحويلٌ إلى حساب أميال باي، '
+        'وكلُّ ما دخل وخرج بترتيبٍ زمنيّ.',
+        Icons.account_balance_wallet, 'المجانية', () => const MerchantWalletScreen()),
     _Svc('profit_reports', 'تقارير الأرباح',
         'تقارير مبيعات وأرباح مفصّلة لمتجرك، بمقارنات يومية وشهرية لتعرف أداءك الحقيقي.',
         Icons.trending_up, 'الأعمال', () => const FinancialTruthReportScreen()),

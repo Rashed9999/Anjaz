@@ -17,6 +17,24 @@ class AccessController extends GetxController implements GetxService {
 
   // الحقول الأساسية
   final RxString role = 'user'.obs;
+
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-POS-ACTOR-001 — **الفاعلُ يُقرأ، لا يُخمَّن من الدور.**
+  //
+  // الخادمُ يصرّح بـ`actor` منذ `AMIAL-ACTOR-001` (مالكٌ · موظّفُ نقطة
+  // بيع · موظّفُ أدوار · عميل) ومعه كتلةُ `pos` — **ولم يكن التطبيق
+  // يقرأ أيّاً منهما**. فكلُّ فرعٍ في المُرسِل يسأل `isMerchant` وهي
+  // `role == 'merchant'`، ودورُ الكاشير `'pos'`، **فيسقط من الفروع
+  // كلِّها** إلى آخر سطر: لوحةُ المالك، وبلا الهيكل.
+  //
+  // ومثلُه `isPosSession` في `MerchantContext`: يُفكَّك من الردّ منذ
+  // كُتب **ولا يقرؤه موضعٌ واحد** — مبنيٌّ ولا يُوصَل إليه.
+  // ══════════════════════════════════════════════════════════════════
+  final RxString actor = 'customer'.obs;
+  final RxnString posNumber = RxnString();
+  final RxnString posDisplayName = RxnString();
+  final RxSet<String> posPermissions = <String>{}.obs;
+  final RxnInt merchantUserId = RxnInt();
   final RxString verificationLevel = 'basic'.obs;
   final RxnString businessType = RxnString();          // قد يكون null إن لم يختر
   final RxnString businessTypeLabel = RxnString();
@@ -66,6 +84,22 @@ class AccessController extends GetxController implements GetxService {
   void _hydrate(Map meta) {
     final access = (meta['access'] ?? {}) as Map;
     role.value = access['role']?.toString() ?? 'user';
+    actor.value = access['actor']?.toString() ?? 'customer';
+    merchantUserId.value = (access['merchant_user_id'] as num?)?.toInt();
+
+    final pos = access['pos'];
+    if (pos is Map) {
+      posNumber.value = pos['pos_number']?.toString();
+      posDisplayName.value = pos['display_name']?.toString();
+      posPermissions
+        ..clear()
+        ..addAll(((pos['permissions'] as List?) ?? const []).map((e) => e.toString()));
+    } else {
+      posNumber.value = null;
+      posDisplayName.value = null;
+      posPermissions.clear();
+    }
+
     verificationLevel.value = access['verification_level']?.toString() ?? 'basic';
     businessType.value = access['business_type']?.toString();
     businessTypeLabel.value = access['business_type_label']?.toString();
@@ -111,6 +145,28 @@ class AccessController extends GetxController implements GetxService {
   bool get isUser => role.value == 'user';
   bool get isAgent => role.value == 'agent';
   bool get isMerchant => role.value == 'merchant';
+
+  /// ══════════════════════════════════════════════════════════════════
+  /// **موظّفُ نقطة البيع** — الكاشير. يرث صنفَ صاحبه وخطّتَه، وتُقصّ
+  /// ميزاتُه بصلاحيّاته في الخادم (`restrictToPosPermissions`).
+  ///
+  /// ولا يُقاس بـ`role == 'pos'` وحده: `actor` هو ما يصرّح به الخادم،
+  /// و`'pos'` دورٌ ليس في `ALL_ROLES` أصلاً.
+  bool get isPosStaff => actor.value == 'pos';
+
+  /// **مالكُ المتجر** — وحدَه من يرى المالَ ويُدير الحساب.
+  bool get isMerchantOwner => actor.value == 'owner';
+
+  /// من يعمل داخل حساب تاجرٍ أيّاً كانت صفتُه: مالكٌ أو كاشيرٌ أو موظّفُ
+  /// أدوار. تُستعمل حيث يكون **صنفُ النشاط** هو المقصود لا الملكيّة.
+  bool get isMerchantSide =>
+      actor.value == 'owner' || actor.value == 'pos' || actor.value == 'staff';
+
+  /// صلاحيّةٌ ممنوحةٌ لموظّف نقطة البيع من شاشة «الموظفون».
+  ///
+  /// **وغيرُ الموظّف يملكها كلَّها** — فالمالكُ لا يُقصّ بصلاحيّات موظّف.
+  bool posCan(String permission) =>
+      !isPosStaff || posPermissions.contains(permission);
   bool get isAdmin => role.value == 'admin';
   bool get isDistributor => role.value == 'distributor';
 
@@ -154,6 +210,15 @@ class AccessController extends GetxController implements GetxService {
   /// إعادة تعيين عند تسجيل الخروج
   void reset() {
     role.value = 'user';
+
+    // **والفاعلُ يُصفَّر مع الباقي** — وإلّا بقي «كاشير» بعد الخروج،
+    // فيدخل المالكُ على جهازه فيجد شاشةَ موظّفه.
+    actor.value = 'customer';
+    posNumber.value = null;
+    posDisplayName.value = null;
+    posPermissions.clear();
+    merchantUserId.value = null;
+
     verificationLevel.value = 'basic';
     businessType.value = null;
     businessTypeLabel.value = null;

@@ -28,7 +28,11 @@ class _MerchantTransactionsScreenState
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('المبيعات والعمليات'),
+        // AMIAL-MERCHANT-WALLET-001 — كان «المبيعات والعمليات»، واسمُها
+        // في «خدماتي» «حركات المتجر»، ورابطُها في اللوحة «المبيعات».
+        // **ثلاثةُ أسماءٍ لشيء**، ويفتحها التاجرُ من ثلاثة أبواب.
+        // فصارت تابعةً لاسمِ ما هي جزءٌ منه: محفظةُ المتجر.
+        title: const Text('حركات المحفظة'),
       ),
       body: RefreshIndicator(
         onRefresh: () => Get.find<MerchantController>().loadTransactions(),

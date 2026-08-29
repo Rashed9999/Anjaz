@@ -10,6 +10,7 @@ import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
 import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_adaptive_shell.dart';
+import 'package:amial_pay/features/merchant/screens/pos_employee_home_screen.dart';
 
 /// CRITICAL-001 — Home Dispatcher.
 ///
@@ -67,6 +68,22 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
       // 3) تاجر لم يختر نوع نشاطه → إجبار الاختيار
       if (_access.needsBusinessTypeSelection) {
         return const BusinessTypeSelectionScreen(mandatory: true);
+      }
+
+      // ══════════════════════════════════════════════════════════════
+      // AMIAL-POS-HOME-001 — **موظّفُ نقطة البيع يفتح شاشةَ كاشير.**
+      //
+      // وكان يسقط من كلّ فروع `isMerchant` أدناه — لأنّها
+      // `role == 'merchant'` ودورُه `'pos'` — إلى آخر سطرٍ في الدالّة،
+      // **فيهبط في لوحة المالك خارجَ الهيكل**: يقرأ رصيدَ صاحبه، ويرى
+      // «سحب رصيدي» و«موظفو نقاط البيع»، ولا زرَّ عودةَ له ولا درج.
+      //
+      // **ويُفحَص قبل الجميع**: الكاشيرُ يرث صنفَ نشاط صاحبه، فلو تُرك
+      // للفروع أسفلَه لالتقطه فرعُ القطاع وفتح له **لوحةَ إدارة**
+      // القطاع (`FuelOwnerConsoleScreen` مثلاً) لا شاشةَ بيعه.
+      // ══════════════════════════════════════════════════════════════
+      if (_access.isPosStaff) {
+        return const PosEmployeeHomeScreen();
       }
 
       // 4) Route حسب الدور + business_type

@@ -9,10 +9,26 @@ import 'package:amial_pay/features/access/controllers/access_controller.dart';
 /// الاستخدام:
 ///   AccessGate(feature: 'inventory', child: _serviceCard(...))
 ///   AccessGate(feature: 'fuel_pos', child: ..., fallback: ...)
+///   AccessGate(ownerOnly: true, child: _LinkTile(label: 'سحب رصيدي'))
 class AccessGate extends StatelessWidget {
   final String? feature;
   final List<String>? anyOf;
   final List<String>? allOf;
+
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-POS-SCOPE-001 — **الملكيّةُ ليست ميزةً، فلا تُفحص بـ`feature`.**
+  ///
+  /// «سحب رصيدي» و«موظفو نقاط البيع» و«إعدادات المتجر» **يرثها الكاشيرُ
+  /// في قائمة الميزات** — لأنّ الوراثةَ تُحسب بصنف صاحبه وخطّته، ثمّ
+  /// تُقصّ بصلاحيّاته. فمن أُعطي `employees` (مديرُ عمليّات مثلاً) يملك
+  /// الميزةَ **ولا يملك المتجر**.
+  ///
+  /// فحاجزٌ على الميزة وحدَها يمرّ، والخادمُ يردّ ٤٠٣ «متاح للتجّار
+  /// فقط». **وزرٌّ يُرسَم ثمّ يُصفع أسوأُ من غيابه**: الغيابُ يُسأل عنه،
+  /// والرفضُ يُقرأ عطلاً في التطبيق.
+  /// ══════════════════════════════════════════════════════════════════
+  final bool ownerOnly;
+
   final Widget child;
   final Widget? fallback;
 
@@ -21,6 +37,7 @@ class AccessGate extends StatelessWidget {
     this.feature,
     this.anyOf,
     this.allOf,
+    this.ownerOnly = false,
     required this.child,
     this.fallback,
   });
@@ -33,6 +50,11 @@ class AccessGate extends StatelessWidget {
       if (feature != null) allowed = allowed && access.has(feature!);
       if (anyOf != null) allowed = allowed && access.hasAny(anyOf!);
       if (allOf != null) allowed = allowed && access.hasAll(allOf!);
+
+      // **ولا يُعرَض بديلٌ «بالترقية» لمن ليس مالكاً**: الترقيةُ لا تجعل
+      // الكاشيرَ صاحبَ المتجر، ودعوتُه إليها كذب.
+      if (ownerOnly && !access.isMerchantOwner) return const SizedBox.shrink();
+
       return allowed ? child : (fallback ?? const SizedBox.shrink());
     });
   }

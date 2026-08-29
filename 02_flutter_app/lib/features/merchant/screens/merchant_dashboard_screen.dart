@@ -13,12 +13,13 @@ import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
-import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 import 'package:amial_pay/features/merchant/screens/split_bill_create_screen.dart';
 import 'package:amial_pay/features/merchant/screens/split_bill_my_shares_screen.dart';
 import 'package:amial_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
 import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
+import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-MERCHANT-APP-001 (v1.6)
@@ -121,35 +122,74 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.15),
+                    // ══════════════════════════════════════════════════
+                    // AMIAL-MERCHANT-WALLET-001 — **بطاقةٌ تُقرأ وتُضغط.**
+                    //
+                    // كانت `Container` صمّاء: الرصيدُ يُعرض ولا باب من
+                    // عنده إلى الحركات ولا إلى السحب — وهما في أسفل
+                    // اللوحة وفي شاشةٍ ثالثة، **بثلاثة أسماء**.
+                    //
+                    // **و`${...balance} ر.ي` كانت تكتب «0 ر.ي»** حين
+                    // يحجب الخادمُ الرصيدَ (عن موظّف نقطة البيع)، لأنّ
+                    // النموذجَ كان يفترض `'0'`. وصفرٌ يُقرأ «متجرٌ خاوٍ».
+                    // فصار `null` يُقال غياباً. (القاعدة السابعة.)
+                    // ══════════════════════════════════════════════════
+                    //
+                    // **والبطاقةُ نفسُها لمالكٍ لا لكلّ من يفتح اللوحة.**
+                    // كشفه حارسُ `pos_employee_has_a_cashier_screen_test`
+                    // حين سقط على هذا الموضع: موظّفُ الأدوار
+                    // (`merchant_user_roles`) ما زال يسقط إلى هذه اللوحة
+                    // — فرعُه لم يُبنَ بعد — **فكان يقرأ رصيدَ صاحبه
+                    // ويفتح محفظتَه**.
+                    AccessGate(
+                      ownerOnly: true,
+                      child: Material(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
                         borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.account_balance_wallet,
-                              color: Colors.white, size: 28),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        onTap: () => Get.to(() => const MerchantWalletScreen()),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
                             children: [
-                              const Text('الرصيد المتاح',
-                                  style: TextStyle(
-                                      color: Colors.white70, fontSize: 12)),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${ctrl.stats.value.balance} ر.ي',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
+                              const Icon(Icons.account_balance_wallet,
+                                  color: Colors.white, size: 28),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('الرصيد المتاح',
+                                        style: TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      ctrl.stats.value.hasBalance
+                                          ? AmialMoney.yer(
+                                              ctrl.stats.value.balance)
+                                          : 'لمالك المتجر',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: ctrl.stats.value.hasBalance
+                                            ? 22
+                                            : 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
+                              const Text('محفظة المتجر',
+                                  style: TextStyle(
+                                      color: Colors.white70, fontSize: 11)),
+                              const Icon(Icons.chevron_left,
+                                  color: Colors.white70),
                             ],
                           ),
-                        ],
+                        ),
+                      ),
                       ),
                     ),
                   ],
@@ -399,20 +439,41 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                     // **وقولُ «قريباً» عن مبنيٍّ أسوأ من غياب الزرّ**:
                     // الغيابُ يُسأل عنه، و«قريباً» تُصدَّق فيُكفّ عن السؤال.
                     // ══════════════════════════════════════════════════
-                    _LinkTile(
-                      icon: Icons.account_balance_wallet_outlined,
-                      label: 'سحب رصيدي (عبر وكيل)',
-                      onTap: () => Get.to(() => const WithdrawRequestScreen()),
+                    // ══════════════════════════════════════════════════
+                    // AMIAL-POS-SCOPE-001 — **وثلاثتُها لمالك المتجر.**
+                    //
+                    // كانت تُرسَم بلا شرط، وهذه اللوحةُ هي ما كان يهبط
+                    // فيه موظّفُ نقطة البيع (انظر `PosEmployeeHomeScreen`).
+                    // فيقرأ الكاشيرُ «سحب رصيدي» و«موظفو نقاط البيع»
+                    // ويضغطهما فيُردّ بـ٤٠٣ «متاح للتجّار فقط».
+                    //
+                    // **وحاجزُ الميزة وحدَه لا يكفي**: الكاشيرُ يرث ميزاتِ
+                    // صاحبه، فيمرّ. فالحدُّ على **الملكيّة**.
+                    // ══════════════════════════════════════════════════
+                    AccessGate(
+                      ownerOnly: true,
+                      child: _LinkTile(
+                        icon: Icons.account_balance_wallet_outlined,
+                        label: 'محفظة المتجر',
+                        onTap: () => Get.to(() => const MerchantWalletScreen()),
+                      ),
                     ),
-                    _LinkTile(
-                      icon: Icons.people,
-                      label: 'موظفو نقاط البيع',
-                      onTap: () => Get.to(() => const MerchantStaffScreen()),
+                    AccessGate(
+                      ownerOnly: true,
+                      feature: 'employees',
+                      child: _LinkTile(
+                        icon: Icons.people,
+                        label: 'موظفو نقاط البيع',
+                        onTap: () => Get.to(() => const MerchantStaffScreen()),
+                      ),
                     ),
-                    _LinkTile(
-                      icon: Icons.settings,
-                      label: 'إعدادات المتجر',
-                      onTap: () => Get.to(() => const MerchantServicesHubScreen()),
+                    AccessGate(
+                      ownerOnly: true,
+                      child: _LinkTile(
+                        icon: Icons.settings,
+                        label: 'إعدادات المتجر',
+                        onTap: () => Get.to(() => const MerchantServicesHubScreen()),
+                      ),
                     ),
                   ],
                 ),

@@ -119,7 +119,22 @@ class AmialMerchantDashboardStats {
   final String todayRefunds;
   final String todayNet;
   final int todayTransactionsCount;
-  final String balance;
+
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-POS-SCOPE-001 — **`null` يعني «لا يُعرَض لك»، لا «صفر».**
+  ///
+  /// كان `String balance` بافتراضٍ `'0'`. والخادمُ صار يحذف الحقلَ عن
+  /// موظّف نقطة البيع — **فكان الافتراضُ يكتب «الرصيد المتاح: 0 ر.ي»
+  /// على متجرٍ فيه مئتا ألف**. وكذبةٌ بصفرٍ أسوأ من امتناع: الكاشيرُ
+  /// يقرؤها متجراً خاوياً، والمالكُ إن رآها ظنّ مالَه ذهب.
+  ///
+  /// (القاعدة السابعة: «غير معروف» ليس صفراً — يُقال الغيابُ صراحةً.)
+  /// ══════════════════════════════════════════════════════════════════
+  final String? balance;
+
+  /// `owner_only` حين يحجب الخادمُ الرصيد — يُقرأ ليُقال السببُ للمستعمل.
+  final String? balanceScope;
+
   final String pendingSettlement;
 
   AmialMerchantDashboardStats({
@@ -129,20 +144,27 @@ class AmialMerchantDashboardStats {
     required this.todayTransactionsCount,
     required this.balance,
     required this.pendingSettlement,
+    this.balanceScope,
   });
+
+  /// هل يُعرَض الرصيدُ لهذا الحساب؟
+  bool get hasBalance => balance != null;
 
   factory AmialMerchantDashboardStats.empty() => AmialMerchantDashboardStats(
         todaySales: '0', todayRefunds: '0', todayNet: '0',
-        todayTransactionsCount: 0, balance: '0', pendingSettlement: '0',
+        todayTransactionsCount: 0, balance: null, pendingSettlement: '0',
       );
 
   factory AmialMerchantDashboardStats.fromJson(Map<String, dynamic> j) {
+    final raw = j['current_balance'] ?? j['balance'];
+
     return AmialMerchantDashboardStats(
       todaySales: (j['today_sales'] ?? '0').toString(),
       todayRefunds: (j['today_refunds'] ?? '0').toString(),
       todayNet: (j['today_net'] ?? j['today_sales'] ?? '0').toString(),
       todayTransactionsCount: j['today_count'] ?? 0,
-      balance: (j['current_balance'] ?? j['balance'] ?? '0').toString(),
+      balance: raw?.toString(),
+      balanceScope: j['balance_scope']?.toString(),
       pendingSettlement: (j['pending_settlement'] ?? '0').toString(),
     );
   }
