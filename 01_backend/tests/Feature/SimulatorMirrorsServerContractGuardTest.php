@@ -34,6 +34,12 @@ class SimulatorMirrorsServerContractGuardTest extends TestCase
     private const RX_SIM = __DIR__ . '/../../../docs/محاكيات/محاكي-الصيدلية.html';
     private const RX_CTRL = __DIR__ . '/../../app/Http/Controllers/Api/V1/Amial/PharmacyController.php';
 
+    private const FUEL_SIM = __DIR__ . '/../../../docs/محاكيات/محاكي-محطة-الوقود.html';
+    private const FUEL_CTRL = __DIR__ . '/../../app/Http/Controllers/Api/V1/Amial/FuelStationController.php';
+
+    private const RETAIL_SIM = __DIR__ . '/../../../docs/محاكيات/محاكي-متجر-التجزئة.html';
+    private const RETAIL_CTRL = __DIR__ . '/../../app/Http/Controllers/Api/V1/Amial/CashierController.php';
+
     private function sim(): string
     {
         $this->assertFileExists(self::SIM, 'محاكي الجملة مفقود — والحارسُ يفحص العدم.');
@@ -353,6 +359,153 @@ class SimulatorMirrorsServerContractGuardTest extends TestCase
 
         $this->assertSame([], $missing, sprintf(
             "**أقسامٌ في درج الصيدليّة وليست في محاكيها:**\n  %s",
+            implode('، ', $missing)));
+    }
+    /**
+     * **⑩ والوقودُ والتجزئة: كلُّ طريقةِ دفعٍ يقبلها الخادمُ معروضة.**
+     *
+     * الوقود  `cash · amial_pay · company_card · credit`  (أربع)
+     * التجزئة `cash · credit · amial_pay · corporate · mixed` (خمس)
+     */
+    /** @test */
+    public function every_fuel_and_retail_payment_method_is_shown(): void
+    {
+        foreach ([
+            'الوقود' => [self::FUEL_SIM, self::FUEL_CTRL, 4],
+            'التجزئة' => [self::RETAIL_SIM, self::RETAIL_CTRL, 5],
+        ] as $label => [$simPath, $ctrl, $min]) {
+            $this->assertFileExists($simPath, "محاكي {$label} مفقود.");
+            $sim = (string) file_get_contents($simPath);
+
+            $accepted = $this->acceptedValues('payment_method', $ctrl);
+
+            $this->assertGreaterThanOrEqual($min, count($accepted),
+                "قُرئت طرقُ دفعٍ لـ«{$label}» أقلُّ ممّا كان — تغيّرت "
+                . 'صياغةُ المتحقِّق، والحارسُ يفحص فراغاً.');
+
+            $missing = array_values(array_filter($accepted,
+                fn (string $v): bool => ! str_contains($sim, "data-pay=\"{$v}\"")
+                    && ! str_contains($sim, "['{$v}',")));
+
+            $this->assertSame([], $missing, sprintf(
+                "**طرقُ دفعٍ يقبلها الخادمُ ولا يعرضها محاكي %s:**\n  %s",
+                $label, implode('، ', $missing)));
+        }
+    }
+
+    /**
+     * **⑪ ومحطةُ الوقود لا تُعرَض عليها أصنافٌ ولا مخزون.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمنُ الذي دُفع:** سأل صاحبُ المشروع «لماذا تاجر وقود لديه
+     * أصناف ومخزون؟ … انت عملت نسخ لصق». وقِيس فإذا الوقودُ يصله ٣٩
+     * ميزةً منها الأصنافُ والمخزونُ والموردون — لأنّ `planFeatures` كانت
+     * تُصبّ على كلّ تاجرٍ بلا نظرٍ إلى قطاعه (AMIAL-VERTICAL-SCOPE-001).
+     *
+     * **و«لا ينطبق» ليست «مقفلة»:** المقفلُ يَعِد بأنّ الدفعَ يفتحه.
+     * فالمحاكي يعرضها صنفاً ثالثاً لا تفتحه أيُّ ترقية.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    /** @test */
+    public function the_fuel_simulator_never_offers_goods_capabilities(): void
+    {
+        // المصدرُ يُقرأ: الوقودُ ليس في `GOODS` فلا تنطبق عليه.
+        $reg = (string) file_get_contents(
+            __DIR__ . '/../../app/Support/Access/CapabilityRegistry.php');
+
+        $at = strpos($reg, 'private const GOODS = [');
+        $this->assertNotFalse($at, 'اختفى ثابتُ `GOODS` من السجلّ.');
+
+        $goods = substr($reg, $at, (int) strpos($reg, '];', $at) - $at);
+
+        $this->assertStringNotContainsString('BIZ_FUEL', $goods,
+            '**عاد الوقودُ إلى `GOODS`.** فتُمنَح له الأصنافُ والمخزونُ '
+            . 'مرّةً أخرى — وهو العطلُ الذي كشفه صاحبُ المشروع بعينه.');
+
+        $sim = (string) file_get_contents(self::FUEL_SIM);
+
+        $this->assertStringContainsString('var NEVER = {', $sim,
+            '**محاكي الوقود بلا صنف «لا ينطبق».** فتُعرَض الأصنافُ '
+            . 'مقفلةً بباقةٍ وتَعِد بأنّ الدفعَ يفتحها.');
+
+        foreach (['products', 'inventory', 'debts'] as $code) {
+            $this->assertMatchesRegularExpression(
+                "/NEVER = \{[^}]*\b{$code}: 1/s", $sim,
+                "**«{$code}» ليست في «لا ينطبق» بمحاكي الوقود.**");
+        }
+
+        $this->assertStringContainsString('if (NEVER[code]) return false;', $sim,
+            '**«لا ينطبق» تنفتح بالترقية في المحاكي.** والترقيةُ لا '
+            . 'تفتحها أبداً.');
+    }
+
+    /**
+     * **⑫ والتجزئةُ لا تملك الأصنافَ من نشاطها.**
+     *
+     * والتعليقُ في `VerticalRegistry` بنصّه: «صنفُ النشاط يقول ما ينطبق،
+     * لا ما اشتُري. فالمنتجاتُ والعملاءُ تبيعهما الباقةُ لا يمنحهما
+     * النشاط». فمحاكٍ يمنحها من المربّع يُري باقةً مجّانيّةً بكتالوج.
+     */
+    /** @test */
+    public function retail_does_not_get_products_from_its_vertical(): void
+    {
+        $vr = (string) file_get_contents(
+            __DIR__ . '/../../app/Domain/Verticals/VerticalRegistry.php');
+
+        $at = strpos($vr, 'A::BIZ_RETAIL => new class');
+        $this->assertNotFalse($at, 'اختفى مربّعُ التجزئة.');
+        $block = substr($vr, $at, (int) strpos($vr, 'A::BIZ_WHOLESALE =>', $at) - $at);
+
+        $this->assertStringNotContainsString('A::F_PRODUCTS', $block,
+            '**عادت `F_PRODUCTS` إلى مربّع التجزئة.** وقرارُ صاحب المشروع '
+            . 'أنّها تُباع بالباقة — ويُراجَع المحاكي معه.');
+
+        $sim = (string) file_get_contents(self::RETAIL_SIM);
+
+        $this->assertMatchesRegularExpression(
+            "/var OWN = \[[^\]]*'cashier'[^\]]*'split_bill'/s", $sim,
+            'مربّعُ التجزئة في المحاكي لا يطابق `own()`.');
+
+        $this->assertDoesNotMatchRegularExpression(
+            "/var OWN = \[[^\]]*'products'/s", $sim,
+            '**المحاكي يمنح الأصنافَ من المربّع.** فيُرى كتالوجٌ في '
+            . 'الباقة المجّانيّة — وهو ما لا يقع في التطبيق.');
+
+        $this->assertStringContainsString("products: 'business'", $sim,
+            'والأصنافُ يجب أن تُنسَب إلى باقة الأعمال في المحاكي.');
+    }
+
+    /**
+     * **⑬ وأقسامُ درج التجزئة هي أقسامُه في التطبيق.**
+     */
+    /** @test */
+    public function the_simulator_drawer_matches_the_real_retail_drawer(): void
+    {
+        $shell = __DIR__ . '/../../../02_flutter_app/lib/features/merchant/screens/merchant_adaptive_shell.dart';
+        $src = (string) file_get_contents($shell);
+
+        $at = strpos($src, "case 'retail':");
+        $this->assertNotFalse($at, 'اختفى فرعُ التجزئة من درج التطبيق');
+        $block = substr($src, $at, (int) strpos($src, 'default:', $at) - $at);
+
+        preg_match_all("/(?<!sub)title: '([^']+)'/", $block, $m);
+        $titles = $m[1] ?? [];
+
+        foreach (['people' => 'العملاء والفريق', 'reports' => 'التقارير والمالية'] as $var => $t) {
+            if (preg_match('/\b' . $var . ',/', $block)) {
+                $titles[] = $t;
+            }
+        }
+
+        $this->assertGreaterThanOrEqual(4, count($titles),
+            'لم تُقرأ أقسامُ درج التجزئة — تغيّرت الصياغة.');
+
+        $sim = (string) file_get_contents(self::RETAIL_SIM);
+        $missing = array_values(array_filter($titles,
+            fn (string $t): bool => ! str_contains($sim, $t)));
+
+        $this->assertSame([], $missing, sprintf(
+            "**أقسامٌ في درج التجزئة وليست في محاكيها:**\n  %s",
             implode('، ', $missing)));
     }
 }
