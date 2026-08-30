@@ -737,7 +737,7 @@
   };
 
   S.reports = function () {
-    titleEl.textContent = 'التقارير والماليّة';
+    titleEl.textContent = 'التقارير والمالية';
     if (!has('daily_reports')) {
       return '<div class="note"><b>التقاريرُ تبدأ من باقة الأعمال.</b> ' +
         'والمجّانيّةُ تُظهر إجماليَّ اليوم في الرئيسيّة وحدَه.</div>';
@@ -807,7 +807,7 @@
     ['👥', 'العملاء والديون', 'العملاء، كشف الحساب، آجال الاستحقاق.', 'customers', function () { return true; }],
     ['📦', 'الأصناف ومخزون الجملة', 'أصناف، باركود، مخزون، موردون وطلبات شراء.', 'stock', function () { return has('products'); }],
     ['🏷️', 'التسعير', 'قوائم أسعار وشرائح كمّيّة وأسعار شركات.', 'pricing', function () { return has('wholesale_multi_pricing'); }],
-    ['📊', 'التقارير والماليّة', 'المبيعات والربح والذمم والتدقيق.', 'reports', function () { return has('daily_reports'); }],
+    ['📊', 'التقارير والمالية', 'المبيعات والربح والذمم والتدقيق.', 'reports', function () { return has('daily_reports'); }],
     ['👤', 'الفريق والأجهزة', 'الموظّفون، الأدوار، أجهزة نقاط البيع، الفروع.', 'team', function () { return has('employees'); }]
   ];
 

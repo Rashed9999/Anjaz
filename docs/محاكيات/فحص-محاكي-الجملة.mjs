@@ -1,7 +1,37 @@
-import { chromium } from 'playwright-core';
+// ══════════════════════════════════════════════════════════════════════
+// **ESM لا يقرأ `NODE_PATH`** — يقرؤه `require` وحدَه. فاستيرادٌ مجرّدٌ
+// ينجح حيث صودف `node_modules` مجاورٌ ويسقط في البوّابة، وهو ما وقع:
+// المسبارُ يمرّ من مجلّدٍ مؤقّتٍ ويسقط `ERR_MODULE_NOT_FOUND` من موضعه
+// في المستودع. والنمطُ هنا هو نفسُه في `flow-coverage-probe.mjs`.
+// ══════════════════════════════════════════════════════════════════════
+import { createRequire } from 'node:module';
 
-const FILE = 'file:///home/user/Anjaz/docs/' + encodeURIComponent('محاكيات') + '/' +
-  encodeURIComponent('محاكي-تاجر-الجملة.html');
+let chromium;
+const CANDIDATES = [
+  process.env.NODE_PATH || '/opt/node22/lib/node_modules',
+  '/opt/node22/lib/node_modules',
+  '/usr/lib/node_modules',
+];
+for (const pkg of ['playwright-core', 'playwright']) {
+  if (chromium) break;
+  try {
+    const req = createRequire(import.meta.url);
+    ({ chromium } = req(req.resolve(pkg, { paths: CANDIDATES })));
+  } catch {
+    try { ({ chromium } = await import(pkg)); } catch { /* التالي */ }
+  }
+}
+
+// **والغيابُ يُقال ولا يُمرَّر نجاحاً.** الخروجُ بالرمز ٢ هو ما تقرؤه
+// البوّابةُ «مُخطّاة» بدل «نجحت». (القاعدة السابعة.)
+if (!chromium) {
+  console.log('  — تخطّي: playwright غير متوفّر — ولا تُعدّ الطبقةُ نجاحاً');
+  process.exit(2);
+}
+
+// المسارُ يُشتقّ من موضع المسبار — لا يُكتب مطلقاً، فينتقل المستودعُ
+// ويبقى المسبارُ يعمل.
+const FILE = new URL('./محاكي-تاجر-الجملة.html', import.meta.url).href;
 
 let pass = 0, fail = 0;
 const errs = [];
@@ -35,7 +65,7 @@ ok(!(await page.locator('#back').isVisible()), 'لا زرَّ رجوعٍ في ا
 console.log('\n② الدرج — أقسامُ دليل الجملة');
 await openDrawer();
 for (const s of ['فواتير الجملة والتحصيل', 'العملاء والديون', 'الأصناف ومخزون الجملة',
-                 'التسعير', 'التقارير والماليّة', 'الفريق والأجهزة']) {
+                 'التسعير', 'التقارير والمالية', 'الفريق والأجهزة']) {
   ok((await page.textContent('#dbody')).includes(s), `قسم «${s}»`);
 }
 ok(await page.locator('#drawer.open').isVisible(), 'الدرج يُفتح فعلاً');
@@ -233,7 +263,11 @@ if (fontHost.length) {
     await page.evaluate(() => getComputedStyle(document.body).fontFamily));
 }
 
-await page.screenshot({ path: '/tmp/claude-0/-home-user/f5304a9b-d33e-5c31-af4f-f06ece369306/scratchpad/wholesale-sim.png' });
+// اللقطةُ مساعدةٌ لا شرط — ومجلّدٌ غائبٌ لا يُسقط فحصاً نجح.
+try {
+  await page.screenshot({
+    path: new URL('./لقطة-محاكي-الجملة.png', import.meta.url).pathname });
+} catch { /* لا تُعدّ فشلاً */ }
 await browser.close();
 
 console.log(`\n══════════════════\n  نجح ${pass} · فشل ${fail}\n`);

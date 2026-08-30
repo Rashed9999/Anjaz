@@ -369,6 +369,50 @@ else
   printf '  \033[33m—\033[0m node أو المسبار غير متوفّر — تخطّي\n'
 fi
 
+# ── ٦د) محاكياتُ القطاعات في متصفّحٍ حقيقيّ ──────────────────────────
+#
+# **مسبارٌ لا يُنفَّذ ليس مسباراً.** بُني محاكيا التجزئة والوقود في مجلّدٍ
+# مؤقّتٍ خارج المستودع فذهبا مع الحاوية، وسأل صاحبُ المشروع: «كم محاكي
+# تجار تم دفعه إلى النشر؟» — والجوابُ صفر.
+#
+# وهذه الطبقةُ تضغط أزرارَها: أخرجت في أوّل تشغيلٍ ثلاثةَ أعطالٍ لم
+# تكشفها القراءة — زرَّ رجوعٍ لا يرجع، ودرجاً يفتح من الجهة الخطأ في
+# واجهةٍ عربيّة، وزرَّ طريقةِ تحصيلٍ يُضغط ولا يحدث شيءٌ ولا خطأَ في أيّ
+# سجلّ. (الحارس: SimulatorsAreCommittedAndProbedGuardTest)
+head_ "٦د) محاكيات القطاعات في متصفّح"
+SIM_DIR="$(cd "$(dirname "$0")/../.." && pwd)/docs/محاكيات"
+if command -v node >/dev/null 2>&1 && [[ -d "$SIM_DIR" ]]; then
+  SIM_FAIL=0; SIM_RAN=0
+  for probe in "$SIM_DIR"/*.mjs; do
+    [[ -e "$probe" ]] || continue
+    SIM_RAN=$((SIM_RAN+1))
+    SIM_OUT=$(cd "$SIM_DIR" && NODE_PATH="${NODE_PATH:-/opt/node22/lib/node_modules}" \
+      node "$probe" 2>&1)
+    SIM_RC=$?
+    if [[ $SIM_RC -eq 0 ]]; then
+      printf '  \033[32m✓\033[0m %s — %s\n' "$(basename "$probe")" \
+        "$(echo "$SIM_OUT" | grep -oE 'نجح [0-9]+ · فشل [0-9]+' | tail -1)"
+    elif [[ $SIM_RC -eq 2 ]]; then
+      # **مُخطّىً لا ناجح** — playwright غائبٌ فلا يُدّعى فحصٌ لم يقع.
+      SIM_RAN=$((SIM_RAN-1))
+      printf '  \033[33m—\033[0m %s — مُخطّىً ولا يُعدّ نجاحاً\n' "$(basename "$probe")"
+    else
+      SIM_FAIL=$((SIM_FAIL+1))
+      printf '  \033[31m✗\033[0m %s\n' "$(basename "$probe")"
+      echo "$SIM_OUT" | grep -E '✗' | head -8 | sed 's/^/    /'
+    fi
+  done
+  if [[ $SIM_RAN -eq 0 ]]; then
+    printf '  \033[33m—\033[0m لا مسبارَ محاكٍ — لا تُعدّ نجاحاً\n'
+  elif [[ $SIM_FAIL -eq 0 ]]; then
+    PASS=$((PASS+1))
+  else
+    FAIL=$((FAIL+1))
+  fi
+else
+  printf '  \033[33m—\033[0m node أو مجلّدُ المحاكيات غير متوفّر — تخطّي\n'
+fi
+
 # ── ٦ج) تغطيةُ التدفّقات في متصفّح ───────────────────────────────────
 #
 # **تبويبٌ لم يُضغط ليس مبنيّاً** (القاعدة التاسعة). والمسارُ مسجَّلٌ
