@@ -1,0 +1,384 @@
+<title>نموذج الموظف المبسط — الوثيقة والشيفرة</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
+<style>
+  :root{
+    --brand:#053391; --brand-lt:#1D4FB8;
+    --ok:#0F7A46; --ok-bg:#E8F4EC; --ok-line:#B7DFC7;
+    --warn:#8A5A00; --warn-bg:#FDF4E0; --warn-line:#EBD3A0;
+    --bad:#B3261E; --bad-bg:#FBEAE9; --bad-line:#EFC0BD;
+    --ground:#EEF1F6; --surface:#FFFFFF; --surface-2:#F6F8FC;
+    --ink:#101828; --ink-2:#475069; --ink-3:#7C869E;
+    --line:#DCE2EE; --line-2:#EBEFF7;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --brand:#7DA0EE; --brand-lt:#9BB8F4;
+      --ok:#63D096; --ok-bg:#0F2A1D; --ok-line:#1E4733;
+      --warn:#E7BA63; --warn-bg:#2E2308; --warn-line:#4A3A14;
+      --bad:#F28C84; --bad-bg:#361412; --bad-line:#5A2320;
+      --ground:#0A0F1B; --surface:#131B2B; --surface-2:#182236;
+      --ink:#E9EDF6; --ink-2:#A8B3C8; --ink-3:#7A85A0;
+      --line:#28324a; --line-2:#1E2739;
+    }
+  }
+  :root[data-theme="dark"]{
+    --brand:#7DA0EE; --brand-lt:#9BB8F4;
+    --ok:#63D096; --ok-bg:#0F2A1D; --ok-line:#1E4733;
+    --warn:#E7BA63; --warn-bg:#2E2308; --warn-line:#4A3A14;
+    --bad:#F28C84; --bad-bg:#361412; --bad-line:#5A2320;
+    --ground:#0A0F1B; --surface:#131B2B; --surface-2:#182236;
+    --ink:#E9EDF6; --ink-2:#A8B3C8; --ink-3:#7A85A0;
+    --line:#28324a; --line-2:#1E2739;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0; direction:rtl; background:var(--ground); color:var(--ink);
+    font-family:'Tajawal','Noto Kufi Arabic','Noto Sans Arabic','Segoe UI',
+                'Geeza Pro','Droid Arabic Naskh',system-ui,sans-serif;
+    font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:860px; margin:0 auto; padding:36px 22px 72px}
+  h1,h2,h3{margin:0; text-wrap:balance; font-weight:800; letter-spacing:-.015em; line-height:1.3}
+  code{font-family:ui-monospace,'SF Mono',Menlo,monospace; font-size:.86em;
+       background:var(--surface-2); padding:1px 5px; border-radius:4px;
+       border:1px solid var(--line-2); direction:ltr; display:inline-block}
+  .num{font-variant-numeric:tabular-nums}
+
+  header{margin-bottom:34px}
+  .eyebrow{font-size:11.5px; font-weight:700; letter-spacing:.16em; color:var(--brand); margin-bottom:9px}
+  h1{font-size:31px; margin-bottom:10px}
+  .lede{font-size:17px; color:var(--ink-2); margin:0; max-width:62ch}
+
+  /* الحكمُ أوّلاً — لأنّه ما يُقرأ ويُقرَّر عليه. */
+  .verdict{
+    background:var(--surface); border:1px solid var(--line); border-radius:16px;
+    padding:22px; margin:26px 0 34px;
+  }
+  .verdict h2{font-size:17px; margin-bottom:14px}
+  .tally{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px}
+  .tally div{border-radius:12px; padding:13px 14px; border:1px solid}
+  .tally .n{font-size:28px; font-weight:800; display:block; line-height:1.15}
+  .tally .k{font-size:12.5px; font-weight:600; display:block}
+  .t-ok{background:var(--ok-bg); border-color:var(--ok-line)} .t-ok .n,.t-ok .k{color:var(--ok)}
+  .t-wr{background:var(--warn-bg); border-color:var(--warn-line)} .t-wr .n,.t-wr .k{color:var(--warn)}
+  .t-bd{background:var(--bad-bg); border-color:var(--bad-line)} .t-bd .n,.t-bd .k{color:var(--bad)}
+  .verdict p{margin:0; font-size:15px; color:var(--ink-2)}
+  .verdict p+p{margin-top:10px}
+  .verdict b{color:var(--ink)}
+
+  h2.sec{font-size:22px; margin:40px 0 6px}
+  .sub{font-size:14.5px; color:var(--ink-3); margin:0 0 18px}
+
+  /* كلُّ بندٍ يحمل قياسَه — وهذا ما يجعله قابلاً للتصرّف لا رأياً. */
+  .item{
+    background:var(--surface); border:1px solid var(--line);
+    border-inline-start:4px solid var(--line); border-radius:13px;
+    padding:16px 18px; margin-bottom:13px;
+  }
+  .item.ok{border-inline-start-color:var(--ok)}
+  .item.wr{border-inline-start-color:var(--warn)}
+  .item.bd{border-inline-start-color:var(--bad)}
+  .item h3{font-size:16px; margin-bottom:4px; display:flex; gap:9px; align-items:baseline; flex-wrap:wrap}
+  .tag{font-size:10.5px; font-weight:800; padding:2px 9px; border-radius:20px; white-space:nowrap}
+  .tag.ok{background:var(--ok-bg); color:var(--ok)}
+  .tag.wr{background:var(--warn-bg); color:var(--warn)}
+  .tag.bd{background:var(--bad-bg); color:var(--bad)}
+  .item .doc{font-size:14px; color:var(--ink-2); margin:8px 0 0;
+             padding-inline-start:12px; border-inline-start:2px solid var(--line-2)}
+  .item .doc em{font-style:normal; color:var(--ink-3); font-size:12.5px; display:block; margin-bottom:2px}
+  .item .found{font-size:14.5px; margin:11px 0 0}
+  .item .cite{
+    font-size:12.5px; color:var(--ink-3); margin:9px 0 0;
+    background:var(--surface-2); border:1px solid var(--line-2);
+    border-radius:9px; padding:8px 11px; overflow-x:auto;
+  }
+  .item .cite b{color:var(--ink-2); font-weight:700}
+
+  table{width:100%; border-collapse:collapse; font-size:14.5px; margin:6px 0 0}
+  .scroll{overflow-x:auto; border:1px solid var(--line); border-radius:12px; background:var(--surface)}
+  th,td{padding:11px 13px; text-align:start; border-bottom:1px solid var(--line-2)}
+  th{background:var(--surface-2); font-size:12.5px; font-weight:700; color:var(--ink-2); white-space:nowrap}
+  tr:last-child td{border-bottom:0}
+  td b{font-weight:700}
+
+  .market{background:var(--surface); border:1px solid var(--line); border-radius:14px;
+          padding:18px 20px; margin-bottom:13px}
+  .market h3{font-size:16.5px; margin-bottom:7px; color:var(--brand)}
+  .market p{margin:0; font-size:15px; color:var(--ink-2)}
+  .market p b{color:var(--ink)}
+
+  .call{background:var(--surface); border:2px solid var(--brand); border-radius:16px;
+        padding:22px; margin-top:34px}
+  .call h2{font-size:19px; margin-bottom:12px; color:var(--brand)}
+  .call ol{margin:0; padding-inline-start:22px; font-size:15.5px; color:var(--ink-2)}
+  .call li{margin-bottom:11px}
+  .call li b{color:var(--ink)}
+  .call li:last-child{margin-bottom:0}
+
+  footer{margin-top:40px; padding-top:18px; border-top:1px solid var(--line);
+         font-size:13px; color:var(--ink-3)}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">أميال باي · تدقيقٌ مقيس</div>
+    <h1>نموذج الموظف المبسط — الوثيقة والشيفرة</h1>
+    <p class="lede">قِيست كلُّ فقرةٍ في المستند مقابل ما هو مبنيٌّ اليوم.
+      وكلُّ سطرٍ أدناه يحمل موضعَه في الشيفرة — <b>فما لا قياسَ له لا يُذكر
+      هنا</b>.</p>
+  </header>
+
+  <div class="verdict">
+    <h2>الحكم</h2>
+    <div class="tally">
+      <div class="t-ok"><span class="n num">٧</span><span class="k">مطابقٌ ومبنيّ</span></div>
+      <div class="t-wr"><span class="n num">٤</span><span class="k">ناقصٌ يُبنى</span></div>
+      <div class="t-bd"><span class="n num">٢</span><span class="k">مناقضٌ للوثيقة</span></div>
+    </div>
+    <p><b>البنيةُ الثلاثيّةُ التي تطلبها الوثيقة موجودةٌ فعلاً</b> — جدولٌ
+      للشخص، وجدولٌ للعضوية الوظيفيّة، وجدولٌ للجهاز. <b>وتفعيلُ الجهاز
+      مطابقٌ حرفاً بحرف</b>: ثمانيةُ أرقامٍ، خمسَ عشرةَ دقيقة، لمرّةٍ واحدة.</p>
+    <p><b>والمناقضان يقعان في السطر الأوّل من الوثيقة نفسِها.</b> «القاعدة
+      الحاسمة» تقول: رقم الجوال يمثّل الشخص مرّةً واحدة، <b>ولا تُنشأ محفظةٌ
+      ثانيةٌ أو حسابٌ مكرّر</b> — والشيفرةُ تُنشئ لكلّ موظّفٍ <b>حساباً
+      اصطناعيّاً برقمٍ مُختلَق</b>. والوثيقةُ تقول «يدخل بـPIN العمل فقط» —
+      والشيفرةُ تطلب منه <b>كلمةَ مرورِ حسابه الشخصيّ وهاتفَ التاجر</b>.</p>
+  </div>
+
+  <h2 class="sec">① ما هو مبنيٌّ ومطابق</h2>
+  <p class="sub">سبعةُ بنود — ولا يُعاد بناءُ ما هو قائم.</p>
+
+  <div class="item ok">
+    <h3>الفصل الثلاثيّ <span class="tag ok">مطابق</span></h3>
+    <p class="doc"><em>الوثيقة، صفحة ١</em>الشخص · الوظيفة · الجهاز — ثلاثةٌ
+      لا تُخلَط.</p>
+    <p class="found">ثلاثةُ جداولَ منفصلة، والعضويّةُ فريدةٌ داخل المنشأة.</p>
+    <p class="cite"><b>users</b> (الشخص) · <b>pos_users</b> (العضوية:
+      <code>merchant_user_id + pos_number</code> فريدٌ مركّب) ·
+      <b>merchant_pos_devices</b> (الجهاز).</p>
+  </div>
+
+  <div class="item ok">
+    <h3>تفعيلُ الجهاز <span class="tag ok">مطابقٌ حرفاً</span></h3>
+    <p class="doc"><em>الوثيقة، صفحة ٤</em>«ينشئ النظام QR ورمزاً من ٨ أرقام
+      صالحاً لمدة ١٥ دقيقة ولمرة واحدة».</p>
+    <p class="found">ثمانيةُ أرقامٍ عشوائيّة · <code>addMinutes(15)</code> ·
+      <code>consumed_at</code> يمنع الاستعمال الثاني · والرمزُ يُخزَّن
+      <b>مُجزَّأً</b> لا نصّاً.</p>
+    <p class="cite"><b>PosDeviceController.php:111–121, 149</b> —
+      <code>random_int(10000000, 99999999)</code> ·
+      <code>expires_at =&gt; now()-&gt;addMinutes(15)</code> ·
+      <code>$activation-&gt;consumed_at !== null</code></p>
+  </div>
+
+  <div class="item ok">
+    <h3>الجهازُ موردٌ للمنشأة لا للموظّف <span class="tag ok">مطابق</span></h3>
+    <p class="doc"><em>الوثيقة، صفحة ٦</em>«المالك فقط يفعّل أو يلغي الجهاز.
+      الموظف لا يستهلك مقعداً ولا يستطيع تسجيل هاتفه».</p>
+    <p class="found">الجهازُ يُنسَب إلى <code>merchant_user_id</code> و
+      <code>branch_id</code>، <b>ولا عمودَ موظّفٍ عليه إطلاقاً</b>. والموظّفُ
+      بلا مقعدِ جهازٍ يُردّ بـ٤٠٣.</p>
+    <p class="cite"><b>merchant_pos_devices</b> — لا <code>pos_user_id</code>
+      في الجدول · <b>EnsurePosDevice.php:181</b></p>
+  </div>
+
+  <div class="item ok">
+    <h3>إبطالُ الجهاز يقطع فوراً <span class="tag ok">مطابق</span></h3>
+    <p class="doc"><em>الوثيقة، صفحة ٦</em>«تعطيل الجهاز ينهي كل الجلسات
+      المفتوحة عليه فوراً».</p>
+    <p class="found">الوسيطُ يفحص <code>revoked_at</code> و
+      <code>is_active</code> <b>على كلّ طلب</b> — لا عند الدخول وحدَه.</p>
+    <p class="cite"><b>EnsurePosDevice.php:106</b> —
+      <code>$device-&gt;revoked_at !== null || ! $device-&gt;is_active</code></p>
+  </div>
+
+  <div class="item ok">
+    <h3>الأدوارُ قوالبُ صلاحيّات <span class="tag ok">مبنيّ</span></h3>
+    <p class="doc"><em>الوثيقة، صفحة ٣</em>كاشير · مشرف وردية · مدير.</p>
+    <p class="found">جدولُ أدوارٍ ومصفوفةُ صلاحيّاتٍ لكلّ عضويّة، والخادمُ
+      يحرس كلَّ فعلٍ بها.</p>
+    <p class="cite"><b>pos_user_roles</b> · <b>pos_users.permissions</b> (JSON)
+      · <code>restrictToPosPermissions</code></p>
+  </div>
+
+  <div class="item ok">
+    <h3>المحفظةُ الشخصيّة لا تُعرَض في POS <span class="tag ok">أُصلح</span></h3>
+    <p class="doc"><em>الوثيقة، صفحة ٦</em>«لا تُعرض داخل POS».</p>
+    <p class="found">الخادمُ <b>يحذف</b> <code>current_balance</code> من ردّ
+      الإحصاءات لموظّف نقطة البيع ويُرسل <code>balance_scope: owner_only</code>
+      — فلا رقمَ يُخفى في الواجهة، <b>لا يُرسَل أصلاً</b>.</p>
+    <p class="cite"><b>MerchantController::dailyStats</b> ·
+      الحارس <b>PosBalanceScopeGuardTest</b></p>
+  </div>
+
+  <div class="item ok">
+    <h3>الفرعُ والموظّفُ على المعاملة <span class="tag ok">جزئيّ ومبنيّ</span></h3>
+    <p class="doc"><em>الوثيقة، صفحة ٦</em>«كل فاتورة تحفظ merchant_id و
+      branch_id و pos_device_id و employee_membership_id و shift_id».</p>
+    <p class="found">اثنان من خمسةٍ موجودان على <code>transactions</code>.
+      والثلاثةُ الباقيةُ في البند ⑧ أدناه.</p>
+    <p class="cite"><b>transactions.pos_user_id</b> · <b>transactions.branch_id</b></p>
+  </div>
+
+  <h2 class="sec">② ما يناقض الوثيقة</h2>
+  <p class="sub">بندان — وكلاهما في «القاعدة الحاسمة» و«النتيجة التي نريدها».</p>
+
+  <div class="item bd">
+    <h3>حساباتٌ اصطناعيّة <span class="tag bd">تناقضٌ مباشر</span></h3>
+    <p class="doc"><em>الوثيقة، صفحة ١ — «القاعدة الحاسمة»</em>«رقم الجوال
+      يمثل الشخص مرة واحدة. العضوية الوظيفية تربطه بمنشأة محددة، <b>ولا تنشئ
+      محفظة ثانية أو حساباً مكرراً</b>». وصفحة ٢: «<b>لا حسابات اصطناعية</b>
+      ولا خلط بين الموظف والجهاز».</p>
+    <p class="found">الشيفرةُ تُنشئ لكلّ موظّفٍ <b>مستخدماً جديداً برقمِ هاتفٍ
+      مُختلَق</b> بادئتُه <code>9009</code>، لا صلةَ له بالشخص الحقيقيّ. فإن
+      كان للموظّف حسابُ أميال شخصيٌّ فهو <b>غيرُ مربوط</b>، وله الآن هويّتان
+      في المنصّة.</p>
+    <p class="cite"><b>MerchantStaffController.php:171, 296–301</b> —
+      <code>$staffUser-&gt;phone = $this-&gt;uniqueSyntheticPhone($m-&gt;id)</code>
+      · <code>'9009' . str_pad($merchantId,5,'0') . random_int(1000,9999)</code></p>
+  </div>
+
+  <div class="item bd">
+    <h3>لا PIN عملٍ — والدخولُ بكلمة مرور الحساب <span class="tag bd">تناقضٌ مباشر</span></h3>
+    <p class="doc"><em>الوثيقة، صفحات ٢ · ٥ · ٦ · ٧</em>«الموظف يفتح وضع POS
+      <b>ويدخل PIN العمل فقط</b>» · «<b>لا يحتاج العامل إلى كلمة مرور المالك
+      أو محفظته</b>» · «PIN العمل يخزن كبصمة مشفرة <b>منفصلة عن PIN
+      المحفظة</b>».</p>
+    <p class="found"><b>صفرُ مطابقةٍ لـ«PIN العمل» في المشروع كلِّه.</b>
+      والدخولُ اليوم يطلب <b>أربعة</b>: رقمَ التاجر، و<b>هاتفَ التاجر</b>،
+      ورمزَ الموظّف، و<b>كلمةَ مرور حسابه الشخصيّ</b> — وهي نفسُها التي تفتح
+      حسابَه ومحفظتَه.</p>
+    <p class="cite"><b>UnifiedAuthService.php:144–164</b> —
+      <code>$this-&gt;phoneMatches($merchant, $phone)</code> ثمّ
+      <code>Hash::check($password, $user-&gt;password)</code> ·
+      <b>البحث عن work_pin/pos_pin/shift_pin → ٠ نتيجة</b></p>
+  </div>
+
+  <h2 class="sec">③ ما ينقص ويُبنى</h2>
+  <p class="sub">أربعةُ بنودٍ لا خلافَ عليها — الوثيقةُ تطلبها والشيفرةُ لا تمنعها.</p>
+
+  <div class="item wr">
+    <h3>تعطيلُ الموظّف لا يقطع جلستَه <span class="tag wr">ثغرةُ أمان</span></h3>
+    <p class="doc"><em>الوثيقة، صفحة ٦</em>«تعطيل الموظف <b>يزيل عضوية العمل
+      فوراً</b>».</p>
+    <p class="found"><code>is_active = false</code> يمنع <b>الدخولَ التالي</b>
+      ولا يُبطل الرمزَ القائم. فالموظّفُ المُوقَف يواصل البيعَ حتّى تنتهي
+      صلاحيّةُ رمزه. <b>والجهازُ محروسٌ على كلّ طلبٍ والموظّفُ لا</b> —
+      والوثيقةُ تسوّي بينهما.</p>
+    <p class="cite">صفرُ نداءٍ لإبطال الرموز في
+      <b>MerchantStaffController</b> عند التعطيل.</p>
+  </div>
+
+  <div class="item wr">
+    <h3>الجهازُ والورديّةُ ليسا على الفاتورة <span class="tag wr">ناقص</span></h3>
+    <p class="doc"><em>الوثيقة، صفحات ٦ · ٧</em>«كل فاتورة تحفظ … pos_device_id
+      … shift_id» · «تتبع الفاتورة يعرض المنشأة والموظف <b>والجهاز
+      والوردية</b>».</p>
+    <p class="found"><code>transactions</code> فيه الموظّفُ والفرع، <b>ولا
+      عمودَ للجهاز ولا للورديّة</b>. و<code>cashier_shifts</code> مبنيٌّ
+      و<code>fuel_sales.shift_id</code> موجود — <b>فالنمطُ قائمٌ في الوقود ولم
+      يُعمَّم</b>.</p>
+    <p class="cite">مقيس: <code>transactions</code> ← <b>pos_user_id ✓ ·
+      branch_id ✓ · pos_device_id ✗ · shift_id ✗</b></p>
+  </div>
+
+  <div class="item wr">
+    <h3>لا دعوةَ SMS/OTP <span class="tag wr">ناقص</span></h3>
+    <p class="doc"><em>الوثيقة، صفحة ٢</em>«الخادم يجد حساب أميال الموجود
+      <b>أو يرسل دعوة SMS/OTP</b> لإكماله».</p>
+    <p class="found">لا بحثَ عن حسابٍ قائمٍ بالجوال، ولا دعوة. المالكُ يكتب
+      كلمةَ مرورٍ للموظّف مباشرةً — <b>فالمالكُ يعرف كلمةَ مرور موظّفه</b>،
+      وهو ما تمنعه الوثيقةُ ضمناً بفصلها بين الشخص والوظيفة.</p>
+    <p class="cite"><b>MerchantStaffController.php:172</b> —
+      <code>Hash::make($request-&gt;input('password'))</code></p>
+  </div>
+
+  <div class="item wr">
+    <h3>لا تبديلَ عاملٍ بلا خروج <span class="tag wr">ناقص</span></h3>
+    <p class="doc"><em>الوثيقة، صفحة ٥</em>«يضغط العامل رمز القفل. يدخل الموظف
+      التالي PIN العمل. <b>تتغير هوية الموظف النشط فوراً</b> وتبقى الفواتير
+      السابقة منسوبة لصاحبها».</p>
+    <p class="found">لا جلسةَ POS تحمل «الموظّف النشط» قابلةً للتبديل. تبديلُ
+      الموظّف اليوم = خروجٌ ودخولٌ كامل بأربعة حقول.</p>
+    <p class="cite"><code>pos_device_sessions</code> موجودٌ للجهاز — <b>ولا
+      حقلَ «الموظّف النشط» فيه يُبدَّل</b>.</p>
+  </div>
+
+  <h2 class="sec">④ ماذا يفيد السوق اليمنيّ</h2>
+  <p class="sub">لا وجهةَ نظرٍ عامّة — أثرُ كلِّ بندٍ على محلٍّ في صنعاء أو عدن.</p>
+
+  <div class="market">
+    <h3>PIN العمل بدل كلمة المرور</h3>
+    <p>الكاشيرُ في المحلّ اليمنيّ يتبدّل مرّاتٍ في اليوم — ورديّاتٌ، وقريبٌ
+      يسدّ مكانَ الغائب. <b>وكلمةُ مرورٍ طويلةٌ على شاشةٍ صغيرةٍ أمام زبونٍ
+      منتظرٍ تنتهي مكتوبةً على ورقةٍ بجانب الجهاز</b> — فتسقط الحمايةُ كلُّها
+      عمليّاً. وأربعةُ أرقامٍ مصمّمةٌ لهذا الموقف بعينه.</p>
+  </div>
+
+  <div class="market">
+    <h3>حذفُ هاتف التاجر من دخول الموظّف</h3>
+    <p><b>هذا أثقلُ ما في الوضع الحاليّ عمليّاً.</b> الدخولُ يشترط هاتفَ
+      التاجر، وهو <b>هويّةُ محفظته</b>. فإمّا يعطيه للموظّف — وهي مخاطرةٌ لا
+      يقبلها تاجر — أو يحضر بنفسه كلَّ صباحٍ ليفتح الورديّة. <b>وفي الحالتين
+      لا يستطيع التاجرُ ترك محلّه</b>، وهو السببُ الأوّل الذي يشتري النظامَ
+      من أجله.</p>
+  </div>
+
+  <div class="market">
+    <h3>الجهازُ للمنشأة والموظّفون بالتناوب</h3>
+    <p>الجهازُ واحدٌ والموظّفون ثلاثة — هذا هو الشكلُ الغالب، لا الاستثناء.
+      <b>والنموذجُ الذي يربط الجهازَ بجلسة موظّفٍ يعني إعادةَ تهيئةٍ كلَّ
+      ورديّة.</b> وربطُ الجهاز بالمنشأة (وهو مبنيٌّ فعلاً) يجعل التبديلَ
+      ضغطةً واحدة — <b>ويبقى كلُّ بيعٍ منسوباً لمن باعه</b>، وهو ما يحسم
+      الخلافَ على النقص في نهاية اليوم.</p>
+  </div>
+
+  <div class="market">
+    <h3>المحفظةُ الشخصيّةُ خارجَ مساحة العمل</h3>
+    <p>الثقةُ في السوق اليمنيّ شخصيّةٌ وعائليّة. <b>وموظّفٌ يخشى أن يُرى
+      رصيدُه أو يُخصَم منه لن يستعمل النظامَ ولو أُمر به</b> — سيبيع على ورقةٍ
+      ويُدخلها آخرَ اليوم. ففصلُ المحفظة ليس بنداً أمنيّاً فحسب: <b>هو شرطُ
+      التبنّي</b>.</p>
+  </div>
+
+  <div class="market">
+    <h3>الإيقافُ الفوريّ</h3>
+    <p>الموظّفون يتغيّرون بسرعةٍ وبلا عقودٍ مكتوبةٍ في الغالب. <b>وقدرةُ
+      التاجر على القطع في نفس اللحظة — لا في نهاية صلاحيّة رمز — هي ما يجعله
+      يضع بيعَه كلَّه في النظام</b> بدل أن يبقي دفتراً موازياً.</p>
+  </div>
+
+  <div class="market">
+    <h3>الحسابُ الواحد للشخص</h3>
+    <p>وهذا أبعدُها أثراً: <b>الموظّفُ اليوم عاملٌ وغداً صاحبُ بسطة</b>. فإن
+      كان دخولُه الأوّلَ إلى أميال بحسابٍ اصطناعيٍّ رقمُه <code>9009…</code>،
+      فهو <b>لا يملك شيئاً حين يترك العمل</b> — لا سجلَّ ولا محفظةً ولا سمعةً
+      رقميّة. وحسابٌ واحدٌ برقمه الحقيقيّ يجعل كلَّ موظّفٍ اليومَ <b>تاجراً
+      محتملاً غداً</b>، وهو أرخصُ قناةِ نموٍّ متاحة.</p>
+  </div>
+
+  <div class="call">
+    <h2>ما أقترح تنفيذَه — بهذا الترتيب</h2>
+    <ol>
+      <li><b>إبطالُ الرمز عند تعطيل الموظّف.</b> ثغرةٌ أمنيّةٌ قائمةٌ اليوم،
+        والإصلاحُ محصورٌ ولا يمسّ أحداً يعمل الآن. <span style="color:var(--ink-3)">— أبدأ بها ما لم تقل غير ذلك.</span></li>
+      <li><b>الجهازُ والورديّةُ على الفاتورة.</b> إضافةٌ محضةٌ لا تكسر شيئاً،
+        وتُكمل «تتبّع الفاتورة» الذي تطلبه الوثيقة. والنمطُ مبنيٌّ في الوقود
+        فيُعمَّم.</li>
+      <li><b>PIN العمل والدخولُ به وحدَه.</b> <span style="color:var(--bad)">وهذا
+        يغيّر كيف يدخل كلُّ موظّفٍ اليوم</span> — فلا أفعله على تجربةٍ حيّةٍ
+        قبل أن تقول. ويحتاج: عمودَ بصمةٍ مشفّرة، ومسارَ دخولٍ جديداً، وشاشةَ
+        POS، ومهاجرةً للموظّفين القائمين.</li>
+      <li><b>الحسابُ الواحدُ بالجوال الحقيقيّ + دعوةُ OTP.</b> الأعمقُ أثراً
+        والأثقلُ تنفيذاً: يمسّ الهويّةَ والمصادقة، ويحتاج قراراً في
+        <b>الحسابات الاصطناعيّة القائمة</b> — أتُربَط بأصحابها أم تُترك؟</li>
+    </ol>
+  </div>
+
+  <footer>
+    كلُّ سطرٍ في هذا التدقيق قِيس من الشيفرة في
+    <code>claude/project-code-review-yjagv</code> ومن المستند المرفوع.
+    وما لم يُقَس لم يُذكر.
+  </footer>
+</div>
