@@ -234,9 +234,17 @@
   }
   .toast.show{opacity:.96}
 
-  .keypad{display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-top:11px}
-  .keypad button{padding:14px; border-radius:11px; border:1px solid var(--line); background:var(--surface); font-size:18px; font-weight:700}
-  .keypad button:hover{border-color:var(--brand-lt)}
+  /* رمزُ الدفع — نقشٌ مرسومٌ لا صورةٌ خارجيّة، فلا يعتمد على شبكة. */
+  .qr{
+    width:154px; height:154px; margin-inline:auto; border-radius:9px;
+    background-color:var(--surface);
+    background-image:
+      repeating-linear-gradient(90deg,var(--ink) 0 7px,transparent 7px 14px),
+      repeating-linear-gradient(0deg,var(--ink) 0 7px,transparent 7px 14px);
+    background-size:14px 14px;
+    border:7px solid var(--surface); outline:2px solid var(--line);
+    opacity:.88;
+  }
 
   .caption{font-size:12.5px; color:var(--ink-3); text-align:center; margin-top:11px}
   @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
@@ -407,6 +415,20 @@
       toastEl = document.getElementById('toast');
   var stack = [], toastTimer;
   var cart = [], invCustomer = CUSTOMERS[0], invTier = 1, invPay = 'credit';
+  var paidTxn = null, shortCode = null, qrCtx = 'invoice', collectMethod = 'cash';
+
+  function invoiceTotal() {
+    var tier = has('wholesale_multi_pricing') ? invTier : 0;
+    return cart.reduce(function (s, c) { return s + c.q * ITEMS[c.i][2 + tier]; }, 0);
+  }
+  // الفاتورةُ لا تُصدَر بأميال باي قبل أن تعود حركةٌ مدفوعة.
+  function canIssue() {
+    if (!cart.length) return false;
+    return invPay !== 'amial_pay' || !!paidTxn;
+  }
+  function newShortCode() {
+    return String(Math.floor(100000 + Math.random() * 899999));
+  }
 
   function toast(msg) {
     toastEl.textContent = msg; toastEl.classList.add('show');
@@ -534,14 +556,33 @@
       '<div class="card"><div class="sec">الأصناف</div>' +
       (lines || '<p class="s" style="color:var(--ink-3);font-size:12.5px;margin:4px 0">لم يُضَف صنفٌ بعد.</p>') +
       '<button class="btn ghost" data-go="pickItem">＋ إضافة صنف</button></div>' +
-      '<div class="card"><div class="sec">السداد</div><div class="seg" style="margin:0">' +
+      // ══════════════════════════════════════════════════════════════
+      // **الدفعُ عبر أميال باي — وكان ساقطاً.** والعقدُ في الخادم:
+      //   payment_type in: cash · amial_pay · credit
+      //   paid_transaction_id required_if: payment_type,amial_pay
+      // أي أنّ الفاتورةَ **لا تُصدَر** بأميال باي قبل أن يُدفع الـQR —
+      // فالزرُّ يبقى معطَّلاً حتّى يعود معرّفُ الحركة.
+      // ══════════════════════════════════════════════════════════════
+      '<div class="card"><div class="sec">طريقة السداد</div><div class="seg" style="margin:0">' +
       '<button data-pay="cash" aria-pressed="' + (invPay === 'cash') + '">نقداً</button>' +
+      '<button data-pay="amial_pay" aria-pressed="' + (invPay === 'amial_pay') + '">أميال باي</button>' +
       '<button data-pay="credit" aria-pressed="' + (invPay === 'credit') + '">آجل</button>' +
-      '</div></div>' +
+      '</div>' +
+      (invPay === 'amial_pay'
+        ? (paidTxn
+            ? '<div class="note" style="background:var(--ok-bg);color:var(--ok);margin:11px 0 0">' +
+              '<b>دُفعت عبر أميال باي.</b> رقم الحركة <span class="num">' + paidTxn + '</span></div>'
+            : '<div class="note" style="margin:11px 0 0"><b>يُدفع الـQR أوّلاً.</b> ' +
+              'الخادمُ يشترط <code>paid_transaction_id</code> مع أميال باي — ' +
+              'فلا فاتورةَ مدفوعةً بلا حركةٍ حقيقيّة.</div>' +
+              '<button class="btn" data-go="qr">عرض رمز الدفع</button>')
+        : '') +
+      '</div>' +
       '<div class="card"><div class="row" style="border:0;padding:2px 0">' +
       '<span class="g"><span class="t" style="font-size:15px">الإجمالي</span></span>' +
       '<span class="v num" style="font-size:19px;color:var(--brand)">' + money(total) + '</span></div>' +
-      '<button class="btn" data-act="issue"' + (cart.length ? '' : ' disabled') + '>إصدار الفاتورة</button></div>';
+      '<button class="btn" data-act="issue"' + (canIssue(total) ? '' : ' disabled') + '>' +
+      (invPay === 'amial_pay' && !paidTxn ? 'بانتظار دفع العميل' : 'إصدار الفاتورة') + '</button></div>';
   };
 
   S.pickItem = function () {
@@ -554,6 +595,37 @@
         ' / ' + it[1] + ' · رصيد ' + it[5] + '</span></span>' +
         (low ? '<span class="chip bd">قارب النفاد</span>' : '') + '</button>';
     }).join('') + '</div>';
+  };
+
+  /* ══════════════════════════════════════════════════════════════════
+     شاشةُ تحصيل أميال باي — `AmialQrCollectScreen` في التطبيق.
+
+     والتعليقُ في الشيفرة الحقيقيّة يقول بنصّه: «أميال» ليس رقمَ مرجعٍ
+     يكتبه الموظّف: نفتح QR باسم محفظة المالك، ثمّ نسجّل التحصيل **فقط
+     بعد حركةٍ مدفوعة». فلا حقلَ نصٍّ هنا — ولا يُقبل ادّعاءُ دفع.
+     ══════════════════════════════════════════════════════════════════ */
+  S.qr = function () {
+    titleEl.textContent = qrCtx === 'invoice' ? 'دفع الفاتورة — أميال باي'
+                                              : 'تحصيل دين — أميال باي';
+    if (!shortCode) shortCode = newShortCode();
+    var amt = qrCtx === 'invoice' ? invoiceTotal() : 620000;
+
+    return '<div class="card" style="text-align:center;padding:18px 14px">' +
+      '<div class="sec" style="text-align:center">المطلوب من العميل</div>' +
+      '<div class="num" style="font-size:26px;font-weight:800;color:var(--brand);margin-bottom:13px">' +
+      money(amt) + '</div>' +
+      '<div class="qr" aria-label="رمز الدفع"></div>' +
+      '<div style="margin-top:12px;font-size:12px;color:var(--ink-3)">أو بالرمز القصير</div>' +
+      '<div class="num" style="font-size:27px;font-weight:800;letter-spacing:.14em">' +
+      shortCode + '</div></div>' +
+      '<div class="card"><div class="row" style="border:0;padding:2px 0">' +
+      '<span class="dot off" style="margin-top:6px"></span>' +
+      '<span class="g"><span class="t">بانتظار دفع العميل</span>' +
+      '<span class="s">يُمسح الرمزُ من تطبيق أميال باي عند العميل.</span></span></div></div>' +
+      '<div class="note">لا يُكتب رقمُ مرجعٍ هنا. <b>التحصيلُ يُسجَّل بعد ' +
+      'حركةٍ مدفوعةٍ فعلاً</b> — فادّعاءُ الدفع لا يُقبَل من الشاشة.</div>' +
+      '<button class="btn" data-act="qrPaid">محاكاة: دفع العميل</button>' +
+      '<button class="btn ghost" data-act="qrCancel">إلغاء الطلب</button>';
   };
 
   S.invoiceDone = function () {
@@ -579,7 +651,25 @@
         { t: 'بقالة النور', s: 'يستحقّ بعد ٦ أيّام', v: money(145000), chip: ['آجل', 'wr'] },
         { t: 'بقالة الصفا — إب', s: 'يستحقّ بعد ١٩ يوماً', v: money(88000), chip: ['آجل', 'wr'] }
       ]) + '</div>' +
-      '<button class="btn" data-act="collect">تسجيل تحصيل</button>';
+      // العقد: payment_method in: cash · bank_transfer · amial_pay · check
+      '<div class="card"><div class="sec">تسجيل تحصيل — طريقة الدفع</div>' +
+      '<div class="seg" style="margin:0">' +
+      [['cash', 'نقد'], ['bank_transfer', 'تحويل'], ['amial_pay', 'أميال'], ['check', 'شيك']]
+        .map(function (m) {
+          return '<button data-collect="' + m[0] + '" aria-pressed="' +
+            (collectMethod === m[0]) + '">' + m[1] + '</button>';
+        }).join('') + '</div>' +
+      (collectMethod === 'amial_pay'
+        ? '<div class="note" style="margin:11px 0 0">«أميال» ليس رقمَ مرجعٍ ' +
+          'يكتبه الموظّف — <b>يُفتح QR باسم محفظة المالك</b>، ويُسجَّل ' +
+          'التحصيلُ بعد حركةٍ مدفوعة.</div>'
+        : '<div class="note" style="margin:11px 0 0;background:var(--surface-2);color:var(--ink-2)">' +
+          'رقمُ المرجع اختياريٌّ مع ' +
+          ({ cash: 'النقد', bank_transfer: 'التحويل', check: 'الشيك' }[collectMethod]) +
+          '.</div>') +
+      '<button class="btn" data-act="collect">' +
+      (collectMethod === 'amial_pay' ? 'عرض رمز الدفع' : 'تأكيد التحصيل') +
+      '</button></div>';
   };
 
   S.customers = function () {
@@ -854,12 +944,23 @@
 
   /* الضغطُ داخل الشاشة والدرج */
   document.addEventListener('click', function (e) {
-    var el = e.target.closest('[data-go],[data-act],[data-add],[data-tier],[data-pay],[data-line],[data-lock]');
+    // **وكلُّ سمةٍ جديدةٍ تُضاف هنا أيضاً.** أُضيف `data-collect` إلى
+    // المعالج ولا إلى هذا المحدّد، فكان الزرُّ يُضغط ولا يحدث شيء —
+    // ولا خطأَ في أيّ سجلّ. (القاعدة التاسعة.) التقطه المسبار.
+    var el = e.target.closest('[data-go],[data-act],[data-add],[data-tier],' +
+      '[data-pay],[data-collect],[data-line],[data-lock]');
     if (!el || !el.closest('.phone')) return;
 
     if (el.dataset.lock) { toast('مقفلٌ — يُفتح في ' + el.dataset.lock + '.'); return; }
     if (el.dataset.tier !== undefined) { invTier = +el.dataset.tier; render(); return; }
-    if (el.dataset.pay) { invPay = el.dataset.pay; render(); return; }
+    if (el.dataset.collect) { collectMethod = el.dataset.collect; render(); return; }
+    if (el.dataset.pay) {
+      invPay = el.dataset.pay;
+      // تبديلُ الطريقة يُسقط حركةَ دفعٍ سابقة — فلا تُصدَر فاتورةُ آجلٍ
+      // بمعرّفِ حركةٍ التُقط لطريقةٍ أخرى.
+      if (invPay !== 'amial_pay') { paidTxn = null; shortCode = null; }
+      render(); return;
+    }
     if (el.dataset.line !== undefined) {
       cart.splice(+el.dataset.line, 1); render(); toast('حُذف السطر.'); return;
     }
@@ -871,10 +972,20 @@
 
     var act = el.dataset.act;
     if (act === 'issue') {
-      if (!cart.length) return;
+      if (!canIssue()) return;
       go('invoiceDone'); cart = []; return;
     }
-    if (act === 'newAgain') { stack = [role === 'pos' ? 'posHome' : 'home']; go('newInvoice'); return; }
+    if (act === 'qrPaid') {
+      paidTxn = 'TX-' + newShortCode();
+      if (qrCtx === 'invoice') { back(); toast('وصلت الحركة — الفاتورةُ صارت قابلةً للإصدار.'); }
+      else { back(); toast('سُجّل التحصيل بعد حركةٍ مدفوعة.'); }
+      return;
+    }
+    if (act === 'qrCancel') { shortCode = null; back(); toast('أُلغي طلبُ الدفع.'); return; }
+    if (act === 'newAgain') {
+      paidTxn = null; shortCode = null; invPay = 'credit';
+      stack = [role === 'pos' ? 'posHome' : 'home']; go('newInvoice'); return;
+    }
     if (act === 'pickCustomer') {
       invCustomer = CUSTOMERS[(CUSTOMERS.indexOf(invCustomer) + 1) % CUSTOMERS.length];
       render(); toast('العميل: ' + invCustomer[0]); return;
@@ -888,10 +999,14 @@
     }
     if (act === 'withdraw') { toast('طلبُ سحبٍ إلى وكيلٍ — يفتح شاشة السحب.'); return; }
     if (act === 'transfer') { toast('تحويلٌ من المحفظة — يفتح شاشة الإرسال.'); return; }
-    if (act === 'collect') { toast('سُجّل التحصيل ونزل من ذمّة العميل.'); return; }
+    if (act === 'collect') {
+      if (collectMethod === 'amial_pay') { qrCtx = 'collection'; shortCode = null; go('qr'); return; }
+      toast('سُجّل التحصيل ونزل من ذمّة العميل.'); return;
+    }
     if (act === 'lockShift') { toast('أُغلقت الورديّة وسُلّم النقد.'); return; }
 
     var to = el.dataset.go;
+    if (to === 'qr') { qrCtx = 'invoice'; shortCode = null; }
     if (to) {
       if (role === 'pos' && ['wallet', 'team', 'caps'].indexOf(to) > -1) {
         toast('لا يُفتح لموظّف نقطة البيع.'); return;

@@ -90,6 +90,67 @@ await page.click('.btn:has-text("إصدار الفاتورة")'); await page.wai
 ok((await title()) === 'تمّ الإصدار', 'الإصدارُ يقود إلى شاشة النجاح');
 ok((await viewText()).includes('ف-٤٨٢٢'), 'رقمُ الفاتورة يظهر');
 
+console.log('\n④ب الدفع عبر أميال باي — العقدُ في الخادم');
+// createInvoice: payment_type in cash·amial_pay·credit
+// paid_transaction_id required_if: payment_type,amial_pay
+while (await page.locator('#back').isVisible()) { await page.click('#back'); await page.waitForTimeout(80); }
+await page.click('.tile:has-text("فاتورة جديدة")'); await page.waitForTimeout(120);
+ok(await page.locator('button[data-pay]').count() === 3, 'ثلاثُ طرقِ سدادٍ — لا اثنتان');
+ok(await page.locator('button[data-pay="amial_pay"]').count() === 1, 'وفيها «أميال باي»');
+
+await page.click('.btn.ghost:has-text("إضافة صنف")'); await page.waitForTimeout(100);
+await page.click('.row[data-add="0"]'); await page.waitForTimeout(120);
+await page.click('button[data-pay="amial_pay"]'); await page.waitForTimeout(120);
+ok((await viewText()).includes('يُدفع الـQR أوّلاً'), 'يُقال إنّ الـQR يُدفع أوّلاً');
+ok(await page.locator('.btn:has-text("بانتظار دفع العميل")').isDisabled(),
+   '**لا تُصدَر الفاتورةُ قبل الدفع** — كما يشترط `required_if`');
+
+await page.click('.btn:has-text("عرض رمز الدفع")'); await page.waitForTimeout(150);
+ok((await title()).includes('أميال باي'), 'شاشةُ الدفع تفتح');
+ok(await page.locator('.qr').count() === 1, 'رمزُ الدفع مرسوم');
+const code = (await viewText()).match(/\b\d{6}\b/);
+ok(!!code, 'ورمزٌ قصيرٌ من ستّ خانات', code ? code[0] : 'لا رمز');
+ok((await viewText()).includes('لا يُكتب رقمُ مرجعٍ هنا'), 'ولا حقلَ مرجعٍ يكتبه الموظّف');
+ok(await page.locator('input').count() === 0, 'ولا حقلَ إدخالٍ إطلاقاً في شاشة الدفع');
+
+await page.click('.btn:has-text("محاكاة: دفع العميل")'); await page.waitForTimeout(180);
+ok((await title()) === 'فاتورة جديدة', 'الدفعُ يعيد إلى الفاتورة');
+ok((await viewText()).includes('دُفعت عبر أميال باي'), 'وتُقال مدفوعةً');
+ok((await viewText()).includes('TX-'), 'ومعها رقمُ الحركة');
+ok(!(await page.locator('.btn:has-text("إصدار الفاتورة")').isDisabled()),
+   'والإصدارُ انفتح بعد وصول الحركة');
+
+// تبديلُ الطريقة يُسقط الحركة — فلا تُصدَر فاتورةُ آجلٍ بمعرّفٍ من طريقةٍ أخرى
+await page.click('button[data-pay="credit"]'); await page.waitForTimeout(120);
+await page.click('button[data-pay="amial_pay"]'); await page.waitForTimeout(120);
+ok(await page.locator('.btn:has-text("بانتظار دفع العميل")').isDisabled(),
+   'وتبديلُ الطريقة يُسقط الحركةَ السابقة');
+
+await page.click('.btn:has-text("عرض رمز الدفع")'); await page.waitForTimeout(150);
+await page.click('.btn.ghost:has-text("إلغاء الطلب")'); await page.waitForTimeout(150);
+ok((await title()) === 'فاتورة جديدة', 'الإلغاءُ يرجع');
+ok(await page.locator('.btn:has-text("بانتظار دفع العميل")').isDisabled(), 'ولا يُصدِر شيئاً');
+
+console.log('\n④ج التحصيل — أربعُ طرقٍ كما يقبل الخادم');
+while (await page.locator('#back').isVisible()) { await page.click('#back'); await page.waitForTimeout(80); }
+await page.click('.tile:has-text("التحصيلات")'); await page.waitForTimeout(140);
+ok(await page.locator('button[data-collect]').count() === 4,
+   'أربعُ طرقٍ: نقد · تحويل · أميال · شيك');
+await page.click('button[data-collect="amial_pay"]'); await page.waitForTimeout(120);
+ok((await viewText()).includes('ليس رقمَ مرجعٍ يكتبه الموظّف'),
+   'و«أميال» تُعلَّل: لا يكتبها الموظّف');
+await page.click('.btn:has-text("عرض رمز الدفع")'); await page.waitForTimeout(150);
+ok((await title()).includes('تحصيل دين'), 'وتفتح شاشةَ تحصيلٍ لا شاشةَ فاتورة');
+await page.click('.btn:has-text("محاكاة: دفع العميل")'); await page.waitForTimeout(180);
+ok((await page.textContent('#toast')).includes('بعد حركةٍ مدفوعة'),
+   'ويُسجَّل التحصيلُ بعد حركةٍ مدفوعة');
+await page.click('button[data-collect="cash"]'); await page.waitForTimeout(120);
+// المطابقةُ على «رقمُ المرجع» و«النقد» — لا على كلمةٍ مشكولةٍ يختلف
+// فيها التنوينُ عن الشدّة، فيسقط الفحصُ على فرقِ حركةٍ لا على عطل.
+const cashNote = await viewText();
+ok(cashNote.includes('رقمُ المرجع') && cashNote.includes('النقد'),
+   'والنقدُ مرجعُه اختياريّ');
+
 console.log('\n⑤ الترقية تفتح التسعير');
 await setPlan('business');
 await page.click('#back').catch(() => {});
