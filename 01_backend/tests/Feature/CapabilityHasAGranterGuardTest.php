@@ -57,12 +57,27 @@ class CapabilityHasAGranterGuardTest extends TestCase
      */
     private const KNOWN_ORPHANS = [
         'retail.catalog',
-        'retail.locations',
         'retail.price_versions',
         'retail.returns.by_line',
-        'retail.transfers',
         'retail.variants',
         'retail.waste',
+    ];
+
+    /**
+     * **وسبعةٌ صارت خمساً — بثمنٍ من المستند لا باجتهاد.**
+     *
+     * `retail.locations` و`retail.transfers` أُغلقتا في
+     * `AMIAL-WHOLESALE-GUIDE-001`: كانتا معلَنتين
+     * `minPlan(enterprise)` ولا يمنحهما مصدر. ودليلا التشغيل يسعّرانهما
+     * هناك صراحةً — «فروع ومستودعات ومواقع» · «تحويلات بين المواقع» —
+     * فأُدرجتا في `planFeatures(PLAN_ENTERPRISE)` بنطاق `GOODS`.
+     *
+     * **والخمسُ الباقيةُ بلا ثمنٍ مكتوبٍ في أيّ مستند**، فتبقى دَيناً
+     * حتّى يقول صاحبُ المشروع بأيّ باقةٍ تُباع — أو تُعلَن `comingSoon()`.
+     */
+    private const CLOSED_BY_THE_OPERATING_GUIDES = [
+        'retail.locations',
+        'retail.transfers',
     ];
 
     /** كلُّ ما يمنحه مصدرٌ: مربّعُ قطاعٍ أو باقة. */
@@ -148,6 +163,24 @@ class CapabilityHasAGranterGuardTest extends TestCase
             . implode("\n  ", $stale) . "\n\n"
             . 'فتُحذف من `KNOWN_ORPHANS` — وقائمةٌ لا تُنقَص تُجمّد العطلَ '
             . 'بدل أن تعدّه.');
+    }
+
+    /**
+     * @test
+     *
+     * **وما أُغلق يبقى مغلقاً.** فالدَّينُ يُنقَص ولا يعود.
+     */
+    public function what_the_operating_guides_priced_stays_granted(): void
+    {
+        $orphans = $this->orphans();
+
+        foreach (self::CLOSED_BY_THE_OPERATING_GUIDES as $code) {
+            $this->assertNotContains($code, $orphans,
+                "**«{$code}» عادت يتيمةً بلا مانح.** وقد أُغلقت بثمنٍ "
+                . 'مكتوبٍ في دليلَي التشغيل: «فروع ومستودعات ومواقع» · '
+                . '«تحويلات بين المواقع» في باقة المؤسّسة. فمن نزعها من '
+                . '`planFeatures` أعاد عرضَها «بالترقية» على ترقيةٍ لا تفتحها.');
+        }
     }
 
     /**

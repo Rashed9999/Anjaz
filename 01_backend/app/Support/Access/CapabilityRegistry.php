@@ -403,7 +403,8 @@ final class CapabilityRegistry
                 ->permissions(['retail.location.*', 'retail.stock.view'])
                 ->routes(['retail/locations'])
                 ->limit('max_locations')
-                ->screen('/retail/locations'),
+                ->screen('/retail/locations')
+                ->businessTypes(self::GOODS),
 
             C::make('retail.transfers')
                 ->nameAr('التحويلات بين المواقع')
@@ -413,7 +414,8 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_ENTERPRISE)
                 ->permissions(['retail.transfer.*'])
                 ->routes(['retail/transfers'])
-                ->screen('/retail/transfers'),
+                ->screen('/retail/transfers')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_INVENTORY_AUDIT)
                 ->nameAr('الجرد')
@@ -708,11 +710,20 @@ final class CapabilityRegistry
 
             C::make(A::F_WHOLESALE_COLLECTIONS)->nameAr('تحصيلات الجملة')->group('الجملة')->icon('payments')->minPlan(A::PLAN_FREE)->businessTypes([A::BIZ_WHOLESALE]),
 
+            // AMIAL-WHOLESALE-GUIDE-001 — **قدرةٌ تُباع بلا شاشةٍ معلَنة.**
+            //
+            // كانت بلا `screen()`، فتُعرَض في «مزايا باقتي» ولا تُفتح —
+            // و`CapabilityScreens` لا مدخلَ لها. ودليلُ تشغيل الجملة
+            // يجعل «التسعير» **قسماً قائماً بذاته** في القائمة الجانبيّة:
+            // «قوائم أسعار وشرائح كمية وأسعار شركات».
             C::make(A::F_WHOLESALE_MULTI_PRICING)
                 ->nameAr('تسعير متعدد المستويات')
+                ->descAr('سعر عميل/شركة، وسعر كمية، وشرائح تُطبَّق على الفاتورة — '
+                    . 'ولا يعدّل الكاشيرُ السعرَ ما لم تُمنَح له كتابةٌ صريحة.')
                 ->group('الجملة')->icon('price_change')
                 ->minPlan(A::PLAN_BUSINESS)
                 ->businessTypes([A::BIZ_WHOLESALE])
+                ->screen('/wholesale/pricing')
                 ->routes(['wholesale/price-tiers']),
 
             C::make(A::F_RESTAURANT_TABLES)

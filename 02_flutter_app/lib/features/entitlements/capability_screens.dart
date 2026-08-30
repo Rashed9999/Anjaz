@@ -43,6 +43,7 @@ import 'package:amial_pay/features/retail/screens/retail_wastes_screen.dart';
 import 'package:amial_pay/features/merchant/screens/stock_alerts_screen.dart';
 import 'package:amial_pay/features/suppliers/screens/suppliers_screen.dart';
 import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_policy_screens.dart';
 
 /// AMIAL-CAP-SCREENS-001 — **مصدرُ حقيقةٍ واحدٌ للتنقّل بالقدرة.**
 ///
@@ -183,6 +184,15 @@ class CapabilityScreens {
     // كتالوج الخادم، وشاشتُها كشفُ أعمار الديون: من عليه، وكم، ومنذ متى.
     // وكانت تفتح لوحةَ الجملة (رئيسيّةَ تاجرها) فلا يجد المحصِّلُ شيئاً.
     'wholesale_collections': () => const WholesaleAgingReportScreen(),
+
+    // AMIAL-WHOLESALE-GUIDE-001 — **قدرةٌ تُباع ولا مدخلَ لها.**
+    //
+    // `wholesale_multi_pricing` تُعرَض في «مزايا باقتي» ولا تُفتح: لا
+    // مدخلَ هنا، ولا `screen()` في سجلّ الخادم. والشاشةُ الوحيدةُ التي
+    // تحمل «شرائح الأسعار» هي إعداداتُ منشأة الجملة — **مدفونةٌ فيها**،
+    // ودليلُ التشغيل يجعل «التسعير» قسماً قائماً بذاته.
+    'wholesale_multi_pricing': () =>
+        const WholesalePolicyBusinessSettingsScreen(),
     'restaurant_tables': () => const RestaurantScreen(),
 
     // **والقدرتان الأخريان تُفتحان على موضع عملهما.** القطاعُ كلُّه شاشةٌ

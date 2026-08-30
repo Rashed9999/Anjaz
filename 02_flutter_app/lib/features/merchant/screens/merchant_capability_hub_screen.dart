@@ -26,12 +26,34 @@ class MerchantCapabilityHubScreen extends StatefulWidget {
     required this.subtitle,
     required this.groups,
     required this.icon,
+    this.codes,
   });
 
   final String title;
   final String subtitle;
   final List<String> groups;
   final IconData icon;
+
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-WHOLESALE-GUIDE-001 — **تضييقٌ بالرمز حين لا تكفي المجموعة.**
+  ///
+  /// المجموعاتُ في سجلّ القدرات عرضيّةٌ ومشتركةٌ بين القطاعات: «الناس»
+  /// تجمع العملاءَ والموظّفين معاً. وذاك يكفي التجزئةَ («العملاء
+  /// والفريق» قسمٌ واحدٌ في دليلها) **ولا يكفي الجملة**: دليلُ تشغيلها
+  /// يفصلهما قسمين —
+  ///
+  ///     العملاء والديون   : العملاء، كشف الحساب، آجال الاستحقاق
+  ///     الفريق والأجهزة   : الموظفون، الأدوار، POS، الفروع
+  ///
+  /// **ولا تُغيَّر المجموعةُ في السجلّ لأجل قطاع** — فذلك يُحرّك قسمَ
+  /// التجزئة والصيدليّة معه، وهو ما لم يطلبه أحد.
+  ///
+  /// **وحين يُمرَّر، يُقرأ وحدَه** — لا يُجمَع مع المجموعات: قسمٌ يُعرَّف
+  /// برموزه معرَّفٌ تماماً، وضمُّ مجموعةٍ إليه يُعيد الخلطَ الذي فُصل لأجله.
+  /// وكلُّ رمزٍ هنا **يجب أن يوجد في السجلّ** — يحرسه
+  /// `wholesale_guide_contract_test`، فرمزٌ مخطوءٌ يُفرغ القسمَ صامتاً.
+  /// ══════════════════════════════════════════════════════════════════
+  final List<String>? codes;
 
   @override
   State<MerchantCapabilityHubScreen> createState() =>
@@ -59,11 +81,18 @@ class _MerchantCapabilityHubScreenState
     });
   }
 
-  List<Map<String, dynamic>> _rows() => c.items.where((row) {
-        final cap = row['capability'];
-        if (cap is! Map) return false;
-        return widget.groups.contains('${cap['group'] ?? ''}');
-      }).toList();
+  List<Map<String, dynamic>> _rows() {
+    final codes = widget.codes;
+
+    return c.items.where((row) {
+      final cap = row['capability'];
+      if (cap is! Map) return false;
+
+      if (codes != null) return codes.contains('${cap['code'] ?? ''}');
+
+      return widget.groups.contains('${cap['group'] ?? ''}');
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {

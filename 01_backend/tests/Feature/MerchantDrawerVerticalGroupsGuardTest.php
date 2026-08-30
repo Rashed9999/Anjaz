@@ -102,6 +102,77 @@ class MerchantDrawerVerticalGroupsGuardTest extends TestCase
         return $out;
     }
 
+    /**
+     * رموزُ القدرات التي يسمّيها الدرجُ لكلّ قطاع (`codes:`).
+     *
+     * **وقسمٌ يُعرَّف برموزه بابٌ كذلك** — انظر التعليقَ في
+     * `no_vertical_with_its_own_group_is_left_without_a_door`.
+     *
+     * @return array<string,list<string>>
+     */
+    private function declaredCodesInDrawer(): array
+    {
+        $src = (string) file_get_contents(self::SHELL);
+
+        $start = mb_strpos($src, 'List<_MerchantDrawerSection> _sectionsForBusiness()');
+        $end = mb_strpos($src, "\n  }\n", $start);
+        $body = mb_substr($src, $start, $end - $start);
+
+        $switchAt = mb_strpos($body, 'switch (access.businessType.value)');
+        $shared = $this->codesIn(mb_substr($body, 0, $switchAt));
+        $tail = mb_substr($body, $switchAt);
+
+        preg_match_all("~case '([a-z_]+)':~u", $tail, $cases, PREG_OFFSET_CAPTURE);
+
+        $out = [];
+
+        foreach ($cases[1] as $i => [$biz, $_]) {
+            $from = $cases[0][$i][1];
+            $to = $cases[0][$i + 1][1] ?? mb_strlen($tail);
+
+            $out[$biz] = array_values(array_unique(array_merge(
+                $shared, $this->codesIn(substr($tail, $from, $to - $from)))));
+        }
+
+        return $out;
+    }
+
+    /** @return list<string> */
+    private function codesIn(string $chunk): array
+    {
+        preg_match_all("~codes:\s*(?:const\s*)?\[([^\]]*)\]~u", $chunk, $m);
+
+        $names = [];
+
+        foreach ($m[1] as $list) {
+            preg_match_all("~'([^']+)'~u", $list, $q);
+            $names = array_merge($names, $q[1]);
+        }
+
+        return array_values(array_unique($names));
+    }
+
+    /**
+     * رموزُ القدرات المنتمية إلى مجموعةٍ في سجلّ الخادم.
+     *
+     * **وتُقرأ من السجلّ لا تُكتب هنا** — قائمةٌ مكتوبةٌ تشيخ مع أوّل
+     * قدرةٍ تُضاف للمجموعة، فيمرّ الحارسُ على نقصٍ لا يراه.
+     *
+     * @return list<string>
+     */
+    private function capabilityCodesIn(string $group): array
+    {
+        $out = [];
+
+        foreach (CapabilityRegistry::all() as $code => $cap) {
+            if ($cap->groupName() === $group) {
+                $out[] = $code;
+            }
+        }
+
+        return $out;
+    }
+
     /** أسماءُ المجموعات المكتوبةُ في `groups:` داخل مقطعٍ من الشيفرة. */
     private function groupsIn(string $chunk): array
     {
@@ -241,6 +312,7 @@ class MerchantDrawerVerticalGroupsGuardTest extends TestCase
     public function no_vertical_with_its_own_group_is_left_without_a_door(): void
     {
         $declared = $this->declaredInDrawer();
+        $declaredCodes = $this->declaredCodesInDrawer();
 
         $missing = [];
 
@@ -267,9 +339,34 @@ class MerchantDrawerVerticalGroupsGuardTest extends TestCase
             // الدرج («البيع» · «المنتجات والمخزون» · «التقارير») —
             // فالمطلوبُ هنا ما يخصّ القطاعَ وحدَه.
             foreach ($this->sectoralGroupsFor($biz) as $group) {
-                if (! in_array($group, $declared[$biz] ?? [], true)) {
-                    $missing[] = sprintf('  %s → «%s» غائبةٌ عن درجه', $biz, $group);
+                if (in_array($group, $declared[$biz] ?? [], true)) {
+                    continue;
                 }
+
+                // ══════════════════════════════════════════════════════
+                // AMIAL-WHOLESALE-GUIDE-001 — **وتغطيةٌ بالرمز تغطيةٌ
+                // كذلك، وأشدُّ من تسمية المجموعة.**
+                //
+                // دليلُ تشغيل الجملة يفصل ما تجمعه المجموعةُ الواحدة:
+                // «فواتير الجملة والتحصيل» قسمٌ و«التسعير» قسمٌ آخر،
+                // وكلاهما من مجموعة «الجملة». فصار القسمُ يُعرَّف برموزه.
+                //
+                // **والمحروسُ الوصولُ لا شكلُه**: تسميةُ المجموعة تُثبت
+                // باباً واحداً، **وتسميةُ رموزها كلِّها تُثبت أنّ لكلّ
+                // قدرةٍ فيها باباً**. فتُقبل الثانيةُ بشرط الكمال — ومن
+                // نسي رمزاً واحداً يسقط هنا باسمه.
+                // ══════════════════════════════════════════════════════
+                $codes = $this->capabilityCodesIn($group);
+                $named = $declaredCodes[$biz] ?? [];
+                $uncovered = array_values(array_diff($codes, $named));
+
+                if ($uncovered === []) {
+                    continue;
+                }
+
+                $missing[] = sprintf(
+                    '  %s → «%s» غائبةٌ عن درجه (وغيرُ مغطّاةٍ بالرموز؛ ينقصها: %s)',
+                    $biz, $group, implode('، ', $uncovered));
             }
         }
 

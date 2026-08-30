@@ -64,6 +64,7 @@ import 'package:amial_pay/features/fuel_station/screens/fuel_tanks_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_variances_screen.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
 import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_policy_screens.dart';
 import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
 import 'package:amial_pay/features/corporate/screens/corporate_accounts_screen.dart';
 
@@ -172,6 +173,10 @@ class RouteHelper {
   static const String fuelVariances = '/fuel/variances';
   static const String pharmacy = '/pharmacy';
   static const String wholesale = '/wholesale';
+
+  /// AMIAL-WHOLESALE-GUIDE-001 — **«التسعير» قسمٌ قائمٌ بذاته في دليل
+  /// الجملة**، وقدرتُه كانت بلا `screen()` فلا تُفتح من «مزايا باقتي».
+  static const String wholesalePricing = '/wholesale/pricing';
   static const String restaurant = '/restaurant';
   static const String apiKeys = '/api-keys';
   static const String corporate = '/corporate';
@@ -328,6 +333,8 @@ class RouteHelper {
     GetPage(name: fuelVariances, page: () => const FuelVariancesScreen()),
     GetPage(name: pharmacy, page: () => const PharmacyDashboardScreen()),
     GetPage(name: wholesale, page: () => const WholesaleDashboardScreen()),
+    GetPage(name: wholesalePricing,
+        page: () => const WholesalePolicyBusinessSettingsScreen()),
     GetPage(name: restaurant, page: () => const RestaurantScreen()),
     GetPage(name: apiKeys, page: () => const MerchantApiKeysScreen()),
     GetPage(name: corporate, page: () => const CorporateAccountsScreen()),

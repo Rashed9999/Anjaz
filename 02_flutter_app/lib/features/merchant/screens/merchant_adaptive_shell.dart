@@ -318,6 +318,7 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
           subtitle: section.subtitle,
           groups: section.groups,
           icon: section.icon,
+          codes: section.codes,
         ),
       );
     }).toList();
@@ -362,23 +363,87 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
           people,
           reports,
         ];
+      // ══════════════════════════════════════════════════════════════
+      // AMIAL-WHOLESALE-GUIDE-001 — **قائمةُ الجملة كما يصفها دليلُها.**
+      //
+      // «دليل تاجر الجملة»، القسم ٥ — «القائمة الجانبية»:
+      //
+      //     الرئيسية · فواتير الجملة والتحصيل · العملاء والديون ·
+      //     الأصناف ومخزون الجملة · التسعير · التقارير والمالية ·
+      //     الفريق والأجهزة
+      //
+      // وكانت خمساً: **لا قسمَ للتسعير**، و«العملاء والديون» مدموجٌ مع
+      // «الفريق والأجهزة» في «العملاء والفريق»، ومعها قسمُ «البيع
+      // والتحصيل» العامّ — وبيعُ الجملة **فاتورةٌ لا سلّةُ كاشير**.
+      //
+      // والدليلُ يقول بنصّه: «لا تظهر له قائمة محطة الوقود أو مطعم.
+      // القائمة تقوده إلى وظيفة جملة فعلية»، و«عناصر مشتركة فقط: مزايا
+      // الباقة، الترقية، الإعدادات، الدعم وتسجيل الخروج. أما عناصر
+      // التشغيل فهي قائمة جملة متخصصة».
+      // ══════════════════════════════════════════════════════════════
       case 'wholesale':
-        return [
+        return const [
           _MerchantDrawerSection(
             title: 'فواتير الجملة والتحصيل',
-            subtitle: 'فواتير الجملة والتحصيلات والتسعير متعدد المستويات لهذا النشاط.',
-            groups: ['الجملة'],
+            subtitle: 'فواتير، حالة السداد، تحصيلات ومرتجعات.',
+            groups: [],
+            codes: [
+              'wholesale_invoices',
+              'wholesale_collections',
+              'refunds',
+              'offline_pos',
+            ],
             icon: Icons.request_quote_outlined,
           ),
-          sale,
+          _MerchantDrawerSection(
+            title: 'العملاء والديون',
+            subtitle: 'العملاء، كشف الحساب، آجال الاستحقاق.',
+            groups: [],
+            codes: [
+              'customers',
+              'debts',
+              'corporate_accounts',
+              'corporate_credit_limits',
+            ],
+            icon: Icons.groups_2_outlined,
+          ),
           _MerchantDrawerSection(
             title: 'الأصناف ومخزون الجملة',
-            subtitle: 'الأصناف والباركود والمخزون والموردون ومواقع التخزين.',
+            subtitle: 'أصناف، باركود، مخزون، موردون وطلبات شراء.',
             groups: ['الأصناف', 'المخزون'],
             icon: Icons.inventory_2_outlined,
           ),
-          people,
-          reports,
+          // **والتسعيرُ قسمٌ قائمٌ بذاته** — كان مدفوناً داخل «إعدادات
+          // الجملة»، وقدرتُه بلا شاشةٍ معلَنةٍ أصلاً فلا تُفتح من «مزايا
+          // باقتي». وهو ما يميّز الجملةَ عن التجزئة: سعرُ عميلٍ وسعرُ
+          // كمّيّةٍ وسعرُ شركة.
+          _MerchantDrawerSection(
+            title: 'التسعير',
+            subtitle: 'قوائم أسعار وشرائح كمية وأسعار شركات.',
+            groups: [],
+            codes: ['wholesale_multi_pricing'],
+            icon: Icons.price_change_outlined,
+          ),
+          _MerchantDrawerSection(
+            title: 'التقارير والمالية',
+            subtitle: 'المبيعات والربح والذمم والتدقيق.',
+            groups: ['التقارير'],
+            icon: Icons.analytics_outlined,
+          ),
+          _MerchantDrawerSection(
+            title: 'الفريق والأجهزة',
+            subtitle: 'الموظفون، الأدوار، أجهزة نقاط البيع، الفروع.',
+            groups: [],
+            codes: [
+              'employees',
+              'employee_permissions',
+              'rbac',
+              'multi_pos',
+              'shift_close',
+              'branches',
+            ],
+            icon: Icons.manage_accounts_outlined,
+          ),
         ];
       case 'restaurant':
         return [
@@ -659,6 +724,7 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
     required String subtitle,
     required List<String> groups,
     required IconData icon,
+    List<String>? codes,
   }) {
     Navigator.of(context).pop();
     Get.to(() => MerchantCapabilityHubScreen(
@@ -666,6 +732,7 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
           subtitle: subtitle,
           groups: groups,
           icon: icon,
+          codes: codes,
         ));
   }
 
@@ -715,10 +782,15 @@ class _MerchantDrawerSection {
     required this.subtitle,
     required this.groups,
     required this.icon,
+    this.codes,
   });
 
   final String title;
   final String subtitle;
   final List<String> groups;
   final IconData icon;
+
+  /// رموزُ قدراتٍ بعينها حين لا تعبّر المجموعةُ عن القسم — انظر
+  /// `MerchantCapabilityHubScreen.codes`.
+  final List<String>? codes;
 }
