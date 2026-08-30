@@ -508,4 +508,74 @@ class SimulatorMirrorsServerContractGuardTest extends TestCase
             "**أقسامٌ في درج التجزئة وليست في محاكيها:**\n  %s",
             implode('، ', $missing)));
     }
+    /**
+     * **⑭ وكلُّ قطاعٍ في المنتج له محاكٍ — ولا واحدَ يُنسى.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * `A::ALL_BUSINESS_TYPES` هي الفهرسُ المُباع. **ويُقرأ منه لا يُكتب
+     * هنا** — فقطاعٌ يُضاف غداً يُسقط هذا الفحصَ حتّى يُبنى محاكيه.
+     * وقطاعٌ بلا محاكٍ يُقرَّر عليه بلا أن يُرى.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    /** @test */
+    public function every_business_type_has_a_simulator(): void
+    {
+        $dir = __DIR__ . '/../../../docs/محاكيات';
+
+        // الاسمُ العربيُّ للملفّ لا يُشتقّ من الرمز، فتُقرأ التغطيةُ من
+        // **محتوى** المحاكيات: كلُّ ملفٍّ يُصرّح بمربّعه في تعليقه.
+        $files = glob($dir . '/*.html') ?: [];
+        $this->assertNotEmpty($files, 'لا محاكيَ واحدٌ في المستودع.');
+
+        $blob = '';
+        foreach ($files as $f) {
+            $blob .= (string) file_get_contents($f);
+        }
+
+        $missing = [];
+        foreach (\App\Support\Access\AccessConstants::ALL_BUSINESS_TYPES as $biz) {
+            // `VerticalRegistry BIZ_RETAIL->own()` وأخواتُها — التصريحُ
+            // المكتوبُ في رأس كلّ محاكٍ.
+            if (! preg_match('/BIZ_' . strtoupper($biz) . '\b/', $blob)) {
+                $missing[] = $biz;
+            }
+        }
+
+        $this->assertSame([], $missing, sprintf(
+            "**قطاعاتٌ في `ALL_BUSINESS_TYPES` بلا محاكٍ:**\n  %s\n\n"
+            . 'وقطاعٌ لا يُرى يُقرَّر عليه على الورق. (والتصريحُ المطلوب '
+            . 'سطرٌ في رأس المحاكي يذكر `BIZ_<CODE>` — كما في أخواته.)',
+            implode('، ', $missing)));
+    }
+
+    /**
+     * **⑮ ولكلّ محاكٍ مسبارٌ يضغط أزرارَه.**
+     *
+     * (وهذا يكمّل `SimulatorsAreCommittedAndProbedGuardTest` من الجهة
+     *  الأخرى: ذاك يسأل «أَلِكلّ محاكٍ مسبار؟»، وهذا يسأل «أَلِكلّ
+     *  مسبارٍ محاكٍ؟» — فمسبارٌ يتيمٌ يفحص ملفّاً محذوفاً ويمرّ.)
+     */
+    /** @test */
+    public function no_probe_points_at_a_missing_simulator(): void
+    {
+        $dir = __DIR__ . '/../../../docs/محاكيات';
+        $orphans = [];
+
+        foreach (glob($dir . '/*.mjs') ?: [] as $probe) {
+            $src = (string) file_get_contents($probe);
+            if (! preg_match("~new URL\('\./([^']+\.html)'~u", $src, $m)) {
+                $orphans[] = basename($probe) . ' (لا يذكر ملفّاً)';
+                continue;
+            }
+            if (! is_file($dir . '/' . $m[1])) {
+                $orphans[] = basename($probe) . ' → ' . $m[1];
+            }
+        }
+
+        $this->assertSame([], $orphans, sprintf(
+            "**مسابرُ تشير إلى محاكٍ غيرِ موجود:**\n  %s\n\n"
+            . 'ومسبارٌ يفتح ملفّاً محذوفاً يسقط أو يمرّ على فراغ — '
+            . 'وكلاهما أسوأ من غيابه.',
+            implode("\n  ", $orphans)));
+    }
 }
