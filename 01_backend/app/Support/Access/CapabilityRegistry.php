@@ -31,6 +31,48 @@ use App\Support\Access\Capability as C;
  */
 final class CapabilityRegistry
 {
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-VERTICAL-SCOPE-001 — **قطاعاتُ البضاعة الجافّة.**
+     *
+     * من يبيع صنفاً له كتالوجٌ ورفٌّ وباركود. **ومحطّةُ الوقود ليست
+     * منها**: بضاعتُها سائلةٌ في خزّان، وكتالوجُها `fuel_products`،
+     * ومخزونُها يُصالَح بالقياس (`fuel.recon.*`) لا بجردِ رفوف.
+     *
+     * ── لمَ كُتبت ──
+     *
+     * سأل صاحبُ المشروع: «لماذا تاجرُ وقودٍ لديه أصنافٌ ومخزون؟». وقِيس
+     * فكان محقّاً: `resolveFeatures` تصبّ `planFeatures` على كلّ تاجرٍ
+     * يدفع **بلا نظرٍ إلى قطاعه**، فيأخذ صاحبُ المحطّة سبعَ قدراتٍ
+     * إعلانُها كلُّه تجزئة (`retail.product.*` · شاشة `/retail`)، ثمّ
+     * **يُمنَع من البيع منها**: `CashierPosScreen` تردّ حسابَ الوقود إلى
+     * `FuelSaleScreen` بحاجزٍ قطاعيّ. كتالوجٌ يُملأ ولا يُفرَّغ.
+     *
+     * ── والحكمُ من صاحب المشروع لا من اجتهادي ──
+     *
+     * «تدقيق شامل لقطاعات التجار»، جدولُ «لا يجوز أن يرى»:
+     *     محطة وقود ⇒ «البيع السريع بدون التجزئة، **كاشير منتجات عام**»
+     * ومساحتُها الصحيحةُ فيه: «خزانات، توريد، قياس، ورديات، شركات،
+     * فروقات، إيصالات، بيع وقود، مضخات/مسدسات» — لا أصنافَ ولا رفوف.
+     * ودليلُ تشغيل المحطّة: «القائمة ليست قالباً مشتركاً لكل التجار».
+     *
+     * ── وحدُّها ما مُنع صراحةً، لا ما ظننتُه ──
+     *
+     * **البيعُ السريع داخلٌ فيها**: التدقيقُ يمنع عنه «مضخات، وصفات،
+     * فواتير جملة، مطبخ» **ولا يذكر الأصناف**، وبائعُ الخضار قد يمسك
+     * قائمةَ أسعارٍ بسيطة. ومن قصّها عنه فليقصّها بقرارٍ مكتوبٍ لا بظنّ.
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * @var array<int,string>
+     */
+    private const GOODS = [
+        A::BIZ_RETAIL,
+        A::BIZ_WHOLESALE,
+        A::BIZ_PHARMACY,
+        A::BIZ_RESTAURANT,
+        A::BIZ_QUICK_SALE,
+    ];
+
     /** @var array<string,Capability>|null */
     private static ?array $cache = null;
 
@@ -144,11 +186,17 @@ final class CapabilityRegistry
     private static function selling(): array
     {
         return [
+            // **والبيعُ السريعُ ليس لمحطّة وقود** — منعَه التدقيقُ بنصّه
+            // («لا يجوز أن يرى: البيع السريع بدون التجزئة»)، وقِيس أنّه
+            // كان يصلها فعلاً. وهو أصلاً بابٌ ميّتٌ هناك: يفتح
+            // `CashierPosScreen` وهي تردّ حسابَ الوقود إلى `FuelSaleScreen`.
+            // فالمنعُ يُزيل زرّاً يَعِد بما يرتدّ عنه.
             C::make(A::F_QUICK_SALE)
                 ->nameAr('البيع السريع')
                 ->descAr('بيع بمبلغ حرّ بلا أصناف — لبائع الخضار والسمك ومن لا كتالوج له.')
                 ->group('البيع')->icon('bolt')
-                ->minPlan(A::PLAN_FREE)->screen('/quick-sale'),
+                ->minPlan(A::PLAN_FREE)->screen('/quick-sale')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_CASHIER)
                 ->nameAr('الكاشير')
@@ -199,11 +247,24 @@ final class CapabilityRegistry
                 ->routes(['retail/returns', 'retail/sales'])
                 ->screen('/retail/returns'),
 
+            // ══════════════════════════════════════════════════════════
+            // **ودفترُ الدَّين ليس لمحطّة وقود — والنيّةُ مكتوبةٌ منذ قبلُ.**
+            //
+            // `FuelVertical::own()` فوقها بنصّها: «**ولا `F_DEBTS`** —
+            // ائتمانُ المحطّة ببطاقاتٍ لا بدفترِ دَين» (‏`fuel_cards`
+            // و`fuel_companies`). فحُذفت من قدرات القطاع عمداً…
+            // **ثمّ أعادتها `planFeatures` من الباب الآخر**، لأنّها
+            // تُصبّ بلا نظرٍ إلى القطاع.
+            //
+            // وهذا بعينه ما يُصلحه `AMIAL-VERTICAL-SCOPE-001`: نيّةٌ
+            // مكتوبةٌ في موضعٍ، ومنفذٌ يلتفّ عليها في موضعٍ آخر.
+            // ══════════════════════════════════════════════════════════
             C::make(A::F_DEBTS)
                 ->nameAr('البيع الآجل والديون')
                 ->descAr('دفتر ديون العملاء بكشف حساب لكل عميل.')
                 ->group('البيع')->icon('account_balance_wallet')
-                ->minPlan(A::PLAN_FREE)->screen('/credit'),
+                ->minPlan(A::PLAN_FREE)->screen('/credit')
+                ->businessTypes(self::GOODS),
 
             // ══════════════════════════════════════════════════════════
             // **مبنيّةٌ بالكامل ولم تكن موصولةً باستحقاقها.**
@@ -254,7 +315,8 @@ final class CapabilityRegistry
                 ->group('الأصناف')->icon('inventory_2')
                 ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.product.*'])
-                ->limit('max_products')->screen('/products'),
+                ->limit('max_products')->screen('/products')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_BARCODE)
                 ->nameAr('الباركود')
@@ -263,7 +325,8 @@ final class CapabilityRegistry
                 ->group('الأصناف')->icon('qr_code_scanner')
                 ->minPlan(A::PLAN_BUSINESS)
                 ->routes(['retail/scan'])
-                ->permissions(['retail.product.*']),
+                ->permissions(['retail.product.*'])
+                ->businessTypes(self::GOODS),
 
             C::make('retail.catalog')
                 ->nameAr('التصنيفات والعلامات والوحدات')
@@ -319,7 +382,8 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.stock.*'])
                 ->routes(['retail/ops', 'retail/products'])
-                ->screen('/retail'),
+                ->screen('/retail')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_LOW_STOCK_ALERTS)
                 ->nameAr('تنبيه نفاد المخزون')
@@ -327,7 +391,8 @@ final class CapabilityRegistry
                 ->group('المخزون')->icon('warning_amber')
                 ->minPlan(A::PLAN_BUSINESS)
                 ->routes(['pharmacy/alerts'])
-                ->screen('/retail'),
+                ->screen('/retail')
+                ->businessTypes(self::GOODS),
 
             C::make('retail.locations')
                 ->nameAr('المواقع والمستودعات')
@@ -358,7 +423,8 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.count.*'])
                 ->routes(['retail/counts'])
-                ->screen('/retail/counts'),
+                ->screen('/retail/counts')
+                ->businessTypes(self::GOODS),
 
             C::make('retail.waste')
                 ->nameAr('الهالك')
@@ -376,7 +442,8 @@ final class CapabilityRegistry
                 // AMIAL-ENTITLEMENTS-002 — المساراتُ نسبةً إلى `merchant/`
                 // (كما يقرؤها `EntitlementCenterController::coverage`).
                 ->routes(['suppliers'])
-                ->minPlan(A::PLAN_BUSINESS)->screen('/suppliers'),
+                ->minPlan(A::PLAN_BUSINESS)->screen('/suppliers')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_PURCHASES)
                 ->nameAr('أوامر الشراء')
@@ -385,7 +452,8 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.purchase.*'])
                 ->routes(['purchase-orders'])
-                ->screen('/purchase-orders'),
+                ->screen('/purchase-orders')
+                ->businessTypes(self::GOODS),
         ];
     }
 
@@ -432,6 +500,7 @@ final class CapabilityRegistry
                 ->group('الناس')->icon('percent')
                 ->minPlan(A::PLAN_ENTERPRISE)
                 ->permissions(['retail.discount.apply'])
+                ->businessTypes(self::GOODS)
                 ->comingSoon(),
 
             // ══════════════════════════════════════════════════════════

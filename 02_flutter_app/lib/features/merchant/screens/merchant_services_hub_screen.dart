@@ -509,9 +509,18 @@ class MerchantServicesHubScreen extends StatelessWidget {
     _Svc('low_stock_alerts', 'تنبيهات النفاد',
         'حدّد لكل صنف حدّاً أدنى، ونبّهك قبل نفاده بوقتٍ يكفي لإعادة الطلب.',
         Icons.notification_important, 'الأعمال', () => const StockAlertsScreen()),
+    // AMIAL-VERTICAL-SCOPE-001 — **الآجلُ يمنحه النشاطُ لا الباقة.**
+    //
+    // كان في `planFeatures` فيصل كلَّ تاجرٍ **ومنهم محطّةُ الوقود**،
+    // بينما `FuelVertical` تقول بنصّها «ولا `F_DEBTS` — ائتمانُ المحطّة
+    // ببطاقاتٍ لا بدفترِ دَين». فنُقل المنحُ إلى مربّعات القطاعات الخمسة.
+    //
+    // **وبلا `onlyFor` هنا يُعرَض على صاحب المحطّة بوعد «ترقّ باقتك»** —
+    // وهي ترقيةٌ لن تفتحه مهما دفع، لأنّ نشاطَه لا يمنحه.
     _Svc('debts', 'البيع بالآجل',
         'لوحة الآجل: كم لك على العملاء، ومن تأخّر، وسدادٌ جزئيّ أو كامل بكشف حساب لكل عميل.',
-        Icons.account_balance_wallet, 'المجانية', () => const CreditDashboardScreen()),
+        Icons.account_balance_wallet, 'المجانية', () => const CreditDashboardScreen(),
+        onlyFor: {'retail', 'wholesale', 'pharmacy', 'restaurant', 'quick_sale'}),
     _Svc('customers', 'العملاء وحساباتهم',
         'سجلّ عملائك وأرصدتهم الآجلة وحدودهم الائتمانية، مع كشف حساب قابل للتصدير.',
         Icons.person_search, 'الأعمال', () => const CreditCustomersScreen()),

@@ -72,9 +72,9 @@ class VerticalParityGuardTest extends TestCase
                 'enterprise' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'quick_sale', 'receipts', 'receive', 'refunds', 'transfer', 'wallet'],
             ],
             'retail' => [
-                'free' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'payment_requests', 'profile', 'qr_pay', 'receipts', 'receive', 'refunds', 'split_bill', 'transfer', 'wallet'],
-                'business' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'payment_requests', 'profile', 'qr_pay', 'receipts', 'receive', 'refunds', 'split_bill', 'transfer', 'wallet'],
-                'enterprise' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'payment_requests', 'profile', 'qr_pay', 'receipts', 'receive', 'refunds', 'split_bill', 'transfer', 'wallet'],
+                'free' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'payment_requests', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'refunds', 'split_bill', 'transfer', 'wallet'],
+                'business' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'payment_requests', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'refunds', 'split_bill', 'transfer', 'wallet'],
+                'enterprise' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'payment_requests', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'refunds', 'split_bill', 'transfer', 'wallet'],
             ],
             'fuel' => [
                 'free' => ['daily_reports', 'fuel_pos', 'fuel_pumps', 'fuel_shifts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
@@ -82,19 +82,19 @@ class VerticalParityGuardTest extends TestCase
                 'enterprise' => ['daily_reports', 'fuel_cards', 'fuel_companies', 'fuel_pos', 'fuel_products', 'fuel_pumps', 'fuel_shifts', 'fuel_variance', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
             ],
             'pharmacy' => [
-                'free' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_pos', 'pharmacy_products', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
-                'business' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_pos', 'pharmacy_prescriptions', 'pharmacy_products', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
-                'enterprise' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_pos', 'pharmacy_prescriptions', 'pharmacy_products', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
+                'free' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_pos', 'pharmacy_products', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
+                'business' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_pos', 'pharmacy_prescriptions', 'pharmacy_products', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
+                'enterprise' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_pos', 'pharmacy_prescriptions', 'pharmacy_products', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
             ],
             'wholesale' => [
-                'free' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet', 'wholesale_collections', 'wholesale_invoices'],
-                'business' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet', 'wholesale_collections', 'wholesale_invoices', 'wholesale_multi_pricing'],
-                'enterprise' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet', 'wholesale_collections', 'wholesale_invoices', 'wholesale_multi_pricing'],
+                'free' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet', 'wholesale_collections', 'wholesale_invoices'],
+                'business' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet', 'wholesale_collections', 'wholesale_invoices', 'wholesale_multi_pricing'],
+                'enterprise' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet', 'wholesale_collections', 'wholesale_invoices', 'wholesale_multi_pricing'],
             ],
             'restaurant' => [
-                'free' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'restaurant_kitchen', 'restaurant_orders', 'restaurant_tables', 'transfer', 'wallet'],
-                'business' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'restaurant_kitchen', 'restaurant_orders', 'restaurant_tables', 'transfer', 'wallet'],
-                'enterprise' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'qr_pay', 'receipts', 'receive', 'restaurant_kitchen', 'restaurant_orders', 'restaurant_tables', 'transfer', 'wallet'],
+                'free' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'restaurant_kitchen', 'restaurant_orders', 'restaurant_tables', 'transfer', 'wallet'],
+                'business' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'restaurant_kitchen', 'restaurant_orders', 'restaurant_tables', 'transfer', 'wallet'],
+                'enterprise' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'restaurant_kitchen', 'restaurant_orders', 'restaurant_tables', 'transfer', 'wallet'],
             ],
         ];
     }

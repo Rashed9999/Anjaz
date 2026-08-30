@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Domain\Verticals\VerticalRegistry;
 use App\Support\Access\AccessConstants as A;
+use App\Support\Access\AccessPresets;
 use App\Support\Access\CapabilityRegistry;
 use Tests\TestCase;
 
@@ -71,6 +72,25 @@ class CapabilityBoxAgreementGuardTest extends TestCase
     }
 
     /**
+     * كلُّ ما تبيعه الباقاتُ لكلّ التجّار — بلا نظرٍ إلى القطاع.
+     *
+     * **ويُقرأ من `AccessPresets` لا يُكتب هنا** — قائمةٌ مكتوبةٌ بيدٍ
+     * تشيخ، وهذا الملفُّ كلُّه عن مصدرين يفترقان.
+     *
+     * @return array<int,string>
+     */
+    private function everyPlanFeature(): array
+    {
+        $out = [];
+
+        foreach (A::ALL_PLANS as $plan) {
+            $out = array_merge($out, AccessPresets::planFeatures($plan));
+        }
+
+        return array_values(array_unique($out));
+    }
+
+    /**
      * @test
      *
      * **① و② معاً: كلُّ قدرةٍ قطاعيّةٍ لقطاعها بالضبط — لا أقلَّ ولا أكثر.**
@@ -91,14 +111,52 @@ class CapabilityBoxAgreementGuardTest extends TestCase
                 continue;   // قدرةٌ عامّة — ليست محلَّ هذا الحارس
             }
 
-            $sectoral++;
-
             $declared = array_values(array_filter(
                 A::ALL_BUSINESS_TYPES,
                 static fn (string $biz): bool => $cap->appliesTo($biz)));
 
             $granted = array_values(array_unique(array_merge(
                 $own[$code] ?? [], array_keys($depth[$code] ?? []))));
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-VERTICAL-SCOPE-001 — **صنفان يحملان الحقلَ نفسَه.**
+            //
+            // كان هذا الحارسُ يقرأ `businessTypes` **إعلانَ ملكيّة**: من
+            // أعلنه فقطاعُه يمنحه. وكان صحيحاً ما دام الحقلُ على القدرات
+            // القطاعيّة وحدَها (`fuel_*` · `pharmacy_*` · `cashier`).
+            //
+            // **ثمّ صار له معنىً ثانٍ**، وهو قرارُ صاحب المشروع المكتوبُ
+            // في `RetailVertical` بنصّه:
+            //
+            //     «ولا `F_PRODUCTS` ولا `F_CUSTOMERS` هنا — صنفُ النشاط
+            //      يقول ما ينطبق، لا ما اشتُري. فالمنتجاتُ والعملاءُ
+            //      تبيعهما الباقةُ لا يمنحهما النشاط.»
+            //
+            // فـ«الأصناف» **تبيعها الباقةُ للجميع**، و`businessTypes`
+            // عليها **نطاقُ انطباقٍ** يمنعها عن محطّة الوقود — لا ادّعاءَ
+            // أنّ خمسةَ مربّعاتٍ تمنحها.
+            //
+            // **والفرقُ يُقاس ولا يُعلَن بحقلٍ ثالث**: قدرةٌ لا يمنحها
+            // مربّعٌ واحدٌ وتبيعها الباقة ⇒ مبيعةٌ بنطاق. وحقلٌ ثالثٌ
+            // يُكتب باليد يشيخ ويفترق، وهذا المشروعُ دفع ثمنَ ذلك مرّتين.
+            //
+            // **والثابتُ عليها أضيقُ لا أوسع**: مصدرُ منحٍ واحدٌ لا
+            // اثنان. فلو أضافها مربّعٌ غداً صارت مزدوجةَ المصدر، ونزعُها
+            // من الباقة يصير بلا أثر — وهو بعينه العطلُ الذي يحاربه
+            // هذا الملفّ.
+            // ══════════════════════════════════════════════════════════
+            $soldByPlan = in_array($code, $this->everyPlanFeature(), true);
+
+            if ($granted === [] && $soldByPlan) {
+                $this->assertSame([], $granted, sprintf(
+                    '«%s» تبيعها الباقةُ **ويمنحها مربّعٌ أيضاً** [%s] — '
+                    . 'مصدران لمنحٍ واحد، فنزعُها من أحدهما بلا أثر.',
+                    $code, implode('، ', $granted)));
+
+                continue;
+            }
+
+            $sectoral++;
 
             // **والانفراقُ المأذونُ واحد.** «قريباً» تُعلَن في الكتالوج
             // ولا تُمنَح لأحد — وهي الحالةُ التي كُتب هذا الحارسُ لها.

@@ -55,7 +55,13 @@ final class VerticalRegistry
                 public function own(): array
                 {
                     return [
+                    // AMIAL-VERTICAL-SCOPE-001 — **`F_QUICK_SALE` نُقلت
+                    // إلى هنا من `planFeatures`**، حيث كانت تُمنَح لكلّ
+                    // تاجرٍ بلا نظرٍ إلى قطاعه — ومنها محطّةُ الوقود،
+                    // والتدقيق يمنعها عنها بنصّه. **ولم يفقدها هذا
+                    // القطاع**: ما كان يصله من الباقة صار يصله من مربّعه.
                         A::F_CASHIER, A::F_DEBTS, A::F_REFUNDS,
+                        A::F_QUICK_SALE,
                         A::F_PAYMENT_REQUESTS, A::F_SPLIT_BILL,
                     ];
                 }
@@ -67,7 +73,12 @@ final class VerticalRegistry
                 public function own(): array
                 {
                     return [
-                        A::F_CASHIER, A::F_DEBTS,
+                    // AMIAL-VERTICAL-SCOPE-001 — **`F_QUICK_SALE` نُقلت
+                    // إلى هنا من `planFeatures`**، حيث كانت تُمنَح لكلّ
+                    // تاجرٍ بلا نظرٍ إلى قطاعه — ومنها محطّةُ الوقود،
+                    // والتدقيق يمنعها عنها بنصّه. **ولم يفقدها هذا
+                    // القطاع**: ما كان يصله من الباقة صار يصله من مربّعه.
+                        A::F_CASHIER, A::F_DEBTS, A::F_QUICK_SALE,
                         A::F_WHOLESALE_INVOICES, A::F_WHOLESALE_COLLECTIONS,
                     ];
                 }
@@ -88,9 +99,14 @@ final class VerticalRegistry
                 public function own(): array
                 {
                     return [
+                    // AMIAL-VERTICAL-SCOPE-001 — **`F_QUICK_SALE` نُقلت
+                    // إلى هنا من `planFeatures`**، حيث كانت تُمنَح لكلّ
+                    // تاجرٍ بلا نظرٍ إلى قطاعه — ومنها محطّةُ الوقود،
+                    // والتدقيق يمنعها عنها بنصّه. **ولم يفقدها هذا
+                    // القطاع**: ما كان يصله من الباقة صار يصله من مربّعه.
                         A::F_PHARMACY_POS, A::F_PHARMACY_PRODUCTS,
                         A::F_PHARMACY_BATCHES, A::F_PHARMACY_ALERTS,
-                        A::F_DEBTS,
+                        A::F_DEBTS, A::F_QUICK_SALE,
                     ];
                 }
 
@@ -134,10 +150,15 @@ final class VerticalRegistry
                 public function own(): array
                 {
                     return [
+                    // AMIAL-VERTICAL-SCOPE-001 — **`F_QUICK_SALE` نُقلت
+                    // إلى هنا من `planFeatures`**، حيث كانت تُمنَح لكلّ
+                    // تاجرٍ بلا نظرٍ إلى قطاعه — ومنها محطّةُ الوقود،
+                    // والتدقيق يمنعها عنها بنصّه. **ولم يفقدها هذا
+                    // القطاع**: ما كان يصله من الباقة صار يصله من مربّعه.
                         A::F_RESTAURANT_TABLES,
                         A::F_RESTAURANT_ORDERS,
                         A::F_RESTAURANT_KITCHEN,
-                        A::F_DEBTS,
+                        A::F_DEBTS, A::F_QUICK_SALE,
                     ];
                 }
             },

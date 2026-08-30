@@ -91,11 +91,26 @@ class AccessPresets
     public static function planFeatures(string $plan): array
     {
         return match ($plan) {
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-VERTICAL-SCOPE-001 — **`quick_sale` و`debts` خرجتا
+            // من هنا إلى مربّعات قطاعاتها، ولم تُنزَعا عن أحد.**
+            //
+            // كانتا تُمنَحان لكلّ تاجرٍ من هذه القائمة **ومن مربّعه معاً**
+            // — مصدرا منحٍ لشيءٍ واحد. و`F_DEBTS` مثالُه الصارخ: مُعلَنٌ
+            // في نواة القطاعات الخمسة (بيع سريع · تجزئة · جملة · صيدليّة
+            // · مطعم) **وليس في الوقود**، و`FuelVertical` تقول بنصّها
+            // «ولا `F_DEBTS` — ائتمانُ المحطّة ببطاقاتٍ لا بدفترِ دَين».
+            // **ثمّ يُعيدها هذا السطرُ إلى المحطّة من الباب الخلفيّ.**
+            //
+            // فنُقلت النية إلى موضع التنفيذ: يمنحها مربّعُ القطاع، وتُنزَع
+            // من هنا. **ولا يتغيّر ما يصل أحداً** إلّا محطّةَ الوقود —
+            // وذاك المقصود. ويحرسه `VerticalScopeGuardTest`.
+            // ══════════════════════════════════════════════════════════
             A::PLAN_FREE => [
-                A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
+                A::F_REFUNDS,
             ],
             A::PLAN_BUSINESS => [
-                A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
+                A::F_REFUNDS,
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
                 A::F_PROMOTIONS,
@@ -110,7 +125,7 @@ class AccessPresets
             ],
             // مؤسسة (99 ر.س/شهر): كل الأعمال + نمو متعدد الفروع وحوكمة مؤسسية.
             A::PLAN_ENTERPRISE => [
-                A::F_QUICK_SALE, A::F_DEBTS, A::F_REFUNDS,
+                A::F_REFUNDS,
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
                 A::F_PROMOTIONS,
