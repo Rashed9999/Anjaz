@@ -31,6 +31,9 @@ class SimulatorMirrorsServerContractGuardTest extends TestCase
     private const SIM = __DIR__ . '/../../../docs/محاكيات/محاكي-تاجر-الجملة.html';
     private const CTRL = __DIR__ . '/../../app/Http/Controllers/Api/V1/Amial/WholesaleController.php';
 
+    private const RX_SIM = __DIR__ . '/../../../docs/محاكيات/محاكي-الصيدلية.html';
+    private const RX_CTRL = __DIR__ . '/../../app/Http/Controllers/Api/V1/Amial/PharmacyController.php';
+
     private function sim(): string
     {
         $this->assertFileExists(self::SIM, 'محاكي الجملة مفقود — والحارسُ يفحص العدم.');
@@ -43,9 +46,9 @@ class SimulatorMirrorsServerContractGuardTest extends TestCase
      *
      * @return list<string>
      */
-    private function acceptedValues(string $field): array
+    private function acceptedValues(string $field, ?string $ctrl = null): array
     {
-        $src = (string) file_get_contents(self::CTRL);
+        $src = (string) file_get_contents($ctrl ?? self::CTRL);
 
         $this->assertMatchesRegularExpression(
             "/'{$field}'\s*=>\s*'[^']*\bin:/", $src,
@@ -203,6 +206,153 @@ class SimulatorMirrorsServerContractGuardTest extends TestCase
             "**أقسامٌ في درج التطبيق وليست في المحاكي:**\n  %s\n\n"
             . 'فيُعرَض على صاحب المشروع درجٌ ليس درجَه، ويُقرَّر على '
             . 'صورةٍ ناقصة.',
+            implode('، ', $missing)));
+    }
+    /**
+     * **⑥ والصيدليّةُ: ثلاثُ طرقِ دفعٍ كما يقبل `recordSale`.**
+     */
+    /** @test */
+    public function every_pharmacy_payment_method_the_server_accepts_is_shown(): void
+    {
+        $this->assertFileExists(self::RX_SIM, 'محاكي الصيدلية مفقود.');
+        $sim = (string) file_get_contents(self::RX_SIM);
+
+        $accepted = $this->acceptedValues('payment_method', self::RX_CTRL);
+
+        $this->assertGreaterThanOrEqual(3, count($accepted),
+            'قُرئت طرقُ دفعٍ أقلُّ ممّا كان — تغيّرت صياغةُ المتحقِّق.');
+
+        // الأزرارُ تُبنى في وقت التشغيل من مصفوفٍ، فيُقرأ المصفوف.
+        $at = strpos($sim, "data-pay=\"' + m[0]");
+        $this->assertNotFalse($at, 'اختفى بناءُ أزرار الدفع من محاكي الصيدلية.');
+        $block = substr($sim, max(0, $at - 400), 400);
+
+        $missing = array_values(array_filter($accepted,
+            fn (string $v): bool => ! str_contains($block, "'{$v}'")));
+
+        $this->assertSame([], $missing, sprintf(
+            "**طرقُ دفعٍ يقبلها الخادمُ ولا يعرضها محاكي الصيدلية:**\n  %s",
+            implode('، ', $missing)));
+    }
+
+    /**
+     * **⑦ وقيدا الوصفة مستقلّان — والمحاكي يعرضهما اثنين.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * `PharmacyController::recordSale` يفرض قيدين لا يُغني أحدُهما عن
+     * الآخر:
+     *
+     *   · الباقة — `denyUnless($request, 'pharmacy_prescriptions')`
+     *   · الدور  — `guard($request, P::PHARMACY_PRESCRIPTION_RECORD)`
+     *
+     * والتعليقُ هناك يقول بنصّه: «صيدليّةٌ اشترت الميزةَ لا يعني أنّ
+     * كاشيرَها يوثّق وصفة… **وخلطُهما يجعل شراءَ الميزة منحاً لكلّ
+     * الموظّفين**».
+     *
+     * فمحاكٍ يدمجهما في رسالةٍ واحدة **يُرسل الصيدليَّ يشتري ما يملكه**
+     * أو يعدّل صلاحيّةً لن تكفي.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    /** @test */
+    public function the_pharmacy_simulator_keeps_the_two_prescription_constraints_apart(): void
+    {
+        $ctrl = (string) file_get_contents(self::RX_CTRL);
+
+        foreach ([
+            "denyUnless(\$request, 'pharmacy_prescriptions')" => 'قيدُ الباقة',
+            'P::PHARMACY_PRESCRIPTION_RECORD' => 'قيدُ الدور',
+        ] as $needle => $what) {
+            $this->assertStringContainsString($needle, $ctrl,
+                "**{$what} لم يعد في `recordSale`.** فإمّا تغيّر العقدُ "
+                . 'وإمّا سقط قيدٌ — ويُراجَع المحاكي معه.');
+        }
+
+        $sim = (string) file_get_contents(self::RX_SIM);
+
+        $this->assertStringContainsString('function prescriptionBlocker()', $sim,
+            '**المحاكي بلا تفريقٍ بين القيدين.**');
+
+        // وأربعُ حالاتٍ لا حالتان: كلاهما · الباقةُ وحدَها · الدورُ وحدَه · لا مانع.
+        foreach (["'both'", "'plan'", "'role'"] as $state) {
+            $this->assertStringContainsString($state, $sim,
+                "**حالةُ {$state} غائبةٌ عن المحاكي.** فرسالةٌ واحدةٌ "
+                . 'لسببين تُرسل الصيدليَّ يشتري ما يملكه.');
+        }
+
+        $this->assertStringContainsString('pharmacy.prescription.record', $sim,
+            '**المحاكي لا يسمّي صلاحيّةَ الدور.** ورسالةٌ لا تسمّي ما '
+            . 'يُطلَب تجعل الصيدليَّ يخمّن.');
+    }
+
+    /**
+     * **⑧ و«قريباً» ليست «مقفلةً في باقتك».**
+     *
+     * `pharmacy_customers` مُعلَنةٌ بـ`comingSoon()` لأنّها **بلا نقطة
+     * نهاية**. فعرضُها مقفلةً بباقةٍ يَعِد بأنّ الدفعَ يفتحها —
+     * **ووعدٌ في صفحة تسعيرٍ لا يُوفّى أسوأ من ميزةٍ غائبةٍ معلنة.**
+     */
+    /** @test */
+    public function a_coming_soon_capability_is_never_shown_as_plan_locked(): void
+    {
+        $reg = (string) file_get_contents(
+            __DIR__ . '/../../app/Support/Access/CapabilityRegistry.php');
+
+        $at = strpos($reg, 'F_PHARMACY_CUSTOMERS');
+        $this->assertNotFalse($at, 'اختفت «عملاء الصيدلية» من السجلّ.');
+
+        $this->assertStringContainsString('comingSoon()', substr($reg, $at, 400),
+            '**«عملاء الصيدلية» لم تعد «قريباً».** فإن بُنيت نقطتُها '
+            . 'فليُحدَّث المحاكي؛ وإن أُعيدت للبيع بلا نقطةٍ فهذا هو '
+            . 'العطلُ الذي أُخرجت من أجله.');
+
+        $sim = (string) file_get_contents(self::RX_SIM);
+
+        $this->assertStringContainsString('COMING_SOON', $sim,
+            '**المحاكي بلا صنف «قريباً».** فتُعرَض القدرةُ مقفلةً بباقةٍ '
+            . 'وتَعِد بأنّ الدفعَ يفتحها — ولا يفتحها.');
+
+        // **ولا تنفتح بأعلى باقة** — وهو ما يفرّقها عن المقفل.
+        $this->assertMatchesRegularExpression(
+            '/if \(COMING_SOON\[code\]\) return false;/', $sim,
+            '**«قريباً» تنفتح بالترقية في المحاكي.** وهي لم تُبَع أصلاً.');
+    }
+
+    /**
+     * **⑨ وأقسامُ درج الصيدليّة هي أقسامُه في التطبيق.**
+     */
+    /** @test */
+    public function the_simulator_drawer_matches_the_real_pharmacy_drawer(): void
+    {
+        $shell = __DIR__ . '/../../../02_flutter_app/lib/features/merchant/screens/merchant_adaptive_shell.dart';
+        $src = (string) file_get_contents($shell);
+
+        $start = strpos($src, "case 'pharmacy':");
+        $this->assertNotFalse($start, 'اختفى فرعُ الصيدليّة من درج التطبيق');
+        $end = strpos($src, "case '", $start + 10);
+        $block = substr($src, $start, ($end ?: strlen($src)) - $start);
+
+        preg_match_all("/(?<!sub)title: '([^']+)'/", $block, $m);
+        $titles = $m[1] ?? [];
+
+        // الأقسامُ المشتركةُ (`sale` · `people` · `reports`) تُذكر بأسمائها
+        // لا بنصِّها هنا، فتُقرأ من تعريفاتها.
+        foreach (['sale' => 'البيع والتحصيل', 'people' => 'العملاء والفريق',
+                  'reports' => 'التقارير والمالية'] as $var => $t) {
+            if (preg_match('/\b' . $var . ',/', $block)) {
+                $titles[] = $t;
+            }
+        }
+
+        $this->assertGreaterThanOrEqual(4, count($titles),
+            'لم تُقرأ أقسامُ درج الصيدليّة — تغيّرت الصياغةُ والحارسُ '
+            . 'يفحص فراغاً.');
+
+        $sim = (string) file_get_contents(self::RX_SIM);
+        $missing = array_values(array_filter($titles,
+            fn (string $t): bool => ! str_contains($sim, $t)));
+
+        $this->assertSame([], $missing, sprintf(
+            "**أقسامٌ في درج الصيدليّة وليست في محاكيها:**\n  %s",
             implode('، ', $missing)));
     }
 }

@@ -5,6 +5,7 @@
 // في المستودع. والنمطُ هنا هو نفسُه في `flow-coverage-probe.mjs`.
 // ══════════════════════════════════════════════════════════════════════
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 let chromium;
 const CANDIDATES = [
@@ -266,7 +267,7 @@ if (fontHost.length) {
 // اللقطةُ مساعدةٌ لا شرط — ومجلّدٌ غائبٌ لا يُسقط فحصاً نجح.
 try {
   await page.screenshot({
-    path: new URL('./لقطة-محاكي-الجملة.png', import.meta.url).pathname });
+    path: fileURLToPath(new URL('./لقطة-محاكي-الجملة.png', import.meta.url)) });
 } catch { /* لا تُعدّ فشلاً */ }
 await browser.close();
 
