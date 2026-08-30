@@ -245,7 +245,8 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.return.*'])
                 ->routes(['retail/returns', 'retail/sales'])
-                ->screen('/retail/returns'),
+                ->screen('/retail/returns')
+                ->businessTypes(self::GOODS),
 
             // ══════════════════════════════════════════════════════════
             // **ودفترُ الدَّين ليس لمحطّة وقود — والنيّةُ مكتوبةٌ منذ قبلُ.**
@@ -336,7 +337,8 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.catalog.*', 'retail.product.*'])
                 ->routes(['retail/categories', 'retail/brands', 'retail/units'])
-                ->screen('/retail/catalog'),
+                ->screen('/retail/catalog')
+                ->businessTypes(self::GOODS),
 
             C::make('retail.variants')
                 ->nameAr('متغيّرات الصنف')
@@ -346,7 +348,8 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.product.manage'])
                 ->routes(['retail/products'])
-                ->screen('/retail/variants'),
+                ->screen('/retail/variants')
+                ->businessTypes(self::GOODS),
 
             C::make('retail.price_versions')
                 ->nameAr('نسخ الأسعار بالاعتماد')
@@ -356,7 +359,8 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.price.*'])
                 ->routes(['retail/prices'])
-                ->screen('/retail/prices'),
+                ->screen('/retail/prices')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_PROMOTIONS)
                 ->nameAr('العروض والخصومات')
@@ -436,7 +440,8 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.waste.*'])
                 ->routes(['retail/wastes'])
-                ->screen('/retail/wastes'),
+                ->screen('/retail/wastes')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_SUPPLIERS)
                 ->nameAr('الموردون')

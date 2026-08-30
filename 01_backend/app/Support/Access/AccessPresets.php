@@ -110,6 +110,35 @@ class AccessPresets
                 A::F_REFUNDS,
             ],
             A::PLAN_BUSINESS => [
+                // ══════════════════════════════════════════════════════
+                // AMIAL-ORPHAN-CAPS-001 — **مبنيّةٌ ومُسعَّرةٌ ومقفلةٌ معاً.**
+                //
+                // خمسُ قدراتٍ كانت **تُعلَن بـ`minPlan(PLAN_BUSINESS)`،
+                // ولها شاشاتٌ في `CapabilityScreens`، ولها نقاطُ نهايةٍ
+                // تعمل — ولا يمنحها مانحٌ واحد**. فيدفع تاجرُ التجزئة
+                // خمسةً وثلاثين ريالاً، وتَعِده صفحةُ التسعير، ويفتح
+                // الشاشة، **فيردّه وسيطُ `capability:` نفسُه**.
+                //
+                // وهذا مقلوبُ «تُباع ولا وجودَ لها»: **موجودةٌ ومبيعةٌ
+                // ومقفلةٌ**. والسلسلةُ كلُّها سليمةٌ إلّا حلقةَ المنح.
+                //
+                //   retail.catalog        → capability:retail.catalog
+                //                           على /categories /brands /units
+                //   retail.variants       → على /products/{id}/variants
+                //   retail.waste          → على /wastes
+                //   retail.price_versions → نسخُ الأسعار بالاعتماد
+                //   retail.returns.by_line→ مرتجعُ صنفٍ من فاتورة
+                //
+                // **والمنحُ عند أرضيّتها المُعلَنة لا فوقها** — القدرةُ
+                // تقول بنفسها في أيّ باقةٍ هي، فيُطابَق المانحُ قولَها.
+                //
+                // **ونُطّقت بـ`GOODS` أوّلاً** (AMIAL-VERTICAL-SCOPE-001):
+                // منحُها هنا بلا نطاقٍ يُعطي «الهالك» و«متغيّرات الصنف»
+                // لمحطّة وقود — وهو العطلُ الذي كشفه صاحبُ المشروع بعينه.
+                // ══════════════════════════════════════════════════════
+                'retail.catalog', 'retail.variants', 'retail.price_versions',
+                'retail.waste', 'retail.returns.by_line',
+
                 A::F_REFUNDS,
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,
@@ -144,6 +173,14 @@ class AccessPresets
             // ══════════════════════════════════════════════════════════
             A::PLAN_ENTERPRISE => [
                 A::F_REFUNDS,
+                // **والقائمتان مستقلّتان لا تراكميّتان** — فما يُمنَح في
+                // «الأعمال» يُعاد هنا نصّاً، وإلّا أنقصت الترقيةُ ميزة.
+                // (أُغفلت الخمسُ أوّلَ مرّةٍ فسقط
+                //  `PlanEntitlementMatrixTest::a_higher_plan_never_gives_less`
+                //  — **حارسٌ قائمٌ أمسك انحداراً حقيقيّاً**: يدفع التاجرُ
+                //  أكثرَ فيحصل على أقلّ.)
+                'retail.catalog', 'retail.variants', 'retail.price_versions',
+                'retail.waste', 'retail.returns.by_line',
                 'retail.locations', 'retail.transfers',
                 A::F_PRODUCTS, A::F_INVENTORY, A::F_BARCODE,
                 A::F_INVENTORY_AUDIT, A::F_LOW_STOCK_ALERTS,

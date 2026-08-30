@@ -56,11 +56,26 @@ class CapabilityHasAGranterGuardTest extends TestCase
      * @var array<int,string>
      */
     private const KNOWN_ORPHANS = [
-        'retail.catalog',
-        'retail.price_versions',
-        'retail.returns.by_line',
-        'retail.variants',
-        'retail.waste',
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-ORPHAN-CAPS-001 — **أُفرغت، والدَّينُ سُدّ.**
+        //
+        // كانت الخمسُ هنا: `retail.catalog` · `retail.price_versions` ·
+        // `retail.returns.by_line` · `retail.variants` · `retail.waste`.
+        //
+        // **وقِيس ما لم يكن مقيساً يومَ كُتب هذا الحارس:** لكلٍّ منها
+        // نقطةُ نهايةٍ تعمل في `routes/api/amial.php`، **وعليها وسيطُ
+        // `capability:` باسمها**. فلم تكن «تُباع ولا وجودَ لها» — كانت
+        // **موجودةً ومبيعةً ومقفلةً معاً**: يدفع التاجرُ، وتَعِده صفحةُ
+        // التسعير، ويفتح الشاشة، فيردُّه الوسيطُ نفسُه.
+        //
+        // فالثمنُ كان معلَناً في القدرة ذاتها — `minPlan(PLAN_BUSINESS)` —
+        // **ولا اجتهادَ في وضعها**: أُدرجت في `planFeatures(PLAN_BUSINESS)`
+        // مطابِقةً لِما تقوله عن نفسها، ونُطّقت بـ`GOODS` أوّلاً لئلّا
+        // تصل محطّةَ وقود.
+        //
+        // **والقائمةُ تبقى فارغةً لا تُحذف** — فهي السقف، وفراغُها هو
+        // الشرط: أيُّ قدرةٍ تُعلَن غداً بلا مانحٍ تُسقط البوّابة.
+        // ══════════════════════════════════════════════════════════════
     ];
 
     /**
@@ -72,8 +87,11 @@ class CapabilityHasAGranterGuardTest extends TestCase
      * هناك صراحةً — «فروع ومستودعات ومواقع» · «تحويلات بين المواقع» —
      * فأُدرجتا في `planFeatures(PLAN_ENTERPRISE)` بنطاق `GOODS`.
      *
-     * **والخمسُ الباقيةُ بلا ثمنٍ مكتوبٍ في أيّ مستند**، فتبقى دَيناً
-     * حتّى يقول صاحبُ المشروع بأيّ باقةٍ تُباع — أو تُعلَن `comingSoon()`.
+     * **والخمسُ الباقيةُ أُغلقت في `AMIAL-ORPHAN-CAPS-001`** — ولم
+     * تُسعَّر باجتهاد: كلٌّ منها تقول عن نفسها `minPlan(PLAN_BUSINESS)`،
+     * وعليها وسيطُ `capability:` في مسارٍ يعمل. فطابَق المانحُ قولَها.
+     *
+     * **فصار الدَّينُ صفراً**، والقائمةُ فارغةٌ سقفاً لا أرضيّة.
      */
     private const CLOSED_BY_THE_OPERATING_GUIDES = [
         'retail.locations',
