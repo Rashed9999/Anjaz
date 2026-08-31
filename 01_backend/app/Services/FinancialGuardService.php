@@ -217,6 +217,68 @@ class FinancialGuardService
     }
 
     /**
+     * AMIAL-WRONG-TRANSFER-001 — يحجز **ما وُجد** حتّى سقف المطلوب.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ولمَ لا تكفي `hold` الصارمة هنا:** دعوى «حوّلتُ إلى الرقم الخطأ»
+     * تصل غالباً **بعد** أن أنفق المستلِمُ بعضَ المال. فـ`hold` ترمي
+     * `InsufficientBalanceException` عند أوّل ريالٍ ناقص — أي أنّ من
+     * أنفق ٦٠ من ١٠٠ **لا يُحجَز منه شيءٌ إطلاقاً**، والأربعون الباقية
+     * تُنفَق في الدقائق التالية. فيصير الحرصُ على الدقّة سبباً في ضياع
+     * كلِّ المال.
+     *
+     * فتُحجَز الأربعون، ويُسجَّل النقصُ ذمّةً في `wrong_transfer_claims`.
+     *
+     * **وهي مرآةُ `releaseHoldUpTo`** ولا تختلف عنها في المبدأ: مسارُ
+     * حمايةٍ يأخذ ما استطاع ويقول كم أخذ، ولا يفشل صامتاً ولا يفشل
+     * كلّيّاً.
+     *
+     * @return string المبلغ الذي حُجز فعلاً (قد يكون «0.0000»)
+     */
+    public function holdUpTo(int $userId, string $amount, string $reason = 'hold_up_to'): string
+    {
+        $this->assertInTransaction();
+        $amount = MoneyService::normalize($amount);
+
+        if (!MoneyService::isPositive($amount)) {
+            throw new \InvalidArgumentException('Hold amount must be positive');
+        }
+
+        $wallet = $this->lockWallet($userId);
+
+        $toHold = MoneyService::gte($wallet->current_balance, $amount)
+            ? $amount
+            : MoneyService::normalize($wallet->current_balance);
+
+        if (MoneyService::compare($toHold, '0') <= 0) {
+            return MoneyService::normalize('0');
+        }
+
+        $wallet->current_balance = MoneyService::sub($wallet->current_balance, $toHold);
+        $wallet->held_balance = MoneyService::add($wallet->held_balance, $toHold);
+        $wallet->version = $wallet->version + 1;
+        $wallet->save();
+
+        $this->audit->record([
+            'actor_type' => 'system',
+            'actor_user_id' => $userId,
+            'subject_type' => 'wallet',
+            'subject_id' => (string) $userId,
+            'action' => 'HOLD_PARTIAL',
+            'decision_code' => 'HOLD_UP_TO',
+            'reason' => $reason,
+            'severity' => MoneyService::compare($toHold, $amount) < 0 ? 'warning' : 'notice',
+            'context' => [
+                'requested' => $amount,
+                'held' => $toHold,
+                'shortfall' => MoneyService::sub($amount, $toHold),
+            ],
+        ]);
+
+        return $toHold;
+    }
+
+    /**
      * يفكّ الحجز ويعيد المبلغ إلى الرصيد المتاح (إلغاء/انتهاء صلاحية).
      * held -= amount ، current += amount — صفر-sum.
      */

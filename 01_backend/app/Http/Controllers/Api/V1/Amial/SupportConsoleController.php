@@ -445,6 +445,18 @@ class SupportConsoleController extends Controller
                 'id' => $d->id, 'status' => $d->status, 'created_at' => $d->created_at,
                 'updated_at' => $d->updated_at, 'reason' => $d->reason ?? null,
             ])->values(),
+            // AMIAL-WRONG-TRANSFER-001 — **دعاوى الرقم الخطأ في التتبّع نفسِه.**
+            // فشاشةٌ تعرض تتبّعاً كاملاً ولا تقول إنّ على هذه العمليّة
+            // دعوى مفتوحةً وحجزاً جارياً تُخفي أهمَّ ما يجري فيها الآن.
+            'wrong_transfer_claims' => \App\Models\WrongTransferClaim::with(['claimant', 'recipient'])
+                ->where('transaction_id', (string) ($tx->transaction_id ?? ''))
+                ->orderByDesc('id')->get()
+                ->map(fn ($c) => $this->claimPayload($c))->values(),
+            // **وأهليّةُ الفتح تُقال من الخادم لا تُخمَّن في الشاشة.**
+            // فزرٌّ ظاهرٌ على عمليّةِ دفعٍ لتاجر يَعِد بما يُرفَض عند الضغط.
+            'wrong_transfer_claimable' => in_array(
+                $tx->transaction_type,
+                \App\Services\WrongTransferRecoveryService::CLAIMABLE, true),
             'tickets' => $tickets->map(fn (SupportTicket $t) => [
                 'number' => $t->ticket_number, 'status' => $t->status,
                 'category' => $t->category, 'priority' => $t->priority,
@@ -1119,6 +1131,113 @@ class SupportConsoleController extends Controller
                 ->map(fn ($p) => ['split_bill_id' => $p->split_bill_id, 'customer_user_id' => $p->customer_user_id, 'share_amount' => $p->share_amount, 'status' => $p->status, 'paid_at' => $p->paid_at])->values();
         }
         return $out;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-WRONG-TRANSFER-001 — دعاوى «حوّلتُ إلى الرقم الخطأ»
+    //
+    // **ولمَ ثلاثُ نقاطٍ لا واحدة:** الفتحُ يوقف النزيفَ وهو **قابلٌ
+    // للرجوع** (‏يُفرَج عنه تلقائيّاً بعد المهلة)، فيُتاح لمن يردّ على
+    // الهاتف أوّلاً — دقيقةُ انتظارٍ لصلاحيّةٍ أعلى تعني مالاً أُنفق.
+    // أمّا الحسمُ والرفضُ فينقلان مالاً نهائيّاً، فيلزمهما
+    // `platform.disputes.decide`. **والصلاحيّةُ تتبع الأثرَ لا الشاشة.**
+    // ══════════════════════════════════════════════════════════════════
+
+    /** POST /admin/support/wrong-transfer/open */
+    public function openWrongTransferClaim(Request $request): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) {
+            return $resp;
+        }
+
+        $data = $request->validate([
+            'transaction_id' => 'required|string|max:64',
+            'intended_phone' => 'nullable|string|max:32',
+        ]);
+
+        try {
+            $claim = app(\App\Services\WrongTransferRecoveryService::class)->open(
+                $data['transaction_id'],
+                $data['intended_phone'] ?? null,
+                (int) $request->user()->id,
+            );
+        } catch (\Throwable $e) {
+            return $this->error('CLAIM_REFUSED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['claim' => $this->claimPayload($claim)],
+            'CLAIM_OPENED', 'فُتحت الدعوى');
+    }
+
+    /** POST /admin/support/wrong-transfer/{ulid}/resolve */
+    public function resolveWrongTransferClaim(Request $request, string $ulid): JsonResponse
+    {
+        return $this->decideWrongTransferClaim($request, $ulid, true);
+    }
+
+    /** POST /admin/support/wrong-transfer/{ulid}/reject */
+    public function rejectWrongTransferClaim(Request $request, string $ulid): JsonResponse
+    {
+        return $this->decideWrongTransferClaim($request, $ulid, false);
+    }
+
+    private function decideWrongTransferClaim(Request $request, string $ulid, bool $inFavour): JsonResponse
+    {
+        if ($resp = $this->requireAdmin($request)) {
+            return $resp;
+        }
+
+        // **السببُ مطلوبٌ في الحسم لا في الفتح.** فالفتحُ إجراءٌ عاجلٌ
+        // يرجع من تلقائه، والحسمُ ينقل مالاً ولا يرجع — ومن نقل مالَ
+        // إنسانٍ إلى آخرَ يكتب لماذا.
+        $data = $request->validate(['note' => 'required|string|min:5|max:500']);
+
+        $claim = \App\Models\WrongTransferClaim::where('claim_ulid', $ulid)->first();
+
+        if (! $claim) {
+            return $this->error('CLAIM_NOT_FOUND', 'الدعوى غير موجودة', 404);
+        }
+
+        $svc = app(\App\Services\WrongTransferRecoveryService::class);
+
+        try {
+            $claim = $inFavour
+                ? $svc->resolve($claim, (int) $request->user()->id, $data['note'])
+                : $svc->reject($claim, (int) $request->user()->id, $data['note']);
+        } catch (\Throwable $e) {
+            return $this->error('CLAIM_DECISION_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['claim' => $this->claimPayload($claim)],
+            'CLAIM_DECIDED', $inFavour ? 'حُسمت لصالح المطالِب' : 'رُفضت الدعوى وأُفرج عن الحجز');
+    }
+
+    /** صورةُ الدعوى كما تقرؤها الشاشة — **والذمّةُ تُحسب ولا تُقرأ من عمود**. */
+    private function claimPayload(\App\Models\WrongTransferClaim $c): array
+    {
+        return [
+            'ulid' => $c->claim_ulid,
+            'transaction_id' => $c->transaction_id,
+            'status' => $c->status,
+            'status_ar' => [
+                'open' => 'مفتوحة — بلا حجز',
+                'holding' => 'محجوزة',
+                'recovered' => 'استُرِدَّت',
+                'rejected' => 'مرفوضة',
+                'expired' => 'انقضت المهلة',
+            ][$c->status] ?? $c->status,
+            'amount' => (string) $c->amount,
+            'held_amount' => (string) $c->held_amount,
+            'recovered_amount' => (string) $c->recovered_amount,
+            'outstanding' => $c->outstanding(),
+            'risk_score' => (int) $c->risk_score,
+            'risk_signals' => $c->risk_signals ?? [],
+            'hold_expires_at' => $c->hold_expires_at,
+            'resolution_note' => $c->resolution_note,
+            'resolved_at' => $c->resolved_at,
+            'claimant' => $c->claimant?->only(['id', 'f_name', 'l_name']),
+            'recipient' => $c->recipient?->only(['id', 'f_name', 'l_name']),
+        ];
     }
 
     private function requireAdmin(Request $request): ?JsonResponse

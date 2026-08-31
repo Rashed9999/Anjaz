@@ -417,9 +417,94 @@
             <h6>الدليل المحاسبي</h6>
             <div class="table-responsive mb-3"><table class="table table-sm"><thead><tr><th>القيد</th><th>المصدر</th><th>الحالة</th><th>الأسطر والأرصدة</th></tr></thead><tbody>${(j.meta.ledger_entries || []).map(e => `<tr><td class="font-monospace">${esc(e.ulid)}</td><td>${esc(e.source_type)} / ${esc(e.source_id)}</td><td>${esc(e.status)}${e.is_reversal ? ' — عكسي' : ''}</td><td>${e.lines.map(l => `${esc(l.direction)} ${esc(l.amount)} (${esc(l.account)})<br><small class="text-muted">قبل: ${esc(l.balance_before)} · بعد: ${esc(l.balance_after)}${l.description ? ' · ' + esc(l.description) : ''}</small>`).join('<hr class="my-1">')}</td></tr>`).join('') || '<tr><td colspan="4" class="text-muted">لا يوجد قيد مرتبط — يلزم تحقيق مالي.</td></tr>'}</tbody></table></div>
             ${(j.meta.disputes || []).length || (j.meta.tickets || []).length ? `<h6>النزاعات والتذاكر</h6><div class="row g-2 mb-3">${(j.meta.disputes || []).map(d => card('نزاع #'+d.id, `${val(d.status)}<div class="small">${val(d.reason)} · ${val(d.created_at)}</div>`)).join('')}${(j.meta.tickets || []).map(x => card('تذكرة '+x.number, `${val(x.status)} · ${val(x.category)} · ${val(x.priority)}<div class="small">${val(x.created_at)}</div>`)).join('')}</div>` : ''}
+            ${wrongTransferPanel(j.meta, t)}
             <h6>الخط الزمني</h6>
             <ul class="list-group">${j.meta.timeline.map(e => `<li class="list-group-item d-flex justify-content-between gap-3"><span><strong>${esc(e.event)}</strong> — ${esc(e.detail)}</span><span class="text-muted small text-nowrap">${esc(e.at)}</span></li>`).join('')}</ul>`;
     };
+
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-WRONG-TRANSFER-001 — **حوّل إلى الرقم الخطأ: من الشاشة نفسِها.**
+    //
+    // فمن يفحص العمليّة هو من يردّ على العميل الآن، ودقيقةُ انتقالٍ إلى
+    // شاشةٍ أخرى تعني ريالاتٍ أُنفقت. ولا يظهر زرُّ الفتح على عمليّةٍ لا
+    // تُقبل الدعوى عليها — والخادمُ هو الذي يقولها (`wrong_transfer_
+    // claimable`)، لا تخمينٌ في المتصفّح.
+    // ══════════════════════════════════════════════════════════════════
+    function wrongTransferPanel(meta, t) {
+        const claims = meta.wrong_transfer_claims || [];
+        const live = c => c.status === 'open' || c.status === 'holding';
+
+        const rows = claims.map(c => `
+            <tr>
+                <td class="font-monospace small">${esc(c.ulid)}</td>
+                <td>${esc(c.status_ar)}</td>
+                <td class="money">${esc(c.amount)}</td>
+                <td class="money">${esc(c.held_amount)}</td>
+                <td class="money">${esc(c.outstanding)}</td>
+                <td>${esc(c.risk_score)}/100</td>
+                <td class="small">${esc(c.hold_expires_at)}</td>
+                <td class="text-nowrap">${live(c) ? `
+                    <button class="btn btn-sm btn-success" data-wtc-resolve="${esc(c.ulid)}" data-testid="wtc-resolve">استرداد</button>
+                    <button class="btn btn-sm btn-outline-danger" data-wtc-reject="${esc(c.ulid)}" data-testid="wtc-reject">رفض</button>
+                ` : `<span class="text-muted small">${esc(c.resolution_note)}</span>`}</td>
+            </tr>
+            <tr><td colspan="8" class="small text-muted">إشاراتُ التقدير: ${Object.entries(c.risk_signals || {}).map(([k, v]) => `${esc(k)} = ${esc(v)}`).join(' · ') || '—'}</td></tr>`).join('');
+
+        const opener = meta.wrong_transfer_claimable && !claims.some(live) ? `
+            <div class="border rounded p-2 mb-3">
+                <div class="small text-muted mb-2">إن قال العميل إنّه أخطأ رقم الهاتف: يُحجَز الموجودُ فوراً، ويُسجَّل ما أُنفق ذمّةً تُقتطَع من الوارد. والحجزُ يُفرَج عنه تلقائيّاً خلال ٧٢ ساعة إن لم يُحسَم.</div>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text">الرقم الذي قصده</span>
+                    <input class="form-control" id="wtc-phone" placeholder="اختياري — وهو أقوى إشارةٍ في التقدير">
+                    <button class="btn btn-warning" id="wtc-open" data-wtc-tx="${esc(t.transaction_id)}" data-testid="wtc-open">فتحُ دعوى تحويلٍ خاطئ</button>
+                </div>
+            </div>` : '';
+
+        if (!claims.length && !opener) return '';
+
+        return `<h6>دعاوى التحويل إلى رقمٍ خاطئ</h6>${opener}${claims.length ? `
+            <div class="table-responsive mb-3"><table class="table table-sm align-middle">
+            <thead><tr><th>الدعوى</th><th>الحالة</th><th>المبلغ</th><th>المحجوز</th><th>الذمّة</th><th>التقدير</th><th>تنتهي المهلة</th><th></th></tr></thead>
+            <tbody>${rows}</tbody></table></div>` : ''}`;
+    }
+
+    // **معالجٌ واحدٌ بالتفويض** — الأزرارُ تُرسَم بعد كلّ فحص، وربطُ
+    // `onclick` وقتَ التحميل يتركها ميّتةً. (القاعدة التاسعة.)
+    document.addEventListener('click', async function (ev) {
+        const open = ev.target.closest('#wtc-open');
+        const resolve = ev.target.closest('[data-wtc-resolve]');
+        const reject = ev.target.closest('[data-wtc-reject]');
+        if (!open && !resolve && !reject) return;
+
+        ev.preventDefault();
+        let j;
+
+        // **مفتاحُ تفرّدٍ يُرسَل في الجسد.** الوسيطُ يقرؤه من الترويسة أو
+        // من `idempotency_key`، **وإن غاب ولّد واحداً — أي أنّ الحمايةَ
+        // تصير صفراً**. فضغطتان متتاليتان على «استرداد» تُنتجان حركتين.
+        if (open) {
+            j = await post('/wrong-transfer/open', {
+                transaction_id: open.dataset.wtcTx,
+                intended_phone: (document.getElementById('wtc-phone') || {}).value || null,
+                idempotency_key: 'wtc-open-' + open.dataset.wtcTx,
+            });
+        } else {
+            const ulid = (resolve || reject).dataset[resolve ? 'wtcResolve' : 'wtcReject'];
+            const note = prompt(resolve
+                ? 'سببُ الاسترداد (يُسجَّل في التدقيق):'
+                : 'سببُ الرفض (يُسجَّل في التدقيق):');
+            if (!note || note.trim().length < 5) { alert('السببُ مطلوبٌ ولا يقلّ عن خمسة أحرف.'); return; }
+            // **والمفتاحُ مشتقٌّ من الدعوى لا عشوائيّ** — فعشوائيٌّ جديدٌ
+            // مع كلّ ضغطةٍ لا يمنع التكرار، وهو ما يُراد منعُه بالضبط.
+            j = await post('/wrong-transfer/' + encodeURIComponent(ulid) + (resolve ? '/resolve' : '/reject'),
+                {note: note.trim(), idempotency_key: (resolve ? 'wtc-res-' : 'wtc-rej-') + ulid});
+        }
+
+        alert(j.message || (j.success ? 'تمّ' : 'تعذّر التنفيذ'));
+        // **يُعاد الفحصُ بعد كلّ إجراء** — فشاشةٌ تبقى على حالها بعد نقل
+        // مالٍ تجعل الموظّف يضغط مرّتين.
+        if (j.success) document.getElementById('btn-tx').click();
+    });
 
     // ---------- التذاكر ----------
     document.getElementById('btn-tickets').onclick = loadTickets;

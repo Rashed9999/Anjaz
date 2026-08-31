@@ -81,6 +81,27 @@ Route::group(['as' => 'admin.'], function () {
     Route::group(['middleware' => ['admin', 'amial.force-pin-change']], function () {
         Route::get('/', [DashboardController::class, 'dashboard'])->name('dashboard');
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-WRONG-TRANSFER-001 — **بلاغاتُ العملاء: بابٌ لم يكن موجوداً.**
+        //
+        // `DisputeController::list()` و`changeStatus()` مبنيّتان منذ زمن،
+        // **ولا مسارَ لواحدةٍ منهما**. والعميلُ يرفع بلاغَه من التطبيق
+        // (‏`POST /api/v1/customer/dispute/create` موصولةٌ وتعمل) فيدخل
+        // جدولَ `disputes` **ولا يراه أحد**.
+        //
+        // ولوحةُ «النزاعات» في القائمة الجانبيّة نزاعاتُ الدفع الآمن
+        // (`safe_payments`) — جدولٌ آخر، فلا تُغني عن هذه.
+        //
+        // **والصلاحيّتان مفترقتان:** القراءةُ لمن يقرأ العمليّات،
+        // والحسمُ لمن يقرّر النزاعات — فالثاني ينقل مالاً.
+        // ══════════════════════════════════════════════════════════════
+        Route::group(['prefix' => 'disputes', 'as' => 'disputes.'], function () {
+            Route::get('/', [DisputeController::class, 'list'])
+                ->middleware('platform:platform.transactions.view')->name('index');
+            Route::post('change-status', [DisputeController::class, 'changeStatus'])
+                ->middleware('platform:platform.disputes.decide')->name('change-status');
+        });
+
         // AMIAL-OPS-CONSOLE-001 — منصة عمليات الموظفين (واجهة ويب + JSON بجلسة الأدمن)
         // AMIAL-ADMIN-DOORS-001 — مركزُ الدعم عملُ الدعم، وله صلاحيّتُه.
         Route::group(['prefix' => 'support-center', 'as' => 'support-center.'], function () {
@@ -110,6 +131,24 @@ Route::group(['as' => 'admin.'], function () {
             Route::get('tickets/{id}', [$sc, 'showTicket'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.view')->name('tickets.show');
             Route::post('tickets/{id}/update', [$sc, 'updateTicket'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.update');
             Route::post('tickets/{id}/note', [$sc, 'addTicketNote'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.note');
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-WRONG-TRANSFER-001 — دعاوى «حوّلتُ إلى الرقم الخطأ».
+            //
+            // **والتوأمُ في `routes/api/amial.php` لا يُغني عن هذا.**
+            // شاشةُ الدعم تنادي `admin/support-center/...` وحدَها، فمسارٌ
+            // في الـAPI بلا توأمٍ هنا **زرٌّ مبنيٌّ لا يُوصَل إليه**؛
+            // وقد وقع عكسُه في هذا الملفّ من قبل: حُصّنت مسارات الويب
+            // وبقي توأمها في الـAPI بابـاً مفتوحاً. (القاعدة الرابعة.)
+            //
+            // والصلاحيّتان مختلفتان عمداً: الفتحُ يوقف النزيفَ ويرجع من
+            // تلقائه بعد المهلة، والحسمُ ينقل مالاً ولا يرجع.
+            // ══════════════════════════════════════════════════════════
+            Route::post('wrong-transfer/open', [$sc, 'openWrongTransferClaim'])
+                ->middleware(['platform:platform.tickets.manage', 'amial.idempotency'])->name('wrong-transfer.open');
+            Route::post('wrong-transfer/{ulid}/resolve', [$sc, 'resolveWrongTransferClaim'])
+                ->middleware(['platform:platform.disputes.decide', 'amial.idempotency'])->name('wrong-transfer.resolve');
+            Route::post('wrong-transfer/{ulid}/reject', [$sc, 'rejectWrongTransferClaim'])
+                ->middleware(['platform:platform.disputes.decide', 'amial.idempotency'])->name('wrong-transfer.reject');
             // AMIAL-INSIDER-001: Maker-Checker + مراقبة الموظفين
             Route::get('approvals', [$sc, 'approvalsList'])->middleware('platform:platform.approvals.decide')->name('approvals.index');
             Route::post('approvals/{id}/approve', [$sc, 'approveRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.approve');

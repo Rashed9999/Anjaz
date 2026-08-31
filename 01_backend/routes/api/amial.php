@@ -233,6 +233,16 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::get('/tickets/{id}', [$c, 'showTicket'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.show');
             Route::post('/tickets/{id}/update', [$c, 'updateTicket'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.update');
             Route::post('/tickets/{id}/note', [$c, 'addTicketNote'])->where('id', '[0-9]+')->middleware('platform:platform.tickets.manage')->name('tickets.note');
+            // AMIAL-WRONG-TRANSFER-001 — دعاوى «حوّلتُ إلى الرقم الخطأ».
+            // الفتحُ يوقف النزيفَ ويرجع من تلقائه بعد المهلة، فيكفيه إذنُ
+            // الدعم؛ والحسمُ ينقل مالاً نهائيّاً فيلزمه إذنُ النزاعات.
+            // **ومعها `amial.idempotency`** — الثلاثةُ تحرّك مالاً (حجزاً
+            // أو صرفاً أو إفراجاً)، وضغطتان على زرٍّ واحدٍ لا يجوز أن
+            // تُنتجا حركتين. أمسك النقصَ حارسُ المنصّة `AppMoneyIdempotency
+            // Test` عند أوّل تشغيلٍ للبوّابة بعد كتابة المسارات.
+            Route::post('/wrong-transfer/open', [$c, 'openWrongTransferClaim'])->middleware(['platform:platform.tickets.manage', 'amial.idempotency'])->name('wrong-transfer.open');
+            Route::post('/wrong-transfer/{ulid}/resolve', [$c, 'resolveWrongTransferClaim'])->middleware(['platform:platform.disputes.decide', 'amial.idempotency'])->name('wrong-transfer.resolve');
+            Route::post('/wrong-transfer/{ulid}/reject', [$c, 'rejectWrongTransferClaim'])->middleware(['platform:platform.disputes.decide', 'amial.idempotency'])->name('wrong-transfer.reject');
             // AMIAL-INSIDER-001: Maker-Checker + مراقبة الموظفين
             Route::get('/approvals', [$c, 'approvalsList'])->middleware('platform:platform.approvals.decide')->name('approvals.index');
             Route::post('/approvals/{id}/approve', [$c, 'approveRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.approve');

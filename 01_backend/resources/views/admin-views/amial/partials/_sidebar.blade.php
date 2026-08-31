@@ -203,9 +203,13 @@
         [
             'title' => 'خدمات المنصّة',
             'icon' => '🧩',
-            'match' => ['admin/amial/hub/disputes*', 'admin/amial/charity*', 'admin/amial/surface*'],
+            'match' => ['admin/amial/hub/disputes*', 'admin/amial/charity*', 'admin/amial/surface*', 'admin/disputes*'],
             'links' => [
                 ['⚖️ لوحة النزاعات (دفع آمن)', route('admin.amial.hub.disputes'), 'platform.transactions.view'],
+                // **الاسمُ يفرّق بين الجدولين.** «النزاعات» أعلاه للدفع
+                // الآمن (`safe_payments`)، وهذه بلاغاتُ العملاء على
+                // العمليّات العاديّة (`disputes`) — وكانت بلا بابٍ إطلاقاً.
+                ['📣 بلاغات العملاء على العمليات', route('admin.disputes.index'), 'platform.transactions.view'],
                 ['🎗️ لوحة التبرعات (الجمعيات)', route('admin.amial.charity.page'), 'platform.transactions.view'],
                 ['⚡ مزوّدو الفواتير', route('admin.amial.surface.bill-providers'), 'platform.settings.update'],
                 ['👨‍👩‍👧 صناديق العائلة', route('admin.amial.surface.funds'), 'platform.transactions.view'],
