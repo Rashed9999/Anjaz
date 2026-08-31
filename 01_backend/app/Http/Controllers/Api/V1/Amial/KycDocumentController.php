@@ -7,9 +7,11 @@ use App\Models\KycDocument;
 use App\Models\User;
 use App\Services\KycDocumentService;
 use App\Services\PiiAccessAuditService;
+use App\Support\YemenGovernorates;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * AMIAL-KYC-DOCS-001 — طرفا الدائرة: العميل يرفع، والمراجع يبتّ.
@@ -103,7 +105,9 @@ class KycDocumentController extends Controller
      */
     public function page()
     {
-        return view('admin-views.amial.kyc.index');
+        return view('admin-views.amial.kyc.index', [
+            'governorates' => YemenGovernorates::all(),
+        ]);
     }
 
     /** GET /admin/kyc/queue */
@@ -112,6 +116,70 @@ class KycDocumentController extends Controller
         return response()->json([
             'success' => true,
             'data' => ['queue' => $this->kyc->pendingQueue()],
+        ]);
+    }
+
+    /**
+     * حسابات اكتملت وثائقها لكن لم يصدر عليها قرار تفعيل نهائي بعد.
+     *
+     * فصل المستند عن قرار الحساب مقصود، لكن لا يجوز أن يختفي الحساب من
+     * الطابور بمجرد اعتماد آخر صورة؛ لذلك لهذا القرار طابور مستقل ظاهر.
+     */
+    public function activationQueue(Request $request): JsonResponse
+    {
+        return response()->json([
+            'success' => true,
+            'data' => ['queue' => $this->kyc->activationQueue()],
+        ]);
+    }
+
+    /**
+     * اعتماد الحساب النهائي بعد اكتمال الوثائق.
+     *
+     * محافظة السكن إلزامية هنا حتى لا تُرسل المنصة رسالة نجاح لحساب تبقى
+     * منطقته UNKNOWN، فيصبح موثَّقاً ظاهرياً وعاجزاً عن استقبال التحويلات.
+     */
+    public function activateAccount(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'target_tier' => ['required', 'integer', Rule::in([2])],
+            'governorate' => ['required', 'string', Rule::in(YemenGovernorates::codes())],
+        ]);
+
+        $account = User::findOrFail($id);
+        $governorate = (string) $request->input('governorate');
+
+        try {
+            // لا تُخمن المحافظة من الاسم أو رقم الهاتف. هذا اختيار مراجع
+            // ظاهر ومراجَع في ملف الهوية، ثم ZoneAssignmentService يحوّله
+            // إلى المنطقة التشغيلية ويسجل الأثر.
+            $account->residence_governorate = $governorate;
+            $account->save();
+
+            $account = $this->kyc->decideAccountVerification(
+                user: $account,
+                reviewer: $request->user(),
+                approve: true,
+                targetTier: (int) $request->input('target_tier'),
+            );
+        } catch (DomainException $e) {
+            return response()->json([
+                'success' => false,
+                'code' => 'KYC_ACCOUNT_ACTIVATION_REJECTED',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم اعتماد الحساب وتفعيل التحويلات الداخلية بحسب حدود الفئة الثانية.',
+            'data' => [
+                'user_id' => (int) $account->id,
+                'is_kyc_verified' => (int) $account->is_kyc_verified === 1,
+                'kyc_tier' => (int) $account->kyc_tier,
+                'residence_governorate' => $account->residence_governorate,
+                'zone_code' => $account->zone_code,
+            ],
         ]);
     }
 

@@ -17,7 +17,9 @@ use Illuminate\Support\Carbon;
 use App\Models\BusinessSetting;
 use App\Models\WithdrawRequest;
 use App\Models\KycDocument;
+use App\Services\AccountNumberService;
 use App\Services\KycDocumentService;
+use App\Support\YemenGovernorates;
 use App\Models\TransactionLimit;
 use App\CentralLogics\SmsModule;
 use App\Models\PhoneVerification;
@@ -90,6 +92,44 @@ class CustomerAuthController extends Controller
 
             // AMIAL-OTP-SPLIT-001: الرقمُ يحدّد الرمز، لا مفتاحٌ عامّ.
             $policy = app(\App\Services\Otp\OtpPolicy::class);
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-OTP-DELIVERY-001 — **البابُ الأوّل كان يقول «أُرسل»
+            // ولا يُرسل.**
+            //
+            // أرقامُ العرض قائمةٌ محدَّدة (`isDemo` يطابق آخرَ تسعة أرقام)،
+            // فكلُّ رقمٍ حقيقيٍّ خارجَها **يحتاج إرسالاً فعليّاً**. وكان
+            // المسارُ يولّد الرمزَ ويخزّنه ثمّ يردّ `otp: active` بـ٢٠٠
+            // **بلا أن يسأل: أثمّة قناةٌ تُوصله؟**
+            //
+            // فمستخدمُ التجربة يُدخل رقمَه، ويرى «أُرسل الرمز»، وينتظر
+            // رسالةً لا تصل أبداً. **ولا خطأَ في أيّ سجلّ** — لأنّ لا
+            // خطأَ وقع: لم يُطلَب الإرسالُ من أحد.
+            //
+            // و`deliveryReady()` و`unavailableMessage()` مبنيّتان في
+            // `OtpPolicy` **لهذه الحالة بعينها**، وقِيس أنّ لا مُنادِيَ
+            // لهما في المشروع كلِّه. أي أنّ الجوابَ كان مكتوباً ولا
+            // يُقال. (وهو نمطُ «مبنيٌّ ولا يُوصَل إليه» على البابِ الذي
+            // يمرّ به كلُّ عميل.)
+            //
+            // **وأرقامُ العرض لا تُمَسّ**: قرارُ صاحب المشروع أنّ
+            // `AMIAL_DEMO_OTP` يبقى طوال التجربة، وهي لا تحتاج قناةً
+            // أصلاً. فالحاجزُ على الحقيقيّ وحدَه.
+            // ══════════════════════════════════════════════════════════
+            if ($policy->needsDelivery((string) $request['phone']) && ! $policy->deliveryReady()) {
+                app(\App\Services\OpsAlertService::class)->note(
+                    'otp.delivery.unavailable',
+                    'لا قناةَ إيصالٍ لرمز التحقّق — والتسجيلُ مقفلٌ على الأرقام الحقيقيّة',
+                    'رقمٌ حقيقيٌّ طلب رمزاً ولا واتساب ولا رسائل قصيرة مفعّلة. '
+                        . 'أرقامُ العرض وحدَها تعمل الآن.',
+                );
+
+                return response()->json([
+                    'code' => 'otp',
+                    'message' => $policy->unavailableMessage(),
+                ], 503);
+            }
+
             $otp = $policy->codeFor($request['phone']);
 
             DB::table('phone_verifications')->updateOrInsert(['phone' => $request['phone']], [
@@ -439,6 +479,12 @@ class CustomerAuthController extends Controller
     {
         try {
             $customer = $this->user->with('emoney')->customer()->find($request->user()->id);
+            // الحسابات القديمة سُجّلت قبل اعتماد رقم الحساب العام. لا نعرض
+            // QR قابلاً للتحويل إلى رقم هاتف ولا نترك الاستلام السريع معطلاً؛
+            // نمنحها عنوان الاستلام الرسمي نفسه الذي يستخدمه التحويل.
+            if (empty($customer->account_number)) {
+                app(AccountNumberService::class)->assign($customer);
+            }
             $pendingWithdraw = $this->withdrawRequest->where(['user_id' => $customer->id, 'request_status' => 'pending'])->count();
 
             $data = [];
@@ -520,6 +566,8 @@ class CustomerAuthController extends Controller
                     'balance' => (float)$customer->emoney->current_balance,
                     'pending_balance' => (float)$customer->emoney->pending_balance,
                     'pending_withdraw_count' => $pendingWithdraw,
+                    'account_number' => $customer->account_number,
+                    'receive_address' => $customer->account_number,
                     'unique_id' => $customer->unique_id,
                     'qr_code' => strval($qr),
                     'is_kyc_verified' => (int)$customer->is_kyc_verified,
@@ -633,6 +681,8 @@ class CustomerAuthController extends Controller
             // AMIAL-KYC: العنوان + التوقيع الإلكتروني + الإقرار (اختيارية توافقاً
             // مع أي عميل قديم؛ التطبيق الجديد يرسلها ويشترطها في الواجهة).
             'address' => 'sometimes|nullable|string|max:500',
+            'residence_governorate' => ['sometimes', 'nullable', 'string',
+                \Illuminate\Validation\Rule::in(YemenGovernorates::codes())],
             'signature' => 'sometimes|nullable|string|max:255',
             'declaration_accepted' => 'sometimes',
         ]);
@@ -671,6 +721,13 @@ class CustomerAuthController extends Controller
         // AMIAL-KYC: حفظ العنوان + التوقيع + الإقرار (فقط إن أُرسلت وإن وُجدت الأعمدة)
         if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'address') && $request->filled('address')) {
             $user->address = $request->address;
+        }
+        // عنوان النص لا يكفي لإسناد منطقة تشغيلية بصورة حتمية. رمز المحافظة
+        // يختاره العميل من قائمة موحّدة، فيستطيع المراجع إكمال التفعيل من
+        // دون تخمين أو إعادة اتصال لمجرد معرفة المحافظة.
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'residence_governorate')
+            && $request->filled('residence_governorate')) {
+            $user->residence_governorate = $request->residence_governorate;
         }
         if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_signature') && $request->filled('signature')) {
             $user->kyc_signature = $request->signature;

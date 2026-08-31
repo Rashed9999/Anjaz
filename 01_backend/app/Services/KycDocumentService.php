@@ -51,7 +51,7 @@ class KycDocumentService
 
     // ── رفع ────────────────────────────────────────────────────────────
 
-    public function upload(User $user, string $docType, UploadedFile $file): KycDocument
+    public function upload(User $user, string $docType, UploadedFile $file, ?User $operator = null): KycDocument
     {
         if (!in_array($docType, KycDocument::ALL_TYPES, true)) {
             throw new DomainException('نوع مستند غير معروف');
@@ -73,7 +73,7 @@ class KycDocumentService
 
         $path = $this->storage->encryptAndStore($file, 'kyc');
 
-        return DB::transaction(function () use ($user, $docType, $path, $mime, $file, $sha) {
+        return DB::transaction(function () use ($user, $docType, $path, $mime, $file, $sha, $operator) {
             // الأحدث هو النافذ — انظر شرح الصنف.
             KycDocument::where('user_id', $user->id)
                 ->where('doc_type', $docType)
@@ -95,14 +95,15 @@ class KycDocumentService
             ]);
 
             $this->audit->record([
-                'actor_type' => 'customer',
-                'actor_user_id' => $user->id,
+                'actor_type' => $operator ? 'platform_user' : 'customer',
+                'actor_user_id' => $operator?->id ?? $user->id,
                 'subject_type' => 'kyc_document',
                 'subject_id' => (string) $doc->id,
                 'action' => 'KYC_DOCUMENT_UPLOADED',
                 'decision_code' => 'KYC_UPLOAD',
                 'severity' => 'info',
-                'context' => ['doc_type' => $docType, 'size' => $file->getSize()],
+                'context' => ['doc_type' => $docType, 'size' => $file->getSize(),
+                    'subject_user_id' => $user->id, 'assisted_opening' => $operator !== null],
             ]);
 
             return $doc;
@@ -434,6 +435,37 @@ class KycDocumentService
                 'uploaded_at' => $d->created_at?->toIso8601String(),
                 'waiting_hours' => (int) $d->created_at?->diffInHours(now()),
             ])->all();
+    }
+
+    /**
+     * الحسابات الجاهزة للقرار النهائي. لا نعدّها "مكتملة" من حالة آخر
+     * مستند فقط: نعيد احتساب اكتمال كل نوع مطلوب، مع صلاحية الوثيقة نفسها.
+     */
+    public function activationQueue(int $limit = 100): array
+    {
+        $candidateIds = KycDocument::query()
+            ->where('status', KycDocument::STATUS_APPROVED)
+            ->distinct()
+            ->pluck('user_id');
+
+        return User::query()
+            ->whereIn('id', $candidateIds)
+            ->where(function ($query) {
+                $query->whereNull('is_kyc_verified')->orWhere('is_kyc_verified', '!=', 1);
+            })
+            ->orderBy('id')
+            ->limit($limit)
+            ->get(['id', 'f_name', 'l_name', 'phone', 'kyc_tier', 'residence_governorate', 'zone_code'])
+            ->filter(fn (User $user) => $this->completenessFor($user, 2)['complete'])
+            ->map(fn (User $user) => [
+                'user_id' => (int) $user->id,
+                'customer_name' => trim((string) ($user->f_name . ' ' . $user->l_name)) ?: '—',
+                'customer_phone' => (string) ($user->phone ?? '—'),
+                'target_tier' => 2,
+                'residence_governorate' => $user->residence_governorate,
+                'residence_governorate_name' => \App\Support\YemenGovernorates::name($user->residence_governorate),
+                'zone_code' => $user->zone_code ?? ZoneAssignmentService::ZONE_UNKNOWN,
+            ])->values()->all();
     }
 
     /** الملفّ مفكوكَ التشفير — للعرض على المراجع وحده. */

@@ -77,6 +77,14 @@ class CustomerCenterTest extends TestCase
         }
     }
 
+    /** زر «تعديل» القديم لا يعود إلى قالب محذوف؛ يفتح العميل في مركزه الحديث. */
+    public function test_legacy_customer_edit_route_opens_the_modern_customer_center(): void
+    {
+        $this->actingAs($this->staff, 'user')
+            ->get(\"/admin/customer/edit/{$this->customer->id}\")
+            ->assertRedirect(route('admin.amial.customer.page', ['open' => $this->customer->id]));
+    }
+
     /** طلب إعادة الهوية يجب أن يُعرض ولا ينهار بسبب تاريخٍ نصّيّ من قاعدة البيانات. */
     public function kyc_tab_renders_an_active_kyc_update_request(): void
     {

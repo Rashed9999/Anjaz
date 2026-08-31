@@ -68,6 +68,9 @@
     const loaded = {};
     let searchSequence = 0;
     let customerSequence = 0;
+    // يصل زر «تعديل» من القائمة القديمة بهذا المعرف. نفتح الملف مباشرة
+    // بدلاً من ترك الموظف يبحث ثانية أو إرساله إلى قالب محذوف.
+    const requestedCustomer = Number(new URLSearchParams(window.location.search).get('open'));
 
     async function get(p) {
         const response = await fetch(BASE + p, {headers: {'Accept': 'application/json'}});
@@ -323,7 +326,12 @@
                         <td class="small">${esc(d.expires_at || '—')}</td>
                         <td class="small">${esc(d.reviewer || '—')}</td>
                         <td class="small">${dt(d.uploaded_at)}</td></tr>`).join(''),
-                    'لا مستندات', 'cc-kyc')}`;
+                    'لا مستندات', 'cc-kyc')}
+                ${card('ملفات التسجيل المؤرشفة',
+                    table(['المرجع', 'المصدر', 'الحالة', 'ورقي', 'أنشئ'],
+                        (m.registration_dossiers || []).map(d => `<tr><td class="font-monospace">${esc(d.reference)}</td><td>${esc(d.source)}</td><td>${esc(d.state)}</td><td>${d.has_paper_form ? 'نعم' : '—'}</td><td>${dt(d.created_at)}</td></tr>`),
+                        'لا ملف تسجيل مرتبط بهذا العميل', 'cc-registration-dossiers'),
+                    'تُفتح النسخة الكاملة والطباعة من «ملفات التسجيل والأرشفة» بحسب صلاحيتك.')}`;
         },
 
         risk(m, body) {
@@ -510,6 +518,9 @@
             b.textContent = b.dataset.original || b.textContent;
         }
     });
+    if (Number.isInteger(requestedCustomer) && requestedCustomer > 0) {
+        openCustomer(requestedCustomer);
+    }
 })();
 </script>
 @endsection

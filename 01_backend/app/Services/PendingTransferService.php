@@ -68,9 +68,24 @@ class PendingTransferService
             throw new RuntimeException('المبلغ يجب أن يكون موجباً');
         }
 
-        // 2) فحص السياسة المالية (zone + sanction + KYC)
-        $this->enforceFinancialPolicy($sender, 'send_money', $amount);
-        $this->enforceZone($recipient);
+        // 2) تحويل المحافظ حركة دفتر داخليّة. ZonePolicyService هو مصدر
+        // السياسة: كل منطقة معلومة مسموحة هنا، بينما SOUTH خاص بالنقد الذي
+        // يعبر حدّ التشغيل. استخدام enforceFinancialPolicy هنا كان يعيد
+        // الحارس القديم ويمنع مستلمين موثّقين في الشمال بلا مبرر.
+        $senderPolicy = app(ZonePolicyService::class)->authorize($sender, 'send_money');
+        $recipientPolicy = app(ZonePolicyService::class)->authorize($recipient, 'send_money');
+        if (!$senderPolicy['allowed']) {
+            throw new RuntimeException($this->ledgerPolicyMessage($senderPolicy, 'بدء التحويل'));
+        }
+        if (!$recipientPolicy['allowed']) {
+            throw new RuntimeException($this->ledgerPolicyMessage($recipientPolicy, 'التحويل إلى هذا الحساب'));
+        }
+        if ((int) ($recipient->is_kyc_verified ?? 0) !== 1) {
+            throw new RuntimeException('لا يمكن التحويل إلى حساب لم يُعتمد بعد');
+        }
+        $this->enforceSanction($sender);
+        $this->enforceSanction($recipient);
+        $this->enforceKycTier($sender, 'send_money', $amount);
 
         // 3) تأكيد PIN (مطلوب لكل تحويل — AMIAL-PIN-ALL-001)
         if (!$this->pinService->verify($sender, $pin)) {
@@ -209,7 +224,8 @@ class PendingTransferService
 
             // تأكد أن المستلم ما زال مؤهلاً (قد يكون حُظر خلال النافذة)
             $recipient = User::find($locked->recipient_user_id);
-            if (!$recipient || ($recipient->zone_code ?? 'UNKNOWN') !== 'SOUTH'
+            if (!$recipient || (int) ($recipient->is_kyc_verified ?? 0) !== 1
+                || in_array(($recipient->zone_code ?? 'UNKNOWN'), ['', 'UNKNOWN'], true)
                 || ($recipient->sanction_status ?? 'clear') === 'blocked') {
                 // المستلم لم يعد مؤهلاً → استرداد للمرسل
                 $this->guard->credit($locked->sender_user_id, (string)$locked->total_debited,
@@ -350,5 +366,16 @@ class PendingTransferService
             }
         }
         return $count;
+    }
+
+    /** رسالة عملية لا تسرّب سبب سياسة إنجليزي داخلي إلى واجهة العميل. */
+    private function ledgerPolicyMessage(array $policy, string $operation): string
+    {
+        if (($policy['decision_code'] ?? null) === 'ACCOUNT_ZONE_UNKNOWN') {
+            return 'لا يمكن ' . $operation
+                . ' لأن منطقة الحساب التشغيلية غير محددة. أكمل اعتماد الهوية وحدد محافظة السكن.';
+        }
+
+        return 'لا يمكن ' . $operation . ' وفق سياسة الحساب الحالية.';
     }
 }

@@ -33,6 +33,7 @@ class PendingTransferServiceTest extends TestCase
         $user = User::factory()->create(array_merge([
             'zone_code' => 'SOUTH',
             'kyc_tier' => 3,
+            'is_kyc_verified' => 1,
             'sanction_status' => 'clear',
             'sanction_checked' => true,
             'transaction_pin' => Hash::make($pin),
@@ -72,6 +73,20 @@ class PendingTransferServiceTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('PIN');
         $this->service->initiate($sender, $recipient, '1000', '9999'); // PIN خاطئ
+    }
+
+    /** @test */
+    public function a_verified_recipient_in_a_known_northern_zone_can_receive_an_internal_transfer(): void
+    {
+        $sender = $this->makeUser('10000', '1234', ['zone_code' => 'NORTH']);
+        $recipient = $this->makeUser('0', '1234', ['zone_code' => 'NORTH']);
+        EMoney::where('user_id', $sender->id)->update(['zone_code' => 'NORTH']);
+        EMoney::where('user_id', $recipient->id)->update(['zone_code' => 'NORTH']);
+
+        $pending = $this->service->initiate($sender, $recipient, '1000', '1234');
+
+        $this->assertSame('holding', $pending->status,
+            'حارس SOUTH القديم منع تحويلاً داخلياً بين حسابين موثّقين');
     }
 
     /** @test */

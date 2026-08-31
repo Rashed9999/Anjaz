@@ -220,10 +220,18 @@ class CustomerController extends Controller
         return back();
     }
 
-    public function edit(int $id): View
+    /**
+     * توافق مع زر «تعديل» في القائمة القديمة.
+     *
+     * القالب القديم أزيل وبقي الزر يشير إلى route ميت. لا نعيد نموذجاً يكتب
+     * حقول الهوية/الرمز مباشرة؛ مركز العملاء هو الشاشة الموحّدة، وتعديل
+     * بيانات الهوية فيه يمرّ بطلب تغيير ومراجعة.
+     */
+    public function edit(int $id): RedirectResponse
     {
-        $customer = $this->user->find($id);
-        return view('admin-views.customer.edit', compact('customer'));
+        $customer = $this->user->where('type', CUSTOMER_TYPE)->findOrFail($id);
+
+        return redirect()->route('admin.amial.customer.page', ['open' => $customer->id]);
     }
 
     public function update(Request $request, int $id): RedirectResponse

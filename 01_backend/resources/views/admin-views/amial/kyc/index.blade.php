@@ -45,6 +45,16 @@
                 <div class="card-header"><h5 class="card-header-title">بانتظار المراجعة</h5></div>
                 <div id="kyc-queue" class="list-group list-group-flush" data-testid="kyc-queue"></div>
             </div>
+            <div class="card mt-3">
+                <div class="card-header d-flex align-items-center">
+                    <h5 class="card-header-title mb-0">جاهز لاعتماد الحساب</h5>
+                    <span class="badge bg-success ms-auto" id="kyc-activation-count">0</span>
+                </div>
+                <div class="card-body py-2 small text-muted">
+                    الوثائق مكتملة؛ لا يصبح الحساب قابلاً للتحويل قبل اختيار محافظة السكن وإصدار القرار النهائي.
+                </div>
+                <div id="kyc-activation-queue" class="list-group list-group-flush" data-testid="kyc-activation-queue"></div>
+            </div>
         </div>
 
         {{-- المستند المفتوح --}}
@@ -63,6 +73,10 @@
 (function () {
     const BASE = '{{ url('admin/amial/kyc') }}';
     const CSRF = '{{ csrf_token() }}';
+    // واجهة القارئ لا تعرض أزرار القرار. والحارس في الخادم يبقى الحكم النهائي.
+    const CAN_DECIDE = @json((bool) auth('user')->user()?->hasPlatformPermission('platform.customers.freeze'));
+    const CAN_ACTIVATE = @json((bool) auth('user')->user()?->hasPlatformPermission('platform.approvals.decide'));
+    const GOVERNORATES = @json($governorates);
     const esc = s => String(s ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
     let current = null;
@@ -87,7 +101,7 @@
     }
 
     // ---------- الطابور ----------
-    document.getElementById('kyc-btn-refresh').onclick = loadQueue;
+    document.getElementById('kyc-btn-refresh').onclick = loadQueues;
 
     async function loadQueue() {
         const box = document.getElementById('kyc-queue');
@@ -115,14 +129,100 @@
             : '<div class="list-group-item text-muted text-center py-4">لا مستندات بانتظار المراجعة</div>';
     }
 
+    async function loadActivationQueue() {
+        const box = document.getElementById('kyc-activation-queue');
+        box.innerHTML = '<div class="list-group-item text-muted">جارٍ التحميل…</div>';
+        const j = await get('/activation-queue');
+        if (!j.success) {
+            box.innerHTML = `<div class="list-group-item text-danger">${esc(j.message || 'تعذّر التحميل')}</div>`;
+            return;
+        }
+        const q = (j.data && j.data.queue) || [];
+        document.getElementById('kyc-activation-count').textContent = q.length;
+        box.innerHTML = q.length ? q.map(a => `
+            <div class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                <div>
+                    <div class="fw-bold">${esc(a.customer_name)}</div>
+                    <div class="small text-muted font-monospace">#${a.user_id} • ${esc(a.customer_phone)}</div>
+                    <div class="small text-muted">${a.residence_governorate_name
+                        ? 'محافظة محفوظة: ' + esc(a.residence_governorate_name)
+                        : 'محافظة السكن مطلوبة'}</div>
+                </div>
+                ${CAN_ACTIVATE
+                    ? `<button class="btn btn-sm btn-success js-kyc-activate"
+                        data-user="${a.user_id}" data-name="${esc(a.customer_name)}"
+                        data-governorate="${esc(a.residence_governorate || '')}"
+                        data-testid="kyc-activate-${a.user_id}">اعتماد الحساب</button>`
+                    : '<span class="badge badge-soft-secondary">ينتظر قراراً</span>'}
+            </div>`).join('')
+            : '<div class="list-group-item text-muted text-center py-4">لا حسابات جاهزة للتفعيل</div>';
+    }
+
+    async function loadQueues() {
+        await Promise.all([loadQueue(), loadActivationQueue()]);
+    }
+
     // ---------- عرض المستند ----------
     document.addEventListener('click', function (e) {
         const b = e.target.closest('.js-kyc-open');
-        if (!b) return;
-        current = {id: b.dataset.id, name: b.dataset.name, phone: b.dataset.phone,
-                   label: b.dataset.label, user: b.dataset.user};
-        openDoc();
+        if (b) {
+            current = {id: b.dataset.id, name: b.dataset.name, phone: b.dataset.phone,
+                       label: b.dataset.label, user: b.dataset.user};
+            openDoc();
+            return;
+        }
+        const activate = e.target.closest('.js-kyc-activate');
+        if (activate) openActivation(activate);
     });
+
+    function openActivation(button) {
+        const userId = button.dataset.user;
+        const name = button.dataset.name;
+        const storedGovernorate = button.dataset.governorate || '';
+        const options = GOVERNORATES.map(g => `<option value="${esc(g.code)}"
+            ${g.code === storedGovernorate ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
+
+        current = null;
+        document.getElementById('kyc-viewer').innerHTML = `
+            <div class="text-end">
+                <h5>اعتماد وتفعيل الحساب</h5>
+                <p class="text-muted mb-3">العميل: <strong>${esc(name)}</strong> <span class="font-monospace">#${esc(userId)}</span></p>
+                <div class="alert alert-info text-start small">
+                    سيُعتمد الحساب في الفئة الثانية بعد اكتمال الوثائق. اختيار محافظة السكن يحدد المنطقة التشغيلية؛
+                    لا تُخمن من الاسم أو رقم الهاتف.
+                </div>
+                <label class="form-label d-block text-start" for="kyc-governorate">محافظة السكن</label>
+                <select class="form-select" id="kyc-governorate" data-testid="kyc-governorate">
+                    <option value="">اختر المحافظة كما تظهر في الملف</option>${options}
+                </select>
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button class="btn btn-outline-secondary" id="kyc-activate-cancel">إلغاء</button>
+                    <button class="btn btn-success" id="kyc-activate-confirm" data-testid="kyc-activate-confirm">اعتماد وتفعيل</button>
+                </div>
+            </div>`;
+
+        document.getElementById('kyc-activate-cancel').onclick = () => clearViewer('اختر مستنداً أو حساباً من الطابور');
+        document.getElementById('kyc-activate-confirm').onclick = async function () {
+            const governorate = document.getElementById('kyc-governorate').value;
+            if (!governorate) {
+                alert('محافظة السكن مطلوبة لتفعيل التحويلات.');
+                return;
+            }
+            this.disabled = true;
+            this.textContent = 'جارٍ الاعتماد…';
+            const j = await post(`/users/${encodeURIComponent(userId)}/activate`, {
+                target_tier: 2, governorate,
+            });
+            if (!j.success) {
+                alert(j.message || 'تعذّر اعتماد الحساب');
+                this.disabled = false;
+                this.textContent = 'اعتماد وتفعيل';
+                return;
+            }
+            clearViewer(j.message || 'تم اعتماد الحساب');
+            loadActivationQueue();
+        };
+    }
 
     function openDoc() {
         const reason = 'مراجعة طابور الهوية';
@@ -135,10 +235,10 @@
                         <div class="small text-muted font-monospace">#${esc(current.user)} • ${esc(current.phone)}</div>
                         <span class="badge badge-soft-primary mt-1">${esc(current.label)}</span>
                     </div>
-                    <div class="d-flex gap-2">
+                    ${CAN_DECIDE ? `<div class="d-flex gap-2">
                         <button class="btn btn-outline-danger" id="kyc-reject" data-testid="kyc-reject">رفض</button>
                         <button class="btn btn-success" id="kyc-approve" data-testid="kyc-approve">اعتماد</button>
-                    </div>
+                    </div>` : '<span class="badge badge-soft-secondary">قراءة فقط</span>'}
                 </div>
                 <iframe src="${BASE}/documents/${encodeURIComponent(current.id)}/file?reason=${encodeURIComponent(reason)}"
                         style="width:100%;height:420px;border:1px solid #ddd;border-radius:8px;background:#fafafa"
@@ -147,8 +247,10 @@
                 <div id="kyc-completeness" class="mt-3"></div>
             </div>`;
 
-        document.getElementById('kyc-approve').onclick = approve;
-        document.getElementById('kyc-reject').onclick = reject;
+        if (CAN_DECIDE) {
+            document.getElementById('kyc-approve').onclick = approve;
+            document.getElementById('kyc-reject').onclick = reject;
+        }
         loadOcr();
     }
 
@@ -201,7 +303,7 @@
             <div class="col-md-6 mb-2">
                 <label class="form-label small mb-1">${FIELD_LABELS[k]} ${hint}</label>
                 <input type="text" class="form-control form-control-sm js-ocr-field"
-                       data-field="${k}" value="${esc(v)}" data-testid="ocr-field-${k}">
+                       data-field="${k}" value="${esc(v)}" data-testid="ocr-field-${k}" ${CAN_DECIDE ? '' : 'readonly'}>
             </div>`;
         }).join('');
 
@@ -211,7 +313,7 @@
                     <strong class="small">الحقول المستخرَجة</strong>
                     <span class="badge bg-${st[0]}">${st[1]}</span>
                     ${o.confidence ? `<span class="small text-muted">الثقة ${o.confidence}٪ (الحدّ ${o.min_confidence}٪)</span>` : ''}
-                    <button class="btn btn-sm btn-outline-secondary ms-auto" id="kyc-reread">إعادة القراءة</button>
+                    ${CAN_DECIDE ? '<button class="btn btn-sm btn-outline-secondary ms-auto" id="kyc-reread">إعادة القراءة</button>' : ''}
                 </div>
                 <div class="card-body">
                     ${findings}
@@ -220,7 +322,7 @@
                     </div>
                     <div class="row">${rows}</div>
                     <div class="d-flex gap-2 align-items-center mt-2">
-                        <button class="btn btn-sm btn-primary" id="kyc-confirm-fields" data-testid="kyc-confirm-fields">إقرار الحقول</button>
+                        ${CAN_DECIDE ? '<button class="btn btn-sm btn-primary" id="kyc-confirm-fields" data-testid="kyc-confirm-fields">إقرار الحقول</button>' : '<span class="small text-muted">عرض حقول المستند فقط</span>'}
                         ${o.raw_text ? `<button class="btn btn-sm btn-link" type="button"
                             data-bs-toggle="collapse" data-bs-target="#kyc-raw">النصّ الخام</button>` : ''}
                     </div>
@@ -230,19 +332,21 @@
                 </div>
             </div>`;
 
-        document.getElementById('kyc-reread').onclick = async () => {
-            await post(`/documents/${current.id}/reread`, {});
-            loadOcr();
-        };
+        if (CAN_DECIDE) {
+            document.getElementById('kyc-reread').onclick = async () => {
+                await post(`/documents/${current.id}/reread`, {});
+                loadOcr();
+            };
 
-        document.getElementById('kyc-confirm-fields').onclick = async () => {
-            const fields = {};
-            document.querySelectorAll('.js-ocr-field').forEach(i => {
-                if (i.value.trim()) fields[i.dataset.field] = i.value.trim();
-            });
-            const r = await post(`/documents/${current.id}/fields`, {fields});
-            alert(r.message || (r.success ? 'أُقرّت الحقول' : 'فشل'));
-        };
+            document.getElementById('kyc-confirm-fields').onclick = async () => {
+                const fields = {};
+                document.querySelectorAll('.js-ocr-field').forEach(i => {
+                    if (i.value.trim()) fields[i.dataset.field] = i.value.trim();
+                });
+                const r = await post(`/documents/${current.id}/fields`, {fields});
+                alert(r.message || (r.success ? 'أُقرّت الحقول' : 'فشل'));
+            };
+        }
     }
 
     function clearViewer(msg) {
@@ -263,7 +367,7 @@
         // ما بقي على العميل يُقال هنا، لا في شاشةٍ أخرى يفتحها المراجع لاحقاً.
         const c = j.data && j.data.completeness;
         const name = current.name;
-        loadQueue();
+        loadQueues();
         clearViewer('اعتُمد المستند');
         if (c) {
             document.getElementById('kyc-viewer').insertAdjacentHTML('beforeend', c.complete
@@ -277,11 +381,11 @@
         if (!reason || reason.trim().length < 3) { alert('سبب الرفض إلزامي'); return; }
         const j = await post(`/documents/${current.id}/reject`, {reason: reason.trim()});
         if (!j.success) { alert(j.message || 'فشل الرفض'); return; }
-        loadQueue();
+        loadQueues();
         clearViewer('رُفض المستند وأُبلغ العميل بالسبب');
     }
 
-    loadQueue();
+    loadQueues();
 })();
 </script>
 @endsection
