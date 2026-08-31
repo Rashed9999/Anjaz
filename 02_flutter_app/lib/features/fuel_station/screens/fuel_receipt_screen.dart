@@ -6,9 +6,9 @@ import 'package:get/get.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:screenshot/screenshot.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/merchant/controllers/receipt_settings_controller.dart';
+import 'package:amial_pay/features/merchant/widgets/invoice_whatsapp_sheet.dart';
 import 'package:amial_pay/features/payments/widgets/amial_invoice_card.dart';
 import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
 import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
@@ -79,6 +79,14 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
 
   String get _ref => '${widget.sale['sale_ulid'] ?? widget.sale['id'] ?? ''}';
 
+  Map<String, dynamic> get _invoiceSettings => {
+        ..._settings.effective,
+        'store_name': (_settings.effective['store_name'] == null ||
+                _settings.effective['store_name'] == 'المتجر')
+            ? widget.stationName
+            : _settings.effective['store_name'],
+      };
+
   String _now() {
     final d = DateTime.now();
     final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
@@ -112,9 +120,27 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
       final total = double.tryParse('${widget.sale['total_amount'] ?? 0}') ?? 0;
       if (svc != null && svc.config.value != null) {
         final r = await svc.printSale(
-          settings: _settings.effective,
+          settings: _invoiceSettings,
           lines: _thermalLines(),
           total: total,
+          subtotal: total,
+          paid: widget.sale['payment_method'] == 'credit' ? 0 : total,
+          balanceDue: widget.sale['payment_method'] == 'credit' ? total : 0,
+          contextLines: [
+            'المحطة: ${widget.stationName}',
+            if (widget.pumpLabel != null && widget.pumpLabel!.isNotEmpty)
+              'المضخة: ${widget.pumpLabel}',
+            if (widget.sale['nozzle_id'] != null) 'المسدس: ${widget.sale['nozzle_id']}',
+            if ('${widget.sale['vehicle_plate'] ?? ''}'.isNotEmpty)
+              'لوحة المركبة: ${widget.sale['vehicle_plate']}',
+            if ('${widget.sale['driver_name'] ?? ''}'.isNotEmpty)
+              'السائق: ${widget.sale['driver_name']}',
+            if ('${widget.sale['company_name'] ?? ''}'.isNotEmpty)
+              'الشركة: ${widget.sale['company_name']}',
+            if (widget.sale['meter_reading_before'] != null && widget.sale['meter_reading_after'] != null)
+              'قراءة العداد: ${widget.sale['meter_reading_before']} ← ${widget.sale['meter_reading_after']}',
+            'طريقة الدفع: $_method',
+          ],
           invoiceNo: _ref,
           dateTime: DateTime.now(),
         );
@@ -142,41 +168,43 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
 
   /// إرسال واتساب: يشارك صورة الفاتورة؛ إن توفّر رقم العميل يفتح محادثته مباشرةً.
   Future<void> _whatsapp() async {
+    await InvoiceWhatsAppSheet.open(
+      context,
+      invoiceNumber: _ref,
+      initialPhone: widget.customerPhone,
+      captureFile: _capture,
+      message: 'فاتورة تعبئة وقود من ${widget.stationName}\n'
+          'رقم الفاتورة: $_ref\n'
+          'الإجمالي: ${_fmt(widget.sale['total_amount'])} ر.ي\n'
+          'طريقة الدفع: $_method',
+    );
+  }
+
+  Future<void> _downloadPdf() async {
+    final ulid = _ref;
+    if (!RegExp(r'^[A-Z0-9]{26}$').hasMatch(ulid)) {
+      _snack('رقم الفاتورة غير صالح للتنزيل');
+      return;
+    }
     setState(() => _busy = true);
     try {
-      final f = await _capture();
-      if (f == null) throw Exception('capture');
-      final phone = _waPhone(widget.customerPhone);
-      final caption = 'فاتورة تعبئة وقود — ${widget.stationName}\n'
-          'الإجمالي: ${_fmt(widget.sale['total_amount'])} ر.ي\n'
-          'المرجع: $_ref';
-      // نشارك الصورة (واتساب أحد خيارات المشاركة). لو وُجد رقم صحيح نفتح
-      // محادثة العميل نصياً كتأكيد إضافي.
-      await Share.shareXFiles([XFile(f.path, mimeType: 'image/png')],
-          text: caption);
-      if (phone != null) {
-        final uri = Uri.parse('https://wa.me/$phone?text=${Uri.encodeComponent(caption)}');
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        }
+      String? failure;
+      final path = await Get.find<ApiClient>().downloadFile(
+        '/api/v1/amial/merchant/fuel/sales/$ulid/receipt',
+        fileName: 'amial_fuel_invoice_$ulid.pdf',
+        onError: (message) => failure = message,
+      );
+      if (path == null) {
+        _snack(failure ?? 'تعذّر تنزيل الفاتورة');
+        return;
       }
+      await OpenFile.open(path, type: 'application/pdf');
+      _snack('تم تنزيل الفاتورة PDF', ok: true);
     } catch (_) {
-      _snack('تعذّر الإرسال عبر واتساب');
+      _snack('تعذّر تنزيل الفاتورة');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  /// تحويل رقم يمني إلى صيغة واتساب الدولية (967…) بلا صفر بادئ.
-  String? _waPhone(String? raw) {
-    if (raw == null) return null;
-    var p = raw.replaceAll(RegExp(r'[^0-9]'), '');
-    if (p.isEmpty) return null;
-    if (p.startsWith('00')) p = p.substring(2);
-    if (p.startsWith('967')) return p;
-    if (p.startsWith('0')) p = p.substring(1);
-    if (p.length == 9) return '967$p';
-    return p;
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
@@ -215,20 +243,19 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
             child: Screenshot(
               controller: _shot,
               child: Obx(() => AmialInvoiceCard(
-                    settings: {
-                      ..._settings.effective,
-                      // اسم المحطة من العملية إن لم يُضبط اسم المتجر
-                      'store_name': (_settings.effective['store_name'] == null ||
-                              _settings.effective['store_name'] == 'المتجر')
-                          ? widget.stationName
-                          : _settings.effective['store_name'],
-                    },
+                    settings: _invoiceSettings,
                     title: 'فاتورة تعبئة وقود',
                     rows: [
                       ('نوع الوقود', '${widget.sale['product_name'] ?? widget.sale['fuel_product'] ?? 'وقود'}'),
                       if (widget.pumpLabel != null) ('المضخّة', widget.pumpLabel!),
                       ('اللترات', '${_fmt(widget.sale['liters'])} لتر'),
                       ('السعر/لتر', '${_fmt(widget.sale['price_per_liter'])} ر.ي'),
+                      if ('${widget.sale['vehicle_plate'] ?? ''}'.isNotEmpty)
+                        ('لوحة المركبة', '${widget.sale['vehicle_plate']}'),
+                      if ('${widget.sale['driver_name'] ?? ''}'.isNotEmpty)
+                        ('السائق', '${widget.sale['driver_name']}'),
+                      if (widget.sale['meter_reading_before'] != null && widget.sale['meter_reading_after'] != null)
+                        ('قراءة العداد', '${widget.sale['meter_reading_before']} ← ${widget.sale['meter_reading_after']}'),
                     ],
                     total: _fmt(widget.sale['total_amount']),
                     method: _method,
@@ -259,22 +286,29 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
             const SizedBox(width: 10),
             Expanded(
               child: FilledButton.icon(
-                onPressed: _busy ? null : _whatsapp,
-                icon: _busy
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.chat, size: 20),
-                label: const Text('واتساب'),
+                onPressed: _busy ? null : _downloadPdf,
+                icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+                label: const Text('PDF'),
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF25D366),
+                  backgroundColor: AmialColors.red,
                   minimumSize: const Size.fromHeight(50),
                 ),
               ),
             ),
           ]),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _busy ? null : _whatsapp,
+              icon: const Icon(Icons.chat, size: 20),
+              label: const Text('مشاركة عبر واتساب'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF25D366),
+                minimumSize: const Size.fromHeight(50),
+              ),
+            ),
+          ),
           const SizedBox(height: 10),
           FilledButton.icon(
             onPressed: () => Get.back(), // رجوع للكاشير = عملية جديدة

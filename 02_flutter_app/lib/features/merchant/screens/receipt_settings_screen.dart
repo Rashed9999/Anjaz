@@ -4,6 +4,8 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:amial_pay/features/merchant/controllers/receipt_settings_controller.dart';
 import 'package:amial_pay/features/payments/widgets/amial_invoice_card.dart';
+import 'package:amial_pay/features/printer/screens/printer_settings_screen.dart';
+import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-RECEIPT-SETTINGS-001 — «إعدادات الفاتورة والطباعة».
@@ -177,6 +179,44 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                 const SizedBox(width: 10),
                 _paperChip(80, '80 مم'),
               ]),
+              const SizedBox(height: 16),
+              Obx(() {
+                final service = Get.isRegistered<ThermalPrintService>()
+                    ? Get.find<ThermalPrintService>()
+                    : null;
+                final printer = service?.config.value;
+                return Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: AmialColors.border),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Row(children: [
+                      Icon(printer == null ? Icons.print_disabled_outlined : Icons.print_rounded,
+                          color: printer == null ? AmialColors.textMuted : AmialColors.success),
+                      const SizedBox(width: 10),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        const Text('الطابعة الحرارية', style: TextStyle(fontWeight: FontWeight.bold)),
+                        Text(printer == null
+                            ? 'لم يتم اختيار طابعة لهذا الجهاز'
+                            : '${printer.name} • ورق ${printer.paperMm} مم',
+                            style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
+                      ])),
+                    ]),
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed: () => Get.to(() => const PrinterSettingsScreen()),
+                      icon: const Icon(Icons.settings_outlined),
+                      label: Text(printer == null ? 'اختيار طابعة واختبارها' : 'إدارة الطابعة واختبارها'),
+                    ),
+                    const Text('اختيار الطابعة محفوظ في جهاز POS الحالي فقط؛ لا يغيّر هوية المنشأة أو بيانات الفاتورة.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
+                  ]),
+                );
+              }),
               const SizedBox(height: 24),
               Obx(() => FilledButton.icon(
                     onPressed: c.isSaving.value ? null : _save,

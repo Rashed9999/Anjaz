@@ -1,11 +1,12 @@
 import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
-import 'package:share_plus/share_plus.dart';
 import 'package:amial_pay/features/receipts/controllers/receipts_controller.dart';
+import 'package:amial_pay/features/merchant/widgets/invoice_whatsapp_sheet.dart';
 import 'package:amial_pay/data/api/secure_storage_helper.dart';
 import 'package:amial_pay/helper/pdf_downloader_helper.dart';
 import 'package:amial_pay/features/shared/utils/operation_status.dart';
@@ -132,7 +133,7 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
     final settings = payload['settings'] is Map
         ? Map<String, dynamic>.from(payload['settings'])
         : <String, dynamic>{};
-    final issuedAt = DateTime.tryParse('${payload['issued_at'] ?? ''}');
+    final issuedAt = DateConverterHelper.tryFromApi('${payload['issued_at'] ?? ''}');
     PrintResult result;
 
     if (descriptor.isMerchantInvoice) {
@@ -223,50 +224,55 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
             Text(
               isInvoice
                   ? 'نسخة رسمية A4 أو نسخة مهيأة لطابعة نقاط البيع'
-                  : 'سند مالي رسمي أو نسخة مختصرة للطباعة الحرارية',
+                  : 'نزّل السند المالي الرسمي بصيغة PDF.',
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary),
             ),
             const SizedBox(height: 16),
-            _documentOption(
-              icon: Icons.print_rounded,
-              title: 'طباعة مباشرة',
-              subtitle: Get.isRegistered<ThermalPrintService>() &&
-                      Get.find<ThermalPrintService>().config.value != null
-                  ? 'إرسال إلى الطابعة المحفوظة بمقاسها الحالي'
-                  : 'اختر طابعة بلوتوث 58 أو 80 مم أولاً',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _printDirect(receipt);
-              },
-            ),
+            if (isInvoice)
+              _documentOption(
+                icon: Icons.print_rounded,
+                title: 'طباعة مباشرة',
+                subtitle: Get.isRegistered<ThermalPrintService>() &&
+                        Get.find<ThermalPrintService>().config.value != null
+                    ? 'إرسال إلى الطابعة المحفوظة بمقاسها الحالي'
+                    : 'اختر طابعة بلوتوث 58 أو 80 مم أولاً',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _printDirect(receipt);
+                },
+              ),
             _documentOption(
               icon: Icons.description_outlined,
-              title: 'PDF A4',
-              subtitle: isInvoice ? 'فاتورة كاملة مع الأصناف والإجماليات' : 'سند كامل بأطراف العملية والرسوم والتحقق',
+              title: isInvoice ? 'PDF A4' : 'تنزيل السند PDF',
+              subtitle: isInvoice
+                  ? 'فاتورة كاملة مع الأصناف والإجماليات'
+                  : 'سند رسمي للعملية والرسوم وكود التحقق',
               onTap: () {
                 Navigator.pop(sheetContext);
                 _downloadPdf(route: 'download', label: title, fileSuffix: 'a4');
               },
             ),
-            _documentOption(
-              icon: Icons.receipt_long_outlined,
-              title: 'PDF حراري 80 مم',
-              subtitle: 'تنزيل نسخة جاهزة للطباعة في نقاط البيع',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _downloadPdf(route: 'thermal?size=80', label: 'نسخة 80 مم', fileSuffix: '80mm');
-              },
-            ),
-            _documentOption(
-              icon: Icons.receipt_outlined,
-              title: 'PDF حراري 58 مم',
-              subtitle: 'تنزيل نسخة مضغوطة للطابعات الصغيرة',
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _downloadPdf(route: 'thermal?size=58', label: 'نسخة 58 مم', fileSuffix: '58mm');
-              },
-            ),
+            if (isInvoice) ...[
+              _documentOption(
+                icon: Icons.receipt_long_outlined,
+                title: 'PDF حراري 80 مم',
+                subtitle: 'تنزيل نسخة جاهزة للطباعة في نقاط البيع',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _downloadPdf(route: 'thermal?size=80', label: 'نسخة 80 مم', fileSuffix: '80mm');
+                },
+              ),
+              _documentOption(
+                icon: Icons.receipt_outlined,
+                title: 'PDF حراري 58 مم',
+                subtitle: 'تنزيل نسخة مضغوطة للطابعات الصغيرة',
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _downloadPdf(route: 'thermal?size=58', label: 'نسخة 58 مم', fileSuffix: '58mm');
+                },
+              ),
+            ],
           ],
         ),
       ),
@@ -331,9 +337,14 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
 التاريخ: ${_formatWhen(receipt.issuedAt)}
 
 للتحقق:
-${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
+${Get.find<ReceiptsController>().getPublicVerificationUrl(receipt.verificationCode)}
 ''';
-    await Share.share(shareText, subject: receipt.receiptNumber);
+    if (!mounted) return;
+    await InvoiceWhatsAppSheet.open(
+      context,
+      invoiceNumber: receipt.receiptNumber,
+      message: shareText,
+    );
   }
 
   @override
@@ -540,9 +551,22 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
               Row(children: [
                 Expanded(
                   child: _receiptAction(
-                    icon: Icons.print_outlined,
-                    label: r.document?.isMerchantInvoice == true ? 'الفاتورة' : 'السند والطباعة',
-                    onTap: () => _openDocumentSheet(r),
+                    icon: r.document?.isMerchantInvoice == true
+                        ? Icons.print_outlined
+                        : Icons.picture_as_pdf_outlined,
+                    label: r.document?.isMerchantInvoice == true
+                        ? 'الطباعة وPDF'
+                        : 'تحميل السند PDF',
+                    onTap: () {
+                      if (r.document?.isMerchantInvoice == true) {
+                        _openDocumentSheet(r);
+                      } else {
+                        _downloadPdf(
+                          label: 'السند',
+                          fileSuffix: 'voucher',
+                        );
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -688,8 +712,9 @@ ${Get.find<ReceiptsController>().getDownloadUrl(receipt.id)}
   }
 
   String _fmtDate(DateTime d) {
-    return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year} '
-        '(${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')})';
+    final mecca = DateConverterHelper.toMecca(d);
+    return '${mecca.day.toString().padLeft(2, '0')}/${mecca.month.toString().padLeft(2, '0')}/${mecca.year} '
+        '(${mecca.hour.toString().padLeft(2, '0')}:${mecca.minute.toString().padLeft(2, '0')})';
   }
 
 
