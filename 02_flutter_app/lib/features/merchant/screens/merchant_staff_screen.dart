@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/access/widgets/access_gate.dart';
+import 'package:amial_pay/features/merchant/models/staff_roles.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_performance_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
@@ -22,13 +23,6 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
   List<Map<String, dynamic>> _staff = [];
   String? _error;
 
-  static const _allPerms = {
-    'sell': 'البيع',
-    'refund': 'المرتجعات',
-    'products': 'المنتجات',
-    'reports': 'التقارير',
-    'credit': 'الآجل',
-  };
 
   @override
   void initState() {
@@ -73,7 +67,10 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
     final employeeCodeCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
     final passCtrl = TextEditingController();
-    final perms = <String>{'sell'};
+    // **الافتراضُ «كاشير»** — وهو نفسُ ما كانت عليه الشاشة (`{'sell'}`)،
+    // فمن ضغط «إنشاء» بلا قراءةٍ يحصل على ما كان يحصل عليه بالضبط.
+    var role = StaffRoles.defaultRole;
+    final perms = <String>{...StaffRoles.permissions[StaffRoles.defaultRole]!};
 
     final ok = await showDialog<bool>(
       context: context,
@@ -90,16 +87,49 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
               const SizedBox(height: 10),
               TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(
                   labelText: 'كلمة مرور الموظف', border: OutlineInputBorder())),
-              const SizedBox(height: 12),
-              const Align(alignment: Alignment.centerRight,
-                  child: Text('الصلاحيات:', style: TextStyle(fontWeight: FontWeight.bold))),
-              ..._allPerms.entries.map((e) => CheckboxListTile(
-                    dense: true,
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(e.value),
-                    value: perms.contains(e.key),
-                    onChanged: (v) => setD(() => v == true ? perms.add(e.key) : perms.remove(e.key)),
-                  )),
+              const SizedBox(height: 14),
+
+              // **سؤالٌ واحدٌ مكانَ خمسة.**
+              DropdownButtonFormField<String>(
+                initialValue: role,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                    labelText: 'الوظيفة', border: OutlineInputBorder()),
+                items: StaffRoles.labels.entries
+                    .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                    .toList(),
+                onChanged: (v) => setD(() {
+                  role = v ?? StaffRoles.defaultRole;
+                  // **و«مخصّص» يبدأ ممّا اختاره قبلَه** — لا من فراغٍ
+                  // يجعله يبني الصلاحيّاتِ من الصفر.
+                  final preset = StaffRoles.permissions[role];
+                  if (preset != null) {
+                    perms
+                      ..clear()
+                      ..addAll(preset);
+                  }
+                }),
+              ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(StaffRoles.says[role] ?? '',
+                    style: TextStyle(fontSize: 12.5, color: AmialColors.textSecondary)),
+              ),
+
+              // المربّعاتُ الخمسةُ لا تختفي — تنتظر من يطلبها.
+              if (role == StaffRoles.custom) ...[
+                const SizedBox(height: 8),
+                const Align(alignment: Alignment.centerRight,
+                    child: Text('الصلاحيات:', style: TextStyle(fontWeight: FontWeight.bold))),
+                ...StaffRoles.allPermissions.entries.map((e) => CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(e.value),
+                      value: perms.contains(e.key),
+                      onChanged: (v) => setD(() => v == true ? perms.add(e.key) : perms.remove(e.key)),
+                    )),
+              ],
             ]),
           ),
           actions: [
@@ -189,7 +219,7 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
     final badge = isOps ? 'مدير عمليات' : (isFin ? 'مدير مالي' : null);
     final perms = ((s['permissions'] ?? []) as List)
         .where((p) => p != 'operations_manager' && p != 'financial_manager')
-        .map((p) => _allPerms[p] ?? '$p').join(' • ');
+        .map((p) => StaffRoles.allPermissions[p] ?? '$p').join(' • ');
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
