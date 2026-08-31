@@ -95,12 +95,17 @@
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-branches" data-testid="ag-tab-branches">🏬 الفروع</button></li>
             @endif
             <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-till" data-testid="ag-tab-till">🧾 حركة النقد</button></li>
+            {{-- AMIAL-AGENT-SETTLE-REACH-001 — التسويات تبويبٌ أوّلٌ لا بندٌ في «المزيد».
+                 محرّكُها مبنيٌّ كاملاً (`AgentSettlementEngine`) وله خمسُ نقاطِ نهاية،
+                 وكان بابُه الوحيدُ سطراً في قائمةٍ منسدلة — فسأل صاحبُ المشروع «أين
+                 نظامُ التسويات الذي تعبنا عليه». والمطابقةُ بين الفرع والوكيل وبين
+                 الوكيل والمنصّة عملٌ يوميّ، لا بندُ إعداداتٍ يُفتَح مرّةً في الشهر. --}}
+            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ag-settle" data-testid="ag-tab-settle">🤝 التسويات</button></li>
             <li class="nav-item dropdown"><button class="nav-link dropdown-toggle" data-bs-toggle="dropdown">المزيد</button>
                 <ul class="dropdown-menu shadow border-0">
                     <li><button class="dropdown-item" data-bs-toggle="tab" data-bs-target="#ag-earn" data-testid="ag-tab-earn">📈 العمولات</button></li>
                     <li><button class="dropdown-item" data-bs-toggle="tab" data-bs-target="#ag-ops" data-testid="ag-tab-ops">📜 سجلّ العمليات</button></li>
                     <li><button class="dropdown-item" data-bs-toggle="tab" data-bs-target="#ag-reports" data-testid="ag-tab-reports">📊 التقارير التحليلية</button></li>
-                    <li><button class="dropdown-item" data-bs-toggle="tab" data-bs-target="#ag-settle" data-testid="ag-tab-settle">🤝 التسويات</button></li>
                     <li><button class="dropdown-item" data-bs-toggle="tab" data-bs-target="#ag-report" data-testid="ag-tab-report">📋 تقرير اليوم</button></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><button class="dropdown-item" data-bs-toggle="tab" data-bs-target="#ag-settings" data-testid="ag-tab-settings">⚙️ الإعدادات</button></li>
@@ -121,17 +126,17 @@
                         <h3 class="mb-1">مرحباً، {{ $staffName }}</h3>
                         <div class="opacity-75">أرصدة حقيقية، حركة اليوم، وما يحتاج قرارك في مكان واحد.</div></div>
                     <div class="ms-auto d-flex gap-2 flex-wrap">
-                        <button class="btn btn-light" data-bs-toggle="tab" data-bs-target="#ag-workspace">راجع المتابعة</button>
-                        <button class="btn btn-warning" data-bs-toggle="tab" data-bs-target="#ag-till">إدارة السيولة</button>
+                        <button class="btn btn-light" data-ag-goto="#ag-workspace">راجع المتابعة</button>
+                        <button class="btn btn-warning" data-ag-goto="#ag-till">إدارة السيولة</button>
                     </div>
                 </div></div>
                 <div class="row g-3 mb-3" id="ag-totals"></div>
                 <div id="ag-alerts"></div>
                 <div class="row g-3 mb-3" id="ag-attention"></div>
                 <div class="row g-3">
-                    <div class="col-md-4"><button class="ag-action w-100 text-start" data-bs-toggle="tab" data-bs-target="#ag-staff"><span class="ag-action-icon">👥</span><strong class="d-block mt-2">الفريق والصلاحيات</strong><small class="text-muted">التعيين، الأدوار، وساعات العمل</small></button></div>
-                    <div class="col-md-4"><button class="ag-action w-100 text-start" data-bs-toggle="tab" data-bs-target="#ag-shifts"><span class="ag-action-icon">🪟</span><strong class="d-block mt-2">الشبابيك والورديات</strong><small class="text-muted">المفتوح الآن وفروق الجرد</small></button></div>
-                    <div class="col-md-4"><button class="ag-action w-100 text-start" data-bs-toggle="tab" data-bs-target="#ag-reports"><span class="ag-action-icon">📊</span><strong class="d-block mt-2">التقارير التحليلية</strong><small class="text-muted">الفروع، الموظفون، وحجم العمل</small></button></div>
+                    <div class="col-md-4"><button class="ag-action w-100 text-start" data-ag-goto="#ag-staff"><span class="ag-action-icon">👥</span><strong class="d-block mt-2">الفريق والصلاحيات</strong><small class="text-muted">التعيين، الأدوار، وساعات العمل</small></button></div>
+                    <div class="col-md-4"><button class="ag-action w-100 text-start" data-ag-goto="#ag-shifts"><span class="ag-action-icon">🪟</span><strong class="d-block mt-2">الشبابيك والورديات</strong><small class="text-muted">المفتوح الآن وفروق الجرد</small></button></div>
+                    <div class="col-md-4"><button class="ag-action w-100 text-start" data-ag-goto="#ag-reports"><span class="ag-action-icon">📊</span><strong class="d-block mt-2">التقارير التحليلية</strong><small class="text-muted">الفروع، الموظفون، وحجم العمل</small></button></div>
                 </div>
             </div>
             <div class="tab-pane fade" id="ag-workspace">
@@ -436,8 +441,31 @@
                 ${sub ? `<div class="small text-muted mt-1">${sub}</div>` : ''}
             </div></div>`;
 
+        // ══════════════════════════════════════════════════════════
+        // AMIAL-AGENT-WALLET-001 — **محفظةُ الشركة كانت تُرسَل ولا تُعرَض.**
+        //
+        // `own_balance` محسوبةٌ في `AgentPortalController` وتصل في كلّ
+        // نداء، **ولا يقرؤها القالبُ في موضعٍ واحد**. فالإدارةُ العامّة
+        // ترى «إجمالي الفروع» وتظنّه رصيدَها — **وهو رصيدُ غيرِها**.
+        //
+        // وهي أوّلُ ما يُسأل قبل شحن فرع: **مِمَّ أشحن؟** فبلا هذا
+        // الرقمِ يضغط المدير «شحن» ثمّ يقرأ «الرصيد لا يكفي» — يُمنَع
+        // بعد القرار لا قبله.
+        //
+        // **وتُعرَض للإدارة العامّة وحدَها** — الخادمُ يُرسل `null`
+        // لموظّف الفرع عمداً، فالبطاقةُ تختفي ولا تُطبع «٠».
+        // (القاعدة السابعة: «غير معروف» ليس صفراً.)
+        // ══════════════════════════════════════════════════════════
+        const ownWallet = (m.own_balance === null || m.own_balance === undefined)
+            ? ''
+            : kpi('محفظة الشركة',
+                  `<span class="money">${num(m.own_balance)}</span>`,
+                  'الرصيد الإلكترونيّ الذي يُشحَن منه الفروع',
+                  Number(m.own_balance) <= 0 ? 'border-danger' : 'border-primary');
+
         $el('ag-totals').innerHTML =
-            dual(m.totals.cash_on_hand, m.totals.emoney, 'إجمالي الفروع',
+            ownWallet
+            + dual(m.totals.cash_on_hand, m.totals.emoney, 'إجمالي الفروع',
                  m.totals.branches + ' فرع' +
                  (m.totals.low_cash_branches ? ` • <span class="text-danger">${m.totals.low_cash_branches} نقدها منخفض</span>` : ''),
                  m.totals.low_cash_branches ? 'border-danger' : '')
@@ -1087,6 +1115,31 @@
 
     // النافذة تُقرأ عند فتح التبويب: من يفتحه الساعة الحادية عشرة يجب أن
     // يرى «مفتوحة» بلا أن يضغط شيئاً.
+    // ══════════════════════════════════════════════════════════════
+    // AMIAL-AGENT-TABS-001 — **زرٌّ خارج الـ`nav` يرمي ولا يفعل.**
+    //
+    // خمسةُ أزرارٍ في بطاقات الرئيسيّة كانت تحمل
+    // `data-bs-toggle="tab"` وهي **خارج `ul.nav`**. وبوتستراب 5.3
+    // يبحث عن أبٍ `.nav` ليحسب إخوةَ التبويب، **فيرمي
+    // `Illegal invocation`**: تُضغط الأزرارُ ولا يحدث شيء، ولا رسالة،
+    // ولا طلبٌ يصل. (‏وهو ما قاله صاحبُ المشروع بالحرف.)
+    //
+    // **وقِيس في متصفّحٍ حقيقيٍّ لا افتُرض:**
+    //   تبويبٌ داخل nav → يعمل  ·  زرٌّ خارجَه → يبقى المشهدُ كما هو
+    //
+    // فتُوكَّل الضغطةُ إلى تبويبها في الـ`nav` — **حيث يعمل بوتستراب**
+    // — بدل أن تُنادى المكتبةُ من موضعٍ لا تدعمه.
+    // ══════════════════════════════════════════════════════════════
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-ag-goto]');
+        if (!btn) return;
+        const tab = document.querySelector(
+            '.ag-tabs [data-bs-target="' + btn.dataset.agGoto + '"]');
+        if (tab) { tab.click(); return; }
+        // **ولا ضغطةٌ تذهب بلا أثر** — تبويبٌ مفقودٌ يُقال ولا يُبتلع.
+        console.warn('لا تبويبَ لـ', btn.dataset.agGoto);
+    });
+
     document.querySelector('[data-bs-target="#ag-settle"]')?.addEventListener('shown.bs.tab', loadDaily);
 
     $el('ag-cash-in').onclick = () => cashMove('in');
