@@ -5,6 +5,8 @@ import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/credit/screens/my_credits_screen.dart';
+import 'package:amial_pay/features/donations/screens/donations_home_screen.dart';
+import 'package:amial_pay/features/family_fund/screens/my_funds_screen.dart';
 import 'package:amial_pay/features/me/domain/me_repo.dart';
 import 'package:amial_pay/features/me/screens/my_account_number_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
@@ -13,6 +15,7 @@ import 'package:amial_pay/features/notification/screens/notifications_center_scr
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amial_pay/features/kyc_verification/screens/my_profile_changes_screen.dart';
 import 'package:amial_pay/features/reports/screens/amial_account_statement_screen.dart';
+import 'package:amial_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
@@ -211,6 +214,46 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
           label: 'نشاطي التجاري',
           subtitle: 'الإعدادات والخدمات',
           onTap: () => Get.to(() => const MerchantServicesHubScreen()),
+        ),
+      // ══════════════════════════════════════════════════════════════
+      // AMIAL-SERVICES-RESTORE-001 — **ثلاثةُ أبوابٍ حُذفت وما وراءها حيّ.**
+      //
+      // نُزعت هذه البطاقاتُ الثلاثُ في `d8a67a6`
+      // («fix(customer): simplify services») ولم يُوضَع لها بديل.
+      // **وقِيس ما وراءها فإذا هو يعمل كلُّه:**
+      //
+      //   الدفع الآمن       ٢٢ نقطة نهاية حيّة · ٣ شاشات
+      //   الصناديق المشتركة ١٩ نقطة نهاية حيّة · ٥ شاشات
+      //   التبرعات           ٦ نقاط نهاية حيّة · ٤ شاشات
+      //
+      // **والتبسيطُ بالحذف ليس تبسيطاً** — هو نقلُ العطل من «كثيرٌ على
+      // الشاشة» إلى «مبنيٌّ ولا يُوصَل إليه»، وهو أخفى وأطولُ عمراً.
+      // (القاعدة الثانيةَ عشرة: صفحةٌ لا يُوصل إليها ليست مبنيّة.)
+      // ══════════════════════════════════════════════════════════════
+      if (access.has('safe_pay'))
+        _serviceCard(
+          icon: Icons.shield_outlined,
+          label: 'الدفع الآمن',
+          subtitle: 'حماية للبيع والشراء',
+          onTap: () => Get.to(() => const MySafePaymentsScreen()),
+        ),
+      if (access.has('family_fund'))
+        _serviceCard(
+          icon: Icons.savings_outlined,
+          label: 'صندوق العائلة',
+          subtitle: 'ادّخارٌ مشترك',
+          onTap: () => Get.to(() => const MyFundsScreen()),
+        ),
+      // **والتبرّعاتُ بلا قدرةٍ في السجلّ** — قِيس فلا وجودَ لـ`donations`
+      // بين القدرات التسعِ والستّين، ولا وسيطَ `capability:` على مساراتها
+      // الستّ. فالشرطُ هو نفسُه الذي كان قبل الحذف: تُعرَض لغير التاجر.
+      // **ولا يُخترَع حاجزٌ يبدو أدقَّ وهو لا يفحص شيئاً.**
+      if (!merchant)
+        _serviceCard(
+          icon: Icons.volunteer_activism_outlined,
+          label: 'التبرعات',
+          subtitle: 'تبرّع لجهة موثوقة',
+          onTap: () => Get.to(() => const DonationsHomeScreen()),
         ),
       // ══════════════════════════════════════════════════════════════
       // **الحلقةُ الأخيرة — وكانت مقطوعة.**
