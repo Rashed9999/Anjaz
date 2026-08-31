@@ -137,6 +137,10 @@ class SupportConsoleController extends Controller
                 'user_id' => $r->user_id,
                 'status' => $r->status,
                 'issued_at' => $r->issued_at,
+                // AMIAL-SUPPORT-TRACE-REACH-001 — **مرجعُ العمليّة يُرسَل**،
+                // وبه يفتح صفُّ الإيصال التتبّعَ الكامل. وبلا هذا الحقل
+                // يبقى الصفُّ سطراً ميّتاً كما كان.
+                'reference_transaction_id' => $r->reference_transaction_id,
             ])->values(),
         ]);
     }

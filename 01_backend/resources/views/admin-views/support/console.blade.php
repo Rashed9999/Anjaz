@@ -140,13 +140,47 @@
                     </span><span class="text-muted">${esc(u.phone)}</span>
                 </button>`).join('') + '</div>';
         }
+        // ══════════════════════════════════════════════════════════
+        // AMIAL-SUPPORT-TRACE-REACH-001 — **سطرٌ ميّتٌ فوق تتبّعٍ كامل.**
+        //
+        // قال صاحبُ المشروع: «دخلتُ الدعمَ وأدخلتُ رقمَ العمليّة فأعطاني
+        // قيمتَها فقط، لا معلوماتٍ أخرى». **والتتبّعُ الكاملُ مبنيٌّ**:
+        // أطرافٌ ومنفّذُ POS وإيصالٌ وقيودٌ محاسبيّةٌ بأرصدةٍ قبلَ وبعد،
+        // ونزاعاتٌ وتذاكرُ وخطٌّ زمنيّ.
+        //
+        // **وكان في تبويبٍ آخرَ يطلب إعادةَ كتابة الرقم**، ونتيجةُ البحث
+        // `<li>` لا تُضغَط. فمن بحث ووجد ظنّ أنّ هذا كلُّ ما عندنا.
+        //
+        // فصار الصفُّ زرّاً يفتح التتبّعَ بضغطةٍ واحدة. (القاعدة الثانية
+        // عشرة: صفحةٌ لا يُوصل إليها ليست مبنيّة.)
+        // ══════════════════════════════════════════════════════════
         if (m.transactions.length) {
-            html += '<h6>العمليات</h6><ul class="list-group mb-3">' + m.transactions.map(t =>
-                `<li class="list-group-item">${esc(t.transaction_id)} — ${esc(t.type)} — مدين ${esc(t.debit)} / دائن ${esc(t.credit)}</li>`).join('') + '</ul>';
+            html += '<h6>العمليات</h6><div class="list-group mb-3">' + m.transactions.map(t =>
+                `<button type="button" class="list-group-item list-group-item-action"
+                         data-trace="${esc(t.transaction_id || t.id)}" data-testid="search-tx-row">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                      <span><span class="font-monospace">${esc(t.transaction_id)}</span>
+                        — ${esc(t.type)} — مدين ${esc(t.debit)} / دائن ${esc(t.credit)}</span>
+                      <span class="badge bg-primary">التتبّع الكامل ←</span>
+                    </div>
+                 </button>`).join('') + '</div>';
         }
         if (m.receipts.length) {
-            html += '<h6>الإيصالات</h6><ul class="list-group mb-3">' + m.receipts.map(r =>
-                `<li class="list-group-item">${esc(r.receipt_number)} — ${esc(r.receipt_type)} — ${esc(r.amount)}</li>`).join('') + '</ul>';
+            html += '<h6>الإيصالات</h6><div class="list-group mb-3">' + m.receipts.map(r =>
+                // **والإيصالُ يُتتبَّع بمرجع عمليّته لا برقمه** — فنقطةُ
+                // التتبّع تقرأ `transaction_id`، ورقمُ الإيصال لا يطابقها.
+                // فمن لا مرجعَ له يبقى سطراً ولا يَعِد بما لا يفتح.
+                (r.reference_transaction_id
+                    ? `<button type="button" class="list-group-item list-group-item-action"
+                               data-trace="${esc(r.reference_transaction_id)}" data-testid="search-receipt-row">
+                         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                           <span>${esc(r.receipt_number)} — ${esc(r.receipt_type)} — ${esc(r.amount)}</span>
+                           <span class="badge bg-primary">التتبّع الكامل ←</span>
+                         </div>
+                       </button>`
+                    : `<div class="list-group-item">${esc(r.receipt_number)} — ${esc(r.receipt_type)} — ${esc(r.amount)}
+                         <span class="small text-muted">· لا مرجعَ عمليّةٍ مرتبطٌ به</span></div>`)
+            ).join('') + '</div>';
         }
         box.innerHTML = html || '<div class="alert alert-secondary">لا نتائج</div>';
     }
@@ -313,6 +347,32 @@
         const j = await post(`/devices/${b.dataset.row}/${b.dataset.do}`, {reason: reason.trim()});
         await dialog.show(j.message || (j.success ? 'تم' : 'فشل'), j.success ? 'تم الإجراء' : 'تعذّر الإجراء');
         loadDevices(parseInt(b.dataset.user, 10));
+    });
+
+    // ══════════════════════════════════════════════════════════════
+    // AMIAL-SUPPORT-TRACE-REACH-001 — **الضغطةُ تنقل وتشغّل معاً.**
+    //
+    // ونقلٌ بلا تشغيلٍ يترك الدعمَ أمام حقلٍ مملوءٍ وزرٍّ لم يُضغَط —
+    // **فيظنّ أنّ لا نتيجة**. فتُملأ الخانةُ ويُضغط الزرُّ في النداء نفسِه.
+    //
+    // و`data-testid` على الصفوف يجعل مسبارَ الأزرار يمسكها إن ماتت.
+    // ══════════════════════════════════════════════════════════════
+    document.addEventListener('click', function (e) {
+        const row = e.target.closest('[data-trace]');
+        if (!row) return;
+
+        const tab = document.querySelector('[data-bs-target="#tab-tx"]');
+        if (!tab) {
+            // **صلاحيّةُ تتبّع العمليّات غيرُ ممنوحةٍ لهذا الموظّف** —
+            // فالتبويبُ غيرُ مُصيَّرٍ أصلاً. ويُقال ولا يُبتلع صمتاً.
+            alert('تتبّعُ العمليّات يحتاج صلاحيّة «عرض المعاملات» — راجع مديرَك.');
+            return;
+        }
+
+        tab.click();
+        const box = document.getElementById('tx-ref');
+        box.value = row.dataset.trace;
+        document.getElementById('btn-tx').click();
     });
 
     // ---------- فحص عملية ----------
