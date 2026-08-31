@@ -44,6 +44,9 @@ class _PosDeviceActivationScreenState extends State<PosDeviceActivationScreen> {
       });
       if (!mounted) return;
       if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+        // AMIAL-POS-LOGIN-SIMPLE-001 — بها تُخفي شاشةُ الدخول حقلَي التاجر.
+        await PosDeviceIdentity.markActivated();
+        if (!mounted) return;
         await showDialog<void>(
           context: context,
           builder: (ctx) => AlertDialog(

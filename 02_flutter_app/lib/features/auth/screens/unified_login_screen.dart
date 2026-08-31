@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:amial_pay/data/api/pos_device_identity.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:local_auth/local_auth.dart';
@@ -102,6 +103,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
   @override
   void initState() {
     super.initState();
+    _readDeviceActivation();
     SecureScreen.enable();
     final last = UnifiedAuthController.readLastUser();
     if (last != null) {
@@ -136,8 +138,33 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
     });
   }
 
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-POS-LOGIN-SIMPLE-001 — **حقلان له، لا أربعةٌ نصفُها لمديره.**
+  //
+  // كان الكاشيرُ يكتب رقمَ التاجر **وجوّالَ التاجر** ليدخل — أي أنّه
+  // يحفظ رقمَ هاتف مديره ليبدأ يومَه. والجهازُ المفعَّل يحملهما عند
+  // الخادم منذ لحظة التفعيل، فيُشتقّان ولا يُكتبان.
+  //
+  // **والإخفاءُ ليس بلا مخرج**: «الجهاز غير مفعّل؟» ظاهرٌ دائماً،
+  // فمن مسح بياناتِ تطبيقه يُظهر الحقلين ويدخل. (‏وصفحةٌ لا مخرجَ منها
+  // أسوأُ من حقلٍ زائد.)
+  // ══════════════════════════════════════════════════════════════════
+  bool _deviceActivated = false;
+
+  bool _showShopFields = false;
+
+  /// أيُطلَب من الموظّف بياناتُ متجرِه؟
+  bool get _needsShopFields =>
+      _kind != AccountKind.pos || ! _deviceActivated || _showShopFields;
+
+  Future<void> _readDeviceActivation() async {
+    final on = await PosDeviceIdentity.isActivated();
+    if (mounted) setState(() => _deviceActivated = on);
+  }
+
   void _startPosRegistration() {
-    Get.to(() => const PosDeviceActivationScreen());
+    Get.to(() => const PosDeviceActivationScreen())
+        ?.then((_) => _readDeviceActivation());
   }
 
   Future<void> _submit() async {
@@ -550,7 +577,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
                   ),
             ),
             const SizedBox(height: AmialSpacing.lg),
-            if (_kind != AccountKind.customer) ...[
+            if (_kind != AccountKind.customer && _needsShopFields) ...[
               _field(
                 controller: _merchantNumCtrl,
                 label: 'رقم التاجر',
@@ -570,6 +597,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
               ),
               const SizedBox(height: AmialSpacing.sm),
             ],
+            if (_needsShopFields) ...[
             _field(
               controller: _phoneCtrl,
               label: 'رقم الهاتف',
@@ -585,6 +613,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
               },
             ),
             const SizedBox(height: AmialSpacing.sm),
+            ],
             _field(
               controller: _passwordCtrl,
               label: 'كلمة المرور',
@@ -644,6 +673,13 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
             }),
             if (_kind == AccountKind.pos) ...[
               const SizedBox(height: AmialSpacing.sm),
+              // **المخرجُ ظاهرٌ دائماً** — من مسح بياناتِ تطبيقه، أو
+              // فُعّل جهازُه من تثبيتٍ آخر، يُظهر الحقلين ويدخل.
+              if (_deviceActivated && ! _showShopFields)
+                TextButton(
+                  onPressed: () => setState(() => _showShopFields = true),
+                  child: const Text('الجهاز ليس لهذا المتجر؟ أدخل بياناته'),
+                ),
               OutlinedButton.icon(
                 onPressed: _startPosRegistration,
                 icon: const Icon(Icons.add_to_home_screen_outlined),
