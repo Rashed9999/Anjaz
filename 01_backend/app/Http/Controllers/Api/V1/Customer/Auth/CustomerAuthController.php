@@ -19,6 +19,7 @@ use App\Models\WithdrawRequest;
 use App\Models\KycDocument;
 use App\Services\AccountNumberService;
 use App\Services\KycDocumentService;
+use App\Support\YemenGovernorates;
 use App\Models\TransactionLimit;
 use App\CentralLogics\SmsModule;
 use App\Models\PhoneVerification;
@@ -680,6 +681,8 @@ class CustomerAuthController extends Controller
             // AMIAL-KYC: العنوان + التوقيع الإلكتروني + الإقرار (اختيارية توافقاً
             // مع أي عميل قديم؛ التطبيق الجديد يرسلها ويشترطها في الواجهة).
             'address' => 'sometimes|nullable|string|max:500',
+            'residence_governorate' => ['sometimes', 'nullable', 'string',
+                \Illuminate\Validation\Rule::in(YemenGovernorates::codes())],
             'signature' => 'sometimes|nullable|string|max:255',
             'declaration_accepted' => 'sometimes',
         ]);
@@ -718,6 +721,13 @@ class CustomerAuthController extends Controller
         // AMIAL-KYC: حفظ العنوان + التوقيع + الإقرار (فقط إن أُرسلت وإن وُجدت الأعمدة)
         if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'address') && $request->filled('address')) {
             $user->address = $request->address;
+        }
+        // عنوان النص لا يكفي لإسناد منطقة تشغيلية بصورة حتمية. رمز المحافظة
+        // يختاره العميل من قائمة موحّدة، فيستطيع المراجع إكمال التفعيل من
+        // دون تخمين أو إعادة اتصال لمجرد معرفة المحافظة.
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'residence_governorate')
+            && $request->filled('residence_governorate')) {
+            $user->residence_governorate = $request->residence_governorate;
         }
         if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_signature') && $request->filled('signature')) {
             $user->kyc_signature = $request->signature;

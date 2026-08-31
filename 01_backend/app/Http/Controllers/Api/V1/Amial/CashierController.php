@@ -9,6 +9,7 @@ use App\Models\MerchantSale;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Services\CashierService;
+use App\Services\CashierSaleInvoicePdfService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -268,6 +269,58 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         }
 
         return $this->ok(['sale' => $sale], 'SALE_RECORDED', 'تم تسجيل البيع');
+    }
+
+    /**
+     * AMIAL-CASHIER-INVOICE-001 — PDF رسمي من سجلّ البيع المخزّن.
+     *
+     * المسار لا يقرأ شيئاً من Flutter: التاجر وPOS لا يملكان إلا فاتورتهما.
+     */
+    public function downloadInvoice(Request $request, string $ulid)
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $sale = MerchantSale::where('sale_ulid', $ulid)
+            ->where('merchant_user_id', $merchant->id)
+            ->first();
+        if (!$sale) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
+
+        try {
+            // ══════════════════════════════════════════════════════
+            // AMIAL-PDF-CACHE-001 — **التصييرُ داخل الطلب يُسقط الاتّصال.**
+            //
+            // كلُّ تصييرٍ داخل الطلب يعرّض الاتّصالَ للقطع على شبكة جوّال
+            // (‏`Connection closed while receiving data`) — **وهو عطلٌ وقع
+            // فعلاً**، ولذلك بُني `PdfSurfaceGuardTest`. وقد أمسك هذه
+            // النقطةَ في أوّل تشغيلٍ بعد دمج فرع كودكس.
+            //
+            // **والفاتورةُ مستندٌ ثابتٌ لا حيّ**: بيعٌ تمّ لا يتغيّر.
+            // فمفتاحُه معرِّفُه ووقتُ آخر تعديلٍ عليه — فمرتجَعٌ يُسجَّل
+            // يُحرّك `updated_at` فيُصيَّر من جديد، **ولا تُخدَم نسخةٌ
+            // قديمةٌ بأرقامٍ لم تعد صحيحة**.
+            // ══════════════════════════════════════════════════════
+            $pdf = app(\App\Services\PdfCacheService::class)->remember(
+                "cashier_invoice_{$sale->id}_{$sale->updated_at?->timestamp}",
+                fn () => app(CashierSaleInvoicePdfService::class)->generate($sale),
+            );
+            return response($pdf, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Length' => (string) strlen($pdf),
+                'Content-Disposition' => 'attachment; filename="'
+                    . app(CashierSaleInvoicePdfService::class)->suggestedFilename($sale) . '"',
+                'Cache-Control' => 'private, max-age=900',
+                'Content-Encoding' => 'identity',
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Cashier invoice PDF generation failed', [
+                'sale_ulid' => $ulid,
+                'merchant_user_id' => $merchant->id,
+                'error' => $e->getMessage(),
+            ]);
+            return $this->error('PDF_GEN_FAILED', 'تعذّر توليد الفاتورة', 500);
+        }
     }
 
     public function settleCredit(Request $request, int $id): JsonResponse

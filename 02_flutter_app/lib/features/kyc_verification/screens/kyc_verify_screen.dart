@@ -8,6 +8,7 @@ import 'package:amial_pay/common/widgets/custom_button_widget.dart';
 import 'package:amial_pay/common/widgets/custom_drop_down_button_widget.dart';
 import 'package:amial_pay/helper/custom_snackbar_helper.dart';
 import 'package:amial_pay/common/widgets/custom_text_field_widget.dart';
+import 'package:amial_pay/features/auth/widgets/governorate_picker.dart';
 import '../../../util/dimensions.dart';
 
 class KycVerifyScreen extends StatefulWidget {
@@ -22,6 +23,7 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
   // AMIAL-KYC: العنوان + التوقيع الإلكتروني + الإقرار
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _signatureController = TextEditingController();
+  String? _residenceGovernorate;
   bool _declared = false;
 
   @override
@@ -125,6 +127,13 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                 ),
                 const SizedBox(height: Dimensions.fontSizeDefault),
 
+                GovernoratePicker(
+                  label: 'محافظة السكن',
+                  value: _residenceGovernorate,
+                  helper: 'نستخدمها لتحديد منطقة الحساب بعد مراجعة الهوية.',
+                  onChanged: (value) => setState(() => _residenceGovernorate = value),
+                ),
+
                 // ── التوقيع الإلكتروني ────────────────────────
                 Text('التوقيع الإلكتروني (اكتب اسمك الكامل)', style: rubikRegular),
                 const SizedBox(height: Dimensions.paddingSizeExtraSmall),
@@ -169,6 +178,8 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                       showCustomSnackBarHelper('select_identity_type'.tr);
                     }else if(_addressController.text.trim().isEmpty) {
                       showCustomSnackBarHelper('الرجاء إدخال العنوان');
+                    }else if(_residenceGovernorate == null) {
+                      showCustomSnackBarHelper('الرجاء اختيار محافظة السكن');
                     }else if(_signatureController.text.trim().isEmpty) {
                       showCustomSnackBarHelper('الرجاء كتابة التوقيع الإلكتروني');
                     }else if(!_declared) {
@@ -177,6 +188,7 @@ class _KycVerifyScreenState extends State<KycVerifyScreen> {
                       kycVerifyController.kycVerify(
                         _identityNumberController.text,
                         address: _addressController.text.trim(),
+                        residenceGovernorate: _residenceGovernorate!,
                         signature: _signatureController.text.trim(),
                         declared: _declared,
                       ).then((value)

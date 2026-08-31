@@ -437,6 +437,37 @@ class KycDocumentService
             ])->all();
     }
 
+    /**
+     * الحسابات الجاهزة للقرار النهائي. لا نعدّها "مكتملة" من حالة آخر
+     * مستند فقط: نعيد احتساب اكتمال كل نوع مطلوب، مع صلاحية الوثيقة نفسها.
+     */
+    public function activationQueue(int $limit = 100): array
+    {
+        $candidateIds = KycDocument::query()
+            ->where('status', KycDocument::STATUS_APPROVED)
+            ->distinct()
+            ->pluck('user_id');
+
+        return User::query()
+            ->whereIn('id', $candidateIds)
+            ->where(function ($query) {
+                $query->whereNull('is_kyc_verified')->orWhere('is_kyc_verified', '!=', 1);
+            })
+            ->orderBy('id')
+            ->limit($limit)
+            ->get(['id', 'f_name', 'l_name', 'phone', 'kyc_tier', 'residence_governorate', 'zone_code'])
+            ->filter(fn (User $user) => $this->completenessFor($user, 2)['complete'])
+            ->map(fn (User $user) => [
+                'user_id' => (int) $user->id,
+                'customer_name' => trim((string) ($user->f_name . ' ' . $user->l_name)) ?: '—',
+                'customer_phone' => (string) ($user->phone ?? '—'),
+                'target_tier' => 2,
+                'residence_governorate' => $user->residence_governorate,
+                'residence_governorate_name' => \App\Support\YemenGovernorates::name($user->residence_governorate),
+                'zone_code' => $user->zone_code ?? ZoneAssignmentService::ZONE_UNKNOWN,
+            ])->values()->all();
+    }
+
     /** الملفّ مفكوكَ التشفير — للعرض على المراجع وحده. */
     public function decrypt(KycDocument $doc): string
     {

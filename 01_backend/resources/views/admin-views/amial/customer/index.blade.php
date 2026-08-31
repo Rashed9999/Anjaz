@@ -68,6 +68,9 @@
     const loaded = {};
     let searchSequence = 0;
     let customerSequence = 0;
+    // يصل زر «تعديل» من القائمة القديمة بهذا المعرف. نفتح الملف مباشرة
+    // بدلاً من ترك الموظف يبحث ثانية أو إرساله إلى قالب محذوف.
+    const requestedCustomer = Number(new URLSearchParams(window.location.search).get('open'));
 
     async function get(p) {
         const response = await fetch(BASE + p, {headers: {'Accept': 'application/json'}});
@@ -515,6 +518,9 @@
             b.textContent = b.dataset.original || b.textContent;
         }
     });
+    if (Number.isInteger(requestedCustomer) && requestedCustomer > 0) {
+        openCustomer(requestedCustomer);
+    }
 })();
 </script>
 @endsection

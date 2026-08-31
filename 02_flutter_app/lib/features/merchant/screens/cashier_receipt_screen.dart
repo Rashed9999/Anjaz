@@ -6,10 +6,10 @@ import 'package:get/get.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:screenshot/screenshot.dart';
-import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/merchant/controllers/receipt_settings_controller.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
+import 'package:amial_pay/features/merchant/widgets/invoice_whatsapp_sheet.dart';
 import 'package:amial_pay/features/payments/widgets/amial_invoice_card.dart';
 import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
 import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
@@ -120,10 +120,23 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
     try {
       final svc = Get.isRegistered<ThermalPrintService>() ? Get.find<ThermalPrintService>() : null;
       if (svc != null && svc.config.value != null) {
+        final discount = double.tryParse('${widget.sale['discount_amount'] ?? 0}') ?? 0;
+        final subtotal = double.tryParse('${widget.sale['subtotal'] ?? ''}') ?? (widget.total + discount);
+        final isCredit = widget.method == 'credit';
         final r = await svc.printSale(
           settings: _settings.effective,
           lines: _thermalLines(),
           total: widget.total,
+          subtotal: subtotal,
+          discount: discount,
+          paid: isCredit ? 0 : widget.total,
+          balanceDue: isCredit ? widget.total : 0,
+          contextLines: [
+            'طريقة الدفع: $_methodLabel',
+            if ((widget.customerName ?? widget.customerPhone ?? '').isNotEmpty)
+              'العميل: ${widget.customerName ?? widget.customerPhone}',
+            'مرجع البيع: $_ref',
+          ],
           invoiceNo: _ref,
           dateTime: DateTime.now(),
         );
@@ -151,36 +164,45 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
   }
 
   Future<void> _whatsapp() async {
+    final store = '${_settings.effective['store_name'] ?? widget.sale['store_name'] ?? 'التاجر'}';
+    await InvoiceWhatsAppSheet.open(
+      context,
+      invoiceNumber: _ref,
+      initialPhone: widget.customerPhone,
+      captureFile: _capture,
+      message: 'فاتورة بيع من $store\n'
+          'رقم الفاتورة: $_ref\n'
+          'الإجمالي: ${AmialMoney.yer(widget.total)}\n'
+          'طريقة الدفع: $_methodLabel',
+    );
+  }
+
+  /// PDF من الخادم، لا تحويل صورة الشاشة إلى ملف باسم PDF.
+  Future<void> _downloadPdf() async {
+    final ulid = _ref;
+    if (!RegExp(r'^[A-Z0-9]{26}$').hasMatch(ulid)) {
+      _snack('رقم الفاتورة غير صالح للتنزيل');
+      return;
+    }
     setState(() => _busy = true);
     try {
-      final f = await _capture();
-      if (f == null) throw Exception('capture');
-      final caption = 'فاتورة بيع — ${widget.sale['store_name'] ?? ''}\n'
-          'الإجمالي: ${AmialMoney.yer(widget.total)}\nمرجع: $_ref';
-      await Share.shareXFiles([XFile(f.path, mimeType: 'image/png')], text: caption);
-      final phone = _waPhone(widget.customerPhone);
-      if (phone != null) {
-        final uri = Uri.parse('https://wa.me/$phone?text=${Uri.encodeComponent(caption)}');
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        }
+      String? failure;
+      final path = await Get.find<ApiClient>().downloadFile(
+        '/api/v1/amial/merchant/cashier/sales/$ulid/invoice',
+        fileName: 'amial_invoice_$ulid.pdf',
+        onError: (message) => failure = message,
+      );
+      if (path == null) {
+        _snack(failure ?? 'تعذّر تنزيل الفاتورة');
+        return;
       }
+      await OpenFile.open(path, type: 'application/pdf');
+      _snack('تم تنزيل الفاتورة PDF', ok: true);
     } catch (_) {
-      _snack('تعذّر الإرسال عبر واتساب');
+      _snack('تعذّر تنزيل الفاتورة');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
-  }
-
-  String? _waPhone(String? raw) {
-    if (raw == null) return null;
-    var p = raw.replaceAll(RegExp(r'[^0-9]'), '');
-    if (p.isEmpty) return null;
-    if (p.startsWith('00')) p = p.substring(2);
-    if (p.startsWith('967')) return p;
-    if (p.startsWith('0')) p = p.substring(1);
-    if (p.length == 9) return '967$p';
-    return p;
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
@@ -247,16 +269,24 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
                   minimumSize: const Size.fromHeight(50)),
             )),
             const SizedBox(width: 10),
-            Expanded(child: FilledButton.icon(
+            Expanded(child: OutlinedButton.icon(
+              onPressed: _busy ? null : _downloadPdf,
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
+              label: const Text('PDF'),
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: AmialColors.red,
+                  side: const BorderSide(color: AmialColors.red),
+                  minimumSize: const Size.fromHeight(50)),
+            )),
+          ]),
+          const SizedBox(height: 10),
+          SizedBox(width: double.infinity, child: FilledButton.icon(
               onPressed: _busy ? null : _whatsapp,
-              icon: _busy
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Icon(Icons.chat, size: 20),
-              label: const Text('واتساب'),
+              icon: const Icon(Icons.chat, size: 20),
+              label: const Text('مشاركة عبر واتساب'),
               style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF25D366), minimumSize: const Size.fromHeight(50)),
             )),
-          ]),
           const SizedBox(height: 10),
         ],
         FilledButton.icon(

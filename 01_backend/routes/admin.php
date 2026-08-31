@@ -244,7 +244,12 @@ Route::group(['as' => 'admin.'], function () {
         Route::group(['prefix' => 'helpTopic', 'as' => 'helpTopic.'], function () {
         });
 
-        Route::group(['prefix' => 'customer', 'as' => 'customer.', 'middleware' => []], function () {
+        Route::group(['prefix' => 'customer', 'as' => 'customer.',
+            'middleware' => 'platform:platform.customers.view'], function () {
+            // زر «تعديل» في جداول الإدارة القديمة: يعيد إلى مركز العملاء
+            // الحديث بدلاً من قالب محذوف ومسار غير مسجل.
+            Route::get('edit/{id}', [CustomerController::class, 'edit'])
+                ->whereNumber('id')->name('edit');
         });
 
         Route::group(['prefix' => 'agent', 'as' => 'agent.'], function () {

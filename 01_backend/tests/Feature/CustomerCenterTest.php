@@ -77,8 +77,16 @@ class CustomerCenterTest extends TestCase
         }
     }
 
+    /** زر «تعديل» القديم لا يعود إلى قالب محذوف؛ يفتح العميل في مركزه الحديث. */
+    public function test_legacy_customer_edit_route_opens_the_modern_customer_center(): void
+    {
+        $this->actingAs($this->staff, 'user')
+            ->get("/admin/customer/edit/{$this->customer->id}")
+            ->assertRedirect(route('admin.amial.customer.page', ['open' => $this->customer->id]));
+    }
+
     /** طلب إعادة الهوية يجب أن يُعرض ولا ينهار بسبب تاريخٍ نصّيّ من قاعدة البيانات. */
-    public function kyc_tab_renders_an_active_kyc_update_request(): void
+    public function test_kyc_tab_renders_an_active_kyc_update_request(): void
     {
         $this->customer->forceFill([
             'kyc_update_required' => 1,
@@ -303,7 +311,7 @@ class CustomerCenterTest extends TestCase
     }
 
     /** غياب تقييم المخاطر ليس درجة صفرية مطمئنة للموظف. */
-    public function an_unassessed_risk_profile_is_not_presented_as_zero_risk(): void
+    public function test_an_unassessed_risk_profile_is_not_presented_as_zero_risk(): void
     {
         $overview = $this->actingAs($this->staff, 'user')
             ->getJson("/admin/amial/customer/{$this->customer->id}/tab/overview")
@@ -618,7 +626,7 @@ class CustomerCenterTest extends TestCase
     }
 
     /** الإيقاف المؤقت حالة صريحة لا اسم آخر للخمول. */
-    public function suspending_a_customer_uses_the_suspended_state(): void
+    public function test_suspending_a_customer_uses_the_suspended_state(): void
     {
         app(CustomerActionService::class)->run(
             $this->customer, $this->staff, 'suspend',

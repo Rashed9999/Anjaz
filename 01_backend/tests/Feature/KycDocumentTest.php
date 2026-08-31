@@ -336,4 +336,24 @@ class KycDocumentTest extends TestCase
         $this->assertGreaterThanOrEqual(70, $queue[0]['waiting_hours'],
             'زمن الانتظار غير محسوب');
     }
+
+    public function test_the_activation_queue_keeps_complete_documents_visible_until_the_account_decision(): void
+    {
+        $customer = $this->customer();
+        $reviewer = $this->reviewer();
+
+        foreach ([KycDocument::TYPE_ID_FRONT, KycDocument::TYPE_ID_BACK, KycDocument::TYPE_SELFIE] as $type) {
+            $this->svc->approve($this->svc->upload($customer, $type, $this->image()), $reviewer);
+        }
+
+        $this->assertContains($customer->id,
+            array_column($this->svc->activationQueue(), 'user_id'),
+            'اختفى الحساب بعد اعتماد آخر مستند ولم يعد للمراجع قرار نهائي ظاهر');
+
+        $this->svc->decideAccountVerification($customer->fresh(), $reviewer, true);
+
+        $this->assertNotContains($customer->id,
+            array_column($this->svc->activationQueue(), 'user_id'),
+            'حساب مُعتمد بقي في طابور التفعيل');
+    }
 }

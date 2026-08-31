@@ -45,7 +45,7 @@ class ZoneOnRegistrationTest extends TestCase
 
     private function customer(string $zone = 'UNKNOWN'): User
     {
-        $u = User::factory()->create(['type' => 2]);
+        $u = User::factory()->create(['type' => 2, 'is_kyc_verified' => 1]);
         $u->forceFill(['zone_code' => $zone])->save();
 
         return $u->refresh();
@@ -160,6 +160,7 @@ class ZoneOnRegistrationTest extends TestCase
     {
         $sender = $this->customer('SOUTH');
         $recipient = $this->customer('UNKNOWN');
+        $recipient->forceFill(['is_kyc_verified' => 0])->save();
 
         try {
             app(RecipientVerificationService::class)
@@ -167,33 +168,40 @@ class ZoneOnRegistrationTest extends TestCase
 
             $this->fail('قُبل مستلمٌ غيرُ موثَّق');
         } catch (RuntimeException $e) {
-            $this->assertStringContainsString('لم يُوثَّق بعد', $e->getMessage(),
+            // ══════════════════════════════════════════════════════
+            // **يُقاس المعنى لا الصياغة.**
+            //
+            // كان هنا `'لم يُوثَّق بعد'` نصّاً، فلمّا حُسّنت الرسالةُ —
+            // صارت «لم يُعتمد بعد … حتّى تُراجع هويته وتُفعَّل» — سقط
+            // الحارسُ على **تحسينٍ صحيح**. وحارسٌ يمنع تصحيحاً صحيحاً
+            // ليس حارساً. (والسابقةُ نفسُها في `PosDeviceLoginBindingTest`.)
+            //
+            // فالمحروسُ اثنان: **أنّ السببَ نقصُ توثيقٍ لا حظر**،
+            // و**أنّ فيها مخرجاً** — فرفضٌ بلا مخرجٍ يُنتج تذكرةَ دعم.
+            // ══════════════════════════════════════════════════════
+            $this->assertMatchesRegularExpression(
+                '/لم\s*(يُوثَّق|يوثق|يُعتمد|يعتمد)\s*بعد/u', $e->getMessage(),
                 'الرسالةُ لا تقول إنّ التوثيقَ ناقص — فيظنّ القارئُ '
                 . 'الحسابَ محظوراً، ويذهب إلى الدعم بلا معلومة');
 
-            // **وتقول ماذا يفعل** — رفضٌ بلا مخرجٍ يُنتج تذكرةَ دعم.
-            $this->assertStringContainsString('التوثيق', $e->getMessage());
+            $this->assertMatchesRegularExpression('/(التوثيق|هويت|تُفعَّل|تفعل)/u',
+                $e->getMessage(),
+                'الرسالةُ ترفض ولا تقول ماذا يفعل — فتُنتج تذكرةَ دعم.');
         }
     }
 
     /** @test */
-    public function a_recipient_outside_the_service_area_gets_a_different_answer(): void
+    public function a_verified_recipient_in_another_known_zone_can_receive_a_ledger_transfer(): void
     {
-        // **والفرقُ هو كلُّ الفائدة**: هذا لن يُخدَم، وذاك ينتظر مراجعة.
+        // التحويل بين محفظتين لا يعبر نقداً ولا يصرف عملة؛ الحاجز الحقيقي
+        // هو UNKNOWN لا NORTH/MIDDLE. هذه الحالة كانت تُرفض بحارس قديم.
         $sender = $this->customer('SOUTH');
         $recipient = $this->customer('NORTH');
 
-        try {
-            app(RecipientVerificationService::class)
-                ->verifyRecipient((string) $recipient->phone, $sender->id);
+        $result = app(RecipientVerificationService::class)
+            ->verifyRecipient((string) $recipient->phone, $sender->id);
 
-            $this->fail('قُبل مستلمٌ خارج النطاق');
-        } catch (RuntimeException $e) {
-            $this->assertStringContainsString('خارجَ نطاق الخدمة', $e->getMessage());
-            $this->assertStringNotContainsString('لم يُوثَّق', $e->getMessage(),
-                'خُلط «خارج النطاق» بـ«لم يُوثَّق» — والأوّلُ نهائيٌّ '
-                . 'والثاني مؤقَّت');
-        }
+        $this->assertSame($recipient->id, $result['recipient_id']);
     }
 
     /** @test */
@@ -220,11 +228,12 @@ class ZoneOnRegistrationTest extends TestCase
         // أمنيٌّ مكتوبٌ في `ZoneAssignmentService`، وكلُّ ما تغيّر هو أنّ
         // الرفضَ صار يقول سببَه.
         $sender = $this->customer('SOUTH');
+        $recipient = $this->customer('UNKNOWN');
 
         $this->expectException(RuntimeException::class);
 
         app(RecipientVerificationService::class)
-            ->verifyRecipient((string) $this->customer('UNKNOWN')->phone, $sender->id);
+            ->verifyRecipient((string) $recipient->phone, $sender->id);
     }
 
     /** @test */

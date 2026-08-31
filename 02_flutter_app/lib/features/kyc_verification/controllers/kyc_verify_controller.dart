@@ -60,6 +60,7 @@ class KycVerifyController extends GetxController implements GetxService{
   Future<void> kycVerify(
     String idNumber, {
     String address = '',
+    String residenceGovernorate = '',
     String signature = '',
     bool declared = false,
   }) async{
@@ -68,6 +69,7 @@ class KycVerifyController extends GetxController implements GetxService{
       'identification_type': _dropDownSelectedValue,
       // AMIAL-KYC: العنوان + التوقيع الإلكتروني + الإقرار بصحة المعلومات
       'address': address,
+      'residence_governorate': residenceGovernorate,
       'signature': signature,
       'declaration_accepted': declared ? '1' : '0',
       '_method': 'put'

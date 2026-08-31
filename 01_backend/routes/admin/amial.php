@@ -609,6 +609,8 @@ Route::prefix('kyc')->name('kyc.')->group(function () {
 
     Route::get('/', [$kyc, 'page'])->middleware('platform:platform.customers.kyc.view')->name('page');
     Route::get('/queue', [$kyc, 'queue'])->middleware('platform:platform.customers.kyc.view')->name('queue');
+    Route::get('/activation-queue', [$kyc, 'activationQueue'])
+        ->middleware('platform:platform.customers.kyc.view')->name('activation-queue');
     Route::get('/documents/{id}/file', [$kyc, 'file'])
         ->where('id', '[0-9]+')->middleware('platform:platform.customers.kyc.view')->name('file');
     // AMIAL-KYC-OCR-001 — الحقول المستخرَجة وإقرارها
@@ -623,6 +625,8 @@ Route::prefix('kyc')->name('kyc.')->group(function () {
         ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('approve');
     Route::post('/documents/{id}/reject', [$kyc, 'reject'])
         ->where('id', '[0-9]+')->middleware('platform:platform.customers.freeze')->name('reject');
+    Route::post('/users/{id}/activate', [$kyc, 'activateAccount'])
+        ->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('activate');
 
     // ══════════════════════════════════════════════════════════════════
     // AMIAL-PROFILE-CHANGE-003 — طلباتُ تحديث البيانات.

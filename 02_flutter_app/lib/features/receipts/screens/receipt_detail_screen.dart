@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:http/http.dart' as http;
-import 'package:share_plus/share_plus.dart';
 import 'package:amial_pay/features/receipts/controllers/receipts_controller.dart';
+import 'package:amial_pay/features/merchant/widgets/invoice_whatsapp_sheet.dart';
 import 'package:amial_pay/data/api/secure_storage_helper.dart';
 import 'package:amial_pay/helper/pdf_downloader_helper.dart';
 import 'package:amial_pay/features/shared/utils/operation_status.dart';
@@ -339,7 +339,12 @@ class _ReceiptDetailScreenState extends State<ReceiptDetailScreen> {
 للتحقق:
 ${Get.find<ReceiptsController>().getPublicVerificationUrl(receipt.verificationCode)}
 ''';
-    await Share.share(shareText, subject: receipt.receiptNumber);
+    if (!mounted) return;
+    await InvoiceWhatsAppSheet.open(
+      context,
+      invoiceNumber: receipt.receiptNumber,
+      message: shareText,
+    );
   }
 
   @override

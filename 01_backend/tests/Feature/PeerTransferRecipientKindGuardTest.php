@@ -64,6 +64,9 @@ class PeerTransferRecipientKindGuardTest extends TestCase
         $u = User::factory()->create([
             'type' => $type, 'phone' => $phone, 'zone_code' => 'SOUTH',
             'is_active' => 1,
+            // **الأهليّةُ تُفحص قبل النوع** — ومُثبَّتٌ بلا توثيقٍ يُردّ
+            // برفضِ أهليّةٍ، فيُقرأ حكماً على نوع الحساب وهو ليس كذلك.
+            'is_kyc_verified' => 1,
         ]);
 
         $this->walletFor($u);
