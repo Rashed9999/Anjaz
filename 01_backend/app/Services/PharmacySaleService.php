@@ -78,9 +78,13 @@ class PharmacySaleService
                 throw new RuntimeException('العميل غير موجود');
             }
         }
-        if (($data['payment_method'] ?? null) === 'credit'
-            && (!$customer || trim((string) $customer->phone) === '')) {
-            throw new InvalidArgumentException('بيع الأجل يحتاج اختيار العميل ورقم جواله');
+        // يطابق عقدَ القطاعات الأخرى: البيع الآجل يربط برقم العميل ولو لم
+        // يُنشأ له ملفّ علاجي في الصيدلية بعد. اختيار مريض موجود يغلب
+        // المدخل اليدوي كي لا يستطيع الكاشير ربط فاتورة مريض برقم آخر.
+        $creditCustomerPhone = trim((string) ($customer?->phone ?? $data['customer_phone'] ?? ''));
+        $creditCustomerName = trim((string) ($customer?->full_name ?? $data['customer_name'] ?? 'عميل الصيدلية'));
+        if (($data['payment_method'] ?? null) === 'credit' && $creditCustomerPhone === '') {
+            throw new InvalidArgumentException('رقم العميل مطلوب للبيع الآجل');
         }
 
         // اجمع المنتجات + تحقّق من الكمّيات والوصفة والحساسيات
@@ -156,6 +160,7 @@ class PharmacySaleService
 
         return DB::transaction(function () use (
             $merchant, $pharmacy, $posUserId, $createdByUserId, $resolvedItems, $data, $customer, $allergyWarnings,
+            $creditCustomerPhone, $creditCustomerName,
         ) {
             // احسب الإجمالي
             $subtotal = '0';
@@ -208,8 +213,8 @@ class PharmacySaleService
                 $credit = app(CustomerCreditService::class);
                 $account = $credit->findOrCreateAccount(
                     $merchant->id,
-                    (string) $customer->phone,
-                    (string) $customer->full_name,
+                    $creditCustomerPhone,
+                    $creditCustomerName,
                 );
                 $credit->recordSale(
                     account: $account,

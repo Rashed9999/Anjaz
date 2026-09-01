@@ -28,6 +28,8 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
   late final PharmacyController c;
   final _searchCtrl = TextEditingController();
   final _customerPhoneCtrl = TextEditingController();
+  final _creditPhoneCtrl = TextEditingController();
+  final _creditNameCtrl = TextEditingController();
   final _prescriptionCtrl = TextEditingController();
   final _doctorCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
@@ -46,6 +48,8 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
   void dispose() {
     _searchCtrl.dispose();
     _customerPhoneCtrl.dispose();
+    _creditPhoneCtrl.dispose();
+    _creditNameCtrl.dispose();
     _prescriptionCtrl.dispose();
     _doctorCtrl.dispose();
     _discountCtrl.dispose();
@@ -72,6 +76,18 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
   }
 
   Future<void> _submitSale() async {
+    final selectedCustomer = c.selectedCustomer.value;
+    final creditPhone = selectedCustomer?['phone']?.toString().trim().isNotEmpty == true
+        ? selectedCustomer!['phone'].toString().trim()
+        : _creditPhoneCtrl.text.trim();
+    final creditName = selectedCustomer?['full_name']?.toString().trim().isNotEmpty == true
+        ? selectedCustomer!['full_name'].toString().trim()
+        : _creditNameCtrl.text.trim();
+
+    if (_paymentMethod == 'credit' && creditPhone.isEmpty) {
+      return _showSnack('أدخل رقم العميل للبيع الآجل', AmialColors.red);
+    }
+
     // فحص الوصفة
     if (c.cartRequiresPrescription && _prescriptionCtrl.text.trim().isEmpty) {
       return _showSnack('السلّة تحتوي منتجات تستلزم وصفة طبية', AmialColors.red);
@@ -113,6 +129,8 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
 
     final ok = await c.recordCurrentSale(
       paymentMethod: _paymentMethod,
+      customerPhone: _paymentMethod == 'credit' ? creditPhone : null,
+      customerName: _paymentMethod == 'credit' ? creditName : null,
       prescriptionNumber: _prescriptionCtrl.text.trim(),
       prescribingDoctor: _doctorCtrl.text.trim(),
       discountAmount: _discountCtrl.text.trim(),
@@ -530,6 +548,42 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
           const SizedBox(width: 4),
           Expanded(child: _payTile('credit', Icons.event, 'آجل')),
         ]),
+        if (_paymentMethod == 'credit') ...[
+          const SizedBox(height: 10),
+          if (c.selectedCustomer.value != null)
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AmialColors.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text('الفاتورة الآجلة مرتبطة بـ ${c.selectedCustomer.value!['full_name']} — ${c.selectedCustomer.value!['phone']}',
+                  textAlign: TextAlign.right),
+            )
+          else ...[
+            TextField(
+              controller: _creditPhoneCtrl,
+              keyboardType: TextInputType.phone,
+              textAlign: TextAlign.right,
+              decoration: InputDecoration(
+                labelText: 'رقم العميل *',
+                helperText: 'تظهر الفاتورة في «فواتيري الآجلة» لهذا الرقم',
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _creditNameCtrl,
+              textAlign: TextAlign.right,
+              decoration: InputDecoration(
+                labelText: 'اسم العميل (اختياري)',
+                isDense: true,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ],
+        ],
         const SizedBox(height: 8),
         Obx(() => FilledButton.icon(
           onPressed: c.isSubmitting.value ? null : _submitSale,

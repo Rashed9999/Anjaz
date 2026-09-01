@@ -435,6 +435,10 @@ class PharmacyController extends Controller
             'items.*.product_id' => 'required|integer',
             'items.*.quantity' => 'required|numeric|min:0.001',
             'customer_id' => 'sometimes|nullable|integer',
+            // البيع الآجل لا يتطلب أن يكون المريض مسجلاً مسبقاً في ملف
+            // الصيدلية، لكنه لا يتم بلا هوية العميل المالية الموحدة.
+            'customer_phone' => 'sometimes|nullable|string|max:32',
+            'customer_name' => 'sometimes|nullable|string|max:120',
             'payment_method' => 'required|in:cash,amial_pay,credit',
             'paid_transaction_id' => 'sometimes|nullable|string|max:64',
             'due_date' => 'sometimes|nullable|date',

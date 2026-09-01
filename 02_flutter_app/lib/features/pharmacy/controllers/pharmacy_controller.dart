@@ -191,6 +191,8 @@ class PharmacyController extends GetxController implements GetxService {
   /// تسجيل البيع من السلّة الحالية.
   Future<bool> recordCurrentSale({
     required String paymentMethod,
+    String? customerPhone,
+    String? customerName,
     String? paidTransactionId,
     String? prescriptionNumber,
     String? prescribingDoctor,
@@ -212,6 +214,10 @@ class PharmacyController extends GetxController implements GetxService {
       'items': items,
       'payment_method': paymentMethod,
       if (selectedCustomer.value != null) 'customer_id': selectedCustomer.value!['id'],
+      if (customerPhone != null && customerPhone.trim().isNotEmpty)
+        'customer_phone': customerPhone.trim(),
+      if (customerName != null && customerName.trim().isNotEmpty)
+        'customer_name': customerName.trim(),
       if (paidTransactionId != null && paidTransactionId.isNotEmpty)
         'paid_transaction_id': paidTransactionId,
       if (prescriptionNumber != null && prescriptionNumber.isNotEmpty)

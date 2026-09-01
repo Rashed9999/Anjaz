@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
+use App\Models\CustomerCreditAccount;
+use App\Models\CustomerCreditMovement;
 use App\Models\Pharmacy;
 use App\Models\PharmacyBatch;
 use App\Models\PharmacyCustomer;
@@ -16,6 +18,7 @@ use App\Services\PharmacySaleService;
 use App\Services\PharmacyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Laravel\Passport\Passport;
 use Tests\TestCase;
 
 /**
@@ -245,6 +248,73 @@ class PharmacyTest extends TestCase
         $this->assertSame('5.0000', (string) $product->fresh()->current_stock,
             'فشل QR يجب ألا يخصم المخزون ولا ينشئ بيعاً');
         $this->assertSame(0, \App\Models\PharmacySale::count());
+    }
+
+    /** @test */
+    public function pharmacy_credit_sale_creates_a_unified_debt_visible_in_the_customers_deferred_invoices(): void
+    {
+        $customerUser = User::factory()->create([
+            'type' => 2, 'zone_code' => 'SOUTH', 'phone' => '+967771700088',
+        ]);
+        $customer = $this->svc->addCustomer($this->pharmacy, [
+            'full_name' => 'عميل الفاتورة الآجلة', 'phone' => '771700088',
+        ]);
+        $product = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'دواء آجل', 'sale_price' => '1200',
+        ]);
+        $this->svc->addBatch($product, [
+            'batch_number' => 'CREDIT-1', 'expiry_date' => now()->addYear()->toDateString(),
+            'quantity_received' => 5,
+        ]);
+
+        $sale = $this->saleSvc->recordSale(
+            $this->merchant, $this->pharmacy, null,
+            [['product_id' => $product->id, 'quantity' => 1]],
+            ['payment_method' => 'credit', 'customer_id' => $customer->id],
+        );
+
+        $account = CustomerCreditAccount::where('merchant_user_id', $this->merchant->id)->sole();
+        $this->assertSame($customerUser->id, (int) $account->customer_user_id);
+        $this->assertSame('1200.0000', (string) $account->current_balance);
+        $movement = CustomerCreditMovement::where('account_id', $account->id)->sole();
+        $this->assertSame('sale', $movement->type);
+        $this->assertSame('pharmacy_sale', $movement->reference_type);
+        $this->assertSame($sale->sale_ulid, $movement->reference_id);
+
+        Passport::actingAs($customerUser->fresh(), [], 'api');
+        $this->getJson('/api/v1/amial/customer/credits')
+            ->assertOk()
+            ->assertJsonPath('meta.accounts_count', 1)
+            ->assertJsonPath('meta.accounts.0.current_balance', '1200.0000');
+        $this->getJson("/api/v1/amial/customer/credits/{$account->id}/statement")
+            ->assertOk()
+            ->assertJsonPath('meta.movements.0.reference_number', '#' . substr($sale->sale_ulid, -8));
+    }
+
+    /** @test */
+    public function pharmacy_credit_sale_without_a_customer_identity_is_rejected_before_sale_or_debt_creation(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'دواء بلا عميل', 'sale_price' => '100',
+        ]);
+        $this->svc->addBatch($product, [
+            'batch_number' => 'CREDIT-NO-CUSTOMER', 'expiry_date' => now()->addYear()->toDateString(),
+            'quantity_received' => 2,
+        ]);
+
+        try {
+            $this->saleSvc->recordSale(
+                $this->merchant, $this->pharmacy, null,
+                [['product_id' => $product->id, 'quantity' => 1]],
+                ['payment_method' => 'credit'],
+            );
+            $this->fail('لا يجوز تسجيل بيع آجل بلا هوية العميل');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertSame('رقم العميل مطلوب للبيع الآجل', $e->getMessage());
+        }
+
+        $this->assertSame(0, \App\Models\PharmacySale::count());
+        $this->assertSame(0, CustomerCreditAccount::count());
     }
 
     /** @test */
