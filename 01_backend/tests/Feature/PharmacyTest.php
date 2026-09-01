@@ -221,6 +221,33 @@ class PharmacyTest extends TestCase
     }
 
     /** @test */
+    public function pharmacy_sale_rejects_an_unpaid_or_forged_qr_reference_before_stock_is_deducted(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'Panadol غير مدفوع', 'sale_price' => '500',
+        ]);
+        $this->svc->addBatch($product, [
+            'batch_number' => 'QR-UNPAID-1', 'expiry_date' => now()->addYear()->toDateString(),
+            'quantity_received' => 5,
+        ]);
+
+        try {
+            $this->saleSvc->recordSale(
+                $this->merchant, $this->pharmacy, null,
+                [['product_id' => $product->id, 'quantity' => 1]],
+                ['payment_method' => 'amial_pay', 'paid_transaction_id' => 'FORGED-PHARMACY-QR'],
+            );
+            $this->fail('لا يجوز إنشاء بيع أميال باي بمرجع QR غير مدفوع');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('مرجع أميال باي غير صالح', $e->getMessage());
+        }
+
+        $this->assertSame('5.0000', (string) $product->fresh()->current_stock,
+            'فشل QR يجب ألا يخصم المخزون ولا ينشئ بيعاً');
+        $this->assertSame(0, \App\Models\PharmacySale::count());
+    }
+
+    /** @test */
     public function sale_rejects_insufficient_stock(): void
     {
         $product = $this->svc->addProduct($this->pharmacy, [
