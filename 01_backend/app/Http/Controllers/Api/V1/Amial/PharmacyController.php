@@ -623,29 +623,45 @@ class PharmacyController extends Controller
         $authUser = $request->user();
         $pos = PosUser::where('user_id', $authUser->id)->where('is_active', true)->first();
 
+        $merchant = null;
+        $posUserId = null;
+
         if ($pos) {
             $merchant = User::find($pos->merchant_user_id);
             if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
-            return [$merchant, $pos->id];
+            $posUserId = $pos->id;
         }
 
         // الموظفُ حسابٌ بصلاحيّات، وليس بالضرورة حسابَ POS. فربط الدور
         // في merchant_user_roles هو مصدرُ انتمائه إلى المنشأة، ويجب أن
         // يمرّ في المسار نفسه بعد أن يتحقق guard من الفعل المسموح.
-        $merchantId = DB::table('merchant_user_roles')
-            ->where('user_id', $authUser->id)
-            ->where('is_active', true)
-            ->value('merchant_user_id');
-        if ($merchantId) {
-            $merchant = User::find($merchantId);
-            if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
-            return [$merchant, null];
+        if ($merchant === null) {
+            $merchantId = DB::table('merchant_user_roles')
+                ->where('user_id', $authUser->id)
+                ->where('is_active', true)
+                ->value('merchant_user_id');
+            if ($merchantId) {
+                $merchant = User::find($merchantId);
+                if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
+            }
         }
 
-        if (!MerchantProfile::where('user_id', $authUser->id)->exists()) {
+        if ($merchant === null) {
+            $merchant = $authUser;
+        }
+
+        // حارس القطاع على نقطة الدخول نفسها: لا يكفي إخفاء شاشة الصيدلية.
+        // فحساب تاجر التجزئة أو جهاز POS التابع له يستطيع استدعاء API مباشرة
+        // إن لم يُتحقّق من هوية المنشأة المالكة قبل إنشاء أي بيانات صيدلية.
+        $profile = MerchantProfile::where('user_id', $merchant->id)->first();
+        if (!$profile) {
             return $this->error('NOT_A_MERCHANT', 'متاح للتجار وموظفي الصيدلية فقط', 403);
         }
-        return [$authUser, null];
+        if ($profile->business_type !== \App\Support\Access\AccessConstants::BIZ_PHARMACY) {
+            return $this->error('PHARMACY_ONLY', 'هذه العملية متاحة لمنشآت الصيدلية فقط', 403);
+        }
+
+        return [$merchant, $posUserId];
     }
 
     private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse
