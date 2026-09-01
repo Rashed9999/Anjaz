@@ -122,7 +122,15 @@ jobs:
 
       - name: تشغيل كل الاختبارات (747)
         working-directory: 01_backend
-        run: php artisan test
+        run: |
+          # لا نُغرق سجل Actions بالمخرجات المكررة؛ عند الفشل نعرض خاتمة
+          # التقرير التي تحتوي أسماء الاختبارات والاستثناءات الفعلية.
+          php artisan test > phpunit_report.txt 2>&1 || {
+            echo '::error::فشلت اختبارات PHPUnit — آخر 160 سطراً:'
+            tail -n 160 phpunit_report.txt
+            exit 1
+          }
+          tail -n 20 phpunit_report.txt
 
   # ──────────────────────────────────────────────────────────
   # 3) تحليل واختبار تطبيق Flutter
