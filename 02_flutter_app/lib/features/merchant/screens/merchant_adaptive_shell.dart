@@ -300,16 +300,10 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
       case 'pharmacy':
         return [
           _MerchantDrawerSection(
-            title: 'بيع الصيدلية والوصفات',
-            subtitle: 'بيع الأدوية والوصفات والدفعات والصلاحية لخدمات الصيدلية فقط.',
+            title: 'تشغيل الصيدلية',
+            subtitle: 'البيع والوصفات والأدوية والدفعات وتواريخ الصلاحية والتنبيهات من نظام الصيدلية.',
             groups: ['الصيدلية'],
             icon: Icons.local_pharmacy_outlined,
-          ),
-          _MerchantDrawerSection(
-            title: 'الأدوية والمخزون',
-            subtitle: 'الأصناف والباركود والمخزون والموردون، مع بقاء ضوابط الصيدلية في قسمها.',
-            groups: ['الأصناف', 'المخزون'],
-            icon: Icons.medication_outlined,
           ),
           people,
           reports,

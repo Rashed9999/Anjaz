@@ -41,8 +41,16 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
             .toList());
       } else if (r.statusCode == 402) {
         _error = 'إدارة الموظفين متاحة في باقة الأعمال فأعلى';
+      } else if (r.statusCode == 401) {
+        _error = 'انتهت الجلسة — سجّل الدخول من جديد';
+      } else if (r.statusCode == 403) {
+        _error = r.body is Map && r.body['message'] != null
+            ? r.body['message'].toString()
+            : 'لا تملك الصلاحية اللازمة لإدارة الموظفين';
       } else {
-        _error = 'تعذّر تحميل الموظفين';
+        _error = r.body is Map && r.body['message'] != null
+            ? r.body['message'].toString()
+            : 'تعذّر تحميل الموظفين';
       }
     } catch (_) {
       _error = 'خطأ في الشبكة';
@@ -192,6 +200,12 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center,
                         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('إعادة المحاولة'),
+                    ),
                   ]),
                 ))
               : RefreshIndicator(

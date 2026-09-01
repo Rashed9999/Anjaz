@@ -119,12 +119,17 @@ class AuthRepo extends GetxService{
    /// **breaking change للـ controllers الموجودة:**
    /// `isLoggedIn()` و `getUserToken()` كانتا sync — الآن async.
    /// لو هناك caller يستخدمها sync، اقرأ الـ token مرة في splash وخزنه في memory.
-   Future<bool> saveUserToken(String token) async {
-     apiClient.token = token;
-     apiClient.updateHeader(token);
-     await SecureStorageHelper.instance.setToken(token);
-     return true;
-   }
+  Future<bool> saveUserToken(String token) async {
+    // يبقى الرمز في الذاكرة كذلك. من دونه تعمل الترويسة في لحظة الدخول
+    // فقط، لكن SessionGuard يقرأ cache فارغاً بعد ذلك ويعامل الجلسة كأنها
+    // غير موجودة. والأخطر عند إعادة تشغيل التطبيق: لا تُعاد الترويسة من
+    // secure storage فترد خدمات التاجر 401 مع أن المستخدم دخل فعلاً.
+    _cachedToken = token;
+    apiClient.token = token;
+    apiClient.updateHeader(token);
+    await SecureStorageHelper.instance.setToken(token);
+    return true;
+  }
 
    /// Sync wrapper للـ token (للـ controllers التي تتوقع sync).
    /// **مهم:** يجب استدعاء [primeTokenCache] في splash قبل استخدامه.
@@ -155,11 +160,14 @@ class AuthRepo extends GetxService{
      return _cachedToken != null && _cachedToken!.isNotEmpty;
    }
 
-   void removeUserToken() async {
-     _cachedToken = null;
-     apiClient.token = null;
-     await SecureStorageHelper.instance.removeToken();
-   }
+  void removeUserToken() async {
+    _cachedToken = null;
+    apiClient.token = null;
+    // لا نُبقي Authorization قديمة بعد الخروج؛ الرمز المحذوف لا يجوز أن
+    // يرافق أي طلب جديد في الذاكرة.
+    apiClient.updateHeader('');
+    await SecureStorageHelper.instance.removeToken();
+  }
 
    void removeCustomerToken() async {
      removeUserToken();

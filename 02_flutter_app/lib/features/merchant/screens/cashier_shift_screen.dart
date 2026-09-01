@@ -38,6 +38,8 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
       if (r.statusCode == 200 && r.body is Map) {
         _shift = ((r.body['meta'] ?? {})['shift']) as Map<String, dynamic>?;
         if (_shift != null) await _loadX();
+      } else {
+        _error = _messageOf(r) ?? 'تعذّر تحميل حالة الوردية';
       }
     } catch (_) { _error = 'خطأ في الشبكة'; }
     finally { if (mounted) setState(() => _loading = false); }
@@ -48,6 +50,17 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
     if (r.statusCode == 200 && r.body is Map) {
       _x = ((r.body['meta'] ?? {})['report']) as Map<String, dynamic>?;
     }
+  }
+
+  String? _messageOf(dynamic response) {
+    final body = response.body;
+    if (response.statusCode == 401) return 'انتهت الجلسة — سجّل الدخول من جديد';
+    if (response.statusCode == 403) {
+      return body is Map && body['message'] != null
+          ? body['message'].toString()
+          : 'لا تملك الصلاحية اللازمة للورديات';
+    }
+    return body is Map ? body['message']?.toString() : null;
   }
 
   void _snack(String m, {bool ok = false}) => ScaffoldMessenger.of(context).showSnackBar(
@@ -139,6 +152,8 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
                     const Icon(Icons.workspace_premium, size: 56, color: AmialColors.yellowDark),
                     const SizedBox(height: 12),
                     Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: const Text('إعادة المحاولة')),
                   ])))
               : RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
                   if (_shift == null) _noShift() else _openShift(),

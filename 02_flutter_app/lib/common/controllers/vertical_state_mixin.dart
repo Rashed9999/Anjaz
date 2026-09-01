@@ -25,8 +25,14 @@ mixin VerticalStateMixin on GetxController {
   bool okOf(Response r) => r.statusCode == 200 && (r.body?['success'] == true);
 
   String msgOf(Response r) {
-    if (r.statusCode == 401 || r.statusCode == 403) {
-      return 'انتهت الجلسة أو لا تملك الصلاحية';
+    if (r.statusCode == 401) {
+      return 'انتهت الجلسة — سجّل الدخول من جديد';
+    }
+    if (r.statusCode == 403) {
+      final m = r.body is Map ? r.body['message'] : null;
+      return (m is String && m.trim().isNotEmpty)
+          ? m
+          : 'لا تملك الصلاحية اللازمة لهذه الخدمة';
     }
     if (r.statusCode == null || r.statusCode == 0) {
       return 'لا اتصال بالخادم — تحقّق من الشبكة';
