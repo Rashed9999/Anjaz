@@ -9,9 +9,8 @@ import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart';
 import 'package:amial_pay/features/entitlements/screens/my_capabilities_screen.dart';
 import 'package:amial_pay/features/retail/screens/retail_ops_center_screen.dart';
-import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_excel_export_screen.dart';
 import 'package:amial_pay/features/merchant/screens/receipt_settings_screen.dart';
@@ -86,7 +85,7 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
             label: 'تقرير اليوم',
             subtitle: 'كم بِعت اليوم؟',
             color: AmialColors.primary,
-            onTap: () => Get.to(() => const CashierReportScreen()),
+            onTap: () => Get.to(() => const FinancialTruthReportScreen(dailyOnly: true)),
           )),
         ]),
       ),
@@ -134,27 +133,6 @@ class MerchantRetailHomeScreen extends StatelessWidget {
             subtitle: 'بيع جديد + سلّة',
             color: AmialColors.primary,
             onTap: () => Get.to(() => const CashierPosScreen()),
-          ),
-          const SizedBox(height: 14),
-
-          // ══════════════════════════════════════════════════════════
-          // AMIAL-MERCHANT-WALLET-001 — **بابُ المال من الرئيسيّة.**
-          //
-          // «المفترض لديه المحفظة يرى المال الموجود فيه من عمليّات
-          // البيع، يستطيع سحبه تحويله» — ولم يكن في رئيسيّة التجزئة
-          // بابٌ إلى مالٍ إطلاقاً: لا رصيد، ولا سحب، ولا حركات.
-          //
-          // ولمالك المتجر وحدَه — **والملكيّةُ ليست ميزةً تُورَث**.
-          // ══════════════════════════════════════════════════════════
-          AccessGate(
-            ownerOnly: true,
-            child: _BigActionButton(
-              icon: Icons.account_balance_wallet_rounded,
-              label: 'محفظة المتجر',
-              subtitle: 'رصيدُك من البيع — سحبٌ وتحويلٌ وحركات',
-              color: AmialColors.primaryDark,
-              onTap: () => Get.to(() => const MerchantWalletScreen()),
-            ),
           ),
           const SizedBox(height: 14),
 
@@ -218,7 +196,7 @@ class MerchantRetailHomeScreen extends StatelessWidget {
               AccessGate(feature: 'daily_reports', child: _MiniAction(
                 icon: Icons.bar_chart, label: 'التقارير',
                 color: AmialColors.primary,
-                onTap: () => Get.to(() => const CashierReportScreen()),
+                onTap: () => Get.to(() => const FinancialTruthReportScreen(dailyOnly: true)),
               )),
               AccessGate(feature: 'employees', child: _MiniAction(
                 icon: Icons.badge, label: 'الموظفون',

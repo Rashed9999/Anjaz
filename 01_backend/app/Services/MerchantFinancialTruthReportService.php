@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FuelSale;
+use App\Models\CustomerCreditAccount;
 use App\Models\MerchantProfile;
 use App\Models\MerchantSale;
 use App\Models\Ledger\LedgerEntryLine;
@@ -36,6 +37,18 @@ class MerchantFinancialTruthReportService
         $gross = '0'; $count = 0;
         foreach ($sales as $sale) {
             $amount = MoneyService::normalize((string) ($sale->amount ?? '0'));
+            // البيع المختلط ليس «طريقة رابعة»: جزؤه النقدي في الدرج وجزؤه
+            // الإلكتروني في محفظة أميال. وضع الإجمالي في other يُخفي المال
+            // عن المطابقة ويجعل تقرير اليوم صحيح المجموع وخاطئ المعنى.
+            if (($sale->method ?? null) === 'mixed') {
+                $cash = MoneyService::normalize((string) ($sale->cash_amount ?? '0'));
+                $walletPart = MoneyService::normalize((string) ($sale->wallet_amount ?? '0'));
+                $methods['cash'] = MoneyService::add($methods['cash'], $cash);
+                $methods['amial_pay'] = MoneyService::add($methods['amial_pay'], $walletPart);
+                $gross = MoneyService::add($gross, $amount);
+                $count++;
+                continue;
+            }
             $method = $this->normalizeMethod((string) ($sale->method ?? ''));
             $methods[$method] = MoneyService::add($methods[$method], $amount);
             $gross = MoneyService::add($gross, $amount);
@@ -84,7 +97,7 @@ class MerchantFinancialTruthReportService
         return [MerchantSale::where('merchant_user_id', $merchant->id)
             ->whereIn('status', ['completed', 'credit_unpaid', 'credit_paid'])
             ->whereBetween('created_at', [$start, $end])
-            ->get(['total_amount as amount', 'payment_method as method']), 'merchant_sales'];
+            ->get(['total_amount as amount', 'payment_method as method', 'cash_amount', 'wallet_amount']), 'merchant_sales'];
     }
 
     private function wholesaleCollections(User $merchant, Carbon $start, Carbon $end): array
@@ -106,13 +119,34 @@ class MerchantFinancialTruthReportService
 
     private function receivables(User $merchant, string $vertical): array
     {
-        if ($vertical !== 'wholesale') return ['known' => false, 'amount' => null, 'source' => null];
-        $businessId = WholesaleBusiness::where('merchant_user_id', $merchant->id)->value('id');
+        // كل القطاعات الجديدة تنشر الآجل إلى دفتر واحد. لا تُجمع فواتير
+        // الجملة فوقه، لأن الفاتورة نفسها موجودة كحركة في الحساب وسيكون
+        // ذلك عدّاً مزدوجاً. يُفصل فقط إرث الجملة بلا رقم هاتف، إذ لا يمكن
+        // نسبته إلى عميل في التطبيق بعد.
+        $unified = (string) CustomerCreditAccount::where('merchant_user_id', $merchant->id)
+            ->where('is_active', true)
+            ->where('current_balance', '>', 0)
+            ->sum('current_balance');
+
+        $legacyWholesale = '0';
+        if ($vertical === 'wholesale') {
+            $businessId = WholesaleBusiness::where('merchant_user_id', $merchant->id)->value('id');
+            if ($businessId) {
+                $legacyWholesale = (string) WholesaleInvoice::where('business_id', $businessId)
+                    ->whereNotIn('status', ['voided', 'paid'])
+                    ->whereHas('customer', fn ($q) => $q->whereNull('phone')->orWhere('phone', ''))
+                    ->sum('balance_due');
+            }
+        }
+
         return [
             'known' => true,
-            'amount' => $businessId ? (string) WholesaleInvoice::where('business_id', $businessId)
-                ->whereNotIn('status', ['voided', 'paid'])->sum('balance_due') : '0',
-            'source' => 'wholesale_invoices.balance_due',
+            'amount' => MoneyService::add($unified ?: '0', $legacyWholesale ?: '0'),
+            'source' => 'customer_credit_accounts.current_balance',
+            'breakdown' => [
+                'unified_customer_credits' => $unified ?: '0',
+                'legacy_unlinked_wholesale' => $legacyWholesale ?: '0',
+            ],
         ];
     }
 
@@ -134,7 +168,7 @@ class MerchantFinancialTruthReportService
     private function normalizeMethod(string $method): string
     {
         return match ($method) {
-            'cash' => 'cash', 'amial_pay' => 'amial_pay', 'credit', 'company_card', 'corporate' => 'credit',
+            'cash' => 'cash', 'amial_pay', 'customer_wallet' => 'amial_pay', 'credit', 'company_card', 'corporate' => 'credit',
             default => 'other',
         };
     }

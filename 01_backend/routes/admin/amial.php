@@ -852,35 +852,6 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     Route::post('/users/{id}/kyc', [$hc, 'kycStatus'])
         ->where('id', '[0-9]+')
         ->middleware('platform:platform.approvals.decide')->name('users.kyc');
-
-    // ══════════════════════════════════════════════════════════════
-    // AMIAL-ADMIN-EDIT-001 — **بابا الرفع والتعديل، وكانا مفقودين.**
-    //
-    // الرفعُ كان للعميل وحدَه من تطبيقه، فحسابٌ سُجّل بلا وثائق يبقى
-    // مقفلاً أبداً: لا وثائق ⇒ لا اعتماد ⇒ `zone_code = UNKNOWN` ⇒
-    // «حسابُ المستلم لم يُوثَّق بعد».
-    //
-    // **والصلاحيّتان مختلفتان عمداً:**
-    //   · الرفعُ يُجهّز الملفّ — `customers.kyc.request`
-    //   · والتعديلُ يمسّ بياناتِ حسابٍ قائم — `customers.lifecycle.manage`
-    //
-    // فمن يُجهّز ليس بالضرورة من يُعدّل، ومن يُعدّل ليس من يعتمد
-    // (`approvals.decide` أعلاه). ثلاثُ صلاحيّاتٍ لثلاثة أفعال.
-    // ══════════════════════════════════════════════════════════════
-    // **وقبل الفعلِ تُقال الحالة.** «هل إذا رفعتُ سوف يستقبل؟» سؤالٌ
-    // يُجاب عليه بالقياس لا بالتجربة: هذه تقرأ الاكتمالَ من المصدر
-    // نفسِه الذي يسأله قرارُ الاعتماد، وتقول ما ينقص بالاسم.
-    Route::get('/users/{id}/readiness.json', [$hc, 'accountReadinessJson'])
-        ->where('id', '[0-9]+')
-        ->middleware('platform:platform.customers.view')->name('users.readiness');
-
-    Route::post('/users/{id}/documents', [$hc, 'uploadDocument'])
-        ->where('id', '[0-9]+')
-        ->middleware('platform:platform.customers.kyc.request')->name('users.documents.upload');
-
-    Route::post('/users/{id}/profile', [$hc, 'updateProfile'])
-        ->where('id', '[0-9]+')
-        ->middleware('platform:platform.customers.lifecycle.manage')->name('users.profile.update');
     // ══════════════════════════════════════════════════════════════
     // AMIAL-ADMIN-DOORS-002 — **مساراتُ مالٍ كانت بلا صلاحيّةٍ إطلاقاً.**
     //

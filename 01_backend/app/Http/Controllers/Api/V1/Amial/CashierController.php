@@ -10,6 +10,9 @@ use App\Models\PosUser;
 use App\Models\User;
 use App\Services\CashierService;
 use App\Services\CashierSaleInvoicePdfService;
+use App\Services\Merchant\MerchantPermissionService;
+use App\Support\Merchant\MerchantPermissions as P;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -26,21 +29,9 @@ use Illuminate\Support\Facades\Validator;
  */
 class CashierController extends AmialApiController // AMIAL-FIX-007
 {
-    // ══════════════════════════════════════════════════════════════════
-    // AMIAL-PROD-DEFECTS-001 — **السمةُ كانت مستورَدةً ولا مستعمَلة.**
-    //
-    // `use App\Http\Controllers\Concerns\DeniesByPlan;` في رأس الملفّ
-    // **استيرادُ اسمٍ لا ضمُّ سمة**. والصنفُ يُنادي `$this->denyUnless()`
-    // في مسار البيع، فيُلقي `BadMethodCallException` — وهو ما بلّغ عنه
-    // مركزُ الأعطال على `/amial/merchant/cashier/sales`.
-    //
-    // **ولا يُمسَك بالقراءة السريعة**: السطرُ موجودٌ في أعلى الملفّ
-    // ويبدو صحيحاً، والفرقُ حرفٌ واحدٌ وموضعٌ واحد.
-    // ══════════════════════════════════════════════════════════════════
-    use DeniesByPlan;
-
     public function __construct(
         private readonly CashierService $cashier,
+        private readonly MerchantPermissionService $perm,
     ) {}
 
     public function products(Request $request): JsonResponse
@@ -288,23 +279,7 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         if (!$sale) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
 
         try {
-            // ══════════════════════════════════════════════════════
-            // AMIAL-PDF-CACHE-001 — **التصييرُ داخل الطلب يُسقط الاتّصال.**
-            //
-            // كلُّ تصييرٍ داخل الطلب يعرّض الاتّصالَ للقطع على شبكة جوّال
-            // (‏`Connection closed while receiving data`) — **وهو عطلٌ وقع
-            // فعلاً**، ولذلك بُني `PdfSurfaceGuardTest`. وقد أمسك هذه
-            // النقطةَ في أوّل تشغيلٍ بعد دمج فرع كودكس.
-            //
-            // **والفاتورةُ مستندٌ ثابتٌ لا حيّ**: بيعٌ تمّ لا يتغيّر.
-            // فمفتاحُه معرِّفُه ووقتُ آخر تعديلٍ عليه — فمرتجَعٌ يُسجَّل
-            // يُحرّك `updated_at` فيُصيَّر من جديد، **ولا تُخدَم نسخةٌ
-            // قديمةٌ بأرقامٍ لم تعد صحيحة**.
-            // ══════════════════════════════════════════════════════
-            $pdf = app(\App\Services\PdfCacheService::class)->remember(
-                "cashier_invoice_{$sale->id}_{$sale->updated_at?->timestamp}",
-                fn () => app(CashierSaleInvoicePdfService::class)->generate($sale),
-            );
+            $pdf = app(CashierSaleInvoicePdfService::class)->generate($sale);
             return response($pdf, 200, [
                 'Content-Type' => 'application/pdf',
                 'Content-Length' => (string) strlen($pdf),
@@ -325,6 +300,11 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
     public function settleCredit(Request $request, int $id): JsonResponse
     {
+        try {
+            $this->perm->assert($request->user(), P::CASH_MOVE);
+        } catch (DomainException $e) {
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
+        }
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;

@@ -8,7 +8,6 @@ use App\Models\FuelPump;
 use App\Models\FuelSale;
 use App\Models\FuelShift;
 use App\Models\FuelStation;
-use App\Models\PaymentRequest;
 use App\Models\User;
 use App\Traits\TransactionTrait;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +31,7 @@ class FuelStationService
 
     public function __construct(
         private readonly NotificationService $notif,
+        private readonly MerchantPaymentReferenceService $paymentReference,
     ) {}
 
     // ============ المحطّة ============
@@ -325,7 +325,7 @@ class FuelStationService
         ) {
             // ====== التعامل مع طرق الدفع ======
             $companyAccount = null;
-            $paidTxId = null;
+            $paidTxId = trim((string) ($data['paid_transaction_id'] ?? '')) ?: null;
 
             if ($paymentMethod === 'company_card') {
                 $companyAccount = FuelCompanyAccount::where('id', $data['company_account_id'] ?? 0)
@@ -387,12 +387,11 @@ class FuelStationService
 
             if ($paymentMethod === 'amial_pay') {
                 if (!empty($data['customer_phone'])) throw new InvalidArgumentException('دفع الوقود يتم عبر QR يؤكده العميل بنفسه');
-                $paidTxId = trim((string) ($data['paid_transaction_id'] ?? ''));
-                if ($paidTxId === '') throw new InvalidArgumentException('أنشئ رمز QR وانتظر تأكيد العميل للدفع');
-                $request = PaymentRequest::where('paid_transaction_id', $paidTxId)->where('requester_user_id', $merchant->id)->where('status', 'paid')->lockForUpdate()->first();
-                if (!$request) throw new RuntimeException('مرجع أميال باي غير صالح لمحفظة المحطة أو لم يكتمل الدفع');
-                if (MoneyService::compare((string) $request->amount, $totalAmount) !== 0) throw new RuntimeException('مبلغ رمز الدفع لا يطابق قيمة تعبئة الوقود');
-                if (FuelSale::where('paid_transaction_id', $paidTxId)->exists()) throw new RuntimeException('تم استخدام رمز الدفع في عملية وقود سابقة');
+                $this->paymentReference->assertPaidForMerchant(
+                    $merchant,
+                    $paidTxId,
+                    $totalAmount,
+                );
             }
 
             // ====== أنشئ سجل البيع ======

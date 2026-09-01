@@ -60,6 +60,7 @@ class AmialMerchantTransaction {
   final String? posNumber;
   final String status;
   final DateTime createdAt;
+  final bool incoming;
 
   AmialMerchantTransaction({
     required this.id,
@@ -73,6 +74,7 @@ class AmialMerchantTransaction {
     this.posNumber,
     required this.status,
     required this.createdAt,
+    required this.incoming,
   });
 
   factory AmialMerchantTransaction.fromJson(Map<String, dynamic> j) {
@@ -82,14 +84,17 @@ class AmialMerchantTransaction {
       type: (j['type'] ?? j['transaction_type'] ?? 'unknown').toString(),
       amount: (j['amount'] ?? '0').toString(),
       fee: j['fee']?.toString(),
-      customerName: j['customer_name']?.toString(),
-      customerPhoneMasked: (j['customer_phone_masked'] ?? j['sender_phone'])?.toString(),
+      customerName: (j['customer_name'] ?? (j['sender'] is Map ? j['sender']['name'] : null))?.toString(),
+      customerPhoneMasked: (j['customer_phone_masked'] ?? j['sender_phone'] ?? (j['sender'] is Map ? j['sender']['phone'] : null))?.toString(),
       posUserName: j['pos_user_name']?.toString(),
       posNumber: j['pos_number']?.toString(),
-      status: (j['status'] ?? 'unknown').toString(),
+      // سجل العميل التاريخي لا يحمل status لأن الصف لا يُكتب إلا بعد نجاح
+      // العملية؛ لا نحوله إلى «فاشلة» لمجرد اختلاف عقد الاستجابة.
+      status: (j['status'] ?? 'success').toString(),
       createdAt: j['created_at'] != null
           ? (DateTime.tryParse(j['created_at'].toString()) ?? DateTime.now())
           : DateTime.now(),
+      incoming: (double.tryParse('${j['credit'] ?? 0}') ?? 0) > 0,
     );
   }
 
@@ -98,6 +103,7 @@ class AmialMerchantTransaction {
       case 'pay_merchant':
       case 'pos_payment':
       case 'received_payment':
+      case 'received_money':
         return 'استلام دفعة';
       case 'qr_payment':
         return 'دفعة QR';
@@ -111,7 +117,7 @@ class AmialMerchantTransaction {
     }
   }
 
-  bool get isIncoming => !type.contains('refund');
+  bool get isIncoming => incoming;
 }
 
 class AmialMerchantDashboardStats {
@@ -119,22 +125,7 @@ class AmialMerchantDashboardStats {
   final String todayRefunds;
   final String todayNet;
   final int todayTransactionsCount;
-
-  /// ══════════════════════════════════════════════════════════════════
-  /// AMIAL-POS-SCOPE-001 — **`null` يعني «لا يُعرَض لك»، لا «صفر».**
-  ///
-  /// كان `String balance` بافتراضٍ `'0'`. والخادمُ صار يحذف الحقلَ عن
-  /// موظّف نقطة البيع — **فكان الافتراضُ يكتب «الرصيد المتاح: 0 ر.ي»
-  /// على متجرٍ فيه مئتا ألف**. وكذبةٌ بصفرٍ أسوأ من امتناع: الكاشيرُ
-  /// يقرؤها متجراً خاوياً، والمالكُ إن رآها ظنّ مالَه ذهب.
-  ///
-  /// (القاعدة السابعة: «غير معروف» ليس صفراً — يُقال الغيابُ صراحةً.)
-  /// ══════════════════════════════════════════════════════════════════
-  final String? balance;
-
-  /// `owner_only` حين يحجب الخادمُ الرصيد — يُقرأ ليُقال السببُ للمستعمل.
-  final String? balanceScope;
-
+  final String balance;
   final String pendingSettlement;
 
   AmialMerchantDashboardStats({
@@ -144,27 +135,20 @@ class AmialMerchantDashboardStats {
     required this.todayTransactionsCount,
     required this.balance,
     required this.pendingSettlement,
-    this.balanceScope,
   });
-
-  /// هل يُعرَض الرصيدُ لهذا الحساب؟
-  bool get hasBalance => balance != null;
 
   factory AmialMerchantDashboardStats.empty() => AmialMerchantDashboardStats(
         todaySales: '0', todayRefunds: '0', todayNet: '0',
-        todayTransactionsCount: 0, balance: null, pendingSettlement: '0',
+        todayTransactionsCount: 0, balance: '0', pendingSettlement: '0',
       );
 
   factory AmialMerchantDashboardStats.fromJson(Map<String, dynamic> j) {
-    final raw = j['current_balance'] ?? j['balance'];
-
     return AmialMerchantDashboardStats(
       todaySales: (j['today_sales'] ?? '0').toString(),
       todayRefunds: (j['today_refunds'] ?? '0').toString(),
       todayNet: (j['today_net'] ?? j['today_sales'] ?? '0').toString(),
       todayTransactionsCount: j['today_count'] ?? 0,
-      balance: raw?.toString(),
-      balanceScope: j['balance_scope']?.toString(),
+      balance: (j['current_balance'] ?? j['balance'] ?? '0').toString(),
       pendingSettlement: (j['pending_settlement'] ?? '0').toString(),
     );
   }

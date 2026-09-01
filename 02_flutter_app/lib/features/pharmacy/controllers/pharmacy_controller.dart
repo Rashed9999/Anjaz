@@ -263,6 +263,22 @@ class PharmacyController extends GetxController implements GetxService {
     } catch (_) {} finally { isLoading.value = false; }
   }
 
+  /// لا تعتمد بطاقة السجل على البيانات المختصرة؛ تفصيلها يُقرأ عند الضغط
+  /// ليبقى مرجع الفاتورة والوصفة والتشغيلة من الخادم.
+  Future<Map<String, dynamic>?> loadSaleDetail(String ulid) async {
+    try {
+      final r = await repo.showSale(ulid);
+      if (_ok(r)) {
+        final sale = r.body['meta']?['sale'];
+        return sale is Map ? Map<String, dynamic>.from(sale) : null;
+      }
+      lastError.value = _msg(r) ?? 'تعذّر تحميل تفاصيل العملية';
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    }
+    return null;
+  }
+
   // ============ Alerts ============
 
   Future<void> loadAlerts() async {

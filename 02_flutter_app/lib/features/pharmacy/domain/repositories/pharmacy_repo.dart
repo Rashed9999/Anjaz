@@ -46,6 +46,7 @@ class PharmacyRepo extends GetxService {
   // Sales
   Future<Response> recordSale(Map<String, dynamic> data) => apiClient.postData('$_base/sales', data);
   Future<Response> listSales() => apiClient.getData('$_base/sales');
+  Future<Response> showSale(String ulid) => apiClient.getData('$_base/sales/$ulid');
 
   // Alerts
   Future<Response> listAlerts() => apiClient.getData('$_base/alerts');

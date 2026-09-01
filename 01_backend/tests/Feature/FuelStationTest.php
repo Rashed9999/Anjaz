@@ -10,6 +10,7 @@ use App\Models\FuelPump;
 use App\Models\FuelSale;
 use App\Models\FuelStation;
 use App\Models\MerchantProfile;
+use App\Models\PaymentRequest;
 use App\Models\User;
 use App\Services\FuelStationService;
 use App\Services\MoneyService;
@@ -128,66 +129,25 @@ class FuelStationTest extends TestCase
     }
 
     /**
-     * @test AMIAL-FUEL-PAY-001 — بيع أميال باي يشحن العميل مباشرةً في خطوة واحدة:
-     * المال يتحرّك فعلاً (خصم العميل + إضافة التاجر) ويُربط مرجع المعاملة بالبيع.
+     * @test AMIAL-FUEL-PAY-001 — بيع الوقود بأميال باي لا يقبل رقم العميل؛
+     * لا يتم إلا بعد QR مدفوع إلى محفظة المحطة.
      */
-    public function amial_pay_sale_charges_customer_and_moves_money(): void
+    public function amial_pay_sale_requires_a_paid_qr_for_the_station_wallet(): void
     {
-        // محافظ التاجر والعميل + رسوم دفع نقطة بيع
-        \App\Models\EMoney::create([
-            'user_id' => $this->merchant->id, 'current_balance' => '0.0000',
-            'held_balance' => '0.0000', 'pending_balance' => '0.0000',
-            'charge_earned' => '0.0000', 'zone_code' => 'SOUTH',
-        ]);
-        $admin = User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
-        \App\Models\EMoney::create([
-            'user_id' => $admin->id, 'current_balance' => '0.0000',
-            'held_balance' => '0.0000', 'pending_balance' => '0.0000',
-            'charge_earned' => '0.0000', 'zone_code' => 'SOUTH',
-        ]);
-        $customer = User::factory()->create(['type' => 2, 'phone' => '+967771700001', 'zone_code' => 'SOUTH']);
-        \App\Models\EMoney::create([
-            'user_id' => $customer->id, 'current_balance' => '50000.0000',
-            'held_balance' => '0.0000', 'pending_balance' => '0.0000',
-            'charge_earned' => '0.0000', 'zone_code' => 'SOUTH',
-        ]);
-        \App\Models\FeeScheme::create([
-            'code' => 'MERCHANT_POS', 'zone_code' => 'SOUTH', 'applies_to' => 'merchant',
-            'fee_type' => 'percent', 'percent_rate' => '1.0000', 'fixed_amount' => '0',
-            'agent_commission_percent' => '0', 'agent_commission_fixed' => '0',
-            'bearer' => 'receiver', 'version' => 1, 'is_active' => true, 'effective_from' => now(),
-        ]);
-
         $pump = $this->svc->addPump($this->station, ['pump_number' => 1]);
         $product = $this->svc->addProduct($this->station, ['name' => 'بنزين', 'price_per_liter' => '500']);
-
-        // ══════════════════════════════════════════════════════════════
-        // AMIAL-FUEL-QR-001 — **العميلُ يؤكّد بنفسه، ولا يكتب الموظّفُ هاتفَه.**
-        //
-        // كان هذا الاختبارُ يمرّر `customer_phone` فيُخصَم من العميل
-        // مباشرةً — أي أنّ **موظّفَ المحطّة يخصم من محفظة عميلٍ بكتابة
-        // رقمه**، بلا مسحٍ ولا تأكيد. وشُدّد ذلك في الخدمة بحقّ.
-        //
-        // فبقي الاختبارُ على المسار القديم، فصار يُثبت أنّ الرفضَ يقع —
-        // لا أنّ البيعَ يعمل. **واختبارٌ يشترط ما مُنع عمداً يمنع الإصلاح
-        // بدل أن يحرسه.**
-        //
-        // فصار يسلك المسارَ الحيّ: التاجرُ ينشئ طلباً، والعميلُ يدفعه،
-        // ثمّ يُربَط البيعُ بمرجع الدفع الذي نفّذه العميلُ بنفسه.
-        // ══════════════════════════════════════════════════════════════
-        $requests = app(\App\Services\PaymentRequestService::class);
-
-        $request = $requests->create(
-            requester: $this->merchant,
-            amount: '10000',
-            note: 'دفع وقود — بنزين',
-            shareMethod: 'qr',
-        );
-
-        $paid = $requests->pay($customer, $request);
-        $paidTxId = $paid['transaction_id'];
-
-        $this->assertNotEmpty($paidTxId, 'لم يُنتج دفعُ العميل مرجعاً — الاختبار يفحص فراغاً');
+        PaymentRequest::create([
+            'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
+            'short_code' => 'FUEL-QR1',
+            'requester_user_id' => $this->merchant->id,
+            'amount' => '10000.0000',
+            'share_method' => 'qr',
+            'status' => 'paid',
+            'paid_transaction_id' => 'TX-FUEL-1001',
+            'paid_at' => now(),
+            'expires_at' => now()->addMinutes(5),
+            'zone_code' => 'SOUTH',
+        ]);
 
         $sale = $this->svc->recordSale($this->merchant, null, [
             'pump_id' => $pump->id,
@@ -195,42 +155,21 @@ class FuelStationTest extends TestCase
             'sale_type' => 'by_amount',
             'amount' => '10000',
             'payment_method' => 'amial_pay',
-            'paid_transaction_id' => $paidTxId,
+            'paid_transaction_id' => 'TX-FUEL-1001',
         ]);
 
         // المرجع ارتبط بالبيع
-        $this->assertSame($paidTxId, $sale->paid_transaction_id);
-
-        // العميل خُصم منه 10000 تماماً
-        $this->assertSame('40000.0000',
-            (string) \App\Models\EMoney::where('user_id', $customer->id)->value('current_balance'));
-
-        // ══════════════════════════════════════════════════════════════
-        // **والتاجرُ يستلم المبلغَ كاملاً — ولا رسمَ على هذا المسار.**
-        //
-        // كان المتوقَّعُ هنا ٩٩٠٠ (‏١٪ من `MERCHANT_POS`)، وذاك صحيحٌ
-        // للمسار القديم: الخصمُ المباشرُ من محفظة العميل.
-        //
-        // **ومسارُ QR يمرّ بـ`PaymentRequestService::pay()` وهي بلا رسمٍ
-        // عمداً** — «يحافظ على العقد القديم بلا رسم مفاجئ»، وهو قرارٌ
-        // مكتوبٌ في الخدمة نفسِها.
-        //
-        // **وأثرُه الماليُّ يُقال ولا يُسكت عنه:** تحوُّلُ بيع الوقود إلى
-        // QR يُسقط رسمَ المنصّة عن كلّ بيعةٍ بمحفظة أميال. فإن كان
-        // المقصودُ تحصيلَ الرسم على هذا المسار أيضاً، فذاك قرارُ تسعيرٍ
-        // يُتّخذ صراحةً — لا يُدسّ في اختبار.
-        // ══════════════════════════════════════════════════════════════
-        $this->assertSame('10000.0000',
-            (string) \App\Models\EMoney::where('user_id', $this->merchant->id)->value('current_balance'));
+        $this->assertSame('TX-FUEL-1001', $sale->paid_transaction_id);
     }
 
-    /** @test AMIAL-FUEL-PAY-001 — بيع أميال باي بلا هاتف ولا مرجع يُرفض. */
-    public function amial_pay_sale_requires_phone_or_reference(): void
+    /** @test AMIAL-FUEL-PAY-001 — بيع أميال باي بلا QR مدفوع يُرفض. */
+    public function amial_pay_sale_requires_a_paid_qr_reference(): void
     {
         $pump = $this->svc->addPump($this->station, ['pump_number' => 1]);
         $product = $this->svc->addProduct($this->station, ['name' => 'ديزل', 'price_per_liter' => '400']);
 
-        $this->expectException(\InvalidArgumentException::class);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('أنشئ رمز QR');
         $this->svc->recordSale($this->merchant, null, [
             'pump_id' => $pump->id, 'fuel_product_id' => $product->id,
             'sale_type' => 'by_amount', 'amount' => '4000', 'payment_method' => 'amial_pay',

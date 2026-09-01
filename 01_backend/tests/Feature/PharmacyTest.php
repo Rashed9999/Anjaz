@@ -42,7 +42,11 @@ class PharmacyTest extends TestCase
         $this->alertSvc = app(PharmacyAlertService::class);
 
         $this->merchant = User::factory()->create(['type' => 3, 'zone_code' => 'SOUTH']);
-        MerchantProfile::create(['user_id' => $this->merchant->id, 'verification_status' => 'verified']);
+        MerchantProfile::create([
+            'user_id' => $this->merchant->id,
+            'business_type' => 'pharmacy',
+            'verification_status' => 'verified',
+        ]);
         $this->pharmacy = $this->svc->getOrCreatePharmacy($this->merchant);
     }
 
@@ -315,6 +319,30 @@ class PharmacyTest extends TestCase
 
         $this->assertSame(0, \App\Models\PharmacySale::count());
         $this->assertSame(0, CustomerCreditAccount::count());
+    }
+
+    /** @test */
+    public function pharmacy_sales_history_can_open_its_real_details_and_not_a_generic_cashier_receipt(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'دواء تفاصيل', 'sale_price' => '350',
+        ]);
+        $batch = $this->svc->addBatch($product, [
+            'batch_number' => 'DETAIL-LOT', 'expiry_date' => now()->addYear()->toDateString(),
+            'quantity_received' => 4,
+        ]);
+        $sale = $this->saleSvc->recordSale(
+            $this->merchant, $this->pharmacy, null,
+            [['product_id' => $product->id, 'quantity' => 1]],
+            ['payment_method' => 'cash', 'prescription_number' => null],
+        );
+
+        Passport::actingAs($this->merchant->fresh(), [], 'api');
+        $this->getJson("/api/v1/amial/merchant/pharmacy/sales/{$sale->sale_ulid}")
+            ->assertOk()
+            ->assertJsonPath('meta.sale.sale_ulid', $sale->sale_ulid)
+            ->assertJsonPath('meta.sale.items.0.product_trade_name', 'دواء تفاصيل')
+            ->assertJsonPath('meta.sale.items.0.batch.batch_number', $batch->batch_number);
     }
 
     /** @test */

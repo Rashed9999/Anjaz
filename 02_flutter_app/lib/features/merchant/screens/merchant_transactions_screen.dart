@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/merchant/controllers/merchant_controller.dart';
 import 'package:amial_pay/features/merchant/domain/models/merchant_models.dart';
+import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-MERCHANT-APP-001 (v1.6)
@@ -28,11 +29,7 @@ class _MerchantTransactionsScreenState
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        // AMIAL-MERCHANT-WALLET-001 — كان «المبيعات والعمليات»، واسمُها
-        // في «خدماتي» «حركات المتجر»، ورابطُها في اللوحة «المبيعات».
-        // **ثلاثةُ أسماءٍ لشيء**، ويفتحها التاجرُ من ثلاثة أبواب.
-        // فصارت تابعةً لاسمِ ما هي جزءٌ منه: محفظةُ المتجر.
-        title: const Text('حركات المحفظة'),
+        title: const Text('حركات محفظة أميال'),
       ),
       body: RefreshIndicator(
         onRefresh: () => Get.find<MerchantController>().loadTransactions(),
@@ -43,26 +40,49 @@ class _MerchantTransactionsScreenState
             return const Center(
                 child: CircularProgressIndicator(color: AmialColors.primary));
           }
-          if (ctrl.transactions.isEmpty) {
-            return ListView(
-              children: const [
-                SizedBox(height: 100),
-                Icon(Icons.point_of_sale, size: 80, color: AmialColors.textMuted),
-                SizedBox(height: 12),
-                Center(child: Text('لا توجد عمليات بعد')),
-              ],
-            );
-          }
-          return ListView.builder(
+          return ListView(
             padding: const EdgeInsets.all(12),
-            itemCount: ctrl.transactions.length,
-            itemBuilder: (context, i) =>
-                _TransactionTile(transaction: ctrl.transactions[i]),
+            children: [
+              _scopeNotice(),
+              const SizedBox(height: 12),
+              if (ctrl.transactions.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 76),
+                  child: Column(children: [
+                    Icon(Icons.account_balance_wallet_outlined, size: 72, color: AmialColors.textMuted),
+                    SizedBox(height: 12),
+                    Text('لا توجد حركة إلكترونية في المحفظة بعد'),
+                  ]),
+                )
+              else
+                ...ctrl.transactions.map((tx) => _TransactionTile(transaction: tx)),
+            ],
           );
         }),
       ),
     );
   }
+
+  Widget _scopeNotice() => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AmialColors.primary.withValues(alpha: .08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AmialColors.primary.withValues(alpha: .2)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('هذه حركات محفظة أميال الإلكترونية فقط',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          const Text('المبيعات النقدية تُراجع في الدرج، والبيع الآجل يبقى ذمّة على العميل؛ لا يظهر أي منهما كرَصيد محفظة.',
+              style: TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
+          TextButton.icon(
+            onPressed: () => Get.to(() => const FinancialTruthReportScreen(dailyOnly: true)),
+            icon: const Icon(Icons.insights_outlined, size: 18),
+            label: const Text('عرض تقرير المال التشغيلي'),
+          ),
+        ]),
+      );
 }
 
 class _TransactionTile extends StatelessWidget {

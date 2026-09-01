@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\User;
-use App\Models\PaymentRequest;
 use App\Models\WholesaleBusiness;
 use App\Models\WholesaleCustomer;
 use App\Models\WholesaleInvoice;
@@ -33,6 +32,10 @@ use RuntimeException;
 class WholesaleInvoiceService
 {
     use TransactionTrait;
+
+    public function __construct(
+        private readonly MerchantPaymentReferenceService $paymentReference,
+    ) {}
 
     /**
      * إنشاء فاتورة كاملة.
@@ -169,31 +172,9 @@ class WholesaleInvoiceService
             // نفسه. وبذلك لا يستطيع عميل إرسال رقم حركة أجنبي أو إعادة
             // استخدام حركة من فاتورة أخرى.
             if ($paymentType === 'amial_pay') {
-                $paymentRequest = PaymentRequest::where('paid_transaction_id', $paidTransactionId)
-                    ->where('requester_user_id', $merchant->id)
-                    ->where('status', 'paid')
-                    ->lockForUpdate()
-                    ->first();
-
-                if (!$paymentRequest) {
-                    throw new RuntimeException('مرجع أميال باي غير صالح لهذه المحفظة أو لم يكتمل الدفع');
-                }
-                // ══════════════════════════════════════════════════════
-                // **والمستهلَكُ يُقال قبل غير المطابق.**
-                //
-                // كان فحصُ المبلغ أوّلاً، فحركةٌ **مربوطةٌ سلفاً** بفاتورةٍ
-                // أخرى تُردّ بـ«المبلغُ لا يطابق». فيذهب التاجرُ يُعدّل
-                // الكمّيّاتِ ليُطابق مبلغاً **لن يُقبل بأيّ حال** — رسالةٌ
-                // تُرسله خلف إصلاحٍ لا يُصلح شيئاً.
-                //
-                // والحمايتان قائمتان في الحالين؛ الترتيبُ يقرّر أيَّ
-                // الحقيقتين يقرأ. والحقيقةُ الغالبةُ أنّها مستهلَكة.
-                if (WholesaleInvoice::where('paid_transaction_id', $paidTransactionId)->exists()) {
-                    throw new RuntimeException('تم ربط حركة أميال باي هذه بفاتورة مسبقاً');
-                }
-                if (MoneyService::compare((string) $paymentRequest->amount, $totalAmount) !== 0) {
-                    throw new RuntimeException('مبلغ تحصيل أميال باي لا يطابق إجمالي الفاتورة');
-                }
+                $this->paymentReference->assertPaidForMerchant(
+                    $merchant, $paidTransactionId, $totalAmount,
+                );
             }
 
             // 4) فحص الائتمان إن credit
@@ -292,6 +273,29 @@ class WholesaleInvoiceService
                     'total_purchases' => MoneyService::add((string)$customer->total_purchases, $totalAmount),
                     'last_purchase_date' => now()->toDateString(),
                 ]);
+
+                // إذا كان للجملة رقم عميل، فلا يبقى دينها محبوساً في دفتر
+                // الجملة. يُنشر في دفتر الآجل الموحّد ليراه العميل في
+                // التطبيق ويسدد منه كاملاً أو على دفعات.
+                if (trim((string) $customer->phone) !== '') {
+                    $credit = app(CustomerCreditService::class);
+                    $account = $credit->findOrCreateAccount(
+                        $merchant->id,
+                        (string) $customer->phone,
+                        (string) $customer->full_name,
+                        (string) $customer->credit_limit,
+                    );
+                    $credit->recordSale(
+                        account: $account,
+                        amount: $totalAmount,
+                        dueDate: $dueDate,
+                        note: 'فاتورة جملة آجل',
+                        createdBy: $data['created_by_user_id'] ?? $merchant->id,
+                        referenceType: 'wholesale_invoice',
+                        referenceId: $invoice->invoice_ulid,
+                        referenceNumber: $invoice->invoice_number,
+                    );
+                }
             } else {
                 $customer->update([
                     'total_purchases' => MoneyService::add((string)$customer->total_purchases, $totalAmount),

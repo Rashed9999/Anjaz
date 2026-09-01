@@ -238,7 +238,11 @@ class MerchantService
             ->where('direction', 'credit')
             ->where('created_at', '>=', $startOfDay)
             ->whereHas('journalEntry', fn($q) =>
-                $q->whereIn('source_type', ['pay_merchant', 'pos_payment', 'qr_payment', 'send_money']))
+                // دفع QR في أميال يمر عبر PaymentRequestService، ومنه ينشأ
+                // قيد source_type=payment_request. إسقاطه هنا جعل البيع
+                // المؤكد يظهر في سجل الصيدلية أو الوقود بينما بطاقة التاجر
+                // تقول صفر. هذا عدّ من الدفتر نفسه، لا تقدير من واجهة البيع.
+                $q->whereIn('source_type', ['pay_merchant', 'pos_payment', 'qr_payment', 'send_money', 'payment_request']))
             ->sum('amount');
 
         // الاسترجاعات اليوم (debits على حساب التاجر)

@@ -6,7 +6,10 @@ import 'package:amial_pay/theme/amial_colors.dart';
 
 /// تقرير تشغيلي موحّد: لا يخلط البيع بالتحصيل أو حركة المحفظة.
 class FinancialTruthReportScreen extends StatefulWidget {
-  const FinancialTruthReportScreen({super.key});
+  /// التقرير اليومي حقّ أساسي في المجاني. أمّا اختيار فترة أطول فهو واجهة
+  /// التقرير التشغيلي التي تفتحها الباقات الأعمق.
+  final bool dailyOnly;
+  const FinancialTruthReportScreen({super.key, this.dailyOnly = false});
 
   @override
   State<FinancialTruthReportScreen> createState() => _FinancialTruthReportScreenState();
@@ -19,6 +22,7 @@ class _FinancialTruthReportScreenState extends State<FinancialTruthReportScreen>
   @override
   void initState() {
     super.initState();
+    if (widget.dailyOnly) days = 1;
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
@@ -38,7 +42,7 @@ class _FinancialTruthReportScreenState extends State<FinancialTruthReportScreen>
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: AmialColors.background,
-    appBar: AppBar(title: const Text('التقرير المالي التشغيلي')),
+    appBar: AppBar(title: Text(widget.dailyOnly ? 'تقرير اليوم' : 'التقرير المالي التشغيلي')),
     body: Obx(() {
       final report = c.financialReport.value;
       if (c.isLoadingFinancialReport.value && report == null) {
@@ -55,16 +59,27 @@ class _FinancialTruthReportScreenState extends State<FinancialTruthReportScreen>
       final collections = (report['collections'] as Map?) ?? const {};
       final receivables = (report['receivables'] as Map?) ?? const {};
       return RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
-        Wrap(alignment: WrapAlignment.center, spacing: 8, children: [1, 7, 30].map((d) => ChoiceChip(
-          label: Text(d == 1 ? 'اليوم' : '$d يوماً'), selected: days == d,
-          onSelected: (_) { setState(() => days = d); _load(); },
-        )).toList()),
-        const SizedBox(height: 16),
+        if (!widget.dailyOnly) ...[
+          Wrap(alignment: WrapAlignment.center, spacing: 8, children: [1, 7, 30].map((d) => ChoiceChip(
+            label: Text(d == 1 ? 'اليوم' : '$d يوماً'), selected: days == d,
+            onSelected: (_) { setState(() => days = d); _load(); },
+          )).toList()),
+          const SizedBox(height: 16),
+        ],
         _section('المبيعات التشغيلية', 'مصدرها ${sales['source'] ?? '—'}'),
         row('إجمالي البيع', sales['gross'], Icons.point_of_sale_outlined, AmialColors.primary),
         row('نقد', methods['cash'], Icons.payments_outlined, AmialColors.success),
         row('أميال باي', methods['amial_pay'], Icons.account_balance_wallet_outlined, AmialColors.primary),
         row('آجل / شركة', methods['credit'], Icons.credit_score_outlined, AmialColors.warning),
+        _section('أين يوجد المال؟', 'كل خانة لها مصدر مختلف ولا تُجمع كرَصيد واحد'),
+        row('نقد مبيعات الفترة — يُطابق بالدرج', methods['cash'], Icons.point_of_sale_outlined, AmialColors.success),
+        row('رصيد محفظة أميال باي الإلكتروني', wallet['balance'], Icons.account_balance_wallet_outlined, AmialColors.primary),
+        row('ذمم العملاء غير المحصّلة', receivables['amount'], Icons.receipt_long_outlined, AmialColors.red),
+        const Padding(
+          padding: EdgeInsets.only(top: 2, bottom: 4),
+          child: Text('النقد ليس رصيد محفظة. طابقه بما في درج نقطة البيع عند إغلاق الوردية؛ والآجل يبقى ذمّة على العميل حتى التحصيل.',
+              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+        ),
         _section('حركة المحفظة', 'تُعرض مستقلة عن البيع النقدي والآجل'),
         row('المستلم في المحفظة', wallet['received'], Icons.south_west_rounded, AmialColors.success),
         row('المدفوع من المحفظة', wallet['paid_out'], Icons.north_east_rounded, AmialColors.red),

@@ -5,7 +5,7 @@ namespace App\Services;
 use App\CentralLogics\Helpers;
 
 use App\Models\User;
-use App\Models\PaymentRequest;
+use App\Models\CustomerCreditAccount;
 use App\Models\WholesaleCollection;
 use App\Models\WholesaleCustomer;
 use App\Models\WholesaleInvoice;
@@ -25,6 +25,10 @@ use RuntimeException;
  */
 class WholesaleCollectionService
 {
+    public function __construct(
+        private readonly MerchantPaymentReferenceService $paymentReference,
+    ) {}
+
     /**
      * تسجيل تحصيل على فاتورة.
      *
@@ -79,25 +83,9 @@ class WholesaleCollectionService
             // QR مكتمل إلى محفظة مالك التاجر وبالمبلغ نفسه، ولا يعاد استعماله
             // كتحصيل ثانٍ أو كفاتورة بيع أولى.
             if ($data['payment_method'] === 'amial_pay') {
-                $paymentRequest = PaymentRequest::where('paid_transaction_id', $paidTransactionId)
-                    ->where('requester_user_id', $receiver->id)
-                    ->where('status', 'paid')
-                    ->lockForUpdate()
-                    ->first();
-                if (!$paymentRequest) {
-                    throw new RuntimeException('مرجع أميال باي غير صالح لهذه المحفظة أو لم يكتمل الدفع');
-                }
-                // **والترتيبُ نفسُه هنا** — انظر `WholesaleInvoiceService`:
-                // المستهلَكُ يُقال قبل غير المطابق، وإلّا أُرسل التاجرُ
-                // يُطابق مبلغاً لن يُقبل بأيّ حال. وبابان لحقيقةٍ واحدة
-                // يجب أن يقولاها بالترتيب نفسِه. (القاعدة الرابعة.)
-                if (WholesaleInvoice::where('paid_transaction_id', $paidTransactionId)->exists()
-                    || WholesaleCollection::where('paid_transaction_id', $paidTransactionId)->exists()) {
-                    throw new RuntimeException('تم ربط حركة أميال باي هذه بتحصيل أو فاتورة مسبقاً');
-                }
-                if (MoneyService::compare((string) $paymentRequest->amount, $amount) !== 0) {
-                    throw new RuntimeException('مبلغ تحصيل أميال باي لا يطابق مبلغ التسوية');
-                }
+                $this->paymentReference->assertPaidForMerchant(
+                    $receiver, $paidTransactionId, $amount,
+                );
             }
 
             // أنشئ التحصيل
@@ -136,6 +124,12 @@ class WholesaleCollectionService
             $customer->update([
                 'current_balance' => MoneyService::sub((string)$customer->current_balance, $amount),
             ]);
+
+            // تحصيل موظف الجملة (نقداً أو عبر QR) يجب أن يخفض أيضاً الدفتر
+            // الموحد الذي يراه العميل، وإلا ظهرت له فاتورة مدفوعة كأنها دين.
+            $this->recordUnifiedCreditPaymentIfLinked(
+                $receiver, $customer, $amount, $collection, $receivedByUserId,
+            );
 
             if (!empty($collection->paid_transaction_id)) {
                 app(ReceiptService::class)->attachBusinessReference(
@@ -181,9 +175,69 @@ class WholesaleCollectionService
                 ),
             ]);
 
+            // دفتر الآجل append-only؛ لا نحذف سداداً ظهر للعميل، بل نسجل
+            // إعادة الدين بسبب إبطال التحصيل مع مرجع واضح في الكشف.
+            $this->restoreUnifiedCreditIfLinked($inv, $customer, $collection, $reason);
+
             // حذف التحصيل
             $collection->delete();
             return $collection;
         });
+    }
+
+    private function recordUnifiedCreditPaymentIfLinked(
+        User $merchant,
+        WholesaleCustomer $customer,
+        string $amount,
+        WholesaleCollection $collection,
+        ?int $receivedByUserId,
+    ): void {
+        $account = $this->findUnifiedAccount($merchant->id, (string) $customer->phone);
+        if (!$account) {
+            return;
+        }
+
+        app(CustomerCreditService::class)->recordPayment(
+            account: $account,
+            amount: $amount,
+            note: 'تحصيل فاتورة جملة ' . ($collection->invoice?->invoice_number ?? ''),
+            createdBy: $receivedByUserId ?? $merchant->id,
+            referenceType: 'wholesale_collection',
+            referenceId: $collection->collection_ulid,
+        );
+    }
+
+    private function restoreUnifiedCreditIfLinked(
+        WholesaleInvoice $invoice,
+        WholesaleCustomer $customer,
+        WholesaleCollection $collection,
+        string $reason,
+    ): void {
+        $merchantId = (int) \App\Models\WholesaleBusiness::where('id', $invoice->business_id)
+            ->value('merchant_user_id');
+        $account = $this->findUnifiedAccount($merchantId, (string) $customer->phone);
+        if (!$account) {
+            return;
+        }
+
+        app(CustomerCreditService::class)->recordSale(
+            account: $account,
+            amount: (string) $collection->amount,
+            note: 'إبطال تحصيل جملة: ' . $reason,
+            referenceType: 'wholesale_collection_void',
+            referenceId: $collection->collection_ulid,
+            referenceNumber: $invoice->invoice_number,
+        );
+    }
+
+    private function findUnifiedAccount(int $merchantId, string $phone): ?CustomerCreditAccount
+    {
+        if (trim($phone) === '') {
+            return null;
+        }
+
+        return CustomerCreditAccount::where('merchant_user_id', $merchantId)
+            ->whereIn('customer_phone', \App\Support\Phone::variants($phone))
+            ->first();
     }
 }

@@ -3,11 +3,14 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
+use App\Models\CustomerCreditAccount;
+use App\Models\EMoney;
 use App\Models\PaymentRequest;
 use App\Models\User;
 use App\Models\WholesaleCustomer;
 use App\Models\WholesaleProduct;
 use App\Services\MoneyService;
+use App\Services\CustomerCreditSettleService;
 use App\Services\WholesaleCollectionService;
 use App\Services\WholesaleInvoiceService;
 use App\Services\WholesaleReportsService;
@@ -117,6 +120,44 @@ class WholesaleTest extends TestCase
     }
 
     /** @test */
+    public function customer_app_partial_settlement_updates_the_wholesale_invoice_too(): void
+    {
+        $biz = $this->svc->getOrCreateBusiness($this->merchant);
+        $tier = $biz->priceTiers->where('code', 'wholesale')->first();
+        $product = $this->svc->addProduct($biz, [
+            'name' => 'سكر آجل التطبيق', 'base_price' => '1000', 'initial_stock' => 10,
+        ]);
+        $appCustomer = User::factory()->create([
+            'type' => 2, 'phone' => '+967771700199', 'zone_code' => 'SOUTH',
+        ]);
+        foreach ([$this->merchant->id => '0', $appCustomer->id => '10000'] as $userId => $balance) {
+            EMoney::create([
+                'user_id' => $userId, 'current_balance' => $balance . '.0000',
+                'held_balance' => '0.0000', 'pending_balance' => '0.0000',
+                'charge_earned' => '0.0000', 'zone_code' => 'SOUTH',
+            ]);
+        }
+        $customer = $this->svc->addCustomer($biz, [
+            'full_name' => 'عميل التطبيق', 'phone' => '771700199',
+            'credit_limit' => '10000', 'default_tier_id' => $tier->id,
+        ]);
+        $invoice = $this->invSvc->createInvoice($this->merchant, $biz,
+            [['product_id' => $product->id, 'quantity' => 5]],
+            ['customer_id' => $customer->id, 'payment_type' => 'credit'],
+        );
+        $account = CustomerCreditAccount::where('merchant_user_id', $this->merchant->id)->firstOrFail();
+
+        app(CustomerCreditSettleService::class)->settle($appCustomer, $account, '2000');
+
+        $this->assertSame('3000.0000', (string) $invoice->fresh()->balance_due);
+        $this->assertSame('partial_paid', $invoice->fresh()->status);
+        $this->assertSame('3000.0000', (string) $account->fresh()->current_balance);
+        $this->assertDatabaseHas('wholesale_collections', [
+            'invoice_id' => $invoice->id, 'amount' => '2000.0000', 'payment_method' => 'customer_wallet',
+        ]);
+    }
+
+    /** @test */
     public function credit_limit_blocks_invoice_when_exceeded(): void
     {
         $biz = $this->svc->getOrCreateBusiness($this->merchant);
@@ -207,10 +248,7 @@ class WholesaleTest extends TestCase
         ]);
         PaymentRequest::create([
             'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
-            // **ورمزُ الطلب ستّةُ محارفَ من أبجديّةٍ بلا التباس** — كما
-            // يولّده `PaymentRequestService::generateShortCode`، والعمودُ
-            // `varchar(8)`. وكان هنا تسعةٌ، فسقط الإدراجُ بـ1406.
-            'short_code' => 'WHQRAA',
+            'short_code' => 'WHQR-1001',
             'requester_user_id' => $this->merchant->id,
             'amount' => '5000.0000',
             'share_method' => 'qr',
@@ -237,7 +275,7 @@ class WholesaleTest extends TestCase
         $this->assertSame('TX-WHOLESALE-1001', $invoice->paid_transaction_id);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('تم ربط حركة أميال باي');
+        $this->expectExceptionMessage('تم استخدام رمز الدفع هذا');
         $this->invSvc->createInvoice($this->merchant, $biz,
             [['product_id' => $product->id, 'quantity' => 1]],
             [
@@ -259,7 +297,7 @@ class WholesaleTest extends TestCase
         ]);
         PaymentRequest::create([
             'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
-            'short_code' => 'WHQRAB',
+            'short_code' => 'WHQR-1002',
             'requester_user_id' => $this->merchant->id,
             'amount' => '999.0000',
             'share_method' => 'qr',
@@ -271,7 +309,7 @@ class WholesaleTest extends TestCase
         ]);
 
         $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('لا يطابق إجمالي الفاتورة');
+        $this->expectExceptionMessage('مبلغ رمز الدفع لا يطابق');
         $this->invSvc->createInvoice($this->merchant, $biz,
             [['product_id' => $product->id, 'quantity' => 1]],
             [
@@ -297,7 +335,7 @@ class WholesaleTest extends TestCase
         );
         PaymentRequest::create([
             'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
-            'short_code' => 'WHQRBA',
+            'short_code' => 'WHQR-2001',
             'requester_user_id' => $this->merchant->id,
             'amount' => '2000.0000',
             'share_method' => 'qr',

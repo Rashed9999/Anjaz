@@ -5,7 +5,6 @@ import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/features/entitlements/screens/my_capabilities_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_capability_hub_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/features/setting/screens/profile_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
@@ -14,7 +13,6 @@ import 'package:amial_pay/features/fuel_station/screens/fuel_deliveries_screen.d
 import 'package:amial_pay/features/fuel_station/screens/fuel_ops_center_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_prices_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_roles_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_cashier_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_settings_screen.dart';
@@ -132,25 +130,6 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
                       selected: true,
                       onTap: () => Navigator.of(context).pop(),
                     ),
-                    // ══════════════════════════════════════════════════
-                    // AMIAL-MERCHANT-WALLET-001 — **محفظةُ المتجر في
-                    // الدرج، لأنّ الدرجَ هو ما يُفتَح من كلّ شاشة.**
-                    //
-                    // كان الرصيدُ بطاقةً في ترويسة اللوحة وحدَها، والسحبُ
-                    // رابطاً في أسفلها، والحركاتُ شاشةً ثالثة —
-                    // **وأحدَ عشرَ بنداً في الدرج وليس بينها المال**.
-                    //
-                    // ولمالك المتجر وحدَه: الكاشيرُ لا درجَ له أصلاً
-                    // (شاشتُه خارج هذا الهيكل)، والحدُّ هنا احتياطٌ ثانٍ.
-                    // ══════════════════════════════════════════════════
-                    if (access.isMerchantOwner)
-                      _item(
-                        context,
-                        icon: Icons.account_balance_wallet_rounded,
-                        label: 'محفظة المتجر',
-                        onTap: () =>
-                            _open(context, const MerchantWalletScreen()),
-                      ),
                     ..._activityItems(context),
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: AmialSpacing.xs),
@@ -218,36 +197,10 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
   List<Widget> _activityItems(BuildContext context) {
     if (access.businessType.value == 'fuel') {
       return [
-        // ══════════════════════════════════════════════════════════════
-        // AMIAL-FUEL-KEYPAD-001 — **اللوحةُ الرقميّةُ عادت إلى بابها.**
-        //
-        // قال صاحبُ المشروع: «شاشةُ بيع الوقود كانت تحتوي على لوحة أرقام،
-        // الآن اختفت». وقِيس فلم تُحذف اللوحة: `FuelCashierScreen`
-        // (تصميم #103) قائمةٌ كاملةً بلوحتها وأزرارها السريعة
-        // (10k/5k/50k/20k) وتبديلِ «بالريال/باللتر».
-        //
-        // **لكنّ لا سطرَ واحداً في التطبيق كلِّه يفتحها** — قِيس: صفرُ
-        // مراجع. وهذا نمطُ العطل الأكثر تكراراً هنا: **مبنيٌّ ولا يُوصَل
-        // إليه**. فالبابُ كان يقود إلى النموذج المطوّل بدلاً منها.
-        //
-        // **والشاشتان تبقيان — ولا تُستبدل إحداهما بالأخرى**: اللوحةُ
-        // تدعم النقدَ وQR (٩٥٪ من يوم المحطّة)، والمطوّلةُ وحدَها تدعم
-        // **بطاقةَ الشركة والبيعَ الآجل**. فتوجيهُ الباب إلى اللوحة
-        // وحدَها كان يُعيد اللوحةَ ويُسقط طريقتَي دفعٍ مبنيّتين.
-        // ══════════════════════════════════════════════════════════════
-        _item(
-          context,
-          icon: Icons.dialpad_rounded,
-          // **والاسمُ يبقى «بيع الوقود» بنصّه** — فهو ما يعرفه صاحبُ
-          // المحطّة، وحارسُ التنقّل يشترطه حرفاً. واللوحةُ هي المقصودةُ
-          // بالاسم، والمطوّلةُ تُسمّى بما تنفرد به.
-          label: 'بيع الوقود',
-          onTap: () => _open(context, const FuelCashierScreen()),
-        ),
         _item(
           context,
           icon: Icons.local_gas_station_rounded,
-          label: 'بيع آجل وبطاقة شركة',
+          label: 'بيع الوقود',
           onTap: () => _open(context, const FuelSaleScreen()),
         ),
         _item(
@@ -318,7 +271,6 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
           subtitle: section.subtitle,
           groups: section.groups,
           icon: section.icon,
-          codes: section.codes,
         ),
       );
     }).toList();
@@ -362,87 +314,23 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
           people,
           reports,
         ];
-      // ══════════════════════════════════════════════════════════════
-      // AMIAL-WHOLESALE-GUIDE-001 — **قائمةُ الجملة كما يصفها دليلُها.**
-      //
-      // «دليل تاجر الجملة»، القسم ٥ — «القائمة الجانبية»:
-      //
-      //     الرئيسية · فواتير الجملة والتحصيل · العملاء والديون ·
-      //     الأصناف ومخزون الجملة · التسعير · التقارير والمالية ·
-      //     الفريق والأجهزة
-      //
-      // وكانت خمساً: **لا قسمَ للتسعير**، و«العملاء والديون» مدموجٌ مع
-      // «الفريق والأجهزة» في «العملاء والفريق»، ومعها قسمُ «البيع
-      // والتحصيل» العامّ — وبيعُ الجملة **فاتورةٌ لا سلّةُ كاشير**.
-      //
-      // والدليلُ يقول بنصّه: «لا تظهر له قائمة محطة الوقود أو مطعم.
-      // القائمة تقوده إلى وظيفة جملة فعلية»، و«عناصر مشتركة فقط: مزايا
-      // الباقة، الترقية، الإعدادات، الدعم وتسجيل الخروج. أما عناصر
-      // التشغيل فهي قائمة جملة متخصصة».
-      // ══════════════════════════════════════════════════════════════
       case 'wholesale':
-        return const [
+        return [
           _MerchantDrawerSection(
             title: 'فواتير الجملة والتحصيل',
-            subtitle: 'فواتير، حالة السداد، تحصيلات ومرتجعات.',
-            groups: [],
-            codes: [
-              'wholesale_invoices',
-              'wholesale_collections',
-              'refunds',
-              'offline_pos',
-            ],
+            subtitle: 'فواتير الجملة والتحصيلات والتسعير متعدد المستويات لهذا النشاط.',
+            groups: ['الجملة'],
             icon: Icons.request_quote_outlined,
           ),
-          _MerchantDrawerSection(
-            title: 'العملاء والديون',
-            subtitle: 'العملاء، كشف الحساب، آجال الاستحقاق.',
-            groups: [],
-            codes: [
-              'customers',
-              'debts',
-              'corporate_accounts',
-              'corporate_credit_limits',
-            ],
-            icon: Icons.groups_2_outlined,
-          ),
+          sale,
           _MerchantDrawerSection(
             title: 'الأصناف ومخزون الجملة',
-            subtitle: 'أصناف، باركود، مخزون، موردون وطلبات شراء.',
+            subtitle: 'الأصناف والباركود والمخزون والموردون ومواقع التخزين.',
             groups: ['الأصناف', 'المخزون'],
             icon: Icons.inventory_2_outlined,
           ),
-          // **والتسعيرُ قسمٌ قائمٌ بذاته** — كان مدفوناً داخل «إعدادات
-          // الجملة»، وقدرتُه بلا شاشةٍ معلَنةٍ أصلاً فلا تُفتح من «مزايا
-          // باقتي». وهو ما يميّز الجملةَ عن التجزئة: سعرُ عميلٍ وسعرُ
-          // كمّيّةٍ وسعرُ شركة.
-          _MerchantDrawerSection(
-            title: 'التسعير',
-            subtitle: 'قوائم أسعار وشرائح كمية وأسعار شركات.',
-            groups: [],
-            codes: ['wholesale_multi_pricing'],
-            icon: Icons.price_change_outlined,
-          ),
-          _MerchantDrawerSection(
-            title: 'التقارير والمالية',
-            subtitle: 'المبيعات والربح والذمم والتدقيق.',
-            groups: ['التقارير'],
-            icon: Icons.analytics_outlined,
-          ),
-          _MerchantDrawerSection(
-            title: 'الفريق والأجهزة',
-            subtitle: 'الموظفون، الأدوار، أجهزة نقاط البيع، الفروع.',
-            groups: [],
-            codes: [
-              'employees',
-              'employee_permissions',
-              'rbac',
-              'multi_pos',
-              'shift_close',
-              'branches',
-            ],
-            icon: Icons.manage_accounts_outlined,
-          ),
+          people,
+          reports,
         ];
       case 'restaurant':
         return [
@@ -723,7 +611,6 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
     required String subtitle,
     required List<String> groups,
     required IconData icon,
-    List<String>? codes,
   }) {
     Navigator.of(context).pop();
     Get.to(() => MerchantCapabilityHubScreen(
@@ -731,7 +618,6 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
           subtitle: subtitle,
           groups: groups,
           icon: icon,
-          codes: codes,
         ));
   }
 
@@ -781,15 +667,10 @@ class _MerchantDrawerSection {
     required this.subtitle,
     required this.groups,
     required this.icon,
-    this.codes,
   });
 
   final String title;
   final String subtitle;
   final List<String> groups;
   final IconData icon;
-
-  /// رموزُ قدراتٍ بعينها حين لا تعبّر المجموعةُ عن القسم — انظر
-  /// `MerchantCapabilityHubScreen.codes`.
-  final List<String>? codes;
 }

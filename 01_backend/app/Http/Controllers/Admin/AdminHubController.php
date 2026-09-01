@@ -6,7 +6,6 @@ use App\CentralLogics\Helpers;
 use App\Exceptions\TransactionFailedException;
 use App\Http\Controllers\Controller;
 use App\Models\EMoney;
-use App\Models\KycDocument;
 use App\Models\Ledger\LedgerJournalEntry;
 use App\Models\MerchantProfile;
 use App\Models\Transfer;
@@ -25,10 +24,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rule;
 
 /**
  * AMIAL-ADMIN-HUB-001 — اللوحات المركزية الأربع للوحة الويب.
@@ -44,64 +40,6 @@ use Illuminate\Validation\Rule;
  */
 class AdminHubController extends Controller
 {
-    /**
-     * AMIAL-ADMIN-EDIT-001 — **حقولُ التعديل، مصدراً واحداً.**
-     *
-     * تقرؤها الشاشةُ لترسم الحقول، ويقرؤها الحفظُ ليقبلها. **وقائمتان
-     * تفترقان بحقلٍ تُنتجان حقلاً يُرسَل ولا يصل**: النموذجُ يسأل عنه،
-     * والموظّفُ يكتبه، ولا شيء يحفظه — ولا خطأَ في أيّ سجلّ.
-     *
-     * **ولا يدخلها الهاتفُ ولا رقمُ الهويّة** — الأوّلُ مفتاحُ الدخول
-     * ومعرّفُ التحويل، والثاني ما يربط الحسابَ بشخصه. ولهما مساراهما
-     * بموافقةٍ وسجلّ (استعادةُ الحسابات · طلباتُ تحديث البيانات).
-     *
-     * @var list<string>
-     */
-    public const EDITABLE_PROFILE_FIELDS = [
-        'f_name', 'l_name', 'name_en', 'father_name', 'grandfather_name',
-        'residence_governorate', 'residence_district', 'residence_area',
-        'residence_landmark', 'occupation', 'gender',
-        'income_source', 'account_purpose',
-    ];
-
-    /**
-     * قواعدُ قبول تلك الحقول — **ومفاتيحُها هي القائمةُ نفسُها.**
-     *
-     * وأُخرجت من جوف الدالّة لسببٍ مقيس: أوّلُ صياغةٍ للحارس قارنت
-     * القائمةَ المُعلَنة بنفسِها، **فحذفُ حقلٍ منها مرّ بصمت** — تشيخ
-     * القائمةُ وتبقى قاعدةُ القبول، أو العكس. فالمقارنةُ الآن بين
-     * **مَن يقبل** ومَن **يُعرَض**، وهما شيئان مختلفان فعلاً.
-     *
-     * @return array<string, mixed>
-     */
-    public static function profileRules(): array
-    {
-        return [
-            'f_name' => 'sometimes|nullable|string|max:100',
-            'l_name' => 'sometimes|nullable|string|max:100',
-            'name_en' => 'sometimes|nullable|string|max:120',
-            'father_name' => 'sometimes|nullable|string|max:100',
-            'grandfather_name' => 'sometimes|nullable|string|max:100',
-            // **والمحافظةُ رمزٌ لا نصٌّ حرّ.** `cityToZone` تطابق الرمزَ
-            // أو الاسمَ المعروف، وما لا يُطابَق يخرج `UNKNOWN` — فنصٌّ
-            // حرٌّ يُحفَظ ويبدو صحيحاً ثمّ يُنتج حساباً موثَّقاً لا
-            // يستقبل. فيُردّ عند بابه لا بعد الاعتماد.
-            'residence_governorate' => [
-                'sometimes', 'nullable',
-                Rule::in(\App\Support\YemenGovernorates::codes()),
-            ],
-            'residence_district' => 'sometimes|nullable|string|max:120',
-            'residence_area' => 'sometimes|nullable|string|max:120',
-            'residence_landmark' => 'sometimes|nullable|string|max:160',
-            'occupation' => 'sometimes|nullable|string|max:120',
-            'gender' => 'sometimes|nullable|in:male,female',
-            'income_source' => ['sometimes', 'nullable',
-                Rule::in(KycProfileFields::INCOME_SOURCES)],
-            'account_purpose' => ['sometimes', 'nullable',
-                Rule::in(KycProfileFields::ACCOUNT_PURPOSES)],
-        ];
-    }
-
     // ==================== الصفحات ====================
 
     public function customers(): View
@@ -428,327 +366,6 @@ class AdminHubController extends Controller
         ]);
     }
 
-    /**
-     * AMIAL-ZONE-GAP-001 — إسناد المنطقة عند الاعتماد.
-     *
-     * الترتيب مقصود: محافظة السكن المخزّنة أولاً، فإن غابت فمحافظة الأصل
-     * (أضعف لكن أفضل من لا شيء)، فإن غابتا فقرار الأدمن الصريح إن أرسله.
-     * وإن لم يتوفّر شيء تبقى UNKNOWN — لا نخمّن SOUTH أبداً، فذلك بالضبط
-     * الافتراض الخطير الذي بُني هذا النظام لإلغائه.
-     */
-    private function assignZoneOnApproval(User $user, Request $request): void
-    {
-        $zones = app(ZoneAssignmentService::class);
-
-        $source = $user->residence_governorate
-            ?: $user->origin_governorate
-            ?: $request->input('governorate');
-
-        $code = \App\Support\YemenGovernorates::codeFromName((string) $source);
-
-        if ($code === null) {
-            Log::warning('KYC approved without a resolvable governorate — zone stays UNKNOWN', [
-                'user_id' => $user->id,
-            ]);
-            return;
-        }
-
-        $zones->assignFromKyc(
-            $user,
-            \App\Support\YemenGovernorates::name($code) ?? '',
-            $request->user()?->id
-        );
-    }
-
-    /**
-     * POST hub/users/{id}/documents — **رفعُ وثائق الهويّة بالنيابة.**
-     *
-     * ══════════════════════════════════════════════════════════════════
-     * **الثمنُ الذي دُفع، بنصّ صاحب المشروع:** «هذا الحساب لا يستقبل
-     * تحويلات بسبب لا يوجد مستندات. دخلتُ للحساب من لوحة الأدمن أردتُ رفعَ
-     * مستنداتٍ من أجل يعمل — **لا طريقة للرفع**».
-     *
-     * وقِيس فكان محقّاً: الرفعُ كان **للعميل وحدَه** من تطبيقه
-     * (`POST /kyc/documents`)، واللوحةُ تملك المراجعةَ والاعتمادَ والرفضَ
-     * وقراءةَ OCR — **على وثائقَ موجودةٍ سلفاً**. فمن سجّل بلا وثائق
-     * يبقى مقفلاً أبداً ما لم يرفع بنفسه.
-     *
-     * **وسلسلةُ القفل كاملةً، مقيسة:**
-     *
-     *     لا وثائق ⇒ `decideAccountVerification` ترمي KYC_DOCUMENTS_INCOMPLETE
-     *             ⇒ لا اعتماد ⇒ `zone_code` يبقى UNKNOWN
-     *             ⇒ `verifyRecipient` تردّ: «حسابُ المستلم لم يُوثَّق بعد»
-     *
-     * **والخدمةُ كانت مبنيّةً لهذا منذ البداية**: `upload()` تقبل
-     * `?User $operator` — أي رفعاً بالنيابة موقَّعاً باسم الموظّف —
-     * **ولم يكن يمرّرها أحد**. مبنيٌّ ولا يُوصَل إليه، مرّةً أخرى.
-     *
-     * ══════════════════════════════════════════════════════════════════
-     * **ولا يُعتمد المستندُ هنا تلقائيّاً.** الرفعُ فعلٌ، والاعتمادُ قرارٌ
-     * له شاشتُه وسجلُّه (`documents/{id}/approve`). ودمجُهما يجعل موظّفاً
-     * يرفع صورةً فيصير الحسابُ موثَّقاً بضغطةٍ واحدةٍ بلا مراجعة — وهو
-     * ما بُنيت الرقابةُ لمنعه.
-     */
-    public function uploadDocument(Request $request, int $id): JsonResponse
-    {
-        $request->validate([
-            'doc_type' => 'required|string',
-            'file' => 'required|file|max:8192',
-        ]);
-
-        $user = User::findOrFail($id);
-
-        try {
-            $doc = app(KycDocumentService::class)->upload(
-                user: $user,
-                docType: (string) $request->input('doc_type'),
-                file: $request->file('file'),
-                operator: $request->user(),
-            );
-        } catch (\DomainException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
-
-        app(AuditService::class)->record([
-            'actor_type' => 'admin',
-            'actor_user_id' => $request->user()->id,
-            'subject_type' => 'user',
-            'subject_id' => (string) $user->id,
-            'action' => 'ADMIN_KYC_DOCUMENT_UPLOADED',
-            'decision_code' => 'KYC_DOC_UPLOADED_BY_STAFF',
-            'reason' => 'رفعُ وثيقةِ هويّةٍ بالنيابة عن صاحب الحساب',
-            'context' => ['doc_type' => $doc->doc_type, 'document_id' => $doc->id],
-            'severity' => 'warning',
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'رُفعت الوثيقة. تبقى مراجعتُها واعتمادُها من شاشة التحقّق.',
-            'data' => ['id' => $doc->id, 'doc_type' => $doc->doc_type],
-        ]);
-    }
-
-    /**
-     * POST hub/users/{id}/profile — **تعديلُ بيانات الحساب.**
-     *
-     * ══════════════════════════════════════════════════════════════════
-     * **طلبٌ مكرَّرٌ شهراً:** «أنني أصرخُ من شهر يجب إضافة زرّ لتعديل حساب
-     * المستخدم».
-     *
-     * وليس ترفاً: **محافظةُ السكن هي ما يُشتقّ منه النطاقُ التشغيليّ**
-     * عند الاعتماد (`assignFromKyc`). فحسابٌ بلا محافظةٍ يُعتمد ويبقى
-     * خارجَ النطاق — أي **موثَّقٌ ولا يعمل**، وهو أسوأُ من غير الموثَّق:
-     * صاحبُه يظنّ الأمرَ تمّ.
-     *
-     * **ولا يُعدَّل ما يُغيّر الهويّة صامتاً:** الهاتفُ مفتاحُ الدخول
-     * ومعرّفُ التحويل، وتغييرُه من هنا يُسلّم حساباً بتاريخه الماليّ
-     * لشخصٍ آخر. فله مسارُه الخاصّ (استعادةُ الحسابات) بموافقةٍ وسجلّ.
-     */
-    public function updateProfile(Request $request, int $id): JsonResponse
-    {
-        $user = User::findOrFail($id);
-
-        $data = $request->validate(self::profileRules(), [
-            'residence_governorate.in' => 'تُختار المحافظةُ من القائمة — '
-                . 'ونصٌّ حرٌّ يُحفَظ ثمّ يُنتج حساباً موثَّقاً خارجَ النطاق.',
-        ]);
-
-        // عمودٌ غيرُ موجودٍ يُسقط الحفظَ كلَّه بخطأ SQL — فيُصفّى بالمخطَّط
-        // لا بالثقة. (والصفةُ المفقودةُ تُقال، ولا تُبتلع صامتة.)
-        $skipped = [];
-        foreach (array_keys($data) as $field) {
-            if (! Schema::hasColumn('users', $field)) {
-                $skipped[] = $field;
-                unset($data[$field]);
-            }
-        }
-
-        if ($data === []) {
-            return response()->json(['message' => $skipped === []
-                ? 'لا حقلَ للتعديل'
-                : 'لا حقلَ قابلاً للتعديل في هذا المخطَّط: ' . implode('، ', $skipped),
-            ], 422);
-        }
-
-        $before = $user->only(array_keys($data));
-
-        $user->forceFill($data)->save();
-
-        app(AuditService::class)->record([
-            'actor_type' => 'admin',
-            'actor_user_id' => $request->user()->id,
-            'subject_type' => 'user',
-            'subject_id' => (string) $user->id,
-            'action' => 'ADMIN_USER_PROFILE_UPDATED',
-            'decision_code' => 'USER_PROFILE_UPDATED',
-            'reason' => 'تعديلُ بيانات حسابٍ من اللوحة',
-            // **قبلُ وبعدُ معاً** — تعديلٌ يُسجَّل بلا قيمته السابقة لا
-            // يُراجَع: لا يُعرف ما تغيّر ولا يُستعاد.
-            'context' => ['before' => $before, 'after' => $data],
-            'severity' => 'warning',
-        ]);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'حُدّثت بيانات الحساب.',
-            'data' => $user->only(array_keys($data)),
-        ]);
-    }
-
-    /**
-     * GET hub/users/{id}/readiness.json — **ما الذي ينقص هذا الحسابَ ليعمل.**
-     *
-     * ══════════════════════════════════════════════════════════════════
-     * **سؤالُ صاحب المشروع بنصّه:** «وهل إذا رفعتُ سوف يستقبل ويعمل بكلّ
-     * الصلاحيات؟ **ما هذا الغموض**».
-     *
-     * والجوابُ المقيس: **لا، الرفعُ وحدَه لا يكفي — أربعُ خطواتٍ لا
-     * واحدة.** وإن سقطت واحدةٌ بقي الحسابُ مقفلاً **وهو يبدو موثَّقاً**.
-     *
-     * فبدل أن يُجرَّب الأمرُ ويُنتظَر أثرُه، **تُقال الحالةُ كاملةً قبل
-     * الضغط**: ما رُفع، وما اعتُمد، وما ينقص، ولماذا لا يستقبل الآن.
-     *
-     * ══════════════════════════════════════════════════════════════════
-     * **ويُحسب من مصدره لا من عمودٍ مخزَّن** (القاعدة السادسة):
-     *
-     *   · الاكتمالُ من `completenessFor()` — وهي نفسُها التي يسألها
-     *     قرارُ الاعتماد. فشاشةٌ تحسب الاكتمالَ بطريقتها تقول «مكتمل»
-     *     ويردّ القرارُ ٤٢٢، أو العكس.
-     *   · والمنطقةُ من `cityToZone()` عبر خدمة الإسناد — لا تُخمَّن من
-     *     اسم المحافظة.
-     *
-     * **والمحافظاتُ تُعرَض ومعها منطقتُها** — فمن اختار «صنعاء» يرى قبل
-     * الحفظ أنّ الحسابَ سيبقى غيرَ مستقبِل: خارجَ نطاق الخدمة لا ناقصَ
-     * وثيقة. (القاعدة السابعة: الغيابُ يُقال ولا يُملأ بصفر.)
-     */
-    public function accountReadinessJson(int $id): JsonResponse
-    {
-        $user = User::find($id);
-        if (!$user) {
-            return response()->json(['message' => 'الحساب غير موجود'], 404);
-        }
-
-        $kycService = app(KycDocumentService::class);
-        $completeness = $kycService->completenessFor($user, 2);
-
-        // آخرُ مستندٍ من كلّ نوع — فالمرفوعُ ثانيةً يُلغي ما قبله.
-        $docs = KycDocument::where('user_id', $user->id)
-            ->orderByDesc('id')->get()->groupBy('doc_type');
-
-        $documents = [];
-        foreach ((array) $completeness['required'] as $type) {
-            $doc = $docs->get($type)?->first();
-
-            $documents[] = [
-                'doc_type' => $type,
-                'label' => KycDocument::TYPE_LABELS[$type] ?? $type,
-                'id' => $doc?->id,
-                'status' => $doc?->status,
-                // **مرفوعٌ ومعتمَدٌ ومنتهٍ ثلاثُ حالاتٍ لا اثنتان**:
-                // معتمَدٌ انتهت وثيقتُه لا يُحتسب، ويقولها `isUsable()`.
-                'usable' => $doc !== null && $doc->isUsable(),
-                'status_label' => match (true) {
-                    $doc === null => 'لم يُرفع',
-                    $doc->status === KycDocument::STATUS_APPROVED && $doc->isUsable() => 'معتمَد',
-                    $doc->status === KycDocument::STATUS_APPROVED => 'معتمَدٌ ومنتهي الصلاحيّة',
-                    $doc->status === KycDocument::STATUS_REJECTED => 'مرفوض',
-                    $doc->status === KycDocument::STATUS_SUPERSEDED => 'استُبدل بأحدثَ منه',
-                    default => 'مرفوعٌ بانتظار الاعتماد',
-                },
-            ];
-        }
-
-        $zoneService = app(ZoneAssignmentService::class);
-        $governorate = trim((string) ($user->residence_governorate ?? ''));
-        $zone = (string) ($user->zone_code ?? ZoneAssignmentService::ZONE_UNKNOWN);
-
-        // المنطقةُ التي ستُسنَد لو اعتُمد الحسابُ الآن — تُقاس ولا تُوعَد بها.
-        $wouldBeZone = $governorate === ''
-            ? ZoneAssignmentService::ZONE_UNKNOWN
-            : $zoneService->cityToZone($governorate);
-
-        $governorates = array_map(fn (array $g) => $g + [
-            'zone' => $zoneService->cityToZone($g['code']),
-        ], \App\Support\YemenGovernorates::all());
-
-        // ══════════════════════════════════════════════════════════════
-        // ── ما يمنع الاستقبالَ الآن، بالترتيب الذي يُعالَج به ──
-        //
-        // **ولكلّ مانعٍ رمزُه إلى جانب نصّه.** والسببُ مقيس: أوّلُ صياغةٍ
-        // للحارس فحصت وجودَ كلمة «محافظة» في النصّ، **فأُسكت مانعُ
-        // «لا محافظةَ في الملفّ» ومرّ الحارسُ** — لأنّ مانعاً أخاه
-        // («خارجَ نطاق الخدمة») يحمل الكلمةَ نفسَها.
-        //
-        // **وهما تشخيصان مختلفان يقودان إلى فعلين مختلفين**: الأوّلُ
-        // يُملأ حقلٌ، والثاني لن يُخدَم الحسابُ أبداً. فخلطُهما يُرسل
-        // الموظّفَ يملأ حقلاً لن يفيد، أو يترك حقلاً كان يكفي.
-        // ══════════════════════════════════════════════════════════════
-        $blockers = [];
-
-        if (!$completeness['complete']) {
-            $missing = array_map(
-                fn ($t) => KycDocument::TYPE_LABELS[$t] ?? $t,
-                (array) $completeness['missing'],
-            );
-            $blockers[] = ['code' => 'DOCUMENTS_INCOMPLETE', 'text' =>
-                'وثائقُ الهويّة ناقصةٌ أو غيرُ معتمَدة: ' . implode('، ', $missing)];
-        }
-
-        if ($governorate === '') {
-            $blockers[] = ['code' => 'GOVERNORATE_MISSING', 'text' =>
-                '**لا محافظةَ سكنٍ في الملفّ** — ولو اعتُمد الحسابُ '
-                . 'الآن لبقي خارجَ النطاق: موثَّقٌ ولا يستقبل.'];
-        } elseif ($wouldBeZone !== ZoneAssignmentService::ZONE_SOUTH) {
-            $blockers[] = ['code' => 'GOVERNORATE_OUT_OF_ZONE', 'text' =>
-                'محافظةُ السكن خارجَ نطاق الخدمة الحاليّ — '
-                . 'والحسابُ لن يستقبل مهما اكتملت وثائقُه.'];
-        }
-
-        if ((int) ($user->is_kyc_verified ?? 0) !== 1) {
-            $blockers[] = ['code' => 'ACCOUNT_NOT_VERIFIED', 'text' =>
-                'الحسابُ لم يُعتمد بعد — يُعتمد من تبويب «التوثيق» '
-                . 'أو من هذه النافذة بعد اكتمال ما فوق.'];
-        }
-
-        if ($zone !== ZoneAssignmentService::ZONE_SOUTH) {
-            $blockers[] = ['code' => 'ZONE_NOT_OPERATIONAL', 'text' =>
-                'المنطقةُ الحاليّة «' . $zone . '» — والاستقبالُ '
-                . 'مقصورٌ على نطاق التشغيل.'];
-        }
-
-        if ((int) ($user->is_active ?? 0) !== 1) {
-            $blockers[] = ['code' => 'ACCOUNT_FROZEN', 'text' =>
-                'الحسابُ مجمَّد — ويُفكّ من زرّ «فكّ التجميد».'];
-        }
-
-        return response()->json(['data' => [
-            'id' => $user->id,
-            'name' => trim(($user->f_name ?? '') . ' ' . ($user->l_name ?? '')) ?: '—',
-            'phone' => $user->phone,
-            'kyc' => (int) ($user->is_kyc_verified ?? 0),
-            'is_active' => (int) ($user->is_active ?? 0) === 1,
-            'zone_code' => $zone,
-            'would_be_zone' => $wouldBeZone,
-            'documents' => $documents,
-            'doc_types' => array_map(fn ($t) => [
-                'value' => $t, 'label' => KycDocument::TYPE_LABELS[$t] ?? $t,
-            ], KycDocument::ALL_TYPES),
-            'governorates' => $governorates,
-            'profile' => collect(self::EDITABLE_PROFILE_FIELDS)
-                ->filter(fn ($f) => Schema::hasColumn('users', $f))
-                ->mapWithKeys(fn ($f) => [$f => $user->{$f}])
-                ->all(),
-            // قوائمُ الاختيار تُرسَل من مصدرها — قائمةٌ مكتوبةٌ في الشاشة
-            // تشيخ: يُضاف مصدرُ دخلٍ في الجرد ولا يظهر في اللوحة أبداً.
-            'income_sources' => KycProfileFields::INCOME_SOURCES,
-            'account_purposes' => KycProfileFields::ACCOUNT_PURPOSES,
-            // وما ينقص من الحقول الرقابيّة — يُعرَض ولا يمنع الفئةَ الثانية.
-            'missing_fields' => (array) ($completeness['missing_fields'] ?? []),
-            'blockers' => $blockers,
-            'can_receive' => $blockers === [],
-        ]]);
-    }
-
     /** POST hub/users/{id}/kyc — اعتماد/رفض الوثائق (status: 1 قبول / 2 رفض) */
     public function kycStatus(Request $request, int $id): JsonResponse
     {
@@ -758,6 +375,24 @@ class AdminHubController extends Controller
         }
 
         $user = User::findOrFail($id);
+        if ($status === 1) {
+            // هذه واجهة توافقية قديمة؛ لا نسمح لها بعد اليوم بإنتاج حساب
+            // "مقبول" ومنطقته UNKNOWN. إن لم يكن في الملف اختيار محفوظ،
+            // يمكن للمراجع اختياره صراحة في الطلب، ثم يسجَّل كبيان السكن.
+            $governorate = \App\Support\YemenGovernorates::codeFromName(
+                (string) ($request->input('governorate')
+                    ?: $user->residence_governorate
+                    ?: $user->origin_governorate)
+            );
+            if ($governorate === null) {
+                return response()->json([
+                    'message' => 'اختر محافظة السكن قبل اعتماد الحساب. استخدم طابور مراجعة الهوية لإتمام التفعيل.',
+                    'code' => 'MISSING_RESIDENCE_GOVERNORATE',
+                ], 422);
+            }
+            $user->residence_governorate = $governorate;
+            $user->save();
+        }
         try {
             $user = app(KycDocumentService::class)->decideAccountVerification(
                 user: $user,
@@ -768,19 +403,6 @@ class AdminHubController extends Controller
             );
         } catch (\DomainException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
-        }
-
-        // AMIAL-ZONE-GAP-001 — الاعتماد يُسند المنطقة التشغيلية.
-        //
-        // العطل: التسجيل يبدأ zone_code = 'UNKNOWN' عمداً («ممنوع حتى يثبت»)،
-        // وassignFromKyc موجودة منذ البداية — لكن هذا المسار لم يستدعِها قطّ.
-        // فكان العميل يُعتمد ويبقى UNKNOWN، وسياسة المناطق تمنع عنه كل عملية
-        // مالية إلى الأبد. لا رسالة خطأ مفهومة، فقط حساب معتمد لا يعمل.
-        //
-        // المنطقة تتبع محافظة السكن (وثيقة العنوان) لا الأصل: يمنيّ أصله من
-        // إب ويسكن عدن حالة عادية، والعبرة بمكان التعامل.
-        if ($status === 1) {
-            $this->assignZoneOnApproval($user, $request);
         }
 
         // AMIAL-VERIFY-HUB: اعتماد تاجر يوثّق ملفه أيضاً (يفتح ميزات التطبيق فعلياً)

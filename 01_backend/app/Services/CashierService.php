@@ -19,6 +19,10 @@ use RuntimeException;
  */
 class CashierService
 {
+    public function __construct(
+        private readonly MerchantPaymentReferenceService $paymentReference,
+    ) {}
+
     // ============ المنتجات (اختيارية) ============
 
     public function addProduct(User $merchant, array $data): MerchantProduct
@@ -197,6 +201,21 @@ class CashierService
         }
 
         return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid) {
+            // لا يكفي `paid_transaction_id` القادم من Flutter. يجب أن يكون
+            // طلب QR مدفوعاً لمحفظة المنشأة وبالمبلغ نفسه وغير مستهلك.
+            // البيع بلا مرجع يبقى معلّقاً إلى أن تُتم شاشة QR الدفع؛ أمّا إذا
+            // زوّد التطبيق مرجعاً فلا يجوز اعتباره دليلاً بنفسه.
+            if ($paymentMethod === 'amial_pay' && !empty($paidTransactionId)) {
+                $this->paymentReference->assertPaidForMerchant(
+                    $merchant, $paidTransactionId, $total,
+                );
+            }
+            if ($paymentMethod === 'mixed' && MoneyService::isPositive((string) $walletAmount)) {
+                $this->paymentReference->assertPaidForMerchant(
+                    $merchant, $paidTransactionId, (string) $walletAmount,
+                );
+            }
+
             $sale = MerchantSale::create([
                 'sale_ulid' => (string) Str::ulid(),
                 'client_uuid' => $clientUuid ?: null,
@@ -416,6 +435,25 @@ class CashierService
                 'paid_transaction_id' => $paidTransactionId,
                 'settled_at' => now(),
             ]);
+
+            // التسوية من لوحة التاجر ليست حالةً محليةً للبيع فقط؛ يجب أن
+            // تنشر قيد السداد في الدفتر الذي يراه العميل أيضاً.
+            if (!empty($sale->customer_phone)) {
+                $account = \App\Models\CustomerCreditAccount::where('merchant_user_id', $merchant->id)
+                    ->whereIn('customer_phone', \App\Support\Phone::variants((string) $sale->customer_phone))
+                    ->lockForUpdate()
+                    ->first();
+                if ($account) {
+                    app(CustomerCreditService::class)->recordPayment(
+                        account: $account,
+                        amount: (string) $sale->total_amount,
+                        note: 'تسوية بيع آجل من الكاشير',
+                        createdBy: $merchant->id,
+                        referenceType: 'merchant_sale_settlement',
+                        referenceId: $sale->sale_ulid,
+                    );
+                }
+            }
 
             return $sale->fresh();
         });

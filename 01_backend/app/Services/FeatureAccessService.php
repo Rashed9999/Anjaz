@@ -262,58 +262,9 @@ class FeatureAccessService
             foreach (AccessPresets::businessTypeFeatures($businessType) as $f) $features[$f] = true;
         }
 
-        // ══════════════════════════════════════════════════════════════
-        // 3. Plan — **والباقةُ تفتح العمق، ونوعُ النشاط يقرّر الانطباق.**
-        //
-        // AMIAL-VERTICAL-SCOPE-001. سأل صاحبُ المشروع: «لماذا تاجرُ وقودٍ
-        // لديه أصنافٌ ومخزون؟». وقِيس فكان محقّاً:
-        //
-        //     resolveFeatures(merchant, fuel, business) = ٣٩ ميزة
-        //     ومنها: products · barcode · inventory · inventory_audit ·
-        //            low_stock_alerts · purchases · quick_sale
-        //
-        // **وإعلانُ كلٍّ منها تجزئةٌ بنصّه**: صلاحيّاتُها
-        // `retail.product.*` و`retail.stock.*`، وشاشاتُها `/retail`
-        // و`/products`. تُمنَح لمحطّةِ وقودٍ لأنّ `planFeatures` قائمةٌ
-        // مسطّحةٌ **لا تعرف القطاع**.
-        //
-        // وفوق `planFeatures` نفسِها كان مكتوباً: «نوع النشاط يحدد
-        // الانطباق… ولا تمنح قدرة قطاعية لقطاع آخر» — **نيّةٌ مكتوبةٌ ولا
-        // سطرَ ينفّذها**.
-        //
-        // ── وأخطرُ ما فيه أنّه طريقٌ مسدود ──
-        //
-        // الشاشةُ الوحيدةُ التي تبيع من ذلك الكتالوج **ترفض أن تُفتح له**:
-        // `CashierPosScreen` تردّ حسابَ الوقود إلى `FuelSaleScreen` بحاجزٍ
-        // قطاعيّ. فيُباع كتالوجٌ ومخزونٌ وباركود، ثمّ يُمنَع البيعُ منها —
-        // كتالوجٌ يُملأ ولا يُفرَّغ.
-        //
-        // ── والآلةُ كانت مبنيّةً ولا تُنادى ──
-        //
-        // `Capability::appliesTo()` قائمةٌ، ويستعملها `EntitlementService`
-        // في شاشة «قدراتي»، وتُعلنها عشرون قدرةً (‏`cashier` منها:
-        // تجزئةٌ وجملةٌ فقط). **ولم يكن `resolveFeatures` يسألها قطّ.**
-        //
-        // ── والحكمُ من صاحب المشروع لا منّي ──
-        //
-        // «تدقيق شامل لقطاعات التجار»، جدولُ «لا يجوز أن يرى»:
-        //     محطة وقود ⇒ «البيع السريع بدون التجزئة، كاشير منتجات عام»
-        // ودليلُ تشغيل المحطّة: «القائمة ليست قالباً مشتركاً لكل التجار».
-        //
-        // **وما لا قدرةَ له في السجلّ يمرّ** — لا يُحذف بالشكّ. فبعضُ
-        // الميزات أساسٌ بلا مدخلٍ في الكتالوج (وقد كُشف ذلك في
-        // `payment_requests`)، وحذفُها بحجّة القطاع يُقفل ما ليس مقصوداً.
-        // ══════════════════════════════════════════════════════════════
+        // 3. Plan
         if ($role === A::ROLE_MERCHANT) {
-            foreach (AccessPresets::planFeatures($plan) as $f) {
-                if (! self::planFeatureAppliesTo($f, $businessType)) {
-                    continue;
-                }
-                $features[$f] = true;
-            }
-
-            // **وعمقُ القطاع لا يُصفَّى** — هو معرَّفٌ لقطاعه أصلاً،
-            // وتصفيتُه بنفسِه تحصيلُ حاصلٍ يُخفي خطأً إن وقع.
+            foreach (AccessPresets::planFeatures($plan) as $f) $features[$f] = true;
             foreach (AccessPresets::verticalPlanFeatures($businessType, $plan) as $f) {
                 $features[$f] = true;
             }
@@ -327,30 +278,33 @@ class FeatureAccessService
             if (is_string($f)) $features[$f] = true;
         }
 
-        return array_keys($features);
-    }
-
-    /**
-     * **هل تنطبق ميزةُ باقةٍ على هذا النشاط؟**
-     *
-     * المصدرُ واحد: `Capability::appliesTo()` في سجلّ القدرات — وهو ما
-     * تسأله شاشةُ «قدراتي» أصلاً. **ولا تُكتب هنا قائمةٌ ثانية**: قائمتان
-     * تفترقان، وقد افترق الكتالوجان قبلُ (٤٧ في الخادم و٢٧ في الشاشة)
-     * فقرأ التاجرُ مقاماً لا يُحسب من مصدره.
-     *
-     * **وبلا صنفِ نشاطٍ لا يُصفّى شيء**: تاجرٌ لم يختره بعد يُقاد إلى
-     * شاشة الاختيار، وقصُّ ميزاته قبلها يُقفل حسابَه على فراغ.
-     */
-    private static function planFeatureAppliesTo(string $feature, ?string $businessType): bool
-    {
-        if ($businessType === null) {
-            return true;
+        // 6. سجلّ القدرات هو الحكم الأخير، لا اتّحاد قوائم قديمة.
+        //
+        // كانت feature تصل من businessTypeFeatures فتنجو من حد الباقة
+        // المعلن في CapabilityRegistry؛ الاتحاد لا يعرف «الأدنى» ويمنح
+        // ما وصل إليه أولاً. هنا تُراجع كل قدرة مسجّلة أمام نوع النشاط
+        // والباقة، فلا تتحول قائمة شاشة قديمة إلى باب مجاني في الخادم.
+        // الإضافات الإدارية استثناء متعمد ومراجع (extra_features).
+        if ($role === A::ROLE_MERCHANT) {
+            $extra = array_fill_keys(array_filter($extraFeatures, 'is_string'), true);
+            foreach (array_keys($features) as $feature) {
+                if (isset($extra[$feature])) {
+                    continue;
+                }
+                $capability = CapabilityRegistry::find($feature);
+                if ($capability === null) {
+                    continue; // ميزة قديمة غير معروضة في السجل بعد.
+                }
+                $minimumPlan = $capability->minimumPlan();
+                if (! $capability->appliesTo($businessType)
+                    || ($minimumPlan !== null
+                        && CapabilityRegistry::planRank($plan) < CapabilityRegistry::planRank($minimumPlan))) {
+                    unset($features[$feature]);
+                }
+            }
         }
 
-        $cap = CapabilityRegistry::find($feature);
-
-        // **قدرةٌ غيرُ معلَنةٍ في السجلّ تمرّ** — والغيابُ ليس منعاً.
-        return $cap === null || $cap->appliesTo($businessType);
+        return array_keys($features);
     }
 
     /** فحص سريع لميزة محدّدة. */

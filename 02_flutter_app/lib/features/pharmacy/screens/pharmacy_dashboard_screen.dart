@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:open_file/open_file.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/pharmacy/controllers/pharmacy_controller.dart';
@@ -861,11 +864,14 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
     final items = (s['items'] as List?) ?? [];
     final customer = s['customer'] as Map?;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => _openSale(s),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -888,7 +894,113 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
           Text('وصفة: ${s['prescription_number']}',
               style: TextStyle(color: Colors.red.shade700, fontSize: 11)),
         ],
+        const SizedBox(height: 6),
+        const Text('اضغط لعرض تفاصيل العملية والفاتورة',
+            textAlign: TextAlign.end,
+            style: TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
       ]),
+      ),
     );
+  }
+
+  Future<void> _openSale(Map<String, dynamic> summary) async {
+    final ulid = (summary['sale_ulid'] ?? '').toString();
+    if (ulid.isEmpty) return;
+    Get.dialog(const Center(child: CircularProgressIndicator()), barrierDismissible: false);
+    final sale = await c.loadSaleDetail(ulid);
+    if (Get.isDialogOpen == true) Get.back();
+    if (sale == null) {
+      Get.snackbar('تعذّر', c.lastError.value.isEmpty ? 'تعذّر تحميل تفاصيل العملية' : c.lastError.value,
+          backgroundColor: AmialColors.red.withValues(alpha: 0.12));
+      return;
+    }
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (sheetContext) {
+        final items = (sale['items'] as List?) ?? const [];
+        final customer = sale['customer'] as Map?;
+        return SafeArea(child: DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: .72,
+          minChildSize: .45,
+          maxChildSize: .94,
+          builder: (_, scroll) => ListView(
+            controller: scroll,
+            padding: const EdgeInsets.all(20),
+            children: [
+              const Center(child: SizedBox(width: 42, child: Divider(thickness: 4))),
+              const SizedBox(height: 10),
+              const Text('تفاصيل بيع الصيدلية', textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              _detail('رقم العملية', '#${ulid.length >= 8 ? ulid.substring(ulid.length - 8) : ulid}'),
+              _detail('الإجمالي', '${sale['total_amount'] ?? '0'} ر.ي', bold: true),
+              _detail('طريقة الدفع', _paymentLabel((sale['payment_method'] ?? '').toString())),
+              if (customer != null) _detail('العميل', '${customer['full_name'] ?? '—'}'),
+              if (sale['prescription_number'] != null) _detail('رقم الوصفة', '${sale['prescription_number']}'),
+              if (sale['prescribing_doctor'] != null) _detail('الطبيب', '${sale['prescribing_doctor']}'),
+              const Divider(height: 28),
+              const Text('الأصناف والتشغيلات', style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              ...items.map((raw) {
+                final item = raw as Map;
+                final batch = item['batch'] as Map?;
+                return ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('${item['product_trade_name'] ?? 'صنف'} × ${item['quantity'] ?? 0}'),
+                  subtitle: Text(batch?['batch_number'] == null
+                      ? 'تشغيلة غير متاحة'
+                      : 'التشغيلة: ${batch!['batch_number']}'),
+                  trailing: Text('${item['total_price'] ?? 0} ر.ي'),
+                );
+              }),
+              const SizedBox(height: 14),
+              FilledButton.icon(
+                icon: const Icon(Icons.picture_as_pdf_outlined),
+                label: const Text('تنزيل الفاتورة وفتحها'),
+                onPressed: () => _downloadInvoice(ulid),
+              ),
+            ],
+          ),
+        ));
+      },
+    );
+  }
+
+  String _paymentLabel(String method) => switch (method) {
+        'cash' => 'نقد',
+        'amial_pay' => 'أميال باي',
+        'credit' => 'آجل',
+        _ => method,
+      };
+
+  Widget _detail(String label, String value, {bool bold = false}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(children: [
+          Expanded(child: Text(label, style: const TextStyle(color: AmialColors.textSecondary))),
+          Text(value, style: TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.normal)),
+        ]),
+      );
+
+  Future<void> _downloadInvoice(String ulid) async {
+    String? failure;
+    final path = await Get.find<ApiClient>().downloadFile(
+      '/api/v1/amial/merchant/pharmacy/sales/$ulid/invoice',
+      fileName: 'amial_pharmacy_invoice_$ulid.pdf',
+      onError: (message) => failure = message,
+    );
+    if (path == null) {
+      Get.snackbar('تعذّر التنزيل', failure ?? 'تعذّر إنشاء الفاتورة',
+          backgroundColor: AmialColors.red.withValues(alpha: .12));
+      return;
+    }
+    final opened = await OpenFile.open(path, type: 'application/pdf');
+    if (opened.type != ResultType.done) {
+      await Share.shareXFiles([XFile(path, mimeType: 'application/pdf')], text: 'فاتورة صيدلية من أميال باي');
+    }
   }
 }

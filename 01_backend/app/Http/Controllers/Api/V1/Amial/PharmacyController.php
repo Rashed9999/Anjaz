@@ -491,6 +491,30 @@ class PharmacyController extends Controller
     }
 
     /**
+     * تفصيل بيع الصيدلية من مصدره الحقيقي، بما فيه التشغيلات والوصفة.
+     *
+     * لا يُعاد استعمال تفصيل الكاشير العام هنا: ذلك السجل لا يملك دفعات
+     * الدواء ولا رقم الوصفة، فيتحول زر «التفاصيل» إلى إيصال ناقص.
+     */
+    public function showSale(Request $request, string $ulid): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::PHARMACY_SALE_VIEW_ALL)) {
+            return $deny;
+        }
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $sale = PharmacySale::where('sale_ulid', $ulid)
+            ->where('merchant_user_id', $merchant->id)
+            ->with(['items.batch', 'customer'])
+            ->first();
+        if (! $sale) return $this->error('NOT_FOUND', 'عملية البيع غير موجودة', 404);
+
+        return $this->ok(['sale' => $sale]);
+    }
+
+    /**
      * الفاتورة تُبنى من `pharmacy_sales` و`pharmacy_sale_items`، لا من
      * الكاشير العام؛ وبذلك تظهر التشغيلة والانتهاء والوصفة الصحيحة.
      */

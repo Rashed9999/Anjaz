@@ -59,46 +59,20 @@ class MerchantController extends AmialApiController // AMIAL-FIX-007
         return $this->ok($data);
     }
 
-    /**
-     * GET /api/v1/amial/merchant/daily-stats
-     *
-     * ══════════════════════════════════════════════════════════════════
-     * AMIAL-POS-SCOPE-001 — **رصيدُ المتجر لا يخرج إلى الكاشير.**
-     *
-     * كان هذا المسارُ يردّ `current_balance` — **محفظةَ صاحب المتجر
-     * كاملةً** — لموظّف نقطة البيع، لأنّ `resolveMerchantPos` تحوّل
-     * الموظّفَ إلى صاحبه فتُقرأ محفظةُ الأخير.
-     *
-     * **وأختُه تحرس نفسَها**: `financialReport` أسفلَه يردّ موظّفَ نقطة
-     * البيع صراحةً بـ«التقرير المالي الكامل متاح لمالك المتجر فقط».
-     * فالحمايةُ كانت موجودةً في واحدٍ وغائبةً عن الآخر، **والآخرُ هو
-     * الذي تقرؤه لوحةُ التاجر في كلّ فتحة**.
-     *
-     * **وما يبقى للموظّف مقصود**: مبيعاتُ اليوم والمرتجعاتُ وعددُ
-     * العمليّات — يحتاجها ليُقفل ورديّتَه. **والرصيدُ ليس منها.**
-     * (القاعدة الثامنة: الهويّة تحدّد النطاق.)
-     * ══════════════════════════════════════════════════════════════════
-     */
+    /** GET /api/v1/amial/merchant/daily-stats */
     public function dailyStats(Request $request): JsonResponse
     {
         $stats = $this->service->getDailyStats($this->resolveMerchantPos($request));
-
-        if ($this->resolvePosUserId($request) !== null) {
-            // **لا يُصفَّر بل يُحذف** — وصفرٌ يُقرأ «متجرٌ فارغ»، وهو كذب.
-            // (القاعدة السابعة: «غير معروف» ليس صفراً.)
-            unset($stats['current_balance']);
-            $stats['balance_scope'] = 'owner_only';
-        }
-
         return $this->ok($stats);
     }
 
     /** تقرير تشغيل موحّد: البيع والتحصيل والمحفظة ليست الرقم نفسه. */
     public function financialReport(Request $request): JsonResponse
     {
-        if (PosUser::where('user_id', $request->user()->id)->where('is_active', true)->exists()) {
-            return $this->error('OWNER_ONLY', 'التقرير المالي الكامل متاح لمالك المتجر فقط', 403);
-        }
+        // تقرير اليوم المجاني بديل التقرير القديم الذي كان متاحاً للكاشير؛
+        // لا نرفع صلاحية القراءة إلى «المالك فقط» ثم نربط زر الموظف بمسار
+        // يرده 403. بياناته تُقرأ دائماً داخل منشأة صاحب الـPOS نفسها عبر
+        // resolveMerchantPos، وأفعال التحويل/السحب تبقى محروسة في مساراتها.
         $v = Validator::make($request->query(), ['from' => 'sometimes|date', 'to' => 'sometimes|date']);
         if ($v->fails()) return $this->validationError($v);
         try {

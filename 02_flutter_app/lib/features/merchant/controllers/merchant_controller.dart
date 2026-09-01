@@ -126,7 +126,11 @@ class MerchantController extends GetxController implements GetxService {
       isLoading.value = true;
       final r = await repo.transactionHistory();
       if (r.statusCode == 200 && r.body is Map) {
-        final list = (r.body['data'] ?? r.body['meta']?['data'] ?? []) as List;
+        // `/customer/transaction-history` هو مسارٌ قديم لكنّه مصدر حركة
+        // المحفظة الحقيقي للتاجر. عقده يعيد `transactions` في الجذر، لا
+        // `data`: قراءة المفتاح الخطأ كانت تحوّل حركاتٍ موجودة إلى قائمة
+        // فارغة في شاشة «حركات المتجر».
+        final list = (r.body['transactions'] ?? r.body['data'] ?? r.body['meta']?['data'] ?? []) as List;
         transactions.value = list
             .map((j) => AmialMerchantTransaction.fromJson(
                 Map<String, dynamic>.from(j)))

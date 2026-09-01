@@ -31,8 +31,7 @@ import 'package:amial_pay/features/merchant/screens/inventory_audit_screen.dart'
 import 'package:amial_pay/features/merchant/screens/stock_alerts_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart';
-import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
-import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_transactions_screen.dart';
 
 /// AMIAL-MERCHANT-SERVICES-HUB-001 — «مركز خدمات التاجر».
 ///
@@ -509,34 +508,18 @@ class MerchantServicesHubScreen extends StatelessWidget {
     _Svc('low_stock_alerts', 'تنبيهات النفاد',
         'حدّد لكل صنف حدّاً أدنى، ونبّهك قبل نفاده بوقتٍ يكفي لإعادة الطلب.',
         Icons.notification_important, 'الأعمال', () => const StockAlertsScreen()),
-    // AMIAL-VERTICAL-SCOPE-001 — **الآجلُ يمنحه النشاطُ لا الباقة.**
-    //
-    // كان في `planFeatures` فيصل كلَّ تاجرٍ **ومنهم محطّةُ الوقود**،
-    // بينما `FuelVertical` تقول بنصّها «ولا `F_DEBTS` — ائتمانُ المحطّة
-    // ببطاقاتٍ لا بدفترِ دَين». فنُقل المنحُ إلى مربّعات القطاعات الخمسة.
-    //
-    // **وبلا `onlyFor` هنا يُعرَض على صاحب المحطّة بوعد «ترقّ باقتك»** —
-    // وهي ترقيةٌ لن تفتحه مهما دفع، لأنّ نشاطَه لا يمنحه.
     _Svc('debts', 'البيع بالآجل',
         'لوحة الآجل: كم لك على العملاء، ومن تأخّر، وسدادٌ جزئيّ أو كامل بكشف حساب لكل عميل.',
-        Icons.account_balance_wallet, 'المجانية', () => const CreditDashboardScreen(),
-        onlyFor: {'retail', 'wholesale', 'pharmacy', 'restaurant', 'quick_sale'}),
+        Icons.account_balance_wallet, 'المجانية', () => const CreditDashboardScreen()),
     _Svc('customers', 'العملاء وحساباتهم',
         'سجلّ عملائك وأرصدتهم الآجلة وحدودهم الائتمانية، مع كشف حساب قابل للتصدير.',
         Icons.person_search, 'الأعمال', () => const CreditCustomersScreen()),
     _Svc('daily_reports', 'تقرير اليوم',
         'مبيعات اليوم بالتفصيل: عدد الفواتير، النقد مقابل المحفظة، وأعلى الأصناف مبيعاً.',
-        Icons.today, 'المجانية', () => const CashierReportScreen()),
-    // AMIAL-MERCHANT-WALLET-001 — **اسمٌ واحدٌ للشيء الواحد.**
-    //
-    // كان اسمُها هنا «حركات المتجر» وعنوانُ شاشتها «المبيعات والعمليات»
-    // ورابطُها في اللوحة «سحب رصيدي» — **ثلاثةُ أسماءٍ لمالٍ واحد**،
-    // ولا شاشةَ تجمعها. فصارت «محفظة المتجر» تفتح المحفظةَ نفسَها،
-    // ومنها بابٌ إلى الحركات كاملةً.
-    _Svc('wallet', 'محفظة المتجر',
-        'رصيدُك من البيع: كم لديك، وسحبٌ عبر وكيل، وتحويلٌ إلى حساب أميال باي، '
-        'وكلُّ ما دخل وخرج بترتيبٍ زمنيّ.',
-        Icons.account_balance_wallet, 'المجانية', () => const MerchantWalletScreen()),
+        Icons.today, 'المجانية', () => const FinancialTruthReportScreen(dailyOnly: true)),
+    _Svc('wallet', 'حركات المتجر',
+        'كل ما دخل محفظة متجرك وخرج منها: مقبوضات، تحويلات، رسوم — بترتيب زمنيّ وبحث.',
+        Icons.swap_vert, 'المجانية', () => const MerchantTransactionsScreen()),
     _Svc('profit_reports', 'تقارير الأرباح',
         'تقارير مبيعات وأرباح مفصّلة لمتجرك، بمقارنات يومية وشهرية لتعرف أداءك الحقيقي.',
         Icons.trending_up, 'الأعمال', () => const FinancialTruthReportScreen()),
