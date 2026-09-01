@@ -567,7 +567,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
               textAlign: TextAlign.right,
               decoration: InputDecoration(
                 labelText: 'رقم العميل *',
-                helperText: 'تظهر الفاتورة في «فواتيري الآجلة» لهذا الرقم',
+                helperText: 'يُسجَّل الدين لدى الصيدلية. يظهر في أميال عند تفعيل محفظة بالرقم نفسه.',
                 isDense: true,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
@@ -581,6 +581,12 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
                 isDense: true,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'لا يلزم العميل تثبيت أو تفعيل تطبيق أميال للشراء الآجل.',
+              textAlign: TextAlign.right,
+              style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
             ),
           ],
         ],
