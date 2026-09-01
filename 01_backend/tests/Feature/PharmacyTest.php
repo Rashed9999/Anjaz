@@ -8,12 +8,14 @@ use App\Models\PharmacyBatch;
 use App\Models\PharmacyCustomer;
 use App\Models\PharmacyProduct;
 use App\Models\PharmacyStockAlert;
+use App\Models\PaymentRequest;
 use App\Models\User;
 use App\Services\MoneyService;
 use App\Services\PharmacyAlertService;
 use App\Services\PharmacySaleService;
 use App\Services\PharmacyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
@@ -184,6 +186,38 @@ class PharmacyTest extends TestCase
         $this->assertSame('exhausted', $b1->status);
         $this->assertSame('7.0000', (string)$b2->quantity_remaining);
         $this->assertCount(2, $sale->items);
+    }
+
+    /** @test */
+    public function amial_pay_pharmacy_sale_requires_a_paid_qr_for_the_merchant_wallet(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'Panadol QR', 'sale_price' => '500',
+        ]);
+        $this->svc->addBatch($product, [
+            'batch_number' => 'QR-1', 'expiry_date' => now()->addYear()->toDateString(),
+            'quantity_received' => 5,
+        ]);
+        PaymentRequest::create([
+            'request_ulid' => (string) Str::ulid(),
+            'short_code' => 'PHARMQR1',
+            'requester_user_id' => $this->merchant->id,
+            'amount' => '500.0000',
+            'share_method' => 'qr',
+            'status' => 'paid',
+            'paid_transaction_id' => 'TX-PHARMACY-001',
+            'paid_at' => now(),
+            'expires_at' => now()->addMinutes(5),
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $sale = $this->saleSvc->recordSale(
+            $this->merchant, $this->pharmacy, null,
+            [['product_id' => $product->id, 'quantity' => 1]],
+            ['payment_method' => 'amial_pay', 'paid_transaction_id' => 'TX-PHARMACY-001'],
+        );
+
+        $this->assertSame('TX-PHARMACY-001', $sale->paid_transaction_id);
     }
 
     /** @test */

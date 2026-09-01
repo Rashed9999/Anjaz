@@ -437,6 +437,7 @@ class PharmacyController extends Controller
             'customer_id' => 'sometimes|nullable|integer',
             'payment_method' => 'required|in:cash,amial_pay,credit',
             'paid_transaction_id' => 'sometimes|nullable|string|max:64',
+            'due_date' => 'sometimes|nullable|date',
             'prescription_number' => 'sometimes|nullable|string|max:64',
             'prescribing_doctor' => 'sometimes|nullable|string|max:200',
             'prescription_date' => 'sometimes|nullable|date',
@@ -484,7 +485,6 @@ class PharmacyController extends Controller
             ->get();
         return $this->ok(['sales' => $sales]);
     }
-
 
     /**
      * الفاتورة تُبنى من `pharmacy_sales` و`pharmacy_sale_items`، لا من

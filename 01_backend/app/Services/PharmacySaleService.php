@@ -32,6 +32,7 @@ class PharmacySaleService
 
     public function __construct(
         private readonly PharmacyAlertService $alerts,
+        private readonly MerchantPaymentReferenceService $paymentReference,
     ) {}
 
     /**
@@ -76,6 +77,10 @@ class PharmacySaleService
             if (!$customer) {
                 throw new RuntimeException('العميل غير موجود');
             }
+        }
+        if (($data['payment_method'] ?? null) === 'credit'
+            && (!$customer || trim((string) $customer->phone) === '')) {
+            throw new InvalidArgumentException('بيع الأجل يحتاج اختيار العميل ورقم جواله');
         }
 
         // اجمع المنتجات + تحقّق من الكمّيات والوصفة والحساسيات
@@ -164,6 +169,14 @@ class PharmacySaleService
                 throw new InvalidArgumentException('الخصم أكبر من الإجمالي');
             }
 
+            if ($data['payment_method'] === 'amial_pay') {
+                $this->paymentReference->assertPaidForMerchant(
+                    $merchant,
+                    $data['paid_transaction_id'] ?? null,
+                    $total,
+                );
+            }
+
             // أنشئ سجل البيع
             $sale = PharmacySale::create([
                 'sale_ulid' => (string) Str::ulid(),
@@ -187,6 +200,28 @@ class PharmacySaleService
                 'notes' => $data['notes'] ?? null,
                 'zone_code' => $merchant->zone_code ?? 'SOUTH',
             ]);
+
+            // الصيدلية لا تحتفظ بدفتر دين موازٍ: البيع الآجل يدخل الحساب
+            // الموحد نفسه الذي تظهر منه «فواتيري الآجلة» للعميل ويسدده
+            // جزئياً أو كلياً من التطبيق.
+            if ($data['payment_method'] === 'credit') {
+                $credit = app(CustomerCreditService::class);
+                $account = $credit->findOrCreateAccount(
+                    $merchant->id,
+                    (string) $customer->phone,
+                    (string) $customer->full_name,
+                );
+                $credit->recordSale(
+                    account: $account,
+                    amount: $total,
+                    dueDate: $data['due_date'] ?? null,
+                    note: 'فاتورة صيدلية آجل',
+                    createdBy: $createdByUserId,
+                    referenceType: 'pharmacy_sale',
+                    referenceId: $sale->sale_ulid,
+                    referenceNumber: '#' . substr($sale->sale_ulid, -8),
+                );
+            }
 
             // اخصم من Batches بـ FIFO (واحد لكلّ منتج)
             foreach ($resolvedItems as $r) {
