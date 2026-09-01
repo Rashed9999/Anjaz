@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/access/widgets/access_gate.dart';
-import 'package:amial_pay/features/me/screens/my_services_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
 // الشاشات الفعلية للربط
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart';
@@ -51,8 +51,8 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.menu),
-            onPressed: () => Get.to(() => const MyServicesScreen()),
-            tooltip: 'الخدمات',
+            onPressed: () => Get.to(() => const MerchantServicesHubScreen()),
+            tooltip: 'خدمات التاجر',
           ),
         ],
       ),
@@ -116,8 +116,8 @@ class MerchantRetailHomeScreen extends StatelessWidget {
             tooltip: 'خدماتي',
             onPressed: () => Get.to(() => const MyCapabilitiesScreen()),
           ),
-          IconButton(icon: const Icon(Icons.menu),
-              onPressed: () => Get.to(() => const MyServicesScreen())),
+          IconButton(icon: const Icon(Icons.menu), tooltip: 'خدمات التاجر',
+              onPressed: () => Get.to(() => const MerchantServicesHubScreen())),
         ],
       ),
       body: SingleChildScrollView(

@@ -5,19 +5,15 @@ import 'package:amial_pay/common/widgets/amial_ltr_number.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/credit/screens/my_credits_screen.dart';
-import 'package:amial_pay/features/donations/screens/donations_home_screen.dart';
-import 'package:amial_pay/features/family_fund/screens/my_funds_screen.dart';
 import 'package:amial_pay/features/me/domain/me_repo.dart';
 import 'package:amial_pay/features/me/screens/my_account_number_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_pos_home_screen.dart';
 import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
-import 'package:amial_pay/features/kyc_verification/screens/my_profile_changes_screen.dart';
 import 'package:amial_pay/features/reports/screens/amial_account_statement_screen.dart';
-import 'package:amial_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
-import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
 import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
@@ -36,10 +32,15 @@ class MyServicesScreen extends StatefulWidget {
 class _MyServicesScreenState extends State<MyServicesScreen> {
   late final MeController me;
   late final NotificationsCenterController notifications;
+  late final bool _merchantAtEntry;
 
   @override
   void initState() {
     super.initState();
+    // لا نطلب بيانات المحفظة الشخصية أصلاً عند دخول تاجر من route قديم.
+    // الفصل هنا قبل أي API، وليس فقط في build بعد أن تكون البيانات حُمّلت.
+    _merchantAtEntry = Get.find<AccessController>().isMerchantSession;
+    if (_merchantAtEntry) return;
     me = Get.find<MeController>();
     notifications = Get.find<NotificationsCenterController>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -50,6 +51,16 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // هذا آخر خط دفاع، لا مجرد إخفاء بطاقات. قد يصل التاجر إلى هذه الشاشة
+    // من رابط قديم أو من نافذةٍ بقيت في stack بعد تغيير الدور؛ عندئذٍ لا
+    // يجوز عرض رقم محفظته الشخصية أو السحب/كشف الحساب الخاص بالعميل.
+    final access = Get.find<AccessController>();
+    if (access.isPos) {
+      return const MerchantPosHomeScreen();
+    }
+    if (_merchantAtEntry || access.isMerchantSession) {
+      return const MerchantServicesHubScreen();
+    }
     return Scaffold(
       backgroundColor: AmialColors.background,
       body: SafeArea(
@@ -149,7 +160,6 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
 
   Widget _servicesGrid() {
     final access = Get.find<AccessController>();
-    final merchant = access.isMerchant;
     final cards = <Widget>[
       _notificationCard(),
       _serviceCard(
@@ -185,92 +195,17 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
           subtitle: 'وافق أو ارفض',
           onTap: () => Get.to(() => const IncomingRequestsScreen()),
         ),
-      // تبسيطُ شاشة الخدمات أسقط هذا البابَ وأبقى أخاه، فصار المستخدم
-      // يرى ما طُلب منه ولا يرى ما طلبه — والبابُ الباقي إلى «الصادرة»
-      // داخلَ طلبٍ مفتوحٍ سلفاً، أي لا يُوصَل إليها من التنقّل أصلاً.
-      if (access.has('payment_requests'))
-        _serviceCard(
-          icon: Icons.outbox,
-          label: 'طلبات صادرة',
-          subtitle: 'ما طلبتَه من غيرك',
-          onTap: () => Get.to(() => const OutgoingRequestsScreen()),
-        ),
       _serviceCard(
         icon: Icons.account_balance_wallet_outlined,
         label: 'كشف حساب',
         subtitle: 'مدين ودائن ورصيد',
         onTap: () => Get.to(() => const AmialAccountStatementScreen()),
       ),
-      if (!merchant)
-        _serviceCard(
-          icon: Icons.receipt_long_outlined,
-          label: 'فواتيري الآجلة',
-          subtitle: 'ما عليك من دين',
-          onTap: () => Get.to(() => const MyCreditsScreen()),
-        ),
-      if (merchant)
-        _serviceCard(
-          icon: Icons.storefront_outlined,
-          label: 'نشاطي التجاري',
-          subtitle: 'الإعدادات والخدمات',
-          onTap: () => Get.to(() => const MerchantServicesHubScreen()),
-        ),
-      // ══════════════════════════════════════════════════════════════
-      // AMIAL-SERVICES-RESTORE-001 — **ثلاثةُ أبوابٍ حُذفت وما وراءها حيّ.**
-      //
-      // نُزعت هذه البطاقاتُ الثلاثُ في `d8a67a6`
-      // («fix(customer): simplify services») ولم يُوضَع لها بديل.
-      // **وقِيس ما وراءها فإذا هو يعمل كلُّه:**
-      //
-      //   الدفع الآمن       ٢٢ نقطة نهاية حيّة · ٣ شاشات
-      //   الصناديق المشتركة ١٩ نقطة نهاية حيّة · ٥ شاشات
-      //   التبرعات           ٦ نقاط نهاية حيّة · ٤ شاشات
-      //
-      // **والتبسيطُ بالحذف ليس تبسيطاً** — هو نقلُ العطل من «كثيرٌ على
-      // الشاشة» إلى «مبنيٌّ ولا يُوصَل إليه»، وهو أخفى وأطولُ عمراً.
-      // (القاعدة الثانيةَ عشرة: صفحةٌ لا يُوصل إليها ليست مبنيّة.)
-      // ══════════════════════════════════════════════════════════════
-      if (access.has('safe_pay'))
-        _serviceCard(
-          icon: Icons.shield_outlined,
-          label: 'الدفع الآمن',
-          subtitle: 'حماية للبيع والشراء',
-          onTap: () => Get.to(() => const MySafePaymentsScreen()),
-        ),
-      if (access.has('family_fund'))
-        _serviceCard(
-          icon: Icons.savings_outlined,
-          label: 'صندوق العائلة',
-          subtitle: 'ادّخارٌ مشترك',
-          onTap: () => Get.to(() => const MyFundsScreen()),
-        ),
-      // **والتبرّعاتُ بلا قدرةٍ في السجلّ** — قِيس فلا وجودَ لـ`donations`
-      // بين القدرات التسعِ والستّين، ولا وسيطَ `capability:` على مساراتها
-      // الستّ. فالشرطُ هو نفسُه الذي كان قبل الحذف: تُعرَض لغير التاجر.
-      // **ولا يُخترَع حاجزٌ يبدو أدقَّ وهو لا يفحص شيئاً.**
-      if (!merchant)
-        _serviceCard(
-          icon: Icons.volunteer_activism_outlined,
-          label: 'التبرعات',
-          subtitle: 'تبرّع لجهة موثوقة',
-          onTap: () => Get.to(() => const DonationsHomeScreen()),
-        ),
-      // ══════════════════════════════════════════════════════════════
-      // **الحلقةُ الأخيرة — وكانت مقطوعة.**
-      //
-      // الخادمُ يفتح طلبَ تحديثِ البيانات، واللوحةُ تعرض الطابور،
-      // **والشاشةُ مبنيّةٌ ولا بطاقةَ تقود إليها**. فيبقى الطلبُ
-      // `PENDING_CUSTOMER` إلى الأبد: العميلُ مطلوبٌ منه شيءٌ ولا يعلم،
-      // ولا سطرَ خطأٍ في أيّ سجلّ.
-      //
-      // وهو النمطُ الأكثرُ تكراراً في المشروع: مبنيٌّ ولا يُوصَل إليه.
-      // **وصفحةٌ لا يُوصل إليها ليست مبنيّة.**
-      // ══════════════════════════════════════════════════════════════
       _serviceCard(
-        icon: Icons.assignment_ind_outlined,
-        label: 'تحديث بياناتي',
-        subtitle: 'ما هو مطلوب منك · وصلاحية هويّتك',
-        onTap: () => Get.to(() => const MyProfileChangesScreen()),
+        icon: Icons.receipt_long_outlined,
+        label: 'فواتيري الآجلة',
+        subtitle: 'ما عليك من دين',
+        onTap: () => Get.to(() => const MyCreditsScreen()),
       ),
       _serviceCard(
         icon: Icons.support_agent_outlined,

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:modal_progress_hud_nsn/modal_progress_hud_nsn.dart';
 import 'package:amial_pay/common/widgets/custom_switch_button.dart';
-import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/favorite_number/screens/amial_favorites_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_account_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_pos_home_screen.dart';
 import 'package:amial_pay/features/me/screens/my_services_screen.dart';
 import 'package:amial_pay/features/setting/controllers/profile_screen_controller.dart';
 import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
@@ -40,37 +42,17 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
+    // «حسابي» خاص بالمحفظة الشخصية. لا نستخدمه لإعدادات منشأة التاجر.
+    final access = Get.find<AccessController>();
+    if (access.isPos) {
+      return const MerchantPosHomeScreen();
+    }
+    if (access.isMerchantSession) {
+      return const MerchantAccountScreen();
+    }
     final splashController = Get.find<SplashController>();
     List<TransactionTableModel> transactionTableModelList = [];
     ProfileModel? userInfo = Get.find<ProfileController>().userInfo;
-
-    // ══════════════════════════════════════════════════════════════════
-    // AMIAL-PROFILE-ROLE-001 — **شاشةٌ واحدةٌ لكلّ الأدوار، وقد كانت
-    // تعرض للتاجر قوائمَ العميل.**
-    //
-    // **قاله صاحبُ المشروع:** «هذه لحساب عميل… المشكلة أنّ التجّار لديهم
-    // نفس هذه القوائم؟؟ لماذا؟ المفترضُ لديه المحفظة، يرى المال الموجود
-    // فيه من عمليّات البيع، يستطيع سحبَه وتحويلَه فقط».
-    //
-    // وقِيس فكان محقّاً، **ومحرّكُ القدرات يقول ما يقوله هو بالضبط**:
-    //
-    //     roleBase('user')     → … favorite_numbers، payment_requests …
-    //     roleBase('merchant') → wallet، transfer، receive، receipts …
-    //                            **ولا favorite_numbers ولا payment_requests**
-    //
-    // فالمنصّةُ لا تمنح التاجرَ هاتين القدرتين أصلاً، **وهذه الشاشةُ
-    // كانت ترسم زرَّيهما له** — بلا فحصِ دورٍ واحد في الملفّ كلِّه.
-    //
-    // **وأصمتُ ما فيه أنّ الشاشةَ الشقيقةَ تحرسهما**: `MyServicesScreen`
-    // تفتح «طلبات واردة» و«صادرة» خلف `access.has('payment_requests')`
-    // — **الشاشةُ نفسُها، والقدرةُ نفسُها، وحكمان متناقضان**. فيرى
-    // التاجرُ البابَ مغلقاً في موضعٍ ومفتوحاً في موضع.
-    //
-    // فتُسأل القدرةُ ها هنا كما تُسأل هناك. (والقاعدة: صفحةٌ يُرسم
-    // زرُّها ولا يملكها صاحبُه تُردّ عند الضغط أو تعمل بما لا يخصّه —
-    // وكلاهما عطل.)
-    // ══════════════════════════════════════════════════════════════════
-    final access = Get.find<AccessController>();
 
     if(userInfo != null){
       transactionTableModelList.addAll([
@@ -96,10 +78,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
 
 
-        // **وسقفٌ لفعلٍ لا يملكه صاحبُه رقمٌ بلا معنى.** كان يُعرض للتاجر
-        // «حدُّ طلب الأموال» وهو لا يملك `payment_requests` أصلاً — فيقرأ
-        // رقماً يخصّ غيرَه ويظنّه حدَّه.
-        if(access.has('payment_requests') && splashController.configModel!.systemFeature!.sendMoneyRequestStatus! && splashController.configModel!.customerRequestMoneyLimit!.status)
+        if(splashController.configModel!.systemFeature!.sendMoneyRequestStatus! && splashController.configModel!.customerRequestMoneyLimit!.status)
           TransactionTableModel('send_money_request'.tr, Images.requestMoney, splashController.configModel!.customerRequestMoneyLimit!,
             Transaction(
               userInfo.transactionLimits?.dailySendMoneyRequestCount ?? 0,
@@ -176,10 +155,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: () => Get.to(() => const MyServicesScreen()),
                   ),
 
-                  // سجلُّ السحوبات يتبع بوّابةَ السحب نفسَها في شاشة
-                  // الخدمات (`cash_out` أو `wallet`) — وسجلُّ فعلٍ لا
-                  // يملكه صاحبُه يُفتح على فراغٍ دائم.
-                  if(access.hasAny(const ['cash_out', 'wallet'])) CustomInkWellWidget(
+                  CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.withdrawProfile,title: 'withdraw_history'.tr),
                     onTap: () => Get.to(()=> const RequestedMoneyListScreen(requestType: RequestType.withdraw)),
                   ),
@@ -187,18 +163,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   // AMIAL-FAVORITES-001: المفضّلة صارت تشمل الحسابات والتجّار
                   // والعمليات لا الأرقام وحدها، فلم تعد مشروطة بعلَم «الأرقام
                   // المفضّلة» — إطفاؤه كان يُخفي المفضّلة كلها.
-                  if(access.has('favorite_numbers')) CustomInkWellWidget(
+                  CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.favoriteNumberIcon, title: 'المفضّلة'),
                     onTap: () => Get.to(() => const AmialFavoritesScreen()),
                   ),
 
 
-                  if(access.has('payment_requests')) CustomInkWellWidget(
+                  CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.requestProfile,title: 'requests'.tr),
                     onTap: () => Get.to(()=> const IncomingRequestsScreen()),
                   ),
 
-                  if(access.has('payment_requests')) CustomInkWellWidget(
+                  CustomInkWellWidget(
                     child: widget.MenuItem(image: Images.sendMoneyProfile,title: 'send_requests'.tr),
                     onTap: () => Get.to(()=> const OutgoingRequestsScreen()),
                   ),
@@ -381,6 +357,4 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 }
-
-
 

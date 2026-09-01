@@ -10,7 +10,7 @@ import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
 import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_adaptive_shell.dart';
-import 'package:amial_pay/features/merchant/screens/pos_employee_home_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_pos_home_screen.dart';
 
 /// CRITICAL-001 — Home Dispatcher.
 ///
@@ -65,28 +65,18 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
         return widget.userHomeFallback;
       }
 
-      // 3) تاجر لم يختر نوع نشاطه → إجبار الاختيار
+      // 3) موظف POS لا يرث لوحة المالك ولا شاشات العميل. الخادم يحدد
+      // ميزاته، وهذه النقطة تختار فقط سير البيع الملائم لقطاعه.
+      if (_access.isPos) {
+        return const MerchantPosHomeScreen();
+      }
+
+      // 4) تاجر لم يختر نوع نشاطه → إجبار الاختيار
       if (_access.needsBusinessTypeSelection) {
         return const BusinessTypeSelectionScreen(mandatory: true);
       }
 
-      // ══════════════════════════════════════════════════════════════
-      // AMIAL-POS-HOME-001 — **موظّفُ نقطة البيع يفتح شاشةَ كاشير.**
-      //
-      // وكان يسقط من كلّ فروع `isMerchant` أدناه — لأنّها
-      // `role == 'merchant'` ودورُه `'pos'` — إلى آخر سطرٍ في الدالّة،
-      // **فيهبط في لوحة المالك خارجَ الهيكل**: يقرأ رصيدَ صاحبه، ويرى
-      // «سحب رصيدي» و«موظفو نقاط البيع»، ولا زرَّ عودةَ له ولا درج.
-      //
-      // **ويُفحَص قبل الجميع**: الكاشيرُ يرث صنفَ نشاط صاحبه، فلو تُرك
-      // للفروع أسفلَه لالتقطه فرعُ القطاع وفتح له **لوحةَ إدارة**
-      // القطاع (`FuelOwnerConsoleScreen` مثلاً) لا شاشةَ بيعه.
-      // ══════════════════════════════════════════════════════════════
-      if (_access.isPosStaff) {
-        return const PosEmployeeHomeScreen();
-      }
-
-      // 4) Route حسب الدور + business_type
+      // 5) Route حسب الدور + business_type
       // Merchant + fuel → **لوحة المحطة** (AMIAL-FUEL-VERTICAL-001 · ٨)
       //
       // وكانت تقود إلى لوحةٍ واحدةٍ للجميع، فيرى الكاشيرُ ما يراه المالك.

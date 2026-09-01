@@ -6,7 +6,7 @@ import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
 import 'package:amial_pay/features/entitlements/screens/my_capabilities_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_capability_hub_screen.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
-import 'package:amial_pay/features/setting/screens/profile_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_account_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_companies_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_deliveries_screen.dart';
@@ -161,8 +161,8 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
                     _item(
                       context,
                       icon: Icons.settings_outlined,
-                      label: 'الإعدادات',
-                      onTap: () => _open(context, const ProfileScreen()),
+                      label: 'إعدادات المنشأة',
+                      onTap: () => _open(context, const MerchantAccountScreen()),
                     ),
                     _item(
                       context,
