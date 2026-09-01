@@ -5,6 +5,7 @@ import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/pharmacy/controllers/pharmacy_controller.dart';
 import 'package:amial_pay/features/barcode/screens/continuous_scanner_screen.dart';
 import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_receipt_screen.dart';
 
 /// AMIAL-PHARMACY-001 — شاشة بيع الصيدلية (الجوهر).
 ///
@@ -182,30 +183,21 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
   void _showSuccessDialog() {
     final sale = c.lastSale.value;
     if (sale == null) return;
-    showDialog(context: context, barrierDismissible: false, builder: (_) => AlertDialog(
-      title: const Row(children: [
-        Icon(Icons.check_circle, color: Colors.green, size: 28),
-        SizedBox(width: 8),
-        Text('تم البيع بنجاح'),
-      ]),
-      content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Text('الإجمالي: ${sale['total_amount']} ر.ي',
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmialColors.primary)),
-        const SizedBox(height: 4),
-        Text('#${(sale['sale_ulid'] ?? '').toString().substring((sale['sale_ulid'] ?? '').toString().length - 8)}',
-            style: TextStyle(color: Colors.grey.shade600, fontFamily: 'monospace')),
-      ]),
-      actions: [
-        TextButton(
-          onPressed: () { Navigator.pop(context); _prescriptionCtrl.clear(); _doctorCtrl.clear(); _discountCtrl.clear(); },
-          child: const Text('بيع جديد'),
-        ),
-        FilledButton(
-          onPressed: () { Navigator.pop(context); Get.back(); },
-          child: const Text('إغلاق'),
-        ),
-      ],
-    ));
+    final total = double.tryParse('${sale['total_amount'] ?? c.cartTotal}') ?? 0;
+    final customer = sale['customer'] is Map
+        ? Map<String, dynamic>.from(sale['customer'] as Map)
+        : c.selectedCustomer.value;
+    final ulid = '${sale['sale_ulid'] ?? ''}';
+    Get.off(() => CashierReceiptScreen(
+          sale: sale,
+          total: total,
+          method: '${sale['payment_method'] ?? _paymentMethod}',
+          customerName: customer?['full_name']?.toString(),
+          customerPhone: customer?['phone']?.toString(),
+          invoiceTitle: _paymentMethod == 'credit' ? 'فاتورة صيدلية آجل' : 'فاتورة صيدلية',
+          invoicePath: '/api/v1/amial/merchant/pharmacy/sales/$ulid/invoice',
+          nextSalePage: () => const PharmacySaleScreen(),
+        ));
   }
 
   void _showSnack(String msg, Color color) {

@@ -1090,6 +1090,8 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'recordSale'])
                 ->middleware(['amial.rate-limit:pharmacy_sale,300,1', 'amial.usage:sale_operation'])
                 ->name('sales.record');
+            Route::get('/sales/{ulid}/invoice', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'downloadInvoice'])
+                ->where('ulid', '[A-Z0-9]{26}')->name('sales.invoice');
             Route::get('/sales', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listSales'])->name('sales.index');
 
             // ══════════════════════════════════════════════════════

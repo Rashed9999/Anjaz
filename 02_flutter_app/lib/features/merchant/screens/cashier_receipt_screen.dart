@@ -30,6 +30,9 @@ class CashierReceiptScreen extends StatefulWidget {
     this.customerName,
     this.customerPhone,
     this.pendingPayment = false,
+    this.invoicePath,
+    this.invoiceTitle,
+    this.nextSalePage,
   });
 
   final Map<String, dynamic> sale;
@@ -40,6 +43,15 @@ class CashierReceiptScreen extends StatefulWidget {
 
   /// أميال باي: بانتظار دفع العميل عبر QR.
   final bool pendingPayment;
+
+  /// مسار PDF القطاعي. كاشير الصيدلية يقرأ `pharmacy_sales` لا `merchant_sales`.
+  final String? invoicePath;
+
+  /// عنوان الإيصال المعروض، مثل «فاتورة صيدلية».
+  final String? invoiceTitle;
+
+  /// لا تعُد إلى الكاشير العام بعد بيع قطاعي متخصص.
+  final Widget Function()? nextSalePage;
 
   @override
   State<CashierReceiptScreen> createState() => _CashierReceiptScreenState();
@@ -76,10 +88,8 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
 
   String _now() {
     final d = DateTime.now();
-    final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
-    final ampm = d.hour < 12 ? 'ص' : 'م';
     return '${d.year}/${d.month.toString().padLeft(2, '0')}/${d.day.toString().padLeft(2, '0')}  •  '
-        '$h12:${d.minute.toString().padLeft(2, '0')} $ampm';
+        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
   }
 
   List<(String, String)> _rows() {
@@ -87,9 +97,9 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
     if (items.isEmpty) return const [];
     return items.take(15).map<(String, String)>((e) {
       final m = e as Map;
-      final name = '${m['name'] ?? ''}';
-      final qty = int.tryParse('${m['qty'] ?? 1}') ?? 1;
-      final price = double.tryParse('${m['price'] ?? 0}') ?? 0;
+      final name = '${m['name'] ?? m['product_trade_name'] ?? ''}';
+      final qty = int.tryParse('${m['qty'] ?? m['quantity'] ?? 1}') ?? 1;
+      final price = double.tryParse('${m['price'] ?? m['unit_price'] ?? 0}') ?? 0;
       final line = (price * qty);
       return ('$name ×$qty', AmialMoney.yer(line));
     }).toList();
@@ -108,8 +118,9 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
     final items = (widget.sale['items'] as List?) ?? const [];
     return items.map<ThermalReceiptLine>((e) {
       final m = e as Map;
-      return ThermalReceiptLine('${m['name'] ?? ''}',
-          int.tryParse('${m['qty'] ?? 1}') ?? 1, double.tryParse('${m['price'] ?? 0}') ?? 0);
+      return ThermalReceiptLine('${m['name'] ?? m['product_trade_name'] ?? ''}',
+          int.tryParse('${m['qty'] ?? m['quantity'] ?? 1}') ?? 1,
+          double.tryParse('${m['price'] ?? m['unit_price'] ?? 0}') ?? 0);
     }).toList();
   }
 
@@ -188,7 +199,7 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
     try {
       String? failure;
       final path = await Get.find<ApiClient>().downloadFile(
-        '/api/v1/amial/merchant/cashier/sales/$ulid/invoice',
+        widget.invoicePath ?? '/api/v1/amial/merchant/cashier/sales/$ulid/invoice',
         fileName: 'amial_invoice_$ulid.pdf',
         onError: (message) => failure = message,
       );
@@ -243,7 +254,7 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
             controller: _shot,
             child: Obx(() => AmialInvoiceCard(
                   settings: _settings.effective,
-                  title: widget.method == 'credit' ? 'فاتورة بيع آجل' : 'فاتورة بيع',
+                  title: widget.invoiceTitle ?? (widget.method == 'credit' ? 'فاتورة بيع آجل' : 'فاتورة بيع'),
                   rows: _rows(),
                   total: _fmtNum(widget.total),
                   method: _methodLabel,
@@ -290,7 +301,7 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
           const SizedBox(height: 10),
         ],
         FilledButton.icon(
-          onPressed: () => Get.off(() => const CashierPosScreen()),
+          onPressed: () => Get.off(widget.nextSalePage ?? () => const CashierPosScreen()),
           icon: const Icon(Icons.add),
           label: const Text('عملية جديدة',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),

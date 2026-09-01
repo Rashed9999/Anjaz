@@ -485,6 +485,45 @@ class PharmacyController extends Controller
         return $this->ok(['sales' => $sales]);
     }
 
+
+    /**
+     * الفاتورة تُبنى من `pharmacy_sales` و`pharmacy_sale_items`، لا من
+     * الكاشير العام؛ وبذلك تظهر التشغيلة والانتهاء والوصفة الصحيحة.
+     */
+    public function downloadInvoice(Request $request, string $ulid)
+    {
+        if ($deny = $this->guard($request, P::PHARMACY_SALE_CREATE)) {
+            return $deny;
+        }
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $sale = PharmacySale::where('sale_ulid', $ulid)
+            ->where('merchant_user_id', $merchant->id)
+            ->first();
+        if (!$sale) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
+
+        try {
+            $pdf = app(\App\Services\PharmacySaleInvoicePdfService::class)->generate($sale);
+            return response($pdf, 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Length' => (string) strlen($pdf),
+                'Content-Disposition' => 'attachment; filename="'
+                    . app(\App\Services\PharmacySaleInvoicePdfService::class)->suggestedFilename($sale) . '"',
+                'Cache-Control' => 'private, max-age=900',
+                'Content-Encoding' => 'identity',
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Pharmacy invoice PDF generation failed', [
+                'sale_ulid' => $sale->sale_ulid,
+                'merchant_user_id' => $merchant->id,
+                'error' => $e->getMessage(),
+            ]);
+            return $this->error('PDF_GEN_FAILED', 'تعذّر توليد فاتورة الصيدلية', 500);
+        }
+    }
+
     // ============ Alerts ============
 
     public function listAlerts(Request $request): JsonResponse

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
+import 'package:amial_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
 import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_payment_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_scan_screen.dart';
@@ -33,7 +34,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
   void initState() {
     super.initState();
     if (Get.isRegistered<AccessController>() &&
-        Get.find<AccessController>().isFuel) {
+        (Get.find<AccessController>().isFuel || Get.find<AccessController>().isPharmacy)) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -230,11 +231,15 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // حاجز قطاعي أخير: رابط كاشير تجزئة لا يعرض منتجات عامة داخل حساب
-    // محطة الوقود؛ مسار البيع الصحيح هناك FuelSaleScreen فقط.
+    // حاجز قطاعي أخير: الكاشير العام للتجزئة والبيع السريع فقط. الصيدلية
+    // تحتاج مسارها الذي يحفظ الوصفة والتشغيلة والانتهاء، والوقود له مساره.
     if (Get.isRegistered<AccessController>() &&
         Get.find<AccessController>().isFuel) {
       return const FuelSaleScreen();
+    }
+    if (Get.isRegistered<AccessController>() &&
+        Get.find<AccessController>().isPharmacy) {
+      return const PharmacySaleScreen();
     }
     return Scaffold(
       backgroundColor: AmialColors.background,

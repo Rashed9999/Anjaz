@@ -353,7 +353,6 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
             groups: ['الصيدلية'],
             icon: Icons.local_pharmacy_outlined,
           ),
-          sale,
           _MerchantDrawerSection(
             title: 'الأدوية والمخزون',
             subtitle: 'الأصناف والباركود والمخزون والموردون، مع بقاء ضوابط الصيدلية في قسمها.',

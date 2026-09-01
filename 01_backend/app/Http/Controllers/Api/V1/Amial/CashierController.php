@@ -449,12 +449,34 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         if ($pos) {
             $merchant = User::find($pos->merchant_user_id);
             if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
+            if ($this->isPharmacyMerchant($merchant)) {
+                return $this->error(
+                    'PHARMACY_CASHIER_ONLY',
+                    'هذه المنشأة صيدلية. استخدم كاشير الصيدلية لتبقى الوصفات والتشغيلات والصلاحية في الفاتورة.',
+                    403,
+                );
+            }
             return [$merchant, $pos->id];
         }
 
-        if (!MerchantProfile::where('user_id', $authUser->id)->exists()) {
+        $profile = MerchantProfile::where('user_id', $authUser->id)->first();
+        if (!$profile) {
             return $this->error('NOT_A_MERCHANT', 'الكاشير متاح للتجار وموظفي نقاط البيع فقط', 403);
         }
+        if ($profile->business_type === 'pharmacy') {
+            return $this->error(
+                'PHARMACY_CASHIER_ONLY',
+                'هذه المنشأة صيدلية. استخدم كاشير الصيدلية لتبقى الوصفات والتشغيلات والصلاحية في الفاتورة.',
+                403,
+            );
+        }
         return [$authUser, null];
+    }
+
+    /** الكاشير العام يخص البيع السريع والتجزئة؛ الصيدلية لها مصدر بيع مستقل. */
+    private function isPharmacyMerchant(User $merchant): bool
+    {
+        return MerchantProfile::where('user_id', $merchant->id)
+            ->value('business_type') === 'pharmacy';
     }
 }
