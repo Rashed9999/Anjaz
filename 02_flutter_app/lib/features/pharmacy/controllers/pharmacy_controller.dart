@@ -12,6 +12,8 @@ class PharmacyController extends GetxController implements GetxService {
   final Rx<Map<String, dynamic>?> dashboardData = Rx<Map<String, dynamic>?>(null);
 
   final RxList<Map<String, dynamic>> products = <Map<String, dynamic>>[].obs;
+  final RxList<Map<String, dynamic>> categories = <Map<String, dynamic>>[].obs;
+  final RxList<Map<String, dynamic>> similarProducts = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> batches = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> customers = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> sales = <Map<String, dynamic>>[].obs;
@@ -67,6 +69,27 @@ class PharmacyController extends GetxController implements GetxService {
 
   Future<bool> updateProduct(int id, Map<String, dynamic> data) async =>
       _doAndReload(() => repo.updateProduct(id, data), () => loadProducts());
+
+  Future<void> loadCategories() async {
+    try {
+      final r = await repo.listCategories();
+      if (_ok(r)) {
+        final list = (r.body['meta']?['categories'] ?? []) as List;
+        categories.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> loadSimilarProducts(String query, {int? categoryId}) async {
+    if (query.trim().length < 2) { similarProducts.clear(); return; }
+    try {
+      final r = await repo.similarProducts(query.trim(), categoryId: categoryId);
+      if (_ok(r)) {
+        final list = (r.body['meta']?['products'] ?? []) as List;
+        similarProducts.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)));
+      }
+    } catch (_) {}
+  }
 
   // ============ Batches ============
 

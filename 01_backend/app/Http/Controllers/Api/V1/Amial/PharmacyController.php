@@ -148,14 +148,54 @@ class PharmacyController extends Controller
             $q->whereColumn('current_stock', '<=', 'low_stock_threshold');
         }
 
-        $products = $q->orderBy('trade_name')->limit(100)->get();
+        $products = $q->with('category')->orderBy('trade_name')->limit(100)->get();
         return $this->ok(['products' => $products]);
+    }
+
+    /** التصنيفات بيانات حقيقية للصيدلية، لا قوائم ثابتة في الهاتف. */
+    public function listCategories(Request $request): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::PHARMACY_PRODUCT_VIEW)) return $deny;
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $pharmacy = $this->svc->getOrCreatePharmacy($merchant);
+        return $this->ok(['categories' => PharmacyCategory::where('pharmacy_id', $pharmacy->id)
+            ->orderBy('sort_order')->orderBy('name')->get()]);
+    }
+
+    /** حتى خمسة أصناف محلية متشابهة لمنع تكرار الدواء باسمٍ آخر. */
+    public function similarProducts(Request $request): JsonResponse
+    {
+        if ($deny = $this->guard($request, P::PHARMACY_PRODUCT_VIEW)) return $deny;
+        $v = Validator::make($request->all(), [
+            'query' => 'required|string|min:2|max:200',
+            'category_id' => 'sometimes|nullable|integer',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $pharmacy = $this->svc->getOrCreatePharmacy($merchant);
+        $query = trim($request->string('query')->toString());
+        $items = PharmacyProduct::where('pharmacy_id', $pharmacy->id)->where('is_active', true)
+            ->when($request->filled('category_id'), fn ($q) => $q->where('category_id', $request->integer('category_id')))
+            ->where(fn ($q) => $q->where('trade_name', 'like', "%{$query}%")
+                ->orWhere('generic_name', 'like', "%{$query}%"))
+            ->with('category')->orderBy('trade_name')->limit(5)->get();
+        return $this->ok(['products' => $items]);
     }
 
     public function addProduct(Request $request): JsonResponse
     {
 
         if ($deny = $this->guard($request, P::PHARMACY_PRODUCT_MANAGE)) {
+            return $deny;
+        }
+        // الدفعة الأولى استلام مخزون فعلي، فلا تتجاوز صلاحية استلام الدفعات
+        // لمجرد أنها أُرسلت مع نموذج المنتج.
+        if ($request->filled('initial_batch')
+            && ($deny = $this->guard($request, P::PHARMACY_BATCH_RECORD)) !== null) {
             return $deny;
         }
         // ══════════════════════════════════════════════════════════════
@@ -184,10 +224,18 @@ class PharmacyController extends Controller
             'sale_price' => 'required|numeric|min:0.01',
             'cost_price' => 'sometimes|nullable|numeric|min:0',
             'category_id' => 'sometimes|nullable|integer',
+            'category_name' => 'sometimes|nullable|string|max:80',
             'requires_prescription' => 'sometimes|boolean',
             'low_stock_threshold' => 'sometimes|integer|min:0',
             'description' => 'sometimes|nullable|string',
             'dosage_instructions' => 'sometimes|nullable|string',
+            'initial_batch' => 'sometimes|array',
+            'initial_batch.batch_number' => 'required_with:initial_batch|string|max:64',
+            'initial_batch.expiry_date' => 'required_with:initial_batch|date|after:today',
+            'initial_batch.manufactured_at' => 'sometimes|nullable|date|before:initial_batch.expiry_date',
+            'initial_batch.quantity_received' => 'required_with:initial_batch|numeric|min:0.001',
+            'initial_batch.cost_per_unit' => 'sometimes|nullable|numeric|min:0',
+            'initial_batch.supplier_name' => 'sometimes|nullable|string|max:200',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -267,6 +315,7 @@ class PharmacyController extends Controller
             'batch_number' => 'required|string|max:64',
             'expiry_date' => 'required|date|after:today',
             'received_date' => 'sometimes|nullable|date',
+            'manufactured_at' => 'sometimes|nullable|date|before:expiry_date',
             'quantity_received' => 'required|numeric|min:0.001',
             'cost_per_unit' => 'sometimes|nullable|numeric|min:0',
             'supplier_name' => 'sometimes|nullable|string|max:200',

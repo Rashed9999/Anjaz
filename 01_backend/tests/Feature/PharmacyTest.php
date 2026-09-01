@@ -72,6 +72,45 @@ class PharmacyTest extends TestCase
         $this->assertSame('0.0000', (string)$product->current_stock);
     }
 
+    /** المنتج والدفعة الأولى معاملة واحدة: لا صنف ظاهر بمخزونٍ وهمي. */
+    public function product_can_be_created_with_its_first_batch_category_and_dates(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'أموكسيسيلين 500',
+            'generic_name' => 'Amoxicillin',
+            'category_name' => 'مضادات حيوية',
+            'sale_price' => '1500',
+            'cost_price' => '1100',
+            'initial_batch' => [
+                'batch_number' => 'AMX-2026-01',
+                'quantity_received' => '48',
+                'cost_per_unit' => '1100',
+                'manufactured_at' => now()->subMonths(2)->toDateString(),
+                'expiry_date' => now()->addYear()->toDateString(),
+            ],
+        ]);
+
+        $product->load('category', 'batches');
+        $this->assertSame('مضادات حيوية', $product->category?->name);
+        $this->assertSame('48.0000', (string) $product->current_stock);
+        $this->assertCount(1, $product->batches);
+        $this->assertNotNull($product->batches->first()->manufactured_at);
+    }
+
+    /** تاريخ إنتاج بعد الانتهاء يرفض الدفعة قبل أن يلوّث المخزون. */
+    public function batch_rejects_manufacturing_date_after_expiry(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, ['trade_name' => 'دواء', 'sale_price' => '100']);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('الإنتاج');
+        $this->svc->addBatch($product, [
+            'batch_number' => 'BAD-DATE',
+            'quantity_received' => '1',
+            'manufactured_at' => now()->addYear()->toDateString(),
+            'expiry_date' => now()->addMonth()->toDateString(),
+        ]);
+    }
+
     /** @test */
     public function add_batch_increases_product_stock(): void
     {

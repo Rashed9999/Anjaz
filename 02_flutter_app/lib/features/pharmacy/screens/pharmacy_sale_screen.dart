@@ -6,6 +6,7 @@ import 'package:amial_pay/features/pharmacy/controllers/pharmacy_controller.dart
 import 'package:amial_pay/features/barcode/screens/continuous_scanner_screen.dart';
 import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_receipt_screen.dart';
+import 'package:amial_pay/helper/amial_money.dart';
 
 /// AMIAL-PHARMACY-001 — شاشة بيع الصيدلية (الجوهر).
 ///
@@ -403,8 +404,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
                 )),
           ])),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text('$price', style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary, fontSize: 15)),
-            const Text('ر.ي', style: TextStyle(fontSize: 10, color: Colors.grey)),
+            Text(AmialMoney.yer(price), style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary, fontSize: 15)),
           ]),
         ]),
       ),

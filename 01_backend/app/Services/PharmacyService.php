@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Pharmacy;
 use App\Models\PharmacyBatch;
 use App\Models\PharmacyCustomer;
+use App\Models\PharmacyCategory;
 use App\Models\PharmacyProduct;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -52,9 +53,22 @@ class PharmacyService
             throw new InvalidArgumentException('سعر البيع يجب أن يكون موجباً');
         }
 
-        return PharmacyProduct::create([
+        return DB::transaction(function () use ($pharmacy, $data) {
+            $categoryId = $data['category_id'] ?? null;
+            if (!empty($data['category_name'])) {
+                $category = PharmacyCategory::firstOrCreate(
+                    ['pharmacy_id' => $pharmacy->id, 'name' => trim($data['category_name'])],
+                    ['sort_order' => (int) PharmacyCategory::where('pharmacy_id', $pharmacy->id)->max('sort_order') + 1],
+                );
+                $categoryId = $category->id;
+            } elseif ($categoryId !== null && !PharmacyCategory::where('id', $categoryId)
+                ->where('pharmacy_id', $pharmacy->id)->exists()) {
+                throw new InvalidArgumentException('التصنيف لا يتبع لهذه الصيدلية');
+            }
+
+            $product = PharmacyProduct::create([
             'pharmacy_id' => $pharmacy->id,
-            'category_id' => $data['category_id'] ?? null,
+            'category_id' => $categoryId,
             'sku' => $data['sku'] ?? null,
             'barcode' => $data['barcode'] ?? null,
             'trade_name' => $data['trade_name'],
@@ -70,7 +84,16 @@ class PharmacyService
             'dosage_instructions' => $data['dosage_instructions'] ?? null,
             'current_stock' => '0',
             'is_active' => true,
-        ]);
+            ]);
+
+            // لا تُنشأ "كمية" مستقلة عن دفعة: الدفعة هي مصدر مخزون الدواء
+            // وتكلفته وصلاحيته، ولذلك يُنشآن في المعاملة نفسها أو لا شيء.
+            if (!empty($data['initial_batch'])) {
+                $this->addBatch($product, $data['initial_batch']);
+            }
+
+            return $product->fresh(['category', 'batches']);
+        });
     }
 
     public function updateProduct(PharmacyProduct $product, array $data): PharmacyProduct
@@ -110,8 +133,13 @@ class PharmacyService
         if ($expiry->isPast()) {
             throw new InvalidArgumentException('تاريخ الصلاحية في الماضي');
         }
+        $manufacturedAt = !empty($data['manufactured_at'])
+            ? \Carbon\Carbon::parse($data['manufactured_at']) : null;
+        if ($manufacturedAt && $manufacturedAt->greaterThanOrEqualTo($expiry)) {
+            throw new InvalidArgumentException('تاريخ الإنتاج يجب أن يسبق تاريخ الصلاحية');
+        }
 
-        return DB::transaction(function () use ($product, $data, $expiry) {
+        return DB::transaction(function () use ($product, $data, $expiry, $manufacturedAt) {
             if (PharmacyBatch::where('product_id', $product->id)
                 ->where('batch_number', $data['batch_number'])->exists()) {
                 throw new InvalidArgumentException('رقم التشغيلة مسجّل لهذا الدواء مسبقاً');
@@ -124,6 +152,7 @@ class PharmacyService
                 'batch_number' => $data['batch_number'],
                 'expiry_date' => $expiry->toDateString(),
                 'received_date' => $data['received_date'] ?? now()->toDateString(),
+                'manufactured_at' => $manufacturedAt?->toDateString(),
                 'quantity_received' => $qty,
                 'quantity_remaining' => $qty,
                 'cost_per_unit' => isset($data['cost_per_unit'])

@@ -8,6 +8,7 @@ import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/pharmacy/controllers/pharmacy_controller.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
+import 'package:amial_pay/helper/amial_money.dart';
 
 /// AMIAL-PHARMACY-001 — لوحة الصيدلية (Entry point).
 class PharmacyDashboardScreen extends StatefulWidget {
@@ -26,6 +27,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await c.loadPharmacy();
       await c.loadDashboard();
+      await c.loadCategories();
       // AMIAL-SUB-GATING: أعِد تحميل الصلاحيات لتنعكس ترقية الخطة
       try { await Get.find<AccessController>().load(); } catch (_) {}
     });
@@ -89,7 +91,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
                     Expanded(child: _statBox('${today?['sales_count'] ?? 0}', 'بيوع اليوم',
                         AmialColors.primary, Icons.receipt_long)),
                     const SizedBox(width: 6),
-                    Expanded(child: _statBox('${today?['total_amount'] ?? 0}', 'الإجمالي (ر.ي)',
+                    Expanded(child: _statBox(AmialMoney.fmt(today?['total_amount']), 'الإجمالي (ر.ي)',
                         AmialColors.yellowDark, Icons.attach_money)),
                   ]),
                   const SizedBox(height: 8),
@@ -214,7 +216,10 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
   void initState() {
     super.initState();
     c = Get.find<PharmacyController>();
-    WidgetsBinding.instance.addPostFrameCallback((_) => c.loadProducts());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await c.loadCategories();
+      await c.loadProducts();
+    });
   }
 
   @override
@@ -285,7 +290,9 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
             ]),
             if (p['generic_name'] != null)
               Text(p['generic_name'], style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
-            Text('${stock.toStringAsFixed(0)} ${p['unit'] ?? ''} • ${p['sale_price']} ر.ي',
+            if (p['category']?['name'] != null)
+              Text('${p['category']['name']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+            Text('${stock.toStringAsFixed(0)} ${p['unit'] ?? ''} • ${AmialMoney.yer(p['sale_price'])}',
                 style: TextStyle(
                   color: isLow ? AmialColors.red : Colors.green.shade700,
                   fontSize: 12, fontWeight: FontWeight.bold,
@@ -309,7 +316,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
-              Expanded(child: Text('Batches: ${product['trade_name']}',
+              Expanded(child: Text('الدفعات: ${product['trade_name']}',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
               FilledButton.icon(
                 onPressed: () { Navigator.pop(context); _addBatchDialog(product); },
@@ -323,7 +330,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
                 return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.inventory, size: 50, color: Colors.grey.shade400),
                   const SizedBox(height: 8),
-                  Text('لا توجد Batches', style: TextStyle(color: Colors.grey.shade600)),
+                  Text('لا توجد دفعات مسجلة', style: TextStyle(color: Colors.grey.shade600)),
                 ]));
               }
               return ListView.builder(
@@ -363,6 +370,8 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('#${b['batch_number']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           Text('انتهاء: $expiry', style: TextStyle(color: isExpired ? Colors.red : Colors.grey.shade700, fontSize: 11)),
+          if (b['manufactured_at'] != null)
+            Text('إنتاج: ${b['manufactured_at']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text('${b['quantity_remaining']}', style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -407,6 +416,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
     final number = TextEditingController();
     final qty = TextEditingController();
     final expiry = TextEditingController();
+    final manufactured = TextEditingController();
     final supplier = TextEditingController();
     final cost = TextEditingController();
 
@@ -434,6 +444,21 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
           },
         ),
         const SizedBox(height: 8),
+        TextField(
+          controller: manufactured,
+          readOnly: true,
+          decoration: const InputDecoration(labelText: 'تاريخ الإنتاج (اختياري)', hintText: 'YYYY-MM-DD'),
+          onTap: () async {
+            final d = await showDatePicker(
+              context: context,
+              firstDate: DateTime(2000),
+              lastDate: DateTime.now(),
+              initialDate: DateTime.now(),
+            );
+            if (d != null) manufactured.text = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+          },
+        ),
+        const SizedBox(height: 8),
         TextField(controller: supplier, decoration: const InputDecoration(labelText: 'المورّد (اختياري)')),
         const SizedBox(height: 8),
         TextField(controller: cost, keyboardType: TextInputType.number,
@@ -448,6 +473,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
               'batch_number': number.text.trim(),
               'quantity_received': qty.text,
               'expiry_date': expiry.text,
+              if (manufactured.text.isNotEmpty) 'manufactured_at': manufactured.text,
               if (supplier.text.isNotEmpty) 'supplier_name': supplier.text.trim(),
               if (cost.text.isNotEmpty) 'cost_per_unit': cost.text,
             });
@@ -469,20 +495,87 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
     final trade = TextEditingController();
     final generic = TextEditingController();
     final price = TextEditingController();
+    final cost = TextEditingController();
     final barcode = TextEditingController();
+    final manufacturer = TextEditingController();
+    final unit = TextEditingController(text: 'علبة');
+    final category = TextEditingController();
+    final batchNumber = TextEditingController();
+    final quantity = TextEditingController();
+    final expiry = TextEditingController();
+    final manufactured = TextEditingController();
+    int? selectedCategoryId;
     bool requiresPrescription = false;
 
-    showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (_, setSt) => AlertDialog(
-      title: const Text('منتج جديد'),
+    showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (dialogContext, setSt) => AlertDialog(
+      title: const Text('منتج جديد ودفعة أولى'),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: trade, decoration: const InputDecoration(labelText: 'الاسم التجاري *')),
+        const Text('بيانات الصنف', style: TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
+        TextField(controller: trade, onChanged: (v) => c.loadSimilarProducts(v, categoryId: selectedCategoryId), decoration: const InputDecoration(labelText: 'الاسم التجاري *')),
         const SizedBox(height: 8),
-        TextField(controller: generic, decoration: const InputDecoration(labelText: 'الاسم العلمي (اختياري)')),
+        TextField(controller: generic, onChanged: (v) => c.loadSimilarProducts(v, categoryId: selectedCategoryId), decoration: const InputDecoration(labelText: 'الاسم العلمي (اختياري)')),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<int>(
+          value: selectedCategoryId,
+          decoration: const InputDecoration(labelText: 'تصنيف مسجل'),
+          isExpanded: true,
+          items: c.categories.map((x) => DropdownMenuItem<int>(value: (x['id'] as num).toInt(), child: Text('${x['name']}'))).toList(),
+          onChanged: (v) => setSt(() { selectedCategoryId = v; category.clear(); }),
+        ),
+        const SizedBox(height: 8),
+        TextField(controller: category, decoration: const InputDecoration(labelText: 'أو أضف تصنيفاً جديداً *', hintText: 'مثل: مضادات حيوية')),
+        const SizedBox(height: 8),
+        TextField(controller: manufacturer, decoration: const InputDecoration(labelText: 'الشركة المصنعة (اختياري)')),
+        const SizedBox(height: 8),
+        TextField(controller: unit, decoration: const InputDecoration(labelText: 'الوحدة', hintText: 'علبة / شريط / قطعة')),
         const SizedBox(height: 8),
         TextField(controller: barcode, decoration: const InputDecoration(labelText: 'الباركود (اختياري)')),
         const SizedBox(height: 8),
-        TextField(controller: price, keyboardType: TextInputType.number,
+        TextField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: const InputDecoration(labelText: 'سعر البيع *', suffixText: 'ر.ي')),
+        const SizedBox(height: 8),
+        TextField(controller: cost, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'سعر الشراء للوحدة *', suffixText: 'ر.ي')),
+        const SizedBox(height: 14),
+        const Align(alignment: Alignment.centerRight, child: Text('الدفعة الأولى والمخزون', style: TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary))),
+        const SizedBox(height: 8),
+        TextField(controller: batchNumber, decoration: const InputDecoration(labelText: 'رقم التشغيلة / الدفعة *')),
+        const SizedBox(height: 8),
+        TextField(controller: quantity, keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(labelText: 'الكمية المستلمة *', suffixText: unit.text.isEmpty ? 'وحدة' : unit.text)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: manufactured,
+          readOnly: true,
+          decoration: const InputDecoration(labelText: 'تاريخ الإنتاج (إن كان مطبوعاً)', hintText: 'YYYY-MM-DD'),
+          onTap: () async {
+            final d = await showDatePicker(context: dialogContext, firstDate: DateTime(2000), lastDate: DateTime.now(), initialDate: DateTime.now());
+            if (d != null) manufactured.text = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+          },
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: expiry,
+          readOnly: true,
+          decoration: const InputDecoration(labelText: 'تاريخ الانتهاء *', hintText: 'YYYY-MM-DD'),
+          onTap: () async {
+            final d = await showDatePicker(context: dialogContext, firstDate: DateTime.now().add(const Duration(days: 1)), lastDate: DateTime.now().add(const Duration(days: 3650)), initialDate: DateTime.now().add(const Duration(days: 365)));
+            if (d != null) expiry.text = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+          },
+        ),
+        const SizedBox(height: 10),
+        Obx(() {
+          final matches = c.similarProducts;
+          if (matches.isEmpty) return const SizedBox.shrink();
+          return Container(
+            width: double.infinity, padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(8)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('أصناف مشابهة مسجلة — حتى 5', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              ...matches.take(5).map((p) => Text('• ${p['trade_name']}${p['generic_name'] == null ? '' : ' — ${p['generic_name']}'}', style: const TextStyle(fontSize: 12))),
+            ]),
+          );
+        }),
         const SizedBox(height: 8),
         SwitchListTile(
           title: const Text('يستلزم وصفة طبية', style: TextStyle(fontSize: 13)),
@@ -495,13 +588,28 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
         Obx(() => FilledButton(
           onPressed: c.isSubmitting.value ? null : () async {
-            if (trade.text.isEmpty || price.text.isEmpty) return;
+            if (trade.text.isEmpty || price.text.isEmpty || cost.text.isEmpty || batchNumber.text.isEmpty || quantity.text.isEmpty || expiry.text.isEmpty || (selectedCategoryId == null && category.text.trim().isEmpty)) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أكمل الاسم والتصنيف والأسعار والكمية ورقم التشغيلة والانتهاء')));
+              return;
+            }
             final ok = await c.addProduct({
               'trade_name': trade.text.trim(),
               if (generic.text.isNotEmpty) 'generic_name': generic.text.trim(),
               if (barcode.text.isNotEmpty) 'barcode': barcode.text.trim(),
+              if (manufacturer.text.isNotEmpty) 'manufacturer': manufacturer.text.trim(),
+              if (unit.text.isNotEmpty) 'unit': unit.text.trim(),
+              if (selectedCategoryId != null) 'category_id': selectedCategoryId,
+              if (category.text.trim().isNotEmpty) 'category_name': category.text.trim(),
               'sale_price': price.text,
+              'cost_price': cost.text,
               'requires_prescription': requiresPrescription,
+              'initial_batch': {
+                'batch_number': batchNumber.text.trim(),
+                'quantity_received': quantity.text.trim(),
+                'expiry_date': expiry.text,
+                'cost_per_unit': cost.text.trim(),
+                if (manufactured.text.isNotEmpty) 'manufactured_at': manufactured.text,
+              },
             });
             if (!mounted) return;
             if (ok) {
@@ -881,7 +989,7 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
           const SizedBox(width: 8),
           Text('${items.length} عنصر', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
           const Spacer(),
-          Text('${s['total_amount']} ر.ي',
+          Text(AmialMoney.yer(s['total_amount']),
               style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary, fontSize: 15)),
         ]),
         if (customer != null) ...[
@@ -937,7 +1045,7 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               _detail('رقم العملية', '#${ulid.length >= 8 ? ulid.substring(ulid.length - 8) : ulid}'),
-              _detail('الإجمالي', '${sale['total_amount'] ?? '0'} ر.ي', bold: true),
+              _detail('الإجمالي', AmialMoney.yer(sale['total_amount']), bold: true),
               _detail('طريقة الدفع', _paymentLabel((sale['payment_method'] ?? '').toString())),
               if (customer != null) _detail('العميل', '${customer['full_name'] ?? '—'}'),
               if (sale['prescription_number'] != null) _detail('رقم الوصفة', '${sale['prescription_number']}'),
@@ -955,7 +1063,7 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
                   subtitle: Text(batch?['batch_number'] == null
                       ? 'تشغيلة غير متاحة'
                       : 'التشغيلة: ${batch!['batch_number']}'),
-                  trailing: Text('${item['total_price'] ?? 0} ر.ي'),
+                  trailing: Text(AmialMoney.yer(item['total_price'])),
                 );
               }),
               const SizedBox(height: 14),

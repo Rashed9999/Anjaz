@@ -20,6 +20,9 @@ class PharmacyRepo extends GetxService {
     if (lowStockOnly) q['low_stock_only'] = '1';
     return apiClient.getData('$_base/products', query: q.isEmpty ? null : q);
   }
+  Future<Response> listCategories() => apiClient.getData('$_base/categories');
+  Future<Response> similarProducts(String query, {int? categoryId}) => apiClient.getData(
+      '$_base/products/similar', query: {'query': query, if (categoryId != null) 'category_id': '$categoryId'});
   Future<Response> addProduct(Map<String, dynamic> data) => apiClient.postData('$_base/products', data);
   Future<Response> updateProduct(int id, Map<String, dynamic> data) =>
       apiClient.putData('$_base/products/$id', data);
