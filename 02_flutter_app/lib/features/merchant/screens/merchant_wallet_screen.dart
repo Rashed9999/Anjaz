@@ -82,7 +82,7 @@ class _MerchantWalletScreenState extends State<MerchantWalletScreen> {
               children: [
                 _BalanceCard(
                   balance: stats.balance,
-                  ownerOnly: stats.balanceScope == 'owner_only',
+                  ownerOnly: !_access.isMerchantOwner,
                 ),
                 const SizedBox(height: 14),
 
