@@ -83,8 +83,8 @@ class VerticalParityGuardTest extends TestCase
             ],
             'pharmacy' => [
                 'free' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_pos', 'pharmacy_products', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
-                'business' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_pos', 'pharmacy_prescriptions', 'pharmacy_products', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
-                'enterprise' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_pos', 'pharmacy_prescriptions', 'pharmacy_products', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
+                'business' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_customers', 'pharmacy_pos', 'pharmacy_prescriptions', 'pharmacy_products', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
+                'enterprise' => ['daily_reports', 'debts', 'merchant_verification', 'notifications', 'pharmacy_alerts', 'pharmacy_batches', 'pharmacy_customers', 'pharmacy_pos', 'pharmacy_prescriptions', 'pharmacy_products', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet'],
             ],
             'wholesale' => [
                 'free' => ['cashier', 'daily_reports', 'debts', 'merchant_verification', 'notifications', 'profile', 'quick_sale', 'qr_pay', 'receipts', 'receive', 'transfer', 'wallet', 'wholesale_collections', 'wholesale_invoices'],

@@ -246,7 +246,7 @@ final class CapabilityRegistry
                 ->permissions(['retail.return.*'])
                 ->routes(['retail/returns', 'retail/sales'])
                 ->screen('/retail/returns')
-                ->businessTypes(self::GOODS),
+                ->businessTypes([A::BIZ_RETAIL]),
 
             // ══════════════════════════════════════════════════════════
             // **ودفترُ الدَّين ليس لمحطّة وقود — والنيّةُ مكتوبةٌ منذ قبلُ.**
@@ -401,7 +401,6 @@ final class CapabilityRegistry
                 ->group('المخزون')->icon('warning_amber')
                 ->minPlan(A::PLAN_BUSINESS)
                 ->businessTypes([A::BIZ_RETAIL, A::BIZ_WHOLESALE])
-                ->routes(['pharmacy/alerts'])
                 ->screen('/retail')
                 ->businessTypes(self::GOODS),
 
@@ -692,23 +691,23 @@ final class CapabilityRegistry
                 ->routes(['pharmacy/products/{id}/batches']),
 
             C::make(A::F_PHARMACY_PRODUCTS)->nameAr('أصناف الصيدلية')->group('الصيدلية')->icon('medication')->minPlan(A::PLAN_FREE)->businessTypes([A::BIZ_PHARMACY]),
-            C::make(A::F_PHARMACY_ALERTS)->nameAr('تنبيهات الصيدلية')->group('الصيدلية')->icon('warning_amber')->minPlan(A::PLAN_FREE)->businessTypes([A::BIZ_PHARMACY]),
-            // ══════════════════════════════════════════════════════════
-            // AMIAL-SOLD-UNBUILT-001 — **تُباع ولا وجودَ لها.**
-            //
-            // «عملاء الصيدلية» مُعلَنةٌ بـ`minPlan(BUSINESS)` — تظهر في
-            // صفحة التسعير وفي «قدراتي» كأنّها جاهزة. **ولا نقطةَ نهايةٍ
-            // لها في المشروع كلِّه**: لا مسار، ولا متحكّم، ولا حارس.
-            //
-            // فيدفع صاحبُ الصيدليّة ثمنَ الترقية، ويفتح الشاشةَ فلا يجد
-            // شيئاً. **ووعدٌ في صفحة تسعيرٍ لا يُوفّى أسوأ من ميزةٍ
-            // غائبةٍ معلنة.**
-            //
-            // فتُعلَن «قريباً» فتخرج من الباقات حتّى تُبنى — ولا تُحذف،
-            // لأنّ الحذفَ يُنسيها.
-            // ══════════════════════════════════════════════════════════
-            C::make(A::F_PHARMACY_CUSTOMERS)->nameAr('عملاء الصيدلية')->group('الصيدلية')->icon('people')->minPlan(A::PLAN_BUSINESS)->businessTypes([A::BIZ_PHARMACY])
-                ->comingSoon(),
+            C::make(A::F_PHARMACY_ALERTS)
+                ->nameAr('تنبيهات الصيدلية')
+                ->descAr('تنبيهات قرب انتهاء الصلاحية ونفاد الدفعات، مع فحص وإغلاق آمن للتنبيه.')
+                ->group('الصيدلية')->icon('warning_amber')
+                ->minPlan(A::PLAN_FREE)
+                ->routes(['pharmacy/alerts'])
+                ->screen('/pharmacy/alerts')
+                ->businessTypes([A::BIZ_PHARMACY]),
+            C::make(A::F_PHARMACY_CUSTOMERS)
+                ->nameAr('عملاء الصيدلية')
+                ->descAr('ملف صحي للعميل: حساسية وأدوية مزمنة وملاحظات تُراجع قبل بيع الدواء.')
+                ->group('الصيدلية')->icon('people')
+                ->minPlan(A::PLAN_BUSINESS)
+                ->permissions(['pharmacy.patient.*'])
+                ->routes(['pharmacy/customers'])
+                ->screen('/pharmacy/customers')
+                ->businessTypes([A::BIZ_PHARMACY]),
 
             C::make(A::F_PHARMACY_PRESCRIPTIONS)
                 ->nameAr('الوصفات الطبية')

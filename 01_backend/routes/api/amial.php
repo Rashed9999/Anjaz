@@ -1056,11 +1056,15 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
                 ->middleware('capability:pharmacy_batches')
                 ->where('id', '[0-9]+')->name('batches.recall');
 
-            // Customers
-            Route::get('/customers', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listCustomers'])->name('customers.index');
-            Route::get('/customers/by-phone', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'findCustomerByPhone'])->name('customers.by-phone');
-            Route::post('/customers', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'addCustomer'])->name('customers.add');
+            // Customers — الملف الصحي مدفوع في الأعمال؛ الحارس على كل فعل.
+            Route::get('/customers', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listCustomers'])
+                ->middleware('capability:pharmacy_customers')->name('customers.index');
+            Route::get('/customers/by-phone', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'findCustomerByPhone'])
+                ->middleware('capability:pharmacy_customers')->name('customers.by-phone');
+            Route::post('/customers', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'addCustomer'])
+                ->middleware('capability:pharmacy_customers')->name('customers.add');
             Route::put('/customers/{id}', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'updateCustomer'])
+                ->middleware('capability:pharmacy_customers')
                 ->where('id', '[0-9]+')->name('customers.update');
 
             // Sales
@@ -1073,22 +1077,14 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
                 ->where('ulid', '[A-Z0-9]{26}')->name('sales.show');
             Route::get('/sales', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listSales'])->name('sales.index');
 
-            // ══════════════════════════════════════════════════════
-            // Alerts — **تنبيهُ نفاد المخزون، مبنيٌّ ولم يكن موصولاً
-            // باستحقاقه.**
-            //
-            // `PharmacyAlertService` قائمٌ منذ مدّة (‏`checkLowStock` و
-            // `scanExpiringBatches` و`dismissAlert`)، والقدرةُ
-            // `low_stock_alerts` تُباع من «البداية» في السجلّ وفي جدول
-            // الباقات — **ولا حارسَ بينهما**. فكانت تُقرأ «مدفوعةٌ بلا
-            // نقطة نهاية» وهي مبنيّةٌ بالكامل: العطلُ في الوصل لا في
-            // البناء.
+            // تنبيهات الصيدلية نواة مجانية مستقلة عن تنبيه رفوف التجزئة.
+            // لا يجوز أن تحرسها low_stock_alerts لأنها لا تنطبق على الصيدلية.
             Route::get('/alerts', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listAlerts'])
-                ->middleware('capability:low_stock_alerts')->name('alerts.index');
+                ->middleware('capability:pharmacy_alerts')->name('alerts.index');
             Route::post('/alerts/scan', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'scanExpiringBatches'])
-                ->middleware('capability:low_stock_alerts')->name('alerts.scan');
+                ->middleware('capability:pharmacy_alerts')->name('alerts.scan');
             Route::post('/alerts/{id}/dismiss', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'dismissAlert'])
-                ->middleware('capability:low_stock_alerts')
+                ->middleware('capability:pharmacy_alerts')
                 ->where('id', '[0-9]+')->name('alerts.dismiss');
         });
 

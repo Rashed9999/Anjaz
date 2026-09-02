@@ -88,7 +88,23 @@ final class Capability
     public function group(string $v): self { $this->group = $v; return $this; }
     public function icon(string $v): self { $this->icon = $v; return $this; }
     public function minPlan(?string $v): self { $this->minPlan = $v; return $this; }
-    public function businessTypes(array $v): self { $this->businessTypes = $v; return $this; }
+    /**
+     * يضيّق نطاق القدرة عند استدعائه أكثر من مرة، ولا يوسّعه عرضاً.
+     *
+     * في سجل القدرات قد تُكتب قاعدة عامة ثم قاعدة قطاعية أدق في السلسلة
+     * نفسها. الاستبدال كان يجعل الاستدعاء الأخير يفتح القدرة لقطاعات لا
+     * تملك مساراتها (مثل مركز التجزئة داخل الصيدلية). تقاطع النطاقين
+     * يحافظ على القيد الأدق ويجعل تكرار السلسلة آمناً.
+     */
+    public function businessTypes(array $v): self
+    {
+        $v = array_values(array_unique($v));
+        $this->businessTypes = $this->businessTypes === []
+            ? $v
+            : array_values(array_intersect($this->businessTypes, $v));
+
+        return $this;
+    }
     public function permissions(array $v): self { $this->permissions = $v; return $this; }
     public function routes(array $v): self { $this->routes = $v; return $this; }
     public function limit(?string $v): self { $this->limitKey = $v; return $this; }

@@ -18,7 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 ///     pharmacy_products  → PharmacyDashboardScreen       ← رئيسيّة
 ///     pharmacy_batches   → PharmacyDashboardScreen       ← رئيسيّة
 ///     pharmacy_alerts    → PharmacyDashboardScreen       ← رئيسيّة
-///     pharmacy_customers → PharmacyDashboardScreen       ← رئيسيّة
+///     pharmacy_customers → PharmacyCustomersScreen       ← الميزة نفسها
 ///     wholesale_invoices → WholesaleDashboardScreen      ← رئيسيّة
 ///
 /// **فتاجرُ تجزئةٍ يضغط «البيع السريع» فيهبط في رئيسيّةٍ ثانية** ببطاقة

@@ -20,9 +20,8 @@ use Tests\TestCase;
  * ويفتح الشاشة، **فيردُّه الوسيطُ نفسُه**. والسلسلةُ كلُّها سليمةٌ إلّا
  * حلقةَ المنح.
  *
- * **وهذا مقلوبُ «تُباع ولا وجودَ لها»** (‏`pharmacy_customers`): تلك
- * مُعلَنةٌ بلا نقطةِ نهاية، فأُخرجت من الباقات بـ`comingSoon()`. وهذه
- * **موجودةٌ ومبيعةٌ ومقفلة** — فعلاجُها المنحُ لا الإخراج.
+ * وهذه ليست وصفةَ قطاع آخر: ميزات التجزئة موجودة ومبيعة ومقفلة؛ علاجها
+ * المنح لتاجر التجزئة، لا تسريبها إلى صيدلية لها كتالوجها الطبي الخاص.
  *
  * ══════════════════════════════════════════════════════════════════════
  * **ولا يُقاس المنحُ من القائمة بل من الخدمة.**
@@ -62,9 +61,9 @@ class RetailDepthReachesTheMerchantGuardTest extends TestCase
      * وهو الثمنُ الذي تُعلنه كلُّ واحدةٍ عن نفسها.
      */
     /** @test */
-    public function a_business_plan_goods_merchant_actually_receives_all_five(): void
+    public function a_business_plan_retail_merchant_actually_receives_all_five(): void
     {
-        foreach ([A::BIZ_RETAIL, A::BIZ_WHOLESALE, A::BIZ_PHARMACY] as $biz) {
+        foreach ([A::BIZ_RETAIL] as $biz) {
             $features = $this->featuresFor($biz, A::PLAN_BUSINESS);
 
             $missing = array_values(array_diff(self::FIVE, $features));
@@ -96,7 +95,7 @@ class RetailDepthReachesTheMerchantGuardTest extends TestCase
     }
 
     /**
-     * **③ ومحطّةُ الوقود لا تنالها بأيّ باقة.**
+     * **③ ولا قطاعٌ غير التجزئة ينالها بأيّ باقة.**
      *
      * ══════════════════════════════════════════════════════════════════
      * وهذا شرطُ صحّة العلاج لا زينةٌ فوقه: منحُها في `planFeatures` بلا
@@ -109,17 +108,19 @@ class RetailDepthReachesTheMerchantGuardTest extends TestCase
      * ══════════════════════════════════════════════════════════════════
      */
     /** @test */
-    public function a_fuel_station_never_receives_them_on_any_plan(): void
+    public function non_retail_merchants_never_receive_them_on_any_plan(): void
     {
-        foreach (A::ALL_PLANS as $plan) {
-            $features = $this->featuresFor(A::BIZ_FUEL, $plan);
+        foreach ([A::BIZ_QUICK_SALE, A::BIZ_WHOLESALE, A::BIZ_PHARMACY, A::BIZ_FUEL, A::BIZ_RESTAURANT] as $biz) {
+            foreach (A::ALL_PLANS as $plan) {
+                $features = $this->featuresFor($biz, $plan);
 
-            $leaked = array_values(array_intersect(self::FIVE, $features));
+                $leaked = array_values(array_intersect(self::FIVE, $features));
 
-            $this->assertSame([], $leaked, sprintf(
-                "**قدراتُ تجزئةٍ وصلت محطّةَ وقودٍ على باقة «%s»:**\n  %s\n\n"
-                . 'وهي لا تنطبق على قطاعها — والترقيةُ لا تُغيّر ذلك.',
-                $plan, implode('، ', $leaked)));
+                $this->assertSame([], $leaked, sprintf(
+                    "**قدراتُ تجزئةٍ وصلت «%s» على باقة «%s»:**\n  %s\n\n"
+                    . 'وهي لا تنطبق على قطاعها — والترقيةُ لا تُغيّر ذلك.',
+                    $biz, $plan, implode('، ', $leaked)));
+            }
         }
     }
 

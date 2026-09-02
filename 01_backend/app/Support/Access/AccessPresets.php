@@ -149,7 +149,9 @@ class AccessPresets
                 A::F_EXPENSES,
                 A::F_CUSTOMERS, A::F_SUPPLIERS, A::F_PURCHASES,
                 A::F_PROFIT_REPORTS, A::F_EXCEL_EXPORT, A::F_ADVANCED_REPORTS,
-                A::F_EMPLOYEES, A::F_EMPLOYEE_PERMISSIONS, A::F_MULTI_POS,
+                // الصلاحيات جزء من إدارة الموظف نفسها، وليست بطاقة ثانية
+                // تُباع بلا شاشة أو حارس مستقلين.
+                A::F_EMPLOYEES, A::F_MULTI_POS,
                 A::F_LOYALTY,
             ],
             // مؤسسة (99 ر.س/شهر): كل الأعمال + نمو متعدد الفروع وحوكمة مؤسسية.
@@ -191,7 +193,7 @@ class AccessPresets
                 A::F_EXPENSES,
                 A::F_CUSTOMERS, A::F_SUPPLIERS, A::F_PURCHASES,
                 A::F_PROFIT_REPORTS, A::F_EXCEL_EXPORT, A::F_ADVANCED_REPORTS,
-                A::F_EMPLOYEES, A::F_EMPLOYEE_PERMISSIONS, A::F_MULTI_POS,
+                A::F_EMPLOYEES, A::F_MULTI_POS,
                 A::F_LOYALTY,
                 A::F_BRANCHES, A::F_BRANCH_REPORTS,
                 A::F_MULTI_CURRENCY,

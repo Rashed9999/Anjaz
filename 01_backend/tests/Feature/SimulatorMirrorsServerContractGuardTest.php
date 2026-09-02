@@ -293,23 +293,14 @@ class SimulatorMirrorsServerContractGuardTest extends TestCase
     /**
      * **⑧ و«قريباً» ليست «مقفلةً في باقتك».**
      *
-     * `pharmacy_customers` مُعلَنةٌ بـ`comingSoon()` لأنّها **بلا نقطة
-     * نهاية**. فعرضُها مقفلةً بباقةٍ يَعِد بأنّ الدفعَ يفتحها —
-     * **ووعدٌ في صفحة تسعيرٍ لا يُوفّى أسوأ من ميزةٍ غائبةٍ معلنة.**
+     * تُفصل «قريباً» عن «مقفلة في باقتك»: الأولى لا يعد التاجرَ الدفع
+     * بفتحها، والثانية تفتحها الترقية فعلاً.
      */
     /** @test */
     public function a_coming_soon_capability_is_never_shown_as_plan_locked(): void
     {
         $reg = (string) file_get_contents(
             __DIR__ . '/../../app/Support/Access/CapabilityRegistry.php');
-
-        $at = strpos($reg, 'F_PHARMACY_CUSTOMERS');
-        $this->assertNotFalse($at, 'اختفت «عملاء الصيدلية» من السجلّ.');
-
-        $this->assertStringContainsString('comingSoon()', substr($reg, $at, 400),
-            '**«عملاء الصيدلية» لم تعد «قريباً».** فإن بُنيت نقطتُها '
-            . 'فليُحدَّث المحاكي؛ وإن أُعيدت للبيع بلا نقطةٍ فهذا هو '
-            . 'العطلُ الذي أُخرجت من أجله.');
 
         $sim = (string) file_get_contents(self::RX_SIM);
 

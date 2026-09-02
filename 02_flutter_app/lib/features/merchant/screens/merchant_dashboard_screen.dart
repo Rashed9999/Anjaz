@@ -5,6 +5,7 @@ import 'package:amial_pay/features/merchant/screens/merchant_accept_payment_scre
 import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_transactions_screen.dart';
 import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amial_pay/features/merchant/screens/inventory_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
@@ -359,8 +360,8 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       ),
                       child: _LinkTile(
                         icon: Icons.trending_up_rounded,
-                        label: 'التقرير المالي',
-                        onTap: () => Get.to(() => const FinancialTruthReportScreen()),
+                        label: 'تقارير الربحية',
+                        onTap: () => Get.to(() => const ProfitReportScreen()),
                       ),
                     ),
                     // AMIAL-SUPPLIERS-001 (68): الموردون — لباقات Business فأعلى

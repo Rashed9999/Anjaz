@@ -63,6 +63,50 @@ class PharmacyBusinessCoreServicesTest extends TestCase
     }
 
     /** @test */
+    public function pharmacy_customer_records_are_a_real_business_feature_not_a_coming_soon_card(): void
+    {
+        Passport::actingAs($this->merchant->fresh(), [], 'api');
+
+        $this->getJson('/api/v1/amial/merchant/pharmacy/customers')
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        $state = app(EntitlementService::class)->state(
+            $this->merchant->fresh(), A::F_PHARMACY_CUSTOMERS);
+        $this->assertSame(EntitlementService::AVAILABLE, $state['state']);
+
+        $free = User::factory()->create([
+            'type' => 3, 'role' => A::ROLE_MERCHANT, 'zone_code' => 'SOUTH',
+        ]);
+        MerchantProfile::create([
+            'user_id' => $free->id,
+            'business_type' => A::BIZ_PHARMACY,
+            'verification_status' => 'verified',
+            'subscription_plan' => A::PLAN_FREE,
+        ]);
+
+        Passport::actingAs($free->fresh(), [], 'api');
+        $this->getJson('/api/v1/amial/merchant/pharmacy/customers')
+            ->assertStatus(402)
+            ->assertJsonPath('code', 'PLAN_UPGRADE_REQUIRED');
+
+        $retail = User::factory()->create([
+            'type' => 3, 'role' => A::ROLE_MERCHANT, 'zone_code' => 'SOUTH',
+        ]);
+        MerchantProfile::create([
+            'user_id' => $retail->id,
+            'business_type' => A::BIZ_RETAIL,
+            'verification_status' => 'verified',
+            'subscription_plan' => A::PLAN_BUSINESS,
+        ]);
+
+        Passport::actingAs($retail->fresh(), [], 'api');
+        $this->getJson('/api/v1/amial/merchant/pharmacy/customers')
+            ->assertNotFound()
+            ->assertJsonPath('code', 'NOT_FOR_BUSINESS_TYPE');
+    }
+
+    /** @test */
     public function pharmacy_business_manifest_never_advertises_retail_only_surfaces(): void
     {
         $rows = app(EntitlementService::class)->manifestFor($this->merchant->fresh())['capabilities'];

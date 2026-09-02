@@ -7,6 +7,8 @@ import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 // شاشات الخدمات
 import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_advanced_reports_screen.dart';
+import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_excel_export_screen.dart';
@@ -71,8 +73,10 @@ class MerchantServicesHubScreen extends StatelessWidget {
         bool fitsBusiness(_Svc s) =>
             s.onlyFor.isEmpty || (biz != null && s.onlyFor.contains(biz));
 
-        final open = _catalog.where((s) => access.has(s.code)).toList();
-        final closed = _catalog.where((s) => !access.has(s.code));
+        // لا نعرض خدمة قطاع آخر كمفتوحة حتى لو وصلت قائمة قديمة من الخادم؛
+        // الحارس في الخادم هو الحماية، وهذه طبقة منع التشويش في الواجهة.
+        final open = _catalog.where((s) => access.has(s.code) && fitsBusiness(s)).toList();
+        final closed = _catalog.where((s) => !access.has(s.code) || !fitsBusiness(s));
         final upgradable = closed.where(fitsBusiness).toList();
         final foreign = closed.where((s) => !fitsBusiness(s)).toList();
 
@@ -442,7 +446,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
     _Group('المخزون والجرد', Icons.inventory_2,
         ['inventory', 'inventory_audit', 'low_stock_alerts']),
     _Group('المالية والتقارير', Icons.bar_chart, [
-      'profit_reports', 'expenses', 'excel_export', 'multi_currency',
+      'profit_reports', 'advanced_reports', 'expenses', 'excel_export', 'multi_currency',
       'advanced_backup', 'daily_reports', 'wallet',
     ]),
     _Group('العملاء والتسويق', Icons.groups,
@@ -470,7 +474,8 @@ class MerchantServicesHubScreen extends StatelessWidget {
     // رسالة: شاشةٌ خاطئة تعمل بثقة. وInventoryScreen مبنيّة وكانت مهملة.
     _Svc('inventory', 'المخزون',
         'أضِف منتجاتك وتابع كمياتها، مع تنبيه عند اقتراب النفاد وجردٍ دوريّ.',
-        Icons.inventory_2, 'الأعمال', () => const InventoryScreen()),
+        Icons.inventory_2, 'الأعمال', () => const InventoryScreen(),
+        onlyFor: {'retail', 'wholesale'}),
     _Svc('promotions', 'العروض والخصومات',
         'أنشئ كوبونات وخصومات (نسبة مئوية أو مبلغ ثابت) تُطبَّق تلقائياً عند الدفع في الكاشير.',
         Icons.local_offer, 'الأعمال', () => const MerchantPromotionsScreen()),
@@ -494,7 +499,8 @@ class MerchantServicesHubScreen extends StatelessWidget {
         Icons.assignment_return, 'المجانية', () => const MerchantRefundScreen()),
     _Svc('products', 'المنتجات والأسعار',
         'كتالوج منتجاتك: السعر والتكلفة والباركود وتاريخ الانتهاء — يُستخدم في الكاشير مباشرة.',
-        Icons.sell, 'الأعمال', () => const CashierProductsScreen()),
+        Icons.sell, 'الأعمال', () => const CashierProductsScreen(),
+        onlyFor: {'retail', 'wholesale'}),
     _Svc('receipts', 'إعدادات الفاتورة',
         'اسم المتجر وشعاره وبيانات التواصل التي تُطبع أعلى كل إيصال، مع رسالة ختامية للعميل.',
         Icons.receipt, 'المجانية', () => const ReceiptSettingsScreen()),
@@ -504,13 +510,16 @@ class MerchantServicesHubScreen extends StatelessWidget {
         onlyFor: {'retail'}),
     _Svc('inventory_audit', 'الجرد',
         'جردٌ دوريّ يقارن الكمية الدفترية بالكمية الفعلية على الرفّ ويُظهر الفروق صنفاً صنفاً.',
-        Icons.checklist, 'الأعمال', () => const InventoryAuditScreen()),
+        Icons.checklist, 'الأعمال', () => const InventoryAuditScreen(),
+        onlyFor: {'retail', 'wholesale'}),
     _Svc('low_stock_alerts', 'تنبيهات النفاد',
         'حدّد لكل صنف حدّاً أدنى، ونبّهك قبل نفاده بوقتٍ يكفي لإعادة الطلب.',
-        Icons.notification_important, 'الأعمال', () => const StockAlertsScreen()),
+        Icons.notification_important, 'الأعمال', () => const StockAlertsScreen(),
+        onlyFor: {'retail', 'wholesale'}),
     _Svc('debts', 'البيع بالآجل',
         'لوحة الآجل: كم لك على العملاء، ومن تأخّر، وسدادٌ جزئيّ أو كامل بكشف حساب لكل عميل.',
-        Icons.account_balance_wallet, 'المجانية', () => const CreditDashboardScreen()),
+        Icons.account_balance_wallet, 'المجانية', () => const CreditDashboardScreen(),
+        onlyFor: {'quick_sale', 'retail', 'wholesale', 'pharmacy', 'restaurant'}),
     _Svc('customers', 'العملاء وحساباتهم',
         'سجلّ عملائك وأرصدتهم الآجلة وحدودهم الائتمانية، مع كشف حساب قابل للتصدير.',
         Icons.person_search, 'الأعمال', () => const CreditCustomersScreen()),
@@ -522,13 +531,16 @@ class MerchantServicesHubScreen extends StatelessWidget {
         Icons.swap_vert, 'المجانية', () => const MerchantTransactionsScreen()),
     _Svc('profit_reports', 'تقارير الأرباح',
         'تقارير مبيعات وأرباح مفصّلة لمتجرك، بمقارنات يومية وشهرية لتعرف أداءك الحقيقي.',
-        Icons.trending_up, 'الأعمال', () => const FinancialTruthReportScreen()),
+        Icons.trending_up, 'الأعمال', () => const ProfitReportScreen()),
     _Svc('expenses', 'المصروفات والصندوق',
         'سجّل مصروفات المتجر والصندوق النثري وصنّفها، لتحسب صافي ربحك بدقّة بعد المصاريف.',
         Icons.receipt_long, 'الأعمال', () => const MerchantExpensesScreen()),
     _Svc('excel_export', 'تصدير Excel',
         'صدّر مبيعاتك وبياناتك إلى ملفات Excel جاهزة للمحاسبة والمراجعة الخارجية.',
         Icons.grid_on, 'الأعمال', () => const MerchantExcelExportScreen()),
+    _Svc('advanced_reports', 'مركز التقارير',
+        'التقرير المالي والربحية والتصدير في مكان واحد، مع الانتقال إلى التقرير المناسب مباشرة.',
+        Icons.analytics, 'الأعمال', () => const MerchantAdvancedReportsScreen()),
     _Svc('multi_currency', 'تعدّد العملات',
         'اعرض الأسعار وبِع بأكثر من عملة، مع أسعار صرف قابلة للتحديث يدوياً.',
         Icons.currency_exchange, 'مؤسسة', () => const MerchantCurrenciesScreen()),

@@ -154,21 +154,27 @@ class VerticalScopeGuardTest extends TestCase
     /**
      * @test
      *
-     * **والصيدليّةُ والجملةُ تبيعان صنفاً، فلهما الكتالوجُ والمخزون.**
+     * **الجملة لها كتالوجها العام؛ الصيدلية لها كتالوجها الطبي.**
      *
-     * ويُفحَصان لأنّ `GOODS` قائمةٌ **تُنقَص بسهولةٍ عن غير قصد**: من
-     * أخرج الوقودَ منها قد يُخرج معه من لا شأنَ له بالإخراج.
+     * الصيدلية لا ترث شاشة التجزئة لمجرد أنها تبيع صنفاً: حقول الدفعات
+     * والصلاحية والوصفة جزء من منتجها الحقيقي، لا طبقة تجزئة فوقه.
      */
-    public function pharmacy_and_wholesale_are_goods_verticals(): void
+    public function wholesale_keeps_general_catalogue_while_pharmacy_keeps_its_own_surface(): void
     {
-        foreach ([A::BIZ_PHARMACY, A::BIZ_WHOLESALE, A::BIZ_RESTAURANT] as $biz) {
-            $has = $this->featuresFor($biz, A::PLAN_BUSINESS);
+        $wholesale = $this->featuresFor(A::BIZ_WHOLESALE, A::PLAN_BUSINESS);
+        foreach ([A::F_PRODUCTS, A::F_INVENTORY, A::F_SUPPLIERS] as $code) {
+            $this->assertContains($code, $wholesale,
+                "سقطت «{$code}» عن الجملة — وهي تحتاج كتالوجها العام.");
+        }
 
-            foreach ([A::F_PRODUCTS, A::F_INVENTORY, A::F_SUPPLIERS] as $code) {
-                $this->assertContains($code, $has,
-                    "سقطت «{$code}» عن «{$biz}» — وهو يبيع صنفاً له كتالوجٌ "
-                    . 'ومخزون، فقصُّها يشلّ عملَه.');
-            }
+        $pharmacy = $this->featuresFor(A::BIZ_PHARMACY, A::PLAN_BUSINESS);
+        foreach ([A::F_PRODUCTS, A::F_INVENTORY, A::F_SUPPLIERS] as $code) {
+            $this->assertNotContains($code, $pharmacy,
+                "وصلت «{$code}» إلى الصيدلية — وهي شاشة تجزئة لا كتالوج الدواء.");
+        }
+        foreach ([A::F_PHARMACY_PRODUCTS, A::F_PHARMACY_BATCHES, A::F_PHARMACY_ALERTS] as $code) {
+            $this->assertContains($code, $pharmacy,
+                "سقطت «{$code}» عن الصيدلية — وهو جزء من عملها الأساسي.");
         }
     }
 

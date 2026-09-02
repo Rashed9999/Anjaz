@@ -16,6 +16,7 @@ import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart
 import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_api_keys_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_advanced_reports_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_backup_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_currencies_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_excel_export_screen.dart';
@@ -24,6 +25,7 @@ import 'package:amial_pay/features/merchant/screens/merchant_gift_cards_screen.d
 import 'package:amial_pay/features/merchant/screens/merchant_installments_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_loyalty_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_promotions_screen.dart';
+import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
 import 'package:amial_pay/features/access/screens/role_based_home_screens.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
@@ -107,8 +109,8 @@ class CapabilityScreens {
     // ── المال والتقارير ────────────────────────────────────────────
     'shift_close': () => const CashierShiftScreen(),
     'daily_reports': () => const FinancialTruthReportScreen(dailyOnly: true),
-    'profit_reports': () => const FinancialTruthReportScreen(),
-    'advanced_reports': () => const FinancialTruthReportScreen(),
+    'profit_reports': () => const ProfitReportScreen(),
+    'advanced_reports': () => const MerchantAdvancedReportsScreen(),
     'excel_export': () => const MerchantExcelExportScreen(),
     'expenses': () => const MerchantExpensesScreen(),
     'audit_log': () => const MerchantAuditLogScreen(),
@@ -124,11 +126,11 @@ class CapabilityScreens {
     'fuel_products': () => const FuelOpsCenterScreen(),
     'fuel_companies': () => const FuelCompaniesScreen(),
     'fuel_shifts': () => const FuelShiftsScreen(),
-    'pharmacy_pos': () => const PharmacyDashboardScreen(),
-    'pharmacy_products': () => const PharmacyDashboardScreen(),
-    'pharmacy_batches': () => const PharmacyDashboardScreen(),
-    'pharmacy_alerts': () => const PharmacyDashboardScreen(),
-    'pharmacy_customers': () => const PharmacyDashboardScreen(),
+    'pharmacy_pos': () => const PharmacySaleScreen(),
+    'pharmacy_products': () => const PharmacyProductsScreen(),
+    'pharmacy_batches': () => const PharmacyProductsScreen(),
+    'pharmacy_alerts': () => const PharmacyAlertsScreen(),
+    'pharmacy_customers': () => const PharmacyCustomersScreen(),
     // **الوصفاتُ تُدار من لوحة الصيدليّة نفسِها** — وسمُ الصنف وحقولُ
     // الوصفة في البيعة. ولا شاشةَ ثالثةٌ لها، فتُوجَّه إلى موضع عملها.
     // (‏وبلا هذا السطر يظهر سهمُ الدخول ويُضغط فلا يفتح — أمسكه

@@ -180,19 +180,19 @@ class SoldButUnbuiltGuardTest extends TestCase
     /**
      * @test
      *
-     * **③ والقدرتان الموصولتان حديثاً تُمنعان فعلاً على باقةٍ دونهما.**
+     * **③ القدرة المدفوعة تُمنع فعلاً على باقةٍ دونها، والنواة لا تُمنع.**
      *
      * فالوصلُ يُثبَت بالمنع لا بوجود السطر. (‏والضابطُ: تُقاسان بطلبٍ
      * حقيقيّ في `PaidEndpointBypassMatrixTest` أيضاً.)
      */
-    public function the_newly_wired_capabilities_actually_deny(): void
+    public function pharmacy_core_and_paid_capabilities_keep_their_real_boundaries(): void
     {
         $pharmacy = $this->merchant(A::BIZ_PHARMACY, A::PLAN_FREE);
 
-        // تنبيهُ النفاد — يُباع من «البداية».
+        // تنبيهات الصيدلية نواة: لا تربط خطأً بتنبيه رفوف التجزئة المدفوع.
         $this->actingAs($pharmacy, 'api')
             ->getJson('/api/v1/amial/merchant/pharmacy/alerts')
-            ->assertStatus(402);
+            ->assertOk();
 
         // ══════════════════════════════════════════════════════════════
         // **والباقةُ تُقرأ من سجلّ القدرات لا تُكتَب اسماً.**
@@ -228,12 +228,12 @@ class SoldButUnbuiltGuardTest extends TestCase
      */
     public function the_entitled_plan_reaches_the_newly_wired_capabilities(): void
     {
-        $pro = $this->merchant(A::BIZ_PHARMACY, A::PLAN_MERCHANT_PRO);
+        $pro = $this->merchant(A::BIZ_PHARMACY, A::PLAN_BUSINESS);
 
         $this->assertNotSame(402,
             $this->actingAs($pro, 'api')
                 ->getJson('/api/v1/amial/merchant/pharmacy/alerts')->status(),
-            'تنبيهُ النفاد مُنع على باقةٍ تستحقّه');
+            'تنبيهات الصيدلية الأساسية مُنعت بلا سبب');
 
         $this->assertNotSame(402,
             $this->actingAs($pro, 'api')

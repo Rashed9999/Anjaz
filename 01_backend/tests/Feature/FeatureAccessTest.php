@@ -254,6 +254,7 @@ class FeatureAccessTest extends TestCase
         $this->assertContains(A::F_PHARMACY_POS, $features);
         $this->assertContains(A::F_PHARMACY_BATCHES, $features);
         $this->assertContains(A::F_PHARMACY_ALERTS, $features);
+        $this->assertContains(A::F_PHARMACY_CUSTOMERS, $features);
         $this->assertContains(A::F_EMPLOYEES, $features);
         $this->assertContains(A::F_ADVANCED_REPORTS, $features);
 

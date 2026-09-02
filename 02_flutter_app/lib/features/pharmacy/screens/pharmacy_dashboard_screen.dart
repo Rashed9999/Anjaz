@@ -5,6 +5,7 @@ import 'package:open_file/open_file.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/pharmacy/controllers/pharmacy_controller.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
@@ -132,8 +133,17 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
               Expanded(child: _miniAction(Icons.medication, 'المنتجات',
                   () => Get.to(() => const PharmacyProductsScreen()))),
               const SizedBox(width: 8),
-              Expanded(child: _miniAction(Icons.people, 'العملاء',
-                  () => Get.to(() => const PharmacyCustomersScreen()))),
+              Expanded(child: Obx(() {
+                final access = Get.find<AccessController>();
+                final enabled = access.has('pharmacy_customers');
+                return _miniAction(
+                  enabled ? Icons.people : Icons.lock_outline,
+                  enabled ? 'الملف الصحي للعملاء' : 'الملف الصحي (أعمال)',
+                  () => Get.to(() => enabled
+                      ? const PharmacyCustomersScreen()
+                      : const PlansCatalogScreen()),
+                );
+              })),
             ]),
             const SizedBox(height: 8),
             Row(children: [

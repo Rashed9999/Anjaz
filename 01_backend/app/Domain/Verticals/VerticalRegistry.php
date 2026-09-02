@@ -111,12 +111,16 @@ final class VerticalRegistry
                 }
 
                 /**
-                 * **و`pharmacy_customers` ليست هنا** — أُعلنت «قريباً» لأنّها
-                 * بلا نقطة نهاية. ومنحُها يرسم زرّاً لا شيءَ خلفه.
+                 * الملف الصحي للعميل مبني في الصيدلية نفسها (بحث، إضافة،
+                 * تعديل، حساسية وأدوية مزمنة). يفتح في الأعمال لأنه يضيف
+                 * إدارة العميل إلى البيع، لا لأنه مجرد بطاقة تسويقية.
                  */
                 public function paidDepth(): array
                 {
-                    return [A::PLAN_BUSINESS => [A::F_PHARMACY_PRESCRIPTIONS]];
+                    return [A::PLAN_BUSINESS => [
+                        A::F_PHARMACY_CUSTOMERS,
+                        A::F_PHARMACY_PRESCRIPTIONS,
+                    ]];
                 }
             },
 
