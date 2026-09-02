@@ -655,8 +655,17 @@ final class CapabilityRegistry
                 ->routes(['fuel/tanks', 'fuel/pumps', 'fuel/nozzles'])
                 ->screen('/fuel/tanks'),
 
-            C::make(A::F_FUEL_PRODUCTS)->nameAr('منتجات الوقود')->group('الوقود')->icon('inventory_2')->minPlan(A::PLAN_BUSINESS)->businessTypes([A::BIZ_FUEL]),
-            C::make(A::F_FUEL_COMPANIES)->nameAr('شركات الوقود')->group('الوقود')->icon('business')->minPlan(A::PLAN_BUSINESS)->businessTypes([A::BIZ_FUEL]),
+            // AMIAL-FUEL-PAID-001 — **مساراتُهما تُعلَن، وكانتا بلا إعلان.**
+            // فكانتا تُقرآن «تُباع ولا نقطةَ نهايةٍ لها ولا حارس»، وقِيس
+            // بالتشغيل أنّ الباقة المجّانيّة تفتحهما بـ٢٠٠.
+            C::make(A::F_FUEL_PRODUCTS)->nameAr('منتجات الوقود')->group('الوقود')
+                ->icon('inventory_2')->minPlan(A::PLAN_BUSINESS)
+                ->routes(['fuel/products', 'fuel/products/{id}/price'])
+                ->businessTypes([A::BIZ_FUEL]),
+            C::make(A::F_FUEL_COMPANIES)->nameAr('شركات الوقود')->group('الوقود')
+                ->icon('business')->minPlan(A::PLAN_BUSINESS)
+                ->routes(['fuel/companies', 'fuel/companies/{id}/payment'])
+                ->businessTypes([A::BIZ_FUEL]),
             C::make(A::F_FUEL_SHIFTS)->nameAr('ورديات المحطة')->group('الوقود')->icon('schedule')->minPlan(A::PLAN_FREE)->businessTypes([A::BIZ_FUEL]),
 
             C::make(A::F_FUEL_VARIANCE)
@@ -725,7 +734,12 @@ final class CapabilityRegistry
                 ->group('الصيدلية')->icon('compare_arrows')
                 ->minPlan(A::PLAN_BUSINESS)
                 ->routes(['pharmacy/products/{id}/alternatives'])
-                ->screen('/pharmacy')
+                // **ولا `screen()` لها** — مسارُها فعلٌ على صنفٍ بعينه
+                // (`{id}/alternatives`)، فلا وجهةَ مستقلّةً له. وإعلانُ
+                // شاشةٍ يرسم زرّاً باسم «البدائل» يفتح شاشةَ الأصناف
+                // نفسَها: **يعمل ويفتح غيرَ ما يقول**. وحرسُها قائمٌ حيث
+                // تُستعمَل (`has('pharmacy_substitutions')` في لوحة
+                // الصيدليّة، سطرا ٣١٣ و٣٤٤).
                 ->businessTypes([A::BIZ_PHARMACY]),
 
             C::make(A::F_PHARMACY_BATCH_DISPOSITION)
@@ -735,7 +749,8 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['pharmacy.batch.dispose'])
                 ->routes(['pharmacy/batches/{id}/dispose'])
-                ->screen('/pharmacy')
+                // **ولا `screen()` لها** — كسابقتها: `{id}/dispose` فعلٌ
+                // على دفعةٍ بعينها. وحرسُها في موضع عمله (سطر ٤٢٧).
                 ->businessTypes([A::BIZ_PHARMACY]),
 
             C::make(A::F_WHOLESALE_INVOICES)

@@ -138,7 +138,19 @@ void main() {
   });
 
   test('وأبوابُ المالك في لوحته محروسةٌ بالملكيّة لا بالميزة', () {
-    final src = dashboard.readAsStringSync();
+    // ══════════════════════════════════════════════════════════════
+    // **وتُنزع التعليقاتُ قبل الفحص.**
+    //
+    // فقد كتبتُ في اللوحة تعليقاً يقول «`ownerOnly: true` — انظر
+    // `_LinkTile`»، **فكان يُرضي هذا الحارسَ وحدَه بلا حاجزٍ واحد**.
+    // وهو بعينه ما وقع من قبلُ في هذا المشروع: حارسٌ مرّ لأنّ الكلمة
+    // وردت في تعليقٍ عربيٍّ يشرح العطل — **فالتعليقُ الذي يصف الحاجزَ
+    // كان يُغني عنه**. (القاعدة الثانية.)
+    // ══════════════════════════════════════════════════════════════
+    final src = dashboard
+        .readAsStringSync()
+        .replaceAll(RegExp(r'//[^\n]*'), '')
+        .replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '');
 
     // القالبُ المطلوب: `ownerOnly: true` يسبق كلَّ واحدٍ من هذه الشاشات.
     const mustBeOwnerGated = [
@@ -159,8 +171,15 @@ void main() {
 
       // **يُفتَّش عن الحاجز في الكتلة السابقة للنداء وحدَها** — ووجودُه
       // في مكانٍ آخر من الملفّ لا يحرس هذا الزرّ.
+      //
+      // **وصورتا الحاجز كلتاهما مقبولتان**: `ownerOnly: true` وسمٌ على
+      // `_LinkTile` يُخفيه، و`if (_isOwner())` شرطٌ يسبق عنصراً ليس
+      // منها. والمفحوصُ الحراسةُ لا شكلُها.
       final window = src.substring((at - 420).clamp(0, at), at);
-      if (!window.contains('ownerOnly: true')) ungated.add('  $screen');
+      if (!window.contains('ownerOnly: true') &&
+          !window.contains('_isOwner()')) {
+        ungated.add('  $screen');
+      }
     }
 
     expect(ungated, isEmpty,

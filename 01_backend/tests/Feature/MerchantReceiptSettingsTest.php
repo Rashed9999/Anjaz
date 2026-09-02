@@ -85,6 +85,14 @@ class MerchantReceiptSettingsTest extends TestCase
             'is_active' => true,
         ]);
 
+        // **المقيسُ هنا نطاقُ القراءة، لا ربطُ المقعد.**
+        // `EnsurePosDevice` يردّ جلسةَ نقطةِ بيعٍ بلا جهازٍ مربوطٍ قبل
+        // المتحكّم، و`Passport::actingAs` لا يُصدر رمزاً حقيقيّاً يُربَط
+        // به مقعد. وإنفاذُ المقعد محروسٌ في موضعه
+        // (`PosDeviceSessionBindingGuardTest` · `PosDeviceBypassMatrixTest`)،
+        // فلا يُترك بلا قياس — ويُطفَأ هنا وحدَه ليصل الطلبُ إلى المفحوص.
+        config(['amial.pos_devices.enforce_session_binding' => false]);
+
         Passport::actingAs($posLogin, [], 'api');
         $this->getJson('/api/v1/amial/merchant/receipt-settings')
             ->assertOk()

@@ -16,6 +16,9 @@ import 'package:amial_pay/features/reports/screens/amial_account_statement_scree
 import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
+import 'package:amial_pay/features/donations/screens/donations_home_screen.dart';
+import 'package:amial_pay/features/family_fund/screens/my_funds_screen.dart';
+import 'package:amial_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
 import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
 import 'package:amial_pay/shared/widgets/verified_badge.dart';
@@ -205,6 +208,44 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
           label: 'طلبات صادرة',
           subtitle: 'ما طلبتَه من غيرك',
           onTap: () => Get.to(() => const OutgoingRequestsScreen()),
+        ),
+
+      // ══════════════════════════════════════════════════════════════
+      // **استُعيدت هذه الثلاثُ مرّةً ثانية.**
+      //
+      // حذفها `d8a67a6` («fix(customer): simplify services…») فسأل عنها
+      // صاحبُ المشروع بأسمائها، فأُعيدت في `c745614`. ثمّ **حذفها
+      // `797638b` مرّةً أخرى** («fix: separate customer and merchant
+      // surfaces») — ومعها استيراداتُها.
+      //
+      // والشاشاتُ الثلاثُ قائمةٌ في مواضعها لم تُمَسّ: مبنيّةٌ ولا
+      // يُوصَل إليها، وهو نمطُ العطل الأكثرُ تكراراً هنا. **والتبسيطُ
+      // بالحذف ينقل العطلَ ولا يرفعه.**
+      // ══════════════════════════════════════════════════════════════
+      if (access.has('safe_pay'))
+        _serviceCard(
+          icon: Icons.shield_outlined,
+          label: 'الدفع الآمن',
+          subtitle: 'حماية للبيع والشراء',
+          onTap: () => Get.to(() => const MySafePaymentsScreen()),
+        ),
+      if (access.has('family_fund'))
+        _serviceCard(
+          icon: Icons.savings_outlined,
+          label: 'صندوق العائلة',
+          subtitle: 'ادّخارٌ مشترك',
+          onTap: () => Get.to(() => const MyFundsScreen()),
+        ),
+      // **والتبرّعاتُ بلا قدرةٍ في السجلّ** — قِيس فلا وجودَ لـ`donations`
+      // بين القدرات، ولا وسيطَ `capability:` على مساراتها. فالشرطُ هو
+      // نفسُه الذي كان قبل الحذف: تُعرَض لغير التاجر. **ولا يُخترَع
+      // حاجزٌ يبدو أدقَّ وهو لا يفحص شيئاً.** (القاعدة السابعة.)
+      if (!access.isMerchantSession)
+        _serviceCard(
+          icon: Icons.volunteer_activism_outlined,
+          label: 'التبرعات',
+          subtitle: 'تبرّع لجهة موثوقة',
+          onTap: () => Get.to(() => const DonationsHomeScreen()),
         ),
       _serviceCard(
         icon: Icons.account_balance_wallet_outlined,

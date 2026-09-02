@@ -38,6 +38,32 @@ class AccessController extends GetxController implements GetxService {
   final RxnString merchantDisplayName = RxnString();
   final Rxn<MerchantContext> merchantContext = Rxn<MerchantContext>();
 
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-ACTOR-001 — **الفاعلُ يُقرأ من الخادم، ولا يُخمَّن من الدور.**
+  ///
+  /// الخادمُ يصرّح به في `access.actor` بأربع قيم: `owner` · `pos` ·
+  /// `staff` · `customer` (‏`FeatureAccessService`). **وكان التطبيقُ
+  /// يستنتجه** من طرفين آخرين: `role.value == 'pos'` ومن
+  /// `merchant_context.actor`.
+  ///
+  /// **وكلاهما أضعفُ من المصدر:**
+  ///   · `'pos'` **ليس في `AccessConstants::ALL_ROLES` أصلاً** — القائمةُ
+  ///     الرسميّةُ خمسةٌ: مستخدمٌ · وكيلٌ · موزّعٌ · تاجرٌ · مدير. فالمقارنةُ
+  ///     تجري على قيمةٍ لا تُعلنها المنصّة.
+  ///   · و`merchant_context` حمولةٌ أخرى قد تغيب، فيسقط التمييزُ كلُّه
+  ///     إلى الدور — وهو الطرفُ الضعيف.
+  ///
+  /// **وغيابُه لا يُقرأ «عميلاً»** — بل يُقال إنّه لم يُصرَّح به،
+  /// ويُرجَع إلى الاستنتاج القديم. فخادمٌ أقدمُ لا يُرسله كان سيجعل
+  /// **صاحبَ المنشأة عميلاً** فيُغلق دونه مالُه وإدارتُه — وهو بعينه
+  /// ما اشتُكي منه: «مالكُ المحطّة لا يستطيع الدخول إلى حسابه».
+  /// (القاعدة السابعة: «غير معروف» ليس صفراً.)
+  /// ══════════════════════════════════════════════════════════════════
+  final RxString actor = 'customer'.obs;
+
+  /// هل صرّح الخادمُ بالفاعل في هذه الجلسة؟ (لا تُخلَط بقيمته.)
+  final RxBool actorDeclared = false.obs;
+
   // ══════════════════════════════════════════════════════════════════
   // AMIAL-POS-IDENTITY-001 — **هويّةُ موظّف نقطة البيع، استُعيدت.**
   //
@@ -79,6 +105,12 @@ class AccessController extends GetxController implements GetxService {
   void _hydrate(Map meta) {
     final access = (meta['access'] ?? {}) as Map;
     role.value = access['role']?.toString() ?? 'user';
+
+    // AMIAL-ACTOR-001 — من المصدر مباشرةً، ويُوسَم غيابُه ولا يُقرأ صفراً.
+    final declaredActor = access['actor']?.toString();
+    actorDeclared.value = declaredActor != null && declaredActor.isNotEmpty;
+    actor.value = actorDeclared.value ? declaredActor! : 'customer';
+
     verificationLevel.value = access['verification_level']?.toString() ?? 'basic';
     businessType.value = access['business_type']?.toString();
     businessTypeLabel.value = access['business_type_label']?.toString();
@@ -137,7 +169,13 @@ class AccessController extends GetxController implements GetxService {
   bool get isUser => role.value == 'user';
   bool get isAgent => role.value == 'agent';
   bool get isMerchant => role.value == 'merchant';
-  bool get isPos => role.value == 'pos' || merchantContext.value?.actor == 'pos';
+  bool get isPos => isPosStaff;
+
+  /// **موظّفُ نقطة البيع** — من المصدر حين يُصرَّح به، ومن الاستنتاج
+  /// القديم حين لا يُصرَّح. (AMIAL-ACTOR-001 أعلاه.)
+  bool get isPosStaff => actorDeclared.value
+      ? actor.value == 'pos'
+      : (role.value == 'pos' || merchantContext.value?.actor == 'pos');
   /// مالك أو موظف يعمل داخل منشأة. ليست محفظة عميل حتى لو كان للموظف
   /// رقم أميال شخصي مستقل.
   bool get isMerchantSession => isMerchant || isPos || merchantContext.value?.actor == 'staff';
@@ -153,8 +191,12 @@ class AccessController extends GetxController implements GetxService {
   /// **وتُقاس بالنفي لا بقيمةٍ واحدة**: الجلسةُ التاجريّةُ التي ليست
   /// نقطةَ بيعٍ ولا موظّفاً هي جلسةُ المالك. فقيمةٌ ثالثةٌ تُضاف غداً
   /// لا تجعل موظّفاً مالكاً بالخطأ — **والخطأُ هنا يفتح المالَ لكاشير.**
-  bool get isMerchantOwner =>
-      isMerchantSession && !isPos && merchantContext.value?.actor != 'staff';
+  ///
+  /// **وصارت تُقرأ من `actor` حين يُصرَّح به** — والنفيُ يبقى مسلكَ
+  /// الاحتياط حين لا يُصرَّح، فلا يُحرَم مالكٌ من متجره لأنّ حقلاً غاب.
+  bool get isMerchantOwner => actorDeclared.value
+      ? actor.value == 'owner'
+      : (isMerchantSession && !isPos && merchantContext.value?.actor != 'staff');
   bool get isAdmin => role.value == 'admin';
   bool get isDistributor => role.value == 'distributor';
 
@@ -198,6 +240,11 @@ class AccessController extends GetxController implements GetxService {
   /// إعادة تعيين عند تسجيل الخروج
   void reset() {
     role.value = 'user';
+
+    // **ويُصفَّر الفاعلُ مع الجلسة** — وإلّا بقي «كاشير» بعد خروجه،
+    // فيدخل المالكُ على الجهاز نفسِه فيجد شاشةَ موظّفه.
+    actor.value = 'customer';
+    actorDeclared.value = false;
     verificationLevel.value = 'basic';
     businessType.value = null;
     businessTypeLabel.value = null;

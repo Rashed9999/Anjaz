@@ -840,10 +840,24 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             // AMIAL-PRODUCT-QUOTA-002 — **البابُ الرابع.** كان بلا حدٍّ
             // إطلاقاً بينما إخوتُه الثلاثة محروسة — والباقةُ لا تُباع بحدٍّ
             // يلتفّ عليه من يفتح محطّة.
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-FUEL-PAID-001 — **«منتجات الوقود» تُباع ولا تُحرَس.**
+            //
+            // قِيس بالتشغيل: محطّةٌ على **الباقة المجّانيّة** تفتح
+            // `/fuel/products` و`/fuel/companies` بـ٢٠٠، وكلتا القدرتين
+            // `minPlan(PLAN_BUSINESS)` في السجلّ. فتُباع في صفحة الترقية
+            // وتُفتح بلا شراء.
+            //
+            // **والقراءةُ تبقى مجّانيّة عمداً**: `recordSale` يشترط
+            // `fuel_product_id`، و«بيع الوقود» `PLAN_FREE`. فحجبُ قائمة
+            // الأصناف يُعطّل البيعَ المجّانيّ نفسَه — أي يُصلح ثقبَ
+            // تسعيرٍ بكسر ميزةٍ مبيعة. **فتُحرَس الكتابةُ وحدَها.**
+            // ══════════════════════════════════════════════════════════
             Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addProduct'])
-                ->middleware('amial.usage:add_product')->name('products.add');
+                ->middleware(['capability:fuel_products', 'amial.usage:add_product'])->name('products.add');
             Route::get('/price-history', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'priceHistory'])->name('price-history');
             Route::put('/products/{id}/price', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'updateProductPrice'])
+                ->middleware('capability:fuel_products')
                 ->where('id', '[0-9]+')->name('products.price');
             // Sales (الجوهر)
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'recordSale'])
@@ -854,9 +868,15 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
                 ->where('ulid', '[A-Z0-9]{26}')->name('sales.show');
             Route::get('/dashboard', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'dashboard'])->name('dashboard');
             // Company Accounts
-            Route::get('/companies', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listCompanies'])->name('companies.index');
-            Route::post('/companies', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addCompany'])->name('companies.add');
+            // **وحساباتُ الشركات تُحرَس كاملةً** — ميزةٌ قائمةٌ بذاتها
+            // (بيعٌ آجلٌ لشركةٍ وسدادٌ لاحق)، والبيعُ النقديُّ المجّانيُّ
+            // لا يتوقّف عليها. فلا يُكسَر بحجبها شيءٌ مبيع.
+            Route::get('/companies', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listCompanies'])
+                ->middleware('capability:fuel_companies')->name('companies.index');
+            Route::post('/companies', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'addCompany'])
+                ->middleware('capability:fuel_companies')->name('companies.add');
             Route::post('/companies/{id}/payment', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'recordCompanyPayment'])
+                ->middleware('capability:fuel_companies')
                 ->where('id', '[0-9]+')->name('companies.payment');
             // Cards (AMIAL-FUEL-CARDS-001)
             Route::get('/companies/{id}/cards', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'listCards'])

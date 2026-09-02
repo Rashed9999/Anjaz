@@ -248,7 +248,7 @@ class WholesaleTest extends TestCase
         ]);
         PaymentRequest::create([
             'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
-            'short_code' => 'WHQR-1001',
+            'short_code' => 'WHQR1001',
             'requester_user_id' => $this->merchant->id,
             'amount' => '5000.0000',
             'share_method' => 'qr',
@@ -274,10 +274,14 @@ class WholesaleTest extends TestCase
         $this->assertSame('0.0000', (string) $invoice->balance_due);
         $this->assertSame('TX-WHOLESALE-1001', $invoice->paid_transaction_id);
 
+        // **والكمّيّةُ هي هي عمداً.** فحصُ المبلغ يسبق فحصَ الاستهلاك في
+        // `MerchantPaymentReferenceService`، فلو اختلف المبلغُ لَرُدَّ
+        // الطلبُ بـ«لا يطابق» **وبقي فحصُ الاستهلاك بلا قياس** — ومرجعٌ
+        // يُعاد استعمالُه بالمبلغ نفسِه هو الحالةُ الخطرة.
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('تم استخدام رمز الدفع هذا');
         $this->invSvc->createInvoice($this->merchant, $biz,
-            [['product_id' => $product->id, 'quantity' => 1]],
+            [['product_id' => $product->id, 'quantity' => 2]],
             [
                 'customer_id' => $customer->id,
                 'payment_type' => 'amial_pay',
@@ -297,7 +301,7 @@ class WholesaleTest extends TestCase
         ]);
         PaymentRequest::create([
             'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
-            'short_code' => 'WHQR-1002',
+            'short_code' => 'WHQR1002',
             'requester_user_id' => $this->merchant->id,
             'amount' => '999.0000',
             'share_method' => 'qr',
@@ -335,7 +339,7 @@ class WholesaleTest extends TestCase
         );
         PaymentRequest::create([
             'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
-            'short_code' => 'WHQR-2001',
+            'short_code' => 'WHQR2001',
             'requester_user_id' => $this->merchant->id,
             'amount' => '2000.0000',
             'share_method' => 'qr',

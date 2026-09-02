@@ -48,6 +48,8 @@ class CashierShiftTest extends TestCase
         // بيعان نقديان (3000 + 2000) + بيع أميال باي (لا يدخل الدرج)
         $cashier->recordSale(merchant: $this->merchant, total: '3000', paymentMethod: 'cash', items: []);
         $cashier->recordSale(merchant: $this->merchant, total: '2000', paymentMethod: 'cash', items: []);
+        // مرجعُ الدفع طلبُ QR مدفوعٌ حقيقيّ، لا نصٌّ يدّعي الدفع.
+        $this->paidQrRequest($this->merchant, 'TX', '1000');
         $cashier->recordSale(merchant: $this->merchant, total: '1000', paymentMethod: 'amial_pay',
             items: [], paidTransactionId: 'TX');
 

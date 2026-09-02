@@ -89,6 +89,8 @@ class RefundLedgerTruthTest extends TestCase
     /** بيعٌ ثمّ مرتجعٌ إلى المحفظة. */
     private function walletRefund(string $amount = '2000'): MerchantRefund
     {
+        // مرجعُ الدفع طلبُ QR مدفوعٌ حقيقيّ، لا نصٌّ يدّعي الدفع.
+        $this->paidQrRequest($this->merchant, 'TX-LEDGER-TRUTH', '5000');
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '5000',
