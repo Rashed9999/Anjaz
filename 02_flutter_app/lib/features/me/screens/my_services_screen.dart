@@ -14,6 +14,7 @@ import 'package:amial_pay/features/notification/screens/notifications_center_scr
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amial_pay/features/reports/screens/amial_account_statement_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
+import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
 import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
@@ -194,6 +195,16 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
           label: 'طلبات واردة',
           subtitle: 'وافق أو ارفض',
           onTap: () => Get.to(() => const IncomingRequestsScreen()),
+        ),
+      // **والصادرةُ مع الواردة** — كانت في «حسابي» وحدَها، فاختلفت
+      // الشاشتان الشقيقتان على البابِ نفسِه: محروسٌ هنا مكشوفٌ هناك،
+      // ومعروضٌ هناك غائبٌ ها هنا. والبابُ الواحدُ حكمُه واحد.
+      if (access.has('payment_requests'))
+        _serviceCard(
+          icon: Icons.outbox,
+          label: 'طلبات صادرة',
+          subtitle: 'ما طلبتَه من غيرك',
+          onTap: () => Get.to(() => const OutgoingRequestsScreen()),
         ),
       _serviceCard(
         icon: Icons.account_balance_wallet_outlined,

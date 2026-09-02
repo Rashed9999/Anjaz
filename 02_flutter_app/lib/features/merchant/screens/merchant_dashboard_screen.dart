@@ -19,6 +19,10 @@ import 'package:amial_pay/features/notification/screens/notifications_center_scr
 import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_account_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
+import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
 
 /// AMIAL-MERCHANT-APP-001 (v1.6)
 class MerchantDashboardScreen extends StatefulWidget {
@@ -392,20 +396,40 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                       label: 'حصصي في الفواتير المقسّمة',
                       onTap: () => Get.to(() => const SplitBillMySharesScreen()),
                     ),
+                    // ══════════════════════════════════════════════════
+                    // **«قريباً» عن مبنيٍّ أسوأ من غياب الزرّ.**
+                    //
+                    // الغيابُ يُسأل عنه، و«قريباً» تُصدَّق فيُكفّ عن
+                    // السؤال — ولا خطأَ في أيّ سجلّ. وكانت على ثلاثة
+                    // أبوابٍ **اثنان منها مبنيّان منذ شهور** ويُفتحان من
+                    // شاشة الخدمات.
+                    //
+                    // والثالث «سحب للبنك» — **ولا سحبَ بنكيَّ في المنصّة
+                    // أصلاً**، والسحبُ عبر الوكيل يعمل. فالتاجرُ كان يقرأ
+                    // «قريباً» فيظنّ أنّه لا يستطيع إخراجَ مال بيعه وهو
+                    // يستطيع. فيُسمّى بما هو، ويُفتح على ما يعمل.
+                    // ══════════════════════════════════════════════════
                     _LinkTile(
                       icon: Icons.account_balance,
-                      label: 'سحب للبنك',
-                      onTap: () => _comingSoon(context),
+                      label: 'سحب رصيدي',
+                      onTap: () => Get.to(() => const WithdrawRequestScreen()),
                     ),
                     _LinkTile(
                       icon: Icons.people,
                       label: 'موظفو نقاط البيع',
-                      onTap: () => _comingSoon(context),
+                      onTap: () => Get.to(() => const MerchantStaffScreen()),
                     ),
                     _LinkTile(
                       icon: Icons.settings,
                       label: 'إعدادات المتجر',
-                      onTap: () => _comingSoon(context),
+                      onTap: () => Get.to(() => const MerchantAccountScreen()),
+                    ),
+                    // **وبابُ «خدماتي» من اللوحة** — والتاجرُ يبدأ يومَه
+                    // منها، فما لا يُوصل إليه من لوحته غيرُ موجودٍ عنده.
+                    _LinkTile(
+                      icon: Icons.apps_rounded,
+                      label: 'كل الخدمات',
+                      onTap: () => Get.to(() => const MerchantServicesHubScreen()),
                     ),
                   ],
                 ),
@@ -415,12 +439,6 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
           );
         }),
       ),
-    );
-  }
-
-  void _comingSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('قريباً')),
     );
   }
 }

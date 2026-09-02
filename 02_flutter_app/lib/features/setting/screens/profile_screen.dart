@@ -160,24 +160,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: () => Get.to(()=> const RequestedMoneyListScreen(requestType: RequestType.withdraw)),
                   ),
 
-                  // AMIAL-FAVORITES-001: المفضّلة صارت تشمل الحسابات والتجّار
-                  // والعمليات لا الأرقام وحدها، فلم تعد مشروطة بعلَم «الأرقام
-                  // المفضّلة» — إطفاؤه كان يُخفي المفضّلة كلها.
-                  CustomInkWellWidget(
-                    child: widget.MenuItem(image: Images.favoriteNumberIcon, title: 'المفضّلة'),
-                    onTap: () => Get.to(() => const AmialFavoritesScreen()),
-                  ),
+                  // ══════════════════════════════════════════════════════
+                  // **البابُ الواحدُ حكمُه واحدٌ في الشاشتين.**
+                  //
+                  // هذه الأبوابُ الثلاثة محروسةٌ بالقدرة في «خدماتي»
+                  // (`my_services_screen.dart`) ومكشوفةٌ هنا — **الشاشتان
+                  // نفسُهما والقدرةُ نفسُها وحكمان متناقضان**. فيراه
+                  // صاحبُ الحساب مغلقاً في موضعٍ ومفتوحاً في موضع، ولا
+                  // يقول ذلك مُصرِّفٌ ولا محلِّل.
+                  //
+                  // والخادمُ يمنع `favorite_numbers` و`payment_requests`
+                  // عن التاجر أصلاً — فزرٌّ يُرسم له وعدٌ يُخلَف عند أوّل
+                  // ضغطة. (القاعدة التاسعة.)
+                  // ══════════════════════════════════════════════════════
+                  if (access.has('favorite_numbers'))
+                    CustomInkWellWidget(
+                      child: widget.MenuItem(image: Images.favoriteNumberIcon, title: 'المفضّلة'),
+                      onTap: () => Get.to(() => const AmialFavoritesScreen()),
+                    ),
 
+                  if (access.has('payment_requests'))
+                    CustomInkWellWidget(
+                      child: widget.MenuItem(image: Images.requestProfile,title: 'requests'.tr),
+                      onTap: () => Get.to(()=> const IncomingRequestsScreen()),
+                    ),
 
-                  CustomInkWellWidget(
-                    child: widget.MenuItem(image: Images.requestProfile,title: 'requests'.tr),
-                    onTap: () => Get.to(()=> const IncomingRequestsScreen()),
-                  ),
-
-                  CustomInkWellWidget(
-                    child: widget.MenuItem(image: Images.sendMoneyProfile,title: 'send_requests'.tr),
-                    onTap: () => Get.to(()=> const OutgoingRequestsScreen()),
-                  ),
+                  if (access.has('payment_requests'))
+                    CustomInkWellWidget(
+                      child: widget.MenuItem(image: Images.sendMoneyProfile,title: 'send_requests'.tr),
+                      onTap: () => Get.to(()=> const OutgoingRequestsScreen()),
+                    ),
 
                   if(transactionTableModelList.isNotEmpty) CustomInkWellWidget(
                     child: widget.MenuItem(
