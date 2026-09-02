@@ -232,6 +232,10 @@ class AccessConstants
     public const F_PHARMACY_CUSTOMERS = 'pharmacy_customers';
     public const F_PHARMACY_ALERTS = 'pharmacy_alerts';
     public const F_PHARMACY_PRESCRIPTIONS = 'pharmacy_prescriptions';
+    /** بدائل من نفس المادة الفعالة والتركيز والشكل الدوائي. */
+    public const F_PHARMACY_SUBSTITUTIONS = 'pharmacy_substitutions';
+    /** إتلاف/إرجاع الدفعات غير القابلة للبيع بسجل تدقيقي. */
+    public const F_PHARMACY_BATCH_DISPOSITION = 'pharmacy_batch_disposition';
 
     // جملة
     public const F_WHOLESALE_INVOICES = 'wholesale_invoices';

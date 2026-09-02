@@ -131,7 +131,11 @@ class PharmacyBusinessCoreServicesTest extends TestCase
                 "الصيدلية رأت {$retailOnly}، وهو يفتح سطح التجزئة لا سطح الصيدلية.");
         }
 
-        foreach ([A::F_EMPLOYEES, A::F_MULTI_POS, A::F_SHIFT_CLOSE, A::F_PHARMACY_CUSTOMERS] as $expected) {
+        foreach ([
+            A::F_EMPLOYEES, A::F_MULTI_POS, A::F_SHIFT_CLOSE,
+            A::F_PHARMACY_CUSTOMERS, A::F_PHARMACY_SUBSTITUTIONS,
+            A::F_PHARMACY_BATCH_DISPOSITION,
+        ] as $expected) {
             $this->assertContains($expected, $codes,
                 "خدمة أعمال مشتركة أو صيدلانية غابت: {$expected}");
         }

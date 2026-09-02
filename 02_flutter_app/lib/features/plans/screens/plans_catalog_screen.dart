@@ -569,6 +569,8 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
       'rbac': 'صلاحيات متقدّمة',
       'fuel_cards': 'بطاقات الوقود', 'fuel_variance': 'العجز/الفائض',
       'pharmacy_prescriptions': 'الوصفات الطبيّة',
+      'pharmacy_substitutions': 'بدائل دوائية متوافقة',
+      'pharmacy_batch_disposition': 'إرجاع وإتلاف الدفعات',
       'wholesale_multi_pricing': 'تسعير متعدّد للجملة',
     };
     return map[f] ?? f;

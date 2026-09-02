@@ -120,6 +120,8 @@ final class VerticalRegistry
                     return [A::PLAN_BUSINESS => [
                         A::F_PHARMACY_CUSTOMERS,
                         A::F_PHARMACY_PRESCRIPTIONS,
+                        A::F_PHARMACY_SUBSTITUTIONS,
+                        A::F_PHARMACY_BATCH_DISPOSITION,
                     ]];
                 }
             },

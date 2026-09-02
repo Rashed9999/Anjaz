@@ -129,6 +129,9 @@ class CapabilityScreens {
     'pharmacy_pos': () => const PharmacySaleScreen(),
     'pharmacy_products': () => const PharmacyProductsScreen(),
     'pharmacy_batches': () => const PharmacyProductsScreen(),
+    // البدائل وإخراج المنتهي يقعان في تفاصيل الصنف/دفعاته، لا في صفحة عامة.
+    'pharmacy_substitutions': () => const PharmacyProductsScreen(),
+    'pharmacy_batch_disposition': () => const PharmacyProductsScreen(),
     'pharmacy_alerts': () => const PharmacyAlertsScreen(),
     'pharmacy_customers': () => const PharmacyCustomersScreen(),
     // **الوصفاتُ تُدار من لوحة الصيدليّة نفسِها** — وسمُ الصنف وحقولُ

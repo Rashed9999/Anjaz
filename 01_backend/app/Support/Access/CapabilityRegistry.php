@@ -719,6 +719,25 @@ final class CapabilityRegistry
                 ->routes(['pharmacy/products', 'pharmacy/sales'])
                 ->screen('/pharmacy'),
 
+            C::make(A::F_PHARMACY_SUBSTITUTIONS)
+                ->nameAr('بدائل الدواء المتوافقة')
+                ->descAr('يعرض البدائل المحلية فقط عند تطابق المادة الفعالة والتركيز والشكل الدوائي؛ القرار للصيدلي ولا يُستبدل الدواء تلقائياً.')
+                ->group('الصيدلية')->icon('compare_arrows')
+                ->minPlan(A::PLAN_BUSINESS)
+                ->routes(['pharmacy/products/{id}/alternatives'])
+                ->screen('/pharmacy')
+                ->businessTypes([A::BIZ_PHARMACY]),
+
+            C::make(A::F_PHARMACY_BATCH_DISPOSITION)
+                ->nameAr('إرجاع وإتلاف الدفعات')
+                ->descAr('إخراج الدفعة المنتهية أو غير القابلة للبيع من رصيد المخزون مع سبب وموظف وتاريخ محفوظين للتدقيق.')
+                ->group('الصيدلية')->icon('inventory_2')
+                ->minPlan(A::PLAN_BUSINESS)
+                ->permissions(['pharmacy.batch.dispose'])
+                ->routes(['pharmacy/batches/{id}/dispose'])
+                ->screen('/pharmacy')
+                ->businessTypes([A::BIZ_PHARMACY]),
+
             C::make(A::F_WHOLESALE_INVOICES)
                 ->nameAr('فواتير الجملة')
                 ->group('الجملة')->icon('request_quote')

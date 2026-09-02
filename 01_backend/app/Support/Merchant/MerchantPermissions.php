@@ -132,6 +132,8 @@ final class MerchantPermissions
     public const PHARMACY_BATCH_RECORD = 'pharmacy.batch.record';
     /** سحب دفعة من البيع قرار سلامة، لا مجرد تعديل مخزون. */
     public const PHARMACY_BATCH_RECALL = 'pharmacy.batch.recall';
+    /** الإرجاع للمورد أو الإتلاف يغيّر رصيداً ويجب أن يبقى قابلاً للتدقيق. */
+    public const PHARMACY_BATCH_DISPOSE = 'pharmacy.batch.dispose';
 
     public const PHARMACY_SALE_CREATE = 'pharmacy.sale.create';
     public const PHARMACY_SALE_VIEW_ALL = 'pharmacy.sale.view_all';
@@ -316,6 +318,7 @@ final class MerchantPermissions
             self::PHARMACY_BATCH_VIEW => $g('الصيدليّة — التشغيلات', 'عرض التشغيلات وتواريخ الصلاحية'),
             self::PHARMACY_BATCH_RECORD => $g('الصيدليّة — التشغيلات', 'استلام تشغيلة جديدة', true),
             self::PHARMACY_BATCH_RECALL => $g('الصيدليّة — التشغيلات', 'سحب تشغيلة ومنع بيعها', true),
+            self::PHARMACY_BATCH_DISPOSE => $g('الصيدليّة — التشغيلات', 'إرجاع أو إتلاف تشغيلة غير قابلة للبيع', true),
 
             self::PHARMACY_SALE_CREATE => $g('الصيدليّة — البيع', 'بيع دواء'),
             self::PHARMACY_SALE_VIEW_ALL => $g('الصيدليّة — البيع', 'عرض مبيعات الجميع'),
@@ -690,6 +693,7 @@ final class MerchantPermissions
                     self::PHARMACY_PRESCRIPTION_RECORD,
                     self::PHARMACY_PRODUCT_MANAGE,
                     self::PHARMACY_BATCH_RECORD,
+                    self::PHARMACY_BATCH_DISPOSE,
                     self::PHARMACY_ALERT_DISMISS,
                     self::CASH_COUNT,
                     self::SHIFT_OPEN, self::SHIFT_CLOSE,
@@ -727,6 +731,7 @@ final class MerchantPermissions
                 'permissions' => array_merge($core, [
                     self::PHARMACY_PRODUCT_MANAGE,
                     self::PHARMACY_BATCH_RECORD,
+                    self::PHARMACY_BATCH_DISPOSE,
                     self::PHARMACY_ALERT_DISMISS,
                 ]),
                 // ولا بيعَ ولا مالَ ولا ملفَّ مريض.

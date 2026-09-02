@@ -308,7 +308,14 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
                   fontSize: 12, fontWeight: FontWeight.bold,
                 )),
           ])),
-          const Icon(Icons.chevron_left, color: Colors.grey),
+          Column(mainAxisSize: MainAxisSize.min, children: [
+            IconButton(
+              tooltip: 'بدائل الدواء',
+              icon: const Icon(Icons.compare_arrows, color: AmialColors.primary),
+              onPressed: () => _showAlternatives(p),
+            ),
+            const Icon(Icons.chevron_left, color: Colors.grey),
+          ]),
         ]),
       ),
     );
@@ -328,6 +335,12 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
             Row(children: [
               Expanded(child: Text('الدفعات: ${product['trade_name']}',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
+              OutlinedButton.icon(
+                onPressed: () => _showAlternatives(product),
+                icon: const Icon(Icons.compare_arrows, size: 16),
+                label: const Text('بدائل'),
+              ),
+              const SizedBox(width: 6),
               FilledButton.icon(
                 onPressed: () { Navigator.pop(context); _addBatchDialog(product); },
                 icon: const Icon(Icons.add, size: 16),
@@ -361,11 +374,13 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
     final isExpired = status == 'expired';
     final isExhausted = status == 'exhausted';
     final isRecalled = status == 'recalled';
+    final isReturned = status == 'returned';
+    final isDestroyed = status == 'destroyed';
 
     Color cardColor = Colors.white;
     if (isExpired) {
       cardColor = Colors.red.shade50;
-    } else if (isExhausted || isRecalled) {
+    } else if (isExhausted || isRecalled || isReturned || isDestroyed) {
       cardColor = Colors.grey.shade100;
     }
 
@@ -374,14 +389,16 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(8)),
       child: Row(children: [
-        Icon(isRecalled ? Icons.remove_shopping_cart_outlined : (isExpired ? Icons.dangerous : Icons.inventory),
-            color: isExpired ? Colors.red : ((isExhausted || isRecalled) ? Colors.grey : AmialColors.primary), size: 22),
+        Icon(isRecalled ? Icons.remove_shopping_cart_outlined : (isExpired ? Icons.dangerous : (isReturned ? Icons.assignment_return_outlined : (isDestroyed ? Icons.delete_forever_outlined : Icons.inventory))),
+            color: isExpired ? Colors.red : ((isExhausted || isRecalled || isReturned || isDestroyed) ? Colors.grey : AmialColors.primary), size: 22),
         const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('#${b['batch_number']}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           Text('انتهاء: $expiry', style: TextStyle(color: isExpired ? Colors.red : Colors.grey.shade700, fontSize: 11)),
           if (b['manufactured_at'] != null)
             Text('إنتاج: ${b['manufactured_at']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
+          if (isReturned || isDestroyed)
+            Text(isReturned ? 'أُعيدت للمورّد' : 'أُتلفت', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text('${b['quantity_remaining']}', style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -395,9 +412,81 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
             icon: const Icon(Icons.report_gmailerrorred_outlined),
             onPressed: () => _recallBatch(product, b),
           ),
+          if (isExpired)
+            IconButton(
+              tooltip: 'إخراج الدفعة المنتهية',
+              color: AmialColors.primary,
+              icon: const Icon(Icons.inventory_2_outlined),
+              onPressed: () => _disposeBatch(product, b),
+            ),
         ],
       ]),
     );
+  }
+
+  Future<void> _showAlternatives(Map<String, dynamic> product) async {
+    final ok = await c.loadAlternatives((product['id'] as num).toInt());
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red));
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => SafeArea(child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('بدائل ${product['trade_name']}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          const Text('مطابقة المادة الفعالة والتركيز والشكل فقط. لا يتم الاستبدال تلقائياً؛ يقرره الصيدلي.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+          const SizedBox(height: 12),
+          Obx(() => c.alternatives.isEmpty
+              ? const Padding(padding: EdgeInsets.all(18), child: Text('لا يوجد بديل محلي متاح حالياً.'))
+              : Column(children: c.alternatives.map((p) => ListTile(
+                leading: const Icon(Icons.medication_outlined, color: AmialColors.primary),
+                title: Text('${p['trade_name']}'),
+                subtitle: Text('${p['active_ingredient']} • ${p['strength']} • ${p['dosage_form']}'),
+                trailing: Text(AmialMoney.yer(p['sale_price']), style: const TextStyle(fontWeight: FontWeight.bold)),
+              )).toList())),
+        ]),
+      )),
+    );
+  }
+
+  Future<void> _disposeBatch(Map<String, dynamic> product, Map<String, dynamic> batch) async {
+    String type = 'return_to_supplier';
+    final reason = TextEditingController();
+    final approved = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (_, setState) => AlertDialog(
+      title: const Text('إخراج دفعة منتهية'),
+      content: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('هذا الإجراء يُنقص الكمية المتبقية من المخزون ويحفظ الأثر؛ لا يمكن التراجع عنه من هذا الزر.'),
+        const SizedBox(height: 10),
+        DropdownButtonFormField<String>(
+          value: type,
+          decoration: const InputDecoration(labelText: 'مصير الدفعة'),
+          items: const [
+            DropdownMenuItem(value: 'return_to_supplier', child: Text('إرجاع للمورّد')),
+            DropdownMenuItem(value: 'destroyed', child: Text('إتلاف موثّق')),
+          ],
+          onChanged: (v) => setState(() => type = v ?? type),
+        ),
+        const SizedBox(height: 10),
+        TextField(controller: reason, maxLines: 3, decoration: const InputDecoration(labelText: 'السبب/المرجع *', border: OutlineInputBorder())),
+      ]),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تأكيد الإخراج')),
+      ],
+    )));
+    if (approved != true || reason.text.trim().isEmpty) { reason.dispose(); return; }
+    final ok = await c.disposeBatch((product['id'] as num).toInt(), (batch['id'] as num).toInt(), type, reason.text.trim());
+    reason.dispose();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? 'تم توثيق إخراج الدفعة من المخزون' : c.lastError.value),
+      backgroundColor: ok ? Colors.green : AmialColors.red,
+    ));
   }
 
   Future<void> _recallBatch(Map<String, dynamic> product, Map<String, dynamic> batch) async {
@@ -504,6 +593,9 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
   void _addProductDialog() {
     final trade = TextEditingController();
     final generic = TextEditingController();
+    final activeIngredient = TextEditingController();
+    final strength = TextEditingController();
+    final dosageForm = TextEditingController();
     final price = TextEditingController();
     final cost = TextEditingController();
     final barcode = TextEditingController();
@@ -524,6 +616,12 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
         TextField(controller: trade, onChanged: (v) => c.loadSimilarProducts(v, categoryId: selectedCategoryId), decoration: const InputDecoration(labelText: 'الاسم التجاري *')),
         const SizedBox(height: 8),
         TextField(controller: generic, onChanged: (v) => c.loadSimilarProducts(v, categoryId: selectedCategoryId), decoration: const InputDecoration(labelText: 'الاسم العلمي (اختياري)')),
+        const SizedBox(height: 8),
+        TextField(controller: activeIngredient, decoration: const InputDecoration(labelText: 'المادة الفعالة (للبدائل)')),
+        const SizedBox(height: 8),
+        TextField(controller: strength, decoration: const InputDecoration(labelText: 'التركيز (للبدائل)', hintText: '500 mg')),
+        const SizedBox(height: 8),
+        TextField(controller: dosageForm, decoration: const InputDecoration(labelText: 'الشكل الدوائي (للبدائل)', hintText: 'أقراص / شراب / حقن')),
         const SizedBox(height: 8),
         DropdownButtonFormField<int>(
           value: selectedCategoryId,
@@ -605,6 +703,9 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
             final ok = await c.addProduct({
               'trade_name': trade.text.trim(),
               if (generic.text.isNotEmpty) 'generic_name': generic.text.trim(),
+              if (activeIngredient.text.isNotEmpty) 'active_ingredient': activeIngredient.text.trim(),
+              if (strength.text.isNotEmpty) 'strength': strength.text.trim(),
+              if (dosageForm.text.isNotEmpty) 'dosage_form': dosageForm.text.trim(),
               if (barcode.text.isNotEmpty) 'barcode': barcode.text.trim(),
               if (manufacturer.text.isNotEmpty) 'manufacturer': manufacturer.text.trim(),
               if (unit.text.isNotEmpty) 'unit': unit.text.trim(),

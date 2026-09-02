@@ -147,6 +147,66 @@ class PharmacyTest extends TestCase
         $this->assertSame('0.0000', (string) $product->current_stock);
     }
 
+    /** بديلٌ محلي لا يظهر إلا حين يتطابق تعريفه الدوائي كاملاً. */
+    public function alternatives_require_the_same_active_ingredient_strength_and_dosage_form(): void
+    {
+        $source = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'بانادول', 'sale_price' => '500',
+            'active_ingredient' => 'Paracetamol', 'strength' => '500 mg', 'dosage_form' => 'أقراص',
+        ]);
+        $match = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'باراسيتامول محلي', 'sale_price' => '350',
+            'active_ingredient' => 'Paracetamol', 'strength' => '500 mg', 'dosage_form' => 'أقراص',
+        ]);
+        $differentForm = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'باراسيتامول شراب', 'sale_price' => '350',
+            'active_ingredient' => 'Paracetamol', 'strength' => '500 mg', 'dosage_form' => 'شراب',
+        ]);
+        $this->svc->addBatch($match, [
+            'batch_number' => 'ALT-1', 'expiry_date' => now()->addYear()->toDateString(), 'quantity_received' => '5',
+        ]);
+        $this->svc->addBatch($differentForm, [
+            'batch_number' => 'ALT-2', 'expiry_date' => now()->addYear()->toDateString(), 'quantity_received' => '5',
+        ]);
+
+        $alternatives = $this->svc->alternativesFor($source);
+        $this->assertCount(1, $alternatives);
+        $this->assertSame($match->id, $alternatives->first()->id);
+    }
+
+    /** الدفعة المنتهية لا تبقى في الرصيد بعد إتلافها أو إرجاعها. */
+    public function batch_disposition_removes_remaining_stock_and_keeps_audit_fields(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, ['trade_name' => 'دواء منتهي', 'sale_price' => '100']);
+        $batch = $this->svc->addBatch($product, [
+            'batch_number' => 'EXPIRED-RETURN', 'expiry_date' => now()->addYear()->toDateString(), 'quantity_received' => '20',
+        ]);
+        $disposed = $this->svc->disposeBatch($batch, $this->merchant, 'return_to_supplier', 'فاتورة إرجاع المورد #55');
+
+        $this->assertSame('returned', $disposed->status);
+        $this->assertSame('return_to_supplier', $disposed->disposition_type);
+        $this->assertSame($this->merchant->id, $disposed->disposed_by_user_id);
+        $this->assertNotNull($disposed->disposed_at);
+        $product->refresh();
+        $this->assertSame('0.0000', (string) $product->current_stock);
+    }
+
+    /** مسح الانتهاء يحجب الرصيد أولاً؛ توثيق المصير لا يخصمه مرّتين. */
+    public function disposing_an_expired_batch_keeps_stock_at_zero_without_a_double_deduction(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, ['trade_name' => 'دواء انتهى', 'sale_price' => '100']);
+        $batch = $this->svc->addBatch($product, [
+            'batch_number' => 'EXPIRED-DISPOSE', 'expiry_date' => now()->addYear()->toDateString(), 'quantity_received' => '7',
+        ]);
+        PharmacyBatch::whereKey($batch->id)->update(['expiry_date' => now()->subDay()->toDateString()]);
+        $this->alertSvc->scanExpiringBatches($this->pharmacy);
+
+        $disposed = $this->svc->disposeBatch($batch->fresh(), $this->merchant, 'destroyed', 'إتلاف بعد انتهاء الصلاحية');
+        $this->assertSame('destroyed', $disposed->status);
+        $product->refresh();
+        $this->assertSame('0.0000', (string) $product->current_stock);
+    }
+
     /** @test */
     public function past_expiry_batch_is_rejected(): void
     {

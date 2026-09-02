@@ -23,5 +23,7 @@ void main() {
     expect(src, contains("'advanced_reports': () => const MerchantAdvancedReportsScreen()"));
     expect(src, contains("'profit_reports': () => const ProfitReportScreen()"));
     expect(src, contains("'pharmacy_customers': () => const PharmacyCustomersScreen()"));
+    expect(src, contains("'pharmacy_substitutions': () => const PharmacyProductsScreen()"));
+    expect(src, contains("'pharmacy_batch_disposition': () => const PharmacyProductsScreen()"));
   });
 }

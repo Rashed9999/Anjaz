@@ -186,6 +186,25 @@ class PharmacyController extends Controller
         return $this->ok(['products' => $items]);
     }
 
+    /** بدائل يراجعها الصيدلي؛ لا توجد وصفة علاجية أو استبدال تلقائي. */
+    public function alternatives(Request $request, int $id): JsonResponse
+    {
+        if (($deny = $this->denyUnless($request, 'pharmacy_substitutions')) !== null) return $deny;
+        if ($deny = $this->guard($request, P::PHARMACY_PRODUCT_VIEW)) return $deny;
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $pharmacy = $this->svc->getOrCreatePharmacy($merchant);
+        $product = PharmacyProduct::where('id', $id)->where('pharmacy_id', $pharmacy->id)->first();
+        if (!$product) return $this->error('NOT_FOUND', 'المنتج غير موجود', 404);
+        try {
+            $alternatives = $this->svc->alternativesFor($product);
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('ALTERNATIVES_NOT_READY', $e->getMessage(), 422);
+        }
+        return $this->ok(['product' => $product, 'alternatives' => $alternatives]);
+    }
+
     public function addProduct(Request $request): JsonResponse
     {
 
@@ -217,6 +236,9 @@ class PharmacyController extends Controller
         $v = Validator::make($request->all(), [
             'trade_name' => 'required|string|max:200',
             'generic_name' => 'sometimes|nullable|string|max:200',
+            'active_ingredient' => 'sometimes|nullable|string|max:200',
+            'strength' => 'sometimes|nullable|string|max:80',
+            'dosage_form' => 'sometimes|nullable|string|max:80',
             'manufacturer' => 'sometimes|nullable|string|max:120',
             'unit' => 'sometimes|nullable|string|max:32',
             'sku' => 'sometimes|nullable|string|max:64',
@@ -354,6 +376,29 @@ class PharmacyController extends Controller
         try { $recalled = $this->svc->recallBatch($batch, $request->user(), $request->input('reason')); }
         catch (\InvalidArgumentException $e) { return $this->error('INVALID', $e->getMessage(), 422); }
         return $this->ok(['batch' => $recalled], 'RECALLED', 'تم سحب التشغيلة ومنع بيعها');
+    }
+
+    public function disposeBatch(Request $request, int $id): JsonResponse
+    {
+        if (($deny = $this->denyUnless($request, 'pharmacy_batch_disposition')) !== null) return $deny;
+        if ($deny = $this->guard($request, P::PHARMACY_BATCH_DISPOSE)) return $deny;
+        $v = Validator::make($request->all(), [
+            'type' => 'required|in:return_to_supplier,destroyed',
+            'reason' => 'required|string|max:1000',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+        $pharmacy = $this->svc->getOrCreatePharmacy($merchant);
+        $batch = PharmacyBatch::whereHas('product', fn ($q) => $q->where('pharmacy_id', $pharmacy->id))->find($id);
+        if (!$batch) return $this->error('NOT_FOUND', 'التشغيلة غير موجودة', 404);
+        try {
+            $disposed = $this->svc->disposeBatch($batch, $request->user(), $request->string('type')->toString(), $request->string('reason')->toString());
+        } catch (\InvalidArgumentException $e) {
+            return $this->error('INVALID', $e->getMessage(), 422);
+        }
+        return $this->ok(['batch' => $disposed], 'BATCH_DISPOSED', 'تم توثيق إخراج التشغيلة من المخزون');
     }
 
     // ============ Customers ============

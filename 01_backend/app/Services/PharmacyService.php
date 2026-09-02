@@ -73,6 +73,9 @@ class PharmacyService
             'barcode' => $data['barcode'] ?? null,
             'trade_name' => $data['trade_name'],
             'generic_name' => $data['generic_name'] ?? null,
+            'active_ingredient' => $data['active_ingredient'] ?? null,
+            'strength' => $data['strength'] ?? null,
+            'dosage_form' => $data['dosage_form'] ?? null,
             'manufacturer' => $data['manufacturer'] ?? null,
             'unit' => $data['unit'] ?? 'قطعة',
             'sale_price' => MoneyService::normalize($data['sale_price']),
@@ -100,6 +103,7 @@ class PharmacyService
     {
         $allowed = array_intersect_key($data, array_flip([
             'category_id', 'sku', 'barcode', 'trade_name', 'generic_name',
+            'active_ingredient', 'strength', 'dosage_form',
             'manufacturer', 'unit', 'sale_price', 'cost_price',
             'requires_prescription', 'low_stock_threshold',
             'description', 'dosage_instructions', 'is_active',
@@ -195,6 +199,82 @@ class PharmacyService
             $product->update(['current_stock' => MoneyService::sub((string) $product->current_stock, $remaining)]);
             return $locked->fresh();
         });
+    }
+
+    /**
+     * يخرج الدواء غير القابل للبيع من الرصيد، لكن لا يحذف أثره.
+     *
+     * الاستدعاء لا يغيّر بيعة سابقة ولا يمسّ دفعة مسحوبة؛ فالسحب قرار
+     * سلامة مستقل سبق أن حجب الرصيد، أما هنا فهو مصير المخزون المتبقّي
+     * (إرجاع للمورّد أو إتلاف موثّق).
+     */
+    public function disposeBatch(PharmacyBatch $batch, User $actor, string $type, string $reason): PharmacyBatch
+    {
+        if (!in_array($type, ['return_to_supplier', 'destroyed'], true)) {
+            throw new InvalidArgumentException('نوع الإجراء غير صحيح');
+        }
+        $reason = trim($reason);
+        if ($reason === '') throw new InvalidArgumentException('سبب الإرجاع أو الإتلاف مطلوب');
+
+        return DB::transaction(function () use ($batch, $actor, $type, $reason) {
+            $locked = PharmacyBatch::lockForUpdate()->findOrFail($batch->id);
+            if (in_array($locked->status, ['recalled', 'returned', 'destroyed'], true)) {
+                throw new InvalidArgumentException('هذه التشغيلة أُخرجت من المخزون مسبقاً');
+            }
+            if ((float) $locked->quantity_remaining <= 0) {
+                throw new InvalidArgumentException('لا توجد كمية متبقية في هذه التشغيلة');
+            }
+
+            $product = PharmacyProduct::lockForUpdate()->findOrFail($locked->product_id);
+            $remaining = (string) $locked->quantity_remaining;
+            // `scanExpiringBatches()` يحجب المنتهي من الرصيد المتاح فوراً.
+            // لذلك توثيق مصيره لاحقاً لا يخصمه مرة ثانية. أمّا الدفعة
+            // النشطة (تلف/إرجاع قبل الانتهاء) فتُخصم هنا في المعاملة نفسها.
+            $alreadyExcludedFromStock = $locked->status === 'expired';
+            if (! $alreadyExcludedFromStock
+                && MoneyService::compare((string) $product->current_stock, $remaining) < 0) {
+                throw new InvalidArgumentException('رصيد الدواء لا يطابق رصيد التشغيلة؛ راجع الجرد قبل الإجراء');
+            }
+
+            $locked->update([
+                'status' => $type === 'return_to_supplier' ? 'returned' : 'destroyed',
+                'disposition_type' => $type,
+                'disposition_reason' => $reason,
+                'disposed_by_user_id' => $actor->id,
+                'disposed_at' => now(),
+            ]);
+            if (! $alreadyExcludedFromStock) {
+                $product->update(['current_stock' => MoneyService::sub((string) $product->current_stock, $remaining)]);
+            }
+
+            return $locked->fresh();
+        });
+    }
+
+    /**
+     * لا يوصي النظام بعلاج ولا يستبدل تلقائياً: يعرض فقط أصناف الصيدلية
+     * التي تطابق تعريف البديل المدوّن من الصيدلي (مادة + تركيز + شكل).
+     */
+    public function alternativesFor(PharmacyProduct $product): \Illuminate\Support\Collection
+    {
+        $ingredient = trim((string) $product->active_ingredient);
+        $strength = trim((string) $product->strength);
+        $form = trim((string) $product->dosage_form);
+        if ($ingredient === '' || $strength === '' || $form === '') {
+            throw new InvalidArgumentException('أدخل المادة الفعالة والتركيز والشكل الدوائي أولاً لعرض البدائل الآمنة');
+        }
+
+        return PharmacyProduct::where('pharmacy_id', $product->pharmacy_id)
+            ->where('id', '!=', $product->id)
+            ->where('is_active', true)
+            ->where('active_ingredient', $ingredient)
+            ->where('strength', $strength)
+            ->where('dosage_form', $form)
+            ->where('current_stock', '>', 0)
+            ->with('category')
+            ->orderBy('sale_price')
+            ->limit(10)
+            ->get();
     }
 
     // ============ العملاء/المرضى ============

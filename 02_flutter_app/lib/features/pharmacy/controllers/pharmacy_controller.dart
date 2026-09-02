@@ -14,6 +14,7 @@ class PharmacyController extends GetxController implements GetxService {
   final RxList<Map<String, dynamic>> products = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> categories = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> similarProducts = <Map<String, dynamic>>[].obs;
+  final RxList<Map<String, dynamic>> alternatives = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> batches = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> customers = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> sales = <Map<String, dynamic>>[].obs;
@@ -91,6 +92,23 @@ class PharmacyController extends GetxController implements GetxService {
     } catch (_) {}
   }
 
+  Future<bool> loadAlternatives(int productId) async {
+    try {
+      isLoading.value = true;
+      lastError.value = '';
+      final r = await repo.alternatives(productId);
+      if (_ok(r)) {
+        final list = (r.body['meta']?['alternatives'] ?? []) as List;
+        alternatives.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'تعذّر تحميل البدائل';
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    } finally { isLoading.value = false; }
+    return false;
+  }
+
   // ============ Batches ============
 
   Future<void> loadBatches(int productId) async {
@@ -112,6 +130,12 @@ class PharmacyController extends GetxController implements GetxService {
 
   Future<bool> recallBatch(int productId, int batchId, String reason) async =>
       _doAndReload(() => repo.recallBatch(batchId, reason), () async {
+        await loadBatches(productId);
+        await loadProducts();
+      });
+
+  Future<bool> disposeBatch(int productId, int batchId, String type, String reason) async =>
+      _doAndReload(() => repo.disposeBatch(batchId, type, reason), () async {
         await loadBatches(productId);
         await loadProducts();
       });

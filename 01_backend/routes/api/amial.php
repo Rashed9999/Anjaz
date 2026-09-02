@@ -1039,6 +1039,9 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             // Products
             Route::get('/categories', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listCategories'])->name('categories.index');
             Route::get('/products/similar', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'similarProducts'])->name('products.similar');
+            Route::get('/products/{id}/alternatives', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'alternatives'])
+                ->middleware('capability:pharmacy_substitutions')
+                ->where('id', '[0-9]+')->name('products.alternatives');
             Route::get('/products', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listProducts'])->name('products.index');
             Route::post('/products', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'addProduct'])
                 ->middleware('amial.usage:add_product')->name('products.add');
@@ -1055,6 +1058,9 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::post('/batches/{id}/recall', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'recallBatch'])
                 ->middleware('capability:pharmacy_batches')
                 ->where('id', '[0-9]+')->name('batches.recall');
+            Route::post('/batches/{id}/dispose', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'disposeBatch'])
+                ->middleware('capability:pharmacy_batch_disposition')
+                ->where('id', '[0-9]+')->name('batches.dispose');
 
             // Customers — الملف الصحي مدفوع في الأعمال؛ الحارس على كل فعل.
             Route::get('/customers', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'listCustomers'])

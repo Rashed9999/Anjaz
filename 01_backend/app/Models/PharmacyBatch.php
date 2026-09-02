@@ -16,6 +16,7 @@ class PharmacyBatch extends Model
         'quantity_received', 'quantity_remaining',
         'cost_per_unit', 'supplier_name', 'supplier_invoice',
         'status', 'recall_reason', 'recalled_by_user_id', 'recalled_at',
+        'disposition_type', 'disposition_reason', 'disposed_by_user_id', 'disposed_at',
     ];
 
     protected $casts = [
@@ -27,9 +28,10 @@ class PharmacyBatch extends Model
         'quantity_remaining' => 'decimal:4',
         'cost_per_unit' => 'decimal:4',
         'recalled_by_user_id' => 'integer', 'recalled_at' => 'datetime',
+        'disposed_by_user_id' => 'integer', 'disposed_at' => 'datetime',
     ];
 
-    public const STATUSES = ['active', 'exhausted', 'expired', 'recalled'];
+    public const STATUSES = ['active', 'exhausted', 'expired', 'recalled', 'returned', 'destroyed'];
 
     public function product(): BelongsTo
     {
