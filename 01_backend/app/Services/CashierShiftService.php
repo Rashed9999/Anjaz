@@ -64,7 +64,84 @@ class CashierShiftService
                 $count++;
             }
         }
-        return ['cash_sales' => MoneyService::normalize($cash), 'sales_count' => $count];
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-SHIFT-VERTICALS-001 — **ودرجُ الصيدليّة والجملة يُعدّان.**
+        //
+        // **الثمنُ المقيس:** كانت هذه الدالّةُ تقرأ `merchant_sales`
+        // وحدَه — جدولَ الكاشير العامّ. فصيدليّةٌ تفتح ورديّةً وتبيع
+        // نقداً طولَ اليوم تُقفلها والمتوقَّعُ **عهدتُها وحدَها**:
+        //
+        //     عهدة ١٠٠٠ · مبيعاتُ نقدٍ ٣٠٠ · معدود ١٣٠٠
+        //     المتوقَّع كان يخرج ١٠٠٠  ⇒  «فائضٌ ٣٠٠»
+        //
+        // **فكلُّ ريالٍ باعته يُقرأ فائضاً في وجه الكاشير** — وهو أسوأُ
+        // من العجز: العجزُ يُحقَّق فيه، والفائضُ يُقرأ «بيعٌ لم يُسجَّل»
+        // أو «مالٌ من غير مصدره».
+        //
+        // **ووصفُ القدرة نفسِه كان يَعِد بغير ذلك**: «الورديات وإغلاق
+        // الصندوق — **والمتوقَّع يُحسب من الحركة** فلا يظهر مصروف
+        // الكاشير عجزاً في وجهه». (القاعدة السادسة: الرقمُ يُحسب من
+        // مصدره لا من عمودٍ مخزَّن.)
+        //
+        // **والوقودُ مستثنىً عمداً** — له `FuelShiftService` وجدولُ
+        // `fuel_shifts` الخاصّ به، فضمُّه هنا يعدّ بيعَه مرّتين.
+        // ══════════════════════════════════════════════════════════════
+        $vertical = $this->verticalCash($shift);
+
+        return [
+            'cash_sales' => MoneyService::normalize(
+                MoneyService::add($cash, $vertical['cash'])),
+            'sales_count' => $count + $vertical['count'],
+        ];
+    }
+
+    /** نقدُ القطاعات التي لا ورديّةَ خاصّةً لها — الصيدليّةُ والجملة. */
+    private function verticalCash(CashierShift $shift): array
+    {
+        $cash = '0';
+        $count = 0;
+
+        // ① الصيدليّة — تُربط بالتاجر عبر `pharmacies`.
+        $pharmacy = DB::table('pharmacies')
+            ->where('merchant_user_id', $shift->merchant_user_id)
+            ->value('id');
+
+        if ($pharmacy !== null) {
+            $q = DB::table('pharmacy_sales')
+                ->where('pharmacy_id', $pharmacy)
+                ->where('payment_method', 'cash')
+                ->where('created_at', '>=', $shift->opened_at)
+                ->whereIn('status', ['completed', 'credit_paid']);
+
+            // **ونطاقُ الجهاز يُحترَم** — ورديّةُ كاشيرٍ بعينه لا تحمل
+            // بيعَ زميله، وإلّا حُوسب على ما لم يقبضه.
+            if ($shift->pos_user_id) {
+                $q->where('pos_user_id', $shift->pos_user_id);
+            }
+
+            foreach ($q->get(['total_amount']) as $r) {
+                $cash = MoneyService::add($cash, (string) $r->total_amount);
+                $count++;
+            }
+        }
+
+        // ② الجملة — تحصيلاتُها النقديّة، وتُربط عبر `wholesale_businesses`.
+        $business = DB::table('wholesale_businesses')
+            ->where('merchant_user_id', $shift->merchant_user_id)
+            ->value('id');
+
+        if ($business !== null) {
+            foreach (DB::table('wholesale_collections')
+                ->where('business_id', $business)
+                ->where('payment_method', 'cash')
+                ->where('created_at', '>=', $shift->opened_at)
+                ->get(['amount']) as $r) {
+                $cash = MoneyService::add($cash, (string) $r->amount);
+                $count++;
+            }
+        }
+
+        return ['cash' => $cash, 'count' => $count];
     }
 
     /** تقرير X — لقطة لحظية بلا إقفال. */
