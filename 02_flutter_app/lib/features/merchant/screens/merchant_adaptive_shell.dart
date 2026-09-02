@@ -44,36 +44,105 @@ class MerchantAdaptiveShell extends StatelessWidget {
       child: Scaffold(
         backgroundColor: AmialColors.background,
         drawer: const MerchantAdaptiveDrawer(),
-        body: Stack(
+        // AMIAL-MERCHANT-VERIFY-RECEIVE-001 — اللافتةُ تأخذ حيّزَها في الأعلى
+        // ولا تطفو فوق المحتوى: التاجرُ يعمل بالكامل، فلا يجوز أن تغطّي زرَّ
+        // بيعٍ أو دفعٍ في أيّ قطاع (طبقةُ التداخل — القاعدة العاشرة). وحين
+        // يكون موثّقاً (أو غيرَ تاجر) تنكمش إلى صفرٍ فلا أثرَ لها في التخطيط.
+        body: Column(
           children: [
-            Positioned.fill(child: child),
-            SafeArea(
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: Padding(
-                  padding: const EdgeInsets.all(AmialSpacing.sm),
-                  child: Builder(
-                    builder: (buttonContext) => Material(
-                      color: AmialColors.primary,
-                      shape: const CircleBorder(),
-                      elevation: 2,
-                      child: IconButton(
-                        tooltip: 'القائمة',
-                        onPressed: () => Scaffold.of(buttonContext).openDrawer(),
-                        icon: const Icon(
-                          Icons.menu_rounded,
-                          color: AmialColors.cardSurface,
+            const _MerchantPendingReceiveBanner(),
+            Expanded(
+              child: Stack(
+                children: [
+                  Positioned.fill(child: child),
+                  SafeArea(
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.all(AmialSpacing.sm),
+                        child: Builder(
+                          builder: (buttonContext) => Material(
+                            color: AmialColors.primary,
+                            shape: const CircleBorder(),
+                            elevation: 2,
+                            child: IconButton(
+                              tooltip: 'القائمة',
+                              onPressed: () =>
+                                  Scaffold.of(buttonContext).openDrawer(),
+                              icon: const Icon(
+                                Icons.menu_rounded,
+                                color: AmialColors.cardSurface,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
             ),
           ],
         ),
       ),
     );
+  }
+}
+
+/// AMIAL-MERCHANT-VERIFY-RECEIVE-001 — لافتةُ «القبضُ قيد المراجعة».
+///
+/// تظهر لتاجرٍ غيرِ موثّقٍ بعد (`pending_review` أو ما ليس `verified`)، فوق
+/// الشاشة كلِّها في كلّ القطاعات (الغلافُ الواحد). لا تُحبَس الشاشةُ — يعمل
+/// التاجرُ بالكامل — لكنّها تقول صراحةً إنّ **استلامَ المدفوعات عبر المنصّة**
+/// مقفلٌ حتّى الاعتماد، فلا يفاجأ برفضٍ عند أوّل قبض. والمرفوضُ (`rejected`)
+/// لا يصل هنا أصلاً — له شاشةُ الحالة الكاملة.
+class _MerchantPendingReceiveBanner extends StatelessWidget {
+  const _MerchantPendingReceiveBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final AccessController access = Get.find<AccessController>();
+    return Obx(() {
+      final status = access.merchantVerificationStatus.value;
+      // موثّقٌ، أو غيرُ تاجرٍ (null)، أو مرفوضٌ (شاشةٌ أخرى) → لا لافتة.
+      if (status == null || status == 'verified' || status == 'rejected') {
+        return const SizedBox.shrink();
+      }
+      return SafeArea(
+        bottom: false,
+        child: Container(
+          width: double.infinity,
+          margin: const EdgeInsets.fromLTRB(
+            AmialSpacing.sm, AmialSpacing.sm, AmialSpacing.sm, 0),
+          padding: const EdgeInsets.fromLTRB(
+            AmialSpacing.md, AmialSpacing.sm, AmialSpacing.md, AmialSpacing.sm),
+          decoration: BoxDecoration(
+            color: AmialColors.warningSurface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AmialColors.warning, width: 1),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.hourglass_top_rounded,
+                  color: AmialColors.warning, size: 20),
+              const SizedBox(width: AmialSpacing.sm),
+              const Expanded(
+                child: Text(
+                  'حسابك قيد الاعتماد. تعمل بالكامل الآن — والبيعُ النقديّ '
+                  'والآجل والجردُ والطباعةُ متاحة. يبقى استقبالُ المدفوعات '
+                  'عبر أميال باي مقفلاً حتّى تعتمد الإدارةُ متجرك.',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    height: 1.4,
+                    color: AmialColors.textPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    });
   }
 }
 

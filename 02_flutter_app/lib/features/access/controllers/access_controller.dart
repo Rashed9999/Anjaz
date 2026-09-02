@@ -18,6 +18,10 @@ class AccessController extends GetxController implements GetxService {
   // الحقول الأساسية
   final RxString role = 'user'.obs;
   final RxString verificationLevel = 'basic'.obs;
+  // AMIAL-MERCHANT-VERIFY-RECEIVE-001 — حالةُ توثيق التاجر من الخادم:
+  // verified | pending_review | rejected | ... — null لغير التاجر. تقودُ
+  // لافتةَ «القبضُ قيد المراجعة» في غلاف التاجر (دخولٌ محدود فوراً).
+  final RxnString merchantVerificationStatus = RxnString();
   final RxnString businessType = RxnString();          // قد يكون null إن لم يختر
   final RxnString businessTypeLabel = RxnString();
   final RxString subscriptionPlan = 'free'.obs;
@@ -112,6 +116,8 @@ class AccessController extends GetxController implements GetxService {
     actor.value = actorDeclared.value ? declaredActor! : 'customer';
 
     verificationLevel.value = access['verification_level']?.toString() ?? 'basic';
+    merchantVerificationStatus.value =
+        access['merchant_verification_status']?.toString();
     businessType.value = access['business_type']?.toString();
     businessTypeLabel.value = access['business_type_label']?.toString();
     subscriptionPlan.value = access['subscription_plan']?.toString() ?? 'free';
@@ -246,6 +252,7 @@ class AccessController extends GetxController implements GetxService {
     actor.value = 'customer';
     actorDeclared.value = false;
     verificationLevel.value = 'basic';
+    merchantVerificationStatus.value = null;
     businessType.value = null;
     businessTypeLabel.value = null;
     subscriptionPlan.value = 'free';

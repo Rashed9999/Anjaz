@@ -126,6 +126,12 @@ class MerchantPaysNoPlatformFeeGuardTest extends TestCase
         // ══════════════════════════════════════════════════════════════
         $customer = User::factory()->create(['type' => 2, 'zone_code' => 'SOUTH']);
         $merchant = User::factory()->create(['type' => 3, 'zone_code' => 'SOUTH']);
+        // AMIAL-MERCHANT-VERIFY-RECEIVE-001: القبضُ يتطلّب تاجراً موثّقاً خادميّاً.
+        \App\Models\MerchantProfile::create([
+            'user_id' => $merchant->id, 'tier' => 'small',
+            'verification_status' => 'verified',
+            'single_receive_limit' => '5000000', 'daily_receive_limit' => '50000000',
+        ]);
 
         foreach ([$customer->id => '50000.0000', $merchant->id => '0.0000'] as $uid => $bal) {
             EMoney::create([
@@ -167,6 +173,12 @@ class MerchantPaysNoPlatformFeeGuardTest extends TestCase
 
         $customer = User::factory()->create(['type' => 2, 'zone_code' => 'SOUTH']);
         $merchant = User::factory()->create(['type' => 3, 'zone_code' => 'SOUTH']);
+        // AMIAL-MERCHANT-VERIFY-RECEIVE-001: القبضُ يتطلّب تاجراً موثّقاً خادميّاً.
+        \App\Models\MerchantProfile::create([
+            'user_id' => $merchant->id, 'tier' => 'small',
+            'verification_status' => 'verified',
+            'single_receive_limit' => '5000000', 'daily_receive_limit' => '50000000',
+        ]);
 
         foreach ([$customer->id => '50000.0000', $merchant->id => '0.0000'] as $uid => $bal) {
             EMoney::create([

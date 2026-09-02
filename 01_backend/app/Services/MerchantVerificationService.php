@@ -135,6 +135,18 @@ class MerchantVerificationService
             // إشعار التاجر
             $merchant = User::find($request->merchant_user_id);
             if ($merchant) {
+                // AMIAL-MERCHANT-VERIFY-RECEIVE-001 — **الاعتمادُ يرفع القفلَ
+                // فعلاً، لا اسماً.** كان يُضبَط `verification_status='verified'`
+                // على الـprofile وحدَه، و`users.is_kyc_verified` يبقى 0 —
+                // وهو ما يقرؤه التطبيق ومسارُ KYC. فتاجرٌ اعتمدته الإدارةُ
+                // من اللوحة كان **يبقى محبوساً** كأنّه لم يُعتمَد: بابٌ
+                // يُفتح ولا يُوصَل إليه — نمطُ العطل نفسُه الذي يطارده المشروع.
+                // فيُضبَط الحقلان معاً هنا (وفي مسار اللوحة QR أصلاً كذلك).
+                if ((int) ($merchant->is_kyc_verified ?? 0) !== 1) {
+                    $merchant->is_kyc_verified = 1;
+                    $merchant->save();
+                }
+
                 $this->notif->dispatch(
                     $merchant,
                     'merchant_verified',

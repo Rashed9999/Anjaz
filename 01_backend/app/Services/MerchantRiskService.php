@@ -44,18 +44,39 @@ class MerchantRiskService
     public function assertReceiveAllowed(int $merchantUserId, string $amount): void
     {
         $profile = MerchantProfile::where('user_id', $merchantUserId)->first();
-        if (!$profile) {
-            // تاجر بلا profile — يُعامل كـ micro (الأكثر تقييداً) للأمان
-            $limits = MerchantProfile::defaultLimitsForTier('micro');
-            $singleLimit = $limits['single_receive_limit'];
-            $dailyLimit = $limits['daily_receive_limit'];
-        } else {
-            if ($profile->verification_status === 'verification_suspended') {
-                throw new RuntimeException('حساب التاجر موقوف للمراجعة');
-            }
-            $singleLimit = (string)$profile->single_receive_limit;
-            $dailyLimit = (string)$profile->daily_receive_limit;
+
+        // ══════════════════════════════════════════════════════════════════
+        // AMIAL-MERCHANT-VERIFY-RECEIVE-001 — **القبضُ الماليّ محروسٌ في
+        // الخادم، لا بحبس الواجهة.**
+        //
+        // قرارُ صاحب المشروع: «دخولٌ محدود فوراً» — يدخل التاجرُ ويعمل من
+        // اللحظة الأولى (بيعٌ نقديّ، آجل، جردٌ، طباعة)، لكنّ **استلامَ المال
+        // الحقيقيّ عبر المنصّة** يبقى مقفلاً حتّى تعتمده الإدارة. فرفعُ حبس
+        // الواجهة وحدَه (AMIAL-VERIFY-GATE) كان سيترك تاجراً غيرَ موثّقٍ
+        // يقبض مالاً حقيقيّاً — و«إخفاءُ الواجهة ليس أماناً» (amial-rbac).
+        //
+        // وهذا البابُ الوحيدُ يُنادى من مدخلي القبض معاً: QR/POS
+        // (`TransactionTrait::merchant_payment_transaction`) ورابطُ الدفع/
+        // الفاتورة (`PaymentRequestService::settle`). فحارسٌ واحدٌ هنا يغطّي
+        // كلَّ القطاعات وكلَّ مسارات القبض — لا وسيطٌ يُنسى على مسارٍ جديد.
+        //
+        // والهويّةُ من الصفّ المخزَّن لا من الطلب (القاعدة الثامنة). وتاجرٌ
+        // بلا profile يُعامَل غيرَ موثّق (يُقفل)، لا كـ micro يقبض بحدٍّ أدنى:
+        // «غير معروف» ليس «مسموحٌ بحذر» حين يكون المالُ حقيقيّاً (القاعدة ٧).
+        // ══════════════════════════════════════════════════════════════════
+        $status = $profile?->verification_status;
+        if ($status === 'verification_suspended') {
+            throw new RuntimeException('حساب التاجر موقوف للمراجعة');
         }
+        if ($status !== 'verified') {
+            throw new RuntimeException(
+                'حساب المتجر قيد المراجعة — لا يمكن استقبال المدفوعات حتى اعتماد الإدارة'
+            );
+        }
+
+        // وصل هنا ⇒ الـprofile موجودٌ وموثّق.
+        $singleLimit = (string) $profile->single_receive_limit;
+        $dailyLimit = (string) $profile->daily_receive_limit;
 
         // حد العملية الواحدة
         if (bccomp($amount, $singleLimit, 4) > 0) {

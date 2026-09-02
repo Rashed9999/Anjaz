@@ -177,12 +177,21 @@ class FeatureAccessService
         $limits = in_array($actor, ['owner', 'pos'], true)
             ? AccessPresets::planLimits($plan) : [];
 
+        // AMIAL-MERCHANT-VERIFY-RECEIVE-001 — حالةُ توثيق التاجر (أو تاجرِ
+        // موظّف POS) من مصدرها، تُقرأ في كلّ فتحٍ للتطبيق لا عند الدخول وحده.
+        // بها تعرض واجهةُ التاجر لافتةَ «القبضُ قيد المراجعة» بحقيقةٍ حيّة،
+        // لا بحالةٍ محفوظةٍ تشيخ. (غيرُ التاجر: null فلا لافتة.)
+        $merchantVerificationStatus = $ownerId
+            ? MerchantProfile::where('user_id', $ownerId)->value('verification_status')
+            : null;
+
         return [
             'role' => $role,
 
             // **الفاعلُ مصرَّحٌ به** — لا يُستنتج في التطبيق من غياب حقل.
             'actor' => $actor,
             'merchant_user_id' => $ownerId,
+            'merchant_verification_status' => $merchantVerificationStatus,
             'pos' => $posUser ? [
                 'id' => $posUser->id,
                 'pos_number' => $posUser->pos_number,

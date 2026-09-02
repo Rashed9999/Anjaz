@@ -321,11 +321,31 @@ class UnifiedAuthController extends GetxController implements GetxService {
   Future<void> navigateToHomeForRole() async {
     if (currentRole.value.isEmpty) return;
 
-    // AMIAL-VERIFY-GATE: الحساب غير المعتمد (قيد المراجعة/مرفوض) لا يفتح
-    // الرئيسية — يذهب لشاشة الحالة الصريحة بدل تجربة ناقصة صامتة. الأدمن
-    // مستثنى (لا يخضع لتوثيق KYC).
-    if (currentRole.value != 'admin' &&
-        verificationState.value != 'verified') {
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-MERCHANT-VERIFY-RECEIVE-001 — **«دخولٌ محدود فوراً» للتاجر.**
+    //
+    // كان كلُّ حسابٍ غيرِ معتمدٍ يُحبَس في التطبيق كلِّه بشاشة «قيد
+    // المراجعة» — والمالكُ هو من أنشأ الحساب، فيقرأ «قيد المراجعة» ولا
+    // يعرف من يراجع. وقرارُ صاحب المشروع: **التاجرُ (وموظّفُ POS) يدخل
+    // ويعمل من اللحظة الأولى** (بيعٌ نقديّ، آجل، جردٌ، طباعة)، ويبقى
+    // **القبضُ الماليُّ الحقيقيُّ عبر المنصّة** مقفلاً حتّى تعتمده الإدارة.
+    //
+    // والقفلُ الماليُّ في الخادم لا هنا: `MerchantRiskService::
+    // assertReceiveAllowed` يرفض استلامَ تاجرٍ غيرِ موثّق. فرفعُ الحبس هنا
+    // لا يفتح ثغرة — «إخفاءُ الواجهة ليس أماناً»، والأمانُ خلفه قائم.
+    //
+    // ويبقى الحبسُ الكاملُ حيث يجب:
+    //   · التاجرُ/POS المرفوض (rejected) — يحتاج إعادةَ تقديمٍ لا تجربةً ناقصة
+    //   · وغيرُ التاجر (العميل) غيرُ الموثّق — سلوكُه لم يتغيّر، ومالُه
+    //     محروسٌ خادميّاً بحدّ KYC.
+    // والأدمن مستثنىً (لا يخضع لتوثيق KYC).
+    // ══════════════════════════════════════════════════════════════════
+    final bool isMerchantSide =
+        currentRole.value == 'merchant' || currentRole.value == 'pos';
+    final bool fullyBlocked = isMerchantSide
+        ? verificationState.value == 'rejected'
+        : verificationState.value != 'verified';
+    if (currentRole.value != 'admin' && fullyBlocked) {
       Get.offAll(() => AccountReviewScreen(
             state: verificationState.value,
             userName: _displayName,
