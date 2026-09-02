@@ -18,6 +18,7 @@ import 'package:amial_pay/features/merchant_verification/screens/merchant_verifi
 import 'package:amial_pay/features/notification/screens/notifications_center_screen.dart';
 import 'package:amial_pay/features/notification/controllers/notifications_center_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 
 /// AMIAL-MERCHANT-APP-001 (v1.6)
 class MerchantDashboardScreen extends StatefulWidget {
@@ -137,8 +138,13 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                                   style: TextStyle(
                                       color: Colors.white70, fontSize: 12)),
                               const SizedBox(height: 2),
+                              // **«غير معروف» ليس صفراً ولا «null».** الخادمُ
+                              // يحجب الرصيدَ عن موظّف نقطة البيع، فيُقال
+                              // ذلك ولا يُطبع رقمٌ ولا كلمةٌ إنجليزيّة.
                               Text(
-                                '${ctrl.stats.value.balance} ر.ي',
+                                ctrl.stats.value.balance == null
+                                    ? 'غير معروض لحسابك'
+                                    : '${ctrl.stats.value.balance} ر.ي',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 22,
@@ -281,9 +287,11 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
                     const Text('المبيعات',
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 14)),
+                    // **بابُ المال من اللوحة** — كان يقود إلى شاشة الحركات
+                    // باسمٍ ثانٍ للشيء نفسِه. والمحفظةُ تجمعهما.
                     TextButton(
-                      onPressed: () =>
-                          Get.to(() => const MerchantTransactionsScreen()),
+                      key: const Key('merchant-dashboard-wallet'),
+                      onPressed: () => Get.to(() => const MerchantWalletScreen()),
                       child: const Text('عرض الكل'),
                     ),
                   ],

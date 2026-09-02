@@ -34,6 +34,7 @@ import 'package:amial_pay/features/merchant/screens/stock_alerts_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_transactions_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 
 /// AMIAL-MERCHANT-SERVICES-HUB-001 — «مركز خدمات التاجر».
 ///
@@ -526,9 +527,12 @@ class MerchantServicesHubScreen extends StatelessWidget {
     _Svc('daily_reports', 'تقرير اليوم',
         'مبيعات اليوم بالتفصيل: عدد الفواتير، النقد مقابل المحفظة، وأعلى الأصناف مبيعاً.',
         Icons.today, 'المجانية', () => const FinancialTruthReportScreen(dailyOnly: true)),
-    _Svc('wallet', 'حركات المتجر',
-        'كل ما دخل محفظة متجرك وخرج منها: مقبوضات، تحويلات، رسوم — بترتيب زمنيّ وبحث.',
-        Icons.swap_vert, 'المجانية', () => const MerchantTransactionsScreen()),
+    // **اسمٌ واحدٌ للمال.** كان هنا «حركات المتجر» وفي اللوحة «المبيعات»
+    // وفي الشاشة «المبيعات والعمليات» — ثلاثةُ أسماءٍ لشيءٍ واحدٍ يفتحها
+    // التاجرُ من ثلاثة أبوابٍ في الجلسة نفسِها فيظنّها ثلاثةَ أشياء.
+    _Svc('wallet', 'محفظة المتجر',
+        'رصيدُ متجرك وكلُّ ما دخله وخرج منه: مقبوضات، تحويلات، رسوم — بترتيب زمنيّ وبحث.',
+        Icons.account_balance_wallet_rounded, 'المجانية', () => const MerchantWalletScreen()),
     _Svc('profit_reports', 'تقارير الأرباح',
         'تقارير مبيعات وأرباح مفصّلة لمتجرك، بمقارنات يومية وشهرية لتعرف أداءك الحقيقي.',
         Icons.trending_up, 'الأعمال', () => const ProfitReportScreen()),

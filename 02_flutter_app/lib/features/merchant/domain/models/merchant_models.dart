@@ -10,7 +10,18 @@ class AmialMerchant {
   final String? address;
   final String? phone;
   final String? phoneMasked;
-  final String balance;
+  /// ══════════════════════════════════════════════════════════════════
+  /// **«غير معروف» ليس صفراً** — والرصيدُ يُترك عدماً حين يُحجَب.
+  ///
+  /// الخادمُ **يحذف** `current_balance` عن موظّف نقطة البيع عمداً: المالُ
+  /// للمالك لا للكاشير. وافتراضُ `'0'` هنا يكتب على شاشته **«الرصيد
+  /// المتاح: ٠ ر.ي»** على متجرٍ فيه مئتا ألف — رقمٌ ماليٌّ كاذبٌ يُتّخذ
+  /// عليه قرار.
+  ///
+  /// والشاشةُ تفرّق بينهما سلفاً (`balance != null`)؛ النموذجُ وحدَه كان
+  /// يمحو الفرقَ قبل أن تراه. (القاعدة السابعة.)
+  /// ══════════════════════════════════════════════════════════════════
+  final String? balance;
   final bool verified;
   final String? verificationStatus;
 
@@ -23,13 +34,17 @@ class AmialMerchant {
     this.address,
     this.phone,
     this.phoneMasked,
-    required this.balance,
+    this.balance,
     required this.verified,
     this.verificationStatus,
   });
 
   factory AmialMerchant.fromJson(Map<String, dynamic> j) {
     final merchant = j['merchant'] is Map ? Map<String, dynamic>.from(j['merchant']) : <String, dynamic>{};
+
+    // **يُقرأ خاماً ثمّ يُحوَّل** — فـ`?? '0'` قبل `toString` تمحو الغياب
+    // قبل أن تراه الشاشة.
+    final raw = j['current_balance'];
     return AmialMerchant(
       id: merchant['id'] ?? 0,
       userId: j['id'] ?? merchant['user_id'] ?? 0,
@@ -39,7 +54,7 @@ class AmialMerchant {
       address: (merchant['address'] ?? j['address'])?.toString(),
       phone: j['phone']?.toString(),
       phoneMasked: j['phone_masked']?.toString(),
-      balance: (j['current_balance'] ?? '0').toString(),
+      balance: raw?.toString(),
       verified: (j['merchant_verified'] ?? merchant['verified'] ?? 0) == 1,
       verificationStatus: (j['verification_status'] ?? merchant['verification_status'])?.toString(),
     );
@@ -125,7 +140,18 @@ class AmialMerchantDashboardStats {
   final String todayRefunds;
   final String todayNet;
   final int todayTransactionsCount;
-  final String balance;
+  /// ══════════════════════════════════════════════════════════════════
+  /// **«غير معروف» ليس صفراً** — والرصيدُ يُترك عدماً حين يُحجَب.
+  ///
+  /// الخادمُ **يحذف** `current_balance` عن موظّف نقطة البيع عمداً: المالُ
+  /// للمالك لا للكاشير. وافتراضُ `'0'` هنا يكتب على شاشته **«الرصيد
+  /// المتاح: ٠ ر.ي»** على متجرٍ فيه مئتا ألف — رقمٌ ماليٌّ كاذبٌ يُتّخذ
+  /// عليه قرار.
+  ///
+  /// والشاشةُ تفرّق بينهما سلفاً (`balance != null`)؛ النموذجُ وحدَه كان
+  /// يمحو الفرقَ قبل أن تراه. (القاعدة السابعة.)
+  /// ══════════════════════════════════════════════════════════════════
+  final String? balance;
   final String pendingSettlement;
 
   AmialMerchantDashboardStats({
@@ -133,22 +159,24 @@ class AmialMerchantDashboardStats {
     required this.todayRefunds,
     required this.todayNet,
     required this.todayTransactionsCount,
-    required this.balance,
+    this.balance,
     required this.pendingSettlement,
   });
 
   factory AmialMerchantDashboardStats.empty() => AmialMerchantDashboardStats(
         todaySales: '0', todayRefunds: '0', todayNet: '0',
-        todayTransactionsCount: 0, balance: '0', pendingSettlement: '0',
+        todayTransactionsCount: 0, pendingSettlement: '0',
       );
 
   factory AmialMerchantDashboardStats.fromJson(Map<String, dynamic> j) {
+    final raw = j['current_balance'] ?? j['balance'];
+
     return AmialMerchantDashboardStats(
       todaySales: (j['today_sales'] ?? '0').toString(),
       todayRefunds: (j['today_refunds'] ?? '0').toString(),
       todayNet: (j['today_net'] ?? j['today_sales'] ?? '0').toString(),
       todayTransactionsCount: j['today_count'] ?? 0,
-      balance: (j['current_balance'] ?? j['balance'] ?? '0').toString(),
+      balance: raw?.toString(),
       pendingSettlement: (j['pending_settlement'] ?? '0').toString(),
     );
   }

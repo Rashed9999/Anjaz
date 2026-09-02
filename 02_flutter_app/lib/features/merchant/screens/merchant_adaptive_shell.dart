@@ -21,6 +21,7 @@ import 'package:amial_pay/features/fuel_station/screens/fuel_tanks_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 
 /// AMIAL-MERCHANT-NAV-001
 ///
@@ -134,6 +135,19 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: AmialSpacing.xs),
                       child: Divider(color: AmialColors.border),
+                    ),
+                    // ══════════════════════════════════════════════════
+                    // **بابُ المال في الدرج — وهو ما يُفتَح من كلّ شاشة.**
+                    //
+                    // المحفظةُ كانت مبنيّةً **بلا مدخلٍ واحد**: لا لوحةٌ
+                    // ولا درجٌ ولا خدماتٌ ولا رئيسيّة. وشاشةٌ لا يُوصل
+                    // إليها ليست مبنيّة.
+                    // ══════════════════════════════════════════════════
+                    _highlightItem(
+                      context,
+                      icon: Icons.account_balance_wallet_rounded,
+                      label: 'محفظة المتجر',
+                      onTap: () => _open(context, const MerchantWalletScreen()),
                     ),
                     _highlightItem(
                       context,

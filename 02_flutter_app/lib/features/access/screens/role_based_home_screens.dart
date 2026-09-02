@@ -28,6 +28,7 @@ import 'package:amial_pay/features/merchant/screens/merchant_expenses_screen.dar
 import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart';
 import 'package:amial_pay/features/barcode/screens/continuous_scanner_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 
 /// CRITICAL-001 (Phase 2) — شاشات Home متمايزة.
 ///
@@ -86,6 +87,17 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
             subtitle: 'كم بِعت اليوم؟',
             color: AmialColors.primary,
             onTap: () => Get.to(() => const FinancialTruthReportScreen(dailyOnly: true)),
+          )),
+          const SizedBox(height: 14),
+          // **زرُّ المال في الرئيسيّة** — والتاجرُ يبدأ من هنا لا من الدرج.
+          // وهو `ownerOnly` لأنّ الرصيدَ للمالك: الخادمُ يحجبه عن الكاشير،
+          // وزرٌّ يفتح شاشةً تقول «غير معروض لحسابك» وعدٌ بلا وفاء.
+          AccessGate(ownerOnly: true, child: _BigActionButton(
+            icon: Icons.account_balance_wallet_rounded,
+            label: 'محفظة المتجر',
+            subtitle: 'رصيدك وحركاتُه',
+            color: AmialColors.primary,
+            onTap: () => Get.to(() => const MerchantWalletScreen()),
           )),
         ]),
       ),
