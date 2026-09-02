@@ -54,7 +54,11 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
     _settings = Get.isRegistered<ReceiptSettingsController>()
         ? Get.find<ReceiptSettingsController>()
         : Get.put(ReceiptSettingsController(), permanent: true);
-    _settings.load();
+    _settings.load().then((_) {
+      if (_settings.effective['auto_print_receipts'] == true && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _print());
+      }
+    });
   }
 
   String _fmt(dynamic v) {

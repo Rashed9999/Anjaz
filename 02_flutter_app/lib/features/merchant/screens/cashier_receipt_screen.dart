@@ -68,7 +68,11 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
     _settings = Get.isRegistered<ReceiptSettingsController>()
         ? Get.find<ReceiptSettingsController>()
         : Get.put(ReceiptSettingsController(), permanent: true);
-    _settings.load();
+    _settings.load().then((_) {
+      if (_settings.effective['auto_print_receipts'] == true && mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _print());
+      }
+    });
   }
 
   String get _methodLabel => switch (widget.method) {

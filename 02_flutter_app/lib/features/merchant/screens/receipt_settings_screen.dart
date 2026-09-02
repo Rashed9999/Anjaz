@@ -28,6 +28,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
   final _address = TextEditingController();
   bool _showLogo = true, _showPhone = true, _showAddress = true;
   int _paper = 80;
+  bool _autoPrint = false;
   bool _loading = true;
 
   @override
@@ -51,6 +52,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
     _showPhone = s['show_phone'] == true;
     _showAddress = s['show_address'] == true;
     _paper = (s['paper_width'] == 58) ? 58 : 80;
+    _autoPrint = s['auto_print_receipts'] == true;
     if (mounted) setState(() => _loading = false);
   }
 
@@ -73,6 +75,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
         'show_phone': _showPhone,
         'show_address': _showAddress,
         'paper_width': _paper,
+        'auto_print_receipts': _autoPrint,
       };
 
   Future<void> _pickLogo() async {
@@ -101,6 +104,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
       'show_phone': _showPhone,
       'show_address': _showAddress,
       'paper_width': _paper,
+      'auto_print_receipts': _autoPrint,
     });
     if (!mounted) return;
     _snack(ok ? 'تم حفظ الإعدادات ✓' : 'تعذّر الحفظ', ok: ok);
@@ -179,6 +183,14 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                 const SizedBox(width: 10),
                 _paperChip(80, '80 مم'),
               ]),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('طباعة الإيصال تلقائياً'),
+                subtitle: const Text('تورّث إلى موظفي وأجهزة POS؛ لا تعمل إلا عند اختيار طابعة على الجهاز.'),
+                value: _autoPrint,
+                activeColor: AmialColors.primary,
+                onChanged: (v) => setState(() => _autoPrint = v),
+              ),
               const SizedBox(height: 16),
               Obx(() {
                 final service = Get.isRegistered<ThermalPrintService>()

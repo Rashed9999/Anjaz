@@ -37,6 +37,7 @@ class MerchantReceiptSettingsController extends Controller
             'show_phone' => true,
             'show_address' => true,
             'paper_width' => 80,        // 58 | 80 مم
+            'auto_print_receipts' => false,
             'currency_label' => 'ر.ي',
         ];
     }
@@ -109,6 +110,7 @@ class MerchantReceiptSettingsController extends Controller
             'show_phone' => 'sometimes|boolean',
             'show_address' => 'sometimes|boolean',
             'paper_width' => 'sometimes|integer|in:58,80',
+            'auto_print_receipts' => 'sometimes|boolean',
             'currency_label' => 'sometimes|nullable|string|max:8',
             'store_name' => 'sometimes|nullable|string|max:120',
         ]);
