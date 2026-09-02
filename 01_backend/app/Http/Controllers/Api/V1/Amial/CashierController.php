@@ -279,12 +279,22 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         if (!$sale) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
 
         try {
-            $pdf = app(CashierSaleInvoicePdfService::class)->generate($sale);
+            // AMIAL-PDF-CACHE-002 — **بيعٌ تمّ لا يتغيّر، فالتصيير مرّةً
+            // يكفي أبداً.** وكلُّ تصييرٍ داخل الطلب يعرّض الاتّصالَ
+            // للقطع على شبكة جوّال (`Connection closed while receiving
+            // data`) — **وهو عطلٌ وقع فعلاً**، وهذا مسارُ الجوّال نفسُه.
+            $pdfSvc = app(CashierSaleInvoicePdfService::class);
+
+            $pdf = app(\App\Services\PdfCacheService::class)->remember(
+                "cashier_invoice_{$sale->sale_ulid}",
+                fn () => $pdfSvc->generate($sale),
+            );
+
             return response($pdf, 200, [
                 'Content-Type' => 'application/pdf',
                 'Content-Length' => (string) strlen($pdf),
                 'Content-Disposition' => 'attachment; filename="'
-                    . app(CashierSaleInvoicePdfService::class)->suggestedFilename($sale) . '"',
+                    . $pdfSvc->suggestedFilename($sale) . '"',
                 'Cache-Control' => 'private, max-age=900',
                 'Content-Encoding' => 'identity',
             ]);

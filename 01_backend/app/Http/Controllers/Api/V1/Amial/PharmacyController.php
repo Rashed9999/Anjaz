@@ -627,12 +627,19 @@ class PharmacyController extends Controller
         if (!$sale) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
 
         try {
-            $pdf = app(\App\Services\PharmacySaleInvoicePdfService::class)->generate($sale);
+            // AMIAL-PDF-CACHE-002 — **بيعٌ تمّ لا يتغيّر.** ومسارُ الجوّال
+            // هو موضعُ العلّة: القطعُ في منتصف التصيير على شبكةٍ متقطّعة.
+            $pdfSvc = app(\App\Services\PharmacySaleInvoicePdfService::class);
+
+            $pdf = app(\App\Services\PdfCacheService::class)->remember(
+                "pharmacy_invoice_{$sale->sale_ulid}",
+                fn () => $pdfSvc->generate($sale),
+            );
             return response($pdf, 200, [
                 'Content-Type' => 'application/pdf',
                 'Content-Length' => (string) strlen($pdf),
                 'Content-Disposition' => 'attachment; filename="'
-                    . app(\App\Services\PharmacySaleInvoicePdfService::class)->suggestedFilename($sale) . '"',
+                    . $pdfSvc->suggestedFilename($sale) . '"',
                 'Cache-Control' => 'private, max-age=900',
                 'Content-Encoding' => 'identity',
             ]);

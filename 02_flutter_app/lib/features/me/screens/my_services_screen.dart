@@ -16,6 +16,7 @@ import 'package:amial_pay/features/reports/screens/amial_account_statement_scree
 import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/payment_request_create_screen.dart';
+import 'package:amial_pay/features/kyc_verification/screens/my_profile_changes_screen.dart';
 import 'package:amial_pay/features/donations/screens/donations_home_screen.dart';
 import 'package:amial_pay/features/family_fund/screens/my_funds_screen.dart';
 import 'package:amial_pay/features/safe_payment/screens/my_safe_payments_screen.dart';
@@ -247,6 +248,25 @@ class _MyServicesScreenState extends State<MyServicesScreen> {
           subtitle: 'تبرّع لجهة موثوقة',
           onTap: () => Get.to(() => const DonationsHomeScreen()),
         ),
+
+      // ══════════════════════════════════════════════════════════════
+      // **الحلقةُ الأخيرة — وقُطعت مرّتين.**
+      //
+      // الخادمُ يفتح طلبَ تحديثِ البيانات، واللوحةُ تعرض الطابور،
+      // **والشاشةُ مبنيّةٌ ولا بطاقةَ تقود إليها**. فيبقى الطلبُ
+      // `PENDING_CUSTOMER` إلى الأبد: العميلُ مطلوبٌ منه شيءٌ ولا يعلم،
+      // ولا سطرَ خطأٍ في أيّ سجلّ.
+      //
+      // وُصلت في `3818a93`، فقطعها `d8a67a6`، فأُعيدت في `73e4c09`،
+      // **فقطعها `797638b` ثانيةً** مع بطاقاتِ الدفع الآمن وصندوق
+      // العائلة والتبرّعات في الالتزام نفسِه.
+      // ══════════════════════════════════════════════════════════════
+      _serviceCard(
+        icon: Icons.assignment_ind_outlined,
+        label: 'تحديث بياناتي',
+        subtitle: 'ما هو مطلوب منك · وصلاحية هويّتك',
+        onTap: () => Get.to(() => const MyProfileChangesScreen()),
+      ),
       _serviceCard(
         icon: Icons.account_balance_wallet_outlined,
         label: 'كشف حساب',

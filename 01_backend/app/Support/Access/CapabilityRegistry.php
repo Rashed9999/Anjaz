@@ -699,7 +699,27 @@ final class CapabilityRegistry
                 ->businessTypes([A::BIZ_PHARMACY])
                 ->routes(['pharmacy/products/{id}/batches']),
 
-            C::make(A::F_PHARMACY_PRODUCTS)->nameAr('أصناف الصيدلية')->group('الصيدلية')->icon('medication')->minPlan(A::PLAN_FREE)->businessTypes([A::BIZ_PHARMACY]),
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-PRODUCT-QUOTA-004 — **حدُّ الأصناف كان مجهولاً في
+            // بابِ الصيدليّة.**
+            //
+            // قِيس بالتشغيل على صيدليّةٍ في باقة البداية:
+            //
+            //     المحرّك ① (UsageLimitService)  ← يعدّها بـ`max_products`
+            //     المحرّك ② (EntitlementService) ← `not_applicable` · usage: null
+            //
+            // فقدرةُ «الأصناف» العامّة ليست للصيدليّة (لها قدرتُها)،
+            // **وقدرتُها لم تكن تحمل الحدّ**. فالصيدليّةُ محدودةٌ في
+            // بابٍ ولا يُقاس حدُّها في الآخر — ومن لم يُقَس حدُّه لم
+            // يُنذَر باقترابه منه، ولا تُعرَض له ترقيةٌ حين يبلغه.
+            //
+            // **والحدُّ واحدٌ فيُعلَن واحداً**: العدُّ نفسُه في الطرفين
+            // (`countProducts(…, 'auto')` يقرأ جدولَ القطاع).
+            // ══════════════════════════════════════════════════════════
+            C::make(A::F_PHARMACY_PRODUCTS)->nameAr('أصناف الصيدلية')->group('الصيدلية')
+                ->icon('medication')->minPlan(A::PLAN_FREE)
+                ->limit('max_products')
+                ->businessTypes([A::BIZ_PHARMACY]),
             C::make(A::F_PHARMACY_ALERTS)
                 ->nameAr('تنبيهات الصيدلية')
                 ->descAr('تنبيهات قرب انتهاء الصلاحية ونفاد الدفعات، مع فحص وإغلاق آمن للتنبيه.')

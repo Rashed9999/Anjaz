@@ -79,6 +79,35 @@ class ProductQuotaTwoEnginesGuardTest extends TestCase
     {
         $state = app(EntitlementService::class)->state($m, A::F_PRODUCTS);
 
+        // ══════════════════════════════════════════════════════════════
+        // **ويُسأل بابُ القطاع حين لا تنطبق القدرةُ العامّة.**
+        //
+        // قِيس: الصيدليّةُ تُخرج على `F_PRODUCTS` حالةَ `not_applicable`
+        // و`usage: null` — **لأنّ لها قدرتَها الخاصّة**. فكان هذا
+        // العدّادُ يقرأ `-1` ويُقارَن بعددٍ حقيقيّ، **فيصرخ في غير
+        // موضعه**: الخلافُ يبدو في العدّ وهو في السؤال.
+        //
+        // **والعطلُ الحقيقيُّ الذي تحته باقٍ ويُقاس الآن**: قدرةُ أصناف
+        // الصيدليّة كانت بلا `limit('max_products')`، فحدُّها مقيسٌ في
+        // المحرّك ① وغائبٌ عن ②. (أُصلح في `AMIAL-PRODUCT-QUOTA-004`.)
+        // ══════════════════════════════════════════════════════════════
+        if (($state['state'] ?? null) === 'not_applicable') {
+            // **ويُقرأ نوعُ النشاط من جدوله** — ولا علاقةَ باسم
+            // `merchantProfile` على `User`، فقراءتُها تُخرج `null`
+            // أبداً فيُخطَّى الرجوعُ صامتاً ويبقى العدّادُ `-1`.
+            $biz = (string) \App\Models\MerchantProfile::where('user_id', $m->id)
+                ->value('business_type');
+
+            $own = match ($biz) {
+                A::BIZ_PHARMACY => A::F_PHARMACY_PRODUCTS,
+                default => null,
+            };
+
+            if ($own !== null) {
+                $state = app(EntitlementService::class)->state($m, $own);
+            }
+        }
+
         return (int) ($state['usage']['used'] ?? -1);
     }
 
