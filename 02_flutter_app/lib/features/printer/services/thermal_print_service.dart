@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -13,8 +14,12 @@ class ThermalPrinterConfig {
   final String mac;
   final String name;
   final int paperMm; // 58 أو 80
+  final String connection; // bluetooth | network
+  final String? host;
+  final int port;
 
-  const ThermalPrinterConfig({required this.mac, required this.name, this.paperMm = 80});
+  const ThermalPrinterConfig({required this.mac, required this.name, this.paperMm = 80,
+    this.connection = 'bluetooth', this.host, this.port = 9100});
 }
 
 class PrintResult {
@@ -33,6 +38,9 @@ class ThermalPrintService extends GetxService {
   static const _kMac = 'amial_printer_mac';
   static const _kName = 'amial_printer_name';
   static const _kPaper = 'amial_printer_paper';
+  static const _kConnection = 'amial_printer_connection';
+  static const _kHost = 'amial_printer_host';
+  static const _kPort = 'amial_printer_port';
 
   final Rxn<ThermalPrinterConfig> config = Rxn<ThermalPrinterConfig>();
 
@@ -45,11 +53,15 @@ class ThermalPrintService extends GetxService {
   Future<void> loadConfig() async {
     final p = await SharedPreferences.getInstance();
     final mac = p.getString(_kMac);
-    if (mac != null && mac.isNotEmpty) {
+    final connection = p.getString(_kConnection) ?? 'bluetooth';
+    final host = p.getString(_kHost);
+    if ((connection == 'network' && host != null && host.isNotEmpty) ||
+        (connection == 'bluetooth' && mac != null && mac.isNotEmpty)) {
       config.value = ThermalPrinterConfig(
-        mac: mac,
+        mac: mac ?? '',
         name: p.getString(_kName) ?? 'طابعة',
         paperMm: p.getInt(_kPaper) ?? 80,
+        connection: connection, host: host, port: p.getInt(_kPort) ?? 9100,
       );
     }
   }
@@ -59,6 +71,9 @@ class ThermalPrintService extends GetxService {
     await p.setString(_kMac, c.mac);
     await p.setString(_kName, c.name);
     await p.setInt(_kPaper, c.paperMm);
+    await p.setString(_kConnection, c.connection);
+    if (c.host != null) await p.setString(_kHost, c.host!); else await p.remove(_kHost);
+    await p.setInt(_kPort, c.port);
     config.value = c;
   }
 
@@ -67,6 +82,7 @@ class ThermalPrintService extends GetxService {
     await p.remove(_kMac);
     await p.remove(_kName);
     await p.remove(_kPaper);
+    await p.remove(_kConnection); await p.remove(_kHost); await p.remove(_kPort);
     config.value = null;
   }
 
@@ -158,10 +174,15 @@ class ThermalPrintService extends GetxService {
     final cfg = config.value;
     if (cfg == null) return const PrintResult(false, 'لم يتم اختيار طابعة');
     try {
-      if (!await bluetoothEnabled()) return const PrintResult(false, 'البلوتوث مغلق — فعّله ثم أعد المحاولة');
-
       final raster = await _pngToEscPosRaster(png, _dotsFor(cfg.paperMm));
       if (raster == null) return const PrintResult(false, 'تعذّر تجهيز صورة الإيصال');
+      if (cfg.connection == 'network') {
+        if (cfg.host == null || cfg.host!.isEmpty) return const PrintResult(false, 'عنوان IP للطابعة مطلوب');
+        final socket = await Socket.connect(cfg.host!, cfg.port, timeout: const Duration(seconds: 5));
+        socket.add(raster); await socket.flush(); await socket.close();
+        return const PrintResult(true, 'تمت الطباعة عبر الشبكة');
+      }
+      if (!await bluetoothEnabled()) return const PrintResult(false, 'البلوتوث مغلق — فعّله ثم أعد المحاولة');
 
       final connected = await PrintBluetoothThermal.connect(macPrinterAddress: cfg.mac);
       if (!connected) return const PrintResult(false, 'تعذّر الاتصال بالطابعة — تأكّد أنها مقترنة ومشغّلة');
