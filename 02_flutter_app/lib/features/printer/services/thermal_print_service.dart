@@ -188,23 +188,93 @@ class ThermalPrintService extends GetxService {
       );
       if (raster == null) return const PrintResult(false, 'تعذّر تجهيز صورة الإيصال');
       if (cfg.connection == 'network') {
-        if (cfg.host == null || cfg.host!.isEmpty) return const PrintResult(false, 'عنوان IP للطابعة مطلوب');
-        final socket = await Socket.connect(cfg.host!, cfg.port, timeout: const Duration(seconds: 5));
-        socket.add(raster); await socket.flush(); await socket.close();
-        return const PrintResult(true, 'تمت الطباعة عبر الشبكة');
+        if (cfg.host == null || cfg.host!.isEmpty) {
+          return const PrintResult(false, 'PRINT_1001: عنوان IP للطابعة مطلوب');
+        }
+
+        // **ويُلتقط خطأُ الشبكة عند مصدره** — انظر `AMIAL-PRINT-SAY-001`
+        // أسفل الدالّة: `catch` واحدةٌ في الخارج تبتلع سببَه.
+        try {
+          final socket = await Socket.connect(cfg.host!, cfg.port,
+              timeout: const Duration(seconds: 5));
+          socket.add(raster);
+          await socket.flush();
+          await socket.close();
+
+          return const PrintResult(true, 'تمت الطباعة عبر الشبكة');
+        } on SocketException catch (e) {
+          return PrintResult(false, _sayNetwork(e, cfg.host!, cfg.port));
+        }
       }
-      if (!await bluetoothEnabled()) return const PrintResult(false, 'البلوتوث مغلق — فعّله ثم أعد المحاولة');
+      if (!await bluetoothEnabled()) return const PrintResult(false, 'PRINT_1001: البلوتوث مغلق — فعّله ثم أعد المحاولة');
 
       final connected = await PrintBluetoothThermal.connect(macPrinterAddress: cfg.mac);
-      if (!connected) return const PrintResult(false, 'تعذّر الاتصال بالطابعة — تأكّد أنها مقترنة ومشغّلة');
+      if (!connected) return const PrintResult(false, 'PRINT_1001: تعذّر الاتصال بالطابعة — تأكّد أنها مقترنة ومشغّلة');
       final sent = await PrintBluetoothThermal.writeBytes(raster);
       await PrintBluetoothThermal.disconnect;
       return sent
           ? const PrintResult(true, 'تمت الطباعة')
-          : const PrintResult(false, 'فشل إرسال البيانات للطابعة');
-    } catch (_) {
-      return const PrintResult(false, 'حدث خطأ أثناء الطباعة');
+          : const PrintResult(false, 'PRINT_1006: فشل إرسال البيانات للطابعة');
+    } catch (e) {
+      // **ولا يُبتلَع صنفُ الخطأ** — يُوسَم مجهولاً ويُقال نصُّه.
+      return PrintResult(false, 'PRINT_1007: خطأٌ غيرُ متوقّعٍ أثناء الطباعة ($e)');
     }
+  }
+
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-PRINT-SAY-001 — **الفشلُ يقول أيَّ فشلٍ هو.**
+  ///
+  /// كان جسدُ الطباعة كلُّه ملفوفاً في `catch (_)` واحدةٍ تُخرج
+  /// **«حدث خطأ أثناء الطباعة»** لسبعة أسبابٍ مختلفة: عنوانٌ خطأ ·
+  /// طابعةٌ مطفأة · منفذٌ مغلق · واي‑فاي مقطوع · جدارٌ ناريّ · مهلةٌ
+  /// انتهت · صنفٌ مجهول.
+  ///
+  /// **والكاشيرُ واقفٌ والزبونُ ينتظر**، فلا يعرف أيفحص السلك أم
+  /// الشبكة أم الرقم — فيُعيد الضغطَ ثمّ يتّصل بالدعم. وهذا نمطُ
+  /// العطل الذي دُفع ثمنُه مرّاتٍ في هذا المشروع: **رسالةٌ صحيحةٌ
+  /// حرفيّاً وصامتةٌ عن سببها.**
+  ///
+  /// **ومهارةُ الطباعة تشترطه نصّاً**: «Printer failure must show:
+  /// Printer Unavailable · Connection Failed · Timeout …» ولكلٍّ رمزُه
+  /// في محرّك الأخطاء (`PRINT_1000`…). فالتمييزُ عقدٌ لا تحسين.
+  ///
+  /// **ويُذكَر العنوانُ والمنفذ**: «تعذّر الوصول» بلا رقمٍ لا تُصلَّح،
+  /// و«‏192.168.1.50:9100» تُقرأ وتُقارَن بورقةٍ على الطابعة.
+  /// ══════════════════════════════════════════════════════════════════
+  @visibleForTesting
+  String sayNetworkForTest(SocketException e, String host, int port) =>
+      _sayNetwork(e, host, port);
+
+  String _sayNetwork(SocketException e, String host, int port) {
+    final at = '$host:$port';
+    final os = e.osError?.message.toLowerCase() ?? '';
+
+    // مهلةُ الاتّصال — العنوانُ لا يردّ أصلاً.
+    if (e.osError == null || os.contains('timed out') || os.contains('timeout')) {
+      return 'PRINT_1005: لا تردّ الطابعةُ على $at — تأكّد أنّ الجهاز '
+          'والطابعةَ على الشبكة نفسِها، وأنّ العنوان صحيح.';
+    }
+
+    // المنفذُ مغلق: الجهازُ موجودٌ ولا برنامجَ يسمع — طابعةٌ مطفأةٌ غالباً.
+    if (os.contains('refused')) {
+      return 'PRINT_1000: الجهازُ على $at موجودٌ لكنّه يرفض الاتّصال — '
+          'الطابعةُ مطفأةٌ أو المنفذُ غيرُ $port.';
+    }
+
+    // لا شبكةَ إطلاقاً.
+    if (os.contains('unreachable') || os.contains('network is down')) {
+      return 'PRINT_1001: لا شبكةَ تصل إلى $at — تحقّق من الواي‑فاي '
+          'على هذا الجهاز.';
+    }
+
+    // العنوانُ ليس رقماً ولا اسماً يُحَلّ.
+    if (os.contains('failed host lookup') || os.contains('no address')) {
+      return 'PRINT_1001: العنوان «$host» غيرُ معروفٍ على الشبكة — '
+          'أدخِل رقم IP كما يعرضه الطابعُ نفسُه.';
+    }
+
+    // **وما لا يُعرف يُقال خاماً ولا يُخترَع له سبب.**
+    return 'PRINT_1007: تعذّر الوصول إلى $at — ${e.osError?.message ?? e.message}';
   }
 
   /// يفكّ PNG إلى RGBA عبر dart:ui، ثم يبني أوامر GS v 0 (raster bit image).
@@ -221,7 +291,7 @@ class ThermalPrintService extends GetxService {
       final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (byteData == null) return null;
       final rgba = byteData.buffer.asUint8List();
-      return _buildRaster(rgba, image.width, image.height,
+      return buildRaster(rgba, image.width, image.height,
           openCashDrawer: openCashDrawer);
     } catch (_) {
       return null;
@@ -231,7 +301,19 @@ class ThermalPrintService extends GetxService {
   }
 
   /// يبني أوامر ESC/POS: تهيئة + GS v 0 على شكل نطاقات + تغذية + قطع.
-  List<int> _buildRaster(Uint8List rgba, int width, int height,
+  ///
+  /// ══════════════════════════════════════════════════════════════════
+  /// **ومكشوفةٌ للفحص عمداً.** هذه الدالّةُ هي **منتَجُ الطبقة كلِّها**:
+  /// ما يخرج منها يذهب إلى الطابعة كما هو. وكانت خاصّةً، فلا سبيلَ إلى
+  /// قياسها إلّا بطابعةٍ حقيقيّة — **وما لا يُقاس إلّا بجهازٍ لا يُقاس
+  /// في بوّابة**، فبقيت تسعُمئةِ سطرٍ من طبقة الطباعة بلا حارسٍ واحد.
+  ///
+  /// **وفيها نبضةُ درج النقد** (`ESC p`) — أمرٌ يفتح دُرجَ مالٍ حقيقيّاً.
+  /// فسقوطُه صامتٌ (الدرجُ لا يُفتح فيُفتح باليد)، **وظهورُه حيث لا
+  /// يُطلَب أخطر**: دُرجٌ يُفتح مع كلّ إيصالٍ في وجه الزبون.
+  /// ══════════════════════════════════════════════════════════════════
+  @visibleForTesting
+  List<int> buildRaster(Uint8List rgba, int width, int height,
       {required bool openCashDrawer}) {
     final bytesPerRow = (width + 7) >> 3;
     final out = <int>[0x1B, 0x40]; // ESC @ : تهيئة الطابعة
