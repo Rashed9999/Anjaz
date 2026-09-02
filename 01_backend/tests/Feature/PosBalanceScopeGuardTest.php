@@ -183,8 +183,40 @@ class PosBalanceScopeGuardTest extends TestCase
     {
         $cashier = $this->cashierOf($this->merchant());
 
-        $this->actingAs($cashier, 'api')
-            ->getJson('/api/v1/amial/merchant/financial-report')
-            ->assertStatus(403);
+        $r = $this->actingAs($cashier, 'api')
+            ->getJson('/api/v1/amial/merchant/financial-report');
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-POS-SCOPE-002 — **نطاقٌ لا ٤٠٣، والحمايةُ نفسُها.**
+        //
+        // كان هذا يشترط ٤٠٣، ثمّ رُبط زرُّ «تقرير اليوم» في شاشة الكاشير
+        // بهذا المسار — فصار الحارسُ يطلب أن يُردّ الموظّفُ على زرٍّ
+        // مرسومٍ له. وحجّتان صحيحتان تعارضتا.
+        //
+        // **والجوابُ ثالثٌ ومقيس**: التقريرُ يحمل `wallet` و`receivables`
+        // وهما مالُ المالك؛ وباقيه — المبيعاتُ والتحصيلات — يحتاجه
+        // الكاشيرُ ليُقفل ورديّتَه. فيُقصّ ما ليس له ويبقى البابُ مفتوحاً،
+        // **كما في `dailyStats` بالحرف**.
+        //
+        // فالمحروسُ لم يضعف: ما كان محجوباً بـ٤٠٣ ما زال لا يصل.
+        // ══════════════════════════════════════════════════════════════
+        $r->assertStatus(200);
+
+        $report = $r->json('meta.report') ?? [];
+
+        foreach (['wallet', 'receivables'] as $ownerOnly) {
+            $this->assertArrayNotHasKey($ownerOnly, $report, sprintf(
+                "**«%s» وصل إلى الكاشير في التقرير المالي.**\n"
+                .'وهو مالُ المالك — محفظتُه وذممُه — ولا يحتاجه الموظّفُ '
+                .'ليُقفل ورديّتَه.', $ownerOnly));
+        }
+
+        $this->assertSame('owner_only_fields_removed', $report['scope'] ?? null,
+            'قُصّت حقولٌ ولم يُقَل لماذا — فالتطبيقُ لا يفرّق بين '
+            .'«محجوب» و«تعذّرت القراءة».');
+
+        // **وما يحتاجه يبقى** — فقصٌّ شاملٌ يشلّ إقفالَ الصندوق.
+        $this->assertArrayHasKey('sales', $report,
+            'حُجبت المبيعاتُ عن الكاشير — والحارسُ صار قفلاً على عملٍ سليم.');
     }
 }
