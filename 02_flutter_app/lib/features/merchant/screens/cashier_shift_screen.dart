@@ -52,10 +52,12 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
     }
   }
 
-  String? _messageOf(dynamic response) {
-    final body = response.body;
-    if (response.statusCode == 401) return 'انتهت الجلسة — سجّل الدخول من جديد';
-    if (response.statusCode == 403) {
+  /// **الاسمُ `r` كبقيّة الملفّ** — وهو ما يقرؤه الحارسُ أيضاً. واختلافُ
+  /// التسمية في دالّةٍ واحدةٍ جعل فحصاً سليماً يبدو غائباً.
+  String? _messageOf(dynamic r) {
+    final body = r.body;
+    if (r.statusCode == 401) return 'انتهت الجلسة — سجّل الدخول من جديد';
+    if (r.statusCode == 403) {
       return body is Map && body['message'] != null
           ? body['message'].toString()
           : 'لا تملك الصلاحية اللازمة للورديات';

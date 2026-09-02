@@ -22,6 +22,7 @@ import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/images.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_cashier_screen.dart';
 
 /// AMIAL-MERCHANT-NAV-001
 ///
@@ -216,6 +217,15 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
           icon: Icons.local_gas_station_rounded,
           label: 'بيع الوقود',
           onTap: () => _open(context, const FuelSaleScreen()),
+        ),
+        // **ولوحةُ الأرقام بابٌ مستقلّ.** مبنيّةٌ كاملةً ولا يُوصل إليها
+        // من الدرج — فتُصرَّف ولا تُفتح، ولا يقول ذلك مُصرِّفٌ ولا محلِّل.
+        // وهي ما يستعمله الكاشيرُ حين تكون المضخّةُ غيرَ موصولة.
+        _item(
+          context,
+          icon: Icons.dialpad_rounded,
+          label: 'لوحة الأرقام',
+          onTap: () => _open(context, const FuelCashierScreen()),
         ),
         _item(
           context,
