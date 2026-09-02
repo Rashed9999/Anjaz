@@ -6,6 +6,8 @@ use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
+use App\Models\PosUser;
+use App\Models\User;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,19 +41,39 @@ class MerchantReceiptSettingsController extends Controller
         ];
     }
 
-    private function merchantOnly(Request $request): ?JsonResponse
+    /**
+     * يعيد مالك المنشأة الذي يجب أن تُقرأ هويّته في كل فاتورة.
+     *
+     * موظف نقطة البيع لا يملك منشأة مستقلة، لكنّه يجب أن يطبع باسم منشأة
+     * مالكه وبنفس الترويسة والشعار. لذلك نسمح له بالقراءة فقط، ولا نسمح
+     * له بتغيير الهوية أو إعدادات الفاتورة.
+     *
+     * @return array{merchant: User, owner: bool}|JsonResponse
+     */
+    private function merchantContext(Request $request, bool $allowPosRead = false): array|JsonResponse
     {
         $u = $request->user();
-        if (!$u || $u->role !== A::ROLE_MERCHANT) {
+        if (!$u) {
             return $this->error('NOT_A_MERCHANT', 'متاح للتجّار فقط', 403);
         }
-        return null;
+        if ($u->role === A::ROLE_MERCHANT) {
+            return ['merchant' => $u, 'owner' => true];
+        }
+        if ($allowPosRead) {
+            $pos = PosUser::active()->where('user_id', $u->id)->first();
+            $merchant = $pos ? User::find($pos->merchant_user_id) : null;
+            if ($merchant && $merchant->role === A::ROLE_MERCHANT) {
+                return ['merchant' => $merchant, 'owner' => false];
+            }
+        }
+        return $this->error('NOT_A_MERCHANT', 'متاح للتجّار فقط', 403);
     }
 
     public function show(Request $request): JsonResponse
     {
-        if ($err = $this->merchantOnly($request)) return $err;
-        $user = $request->user();
+        $context = $this->merchantContext($request, true);
+        if ($context instanceof JsonResponse) return $context;
+        $user = $context['merchant'];
 
         $profile = MerchantProfile::where('user_id', $user->id)->first();
         $merchant = Merchant::where('user_id', $user->id)->first();
@@ -74,8 +96,9 @@ class MerchantReceiptSettingsController extends Controller
 
     public function save(Request $request): JsonResponse
     {
-        if ($err = $this->merchantOnly($request)) return $err;
-        $user = $request->user();
+        $context = $this->merchantContext($request);
+        if ($context instanceof JsonResponse) return $context;
+        $user = $context['merchant'];
 
         $v = Validator::make($request->all(), [
             'header_note' => 'sometimes|nullable|string|max:120',
@@ -118,8 +141,9 @@ class MerchantReceiptSettingsController extends Controller
     /** رفع شعار المتجر (base64) — يُخزَّن في سجلّ التاجر. */
     public function uploadLogo(Request $request): JsonResponse
     {
-        if ($err = $this->merchantOnly($request)) return $err;
-        $user = $request->user();
+        $context = $this->merchantContext($request);
+        if ($context instanceof JsonResponse) return $context;
+        $user = $context['merchant'];
 
         $v = Validator::make($request->all(), ['logo' => 'required|string']);
         if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);

@@ -179,7 +179,7 @@ class _WholesaleProInvoiceDetailsScreenState extends State<WholesaleProInvoiceDe
   @override Widget build(BuildContext context) => Scaffold(
     backgroundColor: AmialColors.background,
     appBar: AppBar(title: const Text('تفاصيل الفاتورة'), centerTitle: true, actions: [
-      IconButton(tooltip: 'عرض / طباعة PDF', icon: const Icon(Icons.picture_as_pdf_outlined), onPressed: () async {
+      IconButton(tooltip: 'تنزيل الفاتورة PDF', icon: const Icon(Icons.picture_as_pdf_outlined), onPressed: () async {
         final ok = await c.downloadInvoicePdf(widget.invoiceId);
         if (!ok && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(c.lastError.value)));
       }),
@@ -201,7 +201,16 @@ class _WholesaleProInvoiceDetailsScreenState extends State<WholesaleProInvoiceDe
         const SizedBox(height: 12), const Text('الأصناف', style: TextStyle(fontWeight: FontWeight.w900)),
         ...items.map((raw) { final row = raw as Map; return Card(child: ListTile(title: Text('${row['product_name'] ?? '—'}'), subtitle: Text('${row['quantity'] ?? 0} × ${_money(row['unit_price'])}'), trailing: Text('${_money(row['line_total'])} ر.ي'))); }),
         const SizedBox(height: 8),
-        SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () async { final ok = await c.downloadInvoicePdf(widget.invoiceId); if (!ok && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(c.lastError.value))); }, icon: const Icon(Icons.print_outlined), label: const Text('عرض / طباعة الفاتورة PDF'))),
+        SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () async {
+          final result = await c.printInvoiceThermal(invoice);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.message),
+            backgroundColor: result.ok ? AmialColors.success : AmialColors.red,
+          ));
+        }, icon: const Icon(Icons.print_outlined), label: const Text('طباعة حرارية'))),
+        const SizedBox(height: 8),
+        SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () async { final ok = await c.downloadInvoicePdf(widget.invoiceId); if (!ok && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(c.lastError.value))); }, icon: const Icon(Icons.picture_as_pdf_outlined), label: const Text('تنزيل الفاتورة PDF'))),
       ]));
     }),
   );

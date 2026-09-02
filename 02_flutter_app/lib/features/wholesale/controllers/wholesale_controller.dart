@@ -6,6 +6,9 @@ import 'package:amial_pay/util/app_constants.dart';
 import 'package:amial_pay/helper/pdf_downloader_helper.dart';
 import 'package:amial_pay/features/wholesale/domain/repositories/wholesale_repo.dart';
 import 'package:amial_pay/features/plans/screens/my_usage_screen.dart';
+import 'package:amial_pay/features/merchant/controllers/receipt_settings_controller.dart';
+import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
+import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
 
 /// AMIAL-WHOLESALE-001 — متحكّم الجملة.
 ///
@@ -533,6 +536,55 @@ class WholesaleController extends GetxController implements GetxService {
     } finally {
       isSubmitting.value = false;
     }
+  }
+
+  /// يطبع فاتورة الجملة على الطابعة الحرارية التي اختارها جهاز الـ POS.
+  /// لا يفتح PDF باسم «طباعة»؛ الـ PDF يبقى خيار تنزيل مستقل.
+  Future<PrintResult> printInvoiceThermal(Map<String, dynamic> invoice) async {
+    final printer = Get.isRegistered<ThermalPrintService>()
+        ? Get.find<ThermalPrintService>()
+        : null;
+    if (printer == null || printer.config.value == null) {
+      return const PrintResult(false, 'لم يتم اختيار طابعة — افتح إعدادات الطابعة');
+    }
+
+    final receiptSettings = Get.isRegistered<ReceiptSettingsController>()
+        ? Get.find<ReceiptSettingsController>()
+        : Get.put(ReceiptSettingsController(), permanent: true);
+    await receiptSettings.load();
+
+    num number(dynamic value) => num.tryParse('${value ?? 0}') ?? 0;
+    final rawItems = invoice['items'] is List ? invoice['items'] as List : const [];
+    final lines = rawItems.map<ThermalReceiptLine>((raw) {
+      final row = raw is Map ? raw : const <String, dynamic>{};
+      return ThermalReceiptLine(
+        '${row['product_name'] ?? row['name'] ?? 'صنف'}',
+        number(row['quantity'] ?? row['qty'] ?? 1),
+        number(row['unit_price'] ?? row['price']),
+        lineTotal: number(row['line_total']),
+      );
+    }).toList();
+    final customer = invoice['customer'] is Map ? invoice['customer'] as Map : const {};
+    final total = number(invoice['total_amount']);
+    final paid = number(invoice['paid_amount']);
+    final due = number(invoice['balance_due']);
+
+    return printer.printSale(
+      settings: receiptSettings.effective,
+      lines: lines,
+      total: total,
+      subtotal: number(invoice['subtotal'] ?? invoice['total_amount']),
+      discount: number(invoice['discount_amount']),
+      paid: paid,
+      balanceDue: due > 0 ? due : null,
+      invoiceNo: '${invoice['invoice_number'] ?? invoice['id'] ?? ''}',
+      contextLines: [
+        'فاتورة جملة',
+        if ((customer['full_name'] ?? '').toString().isNotEmpty)
+          'العميل: ${customer['full_name']}',
+        'الحالة: ${invoice['status'] ?? ''}',
+      ],
+    );
   }
 
   // ============ Reports ============

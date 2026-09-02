@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
+use App\Models\PosUser;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Passport\Passport;
@@ -70,5 +71,27 @@ class MerchantReceiptSettingsTest extends TestCase
         $customer = User::factory()->create(['type' => 2, 'role' => 'user', 'zone_code' => 'SOUTH']);
         Passport::actingAs($customer->fresh(), [], 'api');
         $this->getJson('/api/v1/amial/merchant/receipt-settings')->assertStatus(403);
+    }
+
+    /** @test موظف الـ POS يقرأ هوية فاتورة مالكه ولا يستطيع تعديلها. */
+    public function pos_employee_reads_owner_receipt_identity_but_cannot_change_it(): void
+    {
+        $posLogin = User::factory()->create(['type' => 4, 'role' => 'pos', 'zone_code' => 'SOUTH']);
+        PosUser::create([
+            'user_id' => $posLogin->id,
+            'merchant_user_id' => $this->merchant->id,
+            'pos_number' => 'POS-1',
+            'display_name' => 'كاشير الاختبار',
+            'is_active' => true,
+        ]);
+
+        Passport::actingAs($posLogin, [], 'api');
+        $this->getJson('/api/v1/amial/merchant/receipt-settings')
+            ->assertOk()
+            ->assertJsonPath('meta.settings.store_name', 'محطة الأمل');
+
+        $this->postJson('/api/v1/amial/merchant/receipt-settings', ['store_name' => 'اسم غير مسموح'])
+            ->assertStatus(403);
+        $this->assertSame('محطة الأمل', Merchant::where('user_id', $this->merchant->id)->value('store_name'));
     }
 }
