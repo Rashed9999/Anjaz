@@ -81,6 +81,29 @@ Route::group(['as' => 'admin.'], function () {
     Route::group(['middleware' => ['admin', 'amial.force-pin-change']], function () {
         Route::get('/', [DashboardController::class, 'dashboard'])->name('dashboard');
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-WRONG-TRANSFER-001 — **بلاغاتُ العملاء: بابٌ لم يكن موجوداً.**
+        //
+        // `DisputeController::list()` و`changeStatus()` مبنيّتان منذ زمن،
+        // **ولا مسارَ لواحدةٍ منهما**. والعميلُ يرفع بلاغَه من التطبيق
+        // (‏`POST /api/v1/customer/dispute/create` موصولةٌ وتعمل) فيدخل
+        // جدولَ `disputes` **ولا يراه أحد**.
+        //
+        // **والصلاحيّتان مفترقتان:** القراءةُ لمن يقرأ العمليّات،
+        // والحسمُ لمن يقرّر النزاعات — فالثاني ينقل مالاً.
+        //
+        // **وقد ضاع هذا الحاجزُ مرّةً في إعادة تأسيسٍ قالت «نجحت»**، فبقيت
+        // مجموعةٌ فارغةٌ مكانَه والرابطُ في القائمة الجانبيّة قائم —
+        // **فسقطت كلُّ شاشات اللوحة بـ٥٠٠** لأنّ القائمةَ في التخطيط
+        // المشترك. ولذلك يحرسه `DisputeDecisionDoesNotLieGuardTest`.
+        // ══════════════════════════════════════════════════════════════
+        Route::group(['prefix' => 'disputes', 'as' => 'disputes.'], function () {
+            Route::get('/', [DisputeController::class, 'list'])
+                ->middleware('platform:platform.transactions.view')->name('index');
+            Route::post('change-status', [DisputeController::class, 'changeStatus'])
+                ->middleware('platform:platform.disputes.decide')->name('change-status');
+        });
+
         // AMIAL-OPS-CONSOLE-001 — منصة عمليات الموظفين (واجهة ويب + JSON بجلسة الأدمن)
         // AMIAL-ADMIN-DOORS-001 — مركزُ الدعم عملُ الدعم، وله صلاحيّتُه.
         Route::group(['prefix' => 'support-center', 'as' => 'support-center.'], function () {
@@ -373,9 +396,6 @@ Route::group(['as' => 'admin.'], function () {
                 Route::post('update/{id}', [FAQCategoryController::class, 'update'])->name('update');
                 Route::post('delete/{id}', [FAQCategoryController::class, 'delete'])->name('delete');
             });
-        });
-
-        Route::group(['prefix' => 'disputes', 'as' => 'disputes.'], function () {
         });
 
     });

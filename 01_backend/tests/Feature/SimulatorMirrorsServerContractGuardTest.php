@@ -177,6 +177,77 @@ class SimulatorMirrorsServerContractGuardTest extends TestCase
             . 'مرجعاً مكتوباً هنا: الحركةُ تأتي من الدفع نفسِه.');
     }
 
+
+    /**
+     * أقسامُ درجِ نشاطٍ في التطبيق — **عدّاً محسوباً لا رقماً مكتوباً**.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **وهذا صوابٌ اشتُري بسقوطِ الحارسَين.** كان لكلٍّ سقفٌ مكتوب (‏٦
+     * للجملة و٤ للصيدليّة)، ثمّ **دُمجت أقسامٌ ونُقلت المشتركةُ إلى
+     * متغيّرات** — فصار الحارسُ يقرأ اثنين من خمسةٍ ويسقط على تغييرٍ
+     * مشروع.
+     *
+     * **ولا يُخفَّض السقفُ ليمرّ** — فذاك يجعل الحارسَ زينة. بل يُعَدُّ
+     * ما في الكتلة فعلاً: كلُّ `_MerchantDrawerSection(` صريح، وكلُّ
+     * إحالةٍ إلى قسمٍ مشترك. **فإن قرأ العناوينُ أقلَّ من المداخل سقط**
+     * — وهو عينُ ما يجب أن يمسكه.
+     *
+     * **وعناوينُ المشتركة تُقرأ من تعريفاتها** لا تُكتب هنا: نصٌّ مكتوبٌ
+     * في الحارس يشيخ عند أوّل إعادة صياغة، ويبقى الحارسُ راضياً.
+     *
+     * @return array{0: array<int,string>, 1: int}  العناوينُ · وعددُ المداخل
+     */
+    private function drawerOf(string $vertical): array
+    {
+        $shell = __DIR__ . '/../../../02_flutter_app/lib/features/merchant/screens/merchant_adaptive_shell.dart';
+        $this->assertFileExists($shell, 'اختفى درجُ التطبيق من مكانه');
+
+        $src = (string) file_get_contents($shell);
+
+        // الأقسامُ المشتركة — تُقرأ من مصدرها.
+        preg_match_all(
+            "/const (\\w+) = _MerchantDrawerSection\\(\\s*title: '([^']+)'/",
+            $src, $sm, PREG_SET_ORDER);
+
+        $shared = [];
+        foreach ($sm as $one) {
+            $shared[$one[1]] = $one[2];
+        }
+
+        $this->assertNotEmpty($shared,
+            'لم تُقرأ الأقسامُ المشتركة — تغيّرت صياغتُها والحارسُ يفحص فراغاً.');
+
+        $start = strpos($src, "case '{$vertical}':");
+        $this->assertNotFalse($start, "اختفى فرعُ «{$vertical}» من درج التطبيق");
+
+        $end = strpos($src, "case '", $start + 10);
+        $block = substr($src, $start, ($end ?: strlen($src)) - $start);
+
+        // **`subtitle:` ينتهي بـ`title:`** — والنظرةُ الخلفيّةُ تقصره على
+        // العنوان وحدَه، وإلّا فُحصت الأوصافُ على أنّها عناوين.
+        preg_match_all("/(?<!sub)title: '([^']+)'/", $block, $m);
+        $titles = $m[1] ?? [];
+
+        $entries = substr_count($block, '_MerchantDrawerSection(');
+
+        foreach ($shared as $var => $title) {
+            if (preg_match('/^\\s*' . preg_quote($var, '/') . ',\\s*$/m', $block)) {
+                $titles[] = $title;
+                $entries++;
+            }
+        }
+
+        $this->assertSame($entries, count($titles), sprintf(
+            "**قُرئ %d عنواناً من %d مدخلاً في درج «%s».**\n"
+            . 'فالحارسُ يفحص أقلَّ ممّا في الشاشة، ويمرّ على نقصٍ لا يراه.',
+            count($titles), $entries, $vertical));
+
+        $this->assertGreaterThanOrEqual(3, $entries,
+            "درجُ «{$vertical}» بأقلَّ من ثلاثة أقسام — وهذا ليس درجاً.");
+
+        return [$titles, $entries];
+    }
+
     /**
      * **⑤ وأقسامُ الدرج في المحاكي هي أقسامُه في التطبيق.**
      *
@@ -186,23 +257,7 @@ class SimulatorMirrorsServerContractGuardTest extends TestCase
     /** @test */
     public function the_simulator_drawer_matches_the_real_wholesale_drawer(): void
     {
-        $shell = __DIR__ . '/../../../02_flutter_app/lib/features/merchant/screens/merchant_adaptive_shell.dart';
-        $this->assertFileExists($shell);
-
-        $src = (string) file_get_contents($shell);
-        $start = strpos($src, "case 'wholesale':");
-        $this->assertNotFalse($start, 'اختفى فرعُ الجملة من درج التطبيق');
-        $end = strpos($src, "case '", $start + 10);
-        $block = substr($src, $start, ($end ?: strlen($src)) - $start);
-
-        // **`subtitle:` ينتهي بـ`title:`** — فأوّلُ صياغةٍ التقطت الأوصافَ
-        // مع العناوين وأسقطت الفحصَ على ما ليس عنواناً. النظرةُ الخلفيّة
-        // تقصره على العنوان وحدَه.
-        preg_match_all("/(?<!sub)title: '([^']+)'/", $block, $m);
-        $titles = $m[1] ?? [];
-
-        $this->assertGreaterThanOrEqual(6, count($titles),
-            'لم تُقرأ أقسامُ الدرج — تغيّرت الصياغةُ والحارسُ يفحص فراغاً.');
+        [$titles] = $this->drawerOf('wholesale');
 
         $sim = $this->sim();
         $missing = array_values(array_filter($titles,
@@ -320,29 +375,7 @@ class SimulatorMirrorsServerContractGuardTest extends TestCase
     /** @test */
     public function the_simulator_drawer_matches_the_real_pharmacy_drawer(): void
     {
-        $shell = __DIR__ . '/../../../02_flutter_app/lib/features/merchant/screens/merchant_adaptive_shell.dart';
-        $src = (string) file_get_contents($shell);
-
-        $start = strpos($src, "case 'pharmacy':");
-        $this->assertNotFalse($start, 'اختفى فرعُ الصيدليّة من درج التطبيق');
-        $end = strpos($src, "case '", $start + 10);
-        $block = substr($src, $start, ($end ?: strlen($src)) - $start);
-
-        preg_match_all("/(?<!sub)title: '([^']+)'/", $block, $m);
-        $titles = $m[1] ?? [];
-
-        // الأقسامُ المشتركةُ (`sale` · `people` · `reports`) تُذكر بأسمائها
-        // لا بنصِّها هنا، فتُقرأ من تعريفاتها.
-        foreach (['sale' => 'البيع والتحصيل', 'people' => 'العملاء والفريق',
-                  'reports' => 'التقارير والمالية'] as $var => $t) {
-            if (preg_match('/\b' . $var . ',/', $block)) {
-                $titles[] = $t;
-            }
-        }
-
-        $this->assertGreaterThanOrEqual(4, count($titles),
-            'لم تُقرأ أقسامُ درج الصيدليّة — تغيّرت الصياغةُ والحارسُ '
-            . 'يفحص فراغاً.');
+        [$titles] = $this->drawerOf('pharmacy');
 
         $sim = (string) file_get_contents(self::RX_SIM);
         $missing = array_values(array_filter($titles,

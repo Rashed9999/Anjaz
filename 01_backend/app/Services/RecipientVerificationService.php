@@ -188,4 +188,76 @@ class RecipientVerificationService
     {
         return "recipient_verify:{$senderId}:{$token}";
     }
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-TRANSFER-KIND-001 — **استُعيدت بعد أن حُذفت من دفعةٍ لاحقة.**
+    //
+    // `TransactionTrait::transfer` ينادي الاثنتين، وحذفُهما جعل **كلَّ
+    // تحويلٍ بين الأفراد يعطل** بـ`Call to undefined method` — قِيس تحت
+    // الضغط: ٩٦ محاولةً، صفرٌ نجحت، ٩٦ عطلت.
+    //
+    // **ولم يُمسك بمجموعة الاختبارات بل بمقياس الضغط** — فالمسارُ يمرّ
+    // بالوسيط في الاختبارات، والنداءُ المباشرُ هو الذي يسقط.
+    // ══════════════════════════════════════════════════════════════════
+
+    /**
+     * **من يجوز أن يستقبل تحويلاً بين الأفراد.**
+     *
+     * والرسالةُ تُرشد إلى الطريق الصحيح لا تكتفي بالمنع: من أراد إيصالَ
+     * مالٍ إلى وكيلٍ فطريقُه الشبّاك — إيداعٌ نقديٌّ له قيدُه وعمولتُه
+     * وحدُّه. ورفضٌ صامتٌ يُرسل صاحبَه إلى الدعم بلا معلومة.
+     *
+     * @throws RuntimeException
+     */
+    public function assertReceivableKind(User $recipient): void
+    {
+        $this->assertKind($recipient, receiving: true);
+    }
+
+    /**
+     * **ولا يُرسِل وكيلٌ تحويلاً فرديّاً كذلك.**
+     *
+     * وهو الوجهُ الآخرُ للثقب نفسِه: فلوتٌ يخرج من الوكيل إلى عميلٍ **بلا
+     * قيدِ إيداعٍ نقديّ** — أي أنّ نقداً قُبض ولم يدخل النظام. فتضيع
+     * عمولةُ الإيداع وحدُّه وأثرُه، وينقص الفعليُّ في التسوية بلا سبب.
+     *
+     * @throws RuntimeException
+     */
+    public function assertSendableKind(User $sender): void
+    {
+        $this->assertKind($sender, receiving: false);
+    }
+
+    private function assertKind(User $party, bool $receiving): void
+    {
+        $type = (int) ($party->type ?? CUSTOMER_TYPE);
+
+        if (! $receiving) {
+            if ($type === AGENT_TYPE) {
+                throw new RuntimeException(
+                    'حسابُ الوكيل لا يُرسل تحويلاً بين الأفراد. '
+                    . 'صرفُ الرصيد للعميل يتمّ من الشبّاك سحباً أو إيداعاً '
+                    . 'بإيصاله وعمولته.');
+            }
+
+            if ($type === ADMIN_TYPE) {
+                throw new RuntimeException(
+                    'حسابُ الإدارة لا يُرسل تحويلاً بين الأفراد — '
+                    . 'تمويلُ الوكلاء من المركز المالي.');
+            }
+
+            return;
+        }
+
+        if ($type === AGENT_TYPE) {
+            throw new RuntimeException(
+                'هذا رقمُ حسابِ وكيل، ولا يستقبل تحويلاً بين الأفراد. '
+                . 'للإيداع لدى الوكيل توجَّه إلى شبّاكه — تُسجَّل العمليّةُ '
+                . 'إيداعاً نقديّاً بإيصالها.');
+        }
+
+        if ($type === ADMIN_TYPE) {
+            throw new RuntimeException(
+                'هذا حسابُ إدارةٍ في المنصّة ولا يستقبل تحويلات.');
+        }
+    }
 }

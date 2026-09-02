@@ -44,6 +44,9 @@ import 'package:amial_pay/features/retail/screens/retail_wastes_screen.dart';
 import 'package:amial_pay/features/merchant/screens/stock_alerts_screen.dart';
 import 'package:amial_pay/features/suppliers/screens/suppliers_screen.dart';
 import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
+// **استُعيد هذا الاستيراد** — الشاشةُ موجودةٌ والمُنادي بلا استيراد،
+// فكان التطبيقُ لا يُصرَّف: Couldn't find constructor 'PharmacySaleScreen'.
+import 'package:amial_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
 
 /// AMIAL-CAP-SCREENS-001 — **مصدرُ حقيقةٍ واحدٌ للتنقّل بالقدرة.**
 ///

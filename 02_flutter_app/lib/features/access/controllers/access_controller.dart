@@ -38,6 +38,19 @@ class AccessController extends GetxController implements GetxService {
   final RxnString merchantDisplayName = RxnString();
   final Rxn<MerchantContext> merchantContext = Rxn<MerchantContext>();
 
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-POS-IDENTITY-001 — **هويّةُ موظّف نقطة البيع، استُعيدت.**
+  //
+  // حُذفت هذه الثلاثةُ وبقي مُنادُوها في `pos_employee_home_screen.dart`،
+  // **فكان التطبيقُ لا يُصرَّف**: أربعةُ أخطاءِ `undefined_getter`. أي
+  // أنّ أيَّ بناءٍ في Codemagic كان يسقط قبل أن يبدأ.
+  //
+  // ولا يحملها `MerchantContext` — فتُقرأ من `access['pos']` كما كانت.
+  // ══════════════════════════════════════════════════════════════════
+  final RxnString posNumber = RxnString();
+  final RxnString posDisplayName = RxnString();
+  final RxSet<String> posPermissions = <String>{}.obs;
+
   // حالات
   final RxBool isLoading = false.obs;
   final RxBool isLoaded = false.obs;
@@ -82,6 +95,19 @@ class AccessController extends GetxController implements GetxService {
       businessTypeLabel.value = merchantContext.value!.businessTypeLabel ?? businessTypeLabel.value;
     }
 
+    final pos = access['pos'];
+    if (pos is Map) {
+      posNumber.value = pos['pos_number']?.toString();
+      posDisplayName.value = pos['display_name']?.toString();
+      posPermissions
+        ..clear()
+        ..addAll(((pos['permissions'] as List?) ?? const []).map((e) => e.toString()));
+    } else {
+      posNumber.value = null;
+      posDisplayName.value = null;
+      posPermissions.clear();
+    }
+
     final fList = (access['features'] as List?)?.cast<String>() ?? [];
     features
       ..clear()
@@ -115,6 +141,20 @@ class AccessController extends GetxController implements GetxService {
   /// مالك أو موظف يعمل داخل منشأة. ليست محفظة عميل حتى لو كان للموظف
   /// رقم أميال شخصي مستقل.
   bool get isMerchantSession => isMerchant || isPos || merchantContext.value?.actor == 'staff';
+
+  /// ══════════════════════════════════════════════════════════════════
+  /// **مالكُ المتجر** — وحدَه من يرى المالَ ويُدير الحساب.
+  ///
+  /// **استُعيدت بعد أن حُذفت وبقي مُنادُوها**: `access_gate.dart` و
+  /// `merchant_wallet_screen.dart` ينادونها، فكان التطبيقُ **لا يُصرَّف
+  /// إطلاقاً** — `The getter 'isMerchantOwner' isn't defined`. أي أنّ
+  /// أيَّ بناءٍ في Codemagic كان سيسقط قبل أن يبدأ.
+  ///
+  /// **وتُقاس بالنفي لا بقيمةٍ واحدة**: الجلسةُ التاجريّةُ التي ليست
+  /// نقطةَ بيعٍ ولا موظّفاً هي جلسةُ المالك. فقيمةٌ ثالثةٌ تُضاف غداً
+  /// لا تجعل موظّفاً مالكاً بالخطأ — **والخطأُ هنا يفتح المالَ لكاشير.**
+  bool get isMerchantOwner =>
+      isMerchantSession && !isPos && merchantContext.value?.actor != 'staff';
   bool get isAdmin => role.value == 'admin';
   bool get isDistributor => role.value == 'distributor';
 
