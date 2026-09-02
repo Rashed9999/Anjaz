@@ -139,6 +139,29 @@ Route::group(['as' => 'admin.'], function () {
             Route::post('approvals/{id}/reject', [$sc, 'rejectRequest'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('approvals.reject');
             Route::get('insider/overview', [$sc, 'insiderOverview'])->middleware('platform:platform.audit.view')->name('insider.overview');
             Route::post('insider/alerts/{id}/ack', [$sc, 'acknowledgeAlert'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('insider.alerts.ack');
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-WRONG-TRANSFER-001 — **بابُ الشاشة، ومعه بابُ الـAPI.**
+            //
+            // **والبابان لازمان معاً**: الشاشةُ تنادي مسارَ الويب،
+            // والتطبيقاتُ تنادي الـAPI — **وناقصُ أحدِهما زرٌّ يَعِد ولا
+            // يفعل**. (القاعدة الرابعة: ميزةٌ لها مدخلان تُختبَر من
+            // مدخليها.)
+            //
+            // والصلاحيّاتُ هي هي في البابين — تتبع الأثرَ لا الشاشة:
+            // فتحٌ قابلٌ للرجوع، وحسمٌ ورفضٌ ينقلان مالاً نهائيّاً.
+            // ══════════════════════════════════════════════════════════
+            // **ومفتاحُ التفرّد هنا أيضاً** — والبابان يحملان الشرطَ
+            // نفسَه، وإلّا كان النقصُ في أحدِهما بابَ ازدواجٍ للمال.
+            Route::group(['prefix' => 'wrong-transfer', 'as' => 'wrong-transfer.',
+                'middleware' => 'amial.idempotency'], function () use ($sc) {
+                Route::post('open', [$sc, 'openWrongTransferClaim'])
+                    ->middleware('platform:platform.customers.freeze')->name('open');
+                Route::post('{ulid}/resolve', [$sc, 'resolveWrongTransferClaim'])
+                    ->middleware('platform:platform.disputes.decide')->name('resolve');
+                Route::post('{ulid}/reject', [$sc, 'rejectWrongTransferClaim'])
+                    ->middleware('platform:platform.disputes.decide')->name('reject');
+            });
         });
 
         // AMIAL-MAINT-001 — لوحة «الصيانة الأولية» (تشغيل/إيقاف الميزات)

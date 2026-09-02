@@ -223,6 +223,38 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::post('/kyc/documents/{id}/reject', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'reject'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('kyc.reject');
             Route::post('/kyc/users/{id}/activate', [\App\Http\Controllers\Api\V1\Amial\KycDocumentController::class, 'activateAccount'])->where('id', '[0-9]+')->middleware('platform:platform.approvals.decide')->name('kyc.activate');
 
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-WRONG-TRANSFER-001 — **دعاوى «حوّلتُ إلى الرقم الخطأ».**
+            //
+            // **الدوالُّ الثلاثُ مبنيّةٌ كاملةً** في
+            // `SupportConsoleController` ومعها `WrongTransferRecoveryService`
+            // و`WrongTransferClaim` — **ولا مسارَ واحداً في المشروع
+            // كلِّه**. فالميزةُ تامّةٌ ولا يبلغها أحد، لا من شاشةٍ ولا من
+            // تطبيق. (وهو نمطُ العطل الأكثرُ تكراراً هنا: مبنيٌّ ولا
+            // يُوصَل إليه.)
+            //
+            // **والصلاحيّةُ تتبع الأثرَ لا الشاشة**، كما يقول توثيقُ
+            // الدوالّ بنصّه: الفتحُ يوقف النزيفَ **وهو قابلٌ للرجوع**
+            // (يُفرَج عنه تلقائيّاً بعد المهلة) فيُتاح لمن يردّ على
+            // الهاتف أوّلاً — ودقيقةُ انتظارٍ لصلاحيّةٍ أعلى تعني مالاً
+            // أُنفق. أمّا الحسمُ والرفضُ **فينقلان مالاً نهائيّاً**،
+            // فيلزمهما `platform.disputes.decide`.
+            // ══════════════════════════════════════════════════════════
+            // **ومفتاحُ التفرّد على الثلاثة** — `resolve` يُعيد المالَ
+            // فعلاً، فضغطةٌ مكرّرةٌ أو إعادةُ إرسالٍ من شبكةٍ متقطّعةٍ
+            // تنقله مرّتين. (أمسكه `AppMoneyIdempotencyTest` على هذه
+            // المسارات نفسِها ساعةَ سُجِّلت.)
+            Route::prefix('/wrong-transfer')->name('wrong-transfer.')
+                ->middleware('amial.idempotency')
+                ->group(function () use ($c) {
+                Route::post('/open', [$c, 'openWrongTransferClaim'])
+                    ->middleware('platform:platform.customers.freeze')->name('open');
+                Route::post('/{ulid}/resolve', [$c, 'resolveWrongTransferClaim'])
+                    ->middleware('platform:platform.disputes.decide')->name('resolve');
+                Route::post('/{ulid}/reject', [$c, 'rejectWrongTransferClaim'])
+                    ->middleware('platform:platform.disputes.decide')->name('reject');
+            });
+
             // AMIAL-DEVICE-TRUST-001 — نفس مسارات الويب بنفس الصلاحية.
             // تحصينُ سطحٍ واحد يترك الآخر باباً مفتوحاً، وقد وقع ذلك في هذا
             // المشروع من قبل: حُصّنت مسارات الويب وبقي توأمها في الـ API.

@@ -33,7 +33,15 @@ class MerchantFinancialTruthReportService
         $vertical = MerchantProfile::where('user_id', $merchant->id)->value('business_type') ?: 'retail';
 
         [$sales, $source] = $this->salesFor($merchant, $vertical, $start, $end);
-        $methods = ['cash' => '0', 'amial_pay' => '0', 'credit' => '0', 'other' => '0'];
+        // AMIAL-MONEY-SHAPE-001 — **صفرٌ بصيغتين في تقريرٍ واحد.**
+        //
+        // كانت الأصفارُ الابتدائيّةُ `'0'` خاماً، **فالبندُ الذي وصله بيعٌ
+        // يخرج `'400.0000'` والذي لم يصله يخرج `'0'`** — رقمان ماليّان في
+        // الحقل نفسِه بصيغتين، والفرقُ يتبع البياناتِ لا العقد.
+        // فمن قرأ الحقلَ بمقارنةٍ نصّيّةٍ أو نسّقه بأربع خاناتٍ انكسر عليه
+        // أحدُهما. (`amial-financial-truth`: صيغةُ الرقم جزءٌ من عقده.)
+        $zero = MoneyService::normalize('0');
+        $methods = ['cash' => $zero, 'amial_pay' => $zero, 'credit' => $zero, 'other' => $zero];
         $gross = '0'; $count = 0;
         foreach ($sales as $sale) {
             $amount = MoneyService::normalize((string) ($sale->amount ?? '0'));
@@ -57,7 +65,7 @@ class MerchantFinancialTruthReportService
 
         $collections = $vertical === 'wholesale'
             ? $this->wholesaleCollections($merchant, $start, $end)
-            : ['cash' => '0', 'amial_pay' => '0', 'other' => '0', 'count' => 0];
+            : ['cash' => $zero, 'amial_pay' => $zero, 'other' => $zero, 'count' => 0];
 
         $wallet = $this->walletTruth($merchant, $start, $end);
         return [
@@ -103,7 +111,9 @@ class MerchantFinancialTruthReportService
     private function wholesaleCollections(User $merchant, Carbon $start, Carbon $end): array
     {
         $businessId = WholesaleBusiness::where('merchant_user_id', $merchant->id)->value('id');
-        $result = ['cash' => '0', 'amial_pay' => '0', 'other' => '0', 'count' => 0];
+        // **والصيغةُ واحدةٌ هنا أيضاً** — انظر `AMIAL-MONEY-SHAPE-001`.
+        $z = MoneyService::normalize('0');
+        $result = ['cash' => $z, 'amial_pay' => $z, 'other' => $z, 'count' => 0];
         if (!$businessId) return $result;
         $rows = WholesaleCollection::where('business_id', $businessId)
             ->whereBetween('collection_date', [$start->toDateString(), $end->toDateString()])

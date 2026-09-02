@@ -143,7 +143,24 @@ class RegistrationRolesTest extends TestCase
         ])->assertOk();
 
         \Laravel\Passport\Passport::actingAs($merchant->fresh(), [], 'api');
-        $this->getJson('/api/v1/amial/merchant/cashier/products')->assertOk();
+
+        // ══════════════════════════════════════════════════════════════
+        // **والتاجرُ الموثَّقُ يفتح بابَ قطاعه — لا بابَ غيره.**
+        //
+        // كان هذا السطرُ يشترط أن يفتح **تاجرُ صيدليّةٍ كاشيرَ البقالة**
+        // (`/merchant/cashier/products`)، وهو ما يمنعه عزلُ القطاعات
+        // عمداً بـ`PHARMACY_CASHIER_ONLY`: «استخدم كاشير الصيدلية لتبقى
+        // الوصفات والتشغيلات والصلاحية في الفاتورة».
+        //
+        // **والمقصودُ من الفحص باقٍ**: أنّ الحسابَ بعد الاعتماد يعمل
+        // فعلاً. فيُقاس على بابه هو — **ويُشترط معه أنّ البابَ الآخرَ
+        // مغلق**، فيصير السطرُ الذي كان يناقض العزلَ حارساً له.
+        // ══════════════════════════════════════════════════════════════
+        $this->getJson('/api/v1/amial/merchant/pharmacy')->assertOk();
+
+        $this->getJson('/api/v1/amial/merchant/cashier/products')
+            ->assertForbidden()
+            ->assertJsonPath('code', 'PHARMACY_CASHIER_ONLY');
     }
 
     /** @test AMIAL-VERIFY-GATE — استجابة الدخول تحمل حالة التوثيق لتوجيه التطبيق. */
