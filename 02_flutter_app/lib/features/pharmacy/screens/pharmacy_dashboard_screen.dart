@@ -309,11 +309,16 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
                 )),
           ])),
           Column(mainAxisSize: MainAxisSize.min, children: [
-            IconButton(
-              tooltip: 'بدائل الدواء',
-              icon: const Icon(Icons.compare_arrows, color: AmialColors.primary),
-              onPressed: () => _showAlternatives(p),
-            ),
+            Obx(() {
+              final enabled = Get.find<AccessController>().has('pharmacy_substitutions');
+              return IconButton(
+                tooltip: enabled ? 'بدائل الدواء' : 'بدائل الدواء — أعمال',
+                icon: Icon(enabled ? Icons.compare_arrows : Icons.lock_outline, color: AmialColors.primary),
+                onPressed: () => enabled
+                    ? _showAlternatives(p)
+                    : Get.to(() => const PlansCatalogScreen()),
+              );
+            }),
             const Icon(Icons.chevron_left, color: Colors.grey),
           ]),
         ]),
@@ -335,11 +340,16 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
             Row(children: [
               Expanded(child: Text('الدفعات: ${product['trade_name']}',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold))),
-              OutlinedButton.icon(
-                onPressed: () => _showAlternatives(product),
-                icon: const Icon(Icons.compare_arrows, size: 16),
-                label: const Text('بدائل'),
-              ),
+              Obx(() {
+                final enabled = Get.find<AccessController>().has('pharmacy_substitutions');
+                return OutlinedButton.icon(
+                  onPressed: () => enabled
+                      ? _showAlternatives(product)
+                      : Get.to(() => const PlansCatalogScreen()),
+                  icon: Icon(enabled ? Icons.compare_arrows : Icons.lock_outline, size: 16),
+                  label: Text(enabled ? 'بدائل' : 'بدائل (أعمال)'),
+                );
+              }),
               const SizedBox(width: 6),
               FilledButton.icon(
                 onPressed: () { Navigator.pop(context); _addBatchDialog(product); },
@@ -413,12 +423,17 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
             onPressed: () => _recallBatch(product, b),
           ),
           if (isExpired)
-            IconButton(
-              tooltip: 'إخراج الدفعة المنتهية',
-              color: AmialColors.primary,
-              icon: const Icon(Icons.inventory_2_outlined),
-              onPressed: () => _disposeBatch(product, b),
-            ),
+            Obx(() {
+              final enabled = Get.find<AccessController>().has('pharmacy_batch_disposition');
+              return IconButton(
+                tooltip: enabled ? 'إخراج الدفعة المنتهية' : 'إرجاع وإتلاف الدفعات — أعمال',
+                color: AmialColors.primary,
+                icon: Icon(enabled ? Icons.inventory_2_outlined : Icons.lock_outline),
+                onPressed: () => enabled
+                    ? _disposeBatch(product, b)
+                    : Get.to(() => const PlansCatalogScreen()),
+              );
+            }),
         ],
       ]),
     );
