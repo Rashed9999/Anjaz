@@ -53,7 +53,13 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   }
 
   Future<void> _select(BluetoothInfo d) async {
-    await _svc.saveConfig(ThermalPrinterConfig(mac: d.macAdress, name: d.name, paperMm: _paper));
+    final current = _svc.config.value;
+    await _svc.saveConfig(ThermalPrinterConfig(
+      mac: d.macAdress,
+      name: d.name,
+      paperMm: _paper,
+      openCashDrawer: current?.openCashDrawer ?? false,
+    ));
     if (!mounted) return;
     _snack('تم اختيار الطابعة: ${d.name}', ok: true);
     setState(() {});
@@ -63,9 +69,34 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     final host = _host.text.trim();
     final port = int.tryParse(_port.text.trim()) ?? 9100;
     if (host.isEmpty || port < 1 || port > 65535) { _snack('أدخل عنوان IP ومنفذاً صحيحين'); return; }
-    await _svc.saveConfig(ThermalPrinterConfig(mac: '', name: 'طابعة شبكة $host', paperMm: _paper,
-        connection: 'network', host: host, port: port));
+    await _svc.saveConfig(ThermalPrinterConfig(
+      mac: '',
+      name: 'طابعة شبكة $host',
+      paperMm: _paper,
+      connection: 'network',
+      host: host,
+      port: port,
+      openCashDrawer: _svc.config.value?.openCashDrawer ?? false,
+    ));
     if (mounted) { _snack('تم حفظ طابعة الشبكة', ok: true); setState(() {}); }
+  }
+
+  Future<void> _setDrawer(bool value) async {
+    final cfg = _svc.config.value;
+    if (cfg == null) {
+      _snack('احفظ الطابعة أولاً');
+      return;
+    }
+    await _svc.saveConfig(ThermalPrinterConfig(
+      mac: cfg.mac,
+      name: cfg.name,
+      paperMm: cfg.paperMm,
+      connection: cfg.connection,
+      host: cfg.host,
+      port: cfg.port,
+      openCashDrawer: value,
+    ));
+    if (mounted) setState(() {});
   }
 
   Future<void> _testPrint() async {
@@ -184,6 +215,17 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           const SizedBox(width: 10),
           _paperChip(80, '80 مم'),
         ]),
+        Obx(() {
+          final cfg = _svc.config.value;
+          return SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('فتح درج النقد تلقائياً'),
+            subtitle: const Text('يرسل نبضة ESC/POS بعد طباعة كل إيصال من جهاز POS هذا.'),
+            value: cfg?.openCashDrawer ?? false,
+            onChanged: cfg == null ? null : _setDrawer,
+            activeColor: AmialColors.primary,
+          );
+        }),
         const SizedBox(height: 20),
 
         if (_connection == 'bluetooth') ...[
@@ -260,6 +302,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               connection: cfg.connection,
               host: cfg.host,
               port: cfg.port,
+              openCashDrawer: cfg.openCashDrawer,
             ));
           }
         },

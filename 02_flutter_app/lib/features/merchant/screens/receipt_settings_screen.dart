@@ -213,7 +213,7 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
                         const Text('الطابعة الحرارية', style: TextStyle(fontWeight: FontWeight.bold)),
                         Text(printer == null
                             ? 'لم يتم اختيار طابعة لهذا الجهاز'
-                            : '${printer.name} • ورق ${printer.paperMm} مم',
+                            : '${printer.name} • ${printer.connection == 'network' ? '${printer.host}:${printer.port}' : 'بلوتوث'} • ورق ${printer.paperMm} مم',
                             style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
                       ])),
                     ]),

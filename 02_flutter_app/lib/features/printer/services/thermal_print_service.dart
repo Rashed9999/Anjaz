@@ -17,9 +17,12 @@ class ThermalPrinterConfig {
   final String connection; // bluetooth | network
   final String? host;
   final int port;
+  /// نبضة ESC/POS لفتح درج النقد المرتبط بالطابعة بعد الإيصال.
+  final bool openCashDrawer;
 
   const ThermalPrinterConfig({required this.mac, required this.name, this.paperMm = 80,
-    this.connection = 'bluetooth', this.host, this.port = 9100});
+    this.connection = 'bluetooth', this.host, this.port = 9100,
+    this.openCashDrawer = false});
 }
 
 class PrintResult {
@@ -41,6 +44,7 @@ class ThermalPrintService extends GetxService {
   static const _kConnection = 'amial_printer_connection';
   static const _kHost = 'amial_printer_host';
   static const _kPort = 'amial_printer_port';
+  static const _kOpenCashDrawer = 'amial_printer_open_cash_drawer';
 
   final Rxn<ThermalPrinterConfig> config = Rxn<ThermalPrinterConfig>();
 
@@ -62,6 +66,7 @@ class ThermalPrintService extends GetxService {
         name: p.getString(_kName) ?? 'طابعة',
         paperMm: p.getInt(_kPaper) ?? 80,
         connection: connection, host: host, port: p.getInt(_kPort) ?? 9100,
+        openCashDrawer: p.getBool(_kOpenCashDrawer) ?? false,
       );
     }
   }
@@ -74,6 +79,7 @@ class ThermalPrintService extends GetxService {
     await p.setString(_kConnection, c.connection);
     if (c.host != null) await p.setString(_kHost, c.host!); else await p.remove(_kHost);
     await p.setInt(_kPort, c.port);
+    await p.setBool(_kOpenCashDrawer, c.openCashDrawer);
     config.value = c;
   }
 
@@ -83,6 +89,7 @@ class ThermalPrintService extends GetxService {
     await p.remove(_kName);
     await p.remove(_kPaper);
     await p.remove(_kConnection); await p.remove(_kHost); await p.remove(_kPort);
+    await p.remove(_kOpenCashDrawer);
     config.value = null;
   }
 
@@ -174,7 +181,11 @@ class ThermalPrintService extends GetxService {
     final cfg = config.value;
     if (cfg == null) return const PrintResult(false, 'لم يتم اختيار طابعة');
     try {
-      final raster = await _pngToEscPosRaster(png, _dotsFor(cfg.paperMm));
+      final raster = await _pngToEscPosRaster(
+        png,
+        _dotsFor(cfg.paperMm),
+        openCashDrawer: cfg.openCashDrawer,
+      );
       if (raster == null) return const PrintResult(false, 'تعذّر تجهيز صورة الإيصال');
       if (cfg.connection == 'network') {
         if (cfg.host == null || cfg.host!.isEmpty) return const PrintResult(false, 'عنوان IP للطابعة مطلوب');
@@ -197,7 +208,11 @@ class ThermalPrintService extends GetxService {
   }
 
   /// يفكّ PNG إلى RGBA عبر dart:ui، ثم يبني أوامر GS v 0 (raster bit image).
-  Future<List<int>?> _pngToEscPosRaster(Uint8List png, int paperDots) async {
+  Future<List<int>?> _pngToEscPosRaster(
+    Uint8List png,
+    int paperDots, {
+    required bool openCashDrawer,
+  }) async {
     ui.Image? image;
     try {
       final codec = await ui.instantiateImageCodec(png, targetWidth: paperDots);
@@ -206,7 +221,8 @@ class ThermalPrintService extends GetxService {
       final byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
       if (byteData == null) return null;
       final rgba = byteData.buffer.asUint8List();
-      return _buildRaster(rgba, image.width, image.height);
+      return _buildRaster(rgba, image.width, image.height,
+          openCashDrawer: openCashDrawer);
     } catch (_) {
       return null;
     } finally {
@@ -215,7 +231,8 @@ class ThermalPrintService extends GetxService {
   }
 
   /// يبني أوامر ESC/POS: تهيئة + GS v 0 على شكل نطاقات + تغذية + قطع.
-  List<int> _buildRaster(Uint8List rgba, int width, int height) {
+  List<int> _buildRaster(Uint8List rgba, int width, int height,
+      {required bool openCashDrawer}) {
     final bytesPerRow = (width + 7) >> 3;
     final out = <int>[0x1B, 0x40]; // ESC @ : تهيئة الطابعة
     const bandH = 128; // نطاقات آمنة لكل الطابعات
@@ -250,6 +267,9 @@ class ThermalPrintService extends GetxService {
       }
     }
     out.addAll([0x1B, 0x64, 0x03]); // ESC d 3 : تغذية 3 أسطر
+    // ESC p m t1 t2 — النبضة القياسية لدرج النقد (Epson/ESC-POS).
+    // لا تُرسل إلا عندما يفعّلها التاجر لجهاز POS الحالي، وبعد الإيصال.
+    if (openCashDrawer) out.addAll(const [0x1B, 0x70, 0x00, 0x19, 0xFA]);
     out.addAll([0x1D, 0x56, 0x01]); // GS V 1 : قطع جزئي
     return out;
   }
