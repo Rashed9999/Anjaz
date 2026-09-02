@@ -49,6 +49,7 @@ import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
 import 'package:amial_pay/features/wholesale/screens/wholesale_workflow_screens.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_policy_screens.dart';
 
 /// AMIAL-CAP-SCREENS-001 — **مصدرُ حقيقةٍ واحدٌ للتنقّل بالقدرة.**
 ///
@@ -170,6 +171,17 @@ class CapabilityScreens {
     // المنتج، والقبضُ يبدأ من فاتورةٍ بعينها (`AmialQrCollectScreen`).
     // فتُفتح شاشةُ الفواتير حيث يُحصَّل فعلاً، لا اللوحةُ العامّة.
     'wholesale_collections': () => const WholesaleProInvoicesScreen(),
+
+    // AMIAL-WHOLESALE-GUIDE-001 — **قدرةٌ تُباع ولا مدخلَ لها.**
+    //
+    // `wholesale_multi_pricing` تُعرَض في «مزايا باقتي» — وهي مبيعةٌ في
+    // باقة الأعمال — **ويُضغط اسمُها ولا يُفتح شيء**. والشاشةُ الوحيدةُ
+    // التي تحمل «شرائح الأسعار» هي إعداداتُ منشأة الجملة، ودليلُ
+    // التشغيل يجعل «التسعير» قسماً قائماً بذاته.
+    //
+    // **استُعيد المدخلُ بعد أن نُزع** مع دمج أقسام الدرج.
+    'wholesale_multi_pricing': () =>
+        const WholesalePolicyBusinessSettingsScreen(),
     'restaurant_tables': () => const RestaurantScreen(),
 
     // ── تجزئةٌ: أرمزٌ منقّطةٌ فاتت أوّلَ مسحٍ لي ─────────────────────
