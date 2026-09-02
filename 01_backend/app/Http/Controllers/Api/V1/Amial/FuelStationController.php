@@ -690,9 +690,33 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
             if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
             return [$merchant, $pos->id];
         }
-        if (!MerchantProfile::where('user_id', $authUser->id)->exists()) {
+        $profile = MerchantProfile::where('user_id', $authUser->id)->first();
+
+        if (! $profile) {
             return $this->error('NOT_A_MERCHANT', 'متاح للتجار وموظفي المحطة فقط', 403);
         }
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-VERTICAL-LANES-001 — **واجهةُ المحطّة لأهلها وحدَهم.**
+        //
+        // **الثمنُ الذي قِيس:** مصفوفةُ ستّةِ قطاعاتٍ × أربعِ واجهاتٍ
+        // أخرجت أنّ **خمسةَ قطاعاتٍ كلَّها تفتح واجهةَ الوقود بـ٢٠٠**:
+        // بسطةٌ وتجزئةٌ وصيدليّةٌ وجملةٌ ومطعم.
+        //
+        // والصيدليّةُ محروسةٌ (`PHARMACY_ONLY`) والجملةُ محروسةٌ بوسيط
+        // (`EnforceWholesaleAccessPolicy`) — **والوقودُ بلا حاجزٍ
+        // إطلاقاً**. فحاجزٌ يُبنى على قطاعٍ بعد شكوى ويُترك جارُه مكشوفاً
+        // يُنتج الشكوى الثانية بعد شهر.
+        //
+        // **ولم يكن في البوّابة ما يقيس هذا الصنف**: الحارسُ القائم يفحص
+        // قوائمَ القدرات لأربعة قطاعاتٍ من ستّة، **ولا يفتح نقطةَ نهايةٍ
+        // واحدة**. فخرجت «٣٤ فحصاً · لا فشل» وهي عمياءُ عنه.
+        // ══════════════════════════════════════════════════════════════
+        if ($profile->business_type !== \App\Support\Access\AccessConstants::BIZ_FUEL) {
+            return $this->error('FUEL_ONLY',
+                'هذه العملية متاحة لمحطات الوقود فقط', 403);
+        }
+
         return [$authUser, null];
     }
 }
