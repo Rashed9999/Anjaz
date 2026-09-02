@@ -47,6 +47,8 @@ import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
 // **استُعيد هذا الاستيراد** — الشاشةُ موجودةٌ والمُنادي بلا استيراد،
 // فكان التطبيقُ لا يُصرَّف: Couldn't find constructor 'PharmacySaleScreen'.
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_workflow_screens.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
 
 /// AMIAL-CAP-SCREENS-001 — **مصدرُ حقيقةٍ واحدٌ للتنقّل بالقدرة.**
 ///
@@ -82,7 +84,10 @@ class CapabilityScreens {
   /// رمزُ القدرة ⇒ باني الشاشة. و`null` = لا شاشةَ في التطبيق بعد.
   static final Map<String, Widget Function()> _map = {
     // ── البيع ──────────────────────────────────────────────────────
-    'quick_sale': () => const MerchantQuickSaleHomeScreen(),
+    // **«البيع السريع» يفتح شاشةَ البيع** لا رئيسيّةً ثانية. فتاجرُ
+    // تجزئةٍ يضغطها فيهبط في رئيسيّةٍ أخرى ببطاقة ترحيبٍ وأزرارٍ مختلفة
+    // — رئيسيّتان لحسابٍ واحد، ويظنّ أنّه تاه.
+    'quick_sale': () => const CashierPosScreen(),
     'cashier': () => const CashierPosScreen(),
     'refunds': () => const MerchantRefundScreen(),
     'debts': () => const CreditDashboardScreen(),
@@ -122,7 +127,15 @@ class CapabilityScreens {
     'api_access': () => const MerchantApiKeysScreen(),
 
     // ── أصنافُ التجّار ─────────────────────────────────────────────
-    'fuel_pos': () => const FuelOwnerConsoleScreen(),
+    // ══════════════════════════════════════════════════════════════════
+    // **القدرةُ تفتح ميزتَها لا رئيسيّةً ثانية.**
+    //
+    // كان الضغطُ على «بيع الوقود» يهبط في **لوحة المحطّة** كاملةً،
+    // و«فواتير الجملة» و«التحصيلات» في **لوحة الجملة** — فيرى التاجرُ
+    // رئيسيّتين لحسابٍ واحد ببطاقتَي ترحيبٍ وأزرارٍ مختلفة، ويظنّ أنّه
+    // تاه. والشاشاتُ الحقيقيّةُ مبنيّةٌ كلُّها.
+    // ══════════════════════════════════════════════════════════════════
+    'fuel_pos': () => const FuelSaleScreen(),
     'fuel_pumps': () => const FuelTanksScreen(),
     'fuel_variance': () => const FuelVariancesScreen(),
     'fuel_cards': () => const FuelOpsCenterScreen(),
@@ -131,19 +144,32 @@ class CapabilityScreens {
     'fuel_shifts': () => const FuelShiftsScreen(),
     'pharmacy_pos': () => const PharmacySaleScreen(),
     'pharmacy_products': () => const PharmacyProductsScreen(),
-    'pharmacy_batches': () => const PharmacyProductsScreen(),
+    // ══════════════════════════════════════════════════════════════════
+    // **هذه الثلاثةُ أفعالٌ داخل شاشة الأصناف لا وجهاتٌ مستقلّة.**
+    //
+    // «الدفعات» و«البدائل» و«إخراج الدفعة المنتهية» تُفتح بعد اختيار
+    // صنفٍ بعينه، **والشاشةُ تحرس كلاًّ منها بقدرتها** بالفعل
+    // (`has('pharmacy_substitutions')` وأخواتها).
+    //
+    // فإسنادُ شاشةٍ لكلّ واحدةٍ يرسم **أربعةَ أزرارٍ مختلفةِ الأسماء
+    // تُفضي إلى موضعٍ واحد** — يعمل الزرُّ ويفتح غيرَ ما يقول. فتُترك
+    // بلا وجهةٍ ويبقى حرسُها حيث تُستعمَل.
+    // ══════════════════════════════════════════════════════════════════
     // البدائل وإخراج المنتهي يقعان في تفاصيل الصنف/دفعاته، لا في صفحة عامة.
-    'pharmacy_substitutions': () => const PharmacyProductsScreen(),
-    'pharmacy_batch_disposition': () => const PharmacyProductsScreen(),
     'pharmacy_alerts': () => const PharmacyAlertsScreen(),
     'pharmacy_customers': () => const PharmacyCustomersScreen(),
     // **الوصفاتُ تُدار من لوحة الصيدليّة نفسِها** — وسمُ الصنف وحقولُ
     // الوصفة في البيعة. ولا شاشةَ ثالثةٌ لها، فتُوجَّه إلى موضع عملها.
     // (‏وبلا هذا السطر يظهر سهمُ الدخول ويُضغط فلا يفتح — أمسكه
     // `CapabilityScreenMapGuardTest`.)
-    'pharmacy_prescriptions': () => const PharmacyDashboardScreen(),
-    'wholesale_invoices': () => const WholesaleDashboardScreen(),
-    'wholesale_collections': () => const WholesaleDashboardScreen(),
+    // **والوصفةُ تُوثَّق على البيعة** — لا شاشةَ وصفاتٍ مستقلّة: الوسمُ
+    // يوقف البيعَ بلا رقمها، والتوثيقُ يقع في شاشة البيع نفسِها.
+    'pharmacy_prescriptions': () => const PharmacySaleScreen(),
+    'wholesale_invoices': () => const WholesaleProInvoicesScreen(),
+    // **والتحصيلُ يقع من الفاتورة** — لا شاشةَ تحصيلٍ مستقلّةً في
+    // المنتج، والقبضُ يبدأ من فاتورةٍ بعينها (`AmialQrCollectScreen`).
+    // فتُفتح شاشةُ الفواتير حيث يُحصَّل فعلاً، لا اللوحةُ العامّة.
+    'wholesale_collections': () => const WholesaleProInvoicesScreen(),
     'restaurant_tables': () => const RestaurantScreen(),
 
     // ── تجزئةٌ: أرمزٌ منقّطةٌ فاتت أوّلَ مسحٍ لي ─────────────────────

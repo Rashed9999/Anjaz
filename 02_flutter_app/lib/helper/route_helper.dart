@@ -172,6 +172,13 @@ class RouteHelper {
   static const String fuelTanks = '/fuel/tanks';
   static const String fuelVariances = '/fuel/variances';
   static const String pharmacy = '/pharmacy';
+  // **شاشتان مبنيّتان بلا مسار.** `PharmacyAlertsScreen` و
+  // `PharmacyCustomersScreen` موجودتان في `pharmacy_dashboard_screen.dart`،
+  // والخادمُ يُعلن قدرتيهما بـ`screen('/pharmacy/alerts')` و
+  // `'/pharmacy/customers'` — **ولا `GetPage` لهما**، فالزرُّ يفتح
+  // «الصفحة غير موجودة». مبنيٌّ ولا يُوصَل إليه.
+  static const String pharmacyAlerts = '/pharmacy/alerts';
+  static const String pharmacyCustomers = '/pharmacy/customers';
   static const String wholesale = '/wholesale';
 
   /// AMIAL-WHOLESALE-GUIDE-001 — **«التسعير» قسمٌ قائمٌ بذاته في دليل
@@ -332,6 +339,8 @@ class RouteHelper {
     GetPage(name: fuelTanks, page: () => const FuelTanksScreen()),
     GetPage(name: fuelVariances, page: () => const FuelVariancesScreen()),
     GetPage(name: pharmacy, page: () => const PharmacyDashboardScreen()),
+    GetPage(name: pharmacyAlerts, page: () => const PharmacyAlertsScreen()),
+    GetPage(name: pharmacyCustomers, page: () => const PharmacyCustomersScreen()),
     GetPage(name: wholesale, page: () => const WholesaleDashboardScreen()),
     GetPage(name: wholesalePricing,
         page: () => const WholesalePolicyBusinessSettingsScreen()),
