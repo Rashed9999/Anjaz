@@ -12,9 +12,16 @@ import 'package:amial_pay/common/widgets/amial_button.dart';
 
 /// AMIAL-REG-WIZARD-001
 ///
-/// معالج تسجيل عميل بنمط البنوك — 10 خطوات: شخصية → هوية → عنوان → وثائق →
-/// شخص قريب → توقيع مرسوم → إقرارات → PIN → OTP → «بانتظار موافقة الإدارة».
+/// معالج تسجيل بنمط البنوك — **عشرُ خطوات إدخالٍ ثمّ شاشةُ النجاح**:
+/// شخصية → هوية → عنوان → **عمل ومصدر دخل** → وثائق → شخص قريب →
+/// توقيع مرسوم → إقرارات → كلمة المرور → OTP → «بانتظار موافقة الإدارة».
+///
+/// وكان هذا السطرُ نفسُه يُسقط خطوةَ «العمل» ويسمّي كلمةَ المرور «PIN» —
+/// وهو ما كانت عليه قائمةُ العناوين حرفاً بحرف (‏AMIAL-REG-TITLES-001).
+/// **فتوثيقٌ يشيخ مع الشيفرة يصير مصدرَ العطل لا وصفَه.**
+///
 /// يرسل كل شيء في نداء تسجيل واحد (multipart) مع التوقيع (base64) والوثائق.
+/// ونوعُ الحساب (`account_type`) عميلٌ أو تاجرٌ أو وكيل — المعالجُ واحدٌ للثلاثة.
 class AmialRegistrationWizardScreen extends StatefulWidget {
   const AmialRegistrationWizardScreen({super.key});
 
@@ -276,11 +283,11 @@ class _AmialRegistrationWizardScreenState
         return true;
       case 8:
         if (_pin.text.length != 4) {
-          _snack('رمز PIN يجب أن يكون 4 أرقام');
+          _snack('كلمة المرور يجب أن تكون 4 أرقام');
           return false;
         }
         if (_pin.text != _pinConfirm.text) {
-          _snack('رمز PIN غير متطابق');
+          _snack('كلمتا المرور غير متطابقتين');
           return false;
         }
         return true;
@@ -548,9 +555,26 @@ class _AmialRegistrationWizardScreenState
 
   @override
   Widget build(BuildContext context) {
-    final titles = [
-      'المعلومات الشخصية', 'معلومات الهوية', 'العنوان', 'وثائق الهوية',
-      'شخص قريب', 'التوقيع الإلكتروني', 'الإقرارات', 'رمز PIN', 'رمز التحقق', 'تم',
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-REG-TITLES-001 — **العناوينُ كانت منزاحةً سبعَ خطوات.**
+    //
+    // أُدرجت خطوةُ «العمل ومصدر الدخل» في الموضع ٣ (‏AMIAL-KYC-INTL-001)
+    // **ولم تُدرَج معها في هذه القائمة**. فمن الخطوة ٣ فصاعداً صار كلُّ
+    // عنوانٍ يسبق شاشتَه بواحدة: شاشةُ الوثائق تُعنوَن «شخص قريب»،
+    // وشاشةُ التوقيع «الإقرارات»، **وشاشةُ كلمة المرور تُعنوَن «رمز
+    // التحقق»** — ولهذا يقول من يسجّل: «لا أجد خانةً لكلمة المرور».
+    //
+    // والتحقّقُ (`_validateStep`) كان سليماً مطابقاً للصفحات، فلم يسقط
+    // شيءٌ ولم يظهر خطأٌ في أيّ سجلّ — **عطلٌ في المعنى وحدَه.**
+    //
+    // والعددُ يُشتقّ من القائمة نفسِها لا يُكتب رقماً، فمن أدرج خطوةً غداً
+    // تتبعه الترقيمُ والشريطُ من تلقائهما. (كان `من 9` و`generate(9)`
+    // مكتوبَين يدويّاً، وكلاهما خطأٌ بواحد.)
+    // ══════════════════════════════════════════════════════════════════
+    const titles = [
+      'المعلومات الشخصية', 'معلومات الهوية', 'العنوان', 'العمل ومصدر الدخل',
+      'وثائق الهوية', 'شخص قريب', 'التوقيع الإلكتروني', 'الإقرارات',
+      'كلمة المرور', 'رمز التحقق',
     ];
     // AMIAL-REG-UI-002: لغة المراجع الاحترافية — بلا شريط عنوان ملوّن ثقيل.
     // رجوع خفيف + شريط تقدّم مقسّم بعدد الخطوات + عنوان كبير أسفله.
@@ -578,7 +602,7 @@ class _AmialRegistrationWizardScreenState
                     ),
                   ),
                   const Spacer(),
-                  Text('الخطوة ${_step + 1} من 9',
+                  Text('الخطوة ${_step + 1} من ${titles.length}',
                       style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -590,12 +614,12 @@ class _AmialRegistrationWizardScreenState
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
-                children: List.generate(9, (i) {
+                children: List.generate(titles.length, (i) {
                   final done = i <= _step;
                   return Expanded(
                     child: Container(
                       height: 4,
-                      margin: EdgeInsets.only(left: i == 8 ? 0 : 4),
+                      margin: EdgeInsets.only(left: i == titles.length - 1 ? 0 : 4),
                       decoration: BoxDecoration(
                         color: done ? AmialColors.primary : const Color(0xFFE6E9EF),
                         borderRadius: BorderRadius.circular(4),
@@ -1098,11 +1122,16 @@ class _AmialRegistrationWizardScreenState
         ),
       ]);
 
+  // AMIAL-REG-TITLES-001 — **اللفظُ نفسُه في الشاشتين.**
+  // كانت تُسمّى هنا «رمز PIN» وتُطلَب في شاشة الدخول «كلمة المرور» — وهي
+  // واحدةٌ تُرسَل في حقل `password`. فمن سجّل لم يجد «خانةَ كلمة مرور»،
+  // ثمّ سُئل عنها عند الدخول. والاسمُ الواحدُ للشيء الواحد.
   Widget _stepPin() => _wrap([
-        _sectionNote('أنشئ رمز PIN من 4 أرقام لتأمين حسابك (يُستخدم للدخول والمعاملات).'),
-        _field(_pin, 'رمز PIN (4 أرقام) *',
+        _sectionNote('اختر كلمة المرور — أربعةُ أرقامٍ تدخل بها إلى حسابك '
+            'وتؤكّد بها معاملاتك. هي نفسُها التي تُطلب في شاشة الدخول.'),
+        _field(_pin, 'كلمة المرور (4 أرقام) *',
             type: TextInputType.number, maxLength: 4),
-        _field(_pinConfirm, 'تأكيد رمز PIN *',
+        _field(_pinConfirm, 'تأكيد كلمة المرور *',
             type: TextInputType.number, maxLength: 4),
       ]);
 
