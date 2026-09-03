@@ -55,9 +55,24 @@ class MerchantAdaptiveShell extends StatelessWidget {
               child: Stack(
                 children: [
                   Positioned.fill(child: child),
+                  // ══════════════════════════════════════════════════════
+                  // AMIAL-SHELL-OVERLAP-001 — **زرّان في موضعٍ واحد.**
+                  //
+                  // شاشاتُ القطاعات لها `AppBar` وأزرارُها في `actions`،
+                  // **وفي العربيّة تُرسَم `actions` يساراً**. وهذا الزرُّ
+                  // كان `Alignment.topLeft` — فيعلو أيقونةَ الشاشة نفسِها.
+                  // (رآه صاحبُ المشروع: دائرةٌ كبيرةٌ فوق أيقونة الشبكة.)
+                  //
+                  // والجهةُ اليمنى موضعُ `leading` — **وهي فارغةٌ في شاشات
+                  // الرئيسيّة** (لا زرَّ رجوعٍ في جذر التنقّل)، والغلافُ لا
+                  // يلفّ إلّا هذه الشاشات. فلا تداخلَ ولا فقدَ زرّ.
+                  //
+                  // ولا يُحَلّ بإزاحةٍ بالبكسل: مقاسُ `AppBar` وعددُ أزرارها
+                  // يختلفان بالقطاع، فإزاحةٌ تُصلح واحداً تكسر آخر.
+                  // ══════════════════════════════════════════════════════
                   SafeArea(
                     child: Align(
-                      alignment: Alignment.topLeft,
+                      alignment: Alignment.topRight,
                       child: Padding(
                         padding: const EdgeInsets.all(AmialSpacing.sm),
                         child: Builder(

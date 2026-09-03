@@ -1,4 +1,5 @@
 import 'package:amial_pay/features/entitlements/controllers/entitlements_controller.dart';
+import 'package:amial_pay/features/merchant/screens/product_editor_screen.dart';
 import 'package:amial_pay/features/retail/screens/product_variants_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -302,6 +303,27 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
             final soon = _isExpiringSoon(expiry);
             final hasOffer = p['offer_price'] != null && (double.tryParse(p['offer_price'].toString()) ?? 0) > 0;
             return ListTile(
+              // ══════════════════════════════════════════════════════════
+              // AMIAL-PRODUCT-EDIT-REACH-001 — **بابٌ كان مفقوداً هنا.**
+              //
+              // `ProductEditorScreen` مبنيّةٌ (٤٠٦ أسطر) وتحفظ فعلاً عبر
+              // `PUT cashier/products/{id}` — **وكانت تُفتح من «المخزون»
+              // و«تنبيهات النقص» وحدَهما**. وشاشةُ «المنتجات» — وهي أوّلُ
+              // ما يفتحه من أراد تعديلَ منتج — **بلا مدخلٍ إليها**، ولا
+              // ضغطةَ على الصفّ إطلاقاً.
+              //
+              // فقال صاحبُ المشروع: «لا يوجد تعديل منتج». والميزةُ قائمةٌ
+              // والبابُ غائب. (القاعدة ١٢: صفحةٌ لا يُوصل إليها ليست
+              // مبنيّة — وهذه أختُها: بابٌ واحدٌ لا يكفي حيث يُبحَث في غيره.)
+              //
+              // ولا حارسَ باقةٍ عليه: التعديلُ من صميم إدارة المنتجات،
+              // ومسارُه غيرُ محروسٍ بقدرة — فلا يُعرَض زرٌّ يقود إلى ٤٠٢.
+              // ══════════════════════════════════════════════════════════
+              onTap: () async {
+                final changed = await Get.to<bool>(
+                    () => ProductEditorScreen(product: p));
+                if (changed == true) c.loadProducts();
+              },
               leading: const Icon(Icons.shopping_bag_outlined, color: AmialColors.primary),
               title: Text((p['name'] ?? '').toString()),
               subtitle: Column(
@@ -335,6 +357,17 @@ class _CashierProductsScreenState extends State<CashierProductsScreen> {
                   // `retail.variants`، فظهورُه لتاجرِ صيدليّةٍ أو مطعمٍ
                   // يقود إلى رفضٍ ٤٠٢ — زرٌّ يعمل ويصل إلى طريقٍ مسدود.
                   // (كشفه محورُ المواصفة في مراجعةٍ آليّة.)
+                  // **وزرٌّ مرئيٌّ مع الضغطة** — فمدخلٌ لا يُرى لا يُستعمل.
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined,
+                        color: AmialColors.textMuted, size: 20),
+                    tooltip: 'تعديل المنتج',
+                    onPressed: () async {
+                      final changed = await Get.to<bool>(
+                          () => ProductEditorScreen(product: p));
+                      if (changed == true) c.loadProducts();
+                    },
+                  ),
                   if (Get.isRegistered<EntitlementsController>() &&
                       Get.find<EntitlementsController>().isAvailable('retail.variants'))
                   IconButton(

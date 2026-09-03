@@ -29,6 +29,17 @@ use Illuminate\Support\Facades\Validator;
  */
 class CashierController extends AmialApiController // AMIAL-FIX-007
 {
+    // AMIAL-OFFLINE-POS-003 — **استيرادُ الصنف ليس استعمالَ التِّرَيت.**
+    //
+    // كان `use App\Http\Controllers\Concerns\DeniesByPlan;` في رأس
+    // الملفّ (استيرادُ نطاق) **ولا سطرَ له داخل الصنف**. فـ`$this->
+    // denyUnless(...)` يرمي `Method ... does not exist` — **انهيارٌ فادحٌ
+    // في مسار البيع نفسِه**، يراه الكاشيرُ شريطاً أحمرَ عند تأكيد الدفع.
+    //
+    // ولا يمسكه مُحلِّلٌ ولا اختبار: الاستيرادُ مستعمَلٌ نحويّاً (يظهر في
+    // التعليقات والتوثيق)، و`php -l` لا يفحص وجودَ دالّةٍ في وقت التشغيل.
+    use \App\Http\Controllers\Concerns\DeniesByPlan;
+
     public function __construct(
         private readonly CashierService $cashier,
         private readonly MerchantPermissionService $perm,
@@ -220,7 +231,25 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         //
         // فالحارسُ على الفعل لا على العنوان: مسارُ البيع واحدٌ للحالتين،
         // ووضعُ `capability:` عليه يُقفل الكاشيرَ على كلّ تاجرٍ مجّانيّ.
-        if ($request->filled('client_uuid')
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-OFFLINE-POS-003 — **والإشارةُ كانت خاطئةً واقعاً.**
+        //
+        // قال التعليقُ أعلاه: «`client_uuid` لا يُرسَل إلّا من طابور
+        // المزامنة». **وقِيس في التطبيق فإذا هو يُرسَل في كلّ بيع** —
+        // سطرٌ غيرُ مشروط في `cashier_controller.dart` يولّده مفتاحاً
+        // لمنع التكرار (‏AMIAL-OFFLINE-POS-001)، متّصلاً كان أو غيرَ متّصل.
+        //
+        // فالحارسُ كان يقع على **كلّ** بيع. ولو أُضيف التِّرَيتُ وحدَه
+        // لتحوّل الانهيارُ إلى ٤٠٢ على البيع النقديِّ الأساسيِّ لكلّ تاجرٍ
+        // مجّانيّ — **وذاك أسوأُ من الانهيار**: قفلٌ مدفوعٌ على ما هو مجّانيّ
+        // بالتصميم، ولا يقول لأحدٍ لماذا.
+        //
+        // **والفارقُ الحقيقيُّ موجودٌ في الحمولة**: طابورُ المزامنة يضيف
+        // `_offline_queued_at` عند الحفظ المحلّيّ ويرسله مع البيع، والبيعُ
+        // المتّصلُ لا يرسله قطّ. فصار الحارسُ على أثرِ الطابور لا على مفتاح
+        // منع التكرار. (القاعدة الثامنة: الحدُّ على ما لا يُنتحَل.)
+        // ══════════════════════════════════════════════════════════════
+        if (($request->filled('_offline_queued_at') || $request->filled('_offline_state'))
             && ($deny = $this->denyUnless($request, 'offline_pos')) !== null) {
             return $deny;
         }
