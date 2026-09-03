@@ -302,9 +302,22 @@ Route::group(['as' => 'admin.'], function () {
         });
 
         Route::group(['prefix' => 'merchant', 'as' => 'merchant.'], function () {
-            Route::post('search', [MerchantController::class, 'search'])
-                ->middleware('platform:platform.merchants.compliance')->name('search');
-
+            // AMIAL-ORPHAN-ROUTE-001 — **مسارٌ يُنادي دالّةً محذوفة.**
+            //
+            // كان هنا `POST merchant/search → MerchantController::search()`،
+            // **والدالّةُ لا وجودَ لها**: بقيّةُ بحثِ التجّار في قالب 6cash،
+            // حُذفت مع قوالبها وبقي تسجيلُ المسار.
+            //
+            // **ولا يمسكه شيء**: `route:list` يعرضه، و`route:cache` ينجح،
+            // و`php -l` راضٍ — لأنّ ربطَ المتحكّم بالدالّة **نصٌّ يُحلّ في
+            // وقت التشغيل**. فلا يظهر إلّا بـ500 في وجه من يطلبه.
+            //
+            // وقِيس فلا يشير إليه شيء: لا قالبٌ ولا سكربت. فأُزيل — إزالةُ
+            // مسارٍ لا يُنتج إلّا خطأً تُنقص سطحَ العطل ولا تُفقد وظيفة.
+            // (وهو قرارُ `routes/merchant.php` نفسُه: «تسجيلُه يُبقي سطحَ
+            // خطأٍ بلا وظيفة».)
+            //
+            // وبحثُ التجّار الحيُّ في مركز التجّار الحديث.
         });
 
         Route::group(['prefix' => 'user', 'as' => 'user.'], function () {
