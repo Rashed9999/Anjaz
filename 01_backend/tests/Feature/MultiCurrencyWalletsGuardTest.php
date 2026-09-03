@@ -331,6 +331,98 @@ class MultiCurrencyWalletsGuardTest extends TestCase
     }
 
     /**
+     * **⑩ ومَن لا يملكها لا يبلغها — بكلّ دورٍ لا بدورٍ واحد.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * سأل صاحبُ المشروع «من يملك المحافظ؟»، وهو سؤالُ صلاحيّةٍ لا سؤالُ
+     * وصف. **فيُقاس بالدخول بكلّ دورٍ لا بقراءة الشرط** (القاعدة الرابعة:
+     * ميزةٌ لها مدخلان تُختبَر من مدخليها).
+     *
+     * **وأخطرُ الأدوار هنا موظّفُ نقطة البيع**: يعمل **داخل** حساب تاجر
+     * المؤسّسة، وباقتُه باقةُ صاحبه، فيُتوقَّع منطقيّاً أن يمرّ — **وهو
+     * لا يمرّ ولا يجوز أن يمرّ**. فالصرفُ بين العملات تصرُّفٌ في مالٍ
+     * مملوكٍ لصاحب المتجر، وموظّفٌ أُعطي «البيع» لا يُعطى تحريكَ الخزنة
+     * بين العملات. (`amial-rbac`: الأقلُّ صلاحيّةً هو الافتراضيّ.)
+     */
+    /** @test */
+    public function only_the_enterprise_merchant_owner_reaches_the_wallets(): void
+    {
+        $owner = $this->merchant(A::PLAN_ENTERPRISE);
+
+        // موظّفُ نقطة بيعٍ تابعٌ لهذا التاجر نفسِه.
+        $pos = User::factory()->create(['type' => 4, 'role' => 'pos', 'is_active' => 1]);
+        \App\Models\PosUser::create([
+            'user_id' => $pos->id, 'merchant_user_id' => $owner->id,
+            'pos_number' => 'P1', 'display_name' => 'كاشير', 'is_active' => true,
+            'permissions' => ['sell'],
+        ]);
+
+        $customer = User::factory()->create(['type' => 2, 'role' => A::ROLE_USER, 'is_active' => 1]);
+        $agent = User::factory()->create(['type' => 5, 'role' => A::ROLE_AGENT, 'is_active' => 1]);
+
+        $denied = [];
+        foreach ([
+            'موظّف نقطة بيع' => $pos,
+            'عميل' => $customer,
+            'وكيل' => $agent,
+        ] as $label => $u) {
+            $s = $this->actingAs($u, 'api')->getJson('/api/v1/amial/merchant/wallets')->status();
+            if ($s !== 403) {
+                $denied[] = "{$label} → {$s}";
+            }
+        }
+
+        $this->assertSame([], $denied, sprintf(
+            "**بلغ محافظَ التاجر من لا يملكها:**\n  %s\n\n"
+            .'والصرفُ بين العملات تصرُّفٌ في مالِ صاحب المتجر — لا يُعطاه '
+            .'موظّفٌ ولا عميلٌ ولا وكيل.',
+            implode("\n  ", $denied)));
+
+        // وبلا دخولٍ أصلاً.
+        $this->assertContains(
+            $this->getJson('/api/v1/amial/merchant/wallets')->status(),
+            [401, 403],
+            '**بابٌ مفتوحٌ بلا مصادقة**'
+        );
+    }
+
+    /**
+     * **⑪ وبابُ القبض بعملةٍ لم يُفتَح بعدُ — ويُقال ولا يُسكت عنه.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **هذا حارسُ صدقٍ لا حارسُ منع.** المحافظُ الأربعُ مبنيّةٌ ويُصرَف
+     * بينها، **لكنّ مسارَي القبض** (‏`TransactionTrait` و
+     * `PaymentRequestService`) ما زالا ينادِيان `assertReceiveAllowed`
+     * **بلا عملة** — أي بالريال دائماً. فلا شيءَ اليومَ يُموّل محفظةَ
+     * دولارٍ إلّا الصرفُ من محفظةٍ أجنبيّةٍ أخرى.
+     *
+     * فهذا يُثبّت الحالةَ المقيسة **صراحةً في الشيفرة** لئلّا تُقرأ
+     * الميزةُ أكملَ ممّا هي. ويومَ يُفتَح البابُ يسقط هذا الحارسُ
+     * فيُحذَف بيدٍ — **وسقوطُه هو الإشعارُ بأنّ الوصفَ هنا شاخ**.
+     */
+    /** @test */
+    public function receiving_in_a_foreign_currency_is_not_wired_yet_and_says_so(): void
+    {
+        $wired = [];
+        foreach ([
+            'app/Traits/TransactionTrait.php',
+            'app/Services/PaymentRequestService.php',
+        ] as $rel) {
+            $src = (string) file_get_contents(base_path($rel));
+            if (preg_match('~assertReceiveAllowed\([^)]*,[^)]*,[^)]*\)~s', $src)) {
+                $wired[] = $rel;
+            }
+        }
+
+        $this->assertSame([], $wired, sprintf(
+            "**صار مسارُ قبضٍ يمرّر عملة:**\n  %s\n\n"
+            ."هذا **خبرٌ سارّ لا عطل** — بابُ القبض بالعملات فُتح.\n"
+            .'فاحذف هذا الحارسَ، وصحّح ما كُتب في `MerchantWalletsController` '
+            .'وفي رسالة الالتزام من أنّ القبضَ بالريال وحدَه.',
+            implode("\n  ", $wired)));
+    }
+
+    /**
      * **⑨ وسعرُ الصرف لا يُعدَّل ولا يُحذَف.**
      *
      * تغييرُ صفٍّ قائمٍ يُعيد كتابةَ مكافئ كلّ فاتورةٍ صدرت بذلك السعر.
