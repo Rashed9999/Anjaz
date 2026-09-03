@@ -112,12 +112,25 @@ fi
 # نولّدها هنا (قبل بدء الخدمة) لا في خلفية مربوطة بالـ DB، فتكون جاهزة قبل
 # أوّل طلب دخول (حلّ حارس api يحمّل المفتاح العامّ؛ غيابه = 500). إن وُجدت
 # (مضبوطة كمتغيّرات بيئة) لا تُلمَس.
-if [ ! -f storage/oauth-private.key ] || [ ! -f storage/oauth-public.key ]; then
-    echo "🔑 توليد مفاتيح Passport (RSA) قبل بدء الخدمة..."
+# AMIAL-PASSPORT-KEYS-PERSIST-001 — **المفاتيحُ في الحجم الدائم.**
+# كانت في `storage/` وهو **ليس** على حجمٍ دائم (الحجمُ على `storage/app`)،
+# فتُولَّد جديدةً مع كلّ نشرة **فيبطل كلُّ رمزِ دخولٍ سابق** ويُطرَد كلُّ
+# المستخدمين بـ«انتهت الجلسة». وموضعُها الآن `storage/app/passport`
+# (‏`Passport::loadKeysFrom` في `AuthServiceProvider`).
+#
+# **وتُنقَل القديمةُ إن وُجدت** — فترحيلٌ يُبقي الرموزَ الحاليّةَ صالحة،
+# ونشرةٌ واحدةٌ بلا طردٍ خيرٌ من نشرةٍ تطرد الجميع.
+mkdir -p storage/app/passport
+if [ -f storage/oauth-private.key ] && [ ! -f storage/app/passport/oauth-private.key ]; then
+    echo "🔑 ترحيل مفاتيح Passport إلى الحجم الدائم..."
+    mv storage/oauth-private.key storage/oauth-public.key storage/app/passport/ 2>/dev/null || true
+fi
+if [ ! -f storage/app/passport/oauth-private.key ] || [ ! -f storage/app/passport/oauth-public.key ]; then
+    echo "🔑 توليد مفاتيح Passport (لم تكن موجودة)..."
     php artisan passport:keys --force 2>&1 | tail -1 || true
 fi
-chmod 600 storage/oauth-private.key storage/oauth-public.key 2>/dev/null || true
-chown www-data:www-data storage/oauth-*.key 2>/dev/null || true
+chmod 600 storage/app/passport/oauth-*.key 2>/dev/null || true
+chown www-data:www-data storage/app/passport/oauth-*.key 2>/dev/null || true
 
 # ── مفاتيح تشفير PII ──────────────────────────────────
 # AMIAL-FIX: أُزيل التوليد العشوائي (كان يكسر فهارس البحث المُعمّاة كل نشر

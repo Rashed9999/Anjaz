@@ -36,9 +36,36 @@ class _MerchantCurrenciesScreenState extends State<MerchantCurrenciesScreen> {
       if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
         setState(() => _list = (((r.body['meta'] ?? {})['currencies'] ?? []) as List)
             .map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        return;
       }
+
+      // ══════════════════════════════════════════════════════════════
+      // AMIAL-EMPTY-LIES-001 — **فشلٌ يُعرَض فراغاً.**
+      //
+      // كان كلُّ ما ليس ٢٠٠ ولا ٤٠٢ **يسقط صامتاً**: `_error` يبقى فارغاً
+      // والقائمةُ فارغة، فتقول الشاشةُ «لا عملات مضافة» — **وهي لم تسأل
+      // أصلاً**. فقرأ صاحبُ المشروع شاشةً هادئةً وكان الردُّ ٤٠١.
+      //
+      // وهذا يخفي أخطرَ عطلٍ يمكن أن يقع: انتهاءَ الجلسة. (القاعدة
+      // السابعة: «غير معروف» ليس صفراً — والصفرُ يُقرأ «فحصنا فلم نجد».)
+      // ══════════════════════════════════════════════════════════════
+      String? serverSays;
+      try {
+        if (r.body is Map && r.body['message'] != null) {
+          final m = '${r.body['message']}';
+          if (m.isNotEmpty) serverSays = m;
+        }
+      } catch (_) {}
+
+      _error = switch (r.statusCode) {
+        401 => 'انتهت الجلسة — سجّل الدخول من جديد',
+        403 => serverSays ?? 'لا تملك الصلاحية اللازمة لإدارة العملات',
+        -1 => 'أوقف VPN ثم حاول مجدداً',
+        0 || 1 => 'لا اتصال بالخادم — تحقّق من الشبكة',
+        _ => serverSays ?? 'تعذّر تحميل العملات (رمز ${r.statusCode})',
+      };
     } catch (_) {
-      _error = 'خطأ في الشبكة';
+      _error = 'تعذّر تحميل العملات — خطأ غير متوقَّع';
     } finally {
       if (mounted) setState(() => _loading = false);
     }
