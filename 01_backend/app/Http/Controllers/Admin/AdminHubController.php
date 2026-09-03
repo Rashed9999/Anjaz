@@ -356,7 +356,7 @@ class AdminHubController extends Controller
                 ])->all();
             $branches = \App\Models\Branch::where('merchant_user_id', $user->id)
                 ->get(['name', 'code', 'city', 'is_active'])->map(fn ($b) => (array) $b->toArray())->all();
-            $salesTotal = (string) \App\Models\MerchantSale::where('merchant_user_id', $user->id)->sum('total_amount');
+            $salesTotal = (string) \App\Models\MerchantSale::where('merchant_user_id', $user->id)->sum(\DB::raw('COALESCE(base_amount, total_amount)'));
             $salesCount = \App\Models\MerchantSale::where('merchant_user_id', $user->id)->count();
 
             // AMIAL-MERCHANT-CENTER-001 — **نُزع من هنا عرضُ أسطر المبيعة

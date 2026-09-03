@@ -14,7 +14,6 @@ import 'package:amial_pay/features/payments/widgets/amial_invoice_card.dart';
 import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
 import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
 import 'package:amial_pay/features/printer/screens/printer_settings_screen.dart';
-import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-POS-003 / AMIAL-RECEIPT-SETTINGS-001 — «تم التحصيل».
@@ -33,11 +32,31 @@ class CashierReceiptScreen extends StatefulWidget {
     this.invoicePath,
     this.invoiceTitle,
     this.nextSalePage,
+    this.currencySymbol,
+    this.baseTotal,
   });
 
   final Map<String, dynamic> sale;
   final double total;
   final String method;
+
+  // ═════════════════════════════════════════════════════════════════
+  // AMIAL-MULTI-CURRENCY-003 — **الإيصالُ يقول عملتَه.**
+  //
+  // كانت كلُّ الأرقام هنا تُنسَّق بـ`AmialMoney.yer` و`totalYer`، فبيعةٌ
+  // بعشرين دولاراً كانت تُطبَع «٢٠ ر.ي». **رقمٌ صحيحٌ بعملةٍ كاذبة** —
+  // وهو العطلُ الذي كلّف هذا المشروعَ في تسعيرة الباقات (٣٥ ر.س عُرضت
+  // «ر.ي»، والفرقُ سبعون ضعفاً).
+  //
+  // و`baseTotal` يبقى بالريال ليصحّ سطرُ المكافئات في أسفل الفاتورة —
+  // فهو محسوبٌ من الإجماليّ بالأساس.
+  // ═════════════════════════════════════════════════════════════════
+
+  /// علامةُ عملة البيعة. `null` = الأساس (ر.ي).
+  final String? currencySymbol;
+
+  /// المكافئُ بالعملة الأساس — لسطر «≈». `null` = `total` نفسُه.
+  final double? baseTotal;
   final String? customerName;
   final String? customerPhone;
 
@@ -86,6 +105,12 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
 
   String get _ref => '${widget.sale['sale_ulid'] ?? widget.sale['id'] ?? ''}';
 
+  /// AMIAL-MULTI-CURRENCY-003 — علامةُ عملة البيعة، والأساسُ افتراضاً.
+  String get _sym => widget.currencySymbol ?? 'ر.ي';
+
+  /// مبلغٌ **بعملة البيعة** — لا بالريال دائماً.
+  String _money(double v) => '${_fmtNum(v)} $_sym';
+
   String _fmtNum(double v) => v
       .toStringAsFixed(v == v.roundToDouble() ? 0 : 2)
       .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?:\.|$))'), (m) => '${m[1]},');
@@ -105,7 +130,7 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
       final qty = int.tryParse('${m['qty'] ?? m['quantity'] ?? 1}') ?? 1;
       final price = double.tryParse('${m['price'] ?? m['unit_price'] ?? 0}') ?? 0;
       final line = (price * qty);
-      return ('$name ×$qty', AmialMoney.yer(line));
+      return ('$name ×$qty', _money(line));
     }).toList();
   }
 
@@ -187,7 +212,7 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
       captureFile: _capture,
       message: 'فاتورة بيع من $store\n'
           'رقم الفاتورة: $_ref\n'
-          'الإجمالي: ${AmialMoney.yer(widget.total)}\n'
+          'الإجمالي: ${_money(widget.total)}\n'
           'طريقة الدفع: $_methodLabel',
     );
   }
@@ -261,11 +286,14 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
                   title: widget.invoiceTitle ?? (widget.method == 'credit' ? 'فاتورة بيع آجل' : 'فاتورة بيع'),
                   rows: _rows(),
                   total: _fmtNum(widget.total),
+                  currencyLabel: _sym,
                   method: _methodLabel,
                   reference: _ref,
                   dateTime: _now(),
                   customer: widget.customerName ?? widget.customerPhone,
-                  totalYer: widget.total,
+                  // **المكافئُ يُحسب من الأساس** — لا من مبلغٍ بالدولار،
+                  // وإلّا ضُرب سعرُ الصرف مرّتين.
+                  totalYer: widget.baseTotal ?? widget.total,
                   currencies: _settings.currencies,
                 )),
           ),

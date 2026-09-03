@@ -205,7 +205,7 @@ class MerchantCenterService
             'sales_summary' => [
                 'count' => MerchantSale::where('merchant_user_id', $m->id)->count(),
                 'amount' => (string) MerchantSale::where('merchant_user_id', $m->id)
-                    ->sum('total_amount'),
+                    ->sum(\DB::raw('COALESCE(base_amount, total_amount)')),
                 'note' => 'إجمالي مبيعاته من نقطة بيعه — أميال لا تحفظ أصنافه',
             ],
         ];

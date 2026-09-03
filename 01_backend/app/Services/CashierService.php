@@ -124,6 +124,9 @@ class CashierService
         ?string $cashAmount = null,
         ?string $walletAmount = null,
         ?string $clientUuid = null,
+        // AMIAL-MULTI-CURRENCY-003 — **افتراضُه الأساس، فكلُّ نداءٍ قائمٍ
+        // يعني الريالَ حرفاً بحرف.**
+        ?string $currency = null,
     ): MerchantSale {
         // AMIAL-OFFLINE-POS-001: idempotency — بيع دون اتصال يُعاد إرساله بنفس
         // client_uuid عند المزامنة؛ إن كان مُسجَّلاً سابقاً نُعيده كما هو دون
@@ -141,6 +144,43 @@ class CashierService
         if (!MoneyService::isPositive($total)) {
             throw new InvalidArgumentException('إجمالي البيع يجب أن يكون موجباً');
         }
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-MULTI-CURRENCY-003 — **عملةُ البيعة وسعرُها المجمَّد.**
+        //
+        // **وثلاثةُ شروطٍ قبل قبول عملةٍ غيرِ الأساس، وكلٌّ منها يمنع
+        // مالاً خارج الرقابة:**
+        //
+        // ① **أن تكون مدعومةً** — رمزٌ مخترَعٌ يُنشئ بيعاتٍ لا يجدها تقرير.
+        // ② **أن يكون التاجرُ قد فعّل قبضَها** — وإلّا سجّل موظّفٌ بيعةً
+        //    بعملةٍ لم يقرّرها صاحبُ المتجر.
+        // ③ **أن يكون لها سعرٌ مضبوط** — فبيعةٌ بلا مكافئٍ لا يُحسَب عليها
+        //    حدُّ استلامٍ ولا تدخل تقريراً. (القاعدة السابعة: لا يُفترَض
+        //    السعرُ واحداً — فمئةُ دولارٍ تصير مئةَ ريال.)
+        // ══════════════════════════════════════════════════════════════
+        $currency = \App\Support\Money\Currencies::normalize(
+            $currency ?: \App\Support\Money\Currencies::BASE
+        );
+        $fxRate = '1';
+
+        if (!\App\Support\Money\Currencies::isBase($currency)) {
+            $accepted = \App\Models\MerchantCurrency::where('merchant_user_id', $merchant->id)
+                ->where('code', $currency)->where('accepts_payments', true)->exists();
+
+            if (!$accepted) {
+                throw new InvalidArgumentException(sprintf(
+                    'المتجر لا يقبل الدفع بـ%s — تُفعَّل من شاشة «محافظي».',
+                    \App\Support\Money\Currencies::nameAr($currency)
+                ));
+            }
+
+            // يرمي `RuntimeException` برسالةٍ تقول أنّ السعرَ غيرُ مضبوط.
+            $fxRate = app(\App\Services\FxRateService::class)->rateToBase($currency);
+        }
+
+        // **المكافئُ يُحسب مرّةً هنا ويُحفَظ** — لا يُعاد حسابُه عند القراءة
+        // بسعرِ ذلك اليوم، فتقريرُ الشهر الماضي لا يتغيّر كلَّ صباح.
+        $baseTotal = bcmul($total, $fxRate, 4);
 
         $status = 'completed';
         if ($paymentMethod === 'credit') {
@@ -200,7 +240,7 @@ class CashierService
             $this->assertDiscountAllowed($merchant, $posUserId, $discountAmount);
         }
 
-        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid) {
+        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid, $currency, $fxRate, $baseTotal) {
             // لا يكفي `paid_transaction_id` القادم من Flutter. يجب أن يكون
             // طلب QR مدفوعاً لمحفظة المنشأة وبالمبلغ نفسه وغير مستهلك.
             // البيع بلا مرجع يبقى معلّقاً إلى أن تُتم شاشة QR الدفع؛ أمّا إذا
@@ -222,6 +262,10 @@ class CashierService
                 'merchant_user_id' => $merchant->id,
                 'pos_user_id' => $posUserId,
                 'total_amount' => $total,
+                // AMIAL-MULTI-CURRENCY-003 — العملةُ والسعرُ المجمَّد والمكافئ.
+                'currency' => $currency,
+                'fx_rate_to_base' => $fxRate,
+                'base_amount' => $baseTotal,
                 'discount_amount' => $discountAmount,
                 'promotion_id' => $promotionId,
                 'cash_amount' => $paymentMethod === 'mixed' ? $cashAmount : null,
@@ -722,7 +766,7 @@ class CashierService
         $realized = MoneyService::add($byMethod['cash'], $byMethod['amial_pay']);
         $outstandingCredit = (string) MerchantSale::where('merchant_user_id', $merchant->id)
             ->where('status', 'credit_unpaid')
-            ->sum('total_amount');
+            ->sum(DB::raw('COALESCE(base_amount, total_amount)'));
 
         return [
             'date' => $day->format('Y-m-d'),

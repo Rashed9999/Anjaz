@@ -242,6 +242,9 @@ class CashierController extends GetxController implements GetxService {
     int? promotionId,
     double? cashAmount, // AMIAL-MIXED-PAYMENT-001 — تقسيم الدفع
     double? walletAmount,
+    // AMIAL-MULTI-CURRENCY-003 — عملةُ البيعة. غيابُها = العملة الأساس،
+    // فكلُّ نداءٍ قائمٍ في التطبيق يبيع بالريال كما كان.
+    String? currency,
   }) async {
     try {
       isSubmitting.value = true;
@@ -259,6 +262,7 @@ class CashierController extends GetxController implements GetxService {
         if (promotionId != null) 'promotion_id': promotionId,
         if (cashAmount != null) 'cash_amount': cashAmount.toStringAsFixed(2),
         if (walletAmount != null) 'wallet_amount': walletAmount.toStringAsFixed(2),
+        if (currency != null && currency.isNotEmpty) 'currency': currency,
         // AMIAL-OFFLINE-POS-001 — مفتاح idempotency: يمنع ازدواج البيع عند المزامنة
         'client_uuid': const Uuid().v4(),
       };

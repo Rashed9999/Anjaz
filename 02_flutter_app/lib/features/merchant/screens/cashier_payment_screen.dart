@@ -39,6 +39,108 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   int? _promotionId;
   String? _promoLabel;
 
+  // ═══════════════════════════════════════════════════════════════════
+  // AMIAL-MULTI-CURRENCY-003 — **عملةُ البيعة تُختار هنا لا في السلّة.**
+  //
+  // بُنيت للتاجر أربعُ محافظ، **وقِيس أنّ الدولارَ لا يدخلها من بيعٍ
+  // أصلاً**: لا حقلَ عملةٍ في البيعة ولا في هذه الشاشة. فمحافظُ مبنيّةٌ
+  // ولا يُوصَل إليها.
+  //
+  // **وموضعُه شاشةُ الدفع لا السلّة**: العملةُ تُقرّر لحظةَ تسليم المال
+  // — يخرج الزبونُ ورقةَ دولارٍ فيختار الكاشيرُ حينها. ووضعُها في السلّة
+  // يجعلها قراراً يُتّخذ قبل أن يُعرف.
+  //
+  // **ولا تُعرَض إن لم يفعّل التاجرُ عملةً غيرَ الأساس** — قائمةٌ بخيارٍ
+  // واحدٍ ليست خياراً، وهي ضوضاءُ شاشةٍ على تاجرٍ لا يقبض إلّا بالريال.
+  // ═══════════════════════════════════════════════════════════════════
+  String _currency = 'YER';
+  String _currencySymbol = 'ر.ي';
+  List<Map<String, dynamic>> _acceptedCurrencies = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrencies();
+  }
+
+  Future<void> _loadCurrencies() async {
+    try {
+      final r = await Get.find<ApiClient>().getData('/api/v1/amial/merchant/wallets');
+      // **و٤٠٢ ليست عطلاً** — تاجرٌ بغير باقة المؤسّسة يبيع بالريال، فتبقى
+      // القائمةُ فارغةً ولا يظهر شيء. ولا تُعرَض له رسالةُ ترقيةٍ في شاشة
+      // دفعٍ والزبونُ واقف.
+      if (r.statusCode != 200 || r.body is! Map || r.body['success'] != true) return;
+
+      final all = (((r.body['meta'] ?? {})['wallets'] ?? []) as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .where((w) => w['accepts_payments'] == true && w['rate_missing'] != true)
+          .toList();
+
+      if (!mounted || all.length < 2) return;   // الأساسُ وحدَه ⇒ لا اختيار
+
+      setState(() {
+        _acceptedCurrencies = all;
+        final base = all.firstWhere((w) => w['is_base'] == true, orElse: () => all.first);
+        _currency = '${base['currency']}';
+        _currencySymbol = '${base['symbol']}';
+      });
+    } catch (_) {
+      // شبكةٌ متقطّعة — يبيع بالريال. ولا يُعطَّل البيعُ لأجل قائمةِ عملات.
+    }
+  }
+
+  /// **السعرُ يُقرأ من الردّ نفسِه** — لا يُحسب في التطبيق ولا يُخزَّن.
+  String? get _rateOfSelected {
+    if (_currency == 'YER') return null;
+    final w = _acceptedCurrencies.firstWhere(
+        (x) => x['currency'] == _currency, orElse: () => {});
+    return w['rate_to_base']?.toString();
+  }
+
+  bool get _isBaseCurrency => _currency == 'YER';
+
+  /// **المبلغُ المرسَل يكون بالعملة المختارة لا بالريال.**
+  ///
+  /// فالخادمُ يحسب المكافئَ ضرباً في السعر (`base = total × rate`).
+  /// وإرسالُ ٢٦٥٠٠ ريالٍ موسومةً «دولاراً» يجعل المكافئَ أربعةَ عشرَ
+  /// مليوناً — **بيعةٌ واحدةٌ تبتلع الحدَّ اليوميَّ كلَّه** ولا يُخرج ذلك
+  /// خطأً في أيّ سجلّ.
+  double get _amountToSend {
+    final rate = double.tryParse(_rateOfSelected ?? '') ?? 0;
+    if (_isBaseCurrency || rate <= 0) return _net;
+
+    return double.parse((_net / rate).toStringAsFixed(2));
+  }
+
+  /// العملةُ التي تُرسَل مع البيعة — و`null` تعني الأساس.
+  String? get _currencyToSend => _isBaseCurrency ? null : _currency;
+
+  /// **والخصمُ يُحوَّل معه.**
+  ///
+  /// فبيعةٌ إجماليُّها بالدولار وخصمُها بالريال سطرٌ لا يُقرأ: يظهر على
+  /// الفاتورة «خصم ٥٠٠» بجوار «٢٠٫٠٠ $» فيُفهَم خصماً بالدولار وهو ربعُ
+  /// الفاتورة. **رقمان صحيحان بعملتين على ورقةٍ واحدة.**
+  double get _discountToSend {
+    if (_discount <= 0) return 0;
+    final rate = double.tryParse(_rateOfSelected ?? '') ?? 0;
+    if (_isBaseCurrency || rate <= 0) return _discount;
+
+    return double.parse((_discount / rate).toStringAsFixed(2));
+  }
+
+  /// ــ **ووسائلُ المنصّة لا تقبض عملةً أجنبيّةً بعد** ــــــــــــــــــ
+  ///
+  /// «أميال باي» و«مختلط» يخصمان من محفظة العميل، **وللعميل محفظةُ ريالٍ
+  /// وحدَها**. فالقبضُ الأجنبيُّ اليومَ نقدٌ ورقيٌّ في الدرج (أو آجل).
+  ///
+  /// **ولا يُترَك ذلك للصمت**: لو بقيت الوسيلةُ معروضةً واختارها الكاشيرُ
+  /// لسُجّلت بيعةٌ بالريال بينما هو يعدّ دولاراً — رقمٌ صحيحٌ بعملةٍ
+  /// كاذبة، وهو العطلُ الذي كلّف هذا المشروعَ من قبل في تسعيرة الباقات.
+  static const _baseOnlyMethods = {'amial_pay', 'mixed', 'corporate'};
+
+  bool _methodAllowedInCurrency(String method) =>
+      _isBaseCurrency || !_baseOnlyMethods.contains(method);
+
   double get _net => (widget.total - _discount).clamp(0, widget.total).toDouble();
 
   /// يقيّم خصماً على الفاتورة (تلقائي أو بكوبون) ويُطبّقه.
@@ -248,16 +350,97 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
         ));
   }
 
+  /// اختيارُ عملة القبض — **ومعه المبلغُ بها، لا الرمزُ وحدَه.**
+  ///
+  /// فكاشيرٌ يختار «دولار» على فاتورةٍ مكتوبٍ عليها ٢٦٥٠٠ لا يعرف كم
+  /// يطلب من الزبون. والمبلغُ المطلوبُ هو ما يُقال، والمكافئُ بالريال
+  /// تحته ليُقرأ ولا يُخمَّن.
+  Widget _currencyPicker() {
+    final rate = _rateOfSelected;
+    final isBase = _currency == 'YER';
+
+    // المطلوبُ بالعملة المختارة: الإجماليُّ بالريال ÷ السعر.
+    final asked = isBase || rate == null || (double.tryParse(rate) ?? 0) <= 0
+        ? _net
+        : _net / double.parse(rate);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AmialColors.primary.withValues(alpha: 0.25)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('عملة القبض',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          children: _acceptedCurrencies.map((w) {
+            final code = '${w['currency']}';
+            final on = code == _currency;
+            return ChoiceChip(
+              selected: on,
+              label: Text('${w['name']} (${w['symbol']})',
+                  style: TextStyle(fontSize: 12,
+                      color: on ? Colors.white : AmialColors.textSecondary)),
+              selectedColor: AmialColors.primary,
+              onSelected: _busy
+                  ? null
+                  : (_) => setState(() {
+                        _currency = code;
+                        _currencySymbol = '${w['symbol']}';
+                        // **ووسيلةٌ لا تصلح لهذه العملة تُبدَّل الآن لا
+                        // عند الضغط** — فزرٌّ معروضٌ يُفترَض أنّه يعمل.
+                        if (!_methodAllowedInCurrency(_method)) {
+                          _method = 'cash';
+                        }
+                      }),
+            );
+          }).toList(),
+        ),
+        if (!isBase) ...[
+          const Divider(height: 20),
+          Text('المطلوب: ${asked.toStringAsFixed(2)} $_currencySymbol',
+              textDirection: TextDirection.ltr,
+              style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.bold,
+                  color: AmialColors.primary)),
+          const SizedBox(height: 4),
+          Text('بسعر 1 $_currency = $rate ر.ي  ·  المكافئ ${AmialMoney.yer(_net)}',
+              style: const TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
+          const SizedBox(height: 8),
+          Row(children: [
+            const Icon(Icons.info_outline, size: 14, color: AmialColors.textSecondary),
+            const SizedBox(width: 6),
+            const Expanded(
+              child: Text(
+                'القبض بعملة أجنبية يكون نقداً أو آجلاً — محفظة العميل بالريال.',
+                style: TextStyle(fontSize: 11, color: AmialColors.textSecondary),
+              ),
+            ),
+          ]),
+        ],
+      ]),
+    );
+  }
+
   Future<void> _recordAndShowReceipt(String method,
       {Map<String, String>? customer, String? creditDueDate}) async {
     setState(() => _busy = true);
     final sale = await c.recordSale(
-      total: _net,
+      // AMIAL-MULTI-CURRENCY-003 — **بالعملة المختارة**، والخادمُ يضرب
+      // في السعر ليحفظ المكافئ. (‏`_amountToSend` = `_net` حين تكون
+      // العملةُ هي الأساس، فمسارُ الريال لم يتغيّر بحرف.)
+      total: _amountToSend,
       method: method,
       customer: customer,
       creditDueDate: creditDueDate,
-      discountAmount: _discount,
+      discountAmount: _discountToSend,
       promotionId: _promotionId,
+      currency: _currencyToSend,
     );
     if (!mounted) return;
     setState(() => _busy = false);
@@ -273,9 +456,12 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     PaymentFeedback.success();
     Get.off(() => CashierReceiptScreen(
           sale: sale,
-          total: _net,
+          // **الإيصالُ يعرض ما دفعه الزبونُ فعلاً** — بالعملة التي دفع بها.
+          total: _amountToSend,
           method: method,
           customerName: customer?['name'],
+          currencySymbol: _isBaseCurrency ? null : _currencySymbol,
+          baseTotal: _net,
         ));
   }
 
@@ -456,6 +642,9 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           ),
           const SizedBox(height: 12),
 
+          // ====== عملة القبض (تظهر لمن فعّل أكثر من عملة) ======
+          if (_acceptedCurrencies.length > 1) _currencyPicker(),
+
           // ====== خصم / كوبون (باقة ستارتر فأعلى) ======
           AccessGate(feature: 'promotions', child: Align(
             alignment: Alignment.centerRight,
@@ -490,31 +679,41 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             title: 'نقدي',
             subtitle: 'الدفع بالعملة المحلية يدوياً',
           ),
-          _methodCard(
-            value: 'amial_pay',
-            icon: Icons.qr_code_2,
-            title: 'أميال باي',
-            subtitle: 'العميل يدفع من تطبيقه عبر QR فوراً',
-            recommended: true,
-          ),
+          // AMIAL-MULTI-CURRENCY-003 — **وسائلُ المحفظة تُخفى مع عملةٍ
+          // أجنبيّة، ولا تُعرَض ثمّ تُرفَض.**
+          //
+          // «أميال باي» و«مختلط» و«حساب شركة» تخصم من رصيدٍ بالريال،
+          // فاختيارُها مع الدولار يُسجّل بيعةً بعملةٍ لم يدفع بها الزبون.
+          // وزرٌّ معروضٌ يُفترَض أنّه يعمل — فإخفاؤه أصدقُ من رفضٍ بعد
+          // الضغط والزبونُ واقف. (والسببُ مكتوبٌ في بطاقة العملة أعلاه.)
+          if (_methodAllowedInCurrency('amial_pay'))
+            _methodCard(
+              value: 'amial_pay',
+              icon: Icons.qr_code_2,
+              title: 'أميال باي',
+              subtitle: 'العميل يدفع من تطبيقه عبر QR فوراً',
+              recommended: true,
+            ),
           _methodCard(
             value: 'credit',
             icon: Icons.calendar_today_outlined,
             title: 'آجل',
             subtitle: 'قيد العملية على حساب العميل',
           ),
-          _methodCard(
-            value: 'mixed',
-            icon: Icons.call_split,
-            title: 'مختلط',
-            subtitle: 'جزء نقداً وجزء من محفظة أميال باي',
-          ),
-          AccessGate(feature: 'corporate_accounts', child: _methodCard(
-            value: 'corporate',
-            icon: Icons.business_center_outlined,
-            title: 'حساب شركة',
-            subtitle: 'قيد العملية على حساب شركة (ضمن حدّ الائتمان)',
-          )),
+          if (_methodAllowedInCurrency('mixed'))
+            _methodCard(
+              value: 'mixed',
+              icon: Icons.call_split,
+              title: 'مختلط',
+              subtitle: 'جزء نقداً وجزء من محفظة أميال باي',
+            ),
+          if (_methodAllowedInCurrency('corporate'))
+            AccessGate(feature: 'corporate_accounts', child: _methodCard(
+              value: 'corporate',
+              icon: Icons.business_center_outlined,
+              title: 'حساب شركة',
+              subtitle: 'قيد العملية على حساب شركة (ضمن حدّ الائتمان)',
+            )),
           const SizedBox(height: 20),
 
           FilledButton.icon(

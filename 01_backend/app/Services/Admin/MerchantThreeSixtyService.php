@@ -95,7 +95,7 @@ class MerchantThreeSixtyService
         // ── المبيعات: قيمةً وعدداً ومتوسّطاً ──
         $sales = DB::table('merchant_sales')->where('merchant_user_id', $m->id);
         $count = (clone $sales)->count();
-        $total = (string) (clone $sales)->sum('total_amount');
+        $total = (string) (clone $sales)->sum(DB::raw('COALESCE(base_amount, total_amount)'));
 
         $out['sales_total'] = $total;
         $out['sales_count'] = $count;

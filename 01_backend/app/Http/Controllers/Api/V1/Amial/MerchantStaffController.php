@@ -89,13 +89,13 @@ class MerchantStaffController extends Controller
         $agg = MerchantSale::where('merchant_user_id', $m->id)
             ->whereNotNull('pos_user_id')
             ->where('created_at', '>=', $from)
-            ->selectRaw('pos_user_id, COUNT(*) as cnt, SUM(total_amount) as total')
+            ->selectRaw('pos_user_id, COUNT(*) as cnt, SUM(COALESCE(base_amount, total_amount)) as total')
             ->groupBy('pos_user_id')->get()->keyBy('pos_user_id');
 
         $todayAgg = MerchantSale::where('merchant_user_id', $m->id)
             ->whereNotNull('pos_user_id')
             ->where('created_at', '>=', $todayFrom)
-            ->selectRaw('pos_user_id, COUNT(*) as cnt, SUM(total_amount) as total')
+            ->selectRaw('pos_user_id, COUNT(*) as cnt, SUM(COALESCE(base_amount, total_amount)) as total')
             ->groupBy('pos_user_id')->get()->keyBy('pos_user_id');
 
         $rows = $staff->map(function (PosUser $p) use ($agg, $todayAgg) {
@@ -120,9 +120,9 @@ class MerchantStaffController extends Controller
         // مبيعات غير منسوبة لموظف (سجّلها التاجر نفسه) + الإجمالي العام
         $unattributed = (string) MerchantSale::where('merchant_user_id', $m->id)
             ->whereNull('pos_user_id')
-            ->where('created_at', '>=', $from)->sum('total_amount');
+            ->where('created_at', '>=', $from)->sum(\DB::raw('COALESCE(base_amount, total_amount)'));
         $grandTotal = (string) MerchantSale::where('merchant_user_id', $m->id)
-            ->where('created_at', '>=', $from)->sum('total_amount');
+            ->where('created_at', '>=', $from)->sum(\DB::raw('COALESCE(base_amount, total_amount)'));
 
         return $this->ok([
             'days' => $days,

@@ -219,6 +219,9 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             'discount_amount' => 'sometimes|nullable|numeric|min:0',
             'promotion_id' => 'sometimes|nullable|integer',
             'client_uuid' => 'sometimes|nullable|string|max:64',
+            // AMIAL-MULTI-CURRENCY-003 — عملةُ البيعة. غيابُها = الأساس،
+            // فكلُّ تطبيقٍ قائمٍ يبيع بالريال كما كان.
+            'currency' => 'sometimes|nullable|string|size:3',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -281,10 +284,13 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
                 cashAmount: $request->input('cash_amount'),
                 walletAmount: $request->input('wallet_amount'),
                 clientUuid: $request->input('client_uuid'),
+                currency: $request->input('currency'),
             );
         } catch (\InvalidArgumentException $e) {
             return $this->error('SALE_INVALID', $e->getMessage(), 422);
         } catch (\RuntimeException $e) {
+            // **ورسالةُ «لا سعرَ صرفٍ مضبوط» تصل الكاشيرَ بنصّها** — فرفضٌ
+            // بلا سبب يجعله يعيد المحاولة والعميلُ واقف.
             return $this->error('SALE_FAILED', $e->getMessage(), 422);
         }
 
