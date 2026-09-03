@@ -277,7 +277,48 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
       ),
       body: Obx(() {
         final items = _visible;
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-QUICKSALE-PRIMARY-001 — **بائعُ السمك لا يملك منتجات.**
+        //
+        // `quick_sale` قطاعُ الأسماك والخضار والبسطات (كما يقول تعريفُه
+        // في `AccessConstants`): **لا كتالوجَ فيه — يُدخَل المبلغُ ويُدفَع
+        // وتُصدَر الفاتورة**. والبنيةُ لذلك مبنيّةٌ هنا منذ البداية:
+        // `_manualAmount()` و`CashierPaymentScreen(freeAmount: true)`.
+        //
+        // **لكنّها كانت خلف أيقونةٍ صغيرةٍ في الشريط العلويّ**، وجسمُ
+        // الشاشة شبكةُ منتجاتٍ — **فارغةٌ أبداً لمن لا منتجاتِ له**. فيفتح
+        // بائعُ السمك «بيع جديد» فيرى فراغاً، وما يحتاجه أيقونةٌ بلا اسم.
+        //
+        // فصار فعلُه الأوّلَ ظاهراً بحجمه. **ولا تُخفى الشبكةُ ولا يُقفَل
+        // شيء**: من أضاف صنفاً يجده كما كان — القطاعُ يقرّر ما يتقدّم،
+        // لا ما يُمنَع. (والباقةُ لا تدخل هنا: البيعُ السريع مجّانيٌّ
+        // بطبعه، والإدخالُ اليدويُّ ليس قدرةً مُسعَّرة.)
+        // ══════════════════════════════════════════════════════════════
+        final quickSale = Get.isRegistered<AccessController>() &&
+            Get.find<AccessController>().isQuickSale;
+
         return Column(children: [
+          if (quickSale)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _manualAmount,
+                  icon: const Icon(Icons.edit_note_rounded, size: 26),
+                  label: const Text('أدخل المبلغ',
+                      style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AmialColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+              ),
+            ),
           // ====== البحث + الماسح ======
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),

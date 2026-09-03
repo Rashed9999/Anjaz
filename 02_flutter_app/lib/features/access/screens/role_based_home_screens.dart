@@ -5,6 +5,7 @@ import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
 // الشاشات الفعلية للربط
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart';
 import 'package:amial_pay/features/entitlements/screens/my_capabilities_screen.dart';
@@ -191,18 +192,37 @@ class MerchantRetailHomeScreen extends StatelessWidget {
               AccessGate(feature: 'barcode', child: _MiniAction(
                 icon: Icons.qr_code_scanner, label: 'مسح باركود',
                 color: AmialColors.primary,
+                // ══════════════════════════════════════════════════════
+                // AMIAL-SCAN-DEADEND-001 — **مسحٌ يُعلَن ولا يُباع.**
+                //
+                // كان الزرُّ يمسح الأصنافَ ثمّ **يعرض إشعاراً ويرمي
+                // النتيجة**: لا سلّةَ ولا كاشيرَ ولا بيع. فيمسح البائعُ
+                // عشرةَ أصنافٍ ويقرأ «✓ تم مسح ١٠ صنف بإجمالي ٤٠٠٠»…
+                // ثمّ لا شيء. (القاعدة التاسعة: زرٌّ يعمل ويفعل الشيءَ
+                // الخطأ — ولا خطأَ في أيّ سجلّ.)
+                //
+                // **والمرجعُ الصحيحُ مبنيٌّ في المشروع**: شاشةُ بيع
+                // الصيدليّة تمسح ثمّ **تضيف إلى السلّة**. فيتبعها هذا.
+                //
+                // والوجهةُ الكاشير: المسحُ ليس مهمّةً قائمةً بذاتها بل
+                // **مدخلٌ مختصرٌ إلى البيع** — وهو ما لاحظه صاحبُ المشروع
+                // حين قال إنّ الكاشيرَ والباركود يؤدّيان مهمّةً واحدة.
+                // ══════════════════════════════════════════════════════
                 onTap: () async {
                   final scanned = await Get.to<List<ScannedItem>>(
                     () => const ContinuousScannerScreen(context: 'auto'),
                   );
-                  if (scanned != null && scanned.isNotEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text('✓ تم مسح ${scanned.length} صنف بإجمالي '
-                          '${scanned.fold(0.0, (s, c) => s + c.unitPrice * c.quantity).toStringAsFixed(0)} ر.ي'),
-                      backgroundColor: Colors.green,
-                      duration: const Duration(seconds: 3),
-                    ));
+                  if (scanned == null || scanned.isEmpty) return;
+
+                  final cashier = Get.find<CashierController>();
+                  for (final item in scanned) {
+                    // الكمّيّةُ تُحترَم — `addToCart` تزيد واحداً في كلّ نداء.
+                    for (var n = 0; n < item.quantity; n++) {
+                      cashier.addToCart(item.name, item.unitPrice,
+                          productId: item.productId);
+                    }
                   }
+                  await Get.to(() => const CashierPosScreen());
                 },
               )),
               AccessGate(feature: 'daily_reports', child: _MiniAction(
