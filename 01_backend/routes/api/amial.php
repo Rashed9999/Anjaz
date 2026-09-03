@@ -1354,6 +1354,16 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
         Route::delete('/{id}', [$c, 'destroy'])->where('id', '[0-9]+')->name('destroy');
     });
 
+    // -------- AMIAL-MULTI-CURRENCY-002 — محافظ التاجر متعدّدة العملات --------
+    Route::prefix('merchant/wallets')->name('amial.merchant.wallets.')->group(function () {
+        $c = \App\Http\Controllers\Api\V1\Amial\MerchantWalletsController::class;
+        Route::get('/', [$c, 'index'])->name('index');
+        Route::post('/quote', [$c, 'quote'])->name('quote');
+        // **الصرفُ حركةُ مال** — فيمرّ بوسيط منع التكرار كسائر المسارات الماليّة.
+        Route::post('/convert', [$c, 'convert'])->middleware('amial.idempotency')->name('convert');
+        Route::post('/accept', [$c, 'setAccepted'])->name('accept');
+    });
+
     // -------- AMIAL-CORPORATE-ACCOUNTS-001 — حسابات الشركات (B2B) --------
     Route::prefix('merchant/corporate')->name('amial.merchant.corporate.')->middleware('amial.idempotency')->group(function () {
         $c = \App\Http\Controllers\Api\V1\Amial\CorporateAccountController::class;

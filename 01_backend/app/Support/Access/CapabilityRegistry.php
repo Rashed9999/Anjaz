@@ -623,10 +623,16 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_ENTERPRISE)
                 ->routes(['branches/{id}/report']),
 
+            // AMIAL-MULTI-CURRENCY-002 — صارت **محافظَ** لا سطرَ مكافئٍ على
+            // الإيصال: للتاجر رصيدٌ بالريال والسعوديّ والدولار والدرهم،
+            // يقبض بها ويصرف بينها. والمسارُ يُعلَن هنا فيُحرَس بالباقة في
+            // الخادم (`EnsureCapability`) لا بإخفاء الشاشة.
             C::make(A::F_MULTI_CURRENCY)
-                ->nameAr('تعدد العملات')
+                ->nameAr('محافظ متعددة العملات')
                 ->group('التقارير')->icon('currency_exchange')
-                ->minPlan(A::PLAN_ENTERPRISE)->screen('/currencies'),
+                ->minPlan(A::PLAN_ENTERPRISE)
+                ->routes(['merchant/wallets', 'merchant/wallets/convert'])
+                ->screen('/currencies'),
 
             C::make(A::F_INSTALLMENTS)
                 ->nameAr('الأقساط')

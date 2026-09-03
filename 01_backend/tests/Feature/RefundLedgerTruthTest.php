@@ -279,8 +279,11 @@ class RefundLedgerTruthTest extends TestCase
         $this->instance(\App\Services\LedgerService::class, new class extends \App\Services\LedgerService {
             public function __construct() {}
 
-            public function getOrCreateUserWallet(int $userId, string $zoneCode = 'SOUTH'): \App\Models\Ledger\LedgerAccount
-            {
+            public function getOrCreateUserWallet(
+                int $userId,
+                string $zoneCode = 'SOUTH',
+                string $currency = \App\Support\Money\Currencies::BASE,
+            ): \App\Models\Ledger\LedgerAccount {
                 return new \App\Models\Ledger\LedgerAccount(['account_code' => "WALLET:{$userId}"]);
             }
 

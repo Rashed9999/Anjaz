@@ -41,8 +41,14 @@ class MerchantRiskService
      * فحص حد الاستلام قبل قبول دفعة للتاجر.
      * @throws RuntimeException
      */
-    public function assertReceiveAllowed(int $merchantUserId, string $amount): void
-    {
+    /**
+     * @param  string  $currency  عملةُ المبلغ. **والحدُّ يُقاس بالمكافئ الأساس.**
+     */
+    public function assertReceiveAllowed(
+        int $merchantUserId,
+        string $amount,
+        string $currency = \App\Support\Money\Currencies::BASE,
+    ): void {
         $profile = MerchantProfile::where('user_id', $merchantUserId)->first();
 
         // ══════════════════════════════════════════════════════════════════
@@ -78,16 +84,43 @@ class MerchantRiskService
         $singleLimit = (string) $profile->single_receive_limit;
         $dailyLimit = (string) $profile->daily_receive_limit;
 
+        // ══════════════════════════════════════════════════════════════════
+        // AMIAL-MULTI-CURRENCY-002 — **الحدُّ يُقاس بالمكافئ الأساس.**
+        //
+        // حدودُ التاجر (`single_receive_limit` · `daily_receive_limit`)
+        // مضبوطةٌ بالريال اليمنيّ منذ كُتبت. فمقارنةُ مبلغٍ **بالدولار**
+        // بحدٍّ **بالريال** ليست مقارنةً أصلاً: تاجرٌ حدُّه خمسةُ ملايين
+        // ريال يقبض عشرةَ آلاف دولار — أي **خمسةَ ملايينَ وثلاثمئة ألف** —
+        // ويمرّ، لأنّ ١٠٬٠٠٠ أصغرُ من ٥٬٠٠٠٬٠٠٠ عدداً.
+        //
+        // **وهذا التفافٌ كاملٌ على حدود مكافحة الغسيل بتغيير قائمةٍ منسدلة**،
+        // ولا يُخرج خطأً في أيّ سجلّ: الرقمان يُقارنان، والحارسُ يمرّ، وهو
+        // لم يقس شيئاً. (وهو نفسُ صنف عطل «٣٥ ر.س تُعرَض ٣٥ ر.ي».)
+        //
+        // فالمكافئُ يُحسب أوّلاً، **وبسعرٍ مذكورِ المصدر**، ثمّ يُقارَن.
+        // وعملةٌ بلا سعرٍ مضبوطٍ تُرفَض ولا تُمرَّر بسعر ١ (القاعدة السابعة).
+        // ══════════════════════════════════════════════════════════════════
+        $cur = \App\Support\Money\Currencies::normalize($currency);
+        $baseAmount = \App\Support\Money\Currencies::isBase($cur)
+            ? $amount
+            : app(\App\Services\FxRateService::class)->toBase($amount, $cur);
+
+        // **والرسالةُ تقول العملتين معاً** — «المبلغ يتجاوز الحدّ (٥٠٠٠٠٠٠)»
+        // على تاجرٍ أدخل ١٠٠ دولارٍ رسالةٌ لا تُفهَم ولا تُصحَّح.
+        $shown = \App\Support\Money\Currencies::isBase($cur)
+            ? ''
+            : sprintf(' — %s %s = %s ر.ي', $amount, \App\Support\Money\Currencies::symbol($cur), $baseAmount);
+
         // حد العملية الواحدة
-        if (bccomp($amount, $singleLimit, 4) > 0) {
-            throw new RuntimeException("المبلغ يتجاوز حد الاستلام للعملية ({$singleLimit})");
+        if (bccomp($baseAmount, $singleLimit, 4) > 0) {
+            throw new RuntimeException("المبلغ يتجاوز حد الاستلام للعملية ({$singleLimit}){$shown}");
         }
 
         // الحد اليومي
         $todayReceived = $this->getTodayReceived($merchantUserId);
-        $newTotal = bcadd($todayReceived, $amount, 4);
+        $newTotal = bcadd($todayReceived, $baseAmount, 4);
         if (bccomp($newTotal, $dailyLimit, 4) > 0) {
-            throw new RuntimeException("هذه الدفعة ستتجاوز حد الاستلام اليومي ({$dailyLimit})");
+            throw new RuntimeException("هذه الدفعة ستتجاوز حد الاستلام اليومي ({$dailyLimit}){$shown}");
         }
     }
 
@@ -215,24 +248,37 @@ class MerchantRiskService
     // Helpers
     // ============================================================
 
-    private function getTodayReceived(int $merchantUserId): string
+    /**
+     * ما قبضه التاجرُ منذ بدء اليوم — **بالمكافئ الأساس.**
+     *
+     * AMIAL-MULTI-CURRENCY-002: `SUM(credit)` كان يجمع ريالاً ودولاراً في
+     * رقمٍ واحدٍ يُقارَن بحدٍّ بالريال. فمئةُ دولارٍ كانت تُحسَب «مئة» من
+     * الحدّ اليوميّ وهي **ثلاثةٌ وخمسون ألفاً**. فالجمعُ صار على
+     * `base_amount` — وهو المكافئُ المجمَّدُ لحظةَ العمليّة، لا محسوباً
+     * بسعرِ اليومِ على معاملاتِ أمس.
+     *
+     * و`COALESCE(base_amount, credit)` تحوطاً لصفوفٍ سبقت الهجرة.
+     */
+    private function baseReceivedSince(int $merchantUserId, Carbon $since): string
     {
         $sum = DB::table('transactions')
             ->where('to_user_id', $merchantUserId)
-            ->where('created_at', '>=', Carbon::today())
+            ->where('created_at', '>=', $since)
             ->where('credit', '>', 0)
-            ->sum('credit');
-        return (string)($sum ?? '0');
+            ->selectRaw('COALESCE(SUM(COALESCE(base_amount, credit)), 0) as s')
+            ->value('s');
+
+        return (string) ($sum ?? '0');
+    }
+
+    private function getTodayReceived(int $merchantUserId): string
+    {
+        return $this->baseReceivedSince($merchantUserId, Carbon::today());
     }
 
     private function getMonthReceived(int $merchantUserId): string
     {
-        $sum = DB::table('transactions')
-            ->where('to_user_id', $merchantUserId)
-            ->where('created_at', '>=', Carbon::now()->startOfMonth())
-            ->where('credit', '>', 0)
-            ->sum('credit');
-        return (string)($sum ?? '0');
+        return $this->baseReceivedSince($merchantUserId, Carbon::now()->startOfMonth());
     }
 
     private function getDistinctCustomersToday(int $merchantUserId): int

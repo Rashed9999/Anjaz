@@ -49,26 +49,46 @@ class FinancialGuardService
         }
     }
 
-    public function lockWallet(int $userId): EMoney
+    /**
+     * AMIAL-MULTI-CURRENCY-002 — **والعملةُ معاملٌ أخيرٌ افتراضُه الأساس.**
+     *
+     * فكلُّ نداءٍ قائمٍ في المشروع — وهي مئات — يبقى يعني الريالَ حرفاً
+     * بحرف، ومن أراد الدولارَ **يقوله**. والصمتُ لا يقود إلى محفظةٍ غير
+     * التي كان يقود إليها أمس.
+     */
+    public function lockWallet(int $userId, string $currency = \App\Support\Money\Currencies::BASE): EMoney
     {
         $this->assertInTransaction();
+        $cur = \App\Support\Money\Currencies::normalize($currency);
 
-        $wallet = EMoney::where('user_id', $userId)->lockForUpdate()->first();
+        $wallet = EMoney::inCurrency($cur)->where('user_id', $userId)->lockForUpdate()->first();
 
         if (!$wallet) {
             // إنشاء محفظة لو غير موجودة — نادر، لكن آمن (mass assignment محمي في model).
             // ملاحظة: داخل transaction، الإنشاء يلتزم بـ atomicity.
-            $wallet = EMoney::create([
-                'user_id' => $userId,
-                'current_balance' => '0.0000',
-                'charge_earned' => '0.0000',
-                'pending_balance' => '0.0000',
-                'held_balance' => '0.0000',
-                'zone_code' => 'SOUTH',
-                'version' => 0,
-            ]);
+            //
+            // **والتصادمُ جوابٌ لا خطأ**: عمليّتان متزامنتان على محفظةٍ لم
+            // تُنشأ بعدُ تُخفقان في القراءة معاً ثمّ تُدرجان معاً، فتصطدم
+            // الثانيةُ بالمفتاح الفريد `(user_id, currency)`. وهو النمطُ
+            // نفسُه الذي أسقط `USER_WALLET_{id}` في الدفتر من قبل — فمن
+            // سبقني أنشأه، أقرؤه بقفل.
+            try {
+                EMoney::create([
+                    'user_id' => $userId,
+                    'currency' => $cur,
+                    'current_balance' => '0.0000',
+                    'charge_earned' => '0.0000',
+                    'pending_balance' => '0.0000',
+                    'held_balance' => '0.0000',
+                    'zone_code' => 'SOUTH',
+                    'version' => 0,
+                ]);
+            } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                // أنشأها غيري بين قراءتي وإدراجي — تُقرأ أدناه بقفل.
+            }
+
             // نعيد القفل (Eloquent::create لا يقفل الصف الجديد)
-            $wallet = EMoney::where('user_id', $userId)->lockForUpdate()->first();
+            $wallet = EMoney::inCurrency($cur)->where('user_id', $userId)->lockForUpdate()->first();
         }
 
         return $wallet;
@@ -85,13 +105,31 @@ class FinancialGuardService
      * AMIAL-AGENT-NETWORK-001 (v2.3): قراءة المحفظة بدون قفل (للعرض/الإحصاءات).
      * لا تستخدمها للعمليات المالية — استخدم debit/credit.
      */
-    public function getWallet(int $userId): ?EMoney
+    public function getWallet(int $userId, string $currency = \App\Support\Money\Currencies::BASE): ?EMoney
     {
-        return EMoney::where('user_id', $userId)->first();
+        return EMoney::inCurrency($currency)->where('user_id', $userId)->first();
     }
 
-    public function debit(int $userId, string $amount, string $reason = 'debit'): EMoney
+    /**
+     * كلُّ محافظ المستخدم — **مصفوفةً بالعملة، لا مجموعاً.**
+     *
+     * فجمعُ دولارٍ وريالٍ في رقمٍ واحدٍ ليس مبلغاً من شيء. من أراد رقماً
+     * واحداً يحوّل بسعرٍ مذكورِ المصدر (`FxRateService`) ويقول إنّه محوَّل.
+     *
+     * @return array<string, EMoney>
+     */
+    public function walletsOf(int $userId): array
     {
+        return EMoney::anyCurrency()->where('user_id', $userId)->get()
+            ->keyBy(fn (EMoney $w) => (string) $w->currency)->all();
+    }
+
+    public function debit(
+        int $userId,
+        string $amount,
+        string $reason = 'debit',
+        string $currency = \App\Support\Money\Currencies::BASE,
+    ): EMoney {
         $this->assertInTransaction();
         $amount = MoneyService::normalize($amount);
 
@@ -99,7 +137,7 @@ class FinancialGuardService
             throw new \InvalidArgumentException('Debit amount must be positive');
         }
 
-        $wallet = $this->lockWallet($userId);
+        $wallet = $this->lockWallet($userId, $currency);
 
         if (!MoneyService::gte($wallet->current_balance, $amount)) {
             // log القرار قبل رمي الـ exception
@@ -115,6 +153,9 @@ class FinancialGuardService
                 'context' => [
                     'required' => $amount,
                     'available' => (string)$wallet->current_balance,
+                    // **والعملةُ تُقال في سجلّ الرفض**: «لم يكفِ ١٠٠» بلا عملةٍ
+                    // ترسل المحقّقَ إلى المحفظة الخطأ. (القاعدة السابعة.)
+                    'currency' => (string) $wallet->currency,
                 ],
             ]);
 
@@ -135,8 +176,12 @@ class FinancialGuardService
     /**
      * يضيف مبلغاً لمحفظة المستخدم. لا فحص مطلوب لكنه atomic ومقفل.
      */
-    public function credit(int $userId, string $amount, string $reason = 'credit'): EMoney
-    {
+    public function credit(
+        int $userId,
+        string $amount,
+        string $reason = 'credit',
+        string $currency = \App\Support\Money\Currencies::BASE,
+    ): EMoney {
         $this->assertInTransaction();
         $amount = MoneyService::normalize($amount);
 
@@ -144,7 +189,7 @@ class FinancialGuardService
             throw new \InvalidArgumentException('Credit amount must be positive');
         }
 
-        $wallet = $this->lockWallet($userId);
+        $wallet = $this->lockWallet($userId, $currency);
         $wallet->current_balance = MoneyService::add($wallet->current_balance, $amount);
         $wallet->version = $wallet->version + 1;
         $wallet->save();

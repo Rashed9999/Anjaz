@@ -232,11 +232,14 @@
             'icon' => '⚙️',
             'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*',
                         'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*',
-                        'admin/amial/legal*', 'admin/amial/hub/settings*'],
+                        'admin/amial/legal*', 'admin/amial/hub/settings*', 'admin/amial/fx*'],
             'links' => [
                 ['🏢 إعدادات الأعمال (عام/رسوم/حدود)', route('admin.business-settings.business-setup'), 'platform.settings.update'],
                 ['⚙️ مفاتيح سريعة (تشغيل/إيقاف)', route('admin.amial.hub.settings'), 'platform.settings.update'],
                 ['💬 حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.settings.update'],
+                // AMIAL-MULTI-CURRENCY-002 — بلا هذا الرابط تبقى محافظ
+                // العملات مبنيّةً ولا يُوصَل إليها: لا سعرَ يُضبَط فلا قبض.
+                ['💱 أسعار الصرف', route('admin.amial.fx.rates.page'), 'platform.money.view'],
                 ['🗺️ نطاق التشغيل والمخالفات', route('admin.amial.hub.zones.index'), 'platform.zones.view'],
                 ['🔥 إعداد Firebase', route('admin.business-settings.fcm-index'), 'platform.settings.update'],
                 ['📜 الشروط القانونية', route('admin.amial.legal.index'), 'platform.ops.view'],

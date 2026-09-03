@@ -10,12 +10,18 @@ use Illuminate\Database\Eloquent\Model;
 class MerchantCurrency extends Model
 {
     protected $fillable = [
-        'merchant_user_id', 'code', 'name', 'symbol', 'rate_to_base', 'is_active',
+        // AMIAL-MULTI-CURRENCY-002: `accepts_payments` هو ما يقرأه القبضُ الآن.
+        // و`rate_to_base` بقي للصفوف القديمة **ولا يُقرأ في تسعير**: السعرُ
+        // صار مركزيّاً في `fx_rates` بمصدرٍ وطابعٍ زمنيّ. ومصدران للسعر
+        // يعنيان رقمين مختلفين على الورقة الواحدة.
+        'merchant_user_id', 'code', 'name', 'symbol', 'rate_to_base',
+        'is_active', 'accepts_payments',
     ];
 
     protected $casts = [
         'merchant_user_id' => 'integer',
         'rate_to_base' => 'decimal:6',
         'is_active' => 'boolean',
+        'accepts_payments' => 'boolean',
     ];
 }

@@ -78,9 +78,25 @@ class LedgerService
             $idempotencyKey, $createdByUserId, $metadata, $zoneCode, $allowNegative,
             $isReversal, $reversesEntryId,
         ) {
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-MULTI-CURRENCY-002 — **قيدٌ «متوازنٌ» عبر عملتين ليس
+            // متوازناً.**
+            //
+            // ١٠٠ مدينٌ بالدولار و١٠٠ دائنٌ بالريال يجتازان `assertBalanced`
+            // (الجمعان متساويان عدداً) **وهما ليسا قيداً محاسبيّاً** — بل
+            // خلقُ مالٍ من فرق الصرف بلا حسابٍ يستقبله. ولا يمسكه ميزانُ
+            // مراجعةٍ لأنّه سيتوازن عددياً هو الآخر.
+            //
+            // فالشرطُ: **كلُّ سطور القيد الواحد بعملةٍ واحدة**. والصرفُ
+            // يُقيَّد قيدين مرتبطين عبر `FX_POSITION_*`، كلٌّ متوازنٌ داخل
+            // عملته. (‏`FxConversionService`.)
+            // ══════════════════════════════════════════════════════════
+            $entryCurrency = $this->assertSingleCurrency($lines);
+
             // إنشاء الرأس
             $totalDebit = $this->sumByDirection($lines, 'debit');
             $entry = LedgerJournalEntry::create([
+                'currency' => $entryCurrency,
                 'entry_ulid' => (string) Str::ulid(),
                 'source_type' => $sourceType,
                 'source_id' => $sourceId,
@@ -238,17 +254,38 @@ class LedgerService
         }
     }
 
-    public function getOrCreateUserWallet(int $userId, string $zoneCode = 'SOUTH'): LedgerAccount
-    {
+    /**
+     * AMIAL-MULTI-CURRENCY-002 — **الأساسُ يحتفظ برمزه، وغيرُه يُلحَق به.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * `USER_WALLET_5` يبقى محفظةَ الريال **كما هو**، و`USER_WALLET_5_USD`
+     * لغيره. وهذا قرارٌ مقصود: أيُّ ترقيمٍ جديدٍ للريال — مثل
+     * `USER_WALLET_5_YER` — كان يعني **نقلَ كلّ قيدٍ في تاريخ المنصّة**
+     * إلى رمزٍ آخر، وهجرةً على بياناتٍ ماليّةٍ حيّة لا تُختبَر إلّا بوقوعها.
+     *
+     * والثمنُ المقبول: رمزٌ غيرُ متماثل. والحارسُ يقرأ العملةَ من عمود
+     * `currency` لا من صيغة الرمز.
+     */
+    public function getOrCreateUserWallet(
+        int $userId,
+        string $zoneCode = 'SOUTH',
+        string $currency = \App\Support\Money\Currencies::BASE,
+    ): LedgerAccount {
+        $cur = \App\Support\Money\Currencies::normalize($currency);
+        $isBase = \App\Support\Money\Currencies::isBase($cur);
+        $code = $isBase ? "USER_WALLET_{$userId}" : "USER_WALLET_{$userId}_{$cur}";
+        $label = $isBase ? '' : ' ('.\App\Support\Money\Currencies::nameAr($cur).')';
+
         return $this->firstOrCreateAccount(
-            ['account_code' => "USER_WALLET_{$userId}"],
+            ['account_code' => $code],
             [
                 'account_type' => 'liability', // MERGE-FIX: محفظة المستخدم = التزام على المنصّة
-                'name_ar' => "محفظة المستخدم {$userId}",
+                'name_ar' => "محفظة المستخدم {$userId}{$label}",
                 'owner_user_id' => $userId,
                 'owner_type' => 'user',
                 'normal_balance' => 'credit', // liability => credit-normal (credit=دخول/زيادة)
                 'current_balance' => '0',
+                'currency' => $cur,
                 'zone_code' => $zoneCode,
             ],
         );
@@ -477,8 +514,13 @@ class LedgerService
     /**
      * جلب حساب نظام (PLATFORM_FEE, ESCROW_HOLD, ...).
      */
-    public function getOrCreateSystemAccount(string $code, string $type, string $name, string $normal = 'credit'): LedgerAccount
-    {
+    public function getOrCreateSystemAccount(
+        string $code,
+        string $type,
+        string $name,
+        string $normal = 'credit',
+        string $currency = \App\Support\Money\Currencies::BASE,
+    ): LedgerAccount {
         return $this->firstOrCreateAccount(
             ['account_code' => $code],
             [
@@ -487,6 +529,7 @@ class LedgerService
                 'owner_type' => 'platform',
                 'normal_balance' => $normal,
                 'current_balance' => '0',
+                'currency' => \App\Support\Money\Currencies::normalize($currency),
             ],
         );
     }
@@ -506,6 +549,42 @@ class LedgerService
         return $account->normal_balance === 'debit'
             ? bcsub($debits, $credits, 4)
             : bcsub($credits, $debits, 4);
+    }
+
+    /**
+     * يُرجع عملةَ القيد — ويرمي إن اختلطت.
+     *
+     * **ويُقرأ من عمود `currency` على الحساب لا من صيغة الرمز**: الأساسُ
+     * يحتفظ برمزه القديم (`USER_WALLET_5`) فلا يدلّ الرمزُ على العملة.
+     * وحسابٌ لا يوجد يُترَك لفحصِ ما بعدُ ليُخرج رسالتَه الأوضح.
+     */
+    private function assertSingleCurrency(array $lines): string
+    {
+        $codes = array_values(array_unique(array_map(
+            static fn ($l) => (string) $l['account'], $lines
+        )));
+
+        $currencies = LedgerAccount::whereIn('account_code', $codes)
+            ->pluck('currency', 'account_code');
+
+        $seen = [];
+        foreach ($codes as $code) {
+            $cur = $currencies[$code] ?? null;
+            if ($cur === null) {
+                continue;   // حسابٌ مفقود — يُبلَّغ عنه بعد قليلٍ باسمه
+            }
+            $seen[strtoupper($cur)] = true;
+        }
+
+        if (count($seen) > 1) {
+            throw new RuntimeException(sprintf(
+                'Cross-currency journal entry (%s): قيدٌ واحدٌ لا يخلط عملتين. '
+                .'الصرفُ يُقيَّد قيدين مرتبطين عبر FX_POSITION_*.',
+                implode(' + ', array_keys($seen))
+            ));
+        }
+
+        return (string) (array_key_first($seen) ?: \App\Support\Money\Currencies::BASE);
     }
 
     // ============================================================

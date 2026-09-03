@@ -540,6 +540,28 @@ Route::prefix('whatsapp')->name('whatsapp.')->middleware('platform:platform.sett
         Route::post('/limits', [$wl, 'save'])->name('limits.save');
     });
 
+// AMIAL-MULTI-CURRENCY-002 — أسعار الصرف.
+//
+// **والقراءةُ تُفصَل عن الكتابة** (AMIAL-MONEY-KEY-SPLIT-001): وضعتُ
+// المسارات الثلاثة أوّلاً خلف `platform.money.move` بحجّة أنّ السعرَ يمسّ
+// المال — **فأمسكها `MoneyKeySplitTest`**، وهو محقّ: من أراد أن **يقرأ**
+// السعرَ وجب حينها منحُه أن **يُحرّك** المال، فيتّسع حاملو المفتاح بدل
+// أن يضيقوا. وهي الحجّةُ نفسُها التي تصحّ على كلّ إعدادٍ في المنصّة.
+//
+// فالقراءةُ `platform.money.view`، والكتابةُ وحدَها `platform.money.move`:
+// رفعُ سعر الدولار عشرةَ أضعافٍ يُضاعف رصيدَ كلّ من يصرف بعده — **فيُحرّك
+// مالاً في كلّ محفظةٍ أجنبيّة دفعةً واحدة**. ومن يملك تغييرَ السعر يملك
+// المال.
+Route::prefix('fx')->name('fx.')->group(function () {
+    $fx = App\Http\Controllers\Admin\FxRateController::class;
+    Route::middleware('platform:platform.money.view')->group(function () use ($fx) {
+        Route::get('/rates', [$fx, 'page'])->name('rates.page');
+        Route::get('/rates/show', [$fx, 'show'])->name('rates.show');
+    });
+    Route::middleware('platform:platform.money.move')
+        ->post('/rates', [$fx, 'save'])->name('rates.save');
+});
+
 // AMIAL-MERCHANT-PAY-002 — مركز فواتير التجّار.
 // يُقرأ من `payment_requests` نفسِه الذي يكتب فيه التطبيق — جذرٌ واحدٌ
 // يُقرأ من زاويتين، لا حقيقتان تفترقان.

@@ -84,13 +84,38 @@ class MerchantReceiptSettingsController extends Controller
         $settings['store_name'] = $merchant?->store_name ?? trim(($user->f_name ?? '') . ' ' . ($user->l_name ?? ''));
         $settings['logo_url'] = $merchant?->logo_fullpath;
 
-        // AMIAL-MULTI-CURRENCY-001: عملات التاجر الفعّالة (لعرض المكافئ على الفاتورة)
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-MULTI-CURRENCY-002 — **السعرُ من المركز لا من يد التاجر.**
+        //
+        // كان يُقرأ `rate_to_base` الذي يكتبه التاجرُ في شاشته: **رقمٌ بلا
+        // مصدرٍ ولا طابعٍ زمنيّ ولا تاريخِ تغييرات**. وأخطرُ ما فيه أنّه
+        // **لا يُجمَّد**: يغيّر التاجرُ السعرَ غداً فيتغيّر معه مكافئُ
+        // فاتورة الأمس على الورقة نفسِها — أي إعادةُ كتابةِ مستندٍ صدر.
+        //
+        // ومصدران للسعر (سعرُ التاجر على الورقة وسعرُ المنصّة في المحفظة)
+        // يعنيان **رقمين مختلفين على البيعة الواحدة**. فصار السعرُ من
+        // `fx_rates` وحدَه، ومعه مصدرُه ولحظتُه.
+        // ══════════════════════════════════════════════════════════════
+        $fx = app(\App\Services\FxRateService::class)->current();
+
         $currencies = \App\Models\MerchantCurrency::where('merchant_user_id', $user->id)
             ->where('is_active', true)->orderBy('code')->get()
-            ->map(fn ($c) => [
-                'code' => $c->code, 'symbol' => $c->symbol,
-                'rate_to_base' => (string) $c->rate_to_base,
-            ]);
+            ->map(function ($c) use ($fx) {
+                $code = strtoupper((string) $c->code);
+                $row = $fx[$code] ?? null;
+
+                return [
+                    'code' => $code,
+                    'symbol' => (string) ($c->symbol ?: ($row ? \App\Support\Money\Currencies::symbol($code) : $code)),
+                    'rate_to_base' => $row['rate'] ?? null,
+                    'rate_source' => $row['source'] ?? null,
+                    'rate_at' => $row['at'] ?? null,
+                ];
+            })
+            // **وعملةٌ بلا سعرٍ تُحذَف من الإيصال ولا تُطبَع بصفر.** مكافئٌ
+            // «≈ 0.00 $» على فاتورةٍ أسوأ من غيابه: يقرؤه العميلُ رقماً.
+            ->filter(fn ($c) => $c['rate_to_base'] !== null)
+            ->values();
 
         return $this->ok(['settings' => $settings, 'currencies' => $currencies], 'OK', 'إعدادات الفاتورة');
     }
