@@ -111,7 +111,20 @@ class _AmialRegistrationWizardScreenState
   final _addrStreet = TextEditingController();   // الشارع
   final _addrLandmark = TextEditingController(); // أقرب معلم
 
-  final List<XFile> _idImages = [];
+  // AMIAL-SELFREG-KYCDOCS-001: وثيقةٌ لكلّ نوعٍ باسمه — يُرسَل مصنّفاً
+  // فيُنشئ الخادمُ منها صفوفَ `kyc_documents`، وبها وحدَها يعمل الاعتماد.
+  XFile? _docIdFront;
+  XFile? _docIdBack;
+  XFile? _docSelfie;
+  XFile? _docAddress;
+
+  /// الوثائقُ المرسَلة، لكلٍّ اسمُ حقلها في الخادم.
+  Map<String, XFile> get _typedDocs => {
+        if (_docIdFront != null) 'kyc_id_front': _docIdFront!,
+        if (_docIdBack != null) 'kyc_id_back': _docIdBack!,
+        if (_docSelfie != null) 'kyc_selfie': _docSelfie!,
+        if (_docAddress != null) 'kyc_address_proof': _docAddress!,
+      };
 
   // ══════════════════════════════════════════════════════════════════
   // AMIAL-KYC-INTL-001 — حقولُ «اعرف عميلك» الرقابيّة.
@@ -256,8 +269,10 @@ class _AmialRegistrationWizardScreenState
         }
         return true;
       case 4:
-        if (_idImages.isEmpty) {
-          _snack('أرفق صورة وثيقة الهوية');
+        // الثلاثةُ التي يشترطها الاعتماد — تُطلب هنا لا بعد أسبوعٍ من
+        // الانتظار في طابور المراجعة.
+        if (_docIdFront == null || _docIdBack == null || _docSelfie == null) {
+          _snack('أرفق وجهَ الهوية وظهرَها وصورةً شخصية');
           return false;
         }
         return true;
@@ -427,12 +442,12 @@ class _AmialRegistrationWizardScreenState
     } catch (_) {/* قد يكون التحقّق بالهاتف معطّلاً */}
   }
 
-  Future<void> _pickIdImages() async {
+  Future<XFile?> _pickOne() async {
     try {
-      final imgs = await ImagePicker().pickMultiImage();
-      if (imgs.isNotEmpty) setState(() => _idImages.addAll(imgs));
+      return await ImagePicker().pickImage(source: ImageSource.gallery);
     } catch (_) {
-      _snack('تعذّر اختيار الصور');
+      _snack('تعذّر اختيار الصورة');
+      return null;
     }
   }
 
@@ -514,9 +529,14 @@ class _AmialRegistrationWizardScreenState
         if (_accountType == 'merchant') 'business_type': _businessType,
         if (signature != null) 'signature': signature,
       };
-      final parts = _idImages
-          .map((x) => MultipartBody('identification_image[]', File(x.path)))
-          .toList();
+      // AMIAL-SELFREG-KYCDOCS-001 — تُرسَل **مسمّاةً** فيُنشئ الخادمُ منها
+      // `kyc_documents` مصنّفة، وبها يعمل زرُّ الاعتماد. وتُرسَل معها في
+      // `identification_image[]` للتوافق الخلفيّ مع ما يقرؤه القائم.
+      final parts = <MultipartBody>[
+        for (final e in _typedDocs.entries) MultipartBody(e.key, File(e.value.path)),
+        for (final x in _typedDocs.values)
+          MultipartBody('identification_image[]', File(x.path)),
+      ];
 
       final api = Get.find<ApiClient>();
       final r = await api.postMultipartData(
@@ -1031,39 +1051,79 @@ class _AmialRegistrationWizardScreenState
         ),
       ]);
 
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-SELFREG-KYCDOCS-001 — **الخاناتُ مسمّاةٌ لأنّ النوعَ لا يُخمَّن.**
+  //
+  // كانت الوثائقُ تُختار قائمةً واحدةً غيرَ مصنّفة («يمكن اختيار عدّة
+  // صور»)، والترتيبُ وحدَه يدلّ على النوع — وهو غيرُ مضمون. فيصل إلى
+  // الخادم أربعُ صورٍ بلا هويّة، ولا يستطيع أن ينشئ منها مستنداتٍ
+  // مصنّفة، **فيبقى زرُّ الاعتماد في لوحة التحقّق يردّ «لا يُعتمد
+  // الحسابُ قبل رفع هذه المستندات» على حسابٍ رفعها فعلاً.**
+  //
+  // ومستندٌ يُسجَّل «وجهَ هويّة» وهو ظهرُها يُفسد ملفَّ امتثالٍ بصمت —
+  // فالتخمينُ هنا أسوأُ من الغياب. (القاعدة السابعة.)
+  // ══════════════════════════════════════════════════════════════════
   Widget _stepDocuments() => _wrap([
-        _sectionNote('أرفق صوراً واضحة (يمكن اختيار عدّة صور):\n'
-            '١) الهوية — الوجه   ٢) الهوية — الظهر\n'
-            '٣) إثبات العنوان   ٤) صورة شخصية حديثة'),
-        OutlinedButton.icon(
-          onPressed: _pickIdImages,
-          icon: const Icon(Icons.upload_file),
-          label: const Text('إرفاق صور الوثائق'),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8, runSpacing: 8,
-          children: List.generate(_idImages.length, (i) {
-            return Stack(children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.file(File(_idImages[i].path),
-                    width: 90, height: 90, fit: BoxFit.cover),
-              ),
-              Positioned(
-                top: 0, left: 0,
-                child: InkWell(
-                  onTap: () => setState(() => _idImages.removeAt(i)),
-                  child: Container(
-                    color: Colors.red.withValues(alpha: 0.85),
-                    child: const Icon(Icons.close, color: Colors.white, size: 18),
-                  ),
-                ),
-              ),
-            ]);
-          }),
-        ),
+        _sectionNote('صوّر كلَّ وثيقةٍ في خانتها. الثلاثُ الأولى مطلوبةٌ '
+            'لاعتماد حسابك، وإثباتُ العنوان يرفع حدودَك لاحقاً.'),
+        _docSlot('بطاقة الهوية — الوجه *', _docIdFront,
+            (x) => setState(() => _docIdFront = x)),
+        _docSlot('بطاقة الهوية — الظهر *', _docIdBack,
+            (x) => setState(() => _docIdBack = x)),
+        _docSlot('صورة شخصية حديثة *', _docSelfie,
+            (x) => setState(() => _docSelfie = x)),
+        _docSlot('إثبات العنوان (اختياري)', _docAddress,
+            (x) => setState(() => _docAddress = x)),
       ]);
+
+  /// خانةُ وثيقةٍ واحدة: تعرض ما اختير، وتسمح باستبداله أو حذفه.
+  Widget _docSlot(String label, XFile? file, void Function(XFile?) set) => Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Row(children: [
+          if (file != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.file(File(file.path),
+                  width: 64, height: 64, fit: BoxFit.cover),
+            )
+          else
+            Container(
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F1F3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.image_outlined, color: Color(0xFF9AA4B2)),
+            ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                const SizedBox(height: 4),
+                Row(children: [
+                  TextButton.icon(
+                    onPressed: () async {
+                      final x = await _pickOne();
+                      if (x != null) set(x);
+                    },
+                    icon: const Icon(Icons.upload_file, size: 17),
+                    label: Text(file == null ? 'اختر صورة' : 'استبدال'),
+                  ),
+                  if (file != null)
+                    TextButton(
+                      onPressed: () => set(null),
+                      child: const Text('حذف',
+                          style: TextStyle(color: AmialColors.red)),
+                    ),
+                ]),
+              ],
+            ),
+          ),
+        ]),
+      );
 
   Widget _stepKin() => _wrap([
         _sectionNote('بيانات شخص قريب يمكن التواصل معه عند الحاجة.'),

@@ -282,6 +282,9 @@ class RegisterController extends Controller
             $user->unique_id = $user->id . mt_rand(1111, 99999);
             $user->save();
 
+            // AMIAL-SELFREG-KYCDOCS-001 — انظر `ingestKycDocuments` أسفله.
+            $this->ingestKycDocuments($user, $request);
+
             // ══════════════════════════════════════════════════════════
             // AMIAL-ZONE-REG-001 — **إسنادُ المنطقة عند التسجيل.**
             //
@@ -523,6 +526,9 @@ class RegisterController extends Controller
             $user->unique_id = $user->id . mt_rand(1111, 99999);
             $user->save();
 
+            // AMIAL-SELFREG-KYCDOCS-001 — انظر `ingestKycDocuments` أسفله.
+            $this->ingestKycDocuments($user, $request);
+
             $emoney = $this->eMoney;
             $emoney->user_id = $user->id;
             $emoney->save();
@@ -536,5 +542,61 @@ class RegisterController extends Controller
         }
 
         return response()->json(['message' => 'Registration Successful'], 200);
+    }
+
+    /**
+     * AMIAL-SELFREG-KYCDOCS-001 — **نظامان لا يلتقيان، وزرُّ الاعتماد بينهما.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ما قِيس:** التسجيلُ الذاتيُّ يحفظ صورَ الوثائق في
+     * `users.identification_image` (‏JSON من مسارات)، و
+     * `KycDocumentService::decideAccountVerification` — التي يمرّ بها
+     * **زرُّ الاعتماد في لوحة التحقّق** — تشترط صفوفاً في `kyc_documents`
+     * من ثلاثة أنواع: وجهُ الهوية · ظهرُها · صورةٌ شخصيّة.
+     *
+     * فالزرُّ يردّ ٤٢٢ «لا يُعتمد الحسابُ قبل رفع هذه المستندات» على حسابٍ
+     * **رفع وثائقَه فعلاً**، ولا سبيلَ في تلك الشاشة إلى رفعها. أي أنّ
+     * **كلَّ حسابٍ سجّل ذاتيّاً — عميلاً أو تاجراً أو وكيلاً — لا يمكن
+     * اعتمادُه أبداً.** (قِيس بالتشغيل: `SelfRegisteredMerchantIsUsableTest`.)
+     *
+     * **ولمَ لم يمسكه اختبار:** كلُّ اختبارات الاعتماد ترفع المستنداتِ
+     * بيدها عبر `upload()` ثمّ تعتمد — فتفحص المنطقَ وتتخطّى الفجوة.
+     * والفجوةُ ليست في طرفٍ منهما بل **في الوصلة بينهما**.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **والوصلُ يحتاج نوعاً، والنوعُ لا يُخمَّن.** فمستندٌ يُسجَّل «وجهَ
+     * هويّة» وهو ظهرُها يُفسد ملفَّ امتثالٍ بصمت، وهو أسوأُ من غيابه.
+     * فتُقبل الحقولُ **مسمّاةً** (`kyc_id_front` …)، والتطبيقُ يرسلها في
+     * خاناتٍ معنونة. وما لا نوعَ له يبقى حيث هو ولا يُخترَع له نوع
+     * (القاعدة السابعة: «غير معروف» ليس قيمةً تُملأ).
+     *
+     * **ولا يُسقِط فشلُ مستندٍ تسجيلاً**: الحسابُ أُنشئ، وفقدُ مستندٍ
+     * يُعالَج برفعه ثانيةً — لا بإلغاء الحساب. فيُلتقط كلُّ استثناءٍ
+     * ويُسجَّل، ويمضي التسجيل.
+     */
+    private function ingestKycDocuments(\App\Models\User $user, Request $request): void
+    {
+        $map = [
+            'kyc_id_front' => \App\Models\KycDocument::TYPE_ID_FRONT,
+            'kyc_id_back' => \App\Models\KycDocument::TYPE_ID_BACK,
+            'kyc_selfie' => \App\Models\KycDocument::TYPE_SELFIE,
+            'kyc_address_proof' => \App\Models\KycDocument::TYPE_ADDRESS_PROOF,
+        ];
+
+        $svc = app(\App\Services\KycDocumentService::class);
+
+        foreach ($map as $field => $docType) {
+            if (!$request->hasFile($field)) {
+                continue;
+            }
+            try {
+                $svc->upload($user, $docType, $request->file($field));
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    'AMIAL-SELFREG-KYCDOCS-001: تعذّر إدراج مستند التسجيل',
+                    ['user_id' => $user->id, 'doc_type' => $docType, 'error' => $e->getMessage()],
+                );
+            }
+        }
     }
 }
