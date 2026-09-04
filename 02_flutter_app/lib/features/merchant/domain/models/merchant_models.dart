@@ -113,6 +113,37 @@ class AmialMerchantTransaction {
     );
   }
 
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-MERCHANT-SESSION-001 — **قيدُ دفترٍ يصير حركةً في المحفظة.**
+  ///
+  /// وكان المصدرُ `/customer/transaction-history` — **وهو يردّ ٤٠٣ لكلّ
+  /// تاجر** (وسيطُ `customerAuth` يشترط نوعَ العميل). فالقائمةُ فارغةٌ
+  /// أبداً، وتُعرَض «لا حركةَ في المحفظة بعد» على متجرٍ يبيع.
+  ///
+  /// والدفترُ لا يحمل `transaction_id` ولا اسمَ عميل — يحمل **الاتّجاهَ
+  /// والمبلغَ والوصفَ ونوعَ المصدر**. وما لا يحمله **يُترك عدماً ولا
+  /// يُخترَع**: `customerName` تبقى `null` فلا يُكتب اسمٌ لم يقله أحد.
+  factory AmialMerchantTransaction.fromLedgerEntry(Map<String, dynamic> j) {
+    final direction = (j['direction'] ?? '').toString();
+
+    return AmialMerchantTransaction(
+      id: 0,
+      transactionId: (j['reference'] ?? '').toString(),
+      type: (j['source_type'] ?? 'unknown').toString(),
+      amount: (j['amount'] ?? '0').toString(),
+      fee: null,
+      customerName: null,
+      customerPhoneMasked: null,
+      posUserName: null,
+      posNumber: null,
+      status: 'success',
+      createdAt: j['date'] != null
+          ? (DateTime.tryParse(j['date'].toString()) ?? DateTime.now())
+          : DateTime.now(),
+      incoming: direction == 'credit',
+    );
+  }
+
   String get typeLabel {
     switch (type) {
       case 'pay_merchant':
@@ -154,12 +185,24 @@ class AmialMerchantDashboardStats {
   final String? balance;
   final String pendingSettlement;
 
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-MERCHANT-RECEIVE-LIMIT-002 — **تحويلاتٌ واردةٌ ليست مبيعات.**
+  ///
+  /// كان `send_money` يُحتسب في «مبيعات اليوم» — فمالٌ يرسله قريبٌ إلى
+  /// التاجر يُكتب بيعاً. فصار يُفصَل ويُعرَض باسمه، ولا يُطوى.
+  ///
+  /// **و`null` تعني «لم يُرسَل» لا «صفر»** — الخادمُ يحذفه عن موظّف
+  /// نقطة البيع كما يحذف الرصيد، فهو مالُ المالك لا مالُ الورديّة.
+  /// (القاعدة السابعة.)
+  final String? todayTransfersIn;
+
   AmialMerchantDashboardStats({
     required this.todaySales,
     required this.todayRefunds,
     required this.todayNet,
     required this.todayTransactionsCount,
     this.balance,
+    this.todayTransfersIn,
     required this.pendingSettlement,
   });
 
@@ -177,6 +220,7 @@ class AmialMerchantDashboardStats {
       todayNet: (j['today_net'] ?? j['today_sales'] ?? '0').toString(),
       todayTransactionsCount: j['today_count'] ?? 0,
       balance: raw?.toString(),
+      todayTransfersIn: j['today_transfers_in']?.toString(),
       pendingSettlement: (j['pending_settlement'] ?? '0').toString(),
     );
   }

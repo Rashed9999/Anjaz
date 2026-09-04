@@ -11,7 +11,27 @@ class ApiChecker {
     // الموحّدة لأميال باي — لا لشاشة PIN القديمة (6cash) التي تظهر بعلم دولة
     // أجنبية ولا تخصّ المشروع. نحرس من الحلقة بتفادي إعادة التوجيه إن كنّا فيها.
     final onUnifiedLogin = Get.currentRoute.contains(RouteHelper.unifiedLoginScreen);
-    if((response.statusCode == 401 || response.statusCode == 429) && !onUnifiedLogin) {
+
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-MERCHANT-SESSION-001 — **٤٢٩ لم تعد تُنهي الجلسة.**
+    //
+    // ٤٢٩ = «تجاوزتَ حدَّ المحاولات في الدقيقة» — حدٌّ يمرّ بعد ثوانٍ.
+    // ومعاملتُه معاملةَ رمزٍ منتهٍ **تحذف رمزَ الدخول وتطرد المستعمل**
+    // على ضغطتين متتاليتين، ولا سبيلَ له إلى فهم ما جرى: يُعاد إلى شاشة
+    // الدخول برسالةٍ عن حدٍّ لا عن جلسة.
+    //
+    // **و٤٠١ وحدَها تعني «الرمزُ لم يعد صالحاً»** — وهي وحدَها ما يستحقّ
+    // إنهاءَ الجلسة. والباقي يُقال ولا يُطرَد صاحبُه.
+    // ══════════════════════════════════════════════════════════════════
+    if(response.statusCode == 429 && !onUnifiedLogin) {
+      showCustomSnackBarHelper(
+        'محاولاتٌ كثيرةٌ في وقتٍ قصير — انتظر دقيقةً ثمّ أعد المحاولة',
+        isError: true,
+      );
+      return;
+    }
+
+    if(response.statusCode == 401 && !onUnifiedLogin) {
       Get.find<AuthController>().removeCustomerToken();
       Get.offAllNamed(RouteHelper.getUnifiedLoginRoute());
 

@@ -106,7 +106,11 @@ class _MerchantWalletScreenState extends State<MerchantWalletScreen> {
                       icon: Icons.send_rounded,
                       label: 'تحويل',
                       subtitle: 'إلى حساب أميال باي',
-                      onTap: () => Get.to(() => const AmialSendMoneyScreen()),
+                      // **ورصيدُ المتجر يُمرَّر معها** — شاشةُ التحويل
+                      // تقرأ رصيدَها من ملفّ العميل، وهو مسارٌ يردّ ٤٠٣
+                      // لكلّ تاجر. (AMIAL-MERCHANT-SESSION-001)
+                      onTap: () => Get.to(() => AmialSendMoneyScreen(
+                          balanceOverride: stats.balance)),
                     ),
                   ),
                 ]),
@@ -118,6 +122,7 @@ class _MerchantWalletScreenState extends State<MerchantWalletScreen> {
                   refunds: stats.todayRefunds,
                   net: stats.todayNet,
                   count: stats.todayTransactionsCount,
+                  transfersIn: stats.todayTransfersIn,
                 ),
 
                 const SizedBox(height: 20),
@@ -296,12 +301,19 @@ class _StatsCard extends StatelessWidget {
     required this.refunds,
     required this.net,
     required this.count,
+    this.transfersIn,
   });
 
   final String sales;
   final String refunds;
   final String net;
   final int count;
+
+  /// AMIAL-MERCHANT-RECEIVE-LIMIT-002 — **مالٌ وصل بلا بيع.**
+  ///
+  /// كان يُحتسب في «المبيعات»، فيقرأ صاحبُ المتجر يومَه على رقمٍ يحمل
+  /// ما لم يُبَع. و`null` تعني «لم يُرسَل» (موظّفُ نقطة البيع) لا صفراً.
+  final String? transfersIn;
 
   @override
   Widget build(BuildContext context) {
@@ -314,6 +326,13 @@ class _StatsCard extends StatelessWidget {
       child: Column(children: [
         _row('المبيعات', AmialMoney.yer(sales), AmialColors.success),
         const Divider(height: 1),
+        // **ولا يُعرَض صفرٌ بلا سبب**: السطرُ يظهر حين يصل مالٌ بلا بيع،
+        // فيعرف صاحبُ المتجر أنّ في محفظته ما ليس من الكاشير.
+        if (transfersIn != null && (double.tryParse(transfersIn!) ?? 0) > 0) ...[
+          _row('تحويلات واردة (ليست مبيعات)',
+              AmialMoney.yer(transfersIn!), AmialColors.primary),
+          const Divider(height: 1),
+        ],
         _row('الاسترجاعات', AmialMoney.yer(refunds), AmialColors.red),
         const Divider(height: 1),
         _row('الصافي', AmialMoney.yer(net), AmialColors.primary),

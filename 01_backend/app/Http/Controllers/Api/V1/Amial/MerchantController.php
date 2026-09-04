@@ -95,6 +95,12 @@ class MerchantController extends AmialApiController // AMIAL-FIX-007
             // **لا يُصفَّر بل يُحذف** — وصفرٌ يُقرأ «متجرٌ فارغ»، وهو كذب.
             // (القاعدة السابعة: «غير معروف» ليس صفراً.)
             unset($stats['current_balance']);
+
+            // AMIAL-MERCHANT-RECEIVE-LIMIT-002 — **والتحويلاتُ الواردةُ
+            // من جنس الرصيد لا من جنس البيع**: مالٌ يصل صاحبَ المتجر من
+            // خارج الكاشير، ولا شأنَ للكاشير به وهو يُقفل ورديّتَه.
+            // ويُحذَف ولا يُصفَّر — والصفرُ يُقرأ «لم يصل شيء».
+            unset($stats['today_transfers_in']);
             $stats['balance_scope'] = 'owner_only';
         }
 

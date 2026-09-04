@@ -233,16 +233,38 @@ class MerchantService
         $wallet = $this->ledger->getOrCreateUserWallet($merchant->id);
         $startOfDay = Carbon::now()->startOfDay();
 
-        // المبيعات اليوم (credits على حساب التاجر من المدفوعات)
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-MERCHANT-RECEIVE-LIMIT-002 — **بيعٌ يُعدّ بيعاً، وتحويلٌ
+        // يُقال تحويلاً.**
+        //
+        // سأل صاحبُ المشروع: «هل يؤثّر ذلك على تنظيم المحفظة الماليّة
+        // بتحويلات دون مبيعات؟». **وقِيس فالجوابُ نعم**: كان
+        // `send_money` في قائمة المصادر أدناه — أي أنّ **مالاً يرسله
+        // قريبٌ إلى التاجر يُكتب في «مبيعات اليوم»**. فالرقمُ الذي يبني
+        // عليه صاحبُ المتجر يومَه يحمل ما ليس بيعاً، ولا شيءَ في الشاشة
+        // يقول ذلك.
+        //
+        // **ولا يُحذَف المال بل يُفصَل** (القاعدة السابعة: الغيابُ يُقال
+        // ولا يُطوى): يخرج من «المبيعات» ويظهر في «تحويلات واردة»،
+        // فيُقرأ كلٌّ على حقيقته ويبقى مجموعُ المحفظة كما هو.
+        //
+        // دفعُ QR يمرّ عبر `PaymentRequestService` فينشأ منه
+        // `payment_request` — وإسقاطُه جعل البيعَ المؤكَّدَ يظهر في سجلّ
+        // الصيدليّة بينما بطاقةُ التاجر تقول صفراً. وهذا عدٌّ من الدفتر
+        // نفسِه لا تقديرٌ من واجهة البيع.
+        // ══════════════════════════════════════════════════════════════
         $todaySales = (string) LedgerEntryLine::where('account_id', $wallet->id)
             ->where('direction', 'credit')
             ->where('created_at', '>=', $startOfDay)
             ->whereHas('journalEntry', fn($q) =>
-                // دفع QR في أميال يمر عبر PaymentRequestService، ومنه ينشأ
-                // قيد source_type=payment_request. إسقاطه هنا جعل البيع
-                // المؤكد يظهر في سجل الصيدلية أو الوقود بينما بطاقة التاجر
-                // تقول صفر. هذا عدّ من الدفتر نفسه، لا تقدير من واجهة البيع.
-                $q->whereIn('source_type', ['pay_merchant', 'pos_payment', 'qr_payment', 'send_money', 'payment_request']))
+                $q->whereIn('source_type', ['pay_merchant', 'pos_payment', 'qr_payment', 'payment_request']))
+            ->sum('amount');
+
+        // **تحويلاتٌ واردةٌ لا بيع** — تُعرَض باسمها ولا تُخلَط بالمبيعات.
+        $todayTransfersIn = (string) LedgerEntryLine::where('account_id', $wallet->id)
+            ->where('direction', 'credit')
+            ->where('created_at', '>=', $startOfDay)
+            ->whereHas('journalEntry', fn($q) => $q->where('source_type', 'send_money'))
             ->sum('amount');
 
         // الاسترجاعات اليوم (debits على حساب التاجر)
@@ -259,6 +281,7 @@ class MerchantService
 
         return [
             'today_sales' => $todaySales ?: '0',
+            'today_transfers_in' => $todayTransfersIn ?: '0',
             'today_refunds' => $todayRefunds ?: '0',
             'today_net' => bcsub($todaySales ?: '0', $todayRefunds ?: '0', 4),
             'today_count' => $todayCount,
