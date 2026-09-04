@@ -239,45 +239,126 @@ class _WholesaleProInvoiceCreateScreenState extends State<WholesaleProInvoiceCre
   double get _total => (c.cartSubtotal - _discountValue).clamp(0, double.infinity).toDouble();
 
   Future<void> _chooseCustomer() async {
+    final search = TextEditingController();
     await showModalBottomSheet<void>(
       context: context,
-      builder: (sheet) => SafeArea(child: Obx(() => ListView(
-        shrinkWrap: true,
-        children: c.customers.map((x) => ListTile(
-          leading: const Icon(Icons.person_outline), title: Text('${x['full_name'] ?? '—'}'),
-          subtitle: Text('${x['phone'] ?? ''}'),
-          onTap: () { c.clearCart(); c.selectedCustomer.value = x; Navigator.pop(sheet); },
-        )).toList(),
+      isScrollControlled: true,
+      builder: (sheet) => SafeArea(child: StatefulBuilder(builder: (_, setSheet) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheet).bottom),
+        child: SizedBox(height: MediaQuery.sizeOf(sheet).height * .72, child: Column(children: [
+          const SizedBox(height: 10),
+          Container(width: 42, height: 4, decoration: BoxDecoration(color: AmialColors.border, borderRadius: BorderRadius.circular(99))),
+          const ListTile(leading: Icon(Icons.person_search_outlined), title: Text('اختيار العميل', style: TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('يُطبّق النظام شريحة السعر وحد الائتمان لهذا العميل')),
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: TextField(
+            controller: search, autofocus: true, onChanged: (_) => setSheet(() {}),
+            decoration: const InputDecoration(hintText: 'ابحث بالاسم أو الهاتف أو المنشأة', prefixIcon: Icon(Icons.search)),
+          )),
+          const SizedBox(height: 8),
+          Expanded(child: Obx(() {
+            final q = search.text.trim().toLowerCase();
+            final rows = c.customers.where((x) => q.isEmpty || '${x['full_name']} ${x['phone']} ${x['company_name']}'.toLowerCase().contains(q)).toList();
+            if (rows.isEmpty) return const _EmptyState(icon: Icons.person_search_outlined, text: 'لا يوجد عميل مطابق');
+            return ListView.separated(
+              itemCount: rows.length, separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (_, i) { final x = rows[i]; return ListTile(
+                leading: CircleAvatar(child: Text('${x['full_name'] ?? '؟'}'.trim().isEmpty ? '؟' : '${x['full_name']}'.trim().substring(0, 1))),
+                title: Text('${x['full_name'] ?? '—'}'),
+                subtitle: Text('${x['company_name'] ?? x['phone'] ?? 'عميل جملة'}'),
+                trailing: Text('${_money(x['current_balance'])} ر.ي', style: const TextStyle(fontWeight: FontWeight.w700)),
+                onTap: () { c.clearCart(); c.selectedCustomer.value = x; Navigator.pop(sheet); },
+              ); },
+            );
+          })),
+        ])),
       ))),
     );
+    search.dispose();
   }
 
   Future<void> _addProduct() async {
     if (c.selectedCustomer.value == null) { _toast('اختر العميل أولاً'); return; }
+    final search = TextEditingController();
     await showModalBottomSheet<void>(
       context: context,
-      builder: (sheet) => SafeArea(child: Obx(() => ListView(
-        shrinkWrap: true,
-        children: c.products.map((x) => ListTile(
-          leading: const Icon(Icons.inventory_2_outlined), title: Text('${x['name'] ?? '—'}'),
-          subtitle: Text('المتاح ${x['current_stock'] ?? 0} • السعر الأساسي ${_money(x['base_price'])} ر.ي'),
-          onTap: () { Navigator.pop(sheet); _quantity(x); },
-        )).toList(),
+      isScrollControlled: true,
+      builder: (sheet) => SafeArea(child: StatefulBuilder(builder: (_, setSheet) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheet).bottom),
+        child: SizedBox(height: MediaQuery.sizeOf(sheet).height * .76, child: Column(children: [
+          const SizedBox(height: 10),
+          Container(width: 42, height: 4, decoration: BoxDecoration(color: AmialColors.border, borderRadius: BorderRadius.circular(99))),
+          const ListTile(leading: Icon(Icons.add_shopping_cart_outlined), title: Text('إضافة أصناف', style: TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('اختر الصنف ثم الكمية؛ السعر النهائي يحدده الخادم')),
+          Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: TextField(
+            controller: search, autofocus: true, onChanged: (_) => setSheet(() {}),
+            decoration: const InputDecoration(hintText: 'ابحث بالاسم أو الباركود أو الرمز', prefixIcon: Icon(Icons.search)),
+          )),
+          const SizedBox(height: 8),
+          Expanded(child: Obx(() {
+            final q = search.text.trim().toLowerCase();
+            final rows = c.products.where((x) => q.isEmpty || '${x['name']} ${x['barcode']} ${x['sku']}'.toLowerCase().contains(q)).toList();
+            if (rows.isEmpty) return const _EmptyState(icon: Icons.inventory_2_outlined, text: 'لا يوجد صنف مطابق');
+            return ListView.separated(
+              itemCount: rows.length, separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (_, i) { final x = rows[i]; final inCart = c.cart.any((row) => row['product_id'] == x['id']); return ListTile(
+                leading: CircleAvatar(backgroundColor: AmialColors.primary.withValues(alpha: .10), child: const Icon(Icons.inventory_2_outlined, color: AmialColors.primary)),
+                title: Text('${x['name'] ?? '—'}'),
+                subtitle: Text('المتاح: ${x['current_stock'] ?? 0} ${x['unit'] ?? ''}  •  سعر أساس: ${_money(x['base_price'])} ر.ي'),
+                trailing: inCart ? const Icon(Icons.edit_outlined, color: AmialColors.primary) : const Icon(Icons.add_circle_outline, color: AmialColors.primary),
+                onTap: () { Navigator.pop(sheet); _quantity(x); },
+              ); },
+            );
+          })),
+        ])),
       ))),
     );
+    search.dispose();
   }
 
-  Future<void> _quantity(Map<String, dynamic> product) async {
-    final amount = TextEditingController(text: '1');
-    final ok = await showDialog<bool>(context: context, builder: (dialog) => AlertDialog(
-      title: Text('${product['name'] ?? 'صنف'}'),
-      content: _Input(controller: amount, label: 'الكمية', icon: Icons.numbers_outlined, number: true),
-      actions: [TextButton(onPressed: () => Navigator.pop(dialog, false), child: const Text('إلغاء')), FilledButton(onPressed: () => Navigator.pop(dialog, true), child: const Text('إضافة'))],
-    ));
-    if (ok != true) return;
+  Future<void> _quantity(Map<String, dynamic> product, {double initial = 1, dynamic initialUnitId}) async {
+    final amount = TextEditingController(text: initial == initial.roundToDouble() ? initial.toStringAsFixed(0) : '$initial');
+    final loaded = await c.loadProductUnits(_id(product));
+    if (!mounted) { amount.dispose(); return; }
+    final units = ((loaded?['units'] ?? const []) as List).map((x) => Map<String, dynamic>.from(x as Map)).toList();
+    Map<String, dynamic>? unit;
+    for (final candidate in units) {
+      if (candidate['id'] == initialUnitId) { unit = candidate; break; }
+    }
+    if (unit == null) {
+      for (final candidate in units) {
+        if (candidate['is_base'] == true) { unit = candidate; break; }
+      }
+    }
+    unit ??= units.isNotEmpty ? units.first : null;
+    final ok = await showModalBottomSheet<bool>(context: context, isScrollControlled: true, builder: (sheet) => SafeArea(child: StatefulBuilder(builder: (_, setSheet) {
+      void change(double delta) { final next = ((double.tryParse(amount.text) ?? 0) + delta).clamp(.01, double.infinity); amount.text = next == next.roundToDouble() ? next.toStringAsFixed(0) : '$next'; setSheet(() {}); }
+      final q = double.tryParse(amount.text.trim()) ?? 0;
+      final stock = double.tryParse('${product['current_stock'] ?? 0}') ?? 0;
+      return Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.viewInsetsOf(sheet).bottom + 16), child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Center(child: Container(width: 42, height: 4, decoration: BoxDecoration(color: AmialColors.border, borderRadius: BorderRadius.circular(99)))),
+        const SizedBox(height: 18),
+        Text('${product['name'] ?? 'صنف'}', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+        Text('المتاح: ${_money(stock)} ${unit?['name'] ?? product['unit'] ?? ''}', style: const TextStyle(color: AmialColors.textSecondary)),
+        const SizedBox(height: 18),
+        if (units.isNotEmpty) DropdownButtonFormField<int>(value: unit?['id'] is num ? (unit!['id'] as num).toInt() : null, isExpanded: true, decoration: const InputDecoration(labelText: 'وحدة البيع', prefixIcon: Icon(Icons.straighten_outlined)), items: units.where((x) => x['id'] is num).map((x) => DropdownMenuItem<int>(value: (x['id'] as num).toInt(), child: Text('${x['name']}'))).toList(), onChanged: (id) => setSheet(() => unit = units.firstWhere((x) => x['id'] is num && (x['id'] as num).toInt() == id))),
+        const SizedBox(height: 14),
+        const Text('الكمية', style: TextStyle(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 8),
+        Row(children: [
+          IconButton.filledTonal(onPressed: () => change(-1), icon: const Icon(Icons.remove)),
+          Expanded(child: TextField(controller: amount, textAlign: TextAlign.center, keyboardType: const TextInputType.numberWithOptions(decimal: true), onChanged: (_) => setSheet(() {}), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900), decoration: const InputDecoration(border: OutlineInputBorder(), suffixText: 'وحدة'))),
+          IconButton.filled(onPressed: () => change(1), icon: const Icon(Icons.add)),
+        ]),
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, children: [for (final step in const [1, 5, 10, 25]) ActionChip(label: Text('+$step'), onPressed: () => change(step.toDouble()))]),
+        const SizedBox(height: 18),
+        FilledButton.icon(onPressed: q <= 0 ? null : () => Navigator.pop(sheet, true), icon: const Icon(Icons.add_shopping_cart_outlined), label: Text(initialUnitId == null ? 'إضافة إلى السلة' : 'تحديث السلة')),
+        TextButton(onPressed: () => Navigator.pop(sheet, false), child: const Text('إلغاء')),
+      ]));
+    })));
+    if (ok != true) { amount.dispose(); return; }
     final qty = double.tryParse(amount.text.trim()) ?? 0;
-    if (qty <= 0) { _toast('الكمية يجب أن تكون أكبر من صفر'); return; }
-    final added = await c.addToCart(product, qty);
+    if (qty <= 0) { amount.dispose(); _toast('الكمية يجب أن تكون أكبر من صفر'); return; }
+    final added = await c.addToCart(product, qty, unit: unit);
+    amount.dispose();
     if (!mounted) return;
     _toast(added ? 'أضيف الصنف بسعر العميل من الخادم' : c.lastError.value, ok: added);
   }
@@ -320,23 +401,37 @@ class _WholesaleProInvoiceCreateScreenState extends State<WholesaleProInvoiceCre
     backgroundColor: AmialColors.background,
     appBar: AppBar(title: const Text('فاتورة جملة جديدة'), centerTitle: true),
     body: Obx(() => Column(children: [
-      Padding(padding: const EdgeInsets.all(16), child: OutlinedButton.icon(
-        onPressed: _chooseCustomer, icon: const Icon(Icons.person_search_outlined),
-        label: Text(c.selectedCustomer.value == null ? 'اختر العميل *' : '${c.selectedCustomer.value!['full_name']}'),
+      Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 8), child: InkWell(
+        onTap: _chooseCustomer, borderRadius: BorderRadius.circular(14),
+        child: Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14), border: Border.all(color: c.selectedCustomer.value == null ? AmialColors.red.withValues(alpha: .45) : AmialColors.primary.withValues(alpha: .35))), child: Row(children: [
+          CircleAvatar(backgroundColor: AmialColors.primary.withValues(alpha: .10), child: Icon(c.selectedCustomer.value == null ? Icons.person_add_alt_1_outlined : Icons.person_outline, color: AmialColors.primary)),
+          const SizedBox(width: 12), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(c.selectedCustomer.value == null ? 'اختر العميل لإصدار الفاتورة' : '${c.selectedCustomer.value!['full_name']}', style: const TextStyle(fontWeight: FontWeight.w900)),
+            Text(c.selectedCustomer.value == null ? 'السعر والائتمان يتحددان حسب العميل' : '${c.selectedCustomer.value!['company_name'] ?? c.selectedCustomer.value!['phone'] ?? 'عميل جملة'}', style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
+          ])), const Icon(Icons.chevron_left_rounded),
+        ])),
       )),
-      Expanded(child: c.cart.isEmpty ? _EmptyState(icon: Icons.shopping_cart_outlined, text: 'السلة فارغة — أضف أصنافاً بعد اختيار العميل') : ListView.builder(
-        itemCount: c.cart.length, itemBuilder: (_, i) { final row = c.cart[i]; final p = row['product'] as Map; final price = double.tryParse('${p['quoted_unit_price'] ?? p['base_price']}') ?? 0; final qty = double.tryParse('${row['quantity']}') ?? 0; return ListTile(
-          title: Text('${p['name'] ?? '—'}'), subtitle: Text('${qty.toStringAsFixed(2)} ${p['quoted_unit'] ?? p['unit'] ?? ''} × ${_money(price)}'),
-          trailing: IconButton(icon: const Icon(Icons.delete_outline, color: AmialColors.red), onPressed: () => c.removeFromCart(_id(row), unitId: row['unit_id'])),
+      Expanded(child: c.cart.isEmpty ? _EmptyState(icon: Icons.playlist_add_rounded, text: c.selectedCustomer.value == null ? 'ابدأ باختيار العميل' : 'أضف أصناف الفاتورة من الزر أدناه') : ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8), itemCount: c.cart.length, itemBuilder: (_, i) { final row = c.cart[i]; final p = row['product'] as Map; final price = double.tryParse('${p['quoted_unit_price'] ?? p['base_price']}') ?? 0; final qty = double.tryParse('${row['quantity']}') ?? 0; return Card(child: ListTile(
+          leading: CircleAvatar(backgroundColor: AmialColors.primary.withValues(alpha: .10), child: Text('${i + 1}', style: const TextStyle(fontWeight: FontWeight.w900, color: AmialColors.primary))),
+          title: Text('${p['name'] ?? '—'}', style: const TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('${qty.toStringAsFixed(qty == qty.roundToDouble() ? 0 : 2)} ${p['quoted_unit'] ?? p['unit'] ?? ''} × ${_money(price)} ر.ي\nالإجمالي: ${_money(qty * price)} ر.ي'),
+          isThreeLine: true,
+          trailing: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            IconButton(tooltip: 'تعديل الكمية', icon: const Icon(Icons.edit_outlined, color: AmialColors.primary), onPressed: () => _quantity(Map<String, dynamic>.from(p), initial: qty, initialUnitId: row['unit_id'])),
+            IconButton(tooltip: 'حذف الصنف', icon: const Icon(Icons.delete_outline, color: AmialColors.red), onPressed: () => c.removeFromCart(_id(row), unitId: row['unit_id'])),
+          ]),
         ); },
       )),
-      Container(padding: const EdgeInsets.all(16), decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Color(0xFFE3E7EE)))), child: Column(children: [
-        Row(children: [OutlinedButton.icon(onPressed: _addProduct, icon: const Icon(Icons.add), label: const Text('إضافة صنف')), const Spacer(), Text('${_money(c.cartSubtotal)} ر.ي', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AmialColors.primary))]),
+      Container(padding: const EdgeInsets.fromLTRB(16, 12, 16, 16), decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Color(0xFFE3E7EE)))), child: Column(children: [
+        SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: _addProduct, icon: const Icon(Icons.add_shopping_cart_outlined), label: const Text('إضافة صنف إلى الفاتورة'))),
         _Input(controller: _discount, label: 'خصم الفاتورة', icon: Icons.discount_outlined, number: true),
         _Input(controller: _notes, label: 'ملاحظات', icon: Icons.notes_outlined),
-        Wrap(spacing: 6, children: [for (final item in const [('cash', 'نقد'), ('amial_pay', 'أميال باي'), ('credit', 'آجل')]) ChoiceChip(label: Text(item.$2), selected: _paymentType == item.$1, onSelected: (_) => setState(() => _paymentType = item.$1))]),
-        const SizedBox(height: 8), Text('الإجمالي ${_money(_total)} ر.ي', style: const TextStyle(fontWeight: FontWeight.w900, color: AmialColors.primary)),
-        const SizedBox(height: 8), SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: c.isSubmitting.value ? null : _submit, icon: const Icon(Icons.check_circle_outline), label: const Text('إنشاء الفاتورة'))),
+        Align(alignment: Alignment.centerRight, child: Text('طريقة السداد', style: Theme.of(context).textTheme.labelLarge)),
+        const SizedBox(height: 6),
+        Wrap(spacing: 6, children: [for (final item in const [('cash', 'نقد'), ('amial_pay', 'أميال باي'), ('credit', 'آجل')]) ChoiceChip(avatar: Icon(item.$1 == 'cash' ? Icons.payments_outlined : item.$1 == 'amial_pay' ? Icons.qr_code_rounded : Icons.calendar_month_outlined, size: 17), label: Text(item.$2), selected: _paymentType == item.$1, onSelected: (_) => setState(() => _paymentType = item.$1))]),
+        if (_paymentType == 'credit') const Padding(padding: EdgeInsets.only(top: 8), child: Text('تُسجّل الفاتورة ضمن دين العميل وفق حدّه ومدة سداده.', style: TextStyle(fontSize: 12, color: AmialColors.textSecondary))),
+        const SizedBox(height: 10), Row(children: [const Text('الإجمالي المطلوب', style: TextStyle(fontWeight: FontWeight.w700)), const Spacer(), Text('${_money(_total)} ر.ي', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AmialColors.primary))]),
+        const SizedBox(height: 10), SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: c.isSubmitting.value ? null : _submit, icon: c.isSubmitting.value ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.check_circle_outline), label: Text(c.isSubmitting.value ? 'جارٍ إنشاء الفاتورة…' : 'تأكيد وإنشاء الفاتورة'))),
       ])),
     ])),
   );
