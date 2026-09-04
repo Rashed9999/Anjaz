@@ -33,6 +33,7 @@ class CashierReceiptScreen extends StatefulWidget {
     this.invoicePath,
     this.invoiceTitle,
     this.nextSalePage,
+    this.nextSaleRoute,
     this.currencySymbol,
     this.baseTotal,
   });
@@ -72,6 +73,11 @@ class CashierReceiptScreen extends StatefulWidget {
 
   /// لا تعُد إلى الكاشير العام بعد بيع قطاعي متخصص.
   final Widget Function()? nextSalePage;
+
+  /// بديلٌ مسمّى لعملية جديدة في قطاعٍ متخصص. المسار يمنع الحلقة بين
+  /// شاشة الإيصال وشاشات القطاعات (مثل المطعم) ويعيد المستخدم إلى مساحة
+  /// عمله الصحيحة بدلاً من كاشير التجزئة العام.
+  final String? nextSaleRoute;
 
   @override
   State<CashierReceiptScreen> createState() => _CashierReceiptScreenState();
@@ -311,7 +317,14 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
           const SizedBox(height: 10),
         ],
         FilledButton.icon(
-          onPressed: () => Get.off(widget.nextSalePage ?? () => const CashierPosScreen()),
+          onPressed: () {
+            final route = widget.nextSaleRoute;
+            if (route != null && route.isNotEmpty) {
+              Get.offAllNamed(route);
+              return;
+            }
+            Get.off(widget.nextSalePage ?? () => const CashierPosScreen());
+          },
           icon: const Icon(Icons.add),
           label: const Text('عملية جديدة',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),

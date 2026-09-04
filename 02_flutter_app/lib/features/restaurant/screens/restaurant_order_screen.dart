@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/merchant/screens/cashier_receipt_screen.dart';
+import 'package:amial_pay/helper/route_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-RESTAURANT-001 — محرّر طلب المطعم.
@@ -132,8 +134,46 @@ class _RestaurantOrderScreenState extends State<RestaurantOrderScreen> {
     final r = await _api.postData('/api/v1/amial/restaurant/orders/$_orderId/close', {'payment_method': method});
     if (!mounted) return;
     setState(() => _busy = false);
-    if (r.statusCode == 200) { _snack('أُغلق الطلب وسُجّلت الفاتورة', ok: true); Get.back(result: true); }
-    else { _snack((r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر الإغلاق'); }
+    if (r.statusCode == 200 && r.body is Map) {
+      final meta = r.body['meta'] is Map
+          ? Map<String, dynamic>.from(r.body['meta'] as Map)
+          : <String, dynamic>{};
+      final rawSale = meta['sale'];
+      final order = meta['order'] is Map
+          ? Map<String, dynamic>.from(meta['order'] as Map)
+          : <String, dynamic>{};
+
+      // لا نكتفي برسالة «سُجّلت الفاتورة»: البيع المسجّل يفتح فوراً في
+      // شاشة الفاتورة الموحدة، فتتوفر الطباعة الحرارية وPDF وواتساب للمطعم
+      // كما هي متاحة لبقية القطاعات. أسطر العرض هنا هي لقطة الطلب الذي
+      // أغلقناه؛ أما PDF فيُقرأ من سجل البيع الحقيقي في الخادم.
+      if (rawSale is Map) {
+        final sale = Map<String, dynamic>.from(rawSale);
+        if (sale['items'] is! List) {
+          sale['items'] = _items
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList(growable: false);
+        }
+        final total = double.tryParse(
+              '${sale['total_amount'] ?? order['total'] ?? _total}',
+            ) ??
+            _total;
+
+        Get.off(() => CashierReceiptScreen(
+          sale: sale,
+          total: total,
+          method: method,
+          invoiceTitle: 'فاتورة مطعم',
+          nextSaleRoute: RouteHelper.restaurant,
+        ));
+        return;
+      }
+
+      _snack('أُغلق الطلب وسُجّلت الفاتورة', ok: true);
+      Get.back(result: true);
+    } else {
+      _snack((r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر الإغلاق');
+    }
   }
 
   String _statusLabel(String s) => {
