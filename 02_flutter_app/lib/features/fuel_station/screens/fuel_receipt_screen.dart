@@ -9,6 +9,7 @@ import 'package:screenshot/screenshot.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/merchant/controllers/receipt_settings_controller.dart';
 import 'package:amial_pay/features/merchant/widgets/invoice_whatsapp_sheet.dart';
+import 'package:amial_pay/features/merchant/widgets/merchant_invoice_actions.dart';
 import 'package:amial_pay/features/payments/widgets/amial_invoice_card.dart';
 import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
 import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
@@ -273,45 +274,12 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
           ),
           const SizedBox(height: 22),
 
-          // ====== الأزرار ======
-          Row(children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _busy ? null : _print,
-                icon: const Icon(Icons.print_outlined, size: 20),
-                label: const Text('طباعة'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AmialColors.primary,
-                  side: const BorderSide(color: AmialColors.primary),
-                  minimumSize: const Size.fromHeight(50),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: _busy ? null : _downloadPdf,
-                icon: const Icon(Icons.picture_as_pdf_outlined, size: 20),
-                label: const Text('PDF'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AmialColors.red,
-                  minimumSize: const Size.fromHeight(50),
-                ),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _busy ? null : _whatsapp,
-              icon: const Icon(Icons.chat, size: 20),
-              label: const Text('مشاركة عبر واتساب'),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF25D366),
-                minimumSize: const Size.fromHeight(50),
-              ),
-            ),
+          // نفس إجراءات الفاتورة المعتمدة في بقية قطاعات التجار.
+          MerchantInvoiceActions(
+            busy: _busy,
+            onPrint: _print,
+            onWhatsApp: _whatsapp,
+            onPdf: _downloadPdf,
           ),
           const SizedBox(height: 10),
           FilledButton.icon(

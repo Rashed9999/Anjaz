@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:screenshot/screenshot.dart';
 
 import 'package:amial_pay/features/merchant/widgets/invoice_whatsapp_sheet.dart';
+import 'package:amial_pay/features/merchant/widgets/merchant_invoice_actions.dart';
 import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_access_controller.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
@@ -229,18 +230,22 @@ class _WholesaleProInvoiceDetailsScreenState extends State<WholesaleProInvoiceDe
         const SizedBox(height: 12), const Text('الأصناف', style: TextStyle(fontWeight: FontWeight.w900)),
         ...items.map((raw) { final row = raw as Map; return Card(child: ListTile(title: Text('${row['product_name'] ?? '—'}'), subtitle: Text('${row['quantity'] ?? 0} × ${_money(row['unit_price'])}'), trailing: Text('${_money(row['line_total'])} ر.ي'))); }),
         const SizedBox(height: 8),
-        SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () async {
+        MerchantInvoiceActions(
+          busy: c.isSubmitting.value,
+          onPrint: () async {
           final result = await c.printInvoiceThermal(invoice);
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(result.message),
             backgroundColor: result.ok ? AmialColors.success : AmialColors.red,
           ));
-        }, icon: const Icon(Icons.print_outlined), label: const Text('طباعة حرارية'))),
-        const SizedBox(height: 8),
-        SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => _shareWhatsApp(invoice, customer), icon: const Icon(Icons.chat_outlined), label: const Text('مشاركة عبر واتساب'))),
-        const SizedBox(height: 8),
-        SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () async { final ok = await c.downloadInvoicePdf(widget.invoiceId); if (!ok && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(c.lastError.value))); }, icon: const Icon(Icons.picture_as_pdf_outlined), label: const Text('تنزيل الفاتورة PDF'))),
+          },
+          onWhatsApp: () => _shareWhatsApp(invoice, customer),
+          onPdf: () async {
+            final ok = await c.downloadInvoicePdf(widget.invoiceId);
+            if (!ok && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(c.lastError.value)));
+          },
+        ),
       ])));
     }),
   );
