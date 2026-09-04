@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Models\CustomerCreditAccount;
 use App\Models\User;
+use App\Models\WholesaleBusiness;
 use App\Models\WholesaleCustomer;
 use App\Models\WholesaleInvoice;
 use App\Models\WholesaleInvoiceItem;
@@ -137,6 +139,25 @@ class WholesaleReturnService
             ]);
             if (MoneyService::compare($credited, '0') > 0) {
                 $customer->update(['current_balance' => MoneyService::sub((string) $customer->current_balance, $credited)]);
+
+                // المرتجع يقلل الذمة المفتوحة، لذلك لا يكفي تعديل جدول
+                // الجملة وحده: نضيف قيد return إلى دفتر الديون الموحد الذي
+                // يراه التاجر والعميل. الحساب المفقود يخص فاتورة تاريخية
+                // قبل التوحيد، فلا ننشئ له حساباً سالباً مصطنعاً.
+                $account = $this->findUnifiedCreditAccount(
+                    (int) WholesaleBusiness::whereKey($invoice->business_id)->value('merchant_user_id'),
+                    (string) $customer->phone,
+                );
+                if ($account) {
+                    app(CustomerCreditService::class)->recordReturn(
+                        account: $account,
+                        amount: $credited,
+                        note: 'مرتجع فاتورة جملة',
+                        createdBy: $reviewer->id,
+                        referenceType: 'wholesale_return',
+                        referenceId: $ret->return_ulid,
+                    );
+                }
             }
             if ($invoice->sales_rep_id && MoneyService::compare((string) $invoice->sales_rep_commission_amount, '0') > 0) {
                 $rep = WholesaleSalesRep::lockForUpdate()->find($invoice->sales_rep_id);
@@ -160,5 +181,17 @@ class WholesaleReturnService
             ]);
             return $ret->fresh(['items', 'invoice', 'customer']);
         });
+    }
+
+    /** @see WholesaleInvoiceService::findUnifiedCreditAccount */
+    private function findUnifiedCreditAccount(int $merchantId, string $phone): ?CustomerCreditAccount
+    {
+        if ($merchantId <= 0 || trim($phone) === '') {
+            return null;
+        }
+
+        return CustomerCreditAccount::where('merchant_user_id', $merchantId)
+            ->whereIn('customer_phone', \App\Support\Phone::variants($phone))
+            ->first();
     }
 }

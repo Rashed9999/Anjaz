@@ -12,12 +12,12 @@ use Tests\TestCase;
  * أرسل صاحبُ المشروع شاشتَي دفعٍ متباعدتين — تجزئةٍ وصيدليّة — وسأل عن
  * الآجل، وطلب **التوحيد لكلّ القطاعات**.
  *
- * **وقِيس فالجوابُ أنّ الأربعةَ موصولةٌ كلُّها**:
+ * **وقِيس فالجوابُ أنّ القطاعات التجارية الأربعة موصولةٌ كلُّها**:
  *
  *     تجزئة/سريع → CashierService      → CustomerCreditService
  *     صيدليّة    → PharmacySaleService → CustomerCreditService
  *     وقود       → FuelStationService  → CustomerCreditService
- *     مطعم       → closeOrder → CashierService (تفويضٌ لا نسخة)
+ *     جملة       → WholesaleInvoiceService → CustomerCreditService
  *
  * **فالعطلُ ليس في الوصل بل في الصمت عنه** — وفي أنّ الصيدليّة بلا خصم.
  *
@@ -54,35 +54,39 @@ class SectorPaymentUnifiedGuardTest extends TestCase
     /** @test */
     public function every_sector_that_accepts_credit_writes_it_to_the_debt_ledger(): void
     {
-        // القطاعُ ⇒ [ملفُّ المتحكّم (لقبول `credit`)، ملفُّ الخدمة (للوصل)]
+        // القطاعُ ⇒ [ملفُّ المتحكّم، اسم الحقل، ملفات الخدمة].
+        // الجملة تستعمل `payment_type`، لا `payment_method`؛ تجاهلُ الفرق
+        // يجعل الحارس أخضر بينما أهم فاتورة آجل لا تُفحَص أصلاً.
         $sectors = [
             'تجزئة/سريع' => [
                 'app/Http/Controllers/Api/V1/Amial/CashierController.php',
+                'payment_method',
                 ['app/Services/CashierService.php'],
             ],
             'صيدليّة' => [
                 'app/Http/Controllers/Api/V1/Amial/PharmacyController.php',
+                'payment_method',
                 ['app/Services/PharmacySaleService.php'],
             ],
             'وقود' => [
                 'app/Http/Controllers/Api/V1/Amial/FuelStationController.php',
+                'payment_method',
                 ['app/Services/FuelStationService.php'],
             ],
-            // **والمطعمُ يفوّض ولا ينسخ** — فيُقبل وصلُه عبر الكاشير.
-            'مطعم' => [
-                'app/Http/Controllers/Api/V1/Amial/RestaurantController.php',
-                ['app/Services/RestaurantService.php', 'app/Services/CashierService.php'],
+            'جملة' => [
+                'app/Http/Controllers/Api/V1/Amial/WholesaleController.php',
+                'payment_type',
+                ['app/Services/WholesaleInvoiceService.php'],
             ],
         ];
 
         $unwired = [];
         $checked = 0;
 
-        foreach ($sectors as $label => [$controller, $services]) {
+        foreach ($sectors as $label => [$controller, $paymentField, $services]) {
             $ctl = $this->backend($controller);
 
-            // لا يقبل الآجلَ أصلاً ⇒ لا يُطالَب بوصل.
-            if (!preg_match("~payment_method[^\n]*credit~", $ctl)) {
+            if (!preg_match("~{$paymentField}[^\n]*credit~", $ctl)) {
                 continue;
             }
 
@@ -102,14 +106,36 @@ class SectorPaymentUnifiedGuardTest extends TestCase
         }
 
         // **ولا يمرّ الحارسُ على لا شيء** — مرشِّحٌ عمي يخرج أخضرَ على صفر.
-        $this->assertGreaterThanOrEqual(4, $checked,
-            "لم يُفحَص إلّا {$checked} قطاعاً — المرشِّحُ لا يرى «credit».");
+        $this->assertSame(4, $checked,
+            "لم يُفحَص إلّا {$checked} قطاعاً — المرشِّحُ لا يرى «credit» في عقد قطاع تجاري.");
 
         $this->assertSame([], $unwired, sprintf(
             "**قطاعاتٌ تقبل البيعَ الآجلَ ولا تكتب ديناً:**\n  %s\n\n"
             .'فالبضاعةُ تخرج والذمّةُ لا تُقيَّد — **بيعٌ بالمجّان**، ولا '
             .'خطأَ في أيّ سجلّ: البيعةُ تُسجَّل وتُطبَع.',
             implode("\n  ", $unwired)));
+    }
+
+    /**
+     * ①-ب البيع الآجل ليس قيداً وحيد الاتجاه. إن أُبطلت الفاتورة أو قبل
+     * التاجر مرتجعاً، يجب أن يتغيّر كشف الديون الموحد كما يتغيّر رصيد
+     * عميل الجملة؛ وإلا صارت الفاتورة «ملغاة» والعميل ما زال مديناً بها.
+     */
+    /** @test */
+    public function wholesale_credit_has_a_complete_unified_debt_lifecycle(): void
+    {
+        $invoice = $this->backend('app/Services/WholesaleInvoiceService.php');
+        $returns = $this->backend('app/Services/WholesaleReturnService.php');
+
+        $this->assertStringContainsString('بيع الجملة الآجل يحتاج رقم هاتف العميل', $invoice,
+            'لا تقبل فاتورة آجل بلا هوية عميل قابلة للربط بالدفتر الموحد');
+        $this->assertStringContainsString("referenceType: 'wholesale_invoice'", $invoice);
+        $this->assertStringContainsString("referenceType: 'wholesale_invoice_void'", $invoice,
+            'إبطال فاتورة الآجل لا يعكس قيد الدفتر الموحد');
+        $this->assertStringContainsString('recordReturn(', $invoice);
+        $this->assertStringContainsString("referenceType: 'wholesale_return'", $returns,
+            'مرتجع الجملة لا يترك ديناً قائماً في الدفتر الموحد');
+        $this->assertStringContainsString('recordReturn(', $returns);
     }
 
     /**
@@ -175,6 +201,8 @@ class SectorPaymentUnifiedGuardTest extends TestCase
         foreach ([
             'الكاشير (تجزئة · سريع · مطعم)' => 'lib/features/merchant/screens/cashier_payment_screen.dart',
             'الصيدليّة' => 'lib/features/pharmacy/screens/pharmacy_sale_screen.dart',
+            'الوقود' => 'lib/features/fuel_station/screens/fuel_sale_screen.dart',
+            'الجملة' => 'lib/features/wholesale/screens/wholesale_workflow_screens.dart',
         ] as $label => $rel) {
             if (!str_contains($this->app($rel), 'CreditSaleNotice')) {
                 $missing[] = "{$label} ({$rel})";
@@ -186,5 +214,46 @@ class SectorPaymentUnifiedGuardTest extends TestCase
             .'وسؤالُ صاحب المشروع كان بنصّه: «لا أعلم أيٌّ منهم مرتبطٌ '
             .'الآجلُ فيه بنظام الديون» — وهو سؤالٌ لا يُجاب من الشاشة.',
             implode("\n  ", $missing)));
+    }
+
+    /**
+     * ④ لا تعود كل شاشة إلى أزرارها الخاصة، ولا يضيع إيصال الوقود بعد
+     * النقد أو الآجل. الحارس بنيوي؛ التحقق التفاعلي يبقى ضمن بناء Flutter.
+     */
+    /** @test */
+    public function every_commercial_sale_screen_uses_the_shared_payment_contract(): void
+    {
+        $picker = 'lib/features/merchant/widgets/merchant_payment_method_picker.dart';
+        $this->assertFileExists(dirname(base_path()).'/02_flutter_app/'.$picker,
+            'مكوّن وسائل الدفع الموحّد غير موجود');
+
+        $missing = [];
+        foreach ([
+            'تجزئة/سريع' => 'lib/features/merchant/screens/cashier_payment_screen.dart',
+            'صيدليّة' => 'lib/features/pharmacy/screens/pharmacy_sale_screen.dart',
+            'وقود' => 'lib/features/fuel_station/screens/fuel_sale_screen.dart',
+            'جملة' => 'lib/features/wholesale/screens/wholesale_workflow_screens.dart',
+        ] as $label => $rel) {
+            $src = $this->app($rel);
+            if (!str_contains($src, 'MerchantPaymentMethodPicker')) {
+                $missing[] = "{$label} ({$rel})";
+            }
+        }
+        $this->assertSame([], $missing, sprintf(
+            "**شاشات بيع عادت لخيارات دفع منفصلة:**\n  %s",
+            implode("\n  ", $missing)));
+
+        $fuelSale = $this->app('lib/features/fuel_station/screens/fuel_sale_screen.dart');
+        $fuelReceipt = $this->app('lib/features/fuel_station/screens/fuel_receipt_screen.dart');
+        $wholesale = $this->app('lib/features/wholesale/screens/wholesale_workflow_screens.dart');
+
+        $this->assertStringContainsString('void _openReceipt()', $fuelSale);
+        $this->assertStringContainsString('FuelReceiptScreen(', $fuelSale,
+            'بيع الوقود الناجح لا يصل إلى الفاتورة الموحدة');
+        $this->assertStringContainsString("'credit' => 'آجل'", $fuelReceipt,
+            'فاتورة الوقود تعرض كود payment_method بدلاً من «آجل»');
+        $this->assertStringContainsString('double get _taxAmount', $wholesale);
+        $this->assertStringContainsString('taxRate: _taxRateSource', $wholesale,
+            'QR الجملة لا يثبّت ضريبة الإجمالي قبل إنشاء الفاتورة');
     }
 }

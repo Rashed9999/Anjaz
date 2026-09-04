@@ -26,11 +26,16 @@ class CreditSaleNotice extends StatelessWidget {
   const CreditSaleNotice({
     super.key,
     this.customerLabel,
+    this.missingCustomerMessage,
     this.dense = false,
   });
 
   /// «أحمد — 7xxxxxxxx» إن عُرف العميل. و`null` يعني أنّه لم يُدخَل بعد.
   final String? customerLabel;
+
+  /// نصٌّ خاص لقطاع لديه عميل مختار لكن لا يملك رقم هاتف بعد (الجملة).
+  /// لا نكذب فنقول إن الدين ظهر في تطبيق العميل قبل ربط هويته.
+  final String? missingCustomerMessage;
 
   /// صيغةٌ أضيقُ لورقةٍ سفليّةٍ ضيّقة (شاشةُ الصيدليّة).
   final bool dense;
@@ -68,8 +73,9 @@ class CreditSaleNotice extends StatelessWidget {
                   // **ويُسمّى من عليه الدين** — «دينٌ على العميل» بلا اسمٍ
                   // لا يُحصَّل، ولا يُعرف على من هو بعد أسبوع.
                   ? 'على: $customerLabel  ·  يظهر في «دفتر الديون» وتُحصَّل منه دفعاتُه.'
-                  : 'أدخل رقم العميل — فدَينٌ بلا صاحبٍ لا يُحصَّل. '
-                      'ويظهر بعدها في «دفتر الديون».',
+                  : (missingCustomerMessage ??
+                      'أدخل رقم العميل — فدَينٌ بلا صاحبٍ لا يُحصَّل. '
+                          'ويظهر بعدها في «دفتر الديون».'),
               style: TextStyle(
                 fontSize: dense ? 10.5 : 11.5,
                 height: 1.45,

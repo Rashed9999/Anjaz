@@ -5,6 +5,7 @@ import 'package:amial_pay/features/fuel_station/controllers/fuel_station_control
 import 'package:amial_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_receipt_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_qr_collect_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
 
 /// AMIAL-FUEL-CASHIER-001 — كاشير محطة الوقود (تصميم #103).
 ///
@@ -277,8 +278,19 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
               icon: const Icon(Icons.history),
               label: const Text('السجل'),
             )),
-            const SizedBox(width: 8),
           ]),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: c.isSubmitting.value
+                ? null
+                : () => Get.to(() => const FuelSaleScreen()),
+            icon: const Icon(Icons.receipt_long_outlined),
+            label: const Text('بيع تفصيلي: آجل أو حساب شركة'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AmialColors.primary,
+              minimumSize: const Size.fromHeight(46),
+            ),
+          ),
           const SizedBox(height: 20),
 
           // ===== آخر العمليات =====

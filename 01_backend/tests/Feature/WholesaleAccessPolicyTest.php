@@ -189,7 +189,7 @@ class WholesaleAccessPolicyTest extends TestCase
             'name' => 'صنف تحصيل الموظف', 'base_price' => '1000', 'initial_stock' => 5,
         ]);
         $customer = $service->addCustomer($business, [
-            'full_name' => 'عميل التحصيل', 'credit_limit' => '10000',
+            'full_name' => 'عميل التحصيل', 'phone' => '771700001', 'credit_limit' => '10000',
         ]);
         $invoice = app(WholesaleInvoiceService::class)->createInvoice($owner, $business, [[
             'product_id' => $product->id, 'quantity' => '2',

@@ -9,6 +9,7 @@ import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/helper/payment_feedback.dart';
 import 'package:amial_pay/features/merchant/widgets/credit_sale_notice.dart';
+import 'package:amial_pay/features/merchant/widgets/merchant_payment_method_picker.dart';
 
 /// AMIAL-POS-002 — «تأكيد الدفع» (التصميم 37):
 /// بطاقة الإجمالي المطلوب سداده + اختيار وسيلة واحدة:
@@ -674,12 +675,6 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           ]),
           const SizedBox(height: 12),
 
-          _methodCard(
-            value: 'cash',
-            icon: Icons.payments_outlined,
-            title: 'نقدي',
-            subtitle: 'الدفع بالعملة المحلية يدوياً',
-          ),
           // AMIAL-MULTI-CURRENCY-003 — **وسائلُ المحفظة تُخفى مع عملةٍ
           // أجنبيّة، ولا تُعرَض ثمّ تُرفَض.**
           //
@@ -687,19 +682,18 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           // فاختيارُها مع الدولار يُسجّل بيعةً بعملةٍ لم يدفع بها الزبون.
           // وزرٌّ معروضٌ يُفترَض أنّه يعمل — فإخفاؤه أصدقُ من رفضٍ بعد
           // الضغط والزبونُ واقف. (والسببُ مكتوبٌ في بطاقة العملة أعلاه.)
-          if (_methodAllowedInCurrency('amial_pay'))
-            _methodCard(
-              value: 'amial_pay',
-              icon: Icons.qr_code_2,
-              title: 'أميال باي',
-              subtitle: 'العميل يدفع من تطبيقه عبر QR فوراً',
-              recommended: true,
-            ),
-          _methodCard(
-            value: 'credit',
-            icon: Icons.calendar_today_outlined,
-            title: 'آجل',
-            subtitle: 'قيد العملية على حساب العميل',
+          MerchantPaymentMethodPicker(
+            layout: MerchantPaymentPickerLayout.cards,
+            selectedValue: _method,
+            onChanged: _busy ? null : (value) => setState(() => _method = value),
+            options: [
+              MerchantPaymentOption.cash,
+              if (_methodAllowedInCurrency('amial_pay'))
+                MerchantPaymentOption.amialPay,
+              MerchantPaymentOption.credit,
+              if (_methodAllowedInCurrency('mixed'))
+                MerchantPaymentOption.mixed,
+            ],
           ),
 
           // AMIAL-SECTOR-PAY-UNIFY-001 — **اللافتةُ نفسُها في كلّ قطاع.**
@@ -708,13 +702,6 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
           // مشتركٍ فلا يفترق عن نصّ الصيدليّة بعد أوّل تعديل.
           if (_method == 'credit') const CreditSaleNotice(),
 
-          if (_methodAllowedInCurrency('mixed'))
-            _methodCard(
-              value: 'mixed',
-              icon: Icons.call_split,
-              title: 'مختلط',
-              subtitle: 'جزء نقداً وجزء من محفظة أميال باي',
-            ),
           if (_methodAllowedInCurrency('corporate'))
             AccessGate(feature: 'corporate_accounts', child: _methodCard(
               value: 'corporate',

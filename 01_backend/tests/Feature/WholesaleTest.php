@@ -97,7 +97,7 @@ class WholesaleTest extends TestCase
             'name' => 'سكر 50 كجم', 'base_price' => '5000', 'initial_stock' => 100,
         ]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'محل سعيد', 'credit_limit' => 100000,
+            'full_name' => 'محل سعيد', 'phone' => '771700001', 'credit_limit' => 100000,
             'default_tier_id' => $tier->id,
         ]);
 
@@ -117,6 +117,43 @@ class WholesaleTest extends TestCase
         // رصيد العميل ارتفع
         $customer->refresh();
         $this->assertEquals('50000.0000', (string)$customer->current_balance);
+
+        // ولا يبقى الدين محبوساً في جدول الجملة: دفتر الديون الموحد يأخذ
+        // القيد نفسه، سواء كان صاحب الرقم يستخدم تطبيق أميال أم لا.
+        $account = CustomerCreditAccount::where('merchant_user_id', $this->merchant->id)
+            ->where('customer_phone', '771700001')->firstOrFail();
+        $this->assertSame('50000.0000', (string) $account->current_balance);
+    }
+
+    /** @test */
+    public function wholesale_credit_requires_an_identified_customer_but_cash_does_not(): void
+    {
+        $biz = $this->svc->getOrCreateBusiness($this->merchant);
+        $tier = $biz->priceTiers->where('code', 'wholesale')->first();
+        $product = $this->svc->addProduct($biz, [
+            'name' => 'هوية الدين', 'base_price' => '1000', 'initial_stock' => 10,
+        ]);
+        $customer = $this->svc->addCustomer($biz, [
+            'full_name' => 'عميل بلا رقم', 'credit_limit' => '10000',
+            'default_tier_id' => $tier->id,
+        ]);
+
+        try {
+            $this->invSvc->createInvoice($this->merchant, $biz,
+                [['product_id' => $product->id, 'quantity' => 1]],
+                ['customer_id' => $customer->id, 'payment_type' => 'credit'],
+            );
+            $this->fail('قُبل بيع آجل بلا هوية عميل');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('رقم هاتف العميل', $e->getMessage());
+        }
+
+        $cash = $this->invSvc->createInvoice($this->merchant, $biz,
+            [['product_id' => $product->id, 'quantity' => 1]],
+            ['customer_id' => $customer->id, 'payment_type' => 'cash'],
+        );
+        $this->assertSame('paid', $cash->status,
+            'رقم الهاتف هويةٌ للآجل فقط؛ لا يجوز أن يمنع البيع النقدي');
     }
 
     /** @test */
@@ -167,7 +204,7 @@ class WholesaleTest extends TestCase
             'name' => 'X', 'base_price' => '5000', 'initial_stock' => 100,
         ]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'X', 'credit_limit' => 20000, // حدّ منخفض
+            'full_name' => 'X', 'phone' => '771700001', 'credit_limit' => 20000, // حدّ منخفض
             'default_tier_id' => $tier->id,
         ]);
 
@@ -186,7 +223,7 @@ class WholesaleTest extends TestCase
         $tier = $biz->priceTiers->where('code', 'wholesale')->first();
         $product = $this->svc->addProduct($biz, ['name' => 'X', 'base_price' => '5000', 'initial_stock' => 100]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'X', 'credit_limit' => 0,
+            'full_name' => 'X', 'phone' => '771700001', 'credit_limit' => 0,
             'default_tier_id' => $tier->id,
         ]);
 
@@ -220,7 +257,7 @@ class WholesaleTest extends TestCase
             'expiry_date' => now()->addYear()->toDateString(),
         ]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'عميل الكراتين', 'credit_limit' => '10000', 'default_tier_id' => $tier->id,
+            'full_name' => 'عميل الكراتين', 'phone' => '771700001', 'credit_limit' => '10000', 'default_tier_id' => $tier->id,
         ]);
 
         $invoice = $this->invSvc->createInvoice($this->merchant, $biz, [[
@@ -244,7 +281,7 @@ class WholesaleTest extends TestCase
         $tier = $biz->priceTiers->where('code', 'wholesale')->first();
         $product = $this->svc->addProduct($biz, ['name' => 'تحصيل محفظة', 'base_price' => '2500', 'initial_stock' => 10]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'عميل المحفظة', 'credit_limit' => 0, 'default_tier_id' => $tier->id,
+            'full_name' => 'عميل المحفظة', 'phone' => '771700001', 'credit_limit' => 0, 'default_tier_id' => $tier->id,
         ]);
         PaymentRequest::create([
             'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
@@ -297,7 +334,7 @@ class WholesaleTest extends TestCase
         $tier = $biz->priceTiers->where('code', 'wholesale')->first();
         $product = $this->svc->addProduct($biz, ['name' => 'مبلغ غير مطابق', 'base_price' => '1000', 'initial_stock' => 10]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'عميل', 'credit_limit' => 0, 'default_tier_id' => $tier->id,
+            'full_name' => 'عميل', 'phone' => '771700001', 'credit_limit' => 0, 'default_tier_id' => $tier->id,
         ]);
         PaymentRequest::create([
             'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
@@ -331,7 +368,7 @@ class WholesaleTest extends TestCase
         $tier = $biz->priceTiers->where('code', 'wholesale')->first();
         $product = $this->svc->addProduct($biz, ['name' => 'دين أميال', 'base_price' => '1000', 'initial_stock' => 10]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'عميل دين', 'credit_limit' => 10000, 'default_tier_id' => $tier->id,
+            'full_name' => 'عميل دين', 'phone' => '771700001', 'credit_limit' => 10000, 'default_tier_id' => $tier->id,
         ]);
         $invoice = $this->invSvc->createInvoice($this->merchant, $biz,
             [['product_id' => $product->id, 'quantity' => 5]],
@@ -375,7 +412,7 @@ class WholesaleTest extends TestCase
         // يجب أن يختار الخادم سعر الشريحة (900) لا سعراً يرسله التطبيق.
         $this->svc->setProductPrice($product, $tier->id, 900, 1);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'عميل الخصم', 'credit_limit' => 100000, 'default_tier_id' => $tier->id,
+            'full_name' => 'عميل الخصم', 'phone' => '771700001', 'credit_limit' => 100000, 'default_tier_id' => $tier->id,
         ]);
 
         $invoice = $this->invSvc->createInvoice($this->merchant, $biz,
@@ -398,7 +435,7 @@ class WholesaleTest extends TestCase
         $tier = $biz->priceTiers->where('code', 'wholesale')->first();
         $product = $this->svc->addProduct($biz, ['name' => 'صنف مرتجع', 'base_price' => '1000', 'initial_stock' => 10]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'عميل مرتجع', 'credit_limit' => 50000, 'default_tier_id' => $tier->id,
+            'full_name' => 'عميل مرتجع', 'phone' => '771700001', 'credit_limit' => 50000, 'default_tier_id' => $tier->id,
         ]);
         $invoice = $this->invSvc->createInvoice($this->merchant, $biz,
             [['product_id' => $product->id, 'quantity' => 5]],
@@ -419,6 +456,17 @@ class WholesaleTest extends TestCase
         $this->assertEquals('3000.0000', (string) $customer->current_balance);
         $this->assertEquals('3000.0000', (string) $invoice->balance_due);
         $this->assertEquals('3000.0000', (string) $invoice->total_amount);
+        $account = CustomerCreditAccount::where('merchant_user_id', $this->merchant->id)
+            ->where('customer_phone', '771700001')->firstOrFail();
+        $this->assertEquals('3000.0000', (string) $account->current_balance,
+            'مرتجع الجملة يجب أن يقلل دفتر الديون الموحد مثل رصيد العميل');
+        $this->assertDatabaseHas('customer_credit_movements', [
+            'account_id' => $account->id,
+            'type' => 'return',
+            'amount' => '-2000.0000',
+            'reference_type' => 'wholesale_return',
+            'reference_id' => $return->return_ulid,
+        ]);
     }
 
     /** @test */
@@ -428,7 +476,7 @@ class WholesaleTest extends TestCase
         $tier = $biz->priceTiers->where('code', 'wholesale')->first();
         $product = $this->svc->addProduct($biz, ['name' => 'مرتجع نقدي', 'base_price' => '1000', 'initial_stock' => 4]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'عميل نقدي', 'credit_limit' => 0, 'default_tier_id' => $tier->id,
+            'full_name' => 'عميل نقدي', 'phone' => '771700001', 'credit_limit' => 0, 'default_tier_id' => $tier->id,
         ]);
         $invoice = $this->invSvc->createInvoice($this->merchant, $biz,
             [['product_id' => $product->id, 'quantity' => 2]],
@@ -450,7 +498,7 @@ class WholesaleTest extends TestCase
         $tier = $biz->priceTiers->where('code', 'wholesale')->first();
         $product = $this->svc->addProduct($biz, ['name' => 'X', 'base_price' => '10000', 'initial_stock' => 100]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'X', 'credit_limit' => 200000,
+            'full_name' => 'X', 'phone' => '771700001', 'credit_limit' => 200000,
             'default_tier_id' => $tier->id,
         ]);
 
@@ -493,7 +541,7 @@ class WholesaleTest extends TestCase
         $tier = $biz->priceTiers->where('code', 'wholesale')->first();
         $product = $this->svc->addProduct($biz, ['name' => 'X', 'base_price' => '1000', 'initial_stock' => 100]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'X', 'credit_limit' => 100000, 'default_tier_id' => $tier->id,
+            'full_name' => 'X', 'phone' => '771700001', 'credit_limit' => 100000, 'default_tier_id' => $tier->id,
         ]);
         $invoice = $this->invSvc->createInvoice($this->merchant, $biz,
             [['product_id' => $product->id, 'quantity' => 5]],
@@ -515,7 +563,7 @@ class WholesaleTest extends TestCase
         $tier = $biz->priceTiers->where('code', 'wholesale')->first();
         $product = $this->svc->addProduct($biz, ['name' => 'X', 'base_price' => '1000', 'initial_stock' => 100]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'X', 'credit_limit' => 50000, 'default_tier_id' => $tier->id,
+            'full_name' => 'X', 'phone' => '771700001', 'credit_limit' => 50000, 'default_tier_id' => $tier->id,
         ]);
         $invoice = $this->invSvc->createInvoice($this->merchant, $biz,
             [['product_id' => $product->id, 'quantity' => 20]],
@@ -535,6 +583,17 @@ class WholesaleTest extends TestCase
         $this->assertEquals('100.0000', (string)$product->current_stock);
         $customer->refresh();
         $this->assertEquals('0.0000', (string)$customer->current_balance);
+        $account = CustomerCreditAccount::where('merchant_user_id', $this->merchant->id)
+            ->where('customer_phone', '771700001')->firstOrFail();
+        $this->assertEquals('0.0000', (string) $account->current_balance,
+            'إبطال فاتورة الجملة يجب أن يعكس قيد الدين الموحد أيضاً');
+        $this->assertDatabaseHas('customer_credit_movements', [
+            'account_id' => $account->id,
+            'type' => 'return',
+            'amount' => '-20000.0000',
+            'reference_type' => 'wholesale_invoice_void',
+            'reference_id' => $invoice->invoice_ulid,
+        ]);
 
         $invoice->refresh();
         $this->assertEquals('voided', $invoice->status);
@@ -547,7 +606,7 @@ class WholesaleTest extends TestCase
         $tier = $biz->priceTiers->where('code', 'wholesale')->first();
         $product = $this->svc->addProduct($biz, ['name' => 'X', 'base_price' => '100', 'initial_stock' => 100]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'X', 'credit_limit' => 10000, 'default_tier_id' => $tier->id,
+            'full_name' => 'X', 'phone' => '771700001', 'credit_limit' => 10000, 'default_tier_id' => $tier->id,
         ]);
 
         $inv1 = $this->invSvc->createInvoice($this->merchant, $biz,
@@ -571,7 +630,7 @@ class WholesaleTest extends TestCase
         $tier = $biz->priceTiers->where('code', 'wholesale')->first();
         $product = $this->svc->addProduct($biz, ['name' => 'X', 'base_price' => '1000', 'initial_stock' => 1000]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'X', 'credit_limit' => 1000000, 'default_tier_id' => $tier->id,
+            'full_name' => 'X', 'phone' => '771700001', 'credit_limit' => 1000000, 'default_tier_id' => $tier->id,
         ]);
 
         // فاتورة current (مستحقّة بعد 10 يوم)
@@ -603,7 +662,7 @@ class WholesaleTest extends TestCase
         $tier = $biz->priceTiers->where('code', 'wholesale')->first();
         $product = $this->svc->addProduct($biz, ['name' => 'X', 'base_price' => '1000', 'initial_stock' => 100]);
         $customer = $this->svc->addCustomer($biz, [
-            'full_name' => 'Test', 'credit_limit' => 100000, 'default_tier_id' => $tier->id,
+            'full_name' => 'Test', 'phone' => '771700001', 'credit_limit' => 100000, 'default_tier_id' => $tier->id,
         ]);
 
         $inv = $this->invSvc->createInvoice($this->merchant, $biz,

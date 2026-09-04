@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\CustomerCreditAccount;
 use App\Models\User;
 use App\Models\WholesaleBusiness;
 use App\Models\WholesaleCustomer;
@@ -84,6 +85,14 @@ class WholesaleInvoiceService
                 ->first();
             if (!$customer) {
                 throw new RuntimeException('العميل غير موجود');
+            }
+            // الآجل ليس «رصيد عميل جملة» غامضاً؛ يجب أن يحمل هويةً تصلح
+            // لدفتر الديون الموحّد. الرقم لا يطلب من العميل تثبيت أميال باي
+            // أو فتح محفظة، لكنه يمنع فاتورةً بلا مدينٍ قابلٍ للتحصيل.
+            if ($paymentType === 'credit' && trim((string) $customer->phone) === '') {
+                throw new InvalidArgumentException(
+                    'بيع الجملة الآجل يحتاج رقم هاتف العميل لربط الدين؛ لا يلزم تفعيل تطبيق أميال باي'
+                );
             }
             $tierId = $customer->default_tier_id ?? $this->getDefaultTierId($business);
             if ($tierId === null) {
@@ -274,28 +283,26 @@ class WholesaleInvoiceService
                     'last_purchase_date' => now()->toDateString(),
                 ]);
 
-                // إذا كان للجملة رقم عميل، فلا يبقى دينها محبوساً في دفتر
-                // الجملة. يُنشر في دفتر الآجل الموحّد ليراه العميل في
-                // التطبيق ويسدد منه كاملاً أو على دفعات.
-                if (trim((string) $customer->phone) !== '') {
-                    $credit = app(CustomerCreditService::class);
-                    $account = $credit->findOrCreateAccount(
-                        $merchant->id,
-                        (string) $customer->phone,
-                        (string) $customer->full_name,
-                        (string) $customer->credit_limit,
-                    );
-                    $credit->recordSale(
-                        account: $account,
-                        amount: $totalAmount,
-                        dueDate: $dueDate,
-                        note: 'فاتورة جملة آجل',
-                        createdBy: $data['created_by_user_id'] ?? $merchant->id,
-                        referenceType: 'wholesale_invoice',
-                        referenceId: $invoice->invoice_ulid,
-                        referenceNumber: $invoice->invoice_number,
-                    );
-                }
+                // صار الرقم إلزامياً للآجل أعلاه، لذلك لا يبقى دين الجملة
+                // في دفتر موازٍ. يُنشر دائماً في الحساب الموحّد، ويرتبط
+                // بحساب التطبيق فقط إن كان الرقم مستخدماً مسجّلاً.
+                $credit = app(CustomerCreditService::class);
+                $account = $credit->findOrCreateAccount(
+                    $merchant->id,
+                    (string) $customer->phone,
+                    (string) $customer->full_name,
+                    (string) $customer->credit_limit,
+                );
+                $credit->recordSale(
+                    account: $account,
+                    amount: $totalAmount,
+                    dueDate: $dueDate,
+                    note: 'فاتورة جملة آجل',
+                    createdBy: $data['created_by_user_id'] ?? $merchant->id,
+                    referenceType: 'wholesale_invoice',
+                    referenceId: $invoice->invoice_ulid,
+                    referenceNumber: $invoice->invoice_number,
+                );
             } else {
                 $customer->update([
                     'total_purchases' => MoneyService::add((string)$customer->total_purchases, $totalAmount),
@@ -422,6 +429,26 @@ class WholesaleInvoiceService
                             (string)$customer->current_balance, (string)$invoice->total_amount,
                         ),
                     ]);
+
+                    // دفتر الديون append-only: لا نحذف بيع الآجل الأصلي،
+                    // بل ننشر مرتجعاً واضحاً عند إبطال فاتورة لم يُحصّل
+                    // منها شيء. الفاتورة الجديدة تنشئ الحساب دائماً؛ أما
+                    // فاتورة قديمة لم تكن موصولة بالدفتر فلا ننشئ لها حساباً
+                    // سالباً عند الإبطال.
+                    $account = $this->findUnifiedCreditAccount(
+                        (int) WholesaleBusiness::whereKey($invoice->business_id)->value('merchant_user_id'),
+                        (string) $customer->phone,
+                    );
+                    if ($account) {
+                        app(CustomerCreditService::class)->recordReturn(
+                            account: $account,
+                            amount: (string) $invoice->total_amount,
+                            note: 'إبطال فاتورة جملة: ' . $reason,
+                            referenceType: 'wholesale_invoice_void',
+                            referenceId: $invoice->invoice_ulid,
+                            createdBy: $invoice->created_by_user_id,
+                        );
+                    }
                 }
             }
 
@@ -441,5 +468,20 @@ class WholesaleInvoiceService
             ->where('is_active', true)
             ->first();
         return $tier?->id;
+    }
+
+    /**
+     * لا ننشئ حساباً عند العكس: الحساب المفقود يعني فاتورة تاريخية سابقة
+     * لتوحيد الديون، وإنشاؤه ثم تسجيل مرتجع سيصنع رصيداً سالباً مصطنعاً.
+     */
+    private function findUnifiedCreditAccount(int $merchantId, string $phone): ?CustomerCreditAccount
+    {
+        if ($merchantId <= 0 || trim($phone) === '') {
+            return null;
+        }
+
+        return CustomerCreditAccount::where('merchant_user_id', $merchantId)
+            ->whereIn('customer_phone', \App\Support\Phone::variants($phone))
+            ->first();
     }
 }

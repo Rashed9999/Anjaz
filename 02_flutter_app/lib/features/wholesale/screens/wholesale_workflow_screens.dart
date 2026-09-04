@@ -8,6 +8,8 @@ import 'package:screenshot/screenshot.dart';
 
 import 'package:amial_pay/features/merchant/widgets/invoice_whatsapp_sheet.dart';
 import 'package:amial_pay/features/merchant/widgets/merchant_invoice_actions.dart';
+import 'package:amial_pay/features/merchant/widgets/credit_sale_notice.dart';
+import 'package:amial_pay/features/merchant/widgets/merchant_payment_method_picker.dart';
 import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_access_controller.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
@@ -64,7 +66,7 @@ class _WholesaleProCustomersScreenState extends State<WholesaleProCustomersScree
         title: Text(customer == null ? 'عميل جديد' : 'تعديل العميل'),
         content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
           _Input(controller: name, label: 'اسم العميل *', icon: Icons.person_outline),
-          _Input(controller: phone, label: 'رقم الهاتف', icon: Icons.phone_outlined),
+          _Input(controller: phone, label: 'رقم الهاتف (مطلوب للبيع الآجل)', icon: Icons.phone_outlined),
           _Input(controller: company, label: 'اسم المنشأة', icon: Icons.business_outlined),
           _Input(controller: limit, label: 'حد الائتمان', icon: Icons.account_balance_wallet_outlined, number: true),
           _Input(controller: days, label: 'أيام السداد', icon: Icons.calendar_month_outlined, number: true),
@@ -261,17 +263,34 @@ class _WholesaleProInvoiceCreateScreenState extends State<WholesaleProInvoiceCre
   void initState() {
     super.initState();
     c.clearCart();
+    _discount.addListener(_refreshTotals);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await c.loadCustomers();
-      await c.loadProducts();
+      await Future.wait([c.loadBusiness(), c.loadCustomers(), c.loadProducts()]);
     });
   }
 
+  void _refreshTotals() {
+    if (mounted) setState(() {});
+  }
+
   @override
-  void dispose() { _discount.dispose(); _notes.dispose(); super.dispose(); }
+  void dispose() {
+    _discount.removeListener(_refreshTotals);
+    _discount.dispose();
+    _notes.dispose();
+    super.dispose();
+  }
 
   double get _discountValue => double.tryParse(_discount.text.trim()) ?? 0;
-  double get _total => (c.cartSubtotal - _discountValue).clamp(0, double.infinity).toDouble();
+  double get _netBeforeTax =>
+      (c.cartSubtotal - _discountValue).clamp(0, double.infinity).toDouble();
+  double get _taxRate =>
+      double.tryParse('${c.business.value?['default_tax_rate'] ?? 0}') ?? 0;
+  String get _taxRateSource =>
+      '${c.business.value?['default_tax_rate'] ?? 0}'.trim();
+  double _roundMoney(double value) => (value * 10000).roundToDouble() / 10000;
+  double get _taxAmount => _roundMoney(_netBeforeTax * _taxRate / 100);
+  double get _total => _roundMoney(_netBeforeTax + _taxAmount);
 
   Future<void> _chooseCustomer() async {
     final search = TextEditingController();
@@ -401,6 +420,10 @@ class _WholesaleProInvoiceCreateScreenState extends State<WholesaleProInvoiceCre
   Future<void> _submit() async {
     if (c.selectedCustomer.value == null || c.cart.isEmpty) { _toast('اختر العميل وأضف صنفاً واحداً على الأقل'); return; }
     if (_discountValue < 0 || _discountValue > c.cartSubtotal) { _toast('خصم الفاتورة غير صحيح'); return; }
+    if (_paymentType == 'credit' && '${c.selectedCustomer.value?['phone'] ?? ''}'.trim().isEmpty) {
+      _toast('أضف رقم هاتف العميل قبل إصدار فاتورة آجل — لا يلزم تثبيت تطبيق أميال.');
+      return;
+    }
     if (_paymentType == 'amial_pay') {
       await Get.to(() => AmialQrCollectScreen(
         amount: _total,
@@ -418,7 +441,11 @@ class _WholesaleProInvoiceCreateScreenState extends State<WholesaleProInvoiceCre
   Future<bool> _create([String? transactionId]) async {
     final ok = await c.createInvoice(
       paymentType: _paymentType, paidTransactionId: transactionId,
-      discountAmount: _discount.text.trim(), notes: _notes.text.trim(),
+      discountAmount: _discount.text.trim(),
+      // يمرّر السعر المضبوط من إعدادات المنشأة كما هو؛ لا تُرسل قيمة
+      // معاد حسابها من الواجهة فتختلف عن مبلغ QR في الخادم.
+      taxRate: _taxRateSource,
+      notes: _notes.text.trim(),
     );
     if (!mounted) return ok;
     _toast(ok ? 'تم إنشاء الفاتورة بنجاح' : c.lastError.value, ok: ok);
@@ -463,8 +490,30 @@ class _WholesaleProInvoiceCreateScreenState extends State<WholesaleProInvoiceCre
         _Input(controller: _notes, label: 'ملاحظات', icon: Icons.notes_outlined),
         Align(alignment: Alignment.centerRight, child: Text('طريقة السداد', style: Theme.of(context).textTheme.labelLarge)),
         const SizedBox(height: 6),
-        Wrap(spacing: 6, children: [for (final item in const [('cash', 'نقد'), ('amial_pay', 'أميال باي'), ('credit', 'آجل')]) ChoiceChip(avatar: Icon(item.$1 == 'cash' ? Icons.payments_outlined : item.$1 == 'amial_pay' ? Icons.qr_code_rounded : Icons.calendar_month_outlined, size: 17), label: Text(item.$2), selected: _paymentType == item.$1, onSelected: (_) => setState(() => _paymentType = item.$1))]),
-        if (_paymentType == 'credit') const Padding(padding: EdgeInsets.only(top: 8), child: Text('تُسجّل الفاتورة ضمن دين العميل وفق حدّه ومدة سداده.', style: TextStyle(fontSize: 12, color: AmialColors.textSecondary))),
+        MerchantPaymentMethodPicker(
+          layout: MerchantPaymentPickerLayout.chips,
+          selectedValue: _paymentType,
+          onChanged: (value) => setState(() => _paymentType = value),
+          options: const [
+            MerchantPaymentOption.cash,
+            MerchantPaymentOption.amialPay,
+            MerchantPaymentOption.credit,
+          ],
+        ),
+        if (_paymentType == 'credit') ...[
+          const SizedBox(height: 8),
+          CreditSaleNotice(
+            dense: true,
+            customerLabel: '${c.selectedCustomer.value?['phone'] ?? ''}'.trim().isEmpty
+                ? null
+                : '${c.selectedCustomer.value?['full_name'] ?? 'العميل'} — ${c.selectedCustomer.value?['phone']}',
+            missingCustomerMessage: 'أضف رقم العميل أولاً؛ الآجل يُسجَّل في دفتر الديون الموحّد ولا يتطلب تثبيت تطبيق أميال.',
+          ),
+        ],
+        if (_taxRate > 0) Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Row(children: [Text('ضريبة ${_taxRate.toStringAsFixed(_taxRate == _taxRate.roundToDouble() ? 0 : 2)}٪', style: const TextStyle(color: AmialColors.textSecondary)), const Spacer(), Text('${_money(_taxAmount)} ر.ي', style: const TextStyle(color: AmialColors.textSecondary))]),
+        ),
         const SizedBox(height: 10), Row(children: [const Text('الإجمالي المطلوب', style: TextStyle(fontWeight: FontWeight.w700)), const Spacer(), Text('${_money(_total)} ر.ي', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AmialColors.primary))]),
         const SizedBox(height: 10), SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: c.isSubmitting.value ? null : _submit, icon: c.isSubmitting.value ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.check_circle_outline), label: Text(c.isSubmitting.value ? 'جارٍ إنشاء الفاتورة…' : 'تأكيد وإنشاء الفاتورة'))),
       ])),

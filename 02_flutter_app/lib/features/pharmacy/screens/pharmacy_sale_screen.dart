@@ -8,6 +8,7 @@ import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart
 import 'package:amial_pay/features/merchant/screens/cashier_receipt_screen.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/features/merchant/widgets/credit_sale_notice.dart';
+import 'package:amial_pay/features/merchant/widgets/merchant_payment_method_picker.dart';
 
 /// AMIAL-PHARMACY-001 — شاشة بيع الصيدلية (الجوهر).
 ///
@@ -595,14 +596,17 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
           ),
         ],
         const SizedBox(height: 8),
-        // طرق الدفع
-        Row(children: [
-          Expanded(child: _payTile('cash', Icons.payments, 'نقد')),
-          const SizedBox(width: 4),
-          Expanded(child: _payTile('amial_pay', Icons.qr_code, 'أميال')),
-          const SizedBox(width: 4),
-          Expanded(child: _payTile('credit', Icons.event, 'آجل')),
-        ]),
+        // طرق الدفع الأساسية موحّدة مع بقية نقاط البيع؛ يبقى إدخال الدواء
+        // والوصفة وتحذيرات الحساسية خاصاً بالصيدلية.
+        MerchantPaymentMethodPicker(
+          selectedValue: _paymentMethod,
+          onChanged: (value) => setState(() => _paymentMethod = value),
+          options: const [
+            MerchantPaymentOption.cash,
+            MerchantPaymentOption.amialPay,
+            MerchantPaymentOption.credit,
+          ],
+        ),
         if (_paymentMethod == 'credit') ...[
           // **وتُقال حقيقةُ الفعل** — سأل صاحبُ المشروع «أيٌّ منهم مرتبطٌ
           // الآجلُ فيه بنظام الديون؟»، وهو سؤالٌ لا يُجاب من الشاشة.
@@ -672,23 +676,4 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
     );
   }
 
-  Widget _payTile(String v, IconData icon, String label) {
-    final selected = _paymentMethod == v;
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () => setState(() => _paymentMethod = v),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? AmialColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: selected ? AmialColors.primary : Colors.grey.shade300),
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: selected ? Colors.white : AmialColors.primary, size: 18),
-          Text(label, style: TextStyle(color: selected ? Colors.white : Colors.black, fontSize: 11)),
-        ]),
-      ),
-    );
-  }
 }

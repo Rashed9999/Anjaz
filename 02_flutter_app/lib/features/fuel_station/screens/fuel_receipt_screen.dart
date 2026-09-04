@@ -77,6 +77,7 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
     return switch (m) {
       'cash' => 'نقداً',
       'amial_pay' => 'أميال باي',
+      'credit' => 'آجل',
       'company_card' => 'بطاقة شركة',
       _ => m.isEmpty ? '—' : m,
     };
@@ -113,7 +114,7 @@ class _FuelReceiptScreenState extends State<FuelReceiptScreen> {
   List<ThermalReceiptLine> _thermalLines() {
     final liters = double.tryParse('${widget.sale['liters'] ?? 0}') ?? 0;
     final ppl = double.tryParse('${widget.sale['price_per_liter'] ?? 0}') ?? 0;
-    final fuel = '${widget.sale['fuel_type'] ?? widget.sale['product'] ?? 'وقود'}';
+    final fuel = '${widget.sale['product_name'] ?? widget.sale['fuel_type'] ?? widget.sale['product'] ?? 'وقود'}';
     return [ThermalReceiptLine('$fuel (لتر)', liters, ppl)];
   }
 
