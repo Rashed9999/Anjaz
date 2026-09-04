@@ -15,6 +15,7 @@ import 'package:amial_pay/features/payments/widgets/amial_invoice_card.dart';
 import 'package:amial_pay/features/printer/services/thermal_print_service.dart';
 import 'package:amial_pay/features/printer/widgets/thermal_receipt_widget.dart';
 import 'package:amial_pay/features/printer/screens/printer_settings_screen.dart';
+import 'package:amial_pay/features/merchant/controllers/cashier_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-POS-003 / AMIAL-RECEIPT-SETTINGS-001 — «تم التحصيل».
@@ -265,6 +266,17 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
         leading: IconButton(icon: const Icon(Icons.close), onPressed: () => Get.back()),
       ),
       body: ListView(padding: const EdgeInsets.all(20), children: [
+        // AMIAL-NEGATIVE-STOCK-001 — **ما نزل تحت الصفر يُقال هنا.**
+        //
+        // وهذه الشاشةُ هي **الممرُّ الوحيد** الذي تنتهي إليه كلُّ مسارات
+        // البيع (نقدي · آجل · محفظة · مختلط · شركة). فوضعُ التحذير فيها
+        // يغطّي المداخلَ كلَّها بموضعٍ واحد — والقاعدةُ الرابعة تقول إنّ
+        // ميزةً لها مداخلُ تُحرَس من مدخلٍ مشترك.
+        //
+        // **ولا يُوقَف شيء**: البضاعةُ خرجت من الرفّ فعلاً والبيعُ تمّ.
+        // هذه رسالةٌ للكاشير وهو **واقفٌ أمام الرفّ**، يستطيع النظرَ فيه
+        // الآن — لا مالكٌ يفتح شاشةً بعد يومين.
+        _negativeStockNote(),
         // شارة الحالة
         Center(
           child: Container(
@@ -331,6 +343,52 @@ class _CashierReceiptScreenState extends State<CashierReceiptScreen> {
           style: FilledButton.styleFrom(
               backgroundColor: AmialColors.primary, minimumSize: const Size.fromHeight(54)),
         ),
+      ]),
+    );
+  }
+
+  /// **تحذيرُ المخزون السالب** — يظهر حين يقع، ويختفي حين لا يقع.
+  ///
+  /// AMIAL-NEGATIVE-STOCK-001. **ولا يُرسَم على بيعةٍ سليمة**: تحذيرٌ
+  /// يظهر بلا سببٍ يُعوّد القارئَ على تجاهله يومَ يصدق — وهو الدرسُ نفسُه
+  /// من لافتة «كُسرت السلسلة» في سجلّ التدقيق.
+  Widget _negativeStockNote() {
+    if (!Get.isRegistered<CashierController>()) return const SizedBox.shrink();
+
+    final lines = Get.find<CashierController>().lastNegativeStock;
+    if (lines.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: AmialColors.warningSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AmialColors.warning.withValues(alpha: 0.4)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.inventory_2_outlined, size: 18, color: AmialColors.warning),
+          const SizedBox(width: 8),
+          const Expanded(
+            child: Text('المخزون نزل تحت الصفر',
+                style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    color: AmialColors.warning)),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        ...lines.map((l) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Text('• ${l['product']} — ينقص ${l['shortfall']}',
+                  style: const TextStyle(fontSize: 12, height: 1.5)),
+            )),
+        const SizedBox(height: 6),
+        const Text(
+            'البيع تمّ والبضاعة خرجت. لكن الجرد لا يطابق الرفّ — '
+            'راجع الكمية الآن أو سجّل التوريد الناقص.',
+            style: TextStyle(fontSize: 11, color: AmialColors.textSecondary, height: 1.5)),
       ]),
     );
   }

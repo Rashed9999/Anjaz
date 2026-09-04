@@ -155,6 +155,13 @@ class RetailVerticalController extends Controller
 
                 'low_stock' => $low,
 
+                // AMIAL-NEGATIVE-STOCK-001 — **والسالبُ يصل صاحبَ المتجر.**
+                //
+                // **ولا يُحرَس بقدرةٍ مدفوعة** بخلاف تنبيه النفاد: ذاك
+                // خدمةٌ تُشترى (متى أطلب؟)، وهذا **خللٌ في بياناته هو** —
+                // وبيعُ رؤيةِ الخلل بيعُ أرقامٍ خاطئةٍ لمن دفع أقلّ.
+                'negative_stock' => $this->stock->negativeStock($merchant->id),
+
                 // **القسمُ المقفولُ يُصرَّح به لا يُطوى** — فالشاشةُ تعرض
                 // «ارفع الباقة» مكانَ قائمةٍ فارغةٍ تكذب.
                 'low_stock_locked' => $lowStockState !== null ? [

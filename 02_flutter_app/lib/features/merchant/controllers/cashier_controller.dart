@@ -312,6 +312,13 @@ class CashierController extends GetxController implements GetxService {
       // CRITICAL-001-USAGE — التقاط 402 وعرض الحوار
       if (await UsageLimitDialog.handleIfLimitExceeded(r)) return null;
       if (_ok(r)) {
+        // AMIAL-NEGATIVE-STOCK-001 — **يُلتقَط قبل تفريغ السلّة.**
+        // ولا يُرسَل المفتاحُ إلّا حين يوجد سالبٌ فعلاً، فقائمةٌ فارغةٌ
+        // في كلّ ردٍّ تُعوّد الشاشةَ على تجاهلها.
+        lastNegativeStock.assignAll(
+            (((r.body['meta']?['negative_stock'] ?? []) as List))
+                .map((e) => Map<String, dynamic>.from(e as Map)));
+
         clearCart();
         return Map<String, dynamic>.from((r.body['meta']?['sale'] ?? {}) as Map);
       }
@@ -395,6 +402,16 @@ class CashierController extends GetxController implements GetxService {
   // ══════════════════════════════════════════════════════════════════
   //  AMIAL-HELD-SALE-001 — التذاكر المفتوحة (تعليق الفاتورة)
   // ══════════════════════════════════════════════════════════════════
+
+  /// AMIAL-NEGATIVE-STOCK-001 — **ما نزل تحت الصفر في آخر بيعة.**
+  ///
+  /// الخادمُ لا يُوقف البيع (البضاعةُ خرجت من الرفّ فعلاً)، **لكنّه يقول
+  /// أيُّ صنفٍ نزل**. وأنفعُ لحظةٍ لعرضه هي هذه: الكاشيرُ واقفٌ أمام
+  /// الرفّ ويستطيع النظرَ فيه الآن — لا مالكٌ يفتح شاشةً بعد يومين.
+  ///
+  /// **وتُفرَّغ مع كلّ بيعة** فلا يبقى تحذيرُ الأمس معلَّقاً على اليوم.
+  final RxList<Map<String, dynamic>> lastNegativeStock =
+      <Map<String, dynamic>>[].obs;
 
   final RxList<Map<String, dynamic>> heldTickets = <Map<String, dynamic>>[].obs;
   final RxBool isHolding = false.obs;

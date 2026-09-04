@@ -505,6 +505,30 @@ class CashierService
      * من الرفّ فعلاً، ورفضُها بعد خروجها لا يُفيد أحداً — **لكنّ الرصيد
      * السالب يبقى ظاهراً** حتّى يُصلحه جردٌ، وهو الإشارةُ التي كانت تُمحى.
      */
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-NEGATIVE-STOCK-001 — **ما نزل تحت الصفر يُقال للكاشير.**
+     *
+     * البيعُ يمرّ بالسالب عمداً (انظر أدناه)، **والسالبُ يبقى ظاهراً**.
+     * لكنّه كان يُترَك في جدولٍ يقرؤه المالكُ بعد يومين إن بحث — **وأنفعُ
+     * لحظةٍ لقوله هي هذه**: الكاشيرُ واقفٌ أمام الرفّ، ويستطيع أن ينظر
+     * فيه الآن.
+     *
+     * **ولا يُوقَف البيعُ ولا يُؤخَّر** — الرسالةُ بعد نجاحه لا قبله.
+     * ✱ @var array<int,array<string,string>>
+     * ══════════════════════════════════════════════════════════════════
+     */
+    private array $wentNegative = [];
+
+    /** ما نزل تحت الصفر في آخر بيعة — يُقرأ مرّةً ثمّ يُفرَّغ. */
+    public function takeNegativeLines(): array
+    {
+        $lines = $this->wentNegative;
+        $this->wentNegative = [];
+
+        return $lines;
+    }
+
     private function decrementStockForSale(MerchantSale $sale, ?int $locationId = null): void
     {
         $stock = app(\App\Services\Retail\StockService::class);
@@ -524,7 +548,7 @@ class CashierService
                 ->first();
             if (!$product) continue;
 
-            $stock->move(
+            $movement = $stock->move(
                 product: $product,
                 location: $location,
                 delta: '-' . $qty,
@@ -536,6 +560,19 @@ class CashierService
                 // **يُسمح بالسالب عمداً** — انظر شرح الدالّة أعلاه.
                 allowNegative: true,
             );
+
+            // AMIAL-NEGATIVE-STOCK-001 — **ويُلتقَط ما نزل تحت الصفر.**
+            //
+            // ويُقرأ من `balance_after` في الحركة نفسِها لا باستعلامٍ
+            // ثانٍ: الحركةُ هي ما وقع، واستعلامٌ بعدها قد يقرأ رصيداً
+            // حرّكته بيعةٌ أخرى في الثانية نفسِها. (القاعدة السادسة.)
+            if (bccomp((string) $movement->balance_after, '0', 3) < 0) {
+                $this->wentNegative[] = [
+                    'product' => (string) $product->name,
+                    'on_hand' => (string) $movement->balance_after,
+                    'shortfall' => ltrim((string) $movement->balance_after, '-'),
+                ];
+            }
         }
     }
 
