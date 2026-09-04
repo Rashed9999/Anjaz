@@ -1013,6 +1013,16 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::post('/products/{id}/variants', [$RV, 'generateVariants'])->middleware('capability:retail.variants')
                 ->where('id', '[0-9]+')->name('products.variants');
 
+            // AMIAL-VARIANT-EDITOR-001 — قراءةُ المتغيّرات وتحريرُ كلٍّ منها.
+            // كان التوليدُ باباً بلا عودة: تُولَّد تسعةٌ ثمّ لا مسارَ يقرؤها،
+            // فلا يُوزَّع المخزونُ الذي قِيل إنّه «ينتظر التوزيع».
+            Route::get('/products/{id}/variants', [$RV, 'productVariants'])
+                ->middleware('capability:retail.variants')->where('id', '[0-9]+')
+                ->name('products.variants.index');
+            Route::post('/variants/{id}', [$RV, 'updateVariant'])
+                ->middleware('capability:retail.variants')->where('id', '[0-9]+')
+                ->name('variants.update');
+
             // AMIAL-PRODUCT-ATTRIBUTES-001 — مكتبةُ السمات: تُعرَّف مرّةً
             // وتُختار في كلّ منتج. وهي خلف قدرة المتغيّرات نفسِها — فسماتٌ
             // بلا توليدِ متغيّراتٍ لا تفعل شيئاً.

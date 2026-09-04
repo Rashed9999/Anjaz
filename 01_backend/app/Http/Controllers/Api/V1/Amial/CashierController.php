@@ -51,7 +51,13 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
-        return $this->ok(['products' => $this->cashier->listProducts($merchant, $request->query('search'))]);
+        return $this->ok(['products' => $this->cashier->listProducts(
+            $merchant,
+            $request->query('search'),
+            // AMIAL-VARIANT-EDITOR-001 — شاشةُ الإدارة تطلبها صراحةً،
+            // وشبكةُ البيع لا تطلبها فتبقى مستثناة.
+            $request->boolean('include_variant_parents'),
+        )]);
     }
 
     /**

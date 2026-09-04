@@ -48,10 +48,11 @@ class CashierController extends GetxController implements GetxService {
   final RxBool isLoadingSales = false.obs;
 
   // ---- المنتجات ----
-  Future<void> loadProducts({String? search}) async {
+  Future<void> loadProducts({String? search, bool includeVariantParents = false}) async {
     try {
       isLoadingProducts.value = true;
-      final r = await repo.products(search: search);
+      final r = await repo.products(
+          search: search, includeVariantParents: includeVariantParents);
       if (_ok(r)) {
         final list = (r.body['meta']?['products'] ?? []) as List;
         products.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());

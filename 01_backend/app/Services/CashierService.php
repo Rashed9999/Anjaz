@@ -93,13 +93,23 @@ class CashierService
      * لا يظهر إلّا لمن يبيع فعلاً.
      * ══════════════════════════════════════════════════════════════════
      */
-    public function listProducts(User $merchant, ?string $search = null)
-    {
+    public function listProducts(
+        User $merchant,
+        ?string $search = null,
+        // **وشاشةُ إدارة المنتجات ليست شبكةَ البيع.**
+        //
+        // استثناءُ المِظلّة صحيحٌ في الكاشير وخطأٌ في الكتالوج: لو غابت
+        // عن الإدارة أيضاً **لم يعد للتاجر بابٌ إليها إطلاقاً** — لا
+        // تعديلَ اسمٍ ولا وصولَ إلى «الأنواع» ليوزّع مخزونَها. فتُقاد
+        // من الطلب، والافتراضيُّ سلوكُ الكاشير.
+        bool $includeVariantParents = false,
+    ) {
         return MerchantProduct::where('merchant_user_id', $merchant->id)
             ->where('is_active', true)
             // **مِظلّةُ المتغيّرات تُستثنى** — ومخزونُها ليس مخزوناً يُباع.
-            ->where(fn ($q) => $q->whereNull('is_variant_parent')
-                ->orWhere('is_variant_parent', false))
+            ->when(! $includeVariantParents,
+                fn ($q) => $q->where(fn ($w) => $w->whereNull('is_variant_parent')
+                    ->orWhere('is_variant_parent', false)))
             ->when($search, fn ($q) => $q->where(function ($w) use ($search) {
                 $w->where('name', 'like', "%{$search}%")->orWhere('barcode', $search);
             }))
@@ -109,6 +119,9 @@ class CashierService
             // باسم «قميص» ولا يُعرف أيُّها الذي في اليد.
             ->each(function (MerchantProduct $p) {
                 $p->setAttribute('display_name', $p->displayName());
+                // **وتُقال صفةُ المِظلّة للشاشة** — فزرُّ «الأنواع» لا
+                // يُعرَض إلّا عليها، وشاشةٌ فارغةٌ على صنفٍ عاديٍّ تُقرأ عطلاً.
+                $p->setAttribute('is_variant_parent', (bool) $p->is_variant_parent);
             });
     }
 

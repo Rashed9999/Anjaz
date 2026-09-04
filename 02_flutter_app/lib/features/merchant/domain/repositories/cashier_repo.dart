@@ -8,9 +8,18 @@ class CashierRepo extends GetxService {
 
   static const _base = '/api/v1/amial/merchant/cashier';
 
-  Future<Response> products({String? search}) {
-    return apiClient.getData('$_base/products',
-        query: search != null && search.isNotEmpty ? {'search': search} : null);
+  /// AMIAL-VARIANT-EDITOR-001 — `includeVariantParents` لشاشة **الإدارة**.
+  ///
+  /// شبكةُ البيع لا تعرض مِظلّةَ المتغيّرات (لا تُباع)، **وشاشةُ إدارة
+  /// المنتجات يجب أن تعرضها** — وإلّا لم يبقَ للتاجر بابٌ إليها: لا
+  /// تعديلُ اسمٍ ولا وصولٌ إلى «الأنواع» ليوزّع مخزونَها.
+  Future<Response> products({String? search, bool includeVariantParents = false}) {
+    final q = <String, String>{
+      if (search != null && search.isNotEmpty) 'search': search,
+      if (includeVariantParents) 'include_variant_parents': '1',
+    };
+
+    return apiClient.getData('$_base/products', query: q.isEmpty ? null : q);
   }
 
   // AMIAL-CASHIER-BARCODE-001 — بحث منتج بالباركود

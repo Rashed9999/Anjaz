@@ -213,6 +213,49 @@ class RetailVerticalController extends GetxController
       await _run(() => repo.generateVariants(productId, axes),
           (_) => true, submitting: true) ?? false;
 
+  // ── AMIAL-VARIANT-EDITOR-001 · AMIAL-PRODUCT-ATTRIBUTES-001 ────────
+
+  /// آخرُ رسالةِ نجاحٍ من الخادم — **تحمل «١٠ وحداتٍ تنتظر التوزيع»**،
+  /// وهي رسالةٌ لا تُبنى في التطبيق فلا تُخترَع.
+  final lastMessage = ''.obs;
+
+  Future<Map<String, dynamic>?> loadVariants(int productId) async =>
+      await _run(() => repo.productVariants(productId),
+          (r) => Map<String, dynamic>.from((r.body?['data'] ?? {}) as Map));
+
+  Future<bool> saveVariant(int variantId, Map<String, dynamic> d) async =>
+      await _run(() => repo.updateVariant(variantId, d),
+          (_) => true, submitting: true) ?? false;
+
+  Future<bool> generateVariantsFromLibrary(
+          int productId, List<Map<String, dynamic>> selection) async =>
+      await _run(() => repo.generateVariantsFromLibrary(productId, selection),
+          (r) {
+            lastMessage.value = '${r.body?['message'] ?? ''}';
+            return true;
+          }, submitting: true) ?? false;
+
+  Future<List<Map<String, dynamic>>?> loadAttributes() async =>
+      await _run(() => repo.attributes(), (r) =>
+          ((((r.body?['data'] ?? {}) as Map)['attributes'] ?? []) as List)
+              .map((e) => Map<String, dynamic>.from(e as Map)).toList());
+
+  Future<bool> addAttribute(String name, List<String> terms) async =>
+      await _run(() => repo.addAttribute(name, terms), (_) => true,
+          submitting: true) ?? false;
+
+  Future<bool> addAttributeTerms(int attributeId, List<String> terms) async =>
+      await _run(() => repo.addAttributeTerms(attributeId, terms), (_) => true,
+          submitting: true) ?? false;
+
+  Future<bool> deleteAttributeTerm(int termId) async =>
+      await _run(() => repo.deleteAttributeTerm(termId), (_) => true,
+          submitting: true) ?? false;
+
+  Future<bool> deleteAttribute(int attributeId) async =>
+      await _run(() => repo.deleteAttribute(attributeId), (_) => true,
+          submitting: true) ?? false;
+
   Future<bool> requestTransfer(Map<String, dynamic> d) async =>
       await _run(() => repo.requestTransfer(d), (_) => true, submitting: true) ?? false;
 

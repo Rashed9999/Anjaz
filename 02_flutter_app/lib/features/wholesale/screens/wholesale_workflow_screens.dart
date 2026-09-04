@@ -482,7 +482,7 @@ class _WholesaleProInvoiceCreateScreenState extends State<WholesaleProInvoiceCre
             IconButton(tooltip: 'تعديل الكمية', icon: const Icon(Icons.edit_outlined, color: AmialColors.primary), onPressed: () => _quantity(Map<String, dynamic>.from(p), initial: qty, initialUnitId: row['unit_id'])),
             IconButton(tooltip: 'حذف الصنف', icon: const Icon(Icons.delete_outline, color: AmialColors.red), onPressed: () => c.removeFromCart(_id(row), unitId: row['unit_id'])),
           ]),
-        ); },
+        )); },
       )),
       Container(padding: const EdgeInsets.fromLTRB(16, 12, 16, 16), decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Color(0xFFE3E7EE)))), child: Column(children: [
         SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: _addProduct, icon: const Icon(Icons.add_shopping_cart_outlined), label: const Text('إضافة صنف إلى الفاتورة'))),
