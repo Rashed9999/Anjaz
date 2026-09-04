@@ -19,6 +19,10 @@ class MerchantSale extends Model
     protected $fillable = [
         'sale_ulid', 'client_uuid', 'merchant_user_id', 'pos_user_id',
         'total_amount', 'discount_amount', 'promotion_id',
+        // AMIAL-LOYALTY-AT-PAYMENT-001 — وغيابُهما هنا يُسقطهما صامتاً
+        // كما وقع في `LedgerJournalEntry`: تُحرَق النقاطُ وتُسجَّل البيعةُ
+        // بلا أثرٍ يقول لماذا نقص المبلغ.
+        'loyalty_points_redeemed', 'loyalty_discount',
         // AMIAL-MULTI-CURRENCY-003 — **غيابُها هنا لا يُخرج خطأً.**
         // `create()` يُسقط ما ليس في القائمة **صامتاً**، فتقع الأعمدةُ على
         // افتراضيّ القاعدة: كلُّ بيعةِ دولارٍ تُسجَّل «ريالاً» بسعر ١.

@@ -228,6 +228,9 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             // AMIAL-MULTI-CURRENCY-003 — عملةُ البيعة. غيابُها = الأساس،
             // فكلُّ تطبيقٍ قائمٍ يبيع بالريال كما كان.
             'currency' => 'sometimes|nullable|string|size:3',
+            // AMIAL-LOYALTY-AT-PAYMENT-001 — نقاطٌ يصرفها العميلُ على
+            // هذه الفاتورة. غيابُها = لا استبدال.
+            'redeem_points' => 'sometimes|nullable|numeric|min:0',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -291,6 +294,10 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
                 walletAmount: $request->input('wallet_amount'),
                 clientUuid: $request->input('client_uuid'),
                 currency: $request->input('currency'),
+                // AMIAL-LOYALTY-AT-PAYMENT-001 — نقاطُ العميل تُصرَف مع
+                // البيعة، فتسقط معها إن سقطت.
+                redeemPoints: $request->input('redeem_points') !== null
+                    ? (float) $request->input('redeem_points') : null,
             );
         } catch (\InvalidArgumentException $e) {
             return $this->error('SALE_INVALID', $e->getMessage(), 422);

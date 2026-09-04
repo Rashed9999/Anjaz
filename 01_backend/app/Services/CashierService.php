@@ -172,6 +172,17 @@ class CashierService
         // AMIAL-MULTI-CURRENCY-003 — **افتراضُه الأساس، فكلُّ نداءٍ قائمٍ
         // يعني الريالَ حرفاً بحرف.**
         ?string $currency = null,
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-LOYALTY-AT-PAYMENT-001 — **النقاطُ تُصرَف داخل البيعة.**
+        //
+        // وكان الاستبدالُ يقع في شاشةٍ أخرى ثمّ يُقال للكاشير «طبّقه على
+        // الفاتورة»: نقاطٌ تُحرَق ثمّ خصمٌ يُطبَّق **إن تذكّر**. وإن
+        // نسِي أو أُلغيت البيعة ذهبت النقاطُ ودفع العميلُ كاملاً.
+        //
+        // فصارت هنا: تُصرَف في معاملة البيعة نفسِها — تسقط البيعةُ فتعود
+        // النقاط، وتُحفظ فتُوسَم حركتُها بمعرّفها.
+        // ══════════════════════════════════════════════════════════════
+        ?float $redeemPoints = null,
     ): MerchantSale {
         // AMIAL-OFFLINE-POS-001: idempotency — بيع دون اتصال يُعاد إرساله بنفس
         // client_uuid عند المزامنة؛ إن كان مُسجَّلاً سابقاً نُعيده كما هو دون
@@ -285,7 +296,14 @@ class CashierService
             $this->assertDiscountAllowed($merchant, $posUserId, $discountAmount);
         }
 
-        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid, $currency, $fxRate, $baseTotal) {
+        // **ونقاطٌ بلا عميلٍ لا تُصرَف**: الرصيدُ محفوظٌ على هاتفه، فبلا
+        // هاتفٍ لا يُعرف من يدفع من رصيده.
+        if ($redeemPoints !== null && $redeemPoints > 0 && empty($customer['phone'])) {
+            throw new InvalidArgumentException(
+                'استبدالُ النقاط يحتاج رقمَ العميل — فرصيدُ النقاط محفوظٌ على رقمه');
+        }
+
+        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid, $currency, $fxRate, $baseTotal, $redeemPoints) {
             // لا يكفي `paid_transaction_id` القادم من Flutter. يجب أن يكون
             // طلب QR مدفوعاً لمحفظة المنشأة وبالمبلغ نفسه وغير مستهلك.
             // البيع بلا مرجع يبقى معلّقاً إلى أن تُتم شاشة QR الدفع؛ أمّا إذا
@@ -393,6 +411,32 @@ class CashierService
                 } catch (\Throwable $e) {
                     logger()->warning('Promotion consume failed: ' . $e->getMessage());
                 }
+            }
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-LOYALTY-AT-PAYMENT-001 — **الاستبدالُ داخل المعاملة.**
+            //
+            // **ولا يُبتلَع خطؤه** — بخلاف الكسب أسفلَه. والفرقُ ليس
+            // اجتهاداً: الكسبُ **يُعطي**، فسقوطُه يُنقص العميلَ نقاطاً
+            // ولا يمسّ مالاً. والاستبدالُ **يأخذ من رصيده ويُنقص ما
+            // يدفع**؛ فابتلاعُ خطئه يُنتج أسوأَ حالتين:
+            //
+            //   · إن مرّ الخصمُ ولم تُنقَص النقاط ⇒ المتجرُ خسِر خصماً
+            //     بلا مقابل، مرّةً بعد مرّة.
+            //   · وإن نُقصت النقاطُ وسقطت البيعة ⇒ العميلُ خسِر رصيدَه.
+            //
+            // فالرميُ هنا يُسقط البيعةَ كلَّها، **فتعود النقاطُ ولا
+            // يُقبَض المال** — وبيعةٌ تُعاد أهونُ من رصيدٍ يضيع.
+            // ══════════════════════════════════════════════════════════
+            if ($redeemPoints !== null && $redeemPoints > 0) {
+                $redeemed = app(\App\Services\LoyaltyService::class)->redeem(
+                    $merchant, (string) $customer['phone'], $redeemPoints,
+                    $posUserId ?? $merchant->id, $sale->sale_ulid,
+                );
+
+                $sale->loyalty_points_redeemed = $redeemPoints;
+                $sale->loyalty_discount = $redeemed['discount'];
+                $sale->save();
             }
 
             // AMIAL-LOYALTY-001 — كسب نقاط الولاء مركزياً لكل بيع مُتمّ بعميل معروف.

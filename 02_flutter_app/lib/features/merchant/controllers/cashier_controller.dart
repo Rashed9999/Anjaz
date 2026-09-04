@@ -246,6 +246,10 @@ class CashierController extends GetxController implements GetxService {
     // AMIAL-MULTI-CURRENCY-003 — عملةُ البيعة. غيابُها = العملة الأساس،
     // فكلُّ نداءٍ قائمٍ في التطبيق يبيع بالريال كما كان.
     String? currency,
+    // AMIAL-LOYALTY-AT-PAYMENT-001 — نقاطٌ يصرفها العميلُ على هذه
+    // الفاتورة. تُستبدَل في معاملة البيعة نفسِها على الخادم: تسقط
+    // البيعةُ فتعود النقاط.
+    double? redeemPoints,
   }) async {
     try {
       isSubmitting.value = true;
@@ -261,6 +265,8 @@ class CashierController extends GetxController implements GetxService {
         if (corporateMemberId != null) 'corporate_member_id': corporateMemberId,
         if (discountAmount != null && discountAmount > 0) 'discount_amount': discountAmount.toStringAsFixed(2),
         if (promotionId != null) 'promotion_id': promotionId,
+        if (redeemPoints != null && redeemPoints > 0)
+          'redeem_points': redeemPoints.toStringAsFixed(2),
         if (cashAmount != null) 'cash_amount': cashAmount.toStringAsFixed(2),
         if (walletAmount != null) 'wallet_amount': walletAmount.toStringAsFixed(2),
         if (currency != null && currency.isNotEmpty) 'currency': currency,

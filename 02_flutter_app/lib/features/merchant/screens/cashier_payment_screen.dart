@@ -42,6 +42,28 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   String? _promoLabel;
 
   // ═══════════════════════════════════════════════════════════════════
+  // AMIAL-LOYALTY-AT-PAYMENT-001 — **النقاطُ تُصرَف حيث يُدفَع المال.**
+  //
+  // **الملاحظة بنصّها:** «نقاط الولاء ليس لها استخدام أثناء الدفع…
+  // يبدو أنّها غير مكتملة الميزة».
+  //
+  // وقِيس فإذا هي أسوأُ من ناقصة: `redeem` مبنيّةٌ وتعمل، وشاشةُ
+  // «برنامج الولاء» تناديها ثمّ تطبع للكاشير **«طبّقه على الفاتورة»** —
+  // فالنقاطُ تُحرَق في شاشةٍ والخصمُ يُطبَّق في أخرى بيدٍ بشريّة. وإن
+  // نسِي، أو أُلغيت البيعة: **النقاطُ ذهبت والعميلُ دفع كاملاً.**
+  //
+  // فصار المدخلُ هنا، ويُرسَل `redeem_points` مع البيعة نفسِها.
+  // ═══════════════════════════════════════════════════════════════════
+  final _loyaltyPhone = TextEditingController();
+  bool _loyaltyBusy = false;
+  bool _loyaltyLookedUp = false;
+  double _loyaltyBalance = 0;
+  double _loyaltyValuePerPoint = 0;
+  int _loyaltyMinPoints = 0;
+  String? _loyaltyCustomerName;
+  double _redeemPoints = 0;
+
+  // ═══════════════════════════════════════════════════════════════════
   // AMIAL-MULTI-CURRENCY-003 — **عملةُ البيعة تُختار هنا لا في السلّة.**
   //
   // بُنيت للتاجر أربعُ محافظ، **وقِيس أنّ الدولارَ لا يدخلها من بيعٍ
@@ -143,7 +165,111 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   bool _methodAllowedInCurrency(String method) =>
       _isBaseCurrency || !_baseOnlyMethods.contains(method);
 
-  double get _net => (widget.total - _discount).clamp(0, widget.total).toDouble();
+  /// قيمةُ النقاط المصروفة بالريال — يحسبها الخادمُ أيضاً، وهذه للعرض.
+  double get _loyaltyDiscount =>
+      double.parse((_redeemPoints * _loyaltyValuePerPoint).toStringAsFixed(2));
+
+  double get _net => (widget.total - _discount - _loyaltyDiscount)
+      .clamp(0, widget.total)
+      .toDouble();
+
+  @override
+  void dispose() {
+    _loyaltyPhone.dispose();
+    super.dispose();
+  }
+
+  /// يسأل رصيدَ نقاط العميل — **من الشبّاك، وهو موضعُ صرفها.**
+  Future<void> _lookupLoyalty() async {
+    final phone = _loyaltyPhone.text.trim();
+    if (phone.length < 6) { _snack('أدخل رقم العميل'); return; }
+
+    setState(() => _loyaltyBusy = true);
+    try {
+      final r = await Get.find<ApiClient>()
+          .getData('/api/v1/amial/merchant/loyalty/lookup', query: {'phone': phone});
+
+      if (r.statusCode == 402) { _snack('برنامج الولاء متاح في باقة الأعمال فأعلى'); return; }
+
+      if (r.statusCode == 200 && r.body is Map) {
+        final m = (r.body['meta'] ?? {}) as Map;
+        setState(() {
+          _loyaltyLookedUp = true;
+          _loyaltyBalance = double.tryParse('${m['points_balance'] ?? 0}') ?? 0;
+          _loyaltyValuePerPoint = double.tryParse('${m['redeem_value_per_point'] ?? 0}') ?? 0;
+          _loyaltyMinPoints = int.tryParse('${m['min_redeem_points'] ?? 0}') ?? 0;
+          _loyaltyCustomerName = m['customer_name']?.toString();
+          _redeemPoints = 0;
+        });
+      } else {
+        _snack((r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر الاستعلام');
+      }
+    } catch (_) {
+      _snack('خطأ في الشبكة');
+    } finally {
+      if (mounted) setState(() => _loyaltyBusy = false);
+    }
+  }
+
+  /// **الحدُّ الأعلى للنقاط المصروفة على هذه الفاتورة.**
+  ///
+  /// ولا يُترَك للرصيد وحدَه: صرفُ نقاطٍ قيمتُها أكبرُ من الفاتورة يُنتج
+  /// صافياً سالباً — **متجرٌ يدفع للزبون**. فالسقفُ أدنى الاثنين.
+  double get _maxRedeemablePoints {
+    if (_loyaltyValuePerPoint <= 0) return 0;
+
+    final byInvoice = (widget.total - _discount) / _loyaltyValuePerPoint;
+
+    return (_loyaltyBalance < byInvoice ? _loyaltyBalance : byInvoice)
+        .floorToDouble();
+  }
+
+  void _applyLoyalty() async {
+    final ctrl = TextEditingController(
+        text: _maxRedeemablePoints.toStringAsFixed(0));
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('استبدال نقاط بخصم'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('الرصيد: ${_loyaltyBalance.toStringAsFixed(0)} نقطة  ·  '
+              'أقصى ما يُصرف على هذه الفاتورة: '
+              '${_maxRedeemablePoints.toStringAsFixed(0)}',
+              style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: ctrl,
+            keyboardType: TextInputType.number,
+            textDirection: TextDirection.ltr,
+            decoration: const InputDecoration(
+                labelText: 'عدد النقاط', border: OutlineInputBorder()),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(d, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(d, true), child: const Text('تطبيق')),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    final pts = double.tryParse(ctrl.text.trim()) ?? 0;
+
+    // **والرفضُ يقول سببَه بالرقم** — «غير مسموح» تُرسل الكاشيرَ يجرّب.
+    if (pts <= 0) { _snack('أدخل عدد نقاط صحيحاً'); return; }
+    if (pts < _loyaltyMinPoints) {
+      _snack('الحدّ الأدنى للاستبدال $_loyaltyMinPoints نقطة'); return;
+    }
+    if (pts > _maxRedeemablePoints) {
+      _snack('أقصى ما يُصرف على هذه الفاتورة '
+          '${_maxRedeemablePoints.toStringAsFixed(0)} نقطة');
+      return;
+    }
+
+    setState(() => _redeemPoints = pts);
+  }
 
   /// يقيّم خصماً على الفاتورة (تلقائي أو بكوبون) ويُطبّقه.
   Future<void> _applyDiscount() async {
@@ -266,6 +392,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       final sale = await c.recordSale(
         total: _net, method: 'mixed', cashAmount: cash, walletAmount: 0,
         discountAmount: _discount, promotionId: _promotionId,
+        redeemPoints: _redeemPoints > 0 ? _redeemPoints : null,
       );
       if (!mounted) return;
       if (sale == null) { if (c.lastError.value.isNotEmpty) _snack(c.lastError.value); return; }
@@ -282,6 +409,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
               total: _net, method: 'mixed', paidTransactionId: paidTxId,
               cashAmount: cash, walletAmount: wallet,
               discountAmount: _discount, promotionId: _promotionId,
+              redeemPoints: _redeemPoints > 0 ? _redeemPoints : null,
             );
             if (sale == null) return false;
             Get.off(() => CashierReceiptScreen(sale: sale, total: _net, method: 'mixed'));
@@ -429,8 +557,135 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
     );
   }
 
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-LOYALTY-AT-PAYMENT-001 — **مدخلُ النقاط حيث يُدفَع المال.**
+  ///
+  /// وكان لا مدخلَ له هنا إطلاقاً: الاستبدالُ في شاشة «برنامج الولاء»
+  /// يحرق النقاطَ ثمّ يطلب من الكاشير تطبيقَ الخصم بيده في شاشةٍ أخرى.
+  /// (القاعدة الثانية عشرة: مبنيٌّ ولا يُوصَل إليه.)
+  Widget _loyaltyCard() {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AmialColors.cardSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AmialColors.border),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          const Icon(Icons.card_giftcard_outlined,
+              size: 18, color: AmialColors.primary),
+          const SizedBox(width: 6),
+          const Expanded(
+            child: Text('نقاط الولاء',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+          ),
+          if (_redeemPoints > 0)
+            TextButton(
+              onPressed: _busy ? null : () => setState(() => _redeemPoints = 0),
+              child: const Text('إلغاء', style: TextStyle(color: AmialColors.red)),
+            ),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(
+            child: TextField(
+              controller: _loyaltyPhone,
+              keyboardType: TextInputType.phone,
+              textAlign: TextAlign.right,
+              enabled: !_busy && _redeemPoints == 0,
+              decoration: const InputDecoration(
+                labelText: 'رقم العميل',
+                hintText: '77XXXXXXX',
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton.filled(
+            onPressed: (_busy || _loyaltyBusy || _redeemPoints > 0)
+                ? null : _lookupLoyalty,
+            icon: _loyaltyBusy
+                ? const SizedBox(
+                    width: 16, height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.search),
+            style: IconButton.styleFrom(backgroundColor: AmialColors.primary),
+          ),
+        ]),
+        if (_loyaltyLookedUp) ...[
+          const SizedBox(height: 8),
+          // **والرصيدُ يُقال بالنقطة وبالريال معاً** — «١٢٠ نقطة» وحدَها
+          // لا يعرف الزبونُ كم توفّر عليه.
+          Text(
+            _loyaltyCustomerName != null && _loyaltyCustomerName!.isNotEmpty
+                ? '${_loyaltyCustomerName!} · '
+                    '${_loyaltyBalance.toStringAsFixed(0)} نقطة '
+                    '(${AmialMoney.yer(_loyaltyBalance * _loyaltyValuePerPoint)})'
+                : '${_loyaltyBalance.toStringAsFixed(0)} نقطة '
+                    '(${AmialMoney.yer(_loyaltyBalance * _loyaltyValuePerPoint)})',
+            style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          if (_redeemPoints > 0)
+            Text(
+              'يُصرَف ${_redeemPoints.toStringAsFixed(0)} نقطة  ·  '
+              'خصم ${AmialMoney.yer(_loyaltyDiscount)}',
+              style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.bold,
+                  color: AmialColors.success),
+            )
+          else if (_maxRedeemablePoints <= 0)
+            const Text('لا نقاطَ قابلةً للصرف على هذه الفاتورة',
+                style: TextStyle(fontSize: 12, color: AmialColors.textMuted))
+          else
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _applyLoyalty,
+              icon: const Icon(Icons.redeem_outlined, size: 18),
+              label: const Text('استبدال نقاط بخصم'),
+              style: OutlinedButton.styleFrom(
+                  foregroundColor: AmialColors.primary,
+                  side: const BorderSide(color: AmialColors.primary)),
+            ),
+        ],
+      ]),
+    );
+  }
+
+  /// **رقمُ صاحب النقاط ورقمُ الفاتورة يجب أن يكونا واحداً.**
+  ///
+  /// وإلّا صُرفت نقاطُ فلانٍ على فاتورة فلانة — ويُقيَّد الكسبُ لغير من
+  /// دفع. ويُقال بالرقمين لا بـ«غير مطابق».
+  String? _loyaltyCustomerConflict(Map<String, String>? customer) {
+    if (_redeemPoints <= 0) return null;
+
+    final onLoyalty = _loyaltyPhone.text.trim();
+    final onInvoice = (customer?['phone'] ?? '').trim();
+
+    if (onInvoice.isEmpty || onInvoice == onLoyalty) return null;
+
+    return 'رقمُ النقاط ($onLoyalty) غير رقم العميل في الفاتورة ($onInvoice)';
+  }
+
   Future<void> _recordAndShowReceipt(String method,
       {Map<String, String>? customer, String? creditDueDate}) async {
+    final conflict = _loyaltyCustomerConflict(customer);
+    if (conflict != null) { _snack(conflict); return; }
+
+    // **ومن صرف نقاطاً صار عميلَ الفاتورة** — فبلا رقمٍ لا يُقيَّد الكسبُ
+    // ولا تُربط الحركةُ بصاحبها.
+    if (_redeemPoints > 0 && (customer?['phone'] ?? '').trim().isEmpty) {
+      customer = {
+        ...?customer,
+        'phone': _loyaltyPhone.text.trim(),
+        if (_loyaltyCustomerName != null && _loyaltyCustomerName!.isNotEmpty)
+          'name': _loyaltyCustomerName!,
+      };
+    }
+
     setState(() => _busy = true);
     final sale = await c.recordSale(
       // AMIAL-MULTI-CURRENCY-003 — **بالعملة المختارة**، والخادمُ يضرب
@@ -443,6 +698,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       discountAmount: _discountToSend,
       promotionId: _promotionId,
       currency: _currencyToSend,
+      // AMIAL-LOYALTY-AT-PAYMENT-001 — تُستبدَل في معاملة البيعة نفسِها.
+      redeemPoints: _redeemPoints > 0 ? _redeemPoints : null,
     );
     if (!mounted) return;
     setState(() => _busy = false);
@@ -622,7 +879,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                   style: TextStyle(
                       fontSize: 13, color: AmialColors.textSecondary)),
               const SizedBox(height: 8),
-              if (_discount > 0)
+              if (_discount > 0 || _redeemPoints > 0)
                 Text(AmialMoney.yer(widget.total),
                     style: const TextStyle(
                         fontSize: 16,
@@ -633,6 +890,17 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                       fontSize: 34,
                       fontWeight: FontWeight.bold,
                       color: AmialColors.primary)),
+              if (_redeemPoints > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                      'نقاط ولاء ${_redeemPoints.toStringAsFixed(0)} • '
+                      'خصم ${AmialMoney.yer(_loyaltyDiscount)}',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AmialColors.success)),
+                ),
               if (_discount > 0)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
@@ -666,6 +934,9 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                   ),
           )),
           const SizedBox(height: 10),
+
+          // ====== نقاط الولاء (باقة الأعمال فأعلى) ======
+          AccessGate(feature: 'loyalty', child: _loyaltyCard()),
 
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: const [
             Text('الرجاء تحديد خيار واحد',

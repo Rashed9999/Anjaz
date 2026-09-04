@@ -123,7 +123,15 @@ class _MerchantLoyaltyScreenState extends State<MerchantLoyaltyScreen> {
               {'phone': phone.text.trim(), 'points': double.tryParse(ptsCtrl.text.trim()) ?? 0});
           if (r.statusCode == 200 && r.body is Map) {
             final disc = (r.body['meta'] ?? {})['discount'];
-            _snack('خصم بقيمة $disc ر.ي — طبّقه على الفاتورة', ok: true);
+            // AMIAL-LOYALTY-AT-PAYMENT-001 — **ويُقال إنّ هذا البابَ
+            // الاحتياطيّ لا الأصليّ.** الاستبدالُ من هنا يُنقص النقاطَ
+            // **الآن** والخصمُ يُطبَّق بيدٍ في شاشةٍ أخرى — فإن نسِيَه
+            // الكاشيرُ ذهبت النقاطُ ودفع العميلُ كاملاً. والمسارُ السليم
+            // مدخلُ «نقاط الولاء» في شاشة الدفع: يُصرَف مع الفاتورة
+            // نفسِها فتسقط معها إن سقطت.
+            _snack('نُقصت النقاط الآن — طبّق خصم $disc ر.ي يدويّاً على '
+                'الفاتورة. والأفضل: استبدلها من شاشة الدفع لتُربَط بالبيعة',
+                ok: true);
             await doLookup();
             _loadAccounts().then((_) { if (mounted) setState(() {}); });
           } else {
