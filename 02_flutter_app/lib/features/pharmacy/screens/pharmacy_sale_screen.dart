@@ -7,6 +7,7 @@ import 'package:amial_pay/features/barcode/screens/continuous_scanner_screen.dar
 import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_receipt_screen.dart';
 import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/features/merchant/widgets/credit_sale_notice.dart';
 
 /// AMIAL-PHARMACY-001 — شاشة بيع الصيدلية (الجوهر).
 ///
@@ -55,6 +56,19 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
     _doctorCtrl.dispose();
     _discountCtrl.dispose();
     super.dispose();
+  }
+
+  /// AMIAL-SECTOR-PAY-UNIFY-001 — قيمةُ الخصم المُدخَلة.
+  double get _discountValue =>
+      double.tryParse(_discountCtrl.text.trim()) ?? 0;
+
+  /// الصافي بعد الخصم — **ولا ينزل تحت الصفر**، فخصمٌ أكبرُ من الفاتورة
+  /// يُنتج مبلغاً سالباً يُرسَل إلى الخادم فيُرفَض بعد أن يكتبه الصيدليّ.
+  double _netTotal(double gross) {
+    final d = _discountValue;
+    if (d <= 0) return gross;
+
+    return (gross - d).clamp(0, gross).toDouble();
   }
 
   Future<void> _searchProducts(String q) async {
@@ -517,12 +531,53 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
                 ),
             ]),
           ),
+        // ══════════════════════════════════════════════════════════
+        // AMIAL-SECTOR-PAY-UNIFY-001 — **خصمُ الصيدليّة: مبنيٌّ ولا
+        // يُوصَل إليه.**
+        //
+        // `_discountCtrl` **معرَّفٌ ويُرسَل في نداءي البيع كليهما** —
+        // ولا حقلَ له في الشاشة إطلاقاً. فيُرسَل **فارغاً أبداً**،
+        // والصيدليُّ لا يستطيع خصمَ ريالٍ واحد.
+        //
+        // والخادمُ يقبله منذ البداية (`discount_amount` في المُحقِّق،
+        // و`PharmacySaleService` يطرحه من الإجمالي). **فالقطعةُ
+        // الوحيدةُ الغائبةُ حقلُ إدخال** — وهو نمطُ العطل الأكثر
+        // تكراراً في هذا المشروع.
+        // ══════════════════════════════════════════════════════════
+        Row(children: [
+          Expanded(
+            child: TextField(
+              controller: _discountCtrl,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              textAlign: TextAlign.right,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                labelText: 'خصم (ر.ي)',
+                isDense: true,
+                prefixIcon: const Icon(Icons.local_offer_outlined, size: 18),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 8),
+
         // الإجمالي + الدفع
         Row(children: [
-          Text(c.cartTotal.toStringAsFixed(0),
+          Text(_netTotal(c.cartTotal).toStringAsFixed(0),
               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AmialColors.primary)),
           const SizedBox(width: 4),
           const Text('ر.ي', style: TextStyle(fontSize: 12)),
+          if (_discountValue > 0) ...[
+            const SizedBox(width: 8),
+            // **والمشطوبُ يُعرَض بجانبه** — فمن خصم ثمّ نظر إلى رقمٍ
+            // واحدٍ لا يعرف أخُصم أم لا.
+            Text(c.cartTotal.toStringAsFixed(0),
+                style: const TextStyle(
+                    fontSize: 13,
+                    color: AmialColors.textMuted,
+                    decoration: TextDecoration.lineThrough)),
+          ],
           const Spacer(),
           const Text('الإجمالي:', style: TextStyle(color: Colors.grey)),
         ]),
@@ -549,6 +604,17 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
           Expanded(child: _payTile('credit', Icons.event, 'آجل')),
         ]),
         if (_paymentMethod == 'credit') ...[
+          // **وتُقال حقيقةُ الفعل** — سأل صاحبُ المشروع «أيٌّ منهم مرتبطٌ
+          // الآجلُ فيه بنظام الديون؟»، وهو سؤالٌ لا يُجاب من الشاشة.
+          // والأداةُ مشتركةٌ مع الكاشير فلا يفترق النصّان.
+          CreditSaleNotice(
+            dense: true,
+            customerLabel: c.selectedCustomer.value != null
+                ? '${c.selectedCustomer.value!['full_name']} — ${c.selectedCustomer.value!['phone']}'
+                : (_creditPhoneCtrl.text.trim().isEmpty
+                    ? null
+                    : _creditPhoneCtrl.text.trim()),
+          ),
           const SizedBox(height: 10),
           if (c.selectedCustomer.value != null)
             Container(

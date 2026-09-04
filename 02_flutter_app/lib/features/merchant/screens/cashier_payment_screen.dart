@@ -8,6 +8,7 @@ import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/helper/payment_feedback.dart';
+import 'package:amial_pay/features/merchant/widgets/credit_sale_notice.dart';
 
 /// AMIAL-POS-002 — «تأكيد الدفع» (التصميم 37):
 /// بطاقة الإجمالي المطلوب سداده + اختيار وسيلة واحدة:
@@ -700,6 +701,13 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
             title: 'آجل',
             subtitle: 'قيد العملية على حساب العميل',
           ),
+
+          // AMIAL-SECTOR-PAY-UNIFY-001 — **اللافتةُ نفسُها في كلّ قطاع.**
+          // سأل صاحبُ المشروع «أيٌّ منهم مرتبطٌ الآجلُ فيه بنظام الديون؟»
+          // — والجوابُ: كلُّها. فتقوله الشاشةُ بدل أن يُخمَّن، وبنصٍّ واحدٍ
+          // مشتركٍ فلا يفترق عن نصّ الصيدليّة بعد أوّل تعديل.
+          if (_method == 'credit') const CreditSaleNotice(),
+
           if (_methodAllowedInCurrency('mixed'))
             _methodCard(
               value: 'mixed',
