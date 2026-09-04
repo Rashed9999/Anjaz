@@ -586,13 +586,21 @@ class CashierService
                     ->lockForUpdate()
                     ->first();
                 if ($account) {
+                    $saleMovement = \App\Models\CustomerCreditMovement::where('account_id', $account->id)
+                        ->where('type', 'sale')
+                        ->where('reference_type', 'merchant_sale')
+                        ->where('reference_id', $sale->sale_ulid)
+                        ->latest('id')
+                        ->first();
                     app(CustomerCreditService::class)->recordPayment(
                         account: $account,
                         amount: (string) $sale->total_amount,
                         note: 'تسوية بيع آجل من الكاشير',
                         createdBy: $merchant->id,
-                        referenceType: 'merchant_sale_settlement',
-                        referenceId: $sale->sale_ulid,
+                        // تُربط التسوية بالفاتورة نفسها، فلا يجعلها عرض
+                        // «فواتيري الآجلة» سداداً FIFO لفاتورة أقدم.
+                        referenceType: $saleMovement ? 'credit_sale_payment' : 'merchant_sale_settlement',
+                        referenceId: $saleMovement?->movement_ulid ?? $sale->sale_ulid,
                     );
                 }
             }

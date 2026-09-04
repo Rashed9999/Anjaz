@@ -27,7 +27,46 @@ class CreditSourceSettlementService
      *
      * @return array<int, array{reference_type:?string,reference_id:?string,amount:string,fully_settled:bool}>
      */
-    public function allocate(CustomerCreditAccount $account, string $amount): array
+    public function allocate(
+        CustomerCreditAccount $account,
+        string $amount,
+        ?string $saleMovementUlid = null,
+    ): array
+    {
+        $open = $this->openEntries($account);
+
+        $allocations = [];
+        foreach ($this->consume($open, $amount, $saleMovementUlid) as $portion) {
+            $allocations[] = [
+                'sale_movement_ulid' => $portion['movement_ulid'],
+                'reference_type' => $portion['reference_type'],
+                'reference_id' => $portion['reference_id'],
+                'amount' => $portion['amount'],
+                'fully_settled' => $portion['fully_settled'],
+            ];
+        }
+
+        return $allocations;
+    }
+
+    /**
+     * الفواتير الآجلة المفتوحة كما هي الآن، لا كما كانت عند إنشائها.
+     *
+     * القيد هو دفتر الحقيقة الوحيد. نعيد لعب القيود لنحسب المتبقي لكل
+     * فاتورة؛ فلا ننشئ جدول "فواتير مؤجلة" موازياً قد يختلف عن الرصيد.
+     * السدادات القديمة التي لم تحدد فاتورة تبقى FIFO، والسداد الجديد الذي
+     * يحدده العميل يحمل ULID الفاتورة في مرجعه ويخصم منها تحديداً.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function openInvoices(CustomerCreditAccount $account): array
+    {
+        return array_values(array_filter($this->openEntries($account),
+            fn (array $entry) => MoneyService::isPositive($entry['remaining'])));
+    }
+
+    /** @return array<int,array<string,mixed>> */
+    private function openEntries(CustomerCreditAccount $account): array
     {
         $open = [];
         $movements = CustomerCreditMovement::where('account_id', $account->id)
@@ -37,28 +76,33 @@ class CreditSourceSettlementService
         foreach ($movements as $movement) {
             $value = (string) $movement->amount;
             if (str_starts_with($value, '-')) {
-                $this->consume($open, ltrim($value, '-'));
+                // السداد الذي اختار العميل له فاتورة لا يُحوّل بصمت إلى
+                // أقدم فاتورة. القيود القديمة تبقى FIFO للتوافق التاريخي.
+                $target = $movement->reference_type === 'credit_sale_payment'
+                    ? (string) $movement->reference_id : null;
+                $this->consume($open, ltrim($value, '-'), $target ?: null);
+                continue;
+            }
+
+            if ($movement->type !== 'sale') {
                 continue;
             }
 
             $open[] = [
+                'movement_id' => $movement->id,
+                'movement_ulid' => $movement->movement_ulid,
                 'reference_type' => $movement->reference_type,
                 'reference_id' => $movement->reference_id,
+                'reference_number' => $movement->reference_number,
+                'due_date' => $movement->due_date?->toDateString(),
+                'note' => $movement->note,
+                'issued_at' => $movement->created_at?->toIso8601String(),
+                'original_amount' => MoneyService::normalize($value),
                 'remaining' => MoneyService::normalize($value),
             ];
         }
 
-        $allocations = [];
-        foreach ($this->consume($open, $amount) as $portion) {
-            $allocations[] = [
-                'reference_type' => $portion['reference_type'],
-                'reference_id' => $portion['reference_id'],
-                'amount' => $portion['amount'],
-                'fully_settled' => $portion['fully_settled'],
-            ];
-        }
-
-        return $allocations;
+        return $open;
     }
 
     /** يطبّق الأثر على مصادر التفاصيل بعد أن نجح قيد السداد والمحفظة. */
@@ -129,10 +173,37 @@ class CreditSourceSettlementService
      * @param array<int, array{reference_type:?string,reference_id:?string,remaining:string}> $open
      * @return array<int, array{reference_type:?string,reference_id:?string,amount:string,fully_settled:bool}>
      */
-    private function consume(array &$open, string $amount): array
+    private function consume(array &$open, string $amount, ?string $saleMovementUlid = null): array
     {
         $remaining = MoneyService::normalize($amount);
         $portions = [];
+
+        // اختار العميل فاتورة بعينها: لا يُعاد ترتيب دينه من وراء ظهره.
+        if ($saleMovementUlid !== null) {
+            foreach ($open as $index => &$entry) {
+                if (($entry['movement_ulid'] ?? null) !== $saleMovementUlid) {
+                    continue;
+                }
+                if (MoneyService::compare($remaining, $entry['remaining']) > 0) {
+                    throw new RuntimeException('مبلغ السداد أكبر من المتبقي في الفاتورة المختارة');
+                }
+                $entry['remaining'] = MoneyService::sub($entry['remaining'], $remaining);
+                $portions[] = [
+                    'movement_ulid' => $entry['movement_ulid'],
+                    'reference_type' => $entry['reference_type'],
+                    'reference_id' => $entry['reference_id'],
+                    'amount' => $remaining,
+                    'fully_settled' => MoneyService::compare($entry['remaining'], '0') <= 0,
+                ];
+                if (!MoneyService::isPositive($entry['remaining'])) {
+                    unset($open[$index]);
+                }
+                unset($entry);
+                return $portions;
+            }
+            unset($entry);
+            throw new RuntimeException('الفاتورة المختارة غير مستحقة أو لا تخص هذا الحساب');
+        }
 
         foreach ($open as $index => &$entry) {
             if (!MoneyService::isPositive($remaining)) {
@@ -147,6 +218,7 @@ class CreditSourceSettlementService
             $entry['remaining'] = MoneyService::sub($entry['remaining'], $portion);
             $remaining = MoneyService::sub($remaining, $portion);
             $portions[] = [
+                'movement_ulid' => $entry['movement_ulid'],
                 'reference_type' => $entry['reference_type'],
                 'reference_id' => $entry['reference_id'],
                 'amount' => $portion,

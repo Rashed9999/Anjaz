@@ -130,6 +130,7 @@ class CustomerCreditService
         ?int $createdBy = null,
         ?string $referenceType = null,
         ?string $referenceId = null,
+        ?string $referenceNumber = null,
     ): CustomerCreditMovement {
         $amount = MoneyService::normalize($amount);
         if (!MoneyService::isPositive($amount)) {
@@ -144,6 +145,7 @@ class CustomerCreditService
             createdBy: $createdBy,
             referenceType: $referenceType,
             referenceId: $referenceId,
+            referenceNumber: $referenceNumber,
         );
     }
 

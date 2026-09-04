@@ -128,7 +128,7 @@ class WholesaleCollectionService
             // تحصيل موظف الجملة (نقداً أو عبر QR) يجب أن يخفض أيضاً الدفتر
             // الموحد الذي يراه العميل، وإلا ظهرت له فاتورة مدفوعة كأنها دين.
             $this->recordUnifiedCreditPaymentIfLinked(
-                $receiver, $customer, $amount, $collection, $receivedByUserId,
+                $receiver, $customer, $inv, $amount, $collection, $receivedByUserId,
             );
 
             if (!empty($collection->paid_transaction_id)) {
@@ -188,6 +188,7 @@ class WholesaleCollectionService
     private function recordUnifiedCreditPaymentIfLinked(
         User $merchant,
         WholesaleCustomer $customer,
+        WholesaleInvoice $invoice,
         string $amount,
         WholesaleCollection $collection,
         ?int $receivedByUserId,
@@ -197,13 +198,20 @@ class WholesaleCollectionService
             return;
         }
 
+        $saleMovement = \App\Models\CustomerCreditMovement::where('account_id', $account->id)
+            ->where('type', 'sale')
+            ->where('reference_type', 'wholesale_invoice')
+            ->where('reference_id', $invoice->invoice_ulid)
+            ->latest('id')
+            ->first();
+
         app(CustomerCreditService::class)->recordPayment(
             account: $account,
             amount: $amount,
             note: 'تحصيل فاتورة جملة ' . ($collection->invoice?->invoice_number ?? ''),
             createdBy: $receivedByUserId ?? $merchant->id,
-            referenceType: 'wholesale_collection',
-            referenceId: $collection->collection_ulid,
+            referenceType: $saleMovement ? 'credit_sale_payment' : 'wholesale_collection',
+            referenceId: $saleMovement?->movement_ulid ?? $collection->collection_ulid,
         );
     }
 

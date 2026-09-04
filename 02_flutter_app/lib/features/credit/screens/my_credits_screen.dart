@@ -158,6 +158,7 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
   bool _loading = true;
   String _balance = '0';
   List<Map<String, dynamic>> _movements = [];
+  List<Map<String, dynamic>> _invoices = [];
 
   @override
   void initState() {
@@ -176,6 +177,9 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
           _movements = ((meta['movements'] ?? []) as List)
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
+          _invoices = ((meta['invoices'] ?? []) as List)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
         });
       }
     } catch (_) {} finally {
@@ -188,17 +192,17 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
     return n.toStringAsFixed(n == n.roundToDouble() ? 0 : 2);
   }
 
-  Future<void> _settle() async {
-    final balance = double.tryParse(_balance) ?? 0;
+  Future<void> _settle({Map<String, dynamic>? invoice}) async {
+    final balance = double.tryParse('${invoice?['remaining'] ?? _balance}') ?? 0;
     if (balance <= 0) return;
     final amtCtrl = TextEditingController(text: balance.toStringAsFixed(0));
 
     final amount = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('سداد الآجل'),
+        title: Text(invoice == null ? 'سداد الآجل' : 'سداد فاتورة آجلة'),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('المستحقّ: ${_fmt(_balance)} ر.ي',
+          Text('المستحقّ: ${_fmt(invoice?['remaining'] ?? _balance)} ر.ي',
               style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.red)),
           const SizedBox(height: 12),
           TextField(
@@ -226,7 +230,12 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
 
     final r = await _api.postData(
       '/api/v1/amial/customer/credits/${widget.accountId}/settle',
-      {'amount': amount, 'pin': pin},
+      {
+        'amount': amount,
+        'pin': pin,
+        if (invoice?['movement_ulid'] != null)
+          'sale_movement_ulid': invoice!['movement_ulid'],
+      },
     );
     if (!mounted) return;
     if (r.statusCode == 200) {
@@ -281,6 +290,13 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
                   ),
                 ],
                 const SizedBox(height: 12),
+                if (_invoices.isNotEmpty) ...[
+                  const Text('الفواتير المستحقة',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  ..._invoices.map(_invoiceRow),
+                  const SizedBox(height: 8),
+                ],
                 ..._movements.map(_movementRow),
               ]),
             ),
@@ -305,6 +321,40 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
         ].where((s) => s.isNotEmpty).join(' • '), style: const TextStyle(fontSize: 11)),
         trailing: Text('$sign${_fmt(m['amount'])}',
             style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 15)),
+      ),
+    );
+  }
+
+  Widget _invoiceRow(Map<String, dynamic> invoice) {
+    final due = '${invoice['due_date'] ?? ''}';
+    final note = '${invoice['note'] ?? ''}';
+    final reference = '${invoice['reference_number'] ?? ''}';
+    final remaining = _fmt(invoice['remaining']);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AmialColors.red.withValues(alpha: 0.18)),
+      ),
+      child: ListTile(
+        leading: const Icon(Icons.receipt_long, color: AmialColors.red),
+        title: Text(reference.isEmpty ? 'فاتورة آجلة' : 'فاتورة $reference',
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text([
+          if (due.isNotEmpty) 'الاستحقاق: $due',
+          if (note.isNotEmpty) note,
+        ].join(' • '), style: const TextStyle(fontSize: 11)),
+        trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text('$remaining ر.ي',
+                style: const TextStyle(fontWeight: FontWeight.bold, color: AmialColors.red)),
+            const Text('سداد جزئي أو كامل', style: TextStyle(fontSize: 10, color: AmialColors.textMuted)),
+          ],
+        ),
+        onTap: () => _settle(invoice: invoice),
       ),
     );
   }

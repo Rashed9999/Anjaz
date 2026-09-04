@@ -28,7 +28,12 @@ class CustomerCreditSettleService
     /**
      * @return array{new_balance:string, paid:string, transaction_no:?string}
      */
-    public function settle(User $customer, CustomerCreditAccount $account, string $amount): array
+    public function settle(
+        User $customer,
+        CustomerCreditAccount $account,
+        string $amount,
+        ?string $saleMovementUlid = null,
+    ): array
     {
         if ($account->customer_user_id !== $customer->id) {
             throw new InvalidArgumentException('هذا الحساب لا يخصّك');
@@ -46,11 +51,11 @@ class CustomerCreditSettleService
 
         $merchantId = $account->merchant_user_id;
 
-        return DB::transaction(function () use ($customer, $account, $merchantId, $amount) {
+        return DB::transaction(function () use ($customer, $account, $merchantId, $amount, $saleMovementUlid) {
             // نفس الحساب يُقفل قبل حساب توزيع السداد، فلا يوزّع طلبان
             // متزامنان المبلغ ذاته على فاتورة واحدة.
             $lockedAccount = CustomerCreditAccount::lockForUpdate()->findOrFail($account->id);
-            $allocations = $this->sources->allocate($lockedAccount, $amount);
+            $allocations = $this->sources->allocate($lockedAccount, $amount, $saleMovementUlid);
 
             // 1) حرّك المال: خصم من العميل، إضافة للتاجر (يرمي عند نقص الرصيد)
             $this->guard()->lockWalletsOrdered([$customer->id, $merchantId]);
@@ -63,8 +68,9 @@ class CustomerCreditSettleService
                 amount: $amount,
                 note: 'سداد عبر أميال باي',
                 createdBy: $customer->id,
-                referenceType: 'wallet_settle',
-                referenceId: (string) $customer->id,
+                referenceType: $saleMovementUlid ? 'credit_sale_payment' : 'wallet_settle',
+                referenceId: $saleMovementUlid ?: (string) $customer->id,
+                referenceNumber: $saleMovementUlid ? 'سداد فاتورة آجل' : null,
             );
 
             if (!$movement) {
@@ -80,6 +86,7 @@ class CustomerCreditSettleService
                 'new_balance' => (string) $lockedAccount->fresh()->current_balance,
                 'paid' => $amount,
                 'transaction_no' => null, // حركة محفظة مباشرة (بلا رقم عملية دفتر العام)
+                'allocations' => $allocations,
             ];
         });
     }
