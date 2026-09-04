@@ -1,6 +1,12 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:screenshot/screenshot.dart';
 
+import 'package:amial_pay/features/merchant/widgets/invoice_whatsapp_sheet.dart';
 import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_access_controller.dart';
 import 'package:amial_pay/features/wholesale/controllers/wholesale_controller.dart';
@@ -175,7 +181,29 @@ class WholesaleProInvoiceDetailsScreen extends StatefulWidget {
 
 class _WholesaleProInvoiceDetailsScreenState extends State<WholesaleProInvoiceDetailsScreen> {
   WholesaleController get c => Get.find<WholesaleController>();
+  final ScreenshotController _shot = ScreenshotController();
   @override void initState() { super.initState(); WidgetsBinding.instance.addPostFrameCallback((_) => c.loadInvoiceDetails(widget.invoiceId)); }
+
+  Future<File?> _captureInvoice() async {
+    final Uint8List? bytes = await _shot.capture(pixelRatio: 3);
+    if (bytes == null) return null;
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/wholesale_invoice_${widget.invoiceId}_${DateTime.now().millisecondsSinceEpoch}.png');
+    await file.writeAsBytes(bytes, flush: true);
+    return file;
+  }
+
+  Future<void> _shareWhatsApp(Map invoice, Map customer) => InvoiceWhatsAppSheet.open(
+    context,
+    invoiceNumber: '${invoice['invoice_number'] ?? widget.invoiceId}',
+    initialPhone: customer['phone']?.toString(),
+    captureFile: _captureInvoice,
+    message: 'فاتورة جملة من ${invoice['merchant_name'] ?? 'التاجر'}\n'
+        'رقم الفاتورة: ${invoice['invoice_number'] ?? widget.invoiceId}\n'
+        'الإجمالي: ${_money(invoice['total_amount'])} ر.ي\n'
+        'المتبقي: ${_money(invoice['balance_due'])} ر.ي',
+  );
+
   @override Widget build(BuildContext context) => Scaffold(
     backgroundColor: AmialColors.background,
     appBar: AppBar(title: const Text('تفاصيل الفاتورة'), centerTitle: true, actions: [
@@ -190,7 +218,7 @@ class _WholesaleProInvoiceDetailsScreenState extends State<WholesaleProInvoiceDe
       if (invoice == null) return _EmptyState(icon: Icons.receipt_long_outlined, text: c.lastError.value.isEmpty ? 'تعذر تحميل الفاتورة' : c.lastError.value);
       final customer = invoice['customer'] is Map ? invoice['customer'] as Map : const {};
       final items = invoice['items'] is List ? invoice['items'] as List : const [];
-      return RefreshIndicator(onRefresh: () => c.loadInvoiceDetails(widget.invoiceId), child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(16), children: [
+      return Screenshot(controller: _shot, child: RefreshIndicator(onRefresh: () => c.loadInvoiceDetails(widget.invoiceId), child: ListView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(16), children: [
         Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('${invoice['invoice_number'] ?? '—'}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
           Text('العميل: ${customer['full_name'] ?? '—'}'),
@@ -210,8 +238,10 @@ class _WholesaleProInvoiceDetailsScreenState extends State<WholesaleProInvoiceDe
           ));
         }, icon: const Icon(Icons.print_outlined), label: const Text('طباعة حرارية'))),
         const SizedBox(height: 8),
+        SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => _shareWhatsApp(invoice, customer), icon: const Icon(Icons.chat_outlined), label: const Text('مشاركة عبر واتساب'))),
+        const SizedBox(height: 8),
         SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () async { final ok = await c.downloadInvoicePdf(widget.invoiceId); if (!ok && mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(c.lastError.value))); }, icon: const Icon(Icons.picture_as_pdf_outlined), label: const Text('تنزيل الفاتورة PDF'))),
-      ]));
+      ])));
     }),
   );
 }
