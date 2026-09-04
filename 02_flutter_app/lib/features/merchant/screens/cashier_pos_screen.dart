@@ -40,6 +40,9 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       c.loadProducts();
+      // AMIAL-HELD-SALE-001 — التذاكرُ تُقرأ عند فتح الشبّاك، فيرى الكاشيرُ
+      // ما تركه هو أو زميلُه.
+      c.loadHeldTickets();
       // AMIAL-OFFLINE-POS-001 — حاول مزامنة أي مبيعات معلّقة عند فتح الكاشير.
       _offline.refreshCount().then((n) { if (n > 0) _offline.sync(); });
     });
@@ -281,6 +284,36 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                     ),
                   ]),
                 )),
+          // AMIAL-HELD-SALE-001 — **بابُ التذاكر المفتوحة، بعدّادها.**
+          //
+          // ويُعرَض العددُ على الأيقونة: تذكرةٌ لا تُرى تُنسى، ويُعاد بناءُ
+          // سلّتها من الصفر — وهو عينُ العطل الذي بُنيت الميزةُ لحلّه.
+          Obx(() {
+            final n = c.heldTickets.length;
+            return Stack(alignment: Alignment.center, children: [
+              IconButton(
+                key: const Key('cashier-held-tickets'),
+                tooltip: 'التذاكر المفتوحة',
+                icon: const Icon(Icons.pause_circle_outline_rounded),
+                onPressed: _openHeldTickets,
+              ),
+              if (n > 0)
+                Positioned(
+                  right: 6, top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                        color: AmialColors.yellow,
+                        borderRadius: BorderRadius.circular(10)),
+                    child: Text('$n',
+                        style: const TextStyle(
+                            color: AmialColors.primaryDark,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                ),
+            ]);
+          }),
           IconButton(
             tooltip: 'إدخال يدوي',
             icon: const Icon(Icons.edit_note_rounded),
@@ -516,7 +549,27 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                       ),
                     ),
 
-                    const SizedBox(width: 8),
+                    // AMIAL-HELD-SALE-001 — **زرُّ التعليق حيث تقع الحاجة.**
+                    //
+                    // الحاجةُ تقع والسلّةُ مبنيّةٌ والزبونُ واقف، فالزرُّ
+                    // في شريط السلّة نفسِه لا في قائمةٍ يُبحَث فيها.
+                    // **وهو خارج `InkWell` المراجعة**: زرٌّ داخل مساحةٍ
+                    // قابلةٍ للضغط تبتلعه الضغطةُ الأمُّ فينقل إلى شاشةٍ
+                    // أخرى — وهو عطلُ «تحويل رصيد» في مركز الوكلاء بحرفه.
+                    Obx(() => IconButton(
+                          key: const Key('cashier-hold-cart'),
+                          tooltip: 'تعليق الفاتورة',
+                          onPressed: c.isHolding.value ? null : _holdCart,
+                          icon: c.isHolding.value
+                              ? const SizedBox(
+                                  height: 18, width: 18,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.pause_circle_outline_rounded,
+                                  color: Colors.white),
+                        )),
+
+                    const SizedBox(width: 4),
 
                     // ــ الفعلُ الظاهر ــ
                     Container(
@@ -743,5 +796,261 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
         ),
       ),
     );
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  AMIAL-HELD-SALE-001 — التذاكر المفتوحة
+  // ══════════════════════════════════════════════════════════════════
+
+  /// **تعليقُ السلّة الحاليّة.**
+  ///
+  /// ويُسأل عن اسمٍ يُميّزها: الكاشيرُ يعود بعد نصف ساعةٍ إلى خمس تذاكر،
+  /// و«تذكرة ٣» لا تقول له أيُّها لِمن. **والاسمُ اختياريٌّ ولا يُلزَم** —
+  /// إلزامُه يجعل الطابورَ ينتظر كتابةَ نصّ.
+  Future<void> _holdCart() async {
+    if (c.cart.isEmpty) return;
+
+    final label = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تعليق الفاتورة'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('${c.cart.length} صنف · ${AmialMoney.yer(c.cartTotal)}',
+              style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: label,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'اسم يميّزها (اختياري)',
+              hintText: 'أبو محمد · السيارة الحمراء · الطاولة ٣',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+              'تُحفظ في الخادم فتنجو من إغلاق التطبيق، ويستأنفها أي صندوق. '
+              'ولا تُخصم البضاعة من المخزون قبل الدفع.',
+              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تعليق')),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    final done = await c.holdCart(label: label.text.trim());
+    if (!mounted) return;
+
+    if (done) {
+      Get.snackbar('عُلّقت الفاتورة', 'تُستأنف من «التذاكر المفتوحة» في الأعلى',
+          backgroundColor: AmialColors.successSurface, colorText: AmialColors.success);
+    } else {
+      Get.snackbar('تعذّر التعليق', c.lastError.value,
+          backgroundColor: AmialColors.dangerSurface, colorText: AmialColors.red);
+    }
+  }
+
+  Future<void> _openHeldTickets() async {
+    await c.loadHeldTickets();
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        maxChildSize: 0.92,
+        minChildSize: 0.35,
+        expand: false,
+        builder: (_, scroll) => Container(
+          decoration: const BoxDecoration(
+            color: AmialColors.background,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+          ),
+          child: Obx(() {
+            final list = c.heldTickets;
+
+            return ListView(controller: scroll, padding: const EdgeInsets.all(16), children: [
+              Center(
+                child: Container(
+                  width: 44, height: 4,
+                  decoration: BoxDecoration(
+                      color: AmialColors.border,
+                      borderRadius: BorderRadius.circular(4)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text('التذاكر المفتوحة',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 4),
+              const Text('فواتير عُلّقت ولم تُدفَع بعد. أي صندوق يستأنفها.',
+                  style: TextStyle(fontSize: 11.5, color: AmialColors.textMuted)),
+              const SizedBox(height: 14),
+              if (list.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Text(
+                      'لا تذاكر معلّقة.\n\nحين يقول الزبون «انتظر، نسيت شيئاً» — '
+                      'اضغط «تعليق» في شريط السلة واخدم التالي.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AmialColors.textMuted, height: 1.7)),
+                )
+              else
+                ...list.map(_ticketCard),
+              const SizedBox(height: 20),
+            ]);
+          }),
+        ),
+      ),
+    );
+  }
+
+  Widget _ticketCard(Map<String, dynamic> t) {
+    final label = '${t['label'] ?? ''}'.trim();
+    final who = '${t['opened_by_name'] ?? ''}'.trim();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AmialColors.border),
+      ),
+      child: Column(children: [
+        Row(children: [
+          Expanded(
+            child: Text(label.isEmpty ? 'تذكرة بلا اسم' : label,
+                style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                    color: label.isEmpty ? AmialColors.textSecondary : null)),
+          ),
+          Text(AmialMoney.yer(t['total']),
+              style: const TextStyle(
+                  fontWeight: FontWeight.w900, color: AmialColors.primary)),
+        ]),
+        const SizedBox(height: 4),
+        Row(children: [
+          Text('${t['items_count'] ?? 0} صنف',
+              style: const TextStyle(fontSize: 11.5, color: AmialColors.textSecondary)),
+          if (who.isNotEmpty) ...[
+            const Text(' · ', style: TextStyle(color: AmialColors.textMuted)),
+            // **ومن علّقها يُقرأ** — فيعرف الكاشيرُ أنّها ليست تذكرتَه.
+            Text(who,
+                style: const TextStyle(fontSize: 11.5, color: AmialColors.textSecondary)),
+          ],
+        ]),
+        const Divider(height: 20),
+        Row(children: [
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: () => _resume('${t['ticket_ulid']}'),
+              icon: const Icon(Icons.play_arrow, size: 16),
+              label: const Text('استئناف'),
+              style: FilledButton.styleFrom(
+                  backgroundColor: AmialColors.primary,
+                  minimumSize: const Size(0, 42)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: () => _voidTicket('${t['ticket_ulid']}'),
+            icon: const Icon(Icons.delete_outline, size: 16),
+            label: const Text('إلغاء'),
+            style: OutlinedButton.styleFrom(
+                foregroundColor: AmialColors.red,
+                side: const BorderSide(color: AmialColors.red),
+                minimumSize: const Size(0, 42)),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  /// **والسلّةُ الحاليّةُ لا تُداس صامتةً.**
+  ///
+  /// استئنافُ تذكرةٍ فوق سلّةٍ فيها أصنافٌ يمحوها — وأصنافٌ مُسحت بالباركود
+  /// تختفي بلا سؤال. فيُسأل، والخيارُ «علّق الحاليّة أوّلاً» مطروح.
+  Future<void> _resume(String ulid) async {
+    if (c.cart.isNotEmpty) {
+      final choice = await showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('في السلة أصناف'),
+          content: Text('السلة الحالية فيها ${c.cart.length} صنف. '
+              'استئناف تذكرة أخرى سيستبدلها.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, 'cancel'),
+                child: const Text('تراجع')),
+            TextButton(onPressed: () => Navigator.pop(ctx, 'hold'),
+                child: const Text('علّق الحالية أولاً')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, 'replace'),
+                child: const Text('استبدال')),
+          ],
+        ),
+      );
+
+      if (!mounted || choice == null || choice == 'cancel') return;
+
+      if (choice == 'hold') {
+        final held = await c.holdCart();
+        if (!mounted || !held) return;
+      }
+    }
+
+    final ok = await c.resumeHeld(ulid);
+    if (!mounted) return;
+
+    if (ok) {
+      Navigator.of(context).maybePop();
+    } else {
+      Get.snackbar('تعذّر الاستئناف', c.lastError.value,
+          backgroundColor: AmialColors.dangerSurface, colorText: AmialColors.red);
+    }
+  }
+
+  Future<void> _voidTicket(String ulid) async {
+    final reason = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إلغاء التذكرة'),
+        content: TextField(
+          controller: reason,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'السبب',
+            hintText: 'الزبون انصرف · أُدخلت بالخطأ',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: AmialColors.red),
+              child: const Text('إلغاء التذكرة')),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    if (reason.text.trim().length < 3) {
+      Get.snackbar('السبب مطلوب', 'تذكرة تختفي بلا سبب تُقرأ عطلاً',
+          backgroundColor: AmialColors.dangerSurface, colorText: AmialColors.red);
+      return;
+    }
+
+    await c.voidHeld(ulid, reason.text.trim());
   }
 }

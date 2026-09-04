@@ -227,7 +227,15 @@ class CashierController extends GetxController implements GetxService {
     }
   }
 
-  void clearCart() => cart.clear();
+  /// **وتُنسى التذكرةُ مع السلّة.**
+  ///
+  /// AMIAL-HELD-SALE-001 — بقاءُ `activeTicket` بعد تفريغٍ يدويٍّ يجعل
+  /// **الفاتورةَ التاليةَ تُختَم بتذكرةٍ لا علاقةَ لها بها**، فيُقرأ مصيرُ
+  /// التذكرة خطأً: «دُفعت» وهي لم تُدفَع.
+  void clearCart() {
+    cart.clear();
+    activeTicket.value = '';
+  }
 
   // ---- تسجيل البيع ----
   /// method: cash | credit | amial_pay
@@ -268,6 +276,10 @@ class CashierController extends GetxController implements GetxService {
         if (corporateMemberId != null) 'corporate_member_id': corporateMemberId,
         if (discountAmount != null && discountAmount > 0) 'discount_amount': discountAmount.toStringAsFixed(2),
         if (promotionId != null) 'promotion_id': promotionId,
+        // AMIAL-HELD-SALE-001 — **التذكرةُ تُختَم ببيعتها.**
+        // فيُعرف مصيرُها: دُفعت أم ما زالت معلَّقة. وتذكرةٌ لا وجودَ لها
+        // لا تُسقط البيع — الخادمُ يتجاوز الربطَ ولا يرمي.
+        if (activeTicket.value.isNotEmpty) 'held_ticket_ulid': activeTicket.value,
         if (redeemPoints != null && redeemPoints > 0)
           'redeem_points': redeemPoints.toStringAsFixed(2),
         if (amountReceived != null && amountReceived > 0)
@@ -378,5 +390,125 @@ class CashierController extends GetxController implements GetxService {
       if (r.body is Map) return r.body['message']?.toString();
     } catch (_) {}
     return null;
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  AMIAL-HELD-SALE-001 — التذاكر المفتوحة (تعليق الفاتورة)
+  // ══════════════════════════════════════════════════════════════════
+
+  final RxList<Map<String, dynamic>> heldTickets = <Map<String, dynamic>>[].obs;
+  final RxBool isHolding = false.obs;
+
+  /// **التذكرةُ التي بُنيت منها السلّةُ الحاليّة** — تُرسَل مع البيع
+  /// فتُختَم التذكرةُ ببيعتها، ويُعرف مصيرُها.
+  final RxString activeTicket = ''.obs;
+
+  Future<void> loadHeldTickets() async {
+    try {
+      final r = await repo.heldTickets();
+      if (r.statusCode == 200 && r.body is Map) {
+        heldTickets.assignAll((((r.body['meta'] ?? {})['tickets'] ?? []) as List)
+            .map((e) => Map<String, dynamic>.from(e as Map)));
+      }
+    } catch (_) {/* الشبكة — والشاشةُ تعمل بما تعرفه */}
+  }
+
+  /// تعليقُ السلّة الحاليّة، **وتفريغُها بعد نجاح الحفظ لا قبله.**
+  ///
+  /// تفريغُها قبل تأكيد الخادم يفقد السلّةَ إن سقط الطلب — وهو أسوأُ من
+  /// ألّا تُعلَّق أصلاً.
+  Future<bool> holdCart({String? label, String? customerName, String? notes}) async {
+    if (cart.isEmpty) {
+      lastError.value = 'السلة فارغة';
+      return false;
+    }
+
+    isHolding.value = true;
+    try {
+      final r = await repo.holdCart({
+        'items': cart.map((l) => l.toJson()).toList(),
+        if (label != null && label.isNotEmpty) 'label': label,
+        if (customerName != null && customerName.isNotEmpty) 'customer_name': customerName,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
+      });
+
+      if (r.statusCode == 201 || r.statusCode == 200) {
+        cart.clear();
+        activeTicket.value = '';
+        await loadHeldTickets();
+        return true;
+      }
+
+      lastError.value = _msg(r) ?? 'تعذّر تعليق الفاتورة';
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    } finally {
+      isHolding.value = false;
+    }
+    return false;
+  }
+
+  /// استئنافُ تذكرة: تُملأ بها السلّةُ ويُحفَظ رقمُها لتُختَم عند الدفع.
+  ///
+  /// **والسلّةُ الحاليّةُ لا تُداس صامتةً** — الشاشةُ تسأل قبل النداء.
+  Future<bool> resumeHeld(String ulid) async {
+    try {
+      final r = await repo.resumeHeld(ulid);
+      if (r.statusCode == 200 && r.body is Map) {
+        final t = ((r.body['meta'] ?? {})['ticket'] ?? {}) as Map;
+
+        cart.assignAll(((t['items'] ?? []) as List).map((e) {
+          final m = Map<String, dynamic>.from(e as Map);
+          return CartLine(
+            name: '${m['name'] ?? 'صنف'}',
+            price: double.tryParse('${m['price'] ?? 0}') ?? 0,
+            qty: (double.tryParse('${m['qty'] ?? 1}') ?? 1).round(),
+            productId: m['product_id'] == null ? null : (m['product_id'] as num).toInt(),
+          );
+        }));
+
+        activeTicket.value = '${t['ticket_ulid'] ?? ''}';
+        await loadHeldTickets();
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'تعذّر استئناف التذكرة';
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    }
+    return false;
+  }
+
+  /// **التراجعُ عن الاستئناف** — تُعاد التذكرةُ معلَّقةً وتُفرَّغ السلّة.
+  Future<bool> reopenHeld(String ulid) async {
+    try {
+      final r = await repo.reopenHeld(ulid);
+      if (r.statusCode == 200) {
+        if (activeTicket.value == ulid) {
+          cart.clear();
+          activeTicket.value = '';
+        }
+        await loadHeldTickets();
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'تعذّر إعادة التذكرة';
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    }
+    return false;
+  }
+
+  Future<bool> voidHeld(String ulid, String reason) async {
+    try {
+      final r = await repo.voidHeld(ulid, reason);
+      if (r.statusCode == 200) {
+        if (activeTicket.value == ulid) activeTicket.value = '';
+        await loadHeldTickets();
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'تعذّر إلغاء التذكرة';
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    }
+    return false;
   }
 }

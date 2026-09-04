@@ -311,7 +311,152 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             return $this->error('SALE_FAILED', $e->getMessage(), 422);
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-HELD-SALE-001 — **التذكرةُ تُختَم بالبيعة التي وُلدت منها.**
+        //
+        // فيُعرف مصيرُها: دُفعت أم ما زالت معلَّقة. **ولا يُرمى استثناءٌ
+        // إن تعذّر الربط** — البيعةُ وقعت والمالُ تحرّك، وربطُ الأثر لا
+        // يُسقط بيعةً ناجحة. (وهو حدُّ `AuditService::record` نفسُه:
+        // عقوبةُ خطأٍ صغيرٍ لا تكون بفقد ما نجح.)
+        // ══════════════════════════════════════════════════════════════
+        if ($request->filled('held_ticket_ulid')) {
+            try {
+                app(\App\Services\HeldSaleService::class)->linkSale(
+                    $merchant,
+                    (string) $request->input('held_ticket_ulid'),
+                    (string) ($sale['sale_ulid'] ?? $sale->sale_ulid ?? ''),
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    'held ticket link failed: ' . $e->getMessage());
+            }
+        }
+
         return $this->ok(['sale' => $sale], 'SALE_RECORDED', 'تم تسجيل البيع');
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  AMIAL-HELD-SALE-001 — التذاكر المفتوحة (تعليق الفاتورة)
+    // ══════════════════════════════════════════════════════════════════
+
+    /** GET /merchant/cashier/held — التذاكر المفتوحة للمنشأة. */
+    public function heldIndex(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $tickets = app(\App\Services\HeldSaleService::class)->open($merchant);
+
+        return $this->ok([
+            'tickets' => $tickets,
+            'count' => count($tickets),
+            'max_open' => \App\Models\HeldSale::MAX_OPEN,
+        ]);
+    }
+
+    /** POST /merchant/cashier/held — تعليق السلة الحالية. */
+    public function heldStore(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'items' => 'required|array|min:1',
+            'items.*.name' => 'sometimes|nullable|string|max:200',
+            'items.*.qty' => 'sometimes|numeric|min:0',
+            'items.*.quantity' => 'sometimes|numeric|min:0',
+            'items.*.price' => 'sometimes|numeric|min:0',
+            'items.*.product_id' => 'sometimes|nullable|integer',
+            'label' => 'sometimes|nullable|string|max:120',
+            'customer_name' => 'sometimes|nullable|string|max:190',
+            'customer_phone' => 'sometimes|nullable|string|max:32',
+            'notes' => 'sometimes|nullable|string|max:500',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posUserId] = $ctx;
+
+        try {
+            $ticket = app(\App\Services\HeldSaleService::class)->hold(
+                $merchant, $posUserId, $request->input('items'), [
+                    'label' => $request->input('label'),
+                    'customer_name' => $request->input('customer_name'),
+                    'customer_phone' => $request->input('customer_phone'),
+                    'notes' => $request->input('notes'),
+                ]);
+        } catch (\DomainException $e) {
+            return $this->error('HOLD_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['ticket' => $this->ticketArr($ticket)], 'HELD',
+            'عُلّقت الفاتورة — تُستأنف من «التذاكر المفتوحة»', 201);
+    }
+
+    /** POST /merchant/cashier/held/{ulid}/resume */
+    public function heldResume(Request $request, string $ulid): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        try {
+            $ticket = app(\App\Services\HeldSaleService::class)->resume($merchant, $ulid);
+        } catch (\DomainException $e) {
+            return $this->error('RESUME_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['ticket' => $ticket], 'RESUMED', 'استُؤنفت التذكرة');
+    }
+
+    /** POST /merchant/cashier/held/{ulid}/reopen — تراجُعٌ عن الاستئناف. */
+    public function heldReopen(Request $request, string $ulid): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        try {
+            $ticket = app(\App\Services\HeldSaleService::class)->reopen($merchant, $ulid);
+        } catch (\DomainException $e) {
+            return $this->error('REOPEN_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['ticket' => $ticket], 'REOPENED', 'أُعيدت التذكرة معلَّقة');
+    }
+
+    /** POST /merchant/cashier/held/{ulid}/void */
+    public function heldVoid(Request $request, string $ulid): JsonResponse
+    {
+        $v = Validator::make($request->all(), ['reason' => 'required|string|min:3|max:300']);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        try {
+            $ticket = app(\App\Services\HeldSaleService::class)
+                ->void($merchant, $ulid, (string) $request->input('reason'));
+        } catch (\DomainException $e) {
+            return $this->error('VOID_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['ticket' => $ticket], 'VOIDED', 'أُلغيت التذكرة');
+    }
+
+    private function ticketArr(\App\Models\HeldSale $t): array
+    {
+        return [
+            'ticket_ulid' => $t->ticket_ulid,
+            'label' => $t->label,
+            'customer_name' => $t->customer_name,
+            'items' => $t->items ?? [],
+            'items_count' => count($t->items ?? []),
+            'total' => (string) $t->total,
+            'status' => $t->status,
+            'opened_by_name' => $t->opened_by_name,
+            'opened_at' => $t->created_at?->toIso8601String(),
+        ];
     }
 
     /**

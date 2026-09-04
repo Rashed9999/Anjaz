@@ -812,6 +812,27 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
             Route::get('/sales/{ulid}/invoice', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'downloadInvoice'])
                 ->where('ulid', '[A-Z0-9]{26}')->name('sales.invoice');
             Route::post('/sales/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'settleCredit'])->name('sales.settle');
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-HELD-SALE-001 — **التذاكر المفتوحة (تعليق الفاتورة).**
+            //
+            // «انتظر، نسيتُ الحليب» — فتُحفَظ السلّةُ ويُخدَم التالي، بدل
+            // إيقاف الطابور أو إلغاء عشرين صنفاً.
+            //
+            // **ولا حارسَ ورديّةٍ عليها**: التعليقُ لا يقبض ريالاً ولا
+            // يُخرج بضاعة. والحدُّ يقع حيث يقع المال — عند الدفع. ووضعُه
+            // هنا يمنع كاشيراً من حفظ سلّةٍ بناها، فيُلغيها — وهو العطلُ
+            // الذي بُنيت الميزةُ لحلّه.
+            // ══════════════════════════════════════════════════════════
+            $HS = \App\Http\Controllers\Api\V1\Amial\CashierController::class;
+            Route::get('/held', [$HS, 'heldIndex'])->name('held.index');
+            Route::post('/held', [$HS, 'heldStore'])
+                ->middleware('amial.rate-limit:cashier_hold,120,1')->name('held.store');
+            Route::post('/held/{ulid}/resume', [$HS, 'heldResume'])
+                ->where('ulid', '[A-Z0-9]{26}')->name('held.resume');
+            Route::post('/held/{ulid}/reopen', [$HS, 'heldReopen'])
+                ->where('ulid', '[A-Z0-9]{26}')->name('held.reopen');
+            Route::post('/held/{ulid}/void', [$HS, 'heldVoid'])
+                ->where('ulid', '[A-Z0-9]{26}')->name('held.void');
             // AMIAL-CASHIER-REFUND-001 — قائمة مبيعات اليوم (مدخل شاشة الاسترجاع)
             Route::get('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'listSales'])->name('sales.list');
             Route::get('/report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'report'])->name('report');

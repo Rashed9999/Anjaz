@@ -76,4 +76,23 @@ class CashierRepo extends GetxService {
   /// AMIAL-PROFIT-001 — تقرير الربحية (إجماليات + اتجاه يومي + منتجات).
   Future<Response> profitReport({int days = 7}) =>
       apiClient.getData('$_base/profit-report?days=$days');
+
+  // ── AMIAL-HELD-SALE-001 — التذاكر المفتوحة (تعليق الفاتورة) ─────────
+
+  /// التذاكرُ المعلَّقةُ للمنشأة — **لا للجهاز**: الزبونُ قد ينتقل إلى
+  /// الصندوق الآخر، فيستأنفها زميلُه.
+  Future<Response> heldTickets() => apiClient.getData('$_base/held');
+
+  Future<Response> holdCart(Map<String, dynamic> data) =>
+      apiClient.postData('$_base/held', data);
+
+  Future<Response> resumeHeld(String ulid) =>
+      apiClient.postData('$_base/held/$ulid/resume', {});
+
+  /// **تراجعٌ عن الاستئناف** — وبدونه تضيع السلّةُ إن سقط الدفع.
+  Future<Response> reopenHeld(String ulid) =>
+      apiClient.postData('$_base/held/$ulid/reopen', {});
+
+  Future<Response> voidHeld(String ulid, String reason) =>
+      apiClient.postData('$_base/held/$ulid/void', {'reason': reason});
 }
