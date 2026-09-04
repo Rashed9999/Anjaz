@@ -34,6 +34,72 @@ class CustomerCreditController extends Controller
         private readonly MerchantPermissionService $perm,
     ) {}
 
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-CREDIT-AT-TILL-001 — **دَينُ العميل يُقرأ قبل أن يُزاد.**
+     *
+     * كان دفترُ الديون شاشةً أخرى، **والبائعُ يبيع آجلاً وهو لا يعرف كم
+     * على الزبون**. فيبيع لمن عليه أربعون ألفاً وحدُّه ثلاثون، ولا يُكتشف
+     * التجاوزُ إلّا حين يفتح المالكُ الدفترَ بعد أيّام.
+     *
+     * **والحدُّ لا يُفرَض هنا بل يُقال.** ثلاثةُ أسبابٍ مقيسة: كثيرٌ من
+     * الحسابات حدُّها صفرٌ (أي غير مضبوط) فمنعُها يُقفل البيعَ الآجلَ على
+     * الجميع · والبائعُ قد يكون صاحبَ المتجر نفسَه فيقرّر · والقرارُ
+     * التجاريُّ ليس قرارَ شيفرة. **فالمعلومةُ تصل، والقرارُ لصاحبه.**
+     *
+     * **والقدرةُ `debts` المجّانيّة لا `customers` المدفوعة** — وهو نفسُ
+     * التعليل المكتوب في مسارات هذه المجموعة: من باع بالآجل يجب أن يعرف
+     * دينَ زبونه مهما كانت باقتُه. ولو حُرست بـ`customers` لَصار الحاجزُ
+     * على المعلومة التي تمنع الخسارة.
+     *
+     * GET /merchant/credit/lookup?phone=77XXXXXXX
+     * ══════════════════════════════════════════════════════════════════
+     */
+    public function lookup(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveMerchant($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $phone = trim((string) $request->query('phone', ''));
+        if ($phone === '') {
+            return $this->error('VALIDATION', 'أدخل رقم العميل', 422);
+        }
+
+        $account = CustomerCreditAccount::where('merchant_user_id', $merchant->id)
+            ->whereIn('customer_phone', \App\Support\Phone::variants($phone))
+            ->first();
+
+        // **وعميلٌ جديدٌ ليس عميلاً عليه صفر** — الفرقُ يُقال للبائع:
+        // «لا حسابَ بعد» غيرُ «لا دينَ عليه». (القاعدة السابعة.)
+        if (! $account) {
+            return $this->ok([
+                'found' => false,
+                'customer_name' => null,
+                'current_balance' => null,
+                'credit_limit' => null,
+                'remaining' => null,
+                'is_over_limit' => false,
+            ]);
+        }
+
+        $balance = (string) $account->current_balance;
+        $limit = (string) $account->credit_limit;
+        $hasLimit = bccomp($limit, '0', 4) > 0;
+
+        return $this->ok([
+            'found' => true,
+            'customer_name' => $account->customer_name,
+            'current_balance' => $balance,
+            // **وحدٌّ صفرٌ يعني «غير مضبوط» لا «ممنوعٌ من الآجل»** —
+            // فيُرسَل `null` ولا يُحسب متبقٍّ سالبٌ من عدم.
+            'credit_limit' => $hasLimit ? $limit : null,
+            'remaining' => $hasLimit ? bcsub($limit, $balance, 4) : null,
+            'is_over_limit' => $hasLimit && bccomp($balance, $limit, 4) >= 0,
+            'is_active' => (bool) $account->is_active,
+        ]);
+    }
+
     public function dashboard(Request $request): JsonResponse
     {
         if ($deny = $this->guard($request, P::LEDGER_VIEW)) return $deny;

@@ -198,6 +198,13 @@ class PharmacySaleService
                 'subtotal' => $subtotal,
                 'discount_amount' => $discount,
                 'total_amount' => $total,
+                // AMIAL-CASH-TENDERED-001 — ما استلمه البائعُ نقداً؛
+                // والباقي يُحسب منه ومن الإجماليّ على الإيصال.
+                'amount_received' => isset($data['amount_received'])
+                    && $data['amount_received'] !== null
+                    && $data['amount_received'] !== ''
+                    ? MoneyService::normalize((string) $data['amount_received'])
+                    : null,
                 'payment_method' => $data['payment_method'],
                 'paid_transaction_id' => $data['paid_transaction_id'] ?? null,
                 'warnings_acknowledged' => empty($allergyWarnings) ? null : $allergyWarnings,

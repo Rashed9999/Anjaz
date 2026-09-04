@@ -9,6 +9,8 @@ import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/helper/payment_feedback.dart';
 import 'package:amial_pay/features/merchant/widgets/credit_sale_notice.dart';
+import 'package:amial_pay/features/merchant/widgets/cash_tendered_field.dart';
+import 'package:amial_pay/features/merchant/widgets/customer_balance_badge.dart';
 import 'package:amial_pay/features/merchant/widgets/merchant_payment_method_picker.dart';
 
 /// AMIAL-POS-002 — «تأكيد الدفع» (التصميم 37):
@@ -62,6 +64,10 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   int _loyaltyMinPoints = 0;
   String? _loyaltyCustomerName;
   double _redeemPoints = 0;
+
+  /// AMIAL-CASH-TENDERED-001 — ما استلمه الكاشيرُ نقداً. و`null` تعني
+  /// «لم يُدخَل» لا صفراً: كثيرٌ من البيوع يُسلَّم فيها المبلغُ بالضبط.
+  double? _received;
 
   // ═══════════════════════════════════════════════════════════════════
   // AMIAL-MULTI-CURRENCY-003 — **عملةُ البيعة تُختار هنا لا في السلّة.**
@@ -326,7 +332,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   Future<void> _confirm() async {
     switch (_method) {
       case 'cash':
-        await _recordAndShowReceipt('cash');
+        await _recordAndShowReceipt('cash', amountReceived: _received);
       case 'amial_pay':
         await _amialPay();
       case 'credit':
@@ -671,7 +677,8 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
   }
 
   Future<void> _recordAndShowReceipt(String method,
-      {Map<String, String>? customer, String? creditDueDate}) async {
+      {Map<String, String>? customer, String? creditDueDate,
+      double? amountReceived}) async {
     final conflict = _loyaltyCustomerConflict(customer);
     if (conflict != null) { _snack(conflict); return; }
 
@@ -700,6 +707,7 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
       currency: _currencyToSend,
       // AMIAL-LOYALTY-AT-PAYMENT-001 — تُستبدَل في معاملة البيعة نفسِها.
       redeemPoints: _redeemPoints > 0 ? _redeemPoints : null,
+      amountReceived: amountReceived,
     );
     if (!mounted) return;
     setState(() => _busy = false);
@@ -795,7 +803,11 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
                   labelText: 'رقم العميل *',
                   hintText: '77XXXXXXX',
                   border: OutlineInputBorder()),
+              // AMIAL-CREDIT-AT-TILL-001 — **يُقرأ الدَّينُ قبل أن يُزاد.**
+              // فالبائعُ كان يبيع آجلاً وهو لا يعرف كم على الزبون.
+              onChanged: (_) => setLocal(() {}),
             ),
+            CustomerBalanceBadge(phone: phone.text),
             const SizedBox(height: 10),
             OutlinedButton.icon(
               icon: const Icon(Icons.calendar_month_outlined, size: 18),
@@ -937,6 +949,17 @@ class _CashierPaymentScreenState extends State<CashierPaymentScreen> {
 
           // ====== نقاط الولاء (باقة الأعمال فأعلى) ======
           AccessGate(feature: 'loyalty', child: _loyaltyCard()),
+
+          // ====== المبلغ المستلم والباقي (نقداً فقط) ======
+          //
+          // **ولا يُعرَض في الآجل ولا المحفظة** — لا مستلَمَ فيهما أصلاً،
+          // وحقلٌ يُعرَض حيث لا معنى له يُعلّم البائعَ أن يتجاهل الشاشة.
+          if (_method == 'cash')
+            CashTenderedField(
+              net: _amountToSend,
+              symbol: _isBaseCurrency ? null : _currencySymbol,
+              onChanged: (v) => setState(() => _received = v),
+            ),
 
           Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: const [
             Text('الرجاء تحديد خيار واحد',

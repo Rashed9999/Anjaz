@@ -231,6 +231,8 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             // AMIAL-LOYALTY-AT-PAYMENT-001 — نقاطٌ يصرفها العميلُ على
             // هذه الفاتورة. غيابُها = لا استبدال.
             'redeem_points' => 'sometimes|nullable|numeric|min:0',
+            // AMIAL-CASH-TENDERED-001 — ما استلمه الكاشيرُ نقداً من الزبون.
+            'amount_received' => 'sometimes|nullable|numeric|min:0',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -298,6 +300,8 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
                 // البيعة، فتسقط معها إن سقطت.
                 redeemPoints: $request->input('redeem_points') !== null
                     ? (float) $request->input('redeem_points') : null,
+                amountReceived: $request->input('amount_received') !== null
+                    ? (string) $request->input('amount_received') : null,
             );
         } catch (\InvalidArgumentException $e) {
             return $this->error('SALE_INVALID', $e->getMessage(), 422);

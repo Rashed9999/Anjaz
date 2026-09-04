@@ -856,6 +856,12 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
             // فالمحروسُ **إدارةُ العملاء** (قائمةٌ وإنشاءٌ وملفٌّ وكشف)،
             // و**عملياتُ الدين تبقى مجّانيّة**: تسديدٌ ومرتجعٌ وتسوية —
             // فمن باع بالآجل يجب أن يُحصّل دينَه مهما كانت باقتُه.
+            // AMIAL-CREDIT-AT-TILL-001 — **رصيدُ العميل لحظةَ اختياره في
+            // الشبّاك.** ومجّانيّةٌ كأخواتها العمليّاتيّة: من باع بالآجل
+            // يجب أن يعرف دينَ زبونه **قبل** أن يزيده، مهما كانت باقتُه.
+            Route::get('/lookup', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'lookup'])
+                ->name('lookup');
+
             Route::get('/customers', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'listCustomers'])
                 ->middleware('capability:' . \App\Support\Access\AccessConstants::F_CUSTOMERS)->name('customers');
             Route::post('/customers', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'upsertCustomer'])

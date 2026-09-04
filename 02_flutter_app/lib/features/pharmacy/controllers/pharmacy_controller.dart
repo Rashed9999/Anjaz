@@ -246,6 +246,8 @@ class PharmacyController extends GetxController implements GetxService {
     String? discountAmount,
     List<String>? acknowledgedWarnings,
     String? notes,
+    // AMIAL-CASH-TENDERED-001 — يُحفَظ مع البيعة ليُطبَع على الإيصال.
+    double? amountReceived,
   }) async {
     if (cart.isEmpty) {
       lastError.value = 'السلّة فارغة';
@@ -267,6 +269,8 @@ class PharmacyController extends GetxController implements GetxService {
         'customer_name': customerName.trim(),
       if (paidTransactionId != null && paidTransactionId.isNotEmpty)
         'paid_transaction_id': paidTransactionId,
+      if (amountReceived != null && amountReceived > 0)
+        'amount_received': amountReceived.toStringAsFixed(2),
       if (prescriptionNumber != null && prescriptionNumber.isNotEmpty)
         'prescription_number': prescriptionNumber,
       if (prescribingDoctor != null && prescribingDoctor.isNotEmpty)

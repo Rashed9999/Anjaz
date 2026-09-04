@@ -183,6 +183,14 @@ class CashierService
         // النقاط، وتُحفظ فتُوسَم حركتُها بمعرّفها.
         // ══════════════════════════════════════════════════════════════
         ?float $redeemPoints = null,
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-CASH-TENDERED-001 — **ما استلمه الكاشيرُ نقداً.**
+        //
+        // والباقي يُحسب منه ومن الإجماليّ، **ولا يُخزَّن** — عمودٌ ثالثٌ
+        // يمكن أن يناقض الاثنين (القاعدة السادسة). و`null` تعني «لم
+        // يُدخَل» لا صفراً: الآجلُ والمحفظةُ لا مستلَمَ فيهما أصلاً.
+        // ══════════════════════════════════════════════════════════════
+        ?string $amountReceived = null,
     ): MerchantSale {
         // AMIAL-OFFLINE-POS-001: idempotency — بيع دون اتصال يُعاد إرساله بنفس
         // client_uuid عند المزامنة؛ إن كان مُسجَّلاً سابقاً نُعيده كما هو دون
@@ -303,7 +311,7 @@ class CashierService
                 'استبدالُ النقاط يحتاج رقمَ العميل — فرصيدُ النقاط محفوظٌ على رقمه');
         }
 
-        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid, $currency, $fxRate, $baseTotal, $redeemPoints) {
+        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid, $currency, $fxRate, $baseTotal, $redeemPoints, $amountReceived) {
             // لا يكفي `paid_transaction_id` القادم من Flutter. يجب أن يكون
             // طلب QR مدفوعاً لمحفظة المنشأة وبالمبلغ نفسه وغير مستهلك.
             // البيع بلا مرجع يبقى معلّقاً إلى أن تُتم شاشة QR الدفع؛ أمّا إذا
@@ -330,6 +338,7 @@ class CashierService
                 'fx_rate_to_base' => $fxRate,
                 'base_amount' => $baseTotal,
                 'discount_amount' => $discountAmount,
+                'amount_received' => $amountReceived,
                 'promotion_id' => $promotionId,
                 'cash_amount' => $paymentMethod === 'mixed' ? $cashAmount : null,
                 'wallet_amount' => $paymentMethod === 'mixed' ? $walletAmount : null,

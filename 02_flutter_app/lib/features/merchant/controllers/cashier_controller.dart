@@ -250,6 +250,9 @@ class CashierController extends GetxController implements GetxService {
     // الفاتورة. تُستبدَل في معاملة البيعة نفسِها على الخادم: تسقط
     // البيعةُ فتعود النقاط.
     double? redeemPoints,
+    // AMIAL-CASH-TENDERED-001 — ما استلمه الكاشيرُ نقداً. يُحفظ مع البيعة
+    // ليُطبَع على الإيصال ويُراجَع بعدها.
+    double? amountReceived,
   }) async {
     try {
       isSubmitting.value = true;
@@ -267,6 +270,8 @@ class CashierController extends GetxController implements GetxService {
         if (promotionId != null) 'promotion_id': promotionId,
         if (redeemPoints != null && redeemPoints > 0)
           'redeem_points': redeemPoints.toStringAsFixed(2),
+        if (amountReceived != null && amountReceived > 0)
+          'amount_received': amountReceived.toStringAsFixed(2),
         if (cashAmount != null) 'cash_amount': cashAmount.toStringAsFixed(2),
         if (walletAmount != null) 'wallet_amount': walletAmount.toStringAsFixed(2),
         if (currency != null && currency.isNotEmpty) 'currency': currency,

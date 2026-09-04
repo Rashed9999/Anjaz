@@ -8,6 +8,8 @@ import 'package:amial_pay/features/payments/screens/amial_qr_collect_screen.dart
 import 'package:amial_pay/features/merchant/screens/cashier_receipt_screen.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/features/merchant/widgets/credit_sale_notice.dart';
+import 'package:amial_pay/features/merchant/widgets/customer_balance_badge.dart';
+import 'package:amial_pay/features/merchant/widgets/cash_tendered_field.dart';
 import 'package:amial_pay/features/merchant/widgets/merchant_payment_method_picker.dart';
 
 /// AMIAL-PHARMACY-001 — شاشة بيع الصيدلية (الجوهر).
@@ -37,6 +39,9 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
   final _doctorCtrl = TextEditingController();
   final _discountCtrl = TextEditingController();
   String _paymentMethod = 'cash';
+
+  /// AMIAL-CASH-TENDERED-001 — ما استلمه البائعُ نقداً. و`null` = لم يُدخَل.
+  double? _received;
   bool _searching = false;
 
   @override
@@ -151,6 +156,7 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
       prescribingDoctor: _doctorCtrl.text.trim(),
       discountAmount: _discountCtrl.text.trim(),
       acknowledgedWarnings: ackList,
+      amountReceived: _paymentMethod == 'cash' ? _received : null,
     );
     if (!mounted) return;
     if (ok) {
@@ -607,6 +613,16 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
             MerchantPaymentOption.credit,
           ],
         ),
+        // ====== المبلغ المستلم والباقي (نقداً فقط) ======
+        //
+        // AMIAL-CASH-TENDERED-001 — وشبّاكُ الصيدليّة يبيع نقداً كالكاشير،
+        // فيأخذ الأداةَ نفسَها ولا تُكتب له نسخةٌ ثانيةٌ تفترق عنها.
+        if (_paymentMethod == 'cash')
+          CashTenderedField(
+            net: _netTotal(c.cartTotal),
+            onChanged: (v) => setState(() => _received = v),
+          ),
+
         if (_paymentMethod == 'credit') ...[
           // **وتُقال حقيقةُ الفعل** — سأل صاحبُ المشروع «أيٌّ منهم مرتبطٌ
           // الآجلُ فيه بنظام الديون؟»، وهو سؤالٌ لا يُجاب من الشاشة.
@@ -641,7 +657,11 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
                 isDense: true,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
               ),
+              // AMIAL-CREDIT-AT-TILL-001 — والصيدليّةُ تبيع آجلاً كالكاشير،
+              // فتقرأ الدَّينَ بالأداة نفسِها ولا تُكتب لها نسخةٌ ثانية.
+              onChanged: (_) => setState(() {}),
             ),
+            CustomerBalanceBadge(phone: _creditPhoneCtrl.text),
             const SizedBox(height: 8),
             TextField(
               controller: _creditNameCtrl,

@@ -68,6 +68,8 @@
             @if((float) $document['discount'] > 0)<tr><td>الخصم</td><td class="left">- {{ number_format((float) $document['discount'], 2) }}</td></tr>@endif
             @if((float) $document['tax'] > 0)<tr><td>الضريبة</td><td class="left">{{ number_format((float) $document['tax'], 2) }}</td></tr>@endif
             <tr><td class="b">الإجمالي</td><td class="left b">{{ number_format((float) $document['total'], 2) }} {{ $document['currency'] }}</td></tr>
+            {{-- AMIAL-CASH-TENDERED-001 — المستلَمُ والباقي على الشريط الحراريّ. --}}
+            @foreach($document['tendered_lines'] ?? [] as $line)<tr><td>{{ $line['label'] }}</td><td class="left">{{ number_format((float) $line['value'], 2) }} {{ $document['currency'] }}</td></tr>@endforeach
             @if((float) $document['balance_due'] > 0)<tr><td>المتبقي</td><td class="left b">{{ number_format((float) $document['balance_due'], 2) }} {{ $document['currency'] }}</td></tr>@endif
         </table>
     @else

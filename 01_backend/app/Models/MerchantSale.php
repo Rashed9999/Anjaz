@@ -23,6 +23,8 @@ class MerchantSale extends Model
         // كما وقع في `LedgerJournalEntry`: تُحرَق النقاطُ وتُسجَّل البيعةُ
         // بلا أثرٍ يقول لماذا نقص المبلغ.
         'loyalty_points_redeemed', 'loyalty_discount',
+        // AMIAL-CASH-TENDERED-001 — وغيابُه هنا يُسقطه صامتاً كما وقع مرّتين.
+        'amount_received',
         // AMIAL-MULTI-CURRENCY-003 — **غيابُها هنا لا يُخرج خطأً.**
         // `create()` يُسقط ما ليس في القائمة **صامتاً**، فتقع الأعمدةُ على
         // افتراضيّ القاعدة: كلُّ بيعةِ دولارٍ تُسجَّل «ريالاً» بسعر ١.

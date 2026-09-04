@@ -540,6 +540,8 @@ class PharmacyController extends Controller
             'prescribing_doctor' => 'sometimes|nullable|string|max:200',
             'prescription_date' => 'sometimes|nullable|date',
             'discount_amount' => 'sometimes|nullable|numeric|min:0',
+            // AMIAL-CASH-TENDERED-001 — ما استلمه البائعُ نقداً من الزبون.
+            'amount_received' => 'sometimes|nullable|numeric|min:0',
             'warnings_acknowledged' => 'sometimes|nullable|array',
             'notes' => 'sometimes|nullable|string|max:500',
         ]);

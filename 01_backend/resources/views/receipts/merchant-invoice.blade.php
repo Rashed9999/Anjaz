@@ -172,6 +172,8 @@
                 @if((float) $document['discount'] > 0)<tr><td class="label">الخصم</td><td class="money">- {{ number_format((float) $document['discount'], 2) }} {{ $document['currency'] }}</td></tr>@endif
                 @if((float) $document['tax'] > 0)<tr><td class="label">الضريبة</td><td class="money">{{ number_format((float) $document['tax'], 2) }} {{ $document['currency'] }}</td></tr>@endif
                 <tr class="grand"><td>الإجمالي</td><td class="money">{{ number_format((float) $document['total'], 2) }} {{ $document['currency'] }}</td></tr>
+                {{-- AMIAL-CASH-TENDERED-001 — المستلَمُ والباقي، ولا يُطبَعان لبيعةٍ لم يُدخَلا فيها. --}}
+                @foreach($document['tendered_lines'] ?? [] as $line)<tr><td class="label">{{ $line['label'] }}</td><td class="money">{{ number_format((float) $line['value'], 2) }} {{ $document['currency'] }}</td></tr>@endforeach
                 @if((float) $document['balance_due'] > 0)<tr><td class="label">المدفوع</td><td class="money">{{ number_format((float) $document['paid'], 2) }} {{ $document['currency'] }}</td></tr><tr class="balance"><td>المتبقي</td><td class="money">{{ number_format((float) $document['balance_due'], 2) }} {{ $document['currency'] }}</td></tr>@endif
             </table>
         </td>

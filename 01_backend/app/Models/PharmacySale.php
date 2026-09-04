@@ -14,6 +14,8 @@ class PharmacySale extends Model
         'sale_ulid', 'merchant_user_id', 'pos_user_id', 'created_by_user_id', 'pharmacy_id', 'customer_id',
         'prescription_number', 'prescribing_doctor', 'prescription_date',
         'subtotal', 'discount_amount', 'total_amount',
+        // AMIAL-CASH-TENDERED-001 — وغيابُه هنا يُسقطه صامتاً.
+        'amount_received',
         'payment_method', 'paid_transaction_id',
         'warnings_acknowledged',
         'status', 'notes', 'zone_code',

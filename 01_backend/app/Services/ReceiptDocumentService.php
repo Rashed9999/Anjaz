@@ -290,6 +290,16 @@ class ReceiptDocumentService
             'total' => $total,
             'paid' => (string) ($source['paid'] ?? $total),
             'balance_due' => (string) ($source['balance_due'] ?? '0'),
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-CASH-TENDERED-001 — **ويُنقَل إلى الوثيقة صراحةً.**
+            //
+            // هذه الدالّةُ **تنتقي مفاتيحَ المصدر واحداً واحداً**، فما
+            // يُضاف هناك ولا يُذكر هنا **يسقط صامتاً**: الحقلُ محفوظٌ في
+            // البيعة، ومبنيٌّ في `retailSource`، ولا يصل الورقة. وهو
+            // بعينه «مبنيٌّ ولا يُوصَل إليه» — وأمسكه حارسُه في أوّل
+            // تشغيل.
+            // ══════════════════════════════════════════════════════════
+            'tendered_lines' => $source['tendered_lines'] ?? [],
             'payment_method' => $source['payment_method'] ?? $base['channel_label'],
             'amount_words' => ArabicTafqit::yer($total),
             'note' => $source['note'] ?? $base['note'],
@@ -469,6 +479,43 @@ class ReceiptDocumentService
             'status' => (string) $sale->status,
             'status_label' => $this->saleStatusLabel((string) $sale->status),
             'customer' => $this->namedCustomer($sale->customer_name, $sale->customer_phone),
+            'tendered_lines' => $this->tenderedLines(
+                $sale->amount_received === null ? null : (string) $sale->amount_received,
+                (string) $sale->total_amount,
+            ),
+        ];
+    }
+
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-CASH-TENDERED-001 — **المستلَمُ والباقي على الورقة.**
+     *
+     * الباقي رقمٌ يُقال للزبون شفاهاً ويُنسى. فإن اختلفا بعده على ورقةٍ
+     * لم يبقَ ما يُراجَع. **ورقمٌ قيل ولم يُطبَع لا يُدافَع عنه.**
+     *
+     * **ويُحسب هنا من مصدره** — المستلَمُ ناقصَ الإجماليّ — ولا يُقرأ من
+     * عمودٍ ثالثٍ يمكن أن يناقضهما (القاعدة السادسة).
+     *
+     * **ولا يُطبَع سطرٌ لبيعةٍ لم يُدخَل فيها مستلَم** (الآجلُ والمحفظةُ
+     * وأكثرُ النقديّ): و«المستلَم: ٠» يُقرأ «لم يدفع». (القاعدة السابعة.)
+     *
+     * @return array<int,array<string,string>>
+     */
+    private function tenderedLines(?string $received, string $total): array
+    {
+        if ($received === null || $received === '' || bccomp($received, '0', 4) <= 0) {
+            return [];
+        }
+
+        $change = bcsub($received, $total, 4);
+
+        return [
+            ['label' => 'المبلغ المستلم', 'value' => $received],
+            [
+                'label' => bccomp($change, '0', 4) < 0 ? 'ناقصٌ من الفاتورة' : 'الباقي',
+                'value' => bccomp($change, '0', 4) < 0
+                    ? bcmul($change, '-1', 4) : $change,
+            ],
         ];
     }
 
@@ -551,6 +598,10 @@ class ReceiptDocumentService
             'total' => (string) $sale->total_amount,
             'paid' => (string) $sale->total_amount,
             'balance_due' => '0',
+            'tendered_lines' => $this->tenderedLines(
+                $sale->amount_received === null ? null : (string) $sale->amount_received,
+                (string) $sale->total_amount,
+            ),
             'payment_method' => $this->paymentMethodLabel((string) $sale->payment_method),
             'status' => (string) $sale->status,
             'status_label' => $this->saleStatusLabel((string) $sale->status),
