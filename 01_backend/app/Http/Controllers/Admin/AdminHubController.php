@@ -1168,6 +1168,24 @@ class AdminHubController extends Controller
                     'phone' => $u->phone,
                     'kyc' => (int) ($u->is_kyc_verified ?? 0),
                     'is_active' => (int) $u->is_active === 1,
+                    // ══════════════════════════════════════════════════
+                    // AMIAL-VERIFY-GOV-001 — **المحافظةُ تُرسَل، وكانت
+                    // غائبةً عن البطاقة كلَّها.**
+                    //
+                    // `kycStatus` يرفض الاعتمادَ بلا محافظةِ سكن (٤٢٢
+                    // `MISSING_RESIDENCE_GOVERNORATE`) — **وهي لم تكن
+                    // تُعرَض ولا تُضبَط من هذه الشاشة إطلاقاً**. فيضغط
+                    // المراجعُ «اعتماد» فيُردّ، ولا يجد باباً يُصلحه منه:
+                    // الرسالةُ تحيله إلى «طابور مراجعة الهوية» بلا رابط.
+                    //
+                    // فصارت تُرسَل ليعرف **قبل** الضغط، ولتُختار في
+                    // البطاقة إن غابت. (القاعدة السابعة: الغيابُ يُقال.)
+                    // ══════════════════════════════════════════════════
+                    'governorate' => \App\Support\YemenGovernorates::codeFromName(
+                        (string) ($u->residence_governorate ?: $u->origin_governorate)),
+                    'governorate_name' => \App\Support\YemenGovernorates::name(
+                        \App\Support\YemenGovernorates::codeFromName(
+                            (string) ($u->residence_governorate ?: $u->origin_governorate))),
                     'id_type' => $u->identification_type,
                     'id_number' => $u->identification_number,
                     'documents' => $u->identification_image_fullpath ?? [],

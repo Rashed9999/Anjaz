@@ -179,6 +179,25 @@
                 <div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#opening-consent">{{ $hubType == 3 ? '5' : '4' }}. الإقرار والأرشفة</button></h2>
                     <div id="opening-consent" class="accordion-collapse collapse"><div class="accordion-body"><div class="row g-3"><div class="col-md-6"><label class="form-label">نسخة النموذج الورقي الموقّع (اختياري)</label><input class="form-control" name="signed_paper_form" type="file" accept="application/pdf,image/jpeg,image/png"><small class="text-muted">PDF أو JPG/PNG حتى 8MB. تُشفّر النسخة وتُربط بهذا الملف.</small></div><div class="col-md-6"><label class="form-label">بيانات الدخول الأولية</label><input class="form-control mb-2" name="password" type="password" minlength="8" placeholder="كلمة سر مؤقتة (8 أحرف على الأقل)" required dir="ltr"><input class="form-control" name="pin" inputmode="numeric" maxlength="4" placeholder="PIN معاملات من 4 أرقام (اختياري)" dir="ltr"></div><div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="declaration_accepted" value="1" id="declaration-accepted" required><label class="form-check-label" for="declaration-accepted">أقرّ بأن البيانات قُدّمت من صاحبها أو مفوضه، وبأنه اطّلع على الموافقات المطلوبة. ستُراجع الهوية والهاتف قبل اعتماد الحساب.</label></div></div></div></div></div>
             </div>
+            {{-- ══════════════════════════════════════════════════════════
+                 AMIAL-HUB-MODAL-NEST-001 — **`</div>` واحدٌ كان ناقصاً،
+                 وبه ماتت ثلاثُ نوافذَ في ثلاث صفحات.**
+
+                 `<div class="accordion" id="opening-dossier-sections">`
+                 فُتح ولم يُغلَق، فابتلع `#modal-add` كلَّ ما بعده:
+                 `#modal-transfer` و`#modal-edit` و`#modal-tx` صارت
+                 **أبناءً له**. وهو `display:none` ما لم يُفتَح، والابنُ
+                 تحت أبٍ مخفيٍّ لا يُرسَم مهما فُتح.
+
+                 فتُضغط «✏️ تعديل» فتُضاف `.show` إلى عنصرٍ **مقاسُه
+                 صفرٌ في صفر** — لا نافذةَ ولا زرَّ حفظٍ ولا خطأ في أيّ
+                 سجلّ. وهو ما وصل بنصّه: «جرّبتهم لا يعملو».
+
+                 وقِيس في متصفّحٍ حقيقيّ:
+                   #modal-edit → أبوه #modal-add · العرض ٠ · الارتفاع ٠
+                   بين الافتتاحين: <div>=٨٢ و</div>=٨١ — الفرقُ واحد.
+            ══════════════════════════════════════════════════════════ --}}
+            </div>
             <div class="text-danger small" id="add-error"></div>
         </form>
         <div class="modal-footer">
