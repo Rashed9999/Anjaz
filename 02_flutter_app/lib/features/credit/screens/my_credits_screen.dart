@@ -160,6 +160,15 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
   List<Map<String, dynamic>> _movements = [];
   List<Map<String, dynamic>> _invoices = [];
 
+  /// AMIAL-CREDIT-GAP-001 — **الفرقُ بين الرصيد ومجموع الفواتير.**
+  ///
+  /// قائمةُ الفواتير تقتصر على قيود البيع عمداً، والتعديلُ اليدويُّ
+  /// الموجب (دَينٌ قديمٌ مُرحَّل) في الرصيد ولا سطرَ له. فيقرأ العميلُ
+  /// «عليّ ٥٠٠» فوق و«١٥٠٠» في البطاقة، **ولا شيءَ يفسّر الألف**.
+  /// (القاعدة السابعة: الغيابُ يُقال ولا يُترَك فراغاً.)
+  String _unlinked = '0';
+  String _unlinkedNote = '';
+
   @override
   void initState() {
     super.initState();
@@ -180,6 +189,8 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
           _invoices = ((meta['invoices'] ?? []) as List)
               .map((e) => Map<String, dynamic>.from(e as Map))
               .toList();
+          _unlinked = '${meta['unlinked_balance'] ?? '0'}';
+          _unlinkedNote = '${meta['unlinked_note_ar'] ?? ''}';
         });
       }
     } catch (_) {} finally {
@@ -297,6 +308,7 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
                   ..._invoices.map(_invoiceRow),
                   const SizedBox(height: 8),
                 ],
+                if ((double.tryParse(_unlinked) ?? 0) > 0) _unlinkedBox(),
                 ..._movements.map(_movementRow),
               ]),
             ),
@@ -358,4 +370,36 @@ class _CreditStatementScreenState extends State<_CreditStatementScreen> {
       ),
     );
   }
+
+  /// **ما ليس فاتورةً يُقال بنصّه** — ولا يُخترَع له سطرُ فاتورةٍ وهميّ
+  /// بزرّ سدادٍ لا يقبله المحرّك.
+  Widget _unlinkedBox() => Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AmialColors.warningSurface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AmialColors.warning.withValues(alpha: 0.35)),
+        ),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Icon(Icons.info_outline, size: 18, color: AmialColors.warning),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${_fmt(_unlinked)} ر.ي خارج الفواتير أعلاه',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: AmialColors.warning)),
+              if (_unlinkedNote.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(_unlinkedNote,
+                      style: const TextStyle(
+                          fontSize: 11, color: AmialColors.textSecondary)),
+                ),
+            ]),
+          ),
+        ]),
+      );
 }

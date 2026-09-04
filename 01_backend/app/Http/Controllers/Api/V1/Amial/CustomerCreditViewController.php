@@ -114,6 +114,33 @@ class CustomerCreditViewController extends Controller
         // السدادات الجزئية والمرتجعات من دفتر الديون نفسه.
         $invoices = app(CreditSourceSettlementService::class)->openInvoices($account);
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-CREDIT-GAP-001 — **الفرقُ يُقال، ولا يُترَك للقارئ يجمع.**
+        //
+        // `openInvoices` تقتصر على قيود البيع عمداً — والتعديلُ اليدويُّ
+        // الموجب (دينٌ قديمٌ مُرحَّل) ليس فاتورةً تُسدَّد وحدَها. **لكنّه
+        // في الرصيد.** فقِيس:
+        //
+        //     تعديلٌ موجب  1000  ثمّ بيعةٌ آجلة  500
+        //     current_balance = 1500
+        //     invoices        =  500   ← ألفٌ بلا سطر
+        //
+        // فيقرأ العميلُ «عليّ ٥٠٠» في قائمة الفواتير و«١٥٠٠» في الرصيد،
+        // **ولا شيءَ يفسّر الألف**. وهو عينُ القاعدة السابعة: الغيابُ
+        // يُقال ولا يُترَك فراغاً يُقرأ صفراً.
+        //
+        // **ولا يُخترَع له سطرُ فاتورةٍ وهميّ** — سطرٌ يُعرَض بزرّ سدادٍ
+        // لا يقبله المحرّك أسوأ من لافتةٍ تشرح.
+        // ══════════════════════════════════════════════════════════════
+        $invoicesTotal = '0';
+        foreach ($invoices as $invoice) {
+            $invoicesTotal = \App\Services\MoneyService::add(
+                $invoicesTotal, (string) ($invoice['remaining'] ?? '0'));
+        }
+
+        $unlinked = \App\Services\MoneyService::sub(
+            (string) $account->current_balance, $invoicesTotal);
+
         return $this->ok([
             'account_id' => $account->id,
             'merchant_name' => $storeName,
@@ -121,6 +148,13 @@ class CustomerCreditViewController extends Controller
             'credit_limit' => (string) $account->credit_limit,
             'movements' => $movements,
             'invoices' => $invoices,
+            'invoices_total' => $invoicesTotal,
+            // موجبٌ يعني: دينٌ في الرصيد بلا فاتورةٍ تُسدَّد وحدَها.
+            'unlinked_balance' => $unlinked,
+            'unlinked_note_ar' => \App\Services\MoneyService::isPositive($unlinked)
+                ? 'مبلغٌ من رصيدك ليس فاتورةً مستقلّة (تعديلٌ يدويٌّ أو '
+                    . 'دَينٌ سابقٌ مُرحَّل). يُسدَّد بـ«سداد الآجل» كاملاً.'
+                : null,
         ], 'OK', 'كشف الحساب الآجل');
     }
 
