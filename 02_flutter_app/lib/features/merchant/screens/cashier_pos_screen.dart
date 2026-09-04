@@ -67,7 +67,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
         return false;
       }
       if (q.isNotEmpty &&
-          !'${p['name']}'.contains(q) &&
+          !'${p['display_name'] ?? p['name']}'.contains(q) &&
           !'${p['barcode'] ?? ''}'.contains(q)) {
         return false;
       }
@@ -676,7 +676,10 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
               ),
             ]),
             const Spacer(),
-            Text('${p['name']}',
+            // AMIAL-VARIANT-PARENT-001 — **الاسمُ المعروضُ يميّز المتغيّر.**
+            // ولولاه ظهرت تسعةُ صفوفٍ باسم «قميص» ولا يُعرف أيُّها الذي
+            // في اليد. و`display_name` يبنيه الخادمُ من `variant_attributes`.
+            Text('${p['display_name'] ?? p['name']}',
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,

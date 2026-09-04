@@ -1013,6 +1013,20 @@ Route::middleware(['auth:api', 'amial.pos-device'])->group(function () {
             Route::post('/products/{id}/variants', [$RV, 'generateVariants'])->middleware('capability:retail.variants')
                 ->where('id', '[0-9]+')->name('products.variants');
 
+            // AMIAL-PRODUCT-ATTRIBUTES-001 — مكتبةُ السمات: تُعرَّف مرّةً
+            // وتُختار في كلّ منتج. وهي خلف قدرة المتغيّرات نفسِها — فسماتٌ
+            // بلا توليدِ متغيّراتٍ لا تفعل شيئاً.
+            Route::get('/attributes', [$RV, 'attributes'])
+                ->middleware('capability:retail.variants')->name('attributes.index');
+            Route::post('/attributes', [$RV, 'addAttribute'])
+                ->middleware('capability:retail.variants')->name('attributes.add');
+            Route::post('/attributes/{id}/terms', [$RV, 'addAttributeTerms'])
+                ->middleware('capability:retail.variants')->where('id', '[0-9]+')->name('attributes.terms.add');
+            Route::delete('/attributes/terms/{id}', [$RV, 'deleteAttributeTerm'])
+                ->middleware('capability:retail.variants')->where('id', '[0-9]+')->name('attributes.terms.delete');
+            Route::delete('/attributes/{id}', [$RV, 'deleteAttribute'])
+                ->middleware('capability:retail.variants')->where('id', '[0-9]+')->name('attributes.delete');
+
             // المخزون والمواقع
             Route::get('/locations', [$RV, 'locations'])->middleware('capability:retail.locations')->name('locations.index');
             Route::post('/locations', [$RV, 'addLocation'])->middleware('capability:retail.locations')->name('locations.add');

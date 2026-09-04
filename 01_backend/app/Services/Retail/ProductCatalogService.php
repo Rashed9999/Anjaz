@@ -7,6 +7,7 @@ use App\Models\Retail\MerchantBrand;
 use App\Models\Retail\MerchantCategory;
 use App\Models\Retail\MerchantUnit;
 use App\Models\Retail\ProductBarcode;
+use App\Services\Retail\StockService;
 use App\Models\User;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -267,8 +268,18 @@ class ProductCatalogService
      *
      * **والأبُ يصير مِظلّةً لا يُباع** — وبيعُه يعني بيعَ «قميص» بلا لون.
      */
-    public function generateVariants(User $merchant, int $parentId, array $axes): array
-    {
+    /**
+     * @param  string|null  $unallocated  **يُخرَج بالإشارة**: مخزونُ الأب الذي
+     *   صُفِّر ويحتاج توزيعاً على المتغيّرات. ومعاملٌ اختياريٌّ بالإشارة
+     *   يُبقي النداءات القائمة كما هي حرفاً بحرف — وهي في متحكّمٍ
+     *   وحارسَين.
+     */
+    public function generateVariants(
+        User $merchant,
+        int $parentId,
+        array $axes,
+        ?string &$unallocated = null,
+    ): array {
         $parent = MerchantProduct::where('id', $parentId)
             ->where('merchant_user_id', $merchant->id)->first();
         if (! $parent) {
@@ -292,8 +303,58 @@ class ProductCatalogService
                 'المحاور تُنتج ' . count($combos) . ' متغيّراً — الحدّ ٢٠٠ في المرّة');
         }
 
-        return DB::transaction(function () use ($merchant, $parent, $combos) {
-            $parent->update(['is_variant_parent' => true, 'track_stock' => false]);
+        return DB::transaction(function () use ($merchant, $parent, $combos, &$unallocated) {
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-VARIANT-PARENT-001 — **مخزونُ الأب لا يضيع صامتاً.**
+            //
+            // كان السطرُ التالي يقلب الأبَ مِظلّةً **ويترك `quantity` كما
+            // هي**. فتاجرٌ عنده عشرةُ قمصانٍ يولّد المتغيّراتِ فإذا:
+            //
+            //     الأب     : ١٠ قطعة  ← **لا تُباع** (صار مِظلّة)
+            //     المتغيّرات: ٠ لكلٍّ  ← «نفذ المخزون» على الشاشة
+            //
+            // **فعشرُ قطعٍ حقيقيّةٍ اختفت من البيع بضغطةٍ واحدة**، ولا خطأَ
+            // في أيّ سجلّ — الصفُّ موجودٌ ورقمُه صحيح، لكن لا بابَ إليه.
+            //
+            // **ولا تُوزَّع تلقائيّاً**: قسمةُ العشرة على تسعةِ متغيّراتٍ
+            // اختراعٌ لا يعرفه إلّا التاجر (كم أحمرَ وكم أزرق؟). فالمخزونُ
+            // **يُصفَّر بحركةِ مخزونٍ مسجَّلةٍ سببُها `correction`**، ويُعاد
+            // العددُ في الردّ ليقوله التطبيقُ صراحةً: «١٠ وحداتٍ بانتظار
+            // التوزيع». (القاعدة السابعة: الغيابُ يُقال ولا يُبتلع.)
+            // ══════════════════════════════════════════════════════════
+            $leftOver = (string) ($parent->quantity ?? '0');
+            $hadStock = bccomp($leftOver, '0', 3) > 0;
+
+            if ($hadStock) {
+                try {
+                    $stock = app(StockService::class);
+                    $stock->move(
+                        product: $parent,
+                        location: $stock->defaultLocation($merchant->id),
+                        delta: '-'.$leftOver,
+                        reason: 'correction',
+                        actor: $merchant,
+                        note: 'تحويلُ الصنف إلى مِظلّةِ متغيّرات — المخزونُ '
+                            .'ينتقل إلى المتغيّرات ويُوزَّع يدويّاً',
+                        allowNegative: true,
+                    );
+                } catch (\Throwable $e) {
+                    // **ولا يسقط التوليدُ لأجل حركةِ أثر.** الأثرُ يُحاوَل،
+                    // والتصفيرُ يقع بكلّ حال — فبقاءُ الرقم على الأب أخطرُ
+                    // من غياب سطرٍ في سجلّ الحركة.
+                    \Log::warning('AMIAL-VARIANT-PARENT-001: تعذّر تسجيل حركة تصفير الأب', [
+                        'product_id' => $parent->id, 'error' => $e->getMessage(),
+                    ]);
+                }
+
+                $parent->quantity = '0';
+            }
+
+            $unallocated = $hadStock ? $leftOver : '0';
+
+            $parent->is_variant_parent = true;
+            $parent->track_stock = false;
+            $parent->save();
 
             $made = [];
             foreach ($combos as $combo) {
