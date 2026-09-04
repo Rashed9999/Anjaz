@@ -139,13 +139,41 @@ final class Capability
     public function screenRoute(): ?string { return $this->screen; }
     public function appliesToAllBusinessTypes(): bool { return $this->businessTypes === []; }
 
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-VERTICAL-COMPOSE-001 — **قائمةُ المنح هي المصدر، لا قائمتان.**
+     *
+     * `businessTypes([...])` هنا مكتوبةٌ بالاسم في الشيفرة، فلا تعرف
+     * قطاعاً أنشأته الإدارةُ بعد آخر نشرة. ولو بقيت وحدَها لَوقع أخبثُ
+     * صور العطل: القطاعُ يمنح «كاشير» في اللوحة، و`FeatureAccessService`
+     * **ينزعها بصمتٍ** في السطر التالي لأنّ القدرةَ لا تُعلن رمزَه —
+     * فيُنشأ قطاعٌ ويُختار له عشرُ قدراتٍ ولا تصل واحدةٌ منها، بلا خطأٍ
+     * في أيّ سجلّ.
+     *
+     * **فالفصلُ:** الستّةُ المبنيّةُ تُقرأ من القائمة المكتوبة — ولا
+     * يتغيّر لها شيء، ويُثبته `CapabilityBoxAgreementGuardTest`. وما
+     * أنشأته الإدارةُ يُسأل عنه **مربّعَه**: أَمنحتَه هذه القدرة؟
+     *
+     * وهذا ليس تخفيفاً للحارس بل تضييقٌ له: الانطباقُ صار مشتقّاً من
+     * المنح لا مصدراً ثانياً بجانبه، **فلا يفترقان أصلاً**.
+     * ══════════════════════════════════════════════════════════════════
+     */
     public function appliesTo(?string $businessType): bool
     {
         if ($this->businessTypes === []) {
             return true;
         }
 
-        return $businessType !== null && in_array($businessType, $this->businessTypes, true);
+        if ($businessType === null) {
+            return false;
+        }
+
+        if (in_array($businessType, $this->businessTypes, true)) {
+            return true;
+        }
+
+        return \App\Domain\Verticals\VerticalRegistry::isAdminDefined($businessType)
+            && \App\Domain\Verticals\VerticalRegistry::find($businessType)?->grants($this->code) === true;
     }
 
     /** أيحرس هذا المسارَ؟ — يُقارَن بالبادئة بعد تطبيع الشرطات. */

@@ -162,6 +162,42 @@ abstract class MerchantVertical
     }
 
     /**
+     * **رمزُ القدرة التي يفتح عليها هذا القطاعُ التطبيق** — أو `null`.
+     *
+     * والستّةُ المبنيّةُ تُرجع `null` عن قصد: لكلٍّ منها موزِّعٌ في
+     * `home_dispatcher_screen.dart` يفتح لوحتَها الخاصّة (لوحةُ المحطّة ·
+     * لوحةُ الصيدليّة · …). وما تُنشئه الإدارةُ لا موزِّعَ له، فيقول
+     * بنفسِه أين يبدأ.
+     */
+    public function homeCapability(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * **أيمنح هذا القطاعُ هذه القدرةَ في أيّ باقة؟**
+     *
+     * ولا تُسأل عن باقةٍ بعينها عمداً: هذا سؤالُ **الانطباق** لا سؤالُ
+     * الاستحقاق — «أهذه القدرةُ من شأن هذا القطاع أصلاً؟». وحراسةُ
+     * الباقة موضعُها `EntitlementService`، وخلطُهما يجعل قدرةً مدفوعةً
+     * تُقرأ «لا تنطبق على قطاعك» بدل «افتح الباقة».
+     */
+    final public function grants(string $feature): bool
+    {
+        if (in_array($feature, $this->own(), true)) {
+            return true;
+        }
+
+        foreach ($this->paidDepth() as $features) {
+            if (in_array($feature, $features, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * **عمقُ هذا القطاع الذي تبلغه هذه الباقةُ وحدَه.**
      *
      * وهي مدخلُ `AccessPresets::verticalPlanFeatures` — فصلٌ عن

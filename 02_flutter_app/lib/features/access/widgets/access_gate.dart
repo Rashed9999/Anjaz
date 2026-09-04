@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/access/domain/vertical_catalog.dart';
 
 /// CRITICAL-001 — AccessGate widget.
 ///
@@ -76,14 +77,28 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
   String? _selected;
   bool _submitting = false;
 
-  static const _options = [
-    _BizOption('quick_sale', 'بيع سريع', 'أسماك، خضار، بسطات', Icons.shopping_basket, Color(0xFF2196F3)),
-    _BizOption('retail', 'تجزئة', 'بقالة، سوبرماركت', Icons.storefront, Color(0xFF4CAF50)),
-    _BizOption('fuel', 'محطة وقود', 'بنزين، ديزل', Icons.local_gas_station, Color(0xFF1B5E20)),
-    _BizOption('pharmacy', 'صيدلية', 'أدوية + Batches', Icons.local_pharmacy, Color(0xFF7B1FA2)),
-    _BizOption('wholesale', 'جملة', 'فواتير + حسابات آجلة', Icons.warehouse, Color(0xFFE65100)),
-    _BizOption('restaurant', 'مطعم', '(قريباً)', Icons.restaurant, Color(0xFF795548)),
-  ];
+  /// AMIAL-VERTICAL-COMPOSE-001 — **البطاقاتُ تُسأل من الخادم.**
+  ///
+  /// كانت ستَّ بطاقاتٍ محفورةً هنا، فقطاعٌ تُنشئه الإدارةُ يعمل في
+  /// الخادم كاملاً **ولا يجد تاجرٌ بطاقةً يضغطها**. والستّةُ تُعرَض
+  /// بأشكالها كما هي — `VerticalCatalog.builtIn` نسخةُ ما كان هنا.
+  List<VerticalOption> _options = VerticalCatalog.builtIn.values.toList();
+  bool _loadingOptions = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOptions();
+  }
+
+  Future<void> _loadOptions() async {
+    final list = await VerticalCatalog.load();
+    if (!mounted) return;
+    setState(() {
+      _options = list;
+      _loadingOptions = false;
+    });
+  }
 
   Future<void> _submit() async {
     if (_selected == null) return;
@@ -137,7 +152,13 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
               ]),
             ),
             const SizedBox(height: 16),
-            ..._options.map((o) => _optionTile(o)),
+            if (_loadingOptions)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else
+              ..._options.map((o) => _optionTile(o)),
             const SizedBox(height: 20),
             FilledButton.icon(
               onPressed: _selected == null || _submitting ? null : _submit,
@@ -157,11 +178,11 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
     );
   }
 
-  Widget _optionTile(_BizOption o) {
-    final selected = _selected == o.value;
+  Widget _optionTile(VerticalOption o) {
+    final selected = _selected == o.code;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: () => setState(() => _selected = o.value),
+      onTap: () => setState(() => _selected = o.code),
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
@@ -191,11 +212,3 @@ class _BusinessTypeSelectionScreenState extends State<BusinessTypeSelectionScree
   }
 }
 
-class _BizOption {
-  final String value;
-  final String label;
-  final String description;
-  final IconData icon;
-  final Color color;
-  const _BizOption(this.value, this.label, this.description, this.icon, this.color);
-}

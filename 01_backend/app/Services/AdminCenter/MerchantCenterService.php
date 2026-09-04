@@ -137,7 +137,7 @@ class MerchantCenterService
             'business_type' => $p?->business_type,
             'business_type_label' => $p === null
                 ? 'لا ملفَّ تاجرٍ لهذا الحساب'
-                : (A::BUSINESS_TYPE_LABELS[$p->business_type ?? ''] ?? '—'),
+                : (\App\Domain\Verticals\VerticalRegistry::labels()[$p->business_type ?? ''] ?? '—'),
             'has_profile' => $p !== null,
             'status' => (int) ($m->is_active ?? 0) === 1 ? 'active' : 'frozen',
             'status_ar' => (int) ($m->is_active ?? 0) === 1 ? 'نشط' : 'مجمَّد',

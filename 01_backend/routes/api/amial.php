@@ -67,6 +67,21 @@ Route::post('/geo/resolve-zone', [\App\Http\Controllers\Api\V1\Amial\GeoZoneCont
 Route::get('/geo/governorates', [\App\Http\Controllers\Api\V1\Amial\GeoZoneController::class, 'governorates'])
     ->name('amial.geo.governorates');
 
+// ══════════════════════════════════════════════════════════════════════
+// AMIAL-VERTICAL-COMPOSE-001 — **قائمةُ القطاعات تُسأل ولا تُكتب في Dart.**
+//
+// وهذه هي النقطةُ التي تجعل «إضافةَ قطاعٍ من اللوحة» تصل التاجرَ فعلاً:
+// شاشةُ اختيار النشاط وقائمةُ التسجيل كانتا ستَّ بطاقاتٍ محفورةً في
+// ملفَّي Dart، فقطاعٌ يُنشَأ اليومَ لا يستطيع أحدٌ اختيارَه حتّى نشرةِ
+// متجر — أي **مبنيٌّ ولا يُوصَل إليه** (القاعدة الثانية عشرة).
+//
+// **وعامّةٌ بلا مصادقة عمداً**: تُقرأ في شاشة التسجيل قبل وجود حساب،
+// كما `geo/governorates` فوقها بالضبط. ولا تكشف شيئاً — أسماءُ
+// القطاعات معروضةٌ في صفحة التسعير للعموم أصلاً. ومحدودةُ المعدّل.
+Route::get('/business-types', [\App\Http\Controllers\Api\V1\Amial\AccessController::class, 'businessTypeCatalog'])
+    ->middleware('throttle:60,1')
+    ->name('amial.business-types');
+
 // P0-LEGAL — Markdown docs للموقع العام (بدون auth)
 Route::prefix('legal-docs')->name('amial.legal-docs.')->group(function () {
     Route::get('/', [\App\Http\Controllers\Api\V1\Amial\PublicLegalController::class, 'index'])->name('index');

@@ -82,11 +82,12 @@
             'icon' => '🏪',
             'match' => ['admin/amial/hub/merchants*', 'admin/amial/hub/subscriptions*',
                         'admin/amial/invoices*', 'admin/amial/catalog*',
-                        'admin/amial/entitlements*'],
+                        'admin/amial/entitlements*', 'admin/amial/verticals*'],
             'links' => [
                 ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), 'platform.merchants.compliance'],
                 ['💎 لوحة الاشتراكات', route('admin.amial.hub.subscriptions'), 'platform.settings.manage'],
                 ['🎚️ الباقات والقدرات (ماذا تفتح كل باقة)', route('admin.amial.entitlements.page'), 'platform.settings.manage'],
+                ['🏗️ قطاعات التجّار (إضافة قطاع جديد)', route('admin.amial.verticals.page'), 'platform.settings.manage'],
                 ['🧾 فواتير التجّار ومدفوعاتها', route('admin.amial.invoices.page'), 'platform.money.view'],
                 ['📦 كتالوج المنتجات (الباركود)', route('admin.amial.catalog.page'), 'platform.settings.update'],
             ],

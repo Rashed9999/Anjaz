@@ -41,7 +41,7 @@ final class MerchantContextService
                 'merchant_number' => $merchant?->merchant_number,
                 'business_type' => $businessType,
                 'business_type_label' => $businessType
-                    ? (A::BUSINESS_TYPE_LABELS[$businessType] ?? $businessType)
+                    ? (\App\Domain\Verticals\VerticalRegistry::labels()[$businessType] ?? $businessType)
                     : null,
             ],
             'subscription' => [

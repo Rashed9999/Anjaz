@@ -810,7 +810,7 @@ class ReceiptDocumentService
 
     private function normalizeVertical(string $vertical): string
     {
-        return in_array($vertical, A::ALL_BUSINESS_TYPES, true)
+        return in_array($vertical, \App\Domain\Verticals\VerticalRegistry::codes(), true)
             ? $vertical
             : A::BIZ_QUICK_SALE;
     }

@@ -11,6 +11,7 @@ import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_adaptive_shell.dart';
 import 'package:amial_pay/features/merchant/screens/pos_employee_home_screen.dart';
+import 'package:amial_pay/features/entitlements/capability_screens.dart';
 
 /// CRITICAL-001 — Home Dispatcher.
 ///
@@ -130,6 +131,27 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
       // Merchant + restaurant → operational restaurant workspace.
       if (_access.isMerchant && _access.isRestaurant) {
         return _merchantShell(const RestaurantScreen());
+      }
+
+      // ══════════════════════════════════════════════════════════════
+      // AMIAL-VERTICAL-COMPOSE-001 — **قطاعٌ أنشأته الإدارةُ يقول أين
+      // يبدأ، فلا يهبط على شاشةٍ عامّة.**
+      //
+      // وهذا هو السطرُ الذي يجعل «إضافةَ قطاعٍ من اللوحة» تصل التاجرَ
+      // شاشةً لا قائمةَ صلاحيّاتٍ فقط: الخادمُ يرسل رمزَ قدرةٍ في
+      // `business_type_home`، و`CapabilityScreens` تعرف شاشتَها منذ
+      // بُنيت. **فهو آخرُ قطاعٍ يحتاج تعديلاً في Dart** — ما بعده
+      // بياناتٌ في جدول.
+      //
+      // وبلا هذا يهبط تاجرُ المخبز على الشاشة الاحتياطيّة العامّة:
+      // حسابٌ يعمل، وقدراتٌ مفتوحةٌ، وواجهةٌ لا تدلّ على شيء.
+      if (_access.isMerchant && !_access.isBuiltInVertical) {
+        final home = _access.businessTypeHome.value;
+        final builder = home == null ? null : CapabilityScreens.screenFor(home);
+
+        if (builder != null) {
+          return _merchantShell(builder());
+        }
       }
 
       // أي نشاط تاجر جديد لم يُضف له Dispatcher متخصص بعد يحصل على القائمة

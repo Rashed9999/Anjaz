@@ -171,14 +171,110 @@ final class VerticalRegistry
         ];
     }
 
+    /**
+     * **وتبحث في القائم لا في المبنيّ.** لو بحثت في الستّة وحدَها لَما
+     * نال قطاعٌ أنشأته الإدارةُ قدرةً واحدة: `AccessPresets` تسأل هذه
+     * الدالّةَ بعينِها عن نواة القطاع وعمقِه، فتردّ `null` فتُمنَح
+     * القائمةُ الفارغة — **تاجرٌ يُسجَّل في قطاعٍ ويُفتَح له لا شيء**.
+     */
     public static function find(?string $code): ?MerchantVertical
     {
-        return $code === null ? null : (self::all()[$code] ?? null);
+        return $code === null ? null : (self::current()[$code] ?? null);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  AMIAL-VERTICAL-COMPOSE-001 — **الستّةُ المبنيّةُ وما تُنشئه الإدارة**
+    // ══════════════════════════════════════════════════════════════════
+
+    /** @var array<string,MerchantVertical>|null */
+    private static ?array $memoAll = null;
+
+    /**
+     * **الستّةُ المبنيّةُ وحدَها** — وهي ما كانت `all()` تُرجعه قبل هذا
+     * المربّع. وتُقرأ منفردةً حيث يُقصد «ما في الشيفرة» لا «ما هو قائم»:
+     * `VerticalParityGuardTest` يقارن بها، والقائمةُ الافتراضيّةُ في
+     * التطبيق مبنيّةٌ عليها.
+     *
+     * @return array<string,MerchantVertical>
+     */
+    public static function builtIn(): array
+    {
+        return self::all();
+    }
+
+    /**
+     * **كلُّ قطاعٍ قائمٍ الآن**: الستّةُ في الشيفرة، ثمّ ما عرّفته الإدارةُ
+     * في `merchant_verticals`.
+     *
+     * **والمبنيُّ لا يُستبدَل من الجدول.** صفٌّ برمزٍ من الستّة يُتجاهَل
+     * هنا (والمتحكّمُ يمنع إنشاءَه أصلاً، فهذا حزامٌ ثانٍ): تعديلُ قطاعٍ
+     * حيٍّ يبيع اليومَ من لوحةٍ يُغيّر ما يراه تجّارٌ قائمون بلا مراجعة،
+     * وحدُّ هذا المربّع **الإضافةُ لا المساس بالقائم**.
+     *
+     * @return array<string,MerchantVertical>
+     */
+    public static function current(): array
+    {
+        if (self::$memoAll !== null) {
+            return self::$memoAll;
+        }
+
+        $out = self::all();
+
+        foreach (\App\Models\Access\MerchantVerticalDefinition::active() as $row) {
+            $code = (string) $row->code;
+
+            if ($code === '' || isset($out[$code])) {
+                continue;
+            }
+
+            $out[$code] = new DbVertical($row);
+        }
+
+        return self::$memoAll = $out;
+    }
+
+    /**
+     * @return array<int,string> رموزُ كلّ القطاعات القائمة
+     */
+    public static function codes(): array
+    {
+        return array_keys(self::current());
+    }
+
+    /**
+     * العناوينُ للعرض والاختيار: رمز ⇒ اسم.
+     *
+     * **والستّةُ تحتفظ بوصفها الكامل** من `BUSINESS_TYPE_LABELS`
+     * («تجزئة (بقالة، سوبرماركت)») لأنّه ما تعرضه قائمةُ الاختيار منذ
+     * البداية، والقطاعُ المُضاف يُعرَض باسمه وتلميحُه بجانبه.
+     *
+     * @return array<string,string>
+     */
+    public static function labels(): array
+    {
+        $out = [];
+
+        foreach (self::current() as $code => $vertical) {
+            $out[$code] = A::BUSINESS_TYPE_LABELS[$code] ?? $vertical->nameAr();
+        }
+
+        return $out;
+    }
+
+    /** أهذا القطاعُ ممّا أنشأته الإدارةُ لا ممّا في الشيفرة؟ */
+    public static function isAdminDefined(?string $code): bool
+    {
+        return $code !== null
+            && ! isset(self::all()[$code])
+            && isset(self::current()[$code]);
     }
 
     /** يُفرَّغ في الاختبارات — ذاكرةٌ ساكنةٌ تعبر بينها تُنتج نتيجةً بترتيبها. */
     public static function flush(): void
     {
         self::$memo = null;
+        self::$memoAll = null;
+        \App\Models\Access\MerchantVerticalDefinition::flush();
     }
 }

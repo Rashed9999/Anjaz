@@ -577,7 +577,7 @@ class AdminHubController extends Controller
             'address_proof' => 'nullable|file|max:8192|mimetypes:image/jpeg,image/png,image/heic,image/heif,application/pdf',
             // حقول التاجر
             'store_name' => 'nullable|string|max:120',
-            'business_type' => 'nullable|string|in:' . implode(',', \App\Support\Access\AccessConstants::ALL_BUSINESS_TYPES),
+            'business_type' => 'nullable|string|in:' . implode(',', \App\Domain\Verticals\VerticalRegistry::codes()),
             'plan' => 'nullable|string|in:' . implode(',', \App\Support\Access\AccessConstants::ALL_PLANS),
             'business_registration_number' => 'nullable|string|max:100',
             'business_legal_form' => 'nullable|string|max:80',
@@ -1030,7 +1030,7 @@ class AdminHubController extends Controller
         $A = \App\Support\Access\AccessConstants::class;
         return view('admin-views.amial.hub.subscriptions', [
             'plans' => array_map(fn ($p) => ['code' => $p, 'label' => $A::PLAN_LABELS[$p] ?? $p], $A::ALL_PLANS),
-            'bizLabels' => $A::BUSINESS_TYPE_LABELS,
+            'bizLabels' => \App\Domain\Verticals\VerticalRegistry::labels(),
         ]);
     }
 

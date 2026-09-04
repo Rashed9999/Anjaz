@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:amial_pay/features/access/domain/vertical_catalog.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
@@ -56,6 +57,10 @@ class _AmialRegistrationWizardScreenState
   // AMIAL-REG-ROLES: نوع الحساب + حقول التاجر + أرقام الدخول من الخادم
   String _accountType = 'customer';
   String _businessType = 'retail';
+
+  /// AMIAL-VERTICAL-COMPOSE-001 — قطاعاتُ التسجيل: من الخادم، وإلى
+  /// الستّة المبنيّة عند تعذّره (فلا يُقفَل بابُ التسجيل بانقطاع شبكة).
+  List<VerticalOption> _verticals = VerticalCatalog.builtIn.values.toList();
   final _storeName = TextEditingController();
   String? _agentNumber;
   String? _merchantNumber;
@@ -171,6 +176,15 @@ class _AmialRegistrationWizardScreenState
   final _pin = TextEditingController();
   final _pinConfirm = TextEditingController();
   final _otp = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    VerticalCatalog.load().then((list) {
+      if (!mounted) return;
+      setState(() => _verticals = list);
+    });
+  }
 
   @override
   void dispose() {
@@ -788,17 +802,16 @@ class _AmialRegistrationWizardScreenState
         if (_accountType == 'merchant') ...[
           const SizedBox(height: 14),
           _field(_storeName, 'اسم المتجر *'),
+          // AMIAL-VERTICAL-COMPOSE-001 — **القائمةُ تُسأل من الخادم.**
+          //
+          // وكانت ستَّ سطورٍ محفورة، فقطاعٌ تُنشئه الإدارةُ لا يجده من
+          // يسجّل حساباً جديداً — أوّلُ بابٍ يدخل منه التاجر.
           DropdownButtonFormField<String>(
-            value: _businessType,
+            value: _verticals.any((o) => o.code == _businessType) ? _businessType : null,
             decoration: const InputDecoration(labelText: 'نوع النشاط', border: OutlineInputBorder()),
-            items: const [
-              DropdownMenuItem(value: 'retail', child: Text('بقالة / سوبرماركت')),
-              DropdownMenuItem(value: 'quick_sale', child: Text('بيع سريع (بسطة/خضار/أسماك)')),
-              DropdownMenuItem(value: 'fuel', child: Text('محطة وقود')),
-              DropdownMenuItem(value: 'pharmacy', child: Text('صيدلية')),
-              DropdownMenuItem(value: 'wholesale', child: Text('جملة')),
-              DropdownMenuItem(value: 'restaurant', child: Text('مطعم')),
-            ],
+            items: _verticals
+                .map((o) => DropdownMenuItem(value: o.code, child: Text(o.label)))
+                .toList(),
             onChanged: (v) => setState(() => _businessType = v ?? 'retail'),
           ),
         ],

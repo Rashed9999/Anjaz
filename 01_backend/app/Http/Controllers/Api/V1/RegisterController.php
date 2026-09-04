@@ -121,7 +121,7 @@ class RegisterController extends Controller
             // الحساب يُنشأ «قيد التحقق» (kyc=0) ويظهر في لوحة التحقق للاعتماد.
             'account_type' => 'sometimes|nullable|in:customer,merchant,agent',
             'store_name' => 'sometimes|nullable|string|max:120',
-            'business_type' => 'sometimes|nullable|in:' . implode(',', \App\Support\Access\AccessConstants::ALL_BUSINESS_TYPES),
+            'business_type' => 'sometimes|nullable|in:' . implode(',', \App\Domain\Verticals\VerticalRegistry::codes()),
         ]);
 
 

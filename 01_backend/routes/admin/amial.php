@@ -455,6 +455,30 @@ Route::prefix('entitlements')->name('entitlements.')
             ->where(['id' => '[0-9]+', 'overrideId' => '[0-9]+'])->name('merchant.override.remove');
     });
 
+// ============ AMIAL-VERTICAL-COMPOSE-001 — مركز قطاعات التجّار ============
+//
+// **إضافةُ قطاعٍ كانت تحتاج نشرةَ خادمٍ وبناءَ تطبيقٍ ونشرةَ متجر.** وصارت
+// صفّاً في جدولٍ يصل التاجرَ في اللحظة نفسِها.
+//
+// **والصلاحيّةُ `platform.settings.manage`** — هي صلاحيّةُ «الباقات
+// والقدرات» نفسُها، لأنّ هذا الفعلَ من جنسها بالضبط: تقريرُ ما يُفتَح
+// لمن. وفعلٌ يُغيّر ما يراه تجّارٌ قائمون ليس قراءةَ تدقيق.
+Route::prefix('verticals')->name('verticals.')
+    ->middleware('platform:platform.settings.manage')
+    ->group(function () {
+        $vc = App\Http\Controllers\Admin\VerticalCenterController::class;
+
+        Route::get('/', [$vc, 'page'])->name('page');
+        Route::get('/list', [$vc, 'index'])->name('list');
+        Route::post('/', [$vc, 'store'])->name('store');
+        Route::post('/{code}', [$vc, 'update'])
+            ->where('code', '[a-z0-9_]+')->name('update');
+        Route::post('/{code}/toggle', [$vc, 'toggle'])
+            ->where('code', '[a-z0-9_]+')->name('toggle');
+        Route::delete('/{code}', [$vc, 'destroy'])
+            ->where('code', '[a-z0-9_]+')->name('destroy');
+    });
+
 // ============ AMIAL-RETAIL-VERTICAL-001 · المرحلة ١١ — مركز التجزئة ============
 //
 // رقابةٌ لا إدارة: لا تعتمد اللوحةُ جردَ تاجرٍ ولا هالكَه — ذاك له.

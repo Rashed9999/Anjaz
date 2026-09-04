@@ -24,6 +24,13 @@ class AccessController extends GetxController implements GetxService {
   final RxnString merchantVerificationStatus = RxnString();
   final RxnString businessType = RxnString();          // قد يكون null إن لم يختر
   final RxnString businessTypeLabel = RxnString();
+
+  /// AMIAL-VERTICAL-COMPOSE-001 — **رمزُ القدرة التي يفتح عليها هذا
+  /// القطاعُ التطبيق**، أو `null` لقطاعٍ مبنيٍّ له موزِّعُه هنا.
+  ///
+  /// وبدونها يهبط تاجرُ قطاعٍ أنشأته الإدارةُ على الشاشة الاحتياطيّة
+  /// العامّة: حسابٌ يعمل وواجهةٌ لا تدلّ على شيء.
+  final RxnString businessTypeHome = RxnString();
   final RxString subscriptionPlan = 'free'.obs;
   final RxnString subscriptionPlanLabel = RxnString();
   final RxInt subscriptionPriceSar = 0.obs;
@@ -120,6 +127,7 @@ class AccessController extends GetxController implements GetxService {
         access['merchant_verification_status']?.toString();
     businessType.value = access['business_type']?.toString();
     businessTypeLabel.value = access['business_type_label']?.toString();
+    businessTypeHome.value = access['business_type_home']?.toString();
     subscriptionPlan.value = access['subscription_plan']?.toString() ?? 'free';
     subscriptionPlanLabel.value = access['subscription_plan_label']?.toString();
     subscriptionPriceSar.value = (access['subscription_price_sar'] as num?)?.toInt() ?? 0;
@@ -214,6 +222,12 @@ class AccessController extends GetxController implements GetxService {
   bool get isWholesale => businessType.value == 'wholesale';
   bool get isRestaurant => businessType.value == 'restaurant';
 
+  /// **أهو من الستّة المبنيّة؟** — وما عداه قطاعٌ أنشأته الإدارة، فليس
+  /// له موزِّعٌ هنا ويُفتَح على `businessTypeHome`.
+  bool get isBuiltInVertical => const {
+        'quick_sale', 'retail', 'fuel', 'pharmacy', 'wholesale', 'restaurant',
+      }.contains(businessType.value);
+
   /// هل التاجر اختار نوع نشاطه بعد؟
   bool get needsBusinessTypeSelection => isMerchant && businessType.value == null;
 
@@ -255,6 +269,7 @@ class AccessController extends GetxController implements GetxService {
     merchantVerificationStatus.value = null;
     businessType.value = null;
     businessTypeLabel.value = null;
+    businessTypeHome.value = null;
     subscriptionPlan.value = 'free';
     subscriptionPlanLabel.value = null;
     subscriptionPriceSar.value = 0;

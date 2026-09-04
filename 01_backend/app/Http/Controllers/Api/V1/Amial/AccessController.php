@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Amial;
 
+use App\Domain\Verticals\VerticalRegistry as VR;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantProfile;
 use App\Models\User;
@@ -81,10 +82,50 @@ class AccessController extends Controller
 
     // ============ التاجر يختار نوع نشاطه ============
 
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-VERTICAL-COMPOSE-001 — **القطاعاتُ المتاحةُ للاختيار.**
+     *
+     * تقرؤها شاشتان: بطاقاتُ «نوع النشاط التجاري» الإلزاميّة، وقائمةُ
+     * التسجيل. وكلتاهما كانت تكتب الستّةَ بيدها في Dart — فلو أضافت
+     * الإدارةُ «مخبزاً» لَما ظهر لأحدٍ حتّى نشرةِ متجرٍ جديدة.
+     *
+     * **والأيقونةُ واللونُ يُرسَلان** لأنّ ملفّاً مُصرَّفاً لا يعرف
+     * قطاعاً وُلد بعده، فيرسمه بأيقونةٍ عامّة. والستّةُ المبنيّةُ تبقى
+     * بأيقوناتها في التطبيق — يدمج الطرفان: المعروفُ بشكله المعروف،
+     * والجديدُ بما أرسله الخادم.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    public function businessTypeCatalog(): JsonResponse
+    {
+        $rows = [];
+
+        foreach (VR::current() as $code => $vertical) {
+            $isBuiltIn = ! VR::isAdminDefined($code);
+
+            $rows[] = [
+                'value' => $code,
+                'label' => VR::labels()[$code] ?? $vertical->nameAr(),
+                'short_label' => $vertical->nameAr(),
+                'hint' => $vertical instanceof \App\Domain\Verticals\DbVertical
+                    ? $vertical->hint() : null,
+                'icon' => $vertical instanceof \App\Domain\Verticals\DbVertical
+                    ? $vertical->icon() : null,
+                'color' => $vertical instanceof \App\Domain\Verticals\DbVertical
+                    ? $vertical->color() : null,
+                // **ويُقال أيُّهما مبنيٌّ وأيُّهما مُضاف** — فالتطبيقُ يعرف
+                // متى يستعمل شكلَه المحفور ومتى يرسم ما أُرسل إليه.
+                'is_built_in' => $isBuiltIn,
+            ];
+        }
+
+        return $this->ok(['business_types' => $rows]);
+    }
+
     public function updateMyBusinessType(Request $request): JsonResponse
     {
         $v = Validator::make($request->all(), [
-            'business_type' => 'required|in:' . implode(',', A::ALL_BUSINESS_TYPES),
+            'business_type' => 'required|in:' . implode(',', VR::codes()),
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -191,8 +232,8 @@ class AccessController extends Controller
             'roles' => A::ALL_ROLES,
             'verification_levels' => A::ALL_VERIFICATION_LEVELS,
             'business_types' => array_map(fn($t) => [
-                'value' => $t, 'label' => A::BUSINESS_TYPE_LABELS[$t] ?? $t,
-            ], A::ALL_BUSINESS_TYPES),
+                'value' => $t, 'label' => VR::labels()[$t] ?? $t,
+            ], VR::codes()),
             'plans' => array_map(fn($p) => [
                 'value' => $p,
                 'label' => A::PLAN_LABELS[$p] ?? $p,
@@ -258,7 +299,7 @@ class AccessController extends Controller
             return $this->error('FORBIDDEN', 'صلاحية إدارية مطلوبة', 403);
         }
         $v = Validator::make($request->all(), [
-            'business_type' => 'nullable|in:' . implode(',', A::ALL_BUSINESS_TYPES),
+            'business_type' => 'nullable|in:' . implode(',', VR::codes()),
         ]);
         if ($v->fails()) return $this->validationError($v);
 

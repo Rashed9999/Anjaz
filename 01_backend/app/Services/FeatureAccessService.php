@@ -201,7 +201,20 @@ class FeatureAccessService
 
             'verification_level' => $verificationLevel,
             'business_type' => $businessType,
-            'business_type_label' => $businessType ? (A::BUSINESS_TYPE_LABELS[$businessType] ?? null) : null,
+            // AMIAL-VERTICAL-COMPOSE-001 — **من السجلّ لا من الثابت**: ثابتُ
+            // الشيفرة لا يعرف قطاعاً أنشأته الإدارة، فيصل التطبيقَ `null`
+            // فتُعرَض ترويسةُ التاجر بلا نشاط.
+            'business_type_label' => $businessType
+                ? (\App\Domain\Verticals\VerticalRegistry::labels()[$businessType] ?? null)
+                : null,
+
+            // **الشاشةُ التي يفتح عليها هذا القطاعُ تطبيقَه** — رمزُ قدرةٍ
+            // يعرف `CapabilityScreens` شاشتَها. وبدونها يهبط تاجرُ قطاعٍ
+            // مُضافٍ على الشاشة الاحتياطيّة العامّة: حسابٌ يعمل وواجهةٌ
+            // لا تدلّ على شيء. والستّةُ المبنيّةُ لها موزِّعُها في
+            // التطبيق فتُرسَل `null` ولا يتغيّر لها شيء.
+            'business_type_home' => \App\Domain\Verticals\VerticalRegistry::find($businessType)
+                ?->homeCapability(),
             'subscription_plan' => $plan,
             'subscription_plan_label' => A::PLAN_LABELS[$plan] ?? $plan,
             'subscription_price_sar' => A::PLAN_PRICES_SAR[$plan] ?? 0,
@@ -344,7 +357,7 @@ class FeatureAccessService
     /** Admin: تغيير business_type تاجر. */
     public function updateBusinessType(MerchantProfile $merchant, ?string $type): MerchantProfile
     {
-        if ($type !== null && !in_array($type, A::ALL_BUSINESS_TYPES, true)) {
+        if ($type !== null && !in_array($type, \App\Domain\Verticals\VerticalRegistry::codes(), true)) {
             throw new \InvalidArgumentException("نوع نشاط غير صحيح: {$type}");
         }
         $merchant->update(['business_type' => $type]);
