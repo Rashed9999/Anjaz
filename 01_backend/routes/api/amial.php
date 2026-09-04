@@ -844,6 +844,25 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
                 ->middleware('amial.rate-limit:po_receive,30,1')->name('receive');
             Route::post('/{id}/cancel', [$sc, 'poCancel'])->where('id', '[0-9]+')->name('cancel');
         });
+        // AMIAL-DAILY-MOVEMENT-001 — **مرتجعُ الشراء**: بضاعةٌ تعود إلى
+        // المورد. وهو الصفُّ الرابع في «الحركة اليوميّة»، ولم يكن له
+        // جدولٌ ولا خدمةٌ ولا بابٌ إطلاقاً — بينما `purchase_return` سببُ
+        // حركةِ مخزونٍ معرَّفٌ منذ بُني المخزون بلا مُصدِرٍ واحد.
+        //
+        // **وتحت قدرة «أوامر الشراء» نفسِها** لا قدرةٍ جديدة: من يشتري
+        // يردّ، وقدرةٌ ثانيةٌ تجعل نصفَ التجّار يستلمون ولا يستطيعون
+        // الردّ. (القاعدة الرابعة: بابان لفعلٍ واحدٍ يفترقان.)
+        Route::prefix('purchase-returns')->name('purchase-returns.')
+            ->middleware('capability:' . \App\Support\Access\AccessConstants::F_PURCHASES)
+            ->group(function () {
+            $sc = \App\Http\Controllers\Api\V1\Amial\SupplierController::class;
+            Route::get('/', [$sc, 'prIndex'])->name('index');
+            Route::post('/', [$sc, 'prStore'])
+                ->middleware('amial.rate-limit:purchase_return_create,30,1')->name('store');
+            Route::get('/{id}', [$sc, 'prShow'])->where('id', '[0-9]+')->name('show');
+            Route::post('/{id}/approve', [$sc, 'prApprove'])->where('id', '[0-9]+')->name('approve');
+            Route::post('/{id}/reject', [$sc, 'prReject'])->where('id', '[0-9]+')->name('reject');
+        });
         // AMIAL-CUSTOMER-CREDIT-001 — نظام ديون العملاء
         Route::prefix('credit')->name('credit.')->group(function () {
             Route::get('/dashboard', [\App\Http\Controllers\Api\V1\Amial\CustomerCreditController::class, 'dashboard'])->name('dashboard');

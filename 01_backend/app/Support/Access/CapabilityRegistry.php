@@ -511,7 +511,10 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_BUSINESS)
                 ->businessTypes([A::BIZ_RETAIL, A::BIZ_WHOLESALE])
                 ->permissions(['retail.purchase.*'])
-                ->routes(['purchase-orders'])
+                // AMIAL-DAILY-MOVEMENT-001 — **والمرتجعُ من الشراء نفسِه.**
+                // `coverage` يطابق المساراتِ بالبادئة، فبادئةٌ غيرُ مذكورةٍ
+                // هنا تُقرأ «مسارٌ بلا قدرة» في تقرير التغطية.
+                ->routes(['purchase-orders', 'purchase-returns'])
                 ->screen('/purchase-orders')
                 ->businessTypes(self::GOODS),
         ];

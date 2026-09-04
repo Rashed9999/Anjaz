@@ -66,6 +66,9 @@ class _FinancialTruthReportScreenState extends State<FinancialTruthReportScreen>
           )).toList()),
           const SizedBox(height: 16),
         ],
+        // AMIAL-DAILY-MOVEMENT-001 — **المصفوفةُ أوّلاً**: هي جوابُ سؤال
+        // «ماذا جرى اليوم؟» في نظرةٍ واحدة، وما بعدها تفصيلُها.
+        ..._movement((report['movement'] as Map?) ?? const {}),
         _section('المبيعات التشغيلية', 'مصدرها ${sales['source'] ?? '—'}'),
         row('إجمالي البيع', sales['gross'], Icons.point_of_sale_outlined, AmialColors.primary),
         row('نقد', methods['cash'], Icons.payments_outlined, AmialColors.success),
@@ -96,6 +99,141 @@ class _FinancialTruthReportScreenState extends State<FinancialTruthReportScreen>
       ]));
     }),
   );
+
+  // ══════════════════════════════════════════════════════════════════
+  //  AMIAL-DAILY-MOVEMENT-001 — الحركةُ اليوميّة الكاملة
+  // ══════════════════════════════════════════════════════════════════
+
+  /// **أربعُ حركاتٍ × ثلاثةُ أعمدة، وصافٍ نقديٌّ واحد.**
+  ///
+  /// من شاشة تطبيقٍ محاسبيٍّ منافس أرسلها صاحبُ المشروع واختار فكرتَها.
+  ///
+  /// **وثلاثةُ قراراتٍ في العرض، لا في الخادم وحده:**
+  ///
+  ///   · **الصفُّ الغائبُ يُكتب غائباً** ولا يُرسَم صفراً — الخادمُ يرسل
+  ///     `available:false` ومعه سببُه، **والشاشةُ تقوله بنصّه**. وصفرٌ
+  ///     هنا يُقرأ «لم يقع شيءٌ اليوم» وهو كذب. (القاعدة السابعة.)
+  ///   · **والاتّجاهُ يُرى قبل الرقم**: سهمٌ داخلٌ أخضرُ وخارجٌ أحمر،
+  ///     فالمرتجعُ لا يُقرأ بيعاً بلمحة عين.
+  ///   · **والجدولُ يُمرَّر أفقيّاً** ولا يُضغط: أربعةُ أعمدةٍ بأرقامٍ
+  ///     ماليّةٍ على شاشة هاتفٍ صغيرةٍ تنكسر، والانكسارُ يقلب الأعمدة.
+  List<Widget> _movement(Map m) {
+    final rows = (m['rows'] as List?) ?? const [];
+    if (rows.isEmpty) return const [];
+
+    final labels = (m['column_labels_ar'] as Map?) ?? const {};
+    final net = (m['net_cash'] as Map?) ?? const {};
+
+    Widget head(String t) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      child: Text(t, style: const TextStyle(
+          fontSize: 12, fontWeight: FontWeight.w900, color: AmialColors.textSecondary)),
+    );
+
+    Widget cell(dynamic v) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      child: Text(money(v), textDirection: TextDirection.ltr,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+              fontFeatures: [FontFeature.tabularFigures()])),
+    );
+
+    return [
+      _section('الحركة اليومية الكاملة',
+          'المبيع والشراء ومرتجعاهما — نقداً وآجلاً، كلٌّ من مصدره'),
+      Container(
+        decoration: BoxDecoration(
+          color: AmialColors.cardSurface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AmialColors.border),
+        ),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: DataTable(
+            headingRowHeight: 40,
+            dataRowMinHeight: 44,
+            dataRowMaxHeight: 64,
+            columnSpacing: 18,
+            columns: [
+              const DataColumn(label: Text('الحركة',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900))),
+              DataColumn(label: head('${labels['cash'] ?? 'نقدي'}')),
+              DataColumn(label: head('${labels['amial_pay'] ?? 'أميال باي'}')),
+              DataColumn(label: head('${labels['credit'] ?? 'آجل'}')),
+              const DataColumn(label: Text('الإجمالي',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900))),
+            ],
+            rows: rows.map<DataRow>((raw) {
+              final r = raw as Map;
+              final isIn = r['direction'] == 'in';
+              final available = r['available'] == true;
+
+              final title = Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(isIn ? Icons.south_west_rounded : Icons.north_east_rounded,
+                    size: 15, color: isIn ? AmialColors.success : AmialColors.red),
+                const SizedBox(width: 6),
+                Text('${r['label_ar'] ?? r['code']}',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+              ]);
+
+              if (!available) {
+                // **الغيابُ يُقال مرّةً واحدةً بعرض الصفّ** — ولا يُكرَّر
+                // في كلّ خانةٍ شرطةً تُقرأ رقماً ناقصاً.
+                return DataRow(cells: [
+                  DataCell(title),
+                  DataCell(Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text('${r['unavailable_reason_ar'] ?? 'غير متاح في قطاعك'}',
+                        style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+                  )),
+                  const DataCell(SizedBox.shrink()),
+                  const DataCell(SizedBox.shrink()),
+                  const DataCell(SizedBox.shrink()),
+                ]);
+              }
+
+              return DataRow(cells: [
+                DataCell(title),
+                DataCell(cell(r['cash'])),
+                DataCell(cell(r['amial_pay'])),
+                DataCell(cell(r['credit'])),
+                DataCell(Text(money(r['total']), textDirection: TextDirection.ltr,
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900))),
+              ]);
+            }).toList(),
+          ),
+        ),
+      ),
+      if (net.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AmialColors.success.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AmialColors.success.withValues(alpha: 0.3)),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Icon(Icons.point_of_sale_outlined, size: 18, color: AmialColors.success),
+                const SizedBox(width: 8),
+                Expanded(child: Text('${net['label_ar'] ?? 'صافي النقد'}',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800))),
+                Text(money(net['amount']), textDirection: TextDirection.ltr,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900,
+                        color: AmialColors.success)),
+              ]),
+              if ((net['note_ar'] ?? '').toString().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text('${net['note_ar']}',
+                      style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+                ),
+            ]),
+          ),
+        ),
+    ];
+  }
 
   Widget _section(String title, String note) => Padding(
     padding: const EdgeInsets.only(top: 16, bottom: 6),

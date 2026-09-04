@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/suppliers/controllers/suppliers_controller.dart';
 import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/features/suppliers/screens/purchase_return_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-SUPPLIERS-005 — «استلام بضاعة» (التصميم 57):
@@ -28,6 +29,32 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
 
   /// itemId → الكمية الجديدة المستلمة الآن.
   final Map<int, int> _receiving = {};
+
+  /// AMIAL-DAILY-MOVEMENT-001 — **ما دُفع نقداً لحظةَ الاستلام.**
+  ///
+  /// كان كلُّ استلامٍ يرفع دينَ المورد بلا استثناء، فمن اشترى نقداً من
+  /// مورّدٍ عابرٍ لا يجد إلّا خمسَ خطوات — أو لا يسجّل الشراءَ إطلاقاً،
+  /// **فيغيب الشراءُ النقديُّ عن الحركة اليوميّة كلِّها**.
+  final TextEditingController _paidNow = TextEditingController();
+
+  @override
+  void dispose() {
+    _paidNow.dispose();
+    super.dispose();
+  }
+
+  /// قيمةُ ما يُستلَم الآن — **تُحسب من البنود لا من إجمالي الأمر**:
+  /// الاستلامُ الجزئيُّ أقلُّ من الأمر، وعرضُ إجمالي الأمر هنا يُغري
+  /// بدفع ثمن ما لم يصل.
+  String get _valueNow {
+    var total = 0.0;
+    for (final it in _items) {
+      final n = _receiving[it['id'] as int] ?? 0;
+      if (n <= 0) continue;
+      total += n * (double.tryParse('${it['unit_cost'] ?? 0}') ?? 0);
+    }
+    return total.toStringAsFixed(2);
+  }
 
   @override
   void initState() {
@@ -61,13 +88,30 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
       _snack('حدد كميات مستلمة أولاً');
       return;
     }
+    final paid = _paidNow.text.trim();
+
+    // **ولا يُرسَل ما يتجاوز قيمةَ المستلَم** — الخادمُ يرفضه، والرفضُ
+    // بعد ضغطةٍ أسوأُ من منعٍ قبلها.
+    if (paid.isNotEmpty) {
+      final p = double.tryParse(paid) ?? 0;
+      if (p > (double.tryParse(_valueNow) ?? 0)) {
+        _snack('المدفوع نقداً أكبر من قيمة المستلَم '
+            '(${AmialMoney.yer(_valueNow)}). لسداد دَينٍ سابق استعمل «سداد دفعة».');
+        return;
+      }
+    }
+
     setState(() => _saving = true);
-    final ok = await c.poReceive(widget.poId, payload);
+    final ok = await c.poReceive(widget.poId, payload,
+        paidNow: paid.isEmpty ? null : paid);
     if (!mounted) return;
     setState(() => _saving = false);
     if (ok) {
       Get.back(result: true);
-      Get.snackbar('تم الاستلام', 'حُدّث المخزون ومديونية المورد',
+      Get.snackbar('تم الاستلام',
+          paid.isEmpty
+              ? 'حُدّث المخزون ومديونية المورد'
+              : 'حُدّث المخزون، ودُفع ${AmialMoney.yer(paid)} نقداً',
           backgroundColor: AmialColors.successSurface,
           colorText: AmialColors.success);
     } else {
@@ -176,10 +220,91 @@ class _PoReceiveScreenState extends State<PoReceiveScreen> {
                     const SizedBox(height: 14),
 
                     ..._items.map((it) => _itemCard(it)),
+
+                    if (!ro) _cashBox(),
+
+                    // AMIAL-DAILY-MOVEMENT-001 — **بابُ الردّ حيث يقع
+                    // الاكتشاف.** التالفُ يُرى لحظةَ الاستلام أو بعده
+                    // بيوم، وشاشةٌ منفصلةٌ في قائمةٍ أخرى لا يصلها أحد.
+                    // (القاعدة الثانية عشرة: مسارٌ بلا رابطٍ ليس مبنيّاً.)
+                    if (_receivedAnything) _returnDoor(),
                   ],
                 ),
     );
   }
+
+  bool get _receivedAnything => _items.any((it) => _received(it) > 0);
+
+  /// **حقلُ الدفع النقديّ عند الاستلام.**
+  ///
+  /// ويُعرَض معه **قيمةُ ما يُستلَم الآن** لا إجمالي الأمر — فالاستلامُ
+  /// الجزئيُّ أقلُّ، ورقمٌ أكبرُ هنا يُغري بدفع ثمن ما لم يصل.
+  Widget _cashBox() => Container(
+        margin: const EdgeInsets.only(top: 4, bottom: 10),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AmialColors.border),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            const Icon(Icons.payments_outlined,
+                size: 18, color: AmialColors.cash),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('المدفوع نقداً الآن (اختياري)',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            ),
+            Text('قيمة المستلَم: ${AmialMoney.yer(_valueNow)}',
+                style: const TextStyle(
+                    fontSize: 11, color: AmialColors.textSecondary)),
+          ]),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _paidNow,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            textDirection: TextDirection.ltr,
+            decoration: const InputDecoration(
+              isDense: true,
+              hintText: '0',
+              border: OutlineInputBorder(),
+              helperMaxLines: 3,
+              helperText: 'اتركه فارغاً للشراء الآجل. وما يزيد عن قيمة '
+                  'المستلَم ليس شراءً نقدياً بل سداد دَينٍ سابق — بابه '
+                  '«سداد دفعة» في ملف المورد.',
+              helperStyle: TextStyle(fontSize: 10),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ]),
+      );
+
+  /// **بابُ ردّ البضاعة إلى المورد.**
+  Widget _returnDoor() => Padding(
+        padding: const EdgeInsets.only(top: 6, bottom: 24),
+        child: OutlinedButton.icon(
+          onPressed: () async {
+            final done = await Get.to<bool>(() => PurchaseReturnScreen(
+                  poId: widget.poId,
+                  supplierId: (_order?['supplier_id'] as num?)?.toInt() ??
+                      (_order?['supplier']?['id'] as num?)?.toInt() ??
+                      0,
+                  items: _items.where((it) => _received(it) > 0).toList(),
+                ));
+            if (done == true) _load();
+          },
+          icon: const Icon(Icons.assignment_return_outlined, size: 18),
+          label: const Text('ردّ بضاعة إلى المورد (تالف أو زائد)'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AmialColors.red,
+            side: const BorderSide(color: AmialColors.red),
+            minimumSize: const Size.fromHeight(48),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+        ),
+      );
 
   Widget _itemCard(Map<String, dynamic> it) {
     final id = it['id'] as int;
