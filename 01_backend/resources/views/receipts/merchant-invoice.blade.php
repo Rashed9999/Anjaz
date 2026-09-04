@@ -190,6 +190,12 @@
     </tr>
 </table>
 
+{{-- AMIAL-SHIFT-GATE-001 — اسمُ فاتح الوردية أسفل الفاتورة، ولا يُطبَع
+     سطرٌ فارغٌ لبيعةٍ لا وردية لها. --}}
+@if(!empty($document['shift_line']))
+<div class="legal"><strong>{{ $document['shift_line']['label'] }}:</strong> {{ $document['shift_line']['value'] }}</div>
+@endif
+
 <div class="legal">{{ $document['seller']['footer_note'] }}<br>فاتورة إلكترونية محفوظة في سجلات النشاط وأميال باي. إعادة الطباعة لا تنشئ عملية دفع جديدة.</div>
 </body>
 </html>

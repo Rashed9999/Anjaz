@@ -26,14 +26,34 @@ class CashierShiftTest extends TestCase
             'verification_status' => 'verified', 'subscription_plan' => A::PLAN_BUSINESS]);
     }
 
-    /** @test المجّاني ممنوع → 402. */
-    public function free_plan_cannot_use_shifts(): void
+    /**
+     * @test
+     *
+     * **AMIAL-SHIFT-GATE-001 — قُلبت هذه الحالةُ عن قصد، ويُقال لماذا.**
+     *
+     * كانت تشترط ٤٠٢ للمجّانيّ («الورديات في باقة الأعمال فأعلى»)، وكان
+     * ذلك صحيحاً يومَ كُتبت. **ثمّ صار البيعُ نفسُه يشترط ورديّةً مفتوحة**
+     * (‏`amial.shift` على مسارات القبض) — فبقاءُ القفل يعني أنّ **كلَّ
+     * تاجرٍ مجّانيٍّ عاجزٌ عن البيع إطلاقاً**: بيعُ القدرةِ على تشغيل
+     * الشبّاك لا بيعُ ميزة.
+     *
+     * فنزلت القدرةُ إلى الأساس (`core()` و`PLAN_FREE`)، **والعمقُ يبقى
+     * مدفوعاً**: تقريرُ ساعات العمل وتاريخُ الورديّات.
+     *
+     * **ولم تُحذَف الحالةُ بل عُكست** — فحذفُها يترك السؤالَ بلا جواب،
+     * ويُعيد أحدُهم القفلَ غداً بحسن نيّة.
+     */
+    public function the_free_plan_can_use_shifts_because_selling_requires_one(): void
     {
         $free = User::factory()->create(['type' => 3, 'role' => 'merchant', 'zone_code' => 'SOUTH']);
         MerchantProfile::create(['user_id' => $free->id, 'business_type' => A::BIZ_RETAIL,
             'verification_status' => 'verified', 'subscription_plan' => A::PLAN_FREE]);
         Passport::actingAs($free->fresh(), [], 'api');
-        $this->getJson('/api/v1/amial/cashier/shift')->assertStatus(402);
+
+        $this->getJson('/api/v1/amial/cashier/shift')->assertOk();
+
+        $this->postJson('/api/v1/amial/cashier/shift/open', ['opening_float' => 0])
+            ->assertStatus(201);
     }
 
     /** @test الإقفال يحسب النقد المتوقّع والفرق بدقّة. */

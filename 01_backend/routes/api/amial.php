@@ -803,8 +803,12 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
                 ->middleware('capability:' . \App\Support\Access\AccessConstants::F_PRODUCTS)
                 ->name('products.adopt');
             Route::put('/products/{id}', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'updateProduct'])->name('products.update');
+            // AMIAL-SHIFT-GATE-001 — **لا شبّاكَ بلا ورديّة، ولا استثناءَ
+            // للمالك.** والحدُّ هنا لا في الخدمة: الخدمةُ تُنادى من خمسةَ
+            // عشرَ موضعاً منها اختباراتُ مخزونٍ وولاءٍ ودفتر، **والحدُّ
+            // يخصّ البابَ الذي يدخل منه إنسان**.
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'recordSale'])
-                ->middleware('amial.rate-limit:cashier_sale,120,1')->name('sales');
+                ->middleware(['amial.rate-limit:cashier_sale,120,1', 'amial.shift'])->name('sales');
             Route::get('/sales/{ulid}/invoice', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'downloadInvoice'])
                 ->where('ulid', '[A-Z0-9]{26}')->name('sales.invoice');
             Route::post('/sales/{id}/settle', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'settleCredit'])->name('sales.settle');
@@ -957,6 +961,11 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
                 ->middleware('capability:fuel_products')
                 ->where('id', '[0-9]+')->name('products.price');
             // Sales (الجوهر)
+            // AMIAL-SHIFT-GATE-001 — **والوقودُ مستثنىً عمداً ويُقال.**
+            // له ورديّاتُه الخاصّة (`fuel_shifts` و`FuelShiftService`)
+            // بقراءات عدّادات ومناوبات مضخّات، و`computeCash` يستثنيه
+            // صراحةً لئلّا يُعدّ بيعُه مرّتين. فوضعُ حارس درج الكاشير هنا
+            // يطلب ورديّةً ثانيةً لا معنى لها.
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\FuelStationController::class, 'recordSale'])
                 ->middleware(['amial.rate-limit:fuel_sale,300,1', 'amial.usage:sale_operation'])
                 ->name('sales.record');
@@ -1215,8 +1224,11 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
                 ->where('id', '[0-9]+')->name('customers.update');
 
             // Sales
+            // AMIAL-SHIFT-GATE-001 — ونقدُ الصيدليّة يدخل الدرجَ نفسَه
+            // (‏`computeCash` يعدّه)، فبابُه تحت الحارس نفسِه. وإلّا ظهر
+            // في «المتوقَّع» نقدٌ لم تأذن به ورديّة.
             Route::post('/sales', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'recordSale'])
-                ->middleware(['amial.rate-limit:pharmacy_sale,300,1', 'amial.usage:sale_operation'])
+                ->middleware(['amial.rate-limit:pharmacy_sale,300,1', 'amial.usage:sale_operation', 'amial.shift'])
                 ->name('sales.record');
             Route::get('/sales/{ulid}/invoice', [\App\Http\Controllers\Api\V1\Amial\PharmacyController::class, 'downloadInvoice'])
                 ->where('ulid', '[A-Z0-9]{26}')->name('sales.invoice');
@@ -1310,8 +1322,11 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
 
             // Collections
             Route::get('/collections', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'listCollections'])->name('collections.index');
+            // AMIAL-SHIFT-GATE-001 — والتحصيلُ النقديُّ يدخل الدرجَ أيضاً
+            // (‏`computeCash` يعدّه)، **بخلاف إصدار الفاتورة**: تلك تُكتب
+            // في الميدان بيد مندوبٍ ولا درجَ فيها.
             Route::post('/invoices/{id}/collect', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'recordCollection'])
-                ->where('id', '[0-9]+')->name('collections.record');
+                ->where('id', '[0-9]+')->middleware('amial.shift')->name('collections.record');
 
             // Sales Reps
             Route::get('/sales-reps', [\App\Http\Controllers\Api\V1\Amial\WholesaleController::class, 'listSalesReps'])->name('reps.index');
@@ -1384,6 +1399,9 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
         Route::get('/x', [$c, 'xReport'])->name('x');
         Route::post('/close', [$c, 'close'])->name('close');
         Route::get('/history', [$c, 'history'])->name('history');
+        // AMIAL-SHIFT-GATE-001 — ساعاتُ عملِ كلِّ من وقف على الشبّاك:
+        // اليومَ وهذا الشهر. للمالك وحدَه.
+        Route::get('/work-time', [$c, 'workTime'])->name('work-time');
     });
 
     // -------- AMIAL-GIFT-CARDS-001 — بطاقات الهدايا ورصيد المتجر --------

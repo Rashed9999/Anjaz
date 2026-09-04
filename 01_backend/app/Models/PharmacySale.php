@@ -16,6 +16,8 @@ class PharmacySale extends Model
         'subtotal', 'discount_amount', 'total_amount',
         // AMIAL-CASH-TENDERED-001 — وغيابُه هنا يُسقطه صامتاً.
         'amount_received',
+        // AMIAL-SHIFT-GATE-001 — من كان على الشبّاك حين قُبضت هذه البيعة.
+        'shift_id',
         'payment_method', 'paid_transaction_id',
         'warnings_acknowledged',
         'status', 'notes', 'zone_code',

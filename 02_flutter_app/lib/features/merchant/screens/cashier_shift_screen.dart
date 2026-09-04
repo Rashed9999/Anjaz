@@ -21,6 +21,10 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
   Map<String, dynamic>? _shift;
   Map<String, dynamic>? _x;
 
+  /// AMIAL-SHIFT-GATE-001 — ساعاتُ العمل: اليومَ وهذا الشهر.
+  /// `null` تعني «لم تُقرأ» لا «صفرُ ساعات» — والفرقُ يُعرَض.
+  List<Map<String, dynamic>>? _people;
+
   @override
   void initState() {
     super.initState();
@@ -38,6 +42,7 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
       if (r.statusCode == 200 && r.body is Map) {
         _shift = ((r.body['meta'] ?? {})['shift']) as Map<String, dynamic>?;
         if (_shift != null) await _loadX();
+        await _loadWorkTime();
       } else {
         _error = _messageOf(r) ?? 'تعذّر تحميل حالة الوردية';
       }
@@ -50,6 +55,19 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
     if (r.statusCode == 200 && r.body is Map) {
       _x = ((r.body['meta'] ?? {})['report']) as Map<String, dynamic>?;
     }
+  }
+
+  /// AMIAL-SHIFT-GATE-001 — **ساعاتُ العمل للمالك وحدَه** (٤٠٣ للموظّف).
+  /// ولا تُعرَض رسالةُ عطلٍ له: ليست عطلاً، هي ليست شغلَه.
+  Future<void> _loadWorkTime() async {
+    try {
+      final r = await _api.getData('/api/v1/amial/cashier/shift/work-time');
+      if (r.statusCode == 200 && r.body is Map) {
+        _people = (((r.body['meta'] ?? {})['people'] ?? []) as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+      }
+    } catch (_) {/* الشبكة — والشاشةُ تعمل بما تعرفه */}
   }
 
   /// **الاسمُ `r` كبقيّة الملفّ** — وهو ما يقرؤه الحارسُ أيضاً. واختلافُ
@@ -125,8 +143,17 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
 
   void _showResult(Map<String, dynamic> s) {
     final variance = double.tryParse('${s['variance']}') ?? 0;
-    final color = variance == 0 ? AmialColors.success : AmialColors.red;
-    final label = variance == 0 ? 'مطابق تماماً' : variance > 0 ? 'زيادة' : 'عجز';
+    // **والاسمُ من الخادم أوّلاً** — مصدرٌ واحدٌ يسمّي الفرق، فلا تقول
+    // الشاشةُ «زيادة» ويقول التقريرُ غيرَها.
+    final kind = '${s['variance_kind'] ?? ''}';
+    final color = variance == 0 ? AmialColors.success
+        : (kind == 'surplus' || variance > 0 ? AmialColors.yellowDark : AmialColors.red);
+    final label = switch (kind) {
+      'balanced' => 'مطابق تماماً',
+      'surplus' => 'فائض في الدرج',
+      'shortage' => 'عجز في الدرج',
+      _ => variance == 0 ? 'مطابق تماماً' : (variance > 0 ? 'فائض' : 'عجز'),
+    };
     showDialog(context: context, builder: (ctx) => AlertDialog(
       title: Row(children: [Icon(variance == 0 ? Icons.check_circle : Icons.warning, color: color), const SizedBox(width: 8), const Text('تقرير Z')]),
       content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -135,6 +162,10 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
         _row('المتوقّع', '${s['expected_cash']} ر.ي'),
         _row('المجرود', '${s['counted_cash']} ر.ي'),
         const Divider(),
+        if ('${s['opened_by_name'] ?? ''}'.isNotEmpty)
+          _row('فتحها', '${s['opened_by_name']}'),
+        if ('${s['closed_by_name'] ?? ''}'.isNotEmpty)
+          _row('أقفلها', '${s['closed_by_name']}'),
         _row('الفرق ($label)', '${s['variance']} ر.ي', color: color, bold: true),
       ]),
       actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('تم'))],
@@ -159,6 +190,7 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
                   ])))
               : RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
                   if (_shift == null) _noShift() else _openShift(),
+                  ..._workTime(),
                 ])),
     );
   }
@@ -185,6 +217,9 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
             const Row(children: [Icon(Icons.receipt_long, color: AmialColors.primary), SizedBox(width: 8),
               Text('تقرير X — لحظي', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))]),
             const Divider(height: 24),
+            // AMIAL-SHIFT-GATE-001 — **باسم من ستُطبَع الفاتورة.**
+            if ('${_shift!['opened_by_name'] ?? ''}'.isNotEmpty)
+              _row('فتح الوردية', '${_shift!['opened_by_name']}'),
             _row('الرصيد الافتتاحي', '${_shift!['opening_float']} ر.ي'),
             _row('مبيعات نقدية (${_x?['sales_count'] ?? 0})', '${_x?['cash_sales'] ?? '0'} ر.ي'),
             const SizedBox(height: 6),
@@ -208,4 +243,85 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
           Text(k, style: const TextStyle(fontSize: 13, color: AmialColors.textSecondary)),
         ]),
       );
+
+  // ══════════════════════════════════════════════════════════════════
+  //  AMIAL-SHIFT-GATE-001 — ساعاتُ العمل: اليومَ وهذا الشهر
+  // ══════════════════════════════════════════════════════════════════
+
+  /// **بنصّ الطلب:** «وردية تعمل اسمه ووقت عمله اليومي والشهري».
+  ///
+  /// **ولا تُعرَض لموظّف** — الخادمُ يردّ ٤٠٣ فتبقى `_people` فارغةً،
+  /// والقسمُ لا يُرسَم. وذلك مقصود: ساعاتُ الزملاء وفروقُ درجهم ليست شغلَ
+  /// كاشيرٍ على الشبّاك.
+  ///
+  /// **والورديّةُ الجاريةُ تُوسَم ولا تُحسَب صفراً** (القاعدة السابعة) —
+  /// صفرٌ هناك يقتطع من أجرِ من هو واقفٌ الآن.
+  List<Widget> _workTime() {
+    final people = _people;
+    if (people == null || people.isEmpty) return const [];
+
+    return [
+      const SizedBox(height: 20),
+      const Row(children: [
+        Icon(Icons.schedule, color: AmialColors.primary, size: 18),
+        SizedBox(width: 8),
+        Text('ساعات العمل هذا الشهر',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+      ]),
+      const SizedBox(height: 4),
+      const Text('تُحسب من الورديات نفسها — لا من عمود مخزَّن.',
+          style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+      const SizedBox(height: 10),
+      ...people.map(_personCard),
+    ];
+  }
+
+  Widget _personCard(Map<String, dynamic> p) {
+    final running = p['is_running'] == true;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: running
+                ? AmialColors.success.withValues(alpha: 0.45)
+                : AmialColors.border),
+      ),
+      child: Column(children: [
+        Row(children: [
+          Expanded(
+            child: Text('${p['name'] ?? 'غير معروف'}',
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14)),
+          ),
+          if (running)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                  color: AmialColors.successSurface,
+                  borderRadius: BorderRadius.circular(20)),
+              child: const Text('وردية جارية',
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: AmialColors.success)),
+            )
+          else
+            Text(p['role'] == 'owner' ? 'صاحب المتجر' : 'موظف نقطة بيع',
+                style: const TextStyle(
+                    fontSize: 11, color: AmialColors.textSecondary)),
+        ]),
+        const Divider(height: 20),
+        _row('اليوم', '${p['hours_today'] ?? 0} ساعة · ${p['shifts_today'] ?? 0} وردية'),
+        _row('هذا الشهر', '${p['hours_month'] ?? 0} ساعة · ${p['shifts_month'] ?? 0} وردية'),
+        _row('مبيعات نقدية للشهر', '${p['cash_sales_month'] ?? '0'} ر.ي'),
+        _row('مجموع الفروق', '${p['variance_month'] ?? '0'} ر.ي',
+            color: (double.tryParse('${p['variance_month'] ?? 0}') ?? 0) == 0
+                ? null
+                : AmialColors.yellowDark),
+      ]),
+    );
+  }
 }

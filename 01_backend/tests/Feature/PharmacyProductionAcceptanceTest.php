@@ -58,6 +58,13 @@ class PharmacyProductionAcceptanceTest extends TestCase
             'subscription_expires_at' => now()->addYear(),
         ]);
 
+        // AMIAL-SHIFT-GATE-001 — **وشبّاكُ الصيدليّة صار يشترط ورديّة.**
+        //
+        // نقدُه يدخل درجَ الورديّة نفسَه (‏`computeCash` يعدّه)، فبابُه
+        // تحت الحارس. **ويُهيَّأ الشرطُ ولا يُطفأ الحدّ** — إطفاؤه يجعل
+        // هذا الملفَّ يفحص مساراً لا يسلكه صيدليٌّ حقيقيّ.
+        app(\App\Services\CashierShiftService::class)->open($this->owner, null, '0');
+
         EMoney::create([
             'user_id' => $this->owner->id, 'current_balance' => '0.0000',
             'held_balance' => '0.0000', 'pending_balance' => '0.0000',

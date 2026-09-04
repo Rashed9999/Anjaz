@@ -300,6 +300,10 @@ class ReceiptDocumentService
             // تشغيل.
             // ══════════════════════════════════════════════════════════
             'tendered_lines' => $source['tendered_lines'] ?? [],
+            // AMIAL-SHIFT-GATE-001 — **وهذه أيضاً تُنقَل صراحةً.** الدالّةُ
+            // تنتقي مفاتيحَ المصدر واحداً واحداً، وما لا يُذكر هنا يسقط
+            // صامتاً — وهو ما وقع حرفيّاً مع `tendered_lines` قبلها.
+            'shift_line' => $source['shift_line'] ?? null,
             'payment_method' => $source['payment_method'] ?? $base['channel_label'],
             'amount_words' => ArabicTafqit::yer($total),
             'note' => $source['note'] ?? $base['note'],
@@ -483,7 +487,44 @@ class ReceiptDocumentService
                 $sale->amount_received === null ? null : (string) $sale->amount_received,
                 (string) $sale->total_amount,
             ),
+            'shift_line' => $this->shiftLine($sale->shift_id),
         ];
+    }
+
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-SHIFT-GATE-001 — **اسمُ فاتح الورديّة أسفلَ الفاتورة.**
+     *
+     * **بنصّ الطلب:** «الفاتورة يجب أن تحمل اسمَ فاتح الورديّة أسفلها».
+     *
+     * **ويُقرأ من لقطة الورديّة لا من جدول المستخدمين** — فموظّفٌ يُعاد
+     * تسميتُه أو يُحذَف **لا يُعيد كتابةَ فواتيرِ الشهر الماضي**: الورقةُ
+     * في يد الزبون تقول اسماً، وإعادةُ الطباعة يجب أن تقوله نفسَه.
+     *
+     * **و`null` تعني «بيعةٌ قبل هذا الحارس»** (القاعدة السابعة) — فلا
+     * يُكتب «غير معروف» على فواتيرَ قديمةٍ لم تكن الورديّةُ مطلوبةً
+     * يومَها، ولا يُكتب اسمُ من لم يقبض.
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * @return array{label:string,value:string}|null
+     */
+    private function shiftLine(?int $shiftId): ?array
+    {
+        if (! $shiftId) {
+            return null;
+        }
+
+        $shift = \App\Models\CashierShift::find($shiftId);
+        if (! $shift) {
+            return null;
+        }
+
+        $name = trim((string) ($shift->opened_by_name ?? ''));
+        if ($name === '') {
+            return null;
+        }
+
+        return ['label' => 'الوردية', 'value' => $name];
     }
 
     /**

@@ -40,6 +40,13 @@ class SaleCurrencyReachesTheWalletGuardTest extends TestCase
             'single_receive_limit' => '5000000', 'daily_receive_limit' => '50000000',
         ]);
 
+        // AMIAL-SHIFT-GATE-001 — **وتُفتَح ورديّةٌ لأنّ البيعَ صار يشترطها.**
+        //
+        // «لا يُقبض نقدٌ بلا وردية تحمل اسمَ فاتحها». وهذا الملفُّ يفحص
+        // شيئاً آخر، **فيُهيَّأ الشرطُ ولا يُطفأ الحدّ**: إطفاؤه يجعل
+        // الاختبارَ يمرّ على مسارٍ لا يسلكه تاجرٌ حقيقيّ.
+        app(\App\Services\CashierShiftService::class)->open($u, null, '0');
+
         return $u;
     }
 

@@ -10,6 +10,7 @@ import 'package:amial_pay/features/merchant/screens/cashier_scan_screen.dart';
 import 'package:amial_pay/features/merchant/screens/offline_sales_screen.dart';
 import 'package:amial_pay/features/merchant/services/offline_sale_queue.dart';
 import 'package:amial_pay/helper/amial_money.dart';
+import 'package:amial_pay/features/merchant/widgets/shift_gate.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-POS-001 — «المبيعات» (التصميم 36):
@@ -241,6 +242,18 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
         Get.find<AccessController>().isPharmacy) {
       return const PharmacySaleScreen();
     }
+    // AMIAL-SHIFT-GATE-001 — **الشبّاكُ لا يُفتح بلا ورديّة.**
+    //
+    // ويُلَفّ هنا **داخل الشاشة نفسِها** لا في مواضع فتحِها الثمانية:
+    // موضعٌ واحدٌ يُنسى يترك باباً بلا حارس، **وهي القاعدة الرابعة
+    // بعينها** — ميزةٌ لها مداخلُ تُحرَس من مدخلٍ واحدٍ مشترك.
+    //
+    // والحدُّ الحقيقيُّ في الخادم (`amial.shift`)؛ هذا يمنع أن يملأ
+    // الكاشيرُ السلّةَ والزبونُ واقفٌ ثمّ يُردّ عند الضغط الأخير.
+    return ShiftGate(child: _till(context));
+  }
+
+  Widget _till(BuildContext context) {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(

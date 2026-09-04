@@ -89,6 +89,12 @@
     <div class="c muted">التحقق: {{ $document['verification_code'] }}</div>
     @if(!empty($qrDataUri))<div class="c"><img class="qr" src="{{ $qrDataUri }}" width="{{ $widthMm >= 80 ? 92 : 74 }}" alt="QR"></div>@endif
     <div class="hr"></div>
+    {{-- AMIAL-SHIFT-GATE-001 — اسمُ فاتح الوردية أسفل الفاتورة.
+         ولا يُطبَع سطرٌ فارغٌ لبيعةٍ لا وردية لها: فراغٌ باسم «الوردية»
+         يُقرأ «لم يقبضها أحد». (القاعدة السابعة.) --}}
+    @if(!empty($document['shift_line']))
+        <div class="c muted">{{ $document['shift_line']['label'] }}: {{ $document['shift_line']['value'] }}</div>
+    @endif
     <div class="c muted">
         @if($document['kind'] === 'merchant_invoice')
             {{ $document['seller']['footer_note'] }}

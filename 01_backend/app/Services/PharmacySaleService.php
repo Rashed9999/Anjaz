@@ -190,6 +190,12 @@ class PharmacySaleService
                 // جهاز POS اختياري للموظف، لكن منفذ البيع لا يجوز أن
                 // يضيع من سجل التدقيق حين يعمل بحساب موظف مستقل.
                 'created_by_user_id' => $createdByUserId,
+                // AMIAL-SHIFT-GATE-001 — **وشبّاكُ الصيدليّة درجُ الورديّة
+                // نفسُه** (‏`computeCash` يعدّه)، فبيعتُه تحمل ورديّتَها
+                // كما تحملها بيعةُ الكاشير — وإلّا ظهر في «المتوقَّع» نقدٌ
+                // لا يُعرف قابضُه.
+                'shift_id' => app(\App\Services\CashierShiftService::class)
+                    ->current($merchant, $posUserId)?->id,
                 'pharmacy_id' => $pharmacy->id,
                 'customer_id' => $customer?->id,
                 'prescription_number' => $data['prescription_number'] ?? null,

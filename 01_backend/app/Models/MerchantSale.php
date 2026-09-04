@@ -25,6 +25,8 @@ class MerchantSale extends Model
         'loyalty_points_redeemed', 'loyalty_discount',
         // AMIAL-CASH-TENDERED-001 — وغيابُه هنا يُسقطه صامتاً كما وقع مرّتين.
         'amount_received',
+        // AMIAL-SHIFT-GATE-001 — من كان على الشبّاك حين قُبضت هذه البيعة.
+        'shift_id',
         // AMIAL-MULTI-CURRENCY-003 — **غيابُها هنا لا يُخرج خطأً.**
         // `create()` يُسقط ما ليس في القائمة **صامتاً**، فتقع الأعمدةُ على
         // افتراضيّ القاعدة: كلُّ بيعةِ دولارٍ تُسجَّل «ريالاً» بسعر ١.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:amial_pay/features/merchant/widgets/shift_gate.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/pharmacy/controllers/pharmacy_controller.dart';
 import 'package:amial_pay/features/barcode/screens/continuous_scanner_screen.dart';
@@ -268,6 +269,13 @@ class _PharmacySaleScreenState extends State<PharmacySaleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // AMIAL-SHIFT-GATE-001 — **وشبّاكُ الصيدليّة درجُ الورديّة نفسُه**
+    // (‏`computeCash` يعدّ نقدَه)، فحارسُه واحدٌ مع الكاشير — وإلّا ظهر
+    // في «المتوقَّع» نقدٌ لم تأذن به ورديّة.
+    return ShiftGate(child: _till(context));
+  }
+
+  Widget _till(BuildContext context) {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(

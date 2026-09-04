@@ -266,6 +266,11 @@ $app = Application::configure(basePath: dirname(__DIR__))
             // المسروق. وهذه **مقعدُ ترخيصٍ يملكه التاجر** — تمنع أن يعمل
             // عشرةُ أجهزةٍ برمزِ مقعدٍ واحدٍ مدفوع.
             'amial.pos-device' => \App\Http\Middleware\EnsurePosDevice::class,
+
+            // AMIAL-SHIFT-GATE-001 — **لا شبّاكَ بلا ورديّة، ولا استثناءَ
+            // للمالك.** ويُوضَع على مسارات البيع وحدَها، ويعدّها حارسٌ
+            // فلا يُضاف بابُ بيعٍ جديدٌ يفلت منه.
+            'amial.shift' => \App\Http\Middleware\EnsureOpenShift::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
