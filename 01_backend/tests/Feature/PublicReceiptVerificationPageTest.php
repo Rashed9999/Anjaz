@@ -38,7 +38,10 @@ class PublicReceiptVerificationPageTest extends TestCase
 
         $this->get('/v/' . $receipt->verification_code)
             ->assertOk()
-            ->assertSee('السند صحيح')
+            // AMIAL-DOC-VERIFY-001 — النصُّ تغيّر عمداً: الصفحةُ صارت
+            // تفرّق بين «لا مستند بهذا الرمز» و«مستند ملغى»، وهو ما لم
+            // تكن تقدر عليه. والمحروسُ باقٍ: عامّةٌ · مقروءةٌ · بلا تسريب.
+            ->assertSee('مستند أصلي')
             ->assertSee($receipt->receipt_number)
             ->assertDontSee('Unauthorized');
     }
@@ -47,6 +50,6 @@ class PublicReceiptVerificationPageTest extends TestCase
     {
         $this->get('/v/9999999999999999')
             ->assertNotFound()
-            ->assertSee('لم نعثر على سند صالح');
+            ->assertSee('لا مستند بهذا الرمز');
     }
 }

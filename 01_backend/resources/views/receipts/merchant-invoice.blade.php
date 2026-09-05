@@ -185,7 +185,7 @@
 <table class="verify">
     <tr>
         <td style="width:96px">@if(!empty($qrDataUri))<img class="qr" src="{{ $qrDataUri }}" alt="QR">@endif</td>
-        <td><strong>التحقق من الفاتورة</strong><div class="verify-code ltr">{{ $document['verification_code'] }}</div><div class="k">يرتبط الرمز بمعاملة أميال باي ولا يكشف بيانات حساسة.</div></td>
+        <td><strong>التحقق من الفاتورة</strong><div class="verify-code ltr">{{ $document['verification_code'] }}</div><div class="k">يرتبط الرمز بمعاملة أميال باي ولا يكشف بيانات حساسة.</div><div class="k ltr">{{ rtrim(config('app.url', 'https://amialpay.com'), '/') }}/verify</div></td>
         <td style="text-align:left"><div class="k">رقم العملية</div><div class="v ltr">{{ $document['transaction_number'] }}</div></td>
     </tr>
 </table>

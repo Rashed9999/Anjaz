@@ -87,6 +87,8 @@
     <div class="hr"></div>
     <table><tr><td>مرجع العملية</td><td class="left muted">{{ $document['transaction_number'] }}</td></tr></table>
     <div class="c muted">التحقق: {{ $document['verification_code'] }}</div>
+    {{-- **ورمزٌ بلا موضعٍ يُكتب فيه لا يُتحقَّق منه.** --}}
+    <div class="c muted" dir="ltr">{{ rtrim(config('app.url', 'https://amialpay.com'), '/') }}/verify</div>
     @if(!empty($qrDataUri))<div class="c"><img class="qr" src="{{ $qrDataUri }}" width="{{ $widthMm >= 80 ? 92 : 74 }}" alt="QR"></div>@endif
     <div class="hr"></div>
     {{-- AMIAL-SHIFT-GATE-001 — اسمُ فاتح الوردية أسفل الفاتورة.

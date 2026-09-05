@@ -65,8 +65,21 @@ Route::get('/home', function () {
 
 // رابط التحقق الذي يشارك من سند العميل. مستقل عن API المحمي: لا يتطلب
 // تسجيل دخول ولا يعرض الأطراف أو أي بيانات شخصية.
-Route::get('/v/{code}', [ReceiptController::class, 'verifyPublicPage'])
-    ->where('code', '[A-Za-z0-9 \-]{16,32}')
+//
+// AMIAL-DOC-VERIFY-001 — **وصار له بابٌ يُدخَل منه.**
+//
+// كان `/v/{code}` وحدَه: من مسح QR وصل، **ومن يحمل ورقةً ويريد كتابة
+// رمزها لا بابَ له إطلاقاً**. فأُضيفت `/verify` — الصفحةُ الثابتة.
+//
+// **والمدى `8` لا `16`**: سندُ الوقود يطبع رمزاً من ثمانية محارف تحت
+// لافتة «رمز التحقّق» — وكان المسارُ يرفضه بصيغته قبل أن يُسأل عنه
+// أحد، فيقرأ صاحبُ السند الصحيحِ أنّ سندَه غيرُ صالح.
+Route::get('/verify', [\App\Http\Controllers\PublicVerificationController::class, 'page'])
+    ->middleware('throttle:30,1')
+    ->name('public.verify');
+
+Route::get('/v/{code}', [\App\Http\Controllers\PublicVerificationController::class, 'show'])
+    ->where('code', '[A-Za-z0-9 \-]{8,40}')
     ->middleware('throttle:20,1')
     ->name('receipt.verify.public-page');
 

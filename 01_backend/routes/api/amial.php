@@ -1644,7 +1644,11 @@ Route::prefix('partner')->middleware('amial.api-key')->name('amial.partner.')->g
 // وحدّ المعدّل: النقطة عامّة بلا مصادقة وكانت بلا أي حدّ، فتُجرَّب الأكواد
 // بالقوة الغاشمة بلا مانع. صار 20 محاولة/دقيقة لكل IP — يكفي المستخدم
 // الحقيقي (يمسح رمزاً أو يكتب كوداً مرّة) ويقتل التجريب الآلي.
-Route::get('/v/{code}', [ReceiptController::class, 'verifyPublic'])
+// AMIAL-DOC-VERIFY-001 — **مُتحقِّقٌ واحدٌ للصفحة وللـAPI.**
+// كان `ReceiptController::verifyPublic` يقرأ `receipts` وحدَها ويشترط
+// `pdf_generated`، فيُجيب عن الملغى «غير موجود» ويرفض رمزَ الوقود
+// القصير — أي جوابان مختلفان للسؤال نفسِه حسب البابِ الذي دخلتَ منه.
+Route::get('/v/{code}', [\App\Http\Controllers\PublicVerificationController::class, 'json'])
     // النمط يسمح بالمسافات والشَرطات لأن العميل يكتب الكود كما يراه
     // مجموعاً على الورقة؛ المتحكّم يُطبّع ثم يتحقّق من الشكل بدقّة.
     ->where('code', '[A-Za-z0-9 \-]{16,32}')
