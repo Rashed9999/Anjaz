@@ -111,6 +111,17 @@ class AmialLanguageChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // AMIAL-I18N-003 — **زرٌّ يفتح قائمةً بخيارٍ واحدٍ ليس زرّاً.**
+    //
+    // صفُّ اللغة في الملفّ الشخصيّ محجوبٌ سلفاً بـ`length > 1`، **ورقاقةُ
+    // شاشة الدخول لم تكن**. فتُضغَط، وتفتح ورقةً فيها «العربية» وحدَها،
+    // وتُغلَق بلا شيء — والقاعدةُ التاسعة: ضغطةٌ لا تُغيّر شيئاً تُقرأ
+    // عطلاً، ويبحث صاحبُها عمّا لا وجودَ له.
+    //
+    // والشرطُ من المصدر نفسِه، فتعود الرقاقةُ تلقائيّاً يومَ تعود لغةٌ
+    // ثانية — ولا يُنسى موضعٌ.
+    if (AppConstants.languages.length < 2) return const SizedBox.shrink();
+
     return GetBuilder<LocalizationController>(builder: (c) {
       final name = AppConstants.languages
           .firstWhere(

@@ -87,11 +87,11 @@ class ReceiptsController extends GetxController implements GetxService {
         currentPage.value++;
         lastError.value = '';
       } else {
-        lastError.value = _msg(r) ?? 'Failed to load receipts';
+        lastError.value = _msg(r) ?? 'تعذّر تحميل الإيصالات';
       }
     } catch (e) {
       if (kDebugMode) debugPrint('loadReceipts error: $e');
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
     } finally {
       isLoading.value = false;
       isLoadingMore.value = false;
@@ -107,10 +107,10 @@ class ReceiptsController extends GetxController implements GetxService {
         selectedReceipt.value = AmialReceipt.fromJson(meta);
         lastError.value = '';
       } else {
-        lastError.value = _msg(r) ?? 'Failed to load';
+        lastError.value = _msg(r) ?? 'تعذّر التحميل';
       }
     } catch (e) {
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
     } finally {
       isLoading.value = false;
     }

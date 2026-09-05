@@ -34,11 +34,11 @@ class AmialController extends GetxController implements GetxService {
         sessionPolicy.value = AmialSessionPolicy.fromJson(meta);
         lastError.value = '';
       } else {
-        lastError.value = _extractMessage(r) ?? 'Failed to load session policy';
+        lastError.value = _extractMessage(r) ?? 'تعذّر تحميل سياسة الجلسة';
       }
     } catch (e) {
       if (kDebugMode) debugPrint('refreshSessionPolicy error: $e');
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
     } finally {
       isLoading.value = false;
     }
@@ -60,10 +60,10 @@ class AmialController extends GetxController implements GetxService {
         );
         return true;
       }
-      lastError.value = _extractMessage(r) ?? 'Failed';
+      lastError.value = _extractMessage(r) ?? 'تعذّر إتمام العملية';
       return false;
     } catch (e) {
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
       return false;
     } finally {
       isLoading.value = false;
@@ -80,10 +80,10 @@ class AmialController extends GetxController implements GetxService {
         );
         return currentTerm.value;
       }
-      lastError.value = _extractMessage(r) ?? 'No terms';
+      lastError.value = _extractMessage(r) ?? 'لا شروطَ منشورة';
       return null;
     } catch (e) {
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
       return null;
     } finally {
       isLoading.value = false;
@@ -94,7 +94,7 @@ class AmialController extends GetxController implements GetxService {
   Future<bool> acceptCurrentTerm({String? deviceId}) async {
     final term = currentTerm.value;
     if (term == null) {
-      lastError.value = 'No term loaded';
+      lastError.value = 'لم تُحمَّل الشروط بعد';
       return false;
     }
     try {
@@ -114,10 +114,10 @@ class AmialController extends GetxController implements GetxService {
         lastError.value = '';
         return true;
       }
-      lastError.value = _extractMessage(r) ?? 'Failed';
+      lastError.value = _extractMessage(r) ?? 'تعذّر إتمام العملية';
       return false;
     } catch (e) {
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
       return false;
     } finally {
       isLoading.value = false;
