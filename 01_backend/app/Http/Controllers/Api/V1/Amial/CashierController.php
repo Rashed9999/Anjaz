@@ -641,6 +641,37 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         return $this->ok($this->cashier->profitReport($merchant, $days));
     }
 
+    /**
+     * AMIAL-SALES-BREAKDOWN-001 — **ماذا بِعتُ، وبكم، وبأيّ ربح.**
+     *
+     * وكان في المنتج `top_products`: خمسةُ أسماءٍ بكمّيّاتها ليومٍ واحد.
+     * وهذا يُضيف الإيرادَ والتكلفةَ والهامشَ **والتصنيف**، على مدىً
+     * يختاره التاجر، **ومطروحاً منه المرتجَع**.
+     *
+     * @see \App\Services\SalesBreakdownService
+     */
+    public function salesBreakdown(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $v = \Illuminate\Support\Facades\Validator::make($request->query(), [
+            'from' => 'sometimes|nullable|date',
+            'to' => 'sometimes|nullable|date',
+        ]);
+
+        if ($v->fails()) {
+            return $this->validationError($v);
+        }
+
+        return $this->ok(app(\App\Services\SalesBreakdownService::class)->report(
+            $merchant,
+            $request->query('from'),
+            $request->query('to'),
+        ));
+    }
+
     // ---- helpers ----
 
     /** يرجّع [merchant(User), posUserId(?int)] أو JsonResponse عند الخطأ. */

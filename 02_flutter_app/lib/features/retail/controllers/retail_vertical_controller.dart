@@ -316,4 +316,30 @@ class RetailVerticalController extends GetxController
       ((ops.value?['in_transit'] ?? []) as List)
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
+
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-NEGATIVE-STOCK-001 — **الخادمُ يُرسلها منذ بُنيت، ولا قارئَ لها.**
+  //
+  // `RetailVerticalController::operationsCenter` يضع `negative_stock` في
+  // الردّ، ولم يكن في التطبيق سطرٌ واحدٌ يقرأ الاسم. **فالميزةُ تنتهي عند
+  // JSON** — وهو نمطُ العطل الأكثر تكراراً في المشروع: مبنيٌّ ولا يُوصَل
+  // إليه. (القاعدة الثانية عشرة.)
+  // ══════════════════════════════════════════════════════════════════
+  List<Map<String, dynamic>> get negativeStock =>
+      ((ops.value?['negative_stock'] ?? []) as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+  /// **ولا يُقرأ القفلُ صفراً.**
+  ///
+  /// حين تُقفل «تنبيهات النفاد» بالباقة يُرسل الخادمُ `low_stock` **معدومةً**
+  /// و`low_stock_locked` تصف القفل — والتعليقُ في المتحكّم يقول الغرضَ
+  /// صراحةً: «فالشاشةُ تعرض ارفع الباقة مكانَ قائمةٍ فارغةٍ تكذب».
+  /// ولم يكن في التطبيق قارئٌ لها، **فقُرئ القفلُ «فحصنا فلم نجد»** —
+  /// والتاجرُ يظنّ مخزونَه سليماً وهو لم يُفحص. (القاعدة السابعة.)
+  Map<String, dynamic>? get lowStockLocked {
+    final v = ops.value?['low_stock_locked'];
+
+    return v is Map ? Map<String, dynamic>.from(v) : null;
+  }
 }

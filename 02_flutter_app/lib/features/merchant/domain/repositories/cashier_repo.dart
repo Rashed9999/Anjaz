@@ -77,6 +77,18 @@ class CashierRepo extends GetxService {
   Future<Response> profitReport({int days = 7}) =>
       apiClient.getData('$_base/profit-report?days=$days');
 
+  /// AMIAL-SALES-BREAKDOWN-001 — المبيعاتُ بالصنف وبالتصنيف على مدىً
+  /// يختاره التاجر، **ومطروحاً منه المرتجَع**.
+  Future<Response> salesBreakdown({String? from, String? to}) {
+    final q = <String>[
+      if (from != null) 'from=$from',
+      if (to != null) 'to=$to',
+    ].join('&');
+
+    return apiClient.getData(
+        '$_base/sales-breakdown${q.isEmpty ? '' : '?$q'}');
+  }
+
   // ── AMIAL-HELD-SALE-001 — التذاكر المفتوحة (تعليق الفاتورة) ─────────
 
   /// التذاكرُ المعلَّقةُ للمنشأة — **لا للجهاز**: الزبونُ قد ينتقل إلى

@@ -840,6 +840,15 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
             Route::get('/profit-report', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'profitReport'])
                 ->middleware('capability:' . \App\Support\Access\AccessConstants::F_PROFIT_REPORTS)
                 ->name('profit-report');
+            // AMIAL-SALES-BREAKDOWN-001 — المبيعات بالصنف وبالتصنيف (مدىً + مرتجعٌ مطروح).
+            //
+            // **وخلف حارس الربحيّة نفسِه** لا حارسٍ جديد: التقريرُ يُخرج
+            // التكلفةَ والهامشَ لكلّ صنف — وهو تفصيلُ ما يُخرجه
+            // `profit-report` مجمَلاً. فحارسان مختلفان على الرقم نفسِه
+            // يفتحان بابين لِما أُغلق واحدُهما.
+            Route::get('/sales-breakdown', [\App\Http\Controllers\Api\V1\Amial\CashierController::class, 'salesBreakdown'])
+                ->middleware('capability:' . \App\Support\Access\AccessConstants::F_PROFIT_REPORTS)
+                ->name('sales-breakdown');
         });
         // AMIAL-SUPPLIERS-001 — الموردون وأوامر الشراء (تصاميم 53/57/67/68)
         // AMIAL-ENTITLEMENTS-002 — حارسُ الباقة، ويبدأ في وضع الظلّ

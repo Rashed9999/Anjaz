@@ -104,6 +104,41 @@ class CashierController extends GetxController implements GetxService {
     }
   }
 
+  // ── AMIAL-SALES-BREAKDOWN-001 — المبيعاتُ بالصنف وبالتصنيف ──────────
+
+  final Rx<Map<String, dynamic>?> salesBreakdown = Rx<Map<String, dynamic>?>(null);
+  final RxBool isLoadingBreakdown = false.obs;
+
+  Future<void> loadSalesBreakdown({String? from, String? to}) async {
+    try {
+      isLoadingBreakdown.value = true;
+      final r = await repo.salesBreakdown(from: from, to: to);
+      if (_ok(r)) {
+        salesBreakdown.value =
+            Map<String, dynamic>.from((r.body['meta'] ?? {}) as Map);
+      } else {
+        // **والرفضُ يصل بنصّه** — «تعذّر» وحدَها تُرسل التاجرَ إلى الدعم
+        // على قفلِ باقةٍ يفتحه هو بضغطةٍ لو قُرئ.
+        lastError.value = _msg(r) ?? 'تعذّر تحميل تقرير الأصناف';
+        salesBreakdown.value = null;
+      }
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    } finally {
+      isLoadingBreakdown.value = false;
+    }
+  }
+
+  List<Map<String, dynamic>> get breakdownItems =>
+      ((salesBreakdown.value?['items'] ?? []) as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+  List<Map<String, dynamic>> get breakdownCategories =>
+      ((salesBreakdown.value?['categories'] ?? []) as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
   /// AMIAL-INVENTORY-001: تعديل منتج (سعر/كمية/تفعيل...).
   Future<bool> updateProduct(int id, Map<String, dynamic> data) async {
     try {
