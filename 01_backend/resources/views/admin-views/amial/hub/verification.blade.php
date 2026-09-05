@@ -81,9 +81,52 @@
             `سُجّل: ${esc(u.registered_at ?? '')}`,
         ].filter(Boolean).map(l => `<div class="small text-muted">${l}</div>`).join('');
 
-        const docs = (u.documents || []).map(d =>
-            `<a href="${esc(d)}" target="_blank"><img src="${esc(d)}" style="height:64px;border-radius:6px;border:1px solid #ddd"></a>`
-        ).join(' ') || '<span class="text-muted small">لا وثائق مرفوعة</span>';
+        // ══════════════════════════════════════════════════════════
+        // AMIAL-KYC-EVIDENCE-001 — **الدليلُ المعروضُ هو الدليلُ المحكومُ
+        // به.**
+        //
+        // كان يُعرَض `u.documents` — صورُ العمود القديم — **والقرارُ
+        // يُحسب من `kyc_documents`**. فيرى المراجعُ صوراً بائدةً فيعتمد،
+        // أو يقرأ «لا وثائق مرفوعة» ووثائقُ العميل مرفوعةٌ في السجلّ
+        // الحديث لم تُعرَض له إطلاقاً.
+        //
+        // **والقديمُ لا يُطوى بل يُوسَم**: طيُّه يُخفي ما قد ينفع، وخلطُه
+        // يجعله يُقرأ وثيقةً معتمَدة. (القاعدة السابعة.)
+        // ══════════════════════════════════════════════════════════
+        const ev = u.evidence || {};
+
+        const docs = (ev.documents || []).map(d => {
+            const cls = d.status === 'approved'
+                ? (d.counts ? 'bg-success' : 'bg-warning text-dark')
+                : (d.status === 'rejected' ? 'bg-danger' : 'bg-secondary');
+            const why = d.rejection_reason ? ` — ${esc(d.rejection_reason)}` : '';
+            return `<div class="small"><span class="badge ${cls}">${esc(d.status_label)}</span>
+                    ${esc(d.type_label)}<span class="text-muted">${why}</span></div>`;
+        }).join('') || '<div class="text-muted small">لا وثائق في سجلّ المستندات</div>';
+
+        // **والناقصُ يُسمّى بعينه** — «الملفّ ناقص» تُرسل المراجعَ يبحث.
+        const missing = (ev.missing || []).length
+            ? `<div class="small text-danger mt-1">ينقص: ${esc((ev.missing || []).join('، '))}</div>`
+            : '';
+
+        const legacy = (ev.legacy_images || []).length
+            ? `<div class="mt-2">
+                 <div class="small text-muted">صورٌ قديمةٌ من حقل الهويّة — <b>لا تُحتسَب في الاكتمال</b>:</div>
+                 <div class="d-flex gap-2 flex-wrap mt-1">` +
+               (ev.legacy_images || []).map(d =>
+                 `<a href="${esc(d)}" target="_blank"><img src="${esc(d)}" style="height:56px;border-radius:6px;border:1px dashed #bbb;opacity:.75"></a>`
+               ).join('') + `</div></div>`
+            : '';
+
+        // **وما يمنع الاعتمادَ يُقال قبل الضغط لا بعد الرفض** — وزرٌّ
+        // يُضغط فيُردّ يُعلّم المراجعَ أن يجرّب ويرى.
+        const blockers = (ev.blockers || []);
+        const blocked = blockers.length > 0;
+        const blockNote = blocked
+            ? `<div class="alert alert-warning py-1 px-2 small mt-2 mb-0">
+                 <b>لا يتمّ الاعتماد الآن:</b><ul class="mb-0 ps-3">` +
+               blockers.map(b => `<li>${esc(b)}</li>`).join('') + `</ul></div>`
+            : '';
 
         // **والمحافظةُ تُقال قبل الضغط لا بعد الرفض.**
         const govBlock = u.governorate
@@ -119,9 +162,13 @@
                 <div class="small text-muted mb-1" dir="ltr">${esc(u.phone)}</div>
                 ${info}
                 ${govBlock}
-                <div class="d-flex gap-2 flex-wrap my-2">${docs}</div>
+                <div class="my-2">${docs}${missing}</div>
+                ${legacy}
+                ${blockNote}
                 <div class="mt-auto d-flex gap-2">
-                    ${u.kyc !== 1 ? `<button class="btn btn-sm btn-success flex-fill" data-act="approve" data-id="${u.id}">اعتماد</button>` : ''}
+                    ${u.kyc !== 1 ? `<button class="btn btn-sm btn-success flex-fill" data-act="approve" data-id="${u.id}"
+                        ${blocked && u.governorate ? 'disabled' : ''}
+                        title="${blocked ? esc(blockers.join(' · ')) : 'اعتماد الحساب'}">اعتماد</button>` : ''}
                     ${u.kyc !== 2 ? `<button class="btn btn-sm btn-outline-danger flex-fill" data-act="reject" data-id="${u.id}">رفض</button>` : ''}
                     <button class="btn btn-sm ${u.is_active ? 'btn-outline-dark' : 'btn-dark'}" data-act="block" data-id="${u.id}">
                         ${u.is_active ? 'حظر' : 'فكّ الحظر'}</button>

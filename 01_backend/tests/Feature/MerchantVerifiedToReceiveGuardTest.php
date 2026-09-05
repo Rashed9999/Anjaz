@@ -59,6 +59,33 @@ class MerchantVerifiedToReceiveGuardTest extends TestCase
         return $m;
     }
 
+    /**
+     * AMIAL-KYC-EVIDENCE-001 — **ملفُّ هويّةٍ مكتملٌ ومعتمَد.**
+     *
+     * كان هذا الحارسُ يفترض أنّ اعتمادَ **النشاط التجاريّ** يرفع قفلَ
+     * المال عن تاجرٍ **بلا وثيقةِ هويّةٍ واحدة** — وهو ثغرةُ امتثالٍ لا
+     * ميزة: سجلُّ المتجر لا يثبت هويّةَ صاحبه. فصار الملفُّ يُستوفى هنا،
+     * ويبقى المحروسُ كما هو: **الاعتمادُ يرفع القفلَ فعلاً لا اسماً**.
+     */
+    private function completeIdentity(User $u): void
+    {
+        $u->residence_governorate = 'عدن';
+        $u->save();
+
+        foreach ([
+            \App\Models\KycDocument::TYPE_ID_FRONT,
+            \App\Models\KycDocument::TYPE_ID_BACK,
+            \App\Models\KycDocument::TYPE_SELFIE,
+        ] as $type) {
+            \App\Models\KycDocument::create([
+                'user_id' => $u->id, 'doc_type' => $type,
+                'status' => \App\Models\KycDocument::STATUS_APPROVED,
+                'encrypted_path' => 'kyc/'.\Illuminate\Support\Str::random(8).'.enc',
+                'size_bytes' => 1024, 'ocr_status' => 'not_run',
+            ]);
+        }
+    }
+
     private function customer(): User
     {
         return User::factory()->create([
@@ -174,6 +201,10 @@ class MerchantVerifiedToReceiveGuardTest extends TestCase
         $this->assertSame(0, (int) $merchant->fresh()->is_kyc_verified,
             'قبل الاعتماد: التاجرُ غيرُ موثّق');
 
+        // **وملفُّ هويّته مكتملٌ ومعتمَد** — فاعتمادُ النشاط يرفع القفلَ
+        // عبر البابِ الواحد، لا بكتابةِ الحقل مباشرةً.
+        $this->completeIdentity($merchant);
+
         app(MerchantVerificationService::class)->approve($req, $admin->id);
 
         // ① الاعتمادُ رفع القفلَ في الحقلين معاً.
@@ -189,5 +220,39 @@ class MerchantVerifiedToReceiveGuardTest extends TestCase
         $txId = $svc->merchant_payment_transaction($customer->id, $merchant->id, '1000', 'qr');
 
         $this->assertNotNull($txId, 'اعتُمد التاجرُ ومع ذلك رُفض قبضُه — الاعتمادُ اسمٌ بلا أثر');
+    }
+
+    /**
+     * AMIAL-KYC-EVIDENCE-001 — **ووثيقةُ النشاط لا توثّق الشخص.**
+     *
+     * وهو الوجهُ المقابل للحالة أعلاه، **وكان مفقوداً**: كانت
+     * `MerchantVerificationService::approve` تكتب `is_kyc_verified = 1`
+     * مباشرةً. فسجلٌّ تجاريٌّ باسم متجرٍ يفتح **سقفَ مالٍ على شخصٍ لم
+     * تُقرأ له ورقة** — والاثنان قراران لا قرار.
+     *
+     * @test
+     */
+    public function business_verification_alone_never_verifies_the_person(): void
+    {
+        $admin = User::factory()->create(['type' => 1]);
+        $merchant = $this->merchant('pending_review');   // بلا وثيقةِ هويّةٍ واحدة
+
+        $req = \App\Models\MerchantVerificationRequest::create([
+            'request_ulid' => (string) \Illuminate\Support\Str::ulid(),
+            'merchant_user_id' => $merchant->id,
+            'business_name' => 'متجر بلا هويّة',
+            'status' => 'pending_review',
+        ]);
+
+        app(MerchantVerificationService::class)->approve($req, $admin->id);
+
+        $this->assertSame(0, (int) $merchant->fresh()->is_kyc_verified,
+            'وثيقةُ النشاط وثّقت الشخص — فسقفُ المال فُتح على هويّةٍ لم '
+            .'تُراجَع، وهي ثغرةُ امتثالٍ لا ميزة');
+
+        // **ولا يُسقِط ذلك توثيقَ المتجر** — هما قراران.
+        $this->assertSame('verified',
+            MerchantProfile::where('user_id', $merchant->id)->value('verification_status'),
+            'نقصُ الهويّة ألغى اعتمادَ المتجر — وهو قرارٌ مستقلٌّ عنه');
     }
 }

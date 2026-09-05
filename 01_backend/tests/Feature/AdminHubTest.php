@@ -373,7 +373,12 @@ class AdminHubTest extends TestCase
             ->assertJsonPath('id', $customer->id)
             ->assertJsonPath('wallet.current', '7500.0000')
             ->assertJsonPath('risk.label', 'سليم') // لا ملف مخاطر = منخفض = سليم
-            ->assertJsonStructure(['name', 'phone', 'documents', 'risk' => ['level', 'label', 'score', 'is_dangerous'], 'transactions']);
+            ->assertJsonStructure(['name', 'phone',
+                // AMIAL-KYC-EVIDENCE-001 — كان `documents` (عمودُ الهويّة
+                // القديم)، وصار `evidence`: السجلُّ الحديث ومعه ما ينقص وما
+                // يمنع الاعتماد — وهو الدليلُ الذي يُحكَم به فعلاً.
+                'evidence' => ['complete', 'missing', 'documents', 'legacy_images', 'blockers'],
+                'risk' => ['level', 'label', 'score', 'is_dangerous'], 'transactions']);
     }
 
     /** @test AMIAL — حالة المخاطر تعكس ملف AML (خطر جداً = critical). */

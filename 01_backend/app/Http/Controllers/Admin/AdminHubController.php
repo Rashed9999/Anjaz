@@ -273,8 +273,11 @@ class AdminHubController extends Controller
      * بيانات شخصية + وثائق + محفظة + حالة المخاطر (AML) + سجل عمليات،
      * وإضافات حسب الدور: التاجر (موظفون/مبيعات/اشتراك) والوكيل (تسويات/فروع).
      */
-    public function accountDetailJson(int $id): JsonResponse
-    {
+    public function accountDetailJson(
+        int $id,
+        Request $request,
+        \App\Services\Admin\KycEvidenceService $evidence,
+    ): JsonResponse {
         $user = User::find($id);
         if (!$user) return response()->json(['message' => 'الحساب غير موجود'], 404);
 
@@ -317,7 +320,10 @@ class AdminHubController extends Controller
             'agent_number' => $user->agent_number ?? null,
             'is_active' => (int) $user->is_active === 1,
             'kyc' => (int) ($user->is_kyc_verified ?? 0),
-            'documents' => $user->identification_image_fullpath ?? [],
+            // AMIAL-KYC-EVIDENCE-001 — الدليلُ من السجلّ الحديث، والقديمُ
+            // معروضٌ داخلَه موسوماً «لا يُحتسَب». (وهي المسألةُ نفسُها في
+            // `verificationJson`: كان يُعرَض عمودٌ ويُحكَم بجدول.)
+            'evidence' => $evidence->for($user, 2, $request->user()),
             'kin' => trim(implode(' — ', array_filter([
                 $user->kin_name ?? null, $user->kin_phone ?? null, $user->kin_relation ?? null,
             ]))) ?: null,
@@ -1139,8 +1145,11 @@ class AdminHubController extends Controller
      * كل الحسابات قيد التحقق (التسجيل الذاتي يصل هنا) عبر الأدوار الثلاثة،
      * مع بياناتها ووثائقها ومتجر التاجر — للاعتماد/الرفض/الحظر.
      */
-    public function verificationJson(Request $request): JsonResponse
-    {
+    public function verificationJson(
+        Request $request,
+        \App\Services\Admin\KycEvidenceService $evidence,
+    ): JsonResponse {
+        $reviewer = $request->user();
         $filter = $request->query('filter', 'pending');
         $q = User::whereIn('type', [CUSTOMER_TYPE, AGENT_TYPE, MERCHANT_TYPE]);
         if ($filter === 'pending') {
@@ -1156,7 +1165,7 @@ class AdminHubController extends Controller
             ->get()->keyBy('user_id');
 
         return response()->json([
-            'data' => $users->map(function (User $u) use ($merchantRecords, $profiles) {
+            'data' => $users->map(function (User $u) use ($merchantRecords, $profiles, $evidence, $reviewer) {
                 $roleLabel = match ((int) $u->type) {
                     AGENT_TYPE => 'وكيل', MERCHANT_TYPE => 'تاجر', default => 'عميل',
                 };
@@ -1188,7 +1197,20 @@ class AdminHubController extends Controller
                             (string) ($u->residence_governorate ?: $u->origin_governorate))),
                     'id_type' => $u->identification_type,
                     'id_number' => $u->identification_number,
-                    'documents' => $u->identification_image_fullpath ?? [],
+                    // ══════════════════════════════════════════════════
+                    // AMIAL-KYC-EVIDENCE-001 — **الدليلُ المعروضُ هو
+                    // الدليلُ المحكومُ به.**
+                    //
+                    // كان هنا `identification_image_fullpath` — العمودُ
+                    // القديم — **والقرارُ يُحسب من `kyc_documents`**.
+                    // فالمراجعُ يرى شيئاً ويقرّر على شيءٍ آخر: يعتمد على
+                    // صورةٍ بائدة، أو يقرأ «لا وثائق» ووثائقُ العميل
+                    // مرفوعةٌ في السجلّ الحديث لم تُعرَض له.
+                    //
+                    // **وللأنواع الثلاثة سواء** — عميلاً ووكيلاً وتاجراً:
+                    // الوثيقةُ الشخصيّةُ واحدةٌ لكلّ من يملك محفظة.
+                    // ══════════════════════════════════════════════════
+                    'evidence' => $evidence->for($u, 2, $reviewer),
                     'address' => $u->address ?? null,
                     'kin' => trim(implode(' — ', array_filter([
                         $u->kin_name ?? null, $u->kin_phone ?? null, $u->kin_relation ?? null,
