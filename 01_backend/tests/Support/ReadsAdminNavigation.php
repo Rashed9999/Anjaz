@@ -65,6 +65,24 @@ trait ReadsAdminNavigation
 
         $this->assertNotEmpty($m, 'تعذّر العثور على بطاقات مساحة العمل');
 
+        // **وصفُّ «الأكثر استخداماً» سطحٌ مستقلٌّ يُقتطَع** — بابٌ سريعٌ
+        // إلى وجهةٍ لها بيتُها في التبويبات، كما الشريطُ الجانبيّ تماماً.
+        // ويُفحَص وحدَه في `frequentLinks()`، فلا يسقط من الحراسة.
+        $slice = $m[0];
+        $cut = strpos($slice, 'id="ws-frequent"');
+
+        return $this->hrefsIn($cut === false ? $slice : substr($slice, 0, $cut));
+    }
+
+    /** روابطُ «الأكثر استخداماً» وحدَها — سطحٌ ثالثٌ يُفحص كغيره. */
+    protected function frequentLinks(User $admin): array
+    {
+        $html = $this->workspaceHtml($admin);
+
+        if (! preg_match('~<div class="row g-2" id="ws-frequent">.*?</main>~s', $html, $m)) {
+            return [];
+        }
+
         return $this->hrefsIn($m[0]);
     }
 

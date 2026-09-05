@@ -56,10 +56,19 @@ class AdminSidebarIntegrityTest extends TestCase
         // ══════════════════════════════════════════════════════════════
         $admin = $this->admin();
 
-        foreach ([
+        $surfaces = [
             'الشريط الجانبي' => $this->sidebarLinks($admin),
             'مساحة العمل' => $this->workspaceLinks($admin),
-        ] as $surface => $links) {
+            'الأكثر استخداماً' => $this->frequentLinks($admin),
+        ];
+
+        // **ومُطابِقٌ عمي يخرج أخضرَ على صفر.** سطحٌ يُقرأ فارغاً يجتاز
+        // الفحصَ بلا أن يفحص شيئاً — وهو الصمتُ بثوب نجاح.
+        foreach ($surfaces as $surface => $links) {
+            $this->assertNotEmpty($links, "سطحُ «{$surface}» قُرئ فارغاً — فلم يُفحَص");
+        }
+
+        foreach ($surfaces as $surface => $links) {
             $counts = array_count_values($links);
             $dupes = array_keys(array_filter($counts, static fn (int $n): bool => $n > 1));
 
