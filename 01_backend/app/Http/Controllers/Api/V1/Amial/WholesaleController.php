@@ -637,7 +637,35 @@ class WholesaleController extends Controller
 
         $ctx = $this->resolveMerchant($request);
         if ($ctx instanceof JsonResponse) return $ctx;
-        [$merchant] = $ctx;
+        [$merchant, $posUserId] = $ctx + [1 => null];
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-SHIFT-GATE-002 — **فاتورةُ الجملة النقديّة نقدٌ في الدرج.**
+        //
+        // أرسل صاحبُ المشروع: «حساب تاجر جملة أنشأ فاتورةً دون أن يطلب
+        // فتحَ ورديّة، إذن النظامُ غائبٌ عنه». وقِيس فكان محقّاً:
+        // `wholesale/invoices` بلا حارس، **و`payment_type` يقبل `cash`**
+        // — أي نقدٌ يُقبَض في اللحظة.
+        //
+        // **والوسيطُ لا يُركَّب على المسار** لأنّه لا يقرأ جسمَ الطلب:
+        // `credit` دينٌ لا يمسّ الدرج، فطلبُ ورديّةٍ له حاجزٌ يشلّ عملاً
+        // سليماً — وهو أسوأ من ثغرة. فالحكمُ على الشرط، **من المصدر
+        // نفسِه** (`EnsureOpenShift::refusalFor`) لا برسالةٍ ثانية:
+        // رمزان مختلفان يجعلان الشاشةَ تفتح نافذةَ الورديّة في بابٍ
+        // وتعرض عطلاً في الآخر.
+        //
+        // (والتحصيلُ `collect` محروسٌ سلفاً بالوسيط — وهو البابُ الثاني
+        // لنقد الجملة. فصار البابان تحت حكمٍ واحد.)
+        // ══════════════════════════════════════════════════════════════
+        if ($request->input('payment_type') === 'cash') {
+            $refusal = app(\App\Http\Middleware\EnsureOpenShift::class)
+                ->refusalFor($merchant, $posUserId);
+
+            if ($refusal !== null) {
+                return $refusal;
+            }
+        }
+
         $biz = $this->svc->getOrCreateBusiness($merchant);
 
         // P1-BRANCHES — حلّ الفرع النشط تلقائياً

@@ -70,16 +70,37 @@ class EnsureOpenShift
 
         [$merchant, $posUserId] = $ctx;
 
+        return $this->refusalFor($merchant, $posUserId) ?? $next($request);
+    }
+
+    /**
+     * **الرفضُ نفسُه، لمن لا يستطيع أن يكون وسيطاً** —
+     * AMIAL-SHIFT-GATE-002.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * فاتورةُ الجملة تُنشَأ بـ`payment_type` في **جسم الطلب**: `cash`
+     * نقدٌ يُقبَض في اللحظة، و`credit` دينٌ لا يمسّ الدرج. **والوسيطُ لا
+     * يقرأ الجسم** — فتركيبُه على المسار يطلب ورديّةً لبيعٍ آجلٍ لا
+     * ورديّةَ له، وتركُه يترك النقدَ بلا حارس.
+     *
+     * فيُستدعى الحكمُ من داخل المتحكّم على الشرط، **ولا يُعاد كتابتُه
+     * هناك**: رسالةٌ ثانيةٌ برمزٍ ثانٍ تجعل الشاشةَ تفتح نافذةً في بابٍ
+     * ولا تفتحها في الآخر، **وهو العطلُ نفسُه بثوبٍ جديد**.
+     *
+     * @return JsonResponse|null  الرفضُ، أو `null` إن كان الطريقُ مفتوحاً.
+     */
+    public function refusalFor(User $merchant, ?int $posUserId): ?JsonResponse
+    {
         // ④ الحدُّ يُطفأ من اللوحة بقرارٍ مكتوب، لا بتعليق سطر.
         $required = (bool) (MerchantProfile::where('user_id', $merchant->id)
             ->value('require_shift_to_sell') ?? true);
 
         if (! $required) {
-            return $next($request);
+            return null;
         }
 
         if ($this->shifts->current($merchant, $posUserId) !== null) {
-            return $next($request);
+            return null;
         }
 
         return new JsonResponse([

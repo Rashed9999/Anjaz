@@ -1,3 +1,4 @@
+import 'package:amial_pay/features/merchant/widgets/shift_status_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
@@ -24,7 +25,6 @@ import 'package:amial_pay/features/merchant/screens/merchant_promotions_screen.d
 import 'package:amial_pay/features/merchant/screens/merchant_installments_screen.dart';
 import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_gift_cards_screen.dart';
-import 'package:amial_pay/features/merchant/screens/cashier_shift_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_expenses_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart';
@@ -73,6 +73,18 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
             color: AmialColors.primary,
             onTap: () => Get.to(() => const CashierPosScreen()),
           ),
+
+          // AMIAL-SHIFT-DOOR-001 — **البابُ تحت الكاشير مباشرةً.**
+          //
+          // الفعلُ الذي يسبق البيعَ هو **فتحُ الورديّة**، وكانت بلاطتُه
+          // اسمُها «إقفال الوردية» ومكانُها بين العروضِ والولاءِ وبطاقاتِ
+          // الهدايا. فمن أراد أن يبدأ لم يبحث عن «إقفال»، والخادمُ يردّ
+          // ٤٠٩ عند أوّل بيعة. **واسمٌ يصف نصفَ الفعل يُخفي نصفَه.**
+          //
+          // **و«البيعُ السريع» يبيع من الكاشير نفسِه** — فهو تحت الحدّ
+          // نفسِه، وبابُه هنا كذلك.
+          const ShiftStatusTile(),
+
           const SizedBox(height: 14),
           AccessGate(feature: 'debts', child: _BigActionButton(
             icon: Icons.receipt_long,
@@ -147,6 +159,18 @@ class MerchantRetailHomeScreen extends StatelessWidget {
             color: AmialColors.primary,
             onTap: () => Get.to(() => const CashierPosScreen()),
           ),
+
+          // AMIAL-SHIFT-DOOR-001 — **البابُ تحت الكاشير مباشرةً.**
+          //
+          // الفعلُ الذي يسبق البيعَ هو **فتحُ الورديّة**، وكانت بلاطتُه
+          // اسمُها «إقفال الوردية» ومكانُها بين العروضِ والولاءِ وبطاقاتِ
+          // الهدايا. فمن أراد أن يبدأ لم يبحث عن «إقفال»، والخادمُ يردّ
+          // ٤٠٩ عند أوّل بيعة. **واسمٌ يصف نصفَ الفعل يُخفي نصفَه.**
+          //
+          // **و«البيعُ السريع» يبيع من الكاشير نفسِه** — فهو تحت الحدّ
+          // نفسِه، وبابُه هنا كذلك.
+          const ShiftStatusTile(),
+
           const SizedBox(height: 14),
 
           // ══════════════════════════════════════════════════════════
@@ -264,11 +288,6 @@ class MerchantRetailHomeScreen extends StatelessWidget {
                 icon: Icons.redeem, label: 'بطاقات الهدايا',
                 color: const Color(0xFF7B1FA2),
                 onTap: () => Get.to(() => const MerchantGiftCardsScreen()),
-              )),
-              AccessGate(feature: 'shift_close', child: _MiniAction(
-                icon: Icons.point_of_sale, label: 'إقفال الوردية',
-                color: const Color(0xFF455A64),
-                onTap: () => Get.to(() => const CashierShiftScreen()),
               )),
               AccessGate(feature: 'expenses', child: _MiniAction(
                 icon: Icons.receipt_long, label: 'المصروفات',

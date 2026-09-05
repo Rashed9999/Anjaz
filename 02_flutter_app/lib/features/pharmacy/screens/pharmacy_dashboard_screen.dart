@@ -1,3 +1,4 @@
+import 'package:amial_pay/features/merchant/widgets/shift_status_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -127,6 +128,12 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
             // الإجراء الأساسي
             _bigAction(Icons.point_of_sale, 'بيع جديد', 'تسجيل عملية بيع',
                 AmialColors.primary, () => Get.to(() => const PharmacySaleScreen())),
+
+            // AMIAL-SHIFT-DOOR-001 — **لوحةُ الصيدليّة كانت بلا ورديّةٍ
+            // إطلاقاً**، و`merchant/pharmacy/sales` تحت `amial.shift`.
+            // فالخادمُ يردّ ٤٠٩ على كلّ بيعة، والمستعملُ أمام حدٍّ لا
+            // يعرف بابَه. (القاعدة الثانية عشرة.)
+            const ShiftStatusTile(),
 
             const SizedBox(height: 10),
             Row(children: [

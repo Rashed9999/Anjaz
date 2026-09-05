@@ -439,6 +439,23 @@ class NoTillWithoutAShiftGuardTest extends TestCase
             'api/v1/amial/merchant/cashier/sales' => 'بيعُ الكاشير العامّ',
             'api/v1/amial/merchant/pharmacy/sales' => 'شبّاكُ الصيدليّة',
             'api/v1/amial/merchant/wholesale/invoices/{id}/collect' => 'تحصيلُ الجملة النقديّ',
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-SHIFT-GATE-002 — **بابٌ فاتَ القائمةَ سنةً كاملة.**
+            //
+            // أرسل صاحبُ المشروع يسأل عن الورديّات في القطاعات، فقِيس
+            // **كلُّ من يكتب في `merchant_sales`** لا من يبدو بيعاً:
+            //
+            //     grep 'MerchantSale::create' app/  →  CashierService:348
+            //     grep 'CashierService' app/Services/RestaurantService.php
+            //         →  closeOrder() ينادي recordSale()
+            //
+            // فإغلاقُ طاولةٍ نقداً يكتب صفَّ بيعٍ يقرؤه `computeCash`،
+            // **ولا ورديّةَ أذنت به** — فيظهر فائضاً في وجه من لم يقبضه.
+            // وهو العطلُ الذي بُني له الحارسُ بعينه، **وقائمتُه كانت
+            // تخلو منه**: مُطابِقٌ يعدّ ثلاثةً ويمرّ أخضرَ على أربعة.
+            // ══════════════════════════════════════════════════════════
+            'api/v1/amial/restaurant/orders/{id}/close' => 'إغلاقُ طاولة المطعم',
         ];
 
         foreach ($mustBeGated as $uri => $what) {
@@ -486,5 +503,95 @@ class NoTillWithoutAShiftGuardTest extends TestCase
             ->update(['require_shift_to_sell' => false]);
 
         $this->sell($this->owner, $this->owner)->assertStatus(200);
+    }
+
+    /**
+     * @test
+     *
+     * **⑩ والقائمةُ المكتوبةُ تشيخ — فتُشتقّ من الشيفرة.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * القائمةُ أعلاه بابٌ يُضاف إليها **بالتذكّر**. وقد فاتها المطعمُ
+     * سنةً كاملة: `RestaurantService::closeOrder` ينادي
+     * `CashierService::recordSale`، فيكتب في `merchant_sales` الذي
+     * يقرؤه `computeCash` — **ولا شيءَ نبّه**. والحارسُ كان يعدّ ثلاثةً
+     * ويمرّ أخضرَ على أربعة.
+     *
+     * **فالحدُّ يُقاس من المصدر الوحيد للحقيقة**: `MerchantSale::create`
+     * موجودٌ في موضعٍ واحدٍ في المشروع كلِّه (`CashierService`). فمن نادى
+     * `recordSale` كتب في الدرج — **ومن كتب في الدرج يحتاج ورديّة**.
+     *
+     * فيُمسَح `app/Services` عمّن ينادي `recordSale`، ويُشترَط أن يكون
+     * كلُّ واحدٍ منهم **معروفاً ومحكوماً**. وخدمةٌ جديدةٌ تنادي البيعَ
+     * تُسقط هذا الفحصَ حتّى يُقرَّر بابُها صراحةً.
+     */
+    public function no_service_writes_to_the_drawer_without_a_declared_gate(): void
+    {
+        /** خدماتٌ تنادي `recordSale`، وبابُ كلٍّ محكومٌ أعلاه. */
+        $known = [
+            // الشبّاكُ نفسُه — بابُه `cashier/sales`، محروس.
+            'CashierService.php',
+            // المطعمُ — بابُه `restaurant/orders/{id}/close`، صار محروساً.
+            'RestaurantService.php',
+        ];
+
+        $callers = [];
+
+        $it = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator(app_path('Services'),
+                \FilesystemIterator::SKIP_DOTS));
+
+        foreach ($it as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+
+            // **التعليقُ الذي يصف العطلَ كان يُخفيه** — فيُنزَع أوّلاً.
+            $code = '';
+            foreach (token_get_all((string) file_get_contents($file->getPathname())) as $t) {
+                if (is_array($t) && in_array($t[0], [T_COMMENT, T_DOC_COMMENT], true)) {
+                    continue;
+                }
+                $code .= is_array($t) ? $t[1] : $t;
+            }
+
+            // ══════════════════════════════════════════════════════════
+            // **والمُطابِقُ يُشدَّد، وقد أخطأ أوّلَ مرّة.**
+            //
+            // كان `->recordSale(` وحدَه، فالتقط ستّاً — **وأربعٌ منها
+            // كاذبة**: `CustomerCreditService::recordSale` يكتب في **دفتر
+            // الديون** لا في الدرج، وكلُّ خدمةٍ تعرّف `recordSale` باسمها.
+            //
+            // فحدُّ «كتب في الدرج» شيءٌ واحد: **صفٌّ في `merchant_sales`**.
+            // وبابُه `MerchantSale::create` (في `CashierService` وحدَه)
+            // أو نداءُ `CashierService::recordSale`. وهذا ما يُطابَق.
+            //
+            // (وحارسٌ يعدّ أكثرَ ممّا يجب يُعوّد قارئَه أن يوسّع القائمةَ
+            // ليمرّ — فيصير التوسيعُ عادةً، ويمرّ الحقيقيُّ معها.)
+            // ══════════════════════════════════════════════════════════
+            $writesToDrawer = str_contains($code, 'MerchantSale::create(')
+                || (str_contains($code, 'CashierService')
+                    && str_contains($code, 'recordSale('));
+
+            if ($writesToDrawer) {
+                $callers[] = $file->getFilename();
+            }
+        }
+
+        sort($callers);
+        sort($known);
+
+        $this->assertSame($known, $callers,
+            "تغيّرت الخدماتُ التي تكتب في درج الكاشير.\n"
+            .'المقيسُ الآن: '.implode('، ', $callers)."\n"
+            .'كلُّ من يكتب في `merchant_sales` يدخل «المتوقَّع» في الدرج — '
+            .'فإن كان بابُه بلا `amial.shift` ظهر نقدُه فائضاً في وجه من '
+            .'لم يقبضه. أضِف بابَه إلى `$mustBeGated` أعلاه، ثمّ أضِف '
+            .'الخدمةَ هنا بسببٍ مكتوب.');
+
+        // **ولا يكفي أن تكون معروفةً** — بابُها يُفحَص في الحالة السابقة،
+        // وهذه تضمن ألّا يظهر بابٌ خامسٌ بلا قرار.
+        $this->assertNotEmpty($callers,
+            'صفرُ خدماتٍ تكتب بيعاً — فالمُطابِقُ أعمى، والصمتُ بثوب نجاح');
     }
 }

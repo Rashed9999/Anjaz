@@ -1478,7 +1478,21 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
         Route::get('/orders/{id}', [$c, 'showOrder'])->where('id', '[0-9]+')->name('orders.show');
         Route::post('/orders/{id}', [$c, 'updateOrder'])->where('id', '[0-9]+')->name('orders.update');
         Route::post('/orders/{id}/status', [$c, 'setStatus'])->where('id', '[0-9]+')->name('orders.status');
-        Route::post('/orders/{id}/close', [$c, 'closeOrder'])->where('id', '[0-9]+')->name('orders.close');
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-SHIFT-GATE-002 — **ونقدُ المطعم يدخل الدرجَ نفسَه.**
+        //
+        // `RestaurantService::closeOrder` ينادي
+        // `CashierService::recordSale` — أي أنّه **يكتب صفّاً في
+        // `merchant_sales`**، و`computeCash` يقرأ ذلك الجدولَ وحدَه.
+        // فإغلاقُ طاولةٍ نقداً يرفع «المتوقَّع» في الدرج **بلا ورديّةٍ
+        // أذنت به**، فيظهر فائضاً في وجه من لم يقبضه.
+        //
+        // وهو العطلُ الذي بُني له `EnsureOpenShift` بعينه — **وقائمةُ
+        // حارسه كانت تحوي الكاشيرَ والصيدليّةَ والجملةَ ولا تحوي
+        // المطعم**، فمرّ أخضرَ على بابٍ مفتوح.
+        // ══════════════════════════════════════════════════════════════
+        Route::post('/orders/{id}/close', [$c, 'closeOrder'])
+            ->where('id', '[0-9]+')->middleware('amial.shift')->name('orders.close');
     });
 
     // -------- AMIAL-INSTALLMENTS-001 — البيع بالتقسيط --------
