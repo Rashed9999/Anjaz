@@ -47,7 +47,7 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
 
           const SizedBox(height: Dimensions.paddingSizeExtraExtraLarge),
 
-          const CustomLogoWidget(height: 70.0, width: 70.0),
+          const CustomLogoWidget(height: 56.0),
           const SizedBox(height: Dimensions.paddingSizeExtraLarge),
 
           Padding(padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeExtraLarge),

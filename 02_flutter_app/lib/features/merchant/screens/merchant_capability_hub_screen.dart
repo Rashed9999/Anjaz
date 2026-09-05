@@ -1,3 +1,4 @@
+import 'package:amial_pay/common/widgets/amial_brand_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -9,7 +10,6 @@ import 'package:amial_pay/features/fuel_station/screens/fuel_owner_console_scree
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
-import 'package:amial_pay/util/images.dart';
 
 /// AMIAL-MERCHANT-NAV-001
 ///
@@ -177,14 +177,14 @@ class _MerchantCapabilityHubScreenState
           Row(
             children: [
               Container(
-                width: AmialSpacing.xxl * 1.75,
+                width: AmialSpacing.xxl * 1.75 * AmialBrandLogo.lockupAspect,
                 height: AmialSpacing.xxl * 1.75,
                 padding: const EdgeInsets.all(AmialSpacing.xs),
                 decoration: BoxDecoration(
                   color: AmialColors.cardSurface,
                   borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
                 ),
-                child: Image.asset(Images.logo, fit: BoxFit.contain),
+                child: const AmialBrandLogo(fit: BoxFit.contain),
               ),
               const Spacer(),
               Container(

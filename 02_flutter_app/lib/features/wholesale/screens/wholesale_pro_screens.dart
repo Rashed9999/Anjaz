@@ -1,3 +1,4 @@
+import 'package:amial_pay/common/widgets/amial_brand_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -12,7 +13,6 @@ import 'package:amial_pay/features/wholesale/controllers/wholesale_access_contro
 import 'package:amial_pay/features/wholesale/screens/wholesale_workflow_screens.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
-import 'package:amial_pay/util/images.dart';
 
 /// AMIAL-WHOLESALE-UI-002 — مساحة عمل الجملة الاحترافية المعتمدة.
 ///
@@ -136,14 +136,14 @@ class _WholesaleProDashboardScreenState
       child: Row(
         children: [
           Container(
-            width: 62,
+            width: 62 * AmialBrandLogo.lockupAspect,
             height: 62,
             padding: const EdgeInsets.all(AmialSpacing.xs),
             decoration: BoxDecoration(
               color: AmialColors.cardSurface,
               borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
             ),
-            child: Image.asset(Images.logo, fit: BoxFit.contain),
+            child: const AmialBrandLogo(fit: BoxFit.contain),
           ),
           const SizedBox(width: AmialSpacing.md),
           Expanded(

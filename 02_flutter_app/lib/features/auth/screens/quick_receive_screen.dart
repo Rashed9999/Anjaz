@@ -1,10 +1,10 @@
+import 'package:amial_pay/common/widgets/amial_brand_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:amial_pay/features/auth/controllers/unified_auth_controller.dart';
 import 'package:amial_pay/features/auth/domain/quick_receive_preferences.dart';
 import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
-import 'package:amial_pay/util/images.dart';
 
 /// AMIAL-QUICK-RECEIVE-002
 ///
@@ -162,7 +162,7 @@ class QuickReceiveScreen extends StatelessWidget {
         children: [
           Center(
             child: Container(
-              width: AmialSpacing.xxl * 2.25,
+              width: AmialSpacing.xxl * 2.25 * AmialBrandLogo.lockupAspect,
               height: AmialSpacing.xxl * 2.25,
               padding: const EdgeInsets.all(AmialSpacing.xs),
               decoration: BoxDecoration(
@@ -170,7 +170,7 @@ class QuickReceiveScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
                 boxShadow: AmialSpacing.cardShadow,
               ),
-              child: Image.asset(Images.logo, fit: BoxFit.contain),
+              child: const AmialBrandLogo(fit: BoxFit.contain),
             ),
           ),
           const SizedBox(height: AmialSpacing.lg),

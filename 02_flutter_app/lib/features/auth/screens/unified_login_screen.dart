@@ -1,3 +1,4 @@
+import 'package:amial_pay/common/widgets/amial_brand_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:amial_pay/data/api/pos_device_identity.dart';
 import 'package:flutter/services.dart';
@@ -14,7 +15,6 @@ import 'package:amial_pay/features/language/widgets/amial_language_switch.dart';
 import 'package:amial_pay/features/merchant/screens/pos_device_activation_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
-import 'package:amial_pay/util/images.dart';
 import 'package:amial_pay/util/secure_screen.dart';
 
 /// AMIAL-LOGIN-DOORS-001 — **ثلاثةُ أبوابٍ لا خمسة، والتعليلُ يُقال.**
@@ -379,7 +379,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
           ),
           const SizedBox(height: AmialSpacing.xl),
           Container(
-            width: AmialSpacing.xxl * 2.4,
+            width: AmialSpacing.xxl * 2.4 * AmialBrandLogo.lockupAspect,
             height: AmialSpacing.xxl * 2.4,
             padding: const EdgeInsets.all(AmialSpacing.xs),
             decoration: BoxDecoration(
@@ -387,7 +387,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
               borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
               boxShadow: AmialSpacing.cardShadow,
             ),
-            child: Image.asset(Images.logo, fit: BoxFit.contain),
+            child: const AmialBrandLogo(fit: BoxFit.contain),
           ),
           const SizedBox(height: AmialSpacing.lg),
           if (_kind != AccountKind.customer) ...[

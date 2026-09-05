@@ -1,3 +1,4 @@
+import 'package:amial_pay/common/widgets/amial_brand_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -20,7 +21,6 @@ import 'package:amial_pay/features/fuel_station/screens/fuel_shifts_screen.dart'
 import 'package:amial_pay/features/fuel_station/screens/fuel_tanks_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
-import 'package:amial_pay/util/images.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_cashier_screen.dart';
 import 'package:amial_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
@@ -653,14 +653,14 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: AmialSpacing.xxl * 2,
+                width: AmialSpacing.xxl * 2 * AmialBrandLogo.lockupAspect,
                 height: AmialSpacing.xxl * 2,
                 padding: const EdgeInsets.all(AmialSpacing.xs),
                 decoration: BoxDecoration(
                   color: AmialColors.cardSurface,
                   borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
                 ),
-                child: Image.asset(Images.logo, fit: BoxFit.contain),
+                child: const AmialBrandLogo(fit: BoxFit.contain),
               ),
               const SizedBox(width: AmialSpacing.md),
               Expanded(

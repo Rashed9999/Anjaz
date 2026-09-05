@@ -185,6 +185,19 @@
                     <button class="btn btn-sm ${u.is_active ? 'btn-outline-dark' : 'btn-dark'}" data-act="block" data-id="${u.id}">
                         ${u.is_active ? 'حظر' : 'فكّ الحظر'}</button>
                 </div>
+                {{--
+                    AMIAL-ACCOUNT-PRINT-001 — **الطباعةُ حيث يقف المراجع.**
+                    كانت مبنيّةً وبابُها سجلٌّ آخر يُبحَث فيه عن مرجعٍ بين
+                    مئة، وحسابٌ بلا لقطةٍ مؤرشفةٍ لا يُطبَع أصلاً.
+                    ورابطٌ لا زرُّ فعل: يفتح ورقةً ولا يغيّر حالاً، فلا
+                    يحتاج تأكيداً — والتسجيلُ في سجلّ البيانات الشخصيّة
+                    يقع في الخادم لا هنا.
+                --}}
+                <a class="btn btn-sm btn-outline-primary w-100 mt-2 js-print-dossier"
+                   target="_blank" rel="noopener"
+                   href="{{ url('admin/amial/hub/account') }}/${u.id}/print">
+                   🖨 طباعة ملفّ الحساب — البيانات وصور الوثائق
+                </a>
             </div>
         </div></div>`;
     }

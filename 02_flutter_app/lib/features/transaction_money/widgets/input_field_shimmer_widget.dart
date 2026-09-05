@@ -1,3 +1,4 @@
+import 'package:amial_pay/common/widgets/amial_brand_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get_utils/src/extensions/internacionalization.dart';
 import 'package:shimmer/shimmer.dart';
@@ -30,7 +31,7 @@ class InputFieldShimmerWidget extends StatelessWidget {
             const SizedBox(height: Dimensions.paddingSizeDefault),
           ]),
 
-          Positioned(left: Dimensions.paddingSizeLarge, bottom: Dimensions.paddingSizeExtraLarge, child: Image.asset(Images.logo,width: 50.0)),
+          Positioned(left: Dimensions.paddingSizeLarge, bottom: Dimensions.paddingSizeExtraLarge, child: const AmialBrandLogo(width: 62.0)),
 
           Positioned(right: 10, bottom: 5, child: Image.asset(Images.inputStackDesing, width: 150.0,filterQuality: FilterQuality.high)),
         ]),

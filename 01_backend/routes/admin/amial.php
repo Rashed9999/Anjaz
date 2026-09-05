@@ -916,6 +916,22 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
 
     // صفحة تفاصيل الحساب الكاملة (بيانات + وثائق + مخاطر AML + سجل + إضافات الدور)
     Route::get('/account/{id}', [$hc, 'account'])->where('id', '[0-9]+')->name('account');
+
+    // ══════════════════════════════════════════════════════════════
+    // AMIAL-ACCOUNT-PRINT-001 — **الأرشيفُ مبنيٌّ ولا زرَّ يطبعه.**
+    //
+    // الطباعةُ القائمة مفتاحُها `reference` وبابُها سجلٌّ آخر — فمن وقف
+    // على حسابٍ في لوحة التحقّق عليه أن يخرج ويبحث عن مرجعٍ بين مئة،
+    // **وحسابٌ بلا لقطةٍ مؤرشفةٍ لا يُطبَع أصلاً**. فالمفتاحُ هنا
+    // مُعرّفُ المستخدم، وهو ما تعرفه كلُّ شاشةِ حساب.
+    //
+    // **والصلاحيّةُ هي نفسُها التي تفتح صورَ الوثائق** — لأنّ الورقةَ
+    // تحمل ما تحمله تلك الشاشة، ووضعُها خلف صلاحيّةٍ أدنى بابٌ جانبيٌّ
+    // إلى صورِ الهويّة لمن لا يملك رؤيتَها.
+    // ══════════════════════════════════════════════════════════════
+    Route::get('/account/{id}/print', [App\Http\Controllers\Admin\AccountDossierPrintController::class, 'show'])
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.customers.kyc.view')->name('account.print');
     Route::get('/users/{id}/detail.json', [$hc, 'accountDetailJson'])
         ->where('id', '[0-9]+')->name('users.detail');
 

@@ -45,7 +45,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   color: Colors.white.withValues(alpha: 0.12),
                   shape: BoxShape.circle,
                 ),
-                child: const CustomLogoWidget(height: 90, width: 90),
+                child: const CustomLogoWidget(height: 76),
               ),
               const SizedBox(height: 28),
               Text(
