@@ -788,6 +788,38 @@ Route::prefix('settlements')->name('settlements.')->middleware(['platform:platfo
 // AMIAL-ADMIN-DOORS-002 — القراءةُ مخاطرُ تاجر، والشريحةُ تُغيّر حدودَه
 // ورسومَه، والتوثيقُ قرارُ اعتماد. وكانت الخمسةُ بلا صلاحيّة.
 Route::prefix('merchants')->name('merchants.')->group(function () {
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-MERCHANT-VERIFY-ADMIN-001 — **التاجرُ يقدّم، ولم يكن أحدٌ
+    // يعتمد.**
+    //
+    // قِيس: `adminApprove` و`adminReject` و`adminRequestResubmission`
+    // مبنيّاتٌ في `MerchantVerificationController` منذ كُتبت، **وصفرُ
+    // مساراتٍ للإدارة** — والتاجرُ يرفع سجلَّه التجاريَّ وصورةَ متجره
+    // ويُقال له «قيد المراجعة» فيبقى عالقاً بلا نهاية، ولا خطأ في أيّ
+    // سجلّ. (القاعدة الثانية عشرة: مبنيٌّ ولا يُوصَل إليه.)
+    //
+    // **والاعتمادُ خلف `approvals.decide` لا `merchants.compliance`**:
+    // القراءةُ امتثال، والقرارُ اعتمادٌ — والفصلُ بينهما هو ما يمنع
+    // موظّفَ مراجعةٍ من أن يقرّر وحدَه.
+    // ══════════════════════════════════════════════════════════════════
+    Route::prefix('verification')->name('verification.')->group(function () {
+        $vc = App\Http\Controllers\Admin\MerchantVerificationAdminController::class;
+
+        Route::middleware('platform:platform.merchants.compliance')->group(function () use ($vc) {
+            Route::get('/', [$vc, 'page'])->name('page');
+            Route::get('/list.json', [$vc, 'listJson'])->name('list');
+            Route::get('/{id}/document/{type}', [$vc, 'document'])
+                ->where(['id' => '[0-9]+', 'type' => '[a-z_]+'])->name('document');
+        });
+
+        Route::middleware('platform:platform.approvals.decide')->group(function () use ($vc) {
+            Route::post('/{id}/approve', [$vc, 'approve'])->where('id', '[0-9]+')->name('approve');
+            Route::post('/{id}/reject', [$vc, 'reject'])->where('id', '[0-9]+')->name('reject');
+            Route::post('/{id}/resubmit', [$vc, 'requestResubmission'])
+                ->where('id', '[0-9]+')->name('resubmit');
+        });
+    });
+
     Route::get('/high-risk', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'highRisk'])
         ->middleware('platform:platform.merchants.risk')->name('high-risk');
     Route::get('/risk-stats', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'riskStats'])
