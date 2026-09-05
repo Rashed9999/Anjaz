@@ -1,3 +1,4 @@
+import 'package:amial_pay/features/merchant/widgets/quick_calculator_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -262,6 +263,15 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
       appBar: AppBar(
         title: const Text('المبيعات'),
         actions: [
+          // AMIAL-CALCULATOR-001 — **الحاسبةُ حيث يُحسَب، لا في قائمة.**
+          // من يحسب وهو على الشبّاك يحسب **والسلّةُ أمامه** — وشاشةٌ
+          // مستقلّةٌ تُخرجه من السلّة. وورقةٌ تعلو الشاشة تُغلَق بسحبة.
+          IconButton(
+            key: const Key('calc-open'),
+            icon: const Icon(Icons.calculate_outlined),
+            tooltip: 'آلة حاسبة',
+            onPressed: () => QuickCalculatorSheet.open(context),
+          ),
           // مؤشّر المبيعات دون اتصال (يظهر عند وجود معلّق)
           Obx(() => _offline.pending.value == 0
               ? const SizedBox.shrink()

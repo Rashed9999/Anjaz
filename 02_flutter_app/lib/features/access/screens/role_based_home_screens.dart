@@ -1,3 +1,4 @@
+import 'package:amial_pay/features/merchant/widgets/quick_calculator_sheet.dart';
 import 'package:amial_pay/features/merchant/widgets/shift_status_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -85,6 +86,24 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
           // نفسِه، وبابُه هنا كذلك.
           const ShiftStatusTile(),
 
+          // AMIAL-CALCULATOR-001 — **مجّانيّةٌ لكلّ باقة، بلا `AccessGate`.**
+          // أداةٌ لا تُحرّك ريالاً ولا تكتب سطراً — وحجبُها خلف باقةٍ بيعُ
+          // آلةٍ حاسبةٍ في هاتفٍ فيه واحدةٌ مجّاناً.
+          Card(
+            key: const Key('calc-tile'),
+            margin: const EdgeInsets.only(bottom: 6),
+            child: ListTile(
+              leading: const Icon(Icons.calculate_outlined,
+                  color: AmialColors.primary, size: 28),
+              title: const Text('آلة حاسبة',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              subtitle: const Text('احسب قبل أن تُدخل المبلغ — متاحة لكلّ الباقات',
+                  style: TextStyle(fontSize: 12)),
+              trailing: const Icon(Icons.chevron_left_rounded),
+              onTap: () => QuickCalculatorSheet.open(context),
+            ),
+          ),
+
           const SizedBox(height: 14),
           AccessGate(feature: 'debts', child: _BigActionButton(
             icon: Icons.receipt_long,
@@ -170,6 +189,24 @@ class MerchantRetailHomeScreen extends StatelessWidget {
           // **و«البيعُ السريع» يبيع من الكاشير نفسِه** — فهو تحت الحدّ
           // نفسِه، وبابُه هنا كذلك.
           const ShiftStatusTile(),
+
+          // AMIAL-CALCULATOR-001 — **مجّانيّةٌ لكلّ باقة، بلا `AccessGate`.**
+          // أداةٌ لا تُحرّك ريالاً ولا تكتب سطراً — وحجبُها خلف باقةٍ بيعُ
+          // آلةٍ حاسبةٍ في هاتفٍ فيه واحدةٌ مجّاناً.
+          Card(
+            key: const Key('calc-tile'),
+            margin: const EdgeInsets.only(bottom: 6),
+            child: ListTile(
+              leading: const Icon(Icons.calculate_outlined,
+                  color: AmialColors.primary, size: 28),
+              title: const Text('آلة حاسبة',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              subtitle: const Text('احسب قبل أن تُدخل المبلغ — متاحة لكلّ الباقات',
+                  style: TextStyle(fontSize: 12)),
+              trailing: const Icon(Icons.chevron_left_rounded),
+              onTap: () => QuickCalculatorSheet.open(context),
+            ),
+          ),
 
           const SizedBox(height: 14),
 

@@ -84,7 +84,8 @@ class MerchantServicesHubScreen extends StatelessWidget {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _planHeader(planLabel, open.length, _catalog.length - foreign.length),
+            _planHeader(planLabel, open.length, _catalog.length - foreign.length,
+                isTopPlan: access.isEnterprisePlan),
             const SizedBox(height: 18),
 
             if (open.isNotEmpty) ...[
@@ -160,7 +161,8 @@ class MerchantServicesHubScreen extends StatelessWidget {
   }
 
   // ── بطاقة الباقة الحالية ──────────────────────────────────────────
-  Widget _planHeader(String planLabel, int unlocked, int total) {
+  Widget _planHeader(String planLabel, int unlocked, int total,
+      {required bool isTopPlan}) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -181,15 +183,23 @@ class MerchantServicesHubScreen extends StatelessWidget {
                   style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             ]),
           ),
-          TextButton(
-            onPressed: () => Get.to(() => const PlansCatalogScreen()),
-            style: TextButton.styleFrom(
-              backgroundColor: AmialColors.yellow,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          // AMIAL-PLAN-TRUTH-001 — **ولا يُدعى إلى ترقيةٍ من هو في أعلاها.**
+          //
+          // هذا الملفُّ نفسُه يقول في قسم المقفلات: «صاحبُ المحطّة على
+          // الباقة المؤسسيّة يرى دعوةً لترقيةٍ لا وجودَ لها، ثمّ يرقّي
+          // فلا تُفتح — **وعدٌ لا يستطيع النظامُ الوفاءَ به**». والقاعدةُ
+          // طُبّقت هناك **ونُسيت هنا**، فبقي الزرُّ في الترويسة يدعو
+          // صاحبَ «مؤسسة» إلى ما فوقها ولا شيءَ فوقها.
+          if (!isTopPlan)
+            TextButton(
+              onPressed: () => Get.to(() => const PlansCatalogScreen()),
+              style: TextButton.styleFrom(
+                backgroundColor: AmialColors.yellow,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+              child: const Text('ترقية', style: TextStyle(fontWeight: FontWeight.bold)),
             ),
-            child: const Text('ترقية', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
         ]),
         const SizedBox(height: 14),
         ClipRRect(
@@ -202,8 +212,29 @@ class MerchantServicesHubScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Text('مفتوح لديك $unlocked من $total خدمة',
+        // ══════════════════════════════════════════════════════════
+        // AMIAL-PLAN-TRUTH-001 — **رقمان لشيءٍ واحد، وكلاهما صحيح.**
+        //
+        // أرسل صاحبُ المشروع صورتين: «مزايا باقتي» تقول «٤٩ متاحة»،
+        // وهذه تقول «٢٩ من ٢٩». **وليس أحدُهما خطأً في الحساب**:
+        //
+        //   · «مزايا باقتي» تقرأ `/me/entitlements` ← `CapabilityRegistry`
+        //     في الخادم — **٧١ قدرة**.
+        //   · وهذه تقرأ `_catalog` **مكتوباً يدويّاً في هذا الملفّ** —
+        //     ٣٠ عنصراً، وهي ما لها شاشةٌ في التطبيق.
+        //
+        // فالعطلُ أنّ الاثنين يسمّيان ما يعدّانه «خدمة». **فيُسمّى كلٌّ
+        // باسمه**، ويُقال أين تُقرأ القائمةُ الكاملة — ولا يُترك القارئُ
+        // يوفّق بين رقمين لا يلتقيان.
+        //
+        // (والقائمةُ المكتوبةُ تشيخ يومَ تُضاف قدرةٌ في الخادم ولا تظهر
+        // هنا أبداً — وهو ما تحرسه `MerchantServicesCatalogGuardTest`.)
+        // ══════════════════════════════════════════════════════════
+        Text('مفتوح لديك $unlocked من $total شاشة في التطبيق',
             style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        const SizedBox(height: 2),
+        const Text('وقائمةُ مزايا باقتك كاملةً في «مزايا باقتي».',
+            style: TextStyle(color: Colors.white60, fontSize: 11)),
       ]),
     );
   }
