@@ -5,6 +5,7 @@ import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
 import 'package:amial_pay/features/merchant/screens/receipt_settings_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
+import 'package:amial_pay/features/setting/screens/account_security_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// إعدادات المنشأة في تطبيق التاجر.
@@ -63,6 +64,18 @@ class MerchantAccountScreen extends StatelessWidget {
                 title: 'إعدادات الفاتورة والطباعة',
                 subtitle: 'اسم المنشأة، الترويسة، الشعار والطابعة',
                 onTap: () => Get.to(() => const ReceiptSettingsScreen()),
+              ),
+              // AMIAL-ACCOUNT-SECURITY-001 — **والتاجرُ كان أبعدَهم عن
+              // الباب**: `change-pin` مبنيٌّ للعميل والوكيل وحدَهما،
+              // و«حسابي» تُحوَّل للتاجر إلى هذه الشاشة فلا يرى قائمةَ
+              // الملفّ الشخصيّ أصلاً. فمن يحرّك أكبرَ المبالغ لم يكن
+              // يملك تغييرَ كلمةِ مروره ولا رمزِه.
+              _item(
+                context,
+                icon: Icons.shield_outlined,
+                title: 'أمان الحساب',
+                subtitle: 'كلمة المرور ورمز التحويل',
+                onTap: () => Get.to(() => const AccountSecurityScreen()),
               ),
               _item(
                 context,

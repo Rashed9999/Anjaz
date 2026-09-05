@@ -23,6 +23,7 @@ import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/images.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_cashier_screen.dart';
+import 'package:amial_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
 
 /// AMIAL-MERCHANT-NAV-001
 ///
@@ -111,6 +112,27 @@ class MerchantAdaptiveShell extends StatelessWidget {
 /// التاجرُ بالكامل — لكنّها تقول صراحةً إنّ **استلامَ المدفوعات عبر المنصّة**
 /// مقفلٌ حتّى الاعتماد، فلا يفاجأ برفضٍ عند أوّل قبض. والمرفوضُ (`rejected`)
 /// لا يصل هنا أصلاً — له شاشةُ الحالة الكاملة.
+///
+/// ══════════════════════════════════════════════════════════════════════
+/// **AMIAL-MERCHANT-VERIFY-BANNER-002 — «مع أنّ الحساب موثّق».**
+///
+/// أرسل صاحبُ المشروع صورةَ اللافتة وقال ذلك. **وكلامُه صحيحٌ ونصُّ اللافتة
+/// كان صحيحاً أيضاً** — والعطلُ في أنّهما يتكلّمان عن شيئين:
+///
+///   · `users.is_kyc_verified` → **توثيقُ الشخص**، وهو ما اعتُمد له.
+///   · `merchant_profiles.verification_status` → **اعتمادُ المتجر**، وهو
+///     ملفٌّ آخرُ بمستنداتٍ أخرى (سجلٌّ تجاريٌّ وعنوانٌ ورخصة)، **ولم
+///     يُرسَل بعد**.
+///
+/// واللافتةُ كانت تقول «**حسابك** قيد الاعتماد» — فمن اعتُمد حسابُه أمس
+/// يقرؤها كذباً، ويتوقّف عن البحث. **وثلاثُ حالاتٍ مختلفةٍ كانت تُقال
+/// بجملةٍ واحدة**: «لم يُرسَل» و«قيد المراجعة» و«طُلبت مستنداتٌ إضافيّة» —
+/// والأولى والثالثةُ فيهما عملٌ على صاحبها، والثانيةُ انتظارٌ محض.
+///
+/// **ولا بابَ فيها.** `MerchantVerificationScreen` مبنيّةٌ ولها مدخلٌ واحدٌ
+/// في المشروع: لوحةُ التاجر العامّة — **وصاحبُ محطّة الوقود لا يراها**،
+/// فشاشتُه لوحةُ المحطّة. فمن قرأ اللافتةَ لم يجد ما يفعل.
+/// (القاعدة الثانية عشرة، والقاعدة السابعة: الحالاتُ تُفرَّق ولا تُخلَط.)
 class _MerchantPendingReceiveBanner extends StatelessWidget {
   const _MerchantPendingReceiveBanner();
 
@@ -123,6 +145,37 @@ class _MerchantPendingReceiveBanner extends StatelessWidget {
       if (status == null || status == 'verified' || status == 'rejected') {
         return const SizedBox.shrink();
       }
+
+      // **لكلّ حالةٍ نصُّها، ولمن عليه عملٌ بابُه.**
+      final (String body, bool actionable) = switch (status) {
+        'pending_review' => (
+          'ملفُّ متجرك وصل الإدارةَ وهو قيد المراجعة. تعمل بالكامل الآن — '
+              'البيعُ النقديّ والآجل والجردُ والطباعةُ متاحة. يبقى استقبالُ '
+              'المدفوعات عبر أميال باي مقفلاً حتّى يُعتمد المتجر. '
+              '(وتوثيقُ هويّتك الشخصيّة ملفٌّ آخرُ منفصل.)',
+          false,
+        ),
+        'resubmission_required' => (
+          'طلبت الإدارةُ مستنداتٍ إضافيّةً لاعتماد متجرك. راجع الملاحظاتِ '
+              'وأعِد الإرسال — استقبالُ المدفوعات عبر أميال باي مقفلٌ حتّى ذلك.',
+          true,
+        ),
+        'verification_suspended' => (
+          'اعتمادُ متجرك موقوفٌ مؤقّتاً، واستقبالُ المدفوعات عبر أميال باي '
+              'مقفلٌ حتّى يُراجَع. تواصل مع الدعم لمعرفة السبب.',
+          false,
+        ),
+        // `unverified` وما جدّ من حالات — **ولا يُقال «قيد الاعتماد» لملفٍّ
+        // لم يُرسَل**: انتظارٌ لا ينتهي لأنّ لا أحدَ ينتظره.
+        _ => (
+          'لم تُرسِل ملفَّ اعتماد المتجر بعد. تعمل بالكامل الآن — والبيعُ '
+              'النقديّ والآجل والجردُ والطباعةُ متاحة — لكنّ استقبالَ '
+              'المدفوعات عبر أميال باي يبقى مقفلاً حتّى يُعتمد المتجر. '
+              '(وتوثيقُ هويّتك الشخصيّة ملفٌّ آخرُ منفصل.)',
+          true,
+        ),
+      };
+
       return SafeArea(
         bottom: false,
         child: Container(
@@ -137,20 +190,38 @@ class _MerchantPendingReceiveBanner extends StatelessWidget {
             border: Border.all(color: AmialColors.warning, width: 1),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.hourglass_top_rounded,
+              const Icon(Icons.storefront_outlined,
                   color: AmialColors.warning, size: 20),
               const SizedBox(width: AmialSpacing.sm),
-              const Expanded(
-                child: Text(
-                  'حسابك قيد الاعتماد. تعمل بالكامل الآن — والبيعُ النقديّ '
-                  'والآجل والجردُ والطباعةُ متاحة. يبقى استقبالُ المدفوعات '
-                  'عبر أميال باي مقفلاً حتّى تعتمد الإدارةُ متجرك.',
-                  style: TextStyle(
-                    fontSize: 12.5,
-                    height: 1.4,
-                    color: AmialColors.textPrimary,
-                  ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      body,
+                      key: const Key('merchant-verify-banner'),
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        height: 1.4,
+                        color: AmialColors.textPrimary,
+                      ),
+                    ),
+                    // **بابٌ لمن عليه عمل، ولا زرَّ لمن ينتظر** — زرٌّ لا
+                    // يُغيّر شيئاً يُضغط مرّةً ثمّ يُهمَل هو وما بعده.
+                    if (actionable)
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: TextButton.icon(
+                          key: const Key('merchant-verify-banner-action'),
+                          onPressed: () => Get.to(
+                              () => const MerchantVerificationScreen()),
+                          icon: const Icon(Icons.upload_file_rounded, size: 18),
+                          label: const Text('ملفُّ اعتماد المتجر'),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],

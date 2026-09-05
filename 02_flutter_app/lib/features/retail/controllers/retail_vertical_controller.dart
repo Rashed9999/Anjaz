@@ -77,14 +77,21 @@ class RetailVerticalController extends GetxController
       final r = await call();
       classify(r);
       if (!okOf(r)) {
-        lastError.value = msgOf(r);
+        // AMIAL-VERTICAL-ACTION-ERROR-001 — **الفعلُ ليس التحميل.**
+        // فشلُ إدخالٍ واحدٍ لا يمحو قائمةً محمَّلةً سليمةً وزرَّ إضافتها.
+        submitting ? failAction(msgOf(r)) : failLoad(msgOf(r));
         return null;
       }
       return map(r);
     } catch (_) {
       // **لا يُبتلع العطل**: شاشةٌ فارغةٌ بلا سبب تُقرأ «لا بيانات».
-      isOffline.value = true;
-      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة';
+      const msg = 'لا اتصال بالخادم — تحقّق من الشبكة';
+      if (submitting) {
+        failAction(msg);
+      } else {
+        isOffline.value = true;
+        failLoad(msg);
+      }
       return null;
     } finally {
       isSubmitting.value = false;

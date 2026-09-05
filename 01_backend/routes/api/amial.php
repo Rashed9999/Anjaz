@@ -162,6 +162,24 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
         // CRITICAL-001 — Access endpoint (يقرأه AccessController في Flutter عند الدخول)
         Route::get('/access', [\App\Http\Controllers\Api\V1\Amial\AccessController::class, 'me'])->name('access');
 
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-ACCOUNT-SECURITY-001 — **بابٌ لم يكن موجوداً إطلاقاً.**
+        //
+        // قِيس: `forgot-password` و`reset-password` مبنيّان (وكلاهما عبر
+        // رسالةٍ إلى الهاتف)، **ولا مسارَ يغيّر كلمةَ المرور لمن دخل**.
+        // و`change-pin` للعميل والوكيل وحدَهما — **والتاجرُ بلا باب**.
+        //
+        // فواحدٌ هنا للأنواع الثلاثة، خلف `auth:sanctum` نفسِه الذي يحرس
+        // بقيّةَ `me`. ولا صلاحيّةَ زائدةٌ تُشترَط: هذا قرارُ صاحب الحساب
+        // في حسابه، وحجبُه خلف قدرةٍ يمنحها غيرُه عبثٌ.
+        // ══════════════════════════════════════════════════════════════
+        $SEC = \App\Http\Controllers\Api\V1\Amial\AccountSecurityController::class;
+        Route::get('/security', [$SEC, 'show'])->name('security');
+        Route::post('/security/password', [$SEC, 'changePassword'])
+            ->middleware('amial.rate-limit:change_password,5,10')->name('security.password');
+        Route::post('/security/pin', [$SEC, 'changePin'])
+            ->middleware('amial.rate-limit:change_pin,5,10')->name('security.pin');
+
         // AMIAL-ENTITLEMENTS-001 — **ملفّ خدمات التاجر**.
         //
         // نداءٌ واحدٌ يردّ كلَّ قدرات المنصّة بحالة كلٍّ لهذا الحساب:

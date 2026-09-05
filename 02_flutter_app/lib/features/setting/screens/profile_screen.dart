@@ -27,6 +27,7 @@ import 'package:amial_pay/features/requested_money/screens/requested_money_list_
 import 'package:amial_pay/features/requested_money/screens/incoming_requests_screen.dart';
 import 'package:amial_pay/features/requested_money/screens/outgoing_requests_screen.dart';
 import 'package:amial_pay/features/setting/screens/transaction_limit_screen.dart';
+import 'package:amial_pay/features/setting/screens/account_security_screen.dart';
 import 'package:amial_pay/features/language/widgets/amial_language_switch.dart';
 import 'package:amial_pay/common/widgets/amial_build_stamp.dart';
 import 'package:amial_pay/features/setting/screens/about_amial_screen.dart';
@@ -201,9 +202,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     )),
                   ),
 
+                  // AMIAL-ACCOUNT-SECURITY-001 — **كلمةُ المرور لم يكن لها
+                  // بابٌ إطلاقاً**، ورمزُ التحويل هو كلمةُ المرور نفسُها
+                  // لكلّ من سجّل من التطبيق. فبابٌ واحدٌ للاثنين، يقول
+                  // أوّلاً أيّهما ما زال مربوطاً بالآخر.
                   CustomInkWellWidget(
-                    child: widget.MenuItem(image: Images.pinChangeLogo,title: 'change_pin'.tr),
-                    onTap:()=> Get.toNamed(RouteHelper.getChangePinRoute()),
+                    child: widget.MenuItem(
+                        image: Images.pinChangeLogo, title: 'أمان الحساب — كلمة المرور والرمز'),
+                    onTap: () => Get.to(() => const AccountSecurityScreen()),
                   ),
 
                  if(AppConstants.languages.length > 1) CustomInkWellWidget(
