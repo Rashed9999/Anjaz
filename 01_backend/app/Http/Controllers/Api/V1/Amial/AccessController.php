@@ -223,8 +223,23 @@ class AccessController extends Controller
         // فيُرسَل الوصفُ من مصدره، **ولا يُضاف مسارٌ ثانٍ**: شاشةٌ تنادي
         // نداءين لتبني صفحةً واحدةً تعرض نصفَها ثمّ تنتظر.
         // ══════════════════════════════════════════════════════════════
-        $comparison = \Cache::remember('amial_plans_comparison', now()->addHours(6),
-            fn () => app(\App\Services\Access\PlanComparisonService::class)->catalogue());
+        // ══════════════════════════════════════════════════════════════
+        // **والمقارنةُ تُحسب لنشاط القارئ، ومفتاحُ الذاكرة يحمله.**
+        //
+        // كانت تُخزَّن بمفتاحٍ واحدٍ للجميع، فيقرأ صاحبُ الصيدليّة أنّ
+        // «الأعمال» تفتح له «كتالوج التجزئة» — **ولا تفتحه أبداً**، لأنّ
+        // `CapabilityRegistry` ينزعه عند التشغيل. وعدٌ لا يُوفى.
+        //
+        // ومفتاحٌ واحدٌ لجميع الأنشطة **أخطرُ من غياب الذاكرة**: أوّلُ
+        // قارئٍ يملؤها بنشاطه فيراها البقيّةُ بعينه.
+        // ══════════════════════════════════════════════════════════════
+        $businessType = $profile?->business_type;
+
+        $comparison = \Cache::remember(
+            'amial_plans_comparison:'.($businessType ?: 'any'),
+            now()->addHours(6),
+            fn () => app(\App\Services\Access\PlanComparisonService::class)
+                ->catalogue($businessType));
 
         return $this->ok([
             'plans' => $plans,

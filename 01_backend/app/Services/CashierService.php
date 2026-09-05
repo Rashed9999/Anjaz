@@ -342,8 +342,19 @@ class CashierService
             // **و`null` هنا ليست عطلاً** (القاعدة السابعة): تاجرٌ أطفأ
             // الحدَّ من لوحته يبيع بلا ورديّة عن قصد، والعمودُ يقول ذلك.
             // ══════════════════════════════════════════════════════════
-            $shiftId = app(CashierShiftService::class)
-                ->current($merchant, $posUserId)?->id;
+            $openShift = app(CashierShiftService::class)->current($merchant, $posUserId);
+            $shiftId = $openShift?->id;
+
+            // AMIAL-SHIFT-DEVICE-001 — **والصندوقُ يُقرأ من الورديّة لا
+            // من الطلب.**
+            //
+            // فلا مصدرانِ للجهاز يفترقان: البيعةُ تقع داخل ورديّة، والورديّةُ
+            // فُتحت على صندوقٍ أثبتته البوّابة. وقراءتُه ثانيةً من الطلب
+            // تفتح بابَ فاتورةٍ تقول صندوقاً ودرجُها في آخر.
+            //
+            // **وبلا ورديّةٍ لا جهاز** — وهو صادقٌ: تاجرٌ أطفأ حدَّ الورديّة
+            // يبيع من هاتفه، ولا درجَ يُنسَب إليه.
+            $saleDeviceId = $openShift?->pos_device_id;
 
             $sale = MerchantSale::create([
                 'sale_ulid' => (string) Str::ulid(),
@@ -351,6 +362,7 @@ class CashierService
                 'merchant_user_id' => $merchant->id,
                 'pos_user_id' => $posUserId,
                 'shift_id' => $shiftId,
+                'pos_device_id' => $saleDeviceId,
                 'total_amount' => $total,
                 // AMIAL-MULTI-CURRENCY-003 — العملةُ والسعرُ المجمَّد والمكافئ.
                 'currency' => $currency,

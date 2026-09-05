@@ -49,6 +49,23 @@ class EnsurePosDevice
     /** ترويسةُ هويّة الجهاز — والقيمةُ معرِّفُ تثبيتٍ لا سرّ. */
     public const HEADER = 'x-pos-device';
 
+    /**
+     * اسمُ سمةِ الطلب التي تحمل الجهازَ المتحقَّقَ منه.
+     *
+     * **ولا يُقرأ إلّا من هنا**: من بحث عن الجهاز بنفسِه في خدمةٍ قد
+     * يجد غيرَ الذي فُحص — والبوّابةُ هي التي أثبتت أنّه غيرُ ملغىً
+     * ومطابقٌ للجلسة.
+     */
+    public const ATTRIBUTE = 'amial_pos_device';
+
+    /** الجهازُ المتحقَّقُ منه لهذا الطلب، أو `null` إن لم تمرّ البوّابة. */
+    public static function deviceOf(Request $request): ?PosDevice
+    {
+        $d = $request->attributes->get(self::ATTRIBUTE);
+
+        return $d instanceof PosDevice ? $d : null;
+    }
+
     public function __construct(private OpsAlertService $ops) {}
 
     public function handle(Request $request, Closure $next): mixed
@@ -123,6 +140,13 @@ class EnsurePosDevice
         }
 
         $this->touch($session, $device);
+
+        // AMIAL-SHIFT-DEVICE-001 — **الجهازُ يُمرَّر لا يُعاد البحثُ عنه.**
+        //
+        // كان يُفحَص هنا ثمّ يُنسى، فالخدماتُ خلفه لا تعرف على أيّ صندوقٍ
+        // تعمل — وهو سببُ انفصال الجهاز عن المال. وبحثٌ ثانٍ في الخدمة
+        // يفتح بابَ اختلافٍ بين ما فُحص وما استُعمل.
+        $request->attributes->set(self::ATTRIBUTE, $device);
 
         return $next($request);
     }

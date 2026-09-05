@@ -25,10 +25,34 @@ class CashierShiftService
             ->latest('id')->first();
     }
 
-    public function open(User $merchant, ?int $posUserId, string $openingFloat): CashierShift
-    {
+    public function open(
+        User $merchant,
+        ?int $posUserId,
+        string $openingFloat,
+        ?int $posDeviceId = null,
+    ): CashierShift {
         if ($this->current($merchant, $posUserId)) {
             throw new RuntimeException('توجد وردية مفتوحة بالفعل — أغلِقها أولاً');
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-SHIFT-DEVICE-001 — **وصندوقٌ واحدٌ لا يحمل ورديّتين.**
+        //
+        // درجُ النقد واحدٌ ماديّاً. فورديّتان مفتوحتان عليه تعنيان أنّ
+        // الجردَ لا يُنسَب لأحد: كلٌّ يقول «العجزُ من الآخر»، **ولا
+        // يُحسم**. والفحصُ هنا رسالةٌ تُقرأ، والقيدُ الفريدُ في القاعدة
+        // هو الحارس — فموظّفان يضغطان «افتح» في اللحظة نفسِها يقرآن
+        // كلاهما «لا ورديّةَ مفتوحة».
+        // ══════════════════════════════════════════════════════════════
+        if ($posDeviceId !== null) {
+            $busy = CashierShift::where('open_device_lock', $posDeviceId)->first();
+
+            if ($busy !== null) {
+                throw new RuntimeException(
+                    'على هذا الصندوق ورديّةٌ مفتوحةٌ باسم «'
+                    .($busy->opened_by_name ?: 'غير معروف')
+                    .'» — تُقفَل قبل فتح غيرها. ودرجُ النقد واحد.');
+            }
         }
         $openingFloat = MoneyService::normalize($openingFloat);
 
@@ -43,6 +67,12 @@ class CashierShiftService
         return CashierShift::create([
             'merchant_user_id' => $merchant->id,
             'pos_user_id' => $posUserId,
+            'pos_device_id' => $posDeviceId,
+
+            // **يحمل الجهازَ ما دامت مفتوحة، ويُفرَّغ عند الإغلاق** —
+            // فالقيدُ الفريدُ يمنع الثانيةَ ويسمح بألفِ ورديّةٍ مغلقة.
+            'open_device_lock' => $posDeviceId,
+
             'opening_float' => $openingFloat,
             'status' => 'open',
             'opened_by' => $posUserId ?? $merchant->id,
@@ -350,6 +380,11 @@ class CashierShiftService
                 'status' => 'closed',
                 'notes' => $notes,
                 'closed_at' => now(),
+
+                // AMIAL-SHIFT-DEVICE-001 — **ويُحرَّر الصندوقُ للتالي.**
+                // و`pos_device_id` يبقى — هو التاريخُ الذي يقول على أيّ
+                // صندوقٍ جرت. المُفرَّغُ هو القفلُ وحدَه.
+                'open_device_lock' => null,
                 // AMIAL-SHIFT-GATE-001 — **ومن أقفلَ يُسمّى أيضاً.**
                 // فقد يُقفلها المالكُ نيابةً عن كاشيرٍ انصرف، والفرقُ
                 // يُنسَب حينها إلى من عدَّ الدرجَ لا إلى من فتحه.

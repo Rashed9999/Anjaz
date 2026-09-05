@@ -80,18 +80,45 @@ class PlanComparisonService
     ];
 
     /**
-     * كتالوجُ المقارنة الكامل.
+     * كتالوجُ المقارنة الكامل — **لنشاطٍ بعينه.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **العطلُ الذي أُصلح هنا، وقد قِيس:**
+     *
+     *     ما تَعِد به «الأعمال» في الشاشة  →  retail.catalog · retail.variants
+     *                                        · retail.price_versions
+     *                                        · retail.waste
+     *                                        · retail.returns.by_line
+     *     ما تأخذه صيدليّةٌ منها فعلاً      →  **صفر**
+     *
+     * `AccessPresets::planFeatures()` تُرجع قائمةَ الباقة **خاماً**، وهي
+     * ليست ما يصل التاجر: `FeatureAccessService::resolveFeatures` تمرّ
+     * بعدها على `CapabilityRegistry` فتنزع كلَّ قدرةٍ لا تنطبق على نوع
+     * النشاط. **فالمحرّكُ سليمٌ والشاشةُ وحدَها تَعِد بما لا يُعطى.**
+     *
+     * وأسوأُ ما فيه أنّ الملاحظةَ أسفلَ الجدول كانت تُسمّي «صيدليّة ·
+     * محطّة وقود · جملة» ولا تذكر التجزئة — **فيقرؤها صاحبُ الصيدليّة
+     * عكسَ مرادها**: «قدراتُ الصيدليّة لا تفتحها الترقيةُ، إذن قدراتُ
+     * التجزئة المذكورةُ تحت الباقة تُفتَح». وهي لا تُفتَح.
+     *
+     * فصار الحسابُ يمرّ بالمرشِّح نفسِه الذي يحكم وقتَ التشغيل — **مصدرٌ
+     * واحدٌ للحقيقة، لا حسابان يفترقان.**
+     *
+     * @param  string|null  $businessType  نوعُ نشاط القارئ. و`null` تعني
+     *                                     «لا نعرف بعد» — فتُعرَض القائمةُ
+     *                                     الخام ويُقال ذلك في الملاحظة،
+     *                                     ولا تُقدَّم على أنّها مضمونة.
      *
      * @return array{plans:array<int,array<string,mixed>>,vertical_note:string}
      */
-    public function catalogue(): array
+    public function catalogue(?string $businessType = null): array
     {
         $ladder = A::ALL_PLANS;
         $out = [];
         $previousCodes = [];
 
         foreach ($ladder as $i => $plan) {
-            $codes = AccessPresets::planFeatures($plan);
+            $codes = $this->grantedFor($businessType, $plan);
 
             // **ما تضيفه هذه الباقةُ على التي تحتها** — وهو جوابُ السؤال
             // الذي يسأله من يفكّر في الترقية.
@@ -123,12 +150,88 @@ class PlanComparisonService
         return [
             'plans' => $out,
             'groups' => $this->groupOrder(),
+            'business_type' => $businessType,
+            'vertical_note' => $this->verticalNote($businessType),
 
-            // ③ **وما لا تفتحه الترقيةُ يُقال صراحةً** — وإلّا رقّى صاحبُ
-            // البقالة ليحصل على قدرةِ صيدليّةٍ فلا يجدها.
-            'vertical_note' => 'قدراتُ النشاط (صيدليّة · محطّة وقود · جملة) '
-                .'تُفتَح بنوع نشاطك لا بباقتك — والترقيةُ لا تفتحها.',
+            // **وما حُجب عن هذا النشاط يُقال بعدده** — فالقارئُ يعلم أنّ
+            // الجدولَ مفصَّلٌ له لا قائمةً عامّة.
+            'withheld_count' => count($this->withheldFrom($businessType)),
         ];
+    }
+
+    /**
+     * **ما يصل هذا النشاطَ فعلاً في هذه الباقة** — بالمرشِّح نفسِه.
+     *
+     * ولا يُعاد بناءُ المنطق هنا: `resolveFeatures` هي الحَكَم وقتَ
+     * التشغيل، **فحسابٌ ثانٍ يوازيها يفترق عنها يومَ تتغيّر**. (وهي
+     * القائمةُ الموازيةُ الخامسةُ التي كادت تُولَد في هذا المشروع.)
+     *
+     * @return array<int,string>
+     */
+    private function grantedFor(?string $businessType, string $plan): array
+    {
+        if ($businessType === null) {
+            return AccessPresets::planFeatures($plan);
+        }
+
+        $resolved = app(\App\Services\FeatureAccessService::class)->resolveFeatures(
+            A::ROLE_MERCHANT, 'verified', $businessType, $plan);
+
+        // **ويُقتصر على ما تفتحه الباقةُ** — لا ما يفتحه الدورُ أو النشاط:
+        // الجدولُ يقارن باقاتٍ، فإدراجُ ما يأتي مجّاناً من النشاط يجعل
+        // «المجّانيّة» تبدو وكأنّها تبيعه.
+        return array_values(array_intersect(
+            AccessPresets::planFeatures($plan), $resolved));
+    }
+
+    /**
+     * القدراتُ المُدرجةُ في الباقة العليا ولا يفتحها هذا النشاط أبداً.
+     *
+     * @return array<int,string>
+     */
+    private function withheldFrom(?string $businessType): array
+    {
+        if ($businessType === null) {
+            return [];
+        }
+
+        return array_values(array_diff(
+            AccessPresets::planFeatures(A::PLAN_ENTERPRISE),
+            $this->grantedFor($businessType, A::PLAN_ENTERPRISE)));
+    }
+
+    /**
+     * ③ **وما لا تفتحه الترقيةُ يُقال صراحةً وبأسمائه.**
+     *
+     * وكانت جملةً مكتوبةً تُسمّي ثلاثةَ أنشطةٍ بعينها — **فتشيخ يومَ
+     * يُضاف نشاطٌ رابع، وتُقرأ عكسَ مرادها** من كان نشاطُه خارجها.
+     * فصارت تُبنى من الفرق المحسوب: تقول كم قدرةً حُجبت وأمثلةً منها
+     * بأسمائها العربيّة من السجلّ.
+     */
+    private function verticalNote(?string $businessType): string
+    {
+        if ($businessType === null) {
+            return 'هذه القائمةُ عامّةٌ لكلّ الأنشطة. وبعضُ القدرات تخصّ '
+                .'نشاطاً بعينه، فما يصلك يُحسب بعد اختيار نوع نشاطك.';
+        }
+
+        $withheld = $this->withheldFrom($businessType);
+
+        if ($withheld === []) {
+            return 'كلُّ ما في هذه الباقات يُفتَح لنشاطك — لا شيءَ محجوبٌ '
+                .'بنوع النشاط.';
+        }
+
+        $registry = CapabilityRegistry::all();
+        $names = [];
+
+        foreach (array_slice($withheld, 0, 3) as $code) {
+            $names[] = $registry[$code]?->name() ?: $code;
+        }
+
+        return 'وفي هذه الباقات '.count($withheld).' قدرةً تخصّ أنشطةً أخرى '
+            .'('.implode(' · ', $names).(count($withheld) > 3 ? ' وغيرُها' : '')
+            .') — **لا تفتحها الترقيةُ لنشاطك**، ولم تُحتسَب في الأرقام أعلاه.';
     }
 
     /**

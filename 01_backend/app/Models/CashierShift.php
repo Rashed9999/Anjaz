@@ -17,6 +17,11 @@ class CashierShift extends Model
         // بلا اسمٍ وتُطبَع الفاتورةُ بلا فاتحها. (وقد عضّ هذا المشروعَ
         // أربع مرّات.)
         'opened_by_name', 'closed_by', 'closed_by_name', 'opened_by_role',
+
+        // AMIAL-SHIFT-DEVICE-001 — **على أيّ صندوقٍ فُتحت.**
+        // و`open_device_lock` يحمل الجهازَ ما دامت مفتوحةً ويُفرَّغ عند
+        // الإغلاق — فالقيدُ الفريدُ يمنع ورديّتين على صندوقٍ واحد.
+        'pos_device_id', 'open_device_lock',
     ];
 
     protected $casts = [

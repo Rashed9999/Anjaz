@@ -59,7 +59,16 @@ class CashierShiftController extends Controller
         if ($v->fails()) return $this->err('VALIDATION', $v->errors()->first(), 422);
 
         try {
-            $shift = $this->svc->open($merchant, $posId, (string) $request->input('opening_float', '0'));
+            // AMIAL-SHIFT-DEVICE-001 — **الصندوقُ الذي فُتحت عليه.**
+            // ويُؤخذ من البوّابة لا من الطلب: معرّفٌ يأتي من الجهاز
+            // يمكن تغييرُه، والبوّابةُ وحدَها أثبتت أنّه غيرُ ملغىً
+            // ومطابقٌ للجلسة. (القاعدة الثامنة.)
+            $shift = $this->svc->open(
+                $merchant,
+                $posId,
+                (string) $request->input('opening_float', '0'),
+                \App\Http\Middleware\EnsurePosDevice::deviceOf($request)?->id,
+            );
         } catch (\RuntimeException $e) {
             return $this->err('OPEN_FAILED', $e->getMessage(), 422);
         }
