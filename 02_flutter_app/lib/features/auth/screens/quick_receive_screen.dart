@@ -1,10 +1,11 @@
+import 'package:amial_pay/common/widgets/amial_brand_logo.dart';
 import 'package:flutter/material.dart';
 import 'package:amial_pay/features/auth/controllers/unified_auth_controller.dart';
 import 'package:amial_pay/features/auth/domain/quick_receive_preferences.dart';
 import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
-import 'package:amial_pay/util/images.dart';
+import 'package:amial_pay/util/app_direction.dart';
 
 /// AMIAL-QUICK-RECEIVE-002
 ///
@@ -49,9 +50,20 @@ class QuickReceiveScreen extends StatelessWidget {
     final last = UnifiedAuthController.readLastUser();
     if (last == null || last.kind != 'customer') return null;
 
-    final owner = saved.ownerPhone.trim();
-    final lastPhone = last.phone.trim();
-    if (owner.isNotEmpty && lastPhone.isNotEmpty && owner != lastPhone) {
+    // AMIAL-QUICK-RECEIVE-004 — **ولا تُقارَن الأرقامُ حرفيّاً ها هنا.**
+    //
+    // المخزَّنُ يأتي من الملفّ الشخصيّ (`967777100001`)، والأخيرُ يأتي
+    // **كما كتبه صاحبُه في الدخول** (`777100001`) — فالمقارنةُ الحرفيّةُ
+    // تقول «مختلفان» في كلّ مرّة، فتردّ هذه الدالّةُ `null` وتُعرَض
+    // حالةُ «مُعطَّل» **والميزةُ مفعَّلة**. وهو ما شُكي منه: «لا تعمل».
+    //
+    // والمقارنةُ الصحيحةُ كانت مكتوبةً في `disableIfOwnedByAnother` منذ
+    // AMIAL-QUICK-RECEIVE-003 — **وبابٌ ثانٍ تُرك على الحرفيّة**.
+    // (القاعدة الرابعة: ميزةٌ لها مدخلان تُختبَر من مدخليها.)
+    if (!QuickReceivePreferences.isSameOwner(
+      storedOwner: saved.ownerPhone,
+      currentPhone: last.phone,
+    )) {
       return null;
     }
     return saved;
@@ -71,7 +83,7 @@ class QuickReceiveScreen extends StatelessWidget {
       ),
       body: SafeArea(
         child: Directionality(
-          textDirection: TextDirection.rtl,
+          textDirection: appTextDirection(),
           child: data == null
               ? _disabledState(context)
               : _enabledState(
@@ -151,7 +163,7 @@ class QuickReceiveScreen extends StatelessWidget {
         children: [
           Center(
             child: Container(
-              width: AmialSpacing.xxl * 2.25,
+              width: AmialSpacing.xxl * 2.25 * AmialBrandLogo.lockupAspect,
               height: AmialSpacing.xxl * 2.25,
               padding: const EdgeInsets.all(AmialSpacing.xs),
               decoration: BoxDecoration(
@@ -159,7 +171,7 @@ class QuickReceiveScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AmialSpacing.radiusLg),
                 boxShadow: AmialSpacing.cardShadow,
               ),
-              child: Image.asset(Images.logo, fit: BoxFit.contain),
+              child: const AmialBrandLogo(fit: BoxFit.contain),
             ),
           ),
           const SizedBox(height: AmialSpacing.lg),

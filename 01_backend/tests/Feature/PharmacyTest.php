@@ -3,17 +3,22 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
+use App\Models\CustomerCreditAccount;
+use App\Models\CustomerCreditMovement;
 use App\Models\Pharmacy;
 use App\Models\PharmacyBatch;
 use App\Models\PharmacyCustomer;
 use App\Models\PharmacyProduct;
 use App\Models\PharmacyStockAlert;
+use App\Models\PaymentRequest;
 use App\Models\User;
 use App\Services\MoneyService;
 use App\Services\PharmacyAlertService;
 use App\Services\PharmacySaleService;
 use App\Services\PharmacyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
+use Laravel\Passport\Passport;
 use Tests\TestCase;
 
 /**
@@ -37,7 +42,11 @@ class PharmacyTest extends TestCase
         $this->alertSvc = app(PharmacyAlertService::class);
 
         $this->merchant = User::factory()->create(['type' => 3, 'zone_code' => 'SOUTH']);
-        MerchantProfile::create(['user_id' => $this->merchant->id, 'verification_status' => 'verified']);
+        MerchantProfile::create([
+            'user_id' => $this->merchant->id,
+            'business_type' => 'pharmacy',
+            'verification_status' => 'verified',
+        ]);
         $this->pharmacy = $this->svc->getOrCreatePharmacy($this->merchant);
     }
 
@@ -63,6 +72,45 @@ class PharmacyTest extends TestCase
         $this->assertSame('0.0000', (string)$product->current_stock);
     }
 
+    /** المنتج والدفعة الأولى معاملة واحدة: لا صنف ظاهر بمخزونٍ وهمي. */
+    public function product_can_be_created_with_its_first_batch_category_and_dates(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'أموكسيسيلين 500',
+            'generic_name' => 'Amoxicillin',
+            'category_name' => 'مضادات حيوية',
+            'sale_price' => '1500',
+            'cost_price' => '1100',
+            'initial_batch' => [
+                'batch_number' => 'AMX-2026-01',
+                'quantity_received' => '48',
+                'cost_per_unit' => '1100',
+                'manufactured_at' => now()->subMonths(2)->toDateString(),
+                'expiry_date' => now()->addYear()->toDateString(),
+            ],
+        ]);
+
+        $product->load('category', 'batches');
+        $this->assertSame('مضادات حيوية', $product->category?->name);
+        $this->assertSame('48.0000', (string) $product->current_stock);
+        $this->assertCount(1, $product->batches);
+        $this->assertNotNull($product->batches->first()->manufactured_at);
+    }
+
+    /** تاريخ إنتاج بعد الانتهاء يرفض الدفعة قبل أن يلوّث المخزون. */
+    public function batch_rejects_manufacturing_date_after_expiry(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, ['trade_name' => 'دواء', 'sale_price' => '100']);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('الإنتاج');
+        $this->svc->addBatch($product, [
+            'batch_number' => 'BAD-DATE',
+            'quantity_received' => '1',
+            'manufactured_at' => now()->addYear()->toDateString(),
+            'expiry_date' => now()->addMonth()->toDateString(),
+        ]);
+    }
+
     /** @test */
     public function add_batch_increases_product_stock(): void
     {
@@ -80,6 +128,83 @@ class PharmacyTest extends TestCase
 
         $product->refresh();
         $this->assertSame(MoneyService::normalize('100'), (string)$product->current_stock);
+    }
+
+    /** @test */
+    public function recalled_batch_is_removed_from_saleable_stock_without_erasing_its_audit_record(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, ['trade_name' => 'دواء مسحوب', 'sale_price' => '100']);
+        $batch = $this->svc->addBatch($product, [
+            'batch_number' => 'RECALL-001', 'expiry_date' => now()->addYear()->toDateString(),
+            'quantity_received' => '20',
+        ]);
+        $recalled = $this->svc->recallBatch($batch, $this->merchant, 'تعميم سحب من المورد');
+
+        $this->assertSame('recalled', $recalled->status);
+        $this->assertSame('تعميم سحب من المورد', $recalled->recall_reason);
+        $this->assertSame($this->merchant->id, $recalled->recalled_by_user_id);
+        $product->refresh();
+        $this->assertSame('0.0000', (string) $product->current_stock);
+    }
+
+    /** بديلٌ محلي لا يظهر إلا حين يتطابق تعريفه الدوائي كاملاً. */
+    public function alternatives_require_the_same_active_ingredient_strength_and_dosage_form(): void
+    {
+        $source = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'بانادول', 'sale_price' => '500',
+            'active_ingredient' => 'Paracetamol', 'strength' => '500 mg', 'dosage_form' => 'أقراص',
+        ]);
+        $match = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'باراسيتامول محلي', 'sale_price' => '350',
+            'active_ingredient' => 'Paracetamol', 'strength' => '500 mg', 'dosage_form' => 'أقراص',
+        ]);
+        $differentForm = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'باراسيتامول شراب', 'sale_price' => '350',
+            'active_ingredient' => 'Paracetamol', 'strength' => '500 mg', 'dosage_form' => 'شراب',
+        ]);
+        $this->svc->addBatch($match, [
+            'batch_number' => 'ALT-1', 'expiry_date' => now()->addYear()->toDateString(), 'quantity_received' => '5',
+        ]);
+        $this->svc->addBatch($differentForm, [
+            'batch_number' => 'ALT-2', 'expiry_date' => now()->addYear()->toDateString(), 'quantity_received' => '5',
+        ]);
+
+        $alternatives = $this->svc->alternativesFor($source);
+        $this->assertCount(1, $alternatives);
+        $this->assertSame($match->id, $alternatives->first()->id);
+    }
+
+    /** الدفعة المنتهية لا تبقى في الرصيد بعد إتلافها أو إرجاعها. */
+    public function batch_disposition_removes_remaining_stock_and_keeps_audit_fields(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, ['trade_name' => 'دواء منتهي', 'sale_price' => '100']);
+        $batch = $this->svc->addBatch($product, [
+            'batch_number' => 'EXPIRED-RETURN', 'expiry_date' => now()->addYear()->toDateString(), 'quantity_received' => '20',
+        ]);
+        $disposed = $this->svc->disposeBatch($batch, $this->merchant, 'return_to_supplier', 'فاتورة إرجاع المورد #55');
+
+        $this->assertSame('returned', $disposed->status);
+        $this->assertSame('return_to_supplier', $disposed->disposition_type);
+        $this->assertSame($this->merchant->id, $disposed->disposed_by_user_id);
+        $this->assertNotNull($disposed->disposed_at);
+        $product->refresh();
+        $this->assertSame('0.0000', (string) $product->current_stock);
+    }
+
+    /** مسح الانتهاء يحجب الرصيد أولاً؛ توثيق المصير لا يخصمه مرّتين. */
+    public function disposing_an_expired_batch_keeps_stock_at_zero_without_a_double_deduction(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, ['trade_name' => 'دواء انتهى', 'sale_price' => '100']);
+        $batch = $this->svc->addBatch($product, [
+            'batch_number' => 'EXPIRED-DISPOSE', 'expiry_date' => now()->addYear()->toDateString(), 'quantity_received' => '7',
+        ]);
+        PharmacyBatch::whereKey($batch->id)->update(['expiry_date' => now()->subDay()->toDateString()]);
+        $this->alertSvc->scanExpiringBatches($this->pharmacy);
+
+        $disposed = $this->svc->disposeBatch($batch->fresh(), $this->merchant, 'destroyed', 'إتلاف بعد انتهاء الصلاحية');
+        $this->assertSame('destroyed', $disposed->status);
+        $product->refresh();
+        $this->assertSame('0.0000', (string) $product->current_stock);
     }
 
     /** @test */
@@ -167,6 +292,156 @@ class PharmacyTest extends TestCase
         $this->assertSame('exhausted', $b1->status);
         $this->assertSame('7.0000', (string)$b2->quantity_remaining);
         $this->assertCount(2, $sale->items);
+    }
+
+    /** @test */
+    public function amial_pay_pharmacy_sale_requires_a_paid_qr_for_the_merchant_wallet(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'Panadol QR', 'sale_price' => '500',
+        ]);
+        $this->svc->addBatch($product, [
+            'batch_number' => 'QR-1', 'expiry_date' => now()->addYear()->toDateString(),
+            'quantity_received' => 5,
+        ]);
+        PaymentRequest::create([
+            'request_ulid' => (string) Str::ulid(),
+            'short_code' => 'PHARMQR1',
+            'requester_user_id' => $this->merchant->id,
+            'amount' => '500.0000',
+            'share_method' => 'qr',
+            'status' => 'paid',
+            'paid_transaction_id' => 'TX-PHARMACY-001',
+            'paid_at' => now(),
+            'expires_at' => now()->addMinutes(5),
+            'zone_code' => 'SOUTH',
+        ]);
+
+        $sale = $this->saleSvc->recordSale(
+            $this->merchant, $this->pharmacy, null,
+            [['product_id' => $product->id, 'quantity' => 1]],
+            ['payment_method' => 'amial_pay', 'paid_transaction_id' => 'TX-PHARMACY-001'],
+        );
+
+        $this->assertSame('TX-PHARMACY-001', $sale->paid_transaction_id);
+    }
+
+    /** @test */
+    public function pharmacy_sale_rejects_an_unpaid_or_forged_qr_reference_before_stock_is_deducted(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'Panadol غير مدفوع', 'sale_price' => '500',
+        ]);
+        $this->svc->addBatch($product, [
+            'batch_number' => 'QR-UNPAID-1', 'expiry_date' => now()->addYear()->toDateString(),
+            'quantity_received' => 5,
+        ]);
+
+        try {
+            $this->saleSvc->recordSale(
+                $this->merchant, $this->pharmacy, null,
+                [['product_id' => $product->id, 'quantity' => 1]],
+                ['payment_method' => 'amial_pay', 'paid_transaction_id' => 'FORGED-PHARMACY-QR'],
+            );
+            $this->fail('لا يجوز إنشاء بيع أميال باي بمرجع QR غير مدفوع');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('مرجع أميال باي غير صالح', $e->getMessage());
+        }
+
+        $this->assertSame('5.0000', (string) $product->fresh()->current_stock,
+            'فشل QR يجب ألا يخصم المخزون ولا ينشئ بيعاً');
+        $this->assertSame(0, \App\Models\PharmacySale::count());
+    }
+
+    /** @test */
+    public function pharmacy_credit_sale_creates_a_unified_debt_visible_in_the_customers_deferred_invoices(): void
+    {
+        $customerUser = User::factory()->create([
+            'type' => 2, 'zone_code' => 'SOUTH', 'phone' => '+967771700088',
+        ]);
+        $customer = $this->svc->addCustomer($this->pharmacy, [
+            'full_name' => 'عميل الفاتورة الآجلة', 'phone' => '771700088',
+        ]);
+        $product = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'دواء آجل', 'sale_price' => '1200',
+        ]);
+        $this->svc->addBatch($product, [
+            'batch_number' => 'CREDIT-1', 'expiry_date' => now()->addYear()->toDateString(),
+            'quantity_received' => 5,
+        ]);
+
+        $sale = $this->saleSvc->recordSale(
+            $this->merchant, $this->pharmacy, null,
+            [['product_id' => $product->id, 'quantity' => 1]],
+            ['payment_method' => 'credit', 'customer_id' => $customer->id],
+        );
+
+        $account = CustomerCreditAccount::where('merchant_user_id', $this->merchant->id)->sole();
+        $this->assertSame($customerUser->id, (int) $account->customer_user_id);
+        $this->assertSame('1200.0000', (string) $account->current_balance);
+        $movement = CustomerCreditMovement::where('account_id', $account->id)->sole();
+        $this->assertSame('sale', $movement->type);
+        $this->assertSame('pharmacy_sale', $movement->reference_type);
+        $this->assertSame($sale->sale_ulid, $movement->reference_id);
+
+        Passport::actingAs($customerUser->fresh(), [], 'api');
+        $this->getJson('/api/v1/amial/customer/credits')
+            ->assertOk()
+            ->assertJsonPath('meta.accounts_count', 1)
+            ->assertJsonPath('meta.accounts.0.current_balance', '1200.0000');
+        $this->getJson("/api/v1/amial/customer/credits/{$account->id}/statement")
+            ->assertOk()
+            ->assertJsonPath('meta.movements.0.reference_number', '#' . substr($sale->sale_ulid, -8));
+    }
+
+    /** @test */
+    public function pharmacy_credit_sale_without_a_customer_identity_is_rejected_before_sale_or_debt_creation(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'دواء بلا عميل', 'sale_price' => '100',
+        ]);
+        $this->svc->addBatch($product, [
+            'batch_number' => 'CREDIT-NO-CUSTOMER', 'expiry_date' => now()->addYear()->toDateString(),
+            'quantity_received' => 2,
+        ]);
+
+        try {
+            $this->saleSvc->recordSale(
+                $this->merchant, $this->pharmacy, null,
+                [['product_id' => $product->id, 'quantity' => 1]],
+                ['payment_method' => 'credit'],
+            );
+            $this->fail('لا يجوز تسجيل بيع آجل بلا هوية العميل');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertSame('رقم العميل مطلوب للبيع الآجل', $e->getMessage());
+        }
+
+        $this->assertSame(0, \App\Models\PharmacySale::count());
+        $this->assertSame(0, CustomerCreditAccount::count());
+    }
+
+    /** @test */
+    public function pharmacy_sales_history_can_open_its_real_details_and_not_a_generic_cashier_receipt(): void
+    {
+        $product = $this->svc->addProduct($this->pharmacy, [
+            'trade_name' => 'دواء تفاصيل', 'sale_price' => '350',
+        ]);
+        $batch = $this->svc->addBatch($product, [
+            'batch_number' => 'DETAIL-LOT', 'expiry_date' => now()->addYear()->toDateString(),
+            'quantity_received' => 4,
+        ]);
+        $sale = $this->saleSvc->recordSale(
+            $this->merchant, $this->pharmacy, null,
+            [['product_id' => $product->id, 'quantity' => 1]],
+            ['payment_method' => 'cash', 'prescription_number' => null],
+        );
+
+        Passport::actingAs($this->merchant->fresh(), [], 'api');
+        $this->getJson("/api/v1/amial/merchant/pharmacy/sales/{$sale->sale_ulid}")
+            ->assertOk()
+            ->assertJsonPath('meta.sale.sale_ulid', $sale->sale_ulid)
+            ->assertJsonPath('meta.sale.items.0.product_trade_name', 'دواء تفاصيل')
+            ->assertJsonPath('meta.sale.items.0.batch.batch_number', $batch->batch_number);
     }
 
     /** @test */

@@ -11,6 +11,7 @@ use App\Models\Receipt;
 use App\Models\RestaurantOrder;
 use App\Models\WholesaleCollection;
 use App\Models\WholesaleInvoice;
+use App\Domain\Verticals\VerticalRegistry;
 use App\Support\Access\AccessConstants as A;
 use App\Support\ArabicTafqit;
 use Illuminate\Support\Facades\Cache;
@@ -33,14 +34,23 @@ class ReceiptDocumentService
         'pay_merchant', 'pos_payment', 'qr_payment', 'split_bill_payment',
     ];
 
-    private const VERTICAL_LABELS = [
-        A::BIZ_QUICK_SALE => 'بيع سريع',
-        A::BIZ_RETAIL => 'تجزئة',
-        A::BIZ_FUEL => 'محطة وقود',
-        A::BIZ_PHARMACY => 'صيدلية',
-        A::BIZ_WHOLESALE => 'تجارة جملة',
-        A::BIZ_RESTAURANT => 'مطعم',
-    ];
+    /**
+     * AMIAL-VERTICAL-OOP-004 — **اسمُ القطاع على الإيصال من مصدره.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * كانت هنا **نسخةٌ خامسةٌ** لأسماء القطاعات، مكتوبةً بيدها. ووافقت
+     * المصدرَ يومَ كُتبت — **وهذا بالضبط ما يجعلها خطرة**: نسخةٌ تُوافق
+     * لا تُنبّه أحداً، ثمّ يتغيّر المصدرُ وحدَه فتفترق بصمت.
+     *
+     * **وأثرُها هنا أدومُ من غيره:** الإيصالُ يُطبع ويُسلَّم ويُحفَظ. فاسمٌ
+     * على ورقةٍ في يد العميل لا يُصحَّح بتحديثٍ — ويبقى شاهداً على
+     * نظامين مختلفين.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    private function verticalLabel(?string $vertical, string $fallback): string
+    {
+        return VerticalRegistry::find($vertical)?->nameAr() ?? $fallback;
+    }
 
     public function __construct(
         private readonly ReceiptNoticeService $notice,
@@ -264,9 +274,9 @@ class ReceiptDocumentService
         return array_merge($base, [
             'kind' => 'merchant_invoice',
             'title' => $source['title'] ?? $this->invoiceTitle($vertical),
-            'subtitle' => self::VERTICAL_LABELS[$vertical] ?? 'فاتورة بيع',
+            'subtitle' => $this->verticalLabel($vertical, 'فاتورة بيع'),
             'vertical' => $vertical,
-            'vertical_label' => self::VERTICAL_LABELS[$vertical] ?? 'تاجر',
+            'vertical_label' => $this->verticalLabel($vertical, 'تاجر'),
             'document_number' => (string) ($source['document_number'] ?? $receipt->receipt_number),
             'status' => (string) ($source['status'] ?? $base['status']),
             'status_label' => $source['status_label'] ?? $base['status_label'],
@@ -280,6 +290,20 @@ class ReceiptDocumentService
             'total' => $total,
             'paid' => (string) ($source['paid'] ?? $total),
             'balance_due' => (string) ($source['balance_due'] ?? '0'),
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-CASH-TENDERED-001 — **ويُنقَل إلى الوثيقة صراحةً.**
+            //
+            // هذه الدالّةُ **تنتقي مفاتيحَ المصدر واحداً واحداً**، فما
+            // يُضاف هناك ولا يُذكر هنا **يسقط صامتاً**: الحقلُ محفوظٌ في
+            // البيعة، ومبنيٌّ في `retailSource`، ولا يصل الورقة. وهو
+            // بعينه «مبنيٌّ ولا يُوصَل إليه» — وأمسكه حارسُه في أوّل
+            // تشغيل.
+            // ══════════════════════════════════════════════════════════
+            'tendered_lines' => $source['tendered_lines'] ?? [],
+            // AMIAL-SHIFT-GATE-001 — **وهذه أيضاً تُنقَل صراحةً.** الدالّةُ
+            // تنتقي مفاتيحَ المصدر واحداً واحداً، وما لا يُذكر هنا يسقط
+            // صامتاً — وهو ما وقع حرفيّاً مع `tendered_lines` قبلها.
+            'shift_line' => $source['shift_line'] ?? null,
             'payment_method' => $source['payment_method'] ?? $base['channel_label'],
             'amount_words' => ArabicTafqit::yer($total),
             'note' => $source['note'] ?? $base['note'],
@@ -459,6 +483,80 @@ class ReceiptDocumentService
             'status' => (string) $sale->status,
             'status_label' => $this->saleStatusLabel((string) $sale->status),
             'customer' => $this->namedCustomer($sale->customer_name, $sale->customer_phone),
+            'tendered_lines' => $this->tenderedLines(
+                $sale->amount_received === null ? null : (string) $sale->amount_received,
+                (string) $sale->total_amount,
+            ),
+            'shift_line' => $this->shiftLine($sale->shift_id),
+        ];
+    }
+
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-SHIFT-GATE-001 — **اسمُ فاتح الورديّة أسفلَ الفاتورة.**
+     *
+     * **بنصّ الطلب:** «الفاتورة يجب أن تحمل اسمَ فاتح الورديّة أسفلها».
+     *
+     * **ويُقرأ من لقطة الورديّة لا من جدول المستخدمين** — فموظّفٌ يُعاد
+     * تسميتُه أو يُحذَف **لا يُعيد كتابةَ فواتيرِ الشهر الماضي**: الورقةُ
+     * في يد الزبون تقول اسماً، وإعادةُ الطباعة يجب أن تقوله نفسَه.
+     *
+     * **و`null` تعني «بيعةٌ قبل هذا الحارس»** (القاعدة السابعة) — فلا
+     * يُكتب «غير معروف» على فواتيرَ قديمةٍ لم تكن الورديّةُ مطلوبةً
+     * يومَها، ولا يُكتب اسمُ من لم يقبض.
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * @return array{label:string,value:string}|null
+     */
+    private function shiftLine(?int $shiftId): ?array
+    {
+        if (! $shiftId) {
+            return null;
+        }
+
+        $shift = \App\Models\CashierShift::find($shiftId);
+        if (! $shift) {
+            return null;
+        }
+
+        $name = trim((string) ($shift->opened_by_name ?? ''));
+        if ($name === '') {
+            return null;
+        }
+
+        return ['label' => 'الوردية', 'value' => $name];
+    }
+
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-CASH-TENDERED-001 — **المستلَمُ والباقي على الورقة.**
+     *
+     * الباقي رقمٌ يُقال للزبون شفاهاً ويُنسى. فإن اختلفا بعده على ورقةٍ
+     * لم يبقَ ما يُراجَع. **ورقمٌ قيل ولم يُطبَع لا يُدافَع عنه.**
+     *
+     * **ويُحسب هنا من مصدره** — المستلَمُ ناقصَ الإجماليّ — ولا يُقرأ من
+     * عمودٍ ثالثٍ يمكن أن يناقضهما (القاعدة السادسة).
+     *
+     * **ولا يُطبَع سطرٌ لبيعةٍ لم يُدخَل فيها مستلَم** (الآجلُ والمحفظةُ
+     * وأكثرُ النقديّ): و«المستلَم: ٠» يُقرأ «لم يدفع». (القاعدة السابعة.)
+     *
+     * @return array<int,array<string,string>>
+     */
+    private function tenderedLines(?string $received, string $total): array
+    {
+        if ($received === null || $received === '' || bccomp($received, '0', 4) <= 0) {
+            return [];
+        }
+
+        $change = bcsub($received, $total, 4);
+
+        return [
+            ['label' => 'المبلغ المستلم', 'value' => $received],
+            [
+                'label' => bccomp($change, '0', 4) < 0 ? 'ناقصٌ من الفاتورة' : 'الباقي',
+                'value' => bccomp($change, '0', 4) < 0
+                    ? bcmul($change, '-1', 4) : $change,
+            ],
         ];
     }
 
@@ -541,6 +639,10 @@ class ReceiptDocumentService
             'total' => (string) $sale->total_amount,
             'paid' => (string) $sale->total_amount,
             'balance_due' => '0',
+            'tendered_lines' => $this->tenderedLines(
+                $sale->amount_received === null ? null : (string) $sale->amount_received,
+                (string) $sale->total_amount,
+            ),
             'payment_method' => $this->paymentMethodLabel((string) $sale->payment_method),
             'status' => (string) $sale->status,
             'status_label' => $this->saleStatusLabel((string) $sale->status),
@@ -617,7 +719,7 @@ class ReceiptDocumentService
             'items' => $items,
             'context_fields' => [
                 ['label' => 'تاريخ الاستحقاق', 'value' => $invoice->due_date?->format('Y-m-d') ?: '—'],
-                ['label' => 'نوع البيع', 'value' => $invoice->payment_type === 'credit' ? 'آجل' : 'نقدي'],
+                ['label' => 'نوع البيع', 'value' => $invoice->payment_type === 'amial_pay' ? 'أميال باي' : ($invoice->payment_type === 'credit' ? 'آجل' : 'نقدي')],
             ],
             'subtotal' => (string) $invoice->subtotal,
             'discount' => (string) $invoice->discount_amount,
@@ -625,7 +727,7 @@ class ReceiptDocumentService
             'total' => (string) $invoice->total_amount,
             'paid' => (string) $invoice->paid_amount,
             'balance_due' => (string) $invoice->balance_due,
-            'payment_method' => $invoice->payment_type === 'credit' ? 'آجل' : 'نقدي',
+            'payment_method' => $invoice->payment_type === 'amial_pay' ? 'أميال باي' : ($invoice->payment_type === 'credit' ? 'آجل' : 'نقدي'),
             'status' => (string) $invoice->status,
             'status_label' => $this->saleStatusLabel((string) $invoice->status),
             'customer' => $invoice->customer ? [
@@ -800,7 +902,7 @@ class ReceiptDocumentService
 
     private function normalizeVertical(string $vertical): string
     {
-        return in_array($vertical, A::ALL_BUSINESS_TYPES, true)
+        return in_array($vertical, \App\Domain\Verticals\VerticalRegistry::codes(), true)
             ? $vertical
             : A::BIZ_QUICK_SALE;
     }

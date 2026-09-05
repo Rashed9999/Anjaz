@@ -19,6 +19,10 @@ use RuntimeException;
  */
 class CashierService
 {
+    public function __construct(
+        private readonly MerchantPaymentReferenceService $paymentReference,
+    ) {}
+
     // ============ المنتجات (اختيارية) ============
 
     public function addProduct(User $merchant, array $data): MerchantProduct
@@ -65,15 +69,60 @@ class CashierService
         return $product;
     }
 
-    public function listProducts(User $merchant, ?string $search = null)
-    {
+    /**
+     * أصنافُ الكاشير.
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-VARIANT-PARENT-001 — **الأبُ لا يُباع، فلا يُعرَض.**
+     *
+     * **ما وصل صاحبَ المشروع:** يضيف متغيّراتٍ لمنتج، ثمّ يفتح الكاشيرَ
+     * فإذا **«نفذ المخزون»** على كلّ شيء.
+     *
+     * وسببُه شقّان يظهران معاً:
+     *
+     * ① **الأبُ يبقى في القائمة.** `is_variant_parent` مضبوطٌ عليه و
+     *    `track_stock=false` — أي أنّه **مِظلّةٌ لا صنفٌ يُباع**، كما يقول
+     *    تعليقُ النموذج بنصّه: «الأبُ لا يُباع ولا يُخزَّن». ومع ذلك كان
+     *    هذا الاستعلامُ يجلبه كسائر الأصناف.
+     *
+     * ② **والمتغيّراتُ تُولَّد بكمّيّة صفر** (وهو صحيح: المخزونُ يُدخَل
+     *    لكلّ مقاسٍ على حدة). فالشاشةُ تعرض الأبَ ومعه تسعةَ متغيّراتٍ
+     *    **كلُّها صفر** — فيقرؤها البائعُ «نفذ» ولا يستطيع بيعَ شيء.
+     *
+     * **ولا يمسكه شيء**: الصفوفُ سليمة، والاستعلامُ يعمل، والرقمُ يُقرأ.
+     * لا يظهر إلّا لمن يبيع فعلاً.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    public function listProducts(
+        User $merchant,
+        ?string $search = null,
+        // **وشاشةُ إدارة المنتجات ليست شبكةَ البيع.**
+        //
+        // استثناءُ المِظلّة صحيحٌ في الكاشير وخطأٌ في الكتالوج: لو غابت
+        // عن الإدارة أيضاً **لم يعد للتاجر بابٌ إليها إطلاقاً** — لا
+        // تعديلَ اسمٍ ولا وصولَ إلى «الأنواع» ليوزّع مخزونَها. فتُقاد
+        // من الطلب، والافتراضيُّ سلوكُ الكاشير.
+        bool $includeVariantParents = false,
+    ) {
         return MerchantProduct::where('merchant_user_id', $merchant->id)
             ->where('is_active', true)
+            // **مِظلّةُ المتغيّرات تُستثنى** — ومخزونُها ليس مخزوناً يُباع.
+            ->when(! $includeVariantParents,
+                fn ($q) => $q->where(fn ($w) => $w->whereNull('is_variant_parent')
+                    ->orWhere('is_variant_parent', false)))
             ->when($search, fn ($q) => $q->where(function ($w) use ($search) {
                 $w->where('name', 'like', "%{$search}%")->orWhere('barcode', $search);
             }))
             ->orderBy('name')
-            ->get();
+            ->get()
+            // **والاسمُ المعروضُ يميّز المتغيّر** — ولولاه ظهرت تسعةُ صفوفٍ
+            // باسم «قميص» ولا يُعرف أيُّها الذي في اليد.
+            ->each(function (MerchantProduct $p) {
+                $p->setAttribute('display_name', $p->displayName());
+                // **وتُقال صفةُ المِظلّة للشاشة** — فزرُّ «الأنواع» لا
+                // يُعرَض إلّا عليها، وشاشةٌ فارغةٌ على صنفٍ عاديٍّ تُقرأ عطلاً.
+                $p->setAttribute('is_variant_parent', (bool) $p->is_variant_parent);
+            });
     }
 
     /**
@@ -120,6 +169,28 @@ class CashierService
         ?string $cashAmount = null,
         ?string $walletAmount = null,
         ?string $clientUuid = null,
+        // AMIAL-MULTI-CURRENCY-003 — **افتراضُه الأساس، فكلُّ نداءٍ قائمٍ
+        // يعني الريالَ حرفاً بحرف.**
+        ?string $currency = null,
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-LOYALTY-AT-PAYMENT-001 — **النقاطُ تُصرَف داخل البيعة.**
+        //
+        // وكان الاستبدالُ يقع في شاشةٍ أخرى ثمّ يُقال للكاشير «طبّقه على
+        // الفاتورة»: نقاطٌ تُحرَق ثمّ خصمٌ يُطبَّق **إن تذكّر**. وإن
+        // نسِي أو أُلغيت البيعة ذهبت النقاطُ ودفع العميلُ كاملاً.
+        //
+        // فصارت هنا: تُصرَف في معاملة البيعة نفسِها — تسقط البيعةُ فتعود
+        // النقاط، وتُحفظ فتُوسَم حركتُها بمعرّفها.
+        // ══════════════════════════════════════════════════════════════
+        ?float $redeemPoints = null,
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-CASH-TENDERED-001 — **ما استلمه الكاشيرُ نقداً.**
+        //
+        // والباقي يُحسب منه ومن الإجماليّ، **ولا يُخزَّن** — عمودٌ ثالثٌ
+        // يمكن أن يناقض الاثنين (القاعدة السادسة). و`null` تعني «لم
+        // يُدخَل» لا صفراً: الآجلُ والمحفظةُ لا مستلَمَ فيهما أصلاً.
+        // ══════════════════════════════════════════════════════════════
+        ?string $amountReceived = null,
     ): MerchantSale {
         // AMIAL-OFFLINE-POS-001: idempotency — بيع دون اتصال يُعاد إرساله بنفس
         // client_uuid عند المزامنة؛ إن كان مُسجَّلاً سابقاً نُعيده كما هو دون
@@ -137,6 +208,43 @@ class CashierService
         if (!MoneyService::isPositive($total)) {
             throw new InvalidArgumentException('إجمالي البيع يجب أن يكون موجباً');
         }
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-MULTI-CURRENCY-003 — **عملةُ البيعة وسعرُها المجمَّد.**
+        //
+        // **وثلاثةُ شروطٍ قبل قبول عملةٍ غيرِ الأساس، وكلٌّ منها يمنع
+        // مالاً خارج الرقابة:**
+        //
+        // ① **أن تكون مدعومةً** — رمزٌ مخترَعٌ يُنشئ بيعاتٍ لا يجدها تقرير.
+        // ② **أن يكون التاجرُ قد فعّل قبضَها** — وإلّا سجّل موظّفٌ بيعةً
+        //    بعملةٍ لم يقرّرها صاحبُ المتجر.
+        // ③ **أن يكون لها سعرٌ مضبوط** — فبيعةٌ بلا مكافئٍ لا يُحسَب عليها
+        //    حدُّ استلامٍ ولا تدخل تقريراً. (القاعدة السابعة: لا يُفترَض
+        //    السعرُ واحداً — فمئةُ دولارٍ تصير مئةَ ريال.)
+        // ══════════════════════════════════════════════════════════════
+        $currency = \App\Support\Money\Currencies::normalize(
+            $currency ?: \App\Support\Money\Currencies::BASE
+        );
+        $fxRate = '1';
+
+        if (!\App\Support\Money\Currencies::isBase($currency)) {
+            $accepted = \App\Models\MerchantCurrency::where('merchant_user_id', $merchant->id)
+                ->where('code', $currency)->where('accepts_payments', true)->exists();
+
+            if (!$accepted) {
+                throw new InvalidArgumentException(sprintf(
+                    'المتجر لا يقبل الدفع بـ%s — تُفعَّل من شاشة «محافظي».',
+                    \App\Support\Money\Currencies::nameAr($currency)
+                ));
+            }
+
+            // يرمي `RuntimeException` برسالةٍ تقول أنّ السعرَ غيرُ مضبوط.
+            $fxRate = app(\App\Services\FxRateService::class)->rateToBase($currency);
+        }
+
+        // **المكافئُ يُحسب مرّةً هنا ويُحفَظ** — لا يُعاد حسابُه عند القراءة
+        // بسعرِ ذلك اليوم، فتقريرُ الشهر الماضي لا يتغيّر كلَّ صباح.
+        $baseTotal = bcmul($total, $fxRate, 4);
 
         $status = 'completed';
         if ($paymentMethod === 'credit') {
@@ -196,14 +304,72 @@ class CashierService
             $this->assertDiscountAllowed($merchant, $posUserId, $discountAmount);
         }
 
-        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid) {
+        // **ونقاطٌ بلا عميلٍ لا تُصرَف**: الرصيدُ محفوظٌ على هاتفه، فبلا
+        // هاتفٍ لا يُعرف من يدفع من رصيده.
+        if ($redeemPoints !== null && $redeemPoints > 0 && empty($customer['phone'])) {
+            throw new InvalidArgumentException(
+                'استبدالُ النقاط يحتاج رقمَ العميل — فرصيدُ النقاط محفوظٌ على رقمه');
+        }
+
+        return DB::transaction(function () use ($merchant, $total, $paymentMethod, $status, $items, $posUserId, $customer, $paidTransactionId, $creditDueDate, $corporateAccount, $corporateMemberId, $discountAmount, $promotionId, $cashAmount, $walletAmount, $clientUuid, $currency, $fxRate, $baseTotal, $redeemPoints, $amountReceived) {
+            // لا يكفي `paid_transaction_id` القادم من Flutter. يجب أن يكون
+            // طلب QR مدفوعاً لمحفظة المنشأة وبالمبلغ نفسه وغير مستهلك.
+            // البيع بلا مرجع يبقى معلّقاً إلى أن تُتم شاشة QR الدفع؛ أمّا إذا
+            // زوّد التطبيق مرجعاً فلا يجوز اعتباره دليلاً بنفسه.
+            if ($paymentMethod === 'amial_pay' && !empty($paidTransactionId)) {
+                $this->paymentReference->assertPaidForMerchant(
+                    $merchant, $paidTransactionId, $total,
+                );
+            }
+            if ($paymentMethod === 'mixed' && MoneyService::isPositive((string) $walletAmount)) {
+                $this->paymentReference->assertPaidForMerchant(
+                    $merchant, $paidTransactionId, (string) $walletAmount,
+                );
+            }
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-SHIFT-GATE-001 — **البيعةُ تحمل ورديّتَها، لا تُستنتَج.**
+            //
+            // الورديّةُ لها مدىً زمنيّ، والحسابُ به يعمل **حتّى يقع
+            // تداخل**: ورديّةٌ نُسي إقفالُها ثمّ فُتحت أخرى، أو ساعةٌ
+            // تُعدَّل. فالرابطُ الصريحُ يقول من قبض هذه البيعةَ بعينها.
+            //
+            // **ويُقرأ هنا لا يُمرَّر مُعامِلاً**: التوقيعُ فيه عشرون
+            // مُعامِلاً وخمسةَ عشرَ منادياً، **وواحدٌ ينسى تمريرَه يُنتج
+            // بيعةً بلا ورديّة بلا خطأ**. والمفتاحُ نفسُه الذي يعرفه
+            // الحارس: (التاجر، موظّف نقطة البيع).
+            //
+            // **و`null` هنا ليست عطلاً** (القاعدة السابعة): تاجرٌ أطفأ
+            // الحدَّ من لوحته يبيع بلا ورديّة عن قصد، والعمودُ يقول ذلك.
+            // ══════════════════════════════════════════════════════════
+            $openShift = app(CashierShiftService::class)->current($merchant, $posUserId);
+            $shiftId = $openShift?->id;
+
+            // AMIAL-SHIFT-DEVICE-001 — **والصندوقُ يُقرأ من الورديّة لا
+            // من الطلب.**
+            //
+            // فلا مصدرانِ للجهاز يفترقان: البيعةُ تقع داخل ورديّة، والورديّةُ
+            // فُتحت على صندوقٍ أثبتته البوّابة. وقراءتُه ثانيةً من الطلب
+            // تفتح بابَ فاتورةٍ تقول صندوقاً ودرجُها في آخر.
+            //
+            // **وبلا ورديّةٍ لا جهاز** — وهو صادقٌ: تاجرٌ أطفأ حدَّ الورديّة
+            // يبيع من هاتفه، ولا درجَ يُنسَب إليه.
+            $saleDeviceId = $openShift?->pos_device_id;
+
             $sale = MerchantSale::create([
                 'sale_ulid' => (string) Str::ulid(),
                 'client_uuid' => $clientUuid ?: null,
                 'merchant_user_id' => $merchant->id,
                 'pos_user_id' => $posUserId,
+                'shift_id' => $shiftId,
+                'pos_device_id' => $saleDeviceId,
                 'total_amount' => $total,
+                // AMIAL-MULTI-CURRENCY-003 — العملةُ والسعرُ المجمَّد والمكافئ.
+                'currency' => $currency,
+                'fx_rate_to_base' => $fxRate,
+                'base_amount' => $baseTotal,
                 'discount_amount' => $discountAmount,
+                'amount_received' => $amountReceived,
                 'promotion_id' => $promotionId,
                 'cash_amount' => $paymentMethod === 'mixed' ? $cashAmount : null,
                 'wallet_amount' => $paymentMethod === 'mixed' ? $walletAmount : null,
@@ -287,6 +453,32 @@ class CashierService
                 }
             }
 
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-LOYALTY-AT-PAYMENT-001 — **الاستبدالُ داخل المعاملة.**
+            //
+            // **ولا يُبتلَع خطؤه** — بخلاف الكسب أسفلَه. والفرقُ ليس
+            // اجتهاداً: الكسبُ **يُعطي**، فسقوطُه يُنقص العميلَ نقاطاً
+            // ولا يمسّ مالاً. والاستبدالُ **يأخذ من رصيده ويُنقص ما
+            // يدفع**؛ فابتلاعُ خطئه يُنتج أسوأَ حالتين:
+            //
+            //   · إن مرّ الخصمُ ولم تُنقَص النقاط ⇒ المتجرُ خسِر خصماً
+            //     بلا مقابل، مرّةً بعد مرّة.
+            //   · وإن نُقصت النقاطُ وسقطت البيعة ⇒ العميلُ خسِر رصيدَه.
+            //
+            // فالرميُ هنا يُسقط البيعةَ كلَّها، **فتعود النقاطُ ولا
+            // يُقبَض المال** — وبيعةٌ تُعاد أهونُ من رصيدٍ يضيع.
+            // ══════════════════════════════════════════════════════════
+            if ($redeemPoints !== null && $redeemPoints > 0) {
+                $redeemed = app(\App\Services\LoyaltyService::class)->redeem(
+                    $merchant, (string) $customer['phone'], $redeemPoints,
+                    $posUserId ?? $merchant->id, $sale->sale_ulid,
+                );
+
+                $sale->loyalty_points_redeemed = $redeemPoints;
+                $sale->loyalty_discount = $redeemed['discount'];
+                $sale->save();
+            }
+
             // AMIAL-LOYALTY-001 — كسب نقاط الولاء مركزياً لكل بيع مُتمّ بعميل معروف.
             // آمنة تماماً: تتجاهل بصمت إن لا برنامج مُفعّل/لا هاتف (لا تُعطّل البيع).
             if ($status === 'completed' && !empty($customer['phone'])) {
@@ -325,6 +517,30 @@ class CashierService
      * من الرفّ فعلاً، ورفضُها بعد خروجها لا يُفيد أحداً — **لكنّ الرصيد
      * السالب يبقى ظاهراً** حتّى يُصلحه جردٌ، وهو الإشارةُ التي كانت تُمحى.
      */
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-NEGATIVE-STOCK-001 — **ما نزل تحت الصفر يُقال للكاشير.**
+     *
+     * البيعُ يمرّ بالسالب عمداً (انظر أدناه)، **والسالبُ يبقى ظاهراً**.
+     * لكنّه كان يُترَك في جدولٍ يقرؤه المالكُ بعد يومين إن بحث — **وأنفعُ
+     * لحظةٍ لقوله هي هذه**: الكاشيرُ واقفٌ أمام الرفّ، ويستطيع أن ينظر
+     * فيه الآن.
+     *
+     * **ولا يُوقَف البيعُ ولا يُؤخَّر** — الرسالةُ بعد نجاحه لا قبله.
+     * ✱ @var array<int,array<string,string>>
+     * ══════════════════════════════════════════════════════════════════
+     */
+    private array $wentNegative = [];
+
+    /** ما نزل تحت الصفر في آخر بيعة — يُقرأ مرّةً ثمّ يُفرَّغ. */
+    public function takeNegativeLines(): array
+    {
+        $lines = $this->wentNegative;
+        $this->wentNegative = [];
+
+        return $lines;
+    }
+
     private function decrementStockForSale(MerchantSale $sale, ?int $locationId = null): void
     {
         $stock = app(\App\Services\Retail\StockService::class);
@@ -344,7 +560,7 @@ class CashierService
                 ->first();
             if (!$product) continue;
 
-            $stock->move(
+            $movement = $stock->move(
                 product: $product,
                 location: $location,
                 delta: '-' . $qty,
@@ -356,6 +572,19 @@ class CashierService
                 // **يُسمح بالسالب عمداً** — انظر شرح الدالّة أعلاه.
                 allowNegative: true,
             );
+
+            // AMIAL-NEGATIVE-STOCK-001 — **ويُلتقَط ما نزل تحت الصفر.**
+            //
+            // ويُقرأ من `balance_after` في الحركة نفسِها لا باستعلامٍ
+            // ثانٍ: الحركةُ هي ما وقع، واستعلامٌ بعدها قد يقرأ رصيداً
+            // حرّكته بيعةٌ أخرى في الثانية نفسِها. (القاعدة السادسة.)
+            if (bccomp((string) $movement->balance_after, '0', 3) < 0) {
+                $this->wentNegative[] = [
+                    'product' => (string) $product->name,
+                    'on_hand' => (string) $movement->balance_after,
+                    'shortfall' => ltrim((string) $movement->balance_after, '-'),
+                ];
+            }
         }
     }
 
@@ -416,6 +645,33 @@ class CashierService
                 'paid_transaction_id' => $paidTransactionId,
                 'settled_at' => now(),
             ]);
+
+            // التسوية من لوحة التاجر ليست حالةً محليةً للبيع فقط؛ يجب أن
+            // تنشر قيد السداد في الدفتر الذي يراه العميل أيضاً.
+            if (!empty($sale->customer_phone)) {
+                $account = \App\Models\CustomerCreditAccount::where('merchant_user_id', $merchant->id)
+                    ->whereIn('customer_phone', \App\Support\Phone::variants((string) $sale->customer_phone))
+                    ->lockForUpdate()
+                    ->first();
+                if ($account) {
+                    $saleMovement = \App\Models\CustomerCreditMovement::where('account_id', $account->id)
+                        ->where('type', 'sale')
+                        ->where('reference_type', 'merchant_sale')
+                        ->where('reference_id', $sale->sale_ulid)
+                        ->latest('id')
+                        ->first();
+                    app(CustomerCreditService::class)->recordPayment(
+                        account: $account,
+                        amount: (string) $sale->total_amount,
+                        note: 'تسوية بيع آجل من الكاشير',
+                        createdBy: $merchant->id,
+                        // تُربط التسوية بالفاتورة نفسها، فلا يجعلها عرض
+                        // «فواتيري الآجلة» سداداً FIFO لفاتورة أقدم.
+                        referenceType: $saleMovement ? 'credit_sale_payment' : 'merchant_sale_settlement',
+                        referenceId: $saleMovement?->movement_ulid ?? $sale->sale_ulid,
+                    );
+                }
+            }
 
             return $sale->fresh();
         });
@@ -684,7 +940,7 @@ class CashierService
         $realized = MoneyService::add($byMethod['cash'], $byMethod['amial_pay']);
         $outstandingCredit = (string) MerchantSale::where('merchant_user_id', $merchant->id)
             ->where('status', 'credit_unpaid')
-            ->sum('total_amount');
+            ->sum(DB::raw('COALESCE(base_amount, total_amount)'));
 
         return [
             'date' => $day->format('Y-m-d'),

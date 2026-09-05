@@ -96,7 +96,7 @@ class ShareStatementWidgetState extends State<ShareStatementWidget> {
                     ),
 
                     Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      const CustomLogoWidget(width: 67, height: 67),
+                      const CustomLogoWidget(height: 54),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: Dimensions.paddingSizeExtraSmall),
                         child: Text('${splashController.configModel!.companyName}', style: rubikMedium.copyWith(fontSize: Dimensions.fontSizeOverOverLarge, color: Theme.of(context).primaryColor)),

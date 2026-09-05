@@ -80,10 +80,31 @@ class DataTruthCollector
             app_path(), base_path('routes'), resource_path('views'),
         ]);
 
+        // ══════════════════════════════════════════════════════════════
+        // **وفهرسٌ ثانٍ لِما ليس إنتاجاً — ولا يُدمَج بالأوّل.**
+        //
+        // الأوّلُ يجيب «أيُنادى في الإنتاج؟»، ودمجُ الاختبارات فيه يُفسد
+        // أهمَّ ما يكشفه هذا الجامع: **دالّةٌ لا يناديها إلّا اختبارُها
+        // هي غيرُ مبلوغةٍ فعلاً** — وذاك بعينه «مبنيٌّ ومُختبَرٌ ولا
+        // يُوصَل إليه»، وهو أكثرُ أعطال المشروع تكراراً.
+        //
+        // لكنّه يجيب سؤالاً ثانياً لا يُستغنى عنه: **أيُكسَر شيءٌ إن
+        // خُفِّضت؟** وقِيس أنّ ٢٥ من ٤٩ «مكشوفةٍ أكثرَ ممّا تحتاج»
+        // يناديها اختبارٌ مباشرةً — فنصيحةُ «تُخفَّض إلى private»
+        // كانت **تكسر نصفَ ما تنصح به**.
+        //
+        // **ونصيحةٌ لم تُجرَّب قبل أن تُكتَب** هي الصنفُ الذي أُصلح في
+        // هذا التقرير مرّةً من قبل: قال «احذف» عن دالّةٍ حيّة.
+        // ══════════════════════════════════════════════════════════════
+        $binders = new CallerIndex([
+            base_path('tests'), base_path('database'),
+            base_path('config'), base_path('scripts'),
+        ]);
+
         $findings = [];
         $seen = 0;
 
-        [$methodFindings, $methodsSeen] = $this->unreachedServiceMethods($index);
+        [$methodFindings, $methodsSeen] = $this->unreachedServiceMethods($index, $binders);
         [$columnFindings, $columnsSeen] = $this->columnsBornRejected($index);
 
         $findings = array_merge($methodFindings, $columnFindings);
@@ -97,7 +118,7 @@ class DataTruthCollector
     // ══════════════════════════════════════════════════════════════════
 
     /** @return array{0:list<Finding>, 1:int} */
-    private function unreachedServiceMethods(CallerIndex $index): array
+    private function unreachedServiceMethods(CallerIndex $index, CallerIndex $binders): array
     {
         $findings = [];
         $seen = 0;
@@ -126,9 +147,11 @@ class DataTruthCollector
                 // **وصنفان لا صنفٌ واحد.** دالّةٌ تناديها أختُها في
                 // الصنف نفسِه **تعمل** — وتسميتُها «لا يناديها أحد»
                 // كذبٌ يدفن الحقيقيَّ بين الضجيج.
+                $bound = $binders->callerFiles($name, $path);
+
                 $findings[] = $index->calledWithin($name, $path)
-                    ? $this->overExposedMethod($path, $name, $line)
-                    : $this->unreachedMethod($path, $name, $line);
+                    ? $this->overExposedMethod($path, $name, $line, $bound)
+                    : $this->unreachedMethod($path, $name, $line, $bound);
             }
         }
 
@@ -148,27 +171,46 @@ class DataTruthCollector
      * سبب. وعلاجُها `private` أو `protected` — تجميلٌ لا أمان.
      * ══════════════════════════════════════════════════════════════════
      */
-    private function overExposedMethod(string $path, string $name, int $line): Finding
+    /** @param list<string> $bound ملفَّاتٌ خارجَ الإنتاج تُثبّتها على العلن */
+    private function overExposedMethod(string $path, string $name, int $line, array $bound = []): Finding
     {
         $rel = str_replace(base_path() . '/', '', $path);
         $class = basename($path, '.php');
+        $short = array_map(fn ($f) => str_replace(base_path() . '/', '', $f), $bound);
 
         return (new Finding(
             ruleId: 'SAHER.DATA.SERVICE_METHOD_OVER_EXPOSED',
             sourceCode: self::SOURCE,
             category: 'maintainability',
-            title: 'دالّةٌ عامّةٌ تُنادى من صنفها وحدَه',
+            title: $bound === []
+                ? 'دالّةٌ عامّةٌ تُنادى من صنفها وحدَه'
+                : 'دالّةٌ عامّةٌ لا يناديها إلّا صنفُها — ويُثبّتها اختبارٌ على العلن',
             severity: 'LOW',
             confidence: 'SUSPECTED',
             assetKey: $class . '::' . $name,
             assetType: 'method',
             expected: 'ما لا يُنادى من خارج الصنف يُعلَن `private` أو `protected`',
-            actual: '`' . $name . '(` تُنادى داخل ' . $rel . ' وحدَه',
+            actual: '`' . $name . '(` تُنادى داخل ' . $rel . ' وحدَه'
+                . ($bound === [] ? '' : '، ويناديها مباشرةً ' . count($bound)
+                    . ' ملفّاً خارجَ الإنتاج: ' . implode(' · ', array_slice($short, 0, 3))),
             impact: '**ليست عطلاً — الدالّةُ تعمل.** لكنّ سطحَ التعامُل أوسعُ '
                 . 'ممّا يحتاجه أحد: من يقرأ الصنفَ يظنُّها عقداً خارجيّاً '
                 . 'فيبني عليها، فيُقيَّد تغييرُها بلا سبب.',
-            suggestedAction: 'تُخفَّض إلى `private` أو `protected`. '
-                . '**ولا تُحذف** — هي مُنادَاةٌ فعلاً.',
+
+            // ══════════════════════════════════════════════════════════
+            // **ونصيحةٌ تكسر ما تنصح به أسوأ من ألّا تُكتَب.**
+            //
+            // قِيس على جولةٍ كاملة: ٢٥ من ٤٩ يناديها اختبارٌ مباشرةً.
+            // فـ«تُخفَّض إلى private» كانت — على نصفها — **أمراً بكسر
+            // البوّابة**. ومن طبّقها ثقةً بالتقرير وجد الخطأَ في وجهه،
+            // ومن طبّقها بلا تشغيلٍ شحن كسراً.
+            // ══════════════════════════════════════════════════════════
+            suggestedAction: $bound === []
+                ? 'تُخفَّض إلى `private` أو `protected`. **ولا تُحذف** — هي مُنادَاةٌ فعلاً.'
+                : '**لا تُخفَّض قبل قرارٍ في الاختبار.** خفضُها الآن يكسر '
+                    . implode(' · ', array_slice($short, 0, 3))
+                    . ' — فإمّا أن يُنقَل الاختبارُ إلى المدخل العامّ الذي يناديها، '
+                    . 'وإمّا أن تبقى عامّةً عمداً. **ولا تُحذف** — هي مُنادَاةٌ فعلاً.',
             filePath: $rel,
             lineStart: $line,
             symbol: $class . '::' . $name,
@@ -179,18 +221,30 @@ class DataTruthCollector
                 $rel . ':' . $line . "\npublic function {$name}(…)",
                 $rel,
             ),
+            // **والدليلُ يسمّي ما مُسح لا «كلَّ ملفّ».** كان يقول «أيُّ
+            // ملفٍّ خارج هذا الملفّ» وهو لم يمسّ `tests/` إطلاقاً — دعوى
+            // نفيٍ أوسعُ من البحث الذي جرى.
             Evidence::absence(
                 'ما بُحث عنه ولم يوجد',
-                "أيُّ ملفٍّ **خارج** {$rel} يحوي `->{$name}(` أو `::{$name}(`",
+                "أيُّ ملفٍّ **خارج** {$rel} في `app/` أو `routes/` أو "
+                . "`resources/views/` يحوي `->{$name}(` أو `::{$name}(`",
                 'CallerIndex',
             ),
+            ...($bound === [] ? [] : [new Evidence(
+                'CODE_LINE',
+                'ما يُثبّتها على العلن (خارجَ الإنتاج)',
+                implode("\n", $short),
+                $short[0],
+            )]),
         );
     }
 
-    private function unreachedMethod(string $path, string $name, int $line): Finding
+    /** @param list<string> $bound ملفَّاتٌ خارجَ الإنتاج تناديها — اختبارٌ غالباً */
+    private function unreachedMethod(string $path, string $name, int $line, array $bound = []): Finding
     {
         $rel = str_replace(base_path() . '/', '', $path);
         $class = basename($path, '.php');
+        $short = array_map(fn ($f) => str_replace(base_path() . '/', '', $f), $bound);
 
         return (new Finding(
             ruleId: 'SAHER.DATA.SERVICE_METHOD_UNREACHED',
@@ -205,8 +259,23 @@ class DataTruthCollector
             assetKey: $class . '::' . $name,
             assetType: 'method',
             expected: 'دالّةٌ عامّةٌ في خدمةٍ يناديها مسارٌ أو أمرٌ أو خدمةٌ أخرى',
-            actual: 'صفرُ ملفّاتٍ تنادي `' . $name . '(` خارجَ ملفِّها',
-            impact: '**مبنيٌّ ولا يُوصَل إليه** — وهو نمطُ العطل الأكثرُ '
+            actual: 'صفرُ ملفّاتٍ تنادي `' . $name . '(` خارجَ ملفِّها'
+                . ($bound === [] ? '' : ' — **إلّا اختبارَها**: '
+                    . implode(' · ', array_slice($short, 0, 3))),
+
+            // ══════════════════════════════════════════════════════════
+            // **واختبارٌ أخضرُ بلا مُنادٍ في الإنتاج ليس تخفيفاً — هو
+            // تشديد.** الدالّةُ صحيحةٌ ومُثبَتةٌ ومقصودةٌ للاستعمال، ولا
+            // شيءَ يستعملها: فالغائبُ **التوصيلُ** لا المنطق. وهذه بعينها
+            // صورةُ خمسةِ أعطالٍ في هذا التدقيق — حدُّ استلام التاجر،
+            // وقفلُ رمز العمليّات، وحارسُ الاستلام السريع، ومسارُ
+            // الاستعادة، وحدُّ بطاقة الوقود. **كلُّها خضراءُ الاختبار.**
+            // ══════════════════════════════════════════════════════════
+            impact: ($bound === []
+                ? '**مبنيٌّ ولا يُوصَل إليه** — وهو نمطُ العطل الأكثرُ '
+                : '**مبنيٌّ ومُختبَرٌ ولا يُوصَل إليه** — والاختبارُ الأخضرُ '
+                    . 'يجعلها أرجحَ لا أهونَ: منطقٌ مقصودٌ ومُثبَتٌ بلا مُنادٍ. '
+                    . 'وهو نمطُ العطل الأكثرُ ')
                 . 'تكراراً في هذا المشروع. وآخرُ صورِه كلّفت حساباً حقيقيّاً: '
                 . '`assignOnRegistration` بقيت بلا مُنادٍ منذ v2.0، فوُلد كلُّ '
                 . 'حسابٍ ممنوعاً بلا سطرٍ يقول لماذا.',

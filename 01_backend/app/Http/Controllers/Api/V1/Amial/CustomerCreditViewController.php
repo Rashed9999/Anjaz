@@ -8,6 +8,7 @@ use App\Models\CustomerCreditAccount;
 use App\Models\CustomerCreditMovement;
 use App\Models\User;
 use App\Services\CustomerCreditSettleService;
+use App\Services\CreditSourceSettlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -109,12 +110,51 @@ class CustomerCreditViewController extends Controller
                 'created_at' => $m->created_at?->toIso8601String(),
             ]);
 
+        // هذه فواتير العميل المستحقة فعلاً، وكلّ واحدة تحمل متبقيها بعد
+        // السدادات الجزئية والمرتجعات من دفتر الديون نفسه.
+        $invoices = app(CreditSourceSettlementService::class)->openInvoices($account);
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-CREDIT-GAP-001 — **الفرقُ يُقال، ولا يُترَك للقارئ يجمع.**
+        //
+        // `openInvoices` تقتصر على قيود البيع عمداً — والتعديلُ اليدويُّ
+        // الموجب (دينٌ قديمٌ مُرحَّل) ليس فاتورةً تُسدَّد وحدَها. **لكنّه
+        // في الرصيد.** فقِيس:
+        //
+        //     تعديلٌ موجب  1000  ثمّ بيعةٌ آجلة  500
+        //     current_balance = 1500
+        //     invoices        =  500   ← ألفٌ بلا سطر
+        //
+        // فيقرأ العميلُ «عليّ ٥٠٠» في قائمة الفواتير و«١٥٠٠» في الرصيد،
+        // **ولا شيءَ يفسّر الألف**. وهو عينُ القاعدة السابعة: الغيابُ
+        // يُقال ولا يُترَك فراغاً يُقرأ صفراً.
+        //
+        // **ولا يُخترَع له سطرُ فاتورةٍ وهميّ** — سطرٌ يُعرَض بزرّ سدادٍ
+        // لا يقبله المحرّك أسوأ من لافتةٍ تشرح.
+        // ══════════════════════════════════════════════════════════════
+        $invoicesTotal = '0';
+        foreach ($invoices as $invoice) {
+            $invoicesTotal = \App\Services\MoneyService::add(
+                $invoicesTotal, (string) ($invoice['remaining'] ?? '0'));
+        }
+
+        $unlinked = \App\Services\MoneyService::sub(
+            (string) $account->current_balance, $invoicesTotal);
+
         return $this->ok([
             'account_id' => $account->id,
             'merchant_name' => $storeName,
             'current_balance' => (string) $account->current_balance,
             'credit_limit' => (string) $account->credit_limit,
             'movements' => $movements,
+            'invoices' => $invoices,
+            'invoices_total' => $invoicesTotal,
+            // موجبٌ يعني: دينٌ في الرصيد بلا فاتورةٍ تُسدَّد وحدَها.
+            'unlinked_balance' => $unlinked,
+            'unlinked_note_ar' => \App\Services\MoneyService::isPositive($unlinked)
+                ? 'مبلغٌ من رصيدك ليس فاتورةً مستقلّة (تعديلٌ يدويٌّ أو '
+                    . 'دَينٌ سابقٌ مُرحَّل). يُسدَّد بـ«سداد الآجل» كاملاً.'
+                : null,
         ], 'OK', 'كشف الحساب الآجل');
     }
 
@@ -126,6 +166,7 @@ class CustomerCreditViewController extends Controller
         $v = Validator::make($request->all(), [
             'amount' => 'required|numeric|min:0.01',
             'pin' => 'required|string|min:4|max:8',
+            'sale_movement_ulid' => 'sometimes|nullable|string|max:40',
         ]);
         if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);
 
@@ -140,8 +181,13 @@ class CustomerCreditViewController extends Controller
         }
 
         try {
-            $result = app(CustomerCreditSettleService::class)
-                ->settle($user, $account, (string) $request->input('amount'));
+            $result = app(CustomerCreditSettleService::class)->settle(
+                $user,
+                $account,
+                (string) $request->input('amount'),
+                $request->filled('sale_movement_ulid')
+                    ? (string) $request->input('sale_movement_ulid') : null,
+            );
         } catch (\App\Exceptions\InsufficientBalanceException $e) {
             return $this->error('INSUFFICIENT_BALANCE', 'رصيد محفظتك لا يكفي', 422);
         } catch (\InvalidArgumentException $e) {
@@ -153,6 +199,7 @@ class CustomerCreditViewController extends Controller
         return $this->ok([
             'paid' => $result['paid'],
             'new_balance' => $result['new_balance'],
+            'allocations' => $result['allocations'] ?? [],
         ], 'SETTLED', 'تم السداد بنجاح');
     }
 

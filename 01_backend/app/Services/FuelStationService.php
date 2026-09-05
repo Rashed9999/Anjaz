@@ -31,6 +31,7 @@ class FuelStationService
 
     public function __construct(
         private readonly NotificationService $notif,
+        private readonly MerchantPaymentReferenceService $paymentReference,
     ) {}
 
     // ============ المحطّة ============
@@ -324,7 +325,7 @@ class FuelStationService
         ) {
             // ====== التعامل مع طرق الدفع ======
             $companyAccount = null;
-            $paidTxId = null;
+            $paidTxId = trim((string) ($data['paid_transaction_id'] ?? '')) ?: null;
 
             if ($paymentMethod === 'company_card') {
                 $companyAccount = FuelCompanyAccount::where('id', $data['company_account_id'] ?? 0)
@@ -345,41 +346,52 @@ class FuelStationService
                     (float)$newBalance > (float)$companyAccount->credit_limit) {
                     throw new RuntimeException('تجاوزت الحد الائتماني المتاح للشركة');
                 }
+                // ══════════════════════════════════════════════════════
+                // AMIAL-FUEL-CARD-LIMIT-001 — **حدُّ البطاقة كان يُضبَط
+                // ولا يُطبَّق.**
+                //
+                // الحدُّ **على مستوى الحساب** مفروضٌ أعلاه، **وعلى مستوى
+                // البطاقة لا**. و`FuelCompanyCardService::assertCardLimits`
+                // مبنيّةٌ وتفرض اثنين — أنّ البطاقةَ نشطةٌ وأنّ يومَها لم
+                // يُستنفَد — **وقِيس أنّ لا مُنادِيَ لها في المشروع كلِّه**.
+                //
+                // فبطاقةُ سائقٍ **مسحوبةٌ أو ملغاةٌ تشتري** حتّى سقف
+                // الشركة كلِّه، وحدُّها اليوميُّ يُعرَض في اللوحة ولا يقع.
+                // والوقودُ بالأجل — فالتعرّضُ الائتمانيُّ بلا سقفٍ فعليّ.
+                //
+                // **وموضعُها داخلَ القفل** الذي أخذه الحسابُ أعلاه: العدُّ
+                // اليوميُّ يجمع مبيعاتِ البطاقة، ودفعتان متزامنتان تقرآن
+                // المجموعَ نفسَه فتمرّان معاً. (الطبقةُ الثامنة.)
+                //
+                // **ورقمُ بطاقةٍ لا يخصّ هذا الحساب يُرفَض** — فالهويّة
+                // تحدّد النطاق لا ما يرسله الطلب. (القاعدةُ الثامنة.)
+                // ══════════════════════════════════════════════════════
+                $cardNumber = trim((string) ($data['company_card_id'] ?? ''));
+
+                if ($cardNumber !== '') {
+                    $card = \App\Models\FuelCompanyCard::where('card_number', $cardNumber)
+                        ->where('company_account_id', $companyAccount->id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (! $card) {
+                        throw new RuntimeException('البطاقة غير موجودة في حساب هذه الشركة');
+                    }
+
+                    app(\App\Services\FuelCompanyCardService::class)
+                        ->assertCardLimits($card, $totalAmount);
+                }
+
                 $companyAccount->update(['current_balance' => $newBalance]);
             }
 
             if ($paymentMethod === 'amial_pay') {
-                $paidTxId = $data['paid_transaction_id'] ?? null;
-                // AMIAL-FUEL-PAY-001: الدفع الحقيقي في خطوة واحدة — التاجر يُدخل
-                // هاتف العميل، فنشحن العميل مباشرةً عبر محرّك دفع التاجر (يحرّك
-                // المال + الرسوم + دفتر القيود + الإيصال) ونربط المرجع بالبيع.
-                // يبقى تمرير paid_transaction_id مدعوماً (دفع مسبق من تطبيق العميل).
-                $customerPhone = trim((string) ($data['customer_phone'] ?? ''));
-                if (empty($paidTxId) && $customerPhone !== '') {
-                    $customer = User::whereIn('phone', \App\Support\Phone::variants($customerPhone))
-                        ->where('type', CUSTOMER_TYPE)->first();
-                    if (!$customer) {
-                        throw new RuntimeException('لا يوجد عميل بهذا الرقم');
-                    }
-                    if ($customer->id === $merchant->id) {
-                        throw new RuntimeException('لا يمكن الدفع لنفسك');
-                    }
-                    $paidTxId = $this->merchant_payment_transaction(
-                        $customer->id,
-                        $merchant->id,
-                        $totalAmount,
-                        'pos',
-                        $posUserId,
-                        'دفع وقود',
-                        context: ['sector' => 'fuel'],
-                    );
-                    if (empty($paidTxId)) {
-                        throw new RuntimeException('تعذّر تنفيذ دفع أميال باي');
-                    }
-                }
-                if (empty($paidTxId)) {
-                    throw new InvalidArgumentException('أدخل رقم هاتف العميل أو مرجع الدفع لـ أميال باي');
-                }
+                if (!empty($data['customer_phone'])) throw new InvalidArgumentException('دفع الوقود يتم عبر QR يؤكده العميل بنفسه');
+                $this->paymentReference->assertPaidForMerchant(
+                    $merchant,
+                    $paidTxId,
+                    $totalAmount,
+                );
             }
 
             // ====== أنشئ سجل البيع ======
@@ -418,6 +430,23 @@ class FuelStationService
                     'fuel_sale',
                     (int) $sale->id,
                     ['merchant_vertical' => 'fuel', 'sale_ulid' => $sale->sale_ulid],
+                );
+            }
+
+            // بيع آجل واحد = حركة دين واحدة مرتبطة برقم فاتورة الوقود.
+            // ربط الحساب برقم العميل يجعلها تظهر فوراً في «فواتيري الآجلة»
+            // ويتيح للعميل السداد الجزئي أو الكامل عبر المسار الموحد.
+            if ($paymentMethod === 'credit') {
+                $phone = trim((string) ($data['customer_phone'] ?? ''));
+                if ($phone === '') throw new InvalidArgumentException('رقم العميل مطلوب للبيع الآجل');
+                $credit = app(CustomerCreditService::class);
+                $account = $credit->findOrCreateAccount(
+                    $merchant->id, $phone, (string) ($data['customer_name'] ?? 'عميل محطة الوقود')
+                );
+                $credit->recordSale(
+                    $account, $totalAmount, $data['due_date'] ?? null, 'فاتورة وقود آجل',
+                    $posUserId ?? $merchant->id, 'fuel_sale', $sale->sale_ulid,
+                    '#' . substr($sale->sale_ulid, -8)
                 );
             }
 

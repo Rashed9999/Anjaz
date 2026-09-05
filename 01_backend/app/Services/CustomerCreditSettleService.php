@@ -22,12 +22,18 @@ class CustomerCreditSettleService
 
     public function __construct(
         private readonly CustomerCreditService $credit,
+        private readonly CreditSourceSettlementService $sources,
     ) {}
 
     /**
      * @return array{new_balance:string, paid:string, transaction_no:?string}
      */
-    public function settle(User $customer, CustomerCreditAccount $account, string $amount): array
+    public function settle(
+        User $customer,
+        CustomerCreditAccount $account,
+        string $amount,
+        ?string $saleMovementUlid = null,
+    ): array
     {
         if ($account->customer_user_id !== $customer->id) {
             throw new InvalidArgumentException('هذا الحساب لا يخصّك');
@@ -45,7 +51,12 @@ class CustomerCreditSettleService
 
         $merchantId = $account->merchant_user_id;
 
-        return DB::transaction(function () use ($customer, $account, $merchantId, $amount) {
+        return DB::transaction(function () use ($customer, $account, $merchantId, $amount, $saleMovementUlid) {
+            // نفس الحساب يُقفل قبل حساب توزيع السداد، فلا يوزّع طلبان
+            // متزامنان المبلغ ذاته على فاتورة واحدة.
+            $lockedAccount = CustomerCreditAccount::lockForUpdate()->findOrFail($account->id);
+            $allocations = $this->sources->allocate($lockedAccount, $amount, $saleMovementUlid);
+
             // 1) حرّك المال: خصم من العميل، إضافة للتاجر (يرمي عند نقص الرصيد)
             $this->guard()->lockWalletsOrdered([$customer->id, $merchantId]);
             $this->guard()->debit($customer->id, $amount, "credit_settle:{$account->id}");
@@ -53,22 +64,29 @@ class CustomerCreditSettleService
 
             // 2) سجّل حركة السداد في دفتر الائتمان (تُخفّض الرصيد وتُشعر التاجر)
             $movement = $this->credit->recordPayment(
-                account: $account,
+                account: $lockedAccount,
                 amount: $amount,
                 note: 'سداد عبر أميال باي',
                 createdBy: $customer->id,
-                referenceType: 'wallet_settle',
-                referenceId: (string) $customer->id,
+                referenceType: $saleMovementUlid ? 'credit_sale_payment' : 'wallet_settle',
+                referenceId: $saleMovementUlid ?: (string) $customer->id,
+                referenceNumber: $saleMovementUlid ? 'سداد فاتورة آجل' : null,
             );
 
             if (!$movement) {
                 throw new RuntimeException('تعذّر تسجيل السداد');
             }
 
+            // 3) إذا كان أصل الدَّين فاتورة جملة، تتحدّث فاتورتها وتحصل
+            // على تحصيل تفصيلي بالمبلغ نفسه؛ فلا يختلف دفتر العميل عن
+            // شاشة التاجر بعد السداد الجزئي.
+            $this->sources->apply($allocations, $movement, $customer);
+
             return [
-                'new_balance' => (string) $account->fresh()->current_balance,
+                'new_balance' => (string) $lockedAccount->fresh()->current_balance,
                 'paid' => $amount,
                 'transaction_no' => null, // حركة محفظة مباشرة (بلا رقم عملية دفتر العام)
+                'allocations' => $allocations,
             ];
         });
     }

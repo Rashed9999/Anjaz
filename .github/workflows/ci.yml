@@ -18,6 +18,18 @@ name: أميال باي — CI
 # الحارس: `tests/Feature/DeploymentGateGuardTest.php`.
 # ══════════════════════════════════════════════════════════════════════
 on:
+  # الفحوصُ تبقى على كلّ دفع؛ **وملفُّ APK لا يُبنى إلّا من زرّ Run workflow.**
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'نوع APK المطلوب'
+        required: true
+        default: debug
+        type: choice
+        options:
+          - debug
+          - release
+
   push:
     branches: ['**']
   pull_request:
@@ -29,39 +41,25 @@ concurrency:
 
 jobs:
   # ──────────────────────────────────────────────────────────
-  # 1) فحص بنيوي سريع (توازن الأقواس) — لا يحتاج تبعيات
+  # 1) فحص بنيوي سريع — لا يعتمد على عدّ الأقواس النصّي
   # ──────────────────────────────────────────────────────────
   structural:
     name: فحص بنيوي
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: توازن الأقواس (PHP/Dart)
+      # عدّ الأقواس النصّي لا يفهم heredoc أو regex أو المصفوفات المركبة
+      # في PHP، فيعطي إنذارات كاذبة. php -l هو محلّل اللغة الحقيقي.
+      - name: تثبيت PHP للفحص النحوي
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+      - name: فحص PHP وكشف تعارضات الدمج
         run: |
-          node -e '
-          const fs=require("fs"),path=require("path");
-          function strip(s){let o="",i=0,n=s.length;
-           while(i<n){const c=s[i],d=s[i+1];
-           if(c==="/"&&d==="/"){while(i<n&&s[i]!=="\n")i++;continue;}
-           if(c==="#"){while(i<n&&s[i]!=="\n")i++;continue;}
-           if(c==="/"&&d==="*"){i+=2;while(i<n&&!(s[i]==="*"&&s[i+1]==="/"))i++;i+=2;continue;}
-           if(c==="\x27"||c==="\x22"){const q=c;i++;while(i<n&&s[i]!==q){if(s[i]==="\\")i++;i++;}i++;o+="X";continue;}
-           o+=c;i++;}return o;}
-          function bal(f){try{const s=strip(fs.readFileSync(f,"utf8"));const c={};
-           for(const ch of s)if("(){}[]".includes(ch))c[ch]=(c[ch]||0)+1;
-           return(c["("]||0)===(c[")"]||0)&&(c["{"]||0)===(c["}"]||0)&&(c["["]||0)===(c["]"]||0);
-           }catch{return false;}}
-          let ok=0,fail=0;const fails=[];
-          function walk(dir){if(!fs.existsSync(dir))return;
-           for(const e of fs.readdirSync(dir)){const full=path.join(dir,e);
-           if(fs.statSync(full).isDirectory()){walk(full);continue;}
-           if(e.endsWith(".php")||e.endsWith(".dart")){if(bal(full))ok++;else{fail++;fails.push(full);}}}}
-          ["01_backend/app","01_backend/tests","01_backend/routes","01_backend/database"].forEach(walk);
-          walk("02_flutter_app/lib");
-          console.log(ok+" ✓  "+fail+" ✗");
-          fails.forEach(f=>console.log("  ✗ "+f));
-          process.exit(fail===0?0:1);
-          '
+          ! rg -n '^(<<<<<<<|=======|>>>>>>>)' --glob '*.php' --glob '*.dart' .
+          find 01_backend/app 01_backend/tests 01_backend/routes 01_backend/database \
+            -type f -name '*.php' -print0 | xargs -0 -n1 php -l
 
   # ──────────────────────────────────────────────────────────
   # 2) اختبارات الباكند الكاملة (PHPUnit) — القلب
@@ -70,6 +68,12 @@ jobs:
     name: اختبارات الباكند (PHPUnit)
     runs-on: ubuntu-latest
     needs: structural
+    # **وبناءُ APK يدويٌّ لا يجرّ معه نشرةً ولا جولةَ اختبارات.**
+    # فالزرُّ الوحيدُ الذي يملكه صاحبُ المشروع لبناء تطبيقه يجب ألّا
+    # يُطلق خطّافَ Coolify — وCoolify عنده على `Source: Manual` عمداً،
+    # وهو ينشر بيده. (وهو ما فعله `fe64f3c` بعنوانه: «isolate manual
+    # APK builds from deploy jobs».)
+    if: github.event_name != 'workflow_dispatch'
     services:
       mysql:
         image: mysql:8.0
@@ -136,7 +140,15 @@ jobs:
 
       - name: تشغيل كل الاختبارات (747)
         working-directory: 01_backend
-        run: php artisan test
+        run: |
+          # لا نُغرق سجل Actions بالمخرجات المكررة؛ عند الفشل نعرض خاتمة
+          # التقرير التي تحتوي أسماء الاختبارات والاستثناءات الفعلية.
+          php artisan test > phpunit_report.txt 2>&1 || {
+            echo '::error::فشلت اختبارات PHPUnit — آخر 160 سطراً:'
+            tail -n 160 phpunit_report.txt
+            exit 1
+          }
+          tail -n 20 phpunit_report.txt
 
   # ──────────────────────────────────────────────────────────
   # 3) تحليل واختبار تطبيق Flutter
@@ -205,10 +217,106 @@ jobs:
   # `entrypoint.prod.sh` وحدَه — «وهذا الملفّ هو المُستعمَل فعلاً، فلم
   # يكن يصل» (تعليقٌ في `docker/entrypoint.sh` نفسِه).
   # ──────────────────────────────────────────────────────────
+  # ──────────────────────────────────────────────────────────
+  # AMIAL-CI-APK-002 — **بناءُ APK المجّانيُّ عاد بعد أن حُذف صامتاً.**
+  #
+  # بُني في `10f87a5` («مخرجٌ من رصيد Mac الذي نفد») وعزله `fe64f3c`،
+  # ثمّ **حذفه `19e50e2` وعنوانُه «استبدال فاحصٍ بنيويّ»** — أربعُ
+  # إزالاتٍ وصفرُ إضافة، ولا كلمةَ عنه في الرسالة. (والفاحصُ البديلُ
+  # في ذاك الالتزام **أفضلُ فعلاً** — `php -l` محلِّلُ لغةٍ حقيقيٌّ لا
+  # عدَّ أقواسٍ نصّيّاً؛ فالمأخذُ ما حُذف معه لا ما حلّ محلَّه.)
+  #
+  # **وثمنُه معروفٌ بالرقم**: فاتورةُ مئةِ دولارٍ من Codemagic على
+  # دقائق `mac_mini_m2`، ثمّ نُزع المُطلِقُ كلُّه من `codemagic.yaml`
+  # بقرار صاحب المشروع. **فهذا هو البديلُ الوحيدُ الباقي** — Linux
+  # مجّانيٌّ بضغطة زرّ، ولا دقيقةَ Mac واحدة.
+  #
+  # **ولا يُبنى تلقائيّاً أبداً**: `workflow_dispatch` وحدَه، فلا يعود
+  # ما أنتج الفاتورة.
+  # ──────────────────────────────────────────────────────────
+  apk:
+    name: بناء APK (Linux — بديل Codemagic)
+    runs-on: ubuntu-latest
+    needs: flutter
+    # لا APK تلقائياً عند دفع الشيفرة؛ صاحب المشروع يبدأه يدوياً فقط.
+    if: github.event_name == 'workflow_dispatch'
+    defaults:
+      run:
+        working-directory: 02_flutter_app
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java 17 — نفسُ ما يطلبه `codemagic.yaml`، فلا يفترق البناءان.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - run: flutter pub get
+
+      - name: بصمة المصدر (فرع + التزام + إصدار)
+        run: |
+          echo "======== بصمة بناء أميال باي ========"
+          echo "الفرع    : ${GITHUB_REF_NAME}"
+          echo "الالتزام : $(git rev-parse --short HEAD)"
+          echo "الرسالة  : $(git log -1 --format=%s)"
+          echo "الإصدار  : $(grep '^version:' pubspec.yaml)"
+          echo "===================================="
+
+      # --split-per-abi: ملفٌّ لكلّ معالج، فحجمُ كلٍّ منها ~الثلث.
+      # ونزّل `arm64-v8a` للهواتف الحديثة.
+      - name: بناء APK حسب الخيار
+        run: |
+          if [ "${{ inputs.build_type }}" = "release" ]; then
+            flutter build apk --release --split-per-abi
+          else
+            flutter build apk --debug
+          fi
+
+      - name: قياسُ ما بُني — فمهمّةٌ تنجح بلا ملفٍّ ليست بناءً
+        run: |
+          ls -lh build/app/outputs/flutter-apk/*.apk
+          COUNT=$(ls build/app/outputs/flutter-apk/*.apk 2>/dev/null | wc -l)
+          if [ "$COUNT" -lt 1 ]; then
+            echo "::error::خرجت المهمّةُ بنجاحٍ ولا APK — بناءٌ صامتٌ لا بناء"
+            exit 1
+          fi
+          echo "✓ $COUNT ملفَّ APK"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: amial-${{ inputs.build_type }}-apk-${{ github.sha }}
+          path: 02_flutter_app/build/app/outputs/flutter-apk/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+  # ──────────────────────────────────────────────────────────
+  # 4) التحقّق من بناء الصورتين (بلا تشغيل)
+  #
+  # AMIAL-PROD-READINESS-001 — **الصورةُ المفحوصةُ هي الصورةُ المشحونة.**
+  #
+  # كانت تُبنى `Dockerfile.prod` وحدَها، و`DEPLOY_COOLIFY.md` يقول
+  # «Build Pack = Dockerfile». فما يُفحَص غيرُ ما يُنشَر.
+  #
+  # وقد كلّف هذا عطلاً بنصّه من قبل: إصلاحُ مجلّدات PDF كُتب في
+  # `entrypoint.prod.sh` وحدَه — «وهذا الملفّ هو المُستعمَل فعلاً، فلم
+  # يكن يصل» (تعليقٌ في `docker/entrypoint.sh` نفسِه).
+  # ──────────────────────────────────────────────────────────
+
   docker:
     name: بناء صورتَي Docker
     runs-on: ubuntu-latest
     needs: structural
+    # **وبناءُ APK يدويٌّ لا يجرّ معه نشرةً ولا جولةَ اختبارات.**
+    # فالزرُّ الوحيدُ الذي يملكه صاحبُ المشروع لبناء تطبيقه يجب ألّا
+    # يُطلق خطّافَ Coolify — وCoolify عنده على `Source: Manual` عمداً،
+    # وهو ينشر بيده. (وهو ما فعله `fe64f3c` بعنوانه: «isolate manual
+    # APK builds from deploy jobs».)
+    if: github.event_name != 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -219,3 +327,76 @@ jobs:
       - name: بناء ${{ matrix.dockerfile }}
         working-directory: 01_backend
         run: docker build -f ${{ matrix.dockerfile }} -t amial-pay:ci-${{ matrix.dockerfile }} .
+
+  # ──────────────────────────────────────────────────────────
+  # AMIAL-CD-TRIGGER-001 — **الدفعُ لا ينشر، وهذا آخرُ بابٍ مغلق.**
+  #
+  # **الثمنُ الذي دُفع، بنصّ صاحب المشروع:** «منذ أيّامٍ وأنا لم أستطع
+  # عملَ بناءٍ للتطبيق أو نشرَ المشروع».
+  #
+  # Coolify على `Source: Manual` في كلّ نشراته — فالدفعُ إلى الفرع
+  # المنشور لا يُطلق شيئاً، وكلُّ ما في المستودع يقف حتّى يفتح إنسانٌ
+  # البابَ بيده. **وبابٌ يُفتَح باليد يُنسى**، فتبقى الشيفرةُ الجديدةُ
+  # في git والقديمةُ تخدم العملاء، ولا سطرَ يقول ذلك.
+  #
+  # **ولا يُضبَط Coolify من مستودع** — هو لوحةٌ خارجيّة. لكنّه يقبل
+  # خطّافَ نشرٍ بعنوانٍ واحد. فيُوضَع العنوانُ سرّاً واحداً، ويصير
+  # النشرُ تلقائيّاً إلى الأبد:
+  #
+  #     Coolify ← المشروع ← Webhooks ← انسخ «Deploy Webhook»
+  #     GitHub  ← Settings ← Secrets ← New secret
+  #                 الاسم : COOLIFY_DEPLOY_HOOK
+  #
+  # ══════════════════════════════════════════════════════════
+  # **وثلاثةُ حدودٍ مقصودةٌ تُقرأ ولا تُخمَّن:**
+  #
+  # ① **بعد البوّابة لا معها** (`needs`) — نشرٌ يسبق الفحصَ يشحن ما
+  #    لم يُفحَص، وهو أسوأ من نشرٍ يدويّ.
+  #
+  # ② **فرعُ النشر وحدَه.** Coolify يستورد
+  #    `claude/project-code-review-yjagv`؛ وخطّافٌ يُطلَق من كلّ فرعٍ
+  #    ينشر شيفرةً ليست هي المقصودة.
+  #
+  # ③ **وغيابُ السرّ ليس فشلاً.** الخطوةُ تُخطَّى وتقول لماذا — فوظيفةٌ
+  #    حمراءُ على إعدادٍ لم يُضبَط بعد تُعوّد القارئَ على تجاهل الأحمر.
+  #    (وهي القاعدةُ السابعة: «غيرُ معروف» ليس فشلاً، ويُقال بسببه.)
+  # ──────────────────────────────────────────────────────────
+  deploy:
+    name: إطلاق نشرة Coolify
+    runs-on: ubuntu-latest
+    needs: [structural, backend, flutter, docker]
+    # **ولا نشرَ من زرّ بناء APK** — انظر `AMIAL-CI-APK-002` أعلاه.
+    if: >-
+      github.event_name != 'workflow_dispatch'
+      && github.ref == 'refs/heads/claude/project-code-review-yjagv'
+    steps:
+      - name: نداء خطّاف النشر
+        env:
+          HOOK: ${{ secrets.COOLIFY_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::notice title=النشر التلقائي غير مضبوط::" \
+              "السرُّ COOLIFY_DEPLOY_HOOK غيرُ موجود، فالنشرُ ما زال يدويّاً." \
+              "اضبطه مرّةً واحدةً: Coolify ← Webhooks ← Deploy Webhook،" \
+              "ثمّ GitHub ← Settings ← Secrets ← COOLIFY_DEPLOY_HOOK."
+            exit 0
+          fi
+
+          # `--fail-with-body` لا `--fail` وحدَها: ٤٠٤ على خطّافٍ خاطئ
+          # يجب أن يُظهر نصَّ الردّ، وإلّا صار «فشل» بلا سبب.
+          code=$(curl -sS --fail-with-body -o /tmp/hook.out -w '%{http_code}' \
+                   --max-time 60 -X GET "$HOOK") || {
+            echo "::error title=تعذّر إطلاق النشرة::$(head -c 400 /tmp/hook.out)"
+            exit 1
+          }
+
+          echo "::notice title=أُطلقت النشرة::ردّ Coolify $code على ${GITHUB_SHA::7}"
+          head -c 400 /tmp/hook.out || true
+
+      # **وإطلاقُ النشرة ليس نجاحَها.** Coolify يردّ فورَ القبول، والبناءُ
+      # يجري بعده دقائق. فيُقال ذلك صراحةً لئلّا تُقرأ الخضرةُ «نُشر».
+      - name: ما بعد الإطلاق
+        run: |
+          echo "::notice title=الخطوة التالية::" \
+            "الإطلاقُ ليس اكتمالاً — تابِع Coolify حتّى Running (healthy)،" \
+            "ثمّ شغّل: php artisan amial:readiness --base=https://amialpay.com"

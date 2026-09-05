@@ -98,4 +98,29 @@ class CustomerCreditSettleTest extends TestCase
             'amount' => '5000', 'pin' => '1234',
         ])->assertStatus(422);
     }
+
+    /** @test يحق للعميل سداد فاتورة مؤجلة محددة جزئياً، لا أقدم دين بالضرورة. */
+    public function customer_can_partially_settle_the_selected_deferred_invoice(): void
+    {
+        $account = $this->svc->findOrCreateAccount($this->merchant->id, '+967771700066', 'علي');
+        $older = $this->svc->recordSale($account, '1000', referenceNumber: 'OLD-1');
+        $selected = $this->svc->recordSale($account, '900', referenceNumber: 'NEW-1');
+
+        Passport::actingAs($this->customer->fresh(), [], 'api');
+        $this->postJson("/api/v1/amial/customer/credits/{$account->id}/settle", [
+            'amount' => '400',
+            'pin' => '1234',
+            'sale_movement_ulid' => $selected->movement_ulid,
+        ])->assertOk()
+          ->assertJsonPath('meta.new_balance', '1500.0000')
+          ->assertJsonPath('meta.allocations.0.sale_movement_ulid', $selected->movement_ulid)
+          ->assertJsonPath('meta.allocations.0.amount', '400.0000');
+
+        $open = app(\App\Services\CreditSourceSettlementService::class)
+            ->openInvoices($account->fresh());
+        $byReference = collect($open)->keyBy('reference_number');
+        $this->assertSame('1000.0000', $byReference['OLD-1']['remaining']);
+        $this->assertSame('500.0000', $byReference['NEW-1']['remaining']);
+        $this->assertNotSame($older->movement_ulid, $selected->movement_ulid);
+    }
 }

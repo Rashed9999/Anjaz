@@ -222,9 +222,47 @@ class KycDocumentService
             if ($approve) {
                 $completeness = $this->completenessFor($account, $requiredTier);
                 if (!$completeness['complete']) {
+                    throw new DomainException($this->sayMissing(
+                        'KYC_DOCUMENTS_INCOMPLETE',
+                        'لا يُعتمد الحسابُ قبل رفع هذه المستندات',
+                        $completeness['missing'],
+                        \App\Models\KycDocument::TYPE_LABELS,
+                        'ارفعها من نافذة «✏️ تعديل» ← قسمُ المستندات، ثمّ أعِد الاعتماد.'
+                    ));
+                }
+
+                // ══════════════════════════════════════════════════════
+                // AMIAL-KYC-REUSE-001 — **ورقةٌ واحدةٌ لا تفتح حسابين.**
+                //
+                // والمنعُ ها هنا لا في الشاشة وحدَها: **تحذيرٌ يُمكن
+                // تخطّيه يُتخطّى**، ومسارُ القرار له بابان (اللوحةُ
+                // وطابورُ الهويّة) — فحارسٌ في أحدهما ليس حارساً.
+                // (القاعدة الرابعة: ميزةٌ لها مدخلان تُختبَر من مدخليها.)
+                // ══════════════════════════════════════════════════════
+                $reuse = app(\App\Services\Kyc\DocumentReuseService::class)
+                    ->findingsFor($account);
+
+                if ($reuse['blockers'] !== []) {
                     throw new DomainException(
-                        'KYC_DOCUMENTS_INCOMPLETE: ' . implode(', ', $completeness['missing'])
-                    );
+                        'لا يُعتمد الحسابُ: '.implode(' · ', $reuse['blockers']));
+                }
+
+                // ══════════════════════════════════════════════════════
+                // AMIAL-KYC-DUP-001 — **وهويّةٌ منتهيةٌ تمنع كغيرها.**
+                //
+                // ونظيرُه في `KycEvidenceService::blockers()` يعرضه قبل
+                // الضغط — **والاثنان شرطٌ واحد**: منعٌ بلا عرضٍ يجعل
+                // المراجعَ يضغط فيُردّ ولا يعرف لماذا، وعرضٌ بلا منعٍ
+                // لافتةٌ تُتخطّى. (القاعدة الرابعة، والتاسعة.)
+                // ══════════════════════════════════════════════════════
+                $expiry = app(\App\Services\Kyc\IdentityExpiryService::class)
+                    ->stateOf($account);
+
+                if (($expiry['state'] ?? null) === \App\Services\Kyc\IdentityExpiryService::STATE_EXPIRED) {
+                    throw new DomainException(
+                        'لا يُعتمد الحسابُ: هويّةُ صاحبه منتهيةٌ'
+                        .($expiry['expires_at'] ? ' منذ '.$expiry['expires_at'] : '')
+                        .' — اطلب إعادةَ الرفع.');
                 }
 
                 // ══════════════════════════════════════════════════════
@@ -240,10 +278,19 @@ class KycDocumentService
                 // المراجعَ يبحث وتُنتج تذكرةَ دعمٍ لا إجراءً.
                 // ══════════════════════════════════════════════════════
                 if ($requiredTier >= 3 && ($completeness['missing_fields'] ?? []) !== []) {
-                    throw new DomainException(
-                        'KYC_PROFILE_INCOMPLETE: '
-                        . implode(', ', $completeness['missing_fields'])
-                    );
+                    throw new DomainException($this->sayMissing(
+                        'KYC_PROFILE_INCOMPLETE',
+                        'لا تُرفَع الفئةُ الثالثةُ قبل استكمال هذه الحقول',
+                        $completeness['missing_fields'],
+                        // **ولا معجمَ للحقول الرقابيّة بعد** — فتُعرَض
+                        // رموزُها خاماً موسومةً «بلا ترجمة»، ولا تُخترَع
+                        // لها أسماء. (وأوّلُ صياغةٍ كتبت
+                        // `KycProfileFields::LABELS ?? []` — و`??` لا
+                        // تحمي ثابتاً غيرَ معرَّف: النداءُ يسقط بـ
+                        // `Undefined constant`. قِيس فسقط.)
+                        self::PROFILE_FIELD_LABELS,
+                        'استكملها من نافذة «✏️ تعديل» ثمّ أعِد المحاولة.'
+                    ));
                 }
 
                 $account->is_kyc_verified = 1;
@@ -472,5 +519,73 @@ class KycDocumentService
     public function decrypt(KycDocument $doc): string
     {
         return $this->storage->decryptToBinary($doc->encrypted_path);
+    }
+
+    /**
+     * AMIAL-KYC-SAY-001 — **رفضٌ يقول ما ينقص بالعربيّة وأين يُستدرَك.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمنُ الذي دُفع:** أرسل صاحبُ المشروع صورةَ نافذةٍ في لوحة
+     * الإدارة تقول حرفيّاً:
+     *
+     *     رسالة من أميال باي
+     *     KYC_DOCUMENTS_INCOMPLETE: national_id_front, national_id_back, selfie
+     *
+     * **والرفضُ صحيحٌ تماماً** — الحسابُ ينقصه ثلاثةُ مستندات. لكنّه
+     * يتكلّم بلغة الآلة في وجه إنسانٍ يعمل بالعربيّة، ولا يقول ماذا
+     * يفعل. فسأل: «هذا الزرّ لا يعمل، وإذا عمل هل يعمل بشكل صحيح؟»
+     * — والجوابُ أنّه عمل وأصاب **وأخفق في أن يُفهِم**.
+     *
+     * **والمعجمُ كان موجوداً ولا يُستعمَل**: `KycDocument::TYPE_LABELS`
+     * فيه أسماءٌ عربيّةٌ للخمسة كلِّها منذ كُتب الصنف. مبنيٌّ ولا يُوصَل
+     * إليه — وهو نمطُ العطل الأكثرُ تكراراً في هذا المشروع.
+     *
+     * **ورمزٌ بلا ترجمةٍ يُعرَض خاماً ويُوسَم، ولا يُخترَع له معنى.**
+     * فترجمةٌ مخترَعةٌ في شاشة امتثالٍ تُمرّر القارئَ واثقاً من معنىً لم
+     * يقصده أحد، والرمزُ الخامُ يُوقفه ليسأل. (القاعدة السابعة.)
+     *
+     * @param  array<int,string>     $codes
+     * @param  array<string,string>  $dictionary
+     */
+    /**
+     * أسماءُ الحقول الرقابيّة بالعربيّة — **منقولةٌ من نموذج اللوحة
+     * نفسِه** لا مخترَعة، وما ليس فيها يُعرَض خاماً موسوماً.
+     */
+    private const PROFILE_FIELD_LABELS = [
+        'residence_governorate' => 'محافظة السكن',
+        'residence_district' => 'المديرية',
+        'residence_area' => 'الحيّ',
+        'occupation' => 'المهنة',
+        'income_source' => 'مصدر الدخل',
+        'account_purpose' => 'الغرض من الحساب',
+        'gender' => 'الجنس',
+        'date_of_birth' => 'تاريخ الميلاد',
+        'father_name' => 'اسم الأب',
+        'grandfather_name' => 'اسم الجدّ',
+        'name_en' => 'الاسم بالإنجليزيّة',
+    ];
+
+    private function sayMissing(
+        string $marker,
+        string $headline,
+        array $codes,
+        array $dictionary,
+        string $whatToDo,
+    ): string {
+        $named = array_map(
+            static fn (string $c): string => $dictionary[$c] ?? ($c . ' (بلا ترجمة)'),
+            array_values($codes));
+
+        // ══════════════════════════════════════════════════════════════
+        // **والرمزُ يبقى في الذيل — عقدٌ لا زينة.**
+        //
+        // قِيس: سبعةُ مواضعَ تعتمد `KYC_DOCUMENTS_INCOMPLETE` علامةً
+        // (اختباراتٌ ومساعدُ تجهيزٍ ووثائقُ حرّاس)، ونزعُه كسر اثني عشرَ
+        // اختباراً في أوّل تشغيل. **ورسالةٌ تُقرأ بالعربيّة ولا يُعرَف
+        // رمزُها يجعل بلاغَ الدعم بلا مفتاح.**
+        //
+        // فالإنسانُ يقرأ الجملةَ أوّلاً، والآلةُ تجد علامتَها آخِراً.
+        // ══════════════════════════════════════════════════════════════
+        return $headline . ': ' . implode('، ', $named) . '. ' . $whatToDo . ' [' . $marker . ']';
     }
 }

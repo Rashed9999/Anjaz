@@ -32,6 +32,7 @@ class PharmacySaleService
 
     public function __construct(
         private readonly PharmacyAlertService $alerts,
+        private readonly MerchantPaymentReferenceService $paymentReference,
     ) {}
 
     /**
@@ -58,6 +59,7 @@ class PharmacySaleService
         ?int $posUserId,
         array $items,
         array $data,
+        ?int $createdByUserId = null,
     ): PharmacySale {
         if (empty($items)) {
             throw new InvalidArgumentException('السلّة فارغة');
@@ -75,6 +77,14 @@ class PharmacySaleService
             if (!$customer) {
                 throw new RuntimeException('العميل غير موجود');
             }
+        }
+        // يطابق عقدَ القطاعات الأخرى: البيع الآجل يربط برقم العميل ولو لم
+        // يُنشأ له ملفّ علاجي في الصيدلية بعد. اختيار مريض موجود يغلب
+        // المدخل اليدوي كي لا يستطيع الكاشير ربط فاتورة مريض برقم آخر.
+        $creditCustomerPhone = trim((string) ($customer?->phone ?? $data['customer_phone'] ?? ''));
+        $creditCustomerName = trim((string) ($customer?->full_name ?? $data['customer_name'] ?? 'عميل الصيدلية'));
+        if (($data['payment_method'] ?? null) === 'credit' && $creditCustomerPhone === '') {
+            throw new InvalidArgumentException('رقم العميل مطلوب للبيع الآجل');
         }
 
         // اجمع المنتجات + تحقّق من الكمّيات والوصفة والحساسيات
@@ -146,8 +156,11 @@ class PharmacySaleService
         }
 
         // ===== 3) تنفيذ DB transaction =====
+        $createdByUserId ??= $merchant->id;
+
         return DB::transaction(function () use (
-            $merchant, $pharmacy, $posUserId, $resolvedItems, $data, $customer, $allergyWarnings,
+            $merchant, $pharmacy, $posUserId, $createdByUserId, $resolvedItems, $data, $customer, $allergyWarnings,
+            $creditCustomerPhone, $creditCustomerName,
         ) {
             // احسب الإجمالي
             $subtotal = '0';
@@ -161,11 +174,28 @@ class PharmacySaleService
                 throw new InvalidArgumentException('الخصم أكبر من الإجمالي');
             }
 
+            if ($data['payment_method'] === 'amial_pay') {
+                $this->paymentReference->assertPaidForMerchant(
+                    $merchant,
+                    $data['paid_transaction_id'] ?? null,
+                    $total,
+                );
+            }
+
             // أنشئ سجل البيع
             $sale = PharmacySale::create([
                 'sale_ulid' => (string) Str::ulid(),
                 'merchant_user_id' => $merchant->id,
                 'pos_user_id' => $posUserId,
+                // جهاز POS اختياري للموظف، لكن منفذ البيع لا يجوز أن
+                // يضيع من سجل التدقيق حين يعمل بحساب موظف مستقل.
+                'created_by_user_id' => $createdByUserId,
+                // AMIAL-SHIFT-GATE-001 — **وشبّاكُ الصيدليّة درجُ الورديّة
+                // نفسُه** (‏`computeCash` يعدّه)، فبيعتُه تحمل ورديّتَها
+                // كما تحملها بيعةُ الكاشير — وإلّا ظهر في «المتوقَّع» نقدٌ
+                // لا يُعرف قابضُه.
+                'shift_id' => app(\App\Services\CashierShiftService::class)
+                    ->current($merchant, $posUserId)?->id,
                 'pharmacy_id' => $pharmacy->id,
                 'customer_id' => $customer?->id,
                 'prescription_number' => $data['prescription_number'] ?? null,
@@ -174,6 +204,13 @@ class PharmacySaleService
                 'subtotal' => $subtotal,
                 'discount_amount' => $discount,
                 'total_amount' => $total,
+                // AMIAL-CASH-TENDERED-001 — ما استلمه البائعُ نقداً؛
+                // والباقي يُحسب منه ومن الإجماليّ على الإيصال.
+                'amount_received' => isset($data['amount_received'])
+                    && $data['amount_received'] !== null
+                    && $data['amount_received'] !== ''
+                    ? MoneyService::normalize((string) $data['amount_received'])
+                    : null,
                 'payment_method' => $data['payment_method'],
                 'paid_transaction_id' => $data['paid_transaction_id'] ?? null,
                 'warnings_acknowledged' => empty($allergyWarnings) ? null : $allergyWarnings,
@@ -181,6 +218,28 @@ class PharmacySaleService
                 'notes' => $data['notes'] ?? null,
                 'zone_code' => $merchant->zone_code ?? 'SOUTH',
             ]);
+
+            // الصيدلية لا تحتفظ بدفتر دين موازٍ: البيع الآجل يدخل الحساب
+            // الموحد نفسه الذي تظهر منه «فواتيري الآجلة» للعميل ويسدده
+            // جزئياً أو كلياً من التطبيق.
+            if ($data['payment_method'] === 'credit') {
+                $credit = app(CustomerCreditService::class);
+                $account = $credit->findOrCreateAccount(
+                    $merchant->id,
+                    $creditCustomerPhone,
+                    $creditCustomerName,
+                );
+                $credit->recordSale(
+                    account: $account,
+                    amount: $total,
+                    dueDate: $data['due_date'] ?? null,
+                    note: 'فاتورة صيدلية آجل',
+                    createdBy: $createdByUserId,
+                    referenceType: 'pharmacy_sale',
+                    referenceId: $sale->sale_ulid,
+                    referenceNumber: '#' . substr($sale->sale_ulid, -8),
+                );
+            }
 
             // اخصم من Batches بـ FIFO (واحد لكلّ منتج)
             foreach ($resolvedItems as $r) {

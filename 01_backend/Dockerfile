@@ -19,6 +19,21 @@ RUN apk add --no-cache \
     tesseract-ocr \
     tesseract-ocr-data-ara \
     tesseract-ocr-data-eng \
+    # ══════════════════════════════════════════════════════════════════
+    # AMIAL-BACKUP-OFFSITE-001 — **أداةُ الشحن تُشحَن مع الصورة.**
+    #
+    # `DatabaseBackupCommand::shipOffsite` تنسخ بـ`rclone` متى ضُبطت
+    # `AMIAL_BACKUP_REMOTE`. **ولم تكن `rclone` في الصورة إطلاقاً** —
+    # فأوّلُ ما يضبط صاحبُ المشروعُ الوجهةَ يسقط الشحنُ، والشيفرةُ
+    # تقولها بصدق («الوجهةُ مضبوطةٌ ولا rclone») لكنّ الخطوةَ لا تنجح.
+    #
+    # وهو نمطُ «مبنيٌّ ولا يُوصَل إليه» في أخطر موضع: **النسخةُ خارج
+    # الخادم**. وقرصٌ واحدٌ يُفقِد الأصلَ والنسخةَ معاً.
+    #
+    # وحجمُها ~٢٠ ميجابايت في Alpine، وتُثبَّت مرّةً في البناء لا في
+    # كلّ ليلة — **وتثبيتٌ وقتَ الحاجة يعني شبكةً تعمل ليلةَ الكارثة.**
+    # ══════════════════════════════════════════════════════════════════
+    rclone \
     nodejs \
     npm
 
@@ -159,7 +174,14 @@ COPY . .
 
 # وهنا تُبنى الخريطةُ وتُطلق السكربتاتُ (`package:discover`) — والصورةُ
 # هذه تملك كلَّ الامتدادات، بخلاف مرحلةِ `composer:2.7` في `Dockerfile.prod`.
-RUN composer dump-autoload --no-dev --optimize --no-interaction
+#
+# بعض مساحات Coolify القديمة كانت تُلحق `config/initial.php` من مُثبّت
+# 6cash خارج Git رغم .dockerignore. Laravel يحمّل كل config/*.php، فيسقط
+# النشر على خطأ نحوي في ملف ليس جزءاً من أميال باي. الحذف داخل الصورة هو
+# الحارس الأخير: لا يمس المستودع أو بيانات التشغيل، لكنه يمنع ملفاً دخيلاً
+# من الوصول إلى artisan.
+RUN rm -f config/initial.php \
+ && composer dump-autoload --no-dev --optimize --no-interaction
 
 # صلاحيات storage
 # AMIAL-PDF-DURABLE-001: تُنشأ هنا للنشرات بلا volume، ويُعاد إنشاؤها في

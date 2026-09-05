@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:amial_pay/features/access/domain/vertical_catalog.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
@@ -12,9 +13,16 @@ import 'package:amial_pay/common/widgets/amial_button.dart';
 
 /// AMIAL-REG-WIZARD-001
 ///
-/// معالج تسجيل عميل بنمط البنوك — 10 خطوات: شخصية → هوية → عنوان → وثائق →
-/// شخص قريب → توقيع مرسوم → إقرارات → PIN → OTP → «بانتظار موافقة الإدارة».
+/// معالج تسجيل بنمط البنوك — **عشرُ خطوات إدخالٍ ثمّ شاشةُ النجاح**:
+/// شخصية → هوية → عنوان → **عمل ومصدر دخل** → وثائق → شخص قريب →
+/// توقيع مرسوم → إقرارات → كلمة المرور → OTP → «بانتظار موافقة الإدارة».
+///
+/// وكان هذا السطرُ نفسُه يُسقط خطوةَ «العمل» ويسمّي كلمةَ المرور «PIN» —
+/// وهو ما كانت عليه قائمةُ العناوين حرفاً بحرف (‏AMIAL-REG-TITLES-001).
+/// **فتوثيقٌ يشيخ مع الشيفرة يصير مصدرَ العطل لا وصفَه.**
+///
 /// يرسل كل شيء في نداء تسجيل واحد (multipart) مع التوقيع (base64) والوثائق.
+/// ونوعُ الحساب (`account_type`) عميلٌ أو تاجرٌ أو وكيل — المعالجُ واحدٌ للثلاثة.
 class AmialRegistrationWizardScreen extends StatefulWidget {
   const AmialRegistrationWizardScreen({super.key});
 
@@ -49,6 +57,10 @@ class _AmialRegistrationWizardScreenState
   // AMIAL-REG-ROLES: نوع الحساب + حقول التاجر + أرقام الدخول من الخادم
   String _accountType = 'customer';
   String _businessType = 'retail';
+
+  /// AMIAL-VERTICAL-COMPOSE-001 — قطاعاتُ التسجيل: من الخادم، وإلى
+  /// الستّة المبنيّة عند تعذّره (فلا يُقفَل بابُ التسجيل بانقطاع شبكة).
+  List<VerticalOption> _verticals = VerticalCatalog.builtIn.values.toList();
   final _storeName = TextEditingController();
   String? _agentNumber;
   String? _merchantNumber;
@@ -104,7 +116,20 @@ class _AmialRegistrationWizardScreenState
   final _addrStreet = TextEditingController();   // الشارع
   final _addrLandmark = TextEditingController(); // أقرب معلم
 
-  final List<XFile> _idImages = [];
+  // AMIAL-SELFREG-KYCDOCS-001: وثيقةٌ لكلّ نوعٍ باسمه — يُرسَل مصنّفاً
+  // فيُنشئ الخادمُ منها صفوفَ `kyc_documents`، وبها وحدَها يعمل الاعتماد.
+  XFile? _docIdFront;
+  XFile? _docIdBack;
+  XFile? _docSelfie;
+  XFile? _docAddress;
+
+  /// الوثائقُ المرسَلة، لكلٍّ اسمُ حقلها في الخادم.
+  Map<String, XFile> get _typedDocs => {
+        if (_docIdFront != null) 'kyc_id_front': _docIdFront!,
+        if (_docIdBack != null) 'kyc_id_back': _docIdBack!,
+        if (_docSelfie != null) 'kyc_selfie': _docSelfie!,
+        if (_docAddress != null) 'kyc_address_proof': _docAddress!,
+      };
 
   // ══════════════════════════════════════════════════════════════════
   // AMIAL-KYC-INTL-001 — حقولُ «اعرف عميلك» الرقابيّة.
@@ -151,6 +176,15 @@ class _AmialRegistrationWizardScreenState
   final _pin = TextEditingController();
   final _pinConfirm = TextEditingController();
   final _otp = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    VerticalCatalog.load().then((list) {
+      if (!mounted) return;
+      setState(() => _verticals = list);
+    });
+  }
 
   @override
   void dispose() {
@@ -249,8 +283,10 @@ class _AmialRegistrationWizardScreenState
         }
         return true;
       case 4:
-        if (_idImages.isEmpty) {
-          _snack('أرفق صورة وثيقة الهوية');
+        // الثلاثةُ التي يشترطها الاعتماد — تُطلب هنا لا بعد أسبوعٍ من
+        // الانتظار في طابور المراجعة.
+        if (_docIdFront == null || _docIdBack == null || _docSelfie == null) {
+          _snack('أرفق وجهَ الهوية وظهرَها وصورةً شخصية');
           return false;
         }
         return true;
@@ -276,11 +312,11 @@ class _AmialRegistrationWizardScreenState
         return true;
       case 8:
         if (_pin.text.length != 4) {
-          _snack('رمز PIN يجب أن يكون 4 أرقام');
+          _snack('كلمة المرور يجب أن تكون 4 أرقام');
           return false;
         }
         if (_pin.text != _pinConfirm.text) {
-          _snack('رمز PIN غير متطابق');
+          _snack('كلمتا المرور غير متطابقتين');
           return false;
         }
         return true;
@@ -382,7 +418,6 @@ class _AmialRegistrationWizardScreenState
         return;
       }
 
-      final governorate = data['governorate'];
       setState(() {
         _inServiceArea = data['in_service_area'] == true;
         _locationNotice = (data['notice'] as String?) ??
@@ -421,12 +456,12 @@ class _AmialRegistrationWizardScreenState
     } catch (_) {/* قد يكون التحقّق بالهاتف معطّلاً */}
   }
 
-  Future<void> _pickIdImages() async {
+  Future<XFile?> _pickOne() async {
     try {
-      final imgs = await ImagePicker().pickMultiImage();
-      if (imgs.isNotEmpty) setState(() => _idImages.addAll(imgs));
+      return await ImagePicker().pickImage(source: ImageSource.gallery);
     } catch (_) {
-      _snack('تعذّر اختيار الصور');
+      _snack('تعذّر اختيار الصورة');
+      return null;
     }
   }
 
@@ -508,9 +543,14 @@ class _AmialRegistrationWizardScreenState
         if (_accountType == 'merchant') 'business_type': _businessType,
         if (signature != null) 'signature': signature,
       };
-      final parts = _idImages
-          .map((x) => MultipartBody('identification_image[]', File(x.path)))
-          .toList();
+      // AMIAL-SELFREG-KYCDOCS-001 — تُرسَل **مسمّاةً** فيُنشئ الخادمُ منها
+      // `kyc_documents` مصنّفة، وبها يعمل زرُّ الاعتماد. وتُرسَل معها في
+      // `identification_image[]` للتوافق الخلفيّ مع ما يقرؤه القائم.
+      final parts = <MultipartBody>[
+        for (final e in _typedDocs.entries) MultipartBody(e.key, File(e.value.path)),
+        for (final x in _typedDocs.values)
+          MultipartBody('identification_image[]', File(x.path)),
+      ];
 
       final api = Get.find<ApiClient>();
       final r = await api.postMultipartData(
@@ -549,9 +589,26 @@ class _AmialRegistrationWizardScreenState
 
   @override
   Widget build(BuildContext context) {
-    final titles = [
-      'المعلومات الشخصية', 'معلومات الهوية', 'العنوان', 'وثائق الهوية',
-      'شخص قريب', 'التوقيع الإلكتروني', 'الإقرارات', 'رمز PIN', 'رمز التحقق', 'تم',
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-REG-TITLES-001 — **العناوينُ كانت منزاحةً سبعَ خطوات.**
+    //
+    // أُدرجت خطوةُ «العمل ومصدر الدخل» في الموضع ٣ (‏AMIAL-KYC-INTL-001)
+    // **ولم تُدرَج معها في هذه القائمة**. فمن الخطوة ٣ فصاعداً صار كلُّ
+    // عنوانٍ يسبق شاشتَه بواحدة: شاشةُ الوثائق تُعنوَن «شخص قريب»،
+    // وشاشةُ التوقيع «الإقرارات»، **وشاشةُ كلمة المرور تُعنوَن «رمز
+    // التحقق»** — ولهذا يقول من يسجّل: «لا أجد خانةً لكلمة المرور».
+    //
+    // والتحقّقُ (`_validateStep`) كان سليماً مطابقاً للصفحات، فلم يسقط
+    // شيءٌ ولم يظهر خطأٌ في أيّ سجلّ — **عطلٌ في المعنى وحدَه.**
+    //
+    // والعددُ يُشتقّ من القائمة نفسِها لا يُكتب رقماً، فمن أدرج خطوةً غداً
+    // تتبعه الترقيمُ والشريطُ من تلقائهما. (كان `من 9` و`generate(9)`
+    // مكتوبَين يدويّاً، وكلاهما خطأٌ بواحد.)
+    // ══════════════════════════════════════════════════════════════════
+    const titles = [
+      'المعلومات الشخصية', 'معلومات الهوية', 'العنوان', 'العمل ومصدر الدخل',
+      'وثائق الهوية', 'شخص قريب', 'التوقيع الإلكتروني', 'الإقرارات',
+      'كلمة المرور', 'رمز التحقق',
     ];
     // AMIAL-REG-UI-002: لغة المراجع الاحترافية — بلا شريط عنوان ملوّن ثقيل.
     // رجوع خفيف + شريط تقدّم مقسّم بعدد الخطوات + عنوان كبير أسفله.
@@ -579,7 +636,7 @@ class _AmialRegistrationWizardScreenState
                     ),
                   ),
                   const Spacer(),
-                  Text('الخطوة ${_step + 1} من 9',
+                  Text('الخطوة ${_step + 1} من ${titles.length}',
                       style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -591,12 +648,12 @@ class _AmialRegistrationWizardScreenState
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
-                children: List.generate(9, (i) {
+                children: List.generate(titles.length, (i) {
                   final done = i <= _step;
                   return Expanded(
                     child: Container(
                       height: 4,
-                      margin: EdgeInsets.only(left: i == 8 ? 0 : 4),
+                      margin: EdgeInsets.only(left: i == titles.length - 1 ? 0 : 4),
                       decoration: BoxDecoration(
                         color: done ? AmialColors.primary : const Color(0xFFE6E9EF),
                         borderRadius: BorderRadius.circular(4),
@@ -745,17 +802,16 @@ class _AmialRegistrationWizardScreenState
         if (_accountType == 'merchant') ...[
           const SizedBox(height: 14),
           _field(_storeName, 'اسم المتجر *'),
+          // AMIAL-VERTICAL-COMPOSE-001 — **القائمةُ تُسأل من الخادم.**
+          //
+          // وكانت ستَّ سطورٍ محفورة، فقطاعٌ تُنشئه الإدارةُ لا يجده من
+          // يسجّل حساباً جديداً — أوّلُ بابٍ يدخل منه التاجر.
           DropdownButtonFormField<String>(
-            value: _businessType,
+            value: _verticals.any((o) => o.code == _businessType) ? _businessType : null,
             decoration: const InputDecoration(labelText: 'نوع النشاط', border: OutlineInputBorder()),
-            items: const [
-              DropdownMenuItem(value: 'retail', child: Text('بقالة / سوبرماركت')),
-              DropdownMenuItem(value: 'quick_sale', child: Text('بيع سريع (بسطة/خضار/أسماك)')),
-              DropdownMenuItem(value: 'fuel', child: Text('محطة وقود')),
-              DropdownMenuItem(value: 'pharmacy', child: Text('صيدلية')),
-              DropdownMenuItem(value: 'wholesale', child: Text('جملة')),
-              DropdownMenuItem(value: 'restaurant', child: Text('مطعم')),
-            ],
+            items: _verticals
+                .map((o) => DropdownMenuItem(value: o.code, child: Text(o.label)))
+                .toList(),
             onChanged: (v) => setState(() => _businessType = v ?? 'retail'),
           ),
         ],
@@ -1008,39 +1064,79 @@ class _AmialRegistrationWizardScreenState
         ),
       ]);
 
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-SELFREG-KYCDOCS-001 — **الخاناتُ مسمّاةٌ لأنّ النوعَ لا يُخمَّن.**
+  //
+  // كانت الوثائقُ تُختار قائمةً واحدةً غيرَ مصنّفة («يمكن اختيار عدّة
+  // صور»)، والترتيبُ وحدَه يدلّ على النوع — وهو غيرُ مضمون. فيصل إلى
+  // الخادم أربعُ صورٍ بلا هويّة، ولا يستطيع أن ينشئ منها مستنداتٍ
+  // مصنّفة، **فيبقى زرُّ الاعتماد في لوحة التحقّق يردّ «لا يُعتمد
+  // الحسابُ قبل رفع هذه المستندات» على حسابٍ رفعها فعلاً.**
+  //
+  // ومستندٌ يُسجَّل «وجهَ هويّة» وهو ظهرُها يُفسد ملفَّ امتثالٍ بصمت —
+  // فالتخمينُ هنا أسوأُ من الغياب. (القاعدة السابعة.)
+  // ══════════════════════════════════════════════════════════════════
   Widget _stepDocuments() => _wrap([
-        _sectionNote('أرفق صوراً واضحة (يمكن اختيار عدّة صور):\n'
-            '١) الهوية — الوجه   ٢) الهوية — الظهر\n'
-            '٣) إثبات العنوان   ٤) صورة شخصية حديثة'),
-        OutlinedButton.icon(
-          onPressed: _pickIdImages,
-          icon: const Icon(Icons.upload_file),
-          label: const Text('إرفاق صور الوثائق'),
-        ),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8, runSpacing: 8,
-          children: List.generate(_idImages.length, (i) {
-            return Stack(children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.file(File(_idImages[i].path),
-                    width: 90, height: 90, fit: BoxFit.cover),
-              ),
-              Positioned(
-                top: 0, left: 0,
-                child: InkWell(
-                  onTap: () => setState(() => _idImages.removeAt(i)),
-                  child: Container(
-                    color: Colors.red.withValues(alpha: 0.85),
-                    child: const Icon(Icons.close, color: Colors.white, size: 18),
-                  ),
-                ),
-              ),
-            ]);
-          }),
-        ),
+        _sectionNote('صوّر كلَّ وثيقةٍ في خانتها. الثلاثُ الأولى مطلوبةٌ '
+            'لاعتماد حسابك، وإثباتُ العنوان يرفع حدودَك لاحقاً.'),
+        _docSlot('بطاقة الهوية — الوجه *', _docIdFront,
+            (x) => setState(() => _docIdFront = x)),
+        _docSlot('بطاقة الهوية — الظهر *', _docIdBack,
+            (x) => setState(() => _docIdBack = x)),
+        _docSlot('صورة شخصية حديثة *', _docSelfie,
+            (x) => setState(() => _docSelfie = x)),
+        _docSlot('إثبات العنوان (اختياري)', _docAddress,
+            (x) => setState(() => _docAddress = x)),
       ]);
+
+  /// خانةُ وثيقةٍ واحدة: تعرض ما اختير، وتسمح باستبداله أو حذفه.
+  Widget _docSlot(String label, XFile? file, void Function(XFile?) set) => Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Row(children: [
+          if (file != null)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.file(File(file.path),
+                  width: 64, height: 64, fit: BoxFit.cover),
+            )
+          else
+            Container(
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF0F1F3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.image_outlined, color: Color(0xFF9AA4B2)),
+            ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                const SizedBox(height: 4),
+                Row(children: [
+                  TextButton.icon(
+                    onPressed: () async {
+                      final x = await _pickOne();
+                      if (x != null) set(x);
+                    },
+                    icon: const Icon(Icons.upload_file, size: 17),
+                    label: Text(file == null ? 'اختر صورة' : 'استبدال'),
+                  ),
+                  if (file != null)
+                    TextButton(
+                      onPressed: () => set(null),
+                      child: const Text('حذف',
+                          style: TextStyle(color: AmialColors.red)),
+                    ),
+                ]),
+              ],
+            ),
+          ),
+        ]),
+      );
 
   Widget _stepKin() => _wrap([
         _sectionNote('بيانات شخص قريب يمكن التواصل معه عند الحاجة.'),
@@ -1099,11 +1195,16 @@ class _AmialRegistrationWizardScreenState
         ),
       ]);
 
+  // AMIAL-REG-TITLES-001 — **اللفظُ نفسُه في الشاشتين.**
+  // كانت تُسمّى هنا «رمز PIN» وتُطلَب في شاشة الدخول «كلمة المرور» — وهي
+  // واحدةٌ تُرسَل في حقل `password`. فمن سجّل لم يجد «خانةَ كلمة مرور»،
+  // ثمّ سُئل عنها عند الدخول. والاسمُ الواحدُ للشيء الواحد.
   Widget _stepPin() => _wrap([
-        _sectionNote('أنشئ رمز PIN من 4 أرقام لتأمين حسابك (يُستخدم للدخول والمعاملات).'),
-        _field(_pin, 'رمز PIN (4 أرقام) *',
+        _sectionNote('اختر كلمة المرور — أربعةُ أرقامٍ تدخل بها إلى حسابك '
+            'وتؤكّد بها معاملاتك. هي نفسُها التي تُطلب في شاشة الدخول.'),
+        _field(_pin, 'كلمة المرور (4 أرقام) *',
             type: TextInputType.number, maxLength: 4),
-        _field(_pinConfirm, 'تأكيد رمز PIN *',
+        _field(_pinConfirm, 'تأكيد كلمة المرور *',
             type: TextInputType.number, maxLength: 4),
       ]);
 

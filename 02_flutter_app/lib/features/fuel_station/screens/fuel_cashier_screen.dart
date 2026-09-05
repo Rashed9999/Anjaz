@@ -5,12 +5,13 @@ import 'package:amial_pay/features/fuel_station/controllers/fuel_station_control
 import 'package:amial_pay/features/fuel_station/screens/fuel_sales_history_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_receipt_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_qr_collect_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_sale_screen.dart';
 
 /// AMIAL-FUEL-CASHIER-001 — كاشير محطة الوقود (تصميم #103).
 ///
 /// كاشير سريع للعامل: يختار المضخّة ونوع الوقود، يُدخل المبلغ (بالريال) أو
 /// الكمية (باللتر) عبر لوحة أرقام أو أزرار سريعة، ثم يدفع نقداً أو «QR الفوري»
-/// (أميال باي بهاتف العميل — دفع حقيقي يحرّك المال). موصول بـ recordSale.
+/// (أميال باي عبر QR يؤكده العميل من محفظته). موصول بـ recordSale.
 class FuelCashierScreen extends StatefulWidget {
   const FuelCashierScreen({super.key});
 
@@ -105,49 +106,22 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
         ));
   }
 
-  /// دفع أميال باي بهاتف العميل (شحن مباشر) — خيار بديل سريع.
-  Future<void> _payAmial() async {
-    if (!_validate()) return;
-    final phoneCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('دفع أميال باي'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('المبلغ: ${_fmt(_amount)} ر.ي',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-          const SizedBox(height: 12),
-          TextField(
-            controller: phoneCtrl,
-            keyboardType: TextInputType.phone,
-            autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'رقم هاتف العميل',
-              hintText: '9677xxxxxxxx',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text('يُخصم من محفظة العميل فوراً ويُضاف لك بعد الرسوم.',
-              style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تأكيد الدفع')),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    if (phoneCtrl.text.trim().isEmpty) { _snack('أدخل رقم هاتف العميل'); return; }
-    _lastCustomerPhone = phoneCtrl.text.trim();
-    final data = _baseData()
-      ..['payment_method'] = 'amial_pay'
-      ..['customer_phone'] = phoneCtrl.text.trim();
-    await _submit(data);
-  }
+  // ══════════════════════════════════════════════════════════════════
+  // AMIAL-FUEL-QR-002 — **حُذفت `_payAmial`: شحنٌ مباشرٌ بهاتف العميل.**
+  //
+  // كانت تُرسل `payment_method = 'amial_pay'` مع `customer_phone` — أي
+  // **يخصم موظّفُ المحطّة من محفظة عميلٍ بكتابة رقمه**، بلا مسحٍ ولا
+  // تأكيد. وشُدّد ذلك في الخادم بحقّ، فصار يردّ: «دفع الوقود يتم عبر QR
+  // يؤكده العميل بنفسه».
+  //
+  // **ولم يكن يناديها زرٌّ** — شيفرةٌ ميّتة. لكنّ بقاءَها فخّ: من وصلها
+  // بزرٍّ غداً يُعيد الثغرةَ ويرى ٤٢٢ لا يفهم سببه. **وشيفرةٌ ميّتةٌ
+  // تناقض قاعدةً حيّةً تُحذف ولا تُعلَّق.**
+  //
+  // والمسارُ الباقي `_payByQr` هو الصحيح: يعرض رمزاً بمبلغٍ ثابت،
+  // ويمسحه العميلُ ويؤكّد من تطبيقه، ثمّ يُسجَّل البيعُ بمرجع دفعه.
+  // ══════════════════════════════════════════════════════════════════
 
-  /// هاتف العميل لآخر عملية أميال باي — يُمرَّر للفاتورة (إرسال واتساب).
-  String? _lastCustomerPhone;
 
   Future<void> _submit(Map<String, dynamic> data) async {
     final ok = await c.recordSale(data);
@@ -172,9 +146,7 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
           sale: s,
           stationName: c.station.value?['station_name'] ?? 'محطة الوقود',
           pumpLabel: _pump == null ? null : 'المضخّة #${_pump!['pump_number']}',
-          customerPhone: _lastCustomerPhone,
         ));
-    _lastCustomerPhone = null;
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
@@ -302,17 +274,23 @@ class _FuelCashierScreenState extends State<FuelCashierScreen> {
             )),
             const SizedBox(width: 8),
             Expanded(child: OutlinedButton.icon(
-              onPressed: c.isSubmitting.value ? null : _payAmial,
-              icon: const Icon(Icons.phone_iphone),
-              label: const Text('بالهاتف'),
-            )),
-            const SizedBox(width: 8),
-            Expanded(child: OutlinedButton.icon(
               onPressed: () => Get.to(() => const FuelSalesHistoryScreen()),
               icon: const Icon(Icons.history),
               label: const Text('السجل'),
             )),
           ]),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: c.isSubmitting.value
+                ? null
+                : () => Get.to(() => const FuelSaleScreen()),
+            icon: const Icon(Icons.receipt_long_outlined),
+            label: const Text('بيع تفصيلي: آجل أو حساب شركة'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AmialColors.primary,
+              minimumSize: const Size.fromHeight(46),
+            ),
+          ),
           const SizedBox(height: 20),
 
           // ===== آخر العمليات =====

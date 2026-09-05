@@ -24,11 +24,17 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   bool _btOn = false;
   bool _testing = false;
   int _paper = 80;
+  String _connection = 'bluetooth';
+  final _host = TextEditingController();
+  final _port = TextEditingController(text: '9100');
 
   @override
   void initState() {
     super.initState();
     _paper = _svc.config.value?.paperMm ?? 80;
+    _connection = _svc.config.value?.connection ?? 'bluetooth';
+    _host.text = _svc.config.value?.host ?? '';
+    _port.text = '${_svc.config.value?.port ?? 9100}';
     _refresh();
   }
 
@@ -47,10 +53,50 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   }
 
   Future<void> _select(BluetoothInfo d) async {
-    await _svc.saveConfig(ThermalPrinterConfig(mac: d.macAdress, name: d.name, paperMm: _paper));
+    final current = _svc.config.value;
+    await _svc.saveConfig(ThermalPrinterConfig(
+      mac: d.macAdress,
+      name: d.name,
+      paperMm: _paper,
+      openCashDrawer: current?.openCashDrawer ?? false,
+    ));
     if (!mounted) return;
     _snack('تم اختيار الطابعة: ${d.name}', ok: true);
     setState(() {});
+  }
+
+  Future<void> _saveNetwork() async {
+    final host = _host.text.trim();
+    final port = int.tryParse(_port.text.trim()) ?? 9100;
+    if (host.isEmpty || port < 1 || port > 65535) { _snack('أدخل عنوان IP ومنفذاً صحيحين'); return; }
+    await _svc.saveConfig(ThermalPrinterConfig(
+      mac: '',
+      name: 'طابعة شبكة $host',
+      paperMm: _paper,
+      connection: 'network',
+      host: host,
+      port: port,
+      openCashDrawer: _svc.config.value?.openCashDrawer ?? false,
+    ));
+    if (mounted) { _snack('تم حفظ طابعة الشبكة', ok: true); setState(() {}); }
+  }
+
+  Future<void> _setDrawer(bool value) async {
+    final cfg = _svc.config.value;
+    if (cfg == null) {
+      _snack('احفظ الطابعة أولاً');
+      return;
+    }
+    await _svc.saveConfig(ThermalPrinterConfig(
+      mac: cfg.mac,
+      name: cfg.name,
+      paperMm: cfg.paperMm,
+      connection: cfg.connection,
+      host: cfg.host,
+      port: cfg.port,
+      openCashDrawer: value,
+    ));
+    if (mounted) setState(() {});
   }
 
   Future<void> _testPrint() async {
@@ -111,6 +157,21 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           ]),
         ),
         const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          initialValue: _connection,
+          decoration: const InputDecoration(labelText: 'طريقة الاتصال', border: OutlineInputBorder()),
+          items: const [DropdownMenuItem(value: 'bluetooth', child: Text('بلوتوث')), DropdownMenuItem(value: 'network', child: Text('شبكة LAN / Wi‑Fi'))],
+          onChanged: (v) => setState(() => _connection = v ?? 'bluetooth'),
+        ),
+        const SizedBox(height: 16),
+        if (_connection == 'network') ...[
+          TextField(controller: _host, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'عنوان IP للطابعة', hintText: '192.168.1.100', border: OutlineInputBorder())),
+          const SizedBox(height: 10),
+          TextField(controller: _port, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'المنفذ', border: OutlineInputBorder())),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(onPressed: _saveNetwork, icon: const Icon(Icons.save), label: const Text('حفظ طابعة الشبكة')),
+          const SizedBox(height: 8),
+        ],
 
         // الطابعة الحالية
         Obx(() {
@@ -132,7 +193,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(cfg.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                  Text('${cfg.mac}  •  ورق ${cfg.paperMm}مم',
+                  Text('${cfg.connection == 'network' ? '${cfg.host}:${cfg.port}' : cfg.mac}  •  ورق ${cfg.paperMm}مم',
                       textDirection: TextDirection.ltr,
                       style: const TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
                 ]),
@@ -154,8 +215,20 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           const SizedBox(width: 10),
           _paperChip(80, '80 مم'),
         ]),
+        Obx(() {
+          final cfg = _svc.config.value;
+          return SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('فتح درج النقد تلقائياً'),
+            subtitle: const Text('يرسل نبضة ESC/POS بعد طباعة كل إيصال من جهاز POS هذا.'),
+            value: cfg?.openCashDrawer ?? false,
+            onChanged: cfg == null ? null : _setDrawer,
+            activeColor: AmialColors.primary,
+          );
+        }),
         const SizedBox(height: 20),
 
+        if (_connection == 'bluetooth') ...[
         // الطابعات المقترنة
         Row(children: [
           const Text('الطابعات المقترنة', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
@@ -194,6 +267,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
             ),
           );
         }),
+        ],
         const SizedBox(height: 24),
 
         // طباعة تجريبية
@@ -209,6 +283,9 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
     );
   }
 
+  @override
+  void dispose() { _host.dispose(); _port.dispose(); super.dispose(); }
+
   Widget _paperChip(int mm, String label) {
     final selected = _paper == mm;
     return Expanded(
@@ -218,7 +295,15 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           setState(() => _paper = mm);
           final cfg = _svc.config.value;
           if (cfg != null) {
-            await _svc.saveConfig(ThermalPrinterConfig(mac: cfg.mac, name: cfg.name, paperMm: mm));
+            await _svc.saveConfig(ThermalPrinterConfig(
+              mac: cfg.mac,
+              name: cfg.name,
+              paperMm: mm,
+              connection: cfg.connection,
+              host: cfg.host,
+              port: cfg.port,
+              openCashDrawer: cfg.openCashDrawer,
+            ));
           }
         },
         child: Container(

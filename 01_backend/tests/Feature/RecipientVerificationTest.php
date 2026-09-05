@@ -27,6 +27,8 @@ class RecipientVerificationTest extends TestCase
     {
         $sender = User::factory()->create(['zone_code' => 'SOUTH']);
         $recipient = User::factory()->create([
+            // العمودان يتحرّكان معاً في `KycDocumentService:249-250`.
+            'is_kyc_verified' => 1,
             'phone' => '777123456', 'f_name' => 'أحمد', 'l_name' => 'محمد علي',
             'zone_code' => 'SOUTH',
         ]);
@@ -46,6 +48,8 @@ class RecipientVerificationTest extends TestCase
         $sender = User::factory()->create(['zone_code' => 'SOUTH']);
         $accountNumber = app(\App\Services\AccountNumberService::class)->generateUnique();
         $recipient = User::factory()->create([
+            // العمودان يتحرّكان معاً في `KycDocumentService:249-250`.
+            'is_kyc_verified' => 1,
             'phone' => '777654321', 'f_name' => 'سالم', 'l_name' => 'عبدالله',
             'zone_code' => 'SOUTH', 'account_number' => $accountNumber,
         ]);
@@ -68,39 +72,46 @@ class RecipientVerificationTest extends TestCase
     /** @test */
     public function it_rejects_self_transfer()
     {
-        $user = User::factory()->create(['phone' => '777111222', 'zone_code' => 'SOUTH']);
+        $user = User::factory()->create([
+            'phone' => '777111222', 'zone_code' => 'SOUTH', 'is_kyc_verified' => 1]);
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('لنفسك');
         $this->service->verifyRecipient('777111222', $user->id);
     }
 
     /** @test */
-    public function it_rejects_recipient_outside_south()
+    public function it_rejects_a_recipient_whose_governorate_is_undetermined()
     {
+        // ══════════════════════════════════════════════════════════════
+        // **سياسةُ «الجنوبُ وحدَه» رُفعت — وهذا الحارسُ يتبعها.**
+        //
+        // كان يشترط رفضَ كلِّ ما ليس `SOUTH`. وقد نُقض ذلك بحارسٍ أحدثَ
+        // على الفرع نفسِه — `a_verified_recipient_in_another_known_zone
+        // _can_receive_a_ledger_transfer` — وسببُه مكتوب: **التحويل بين
+        // محفظتين حركةُ دفترٍ داخليّة**، لا يعبر نقداً ولا يصرف عملة،
+        // فحاجزُ المناطق لا محلَّ له فيه.
+        //
+        // **وحارسان متناقضان أسوأُ من واحدٍ ناقص**: أحدُهما يسقط أبداً،
+        // فيُعوَّد القارئُ على الأحمر. فيُعاد هذا إلى ما بقي صحيحاً:
+        // **`UNKNOWN` وحدَه هو المانع** — لأنّ هويّةَ الحساب ناقصة، لا
+        // لأنّ محافظتَه بعيدة.
+        // ══════════════════════════════════════════════════════════════
         $sender = User::factory()->create(['zone_code' => 'SOUTH']);
-        User::factory()->create(['phone' => '777333444', 'zone_code' => 'NORTH']);
+        User::factory()->create([
+            'phone' => '777333444', 'zone_code' => 'UNKNOWN', 'is_kyc_verified' => 1]);
 
-        // ══════════════════════════════════════════════════════════════
-        // **ومقياسٌ يحرس صياغةً لا معنىً يسقط على تحسينٍ صحيح.**
-        //
-        // كان هذا السطرُ `expectExceptionMessage('غير مؤهل')` — يحرس
-        // نصَّ رسالةٍ واحدةٍ كانت تُقال في كلّ حال. وقد قُسّمت (AMIAL-
-        // ZONE-REG-001) لأنّها **لم تكن تفرّق بين «لم يُوثَّق بعد»
-        // و«خارج النطاق»**، والفرقُ هو كلُّ ما يحتاجه القارئ: الأوّلُ
-        // ينتظر مراجعةً تنتهي، والثاني لن يُخدَم أبداً.
-        //
-        // فصار المقياسُ على **المعنى**: يُرفَض، ويُقال أنّه رفضُ نطاقٍ
-        // لا رفضُ توثيق.
-        // ══════════════════════════════════════════════════════════════
         try {
             $this->service->verifyRecipient('777333444', $sender->id);
 
-            $this->fail('قُبل مستلمٌ خارج النطاق');
+            $this->fail('قُبل مستلمٌ بمحافظةٍ غيرِ محدَّدة');
         } catch (\RuntimeException $e) {
-            $this->assertStringContainsString('خارجَ نطاق الخدمة', $e->getMessage());
+            $this->assertMatchesRegularExpression('/(غير محددة|غير محدَّدة|نطاق)/u',
+                $e->getMessage(),
+                'الرفضُ لا يقول إنّ المحافظةَ ناقصة — فيُقرأ حظراً.');
 
-            $this->assertStringNotContainsString('لم يُوثَّق', $e->getMessage(),
-                'خُلط «خارج النطاق» بـ«لم يُوثَّق» — والأوّلُ نهائيٌّ والثاني مؤقَّت');
+            // **ويقول ما المخرج** — رفضٌ بلا مخرجٍ يُنتج تذكرةَ دعم.
+            $this->assertMatchesRegularExpression('/(الدعم|اعتماد|الهوية|هويت)/u',
+                $e->getMessage());
         }
     }
 
@@ -108,7 +119,9 @@ class RecipientVerificationTest extends TestCase
     public function valid_token_passes_assertion()
     {
         $sender = User::factory()->create(['zone_code' => 'SOUTH']);
-        $recipient = User::factory()->create(['phone' => '777555666', 'zone_code' => 'SOUTH']);
+        $recipient = User::factory()->create([
+            // العمودان يتحرّكان معاً في `KycDocumentService:249-250`.
+            'is_kyc_verified' => 1,'phone' => '777555666', 'zone_code' => 'SOUTH']);
 
         $result = $this->service->verifyRecipient('777555666', $sender->id);
 
@@ -121,7 +134,9 @@ class RecipientVerificationTest extends TestCase
     public function token_is_single_use()
     {
         $sender = User::factory()->create(['zone_code' => 'SOUTH']);
-        $recipient = User::factory()->create(['phone' => '777777888', 'zone_code' => 'SOUTH']);
+        $recipient = User::factory()->create([
+            // العمودان يتحرّكان معاً في `KycDocumentService:249-250`.
+            'is_kyc_verified' => 1,'phone' => '777777888', 'zone_code' => 'SOUTH']);
 
         $result = $this->service->verifyRecipient('777777888', $sender->id);
         $token = $result['verification_token'];
@@ -139,7 +154,9 @@ class RecipientVerificationTest extends TestCase
     public function token_rejects_mismatched_recipient()
     {
         $sender = User::factory()->create(['zone_code' => 'SOUTH']);
-        $recipient = User::factory()->create(['phone' => '777999000', 'zone_code' => 'SOUTH']);
+        $recipient = User::factory()->create([
+            // العمودان يتحرّكان معاً في `KycDocumentService:249-250`.
+            'is_kyc_verified' => 1,'phone' => '777999000', 'zone_code' => 'SOUTH']);
 
         $result = $this->service->verifyRecipient('777999000', $sender->id);
 
@@ -181,7 +198,8 @@ class RecipientVerificationTest extends TestCase
     public function it_normalizes_phone_with_country_code()
     {
         $sender = User::factory()->create(['zone_code' => 'SOUTH']);
-        User::factory()->create(['phone' => '777123456', 'zone_code' => 'SOUTH']);
+        User::factory()->create([
+            'phone' => '777123456', 'zone_code' => 'SOUTH', 'is_kyc_verified' => 1]);
 
         // برمز الدولة → يجب أن يطابق
         $result = $this->service->verifyRecipient('+967777123456', $sender->id);

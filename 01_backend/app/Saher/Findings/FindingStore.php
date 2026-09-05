@@ -95,6 +95,35 @@ class FindingStore
             $reopened = ! in_array($existing->status, self::HUMAN_HELD, true)
                 && in_array($existing->status, ['RESOLVED', 'FIXED_PENDING_VERIFICATION'], true);
 
+            // ══════════════════════════════════════════════════════════════
+            // AMIAL-SAHER-RULING-001 — **والحكمُ ينتهي بتغيّر ما حَكَم عليه.**
+            //
+            // بصمةُ `Finding` هي `ruleId|assetKey` — **ثابتةٌ عبر إعادة
+            // كتابة الدالّة كلِّها**. فحكمٌ صدر على شيفرةٍ يبقى ساريّاً على
+            // خَلَفٍ لم يره أحد، **وهذا صمتٌ مؤجَّل** لا فرز.
+            //
+            // (الدرسُ مدفوعٌ هنا: `gradle-floor-waiver.json` يذكر الحدَّين
+            // معاً فينتهي من تلقائه أوّلَ ما يتحرّك أحدُهما.)
+            //
+            // فيُقارَن تجزيءُ الملفّ المُصرِّح بما كان وقتَ الحكم. وإن
+            // تعذّرت القراءةُ **لا يُرفَع الحكم**: الغيابُ ليس تغيّراً،
+            // ورفعٌ على مجهولٍ يُغرق الشاشةَ بما فُرز.
+            $rulingStale = false;
+
+            if (in_array($existing->status, self::HUMAN_HELD, true)
+                && ! empty($existing->ruling_source_hash)) {
+                $p = $finding->filePath ? base_path($finding->filePath) : null;
+
+                if ($p && is_file($p)
+                    && hash_file('sha256', $p) !== $existing->ruling_source_hash) {
+                    $rulingStale = true;
+                }
+            }
+
+            if ($rulingStale) {
+                $reopened = true;
+            }
+
             DB::table('saher_findings')->where('id', $existing->id)->update([
                 'last_seen_at' => $now,
                 'occurrence_count' => $existing->occurrence_count + 1,
@@ -103,9 +132,39 @@ class FindingStore
                 'confidence' => $confidence,
                 'title' => $finding->title,
                 'actual_behavior' => $finding->actual,
+
+                // ══════════════════════════════════════════════════════
+                // **وسردُ الاكتشاف يُعاد كتابتُه من الجامع في كلّ جولة.**
+                //
+                // كانت `title` و`actual_behavior` وحدَهما تُحدَّثان،
+                // و`suggested_action` و`impact` و`expected_behavior`
+                // تُكتَب مرّةً عند أوّل ظهورٍ وتبقى أبداً. **فتصحيحُ
+                // نصيحةٍ خاطئةٍ لا يصل قارئَها إطلاقاً**: تُصلَح القاعدةُ
+                // في الشيفرة، ويقرأ الإنسانُ الجملةَ القديمة.
+                //
+                // وقِيس حيّاً: صُحّحت نصيحةُ «تُخفَّض إلى private» لأنّها
+                // تكسر ٢٥ من ٤٩ — فتغيّر العنوانُ والوصفُ في اللوحة،
+                // **وبقيت النصيحةُ الكاسرةُ كما هي.**
+                //
+                // والموضعُ كذلك: دالّةٌ انتقلت أسطرُها يظلّ التقريرُ
+                // يشير إلى سطرها القديم — **ومؤشِّرٌ يشير إلى الخطأ
+                // يُرسل قارئَه يبحث.**
+                //
+                // (وحكمُ الإنسان لا يُمَسّ — هو في `ruling_reason`،
+                // وانتهاؤه محكومٌ ببصمة الملفّ أعلاه لا بهذا.)
+                // ══════════════════════════════════════════════════════
+                'expected_behavior' => $finding->expected,
+                'impact' => $finding->impact,
+                'suggested_action' => $finding->suggestedAction,
+                'file_path' => $finding->filePath,
+                'line_start' => $finding->lineStart,
+
                 'risk_score' => $this->risk($finding->severity, $confidence),
                 'status' => $reopened ? 'REOPENED' : $existing->status,
                 'resolved_at' => $reopened ? null : $existing->resolved_at,
+                // **وحكمٌ انتهى يُمحى أثرُه** — فلا يُقرأ سببٌ قديمٌ على
+                // شيفرةٍ جديدة، وهو أخطرُ من غياب السبب.
+                'ruling_source_hash' => $rulingStale ? null : ($existing->ruling_source_hash ?? null),
                 'updated_at' => $now,
             ]);
 
@@ -114,7 +173,9 @@ class FindingStore
             if ($reopened) {
                 $counts['reopened']++;
                 $this->event((int) $existing->id, 'REOPENED', $existing->status, 'REOPENED',
-                    'رآه فحصٌ بعد إغلاقه — إصلاحٌ ناقصٌ أو انحدار', $now);
+                    $rulingStale
+                        ? 'تغيّرت الشيفرةُ التي صدر عليها الحكم — فانتهى الحكمُ وعاد مفتوحاً'
+                        : 'رآه فحصٌ بعد إغلاقه — إصلاحٌ ناقصٌ أو انحدار', $now);
             } else {
                 $counts['updated']++;
             }

@@ -68,7 +68,7 @@ class KycTierService
     /**
      * جلب حدود مستوى معين.
      */
-    public function getLimits(int $tier): array
+    private function getLimits(int $tier): array
     {
         $dbLimit = DB::table('kyc_tier_limits')->where('tier', $tier)->where('is_active', true)->first();
         if ($dbLimit) {

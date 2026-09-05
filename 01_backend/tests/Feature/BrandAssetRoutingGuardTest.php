@@ -36,22 +36,61 @@ class BrandAssetRoutingGuardTest extends TestCase
         );
     }
 
-    /** @test */
-    public function canonical_brand_widget_uses_only_official_transparent_layers(): void
+    /**
+     * @test
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **AMIAL-BRAND-LOCKUP-001 — نُقض شرطُ الطبقات الأربع، ويُقال لماذا.**
+     *
+     * كان هذا الفحصُ يشترط أن يذكر الودجت **الطبقاتِ الأربعَ** كلَّها،
+     * لأنّ النسخةَ الكاملةَ كانت تُركَّب منها بمقاساتٍ وفواصلَ مكتوبةٍ
+     * يدويّاً. **وقد نُسخ ذلك بقرارٍ صريحٍ من صاحب المشروع**: أرسل
+     * الشعارَ النهائيَّ ملفّاً واحداً وقال «غيّره إلى هذا في أغلب أماكن
+     * التطبيق، ما عدا شعارات فتح بداية التطبيق».
+     *
+     * **ولم يُحذَف الفحصُ ولم يُضعَّف** — العطلُ الذي وُلد له قائمٌ ويُحرَس
+     * في الحالة الأولى (لا رجوعَ إلى `assets/image/logo.png` المسطّح).
+     * وهذه صارت تشترط ما هو صحيحٌ اليوم: **الأصلُ الرسميُّ الواحد**،
+     * **وغيابُ الطبقات** — فرجوعُها يعني رجوعَ التركيب اليدويّ الذي
+     * يُنتج شعاراً قريباً من الأصل لا الأصلَ نفسَه.
+     *
+     * والطبقاتُ نفسُها لم تُحذَف من المشروع: شاشةُ الافتتاح تحرّكها كلاًّ
+     * على حدة، وهي المستثناةُ نصّاً. يحرسها
+     * `test/brand_lockup_is_the_single_logo_test.dart`.
+     */
+    public function canonical_brand_widget_uses_the_single_official_lockup(): void
     {
         $widget = file_get_contents(
             base_path('../02_flutter_app/lib/common/widgets/amial_brand_logo.dart'),
         );
 
+        // **الأصلان الرسميّان وحدَهما**: الرمزُ المربّع، والشعارُ الكامل.
         foreach ([
             'assets/branding/icon_foreground.png',
+            'assets/brand/logo_lockup.png',
+        ] as $asset) {
+            $this->assertStringContainsString($asset, $widget,
+                "الودجت لا يستعمل الأصلَ الرسميّ {$asset}");
+        }
+
+        $code = preg_replace('~^\s*///?.*$~m', '', $widget) ?? $widget;
+
+        foreach ([
             'assets/brand/logo_wordmark.png',
             'assets/brand/logo_swoosh.png',
             'assets/brand/logo_latin.png',
             'assets/brand/logo_tagline.png',
-        ] as $asset) {
-            $this->assertStringContainsString($asset, $widget);
+        ] as $layer) {
+            $this->assertStringNotContainsString($layer, $code,
+                "عاد التركيبُ اليدويُّ من {$layer} — فالمعروضُ شعارٌ قريبٌ "
+                .'من الأصل لا الأصلُ الذي أقرّه صاحبُ المشروع، وفرقُ '
+                .'التباعد يتراكم عبر أربع طبقاتٍ ولا شيءَ يكشفه');
         }
+
+        // **والملفُّ موجودٌ فعلاً** — مسارٌ مكتوبٌ لأصلٍ غائبٍ يُنتج
+        // مربّعاً رماديّاً في كلّ شاشة، والتصريفُ عنه راضٍ.
+        $this->assertFileExists(
+            base_path('../02_flutter_app/assets/brand/logo_lockup.png'));
     }
 
     /** @test */

@@ -33,11 +33,11 @@ class BillPayController extends GetxController implements GetxService {
             .toList();
         lastError.value = '';
       } else {
-        lastError.value = _msg(r) ?? 'Failed';
+        lastError.value = _msg(r) ?? 'تعذّر إتمام العملية';
       }
     } catch (e) {
       if (kDebugMode) debugPrint('loadProviders: $e');
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
     } finally {
       isLoading.value = false;
     }
@@ -54,10 +54,10 @@ class BillPayController extends GetxController implements GetxService {
             .toList();
         lastError.value = '';
       } else {
-        lastError.value = _msg(r) ?? 'Failed';
+        lastError.value = _msg(r) ?? 'تعذّر إتمام العملية';
       }
     } catch (e) {
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
     } finally {
       isLoading.value = false;
     }
@@ -105,11 +105,11 @@ class BillPayController extends GetxController implements GetxService {
       }
 
       // فشل قابل للـ retry — نحتفظ بـ idempotencyKey
-      lastError.value = _msg(r) ?? 'Failed';
+      lastError.value = _msg(r) ?? 'تعذّر إتمام العملية';
       return false;
     } catch (e) {
       if (kDebugMode) debugPrint('pay error: $e');
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
       return false;
     } finally {
       isSubmitting.value = false;
@@ -127,7 +127,7 @@ class BillPayController extends GetxController implements GetxService {
             .toList();
       }
     } catch (e) {
-      lastError.value = 'Network error';
+      lastError.value = 'لا اتصال بالخادم — تحقّق من الشبكة وأعد المحاولة';
     } finally {
       isLoading.value = false;
     }

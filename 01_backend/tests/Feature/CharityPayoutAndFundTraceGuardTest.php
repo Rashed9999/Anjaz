@@ -753,27 +753,39 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
     //  ③ إنشاءُ موظّفٍ بصلاحيّاته
     // ══════════════════════════════════════════════════════════════════
 
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-OPERATOR-TABS-001 — **الصلاحيّةُ صارت تبويباً، والمحروسُ واحد.**
+     *
+     * أعاد صاحبُ المشروع بناءَ إنشاء الموظّف: لم يعد يُسند `role_ids` من
+     * جدول الأدوار، بل **تبويبَ عملٍ مفهوماً ومستوىً** (قراءة/كتابة)،
+     * ويحوّله `PlatformTabAccessService` إلى صلاحيّاتٍ مباشرةٍ في
+     * `admin_user_permissions`.
+     *
+     * **وهو تحسينٌ حقيقيّ**: الموظّفُ لا يقرأ رموزَ الوسيط، ومن يُنشئه
+     * يختار «المالية — قراءة» لا ثلاثةَ رموزٍ يحفظها.
+     *
+     * **فسقطت هذه الحرّاسُ الثلاثةُ على تحسينٍ سليم** — لأنّها تسأل عن
+     * **الجدول** (`admin_user_roles`) وعن **اسم الحقل** (`role_ids`).
+     * والمحروسُ لم يتغيّر: أن يُنشأ الموظّفُ **بصلاحيّاته في خطوةٍ
+     * واحدة**، وأن **لا يُنشأ بلا صلاحيّةٍ أبداً**.
+     *
+     * فتُقاس القدرةُ نفسُها (`hasPlatformPermission`) لا موضعُ تخزينها:
+     * حارسٌ على الجدول يسقط مع أوّل إعادة تنظيم، وحارسٌ على القدرة يبقى.
+     * ══════════════════════════════════════════════════════════════════
+     */
     public function test_the_roles_page_has_a_form_that_creates_an_employee(): void
     {
         $html = file_get_contents(base_path('resources/views/admin-views/amial/ops/roles.blade.php'));
 
         foreach (['data-testid="operator-create-form"', 'name="phone"',
-                  'name="password"', 'role_ids'] as $needle) {
+                  'name="password"', 'tab_access'] as $needle) {
             $this->assertStringContainsString($needle, $html, "صفحةُ الأدوار بلا: {$needle}");
         }
     }
 
     public function test_creating_an_employee_grants_the_chosen_roles_in_one_step(): void
     {
-        // **دورُ موظّفِ منصّةٍ يبدأ بـ`platform_`** — و`platformRoleIds`
-        // تُسقط ما سواه بحقّ: دورٌ تابعٌ لتاجرٍ لا يُسنَد إلى موظّف منصّة.
-        // فكان اسمُ الدور في هذه التركيبة يجعل الإنشاءَ يُردّ، ثمّ يُقرأ
-        // الردُّ «الشاشةُ لا تُنشئ» — والشاشةُ سليمةٌ والتركيبةُ هي الخطأ.
-        $roleId = DB::table('roles')->insertGetId([
-            'code' => 'platform_auditor_guard_test', 'label_ar' => 'مدقّق',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-
         $this->actingAs($this->admin, 'user')
             ->post('/admin/amial/ops/operators', [
                 'f_name' => 'موظّف', 'l_name' => 'جديد',
@@ -782,50 +794,48 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
                 // الموظّف يُرسَل إليه، فحسابٌ بلا بريدٍ لا يستطيع الدخول.
                 'email' => 'new.operator@amialpay.test',
                 'password' => 'Passw0rd!2026',
-                'role_ids' => [$roleId],
+                'tab_access' => ['finance' => ['read' => 1]],
             ])->assertRedirect();
 
         $created = User::whereIn('phone', \App\Support\Phone::variants('967771900010'))->first();
         $this->assertNotNull($created, 'اللوحةُ ردّت بنجاح ولا حسابَ في القاعدة');
 
         // ══════════════════════════════════════════════════════════════
-        // **وحسابٌ بلا دورٍ يولد أعمى.**
+        // **وحسابٌ بلا صلاحيّةٍ يولد أعمى.**
         //
-        // جُرّب هذا المقياسُ بالعكس فمرّ: خُفّف `role_ids` إلى `nullable`
-        // ولم يسقط — لأنّه يفحص أنّ الدورَ أُسند حين يُرسَل، **ولا يفحص
-        // أنّ إرسالَه إلزاميّ**. فحسابٌ يُنشأ بلا دورٍ يدخل اللوحةَ ويرى
-        // ٤٠٣ في كلّ باب، بلا رسالةٍ تقول لماذا — وهو العطلُ الذي أدخل
-        // `PlatformRoleService` أصلاً.
+        // جُرّب هذا المقياسُ بالعكس فمرّ في صياغته الأولى: خُفّف الحقلُ
+        // إلى `nullable` ولم يسقط — لأنّه يفحص أنّ الصلاحيّةَ أُسندت حين
+        // تُرسَل، **ولا يفحص أنّ إرسالَها إلزاميّ**. فحسابٌ يُنشأ بلا
+        // صلاحيّةٍ يدخل اللوحةَ ويرى ٤٠٣ في كلّ باب، بلا رسالةٍ تقول
+        // لماذا — وهو العطلُ الذي أدخل `PlatformRoleService` أصلاً.
         $this->actingAs($this->admin, 'user')
             ->post('/admin/amial/ops/operators', [
-                'f_name' => 'بلا دور',
+                'f_name' => 'بلا صلاحيّة',
                 'phone' => '967771900019',
                 'email' => 'roleless@amialpay.test',
                 'password' => 'Passw0rd!2026',
-            ])->assertSessionHasErrors('role_ids');
+            ])->assertSessionHasErrors('tab_access');
 
         $this->assertNull(
             User::whereIn('phone', \App\Support\Phone::variants('967771900019'))->first(),
-            'أُنشئ حسابُ إدارةٍ بلا دور — يدخل ولا يرى شيئاً');
+            'أُنشئ حسابُ إدارةٍ بلا صلاحيّة — يدخل ولا يرى شيئاً');
         $this->assertSame(ADMIN_TYPE, (int) $created->type, 'الموظّفُ أُنشئ بنوعٍ لا يدخل اللوحة');
 
-        // **الصلاحيّةُ تُسند مع الإنشاء** — وحسابٌ بلا دورٍ يدخل ولا يرى شيئاً،
-        // فيعود صاحبُه يسأل «لماذا لا تعمل؟».
-        $this->assertTrue(
-            DB::table('admin_user_roles')->where('user_id', $created->id)
-                ->where('role_id', $roleId)->exists(),
-            'أُنشئ الموظّفُ بلا الدور الذي اختير له',
-        );
+        // **والقياسُ على القدرة لا على الجدول.** صفٌّ في
+        // `admin_user_permissions` لا يعني أنّ البابَ يُفتح؛ والسؤالُ
+        // الذي يسأله الوسيطُ نفسُه هو `hasPlatformPermission`.
+        $this->assertTrue($created->fresh()->hasPlatformPermission('platform.money.view'),
+            'أُنشئ الموظّفُ بلا الصلاحيّة التي اختير تبويبُها');
+
+        // **وقراءةٌ لا تصير كتابةً.** تبويبٌ يُمنح «قراءة» فيفتح التحريك
+        // هو أخطرُ ما في هذا الباب: موظّفٌ يُظنّ أنّه يقرأ وهو يُحرّك مالاً.
+        $this->assertFalse($created->fresh()->hasPlatformPermission('platform.money.move'),
+            'مُنح «قراءة» فحصل على تحريك المال — المستوى لا يُحترم');
     }
 
     public function test_creating_an_employee_refuses_a_phone_that_is_already_taken(): void
     {
         User::factory()->create(['phone' => '967771900011']);
-
-        $roleId = DB::table('roles')->insertGetId([
-            'code' => 'platform_dup_phone_guard_test', 'label_ar' => 'مدقّق',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
 
         // **الطلبُ سليمٌ في كلّ شيءٍ إلّا الهاتف** — وإلّا ردّه التحقّقُ من
         // حقلٍ ناقصٍ قبل أن يُسأل عن الرقم، فيمرّ الاختبارُ ولم يُشغَّل
@@ -836,7 +846,7 @@ class CharityPayoutAndFundTraceGuardTest extends TestCase
                 'phone' => '967771900011',
                 'email' => 'dup.operator@amialpay.test',
                 'password' => 'Passw0rd!2026',
-                'role_ids' => [$roleId],
+                'tab_access' => ['finance' => ['read' => 1]],
             ])->assertSessionHasErrors('phone');
 
         // **رقمٌ بحسابين يكسر الدخول نفسَه**: من يسجّل الدخول لا يُعرف مَن هو.

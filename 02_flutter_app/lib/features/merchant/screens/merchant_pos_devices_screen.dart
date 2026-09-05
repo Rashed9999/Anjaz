@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/data/api/pos_device_identity.dart';
+import 'package:amial_pay/helper/date_converter_helper.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-POS-DEVICES-008 — إدارة أجهزة نقاط البيع.
@@ -80,6 +81,57 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
         content: Text(m),
         backgroundColor: ok ? AmialColors.success : AmialColors.red,
       ));
+
+  /// يبدأه المالك، ثم يكتبه عامل الكاشير في شاشة تفعيل الجهاز نفسها.
+  Future<void> _createActivationCode() async {
+    final nameCtrl = TextEditingController();
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('إضافة جهاز نقطة بيع'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('سيظهر رمز تفعيل صالح لمدة 15 دقيقة. الرمز لا يحجز مقعداً؛ يُحسب الجهاز عند تفعيله فقط.'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: nameCtrl,
+            decoration: const InputDecoration(labelText: 'اسم الجهاز', hintText: 'كاشير الواجهة', border: OutlineInputBorder()),
+          ),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('إنشاء الرمز')),
+        ],
+      ),
+    );
+    if (approved != true || !mounted) return;
+    if (nameCtrl.text.trim().isEmpty) {
+      _snack('أدخل اسماً يميز الجهاز');
+      return;
+    }
+    final r = await _api.postData('$_base/activation-codes', {'display_name': nameCtrl.text.trim()});
+    if (!mounted) return;
+    if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
+      final data = (r.body['data'] ?? {}) as Map;
+      final code = data['activation_code']?.toString() ?? '';
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('رمز تفعيل الجهاز'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('على جهاز الكاشير: افتح التطبيق ثم اضغط «تفعيل جهاز نقطة البيع» وأدخل الرمز خلال 15 دقيقة.'),
+            const SizedBox(height: 18),
+            SelectableText(code, style: const TextStyle(fontSize: 28, letterSpacing: 4, fontWeight: FontWeight.bold, color: AmialColors.primary)),
+            const SizedBox(height: 12),
+            const Text('لن يظهر هذا الرمز مرة أخرى.', style: TextStyle(color: AmialColors.textMuted, fontSize: 12)),
+          ]),
+          actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('تم'))],
+        ),
+      );
+    } else {
+      _snack(_messageOf(r.body) ?? 'تعذّر إنشاء رمز التفعيل');
+    }
+  }
 
   /// **تسجيلُ الجهاز الحاليّ — وهو الفعلُ الذي بدونه لا يعمل شيء.**
   ///
@@ -260,6 +312,11 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
         title: const Text('أجهزة نقاط البيع'),
         actions: [
           IconButton(
+            tooltip: 'إضافة جهاز برمز تفعيل',
+            onPressed: _loading ? null : _createActivationCode,
+            icon: const Icon(Icons.key_outlined),
+          ),
+          IconButton(
             tooltip: 'تسجيل هذا الجهاز',
             onPressed: _loading ? null : _registerThisDevice,
             icon: const Icon(Icons.add_to_home_screen),
@@ -309,8 +366,8 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
               padding: EdgeInsets.symmetric(horizontal: 32),
               child: Text(
                 'لا جهازَ مسجَّلٌ بعد.\n\n'
-                'سجّل هذا الجهاز ليعمل عليه موظّفوك، أو افتح التطبيق على '
-                'جهاز الكاشير وسجّله من هنا بحسابك.',
+                'أضف جهازاً من هذه الشاشة وأنشئ رمز التفعيل، ثم افتح التطبيق '
+                'على جهاز الكاشير واختر «تفعيل جهاز نقطة البيع».',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey),
               ),
@@ -319,9 +376,9 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
           const SizedBox(height: 20),
           Center(
             child: FilledButton.icon(
-              onPressed: _registerThisDevice,
-              icon: const Icon(Icons.add_to_home_screen),
-              label: const Text('سجّل هذا الجهاز'),
+              onPressed: _createActivationCode,
+              icon: const Icon(Icons.key_outlined),
+              label: const Text('إضافة جهاز وإنشاء رمز'),
             ),
           ),
         ],
@@ -347,20 +404,25 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
           color: full ? AmialColors.red : AmialColors.border,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.devices, color: full ? AmialColors.red : AmialColors.primary),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
+          Row(children: [
+            Icon(Icons.devices, color: full ? AmialColors.red : AmialColors.primary),
+            const SizedBox(width: 12),
+            Expanded(child: Text(
               _unlimited
                   ? 'المقاعد المستعملة: $_used (بلا حدّ في باقتك)'
                   : 'المقاعد المستعملة: $_used من $_max',
               style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+            )),
+            if (full) const Text('ممتلئ', style: TextStyle(color: AmialColors.red)),
+          ]),
+          const SizedBox(height: 6),
+          const Text(
+            'هذا جهاز تشغيل فقط: لا يملك حساب دخول أو محفظة. أضف حساب الموظف من شاشة «الموظفون وحساباتهم».',
+            style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
           ),
-          if (full)
-            const Text('ممتلئ', style: TextStyle(color: AmialColors.red)),
         ],
       ),
     );
@@ -424,11 +486,11 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
   String _when(dynamic iso) {
     if (iso == null) return '—';
 
-    final t = DateTime.tryParse(iso.toString());
+    final t = DateConverterHelper.tryParseApiInstant(iso.toString());
 
     if (t == null) return '—';
 
-    final d = DateTime.now().difference(t);
+    final d = DateTime.now().toUtc().difference(t);
 
     if (d.inMinutes < 1) return 'الآن';
     if (d.inMinutes < 60) return 'قبل ${d.inMinutes} دقيقة';

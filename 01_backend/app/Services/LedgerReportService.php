@@ -535,37 +535,62 @@ class LedgerReportService
         // الرصيد الدفتريّ يُشتقّ من السطور لا من `current_balance`: المطابقةُ
         // بين رقمين مخزَّنين تُثبت أنّ أحدهما نُسخ عن الآخر، لا أنّ الحركة
         // صحيحة.
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-MULTI-CURRENCY-002 — **المطابقةُ لكلّ (مستخدم، عملة).**
+        //
+        // كان الجمعُ بـ`owner_user_id` وحدَه، والمرشِّحُ `USER_WALLET_%`
+        // **يلتقط `USER_WALLET_5_USD` بالبادئة**. فمحفظةُ دولارٍ واحدةٌ
+        // كانت تُضاف إلى دلوِ الريال، ثمّ تُقارَن بمحفظة الريال وحدَها —
+        // **ففرقٌ كاذبٌ كلَّ ليلةٍ على تاجرٍ لم يخطئ فيه أحد**، وقضيّةُ
+        // مصالحةٍ تُفتَح، وإنذارٌ يُرسَل ٠٢:٠٠.
+        //
+        // وهو نمطُ «حارسٍ يكذب»: يُطمئن حتّى يصدق، ثمّ يُعوَّد القارئُ أن
+        // يتجاهله يومَ يصدق. فالمفتاحُ صار `{user}|{currency}`.
+        // ══════════════════════════════════════════════════════════════
         $ledger = DB::table('ledger_accounts as a')
             ->leftJoin('ledger_entry_lines as l', 'l.account_id', '=', 'a.id')
             ->whereNotNull('a.owner_user_id')
             ->where('a.account_code', 'like', 'USER_WALLET_%')
-            ->groupBy('a.owner_user_id')
-            ->selectRaw("a.owner_user_id,
+            ->groupBy('a.owner_user_id', 'a.currency')
+            ->selectRaw("CONCAT(a.owner_user_id, '|', a.currency) as k,
+                a.owner_user_id,
+                a.currency,
                 SUM(CASE WHEN l.direction = 'credit' THEN l.amount ELSE 0 END)
               - SUM(CASE WHEN l.direction = 'debit'  THEN l.amount ELSE 0 END) as bal")
-            ->pluck('bal', 'owner_user_id');
+            ->pluck('bal', 'k');
 
         $rows = [];
         $divergent = 0;
         $totalGap = '0';
         $walletUserIds = [];
 
-        EMoney::with('user:id,f_name,l_name,phone')
-            ->orderBy('user_id')->limit($limit)->get()
+        // **وكلُّ العملات تُفحَص** — محفظةٌ لا تُفحَص ليست مطابَقةً، وغيابُها
+        // عن التقرير يُقرأ «صفرُ فرق» وهو «لم يُنظَر». (القاعدة السابعة.)
+        EMoney::anyCurrency()->with('user:id,f_name,l_name,phone')
+            ->orderBy('user_id')->orderBy('currency')->limit($limit)->get()
             ->each(function (EMoney $w) use (&$rows, &$divergent, &$totalGap, &$walletUserIds, $ledger) {
-                $walletUserIds[(int) $w->user_id] = true;
+                $cur = (string) ($w->currency ?: \App\Support\Money\Currencies::BASE);
+                $key = $w->user_id.'|'.$cur;
+                $walletUserIds[$key] = true;
                 $wallet = (string) ($w->current_balance ?? '0');
-                $book = (string) ($ledger[$w->user_id] ?? '0');
+                $book = (string) ($ledger[$key] ?? '0');
                 $gap = bcsub($wallet, $book, 4);
                 $off = bccomp($gap, '0', 4) !== 0;
 
                 if ($off) {
                     $divergent++;
-                    $totalGap = bcadd($totalGap, $gap, 4);
+                    // **ولا يُجمَع الفرقُ عبر العملات في رقمٍ واحد** — دولارٌ
+                    // وريالٌ لا يُجمعان. الإجماليُّ للأساس وحدَه، وفروقُ
+                    // غيرِه تُعدّ ولا تُضاف. (amial-financial-truth: لا تحويلَ
+                    // صامت.)
+                    if (\App\Support\Money\Currencies::isBase($cur)) {
+                        $totalGap = bcadd($totalGap, $gap, 4);
+                    }
                 }
 
                 $rows[] = [
                     'user_id' => (int) $w->user_id,
+                    'currency' => $cur,
                     'name' => trim((string) ($w->user?->f_name . ' ' . $w->user?->l_name)) ?: '—',
                     'phone' => (string) ($w->user?->phone ?? '—'),
                     'wallet_balance' => $wallet,
@@ -581,18 +606,23 @@ class LedgerReportService
         // while the ledger still carried a liability.  It is a real mismatch:
         // the wallet side is zero because it does not exist, not because it
         // has been checked and found equal.
-        foreach ($ledger as $userId => $book) {
-            $userId = (int) $userId;
-            if (isset($walletUserIds[$userId])) {
+        foreach ($ledger as $key => $book) {
+            if (isset($walletUserIds[$key])) {
                 continue;
             }
+
+            [$userId, $cur] = array_pad(explode('|', (string) $key, 2), 2, \App\Support\Money\Currencies::BASE);
+            $userId = (int) $userId;
 
             $book = (string) $book;
             $gap = bcsub('0', $book, 4);
             $divergent++;
-            $totalGap = bcadd($totalGap, $gap, 4);
+            if (\App\Support\Money\Currencies::isBase($cur)) {
+                $totalGap = bcadd($totalGap, $gap, 4);
+            }
             $rows[] = [
                 'user_id' => $userId,
+                'currency' => $cur,
                 'name' => 'محفظة دفترية بلا صف E-Money',
                 'phone' => '—',
                 'wallet_balance' => '0',

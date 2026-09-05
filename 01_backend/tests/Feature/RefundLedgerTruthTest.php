@@ -89,6 +89,8 @@ class RefundLedgerTruthTest extends TestCase
     /** بيعٌ ثمّ مرتجعٌ إلى المحفظة. */
     private function walletRefund(string $amount = '2000'): MerchantRefund
     {
+        // مرجعُ الدفع طلبُ QR مدفوعٌ حقيقيّ، لا نصٌّ يدّعي الدفع.
+        $this->paidQrRequest($this->merchant, 'TX-LEDGER-TRUTH', '5000');
         $sale = $this->cashier->recordSale(
             merchant: $this->merchant,
             total: '5000',
@@ -277,8 +279,11 @@ class RefundLedgerTruthTest extends TestCase
         $this->instance(\App\Services\LedgerService::class, new class extends \App\Services\LedgerService {
             public function __construct() {}
 
-            public function getOrCreateUserWallet(int $userId, string $zoneCode = 'SOUTH'): \App\Models\Ledger\LedgerAccount
-            {
+            public function getOrCreateUserWallet(
+                int $userId,
+                string $zoneCode = 'SOUTH',
+                string $currency = \App\Support\Money\Currencies::BASE,
+            ): \App\Models\Ledger\LedgerAccount {
                 return new \App\Models\Ledger\LedgerAccount(['account_code' => "WALLET:{$userId}"]);
             }
 

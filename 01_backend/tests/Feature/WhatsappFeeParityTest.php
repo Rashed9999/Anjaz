@@ -63,7 +63,12 @@ class WhatsappFeeParityTest extends TestCase
         $this->bot = app(WhatsappBotService::class);
 
         $this->user = User::factory()->create(['phone' => '967777123456', 'type' => 3]);
-        $this->recipient = User::factory()->create(['phone' => '967777999888', 'type' => 3]);
+        // **المستلِمُ موثَّقٌ ومحافظتُه محدَّدة** — وإلّا رفضته
+        // `RecipientVerificationService` فلا تبلغ المحادثةُ خطوةَ
+        // التسعير أصلاً، **فيُقرأ رفضُ أهليّةٍ عطلَ رسوم**.
+        $this->recipient = User::factory()->create([
+            'phone' => '967777999888', 'type' => 3,
+            'is_kyc_verified' => 1, 'zone_code' => 'SOUTH']);
 
         foreach ([$this->user, $this->recipient] as $u) {
             EMoney::create([

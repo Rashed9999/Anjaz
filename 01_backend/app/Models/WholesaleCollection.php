@@ -20,7 +20,7 @@ class WholesaleCollection extends Model
         'collection_date' => 'date', 'amount' => 'decimal:4',
     ];
 
-    public const PAYMENT_METHODS = ['cash', 'bank_transfer', 'amial_pay', 'check'];
+    public const PAYMENT_METHODS = ['cash', 'bank_transfer', 'amial_pay', 'check', 'customer_wallet'];
 
     public function invoice(): BelongsTo { return $this->belongsTo(WholesaleInvoice::class, 'invoice_id'); }
     public function customer(): BelongsTo { return $this->belongsTo(WholesaleCustomer::class, 'customer_id'); }

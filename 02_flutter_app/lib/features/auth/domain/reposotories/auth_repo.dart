@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/data/api/secure_storage_helper.dart';
@@ -41,14 +42,22 @@ class AuthRepo extends GetxService{
      String? deviceToken;
 
      if(!(isLogOut ?? false)){
-       // AMIAL-FCM-001: أندرويد ١٣ فما فوق يشترط إذن POST_NOTIFICATIONS وقت
-       // التشغيل تماماً كـ iOS. كان الطلب هنا لـ iOS وحدها، فيصمت أندرويد الحديث.
-       final settings = await FirebaseMessaging.instance.requestPermission(
-         alert: true, announcement: false, badge: true, carPlay: false,
-         criticalAlert: false, provisional: false, sound: true,
-       );
-       final granted = settings.authorizationStatus == AuthorizationStatus.authorized
-           || settings.authorizationStatus == AuthorizationStatus.provisional;
+       // طلب الإذن يجب أن يقع بعد تسجيل الدخول ومن سياق شاشة ظاهر، لا في
+       // splash ولا بعد انتهاء الجولة التعريفية. Android 13 لا يعرض مطالبة
+       // موثوقة من Firebase وحده في كل الأجهزة، لذلك نطلب POST_NOTIFICATIONS
+       // صراحةً من نظام Android ثم نتحقق من FCM في iOS.
+       bool granted;
+       if (GetPlatform.isAndroid) {
+         final status = await Permission.notification.request();
+         granted = status.isGranted || status.isLimited;
+       } else {
+         final settings = await FirebaseMessaging.instance.requestPermission(
+           alert: true, announcement: false, badge: true, carPlay: false,
+           criticalAlert: false, provisional: false, sound: true,
+         );
+         granted = settings.authorizationStatus == AuthorizationStatus.authorized
+             || settings.authorizationStatus == AuthorizationStatus.provisional;
+       }
 
        if(granted) {
          deviceToken = await _saveDeviceToken();
@@ -110,12 +119,17 @@ class AuthRepo extends GetxService{
    /// **breaking change للـ controllers الموجودة:**
    /// `isLoggedIn()` و `getUserToken()` كانتا sync — الآن async.
    /// لو هناك caller يستخدمها sync، اقرأ الـ token مرة في splash وخزنه في memory.
-   Future<bool> saveUserToken(String token) async {
-     apiClient.token = token;
-     apiClient.updateHeader(token);
-     await SecureStorageHelper.instance.setToken(token);
-     return true;
-   }
+  Future<bool> saveUserToken(String token) async {
+    // يبقى الرمز في الذاكرة كذلك. من دونه تعمل الترويسة في لحظة الدخول
+    // فقط، لكن SessionGuard يقرأ cache فارغاً بعد ذلك ويعامل الجلسة كأنها
+    // غير موجودة. والأخطر عند إعادة تشغيل التطبيق: لا تُعاد الترويسة من
+    // secure storage فترد خدمات التاجر 401 مع أن المستخدم دخل فعلاً.
+    _cachedToken = token;
+    apiClient.token = token;
+    apiClient.updateHeader(token);
+    await SecureStorageHelper.instance.setToken(token);
+    return true;
+  }
 
    /// Sync wrapper للـ token (للـ controllers التي تتوقع sync).
    /// **مهم:** يجب استدعاء [primeTokenCache] في splash قبل استخدامه.
@@ -146,11 +160,14 @@ class AuthRepo extends GetxService{
      return _cachedToken != null && _cachedToken!.isNotEmpty;
    }
 
-   void removeUserToken() async {
-     _cachedToken = null;
-     apiClient.token = null;
-     await SecureStorageHelper.instance.removeToken();
-   }
+  void removeUserToken() async {
+    _cachedToken = null;
+    apiClient.token = null;
+    // لا نُبقي Authorization قديمة بعد الخروج؛ الرمز المحذوف لا يجوز أن
+    // يرافق أي طلب جديد في الذاكرة.
+    apiClient.updateHeader('');
+    await SecureStorageHelper.instance.removeToken();
+  }
 
    void removeCustomerToken() async {
      removeUserToken();

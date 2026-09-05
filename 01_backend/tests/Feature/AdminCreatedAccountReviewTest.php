@@ -6,6 +6,7 @@ use App\Models\MerchantProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\EstablishesKycEvidence;
+use Tests\Support\OpensAccountsFromHub;
 use Tests\TestCase;
 
 /**
@@ -20,6 +21,7 @@ class AdminCreatedAccountReviewTest extends TestCase
 {
     use RefreshDatabase;
     use EstablishesKycEvidence;
+    use OpensAccountsFromHub;
 
     private function admin(): User
     {
@@ -37,13 +39,27 @@ class AdminCreatedAccountReviewTest extends TestCase
 
     private function create(string $slug, array $extra = []): array
     {
+        // AMIAL-KYC-DOSSIER-FIXTURE-001 — الملفُّ من موضعه الواحد.
+        //
+        // و**التاجرُ يزيد ثلاثةً ونوعَ نشاط**: سجلٌّ ومفوَّضٌ بالتوقيع
+        // ورقمُه، و`business_type` — فبدونه يُرفَض الإنشاء ٤٢٢ فتُقرأ
+        // الحالةُ «لم يُنشأ» بدل «أُنشئ موثّقاً»، وهو عطلٌ آخر تماماً.
+        $phone = $extra['phone'] ?? '77' . random_int(1000000, 9999999);
+        $merchant = $slug === 'merchants';
+
+        $base = [
+            'f_name' => 'اختبار',
+            'l_name' => 'حساب',
+            'phone' => $phone,
+            'password' => 'Passw0rd!123',
+        ] + $this->kycDossier($phone, merchant: $merchant);
+
+        if ($merchant) {
+            $base += ['business_type' => \App\Support\Access\AccessConstants::BIZ_RETAIL];
+        }
+
         $r = $this->actingAs($this->admin(), 'user')
-            ->postJson("/admin/amial/hub/{$slug}/users", array_merge([
-                'f_name' => 'اختبار',
-                'l_name' => 'حساب',
-                'phone' => '77' . random_int(1000000, 9999999),
-                'password' => 'Passw0rd!123',
-            ], $extra));
+            ->postJson("/admin/amial/hub/{$slug}/users", array_merge($base, $extra));
 
         return [$r, User::latest('id')->first()];
     }

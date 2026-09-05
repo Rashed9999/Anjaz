@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:get/get.dart';
-import 'package:amial_pay/features/splash/controllers/splash_controller.dart';
 import 'package:amial_pay/common/models/signup_body_model.dart';
 import 'package:amial_pay/common/models/contact_model.dart';
 import 'package:amial_pay/features/auth/screens/unified_login_screen.dart';
@@ -16,7 +15,6 @@ import 'package:amial_pay/features/setting/screens/profile_screen.dart';
 import 'package:amial_pay/features/setting/widgets/change_pin_screen.dart';
 import 'package:amial_pay/features/setting/screens/edit_profile_screen.dart';
 import 'package:amial_pay/features/setting/widgets/faq_screen.dart';
-import 'package:amial_pay/features/setting/screens/html_view_screen.dart';
 import 'package:amial_pay/features/setting/screens/qr_code_download_or_share_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
 import 'package:amial_pay/features/splash/screens/splash_screen.dart';
@@ -42,7 +40,7 @@ import 'package:amial_pay/features/merchant/screens/merchant_loyalty_screen.dart
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_shift_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
-import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_excel_export_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_expenses_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
@@ -61,11 +59,12 @@ import 'package:amial_pay/features/retail/screens/retail_wastes_screen.dart';
 import 'package:amial_pay/features/suppliers/screens/suppliers_screen.dart';
 import 'package:amial_pay/features/branches/screens/branches_management_screen.dart';
 import 'package:amial_pay/features/reports/screens/amial_reports_screen.dart';
-import 'package:amial_pay/features/fuel_station/screens/fuel_station_dashboard_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_owner_console_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_tanks_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_variances_screen.dart';
 import 'package:amial_pay/features/pharmacy/screens/pharmacy_dashboard_screen.dart';
 import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
+import 'package:amial_pay/features/wholesale/screens/wholesale_policy_screens.dart';
 import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
 import 'package:amial_pay/features/corporate/screens/corporate_accounts_screen.dart';
 
@@ -173,7 +172,18 @@ class RouteHelper {
   static const String fuelTanks = '/fuel/tanks';
   static const String fuelVariances = '/fuel/variances';
   static const String pharmacy = '/pharmacy';
+  // **شاشتان مبنيّتان بلا مسار.** `PharmacyAlertsScreen` و
+  // `PharmacyCustomersScreen` موجودتان في `pharmacy_dashboard_screen.dart`،
+  // والخادمُ يُعلن قدرتيهما بـ`screen('/pharmacy/alerts')` و
+  // `'/pharmacy/customers'` — **ولا `GetPage` لهما**، فالزرُّ يفتح
+  // «الصفحة غير موجودة». مبنيٌّ ولا يُوصَل إليه.
+  static const String pharmacyAlerts = '/pharmacy/alerts';
+  static const String pharmacyCustomers = '/pharmacy/customers';
   static const String wholesale = '/wholesale';
+
+  /// AMIAL-WHOLESALE-GUIDE-001 — **«التسعير» قسمٌ قائمٌ بذاته في دليل
+  /// الجملة**، وقدرتُه كانت بلا `screen()` فلا تُفتح من «مزايا باقتي».
+  static const String wholesalePricing = '/wholesale/pricing';
   static const String restaurant = '/restaurant';
   static const String apiKeys = '/api-keys';
   static const String corporate = '/corporate';
@@ -278,9 +288,6 @@ class RouteHelper {
     GetPage(name: choseLanguageScreen, page: () => const ChooseLanguageScreen()),
     GetPage(name: editProfileScreen, page: () => const EditProfileScreen()),
     GetPage(name: faq, page: () => FaqScreen(title: 'faq'.tr)),
-    GetPage(name: terms, page: () => HtmlViewScreen(title: 'terms'.tr, url: Get.find<SplashController>().configModel!.termsAndConditions)),
-    GetPage(name: aboutUs, page: () => HtmlViewScreen(title: 'about_us'.tr, url: Get.find<SplashController>().configModel!.aboutUs)),
-    GetPage(name: privacy, page: () => HtmlViewScreen(title: 'privacy_policy'.tr, url: Get.find<SplashController>().configModel!.privacyPolicy)),
     GetPage(name: support, page: () => const SupportScreen()),
     GetPage(name: qrCodeDownloadOrShare, page: () => QrCodeDownloadOrShareScreen(qrCode:  utf8.decode(base64Url.decode(Get.parameters['qr-code']!.replaceAll(' ', '+'))),
         phoneNumber: utf8.decode(base64Url.decode(Get.parameters['phone-number']!.replaceAll(' ', '+'))),)),
@@ -319,7 +326,7 @@ class RouteHelper {
     GetPage(name: retailRoles, page: () => const MerchantStaffScreen()),
     GetPage(name: shifts, page: () => const CashierShiftScreen()),
     GetPage(name: reportsDaily, page: () => const CashierReportScreen()),
-    GetPage(name: reportsProfit, page: () => const ProfitReportScreen()),
+    GetPage(name: reportsProfit, page: () => const FinancialTruthReportScreen()),
     GetPage(name: reports, page: () => const AmialReportsScreen()),
     GetPage(name: export, page: () => const MerchantExcelExportScreen()),
     GetPage(name: expenses, page: () => const MerchantExpensesScreen()),
@@ -328,11 +335,15 @@ class RouteHelper {
     GetPage(name: branches, page: () => const BranchesManagementScreen()),
     GetPage(name: currencies, page: () => const MerchantCurrenciesScreen()),
     GetPage(name: installments, page: () => const MerchantInstallmentsScreen()),
-    GetPage(name: fuel, page: () => const FuelStationDashboardScreen()),
+    GetPage(name: fuel, page: () => const FuelOwnerConsoleScreen()),
     GetPage(name: fuelTanks, page: () => const FuelTanksScreen()),
     GetPage(name: fuelVariances, page: () => const FuelVariancesScreen()),
     GetPage(name: pharmacy, page: () => const PharmacyDashboardScreen()),
+    GetPage(name: pharmacyAlerts, page: () => const PharmacyAlertsScreen()),
+    GetPage(name: pharmacyCustomers, page: () => const PharmacyCustomersScreen()),
     GetPage(name: wholesale, page: () => const WholesaleDashboardScreen()),
+    GetPage(name: wholesalePricing,
+        page: () => const WholesalePolicyBusinessSettingsScreen()),
     GetPage(name: restaurant, page: () => const RestaurantScreen()),
     GetPage(name: apiKeys, page: () => const MerchantApiKeysScreen()),
     GetPage(name: corporate, page: () => const CorporateAccountsScreen()),

@@ -24,6 +24,11 @@ class LedgerJournalEntry extends Model
     protected $fillable = [
         'entry_ulid', 'source_type', 'source_id', 'idempotency_key',
         'description_ar', 'total_amount',
+        // AMIAL-MULTI-CURRENCY-002 — **غيابُه عن هذه القائمة لا يُخرج خطأً.**
+        // `create()` يُسقط ما ليس فيها **صامتاً**، فيقع العمودُ على افتراضيّ
+        // القاعدة (`YER`) — وكلُّ قيدِ دولارٍ يُسجَّل «ريالاً» وهو يوازن
+        // ويُقرأ ويمرّ. قِيس فوقع: قيدُ صرفٍ بأربعين دولاراً حمل `YER`.
+        'currency',
         'is_reversal', 'reverses_entry_id',
         'status', 'reversed_by_entry_id',
         'created_by_user_id', 'zone_code', 'metadata',

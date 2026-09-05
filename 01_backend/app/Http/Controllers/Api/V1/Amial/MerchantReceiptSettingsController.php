@@ -6,6 +6,8 @@ use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
+use App\Models\PosUser;
+use App\Models\User;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -35,23 +37,44 @@ class MerchantReceiptSettingsController extends Controller
             'show_phone' => true,
             'show_address' => true,
             'paper_width' => 80,        // 58 | 80 مم
+            'auto_print_receipts' => false,
             'currency_label' => 'ر.ي',
         ];
     }
 
-    private function merchantOnly(Request $request): ?JsonResponse
+    /**
+     * يعيد مالك المنشأة الذي يجب أن تُقرأ هويّته في كل فاتورة.
+     *
+     * موظف نقطة البيع لا يملك منشأة مستقلة، لكنّه يجب أن يطبع باسم منشأة
+     * مالكه وبنفس الترويسة والشعار. لذلك نسمح له بالقراءة فقط، ولا نسمح
+     * له بتغيير الهوية أو إعدادات الفاتورة.
+     *
+     * @return array{merchant: User, owner: bool}|JsonResponse
+     */
+    private function merchantContext(Request $request, bool $allowPosRead = false): array|JsonResponse
     {
         $u = $request->user();
-        if (!$u || $u->role !== A::ROLE_MERCHANT) {
+        if (!$u) {
             return $this->error('NOT_A_MERCHANT', 'متاح للتجّار فقط', 403);
         }
-        return null;
+        if ($u->role === A::ROLE_MERCHANT) {
+            return ['merchant' => $u, 'owner' => true];
+        }
+        if ($allowPosRead) {
+            $pos = PosUser::active()->where('user_id', $u->id)->first();
+            $merchant = $pos ? User::find($pos->merchant_user_id) : null;
+            if ($merchant && $merchant->role === A::ROLE_MERCHANT) {
+                return ['merchant' => $merchant, 'owner' => false];
+            }
+        }
+        return $this->error('NOT_A_MERCHANT', 'متاح للتجّار فقط', 403);
     }
 
     public function show(Request $request): JsonResponse
     {
-        if ($err = $this->merchantOnly($request)) return $err;
-        $user = $request->user();
+        $context = $this->merchantContext($request, true);
+        if ($context instanceof JsonResponse) return $context;
+        $user = $context['merchant'];
 
         $profile = MerchantProfile::where('user_id', $user->id)->first();
         $merchant = Merchant::where('user_id', $user->id)->first();
@@ -61,21 +84,47 @@ class MerchantReceiptSettingsController extends Controller
         $settings['store_name'] = $merchant?->store_name ?? trim(($user->f_name ?? '') . ' ' . ($user->l_name ?? ''));
         $settings['logo_url'] = $merchant?->logo_fullpath;
 
-        // AMIAL-MULTI-CURRENCY-001: عملات التاجر الفعّالة (لعرض المكافئ على الفاتورة)
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-MULTI-CURRENCY-002 — **السعرُ من المركز لا من يد التاجر.**
+        //
+        // كان يُقرأ `rate_to_base` الذي يكتبه التاجرُ في شاشته: **رقمٌ بلا
+        // مصدرٍ ولا طابعٍ زمنيّ ولا تاريخِ تغييرات**. وأخطرُ ما فيه أنّه
+        // **لا يُجمَّد**: يغيّر التاجرُ السعرَ غداً فيتغيّر معه مكافئُ
+        // فاتورة الأمس على الورقة نفسِها — أي إعادةُ كتابةِ مستندٍ صدر.
+        //
+        // ومصدران للسعر (سعرُ التاجر على الورقة وسعرُ المنصّة في المحفظة)
+        // يعنيان **رقمين مختلفين على البيعة الواحدة**. فصار السعرُ من
+        // `fx_rates` وحدَه، ومعه مصدرُه ولحظتُه.
+        // ══════════════════════════════════════════════════════════════
+        $fx = app(\App\Services\FxRateService::class)->current();
+
         $currencies = \App\Models\MerchantCurrency::where('merchant_user_id', $user->id)
             ->where('is_active', true)->orderBy('code')->get()
-            ->map(fn ($c) => [
-                'code' => $c->code, 'symbol' => $c->symbol,
-                'rate_to_base' => (string) $c->rate_to_base,
-            ]);
+            ->map(function ($c) use ($fx) {
+                $code = strtoupper((string) $c->code);
+                $row = $fx[$code] ?? null;
+
+                return [
+                    'code' => $code,
+                    'symbol' => (string) ($c->symbol ?: ($row ? \App\Support\Money\Currencies::symbol($code) : $code)),
+                    'rate_to_base' => $row['rate'] ?? null,
+                    'rate_source' => $row['source'] ?? null,
+                    'rate_at' => $row['at'] ?? null,
+                ];
+            })
+            // **وعملةٌ بلا سعرٍ تُحذَف من الإيصال ولا تُطبَع بصفر.** مكافئٌ
+            // «≈ 0.00 $» على فاتورةٍ أسوأ من غيابه: يقرؤه العميلُ رقماً.
+            ->filter(fn ($c) => $c['rate_to_base'] !== null)
+            ->values();
 
         return $this->ok(['settings' => $settings, 'currencies' => $currencies], 'OK', 'إعدادات الفاتورة');
     }
 
     public function save(Request $request): JsonResponse
     {
-        if ($err = $this->merchantOnly($request)) return $err;
-        $user = $request->user();
+        $context = $this->merchantContext($request);
+        if ($context instanceof JsonResponse) return $context;
+        $user = $context['merchant'];
 
         $v = Validator::make($request->all(), [
             'header_note' => 'sometimes|nullable|string|max:120',
@@ -86,6 +135,7 @@ class MerchantReceiptSettingsController extends Controller
             'show_phone' => 'sometimes|boolean',
             'show_address' => 'sometimes|boolean',
             'paper_width' => 'sometimes|integer|in:58,80',
+            'auto_print_receipts' => 'sometimes|boolean',
             'currency_label' => 'sometimes|nullable|string|max:8',
             'store_name' => 'sometimes|nullable|string|max:120',
         ]);
@@ -118,8 +168,9 @@ class MerchantReceiptSettingsController extends Controller
     /** رفع شعار المتجر (base64) — يُخزَّن في سجلّ التاجر. */
     public function uploadLogo(Request $request): JsonResponse
     {
-        if ($err = $this->merchantOnly($request)) return $err;
-        $user = $request->user();
+        $context = $this->merchantContext($request);
+        if ($context instanceof JsonResponse) return $context;
+        $user = $context['merchant'];
 
         $v = Validator::make($request->all(), ['logo' => 'required|string']);
         if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);

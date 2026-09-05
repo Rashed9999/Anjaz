@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -23,12 +24,43 @@ import 'package:open_file/open_file.dart';
 
 
 class NotificationHelper {
+  /// هذا هو القناة الوحيدة لإشعارات أميال على Android. يطابق المعرّف
+  /// المعلن في AndroidManifest وFCM، فلا يفقد إشعار الخلفية صوته بسبب
+  /// إنشاء قناة باسم مختلف عن القناة التي يرسل إليها الخادم.
+  static const String androidChannelId = 'amial_pay_default';
+  static const AndroidNotificationChannel _androidChannel =
+      AndroidNotificationChannel(
+    androidChannelId,
+    'إشعارات أميال باي',
+    description: 'تنبيهات العمليات والطلبات المهمة',
+    importance: Importance.max,
+    playSound: true,
+    sound: RawResourceAndroidNotificationSound('notification'),
+  );
+
+  static Future<void> _ensureAndroidChannel(
+      FlutterLocalNotificationsPlugin plugin) async {
+    final android = plugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+    await android?.createNotificationChannel(_androidChannel);
+  }
+
+  /// تهيئة آمنة للعامل الخلفي: بلا GetX أو تنقل، فقط قناة النظام وعرضه.
+  static Future<void> initializeBackground(
+      FlutterLocalNotificationsPlugin plugin) async {
+    const settings = InitializationSettings(
+      android: AndroidInitializationSettings('notification_icon'),
+      iOS: DarwinInitializationSettings(),
+    );
+    await plugin.initialize(settings);
+    await _ensureAndroidChannel(plugin);
+  }
 
   static Future<void> initialize(FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin) async {
     var androidInitialize = const AndroidInitializationSettings('notification_icon');
     var iOSInitialize = const DarwinInitializationSettings();
     var initializationsSettings = InitializationSettings(android: androidInitialize, iOS: iOSInitialize);
-    flutterLocalNotificationsPlugin.initialize(initializationsSettings, onDidReceiveNotificationResponse: (NotificationResponse notificationResponse) async {
+    await flutterLocalNotificationsPlugin.initialize(initializationsSettings, onDidReceiveNotificationResponse: (NotificationResponse notificationResponse) async {
 
 
       try{
@@ -116,9 +148,10 @@ class NotificationHelper {
 
 
     });
+    await _ensureAndroidChannel(flutterLocalNotificationsPlugin);
 
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('onMessage: ${message.notification!.title}/${message.notification!.body}/${message.notification!.titleLocKey} \n ${message.data}');
+      debugPrint('onMessage: ${message.notification?.title ?? message.data['title']}/${message.notification?.body ?? message.data['body']} \n ${message.data}');
 
 
       showNotification(message, flutterLocalNotificationsPlugin);
@@ -159,7 +192,7 @@ class NotificationHelper {
     });
 
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) async {
-      debugPrint('onMessageOpenedApp: ${message.notification!.title}/${message.notification!.body}/${message.notification!.titleLocKey} \n ${message.data}');
+      debugPrint('onMessageOpenedApp: ${message.notification?.title ?? message.data['title']}/${message.notification?.body ?? message.data['body']} \n ${message.data}');
 
 
       await Get.find<ProfileController>().getProfileData(reload: true);
@@ -298,33 +331,42 @@ class NotificationHelper {
   }
 
   static Future<void> showNotification(RemoteMessage message, FlutterLocalNotificationsPlugin? fln) async {
-    String? title;
-    String? body;
+    final plugin = fln;
+    if (plugin == null) return;
+    final notification = message.notification;
+    final notificationTitle = notification?.title?.trim();
+    final title = message.data['title']?.toString().trim().isNotEmpty == true
+        ? message.data['title'].toString()
+        : notificationTitle?.isNotEmpty == true
+            ? notificationTitle!
+            : AppConstants.appName;
+    final body = message.data['body']?.toString().trim().isNotEmpty == true
+        ? message.data['body'].toString()
+        : notification?.body ?? 'لديك إشعار جديد من أميال باي';
     String? orderID;
     String? image;
     String playLoad = jsonEncode(message.data);
 
-    title = message.data['title'];
-    body = message.data['body'];
     orderID = message.data['order_id'];
-    image = (message.data['image'] != null && message.data['image'].isNotEmpty)
-        ? message.data['image'].startsWith('http') ? message.data['image']
-        : '${AppConstants.baseUrl}/storage/app/public/notification/${message.data['image']}' : null;
+    final imageValue = message.data['image']?.toString().trim() ?? '';
+    image = imageValue.isNotEmpty
+        ? imageValue.startsWith('http') ? imageValue
+        : '${AppConstants.baseUrl}/storage/app/public/notification/$imageValue' : null;
 
     if(image != null && image.isNotEmpty) {
       try{
-        await showBigPictureNotificationHiddenLargeIcon(title, body, orderID, image, fln!, payload: playLoad);
+        await showBigPictureNotificationHiddenLargeIcon(title, body, orderID, image, plugin, payload: playLoad);
       }catch(e) {
-        await showBigTextNotification(title, body!, orderID, fln!, payload: playLoad);
+        await showBigTextNotification(title, body, orderID, plugin, payload: playLoad);
       }
     }else {
-      await showBigTextNotification(title, body!, orderID, fln!, payload: playLoad);
+      await showBigTextNotification(title, body, orderID, plugin, payload: playLoad);
     }
   }
 
   static Future<void> showTextNotification(String title, String body, String orderID, FlutterLocalNotificationsPlugin fln) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics = AndroidNotificationDetails(
-      AppConstants.appName, AppConstants.appName, playSound: true,
+      androidChannelId, 'إشعارات أميال باي', playSound: true,
       importance: Importance.max, priority: Priority.max, sound: RawResourceAndroidNotificationSound('notification'),
     );
     const NotificationDetails platformChannelSpecifics = NotificationDetails(android: androidPlatformChannelSpecifics);
@@ -337,7 +379,7 @@ class NotificationHelper {
       contentTitle: title, htmlFormatContentTitle: true,
     );
     AndroidNotificationDetails androidPlatformChannelSpecifics = AndroidNotificationDetails(
-      AppConstants.appName, AppConstants.appName, importance: Importance.max,
+      androidChannelId, 'إشعارات أميال باي', importance: Importance.max,
       styleInformation: bigTextStyleInformation, priority: Priority.max, playSound: true,
       sound: const RawResourceAndroidNotificationSound('notification'),
     );
@@ -354,7 +396,7 @@ class NotificationHelper {
       summaryText: body, htmlFormatSummaryText: true,
     );
     final AndroidNotificationDetails androidPlatformChannelSpecifics = AndroidNotificationDetails(
-      AppConstants.appName, AppConstants.appName,
+      androidChannelId, 'إشعارات أميال باي',
       largeIcon: FilePathAndroidBitmap(largeIconPath), priority: Priority.max, playSound: true,
       styleInformation: bigPictureStyleInformation, importance: Importance.max,
       sound: const RawResourceAndroidNotificationSound('notification'),
@@ -380,12 +422,18 @@ class NotificationHelper {
 
 
 
-Future<dynamic> myBackgroundMessageHandler(RemoteMessage message) async {
-  debugPrint("onBackground: ${message.notification!.title}/${message.notification!.body}/${message.notification!.titleLocKey}");
-  // var androidInitialize = const AndroidInitializationSettings('notification_icon');
-  // var iOSInitialize = const DarwinInitializationSettings();
-  // var initializationsSettings = InitializationSettings(android: androidInitialize, iOS: iOSInitialize);
-  // FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-  // flutterLocalNotificationsPlugin.initialize(initializationsSettings);
-  // NotificationHelper.showNotification(message, flutterLocalNotificationsPlugin);
+@pragma('vm:entry-point')
+Future<void> myBackgroundMessageHandler(RemoteMessage message) async {
+  try {
+    await Firebase.initializeApp();
+  } catch (_) {
+    // قد تكون Firebase مهيّأة بالفعل في isolate الاختبار؛ نكمل عرض الإشعار.
+  }
+  try {
+    final plugin = FlutterLocalNotificationsPlugin();
+    await NotificationHelper.initializeBackground(plugin);
+    await NotificationHelper.showNotification(message, plugin);
+  } catch (error) {
+    debugPrint('AMIAL-FCM background notification failed: $error');
+  }
 }

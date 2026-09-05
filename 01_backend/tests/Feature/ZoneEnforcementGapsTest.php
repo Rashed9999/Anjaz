@@ -8,6 +8,7 @@ use App\Services\KycGeoConsistencyService;
 use App\Support\YemenGovernorates;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\EstablishesKycEvidence;
+use Tests\Support\OpensAccountsFromHub;
 use Tests\TestCase;
 
 /**
@@ -20,6 +21,7 @@ use Tests\TestCase;
  */
 class ZoneEnforcementGapsTest extends TestCase
 {
+    use OpensAccountsFromHub;
     use RefreshDatabase;
     use EstablishesKycEvidence;
 
@@ -39,12 +41,18 @@ class ZoneEnforcementGapsTest extends TestCase
 
     private function createViaHub(array $extra = []): User
     {
+        // AMIAL-KYC-DOSSIER-FIXTURE-001 — **الهاتفُ يُلتقط قبل أن يُرسَل.**
+        //
+        // كان يُولَّد داخلَ المصفوفة، وملفُّ «اعرف عميلك» يشتقّ منه رقمَ
+        // الهويّة — فلو وُلّد مرّتين لاختلف الرقمان وسقط الاتّساق.
+        $phone = $extra['phone'] ?? '77' . random_int(1000000, 9999999);
+
         $this->actingAs($this->admin(), 'user')
             ->postJson('/admin/amial/hub/customers/users', array_merge([
                 'f_name' => 'اختبار', 'l_name' => 'مناطق',
-                'phone' => '77' . random_int(1000000, 9999999),
+                'phone' => $phone,
                 'password' => 'Passw0rd!123',
-            ], $extra))->assertSuccessful();
+            ] + $this->kycDossier($phone), $extra))->assertSuccessful();
 
         return User::latest('id')->first();
     }
@@ -87,11 +95,44 @@ class ZoneEnforcementGapsTest extends TestCase
 
         // اعتمادٌ بلا وثيقة مرفوض بحقّ — يُبنى الدليلُ أوّلاً.
         $this->establishKycEvidence($user);
+
+        // ══════════════════════════════════════════════════════════════
+        // **وتُفرَّغ المحافظةُ بعد بناء الدليل — وإلّا قاس هذا الفحصُ
+        // غيرَ ما يسمّي.**
+        //
+        // `establishKycEvidence` المشتركُ **يملأ `residence_governorate`
+        // حين تكون فارغة** (أُضيف لأنّ تسعةَ اختباراتٍ كانت تسقط بـ٤٢٢،
+        // وهو إصلاحٌ صحيح). فكان هذا الفحصُ يدّعي «اعتمادٌ بلا محافظة»
+        // **ومحافظتُه مملوءةٌ من تحته**، فيُسنَد النطاقُ صحيحاً إلى
+        // `SOUTH` ويُقرأ ذلك عطلاً.
+        //
+        // **وحارسٌ يسقط على حالةٍ لم يصنعها لا يحرس شيئاً** — لا هو
+        // يمسك العطلَ الذي بُني له، ولا هو صامت: يصرخ في غير موضعه.
+        // (القاعدة الثانية.)
+        // ══════════════════════════════════════════════════════════════
+        $user->forceFill(['residence_governorate' => null])->save();
+
+        // **والضمانةُ اليومَ أقوى ممّا كان يُفحَص:** المنصّةُ **ترفض
+        // الاعتمادَ** بـ٤٢٢ بدل أن تعتمدَ وتترك النطاقَ `UNKNOWN`.
+        // وذاك أحسنُ: «موثَّقٌ وممنوع» أسوأُ حالةٍ ممكنة لأنّها تبدو
+        // مكتملة، فيُقال للعميل «وُثِّق حسابُك» ثمّ يُردّ كلُّ تحويلٍ
+        // إليه بلا سببٍ مفهوم.
         $this->actingAs($this->admin(), 'user')
             ->postJson("/admin/amial/hub/users/{$user->id}/kyc", ['status' => 1])
-            ->assertSuccessful();
+            ->assertStatus(422);
 
-        $this->assertSame('UNKNOWN', $user->fresh()->zone_code);
+        // **والمهمُّ أنّ شيئاً لم يُخمَّن**: لا نطاقٌ أُسنِد، ولا حسابٌ
+        // رُفع إلى «موثَّق». (القاعدة السابعة: «غير معروف» ليس صفراً،
+        // والنطاقُ يحكم سياسةَ المال فتخمينُه يفتح بابَ تحويلٍ على غير
+        // أساس.)
+        $fresh = $user->fresh();
+
+        $this->assertSame('UNKNOWN', $fresh->zone_code,
+            '**رُفض الاعتمادُ وأُسنِد نطاقٌ رغم ذلك** — فالرفضُ لم يكن ذرّيّاً.');
+
+        $this->assertEquals(0, $fresh->is_kyc_verified,
+            '**رُفض الاعتمادُ والحسابُ صار موثَّقاً** — وهو ما لا يمسكه '
+            . 'فحصُ الرمز وحدَه.');
     }
 
     // ===================== الثغرة ٢: حساب اللوحة يُمنح SOUTH =====================

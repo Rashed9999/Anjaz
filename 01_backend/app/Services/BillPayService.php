@@ -336,12 +336,39 @@ class BillPayService
         }
     }
 
+    /**
+     * AMIAL-FEE-BILLPAY-001 — **رسمُ المزوّد + رسمُ المنصّة فوقه.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **قرارُ صاحب المشروع، وقد كان معلَّقاً بنصّه في
+     * `FeeOperationRegistry`:** «أهو رسمُ المنصّة فوق رسم المزوّد أم
+     * بدله؟» — **فوقه**.
+     *
+     * فرسمُ المزوّد تكلفةٌ تمرّ إلى المزوّد، ورسمُ المنصّة أجرُ الخدمة.
+     * وجعلُ الثاني بدلَ الأوّل يعني أنّ المنصّةَ تدفع تكلفةَ المزوّد من
+     * جيبها في كلّ فاتورة.
+     *
+     * **وحتّى يُضبَط `BILL_PAY` في مركز الرسوم يبقى صفراً** — فالمحرّكُ
+     * يُرجع صفراً بلا نسخةٍ نشطة **ويرفع عطلاً في مركز الأعطال**. أي
+     * أنّ السلوكَ اليومَ لا يتغيّر بحرف، والبابُ صار مفتوحاً.
+     * ══════════════════════════════════════════════════════════════════
+     */
     private function calculateFee(?BillServiceProduct $product, string $amount): string
     {
-        if (!$product) return '0';
-        $fixed = (string)($product->fee_amount ?? '0');
-        $percentFee = bcmul($amount, bcdiv((string)($product->fee_percent ?? '0'), '100', 6), 4);
-        return MoneyService::normalize(MoneyService::add($fixed, $percentFee));
+        $providerFee = '0';
+
+        if ($product) {
+            $fixed = (string) ($product->fee_amount ?? '0');
+            $percentFee = bcmul($amount, bcdiv((string) ($product->fee_percent ?? '0'), '100', 6), 4);
+            $providerFee = MoneyService::add($fixed, $percentFee);
+        }
+
+        // **ويُحسب على المبلغ الأصليّ لا على المبلغ+رسم المزوّد** — وإلّا
+        // صار رسماً على رسم، ويتغيّر بتغيّر المزوّد وحدَه بلا قرارٍ منّا.
+        $platformFee = (string) app(\App\Services\FeeService::class)
+            ->calculate('BILL_PAY', $amount, ['applies_to' => 'customer'])['fee'];
+
+        return MoneyService::normalize(MoneyService::add($providerFee, $platformFee));
     }
 
     /**

@@ -10,6 +10,9 @@ use App\Models\PosUser;
 use App\Models\User;
 use App\Services\CashierService;
 use App\Services\CashierSaleInvoicePdfService;
+use App\Services\Merchant\MerchantPermissionService;
+use App\Support\Merchant\MerchantPermissions as P;
+use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -26,8 +29,20 @@ use Illuminate\Support\Facades\Validator;
  */
 class CashierController extends AmialApiController // AMIAL-FIX-007
 {
+    // AMIAL-OFFLINE-POS-003 — **استيرادُ الصنف ليس استعمالَ التِّرَيت.**
+    //
+    // كان `use App\Http\Controllers\Concerns\DeniesByPlan;` في رأس
+    // الملفّ (استيرادُ نطاق) **ولا سطرَ له داخل الصنف**. فـ`$this->
+    // denyUnless(...)` يرمي `Method ... does not exist` — **انهيارٌ فادحٌ
+    // في مسار البيع نفسِه**، يراه الكاشيرُ شريطاً أحمرَ عند تأكيد الدفع.
+    //
+    // ولا يمسكه مُحلِّلٌ ولا اختبار: الاستيرادُ مستعمَلٌ نحويّاً (يظهر في
+    // التعليقات والتوثيق)، و`php -l` لا يفحص وجودَ دالّةٍ في وقت التشغيل.
+    use \App\Http\Controllers\Concerns\DeniesByPlan;
+
     public function __construct(
         private readonly CashierService $cashier,
+        private readonly MerchantPermissionService $perm,
     ) {}
 
     public function products(Request $request): JsonResponse
@@ -36,7 +51,13 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
 
-        return $this->ok(['products' => $this->cashier->listProducts($merchant, $request->query('search'))]);
+        return $this->ok(['products' => $this->cashier->listProducts(
+            $merchant,
+            $request->query('search'),
+            // AMIAL-VARIANT-EDITOR-001 — شاشةُ الإدارة تطلبها صراحةً،
+            // وشبكةُ البيع لا تطلبها فتبقى مستثناة.
+            $request->boolean('include_variant_parents'),
+        )]);
     }
 
     /**
@@ -204,6 +225,14 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
             'discount_amount' => 'sometimes|nullable|numeric|min:0',
             'promotion_id' => 'sometimes|nullable|integer',
             'client_uuid' => 'sometimes|nullable|string|max:64',
+            // AMIAL-MULTI-CURRENCY-003 — عملةُ البيعة. غيابُها = الأساس،
+            // فكلُّ تطبيقٍ قائمٍ يبيع بالريال كما كان.
+            'currency' => 'sometimes|nullable|string|size:3',
+            // AMIAL-LOYALTY-AT-PAYMENT-001 — نقاطٌ يصرفها العميلُ على
+            // هذه الفاتورة. غيابُها = لا استبدال.
+            'redeem_points' => 'sometimes|nullable|numeric|min:0',
+            // AMIAL-CASH-TENDERED-001 — ما استلمه الكاشيرُ نقداً من الزبون.
+            'amount_received' => 'sometimes|nullable|numeric|min:0',
         ]);
         if ($v->fails()) return $this->validationError($v);
 
@@ -216,7 +245,25 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         //
         // فالحارسُ على الفعل لا على العنوان: مسارُ البيع واحدٌ للحالتين،
         // ووضعُ `capability:` عليه يُقفل الكاشيرَ على كلّ تاجرٍ مجّانيّ.
-        if ($request->filled('client_uuid')
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-OFFLINE-POS-003 — **والإشارةُ كانت خاطئةً واقعاً.**
+        //
+        // قال التعليقُ أعلاه: «`client_uuid` لا يُرسَل إلّا من طابور
+        // المزامنة». **وقِيس في التطبيق فإذا هو يُرسَل في كلّ بيع** —
+        // سطرٌ غيرُ مشروط في `cashier_controller.dart` يولّده مفتاحاً
+        // لمنع التكرار (‏AMIAL-OFFLINE-POS-001)، متّصلاً كان أو غيرَ متّصل.
+        //
+        // فالحارسُ كان يقع على **كلّ** بيع. ولو أُضيف التِّرَيتُ وحدَه
+        // لتحوّل الانهيارُ إلى ٤٠٢ على البيع النقديِّ الأساسيِّ لكلّ تاجرٍ
+        // مجّانيّ — **وذاك أسوأُ من الانهيار**: قفلٌ مدفوعٌ على ما هو مجّانيّ
+        // بالتصميم، ولا يقول لأحدٍ لماذا.
+        //
+        // **والفارقُ الحقيقيُّ موجودٌ في الحمولة**: طابورُ المزامنة يضيف
+        // `_offline_queued_at` عند الحفظ المحلّيّ ويرسله مع البيع، والبيعُ
+        // المتّصلُ لا يرسله قطّ. فصار الحارسُ على أثرِ الطابور لا على مفتاح
+        // منع التكرار. (القاعدة الثامنة: الحدُّ على ما لا يُنتحَل.)
+        // ══════════════════════════════════════════════════════════════
+        if (($request->filled('_offline_queued_at') || $request->filled('_offline_state'))
             && ($deny = $this->denyUnless($request, 'offline_pos')) !== null) {
             return $deny;
         }
@@ -248,14 +295,184 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
                 cashAmount: $request->input('cash_amount'),
                 walletAmount: $request->input('wallet_amount'),
                 clientUuid: $request->input('client_uuid'),
+                currency: $request->input('currency'),
+                // AMIAL-LOYALTY-AT-PAYMENT-001 — نقاطُ العميل تُصرَف مع
+                // البيعة، فتسقط معها إن سقطت.
+                redeemPoints: $request->input('redeem_points') !== null
+                    ? (float) $request->input('redeem_points') : null,
+                amountReceived: $request->input('amount_received') !== null
+                    ? (string) $request->input('amount_received') : null,
             );
         } catch (\InvalidArgumentException $e) {
             return $this->error('SALE_INVALID', $e->getMessage(), 422);
         } catch (\RuntimeException $e) {
+            // **ورسالةُ «لا سعرَ صرفٍ مضبوط» تصل الكاشيرَ بنصّها** — فرفضٌ
+            // بلا سبب يجعله يعيد المحاولة والعميلُ واقف.
             return $this->error('SALE_FAILED', $e->getMessage(), 422);
         }
 
-        return $this->ok(['sale' => $sale], 'SALE_RECORDED', 'تم تسجيل البيع');
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-HELD-SALE-001 — **التذكرةُ تُختَم بالبيعة التي وُلدت منها.**
+        //
+        // فيُعرف مصيرُها: دُفعت أم ما زالت معلَّقة. **ولا يُرمى استثناءٌ
+        // إن تعذّر الربط** — البيعةُ وقعت والمالُ تحرّك، وربطُ الأثر لا
+        // يُسقط بيعةً ناجحة. (وهو حدُّ `AuditService::record` نفسُه:
+        // عقوبةُ خطأٍ صغيرٍ لا تكون بفقد ما نجح.)
+        // ══════════════════════════════════════════════════════════════
+        if ($request->filled('held_ticket_ulid')) {
+            try {
+                app(\App\Services\HeldSaleService::class)->linkSale(
+                    $merchant,
+                    (string) $request->input('held_ticket_ulid'),
+                    (string) ($sale['sale_ulid'] ?? $sale->sale_ulid ?? ''),
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning(
+                    'held ticket link failed: ' . $e->getMessage());
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-NEGATIVE-STOCK-001 — **ما نزل تحت الصفر يُقال الآن.**
+        //
+        // البيعُ لا يُوقَف (البضاعةُ خرجت من الرفّ فعلاً)، **لكنّ الكاشير
+        // يُخبَر وهو واقفٌ أمام الرفّ** — وهي أنفعُ لحظةٍ لقوله. وتركُه
+        // لجدولٍ يقرؤه المالكُ بعد يومين يجعل الإشارةَ تصل من لا يستطيع
+        // النظرَ في الرفّ الآن.
+        //
+        // **ولا يُرسَل مفتاحٌ فارغٌ حين لا سالب** — قائمةٌ فارغةٌ في كلّ
+        // ردٍّ تُعوّد الشاشةَ على تجاهلها.
+        // ══════════════════════════════════════════════════════════════
+        $negative = $this->cashier->takeNegativeLines();
+
+        return $this->ok(array_filter([
+            'sale' => $sale,
+            'negative_stock' => $negative !== [] ? $negative : null,
+        ], fn ($v) => $v !== null), 'SALE_RECORDED', 'تم تسجيل البيع');
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  AMIAL-HELD-SALE-001 — التذاكر المفتوحة (تعليق الفاتورة)
+    // ══════════════════════════════════════════════════════════════════
+
+    /** GET /merchant/cashier/held — التذاكر المفتوحة للمنشأة. */
+    public function heldIndex(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $tickets = app(\App\Services\HeldSaleService::class)->open($merchant);
+
+        return $this->ok([
+            'tickets' => $tickets,
+            'count' => count($tickets),
+            'max_open' => \App\Models\HeldSale::MAX_OPEN,
+        ]);
+    }
+
+    /** POST /merchant/cashier/held — تعليق السلة الحالية. */
+    public function heldStore(Request $request): JsonResponse
+    {
+        $v = Validator::make($request->all(), [
+            'items' => 'required|array|min:1',
+            'items.*.name' => 'sometimes|nullable|string|max:200',
+            'items.*.qty' => 'sometimes|numeric|min:0',
+            'items.*.quantity' => 'sometimes|numeric|min:0',
+            'items.*.price' => 'sometimes|numeric|min:0',
+            'items.*.product_id' => 'sometimes|nullable|integer',
+            'label' => 'sometimes|nullable|string|max:120',
+            'customer_name' => 'sometimes|nullable|string|max:190',
+            'customer_phone' => 'sometimes|nullable|string|max:32',
+            'notes' => 'sometimes|nullable|string|max:500',
+        ]);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant, $posUserId] = $ctx;
+
+        try {
+            $ticket = app(\App\Services\HeldSaleService::class)->hold(
+                $merchant, $posUserId, $request->input('items'), [
+                    'label' => $request->input('label'),
+                    'customer_name' => $request->input('customer_name'),
+                    'customer_phone' => $request->input('customer_phone'),
+                    'notes' => $request->input('notes'),
+                ]);
+        } catch (\DomainException $e) {
+            return $this->error('HOLD_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['ticket' => $this->ticketArr($ticket)], 'HELD',
+            'عُلّقت الفاتورة — تُستأنف من «التذاكر المفتوحة»', 201);
+    }
+
+    /** POST /merchant/cashier/held/{ulid}/resume */
+    public function heldResume(Request $request, string $ulid): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        try {
+            $ticket = app(\App\Services\HeldSaleService::class)->resume($merchant, $ulid);
+        } catch (\DomainException $e) {
+            return $this->error('RESUME_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['ticket' => $ticket], 'RESUMED', 'استُؤنفت التذكرة');
+    }
+
+    /** POST /merchant/cashier/held/{ulid}/reopen — تراجُعٌ عن الاستئناف. */
+    public function heldReopen(Request $request, string $ulid): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        try {
+            $ticket = app(\App\Services\HeldSaleService::class)->reopen($merchant, $ulid);
+        } catch (\DomainException $e) {
+            return $this->error('REOPEN_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['ticket' => $ticket], 'REOPENED', 'أُعيدت التذكرة معلَّقة');
+    }
+
+    /** POST /merchant/cashier/held/{ulid}/void */
+    public function heldVoid(Request $request, string $ulid): JsonResponse
+    {
+        $v = Validator::make($request->all(), ['reason' => 'required|string|min:3|max:300']);
+        if ($v->fails()) return $this->validationError($v);
+
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        try {
+            $ticket = app(\App\Services\HeldSaleService::class)
+                ->void($merchant, $ulid, (string) $request->input('reason'));
+        } catch (\DomainException $e) {
+            return $this->error('VOID_FAILED', $e->getMessage(), 422);
+        }
+
+        return $this->ok(['ticket' => $ticket], 'VOIDED', 'أُلغيت التذكرة');
+    }
+
+    private function ticketArr(\App\Models\HeldSale $t): array
+    {
+        return [
+            'ticket_ulid' => $t->ticket_ulid,
+            'label' => $t->label,
+            'customer_name' => $t->customer_name,
+            'items' => $t->items ?? [],
+            'items_count' => count($t->items ?? []),
+            'total' => (string) $t->total,
+            'status' => $t->status,
+            'opened_by_name' => $t->opened_by_name,
+            'opened_at' => $t->created_at?->toIso8601String(),
+        ];
     }
 
     /**
@@ -275,12 +492,22 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         if (!$sale) return $this->error('NOT_FOUND', 'الفاتورة غير موجودة', 404);
 
         try {
-            $pdf = app(CashierSaleInvoicePdfService::class)->generate($sale);
+            // AMIAL-PDF-CACHE-002 — **بيعٌ تمّ لا يتغيّر، فالتصيير مرّةً
+            // يكفي أبداً.** وكلُّ تصييرٍ داخل الطلب يعرّض الاتّصالَ
+            // للقطع على شبكة جوّال (`Connection closed while receiving
+            // data`) — **وهو عطلٌ وقع فعلاً**، وهذا مسارُ الجوّال نفسُه.
+            $pdfSvc = app(CashierSaleInvoicePdfService::class);
+
+            $pdf = app(\App\Services\PdfCacheService::class)->remember(
+                "cashier_invoice_{$sale->sale_ulid}",
+                fn () => $pdfSvc->generate($sale),
+            );
+
             return response($pdf, 200, [
                 'Content-Type' => 'application/pdf',
                 'Content-Length' => (string) strlen($pdf),
                 'Content-Disposition' => 'attachment; filename="'
-                    . app(CashierSaleInvoicePdfService::class)->suggestedFilename($sale) . '"',
+                    . $pdfSvc->suggestedFilename($sale) . '"',
                 'Cache-Control' => 'private, max-age=900',
                 'Content-Encoding' => 'identity',
             ]);
@@ -296,6 +523,11 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
     public function settleCredit(Request $request, int $id): JsonResponse
     {
+        try {
+            $this->perm->assert($request->user(), P::CASH_MOVE);
+        } catch (DomainException $e) {
+            return $this->error('FORBIDDEN', $e->getMessage(), 403);
+        }
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
         [$merchant] = $ctx;
@@ -409,6 +641,37 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         return $this->ok($this->cashier->profitReport($merchant, $days));
     }
 
+    /**
+     * AMIAL-SALES-BREAKDOWN-001 — **ماذا بِعتُ، وبكم، وبأيّ ربح.**
+     *
+     * وكان في المنتج `top_products`: خمسةُ أسماءٍ بكمّيّاتها ليومٍ واحد.
+     * وهذا يُضيف الإيرادَ والتكلفةَ والهامشَ **والتصنيف**، على مدىً
+     * يختاره التاجر، **ومطروحاً منه المرتجَع**.
+     *
+     * @see \App\Services\SalesBreakdownService
+     */
+    public function salesBreakdown(Request $request): JsonResponse
+    {
+        $ctx = $this->resolveMerchantPos($request);
+        if ($ctx instanceof JsonResponse) return $ctx;
+        [$merchant] = $ctx;
+
+        $v = \Illuminate\Support\Facades\Validator::make($request->query(), [
+            'from' => 'sometimes|nullable|date',
+            'to' => 'sometimes|nullable|date',
+        ]);
+
+        if ($v->fails()) {
+            return $this->validationError($v);
+        }
+
+        return $this->ok(app(\App\Services\SalesBreakdownService::class)->report(
+            $merchant,
+            $request->query('from'),
+            $request->query('to'),
+        ));
+    }
+
     // ---- helpers ----
 
     /** يرجّع [merchant(User), posUserId(?int)] أو JsonResponse عند الخطأ. */
@@ -420,12 +683,34 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
         if ($pos) {
             $merchant = User::find($pos->merchant_user_id);
             if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
+            if ($this->isPharmacyMerchant($merchant)) {
+                return $this->error(
+                    'PHARMACY_CASHIER_ONLY',
+                    'هذه المنشأة صيدلية. استخدم كاشير الصيدلية لتبقى الوصفات والتشغيلات والصلاحية في الفاتورة.',
+                    403,
+                );
+            }
             return [$merchant, $pos->id];
         }
 
-        if (!MerchantProfile::where('user_id', $authUser->id)->exists()) {
+        $profile = MerchantProfile::where('user_id', $authUser->id)->first();
+        if (!$profile) {
             return $this->error('NOT_A_MERCHANT', 'الكاشير متاح للتجار وموظفي نقاط البيع فقط', 403);
         }
+        if ($profile->business_type === 'pharmacy') {
+            return $this->error(
+                'PHARMACY_CASHIER_ONLY',
+                'هذه المنشأة صيدلية. استخدم كاشير الصيدلية لتبقى الوصفات والتشغيلات والصلاحية في الفاتورة.',
+                403,
+            );
+        }
         return [$authUser, null];
+    }
+
+    /** الكاشير العام يخص البيع السريع والتجزئة؛ الصيدلية لها مصدر بيع مستقل. */
+    private function isPharmacyMerchant(User $merchant): bool
+    {
+        return MerchantProfile::where('user_id', $merchant->id)
+            ->value('business_type') === 'pharmacy';
     }
 }

@@ -31,6 +31,48 @@ use App\Support\Access\Capability as C;
  */
 final class CapabilityRegistry
 {
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * AMIAL-VERTICAL-SCOPE-001 — **قطاعاتُ البضاعة الجافّة.**
+     *
+     * من يبيع صنفاً له كتالوجٌ ورفٌّ وباركود. **ومحطّةُ الوقود ليست
+     * منها**: بضاعتُها سائلةٌ في خزّان، وكتالوجُها `fuel_products`،
+     * ومخزونُها يُصالَح بالقياس (`fuel.recon.*`) لا بجردِ رفوف.
+     *
+     * ── لمَ كُتبت ──
+     *
+     * سأل صاحبُ المشروع: «لماذا تاجرُ وقودٍ لديه أصنافٌ ومخزون؟». وقِيس
+     * فكان محقّاً: `resolveFeatures` تصبّ `planFeatures` على كلّ تاجرٍ
+     * يدفع **بلا نظرٍ إلى قطاعه**، فيأخذ صاحبُ المحطّة سبعَ قدراتٍ
+     * إعلانُها كلُّه تجزئة (`retail.product.*` · شاشة `/retail`)، ثمّ
+     * **يُمنَع من البيع منها**: `CashierPosScreen` تردّ حسابَ الوقود إلى
+     * `FuelSaleScreen` بحاجزٍ قطاعيّ. كتالوجٌ يُملأ ولا يُفرَّغ.
+     *
+     * ── والحكمُ من صاحب المشروع لا من اجتهادي ──
+     *
+     * «تدقيق شامل لقطاعات التجار»، جدولُ «لا يجوز أن يرى»:
+     *     محطة وقود ⇒ «البيع السريع بدون التجزئة، **كاشير منتجات عام**»
+     * ومساحتُها الصحيحةُ فيه: «خزانات، توريد، قياس، ورديات، شركات،
+     * فروقات، إيصالات، بيع وقود، مضخات/مسدسات» — لا أصنافَ ولا رفوف.
+     * ودليلُ تشغيل المحطّة: «القائمة ليست قالباً مشتركاً لكل التجار».
+     *
+     * ── وحدُّها ما مُنع صراحةً، لا ما ظننتُه ──
+     *
+     * **البيعُ السريع داخلٌ فيها**: التدقيقُ يمنع عنه «مضخات، وصفات،
+     * فواتير جملة، مطبخ» **ولا يذكر الأصناف**، وبائعُ الخضار قد يمسك
+     * قائمةَ أسعارٍ بسيطة. ومن قصّها عنه فليقصّها بقرارٍ مكتوبٍ لا بظنّ.
+     * ══════════════════════════════════════════════════════════════════
+     *
+     * @var array<int,string>
+     */
+    private const GOODS = [
+        A::BIZ_RETAIL,
+        A::BIZ_WHOLESALE,
+        A::BIZ_PHARMACY,
+        A::BIZ_RESTAURANT,
+        A::BIZ_QUICK_SALE,
+    ];
+
     /** @var array<string,Capability>|null */
     private static ?array $cache = null;
 
@@ -81,15 +123,54 @@ final class CapabilityRegistry
     /** ترتيبُ الباقات من الأدنى إلى الأعلى — **به يُقارَن `minPlan`**. */
     public const PLAN_ORDER = [
         A::PLAN_FREE => 0,
-        A::PLAN_STARTER => 1,
-        A::PLAN_BUSINESS => 2,
-        A::PLAN_MERCHANT_PRO => 3,
-        A::PLAN_ENTERPRISE => 4,
+        A::PLAN_BUSINESS => 1,
+        A::PLAN_ENTERPRISE => 2,
     ];
 
     public static function planRank(?string $plan): int
     {
         return self::PLAN_ORDER[$plan ?? A::PLAN_FREE] ?? 0;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  AMIAL-VERTICAL-COMPOSE-001 — **ما يُركَّب منه قطاعٌ جديد**
+    // ══════════════════════════════════════════════════════════════════
+
+    /**
+     * **القدراتُ التي تُعرَض على من يُنشئ قطاعاً من اللوحة.**
+     *
+     * والحدُّ مقيسٌ لا مُذاق: قُسّمت القدراتُ السبعون فإذا هي صنفان —
+     *
+     *   · **٣١ قدرةً عامّةً** لا تُعلن قطاعاً أصلاً (المرتجعات · الموظّفون
+     *     · الفروع · التقارير · العملاء · المصروفات …) — تنطبق على كلّ
+     *     تاجر.
+     *   · **١٩ قدرةً من عائلة التجارة العامّة** يُعلنها `retail` أو
+     *     `quick_sale` (كاشير · منتجات · باركود · مخزون · ديون ·
+     *     موردون · مشتريات · هالك · تحويلات …) — وهي مبنيّةٌ على جداولَ
+     *     عامّةٍ مربوطةٍ بالتاجر، ولها شاشاتٌ في `CapabilityScreens`.
+     *
+     * **وما عداها محرّكُ قطاعٍ حقيقيّ** — دفعاتُ الصيدليّة ومضخّاتُ الوقود
+     * وفواتيرُ الجملة ومطبخُ المطعم. ومنحُها لمخبزٍ **يفتح شاشةً فوق
+     * جداولِ قطاعٍ آخر**: يظهر «تنبيهات الصلاحيّة» في مخبزٍ ولا دواءَ
+     * فيه، والرقمُ يُقرأ صفراً فيُظنّ فحصاً وهو غياب (القاعدة السابعة).
+     *
+     * **والحدُّ يُقال للمستعمل ولا يُسكَت عنه** — تقوله الصفحةُ بنصّه.
+     *
+     * @return array<string,Capability>
+     */
+    public static function composable(): array
+    {
+        $out = [];
+
+        foreach (self::all() as $code => $cap) {
+            if ($cap->appliesToAllBusinessTypes()
+                || $cap->appliesTo(A::BIZ_RETAIL)
+                || $cap->appliesTo(A::BIZ_QUICK_SALE)) {
+                $out[$code] = $cap;
+            }
+        }
+
+        return $out;
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -146,11 +227,17 @@ final class CapabilityRegistry
     private static function selling(): array
     {
         return [
+            // **والبيعُ السريعُ ليس لمحطّة وقود** — منعَه التدقيقُ بنصّه
+            // («لا يجوز أن يرى: البيع السريع بدون التجزئة»)، وقِيس أنّه
+            // كان يصلها فعلاً. وهو أصلاً بابٌ ميّتٌ هناك: يفتح
+            // `CashierPosScreen` وهي تردّ حسابَ الوقود إلى `FuelSaleScreen`.
+            // فالمنعُ يُزيل زرّاً يَعِد بما يرتدّ عنه.
             C::make(A::F_QUICK_SALE)
                 ->nameAr('البيع السريع')
                 ->descAr('بيع بمبلغ حرّ بلا أصناف — لبائع الخضار والسمك ومن لا كتالوج له.')
                 ->group('البيع')->icon('bolt')
-                ->minPlan(A::PLAN_FREE)->screen('/quick-sale'),
+                ->minPlan(A::PLAN_FREE)->screen('/quick-sale')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_CASHIER)
                 ->nameAr('الكاشير')
@@ -165,20 +252,61 @@ final class CapabilityRegistry
                 ->group('البيع')->icon('undo')
                 ->minPlan(A::PLAN_FREE)->screen('/refunds'),
 
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-ENTITLEMENTS-007 — **ممنوحةٌ ومستعمَلةٌ وغائبةٌ عن
+            // الكتالوج.**
+            //
+            // `payment_requests` يمنحها المربّعُ لتاجر التجزئة، ويسألها
+            // التطبيقُ في **ثلاثة أبواب** (`access.has('payment_requests')`
+            // في «خدماتي»: طلبُ أموال · واردة · صادرة). ولا مدخلَ لها هنا.
+            //
+            // فالقدرةُ **تعمل** — لأنّ `resolveFeatures` تمنحها — لكنّها
+            // **لا تُرى في «قدراتي» ولا تُدار من اللوحة**: لا اسمَ لها ولا
+            // مجموعةَ ولا ثمن، ولا يستطيع مديرُ المنصّة بيعَها ولا إقفالَها.
+            //
+            // **وقدرةٌ لا تُدار ليست جزءاً من المنتج** — هي تسريبٌ يعمل.
+            // ══════════════════════════════════════════════════════════
+            C::make(A::F_PAYMENT_REQUESTS)
+                ->nameAr('طلبات الأموال')
+                ->descAr('اطلب مبلغاً من عميلٍ أو زميل، وتابع الواردَ والصادر.')
+                ->group('البيع')->icon('request_quote')
+                ->minPlan(A::PLAN_FREE)
+                ->businessTypes([A::BIZ_RETAIL])
+                // **وتُعلن مسارَها** — `amial/payment-requests` يشترك فيه
+                // العميلُ والتاجر، وليس تحت `merchant/`. وكان العُرفُ في
+                // أحد الحارسَين يشترط ذلك، فوُحّد: **قدرةٌ بلا مسارٍ لا
+                // يحرسها `EnsureCapability` إطلاقاً**، والسقفُ يُنقَص لا
+                // يُزاد.
+                ->routes(['payment-requests']),
+
             C::make('retail.returns.by_line')
                 ->nameAr('مرتجع صنف واحد من فاتورة')
                 ->descAr('ارتجاع سطر بعينه بكمّيته وقرار إعادته للرفّ — والتالف لا يعود.')
                 ->group('البيع')->icon('assignment_return')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_BUSINESS)
                 ->permissions(['retail.return.*'])
                 ->routes(['retail/returns', 'retail/sales'])
-                ->screen('/retail/returns'),
+                ->screen('/retail/returns')
+                ->businessTypes([A::BIZ_RETAIL]),
 
+            // ══════════════════════════════════════════════════════════
+            // **ودفترُ الدَّين ليس لمحطّة وقود — والنيّةُ مكتوبةٌ منذ قبلُ.**
+            //
+            // `FuelVertical::own()` فوقها بنصّها: «**ولا `F_DEBTS`** —
+            // ائتمانُ المحطّة ببطاقاتٍ لا بدفترِ دَين» (‏`fuel_cards`
+            // و`fuel_companies`). فحُذفت من قدرات القطاع عمداً…
+            // **ثمّ أعادتها `planFeatures` من الباب الآخر**، لأنّها
+            // تُصبّ بلا نظرٍ إلى القطاع.
+            //
+            // وهذا بعينه ما يُصلحه `AMIAL-VERTICAL-SCOPE-001`: نيّةٌ
+            // مكتوبةٌ في موضعٍ، ومنفذٌ يلتفّ عليها في موضعٍ آخر.
+            // ══════════════════════════════════════════════════════════
             C::make(A::F_DEBTS)
                 ->nameAr('البيع الآجل والديون')
                 ->descAr('دفتر ديون العملاء بكشف حساب لكل عميل.')
                 ->group('البيع')->icon('account_balance_wallet')
-                ->minPlan(A::PLAN_FREE)->screen('/credit'),
+                ->minPlan(A::PLAN_FREE)->screen('/credit')
+                ->businessTypes(self::GOODS),
 
             // ══════════════════════════════════════════════════════════
             // **مبنيّةٌ بالكامل ولم تكن موصولةً باستحقاقها.**
@@ -227,28 +355,34 @@ final class CapabilityRegistry
                 ->nameAr('الأصناف')
                 ->descAr('كتالوج المتجر بأسعاره وتكلفته.')
                 ->group('الأصناف')->icon('inventory_2')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_BUSINESS)
+                ->businessTypes([A::BIZ_RETAIL, A::BIZ_WHOLESALE])
                 ->permissions(['retail.product.*'])
-                ->limit('max_products')->screen('/products'),
+                ->limit('max_products')->screen('/products')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_BARCODE)
                 ->nameAr('الباركود')
                 ->descAr('مسح الأصناف بالباركود — وصنف واحد بأكثر من رمز: '
                     . 'رمز الحبّة ورمز الكرتون بحجم عبوته.')
                 ->group('الأصناف')->icon('qr_code_scanner')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_BUSINESS)
+                ->businessTypes([A::BIZ_RETAIL, A::BIZ_WHOLESALE])
                 ->routes(['retail/scan'])
-                ->permissions(['retail.product.*']),
+                ->permissions(['retail.product.*'])
+                ->businessTypes(self::GOODS),
 
             C::make('retail.catalog')
                 ->nameAr('التصنيفات والعلامات والوحدات')
                 ->descAr('شجرة تصنيفات تُجيب «كم بعتُ من المواد الغذائية؟»، وعلامات '
                     . 'تجارية، ووحدات قياس تعرف أنّ نصف كيلو صواب ونصف حبّة خطأ.')
                 ->group('الأصناف')->icon('category')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_BUSINESS)
+                ->businessTypes([A::BIZ_RETAIL])
                 ->permissions(['retail.catalog.*', 'retail.product.*'])
                 ->routes(['retail/categories', 'retail/brands', 'retail/units'])
-                ->screen('/retail/catalog'),
+                ->screen('/retail/catalog')
+                ->businessTypes(self::GOODS),
 
             C::make('retail.variants')
                 ->nameAr('متغيّرات الصنف')
@@ -256,24 +390,28 @@ final class CapabilityRegistry
                     . 'لا تسعة أصناف مستقلّة يُنسى تعديل أحدها.')
                 ->group('الأصناف')->icon('style')
                 ->minPlan(A::PLAN_BUSINESS)
+                ->businessTypes([A::BIZ_RETAIL])
                 ->permissions(['retail.product.manage'])
                 ->routes(['retail/products'])
-                ->screen('/retail/variants'),
+                ->screen('/retail/variants')
+                ->businessTypes(self::GOODS),
 
             C::make('retail.price_versions')
                 ->nameAr('نسخ الأسعار بالاعتماد')
                 ->descAr('السعر نسخة لها تاريخ سريان ومعتمِد — تُجدوَل زيادةٌ فجر السبت '
                     . 'وتُقرأ «بكم كنّا نبيعه في رمضان؟».')
                 ->group('الأصناف')->icon('sell')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_BUSINESS)
+                ->businessTypes([A::BIZ_RETAIL])
                 ->permissions(['retail.price.*'])
                 ->routes(['retail/prices'])
-                ->screen('/retail/prices'),
+                ->screen('/retail/prices')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_PROMOTIONS)
                 ->nameAr('العروض والخصومات')
                 ->group('الأصناف')->icon('local_offer')
-                ->minPlan(A::PLAN_STARTER)->screen('/promotions'),
+                ->minPlan(A::PLAN_BUSINESS)->screen('/promotions'),
 
             C::make(A::F_LOYALTY)
                 ->nameAr('نقاط الولاء')
@@ -291,49 +429,58 @@ final class CapabilityRegistry
                 ->nameAr('المخزون')
                 ->descAr('كمّية كل صنف ورصيده الحالي.')
                 ->group('المخزون')->icon('warehouse')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_BUSINESS)
+                ->businessTypes([A::BIZ_RETAIL, A::BIZ_WHOLESALE])
                 ->permissions(['retail.stock.*'])
                 ->routes(['retail/ops', 'retail/products'])
-                ->screen('/retail'),
+                ->screen('/retail')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_LOW_STOCK_ALERTS)
                 ->nameAr('تنبيه نفاد المخزون')
                 ->descAr('ما نزل تحت حدّ إعادة الطلب — ومن لم يُضبط له حدّ لا يُعدّ منخفضاً.')
                 ->group('المخزون')->icon('warning_amber')
-                ->minPlan(A::PLAN_STARTER)
-                ->routes(['pharmacy/alerts'])
-                ->screen('/retail'),
+                ->minPlan(A::PLAN_BUSINESS)
+                ->businessTypes([A::BIZ_RETAIL, A::BIZ_WHOLESALE])
+                ->screen('/retail')
+                ->businessTypes(self::GOODS),
 
             C::make('retail.locations')
                 ->nameAr('المواقع والمستودعات')
                 ->descAr('مخزون كل فرع ومستودع على حدة — فبيعٌ في عدن لا ينقص مخزون المكلا، '
                     . 'ولا يُطلب توريد لفرع ممتلئ بينما يقف فرع فارغ.')
                 ->group('المخزون')->icon('store_mall_directory')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
+                ->businessTypes([A::BIZ_RETAIL])
                 ->permissions(['retail.location.*', 'retail.stock.view'])
                 ->routes(['retail/locations'])
                 ->limit('max_locations')
-                ->screen('/retail/locations'),
+                ->screen('/retail/locations')
+                ->businessTypes(self::GOODS),
 
             C::make('retail.transfers')
                 ->nameAr('التحويلات بين المواقع')
                 ->descAr('نقل البضاعة بمراحلها: طلب ← اعتماد ← إرسال ← في الطريق ← استلام. '
                     . 'وما نقص في الطريق يُسجَّل بسببه ولا يُساوى بالقوّة.')
                 ->group('المخزون')->icon('swap_horiz')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
+                ->businessTypes([A::BIZ_RETAIL])
                 ->permissions(['retail.transfer.*'])
                 ->routes(['retail/transfers'])
-                ->screen('/retail/transfers'),
+                ->screen('/retail/transfers')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_INVENTORY_AUDIT)
                 ->nameAr('الجرد')
                 ->descAr('عدّ المخزون ومقارنته بالنظام — ولكلّ فرق سبب واعتماد، '
                     . 'وما لم يُعدّ لا يُصفَّر.')
                 ->group('المخزون')->icon('rule')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_BUSINESS)
+                ->businessTypes([A::BIZ_RETAIL, A::BIZ_WHOLESALE])
                 ->permissions(['retail.count.*'])
                 ->routes(['retail/counts'])
-                ->screen('/retail/counts'),
+                ->screen('/retail/counts')
+                ->businessTypes(self::GOODS),
 
             C::make('retail.waste')
                 ->nameAr('الهالك')
@@ -341,26 +488,35 @@ final class CapabilityRegistry
                     . 'يُخرج بضاعة بلا أثر، والجرد بعدها لا يجد فرقاً.')
                 ->group('المخزون')->icon('delete_outline')
                 ->minPlan(A::PLAN_BUSINESS)
+                ->businessTypes([A::BIZ_RETAIL])
                 ->permissions(['retail.waste.*'])
                 ->routes(['retail/wastes'])
-                ->screen('/retail/wastes'),
+                ->screen('/retail/wastes')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_SUPPLIERS)
                 ->nameAr('الموردون')
                 ->group('المخزون')->icon('local_shipping')
                 // AMIAL-ENTITLEMENTS-002 — المساراتُ نسبةً إلى `merchant/`
                 // (كما يقرؤها `EntitlementCenterController::coverage`).
+                ->businessTypes([A::BIZ_RETAIL, A::BIZ_WHOLESALE])
                 ->routes(['suppliers'])
-                ->minPlan(A::PLAN_BUSINESS)->screen('/suppliers'),
+                ->minPlan(A::PLAN_BUSINESS)->screen('/suppliers')
+                ->businessTypes(self::GOODS),
 
             C::make(A::F_PURCHASES)
                 ->nameAr('أوامر الشراء')
                 ->descAr('طلب بضاعة من مورّد واستلامها كاملة أو جزئية.')
                 ->group('المخزون')->icon('shopping_cart')
                 ->minPlan(A::PLAN_BUSINESS)
+                ->businessTypes([A::BIZ_RETAIL, A::BIZ_WHOLESALE])
                 ->permissions(['retail.purchase.*'])
-                ->routes(['purchase-orders'])
-                ->screen('/purchase-orders'),
+                // AMIAL-DAILY-MOVEMENT-001 — **والمرتجعُ من الشراء نفسِه.**
+                // `coverage` يطابق المساراتِ بالبادئة، فبادئةٌ غيرُ مذكورةٍ
+                // هنا تُقرأ «مسارٌ بلا قدرة» في تقرير التغطية.
+                ->routes(['purchase-orders', 'purchase-returns'])
+                ->screen('/purchase-orders')
+                ->businessTypes(self::GOODS),
         ];
     }
 
@@ -390,7 +546,7 @@ final class CapabilityRegistry
                 ->descAr('أدوار يبنيها المالك بنطاق وحدّ: «الكاشير يخصم حتى ٥٠٠ '
                     . 'ويغلق ورديّته هو وحدها».')
                 ->group('الناس')->icon('admin_panel_settings')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
                 ->permissions(['role.*'])
                 ->routes(['retail/roles'])
                 ->screen('/retail/roles'),
@@ -405,8 +561,9 @@ final class CapabilityRegistry
                 ->descAr('حدّ أعلى لما يخصمه كل دور — مبلغ لا نسبة، فالنسبة تُقاس '
                     . 'على إجمالي يكتبه الكاشير نفسه.')
                 ->group('الناس')->icon('percent')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
                 ->permissions(['retail.discount.apply'])
+                ->businessTypes(self::GOODS)
                 ->comingSoon(),
 
             // ══════════════════════════════════════════════════════════
@@ -439,12 +596,29 @@ final class CapabilityRegistry
                 ->routes(['pos-devices'])
                 ->screen('/pos-devices'),
 
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-SHIFT-GATE-001 — **صارت أساسيّةً لا تُباع.**
+            //
+            // كانت `minPlan(PLAN_BUSINESS)`، وردُّها ٤٠٢ لمن دونها. ثمّ
+            // صار البيعُ نفسُه يشترط ورديّةً مفتوحة — **فلو بقيت مدفوعةً
+            // لصار كلُّ تاجرٍ مجّانيٍّ عاجزاً عن البيع إطلاقاً**. أي بيعُ
+            // القدرةِ على تشغيل الشبّاك، لا بيعُ ميزة.
+            //
+            // وهو حدُّ `core()` نفسُه المكتوب في هذا الملفّ: «قدرةٌ
+            // أساسيّةٌ لا تُباع… هذه تمنع أرقاماً كاذبة، لا تُضيف قيمة».
+            // فورديّةٌ تُنسَب إليها كلُّ بيعةٍ وتُجرَد آخرَ اليوم **تمنع
+            // رقماً كاذباً**: درجاً لا صاحبَ له وفرقاً لا يُنسَب.
+            //
+            // **والعمقُ المدفوعُ يبقى مدفوعاً**: تاريخُ الورديّات وتقريرُ
+            // ساعات العمل في `F_ADVANCED_REPORTS`. المجّانيُّ يفتح ويُقفل
+            // ويرى فرقَ يومه؛ ولا يرى شهرَ موظّفيه.
+            // ══════════════════════════════════════════════════════════
             C::make(A::F_SHIFT_CLOSE)
                 ->nameAr('الورديات وإغلاق الصندوق')
-                ->descAr('عهدة ونقد وردية ومصروفاتها — والمتوقَّع يُحسب من الحركة '
-                    . 'فلا يظهر مصروف الكاشير عجزاً في وجهه.')
+                ->descAr('لا يُقبض نقدٌ بلا وردية تحمل اسم فاتحها — والمتوقَّع '
+                    . 'يُحسب من الحركة فلا يظهر مصروف الكاشير عجزاً في وجهه.')
                 ->group('الناس')->icon('schedule')
-                ->minPlan(A::PLAN_BUSINESS)
+                ->minPlan(A::PLAN_FREE)->core()
                 ->permissions(['shift.*'])->screen('/shifts'),
         ];
     }
@@ -489,36 +663,42 @@ final class CapabilityRegistry
                 ->nameAr('سجلّ التدقيق المفصَّل')
                 ->descAr('من فعل ماذا ومتى ومن أيّ جهاز.')
                 ->group('التقارير')->icon('fact_check')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
                 ->permissions(['audit.view'])->screen('/audit-log'),
 
             C::make(A::F_ADVANCED_BACKUP)
                 ->nameAr('النسخ الاحتياطي المتقدم')
                 ->group('التقارير')->icon('backup')
-                ->minPlan(A::PLAN_MERCHANT_PRO)->screen('/backup'),
+                ->minPlan(A::PLAN_ENTERPRISE)->screen('/backup'),
 
             C::make(A::F_BRANCHES)
                 ->nameAr('الفروع')
                 ->group('التقارير')->icon('account_tree')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
                 ->routes(['branches'])
                 ->limit('max_branches')->screen('/branches'),
 
             C::make(A::F_BRANCH_REPORTS)
                 ->nameAr('تقارير الفروع')
                 ->group('التقارير')->icon('leaderboard')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_ENTERPRISE)
                 ->routes(['branches/{id}/report']),
 
+            // AMIAL-MULTI-CURRENCY-002 — صارت **محافظَ** لا سطرَ مكافئٍ على
+            // الإيصال: للتاجر رصيدٌ بالريال والسعوديّ والدولار والدرهم،
+            // يقبض بها ويصرف بينها. والمسارُ يُعلَن هنا فيُحرَس بالباقة في
+            // الخادم (`EnsureCapability`) لا بإخفاء الشاشة.
             C::make(A::F_MULTI_CURRENCY)
-                ->nameAr('تعدد العملات')
+                ->nameAr('محافظ متعددة العملات')
                 ->group('التقارير')->icon('currency_exchange')
-                ->minPlan(A::PLAN_MERCHANT_PRO)->screen('/currencies'),
+                ->minPlan(A::PLAN_ENTERPRISE)
+                ->routes(['merchant/wallets', 'merchant/wallets/convert'])
+                ->screen('/currencies'),
 
             C::make(A::F_INSTALLMENTS)
                 ->nameAr('الأقساط')
                 ->group('التقارير')->icon('event_repeat')
-                ->minPlan(A::PLAN_MERCHANT_PRO)->screen('/installments'),
+                ->minPlan(A::PLAN_ENTERPRISE)->screen('/installments'),
         ];
     }
 
@@ -541,6 +721,19 @@ final class CapabilityRegistry
                 ->permissions(['fuel.pump.*'])
                 ->routes(['fuel/tanks', 'fuel/pumps', 'fuel/nozzles'])
                 ->screen('/fuel/tanks'),
+
+            // AMIAL-FUEL-PAID-001 — **مساراتُهما تُعلَن، وكانتا بلا إعلان.**
+            // فكانتا تُقرآن «تُباع ولا نقطةَ نهايةٍ لها ولا حارس»، وقِيس
+            // بالتشغيل أنّ الباقة المجّانيّة تفتحهما بـ٢٠٠.
+            C::make(A::F_FUEL_PRODUCTS)->nameAr('منتجات الوقود')->group('الوقود')
+                ->icon('inventory_2')->minPlan(A::PLAN_BUSINESS)
+                ->routes(['fuel/products', 'fuel/products/{id}/price'])
+                ->businessTypes([A::BIZ_FUEL]),
+            C::make(A::F_FUEL_COMPANIES)->nameAr('شركات الوقود')->group('الوقود')
+                ->icon('business')->minPlan(A::PLAN_BUSINESS)
+                ->routes(['fuel/companies', 'fuel/companies/{id}/payment'])
+                ->businessTypes([A::BIZ_FUEL]),
+            C::make(A::F_FUEL_SHIFTS)->nameAr('ورديات المحطة')->group('الوقود')->icon('schedule')->minPlan(A::PLAN_FREE)->businessTypes([A::BIZ_FUEL]),
 
             C::make(A::F_FUEL_VARIANCE)
                 ->nameAr('مصالحة المخزون الرطب')
@@ -569,19 +762,83 @@ final class CapabilityRegistry
             C::make(A::F_PHARMACY_BATCHES)
                 ->nameAr('الدفعات وتواريخ الصلاحية')
                 ->group('الصيدلية')->icon('event_busy')
-                ->minPlan(A::PLAN_STARTER)
+                ->minPlan(A::PLAN_FREE)
                 ->businessTypes([A::BIZ_PHARMACY])
                 ->routes(['pharmacy/products/{id}/batches']),
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-PRODUCT-QUOTA-004 — **حدُّ الأصناف كان مجهولاً في
+            // بابِ الصيدليّة.**
+            //
+            // قِيس بالتشغيل على صيدليّةٍ في باقة البداية:
+            //
+            //     المحرّك ① (UsageLimitService)  ← يعدّها بـ`max_products`
+            //     المحرّك ② (EntitlementService) ← `not_applicable` · usage: null
+            //
+            // فقدرةُ «الأصناف» العامّة ليست للصيدليّة (لها قدرتُها)،
+            // **وقدرتُها لم تكن تحمل الحدّ**. فالصيدليّةُ محدودةٌ في
+            // بابٍ ولا يُقاس حدُّها في الآخر — ومن لم يُقَس حدُّه لم
+            // يُنذَر باقترابه منه، ولا تُعرَض له ترقيةٌ حين يبلغه.
+            //
+            // **والحدُّ واحدٌ فيُعلَن واحداً**: العدُّ نفسُه في الطرفين
+            // (`countProducts(…, 'auto')` يقرأ جدولَ القطاع).
+            // ══════════════════════════════════════════════════════════
+            C::make(A::F_PHARMACY_PRODUCTS)->nameAr('أصناف الصيدلية')->group('الصيدلية')
+                ->icon('medication')->minPlan(A::PLAN_FREE)
+                ->limit('max_products')
+                ->businessTypes([A::BIZ_PHARMACY]),
+            C::make(A::F_PHARMACY_ALERTS)
+                ->nameAr('تنبيهات الصيدلية')
+                ->descAr('تنبيهات قرب انتهاء الصلاحية ونفاد الدفعات، مع فحص وإغلاق آمن للتنبيه.')
+                ->group('الصيدلية')->icon('warning_amber')
+                ->minPlan(A::PLAN_FREE)
+                ->routes(['pharmacy/alerts'])
+                ->screen('/pharmacy/alerts')
+                ->businessTypes([A::BIZ_PHARMACY]),
+            C::make(A::F_PHARMACY_CUSTOMERS)
+                ->nameAr('عملاء الصيدلية')
+                ->descAr('ملف صحي للعميل: حساسية وأدوية مزمنة وملاحظات تُراجع قبل بيع الدواء.')
+                ->group('الصيدلية')->icon('people')
+                ->minPlan(A::PLAN_BUSINESS)
+                ->permissions(['pharmacy.patient.*'])
+                ->routes(['pharmacy/customers'])
+                ->screen('/pharmacy/customers')
+                ->businessTypes([A::BIZ_PHARMACY]),
 
             C::make(A::F_PHARMACY_PRESCRIPTIONS)
                 ->nameAr('الوصفات الطبية')
                 ->descAr('وسمُ الصنف «يحتاج وصفة» فيُوقَف بيعُه بلا رقمها، '
                     . 'وتوثيقُ الطبيب وتاريخِ الوصفة على البيعة.')
                 ->group('الصيدلية')->icon('description')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_BUSINESS)
                 ->businessTypes([A::BIZ_PHARMACY])
                 ->routes(['pharmacy/products', 'pharmacy/sales'])
                 ->screen('/pharmacy'),
+
+            C::make(A::F_PHARMACY_SUBSTITUTIONS)
+                ->nameAr('بدائل الدواء المتوافقة')
+                ->descAr('يعرض البدائل المحلية فقط عند تطابق المادة الفعالة والتركيز والشكل الدوائي؛ القرار للصيدلي ولا يُستبدل الدواء تلقائياً.')
+                ->group('الصيدلية')->icon('compare_arrows')
+                ->minPlan(A::PLAN_BUSINESS)
+                ->routes(['pharmacy/products/{id}/alternatives'])
+                // **ولا `screen()` لها** — مسارُها فعلٌ على صنفٍ بعينه
+                // (`{id}/alternatives`)، فلا وجهةَ مستقلّةً له. وإعلانُ
+                // شاشةٍ يرسم زرّاً باسم «البدائل» يفتح شاشةَ الأصناف
+                // نفسَها: **يعمل ويفتح غيرَ ما يقول**. وحرسُها قائمٌ حيث
+                // تُستعمَل (`has('pharmacy_substitutions')` في لوحة
+                // الصيدليّة، سطرا ٣١٣ و٣٤٤).
+                ->businessTypes([A::BIZ_PHARMACY]),
+
+            C::make(A::F_PHARMACY_BATCH_DISPOSITION)
+                ->nameAr('إرجاع وإتلاف الدفعات')
+                ->descAr('إخراج الدفعة المنتهية أو غير القابلة للبيع من رصيد المخزون مع سبب وموظف وتاريخ محفوظين للتدقيق.')
+                ->group('الصيدلية')->icon('inventory_2')
+                ->minPlan(A::PLAN_BUSINESS)
+                ->permissions(['pharmacy.batch.dispose'])
+                ->routes(['pharmacy/batches/{id}/dispose'])
+                // **ولا `screen()` لها** — كسابقتها: `{id}/dispose` فعلٌ
+                // على دفعةٍ بعينها. وحرسُها في موضع عمله (سطر ٤٢٧).
+                ->businessTypes([A::BIZ_PHARMACY]),
 
             C::make(A::F_WHOLESALE_INVOICES)
                 ->nameAr('فواتير الجملة')
@@ -589,16 +846,63 @@ final class CapabilityRegistry
                 ->minPlan(A::PLAN_FREE)
                 ->businessTypes([A::BIZ_WHOLESALE])->screen('/wholesale'),
 
+            C::make(A::F_WHOLESALE_COLLECTIONS)->nameAr('تحصيلات الجملة')->group('الجملة')->icon('payments')->minPlan(A::PLAN_FREE)->businessTypes([A::BIZ_WHOLESALE]),
+
+            // AMIAL-WHOLESALE-GUIDE-001 — **قدرةٌ تُباع بلا شاشةٍ معلَنة.**
+            //
+            // كانت بلا `screen()`، فتُعرَض في «مزايا باقتي» ولا تُفتح —
+            // و`CapabilityScreens` لا مدخلَ لها. ودليلُ تشغيل الجملة
+            // يجعل «التسعير» **قسماً قائماً بذاته** في القائمة الجانبيّة:
+            // «قوائم أسعار وشرائح كمية وأسعار شركات».
             C::make(A::F_WHOLESALE_MULTI_PRICING)
                 ->nameAr('تسعير متعدد المستويات')
+                ->descAr('سعر عميل/شركة، وسعر كمية، وشرائح تُطبَّق على الفاتورة — '
+                    . 'ولا يعدّل الكاشيرُ السعرَ ما لم تُمنَح له كتابةٌ صريحة.')
                 ->group('الجملة')->icon('price_change')
-                ->minPlan(A::PLAN_MERCHANT_PRO)
+                ->minPlan(A::PLAN_BUSINESS)
                 ->businessTypes([A::BIZ_WHOLESALE])
+                ->screen('/wholesale/pricing')
                 ->routes(['wholesale/price-tiers']),
 
             C::make(A::F_RESTAURANT_TABLES)
-                ->nameAr('الطاولات والطلبات')
+                ->nameAr('طاولات المطعم')
+                ->descAr('توزيعُ الطاولات وحالتُها — مشغولةٌ أو شاغرة.')
                 ->group('المطاعم')->icon('table_restaurant')
+                ->minPlan(A::PLAN_FREE)
+                ->businessTypes([A::BIZ_RESTAURANT])->screen('/restaurant'),
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-RESTAURANT-GATE-002 — **القطاعُ أُصلح في جهةِ المنح
+            // وحدَها، وبقي نصفَ مُصلَح سنةً كاملةً في جهةِ العرض.**
+            //
+            // كان القطاعُ يمنح `restaurant_tables` ولا يمنح الطلباتِ ولا
+            // المطبخ، فصُحّح المنحُ (‏`AccessPresets`) — **ولم يُصحَّح
+            // الكتالوج**. وأثرُ ذلك ثلاثةٌ، كلُّها صامتة:
+            //
+            //   ① `manifestFor()` تمرّ على الكتالوج وحدَه، فالقدرتان
+            //      **لا تظهران في «خدماتي» إطلاقاً** وإن كانتا ممنوحتين.
+            //   ② `RestaurantController` يحرس القطاعَ كلَّه — الطاولاتِ
+            //      نفسَها — بـ`F_RESTAURANT_ORDERS`. **والكتالوجُ لا
+            //      يعرفها**، فمصفوفةُ الإدارة تُبدّل `restaurant_tables`
+            //      وهي قدرةٌ **لا يسألها الخادمُ أبداً**: يُقفلها المديرُ
+            //      فلا يُقفَل شيء، ويظنّ اللوحةَ معطّلة.
+            //   ③ وصفحةُ التسعير تعِد بـ«الطاولات والطلبات» في مدخلٍ
+            //      واحدٍ اسمُه يذكر الطلباتِ ورمزُه لا يمنحها.
+            //
+            // **والاسمُ صار يطابق رمزَه** — مدخلٌ اسمُه يعد بما لا يمنحه
+            // رمزُه هو الكذبةُ نفسُها بصياغةٍ ألطف.
+            // ══════════════════════════════════════════════════════════
+            C::make(A::F_RESTAURANT_ORDERS)
+                ->nameAr('طلبات المطعم')
+                ->descAr('فتحُ الطلب على الطاولة وتعديلُه وإقفالُه بالفاتورة.')
+                ->group('المطاعم')->icon('receipt_long')
+                ->minPlan(A::PLAN_FREE)
+                ->businessTypes([A::BIZ_RESTAURANT])->screen('/restaurant'),
+
+            C::make(A::F_RESTAURANT_KITCHEN)
+                ->nameAr('شاشة المطبخ')
+                ->descAr('ما يُحضَّر الآن ومتى جهز — بلا ورقٍ بين الصالة والمطبخ.')
+                ->group('المطاعم')->icon('soup_kitchen')
                 ->minPlan(A::PLAN_FREE)
                 ->businessTypes([A::BIZ_RESTAURANT])->screen('/restaurant'),
         ];

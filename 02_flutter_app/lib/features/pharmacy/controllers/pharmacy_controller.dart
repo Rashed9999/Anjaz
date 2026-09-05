@@ -12,6 +12,9 @@ class PharmacyController extends GetxController implements GetxService {
   final Rx<Map<String, dynamic>?> dashboardData = Rx<Map<String, dynamic>?>(null);
 
   final RxList<Map<String, dynamic>> products = <Map<String, dynamic>>[].obs;
+  final RxList<Map<String, dynamic>> categories = <Map<String, dynamic>>[].obs;
+  final RxList<Map<String, dynamic>> similarProducts = <Map<String, dynamic>>[].obs;
+  final RxList<Map<String, dynamic>> alternatives = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> batches = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> customers = <Map<String, dynamic>>[].obs;
   final RxList<Map<String, dynamic>> sales = <Map<String, dynamic>>[].obs;
@@ -68,6 +71,44 @@ class PharmacyController extends GetxController implements GetxService {
   Future<bool> updateProduct(int id, Map<String, dynamic> data) async =>
       _doAndReload(() => repo.updateProduct(id, data), () => loadProducts());
 
+  Future<void> loadCategories() async {
+    try {
+      final r = await repo.listCategories();
+      if (_ok(r)) {
+        final list = (r.body['meta']?['categories'] ?? []) as List;
+        categories.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> loadSimilarProducts(String query, {int? categoryId}) async {
+    if (query.trim().length < 2) { similarProducts.clear(); return; }
+    try {
+      final r = await repo.similarProducts(query.trim(), categoryId: categoryId);
+      if (_ok(r)) {
+        final list = (r.body['meta']?['products'] ?? []) as List;
+        similarProducts.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)));
+      }
+    } catch (_) {}
+  }
+
+  Future<bool> loadAlternatives(int productId) async {
+    try {
+      isLoading.value = true;
+      lastError.value = '';
+      final r = await repo.alternatives(productId);
+      if (_ok(r)) {
+        final list = (r.body['meta']?['alternatives'] ?? []) as List;
+        alternatives.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
+        return true;
+      }
+      lastError.value = _msg(r) ?? 'تعذّر تحميل البدائل';
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    } finally { isLoading.value = false; }
+    return false;
+  }
+
   // ============ Batches ============
 
   Future<void> loadBatches(int productId) async {
@@ -85,6 +126,18 @@ class PharmacyController extends GetxController implements GetxService {
       _doAndReload(() => repo.addBatch(productId, data), () async {
         await loadBatches(productId);
         await loadProducts(); // current_stock تحدّث
+      });
+
+  Future<bool> recallBatch(int productId, int batchId, String reason) async =>
+      _doAndReload(() => repo.recallBatch(batchId, reason), () async {
+        await loadBatches(productId);
+        await loadProducts();
+      });
+
+  Future<bool> disposeBatch(int productId, int batchId, String type, String reason) async =>
+      _doAndReload(() => repo.disposeBatch(batchId, type, reason), () async {
+        await loadBatches(productId);
+        await loadProducts();
       });
 
   // ============ Customers ============
@@ -185,12 +238,16 @@ class PharmacyController extends GetxController implements GetxService {
   /// تسجيل البيع من السلّة الحالية.
   Future<bool> recordCurrentSale({
     required String paymentMethod,
+    String? customerPhone,
+    String? customerName,
     String? paidTransactionId,
     String? prescriptionNumber,
     String? prescribingDoctor,
     String? discountAmount,
     List<String>? acknowledgedWarnings,
     String? notes,
+    // AMIAL-CASH-TENDERED-001 — يُحفَظ مع البيعة ليُطبَع على الإيصال.
+    double? amountReceived,
   }) async {
     if (cart.isEmpty) {
       lastError.value = 'السلّة فارغة';
@@ -206,8 +263,14 @@ class PharmacyController extends GetxController implements GetxService {
       'items': items,
       'payment_method': paymentMethod,
       if (selectedCustomer.value != null) 'customer_id': selectedCustomer.value!['id'],
+      if (customerPhone != null && customerPhone.trim().isNotEmpty)
+        'customer_phone': customerPhone.trim(),
+      if (customerName != null && customerName.trim().isNotEmpty)
+        'customer_name': customerName.trim(),
       if (paidTransactionId != null && paidTransactionId.isNotEmpty)
         'paid_transaction_id': paidTransactionId,
+      if (amountReceived != null && amountReceived > 0)
+        'amount_received': amountReceived.toStringAsFixed(2),
       if (prescriptionNumber != null && prescriptionNumber.isNotEmpty)
         'prescription_number': prescriptionNumber,
       if (prescribingDoctor != null && prescribingDoctor.isNotEmpty)
@@ -249,6 +312,22 @@ class PharmacyController extends GetxController implements GetxService {
         sales.assignAll(list.map((e) => Map<String, dynamic>.from(e as Map)).toList());
       }
     } catch (_) {} finally { isLoading.value = false; }
+  }
+
+  /// لا تعتمد بطاقة السجل على البيانات المختصرة؛ تفصيلها يُقرأ عند الضغط
+  /// ليبقى مرجع الفاتورة والوصفة والتشغيلة من الخادم.
+  Future<Map<String, dynamic>?> loadSaleDetail(String ulid) async {
+    try {
+      final r = await repo.showSale(ulid);
+      if (_ok(r)) {
+        final sale = r.body['meta']?['sale'];
+        return sale is Map ? Map<String, dynamic>.from(sale) : null;
+      }
+      lastError.value = _msg(r) ?? 'تعذّر تحميل تفاصيل العملية';
+    } catch (_) {
+      lastError.value = 'خطأ في الشبكة';
+    }
+    return null;
   }
 
   // ============ Alerts ============

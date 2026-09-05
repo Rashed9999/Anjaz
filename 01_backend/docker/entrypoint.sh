@@ -112,12 +112,25 @@ fi
 # نولّدها هنا (قبل بدء الخدمة) لا في خلفية مربوطة بالـ DB، فتكون جاهزة قبل
 # أوّل طلب دخول (حلّ حارس api يحمّل المفتاح العامّ؛ غيابه = 500). إن وُجدت
 # (مضبوطة كمتغيّرات بيئة) لا تُلمَس.
-if [ ! -f storage/oauth-private.key ] || [ ! -f storage/oauth-public.key ]; then
-    echo "🔑 توليد مفاتيح Passport (RSA) قبل بدء الخدمة..."
+# AMIAL-PASSPORT-KEYS-PERSIST-001 — **المفاتيحُ في الحجم الدائم.**
+# كانت في `storage/` وهو **ليس** على حجمٍ دائم (الحجمُ على `storage/app`)،
+# فتُولَّد جديدةً مع كلّ نشرة **فيبطل كلُّ رمزِ دخولٍ سابق** ويُطرَد كلُّ
+# المستخدمين بـ«انتهت الجلسة». وموضعُها الآن `storage/app/passport`
+# (‏`Passport::loadKeysFrom` في `AuthServiceProvider`).
+#
+# **وتُنقَل القديمةُ إن وُجدت** — فترحيلٌ يُبقي الرموزَ الحاليّةَ صالحة،
+# ونشرةٌ واحدةٌ بلا طردٍ خيرٌ من نشرةٍ تطرد الجميع.
+mkdir -p storage/app/passport
+if [ -f storage/oauth-private.key ] && [ ! -f storage/app/passport/oauth-private.key ]; then
+    echo "🔑 ترحيل مفاتيح Passport إلى الحجم الدائم..."
+    mv storage/oauth-private.key storage/oauth-public.key storage/app/passport/ 2>/dev/null || true
+fi
+if [ ! -f storage/app/passport/oauth-private.key ] || [ ! -f storage/app/passport/oauth-public.key ]; then
+    echo "🔑 توليد مفاتيح Passport (لم تكن موجودة)..."
     php artisan passport:keys --force 2>&1 | tail -1 || true
 fi
-chmod 600 storage/oauth-private.key storage/oauth-public.key 2>/dev/null || true
-chown www-data:www-data storage/oauth-*.key 2>/dev/null || true
+chmod 600 storage/app/passport/oauth-*.key 2>/dev/null || true
+chown www-data:www-data storage/app/passport/oauth-*.key 2>/dev/null || true
 
 # ── مفاتيح تشفير PII ──────────────────────────────────
 # AMIAL-FIX: أُزيل التوليد العشوائي (كان يكسر فهارس البحث المُعمّاة كل نشر
@@ -335,7 +348,28 @@ if [ -z "$EFFECTIVE_DEBUG" ] && [ -f "$ENV_FILE" ]; then
         | tail -1 | cut -d= -f2- | tr -d '"'"'"' \r')
 fi
 
-if [ "$EFFECTIVE_DEBUG" = "true" ] && [ "${AMIAL_ALLOW_DEBUG:-false}" != "true" ]; then
+# ══════════════════════════════════════════════════════════════════════
+# AMIAL-DEBUG-ESCAPE-001 — **والمنفذُ يُغلَق في الإنتاج.**
+#
+# `AMIAL_ALLOW_DEBUG=true` كان يفتح الحاجزَ **في أيّ بيئة**، بما فيها
+# `APP_ENV=production`. ومنفذٌ يُفتح مرّةً لتجربةٍ عاجلة يبقى مفتوحاً:
+# لا شيءَ يُغلقه، ولا شيءَ يذكّر به، **وصفحةُ الخطأ تُسرّب مساراتِ
+# الملفّات ونصوصَ الاستعلامات لأيّ مستخدمٍ يستقبل ٥٠٠**.
+#
+# فصار المنفذُ لغيرِ الإنتاج وحدَه. وبيئةُ الديمو المحلّيّةُ لا تضبط
+# `APP_ENV=production` أصلاً، فلا يمسّها هذا.
+#
+# **وبهذا يصير الشرطُ مضموناً بالبناء لا بالتذكُّر**: حاويةُ إنتاجٍ
+# تعمل ⇒ التنقيحُ مغلقٌ حتماً. ولا يبقى «اضبطه ولا تنسَ».
+# ══════════════════════════════════════════════════════════════════════
+DEBUG_ESCAPE="${AMIAL_ALLOW_DEBUG:-false}"
+if [ "${APP_ENV:-}" = "production" ] && [ "$DEBUG_ESCAPE" = "true" ]; then
+    echo "⚠️  AMIAL_ALLOW_DEBUG مضبوطةٌ في بيئةِ إنتاج — **وتُتجاهَل**."
+    echo "   منفذُ التنقيح لبيئات التطوير وحدَها."
+    DEBUG_ESCAPE="false"
+fi
+
+if [ "$EFFECTIVE_DEBUG" = "true" ] && [ "$DEBUG_ESCAPE" != "true" ]; then
     echo "╔══════════════════════════════════════════════════════════╗"
     echo "║  ⛔ APP_DEBUG=true — والخدمةُ لن تبدأ                     ║"
     echo "╚══════════════════════════════════════════════════════════╝"
@@ -345,6 +379,7 @@ if [ "$EFFECTIVE_DEBUG" = "true" ] && [ "${AMIAL_ALLOW_DEBUG:-false}" != "true" 
     echo ""
     echo "   الإصلاح: اضبط APP_DEBUG=false في متغيّرات البيئة ثمّ أعِد النشر."
     echo "   وإن كانت هذه بيئةَ تطويرٍ عن قصد: AMIAL_ALLOW_DEBUG=true"
+    echo "   (ولا تعمل هذه في APP_ENV=production — المنفذُ مغلقٌ هناك.)"
     exit 1
 fi
 

@@ -393,7 +393,7 @@ class PaymentRequestService
     }
 
     /** الرسم والإجمالي اللذان يجب أن يراهما المستلم قبل الموافقة. */
-    public function directQuote(User $payer, PaymentRequest $request): array
+    private function directQuote(User $payer, PaymentRequest $request): array
     {
         if (!$request->isDirect() || $request->recipient_user_id !== $payer->id) {
             throw new InvalidArgumentException('هذا الطلب ليس موجّهاً إليك');

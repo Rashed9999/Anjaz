@@ -10,13 +10,15 @@ import 'package:amial_pay/features/wholesale/screens/wholesale_screens.dart';
 import 'package:amial_pay/features/restaurant/screens/restaurant_screen.dart';
 import 'package:amial_pay/features/access/screens/web_portal_notice_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_adaptive_shell.dart';
+import 'package:amial_pay/features/merchant/screens/pos_employee_home_screen.dart';
+import 'package:amial_pay/features/entitlements/capability_screens.dart';
 
 /// CRITICAL-001 — Home Dispatcher.
 ///
 /// نقطة الدخول الموحّدة بعد تسجيل الدخول.
 /// يفحص access ويعرض الشاشة المناسبة:
 ///   - تاجر بدون business_type → BusinessTypeSelectionScreen (إلزامي)
-///   - Fuel → FuelStationDashboardScreen
+///   - Fuel → FuelOwnerConsoleScreen
 ///   - Pharmacy → PharmacyDashboardScreen
 ///   - Quick Sale → MerchantQuickSaleHomeScreen
 ///   - Retail/Wholesale → MerchantRetailHomeScreen
@@ -64,12 +66,38 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
         return widget.userHomeFallback;
       }
 
-      // 3) تاجر لم يختر نوع نشاطه → إجبار الاختيار
+      // ══════════════════════════════════════════════════════════════
+      // 3) موظف POS لا يرث لوحة المالك ولا شاشات العميل.
+      //
+      // **واستُعيدت وجهتُه بعد أن استُبدلت.** بناها `a3e14e1` في ٢٩
+      // أغسطس ووصلها هنا، فاستبدلها `797638b` («fix: separate customer
+      // and merchant surfaces») في ١ سبتمبر بشاشةٍ من ستّةٍ وعشرين سطراً
+      // **تُمرّر إلى شاشة البيع مباشرةً** — فبقيت الأولى (٤٤٣ سطراً)
+      // مبنيّةً بلا مُنادٍ واحدٍ في المشروع كلِّه.
+      //
+      // **وما فقده الكاشيرُ مقيسٌ لا مقدَّر** — ثمانيةُ أبوابٍ لا يبلغها
+      // من شاشة البيع: **إقفالُ الورديّة** (`CashierShiftScreen`)
+      // وتقريرُها والمرتجعاتُ والإيصالاتُ والأصنافُ وعملاءُ الآجل
+      // والإشعاراتُ وملفُّه. **وأثقلُها الأوّل: كاشيرٌ لا يستطيع إقفال
+      // ورديّته** — وذاك آخرُ ما يفعله في يومه.
+      //
+      // ولا يقول ذلك مُصرِّفٌ ولا محلِّل: الشاشتان تُصرَّفان، والمهجورةُ
+      // تكتب في توثيقها «يُوصل إليه من `HomeDispatcherScreen`» وهي غيرُ
+      // موصولة. (القاعدة الثانية عشرة: صفحةٌ لا يُوصل إليها ليست مبنيّة.)
+      //
+      // **ويُسأل `isPosStaff`** — يقرأ `actor` المصرَّحَ به من الخادم،
+      // لا `role.value == 'pos'` وهو دورٌ ليس في `ALL_ROLES` أصلاً.
+      // ══════════════════════════════════════════════════════════════
+      if (_access.isPosStaff) {
+        return const PosEmployeeHomeScreen();
+      }
+
+      // 4) تاجر لم يختر نوع نشاطه → إجبار الاختيار
       if (_access.needsBusinessTypeSelection) {
         return const BusinessTypeSelectionScreen(mandatory: true);
       }
 
-      // 4) Route حسب الدور + business_type
+      // 5) Route حسب الدور + business_type
       // Merchant + fuel → **لوحة المحطة** (AMIAL-FUEL-VERTICAL-001 · ٨)
       //
       // وكانت تقود إلى لوحةٍ واحدةٍ للجميع، فيرى الكاشيرُ ما يراه المالك.
@@ -103,6 +131,27 @@ class _HomeDispatcherScreenState extends State<HomeDispatcherScreen> {
       // Merchant + restaurant → operational restaurant workspace.
       if (_access.isMerchant && _access.isRestaurant) {
         return _merchantShell(const RestaurantScreen());
+      }
+
+      // ══════════════════════════════════════════════════════════════
+      // AMIAL-VERTICAL-COMPOSE-001 — **قطاعٌ أنشأته الإدارةُ يقول أين
+      // يبدأ، فلا يهبط على شاشةٍ عامّة.**
+      //
+      // وهذا هو السطرُ الذي يجعل «إضافةَ قطاعٍ من اللوحة» تصل التاجرَ
+      // شاشةً لا قائمةَ صلاحيّاتٍ فقط: الخادمُ يرسل رمزَ قدرةٍ في
+      // `business_type_home`، و`CapabilityScreens` تعرف شاشتَها منذ
+      // بُنيت. **فهو آخرُ قطاعٍ يحتاج تعديلاً في Dart** — ما بعده
+      // بياناتٌ في جدول.
+      //
+      // وبلا هذا يهبط تاجرُ المخبز على الشاشة الاحتياطيّة العامّة:
+      // حسابٌ يعمل، وقدراتٌ مفتوحةٌ، وواجهةٌ لا تدلّ على شيء.
+      if (_access.isMerchant && !_access.isBuiltInVertical) {
+        final home = _access.businessTypeHome.value;
+        final builder = home == null ? null : CapabilityScreens.screenFor(home);
+
+        if (builder != null) {
+          return _merchantShell(builder());
+        }
       }
 
       // أي نشاط تاجر جديد لم يُضف له Dispatcher متخصص بعد يحصل على القائمة

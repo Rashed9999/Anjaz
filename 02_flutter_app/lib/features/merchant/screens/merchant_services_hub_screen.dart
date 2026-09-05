@@ -6,6 +6,8 @@ import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 // شاشات الخدمات
+import 'package:amial_pay/features/merchant/screens/financial_truth_report_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_advanced_reports_screen.dart';
 import 'package:amial_pay/features/merchant/screens/profit_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
@@ -31,8 +33,8 @@ import 'package:amial_pay/features/merchant/screens/inventory_audit_screen.dart'
 import 'package:amial_pay/features/merchant/screens/stock_alerts_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart';
-import 'package:amial_pay/features/merchant/screens/cashier_report_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_transactions_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 
 /// AMIAL-MERCHANT-SERVICES-HUB-001 — «مركز خدمات التاجر».
 ///
@@ -49,7 +51,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('خدمات التاجر'),
+        title: Text('خدمات التاجر'.tr),
       ),
       body: Obx(() {
         final planLabel = access.subscriptionPlanLabel.value ?? _planName(access.subscriptionPlan.value);
@@ -72,15 +74,18 @@ class MerchantServicesHubScreen extends StatelessWidget {
         bool fitsBusiness(_Svc s) =>
             s.onlyFor.isEmpty || (biz != null && s.onlyFor.contains(biz));
 
-        final open = _catalog.where((s) => access.has(s.code)).toList();
-        final closed = _catalog.where((s) => !access.has(s.code));
+        // لا نعرض خدمة قطاع آخر كمفتوحة حتى لو وصلت قائمة قديمة من الخادم؛
+        // الحارس في الخادم هو الحماية، وهذه طبقة منع التشويش في الواجهة.
+        final open = _catalog.where((s) => access.has(s.code) && fitsBusiness(s)).toList();
+        final closed = _catalog.where((s) => !access.has(s.code) || !fitsBusiness(s));
         final upgradable = closed.where(fitsBusiness).toList();
         final foreign = closed.where((s) => !fitsBusiness(s)).toList();
 
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _planHeader(planLabel, open.length, _catalog.length - foreign.length),
+            _planHeader(planLabel, open.length, _catalog.length - foreign.length,
+                isTopPlan: access.isEnterprisePlan),
             const SizedBox(height: 18),
 
             if (open.isNotEmpty) ...[
@@ -93,9 +98,9 @@ class MerchantServicesHubScreen extends StatelessWidget {
             if (upgradable.isNotEmpty) ...[
               _sectionTitle('متاح بترقية الباقة (${upgradable.length})', Icons.lock_outline),
               const SizedBox(height: 4),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(bottom: 10),
-                child: Text('اضغط أي خدمة لترى ما تفعله وباقتها',
+                child: Text('اضغط أي خدمة لترى ما تفعله وباقتها'.tr,
                     style: TextStyle(fontSize: 11.5, color: AmialColors.textMuted)),
               ),
               _grid(context, access, upgradable),
@@ -108,8 +113,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: Text(
-                    'هذه الخدمات مصمَّمة لنشاطات غير ${access.businessTypeLabel.value ?? 'نشاطك'} '
-                    '— لا تفتحها ترقية الباقة.',
+                    'هذه الخدمات مصمَّمة لنشاطات غير ${access.businessTypeLabel.value ?? 'نشاطك'} — لا تفتحها ترقية الباقة.',
                     style: const TextStyle(fontSize: 11.5, color: AmialColors.textMuted)),
               ),
               _grid(context, access, foreign),
@@ -128,7 +132,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
                   const Icon(Icons.verified, color: AmialColors.success),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text('باقتك تفتح كل الخدمات — لا شيء محجوب عنك.',
+                    child: Text('باقتك تفتح كل الخدمات — لا شيء محجوب عنك.'.tr,
                         style: TextStyle(
                             fontSize: 13, fontWeight: FontWeight.w600,
                             color: Colors.green.shade900)),
@@ -156,7 +160,8 @@ class MerchantServicesHubScreen extends StatelessWidget {
   }
 
   // ── بطاقة الباقة الحالية ──────────────────────────────────────────
-  Widget _planHeader(String planLabel, int unlocked, int total) {
+  Widget _planHeader(String planLabel, int unlocked, int total,
+      {required bool isTopPlan}) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -172,20 +177,28 @@ class MerchantServicesHubScreen extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('باقتك الحالية', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              Text('باقتك الحالية'.tr, style: TextStyle(color: Colors.white70, fontSize: 12)),
               Text('باقة $planLabel',
                   style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             ]),
           ),
-          TextButton(
-            onPressed: () => Get.to(() => const PlansCatalogScreen()),
-            style: TextButton.styleFrom(
-              backgroundColor: AmialColors.yellow,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          // AMIAL-PLAN-TRUTH-001 — **ولا يُدعى إلى ترقيةٍ من هو في أعلاها.**
+          //
+          // هذا الملفُّ نفسُه يقول في قسم المقفلات: «صاحبُ المحطّة على
+          // الباقة المؤسسيّة يرى دعوةً لترقيةٍ لا وجودَ لها، ثمّ يرقّي
+          // فلا تُفتح — **وعدٌ لا يستطيع النظامُ الوفاءَ به**». والقاعدةُ
+          // طُبّقت هناك **ونُسيت هنا**، فبقي الزرُّ في الترويسة يدعو
+          // صاحبَ «مؤسسة» إلى ما فوقها ولا شيءَ فوقها.
+          if (!isTopPlan)
+            TextButton(
+              onPressed: () => Get.to(() => const PlansCatalogScreen()),
+              style: TextButton.styleFrom(
+                backgroundColor: AmialColors.yellow,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+              child: Text('ترقية'.tr, style: TextStyle(fontWeight: FontWeight.bold)),
             ),
-            child: const Text('ترقية', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
         ]),
         const SizedBox(height: 14),
         ClipRRect(
@@ -198,8 +211,29 @@ class MerchantServicesHubScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        Text('مفتوح لديك $unlocked من $total خدمة',
+        // ══════════════════════════════════════════════════════════
+        // AMIAL-PLAN-TRUTH-001 — **رقمان لشيءٍ واحد، وكلاهما صحيح.**
+        //
+        // أرسل صاحبُ المشروع صورتين: «مزايا باقتي» تقول «٤٩ متاحة»،
+        // وهذه تقول «٢٩ من ٢٩». **وليس أحدُهما خطأً في الحساب**:
+        //
+        //   · «مزايا باقتي» تقرأ `/me/entitlements` ← `CapabilityRegistry`
+        //     في الخادم — **٧١ قدرة**.
+        //   · وهذه تقرأ `_catalog` **مكتوباً يدويّاً في هذا الملفّ** —
+        //     ٣٠ عنصراً، وهي ما لها شاشةٌ في التطبيق.
+        //
+        // فالعطلُ أنّ الاثنين يسمّيان ما يعدّانه «خدمة». **فيُسمّى كلٌّ
+        // باسمه**، ويُقال أين تُقرأ القائمةُ الكاملة — ولا يُترك القارئُ
+        // يوفّق بين رقمين لا يلتقيان.
+        //
+        // (والقائمةُ المكتوبةُ تشيخ يومَ تُضاف قدرةٌ في الخادم ولا تظهر
+        // هنا أبداً — وهو ما تحرسه `MerchantServicesCatalogGuardTest`.)
+        // ══════════════════════════════════════════════════════════
+        Text('مفتوح لديك $unlocked من $total شاشة في التطبيق',
             style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        const SizedBox(height: 2),
+        Text('وقائمةُ مزايا باقتك كاملةً في «مزايا باقتي».'.tr,
+            style: TextStyle(color: Colors.white60, fontSize: 11)),
       ]),
     );
   }
@@ -267,10 +301,10 @@ class MerchantServicesHubScreen extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
               foreign
-                  ? 'لنشاط آخر'
+                  ? 'لنشاط آخر'.tr
                   : locked
                       ? 'باقة ${s.planLabel}'
-                      : 'مفتوحة',
+                      : 'مفتوحة'.tr,
               style: TextStyle(
                   fontSize: 10.5, fontWeight: FontWeight.bold,
                   color: foreign
@@ -328,10 +362,10 @@ class MerchantServicesHubScreen extends StatelessWidget {
                   const SizedBox(width: 4),
                   Text(
                       foreign
-                          ? 'ليست لنشاطك'
+                          ? 'ليست لنشاطك'.tr
                           : locked
                               ? 'متوفّرة في باقة ${s.planLabel}'
-                              : 'مفتوحة في باقتك',
+                              : 'مفتوحة في باقتك'.tr,
                       style: TextStyle(
                           fontSize: 12, fontWeight: FontWeight.w600,
                           color: foreign
@@ -361,7 +395,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
                 Expanded(
                   child: Text(
                       'هذه الخدمة مخصَّصة لـ${_bizNames(s.onlyFor)}. '
-                      'ترقية الباقة لا تفتحها — تُفتح بتغيير نوع النشاط.',
+                      'ترقية الباقة لا تفتحها — تُفتح بتغيير نوع النشاط.'.tr,
                       style: const TextStyle(fontSize: 13, height: 1.5)),
                 ),
               ]),
@@ -380,7 +414,7 @@ class MerchantServicesHubScreen extends StatelessWidget {
             FilledButton.icon(
               onPressed: () { Navigator.pop(ctx); Get.to(s.builder!); },
               icon: const Icon(Icons.arrow_back),
-              label: const Text('افتح الخدمة'),
+              label: Text('افتح الخدمة'.tr),
               style: FilledButton.styleFrom(
                 backgroundColor: AmialColors.primary,
                 minimumSize: const Size.fromHeight(52),
@@ -393,10 +427,10 @@ class MerchantServicesHubScreen extends StatelessWidget {
                 color: AmialColors.background,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Row(children: [
+              child: Row(children: [
                 Icon(Icons.info_outline, color: AmialColors.primary, size: 20),
                 SizedBox(width: 10),
-                Expanded(child: Text('تعمل هذه الخدمة تلقائياً داخل الكاشير — لا تحتاج فتح شاشة.',
+                Expanded(child: Text('تعمل هذه الخدمة تلقائياً داخل الكاشير — لا تحتاج فتح شاشة.'.tr,
                     style: TextStyle(fontSize: 13))),
               ]),
             ),
@@ -407,24 +441,22 @@ class MerchantServicesHubScreen extends StatelessWidget {
 
   /// أسماء أنواع النشاط بالعربية — للجملة «مخصَّصة لـ…».
   static String _bizNames(Set<String> codes) {
-    const labels = {
-      'quick_sale': 'البيع السريع',
-      'retail': 'التجزئة',
-      'fuel': 'محطات الوقود',
-      'pharmacy': 'الصيدليات',
-      'wholesale': 'تجارة الجملة',
-      'restaurant': 'المطاعم',
+    final labels = {
+      'quick_sale': 'البيع السريع'.tr,
+      'retail': 'التجزئة'.tr,
+      'fuel': 'محطات الوقود'.tr,
+      'pharmacy': 'الصيدليات'.tr,
+      'wholesale': 'تجارة الجملة'.tr,
+      'restaurant': 'المطاعم'.tr,
     };
-    return codes.map((c) => labels[c] ?? c).join(' و');
+    return codes.map((c) => labels[c] ?? c).join(' و'.tr);
   }
 
   String _planName(String code) {
     switch (code) {
-      case 'starter': return 'البداية';
-      case 'business': return 'الأعمال';
-      case 'merchant_pro': return 'التاجر برو';
-      case 'enterprise': return 'المؤسسات';
-      default: return 'المجانية';
+      case 'business': return 'الأعمال'.tr;
+      case 'enterprise': return 'مؤسسة'.tr;
+      default: return 'المجانية'.tr;
     }
   }
 
@@ -434,23 +466,23 @@ class MerchantServicesHubScreen extends StatelessWidget {
     for (final g in _groups) {
       if (g.codes.contains(code)) return g.title;
     }
-    return 'أخرى';
+    return 'أخرى'.tr;
   }
 
-  static const List<_Group> _groups = [
-    _Group('المبيعات والكاشير', Icons.point_of_sale, [
+  static final List<_Group> _groups = [
+    _Group('المبيعات والكاشير'.tr, Icons.point_of_sale, [
       'products', 'promotions', 'installments', 'gift_cards',
       'shift_close', 'offline_pos', 'refunds', 'split_bill', 'receipts',
     ]),
-    _Group('المخزون والجرد', Icons.inventory_2,
+    _Group('المخزون والجرد'.tr, Icons.inventory_2,
         ['inventory', 'inventory_audit', 'low_stock_alerts']),
-    _Group('المالية والتقارير', Icons.bar_chart, [
-      'profit_reports', 'expenses', 'excel_export', 'multi_currency',
+    _Group('المالية والتقارير'.tr, Icons.bar_chart, [
+      'profit_reports', 'advanced_reports', 'expenses', 'excel_export', 'multi_currency',
       'advanced_backup', 'daily_reports', 'wallet',
     ]),
-    _Group('العملاء والتسويق', Icons.groups,
+    _Group('العملاء والتسويق'.tr, Icons.groups,
         ['loyalty', 'corporate_accounts', 'debts', 'customers']),
-    _Group('الإدارة والفريق', Icons.admin_panel_settings,
+    _Group('الإدارة والفريق'.tr, Icons.admin_panel_settings,
         ['branches', 'employees', 'audit_log', 'api_access']),
   ];
 
@@ -471,95 +503,105 @@ class MerchantServicesHubScreen extends StatelessWidget {
     // AMIAL-INVENTORY-LINK-001: كانت تفتح CashierPosScreen — أي نقطة البيع
     // لا المخزون. فيضغط التاجر «المخزون» فيُفتح له الكاشير، بلا خطأ ولا
     // رسالة: شاشةٌ خاطئة تعمل بثقة. وInventoryScreen مبنيّة وكانت مهملة.
-    _Svc('inventory', 'المخزون',
-        'أضِف منتجاتك وتابع كمياتها، مع تنبيه عند اقتراب النفاد وجردٍ دوريّ.',
-        Icons.inventory_2, 'البداية', () => const InventoryScreen()),
-    _Svc('promotions', 'العروض والخصومات',
-        'أنشئ كوبونات وخصومات (نسبة مئوية أو مبلغ ثابت) تُطبَّق تلقائياً عند الدفع في الكاشير.',
-        Icons.local_offer, 'ستارتر', () => const MerchantPromotionsScreen()),
-    _Svc('installments', 'البيع بالتقسيط',
-        'بِع بالتقسيط بشروط وضمانات عالمية: دفعة أولى، كفيل، حدّ ائتماني، هامش مرابحة، ورسوم تأخير.',
-        Icons.handshake, 'التاجر برو', () => const MerchantInstallmentsScreen()),
-    _Svc('gift_cards', 'بطاقات الهدايا',
-        'أصدر بطاقات هدايا برصيد مخزَّن يستخدمها العملاء لدى متجرك بكود فريد — تزيد ولاءهم وإنفاقهم.',
-        Icons.card_giftcard, 'الأعمال', () => const MerchantGiftCardsScreen()),
-    _Svc('shift_close', 'إقفال الوردية',
-        'افتح وردية الكاشير وأقفلها بتقرير X/Z، مع حساب فرق الصندوق النقدي (العجز/الفائض).',
-        Icons.lock_clock, 'الأعمال', () => const CashierShiftScreen()),
+    _Svc('inventory', 'المخزون'.tr,
+        'أضِف منتجاتك وتابع كمياتها، مع تنبيه عند اقتراب النفاد وجردٍ دوريّ.'.tr,
+        Icons.inventory_2, 'الأعمال'.tr, () => InventoryScreen(),
+        onlyFor: {'retail', 'wholesale'}),
+    _Svc('promotions', 'العروض والخصومات'.tr,
+        'أنشئ كوبونات وخصومات (نسبة مئوية أو مبلغ ثابت) تُطبَّق تلقائياً عند الدفع في الكاشير.'.tr,
+        Icons.local_offer, 'الأعمال'.tr, () => MerchantPromotionsScreen()),
+    _Svc('installments', 'البيع بالتقسيط'.tr,
+        'بِع بالتقسيط بشروط وضمانات عالمية: دفعة أولى، كفيل، حدّ ائتماني، هامش مرابحة، ورسوم تأخير.'.tr,
+        Icons.handshake, 'مؤسسة'.tr, () => MerchantInstallmentsScreen()),
+    _Svc('gift_cards', 'بطاقات الهدايا'.tr,
+        'أصدر بطاقات هدايا برصيد مخزَّن يستخدمها العملاء لدى متجرك بكود فريد — تزيد ولاءهم وإنفاقهم.'.tr,
+        Icons.card_giftcard, 'الأعمال'.tr, () => MerchantGiftCardsScreen()),
+    _Svc('shift_close', 'إقفال الوردية'.tr,
+        'افتح وردية الكاشير وأقفلها بتقرير X/Z، مع حساب فرق الصندوق النقدي (العجز/الفائض).'.tr,
+        Icons.lock_clock, 'الأعمال'.tr, () => CashierShiftScreen()),
     // كانت بلا شاشة (null) فتفتح ورقةً تقول «تعمل تلقائياً داخل الكاشير»،
     // بينما OfflineSalesScreen مبنيّة وتعرض ما لم يُزامَن بعد. ومن باع دون
     // اتصال يحتاج بالضبط أن يرى ما لم يصل الخادم — لا أن يُطمأن عنه.
-    _Svc('offline_pos', 'البيع دون اتصال',
-        'استمر بالبيع عند انقطاع الإنترنت، وتابع هنا ما لم يُزامَن بعد — تُرفع الفواتير تلقائياً وبلا تكرار عند عودة الاتصال.',
-        Icons.cloud_off, 'الأعمال', () => const OfflineSalesScreen()),
-    _Svc('refunds', 'المرتجعات',
-        'أرجع مبلغ عملية بيع كلياً أو جزئياً، مع تسجيل السبب وربط المرتجع بفاتورته الأصلية.',
-        Icons.assignment_return, 'المجانية', () => const MerchantRefundScreen()),
-    _Svc('products', 'المنتجات والأسعار',
-        'كتالوج منتجاتك: السعر والتكلفة والباركود وتاريخ الانتهاء — يُستخدم في الكاشير مباشرة.',
-        Icons.sell, 'البداية', () => const CashierProductsScreen()),
-    _Svc('receipts', 'إعدادات الفاتورة',
-        'اسم المتجر وشعاره وبيانات التواصل التي تُطبع أعلى كل إيصال، مع رسالة ختامية للعميل.',
-        Icons.receipt, 'المجانية', () => const ReceiptSettingsScreen()),
-    _Svc('split_bill', 'تقسيم الفاتورة',
-        'قسّم فاتورة واحدة على عدّة أشخاص، ويدفع كلٌّ حصّته من محفظته.',
-        Icons.call_split, 'المجانية', () => const SplitBillCreateScreen(),
+    _Svc('offline_pos', 'البيع دون اتصال'.tr,
+        'استمر بالبيع عند انقطاع الإنترنت، وتابع هنا ما لم يُزامَن بعد — تُرفع الفواتير تلقائياً وبلا تكرار عند عودة الاتصال.'.tr,
+        Icons.cloud_off, 'الأعمال'.tr, () => OfflineSalesScreen()),
+    _Svc('refunds', 'المرتجعات'.tr,
+        'أرجع مبلغ عملية بيع كلياً أو جزئياً، مع تسجيل السبب وربط المرتجع بفاتورته الأصلية.'.tr,
+        Icons.assignment_return, 'المجانية'.tr, () => MerchantRefundScreen()),
+    _Svc('products', 'المنتجات والأسعار'.tr,
+        'كتالوج منتجاتك: السعر والتكلفة والباركود وتاريخ الانتهاء — يُستخدم في الكاشير مباشرة.'.tr,
+        Icons.sell, 'الأعمال'.tr, () => CashierProductsScreen(),
+        onlyFor: {'retail', 'wholesale'}),
+    _Svc('receipts', 'إعدادات الفاتورة'.tr,
+        'اسم المتجر وشعاره وبيانات التواصل التي تُطبع أعلى كل إيصال، مع رسالة ختامية للعميل.'.tr,
+        Icons.receipt, 'المجانية'.tr, () => ReceiptSettingsScreen()),
+    _Svc('split_bill', 'تقسيم الفاتورة'.tr,
+        'قسّم فاتورة واحدة على عدّة أشخاص، ويدفع كلٌّ حصّته من محفظته.'.tr,
+        Icons.call_split, 'المجانية'.tr, () => SplitBillCreateScreen(),
         onlyFor: {'retail'}),
-    _Svc('inventory_audit', 'الجرد',
-        'جردٌ دوريّ يقارن الكمية الدفترية بالكمية الفعلية على الرفّ ويُظهر الفروق صنفاً صنفاً.',
-        Icons.checklist, 'البداية', () => const InventoryAuditScreen()),
-    _Svc('low_stock_alerts', 'تنبيهات النفاد',
-        'حدّد لكل صنف حدّاً أدنى، ونبّهك قبل نفاده بوقتٍ يكفي لإعادة الطلب.',
-        Icons.notification_important, 'البداية', () => const StockAlertsScreen()),
-    _Svc('debts', 'البيع بالآجل',
-        'لوحة الآجل: كم لك على العملاء، ومن تأخّر، وسدادٌ جزئيّ أو كامل بكشف حساب لكل عميل.',
-        Icons.account_balance_wallet, 'المجانية', () => const CreditDashboardScreen()),
-    _Svc('customers', 'العملاء وحساباتهم',
-        'سجلّ عملائك وأرصدتهم الآجلة وحدودهم الائتمانية، مع كشف حساب قابل للتصدير.',
-        Icons.person_search, 'الأعمال', () => const CreditCustomersScreen()),
-    _Svc('daily_reports', 'تقرير اليوم',
-        'مبيعات اليوم بالتفصيل: عدد الفواتير، النقد مقابل المحفظة، وأعلى الأصناف مبيعاً.',
-        Icons.today, 'المجانية', () => const CashierReportScreen()),
-    _Svc('wallet', 'حركات المتجر',
-        'كل ما دخل محفظة متجرك وخرج منها: مقبوضات، تحويلات، رسوم — بترتيب زمنيّ وبحث.',
-        Icons.swap_vert, 'المجانية', () => const MerchantTransactionsScreen()),
-    _Svc('profit_reports', 'تقارير الأرباح',
-        'تقارير مبيعات وأرباح مفصّلة لمتجرك، بمقارنات يومية وشهرية لتعرف أداءك الحقيقي.',
-        Icons.trending_up, 'الأعمال', () => const ProfitReportScreen()),
-    _Svc('expenses', 'المصروفات والصندوق',
-        'سجّل مصروفات المتجر والصندوق النثري وصنّفها، لتحسب صافي ربحك بدقّة بعد المصاريف.',
-        Icons.receipt_long, 'الأعمال', () => const MerchantExpensesScreen()),
-    _Svc('excel_export', 'تصدير Excel',
-        'صدّر مبيعاتك وبياناتك إلى ملفات Excel جاهزة للمحاسبة والمراجعة الخارجية.',
-        Icons.grid_on, 'الأعمال', () => const MerchantExcelExportScreen()),
-    _Svc('multi_currency', 'تعدّد العملات',
-        'اعرض الأسعار وبِع بأكثر من عملة، مع أسعار صرف قابلة للتحديث يدوياً.',
-        Icons.currency_exchange, 'التاجر برو', () => const MerchantCurrenciesScreen()),
-    _Svc('advanced_backup', 'النسخ الاحتياطي',
-        'أنشئ نسخاً احتياطية لبيانات متجرك واستعِدها عند الحاجة — أمان لبياناتك.',
-        Icons.backup, 'التاجر برو', () => const MerchantBackupScreen()),
-    _Svc('loyalty', 'برنامج الولاء',
-        'كافئ عملاءك بنقاط على كل عملية شراء يستبدلونها بخصومات — وسيلة مثبتة لزيادة تكرار الشراء.',
-        Icons.stars, 'الأعمال', () => const MerchantLoyaltyScreen()),
-    _Svc('corporate_accounts', 'حسابات الشركات B2B',
-        'افتح حسابات آجلة للشركات بحدّ ائتماني، وبِع على حساب الشركة وحصّل المستحقّات لاحقاً.',
-        Icons.business_center, 'المؤسسات', () => const CorporateAccountsScreen()),
-    _Svc('branches', 'الفروع',
-        'أدر عدّة فروع لمتجرك تحت حساب واحد، مع تقارير منفصلة لكل فرع.',
-        Icons.account_tree, 'التاجر برو', () => const BranchesManagementScreen()),
-    _Svc('employees', 'الموظفون',
-        'أضِف موظفي الكاشير بصلاحيات محدّدة، وتابع مبيعات وأداء كل موظف.',
-        Icons.badge, 'الأعمال', () => const MerchantStaffScreen()),
-    _Svc('multi_pos', 'أجهزة نقاط البيع',
-        'أجهزةُ الكاشير المسجَّلة في متجرك: سمِّها، وتابع آخر نشاطها، '
-        'وألغِ ما فُقد منها فيتوقّف فوراً. والموظّفون يتناوبون عليها.',
-        Icons.point_of_sale, 'حسب الباقة', () => const MerchantPosDevicesScreen()),
-    _Svc('audit_log', 'سجلّ التدقيق',
-        'سجلّ كامل لكل عملية حسّاسة في متجرك: من فعل ماذا ومتى — للرقابة والأمان.',
-        Icons.fact_check, 'التاجر برو', () => const MerchantAuditLogScreen()),
-    _Svc('api_access', 'مفاتيح API',
-        'اربط متجرك بأنظمتك الخارجية (محاسبة، مواقع) عبر مفاتيح API آمنة.',
-        Icons.api, 'المؤسسات', () => const MerchantApiKeysScreen()),
+    _Svc('inventory_audit', 'الجرد'.tr,
+        'جردٌ دوريّ يقارن الكمية الدفترية بالكمية الفعلية على الرفّ ويُظهر الفروق صنفاً صنفاً.'.tr,
+        Icons.checklist, 'الأعمال'.tr, () => InventoryAuditScreen(),
+        onlyFor: {'retail', 'wholesale'}),
+    _Svc('low_stock_alerts', 'تنبيهات النفاد'.tr,
+        'حدّد لكل صنف حدّاً أدنى، ونبّهك قبل نفاده بوقتٍ يكفي لإعادة الطلب.'.tr,
+        Icons.notification_important, 'الأعمال'.tr, () => StockAlertsScreen(),
+        onlyFor: {'retail', 'wholesale'}),
+    _Svc('debts', 'البيع بالآجل'.tr,
+        'لوحة الآجل: كم لك على العملاء، ومن تأخّر، وسدادٌ جزئيّ أو كامل بكشف حساب لكل عميل.'.tr,
+        Icons.account_balance_wallet, 'المجانية'.tr, () => CreditDashboardScreen(),
+        onlyFor: {'quick_sale', 'retail', 'wholesale', 'pharmacy', 'restaurant'}),
+    _Svc('customers', 'العملاء وحساباتهم'.tr,
+        'سجلّ عملائك وأرصدتهم الآجلة وحدودهم الائتمانية، مع كشف حساب قابل للتصدير.'.tr,
+        Icons.person_search, 'الأعمال'.tr, () => CreditCustomersScreen()),
+    _Svc('daily_reports', 'تقرير اليوم'.tr,
+        'مبيعات اليوم بالتفصيل: عدد الفواتير، النقد مقابل المحفظة، وأعلى الأصناف مبيعاً.'.tr,
+        Icons.today, 'المجانية'.tr, () => FinancialTruthReportScreen(dailyOnly: true)),
+    // **اسمٌ واحدٌ للمال.** كان هنا «حركات المتجر» وفي اللوحة «المبيعات»
+    // وفي الشاشة «المبيعات والعمليات» — ثلاثةُ أسماءٍ لشيءٍ واحدٍ يفتحها
+    // التاجرُ من ثلاثة أبوابٍ في الجلسة نفسِها فيظنّها ثلاثةَ أشياء.
+    _Svc('wallet', 'محفظة المتجر'.tr,
+        'رصيدُ متجرك وكلُّ ما دخله وخرج منه: مقبوضات، تحويلات، رسوم — بترتيب زمنيّ وبحث.'.tr,
+        Icons.account_balance_wallet_rounded, 'المجانية'.tr, () => MerchantWalletScreen()),
+    _Svc('profit_reports', 'تقارير الأرباح'.tr,
+        'تقارير مبيعات وأرباح مفصّلة لمتجرك، بمقارنات يومية وشهرية لتعرف أداءك الحقيقي.'.tr,
+        Icons.trending_up, 'الأعمال'.tr, () => ProfitReportScreen()),
+    _Svc('expenses', 'المصروفات والصندوق'.tr,
+        'سجّل مصروفات المتجر والصندوق النثري وصنّفها، لتحسب صافي ربحك بدقّة بعد المصاريف.'.tr,
+        Icons.receipt_long, 'الأعمال'.tr, () => MerchantExpensesScreen()),
+    _Svc('excel_export', 'تصدير Excel'.tr,
+        'صدّر مبيعاتك وبياناتك إلى ملفات Excel جاهزة للمحاسبة والمراجعة الخارجية.'.tr,
+        Icons.grid_on, 'الأعمال'.tr, () => MerchantExcelExportScreen()),
+    _Svc('advanced_reports', 'مركز التقارير'.tr,
+        'التقرير المالي والربحية والتصدير في مكان واحد، مع الانتقال إلى التقرير المناسب مباشرة.'.tr,
+        Icons.analytics, 'الأعمال'.tr, () => MerchantAdvancedReportsScreen()),
+    _Svc('multi_currency', 'تعدّد العملات'.tr,
+        'اعرض الأسعار وبِع بأكثر من عملة، مع أسعار صرف قابلة للتحديث يدوياً.'.tr,
+        Icons.currency_exchange, 'مؤسسة'.tr, () => MerchantCurrenciesScreen()),
+    _Svc('advanced_backup', 'النسخ الاحتياطي'.tr,
+        'أنشئ نسخاً احتياطية لبيانات متجرك واستعِدها عند الحاجة — أمان لبياناتك.'.tr,
+        Icons.backup, 'مؤسسة'.tr, () => MerchantBackupScreen()),
+    _Svc('loyalty', 'برنامج الولاء'.tr,
+        'كافئ عملاءك بنقاط على كل عملية شراء يستبدلونها بخصومات — وسيلة مثبتة لزيادة تكرار الشراء.'.tr,
+        Icons.stars, 'الأعمال'.tr, () => MerchantLoyaltyScreen()),
+    _Svc('corporate_accounts', 'حسابات الشركات B2B'.tr,
+        'افتح حسابات آجلة للشركات بحدّ ائتماني، وبِع على حساب الشركة وحصّل المستحقّات لاحقاً.'.tr,
+        Icons.business_center, 'المؤسسات'.tr, () => CorporateAccountsScreen()),
+    _Svc('branches', 'الفروع'.tr,
+        'أدر عدّة فروع لمتجرك تحت حساب واحد، مع تقارير منفصلة لكل فرع.'.tr,
+        Icons.account_tree, 'مؤسسة'.tr, () => BranchesManagementScreen()),
+    _Svc('employees', 'الموظفون'.tr,
+        'أضِف موظفي الكاشير بصلاحيات محدّدة، وتابع مبيعات وأداء كل موظف.'.tr,
+        Icons.badge, 'الأعمال'.tr, () => MerchantStaffScreen()),
+    _Svc('multi_pos', 'أجهزة نقاط البيع'.tr,
+        'أجهزةُ الكاشير المسجَّلة في متجرك: سمِّها، وتابع آخر نشاطها، وألغِ ما فُقد منها فيتوقّف فوراً. والموظّفون يتناوبون عليها.'.tr,
+        Icons.point_of_sale, 'حسب الباقة'.tr, () => MerchantPosDevicesScreen()),
+    _Svc('audit_log', 'سجلّ التدقيق'.tr,
+        'سجلّ كامل لكل عملية حسّاسة في متجرك: من فعل ماذا ومتى — للرقابة والأمان.'.tr,
+        Icons.fact_check, 'مؤسسة'.tr, () => MerchantAuditLogScreen()),
+    _Svc('api_access', 'مفاتيح API'.tr,
+        'اربط متجرك بأنظمتك الخارجية (محاسبة، مواقع) عبر مفاتيح API آمنة.'.tr,
+        Icons.api, 'المؤسسات'.tr, () => MerchantApiKeysScreen()),
   ];
 }
 

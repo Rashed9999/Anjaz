@@ -1,4 +1,3 @@
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/features/auth/controllers/auth_controller.dart';
@@ -32,9 +31,6 @@ class CustomShowcaseWidget extends StatelessWidget {
           onTap: !isDone ? (){
             ShowCaseWidget.of(context).dismiss();
             Get.find<AuthController>().setTourWidgetStatus(false);
-            if(GetPlatform.isAndroid){
-              FirebaseMessaging.instance.requestPermission();
-            }
           } : (){}
         ),
 

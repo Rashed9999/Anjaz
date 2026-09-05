@@ -155,6 +155,13 @@ class RetailVerticalController extends Controller
 
                 'low_stock' => $low,
 
+                // AMIAL-NEGATIVE-STOCK-001 — **والسالبُ يصل صاحبَ المتجر.**
+                //
+                // **ولا يُحرَس بقدرةٍ مدفوعة** بخلاف تنبيه النفاد: ذاك
+                // خدمةٌ تُشترى (متى أطلب؟)، وهذا **خللٌ في بياناته هو** —
+                // وبيعُ رؤيةِ الخلل بيعُ أرقامٍ خاطئةٍ لمن دفع أقلّ.
+                'negative_stock' => $this->stock->negativeStock($merchant->id),
+
                 // **القسمُ المقفولُ يُصرَّح به لا يُطوى** — فالشاشةُ تعرض
                 // «ارفع الباقة» مكانَ قائمةٍ فارغةٍ تكذب.
                 'low_stock_locked' => $lowStockState !== null ? [
@@ -278,13 +285,243 @@ class RetailVerticalController extends Controller
         });
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    //  AMIAL-PRODUCT-ATTRIBUTES-001 — مكتبةُ السمات
+    //
+    //  تُعرَّف السمةُ وقيمُها مرّةً للتاجر، ثمّ تُختار في كلّ منتج — بدل
+    //  إعادة كتابة «أحمر · أزرق» في كلّ توليد، وهو ما ينقسم به المخزونُ
+    //  حين يفترق الإملاء.
+    // ══════════════════════════════════════════════════════════════════
+
+    public function attributes(Request $request): JsonResponse
+    {
+        return $this->guarded($request, P::RETAIL_PRODUCT_MANAGE, fn () => $this->ok([
+            'attributes' => app(\App\Services\Retail\AttributeLibraryService::class)
+                ->library($this->merchant($request)),
+        ]));
+    }
+
+    public function addAttribute(Request $request): JsonResponse
+    {
+        return $this->guarded($request, P::RETAIL_PRODUCT_MANAGE, function () use ($request) {
+            $svc = app(\App\Services\Retail\AttributeLibraryService::class);
+            $merchant = $this->merchant($request);
+
+            $attr = $svc->addAttribute($merchant, (string) $request->input('name', ''));
+
+            // **والقيمُ تُقبل مع السمة في النداء نفسِه** — فمن عرّف «اللون»
+            // ثمّ نسي قيمَه ترك سمةً فارغةً لا تُولّد شيئاً.
+            $terms = (array) $request->input('terms', []);
+            if ($terms !== []) {
+                $svc->addTerms($merchant, $attr->id, $terms);
+            }
+
+            return $this->ok(['id' => $attr->id, 'name' => $attr->name], 'أُضيفت السمة');
+        });
+    }
+
+    public function addAttributeTerms(Request $request, int $attributeId): JsonResponse
+    {
+        return $this->guarded($request, P::RETAIL_PRODUCT_MANAGE, function () use ($request, $attributeId) {
+            $made = app(\App\Services\Retail\AttributeLibraryService::class)->addTerms(
+                $this->merchant($request), $attributeId, (array) $request->input('terms', []));
+
+            return $this->ok(['added' => count($made)], count($made).' قيمة');
+        });
+    }
+
+    public function deleteAttributeTerm(Request $request, int $termId): JsonResponse
+    {
+        return $this->guarded($request, P::RETAIL_PRODUCT_MANAGE, function () use ($request, $termId) {
+            app(\App\Services\Retail\AttributeLibraryService::class)
+                ->deleteTerm($this->merchant($request), $termId);
+
+            return $this->ok([], 'حُذفت القيمة');
+        });
+    }
+
+    public function deleteAttribute(Request $request, int $attributeId): JsonResponse
+    {
+        return $this->guarded($request, P::RETAIL_PRODUCT_MANAGE, function () use ($request, $attributeId) {
+            app(\App\Services\Retail\AttributeLibraryService::class)
+                ->deleteAttribute($this->merchant($request), $attributeId);
+
+            return $this->ok([], 'حُذفت السمة');
+        });
+    }
+
+    /**
+     * AMIAL-VARIANT-EDITOR-001 — **متغيّراتُ صنفٍ ومخزونُها وأسعارُها.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **كان التوليدُ بابَ ذهابٍ بلا عودة**: تُولَّد تسعةُ متغيّراتٍ ثمّ
+     * لا مسارَ يقرؤها. فالشاشةُ تولّد ولا ترى ما ولّدت، **والمخزونُ
+     * الذي قِيل «ينتظر التوزيع» لا مكانَ يُوزَّع فيه**.
+     *
+     * وتُعاد `unallocated` أيضاً: مخزونُ الأب الذي صُفِّر عند التحويل،
+     * ليُعرَض للتاجر حتّى يوزّعه.
+     */
+    public function productVariants(Request $request, int $productId): JsonResponse
+    {
+        return $this->guarded($request, P::RETAIL_PRODUCT_MANAGE, function () use ($request, $productId) {
+            $merchant = $this->merchant($request);
+
+            $parent = MerchantProduct::where('id', $productId)
+                ->where('merchant_user_id', $merchant->id)->firstOr(
+                    fn () => throw new DomainException('الصنف غير موجود'));
+
+            $variants = MerchantProduct::where('parent_product_id', $parent->id)
+                ->where('merchant_user_id', $merchant->id)
+                ->orderBy('id')->get();
+
+            return $this->ok([
+                'parent' => [
+                    'id' => $parent->id,
+                    'name' => $parent->name,
+                    'is_variant_parent' => (bool) $parent->is_variant_parent,
+                    'price' => (string) $parent->price,
+                ],
+                'variants' => $variants->map(fn (MerchantProduct $v) => [
+                    'id' => $v->id,
+                    'display_name' => $v->displayName(),
+                    'attributes' => $v->variant_attributes ?? [],
+                    'sku' => $v->sku,
+                    'price' => (string) $v->price,
+                    'cost_price' => (string) $v->cost_price,
+                    'quantity' => (string) $v->quantity,
+                    'barcode' => $v->barcode,
+                    'is_active' => (bool) $v->is_active,
+                ])->all(),
+                // **ويُقال المجموعُ الموزَّع** — فمن وزّع ثمانيةً من عشرةٍ
+                // لا يعرف أنّ اثنتين بقيتا إلّا بالجمع بيده.
+                'allocated_total' => (string) $variants->reduce(
+                    fn ($c, $v) => bcadd((string) $c, (string) $v->quantity, 3), '0'),
+            ]);
+        });
+    }
+
+    /**
+     * تحديثُ سعرِ متغيّرٍ ومخزونِه وباركوده — **وهو تبويبُ «الأنواع»**.
+     *
+     * **والمخزونُ يمرّ بحركةِ مخزونٍ لا بكتابةٍ مباشرة**: كتابةُ الرقم
+     * تجعل الجردَ يقارن رقماً بنفسه، ويضيع أثرُ من غيّره ومتى.
+     * (القاعدة السادسة.)
+     */
+    public function updateVariant(Request $request, int $variantId): JsonResponse
+    {
+        return $this->guarded($request, P::RETAIL_PRODUCT_MANAGE, function () use ($request, $variantId) {
+            $merchant = $this->merchant($request);
+
+            $variant = MerchantProduct::where('id', $variantId)
+                ->where('merchant_user_id', $merchant->id)
+                ->whereNotNull('parent_product_id')->firstOr(
+                    fn () => throw new DomainException('المتغيّر غير موجود'));
+
+            foreach (['price', 'cost_price'] as $f) {
+                if ($request->filled($f)) {
+                    $v = (string) $request->input($f);
+                    if (bccomp($v, '0', 4) < 0) {
+                        throw new DomainException('السعر لا يكون سالباً');
+                    }
+                    $variant->{$f} = $v;
+                }
+            }
+
+            if ($request->has('barcode')) {
+                $variant->barcode = $request->input('barcode') ?: null;
+            }
+            if ($request->has('is_active')) {
+                $variant->is_active = (bool) $request->boolean('is_active');
+            }
+
+            $variant->save();
+
+            // ── المخزون ────────────────────────────────────────────────
+            $moved = null;
+            if ($request->filled('quantity')) {
+                $target = (string) $request->input('quantity');
+                if (bccomp($target, '0', 3) < 0) {
+                    throw new DomainException('المخزون لا يكون سالباً');
+                }
+
+                $delta = bcsub($target, (string) $variant->quantity, 3);
+
+                if (bccomp($delta, '0', 3) !== 0) {
+                    $stock = app(StockService::class);
+                    $stock->move(
+                        product: $variant,
+                        location: $stock->defaultLocation($merchant->id),
+                        delta: $delta,
+                        // **`count_adjustment` لا `opening_balance`**: هذا
+                        // تصحيحُ عددٍ بيد التاجر، وتسميتُه «افتتاحاً» تجعل
+                        // كلَّ تعديلٍ يبدو رصيداً أوّلَ المدّة في التقارير.
+                        reason: 'count_adjustment',
+                        actor: $merchant,
+                        note: 'تحديد مخزون المتغيّر من شاشة الأنواع',
+                    );
+                    $moved = $delta;
+                }
+            }
+
+            $variant->refresh();
+
+            return $this->ok([
+                'id' => $variant->id,
+                'display_name' => $variant->displayName(),
+                'price' => (string) $variant->price,
+                'quantity' => (string) $variant->quantity,
+                'stock_delta' => $moved,
+            ], 'حُفظ المتغيّر');
+        });
+    }
+
     public function generateVariants(Request $request, int $productId): JsonResponse
     {
         return $this->guarded($request, P::RETAIL_PRODUCT_MANAGE, function () use ($request, $productId) {
-            $made = $this->catalog->generateVariants(
-                $this->merchant($request), $productId, (array) $request->input('axes', []));
+            $merchant = $this->merchant($request);
 
-            return $this->ok(['created' => count($made)], count($made) . ' متغيّراً');
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-PRODUCT-ATTRIBUTES-001 — **مدخلان لمحاورٍ واحدة.**
+            //
+            // `attributes` = اختيارٌ من المكتبة (سمةٌ + قيمٌ محفوظة) —
+            // وهو المسارُ الذي طلبه صاحبُ المشروع.
+            // `axes` = نصٌّ حرٌّ كما كان — **يبقى للتوافق** فلا ينكسر
+            // تطبيقٌ قائمٌ ولا حارسان يستعملانه.
+            //
+            // **والمولِّدُ واحدٌ للمدخلين**: المكتبةُ تُترجَم إلى محاور،
+            // ولا تُبنى نسخةٌ ثانيةٌ منه — فمولّدان يفترقان بعد شهر.
+            // ══════════════════════════════════════════════════════════
+            $selection = (array) $request->input('attributes', []);
+            $axes = $selection !== []
+                ? app(\App\Services\Retail\AttributeLibraryService::class)
+                    ->axesFromSelection($merchant, $selection)
+                : (array) $request->input('axes', []);
+
+            $unallocated = null;
+            $made = $this->catalog->generateVariants(
+                $merchant, $productId, $axes, $unallocated);
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-VARIANT-PARENT-001 — **ويُقال مخزونُ الأب الذي صُفِّر.**
+            //
+            // تحويلُ صنفٍ إلى مِظلّةِ متغيّراتٍ يُخرج مخزونَه من البيع
+            // (المِظلّةُ لا تُباع)، ولا يُوزَّع تلقائيّاً — فقسمةُ عشرةِ
+            // قمصانٍ على تسعةِ متغيّراتٍ اختراعٌ لا يعرفه إلّا التاجر.
+            //
+            // **فيُقال العددُ صراحةً** بدل أن يُكتشَف نقصُه في الجرد.
+            // (القاعدة السابعة: الغيابُ يُقال ولا يُبتلع.)
+            // ══════════════════════════════════════════════════════════
+            $n = count($made);
+            $pending = $unallocated !== null && bccomp($unallocated, '0', 3) > 0
+                ? $unallocated : null;
+
+            return $this->ok(
+                ['created' => $n, 'unallocated_stock' => $pending],
+                $pending === null
+                    ? $n.' متغيّراً'
+                    : sprintf('%d متغيّراً — و%s وحدةً من مخزون الصنف تنتظر '
+                        .'التوزيع على المتغيّرات', $n, $pending),
+            );
         });
     }
 

@@ -39,6 +39,33 @@ class RetailVerticalRepo extends GetxService {
   Future<Response> generateVariants(int productId, Map<String, dynamic> axes) =>
       apiClient.postData('$_base/products/$productId/variants', {'axes': axes});
 
+  // ── AMIAL-VARIANT-EDITOR-001 · AMIAL-PRODUCT-ATTRIBUTES-001 ────────
+  Future<Response> productVariants(int productId) =>
+      apiClient.getData('$_base/products/$productId/variants');
+
+  Future<Response> updateVariant(int variantId, Map<String, dynamic> d) =>
+      apiClient.postData('$_base/variants/$variantId', d);
+
+  /// توليدٌ باختيارٍ من مكتبة السمات بدل نصٍّ حرّ.
+  Future<Response> generateVariantsFromLibrary(
+          int productId, List<Map<String, dynamic>> selection) =>
+      apiClient.postData(
+          '$_base/products/$productId/variants', {'attributes': selection});
+
+  Future<Response> attributes() => apiClient.getData('$_base/attributes');
+
+  Future<Response> addAttribute(String name, List<String> terms) =>
+      apiClient.postData('$_base/attributes', {'name': name, 'terms': terms});
+
+  Future<Response> addAttributeTerms(int attributeId, List<String> terms) =>
+      apiClient.postData('$_base/attributes/$attributeId/terms', {'terms': terms});
+
+  Future<Response> deleteAttributeTerm(int termId) =>
+      apiClient.deleteData('$_base/attributes/terms/$termId');
+
+  Future<Response> deleteAttribute(int attributeId) =>
+      apiClient.deleteData('$_base/attributes/$attributeId');
+
   // ── المخزون والمواقع ─────────────────────────────────────────────
   Future<Response> locations() => apiClient.getData('$_base/locations');
   Future<Response> addLocation(Map<String, dynamic> d) =>

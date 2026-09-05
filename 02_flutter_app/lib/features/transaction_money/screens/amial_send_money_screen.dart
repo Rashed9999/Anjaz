@@ -27,7 +27,21 @@ class AmialSendMoneyScreen extends StatefulWidget {
   /// AMIAL-QUICK-SEND: رقم يُعبَّأ مسبقاً (من «تحويل سريع» في الرئيسية).
   final String? initialPhone;
 
-  const AmialSendMoneyScreen({super.key, this.initialPhone});
+  /// ══════════════════════════════════════════════════════════════════
+  /// AMIAL-MERCHANT-SESSION-001 — **رصيدٌ يأتي مع الشاشة لمن لا يقرؤه
+  /// من ملفّ العميل.**
+  ///
+  /// بطاقةُ الرصيد هنا تقرأ `ProfileController.userInfo.balance`، ومصدرُه
+  /// `/api/v1/customer/get-customer` — **وهي تردّ ٤٠٣ لكلّ تاجر**. فمن
+  /// فتح هذه الشاشةَ من «محفظة المتجر» رأى بطاقةَ رصيدٍ خاوية، ومعها
+  /// لافتةٌ إنجليزيّةٌ تقول «Access forbidden.».
+  ///
+  /// **ولا يُقرأ رصيدُ التاجر من مصدرٍ ثانٍ هنا** — تُمرّره الشاشةُ التي
+  /// تعرفه (`merchant/daily-stats`)، فلا يُحسب رقمٌ ماليٌّ في موضعين.
+  /// و`null` تعني «اقرأه كما كان» — أي حسابُ عميلٍ عاديّ.
+  final String? balanceOverride;
+
+  const AmialSendMoneyScreen({super.key, this.initialPhone, this.balanceOverride});
 
   @override
   State<AmialSendMoneyScreen> createState() => _AmialSendMoneyScreenState();
@@ -50,10 +64,15 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
       _phoneCtrl.text = ph;
     }
     // الرصيد + «المحوَّل لهم مؤخراً»
-    try {
-      final p = Get.find<ProfileController>();
-      if (p.userInfo == null) p.getProfileData(reload: false);
-    } catch (_) {}
+    //
+    // **ولا يُنادى ملفُّ العميل لمن جاء برصيده معه** — النداءُ يُردّ ٤٠٣
+    // للتاجر، ويُخرج لافتةً إنجليزيّةً لا معنى لها في شاشته.
+    if (widget.balanceOverride == null) {
+      try {
+        final p = Get.find<ProfileController>();
+        if (p.userInfo == null) p.getProfileData(reload: false);
+      } catch (_) {}
+    }
     try {
       Get.find<ContactController>().getSuggestList(type: AppConstants.sendMoney);
     } catch (_) {}
@@ -328,7 +347,7 @@ class _AmialSendMoneyScreenState extends State<AmialSendMoneyScreen> {
           children: [
             // ── بطاقة الرصيد المتاح ──────────────────────────
             GetBuilder<ProfileController>(builder: (p) {
-              final bal = p.userInfo?.balance;
+              final bal = widget.balanceOverride ?? p.userInfo?.balance;
               return Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(

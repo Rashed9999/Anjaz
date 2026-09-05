@@ -82,11 +82,12 @@
             'icon' => '🏪',
             'match' => ['admin/amial/hub/merchants*', 'admin/amial/hub/subscriptions*',
                         'admin/amial/invoices*', 'admin/amial/catalog*',
-                        'admin/amial/entitlements*'],
+                        'admin/amial/entitlements*', 'admin/amial/verticals*'],
             'links' => [
                 ['🏪 مركز التجّار', route('admin.amial.hub.merchants'), 'platform.merchants.compliance'],
                 ['💎 لوحة الاشتراكات', route('admin.amial.hub.subscriptions'), 'platform.settings.manage'],
                 ['🎚️ الباقات والقدرات (ماذا تفتح كل باقة)', route('admin.amial.entitlements.page'), 'platform.settings.manage'],
+                ['🏗️ قطاعات التجّار (إضافة قطاع جديد)', route('admin.amial.verticals.page'), 'platform.settings.manage'],
                 ['🧾 فواتير التجّار ومدفوعاتها', route('admin.amial.invoices.page'), 'platform.money.view'],
                 ['📦 كتالوج المنتجات (الباركود)', route('admin.amial.catalog.page'), 'platform.settings.update'],
             ],
@@ -163,12 +164,13 @@
         [
             'title' => 'الامتثال والمخاطر',
             'icon' => '🛡️',
-            'match' => ['admin/amial/kyc*', 'admin/amial/aml*', 'admin/amial/audit*',
+            'match' => ['admin/amial/kyc*', 'admin/amial/registration-dossiers*', 'admin/amial/aml*', 'admin/amial/audit*',
                         'admin/amial/supervision*', 'admin/amial/security-events*',
                         'admin/amial/sentinel*', 'admin/amial/system*'],
             'links' => [
                 ['🪪 مراجعة مستندات الهوية', route('admin.amial.kyc.page'), 'platform.customers.freeze'],
                 ['🔄 طلبات تحديث بيانات العملاء', route('admin.amial.kyc.changes.page'), 'platform.customers.freeze'],
+                ['🗂️ سجل ملفات فتح الحسابات', route('admin.amial.registration-dossiers.page'), 'platform.registrations.view'],
                 ['🛡️ مكافحة غسل الأموال', route('admin.amial.aml.page'), 'platform.audit.view'],
                 ['🔍 سجلّ تدقيق النظام', route('admin.amial.audit.index'), 'platform.audit.view'],
                 ['👁️ لوحة الإشراف (الفريق والقرارات)', route('admin.amial.supervision.index'), 'platform.audit.view'],
@@ -202,9 +204,13 @@
         [
             'title' => 'خدمات المنصّة',
             'icon' => '🧩',
-            'match' => ['admin/amial/hub/disputes*', 'admin/amial/charity*', 'admin/amial/surface*'],
+            'match' => ['admin/amial/hub/disputes*', 'admin/amial/charity*', 'admin/amial/surface*', 'admin/disputes*'],
             'links' => [
                 ['⚖️ لوحة النزاعات (دفع آمن)', route('admin.amial.hub.disputes'), 'platform.transactions.view'],
+                // **الاسمُ يفرّق بين الجدولين.** «النزاعات» أعلاه للدفع
+                // الآمن (`safe_payments`)، وهذه بلاغاتُ العملاء على
+                // العمليّات العاديّة (`disputes`) — وكانت بلا بابٍ إطلاقاً.
+                ['📣 بلاغات العملاء على العمليات', route('admin.disputes.index'), 'platform.transactions.view'],
                 ['🎗️ لوحة التبرعات (الجمعيات)', route('admin.amial.charity.page'), 'platform.transactions.view'],
                 ['⚡ مزوّدو الفواتير', route('admin.amial.surface.bill-providers'), 'platform.settings.update'],
                 ['👨‍👩‍👧 صناديق العائلة', route('admin.amial.surface.funds'), 'platform.transactions.view'],
@@ -227,11 +233,14 @@
             'icon' => '⚙️',
             'match' => ['admin/maintenance*', 'admin/business-settings*', 'admin/amial/whatsapp*',
                         'admin/amial/zones*', 'admin/amial/hub/zones*', 'admin/amial/ops*',
-                        'admin/amial/legal*', 'admin/amial/hub/settings*'],
+                        'admin/amial/legal*', 'admin/amial/hub/settings*', 'admin/amial/fx*'],
             'links' => [
                 ['🏢 إعدادات الأعمال (عام/رسوم/حدود)', route('admin.business-settings.business-setup'), 'platform.settings.update'],
                 ['⚙️ مفاتيح سريعة (تشغيل/إيقاف)', route('admin.amial.hub.settings'), 'platform.settings.update'],
                 ['💬 حدود بوت واتساب', route('admin.amial.whatsapp.limits.page'), 'platform.settings.update'],
+                // AMIAL-MULTI-CURRENCY-002 — بلا هذا الرابط تبقى محافظ
+                // العملات مبنيّةً ولا يُوصَل إليها: لا سعرَ يُضبَط فلا قبض.
+                ['💱 أسعار الصرف', route('admin.amial.fx.rates.page'), 'platform.money.view'],
                 ['🗺️ نطاق التشغيل والمخالفات', route('admin.amial.hub.zones.index'), 'platform.zones.view'],
                 ['🔥 إعداد Firebase', route('admin.business-settings.fcm-index'), 'platform.settings.update'],
                 ['📜 الشروط القانونية', route('admin.amial.legal.index'), 'platform.ops.view'],
@@ -241,6 +250,24 @@
     ];
 @endphp
 
+{{-- القائمة الجانبية باب سريع فقط. تفاصيل العمل انتقلت إلى «مساحة العمل»
+     بتبويبات، فلا يعود الموظف يبحث في 50 رابطاً أو يرى ما لا يخصه. --}}
+<li class="nav-item">
+    <a class="nav-link {{ Request::is('admin/amial/workspace') ? 'active' : '' }}"
+       href="{{ route('admin.amial.workspace.index') }}" data-testid="nav-workspace">
+        <i class="tio-dashboard-vs nav-icon"></i><span class="text-truncate">🗂️ مساحة العمل</span>
+    </a>
+</li>
+@if($can('platform.staff.view'))
+<li class="nav-item"><a class="nav-link {{ Request::is('admin/amial/ops/roles*') ? 'active' : '' }}"
+    href="{{ route('admin.amial.ops.roles.index') }}"><i class="tio-user-switch nav-icon"></i><span class="text-truncate">👥 الموظفون والصلاحيات</span></a></li>
+@endif
+<li class="nav-item"><a class="nav-link {{ Request::is('admin/amial/2fa*') ? 'active' : '' }}"
+    href="{{ route('admin.amial.2fa.page') }}"><i class="tio-lock nav-icon"></i><span class="text-truncate">🔐 أمان حسابي</span></a></li>
+
+{{-- احتُفظ بتعريف الوجهات أدناه ليكون مرجع التغطية، لكن لم يعد يُعرض كقائمة
+     جانبية. كل هذه الوجهات باتت بطاقات داخل صفحة مساحة العمل. --}}
+@if(false)
 {{-- لوحة القيادة التنفيذية تبقى خارج المجموعات: هي ما يُفتح أوّلاً كلّ صباح،
      ودفنُها داخل مجموعةٍ مطويّة يجعل أكثر الروابط استعمالاً أبعدها. --}}
 <li class="nav-item">
@@ -288,3 +315,4 @@
         </div>
     </li>
 @endforeach
+@endif

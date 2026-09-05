@@ -62,7 +62,7 @@ class VelocityCounterService
     /**
      * عد المعاملات في نافذة زمنية (minutes).
      */
-    public function countInWindow(int $userId, string $transactionType, int $windowMinutes, ?\Carbon\Carbon $now = null): int
+    private function countInWindow(int $userId, string $transactionType, int $windowMinutes, ?\Carbon\Carbon $now = null): int
     {
         $now = $now ?? now();
         $key = $this->key($userId, $transactionType);

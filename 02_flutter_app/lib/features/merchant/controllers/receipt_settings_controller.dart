@@ -25,6 +25,7 @@ class ReceiptSettingsController extends GetxController {
         'show_phone': true,
         'show_address': true,
         'paper_width': 80,
+        'auto_print_receipts': false,
         'currency_label': 'ر.ي',
         'store_name': 'المتجر',
         'logo_url': null,

@@ -455,6 +455,30 @@ Route::prefix('entitlements')->name('entitlements.')
             ->where(['id' => '[0-9]+', 'overrideId' => '[0-9]+'])->name('merchant.override.remove');
     });
 
+// ============ AMIAL-VERTICAL-COMPOSE-001 — مركز قطاعات التجّار ============
+//
+// **إضافةُ قطاعٍ كانت تحتاج نشرةَ خادمٍ وبناءَ تطبيقٍ ونشرةَ متجر.** وصارت
+// صفّاً في جدولٍ يصل التاجرَ في اللحظة نفسِها.
+//
+// **والصلاحيّةُ `platform.settings.manage`** — هي صلاحيّةُ «الباقات
+// والقدرات» نفسُها، لأنّ هذا الفعلَ من جنسها بالضبط: تقريرُ ما يُفتَح
+// لمن. وفعلٌ يُغيّر ما يراه تجّارٌ قائمون ليس قراءةَ تدقيق.
+Route::prefix('verticals')->name('verticals.')
+    ->middleware('platform:platform.settings.manage')
+    ->group(function () {
+        $vc = App\Http\Controllers\Admin\VerticalCenterController::class;
+
+        Route::get('/', [$vc, 'page'])->name('page');
+        Route::get('/list', [$vc, 'index'])->name('list');
+        Route::post('/', [$vc, 'store'])->name('store');
+        Route::post('/{code}', [$vc, 'update'])
+            ->where('code', '[a-z0-9_]+')->name('update');
+        Route::post('/{code}/toggle', [$vc, 'toggle'])
+            ->where('code', '[a-z0-9_]+')->name('toggle');
+        Route::delete('/{code}', [$vc, 'destroy'])
+            ->where('code', '[a-z0-9_]+')->name('destroy');
+    });
+
 // ============ AMIAL-RETAIL-VERTICAL-001 · المرحلة ١١ — مركز التجزئة ============
 //
 // رقابةٌ لا إدارة: لا تعتمد اللوحةُ جردَ تاجرٍ ولا هالكَه — ذاك له.
@@ -539,6 +563,28 @@ Route::prefix('whatsapp')->name('whatsapp.')->middleware('platform:platform.sett
         Route::get('/limits/show', [$wl, 'show'])->name('limits.show');
         Route::post('/limits', [$wl, 'save'])->name('limits.save');
     });
+
+// AMIAL-MULTI-CURRENCY-002 — أسعار الصرف.
+//
+// **والقراءةُ تُفصَل عن الكتابة** (AMIAL-MONEY-KEY-SPLIT-001): وضعتُ
+// المسارات الثلاثة أوّلاً خلف `platform.money.move` بحجّة أنّ السعرَ يمسّ
+// المال — **فأمسكها `MoneyKeySplitTest`**، وهو محقّ: من أراد أن **يقرأ**
+// السعرَ وجب حينها منحُه أن **يُحرّك** المال، فيتّسع حاملو المفتاح بدل
+// أن يضيقوا. وهي الحجّةُ نفسُها التي تصحّ على كلّ إعدادٍ في المنصّة.
+//
+// فالقراءةُ `platform.money.view`، والكتابةُ وحدَها `platform.money.move`:
+// رفعُ سعر الدولار عشرةَ أضعافٍ يُضاعف رصيدَ كلّ من يصرف بعده — **فيُحرّك
+// مالاً في كلّ محفظةٍ أجنبيّة دفعةً واحدة**. ومن يملك تغييرَ السعر يملك
+// المال.
+Route::prefix('fx')->name('fx.')->group(function () {
+    $fx = App\Http\Controllers\Admin\FxRateController::class;
+    Route::middleware('platform:platform.money.view')->group(function () use ($fx) {
+        Route::get('/rates', [$fx, 'page'])->name('rates.page');
+        Route::get('/rates/show', [$fx, 'show'])->name('rates.show');
+    });
+    Route::middleware('platform:platform.money.move')
+        ->post('/rates', [$fx, 'save'])->name('rates.save');
+});
 
 // AMIAL-MERCHANT-PAY-002 — مركز فواتير التجّار.
 // يُقرأ من `payment_requests` نفسِه الذي يكتب فيه التطبيق — جذرٌ واحدٌ
@@ -742,6 +788,47 @@ Route::prefix('settlements')->name('settlements.')->middleware(['platform:platfo
 // AMIAL-ADMIN-DOORS-002 — القراءةُ مخاطرُ تاجر، والشريحةُ تُغيّر حدودَه
 // ورسومَه، والتوثيقُ قرارُ اعتماد. وكانت الخمسةُ بلا صلاحيّة.
 Route::prefix('merchants')->name('merchants.')->group(function () {
+    // ══════════════════════════════════════════════════════════════════
+    // AMIAL-MERCHANT-VERIFY-ADMIN-001 — **التاجرُ يقدّم، ولم يكن أحدٌ
+    // يعتمد.**
+    //
+    // قِيس: `adminApprove` و`adminReject` و`adminRequestResubmission`
+    // مبنيّاتٌ في `MerchantVerificationController` منذ كُتبت، **وصفرُ
+    // مساراتٍ للإدارة** — والتاجرُ يرفع سجلَّه التجاريَّ وصورةَ متجره
+    // ويُقال له «قيد المراجعة» فيبقى عالقاً بلا نهاية، ولا خطأ في أيّ
+    // سجلّ. (القاعدة الثانية عشرة: مبنيٌّ ولا يُوصَل إليه.)
+    //
+    // **والاعتمادُ خلف `approvals.decide` لا `merchants.compliance`**:
+    // القراءةُ امتثال، والقرارُ اعتمادٌ — والفصلُ بينهما هو ما يمنع
+    // موظّفَ مراجعةٍ من أن يقرّر وحدَه.
+    // ══════════════════════════════════════════════════════════════════
+    Route::prefix('verification')->name('verification.')->group(function () {
+        $vc = App\Http\Controllers\Admin\MerchantVerificationAdminController::class;
+
+        Route::middleware('platform:platform.merchants.compliance')->group(function () use ($vc) {
+            Route::get('/', [$vc, 'page'])->name('page');
+            Route::get('/list.json', [$vc, 'listJson'])->name('list');
+            Route::get('/{id}/document/{type}', [$vc, 'document'])
+                ->where(['id' => '[0-9]+', 'type' => '[a-z_]+'])->name('document');
+
+            // AMIAL-KYC-DUP-001 — **فحصُ رقم الهويّة قبل الاعتماد.**
+            //
+            // وصلاحيّتُه `merchants.compliance` لا `approvals.decide`:
+            // هو **قراءةٌ** تسبق القرار، ومن يراجع الملفّ يحتاجها وإن
+            // لم يملك ختمَ الاعتماد. وكلُّ نداءٍ يُسجَّل في
+            // `pii_access_logs` — فهو اطّلاعٌ على بيانات شخصٍ ثالث.
+            Route::post('/{id}/identity-lookup', [$vc, 'lookupIdentity'])
+                ->where('id', '[0-9]+')->name('identity-lookup');
+        });
+
+        Route::middleware('platform:platform.approvals.decide')->group(function () use ($vc) {
+            Route::post('/{id}/approve', [$vc, 'approve'])->where('id', '[0-9]+')->name('approve');
+            Route::post('/{id}/reject', [$vc, 'reject'])->where('id', '[0-9]+')->name('reject');
+            Route::post('/{id}/resubmit', [$vc, 'requestResubmission'])
+                ->where('id', '[0-9]+')->name('resubmit');
+        });
+    });
+
     Route::get('/high-risk', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'highRisk'])
         ->middleware('platform:platform.merchants.risk')->name('high-risk');
     Route::get('/risk-stats', [App\Http\Controllers\Admin\AdminMerchantRiskController::class, 'riskStats'])
@@ -838,6 +925,22 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
 
     // صفحة تفاصيل الحساب الكاملة (بيانات + وثائق + مخاطر AML + سجل + إضافات الدور)
     Route::get('/account/{id}', [$hc, 'account'])->where('id', '[0-9]+')->name('account');
+
+    // ══════════════════════════════════════════════════════════════
+    // AMIAL-ACCOUNT-PRINT-001 — **الأرشيفُ مبنيٌّ ولا زرَّ يطبعه.**
+    //
+    // الطباعةُ القائمة مفتاحُها `reference` وبابُها سجلٌّ آخر — فمن وقف
+    // على حسابٍ في لوحة التحقّق عليه أن يخرج ويبحث عن مرجعٍ بين مئة،
+    // **وحسابٌ بلا لقطةٍ مؤرشفةٍ لا يُطبَع أصلاً**. فالمفتاحُ هنا
+    // مُعرّفُ المستخدم، وهو ما تعرفه كلُّ شاشةِ حساب.
+    //
+    // **والصلاحيّةُ هي نفسُها التي تفتح صورَ الوثائق** — لأنّ الورقةَ
+    // تحمل ما تحمله تلك الشاشة، ووضعُها خلف صلاحيّةٍ أدنى بابٌ جانبيٌّ
+    // إلى صورِ الهويّة لمن لا يملك رؤيتَها.
+    // ══════════════════════════════════════════════════════════════
+    Route::get('/account/{id}/print', [App\Http\Controllers\Admin\AccountDossierPrintController::class, 'show'])
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.customers.kyc.view')->name('account.print');
     Route::get('/users/{id}/detail.json', [$hc, 'accountDetailJson'])
         ->where('id', '[0-9]+')->name('users.detail');
 
@@ -852,6 +955,43 @@ Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(funct
     Route::post('/users/{id}/kyc', [$hc, 'kycStatus'])
         ->where('id', '[0-9]+')
         ->middleware('platform:platform.approvals.decide')->name('users.kyc');
+    // ══════════════════════════════════════════════════════════════
+    // **استُعيدت الثلاثةُ بعد أن حُذفت في دفعةٍ لاحقة.**
+    //
+    // وهي مساراتُ نافذة «✏️ تعديل» في مركز التجّار كلُّها: الشاشةُ
+    // تنادي `readiness.json` لتملأ النافذة، و`profile` لتحفظ،
+    // و`documents` لترفع. فبحذفها تُفتَح النافذةُ ولا تمتلئ أبداً
+    // (‏٤٠٤ صامتة) — وهو ما وصل بنصّه: «تعديل لم يفتح».
+    // ══════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════
+    // AMIAL-ADMIN-EDIT-001 — **بابا الرفع والتعديل، وكانا مفقودين.**
+    //
+    // الرفعُ كان للعميل وحدَه من تطبيقه، فحسابٌ سُجّل بلا وثائق يبقى
+    // مقفلاً أبداً: لا وثائق ⇒ لا اعتماد ⇒ `zone_code = UNKNOWN` ⇒
+    // «حسابُ المستلم لم يُوثَّق بعد».
+    //
+    // **والصلاحيّتان مختلفتان عمداً:**
+    //   · الرفعُ يُجهّز الملفّ — `customers.kyc.request`
+    //   · والتعديلُ يمسّ بياناتِ حسابٍ قائم — `customers.lifecycle.manage`
+    //
+    // فمن يُجهّز ليس بالضرورة من يُعدّل، ومن يُعدّل ليس من يعتمد
+    // (`approvals.decide` أعلاه). ثلاثُ صلاحيّاتٍ لثلاثة أفعال.
+    // ══════════════════════════════════════════════════════════════
+    // **وقبل الفعلِ تُقال الحالة.** «هل إذا رفعتُ سوف يستقبل؟» سؤالٌ
+    // يُجاب عليه بالقياس لا بالتجربة: هذه تقرأ الاكتمالَ من المصدر
+    // نفسِه الذي يسأله قرارُ الاعتماد، وتقول ما ينقص بالاسم.
+    Route::get('/users/{id}/readiness.json', [$hc, 'accountReadinessJson'])
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.customers.view')->name('users.readiness');
+
+    Route::post('/users/{id}/documents', [$hc, 'uploadDocument'])
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.customers.kyc.request')->name('users.documents.upload');
+
+    Route::post('/users/{id}/profile', [$hc, 'updateProfile'])
+        ->where('id', '[0-9]+')
+        ->middleware('platform:platform.customers.lifecycle.manage')->name('users.profile.update');
+
     // ══════════════════════════════════════════════════════════════
     // AMIAL-ADMIN-DOORS-002 — **مساراتُ مالٍ كانت بلا صلاحيّةٍ إطلاقاً.**
     //

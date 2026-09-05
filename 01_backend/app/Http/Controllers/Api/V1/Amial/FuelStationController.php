@@ -472,10 +472,11 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
             'sale_type' => 'required|in:by_liters,by_amount',
             'liters' => 'sometimes|nullable|numeric|min:0.001',
             'amount' => 'sometimes|nullable|numeric|min:0.01',
-            'payment_method' => 'required|in:cash,amial_pay,company_card',
+            'payment_method' => 'required|in:cash,amial_pay,company_card,credit',
+            'customer_phone' => 'required_if:payment_method,credit|nullable|string|min:6|max:20',
+            'customer_name' => 'sometimes|nullable|string|max:160',
+            'due_date' => 'sometimes|nullable|date',
             'paid_transaction_id' => 'sometimes|nullable|string|max:64',
-            // AMIAL-FUEL-PAY-001: هاتف العميل — شحن مباشر في خطوة واحدة
-            'customer_phone' => 'sometimes|nullable|string|min:6|max:20',
             'company_account_id' => 'sometimes|nullable|integer',
             'company_card_id' => 'sometimes|nullable|string|max:40',
             'vehicle_plate' => 'sometimes|nullable|string|max:32',
@@ -484,6 +485,9 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
             'notes' => 'sometimes|nullable|string|max:500',
         ]);
         if ($v->fails()) return $this->validationError($v);
+        if ($request->input('payment_method') === 'amial_pay' && $request->filled('customer_phone')) {
+            return $this->error('CUSTOMER_CONSENT_REQUIRED', 'لا يُقبل الخصم برقم العميل. استخدم QR ليؤكد العميل الدفع بنفسه.', 422);
+        }
 
         $ctx = $this->resolveMerchantPos($request);
         if ($ctx instanceof JsonResponse) return $ctx;
@@ -686,9 +690,56 @@ class FuelStationController extends AmialApiController // AMIAL-FIX-007
             if (!$merchant) return $this->error('MERCHANT_NOT_FOUND', 'التاجر غير موجود', 404);
             return [$merchant, $pos->id];
         }
-        if (!MerchantProfile::where('user_id', $authUser->id)->exists()) {
+        $profile = MerchantProfile::where('user_id', $authUser->id)->first();
+
+        if (! $profile) {
             return $this->error('NOT_A_MERCHANT', 'متاح للتجار وموظفي المحطة فقط', 403);
         }
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-VERTICAL-LANES-001 — **واجهةُ المحطّة لأهلها وحدَهم.**
+        //
+        // **الثمنُ الذي قِيس:** مصفوفةُ ستّةِ قطاعاتٍ × أربعِ واجهاتٍ
+        // أخرجت أنّ **خمسةَ قطاعاتٍ كلَّها تفتح واجهةَ الوقود بـ٢٠٠**:
+        // بسطةٌ وتجزئةٌ وصيدليّةٌ وجملةٌ ومطعم.
+        //
+        // والصيدليّةُ محروسةٌ (`PHARMACY_ONLY`) والجملةُ محروسةٌ بوسيط
+        // (`EnforceWholesaleAccessPolicy`) — **والوقودُ بلا حاجزٍ
+        // إطلاقاً**. فحاجزٌ يُبنى على قطاعٍ بعد شكوى ويُترك جارُه مكشوفاً
+        // يُنتج الشكوى الثانية بعد شهر.
+        //
+        // **ولم يكن في البوّابة ما يقيس هذا الصنف**: الحارسُ القائم يفحص
+        // قوائمَ القدرات لأربعة قطاعاتٍ من ستّة، **ولا يفتح نقطةَ نهايةٍ
+        // واحدة**. فخرجت «٣٤ فحصاً · لا فشل» وهي عمياءُ عنه.
+        // ══════════════════════════════════════════════════════════════
+        // ══════════════════════════════════════════════════════════════
+        // **ويُمنَع صاحبُ قطاعٍ آخر، لا صاحبُ حقلٍ فارغ.**
+        //
+        // كتبتُ الحاجزَ أوّلاً `business_type !== BIZ_FUEL` وحدَه،
+        // **فردَّ ملفّاً بلا `business_type` كما يردّ صاحبَ صيدليّة** —
+        // وحقلٌ لم يُملأ ليس قطاعاً آخر. (القاعدة السابعة: «غير معروف»
+        // ليس صفراً.)
+        //
+        // **وأثرُه هو الشكوى التي وُلد منها هذا العمل بعينها**: «هذا
+        // حسابُ مالك المحطّة، لماذا لا يستطيع الدخولَ إلى حسابه؟».
+        // فحاجزٌ يُبنى ضدَّ التسريب يُنتج المنعَ نفسَه من الجهة الأخرى.
+        //
+        // **والملكيّةُ تُثبَت بسجلّاتها**: من له محطّةٌ مسجَّلةٌ باسمه فهو
+        // صاحبُ محطّة، أعلن ملفُّه ذلك أم سكت. وهو نفسُ ما استُقرّ عليه
+        // في `MerchantPermissionService::ownsMerchantRecords`.
+        // ══════════════════════════════════════════════════════════════
+        $declared = $profile->business_type;
+
+        $isFuel = $declared === \App\Support\Access\AccessConstants::BIZ_FUEL
+            // **وحقلٌ فارغٌ يُسأل عنه السجلُّ، لا يُردّ به صاحبُه.**
+            || ($declared === null && \App\Models\FuelStation::where(
+                'merchant_user_id', $authUser->id)->exists());
+
+        if (! $isFuel) {
+            return $this->error('FUEL_ONLY',
+                'هذه العملية متاحة لمحطات الوقود فقط', 403);
+        }
+
         return [$authUser, null];
     }
 }

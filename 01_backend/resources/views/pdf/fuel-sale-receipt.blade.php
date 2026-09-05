@@ -158,8 +158,12 @@
 
 <div class="footer">
     <div>شكراً لزيارتكم</div>
+    {{-- AMIAL-DOC-VERIFY-001 — **الرمزُ يصير رابطاً يُقرأ.**
+         كان يُطبَع الرمزُ وحدَه تحت لافتة «رمز التحقّق» — **ولا مُتحقِّقَ
+         يقبله ولا موضعَ يُكتب فيه**. فمن جرّبه قرأ سندَه الصحيحَ مزوَّراً. --}}
     <div class="verification-code">{{ strtoupper(substr($sale->sale_ulid, -8)) }}</div>
     <div style="font-size:9px; margin-top:4px">رمز التحقّق</div>
+    <div style="font-size:9px; margin-top:2px" dir="ltr">{{ rtrim(config('app.url', 'https://amialpay.com'), '/') }}/verify</div>
     <div class="amial-brand">Amial Pay © {{ now()->year }}</div>
 </div>
 

@@ -22,6 +22,9 @@ class MeController extends Controller
     public function show(Request $request): JsonResponse
     {
         $user = $request->user();
+        if (empty($user->account_number)) {
+            app(\App\Services\AccountNumberService::class)->assign($user);
+        }
 
         $emoney = EMoney::where('user_id', $user->id)->first();
         $merchant = MerchantProfile::where('user_id', $user->id)->first();
@@ -84,7 +87,7 @@ class MeController extends Controller
     {
         $user = $request->user();
         if (empty($user->account_number)) {
-            return $this->error('NO_ACCOUNT_NUMBER', 'لا يوجد رقم حساب لهذا المستخدم', 404);
+            app(\App\Services\AccountNumberService::class)->assign($user);
         }
         return $this->ok([
             'account_number' => $user->account_number,

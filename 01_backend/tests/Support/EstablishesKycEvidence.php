@@ -41,6 +41,24 @@ trait EstablishesKycEvidence
             $types[] = KycDocument::TYPE_ADDRESS_PROOF;
         }
 
+        // ══════════════════════════════════════════════════════════════
+        // **ومحافظةُ السكن شرطٌ للاعتماد كذلك.**
+        //
+        // أُضيف الاشتراطُ لاحقاً (`MISSING_RESIDENCE_GOVERNORATE`) **وهو
+        // صائب**: المنطقةُ تُشتقّ من المحافظة، وعليها يقوم سقفُ الحساب
+        // وأهليّتُه — فاعتمادٌ بلا محافظةٍ يُنتج حساباً موثّقاً بلا نطاق.
+        //
+        // ولمّا لم يضبطه هذا المساعدُ سقط **تسعةُ اختباراتٍ** دفعةً
+        // واحدة بـ٤٢٢. والدليلُ يُبنى هنا كاملاً مرّةً واحدة، لا يُنسخ
+        // الشرطُ في تسعة ملفّات.
+        // ══════════════════════════════════════════════════════════════
+        if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'residence_governorate')
+            && ($customer->residence_governorate ?? null) === null) {
+            $customer->forceFill([
+                'residence_governorate' => \App\Support\YemenGovernorates::codes()[1] ?? 'YE-AD',
+            ])->save();
+        }
+
         foreach ($types as $type) {
             KycDocument::query()->updateOrCreate(
                 ['user_id' => $customer->id, 'doc_type' => $type],

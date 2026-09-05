@@ -3,6 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/features/fuel_station/controllers/fuel_station_controller.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_qr_collect_screen.dart';
+import 'package:amial_pay/features/fuel_station/screens/fuel_receipt_screen.dart';
+import 'package:amial_pay/features/merchant/widgets/credit_sale_notice.dart';
+import 'package:amial_pay/features/merchant/widgets/merchant_payment_method_picker.dart';
 
 /// AMIAL-FUEL-001 — شاشة بيع وقود (الجوهر).
 ///
@@ -12,7 +16,7 @@ import 'package:amial_pay/features/fuel_station/controllers/fuel_station_control
 ///   3. اختيار طريقة الإدخال (لتر أو مبلغ)
 ///   4. إدخال الكمية مع حساب لحظي للأخرى
 ///   5. (للميكانيكية) قراءة العدّاد بعد البيع
-///   6. اختيار طريقة الدفع (نقد / أميال باي / بطاقة شركة)
+///   6. اختيار طريقة الدفع (نقد / أميال باي / آجل، مع حساب الشركة كامتداد)
 ///   7. تأكيد
 class FuelSaleScreen extends StatefulWidget {
   const FuelSaleScreen({super.key});
@@ -39,11 +43,10 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
   // لـ company_card
   Map<String, dynamic>? _selectedCompany;
   final _cardIdCtrl = TextEditingController();
+  final _creditPhoneCtrl = TextEditingController();
+  final _creditNameCtrl = TextEditingController();
 
   // لـ amial_pay
-  final _paidTxIdCtrl = TextEditingController();
-  // AMIAL-FUEL-PAY-001: هاتف العميل للشحن المباشر عبر أميال باي
-  final _customerPhoneCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -62,8 +65,8 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
     _plateCtrl.dispose();
     _driverCtrl.dispose();
     _cardIdCtrl.dispose();
-    _paidTxIdCtrl.dispose();
-    _customerPhoneCtrl.dispose();
+    _creditPhoneCtrl.dispose();
+    _creditNameCtrl.dispose();
     super.dispose();
   }
 
@@ -114,16 +117,7 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
       if (_driverCtrl.text.isNotEmpty) 'driver_name': _driverCtrl.text.trim(),
     };
 
-    if (_paymentMethod == 'amial_pay') {
-      // AMIAL-FUEL-PAY-001: هاتف العميل يشحن مباشرةً؛ أو مرجع دفع مسبق
-      final phone = _customerPhoneCtrl.text.trim();
-      final ref = _paidTxIdCtrl.text.trim();
-      if (phone.isEmpty && ref.isEmpty) {
-        return _snack('أدخل رقم هاتف العميل (أو مرجع دفع مسبق)');
-      }
-      if (phone.isNotEmpty) data['customer_phone'] = phone;
-      if (ref.isNotEmpty) data['paid_transaction_id'] = ref;
-    }
+    if (_paymentMethod == 'amial_pay') return Get.to(() => FuelQrCollectScreen(saleData: data, amount: _computedTotal, stationName: c.station.value?['station_name'] ?? 'محطة الوقود', pumpLabel: 'المضخّة #${_selectedPump!['pump_number']}', productName: _selectedProduct?['name']?.toString()));
 
     if (_paymentMethod == 'company_card') {
       if (_selectedCompany == null) return _snack('اختر الشركة');
@@ -133,6 +127,12 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
       }
     }
 
+    if (_paymentMethod == 'credit') {
+      if (_creditPhoneCtrl.text.trim().isEmpty) return _snack('أدخل رقم العميل للبيع الآجل');
+      data['customer_phone'] = _creditPhoneCtrl.text.trim();
+      if (_creditNameCtrl.text.trim().isNotEmpty) data['customer_name'] = _creditNameCtrl.text.trim();
+    }
+
     if (_isMechanical && _meterAfterCtrl.text.trim().isNotEmpty) {
       data['meter_reading_after'] = _meterAfterCtrl.text.trim();
     }
@@ -140,85 +140,32 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
     final ok = await c.recordSale(data);
     if (!mounted) return;
     if (ok) {
-      _showSuccessDialog();
+      _openReceipt();
     } else {
       _snack(c.lastError.value.isEmpty ? 'فشل تسجيل البيع' : c.lastError.value);
     }
   }
 
-  void _showSuccessDialog() {
-    final sale = c.lastSale.value;
-    if (sale == null) return;
+  /// كل بيع ناجح — نقد أو آجل أو حساب شركة أو QR — ينتهي بالفاتورة نفسها.
+  /// النافذة القديمة كانت تخفي الطباعة والمشاركة وPDF في ثلاثة مسارات.
+  void _openReceipt() {
+    final sale = Map<String, dynamic>.from(c.lastSale.value ?? const {});
+    if (sale.isEmpty) return;
+    sale.putIfAbsent('product_name', () => _selectedProduct?['name']);
+    sale.putIfAbsent('total_amount', () => _computedTotal);
+    sale.putIfAbsent('liters', () => _computedLiters);
+    sale.putIfAbsent('price_per_liter', () => _pricePerLiter);
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        title: const Row(children: [
-          Icon(Icons.check_circle, color: Colors.green, size: 28),
-          SizedBox(width: 8),
-          Text('تم البيع'),
-        ]),
-        content: SingleChildScrollView(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
-            _resultRow('اللترات', '${sale['liters']} لتر'),
-            _resultRow('السعر للّتر', '${sale['price_per_liter']} ر.ي'),
-            const Divider(),
-            _resultRow('الإجمالي', '${sale['total_amount']} ر.ي', bold: true, color: AmialColors.primary),
-            const SizedBox(height: 8),
-            if (sale['vehicle_plate'] != null)
-              _resultRow('السيارة', '${sale['vehicle_plate']}'),
-          ]),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _resetForm();
-            },
-            child: const Text('بيع جديد'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Get.back(); // ارجع للوحة المحطة
-            },
-            child: const Text('إغلاق'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _resultRow(String label, String value, {bool bold = false, Color? color}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(value, style: TextStyle(
-          fontWeight: bold ? FontWeight.bold : FontWeight.w500,
-          fontSize: bold ? 18 : 14,
-          color: color,
-        )),
-        Text(label, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-      ]),
-    );
-  }
-
-  void _resetForm() {
-    _amountCtrl.clear();
-    _litersCtrl.clear();
-    _meterAfterCtrl.clear();
-    _plateCtrl.clear();
-    _driverCtrl.clear();
-    _cardIdCtrl.clear();
-    _paidTxIdCtrl.clear();
-    _customerPhoneCtrl.clear();
-    setState(() {
-      _selectedPump = null;
-      _selectedProduct = null;
-      _selectedCompany = null;
-    });
-    c.loadPumps(); // إعادة تحميل لقراءة عدّاد محدّثة
+    Get.off(() => FuelReceiptScreen(
+          sale: sale,
+          stationName: c.station.value?['station_name'] ?? 'محطة الوقود',
+          pumpLabel: _selectedPump == null
+              ? null
+              : 'المضخّة #${_selectedPump!['pump_number']}',
+          customerPhone: _paymentMethod == 'credit'
+              ? _creditPhoneCtrl.text.trim()
+              : null,
+        ));
   }
 
   void _snack(String m) => ScaffoldMessenger.of(context).showSnackBar(
@@ -310,28 +257,35 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
             // 7) طريقة الدفع
             _sectionTitle('4. طريقة الدفع'),
             const SizedBox(height: 8),
-            Row(children: [
-              Expanded(child: _payMethodTile('cash', Icons.payments, 'نقدي')),
-              const SizedBox(width: 6),
-              Expanded(child: _payMethodTile('amial_pay', Icons.qr_code, 'أميال باي')),
-              const SizedBox(width: 6),
-              Expanded(child: _payMethodTile('company_card', Icons.business, 'شركة')),
-            ]),
+            MerchantPaymentMethodPicker(
+              selectedValue: _paymentMethod,
+              onChanged: (value) => setState(() => _paymentMethod = value),
+              options: const [
+                MerchantPaymentOption.cash,
+                MerchantPaymentOption.amialPay,
+                MerchantPaymentOption.credit,
+                MerchantPaymentOption.companyCard,
+              ],
+            ),
 
             if (_paymentMethod == 'amial_pay') ...[
               const SizedBox(height: 12),
-              _textField(_customerPhoneCtrl, 'رقم هاتف العميل',
-                  type: TextInputType.phone),
-              const SizedBox(height: 6),
-              const Text(
-                'يُخصم المبلغ من محفظة العميل فوراً ويُضاف لك (بعد الرسوم).',
-                style: TextStyle(fontSize: 11, color: AmialColors.textMuted),
-              ),
+              const Text('سيظهر QR مرتبط بمحفظة المحطة؛ العميل يمسحه ويؤكد الدفع من تطبيقه.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: AmialColors.textMuted)),
             ],
 
             if (_paymentMethod == 'company_card') ...[
               const SizedBox(height: 12),
               _companySelector(),
+            ],
+            if (_paymentMethod == 'credit') ...[
+              const SizedBox(height: 12),
+              const CreditSaleNotice(dense: true),
+              const SizedBox(height: 8),
+              _textField(_creditPhoneCtrl, 'رقم العميل *', type: TextInputType.phone),
+              const SizedBox(height: 8),
+              _textField(_creditNameCtrl, 'اسم العميل (اختياري)'),
+              const SizedBox(height: 6),
+              const Text('رقم العميل يكفي لتسجيل الآجل؛ لا يلزم تثبيت أو تفعيل تطبيق أميال. ويمكنه السداد جزئياً أو كلياً من «فواتيري الآجلة» عند استخدامه.', textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
             ],
 
             const SizedBox(height: 24),
@@ -531,28 +485,6 @@ class _FuelSaleScreenState extends State<FuelSaleScreen> {
         labelText: label,
         filled: true, fillColor: Colors.white,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-      ),
-    );
-  }
-
-  Widget _payMethodTile(String value, IconData icon, String label) {
-    final selected = _paymentMethod == value;
-    return InkWell(
-      borderRadius: BorderRadius.circular(10),
-      onTap: () => setState(() => _paymentMethod = value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-        decoration: BoxDecoration(
-          color: selected ? AmialColors.primary : Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: selected ? AmialColors.primary : Colors.grey.shade300, width: selected ? 2 : 1),
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: selected ? Colors.white : AmialColors.primary, size: 22),
-          const SizedBox(height: 4),
-          Text(label, style: TextStyle(color: selected ? Colors.white : Colors.black87,
-              fontWeight: FontWeight.bold, fontSize: 12)),
-        ]),
       ),
     );
   }

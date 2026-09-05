@@ -108,13 +108,91 @@ class UnifiedAuthController extends Controller
         return $this->success($result);
     }
 
+    /**
+     * AMIAL-POS-LOGIN-SIMPLE-001 — **الجهازُ يعرف تاجرَه، فلا يُكتبان.**
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **الثمنُ الذي قِيس:** الموظّفُ يكتب أربعةَ حقولٍ ليدخل، **اثنان
+     * منها ليسا له**: رقمُ التاجر وجوّالُ التاجر. أي أنّ الكاشيرَ يحفظ
+     * رقمَ هاتف مديره ليبدأ يومَه.
+     *
+     * **والجهازُ يحملهما أصلاً:** `merchant_pos_devices.merchant_user_id`
+     * يُكتب لحظةَ التفعيل بالرمز ذي الأرقام الثمانية. فيُقرآن منه.
+     *
+     *   قبل : رقم التاجر · جوّال التاجر · رمز الموظّف · كلمة المرور
+     *   بعد : رمز الموظّف · كلمة المرور
+     *
+     * ══════════════════════════════════════════════════════════════════
+     * **ولا يُكسَر أحدٌ يعمل الآن — وهذا شرطُ التنفيذ لا زينةٌ عليه:**
+     *
+     * ① الاشتقاقُ **يملأ الفارغَ ولا يستبدل المكتوب**. فمن أرسل الأربعةَ
+     *    يمرّ كما كان حرفاً بحرف، وتطبيقٌ قديمٌ لا يتأثّر.
+     * ② وإن تعذّر الاشتقاقُ سقط التحقّقُ كما كان **بالرسالة نفسِها** —
+     *    فلا رسالةَ جديدةٌ تُربك من يقرؤها.
+     * ③ و**الغموضُ يُرفَض ولا يُخمَّن**: بصمةُ جهازٍ تُطابق أكثرَ من صفّ
+     *    لا تُشتقّ منها هويّة. (القاعدة السابعة: «غير معروف» ليس صفراً.)
+     *
+     * **والأمانُ يزيد لا ينقص:** الدخولُ يصير مربوطاً بجهازٍ **مفعَّلٍ
+     * بعينه** بدل أن يكفيَ من يعرف الأرقامَ الأربعة.
+     * ══════════════════════════════════════════════════════════════════
+     */
+    private function fillMerchantIdentityFromDevice(Request $request): void
+    {
+        // **① لا يُستبدَل مكتوب.**
+        if ($request->filled('merchant_number') && $request->filled('phone')) {
+            return;
+        }
+
+        $raw = trim((string) $request->header(\App\Http\Middleware\EnsurePosDevice::HEADER, ''));
+
+        if ($raw === '') {
+            return;
+        }
+
+        // البصمةُ الحاليّةُ ومفاتيحُ التدوير السابقة — فجهازٌ سُجّل قبل
+        // تدويرٍ لا يفقد بابَه.
+        $hashes = [\App\Models\Merchant\PosDevice::hashUuid($raw)];
+        foreach (\App\Models\Merchant\PosDevice::previousKeys() as $key) {
+            $hashes[] = \App\Models\Merchant\PosDevice::hashUuid($raw, $key);
+        }
+
+        $devices = \App\Models\Merchant\PosDevice::whereIn('device_uuid_hash', $hashes)
+            ->whereNull('revoked_at')
+            ->where('is_active', true)
+            ->limit(2)
+            ->get();
+
+        // **③ الغموضُ يُرفَض** — صفٌّ واحدٌ بالضبط أو لا اشتقاق.
+        if ($devices->count() !== 1) {
+            return;
+        }
+
+        $ownerId = (int) $devices->first()->merchant_user_id;
+
+        $owner = \App\Models\User::find($ownerId);
+        $number = \App\Models\Merchant::where('user_id', $ownerId)->value('merchant_number');
+
+        if ($owner === null || $number === null) {
+            return;
+        }
+
+        $request->merge(array_filter([
+            'merchant_number' => $request->filled('merchant_number') ? null : $number,
+            'phone' => $request->filled('phone') ? null : $owner->phone,
+        ], fn ($v) => $v !== null));
+    }
+
     private function merchantLogin(Request $request): JsonResponse
     {
+        $this->fillMerchantIdentityFromDevice($request);
+
         $v = Validator::make($request->all(), [
             'merchant_number' => 'required|string|min:3|max:50',
             'phone' => 'required|string|min:6|max:30',
             // كلمة السرّ قد تكون PIN من 4 أرقام (معيار التسجيل الذاتي)
             'password' => 'required|string|min:4|max:200',
+            'employee_code' => 'sometimes|nullable|string|max:50',
+            // اسم الحقل القديم مدعوم لنسخ التطبيق السابقة فقط.
             'pos_number' => 'sometimes|nullable|string|max:50',
         ]);
         if ($v->fails()) return $this->validationError($v);
@@ -123,7 +201,7 @@ class UnifiedAuthController extends Controller
             $request->input('merchant_number'),
             $request->input('phone'),
             $request->input('password'),
-            $request->input('pos_number'),
+            $request->input('employee_code', $request->input('pos_number')),
             $request,
         );
         return $this->success($result);

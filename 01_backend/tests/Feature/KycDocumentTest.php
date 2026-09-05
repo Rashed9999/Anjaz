@@ -33,9 +33,12 @@ class KycDocumentTest extends TestCase
         $this->svc = app(KycDocumentService::class);
     }
 
+    /** بصمةٌ مميَّزةٌ لكلّ صورة — انظر AMIAL-KYC-REUSE-001. */
+    private int $imageSeq = 0;
+
     private function image(string $name = 'id.jpg'): UploadedFile
     {
-        return UploadedFile::fake()->image($name, 600, 400);
+        return UploadedFile::fake()->image($name, 600, 400 + (++$this->imageSeq));
     }
 
     private function customer(): User
@@ -279,7 +282,11 @@ class KycDocumentTest extends TestCase
             $this->svc->decideAccountVerification($u->fresh(), $admin, true, 2);
             $this->fail('أُعيدت فئة ٣ بمستندات فئة ٢ فقط');
         } catch (DomainException $e) {
-            $this->assertStringContainsString(KycDocument::TYPE_ADDRESS_PROOF, $e->getMessage());
+            // **يُسمّى الناقصُ بالعربيّة** — صارت الرسالةُ تُقرأ بلغة
+            // من يقرؤها (AMIAL-KYC-SAY-001)، والمقصودُ هنا هو نفسُه:
+            // أن يُسمّى المستندُ الناقصُ بعينه لا «الملفّ ناقص».
+            $this->assertStringContainsString(
+                KycDocument::TYPE_LABELS[KycDocument::TYPE_ADDRESS_PROOF], $e->getMessage());
         }
 
         $this->svc->approve($this->svc->upload($u, KycDocument::TYPE_ADDRESS_PROOF, $this->image('address.jpg')), $admin);

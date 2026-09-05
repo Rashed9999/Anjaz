@@ -6,6 +6,7 @@ use App\Models\EMoney;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\EstablishesKycEvidence;
+use Tests\Support\OpensAccountsFromHub;
 use Tests\TestCase;
 
 /**
@@ -13,6 +14,7 @@ use Tests\TestCase;
  */
 class AdminHubTest extends TestCase
 {
+    use OpensAccountsFromHub;
     use RefreshDatabase;
     use EstablishesKycEvidence;
 
@@ -82,7 +84,7 @@ class AdminHubTest extends TestCase
             ->postJson('/admin/amial/hub/customers/users', [
                 'f_name' => 'اختبار', 'l_name' => 'عميل',
                 'phone' => '967771009010', 'password' => 'Secret@123',
-            ])
+            ] + $this->kycDossier('967771009010'))
             ->assertCreated();
 
         $user = User::where('phone', '967771009010')->first();
@@ -99,7 +101,7 @@ class AdminHubTest extends TestCase
         $this->actingAs($this->admin, 'user')
             ->postJson('/admin/amial/hub/customers/users', [
                 'f_name' => 'مكرر', 'phone' => '967771009011', 'password' => 'Secret@123',
-            ])
+            ] + $this->kycDossier('967771009011'))
             ->assertStatus(422);
     }
 
@@ -219,7 +221,7 @@ class AdminHubTest extends TestCase
             ->postJson('/admin/amial/hub/customers/users', [
                 'f_name' => 'عميل', 'l_name' => 'حقيقي',
                 'phone' => '967771009050', 'password' => 'Secret@123', 'pin' => '5678',
-            ])->assertCreated();
+            ] + $this->kycDossier('967771009050'))->assertCreated();
 
         \Illuminate\Support\Facades\Artisan::call('passport:install', ['--no-interaction' => true]);
         $this->postJson('/api/v1/auth/login', [
@@ -235,7 +237,7 @@ class AdminHubTest extends TestCase
                 'f_name' => 'تاجر', 'l_name' => 'حقيقي',
                 'phone' => '967771009051', 'password' => 'Secret@123',
                 'store_name' => 'بقالة الاختبار', 'business_type' => 'retail', 'plan' => 'business',
-            ])->assertCreated();
+            ] + $this->kycDossier('967771009051', merchant: true))->assertCreated();
 
         // دخول التطبيق بدور تاجر — التطبيق يطلب رقم التاجر الذي تعيده اللوحة
         \Illuminate\Support\Facades\Artisan::call('passport:install', ['--no-interaction' => true]);
@@ -277,7 +279,7 @@ class AdminHubTest extends TestCase
             ->postJson('/admin/amial/hub/agents/users', [
                 'f_name' => 'وكيل', 'l_name' => 'حقيقي',
                 'phone' => '967771009052', 'password' => 'Secret@123',
-            ])->assertCreated();
+            ] + $this->kycDossier('967771009052'))->assertCreated();
 
         $agent = User::where('phone', '967771009052')->first();
         $this->assertNotNull($agent->agent_number, 'رقم الوكيل يُولَّد تلقائياً');
@@ -299,7 +301,8 @@ class AdminHubTest extends TestCase
                 'f_name' => 'تاجر', 'l_name' => 'باقات',
                 'phone' => '967771009053', 'password' => 'Secret@123',
                 'store_name' => 'متجر الباقات', 'plan' => 'free',
-            ])->assertCreated();
+                'business_type' => \App\Support\Access\AccessConstants::BIZ_RETAIL,
+            ] + $this->kycDossier('967771009053', merchant: true))->assertCreated();
         $merchant = User::where('phone', '967771009053')->first();
 
         $this->actingAs($this->admin, 'user')
@@ -309,11 +312,26 @@ class AdminHubTest extends TestCase
             ->getJson('/admin/amial/hub/subscriptions/list.json')
             ->assertOk()->assertJsonStructure(['summary', 'data']);
 
-        // تغيير الباقة يمرّ عبر SubscriptionService الحقيقي ويغيّر الملف فعلاً
+        // ══════════════════════════════════════════════════════════════
+        // تغيير الباقة يمرّ عبر SubscriptionService الحقيقي ويغيّر الملف فعلاً.
+        //
+        // **والرمزُ يُقرأ من الفهرس لا يُكتب نصّاً.** كان مكتوباً هنا
+        // `'merchant_pro'` حرفاً، فلمّا وحّد صاحبُ المشروع الباقاتِ في
+        // ثلاثٍ سقط الاختبارُ بـ422 على **قرارِ تسعيرٍ سليم** لا على عطل.
+        // واختبارٌ يحرس صيغةَ رمزٍ بدل أن يحرس أنّ التغييرَ يقع
+        // **يمنع تصحيحاً صحيحاً**. (القاعدة السادسة بمعناها: يُقرأ من
+        // مصدره لا من نسخةٍ مجمَّدة.)
+        // ══════════════════════════════════════════════════════════════
+        $plans = \App\Support\Access\AccessConstants::ALL_PLANS;
+        $target = $plans[count($plans) - 1];
+
+        $this->assertNotSame(\App\Support\Access\AccessConstants::PLAN_FREE, $target,
+            'أعلى الباقات هي المجّانيّة — فالفهرسُ فارغٌ أو مقلوب، والاختبارُ لا يغيّر شيئاً');
+
         $this->actingAs($this->admin, 'user')
-            ->postJson("/admin/amial/hub/subscriptions/{$merchant->id}/plan", ['plan' => 'merchant_pro'])
+            ->postJson("/admin/amial/hub/subscriptions/{$merchant->id}/plan", ['plan' => $target])
             ->assertOk();
-        $this->assertSame('merchant_pro',
+        $this->assertSame($target,
             \App\Models\MerchantProfile::where('user_id', $merchant->id)->value('subscription_plan'));
 
         // والتمديد يحرّك تاريخ الانتهاء
@@ -355,7 +373,12 @@ class AdminHubTest extends TestCase
             ->assertJsonPath('id', $customer->id)
             ->assertJsonPath('wallet.current', '7500.0000')
             ->assertJsonPath('risk.label', 'سليم') // لا ملف مخاطر = منخفض = سليم
-            ->assertJsonStructure(['name', 'phone', 'documents', 'risk' => ['level', 'label', 'score', 'is_dangerous'], 'transactions']);
+            ->assertJsonStructure(['name', 'phone',
+                // AMIAL-KYC-EVIDENCE-001 — كان `documents` (عمودُ الهويّة
+                // القديم)، وصار `evidence`: السجلُّ الحديث ومعه ما ينقص وما
+                // يمنع الاعتماد — وهو الدليلُ الذي يُحكَم به فعلاً.
+                'evidence' => ['complete', 'missing', 'documents', 'legacy_images', 'blockers'],
+                'risk' => ['level', 'label', 'score', 'is_dangerous'], 'transactions']);
     }
 
     /** @test AMIAL — حالة المخاطر تعكس ملف AML (خطر جداً = critical). */

@@ -99,20 +99,77 @@ class FeatureAccessTest extends TestCase
         $this->assertNotContains(A::F_BARCODE, $features);
         $this->assertNotContains(A::F_EMPLOYEES, $features);
 
-        // الحدود: 20 منتج، 0 موظفين
-        $this->assertSame(0, $access['limits']['max_products']); // FREE: لا منتجات (تُفتح من STARTER)
-        $this->assertSame(0, $access['limits']['max_employees']);
+        // ══════════════════════════════════════════════════════════════
+        // **الحدُّ يُقرأ من مصدره لا يُكتب رقماً.**
+        //
+        // كان هنا `0` منتجاً بتعليقٍ يقول «تُفتح من STARTER» — وقد أُلغيت
+        // «البداية» بتوحيد الباقات، وصار للمجّانيّة سقفٌ منتجاتٍ حقيقيّ.
+        // فسقط الاختبارُ على **قرارِ تسعيرٍ سليم**.
+        //
+        // والمعنى المحروسُ ليس الرقمَ بل **أنّ للمجّانيّة سقفاً**: صفرٌ
+        // يعني «فُحص فوُجد ممنوعاً»، و‏`-1` يعني بلا حدّ. والفرقُ بينهما
+        // هو الفرقُ بين باقةٍ تُباع وباقةٍ لا معنى لها. (القاعدة السابعة.)
+        // ══════════════════════════════════════════════════════════════
+        $free = A::PLAN_LIMITS[A::PLAN_FREE];
+
+        $this->assertSame($free['products'], $access['limits']['max_products']);
+        $this->assertSame($free['employees'], $access['limits']['max_employees']);
+
+        // **وكم تُعطي المجّانيّةُ قرارُ تسعيرٍ لا قرارُ شيفرة.**
+        //
+        // كان هنا `> 0` برأيٍ مكتوب: «فلا يُجرَّب المنتجُ قبل الشراء».
+        // ثمّ قرّر صاحبُ المشروع صفراً — فسقط الحارسُ على **قراره
+        // السليم**. وحارسٌ يفرض رأيَ كاتبه في التسعير يُعطَّل أوّلَ مرّة.
+        //
+        // فالمحروسُ **بنيةٌ لا قيمة**: أنّ للمجّانيّة سقفاً منتهياً،
+        // وأنّ ما يُعرَض هو ما في الكتالوج.
+        $this->assertNotSame(-1, $free['products'],
+            'المجّانيّةُ بلا سقفِ منتجات — فما الذي تبيعه «الأعمال»؟');
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-POS-SEAT-001 — **والسطرُ التالي كرّر الخطأَ الذي فوقه.**
+        //
+        // كان هنا `assertSame(0, $free['employees'])` — رقمٌ تجاريٌّ
+        // مثبَّت، **بعد ثلاثة أسطرٍ تقول إنّ ذلك يُعطِّل الحارس**. وقد
+        // وقع: عجز صاحبُ المشروع عن تجربة نقطة البيع، فالمجّانيّةُ تبيع
+        // مقعداً (`pos_devices = 1`) ولا تسمح بمن يشغله (`employees = 0`)،
+        // والدخولُ إليها برمز موظّف. فرُفع السقفُ إلى واحدٍ **تسليماً لما
+        // بيع** — فسقط هذا على إصلاح.
+        //
+        // فالمحروسُ **بنيةٌ لا قيمة**، كما يقول الشرحُ أعلاه:
+        //   · سقفٌ منتهٍ (لا `-1`) — وإلّا فما الذي تبيعه «الأعمال»؟
+        //   · **ومقعدٌ يُشغَّل**: من باع نقطةَ بيعٍ سمح بموظّفٍ يجلس فيها.
+        //
+        // وكم تُعطي المجّانيّةُ يبقى قرارَ صاحب المشروع.
+        // ══════════════════════════════════════════════════════════════
+        $this->assertNotSame(-1, $free['employees'],
+            'المجّانيّةُ بلا سقفِ موظّفين — فما الذي تبيعه «الأعمال»؟');
+
+        if ((int) $free['pos_devices'] !== 0) {
+            $this->assertGreaterThan(0, (int) $free['employees'],
+                'المجّانيّةُ تبيع مقعدَ نقطة بيعٍ ولا تسمح بموظّفٍ يشغله — '
+                . 'والدخولُ إليها برمز موظّف، فالمقعدُ لا يُستعمل أبداً.');
+        }
     }
 
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * **كان اسمُه `starter`، ولا باقةَ بهذا الاسم اليوم.**
+     *
+     * وحّد صاحبُ المشروع الباقاتِ في ثلاث، فصار `PLAN_STARTER` اسماً
+     * ثانياً لـ`PLAN_BUSINESS`. فبقي الاختبارُ يُسمّى «البداية» **وهو
+     * يقيس «الأعمال»**، ويطلب منها منعَ ما تبيعه.
+     *
+     * فيُسمّى بما يقيس، ويُثبَّت عليه ما تفتحه «الأعمال» فعلاً.
+     */
     /** @test */
-    public function retail_business_starter_plan_adds_barcode_and_inventory(): void
+    public function retail_business_plan_adds_barcode_inventory_and_customers(): void
     {
         $user = User::factory()->create(['role' => A::ROLE_MERCHANT]);
         MerchantProfile::create([
             'user_id' => $user->id,
             'verification_status' => 'verified',
             'business_type' => A::BIZ_RETAIL,
-            'subscription_plan' => A::PLAN_STARTER,
+            'subscription_plan' => A::PLAN_BUSINESS,
         ]);
 
         $access = $this->svc->accessFor($user);
@@ -122,27 +179,30 @@ class FeatureAccessTest extends TestCase
         $this->assertContains(A::F_CASHIER, $features);
         $this->assertContains(A::F_PRODUCTS, $features);
         // ══════════════════════════════════════════════════════════════
-        // **و«العملاء» ليست في «البداية»** — قرارُ صاحب المشروع صراحةً:
+        // **و«العملاء» ليست مجّانيّةً** — قرارُ صاحب المشروع صراحةً:
         //
         //   «customers ليست مجانية … إدارةُ العملاء الكاملة تبدأ من
-        //    Business.  Retail وWholesale: products تبدأ من Starter،
-        //    وcustomers تبدأ من Business. لا يحصل عليهما التاجر مجانًا
-        //    بسبب business_type.»
+        //    Business. لا يحصل عليهما التاجر مجانًا بسبب business_type.»
         //
-        // وكان هذا الفحصُ يطلب عكسَه، فبقي ساقطاً منذ نُفّذ القرار.
-        // **والاختبارُ هو المتخلّف لا الشيفرة** — فيُقلَب ويُثبَّت المنع.
-        $this->assertNotContains(A::F_CUSTOMERS, $features,
-            '«العملاء» مُنحت على «البداية» — وهي تبدأ من «الأعمال»');
-        // STARTER يُفعّل
+        // فهي تبدأ **من هذه الباقة**، لا تُمنع فيها. والمنعُ محروسٌ في
+        // حالة «المجّانيّة» أعلاه — وهناك موضعُه.
+        $this->assertContains(A::F_CUSTOMERS, $features,
+            '«العملاء» مغلقةٌ على «الأعمال» — وهي أوّلُ ما تبيعه');
         $this->assertContains(A::F_INVENTORY, $features);
         $this->assertContains(A::F_BARCODE, $features);
+        $this->assertContains(A::F_EMPLOYEES, $features);
 
-        // لكن لا يرى ميزات Business/Pro
-        $this->assertNotContains(A::F_EMPLOYEES, $features);
+        // **ويبقى للأعلى ما يبيعه** — وإلّا فالطبقةُ العليا بلا سبب.
         $this->assertNotContains(A::F_BRANCHES, $features);
         $this->assertNotContains(A::F_RBAC, $features);
 
-        $this->assertSame(100, $access['limits']['max_products']);
+        // **والحدُّ يُقرأ من مصدره** — كان `100` مكتوباً، وصار ٥٠٠ بالتوحيد.
+        $limits = A::PLAN_LIMITS[A::PLAN_BUSINESS];
+
+        $this->assertSame($limits['products'], $access['limits']['max_products']);
+
+        $this->assertNotSame(-1, $limits['products'],
+            '«الأعمال» بلا سقفِ منتجات — فما الذي تبيعه «مؤسسة»؟');
     }
 
     /** @test */
@@ -194,11 +254,24 @@ class FeatureAccessTest extends TestCase
         $this->assertContains(A::F_PHARMACY_POS, $features);
         $this->assertContains(A::F_PHARMACY_BATCHES, $features);
         $this->assertContains(A::F_PHARMACY_ALERTS, $features);
+        $this->assertContains(A::F_PHARMACY_CUSTOMERS, $features);
         $this->assertContains(A::F_EMPLOYEES, $features);
         $this->assertContains(A::F_ADVANCED_REPORTS, $features);
 
-        // PRESCRIPTIONS feature تأتي مع MERCHANT_PRO فقط
-        $this->assertNotContains(A::F_PHARMACY_PRESCRIPTIONS, $features);
+        // ══════════════════════════════════════════════════════════════
+        // **والوصفاتُ انتقلت إلى هنا** — كانت تُباع بـ«تاجر محترف»، وقد
+        // أُلغيت بتوحيد الباقات، فصارت من «الأعمال». وهو **قرارُ تسعيرٍ
+        // لا عطل**، فيُتبَع لا يُقاوَم.
+        //
+        // **والحدُّ الأدنى يُسأل من سجلّ القدرات** لا يُكتب هنا رمزَ باقةٍ
+        // ثانياً — فتعريفان يفترقان أوّلَ ما يتغيّر أحدُهما.
+        $this->assertContains(A::F_PHARMACY_PRESCRIPTIONS, $features);
+
+        $this->assertSame(
+            A::PLAN_BUSINESS,
+            \App\Support\Access\CapabilityRegistry::find(A::F_PHARMACY_PRESCRIPTIONS)?->minimumPlan(),
+            'سجلُّ القدرات يبيع الوصفاتِ بباقةٍ غيرِ التي تفتحها الاستحقاقات '
+            . '— فالشاشةُ تُفتح والبوّابةُ تردّ، أو العكس');
     }
 
     /** @test */
