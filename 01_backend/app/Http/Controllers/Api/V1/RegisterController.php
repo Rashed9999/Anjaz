@@ -318,9 +318,15 @@ class RegisterController extends Controller
                 $mr = new \App\Models\Merchant();
                 $mr->user_id = $user->id;
                 $mr->store_name = trim((string) $request->input('store_name'));
-                $mr->merchant_number = sprintf('M-%05d', $user->id);
                 $mr->address = trim((string) $request->input('address', '')) ?: '—';
-                $mr->save();
+
+                // AMIAL-MERCHANT-NUMBER-001 — **ستّةُ أرقامٍ عشوائيّةٍ بلا
+                // صفر.** وكان `sprintf('M-%05d', $user->id)` — مشتقّاً من
+                // رقم المستخدم، فيُفشي عدَّ التجّار ويُخمَّن جارُه.
+                // و`assignTo` تحفظ الصفَّ وتعيد المحاولةَ على تصادم
+                // القيد الفريد.
+                app(\App\Services\Merchant\MerchantNumberService::class)->assignTo($mr);
+
                 $loginNumbers['merchant_number'] = $mr->merchant_number;
 
                 \App\Models\MerchantProfile::firstOrCreate(['user_id' => $user->id], [

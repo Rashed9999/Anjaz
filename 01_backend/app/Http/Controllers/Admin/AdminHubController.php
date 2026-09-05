@@ -707,9 +707,23 @@ class AdminHubController extends Controller
                 $mr = \App\Models\Merchant::where('user_id', $user->id)->first() ?? new \App\Models\Merchant();
                 $mr->user_id = $user->id;
                 $mr->store_name = trim((string) $request->input('store_name'));
-                $mr->merchant_number = sprintf('M-%05d', $user->id);
                 $mr->address = trim((string) $request->input('address', '')) ?: '—';
                 $mr->save();
+
+                // ══════════════════════════════════════════════════════
+                // AMIAL-MERCHANT-NUMBER-001 — **ولا يُولَّد إلّا لمن لا
+                // رقمَ له.**
+                //
+                // هذا السطرُ يُعيد استعمالَ متجرٍ قائمٍ (`?? new`)، وكان
+                // يُسنِد `M-%05d` — وهي مشتقّةٌ من `id` **فتُنتج القيمةَ
+                // نفسَها في كلّ حفظ**، أي أنّ إعادةَ الإسناد كانت بلا
+                // أثر. والعشوائيُّ ليس كذلك: **كلُّ تعديلٍ لبيانات تاجرٍ
+                // قائمٍ كان سيمنحه رقماً جديداً**، فيُقفَل خارج حسابه
+                // ويضيع من يدفع إليه — ولا خطأ في أيّ سجلّ.
+                // ══════════════════════════════════════════════════════
+                if (trim((string) $mr->merchant_number) === '') {
+                    app(\App\Services\Merchant\MerchantNumberService::class)->assignTo($mr);
+                }
 
                 // ملف أميال: النشاط يفتح لوحة القطاع، والباقة تفتح الميزات
                 MerchantProfile::firstOrCreate(['user_id' => $user->id], [
