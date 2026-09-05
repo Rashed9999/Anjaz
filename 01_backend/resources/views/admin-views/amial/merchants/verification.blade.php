@@ -109,6 +109,40 @@
                   ? ' — ينقص: ' + esc(id.missing.join('، ')) : '')
               + '<br>توثيقُ المتجر لا يفتح سقفَ المال بدونها.</div>';
 
+        // AMIAL-KYC-DUP-001 — **تاريخُ انتهاء الهويّة يُقال حيث يُعتمَد.**
+        //
+        // و«لا تاريخَ عندنا» تُكتب صراحةً ولا تُترك فراغاً: الفراغُ يُقرأ
+        // «سليمة»، وهو ما تمنعه القاعدةُ السابعة.
+        var ex = id.expiry || {};
+        var exText = {
+            EXPIRED: ['danger', '⛔ هويّةٌ منتهية'],
+            DUE:     ['warning', '⏳ تقترب من الانتهاء'],
+            VALID:   ['success', '✓ هويّةٌ سارية'],
+            UNKNOWN: ['muted', '؟ لا تاريخَ انتهاءٍ مسجَّل']
+        }[ex.state || 'UNKNOWN'] || ['muted', '؟ حالةٌ غيرُ معروفة'];
+
+        var exNote = '<div class="small" style="color:var(--amial-' + exText[0] + ')">'
+            + exText[1]
+            + (ex.expires_at ? ' — ' + esc(ex.expires_at) : '')
+            + (ex.days !== null && ex.days !== undefined
+                ? ' (' + (ex.days < 0 ? 'مضى ' + Math.abs(ex.days) : 'بقي ' + ex.days) + ' يوماً)' : '')
+            + '</div>';
+
+        // **وخانةُ فحص الهويّة بجانب زرّ التوثيق** — لا في شاشةٍ أخرى:
+        // القرارُ يُتّخذ هنا، فالفحصُ يقع هنا.
+        var probe = ''
+            + '<div class="mt-2 p-2 rounded" style="background:color-mix(in srgb, var(--amial-info) 6%, transparent)">'
+            +   '<label class="small text-muted d-block mb-1">فحصُ رقم الهويّة قبل الاعتماد'
+            +     (id.id_masked ? ' — المسجَّل: <span dir="ltr">' + esc(id.id_masked) + '</span>' : ' — لا رقمَ مسجَّل')
+            +   '</label>'
+            +   '<div class="d-flex gap-1">'
+            +     '<input type="text" class="form-control form-control-sm" dir="ltr" '
+            +       'id="mv-nid-' + r.id + '" placeholder="أدخل الرقم كما في البطاقة">'
+            +     '<button class="btn btn-sm btn-outline-info" data-act="lookup" data-id="' + r.id + '">افحص</button>'
+            +   '</div>'
+            +   '<div class="small mt-1" id="mv-nid-out-' + r.id + '"></div>'
+            + '</div>';
+
         var open = r.status === 'pending_review';
 
         return '<div class="col-md-6 col-xl-4"><div class="card h-100"><div class="card-body d-flex flex-column">'
@@ -123,6 +157,8 @@
             + '<div class="small text-muted mb-2">قُدِّم: ' + esc(r.submitted_at || '—') + '</div>'
             + '<div class="mb-2">' + docs + '</div>'
             + idNote
+            + exNote
+            + (open ? probe : '')
             + (r.admin_note ? '<div class="small text-muted mt-1">ملاحظة: ' + esc(r.admin_note) + '</div>' : '')
             + '<div class="mt-auto pt-2 d-flex gap-2 flex-wrap">'
             + (open ? '<button class="btn btn-sm btn-success flex-fill" data-act="approve" data-id="' + r.id + '">توثيق</button>'
@@ -181,6 +217,58 @@
                 say('وُثِّق المتجر. وتبقى هويّةُ صاحبه غير موثّقة — لم يُفتح له سقفُ المال.', 'warning');
             }
             load();
+            return;
+        }
+
+        // AMIAL-KYC-DUP-001 — **فحصُ الهويّة، ولا يمنع بنفسه.**
+        if (act === 'lookup') {
+            // **ولا يُقرأ عنصرٌ قد لا يوجد** — سطرٌ مثل `$('x').value`
+            // على عنصرٍ أُزيل يموت صامتاً فلا يحدث شيءٌ عند الضغط،
+            // وهو ما عطّل زرَّ الإيداع في الشبّاك. (القاعدة التاسعة.)
+            var inp = document.getElementById('mv-nid-' + id);
+            var out = document.getElementById('mv-nid-out-' + id);
+            if (!inp || !out) { say('تعذّر قراءة حقل الهويّة — أعِد تحميل الصفحة.', 'danger'); return; }
+
+            var val = (inp.value || '').trim();
+            if (!val) { out.innerHTML = '<span style="color:var(--amial-warning)">أدخل الرقم أوّلاً.</span>'; return; }
+
+            out.textContent = 'جارٍ الفحص…';
+            var keep = confirm('احفظ هذا الرقم في ملفّ الحساب؟\n\n'
+                + 'الحفظُ يجعل الفحصَ الآليَّ يمسك التكرارَ مستقبلاً.\n'
+                + 'اضغط «إلغاء» للفحص دون حفظ.');
+
+            var lk = await post(base + '/' + id + '/identity-lookup',
+                {national_id: val, remember: keep ? 1 : 0});
+
+            if (!lk.ok) {
+                out.innerHTML = '<span style="color:var(--amial-danger)">'
+                    + esc(lk.body.message || 'تعذّر الفحص') + '</span>';
+                return;
+            }
+
+            var b = lk.body;
+            if (!b.found) {
+                out.innerHTML = '<span style="color:var(--amial-success)">✓ غيرُ مسجَّلةٍ لأيّ حسابٍ آخر — '
+                    + esc(b.masked || '') + '</span>';
+            } else {
+                out.innerHTML = '<span style="color:var(--amial-danger)">⛔ مسجَّلةٌ لـ'
+                    + b.matches.length + ' حسابٍ آخر:</span><ul class="mb-0 ps-3">'
+                    + b.matches.map(function (m) {
+                        return '<li>' + esc(m.name_masked) + ' — ' + esc(m.kind)
+                            + ' · #' + m.id
+                            + (m.is_verified ? ' · موثَّق' : ' · غيرُ موثَّق')
+                            + (m.is_active ? '' : ' · موقوف')
+                            + ' · سُجّل ' + esc(m.registered_at || '—') + '</li>';
+                    }).join('')
+                    + '</ul><span class="text-muted">القرارُ لك: تطابقُ هويّةِ تاجرٍ مع حسابِ '
+                    + 'عميلٍ لنفس الشخص أمرٌ مشروع.</span>';
+            }
+
+            if (b.store_note) {
+                out.innerHTML += '<div class="text-muted">' + esc(b.store_note) + '</div>';
+            } else if (b.stored) {
+                out.innerHTML += '<div style="color:var(--amial-success)">حُفظ الرقمُ في ملفّ الحساب.</div>';
+            }
             return;
         }
 

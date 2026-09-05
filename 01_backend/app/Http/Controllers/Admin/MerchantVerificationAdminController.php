@@ -253,7 +253,71 @@ class MerchantVerificationAdminController extends Controller
             'complete' => $ev['complete'],
             'missing' => $ev['missing'],
             'blockers' => $ev['blockers'],
+
+            // AMIAL-KYC-DUP-001 — **تاريخُ الانتهاء يُعرَض في الصفّ
+            // نفسِه**، لا في شاشةٍ أخرى يُنتقَل إليها. فالمراجعُ يقرّر
+            // وهو ينظر إليه.
+            'expiry' => $ev['identity_expiry'] ?? null,
+            'id_masked' => $merchant->national_id_masked,
         ];
+    }
+
+    /**
+     * AMIAL-KYC-DUP-001 — **فحصُ رقم الهويّة قبل الاعتماد.**
+     *
+     * يُدخِل المراجعُ الرقمَ الذي يراه في البطاقة، فيُقال له: أمسجَّلٌ
+     * لحسابٍ آخرَ أم لا. **ولا يُمنَع آليّاً** — القرارُ له، وتطابقُ
+     * هويّةٍ بين حساب تاجرٍ وحسابِ عميلٍ لشخصٍ واحدٍ أمرٌ مشروع.
+     *
+     * و`remember=1` تحفظ الرقمَ في ملفّ الحساب، فيدخل الفحصَ الآليَّ
+     * لِما بعده — وهو ما يملأ العمودَ الذي كان فارغاً دائماً.
+     */
+    public function lookupIdentity(
+        Request $request,
+        int $id,
+        \App\Services\Kyc\IdentityLookupService $lookup,
+    ): JsonResponse {
+        $req = MerchantVerificationRequest::find($id);
+
+        if (! $req) {
+            return response()->json(['message' => 'الطلب غير موجود'], 404);
+        }
+
+        $merchant = User::find($req->merchant_user_id);
+
+        if (! $merchant) {
+            return response()->json(['message' => 'حساب التاجر غير موجود'], 404);
+        }
+
+        $v = Validator::make($request->all(), [
+            'national_id' => 'required|string|max:50',
+            'remember' => 'sometimes|boolean',
+        ]);
+
+        if ($v->fails()) {
+            return response()->json([
+                'message' => 'أدخل رقمَ الهويّة كما هو في البطاقة',
+                'errors' => $v->errors(),
+            ], 422);
+        }
+
+        $result = $lookup->search(
+            (string) $request->input('national_id'), $merchant, $request->user());
+
+        if (! $result['ok']) {
+            return response()->json(['message' => $result['reason']], 422);
+        }
+
+        $result['stored'] = false;
+        $result['store_note'] = null;
+
+        if ($request->boolean('remember')) {
+            $kept = $lookup->remember((string) $result['digits'], $merchant);
+            $result['stored'] = $kept['stored'];
+            $result['store_note'] = $kept['reason'];
+        }
+
+        return response()->json($result);
     }
 
     private function statusLabel(string $status): string

@@ -810,6 +810,15 @@ Route::prefix('merchants')->name('merchants.')->group(function () {
             Route::get('/list.json', [$vc, 'listJson'])->name('list');
             Route::get('/{id}/document/{type}', [$vc, 'document'])
                 ->where(['id' => '[0-9]+', 'type' => '[a-z_]+'])->name('document');
+
+            // AMIAL-KYC-DUP-001 — **فحصُ رقم الهويّة قبل الاعتماد.**
+            //
+            // وصلاحيّتُه `merchants.compliance` لا `approvals.decide`:
+            // هو **قراءةٌ** تسبق القرار، ومن يراجع الملفّ يحتاجها وإن
+            // لم يملك ختمَ الاعتماد. وكلُّ نداءٍ يُسجَّل في
+            // `pii_access_logs` — فهو اطّلاعٌ على بيانات شخصٍ ثالث.
+            Route::post('/{id}/identity-lookup', [$vc, 'lookupIdentity'])
+                ->where('id', '[0-9]+')->name('identity-lookup');
         });
 
         Route::middleware('platform:platform.approvals.decide')->group(function () use ($vc) {

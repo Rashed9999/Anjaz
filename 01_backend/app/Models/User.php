@@ -43,11 +43,42 @@ class User extends Authenticatable
             'encrypted' => 'email_encrypted', 'blind_index' => 'email_blind_index',
             'masked' => 'email_masked', 'normalizer' => 'email',
         ],
-        'national_id' => [
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-KYC-DUP-001 — **المفتاحُ كان اسماً لا عمودَ له.**
+        //
+        // كان `'national_id'`، **ولا عمودَ بهذا الاسم في `users`**
+        // إطلاقاً. والسمةُ تقرأ `$this->attributes[$plainField]` — فلا
+        // تجد شيئاً أبداً، ومن أسنده صراحةً كسر `save()` بعمودٍ مجهول.
+        //
+        // فقِيس: `->national_id =` في المشروع كلِّه → **صفرُ إسناد**،
+        // و`national_id_blind_index` فارغٌ لكلّ حساب. والتسجيلُ يكتب
+        // `identification_number` — عموداً مسطَّحاً غيرَ مشفَّر.
+        //
+        // **وثلاثةُ أشياءَ كانت معطَّلةً بهذا وحدَه:** كشفُ الهويّة
+        // المكرَّرة في `DocumentReuseService`، ومطابقةُ قوائم العقوبات
+        // في `SanctionScreeningService` (تقرأ `$user->national_id`
+        // فتجدها `null` دائماً)، وتشفيرُ رقم الهويّة أصلاً.
+        //
+        // فصار المفتاحُ العمودَ الحقيقيّ، ويبقى المخزَّنُ في أعمدة
+        // `national_id_*` كما هي — فلا هجرةَ ولا اسمٌ ثالث.
+        // ══════════════════════════════════════════════════════════════
+        'identification_number' => [
             'encrypted' => 'national_id_encrypted', 'blind_index' => 'national_id_blind_index',
             'masked' => 'national_id_masked', 'normalizer' => 'national_id',
         ],
     ];
+
+    /**
+     * `national_id` اسمٌ مرادفٌ يقرأ العمودَ الحقيقيّ.
+     *
+     * **ولا يُحذَف النداءُ من مواضعه**: `SanctionScreeningService`
+     * وغيرُه تسأل `$user->national_id`، وكانت تأخذ `null` دائماً.
+     * فالمرادفُ يُصلح قارئاً قائماً بدل أن يطارده في كلّ ملفّ.
+     */
+    public function getNationalIdAttribute(): ?string
+    {
+        return $this->identification_number;
+    }
 
     // AMIAL-PIN-SECURITY-001: إضافة transaction_pin و fcm_token للـ hidden
     protected $hidden = [

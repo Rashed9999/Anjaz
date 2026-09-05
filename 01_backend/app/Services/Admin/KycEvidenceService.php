@@ -52,6 +52,7 @@ class KycEvidenceService
     public function __construct(
         private KycDocumentService $kyc,
         private \App\Services\Kyc\DocumentReuseService $reuse,
+        private \App\Services\Kyc\IdentityExpiryService $expiry,
     ) {}
 
     /**
@@ -77,6 +78,20 @@ class KycEvidenceService
             'blockers' => $this->blockers($user, $completeness, $targetTier, $reviewer),
             // AMIAL-KYC-REUSE-001 — **ورقةٌ واحدةٌ تفتح حسابين.**
             'reuse' => $this->reuse->findingsFor($user),
+
+            // ══════════════════════════════════════════════════════════
+            // AMIAL-KYC-DUP-001 — **وتاريخُ الانتهاء يُعرَض حيث يُعتمَد.**
+            //
+            // `IdentityExpiryService` مبنيّةٌ ومقروءةٌ من ثلاثة مواضع —
+            // طلبُ تغيير البيانات في التطبيق، ونظيرُه في اللوحة، وأمرٌ
+            // مجدول — **ولا واحدَ منها لوحةُ التحقّق**. فالمراجعُ الذي
+            // يضغط «اعتماد» لا يرى تاريخَ انتهاء الهويّة أصلاً.
+            //
+            // و«غيرُ معروف» تُقال ولا تُقرأ «سارية» (القاعدة السابعة):
+            // التاريخُ اختياريٌّ في التسجيل، فغيابُه شائعٌ ويجب أن
+            // يُرى — لا أن يُخفى فيُقرأ سلامةً.
+            // ══════════════════════════════════════════════════════════
+            'identity_expiry' => $this->expiry->stateOf($user),
         ];
     }
 
@@ -125,6 +140,27 @@ class KycEvidenceService
         // لافتةً بجانب زرٍّ يعمل: تحذيرٌ يُمكن تخطّيه يُتخطّى.
         foreach ($this->reuse->findingsFor($user)['blockers'] as $line) {
             $out[] = $line;
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // AMIAL-KYC-DUP-001 — **ولا يُوثَّق حسابٌ على هويّةٍ منتهية.**
+        //
+        // وهذا **لا يناقض** قاعدةَ `IdentityExpiryService` («تَسِمُ ولا
+        // تمنع»): تلك عن حسابٍ **وُثِّق أمس** وانتهت ورقتُه اليوم —
+        // فتجميدُه صامتاً يشلّ من لم يخطئ. وهذه عن **اعتمادٍ يقع الآن**،
+        // وختمُ التوثيق على ورقةٍ منتهيةٍ خللٌ رقابيٌّ لا سهو.
+        //
+        // **و«غير معروف» ليست مانعاً** — التاريخُ اختياريٌّ في التسجيل،
+        // فمنعُه يُجمّد الطابورَ كلَّه. يُعرَض في `identity_expiry`
+        // ويراه المراجعُ ويقرّر. (القاعدة السابعة: يُقال ولا يُسكَت عنه،
+        // ولا يُلبَس ثوبَ السلامة أيضاً.)
+        // ══════════════════════════════════════════════════════════════
+        $expiry = $this->expiry->stateOf($user);
+
+        if (($expiry['state'] ?? null) === \App\Services\Kyc\IdentityExpiryService::STATE_EXPIRED) {
+            $out[] = 'هويّةُ صاحب الحساب منتهيةٌ'
+                .($expiry['expires_at'] ? ' منذ '.$expiry['expires_at'] : '')
+                .' — لا يُوثَّق حسابٌ على ورقةٍ منتهية. اطلب إعادةَ الرفع.';
         }
 
         return $out;
