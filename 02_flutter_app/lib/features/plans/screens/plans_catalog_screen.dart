@@ -35,10 +35,15 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
     'enterprise': Color(0xFF7C3AED),    // بنفسجي
   };
 
-  static const _planEmojis = {
-    'free': '🆓',
-    'business': '💼',
-    'enterprise': '👑',
+  /// AMIAL-PLAN-COMPARE-001 — **أيقونةُ العائلة لا رمزٌ تعبيريّ.**
+  ///
+  /// الرمزُ التعبيريُّ يُرسَم بخطّ الجهاز، فيختلف شكلُه ولونُه بين هاتفٍ
+  /// وآخر ولا يتبع هويّةَ المنتج — ويقرؤه صاحبُه «مسوّدة». وهو أوّلُ ما
+  /// يقع عليه النظرُ في البطاقة.
+  static const _planIcons = {
+    'free': Icons.rocket_launch_outlined,
+    'business': Icons.storefront_rounded,
+    'enterprise': Icons.account_tree_rounded,
   };
 
   @override
@@ -174,155 +179,185 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
     ),
   );
 
-  // AMIAL-PLANS-COMPARE-001 — جدول مقارنة عملي: الميزات (صفوف) × الباقات (أعمدة).
-  static const double _cmpRowH = 44;
-  static const double _cmpSecH = 34;
-  static const double _cmpHeadH = 132;
-  static const double _cmpPlanW = 124;
-  static const double _cmpLabelW = 128;
-
+  /// AMIAL-PLAN-COMPARE-001 — **الفرقُ بين الباقات، لا سردُ كلِّ ميزة.**
+  ///
+  /// ══════════════════════════════════════════════════════════════════
+  /// **الطلب:** «يجب التوضيح: الفرقُ بين كلّ باقةٍ بكلّ احترافيّة».
+  ///
+  /// وكان الجدولُ القديمُ يسرد **٣٩ صفّاً** — اتّحادَ ميزات الباقات —
+  /// ويضع علامةً في كلّ عمود. **وعيبُه اثنان:**
+  ///
+  ///   ① يترجم بخريطةٍ مكتوبةٍ في هذا الملفّ فيها **١٩ من ٣٩**، فعشرون
+  ///      صفّاً تُعرَض `advanced_reports` و`wholesale_credit` **خاماً
+  ///      بالإنجليزيّة**. والأسماءُ العربيّةُ كلُّها في الخادم.
+  ///   ② ويُعيد المشتركَ في كلّ عمود، **فتختفي الصفوفُ الفارقة** بين
+  ///      عشرين متطابقة. والقارئُ يسأل «ماذا أكسب إن رقّيت؟» فلا يجد.
+  ///
+  /// **فصار العرضُ «ما تضيفه كلُّ باقةٍ على ما قبلها»**، مجموعةً مجموعة،
+  /// بأسماءٍ وأوصافٍ من `CapabilityRegistry` — وهو المصدرُ الذي كتبه
+  /// صاحبُ المشروع أصلاً.
   Widget _comparisonMatrix() {
-    final plans = c.plans;
-    // اتحاد أكواد الميزات بترتيب ظهورها التصاعدي عبر الباقات
-    final seen = <String>{};
-    final featureCodes = <String>[];
-    for (final p in plans) {
-      for (final f in ((p['features'] ?? []) as List)) {
-        final code = f.toString();
-        if (seen.add(code)) featureCodes.add(code);
-      }
-    }
-    // وصف الصفوف: (النوع، التسمية، مفتاح الحدّ)
-    final rows = <(String, String, String)>[
-      ('section', 'الحدود', ''),
-      ('limit', 'عدد المنتجات', 'max_products'),
-      ('limit', 'عمليات شهرية', 'monthly_operations'),
-      ('limit', 'الموظفون', 'max_employees'),
-      ('limit', 'الفروع', 'max_branches'),
-      ('limit', 'نقاط البيع', 'max_pos_devices'),
-      ('limit', 'مدّة الأرشيف', 'archive_days'),
-      ('section', 'الميزات', ''),
-      for (final code in featureCodes) ('feature', _featureLabel(code), code),
-    ];
+    final ladder = c.comparison;
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.vertical,
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // عمود التسميات (ثابت أفقياً)
-        _labelColumn(rows),
-        // أعمدة الباقات (تمرير أفقي)
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: plans.map((p) => _planColumn(p, rows)).toList()),
-          ),
+    if (ladder.isEmpty) {
+      // **«لم تصل» ليست «لا فرق»** (القاعدة السابعة) — ولا يُعرَض فراغٌ
+      // يُقرأ «الباقات متطابقة».
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Text('تعذّرت قراءة تفاصيل المقارنة — اسحب للتحديث.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AmialColors.textMuted)),
         ),
-      ]),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+      children: [
+        for (final plan in ladder) _ladderStep(plan),
+
+        // ③ **وما لا تفتحه الترقيةُ يُقال** — وإلّا رقّى صاحبُ البقالة
+        // ليحصل على قدرةِ صيدليّةٍ فلا يجدها.
+        if (c.verticalNote.value.isNotEmpty)
+          Container(
+            key: const Key('plans-vertical-note'),
+            margin: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AmialColors.warningSurface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.info_outline, size: 18, color: AmialColors.warning),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(c.verticalNote.value,
+                    style: const TextStyle(fontSize: 12, height: 1.5)),
+              ),
+            ]),
+          ),
+      ],
     );
   }
 
-  Widget _labelColumn(List<(String, String, String)> rows) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      // خانة الترويسة
-      Container(
-        width: _cmpLabelW, height: _cmpHeadH,
-        alignment: Alignment.bottomRight,
-        padding: const EdgeInsets.only(right: 8, bottom: 10),
-        child: const Text('قارن الباقات',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AmialColors.primary)),
-      ),
-      ...rows.map((r) {
-        if (r.$1 == 'section') {
-          return Container(
-            width: _cmpLabelW, height: _cmpSecH,
-            color: AmialColors.primary.withValues(alpha: 0.06),
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 8),
-            child: Text(r.$2, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
-          );
-        }
-        return Container(
-          width: _cmpLabelW, height: _cmpRowH,
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.only(right: 8),
-          decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: Color(0xFFF0F1F4)))),
-          child: Text(r.$2, style: const TextStyle(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
-        );
-      }),
-    ]);
-  }
-
-  Widget _planColumn(Map<String, dynamic> plan, List<(String, String, String)> rows) {
+  /// درجةٌ من السلّم: الباقةُ، ووعدُها، وما تضيفه على ما قبلها.
+  Widget _ladderStep(Map<String, dynamic> plan) {
     final code = plan['code']?.toString() ?? '';
     final color = _planColors[code] ?? AmialColors.primary;
+    final pitch = (plan['pitch'] ?? const {}) as Map;
+    final adds = (plan['adds'] ?? const []) as List;
     final isCurrent = c.isCurrentPlan(code);
-    final price = _annual ? plan['price_annual_sar'] : plan['price_monthly_sar'];
-    final limits = (plan['limits'] ?? {}) as Map;
-    final featSet = ((plan['features'] ?? []) as List).map((e) => e.toString()).toSet();
+    final isFree = plan['is_free'] == true;
+
+    // تجميعٌ بالمعنى — لا قائمةً مسطّحةً من تسعةٍ وثلاثين سطراً.
+    final grouped = <String, List<Map>>{};
+    for (final a in adds) {
+      final m = Map<String, dynamic>.from(a as Map);
+      grouped.putIfAbsent('${m['group']}', () => []).add(m);
+    }
+
+    final price = _annual ? plan['price_annual'] : plan['price_monthly'];
+    final currency = plan['currency']?.toString() ?? '';
 
     return Container(
-      width: _cmpPlanW,
+      key: Key('plan-step-$code'),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
-        border: Border(right: BorderSide(color: Colors.grey.shade200)),
-        color: isCurrent ? AmialColors.yellow.withValues(alpha: 0.06) : null,
+        color: AmialColors.cardSurface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: isCurrent ? AmialColors.yellow : Colors.transparent,
+            width: isCurrent ? 2 : 0),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        // ترويسة الباقة
         Container(
-          height: _cmpHeadH,
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
-          color: color.withValues(alpha: 0.10),
-          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Text(_planEmojis[code] ?? '📋', style: const TextStyle(fontSize: 20)),
-            Text(plan['label']?.toString() ?? '',
-                textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: color)),
-            const SizedBox(height: 2),
-            Text(plan['is_free'] == true ? _freePriceLabel(plan) : '$price ${_cur(plan)}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            if (plan['is_free'] != true)
-              Text(_annual ? 'سنوياً' : 'شهرياً',
-                  style: TextStyle(fontSize: 9, color: Colors.grey.shade600)),
-            const SizedBox(height: 4),
-            isCurrent
-                ? const Text('باقتك', style: TextStyle(
-                    fontSize: 10, fontWeight: FontWeight.bold, color: AmialColors.yellowDark))
-                : InkWell(
-                    onTap: () => _showContactDialog(plan),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(14)),
-                      child: const Text('اختيار',
-                          style: TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
+          color: color,
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                child: Text('${plan['label']}',
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+              ),
+              if (isCurrent)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                      color: AmialColors.yellow,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: const Text('باقتك',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                )
+              else
+                // **العملةُ تُقال ولا تُحوَّل** — السعرُ سعوديٌّ والرصيدُ
+                // في المنتج يمنيّ. (القسمُ في `CLAUDE.md`.)
+                Text(isFree ? 'مجّاناً' : '$price $currency',
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+            ]),
+            if ('${pitch['headline'] ?? ''}'.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text('${pitch['headline']}',
+                  style: const TextStyle(color: Colors.white, fontSize: 13.5)),
+            ],
+            if ('${pitch['for_whom'] ?? ''}'.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text('${pitch['for_whom']}',
+                  style: const TextStyle(color: Colors.white70, fontSize: 11.5, height: 1.4)),
+            ],
           ]),
         ),
-        ...rows.map((r) {
-          if (r.$1 == 'section') {
-            return Container(width: _cmpPlanW, height: _cmpSecH,
-                color: AmialColors.primary.withValues(alpha: 0.06));
-          }
-          Widget cell;
-          if (r.$1 == 'limit') {
-            final txt = r.$3 == 'archive_days' ? _archiveText(limits[r.$3]) : _limitText(limits[r.$3]);
-            cell = Text(txt, style: TextStyle(
-                fontSize: 11.5, fontWeight: FontWeight.w600,
-                color: txt == '—' ? Colors.grey.shade400 : Colors.black87));
-          } else {
-            final has = featSet.contains(r.$3);
-            cell = Icon(has ? Icons.check_circle : Icons.remove,
-                size: 17, color: has ? color : Colors.grey.shade300);
-          }
-          return Container(
-            width: _cmpPlanW, height: _cmpRowH,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: Color(0xFFF0F1F4)))),
-            child: cell,
-          );
-        }),
+
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(
+              isFree
+                  ? 'تبدأ بهذه، وفيها:'
+                  : 'تضيف على ما قبلها ${plan['adds_count']} قدرة:',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+
+            for (final entry in grouped.entries) ...[
+              Text(entry.key,
+                  style: TextStyle(
+                      fontSize: 11.5, fontWeight: FontWeight.bold, color: color)),
+              const SizedBox(height: 4),
+              for (final cap in entry.value)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.check_rounded, size: 15, color: color),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${cap['name']}',
+                                style: const TextStyle(
+                                    fontSize: 12.5, fontWeight: FontWeight.w600)),
+                            if ('${cap['description'] ?? ''}'.isNotEmpty)
+                              Text('${cap['description']}',
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      height: 1.45,
+                                      color: AmialColors.textMuted)),
+                          ]),
+                    ),
+                  ]),
+                ),
+              const SizedBox(height: 4),
+            ],
+
+            const Divider(height: 18),
+            for (final l in ((plan['limits'] ?? const []) as List))
+              _limitRow('${(l as Map)['label']}', '${l['text']}'),
+          ]),
+        ),
       ]),
     );
   }
@@ -379,7 +414,8 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
   Widget _planCard(Map<String, dynamic> plan) {
     final code = plan['code']?.toString() ?? '';
     final color = _planColors[code] ?? AmialColors.primary;
-    final emoji = _planEmojis[code] ?? '📋';
+    final icon = _planIcons[code] ?? Icons.workspace_premium_outlined;
+    final pitch = _pitchFor(code);
     final isCurrent = c.isCurrentPlan(code);
     final isSuggested = widget.suggestedPlan == code;
     final price = _annual ? plan['price_annual_sar'] : plan['price_monthly_sar'];
@@ -417,10 +453,15 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
           ),
           child: Column(children: [
-            Text(emoji, style: const TextStyle(fontSize: 32)),
+            Icon(icon, size: 34, color: Colors.white),
             const SizedBox(height: 4),
             Text(plan['label']?.toString() ?? '',
                 style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+
+            // **«لمن هي» قبل «ماذا فيها»** — بطاقةٌ تبدأ بقائمة ميزاتٍ
+            // تُقرأ فهرساً، وبطاقةٌ تبدأ بمن هي له تُقرأ عرضاً.
+            _pitchBlock(pitch),
+
             const SizedBox(height: 12),
             if (plan['is_free'] == true) ...[
               Text(_freePriceLabel(plan),
@@ -467,19 +508,22 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
             const Text('الميزات المُتاحة',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 8),
-            ...features.take(8).map((f) => Padding(
+            // **الأسماءُ من الخادم** — و`_featureLabel` كانت خريطةً
+            // مكتوبةً فيها ١٩ من ٣٩، فما نقص يُعرَض رمزاً إنجليزيّاً
+            // خاماً (`map[f] ?? f`). والأسماءُ كلُّها في
+            // `CapabilityRegistry` منذ البداية.
+            ..._namedFeatures(code).take(8).map((f) => Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Row(children: [
                 Icon(Icons.check_circle, color: color, size: 16),
                 const SizedBox(width: 6),
-                Expanded(child: Text(_featureLabel(f.toString()),
-                    style: const TextStyle(fontSize: 12))),
+                Expanded(child: Text(f, style: const TextStyle(fontSize: 12))),
               ]),
             )),
             if (features.length > 8)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text('+ ${features.length - 8} ميزة أخرى',
+                child: Text('+ ${features.length - 8} قدرة أخرى — انظر «مقارنة»',
                     style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
               ),
           ]),
@@ -540,6 +584,38 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
     return '$n يوم';
   }
 
+  /// وعدُ الباقة من الخادم — ولا يُخترَع هنا نصٌّ تسويقيّ.
+  Map<String, dynamic> _pitchFor(String code) {
+    final row = c.comparison.firstWhereOrNull((p) => p['code'] == code);
+
+    return Map<String, dynamic>.from((row?['pitch'] ?? const {}) as Map);
+  }
+
+  Widget _pitchBlock(Map<String, dynamic> pitch) {
+    final head = '${pitch['headline'] ?? ''}';
+    final whom = '${pitch['for_whom'] ?? ''}';
+    if (head.isEmpty && whom.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      key: const Key('plan-card-pitch'),
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(children: [
+        if (head.isNotEmpty)
+          Text(head,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+        if (whom.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(whom,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, fontSize: 11, height: 1.4)),
+          ),
+      ]),
+    );
+  }
+
   Widget _limitRow(String label, String value) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 3),
     child: Row(children: [
@@ -551,29 +627,18 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
     ]),
   );
 
-  String _featureLabel(String f) {
-    const map = {
-      'quick_sale': 'بيع سريع', 'cashier': 'كاشير', 'debts': 'الديون',
-      'refunds': 'استرجاع', 'products': 'إدارة المنتجات', 'inventory': 'المخزون',
-      'barcode': 'الباركود', 'inventory_audit': 'جرد المخزون',
-      'low_stock_alerts': 'تنبيه نفاد المخزون', 'customers': 'العملاء',
-      'suppliers': 'الموردون', 'purchases': 'المشتريات',
-      'profit_reports': 'تقارير الأرباح', 'excel_export': 'تصدير Excel',
-      'advanced_reports': 'تقارير متقدّمة', 'employees': 'الموظفون',
-      'employee_permissions': 'صلاحيات الموظفين', 'multi_pos': 'نقاط بيع متعدّدة',
-      'branches': 'الفروع', 'branch_reports': 'تقارير الفروع',
-      'multi_currency': 'عملات متعدّدة', 'audit_log': 'سجل التدقيق',
-      'advanced_backup': 'نسخ احتياطي متقدّم', 'api_access': 'وصول API',
-      'corporate_accounts': 'حسابات الشركات', 'corporate_credit_limits': 'حدود ائتمانية',
-      'operations_manager': 'مدير عمليات', 'financial_manager': 'مدير مالي',
-      'rbac': 'صلاحيات متقدّمة',
-      'fuel_cards': 'بطاقات الوقود', 'fuel_variance': 'العجز/الفائض',
-      'pharmacy_prescriptions': 'الوصفات الطبيّة',
-      'pharmacy_substitutions': 'بدائل دوائية متوافقة',
-      'pharmacy_batch_disposition': 'إرجاع وإتلاف الدفعات',
-      'wholesale_multi_pricing': 'تسعير متعدّد للجملة',
-    };
-    return map[f] ?? f;
+  /// **أسماءُ قدرات الباقة من الخادم** — لا من خريطةٍ مكتوبةٍ هنا.
+  ///
+  /// وما لم يصل وصفُه **لا يُعرَض رمزاً خاماً**: الرمزُ الإنجليزيُّ في
+  /// وجه تاجرٍ يمنيٍّ ليس اسماً — هو غيابُ اسم. (القاعدة السابعة.)
+  List<String> _namedFeatures(String code) {
+    final row = c.comparison.firstWhereOrNull((p) => p['code'] == code);
+    if (row == null) return const [];
+
+    return [
+      for (final a in ((row['adds'] ?? const []) as List))
+        if ((a as Map)['documented'] == true) '${a['name']}',
+    ];
   }
 
   void _showContactDialog(Map<String, dynamic> plan) {

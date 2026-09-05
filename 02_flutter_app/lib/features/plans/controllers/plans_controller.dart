@@ -10,6 +10,14 @@ class PlansController extends GetxController implements GetxService {
   // State
   final RxList<Map<String, dynamic>> plans = <Map<String, dynamic>>[].obs;
   final Rx<Map<String, dynamic>?> currentPlan = Rx<Map<String, dynamic>?>(null);
+
+  /// AMIAL-PLAN-COMPARE-001 — **الفرقُ بين الباقات محسوباً في الخادم.**
+  ///
+  /// كانت الشاشةُ تبنيه من أكواد الميزات وتترجمها بخريطةٍ مكتوبةٍ فيها
+  /// ١٩ من ٣٩ — فعشرون صفّاً تُعرَض `advanced_reports` خاماً. والأسماءُ
+  /// والأوصافُ والمجموعاتُ كلُّها في `CapabilityRegistry` منذ البداية.
+  final RxList<Map<String, dynamic>> comparison = <Map<String, dynamic>>[].obs;
+  final RxString verticalNote = ''.obs;
   final Rx<Map<String, dynamic>?> usage = Rx<Map<String, dynamic>?>(null);
 
   final RxBool isLoading = false.obs;
@@ -28,6 +36,12 @@ class PlansController extends GetxController implements GetxService {
         plans.assignAll(((data['plans'] ?? []) as List)
             .map((e) => _planForUi(Map<String, dynamic>.from(e as Map)))
             .toList());
+        final cmp = (data['comparison'] ?? const {}) as Map;
+        comparison.assignAll(((cmp['plans'] ?? const []) as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList());
+        verticalNote.value = cmp['vertical_note']?.toString() ?? '';
+
         currentPlan.value = access == null ? null : {
           'code': access.subscriptionPlan.value,
           'expires_at': access.subscriptionExpiresAt.value,
