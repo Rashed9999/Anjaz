@@ -118,7 +118,10 @@ class EnsureDemoMerchants extends Command
                 if ($m['type'] === 'fuel') {
                     $this->ensureFuelStation($user, $m);
                 }
-                $this->info("✓ تاجر {$m['store']} جاهز — {$m['number']} / {$m['phone']} (باقة {$m['plan']})");
+                $this->info("✓ تاجر {$m['store']} جاهز — {$m['number']} / {$m['phone']} (باقة {$m['plan']}) — "
+                    . DemoAccountPolicy::walletNotice(
+                        DemoAccountPolicy::seededWalletBalance(self::DEMO_BALANCE),
+                        self::DEMO_BALANCE));
             } catch (\Throwable $e) {
                 $this->error("❌ فشل تاجر {$m['store']}: " . $e->getMessage());
             }
@@ -208,12 +211,20 @@ class EnsureDemoMerchants extends Command
         );
     }
 
+    /** الرصيدُ المكتوب في الأمر — يُسَكّ خارج الإنتاج، ويقف فيه بلا موافقة. */
+    public const DEMO_BALANCE = '100000.0000';
+
+    /**
+     * AMIAL-DEMO-MONEY-001 — **المحفظةُ تُنشأ دائماً، والمالُ لا يُسَكّ دائماً.**
+     *
+     * @see \App\Support\DemoAccountPolicy::seededWalletBalance()
+     */
     private function ensureWallet(User $user): void
     {
         EMoney::firstOrCreate(
             ['user_id' => $user->id],
             [
-                'current_balance' => '100000.0000',
+                'current_balance' => DemoAccountPolicy::seededWalletBalance(self::DEMO_BALANCE),
                 'charge_earned' => '0', 'pending_balance' => '0',
                 'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
             ]

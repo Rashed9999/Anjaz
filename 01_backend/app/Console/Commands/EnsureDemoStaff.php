@@ -28,6 +28,9 @@ class EnsureDemoStaff extends Command
 
     private const PASSWORD = 'Pass@2026';
 
+    /** AMIAL-DEMO-MONEY-001 — سيولةُ الوكيل التجريبيّ. لا تُسَكّ في الإنتاج بلا موافقة. */
+    public const AGENT_BALANCE = '500000.0000';
+
     public function handle(): int
     {
         $this->ensureAdmin();
@@ -170,7 +173,7 @@ class EnsureDemoStaff extends Command
                 EMoney::firstOrCreate(
                     ['user_id' => $agent->id],
                     [
-                        'current_balance' => '500000.0000',
+                        'current_balance' => DemoAccountPolicy::seededWalletBalance(self::AGENT_BALANCE),
                         'charge_earned' => '0',
                         'pending_balance' => '0',
                         'held_balance' => '0',
@@ -212,7 +215,7 @@ class EnsureDemoStaff extends Command
             EMoney::firstOrCreate(
                 ['user_id' => $agent->id],
                 [
-                    'current_balance' => '500000.0000',
+                    'current_balance' => DemoAccountPolicy::seededWalletBalance(self::AGENT_BALANCE),
                     'charge_earned' => '0', 'pending_balance' => '0',
                     'held_balance' => '0', 'zone_code' => 'SOUTH', 'version' => 1,
                 ]
