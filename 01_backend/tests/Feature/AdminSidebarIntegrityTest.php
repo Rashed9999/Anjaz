@@ -25,10 +25,21 @@ class AdminSidebarIntegrityTest extends TestCase
     use RefreshDatabase;
     use ReadsAdminNavigation;
 
+    /**
+     * AMIAL-IDENTITY-UNIQUE-001 — **هاتفٌ مميَّزٌ لكلّ إداريّ.**
+     *
+     * كان الرقمُ `967770004401` مكتوباً هنا، والدالّةُ تُنادى أكثرَ من
+     * مرّةٍ في الاختبار الواحد — **فإداريّان بهاتفٍ واحد**، وهو ما يمنعه
+     * قيدُ القاعدة الجديد بحقٍّ: رقمٌ واحدٌ لا يخصّ موظّفين.
+     * فيُميَّز، **ولا يُضعَّف القيدُ ليمرّ اختبار**.
+     */
+    private int $adminSeq = 0;
+
     private function admin(): User
     {
         $u = User::factory()->create([
-            'type' => ADMIN_TYPE, 'role' => 'super_admin', 'phone' => '967770004401',
+            'type' => ADMIN_TYPE, 'role' => 'super_admin',
+            'phone' => '9677700044'.str_pad((string) (++$this->adminSeq), 2, '0', STR_PAD_LEFT),
         ]);
 
         $roleId = DB::table('roles')->whereNull('merchant_user_id')
