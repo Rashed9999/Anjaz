@@ -43,6 +43,23 @@ use Tests\TestCase;
  */
 class AdminUnblocksAnAccountGuardTest extends TestCase
 {
+    /**
+     * AMIAL-KYC-REUSE-001 — **صورةٌ مميَّزةٌ لكلّ وثيقة.**
+     *
+     * `UploadedFile::fake()->image()` بأبعادٍ ثابتةٍ يُنتج **بايتاتٍ
+     * متطابقة**، فتخرج الوثائقُ الثلاثُ ببصمةٍ واحدة — وهي حالةٌ
+     * **مستحيلةٌ في الواقع** (وجهُ الهويّة وظهرُها صورتان مختلفتان)،
+     * ويُغلقها حارسُ إعادة الاستعمال بحقّ. فتُميَّز الأبعادُ لتصدق
+     * التثبيتةُ الواقعَ، **ولا يُضعَّف الحارسُ ليمرّ اختبار**.
+     */
+    private int $imageSeq = 0;
+
+    private function distinctImage(string $name): \Illuminate\Http\UploadedFile
+    {
+        return \Illuminate\Http\UploadedFile::fake()
+            ->image($name, 600, 400 + (++$this->imageSeq));
+    }
+
     use RefreshDatabase;
 
     private function admin(): User
@@ -116,7 +133,7 @@ class AdminUnblocksAnAccountGuardTest extends TestCase
             $this->actingAs($admin, 'user')
                 ->postJson("/admin/amial/hub/users/{$customer->id}/documents", [
                     'doc_type' => $type,
-                    'file' => UploadedFile::fake()->image($type . '.jpg'),
+                    'file' => $this->distinctImage($type . '.jpg'),
                 ])
                 ->assertSuccessful();
         }
@@ -185,7 +202,7 @@ class AdminUnblocksAnAccountGuardTest extends TestCase
         $this->actingAs($admin, 'user')
             ->postJson("/admin/amial/hub/users/{$customer->id}/documents", [
                 'doc_type' => KycDocument::TYPE_ID_FRONT,
-                'file' => UploadedFile::fake()->image('front.jpg'),
+                'file' => $this->distinctImage('front.jpg'),
             ])
             ->assertSuccessful();
 
@@ -293,7 +310,7 @@ class AdminUnblocksAnAccountGuardTest extends TestCase
             $this->actingAs($admin, 'user')
                 ->postJson("/admin/amial/hub/users/{$customer->id}/documents", [
                     'doc_type' => $type,
-                    'file' => UploadedFile::fake()->image($type . '.jpg'),
+                    'file' => $this->distinctImage($type . '.jpg'),
                 ])->assertSuccessful();
         }
 

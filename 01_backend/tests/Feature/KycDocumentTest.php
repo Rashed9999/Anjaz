@@ -33,9 +33,12 @@ class KycDocumentTest extends TestCase
         $this->svc = app(KycDocumentService::class);
     }
 
+    /** بصمةٌ مميَّزةٌ لكلّ صورة — انظر AMIAL-KYC-REUSE-001. */
+    private int $imageSeq = 0;
+
     private function image(string $name = 'id.jpg'): UploadedFile
     {
-        return UploadedFile::fake()->image($name, 600, 400);
+        return UploadedFile::fake()->image($name, 600, 400 + (++$this->imageSeq));
     }
 
     private function customer(): User

@@ -118,6 +118,17 @@
                ).join('') + `</div></div>`
             : '';
 
+        // AMIAL-KYC-REUSE-001 — **وإشارةُ إعادة الاستعمال تُعرَض ولو
+        // لم تمنع.** المانعُ يظهر في اللافتة أدناه، والتنبيهُ (عنوانُ
+        // أسرةٍ واحدة) لا يمنع — **ومن لا يراه يعتمد بلا أن يعرف**.
+        const reuse = (ev.reuse || {});
+        const warns = (reuse.warnings || []);
+        const reuseNote = warns.length
+            ? `<div class="alert alert-info py-1 px-2 small mt-2 mb-0">
+                 <b>إشارة تكرار:</b><ul class="mb-0 ps-3">` +
+               warns.map(w => `<li>${esc(w)}</li>`).join('') + `</ul></div>`
+            : '';
+
         // **وما يمنع الاعتمادَ يُقال قبل الضغط لا بعد الرفض** — وزرٌّ
         // يُضغط فيُردّ يُعلّم المراجعَ أن يجرّب ويرى.
         const blockers = (ev.blockers || []);
@@ -164,6 +175,7 @@
                 ${govBlock}
                 <div class="my-2">${docs}${missing}</div>
                 ${legacy}
+                ${reuseNote}
                 ${blockNote}
                 <div class="mt-auto d-flex gap-2">
                     ${u.kyc !== 1 ? `<button class="btn btn-sm btn-success flex-fill" data-act="approve" data-id="${u.id}"

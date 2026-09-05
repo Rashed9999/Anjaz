@@ -49,7 +49,10 @@ use App\Support\YemenGovernorates;
  */
 class KycEvidenceService
 {
-    public function __construct(private KycDocumentService $kyc) {}
+    public function __construct(
+        private KycDocumentService $kyc,
+        private \App\Services\Kyc\DocumentReuseService $reuse,
+    ) {}
 
     /**
      * الدليلُ الكاملُ لحسابٍ واحد — لأيّ نوعٍ من الثلاثة.
@@ -72,6 +75,8 @@ class KycEvidenceService
             'documents' => $this->documents($user),
             'legacy_images' => $this->legacy($user),
             'blockers' => $this->blockers($user, $completeness, $targetTier, $reviewer),
+            // AMIAL-KYC-REUSE-001 — **ورقةٌ واحدةٌ تفتح حسابين.**
+            'reuse' => $this->reuse->findingsFor($user),
         ];
     }
 
@@ -114,6 +119,12 @@ class KycEvidenceService
         if ($tier >= 3 && ($completeness['missing_fields'] ?? []) !== []) {
             $out[] = 'حقولٌ رقابيّةٌ ناقصةٌ للفئة الثالثة: '
                 .implode('، ', $completeness['missing_fields']);
+        }
+
+        // **وإعادةُ استعمال الوثيقة تُغلق الطريقَ كغيرها** — ولا تُعرَض
+        // لافتةً بجانب زرٍّ يعمل: تحذيرٌ يُمكن تخطّيه يُتخطّى.
+        foreach ($this->reuse->findingsFor($user)['blockers'] as $line) {
+            $out[] = $line;
         }
 
         return $out;

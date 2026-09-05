@@ -32,6 +32,23 @@ use Tests\TestCase;
  */
 class SelfRegisteredMerchantIsUsableTest extends TestCase
 {
+    /**
+     * AMIAL-KYC-REUSE-001 — **صورةٌ مميَّزةٌ لكلّ وثيقة.**
+     *
+     * `UploadedFile::fake()->image()` بأبعادٍ ثابتةٍ يُنتج **بايتاتٍ
+     * متطابقة**، فتخرج الوثائقُ الثلاثُ ببصمةٍ واحدة — وهي حالةٌ
+     * **مستحيلةٌ في الواقع** (وجهُ الهويّة وظهرُها صورتان مختلفتان)،
+     * ويُغلقها حارسُ إعادة الاستعمال بحقّ. فتُميَّز الأبعادُ لتصدق
+     * التثبيتةُ الواقعَ، **ولا يُضعَّف الحارسُ ليمرّ اختبار**.
+     */
+    private int $imageSeq = 0;
+
+    private function distinctImage(string $name): \Illuminate\Http\UploadedFile
+    {
+        return \Illuminate\Http\UploadedFile::fake()
+            ->image($name, 600, 400 + (++$this->imageSeq));
+    }
+
     use RefreshDatabase;
 
     /** يسجّل تاجراً بنفس الحمولة التي يرسلها معالجُ التطبيق. */
@@ -61,9 +78,9 @@ class SelfRegisteredMerchantIsUsableTest extends TestCase
             'store_name' => 'محطة بن ميطان',
             'business_type' => 'fuel',
             // AMIAL-SELFREG-KYCDOCS-001: مصنّفةٌ كما يرسلها المعالجُ الآن.
-            'kyc_id_front' => UploadedFile::fake()->image('front.jpg', 600, 400),
-            'kyc_id_back' => UploadedFile::fake()->image('back.jpg', 600, 400),
-            'kyc_selfie' => UploadedFile::fake()->image('selfie.jpg', 600, 600),
+            'kyc_id_front' => $this->distinctImage('front.jpg'),
+            'kyc_id_back' => $this->distinctImage('back.jpg'),
+            'kyc_selfie' => $this->distinctImage('selfie.jpg'),
         ]);
 
         $r->assertStatus(200);
