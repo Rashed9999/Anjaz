@@ -16,6 +16,7 @@ import 'package:amial_pay/features/merchant/screens/pos_device_activation_screen
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/secure_screen.dart';
+import 'package:amial_pay/util/app_direction.dart';
 
 /// AMIAL-LOGIN-DOORS-001 — **ثلاثةُ أبوابٍ لا خمسة، والتعليلُ يُقال.**
 ///
@@ -312,7 +313,7 @@ class _UnifiedLoginScreenState extends State<UnifiedLoginScreen> {
       backgroundColor: AmialColors.background,
       body: SafeArea(
         child: Directionality(
-          textDirection: TextDirection.rtl,
+          textDirection: appTextDirection(),
           child: ListView(
             padding: EdgeInsets.zero,
             children: [

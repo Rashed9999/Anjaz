@@ -5,6 +5,7 @@ import 'package:amial_pay/features/auth/domain/quick_receive_preferences.dart';
 import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
+import 'package:amial_pay/util/app_direction.dart';
 
 /// AMIAL-QUICK-RECEIVE-002
 ///
@@ -82,7 +83,7 @@ class QuickReceiveScreen extends StatelessWidget {
       ),
       body: SafeArea(
         child: Directionality(
-          textDirection: TextDirection.rtl,
+          textDirection: appTextDirection(),
           child: data == null
               ? _disabledState(context)
               : _enabledState(

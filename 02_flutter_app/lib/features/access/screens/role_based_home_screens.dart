@@ -55,7 +55,7 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.menu),
             onPressed: () => Get.to(() => const MerchantServicesHubScreen()),
-            tooltip: 'خدمات التاجر',
+            tooltip: 'خدمات التاجر'.tr,
           ),
         ],
       ),
@@ -63,14 +63,14 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           // بطاقة "أهلاً"
-          _GreetingCard(subtitle: 'تطبيق بيع سريع — أبسط ما يمكن'),
+          _GreetingCard(subtitle: 'تطبيق بيع سريع — أبسط ما يمكن'.tr),
           const SizedBox(height: 24),
 
           // 3 أزرار كبيرة فقط — هذا كل ما يحتاجه بائع السمك
           _BigActionButton(
             icon: Icons.point_of_sale,
-            label: 'بيع جديد',
-            subtitle: 'سجّل عملية بيع',
+            label: 'بيع جديد'.tr,
+            subtitle: 'سجّل عملية بيع'.tr,
             color: AmialColors.primary,
             onTap: () => Get.to(() => const CashierPosScreen()),
           ),
@@ -95,9 +95,9 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.calculate_outlined,
                   color: AmialColors.primary, size: 28),
-              title: const Text('آلة حاسبة',
+              title: Text('آلة حاسبة'.tr,
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              subtitle: const Text('احسب قبل أن تُدخل المبلغ — متاحة لكلّ الباقات',
+              subtitle: Text('احسب قبل أن تُدخل المبلغ — متاحة لكلّ الباقات'.tr,
                   style: TextStyle(fontSize: 12)),
               trailing: const Icon(Icons.chevron_left_rounded),
               onTap: () => QuickCalculatorSheet.open(context),
@@ -107,16 +107,16 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
           const SizedBox(height: 14),
           AccessGate(feature: 'debts', child: _BigActionButton(
             icon: Icons.receipt_long,
-            label: 'الديون',
-            subtitle: 'سجّل من عليه دين',
+            label: 'الديون'.tr,
+            subtitle: 'سجّل من عليه دين'.tr,
             color: AmialColors.primary,
             onTap: () => Get.to(() => const CreditDashboardScreen()),
           )),
           const SizedBox(height: 14),
           AccessGate(feature: 'daily_reports', child: _BigActionButton(
             icon: Icons.bar_chart,
-            label: 'تقرير اليوم',
-            subtitle: 'كم بِعت اليوم؟',
+            label: 'تقرير اليوم'.tr,
+            subtitle: 'كم بِعت اليوم؟'.tr,
             color: AmialColors.primary,
             onTap: () => Get.to(() => const FinancialTruthReportScreen(dailyOnly: true)),
           )),
@@ -126,8 +126,8 @@ class MerchantQuickSaleHomeScreen extends StatelessWidget {
           // وزرٌّ يفتح شاشةً تقول «غير معروض لحسابك» وعدٌ بلا وفاء.
           AccessGate(ownerOnly: true, child: _BigActionButton(
             icon: Icons.account_balance_wallet_rounded,
-            label: 'محفظة المتجر',
-            subtitle: 'رصيدك وحركاتُه',
+            label: 'محفظة المتجر'.tr,
+            subtitle: 'رصيدك وحركاتُه'.tr,
             color: AmialColors.primary,
             onTap: () => Get.to(() => const MerchantWalletScreen()),
           )),
@@ -157,24 +157,24 @@ class MerchantRetailHomeScreen extends StatelessWidget {
           // يُشترى — ولا يعرف التاجرُ أنّه موجودٌ أصلاً.
           IconButton(
             icon: const Icon(Icons.apps_rounded),
-            tooltip: 'خدماتي',
+            tooltip: 'خدماتي'.tr,
             onPressed: () => Get.to(() => const MyCapabilitiesScreen()),
           ),
-          IconButton(icon: const Icon(Icons.menu), tooltip: 'خدمات التاجر',
+          IconButton(icon: Icon(Icons.menu), tooltip: 'خدمات التاجر'.tr,
               onPressed: () => Get.to(() => const MerchantServicesHubScreen())),
         ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          _GreetingCard(subtitle: 'متجر تجزئة — POS كامل'),
+          _GreetingCard(subtitle: 'متجر تجزئة — POS كامل'.tr),
           const SizedBox(height: 20),
 
           // الإجراء الأساسي: الكاشير
           _BigActionButton(
             icon: Icons.point_of_sale,
-            label: 'الكاشير',
-            subtitle: 'بيع جديد + سلّة',
+            label: 'الكاشير'.tr,
+            subtitle: 'بيع جديد + سلّة'.tr,
             color: AmialColors.primary,
             onTap: () => Get.to(() => const CashierPosScreen()),
           ),
@@ -199,9 +199,9 @@ class MerchantRetailHomeScreen extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.calculate_outlined,
                   color: AmialColors.primary, size: 28),
-              title: const Text('آلة حاسبة',
+              title: Text('آلة حاسبة'.tr,
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-              subtitle: const Text('احسب قبل أن تُدخل المبلغ — متاحة لكلّ الباقات',
+              subtitle: Text('احسب قبل أن تُدخل المبلغ — متاحة لكلّ الباقات'.tr,
                   style: TextStyle(fontSize: 12)),
               trailing: const Icon(Icons.chevron_left_rounded),
               onTap: () => QuickCalculatorSheet.open(context),
@@ -228,7 +228,7 @@ class MerchantRetailHomeScreen extends StatelessWidget {
           // ══════════════════════════════════════════════════════════
           _ToolGrid(children: [
               AccessGate(feature: 'products', child: _MiniAction(
-                icon: Icons.inventory_2, label: 'المنتجات',
+                icon: Icons.inventory_2, label: 'المنتجات'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const CashierProductsScreen()),
               )),
@@ -236,22 +236,22 @@ class MerchantRetailHomeScreen extends StatelessWidget {
               // كان يفتح قائمةَ المنتجات**: عنوانٌ يَعِد بالمخزون ويُعطي
               // الكتالوج، ولا مكانَ للمواقع ولا التحويلات ولا الجرد.
               AccessGate(feature: 'inventory', child: _MiniAction(
-                icon: Icons.warehouse, label: 'المخزون',
+                icon: Icons.warehouse, label: 'المخزون'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const RetailOpsCenterScreen()),
               )),
               AccessGate(feature: 'customers', child: _MiniAction(
-                icon: Icons.people, label: 'العملاء',
+                icon: Icons.people, label: 'العملاء'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const CreditCustomersScreen()),
               )),
               AccessGate(feature: 'debts', child: _MiniAction(
-                icon: Icons.account_balance_wallet, label: 'الديون',
+                icon: Icons.account_balance_wallet, label: 'الديون'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const CreditDashboardScreen()),
               )),
               AccessGate(feature: 'barcode', child: _MiniAction(
-                icon: Icons.qr_code_scanner, label: 'مسح باركود',
+                icon: Icons.qr_code_scanner, label: 'مسح باركود'.tr,
                 color: AmialColors.primary,
                 // ══════════════════════════════════════════════════════
                 // AMIAL-SCAN-DEADEND-001 — **مسحٌ يُعلَن ولا يُباع.**
@@ -287,77 +287,77 @@ class MerchantRetailHomeScreen extends StatelessWidget {
                 },
               )),
               AccessGate(feature: 'daily_reports', child: _MiniAction(
-                icon: Icons.bar_chart, label: 'التقارير',
+                icon: Icons.bar_chart, label: 'التقارير'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const FinancialTruthReportScreen(dailyOnly: true)),
               )),
               AccessGate(feature: 'employees', child: _MiniAction(
-                icon: Icons.badge, label: 'الموظفون',
+                icon: Icons.badge, label: 'الموظفون'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantStaffScreen()),
               )),
               AccessGate(feature: 'excel_export', child: _MiniAction(
-                icon: Icons.grid_on, label: 'تصدير Excel',
+                icon: Icons.grid_on, label: 'تصدير Excel'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantExcelExportScreen()),
               )),
               AccessGate(feature: 'audit_log', child: _MiniAction(
-                icon: Icons.fact_check, label: 'سجلّ التدقيق',
+                icon: Icons.fact_check, label: 'سجلّ التدقيق'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantAuditLogScreen()),
               )),
               _MiniAction(
-                icon: Icons.receipt_long, label: 'إعدادات الفاتورة',
+                icon: Icons.receipt_long, label: 'إعدادات الفاتورة'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const ReceiptSettingsScreen()),
               ),
               AccessGate(feature: 'promotions', child: _MiniAction(
-                icon: Icons.local_offer, label: 'العروض والخصومات',
+                icon: Icons.local_offer, label: 'العروض والخصومات'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantPromotionsScreen()),
               )),
               AccessGate(feature: 'loyalty', child: _MiniAction(
-                icon: Icons.card_giftcard, label: 'برنامج الولاء',
+                icon: Icons.card_giftcard, label: 'برنامج الولاء'.tr,
                 color: const Color(0xFFB8860B),
                 onTap: () => Get.to(() => const MerchantLoyaltyScreen()),
               )),
               AccessGate(feature: 'gift_cards', child: _MiniAction(
-                icon: Icons.redeem, label: 'بطاقات الهدايا',
+                icon: Icons.redeem, label: 'بطاقات الهدايا'.tr,
                 color: const Color(0xFF7B1FA2),
                 onTap: () => Get.to(() => const MerchantGiftCardsScreen()),
               )),
               AccessGate(feature: 'expenses', child: _MiniAction(
-                icon: Icons.receipt_long, label: 'المصروفات',
+                icon: Icons.receipt_long, label: 'المصروفات'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantExpensesScreen()),
               )),
               AccessGate(feature: 'installments', child: _MiniAction(
-                icon: Icons.handshake, label: 'البيع بالتقسيط',
+                icon: Icons.handshake, label: 'البيع بالتقسيط'.tr,
                 color: const Color(0xFF00695C),
                 onTap: () => Get.to(() => const MerchantInstallmentsScreen()),
               )),
               AccessGate(feature: 'restaurant_orders', child: _MiniAction(
-                icon: Icons.restaurant, label: 'المطعم',
+                icon: Icons.restaurant, label: 'المطعم'.tr,
                 color: const Color(0xFFC2410C),
                 onTap: () => Get.to(() => const RestaurantScreen()),
               )),
               AccessGate(feature: 'corporate_accounts', child: _MiniAction(
-                icon: Icons.business_center, label: 'حسابات الشركات',
+                icon: Icons.business_center, label: 'حسابات الشركات'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const CorporateAccountsScreen()),
               )),
               AccessGate(feature: 'multi_currency', child: _MiniAction(
-                icon: Icons.currency_exchange, label: 'العملات',
+                icon: Icons.currency_exchange, label: 'العملات'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantCurrenciesScreen()),
               )),
               AccessGate(feature: 'api_access', child: _MiniAction(
-                icon: Icons.api, label: 'مفاتيح API',
+                icon: Icons.api, label: 'مفاتيح API'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantApiKeysScreen()),
               )),
               AccessGate(feature: 'advanced_backup', child: _MiniAction(
-                icon: Icons.backup, label: 'نسخة احتياطية',
+                icon: Icons.backup, label: 'نسخة احتياطية'.tr,
                 color: AmialColors.primary,
                 onTap: () => Get.to(() => const MerchantBackupScreen()),
               )),
@@ -504,9 +504,9 @@ class _UpgradeBanner extends StatelessWidget {
       child: Row(children: [
         const Icon(Icons.workspace_premium, color: Colors.black87),
         const SizedBox(width: 10),
-        const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('ترقية لخطّة مدفوعة', style: TextStyle(fontWeight: FontWeight.bold)),
-          Text('للحصول على ميزات أكثر', style: TextStyle(fontSize: 11)),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('ترقية لخطّة مدفوعة'.tr, style: TextStyle(fontWeight: FontWeight.bold)),
+          Text('للحصول على ميزات أكثر'.tr, style: TextStyle(fontSize: 11)),
         ])),
         Icon(Icons.chevron_left, color: Colors.black87),
       ]),

@@ -28,7 +28,7 @@ class CashierPosScreen extends StatefulWidget {
 class _CashierPosScreenState extends State<CashierPosScreen> {
   CashierController get c => Get.find<CashierController>();
   final _search = TextEditingController();
-  String _category = 'الكل';
+  String _category = 'الكل'.tr;
 
   final _offline = Get.find<OfflineSaleQueue>();
 
@@ -61,7 +61,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
       final cat = '${p['category'] ?? ''}'.trim();
       if (cat.isNotEmpty) set.add(cat);
     }
-    return ['الكل', ...set];
+    return ['الكل'.tr, ...set];
   }
 
   List<Map<String, dynamic>> get _visible {
@@ -86,7 +86,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('إدخال مبلغ يدوي'),
+        title: Text('إدخال مبلغ يدوي'.tr),
         content: TextField(
           controller: amount,
           autofocus: true,
@@ -94,21 +94,21 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             hintText: '0',
-            suffixText: 'ر.ي',
+            suffixText: 'ر.ي'.tr,
           ),
         ),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('إلغاء')),
+              child: Text('إلغاء'.tr)),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
                 backgroundColor: AmialColors.primary,
                 foregroundColor: Colors.white),
-            child: const Text('متابعة للدفع'),
+            child: Text('متابعة للدفع'.tr),
           ),
         ],
       ),
@@ -134,9 +134,9 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
           child: Obx(() {
             if (c.cart.isEmpty) {
               // أُفرغت السلة من داخل الورقة
-              return const SizedBox(
+              return SizedBox(
                   height: 120,
-                  child: Center(child: Text('السلة فارغة')));
+                  child: Center(child: Text('السلة فارغة'.tr)));
             }
             final count = c.cart.fold<int>(0, (s, l) => s + l.qty);
             return Column(mainAxisSize: MainAxisSize.min, children: [
@@ -162,7 +162,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                           fontWeight: FontWeight.bold,
                           color: AmialColors.primary)),
                 ),
-                const Text('مراجعة الطلب',
+                Text('مراجعة الطلب'.tr,
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
               ]),
               const SizedBox(height: 14),
@@ -192,7 +192,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                             color: AmialColors.primary)),
-                    const Text('الإجمالي المطلوب',
+                    Text('الإجمالي المطلوب'.tr,
                         style: TextStyle(
                             fontSize: 14, fontWeight: FontWeight.w600)),
                   ],
@@ -205,7 +205,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   Get.to(() => CashierPaymentScreen(total: c.cartTotal));
                 },
                 icon: const Icon(Icons.arrow_back),
-                label: const Text('متابعة للدفع',
+                label: Text('متابعة للدفع'.tr,
                     style:
                         TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 style: FilledButton.styleFrom(
@@ -223,7 +223,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                 },
                 icon: const Icon(Icons.delete_sweep_outlined,
                     size: 18, color: AmialColors.red),
-                label: const Text('إفراغ السلة',
+                label: Text('إفراغ السلة'.tr,
                     style: TextStyle(color: AmialColors.red, fontSize: 13)),
               ),
             ]);
@@ -261,7 +261,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('المبيعات'),
+        title: Text('المبيعات'.tr),
         actions: [
           // AMIAL-CALCULATOR-001 — **الحاسبةُ حيث يُحسَب، لا في قائمة.**
           // من يحسب وهو على الشبّاك يحسب **والسلّةُ أمامه** — وشاشةٌ
@@ -269,7 +269,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
           IconButton(
             key: const Key('calc-open'),
             icon: const Icon(Icons.calculate_outlined),
-            tooltip: 'آلة حاسبة',
+            tooltip: 'آلة حاسبة'.tr,
             onPressed: () => QuickCalculatorSheet.open(context),
           ),
           // مؤشّر المبيعات دون اتصال (يظهر عند وجود معلّق)
@@ -279,7 +279,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   padding: const EdgeInsets.only(left: 4),
                   child: Stack(alignment: Alignment.center, children: [
                     IconButton(
-                      tooltip: 'مبيعات دون اتصال',
+                      tooltip: 'مبيعات دون اتصال'.tr,
                       icon: const Icon(Icons.cloud_off),
                       onPressed: () => Get.to(() => const OfflineSalesScreen()),
                     ),
@@ -303,7 +303,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
             return Stack(alignment: Alignment.center, children: [
               IconButton(
                 key: const Key('cashier-held-tickets'),
-                tooltip: 'التذاكر المفتوحة',
+                tooltip: 'التذاكر المفتوحة'.tr,
                 icon: const Icon(Icons.pause_circle_outline_rounded),
                 onPressed: _openHeldTickets,
               ),
@@ -325,7 +325,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
             ]);
           }),
           IconButton(
-            tooltip: 'إدخال يدوي',
+            tooltip: 'إدخال يدوي'.tr,
             icon: const Icon(Icons.edit_note_rounded),
             onPressed: _manualAmount,
           ),
@@ -362,7 +362,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                 child: ElevatedButton.icon(
                   onPressed: _manualAmount,
                   icon: const Icon(Icons.edit_note_rounded, size: 26),
-                  label: const Text('أدخل المبلغ',
+                  label: Text('أدخل المبلغ'.tr,
                       style: TextStyle(
                           fontSize: 18, fontWeight: FontWeight.bold)),
                   style: ElevatedButton.styleFrom(
@@ -403,7 +403,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                   controller: _search,
                   onChanged: (_) => setState(() {}),
                   decoration: InputDecoration(
-                    hintText: 'بحث عن منتج أو كود...',
+                    hintText: 'بحث عن منتج أو كود...'.tr,
                     hintStyle: const TextStyle(fontSize: 13),
                     prefixIcon: const Icon(Icons.search, size: 20),
                     filled: true,
@@ -450,8 +450,8 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                     child:
                         CircularProgressIndicator(color: AmialColors.primary))
                 : items.isEmpty
-                    ? const Center(
-                        child: Text('لا توجد منتجات مطابقة',
+                    ? Center(
+                        child: Text('لا توجد منتجات مطابقة'.tr,
                             style: TextStyle(color: AmialColors.textMuted)))
                     : GridView.builder(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
@@ -568,7 +568,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                     // أخرى — وهو عطلُ «تحويل رصيد» في مركز الوكلاء بحرفه.
                     Obx(() => IconButton(
                           key: const Key('cashier-hold-cart'),
-                          tooltip: 'تعليق الفاتورة',
+                          tooltip: 'تعليق الفاتورة'.tr,
                           onPressed: c.isHolding.value ? null : _holdCart,
                           icon: c.isHolding.value
                               ? const SizedBox(
@@ -589,8 +589,8 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                         color: AmialColors.yellow,
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text('مراجعة الطلب',
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text('مراجعة الطلب'.tr,
                             style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
@@ -724,7 +724,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                     color: AmialColors.primary,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text('عرض',
+                  child: Text('عرض'.tr,
                       style: TextStyle(color: Colors.white, fontSize: 9)),
                 ),
               if (out)
@@ -735,7 +735,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                     color: AmialColors.dangerSurface,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text('نفد',
+                  child: Text('نفد'.tr,
                       style:
                           TextStyle(color: AmialColors.red, fontSize: 9)),
                 ),
@@ -825,7 +825,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('تعليق الفاتورة'),
+        title: Text('تعليق الفاتورة'.tr),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
           Text('${c.cart.length} صنف · ${AmialMoney.yer(c.cartTotal)}',
               style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -833,21 +833,20 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
           TextField(
             controller: label,
             autofocus: true,
-            decoration: const InputDecoration(
-              labelText: 'اسم يميّزها (اختياري)',
-              hintText: 'أبو محمد · السيارة الحمراء · الطاولة ٣',
+            decoration: InputDecoration(
+              labelText: 'اسم يميّزها (اختياري)'.tr,
+              hintText: 'أبو محمد · السيارة الحمراء · الطاولة ٣'.tr,
               border: OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 8),
-          const Text(
-              'تُحفظ في الخادم فتنجو من إغلاق التطبيق، ويستأنفها أي صندوق. '
-              'ولا تُخصم البضاعة من المخزون قبل الدفع.',
+          Text(
+              'تُحفظ في الخادم فتنجو من إغلاق التطبيق، ويستأنفها أي صندوق. ولا تُخصم البضاعة من المخزون قبل الدفع.'.tr,
               style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
         ]),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تعليق')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('إلغاء'.tr)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('تعليق'.tr)),
         ],
       ),
     );
@@ -858,10 +857,10 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     if (!mounted) return;
 
     if (done) {
-      Get.snackbar('عُلّقت الفاتورة', 'تُستأنف من «التذاكر المفتوحة» في الأعلى',
+      Get.snackbar('عُلّقت الفاتورة'.tr, 'تُستأنف من «التذاكر المفتوحة» في الأعلى'.tr,
           backgroundColor: AmialColors.successSurface, colorText: AmialColors.success);
     } else {
-      Get.snackbar('تعذّر التعليق', c.lastError.value,
+      Get.snackbar('تعذّر التعليق'.tr, c.lastError.value,
           backgroundColor: AmialColors.dangerSurface, colorText: AmialColors.red);
     }
   }
@@ -897,18 +896,17 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
                 ),
               ),
               const SizedBox(height: 14),
-              const Text('التذاكر المفتوحة',
+              Text('التذاكر المفتوحة'.tr,
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
               const SizedBox(height: 4),
-              const Text('فواتير عُلّقت ولم تُدفَع بعد. أي صندوق يستأنفها.',
+              Text('فواتير عُلّقت ولم تُدفَع بعد. أي صندوق يستأنفها.'.tr,
                   style: TextStyle(fontSize: 11.5, color: AmialColors.textMuted)),
               const SizedBox(height: 14),
               if (list.isEmpty)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.symmetric(vertical: 40),
                   child: Text(
-                      'لا تذاكر معلّقة.\n\nحين يقول الزبون «انتظر، نسيت شيئاً» — '
-                      'اضغط «تعليق» في شريط السلة واخدم التالي.',
+                      'لا تذاكر معلّقة.\n\nحين يقول الزبون «انتظر، نسيت شيئاً» — اضغط «تعليق» في شريط السلة واخدم التالي.'.tr,
                       textAlign: TextAlign.center,
                       style: TextStyle(color: AmialColors.textMuted, height: 1.7)),
                 )
@@ -937,7 +935,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
       child: Column(children: [
         Row(children: [
           Expanded(
-            child: Text(label.isEmpty ? 'تذكرة بلا اسم' : label,
+            child: Text(label.isEmpty ? 'تذكرة بلا اسم'.tr : label,
                 style: TextStyle(
                     fontWeight: FontWeight.w900,
                     fontSize: 14,
@@ -964,7 +962,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
             child: FilledButton.icon(
               onPressed: () => _resume('${t['ticket_ulid']}'),
               icon: const Icon(Icons.play_arrow, size: 16),
-              label: const Text('استئناف'),
+              label: Text('استئناف'.tr),
               style: FilledButton.styleFrom(
                   backgroundColor: AmialColors.primary,
                   minimumSize: const Size(0, 42)),
@@ -974,7 +972,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
           OutlinedButton.icon(
             onPressed: () => _voidTicket('${t['ticket_ulid']}'),
             icon: const Icon(Icons.delete_outline, size: 16),
-            label: const Text('إلغاء'),
+            label: Text('إلغاء'.tr),
             style: OutlinedButton.styleFrom(
                 foregroundColor: AmialColors.red,
                 side: const BorderSide(color: AmialColors.red),
@@ -994,16 +992,16 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
       final choice = await showDialog<String>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('في السلة أصناف'),
+          title: Text('في السلة أصناف'.tr),
           content: Text('السلة الحالية فيها ${c.cart.length} صنف. '
-              'استئناف تذكرة أخرى سيستبدلها.'),
+              'استئناف تذكرة أخرى سيستبدلها.'.tr),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, 'cancel'),
-                child: const Text('تراجع')),
+                child: Text('تراجع'.tr)),
             TextButton(onPressed: () => Navigator.pop(ctx, 'hold'),
-                child: const Text('علّق الحالية أولاً')),
+                child: Text('علّق الحالية أولاً'.tr)),
             FilledButton(onPressed: () => Navigator.pop(ctx, 'replace'),
-                child: const Text('استبدال')),
+                child: Text('استبدال'.tr)),
           ],
         ),
       );
@@ -1022,7 +1020,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     if (ok) {
       Navigator.of(context).maybePop();
     } else {
-      Get.snackbar('تعذّر الاستئناف', c.lastError.value,
+      Get.snackbar('تعذّر الاستئناف'.tr, c.lastError.value,
           backgroundColor: AmialColors.dangerSurface, colorText: AmialColors.red);
     }
   }
@@ -1033,22 +1031,22 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('إلغاء التذكرة'),
+        title: Text('إلغاء التذكرة'.tr),
         content: TextField(
           controller: reason,
           autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'السبب',
-            hintText: 'الزبون انصرف · أُدخلت بالخطأ',
+          decoration: InputDecoration(
+            labelText: 'السبب'.tr,
+            hintText: 'الزبون انصرف · أُدخلت بالخطأ'.tr,
             border: OutlineInputBorder(),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('تراجع'.tr)),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
               style: FilledButton.styleFrom(backgroundColor: AmialColors.red),
-              child: const Text('إلغاء التذكرة')),
+              child: Text('إلغاء التذكرة'.tr)),
         ],
       ),
     );
@@ -1056,7 +1054,7 @@ class _CashierPosScreenState extends State<CashierPosScreen> {
     if (ok != true || !mounted) return;
 
     if (reason.text.trim().length < 3) {
-      Get.snackbar('السبب مطلوب', 'تذكرة تختفي بلا سبب تُقرأ عطلاً',
+      Get.snackbar('السبب مطلوب'.tr, 'تذكرة تختفي بلا سبب تُقرأ عطلاً'.tr,
           backgroundColor: AmialColors.dangerSurface, colorText: AmialColors.red);
       return;
     }

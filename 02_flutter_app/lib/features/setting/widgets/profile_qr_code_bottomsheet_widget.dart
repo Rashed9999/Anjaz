@@ -8,6 +8,7 @@ import 'package:amial_pay/features/shared/widgets/qr_widgets.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/util/dimensions.dart';
+import 'package:amial_pay/util/app_direction.dart';
 
 /// AMIAL-QUICK-RECEIVE-002
 ///
@@ -124,7 +125,7 @@ class _ProfileQRCodeBottomSheetWidgetState
             AmialSpacing.xl,
           ),
           child: Directionality(
-            textDirection: TextDirection.rtl,
+            textDirection: appTextDirection(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,

@@ -16,6 +16,7 @@ import 'package:amial_pay/features/pharmacy/screens/pharmacy_sale_screen.dart';
 import 'package:amial_pay/features/receipts/screens/receipts_list_screen.dart';
 import 'package:amial_pay/features/setting/screens/profile_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_direction.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
 /// AMIAL-POS-HOME-001 — **شاشةُ الكاشير. وقبلها لم تكن هناك شاشةُ كاشير.**
@@ -71,7 +72,7 @@ class PosEmployeeHomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: appTextDirection(),
       child: Scaffold(
         backgroundColor: AmialColors.background,
         appBar: AppBar(
@@ -196,7 +197,7 @@ class PosEmployeeHomeScreen extends StatelessWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: appTextDirection(),
         child: AlertDialog(
           title: const Text('تسجيل الخروج'),
           content: const Text('ستحتاج رمزَ الموظّف وكلمةَ المرور للدخول ثانيةً.'),

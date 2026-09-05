@@ -72,7 +72,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('الخطط والاشتراكات'),
+        title: Text('الخطط والاشتراكات'.tr),
       ),
       body: Obx(() {
         if (c.isLoading.value && c.plans.isEmpty) {
@@ -90,8 +90,8 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
               boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6)],
             ),
             child: Row(children: [
-              _toggleBtn('شهري', !_annual, () => setState(() => _annual = false)),
-              _toggleBtn('سنوي (وفّر 17%)', _annual, () => setState(() => _annual = true)),
+              _toggleBtn('شهري'.tr, !_annual, () => setState(() => _annual = false)),
+              _toggleBtn('سنوي (وفّر 17%)'.tr, _annual, () => setState(() => _annual = true)),
             ]),
           ),
 
@@ -102,16 +102,16 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(children: [
-              _viewBtn('بطاقات', Icons.view_carousel, !_compare, () => setState(() => _compare = false)),
+              _viewBtn('بطاقات'.tr, Icons.view_carousel, !_compare, () => setState(() => _compare = false)),
               const SizedBox(width: 8),
-              _viewBtn('مقارنة', Icons.table_chart, _compare, () => setState(() => _compare = true)),
+              _viewBtn('مقارنة'.tr, Icons.table_chart, _compare, () => setState(() => _compare = true)),
             ]),
           ),
           const SizedBox(height: 8),
 
           // كتالوج الخطط
           Expanded(child: c.plans.isEmpty
-              ? Center(child: Text('لا توجد خطط متاحة',
+              ? Center(child: Text('لا توجد خطط متاحة'.tr,
                   style: TextStyle(color: Colors.grey.shade600)))
               : (_compare
                   ? _comparisonMatrix()
@@ -127,7 +127,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
           Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
-              'الأسعار مرجعية بالريال السعودي. التفعيل يتم يدوياً عبر خدمة العملاء.',
+              'الأسعار مرجعية بالريال السعودي. التفعيل يتم يدوياً عبر خدمة العملاء.'.tr,
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
             ),
@@ -202,10 +202,10 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
     if (ladder.isEmpty) {
       // **«لم تصل» ليست «لا فرق»** (القاعدة السابعة) — ولا يُعرَض فراغٌ
       // يُقرأ «الباقات متطابقة».
-      return const Center(
+      return Center(
         child: Padding(
           padding: EdgeInsets.all(32),
-          child: Text('تعذّرت قراءة تفاصيل المقارنة — اسحب للتحديث.',
+          child: Text('تعذّرت قراءة تفاصيل المقارنة — اسحب للتحديث.'.tr,
               textAlign: TextAlign.center,
               style: TextStyle(color: AmialColors.textMuted)),
         ),
@@ -288,13 +288,13 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
                   decoration: BoxDecoration(
                       color: AmialColors.yellow,
                       borderRadius: BorderRadius.circular(10)),
-                  child: const Text('باقتك',
+                  child: Text('باقتك'.tr,
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 )
               else
                 // **العملةُ تُقال ولا تُحوَّل** — السعرُ سعوديٌّ والرصيدُ
                 // في المنتج يمنيّ. (القسمُ في `CLAUDE.md`.)
-                Text(isFree ? 'مجّاناً' : '$price $currency',
+                Text(isFree ? 'مجّاناً'.tr : '$price $currency',
                     style: const TextStyle(
                         color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
             ]),
@@ -316,7 +316,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(
               isFree
-                  ? 'تبدأ بهذه، وفيها:'
+                  ? 'تبدأ بهذه، وفيها:'.tr
                   : 'تضيف على ما قبلها ${plan['adds_count']} قدرة:',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
             ),
@@ -379,7 +379,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
         const SizedBox(width: 8),
         Expanded(child: Text(
           isExpired
-            ? 'انتهت خطّتك — تعمل الآن بحدود FREE'
+            ? 'انتهت خطّتك — تعمل الآن بحدود FREE'.tr
             : 'خطّتك الحالية: ${_planLabel(cp['code'])}',
           style: TextStyle(
             color: isExpired ? Colors.red.shade800 : AmialColors.yellowDark,
@@ -419,7 +419,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
     final isCurrent = c.isCurrentPlan(code);
     final isSuggested = widget.suggestedPlan == code;
     final price = _annual ? plan['price_annual_sar'] : plan['price_monthly_sar'];
-    final priceLabel = _annual ? 'سنوياً' : 'شهرياً';
+    final priceLabel = _annual ? 'سنوياً'.tr : 'شهرياً'.tr;
     final features = (plan['features'] ?? []) as List;
     final limits = (plan['limits'] ?? {}) as Map;
 
@@ -466,7 +466,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
             if (plan['is_free'] == true) ...[
               Text(_freePriceLabel(plan),
                   style: const TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold)),
-              const Text('للأبد', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              Text('للأبد'.tr, style: TextStyle(color: Colors.white70, fontSize: 12)),
             ] else ...[
               Row(mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -485,7 +485,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
                   color: AmialColors.yellow,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: const Text('مُقترحة لك',
+                child: Text('مُقترحة لك'.tr,
                     style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold, fontSize: 11)),
               ),
             ],
@@ -497,15 +497,15 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             // الحدود الرقمية
-            _limitRow('عدد المنتجات', _limitText(limits['max_products'])),
-            _limitRow('عمليات شهرية', _limitText(limits['monthly_operations'])),
-            _limitRow('الموظفون', _limitText(limits['max_employees'])),
-            _limitRow('الفروع', _limitText(limits['max_branches'])),
-            _limitRow('نقاط البيع', _limitText(limits['max_pos_devices'])),
-            _limitRow('مدّة الأرشيف', _archiveText(limits['archive_days'])),
+            _limitRow('عدد المنتجات'.tr, _limitText(limits['max_products'])),
+            _limitRow('عمليات شهرية'.tr, _limitText(limits['monthly_operations'])),
+            _limitRow('الموظفون'.tr, _limitText(limits['max_employees'])),
+            _limitRow('الفروع'.tr, _limitText(limits['max_branches'])),
+            _limitRow('نقاط البيع'.tr, _limitText(limits['max_pos_devices'])),
+            _limitRow('مدّة الأرشيف'.tr, _archiveText(limits['archive_days'])),
             const SizedBox(height: 14),
             // الميزات
-            const Text('الميزات المُتاحة',
+            Text('الميزات المُتاحة'.tr,
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 8),
             // **الأسماءُ من الخادم** — و`_featureLabel` كانت خريطةً
@@ -540,16 +540,16 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
                   color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: AmialColors.yellow, width: 2),
                 ),
-                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.check_circle, color: AmialColors.yellowDark, size: 18),
                   SizedBox(width: 6),
-                  Text('الخطّة الحالية', style: TextStyle(color: AmialColors.yellowDark, fontWeight: FontWeight.bold)),
+                  Text('الخطّة الحالية'.tr, style: TextStyle(color: AmialColors.yellowDark, fontWeight: FontWeight.bold)),
                 ]),
               )
             : FilledButton.icon(
                 onPressed: () => _showContactDialog(plan),
                 icon: const Icon(Icons.workspace_premium),
-                label: Text(plan['is_free'] == true ? 'استخدم المجانية' : 'ترقية الآن'),
+                label: Text(plan['is_free'] == true ? 'استخدم المجانية'.tr : 'ترقية الآن'.tr),
                 style: FilledButton.styleFrom(
                   backgroundColor: color,
                   minimumSize: const Size.fromHeight(48),
@@ -564,13 +564,13 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
   /// السعر يكرّرها تحته مباشرةً («مجاني / مجاني»). نعرض «بلا رسوم» عندئذٍ.
   String _freePriceLabel(Map<String, dynamic> plan) {
     final label = plan['label']?.toString() ?? '';
-    return label.contains('مجان') ? 'بلا رسوم' : 'مجاني';
+    return label.contains('مجان'.tr) ? 'بلا رسوم'.tr : 'مجاني'.tr;
   }
 
   String _limitText(dynamic v) {
     if (v == null) return '—';
     final n = v is num ? v.toInt() : (int.tryParse('$v') ?? 0);
-    if (n < 0) return 'غير محدود';
+    if (n < 0) return 'غير محدود'.tr;
     if (n == 0) return '—';
     return '$n';
   }
@@ -578,7 +578,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
   String _archiveText(dynamic v) {
     if (v == null) return '—';
     final n = v is num ? v.toInt() : (int.tryParse('$v') ?? 0);
-    if (n < 0) return 'دائم';
+    if (n < 0) return 'دائم'.tr;
     if (n >= 365) return '${(n / 365).toStringAsFixed(0)} سنة';
     if (n >= 30) return '${(n / 30).toStringAsFixed(0)} شهر';
     return '$n يوم';
@@ -664,38 +664,37 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
             child: Column(children: [
               Text('$price ${_cur(plan)}', style: const TextStyle(
                   fontSize: 24, fontWeight: FontWeight.bold, color: AmialColors.primary)),
-              Text(_annual ? 'سنوياً' : 'شهرياً',
+              Text(_annual ? 'سنوياً'.tr : 'شهرياً'.tr,
                   style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
             ]),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'للترقية، تواصل مع خدمة العملاء وسيتمّ تفعيل خطّتك خلال 24 ساعة من تأكيد الدفع.',
+          Text(
+            'للترقية، تواصل مع خدمة العملاء وسيتمّ تفعيل خطّتك خلال 24 ساعة من تأكيد الدفع.'.tr,
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13),
           ),
           const SizedBox(height: 12),
-          const Text('طرق الدفع المتاحة:',
+          Text('طرق الدفع المتاحة:'.tr,
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
           const SizedBox(height: 4),
-          const Wrap(spacing: 6, runSpacing: 4, children: [
-            _PayMethod('💵', 'نقد'),
-            _PayMethod('🏦', 'تحويل بنكي'),
-            _PayMethod('📱', 'محفظة إلكترونية'),
+          Wrap(spacing: 6, runSpacing: 4, children: [
+            _PayMethod('💵', 'نقد'.tr),
+            _PayMethod('🏦', 'تحويل بنكي'.tr),
+            _PayMethod('📱', 'محفظة إلكترونية'.tr),
           ]),
         ] else ...[
-          const Text(
-            'الخطّة المجانية مُتاحة دائماً، لكنها محدودة بـ 100 عملية بيع شهرياً.\n\n'
-            'للحصول على ميزات إضافية، رقّ خطّتك في أيّ وقت.',
+          Text(
+            'الخطّة المجانية مُتاحة دائماً، لكنها محدودة بـ 100 عملية بيع شهرياً.\n\nللحصول على ميزات إضافية، رقّ خطّتك في أيّ وقت.'.tr,
             textAlign: TextAlign.right,
           ),
         ],
       ]),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق')),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text('إغلاق'.tr)),
         if (!isFree) FilledButton.icon(
           icon: const Icon(Icons.phone),
-          label: const Text('تواصل الآن'),
+          label: Text('تواصل الآن'.tr),
           onPressed: () async {
             Navigator.pop(ctx);
             await _openContactSheet(plan, price);
@@ -724,13 +723,13 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
                 margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(color: Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(2))),
-            const Text('تواصل لتفعيل الخطّة',
+            Text('تواصل لتفعيل الخطّة'.tr,
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             _ContactBtn(
               icon: Icons.chat_bubble,
               label: 'WhatsApp',
-              subtitle: 'الأسرع — رسالة مُعدّة مسبقاً',
+              subtitle: 'الأسرع — رسالة مُعدّة مسبقاً'.tr,
               color: const Color(0xFF25D366),
               onTap: () async {
                 Navigator.pop(sheetCtx);
@@ -741,7 +740,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
             ),
             _ContactBtn(
               icon: Icons.phone,
-              label: 'اتصال هاتفي',
+              label: 'اتصال هاتفي'.tr,
               subtitle: ContactConstants.phoneNumber,
               color: AmialColors.primary,
               onTap: () async {
@@ -751,7 +750,7 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
             ),
             _ContactBtn(
               icon: Icons.email,
-              label: 'البريد الإلكتروني',
+              label: 'البريد الإلكتروني'.tr,
               subtitle: ContactConstants.supportEmail,
               color: Colors.deepOrange,
               onTap: () async {
@@ -775,14 +774,14 @@ class _PlansCatalogScreenState extends State<PlansCatalogScreen> {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('تعذّر فتح التطبيق — تأكّد من تثبيته'),
+          content: Text('تعذّر فتح التطبيق — تأكّد من تثبيته'.tr),
           backgroundColor: AmialColors.red,
         ));
       }
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('فشل التواصل — حاول لاحقاً'),
+        content: Text('فشل التواصل — حاول لاحقاً'.tr),
         backgroundColor: AmialColors.red,
       ));
     }

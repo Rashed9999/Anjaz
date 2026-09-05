@@ -24,6 +24,7 @@ import 'package:amial_pay/theme/amial_spacing.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_wallet_screen.dart';
 import 'package:amial_pay/features/fuel_station/screens/fuel_cashier_screen.dart';
 import 'package:amial_pay/features/merchant_verification/screens/merchant_verification_screen.dart';
+import 'package:amial_pay/util/app_direction.dart';
 
 /// AMIAL-MERCHANT-NAV-001
 ///
@@ -41,7 +42,7 @@ class MerchantAdaptiveShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: appTextDirection(),
       child: Scaffold(
         backgroundColor: AmialColors.background,
         drawer: const MerchantAdaptiveDrawer(),

@@ -8,6 +8,7 @@ import 'package:amial_pay/features/transaction_money/screens/amial_send_money_sc
 import 'package:amial_pay/features/withdraw/screens/withdraw_request_screen.dart';
 import 'package:amial_pay/helper/amial_money.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_direction.dart';
 
 /// ══════════════════════════════════════════════════════════════════════
 /// AMIAL-MERCHANT-WALLET-001 — **محفظةُ المتجر. ولم تكن هناك محفظة.**
@@ -66,7 +67,7 @@ class _MerchantWalletScreenState extends State<MerchantWalletScreen> {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: appTextDirection(),
       child: Scaffold(
         backgroundColor: AmialColors.background,
         appBar: AppBar(title: const Text('محفظة المتجر')),

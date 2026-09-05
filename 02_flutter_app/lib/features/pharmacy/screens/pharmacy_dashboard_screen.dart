@@ -41,7 +41,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('الصيدلية'),
+        title: Text('الصيدلية'.tr),
       ),
       body: RefreshIndicator(
         onRefresh: () async { await c.loadPharmacy(); await c.loadDashboard(); },
@@ -69,7 +69,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(p?['pharmacy_name'] ?? 'صيدليتي',
+                    Text(p?['pharmacy_name'] ?? 'صيدليتي'.tr,
                         style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                     if (p?['pharmacist_name'] != null)
                       Text('الصيدلي: ${p!['pharmacist_name']}',
@@ -94,7 +94,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
                     Expanded(child: _statBox('${today?['sales_count'] ?? 0}', 'بيوع اليوم',
                         AmialColors.primary, Icons.receipt_long)),
                     const SizedBox(width: 6),
-                    Expanded(child: _statBox(AmialMoney.fmt(today?['total_amount']), 'الإجمالي (ر.ي)',
+                    Expanded(child: _statBox(AmialMoney.fmt(today?['total_amount']), 'الإجمالي (ر.ي)'.tr,
                         AmialColors.yellowDark, Icons.attach_money)),
                   ]),
                   const SizedBox(height: 8),
@@ -127,7 +127,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
             const SizedBox(height: 16),
 
             // الإجراء الأساسي
-            _bigAction(Icons.point_of_sale, 'بيع جديد', 'تسجيل عملية بيع',
+            _bigAction(Icons.point_of_sale, 'بيع جديد'.tr, 'تسجيل عملية بيع'.tr,
                 AmialColors.primary, () => Get.to(() => const PharmacySaleScreen())),
 
             // AMIAL-SHIFT-DOOR-001 — **لوحةُ الصيدليّة كانت بلا ورديّةٍ
@@ -145,9 +145,9 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
               child: ListTile(
                 leading: const Icon(Icons.calculate_outlined,
                     color: AmialColors.primary, size: 28),
-                title: const Text('آلة حاسبة',
+                title: Text('آلة حاسبة'.tr,
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                subtitle: const Text('احسب قبل أن تُدخل المبلغ — متاحة لكلّ الباقات',
+                subtitle: Text('احسب قبل أن تُدخل المبلغ — متاحة لكلّ الباقات'.tr,
                     style: TextStyle(fontSize: 12)),
                 trailing: const Icon(Icons.chevron_left_rounded),
                 onTap: () => QuickCalculatorSheet.open(context),
@@ -156,7 +156,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
 
             const SizedBox(height: 10),
             Row(children: [
-              Expanded(child: _miniAction(Icons.medication, 'المنتجات',
+              Expanded(child: _miniAction(Icons.medication, 'المنتجات'.tr,
                   () => Get.to(() => const PharmacyProductsScreen()))),
               const SizedBox(width: 8),
               Expanded(child: Obx(() {
@@ -164,7 +164,7 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
                 final enabled = access.has('pharmacy_customers');
                 return _miniAction(
                   enabled ? Icons.people : Icons.lock_outline,
-                  enabled ? 'الملف الصحي للعملاء' : 'الملف الصحي (أعمال)',
+                  enabled ? 'الملف الصحي للعملاء'.tr : 'الملف الصحي (أعمال)'.tr,
                   () => Get.to(() => enabled
                       ? const PharmacyCustomersScreen()
                       : const PlansCatalogScreen()),
@@ -173,10 +173,10 @@ class _PharmacyDashboardScreenState extends State<PharmacyDashboardScreen> {
             ]),
             const SizedBox(height: 8),
             Row(children: [
-              Expanded(child: _miniAction(Icons.warning_amber, 'التنبيهات',
+              Expanded(child: _miniAction(Icons.warning_amber, 'التنبيهات'.tr,
                   () => Get.to(() => const PharmacyAlertsScreen()))),
               const SizedBox(width: 8),
-              Expanded(child: _miniAction(Icons.history, 'سجل المبيعات',
+              Expanded(child: _miniAction(Icons.history, 'سجل المبيعات'.tr,
                   () => Get.to(() => const PharmacySalesHistoryScreen()))),
             ]),
           ]),
@@ -263,12 +263,12 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('المنتجات'),
+        title: Text('المنتجات'.tr),
         actions: [
           IconButton(
             icon: Icon(_lowStockOnly ? Icons.filter_alt : Icons.filter_alt_outlined),
             onPressed: () { setState(() => _lowStockOnly = !_lowStockOnly); c.loadProducts(lowStockOnly: _lowStockOnly); },
-            tooltip: 'مخزون منخفض فقط',
+            tooltip: 'مخزون منخفض فقط'.tr,
           ),
         ],
       ),
@@ -276,7 +276,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
         backgroundColor: AmialColors.primary,
         onPressed: _addProductDialog,
         icon: const Icon(Icons.add),
-        label: const Text('منتج جديد'),
+        label: Text('منتج جديد'.tr),
       ),
       body: Obx(() {
         if (c.isLoading.value && c.products.isEmpty) {
@@ -286,7 +286,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
           return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(Icons.inventory_2, size: 64, color: Colors.grey.shade400),
             const SizedBox(height: 12),
-            Text(_lowStockOnly ? 'لا توجد منتجات منخفضة' : 'لا توجد منتجات',
+            Text(_lowStockOnly ? 'لا توجد منتجات منخفضة'.tr : 'لا توجد منتجات'.tr,
                 style: TextStyle(color: Colors.grey.shade600)),
           ]));
         }
@@ -338,7 +338,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
             Obx(() {
               final enabled = Get.find<AccessController>().has('pharmacy_substitutions');
               return IconButton(
-                tooltip: enabled ? 'بدائل الدواء' : 'بدائل الدواء — أعمال',
+                tooltip: enabled ? 'بدائل الدواء'.tr : 'بدائل الدواء — أعمال'.tr,
                 icon: Icon(enabled ? Icons.compare_arrows : Icons.lock_outline, color: AmialColors.primary),
                 onPressed: () => enabled
                     ? _showAlternatives(p)
@@ -373,14 +373,14 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
                       ? _showAlternatives(product)
                       : Get.to(() => const PlansCatalogScreen()),
                   icon: Icon(enabled ? Icons.compare_arrows : Icons.lock_outline, size: 16),
-                  label: Text(enabled ? 'بدائل' : 'بدائل (أعمال)'),
+                  label: Text(enabled ? 'بدائل'.tr : 'بدائل (أعمال)'.tr),
                 );
               }),
               const SizedBox(width: 6),
               FilledButton.icon(
                 onPressed: () { Navigator.pop(context); _addBatchDialog(product); },
                 icon: const Icon(Icons.add, size: 16),
-                label: const Text('جديد'),
+                label: Text('جديد'.tr),
               ),
             ]),
             const SizedBox(height: 12),
@@ -389,7 +389,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
                 return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   Icon(Icons.inventory, size: 50, color: Colors.grey.shade400),
                   const SizedBox(height: 8),
-                  Text('لا توجد دفعات مسجلة', style: TextStyle(color: Colors.grey.shade600)),
+                  Text('لا توجد دفعات مسجلة'.tr, style: TextStyle(color: Colors.grey.shade600)),
                 ]));
               }
               return ListView.builder(
@@ -434,7 +434,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
           if (b['manufactured_at'] != null)
             Text('إنتاج: ${b['manufactured_at']}', style: TextStyle(color: Colors.grey.shade600, fontSize: 11)),
           if (isReturned || isDestroyed)
-            Text(isReturned ? 'أُعيدت للمورّد' : 'أُتلفت', style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
+            Text(isReturned ? 'أُعيدت للمورّد'.tr : 'أُتلفت'.tr, style: TextStyle(color: Colors.grey.shade700, fontSize: 11)),
         ])),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
           Text('${b['quantity_remaining']}', style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -443,7 +443,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
         if (!isRecalled && !isExhausted) ...[
           const SizedBox(width: 4),
           IconButton(
-            tooltip: 'سحب التشغيلة',
+            tooltip: 'سحب التشغيلة'.tr,
             color: AmialColors.red,
             icon: const Icon(Icons.report_gmailerrorred_outlined),
             onPressed: () => _recallBatch(product, b),
@@ -452,7 +452,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
             Obx(() {
               final enabled = Get.find<AccessController>().has('pharmacy_batch_disposition');
               return IconButton(
-                tooltip: enabled ? 'إخراج الدفعة المنتهية' : 'إرجاع وإتلاف الدفعات — أعمال',
+                tooltip: enabled ? 'إخراج الدفعة المنتهية'.tr : 'إرجاع وإتلاف الدفعات — أعمال'.tr,
                 color: AmialColors.primary,
                 icon: Icon(enabled ? Icons.inventory_2_outlined : Icons.lock_outline),
                 onPressed: () => enabled
@@ -480,10 +480,10 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Text('بدائل ${product['trade_name']}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
           const SizedBox(height: 6),
-          const Text('مطابقة المادة الفعالة والتركيز والشكل فقط. لا يتم الاستبدال تلقائياً؛ يقرره الصيدلي.', style: TextStyle(fontSize: 12, color: Colors.black54)),
+          Text('مطابقة المادة الفعالة والتركيز والشكل فقط. لا يتم الاستبدال تلقائياً؛ يقرره الصيدلي.'.tr, style: TextStyle(fontSize: 12, color: Colors.black54)),
           const SizedBox(height: 12),
           Obx(() => c.alternatives.isEmpty
-              ? const Padding(padding: EdgeInsets.all(18), child: Text('لا يوجد بديل محلي متاح حالياً.'))
+              ? Padding(padding: EdgeInsets.all(18), child: Text('لا يوجد بديل محلي متاح حالياً.'.tr))
               : Column(children: c.alternatives.map((p) => ListTile(
                 leading: const Icon(Icons.medication_outlined, color: AmialColors.primary),
                 title: Text('${p['trade_name']}'),
@@ -499,25 +499,25 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
     String type = 'return_to_supplier';
     final reason = TextEditingController();
     final approved = await showDialog<bool>(context: context, builder: (ctx) => StatefulBuilder(builder: (_, setState) => AlertDialog(
-      title: const Text('إخراج دفعة منتهية'),
+      title: Text('إخراج دفعة منتهية'.tr),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text('هذا الإجراء يُنقص الكمية المتبقية من المخزون ويحفظ الأثر؛ لا يمكن التراجع عنه من هذا الزر.'),
+        Text('هذا الإجراء يُنقص الكمية المتبقية من المخزون ويحفظ الأثر؛ لا يمكن التراجع عنه من هذا الزر.'.tr),
         const SizedBox(height: 10),
         DropdownButtonFormField<String>(
           value: type,
-          decoration: const InputDecoration(labelText: 'مصير الدفعة'),
-          items: const [
-            DropdownMenuItem(value: 'return_to_supplier', child: Text('إرجاع للمورّد')),
-            DropdownMenuItem(value: 'destroyed', child: Text('إتلاف موثّق')),
+          decoration: InputDecoration(labelText: 'مصير الدفعة'.tr),
+          items: [
+            DropdownMenuItem(value: 'return_to_supplier', child: Text('إرجاع للمورّد'.tr)),
+            DropdownMenuItem(value: 'destroyed', child: Text('إتلاف موثّق'.tr)),
           ],
           onChanged: (v) => setState(() => type = v ?? type),
         ),
         const SizedBox(height: 10),
-        TextField(controller: reason, maxLines: 3, decoration: const InputDecoration(labelText: 'السبب/المرجع *', border: OutlineInputBorder())),
+        TextField(controller: reason, maxLines: 3, decoration: InputDecoration(labelText: 'السبب/المرجع *'.tr, border: OutlineInputBorder())),
       ]),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
-        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تأكيد الإخراج')),
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('تراجع'.tr)),
+        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text('تأكيد الإخراج'.tr)),
       ],
     )));
     if (approved != true || reason.text.trim().isEmpty) { reason.dispose(); return; }
@@ -525,7 +525,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
     reason.dispose();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(ok ? 'تم توثيق إخراج الدفعة من المخزون' : c.lastError.value),
+      content: Text(ok ? 'تم توثيق إخراج الدفعة من المخزون'.tr : c.lastError.value),
       backgroundColor: ok ? Colors.green : AmialColors.red,
     ));
   }
@@ -533,21 +533,21 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
   Future<void> _recallBatch(Map<String, dynamic> product, Map<String, dynamic> batch) async {
     final reason = TextEditingController();
     final approve = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-      title: const Text('سحب تشغيلة من البيع'),
+      title: Text('سحب تشغيلة من البيع'.tr),
       content: Column(mainAxisSize: MainAxisSize.min, children: [
         Text('سيُمنع بيع التشغيلة #${batch['batch_number']} فوراً وتُخصم كميتها المتبقية من المخزون المتاح. هذا الإجراء لا يُحذف من السجل.'),
         const SizedBox(height: 12),
-        TextField(controller: reason, maxLines: 3, decoration: const InputDecoration(labelText: 'سبب السحب *', border: OutlineInputBorder())),
+        TextField(controller: reason, maxLines: 3, decoration: InputDecoration(labelText: 'سبب السحب *'.tr, border: OutlineInputBorder())),
       ]),
-      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('تراجع')),
-        FilledButton(style: FilledButton.styleFrom(backgroundColor: AmialColors.red), onPressed: () => Navigator.pop(ctx, true), child: const Text('سحب التشغيلة'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('تراجع'.tr)),
+        FilledButton(style: FilledButton.styleFrom(backgroundColor: AmialColors.red), onPressed: () => Navigator.pop(ctx, true), child: Text('سحب التشغيلة'.tr))],
     ));
     if (approve != true || reason.text.trim().isEmpty) { reason.dispose(); return; }
     final ok = await c.recallBatch((product['id'] as num).toInt(), (batch['id'] as num).toInt(), reason.text.trim());
     reason.dispose();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(ok ? 'تم سحب التشغيلة ومنع بيعها' : c.lastError.value),
+      content: Text(ok ? 'تم سحب التشغيلة ومنع بيعها'.tr : c.lastError.value),
       backgroundColor: ok ? Colors.green : AmialColors.red,
     ));
   }
@@ -563,16 +563,16 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
     showDialog(context: context, builder: (ctx) => AlertDialog(
       title: Text('Batch جديد: ${product['trade_name']}'),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: number, decoration: const InputDecoration(labelText: 'رقم الـ Batch *')),
+        TextField(controller: number, decoration: InputDecoration(labelText: 'رقم الـ Batch *'.tr)),
         const SizedBox(height: 8),
         TextField(controller: qty, keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(labelText: 'الكمية *')),
+            decoration: InputDecoration(labelText: 'الكمية *'.tr)),
         const SizedBox(height: 8),
         TextField(
           controller: expiry,
           readOnly: true,
-          decoration: const InputDecoration(labelText: 'تاريخ الصلاحية *', hintText: 'YYYY-MM-DD'),
+          decoration: InputDecoration(labelText: 'تاريخ الصلاحية *'.tr, hintText: 'YYYY-MM-DD'),
           onTap: () async {
             final d = await showDatePicker(
               context: context,
@@ -587,7 +587,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
         TextField(
           controller: manufactured,
           readOnly: true,
-          decoration: const InputDecoration(labelText: 'تاريخ الإنتاج (اختياري)', hintText: 'YYYY-MM-DD'),
+          decoration: InputDecoration(labelText: 'تاريخ الإنتاج (اختياري)'.tr, hintText: 'YYYY-MM-DD'),
           onTap: () async {
             final d = await showDatePicker(
               context: context,
@@ -599,13 +599,13 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
           },
         ),
         const SizedBox(height: 8),
-        TextField(controller: supplier, decoration: const InputDecoration(labelText: 'المورّد (اختياري)')),
+        TextField(controller: supplier, decoration: InputDecoration(labelText: 'المورّد (اختياري)'.tr)),
         const SizedBox(height: 8),
         TextField(controller: cost, keyboardType: TextInputType.number,
-            decoration: const InputDecoration(labelText: 'تكلفة الوحدة', suffixText: 'ر.ي')),
+            decoration: InputDecoration(labelText: 'تكلفة الوحدة'.tr, suffixText: 'ر.ي'.tr)),
       ])),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text('إلغاء'.tr)),
         Obx(() => FilledButton(
           onPressed: c.isSubmitting.value ? null : () async {
             if (number.text.isEmpty || qty.text.isEmpty || expiry.text.isEmpty) return;
@@ -625,7 +625,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
               SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red));
             }
           },
-          child: const Text('إضافة'),
+          child: Text('إضافة'.tr),
         )),
       ],
     ));
@@ -641,7 +641,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
     final cost = TextEditingController();
     final barcode = TextEditingController();
     final manufacturer = TextEditingController();
-    final unit = TextEditingController(text: 'علبة');
+    final unit = TextEditingController(text: 'علبة'.tr);
     final category = TextEditingController();
     final batchNumber = TextEditingController();
     final quantity = TextEditingController();
@@ -651,52 +651,52 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
     bool requiresPrescription = false;
 
     showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (dialogContext, setSt) => AlertDialog(
-      title: const Text('منتج جديد ودفعة أولى'),
+      title: Text('منتج جديد ودفعة أولى'.tr),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text('بيانات الصنف', style: TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
-        TextField(controller: trade, onChanged: (v) => c.loadSimilarProducts(v, categoryId: selectedCategoryId), decoration: const InputDecoration(labelText: 'الاسم التجاري *')),
+        Text('بيانات الصنف'.tr, style: TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary)),
+        TextField(controller: trade, onChanged: (v) => c.loadSimilarProducts(v, categoryId: selectedCategoryId), decoration: InputDecoration(labelText: 'الاسم التجاري *'.tr)),
         const SizedBox(height: 8),
-        TextField(controller: generic, onChanged: (v) => c.loadSimilarProducts(v, categoryId: selectedCategoryId), decoration: const InputDecoration(labelText: 'الاسم العلمي (اختياري)')),
+        TextField(controller: generic, onChanged: (v) => c.loadSimilarProducts(v, categoryId: selectedCategoryId), decoration: InputDecoration(labelText: 'الاسم العلمي (اختياري)'.tr)),
         const SizedBox(height: 8),
-        TextField(controller: activeIngredient, decoration: const InputDecoration(labelText: 'المادة الفعالة (للبدائل)')),
+        TextField(controller: activeIngredient, decoration: InputDecoration(labelText: 'المادة الفعالة (للبدائل)'.tr)),
         const SizedBox(height: 8),
-        TextField(controller: strength, decoration: const InputDecoration(labelText: 'التركيز (للبدائل)', hintText: '500 mg')),
+        TextField(controller: strength, decoration: InputDecoration(labelText: 'التركيز (للبدائل)'.tr, hintText: '500 mg')),
         const SizedBox(height: 8),
-        TextField(controller: dosageForm, decoration: const InputDecoration(labelText: 'الشكل الدوائي (للبدائل)', hintText: 'أقراص / شراب / حقن')),
+        TextField(controller: dosageForm, decoration: InputDecoration(labelText: 'الشكل الدوائي (للبدائل)'.tr, hintText: 'أقراص / شراب / حقن'.tr)),
         const SizedBox(height: 8),
         DropdownButtonFormField<int>(
           value: selectedCategoryId,
-          decoration: const InputDecoration(labelText: 'تصنيف مسجل'),
+          decoration: InputDecoration(labelText: 'تصنيف مسجل'.tr),
           isExpanded: true,
           items: c.categories.map((x) => DropdownMenuItem<int>(value: (x['id'] as num).toInt(), child: Text('${x['name']}'))).toList(),
           onChanged: (v) => setSt(() { selectedCategoryId = v; category.clear(); }),
         ),
         const SizedBox(height: 8),
-        TextField(controller: category, decoration: const InputDecoration(labelText: 'أو أضف تصنيفاً جديداً *', hintText: 'مثل: مضادات حيوية')),
+        TextField(controller: category, decoration: InputDecoration(labelText: 'أو أضف تصنيفاً جديداً *'.tr, hintText: 'مثل: مضادات حيوية'.tr)),
         const SizedBox(height: 8),
-        TextField(controller: manufacturer, decoration: const InputDecoration(labelText: 'الشركة المصنعة (اختياري)')),
+        TextField(controller: manufacturer, decoration: InputDecoration(labelText: 'الشركة المصنعة (اختياري)'.tr)),
         const SizedBox(height: 8),
-        TextField(controller: unit, decoration: const InputDecoration(labelText: 'الوحدة', hintText: 'علبة / شريط / قطعة')),
+        TextField(controller: unit, decoration: InputDecoration(labelText: 'الوحدة'.tr, hintText: 'علبة / شريط / قطعة'.tr)),
         const SizedBox(height: 8),
-        TextField(controller: barcode, decoration: const InputDecoration(labelText: 'الباركود (اختياري)')),
+        TextField(controller: barcode, decoration: InputDecoration(labelText: 'الباركود (اختياري)'.tr)),
         const SizedBox(height: 8),
         TextField(controller: price, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'سعر البيع *', suffixText: 'ر.ي')),
+            decoration: InputDecoration(labelText: 'سعر البيع *'.tr, suffixText: 'ر.ي'.tr)),
         const SizedBox(height: 8),
         TextField(controller: cost, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'سعر الشراء للوحدة *', suffixText: 'ر.ي')),
+            decoration: InputDecoration(labelText: 'سعر الشراء للوحدة *'.tr, suffixText: 'ر.ي'.tr)),
         const SizedBox(height: 14),
-        const Align(alignment: Alignment.centerRight, child: Text('الدفعة الأولى والمخزون', style: TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary))),
+        Align(alignment: Alignment.centerRight, child: Text('الدفعة الأولى والمخزون'.tr, style: TextStyle(fontWeight: FontWeight.bold, color: AmialColors.primary))),
         const SizedBox(height: 8),
-        TextField(controller: batchNumber, decoration: const InputDecoration(labelText: 'رقم التشغيلة / الدفعة *')),
+        TextField(controller: batchNumber, decoration: InputDecoration(labelText: 'رقم التشغيلة / الدفعة *'.tr)),
         const SizedBox(height: 8),
         TextField(controller: quantity, keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: InputDecoration(labelText: 'الكمية المستلمة *', suffixText: unit.text.isEmpty ? 'وحدة' : unit.text)),
+            decoration: InputDecoration(labelText: 'الكمية المستلمة *'.tr, suffixText: unit.text.isEmpty ? 'وحدة'.tr : unit.text)),
         const SizedBox(height: 8),
         TextField(
           controller: manufactured,
           readOnly: true,
-          decoration: const InputDecoration(labelText: 'تاريخ الإنتاج (إن كان مطبوعاً)', hintText: 'YYYY-MM-DD'),
+          decoration: InputDecoration(labelText: 'تاريخ الإنتاج (إن كان مطبوعاً)'.tr, hintText: 'YYYY-MM-DD'),
           onTap: () async {
             final d = await showDatePicker(context: dialogContext, firstDate: DateTime(2000), lastDate: DateTime.now(), initialDate: DateTime.now());
             if (d != null) manufactured.text = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -706,7 +706,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
         TextField(
           controller: expiry,
           readOnly: true,
-          decoration: const InputDecoration(labelText: 'تاريخ الانتهاء *', hintText: 'YYYY-MM-DD'),
+          decoration: InputDecoration(labelText: 'تاريخ الانتهاء *'.tr, hintText: 'YYYY-MM-DD'),
           onTap: () async {
             final d = await showDatePicker(context: dialogContext, firstDate: DateTime.now().add(const Duration(days: 1)), lastDate: DateTime.now().add(const Duration(days: 3650)), initialDate: DateTime.now().add(const Duration(days: 365)));
             if (d != null) expiry.text = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -720,25 +720,25 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
             width: double.infinity, padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(color: Colors.amber.shade50, borderRadius: BorderRadius.circular(8)),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('أصناف مشابهة مسجلة — حتى 5', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              Text('أصناف مشابهة مسجلة — حتى 5'.tr, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
               ...matches.take(5).map((p) => Text('• ${p['trade_name']}${p['generic_name'] == null ? '' : ' — ${p['generic_name']}'}', style: const TextStyle(fontSize: 12))),
             ]),
           );
         }),
         const SizedBox(height: 8),
         SwitchListTile(
-          title: const Text('يستلزم وصفة طبية', style: TextStyle(fontSize: 13)),
+          title: Text('يستلزم وصفة طبية'.tr, style: TextStyle(fontSize: 13)),
           value: requiresPrescription,
           onChanged: (v) => setSt(() => requiresPrescription = v),
           contentPadding: EdgeInsets.zero,
         ),
       ])),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text('إلغاء'.tr)),
         Obx(() => FilledButton(
           onPressed: c.isSubmitting.value ? null : () async {
             if (trade.text.isEmpty || price.text.isEmpty || cost.text.isEmpty || batchNumber.text.isEmpty || quantity.text.isEmpty || expiry.text.isEmpty || (selectedCategoryId == null && category.text.trim().isEmpty)) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('أكمل الاسم والتصنيف والأسعار والكمية ورقم التشغيلة والانتهاء')));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('أكمل الاسم والتصنيف والأسعار والكمية ورقم التشغيلة والانتهاء'.tr)));
               return;
             }
             final ok = await c.addProduct({
@@ -771,7 +771,7 @@ class _PharmacyProductsScreenState extends State<PharmacyProductsScreen> {
               SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red));
             }
           },
-          child: const Text('إضافة'),
+          child: Text('إضافة'.tr),
         )),
       ],
     )));
@@ -803,13 +803,13 @@ class _PharmacyCustomersScreenState extends State<PharmacyCustomersScreen> {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('العملاء/المرضى'),
+        title: Text('العملاء/المرضى'.tr),
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: AmialColors.primary,
         onPressed: () => _customerDialog(null),
         icon: const Icon(Icons.add),
-        label: const Text('عميل جديد'),
+        label: Text('عميل جديد'.tr),
       ),
       body: Obx(() {
         if (c.isLoading.value && c.customers.isEmpty) return const Center(child: CircularProgressIndicator());
@@ -817,7 +817,7 @@ class _PharmacyCustomersScreenState extends State<PharmacyCustomersScreen> {
           return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(Icons.people_outline, size: 64, color: Colors.grey.shade400),
             const SizedBox(height: 12),
-            Text('لا يوجد عملاء', style: TextStyle(color: Colors.grey.shade600)),
+            Text('لا يوجد عملاء'.tr, style: TextStyle(color: Colors.grey.shade600)),
           ]));
         }
         return ListView.builder(
@@ -881,20 +881,20 @@ class _PharmacyCustomersScreenState extends State<PharmacyCustomersScreen> {
     showDialog(context: context, builder: (ctx) => StatefulBuilder(builder: (_, setSt) => AlertDialog(
       title: Text(existing == null ? 'عميل جديد' : 'تعديل ${existing['full_name']}'),
       content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        TextField(controller: name, decoration: const InputDecoration(labelText: 'الاسم الكامل *')),
+        TextField(controller: name, decoration: InputDecoration(labelText: 'الاسم الكامل *'.tr)),
         const SizedBox(height: 8),
         TextField(controller: phone, keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(labelText: 'الهاتف')),
+            decoration: InputDecoration(labelText: 'الهاتف'.tr)),
         const SizedBox(height: 8),
         Row(children: [
           Expanded(child: RadioListTile<String>(
-            title: const Text('ذكر', style: TextStyle(fontSize: 12)),
+            title: Text('ذكر'.tr, style: TextStyle(fontSize: 12)),
             value: 'male', groupValue: gender,
             onChanged: (v) => setSt(() => gender = v!),
             contentPadding: EdgeInsets.zero, dense: true,
           )),
           Expanded(child: RadioListTile<String>(
-            title: const Text('أنثى', style: TextStyle(fontSize: 12)),
+            title: Text('أنثى'.tr, style: TextStyle(fontSize: 12)),
             value: 'female', groupValue: gender,
             onChanged: (v) => setSt(() => gender = v!),
             contentPadding: EdgeInsets.zero, dense: true,
@@ -903,22 +903,22 @@ class _PharmacyCustomersScreenState extends State<PharmacyCustomersScreen> {
         const SizedBox(height: 8),
         TextField(
           controller: allergiesCtrl,
-          decoration: const InputDecoration(
-            labelText: 'الحساسيات',
-            helperText: 'افصل بفاصلة (Penicillin, Aspirin)',
+          decoration: InputDecoration(
+            labelText: 'الحساسيات'.tr,
+            helperText: 'افصل بفاصلة (Penicillin, Aspirin)'.tr,
           ),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: chronicCtrl,
-          decoration: const InputDecoration(
-            labelText: 'أمراض مزمنة',
-            helperText: 'افصل بفاصلة (Diabetes, Hypertension)',
+          decoration: InputDecoration(
+            labelText: 'أمراض مزمنة'.tr,
+            helperText: 'افصل بفاصلة (Diabetes, Hypertension)'.tr,
           ),
         ),
       ])),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
+        TextButton(onPressed: () => Navigator.pop(ctx), child: Text('إلغاء'.tr)),
         Obx(() => FilledButton(
           onPressed: c.isSubmitting.value ? null : () async {
             if (name.text.isEmpty) return;
@@ -942,7 +942,7 @@ class _PharmacyCustomersScreenState extends State<PharmacyCustomersScreen> {
               SnackBar(content: Text(c.lastError.value), backgroundColor: AmialColors.red));
             }
           },
-          child: Text(existing == null ? 'إضافة' : 'حفظ'),
+          child: Text(existing == null ? 'إضافة'.tr : 'حفظ'.tr),
         )),
       ],
     )));
@@ -974,16 +974,16 @@ class _PharmacyAlertsScreenState extends State<PharmacyAlertsScreen> {
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('تنبيهات المخزون'),
+        title: Text('تنبيهات المخزون'.tr),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'فحص التواريخ',
+            tooltip: 'فحص التواريخ'.tr,
             onPressed: () async {
               await c.scanExpiring();
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('تم الفحص'), backgroundColor: Colors.green));
+                SnackBar(content: Text('تم الفحص'.tr), backgroundColor: Colors.green));
             },
           ),
         ],
@@ -996,7 +996,7 @@ class _PharmacyAlertsScreenState extends State<PharmacyAlertsScreen> {
               ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                   const Icon(Icons.check_circle, size: 64, color: Colors.green),
                   const SizedBox(height: 12),
-                  Text('لا توجد تنبيهات نشطة', style: TextStyle(color: Colors.grey.shade600, fontSize: 15)),
+                  Text('لا توجد تنبيهات نشطة'.tr, style: TextStyle(color: Colors.grey.shade600, fontSize: 15)),
                 ]))
               : ListView.builder(
                   padding: const EdgeInsets.all(12),
@@ -1062,7 +1062,7 @@ class _PharmacyAlertsScreenState extends State<PharmacyAlertsScreen> {
         IconButton(
           icon: const Icon(Icons.close, color: Colors.grey, size: 18),
           onPressed: () => c.dismissAlert(a['id']),
-          tooltip: 'إغلاق',
+          tooltip: 'إغلاق'.tr,
         ),
       ]),
     );
@@ -1094,7 +1094,7 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(
-        title: const Text('سجل المبيعات'),
+        title: Text('سجل المبيعات'.tr),
       ),
       body: Obx(() {
         if (c.isLoading.value && c.sales.isEmpty) return const Center(child: CircularProgressIndicator());
@@ -1102,7 +1102,7 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
           return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(Icons.receipt_long, size: 64, color: Colors.grey.shade400),
             const SizedBox(height: 12),
-            Text('لا توجد مبيعات', style: TextStyle(color: Colors.grey.shade600)),
+            Text('لا توجد مبيعات'.tr, style: TextStyle(color: Colors.grey.shade600)),
           ]));
         }
         return RefreshIndicator(
@@ -1119,7 +1119,7 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
 
   Widget _saleCard(Map<String, dynamic> s) {
     final method = s['payment_method']?.toString() ?? '';
-    final methodLabel = method == 'cash' ? 'نقد' : (method == 'amial_pay' ? 'أميال' : 'آجل');
+    final methodLabel = method == 'cash' ? 'نقد'.tr : (method == 'amial_pay' ? 'أميال'.tr : 'آجل'.tr);
     final methodColor = method == 'cash' ? Colors.green : (method == 'amial_pay' ? Colors.blue : Colors.orange);
     final items = (s['items'] as List?) ?? [];
     final customer = s['customer'] as Map?;
@@ -1155,7 +1155,7 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
               style: TextStyle(color: Colors.red.shade700, fontSize: 11)),
         ],
         const SizedBox(height: 6),
-        const Text('اضغط لعرض تفاصيل العملية والفاتورة',
+        Text('اضغط لعرض تفاصيل العملية والفاتورة'.tr,
             textAlign: TextAlign.end,
             style: TextStyle(fontSize: 11, color: AmialColors.textSecondary)),
       ]),
@@ -1170,7 +1170,7 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
     final sale = await c.loadSaleDetail(ulid);
     if (Get.isDialogOpen == true) Get.back();
     if (sale == null) {
-      Get.snackbar('تعذّر', c.lastError.value.isEmpty ? 'تعذّر تحميل تفاصيل العملية' : c.lastError.value,
+      Get.snackbar('تعذّر'.tr, c.lastError.value.isEmpty ? 'تعذّر تحميل تفاصيل العملية'.tr : c.lastError.value,
           backgroundColor: AmialColors.red.withValues(alpha: 0.12));
       return;
     }
@@ -1193,17 +1193,17 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
             children: [
               const Center(child: SizedBox(width: 42, child: Divider(thickness: 4))),
               const SizedBox(height: 10),
-              const Text('تفاصيل بيع الصيدلية', textAlign: TextAlign.center,
+              Text('تفاصيل بيع الصيدلية'.tr, textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               _detail('رقم العملية', '#${ulid.length >= 8 ? ulid.substring(ulid.length - 8) : ulid}'),
-              _detail('الإجمالي', AmialMoney.yer(sale['total_amount']), bold: true),
-              _detail('طريقة الدفع', _paymentLabel((sale['payment_method'] ?? '').toString())),
+              _detail('الإجمالي'.tr, AmialMoney.yer(sale['total_amount']), bold: true),
+              _detail('طريقة الدفع'.tr, _paymentLabel((sale['payment_method'] ?? '').toString())),
               if (customer != null) _detail('العميل', '${customer['full_name'] ?? '—'}'),
               if (sale['prescription_number'] != null) _detail('رقم الوصفة', '${sale['prescription_number']}'),
               if (sale['prescribing_doctor'] != null) _detail('الطبيب', '${sale['prescribing_doctor']}'),
               const Divider(height: 28),
-              const Text('الأصناف والتشغيلات', style: TextStyle(fontWeight: FontWeight.bold)),
+              Text('الأصناف والتشغيلات'.tr, style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 6),
               ...items.map((raw) {
                 final item = raw as Map;
@@ -1213,7 +1213,7 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
                   contentPadding: EdgeInsets.zero,
                   title: Text('${item['product_trade_name'] ?? 'صنف'} × ${item['quantity'] ?? 0}'),
                   subtitle: Text(batch?['batch_number'] == null
-                      ? 'تشغيلة غير متاحة'
+                      ? 'تشغيلة غير متاحة'.tr
                       : 'التشغيلة: ${batch!['batch_number']}'),
                   trailing: Text(AmialMoney.yer(item['total_price'])),
                 );
@@ -1221,7 +1221,7 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
               const SizedBox(height: 14),
               FilledButton.icon(
                 icon: const Icon(Icons.picture_as_pdf_outlined),
-                label: const Text('تنزيل الفاتورة وفتحها'),
+                label: Text('تنزيل الفاتورة وفتحها'.tr),
                 onPressed: () => _downloadInvoice(ulid),
               ),
             ],
@@ -1232,9 +1232,9 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
   }
 
   String _paymentLabel(String method) => switch (method) {
-        'cash' => 'نقد',
-        'amial_pay' => 'أميال باي',
-        'credit' => 'آجل',
+        'cash' => 'نقد'.tr,
+        'amial_pay' => 'أميال باي'.tr,
+        'credit' => 'آجل'.tr,
         _ => method,
       };
 
@@ -1254,13 +1254,13 @@ class _PharmacySalesHistoryScreenState extends State<PharmacySalesHistoryScreen>
       onError: (message) => failure = message,
     );
     if (path == null) {
-      Get.snackbar('تعذّر التنزيل', failure ?? 'تعذّر إنشاء الفاتورة',
+      Get.snackbar('تعذّر التنزيل'.tr, failure ?? 'تعذّر إنشاء الفاتورة'.tr,
           backgroundColor: AmialColors.red.withValues(alpha: .12));
       return;
     }
     final opened = await OpenFile.open(path, type: 'application/pdf');
     if (opened.type != ResultType.done) {
-      await Share.shareXFiles([XFile(path, mimeType: 'application/pdf')], text: 'فاتورة صيدلية من أميال باي');
+      await Share.shareXFiles([XFile(path, mimeType: 'application/pdf')], text: 'فاتورة صيدلية من أميال باي'.tr);
     }
   }
 }
