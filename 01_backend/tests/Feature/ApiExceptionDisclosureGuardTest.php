@@ -64,6 +64,26 @@ class ApiExceptionDisclosureGuardTest extends TestCase
     }
 
     /** @test */
+    public function a_prepared_api_response_cannot_bypass_the_disclosure_shield(): void
+    {
+        $request = Request::create('/api/v1/amial/cashier/shift/open', 'POST');
+
+        $response = app(ExceptionHandler::class)->render(
+            $request,
+            new HttpResponseException(new JsonResponse([
+                'message' => 'SQLSTATE[42S22] Unknown column pos_device_id on mysql',
+                'debug' => ['host' => 'internal-db'],
+            ], 422)),
+        );
+
+        $body = (string) $response->getContent();
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringNotContainsString('SQLSTATE', $body);
+        $this->assertStringNotContainsString('internal-db', $body);
+        $this->assertStringContainsString('تحقّق من البيانات', $body);
+    }
+
+    /** @test */
     public function production_startup_applies_migrations_before_accepting_traffic(): void
     {
         $entrypoint = file_get_contents(base_path('docker/entrypoint.sh'));
