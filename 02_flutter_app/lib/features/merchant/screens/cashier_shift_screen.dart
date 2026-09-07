@@ -103,7 +103,7 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
     if (ok != true) return;
     final r = await _api.postData('/api/v1/amial/cashier/shift/open', {'opening_float': floatCtrl.text.trim()});
     if (r.statusCode == 201) { _snack('بدأت الوردية', ok: true); _load(); }
-    else { _snack((r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر'); }
+    else { _snack(_messageOf(r) ?? 'تعذّر بدء الوردية. أعد المحاولة أو تواصل مع الدعم.'); }
   }
 
   Future<void> _close() async {
@@ -137,7 +137,7 @@ class _CashierShiftScreenState extends State<CashierShiftScreen> {
       _showResult(Map<String, dynamic>.from(s as Map));
       _load();
     } else {
-      _snack((r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر الإقفال');
+      _snack(_messageOf(r) ?? 'تعذّر إقفال الوردية. أعد المحاولة أو تواصل مع الدعم.');
     }
   }
 
