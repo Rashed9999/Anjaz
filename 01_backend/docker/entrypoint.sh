@@ -62,8 +62,34 @@ done
 # الحلّ الحاسم: نكتب APP_KEY في ملفّ .env فعلي. Laravel/Dotenv يُحمّله في كلّ
 # عامل مهما كان clear_env، ولا يطمس متغيّرات Railway (DB_*) لأنّها ليست فيه.
 ENV_FILE="/var/www/html/.env"
+
+# ── AMIAL-PII-KEY-GATE-001 — مفاتيح الهوية لا تُخترع ولا تُضمَّن ─────
+# APP_KEY يفك جلسات Laravel، أمّا هذان المفتاحان فيفكان الهوية والوثائق
+# المؤرشفة. تشغيل الإنتاج بدونهما (أو بمفتاح مكتوب في المستودع) يعني أن
+# بيانات العملاء صارت قابلة للقراءة لمن يملك نسخة المصدر. لذلك لا نولّد
+# بديلاً ولا نقبل افتراضاً: يتوقف الإقلاع قبل أن يستقبل أول طلب.
+if [ "${APP_ENV:-production}" = "production" ] && \
+   { [ -z "${AMIAL_PII_ENCRYPTION_KEY:-}" ] || [ -z "${AMIAL_PII_BLIND_INDEX_KEY:-}" ]; }; then
+    echo "❌ خطأ فادح: مفاتيح تشفير بيانات الهوية غير مضبوطة."
+    echo "   اضبط AMIAL_PII_ENCRYPTION_KEY و AMIAL_PII_BLIND_INDEX_KEY من مدير الأسرار ثم أعد النشر."
+    exit 1
+fi
+if [ "${APP_ENV:-production}" = "production" ]; then
+    pii_enc_bytes=$(printf '%s' "$AMIAL_PII_ENCRYPTION_KEY" | base64 -d 2>/dev/null | wc -c | tr -d ' ')
+    pii_index_bytes=$(printf '%s' "$AMIAL_PII_BLIND_INDEX_KEY" | base64 -d 2>/dev/null | wc -c | tr -d ' ')
+    if [ "$pii_enc_bytes" != "32" ] || [ "$pii_index_bytes" != "32" ]; then
+        echo "❌ خطأ فادح: مفاتيح تشفير بيانات الهوية يجب أن تكون base64 لـ 32 بايت."
+        exit 1
+    fi
+fi
+
 if [ -z "$APP_KEY" ] || [ "$APP_KEY" = "base64:" ]; then
-    echo "🔑 توليد APP_KEY (اضبط APP_KEY كمتغيّر بيئة ثابت لإبقاء الرموز صالحة عبر النشر)..."
+    if [ "${APP_ENV:-production}" = "production" ]; then
+        echo "❌ خطأ فادح: APP_KEY غير مضبوط في الإنتاج."
+        echo "   يولّد مرة واحدة ويُحفظ في مدير الأسرار؛ لا يجوز تغييره عند كل نشر."
+        exit 1
+    fi
+    echo "🔑 توليد APP_KEY لبيئة غير إنتاجية..."
     APP_KEY=$(php artisan key:generate --show 2>/dev/null || echo "")
 fi
 if [ -n "$APP_KEY" ] && [ "$APP_KEY" != "base64:" ]; then

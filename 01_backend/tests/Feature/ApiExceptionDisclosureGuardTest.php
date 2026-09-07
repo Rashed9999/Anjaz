@@ -84,6 +84,28 @@ class ApiExceptionDisclosureGuardTest extends TestCase
     }
 
     /** @test */
+    public function an_admin_json_response_is_sanitized_even_without_an_accept_header(): void
+    {
+        // هذه هي هيئة طلب نموذج لوحة الإدارة في الصورة: AJAX عادي بلا
+        // `Accept: application/json`. نوع الرد JSON، ولذلك يجب ألا يكون
+        // المسار الإداري منفذاً مختلفاً لنص QueryException الخام.
+        $request = Request::create('/admin/amial/hub/transfer', 'POST');
+
+        $response = app(ExceptionHandler::class)->render(
+            $request,
+            new HttpResponseException(new JsonResponse([
+                'message' => 'SQLSTATE[42S22] Unknown column pos_device_id on mysql',
+            ], 422)),
+        );
+
+        $body = (string) $response->getContent();
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertStringNotContainsString('SQLSTATE', $body);
+        $this->assertStringNotContainsString('pos_device_id', $body);
+        $this->assertStringContainsString('تحقّق من البيانات', $body);
+    }
+
+    /** @test */
     public function production_startup_applies_migrations_before_accepting_traffic(): void
     {
         $entrypoint = file_get_contents(base_path('docker/entrypoint.sh'));

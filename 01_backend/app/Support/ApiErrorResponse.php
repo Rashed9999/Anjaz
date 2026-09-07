@@ -36,7 +36,14 @@ final class ApiErrorResponse
         Throwable $exception,
         Request $request,
     ): Response {
-        if (! ($request->expectsJson() || $request->is('api/*'))) {
+        // طلبات لوحة الإدارة والوكيل قد تكون AJAX بلا Accept: application/json.
+        // نوع الاستجابة نفسه دليلٌ أقوى من الترويسة التي أرسلها المتصفح؛ وإلّا
+        // يبقى مسار `/admin/...` منفذاً لتسريب SQL رغم أن الرد JSON فعلاً.
+        $isJsonResponse = str_contains(
+            strtolower((string) $response->headers->get('Content-Type', '')),
+            'json',
+        );
+        if (! ($request->expectsJson() || $request->is('api/*') || $isJsonResponse)) {
             return $response;
         }
 

@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\EMoney;
+use App\Models\Ledger\LedgerAccount;
+use App\Models\Ledger\LedgerJournalEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Support\EstablishesKycEvidence;
@@ -147,9 +149,15 @@ class AdminHubTest extends TestCase
         $customer = User::factory()->create(['type' => CUSTOMER_TYPE, 'phone' => '967771009040']);
         $this->wallet($customer->id);
 
+        $payload = [
+            'to_user_id' => $customer->id, 'amount' => '2500', 'reason' => 'إعادة مبلغ',
+        ];
+        $idempotencyKey = 'admin-hub-ledger-transfer-01';
+
         $this->actingAs($this->admin, 'user')
+            ->withHeader('Idempotency-Key', $idempotencyKey)
             ->postJson('/admin/amial/hub/transfer', [
-                'to_user_id' => $customer->id, 'amount' => '2500', 'reason' => 'إعادة مبلغ',
+                ...$payload,
             ])
             ->assertOk();
 
@@ -157,6 +165,24 @@ class AdminHubTest extends TestCase
             (string) EMoney::where('user_id', $customer->id)->value('current_balance'));
         $this->assertSame('997500.0000',
             (string) EMoney::where('user_id', $this->admin->id)->value('current_balance'));
+
+        // ليس كافياً أن تتغير e_money: هذا الباب كان يغيّرها خارج الدفتر.
+        // نقيس الطرفين بعد العملية، لا مجرد وجود سطر دفترٍ شكليّ.
+        $this->assertSame('997500.0000', (string) LedgerAccount::where('account_code', 'USER_WALLET_'.$this->admin->id)
+            ->value('current_balance'));
+        $this->assertSame('2500.0000', (string) LedgerAccount::where('account_code', 'USER_WALLET_'.$customer->id)
+            ->value('current_balance'));
+        $this->assertSame(1, LedgerJournalEntry::where('source_type', 'admin_wallet_transfer')->count());
+
+        // إعادة الإرسال من المتصفح لا تعيد الخصم ولا تسجل قيداً ثانياً.
+        $this->actingAs($this->admin, 'user')
+            ->withHeader('Idempotency-Key', $idempotencyKey)
+            ->postJson('/admin/amial/hub/transfer', $payload)
+            ->assertOk()
+            ->assertHeader('X-Idempotent-Replay', '1');
+        $this->assertSame('997500.0000',
+            (string) EMoney::where('user_id', $this->admin->id)->value('current_balance'));
+        $this->assertSame(1, LedgerJournalEntry::where('source_type', 'admin_wallet_transfer')->count());
     }
 
     /** @test */

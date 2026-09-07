@@ -41,5 +41,8 @@
              من البيئة، وحارسُ `PosDeviceIdentityRotationGuardTest` يمنع
              أن يعود الاشتقاقُ من `APP_KEY`. -->
         <server name="AMIAL_DEVICE_HASH_KEY" value="testing-device-hash-key-not-a-production-secret"/>
+        <!-- مفاتيح اختبار فقط؛ الإنتاج يرفض الإقلاع إن غابت مفاتيح مدير الأسرار. -->
+        <server name="AMIAL_PII_ENCRYPTION_KEY" value="FHAK8qeP6rpaUicSnPp2R/MabL/3DjYCViRNS2FIvAI="/>
+        <server name="AMIAL_PII_BLIND_INDEX_KEY" value="COvXB5jm61FpFLUdXmRnyVtpyRCQSDTgRE3graUdbis="/>
     </php>
 </phpunit>

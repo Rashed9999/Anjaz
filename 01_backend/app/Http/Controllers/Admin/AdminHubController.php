@@ -3,14 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\CentralLogics\Helpers;
-use App\Exceptions\TransactionFailedException;
+use App\Exceptions\InsufficientBalanceException;
 use App\Http\Controllers\Controller;
 use App\Models\EMoney;
 use App\Models\Ledger\LedgerJournalEntry;
 use App\Models\MerchantProfile;
-use App\Models\Transfer;
 use App\Models\User;
 use App\Services\AgentNetworkService;
+use App\Services\AdminWalletTransferService;
 use App\Services\AuditService;
 use App\Services\MoneyService;
 use App\Services\PlatformTreasuryService;
@@ -849,48 +849,29 @@ class AdminHubController extends Controller
             ], 422);
         }
 
-        $adminId = Helpers::get_admin_id();
-        $amount = (string) $request->input('amount');
-
-        $adminBalance = (string) (EMoney::where('user_id', $adminId)->value('current_balance') ?? '0');
-        if (!MoneyService::gte($adminBalance, $amount)) {
-            return response()->json(['message' => "رصيد محفظة الإدارة لا يكفي (المتاح: {$adminBalance})"], 422);
+        $admin = User::find(Helpers::get_admin_id());
+        if (! $admin) {
+            report(new \RuntimeException('Admin wallet transfer attempted without an administration account'));
+            return response()->json(['message' => 'تعذّر إتمام التحويل. تواصل مع الدعم.'], 503);
         }
 
-        DB::beginTransaction();
         try {
-            $data = [
-                'from_user_id' => $adminId,
-                'to_user_id' => (int) $request->input('to_user_id'),
-                'user_id' => (int) $request->input('to_user_id'),
-                'type' => 'credit',
-                'transaction_type' => CASH_IN,
-                'ref_trans_id' => null,
-                'amount' => $amount,
-            ];
-            $customerTransaction = Helpers::make_transaction($data);
-            if ($customerTransaction === null) throw new TransactionFailedException();
-
-            $data['user_id'] = $adminId;
-            $data['type'] = 'debit';
-            $data['transaction_type'] = CASH_OUT;
-            $data['ref_trans_id'] = $customerTransaction;
-            $adminTransaction = Helpers::make_transaction($data);
-            if ($adminTransaction === null) throw new TransactionFailedException();
-
-            $transfer = new Transfer();
-            $transfer->sender = $adminId;
-            $transfer->receiver = (int) $request->input('to_user_id');
-            $transfer->receiver_type = (string) (User::find($request->input('to_user_id'))->type ?? '');
-            $transfer->amount = $amount;
-            $transfer->save();
-            $transfer->unique_id = $transfer->id . mt_rand(111111, 9999999999);
-            $transfer->save();
-
-            DB::commit();
+            $result = app(AdminWalletTransferService::class)->transfer(
+                sender: $admin,
+                recipient: $receiver,
+                amount: (string) $request->input('amount'),
+                reason: (string) $request->input('reason', ''),
+                requestIdempotencyKey: $request->header('Idempotency-Key')
+                    ?: (is_string($request->input('idempotency_key')) ? $request->input('idempotency_key') : null),
+                actor: $request->user(),
+            );
+        } catch (InsufficientBalanceException $e) {
+            return response()->json(['message' => 'رصيد محفظة الإدارة لا يكفي لإتمام التحويل'], 422);
         } catch (\Throwable $e) {
-            DB::rollBack();
-            return response()->json(['message' => 'فشل التحويل: ' . $e->getMessage()], 422);
+            report($e);
+            return response()->json([
+                'message' => 'تعذّر إتمام التحويل. لم يتحرك أي مبلغ؛ استخدم مرجع الطلب عند التواصل مع الدعم.',
+            ], 422);
         }
 
         app(AuditService::class)->record([
@@ -898,11 +879,19 @@ class AdminHubController extends Controller
             'subject_type' => 'user', 'subject_id' => (int) $request->input('to_user_id'),
             'action' => 'ADMIN_WALLET_TRANSFER', 'decision_code' => 'TRANSFERRED',
             'reason' => trim((string) $request->input('reason', '')) ?: null,
-            'transaction_id' => $customerTransaction,
-            'context' => ['amount' => $amount], 'severity' => 'notice',
+            'transaction_id' => $result['transaction_id'],
+            'context' => [
+                'amount' => (string) $request->input('amount'),
+                'ledger_entry_ulid' => $result['ledger_entry_ulid'],
+                'duplicate' => $result['duplicate'],
+            ], 'severity' => 'notice',
         ]);
 
-        return response()->json(['transaction_id' => $customerTransaction, 'message' => 'تم التحويل بنجاح']);
+        return response()->json([
+            'transaction_id' => $result['transaction_id'],
+            'ledger_entry_ulid' => $result['ledger_entry_ulid'],
+            'message' => 'تم التحويل بنجاح',
+        ]);
     }
 
     /** POST hub/agents/{id}/credit — تحويل للوكيل عبر مسار التسويات (الموصى به) */
