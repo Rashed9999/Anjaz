@@ -6,8 +6,8 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use PDOException;
-use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 /**
@@ -24,20 +24,7 @@ final class ApiErrorResponse
      */
     public static function from(Throwable $exception, Request $request): JsonResponse
     {
-        [$status, $code, $message] = self::detailsFor($exception);
-
-        $requestId = (string) $request->attributes->get(
-            'request_id',
-            $request->header('X-Request-Id', ''),
-        );
-
-        return new JsonResponse([
-            'success' => false,
-            'code' => $code,
-            'message' => $message,
-            'errors' => (object) [],
-            'meta' => $requestId !== '' ? ['request_id' => $requestId] : (object) [],
-        ], $status);
+        return self::response(self::detailsFor($exception), $request);
     }
 
     /**
@@ -53,12 +40,39 @@ final class ApiErrorResponse
             return $response;
         }
 
-        $content = (string) $response->getContent();
-        if ($response->getStatusCode() < 500 && ! self::containsTechnicalDetails($content)) {
+        if (! self::containsTechnicalDetails((string) $response->getContent())) {
             return $response;
         }
 
-        return self::from($exception, $request);
+        // هنا الاستجابة صُنعت مسبقاً وقد تكون 422/403 صالحة. نُبقي الحالة
+        // ولا نقرأ نصها الخام، كي لا نحول رفضاً سليماً إلى 500.
+        return self::forStatus($response->getStatusCode(), $request);
+    }
+
+    public static function forStatus(int $status, Request $request): JsonResponse
+    {
+        return self::response(self::detailsForStatus($status), $request);
+    }
+
+    /**
+     * @param array{0:int,1:string,2:string} $details
+     */
+    private static function response(array $details, Request $request): JsonResponse
+    {
+        [$status, $code, $message] = $details;
+
+        $requestId = (string) $request->attributes->get(
+            'request_id',
+            $request->header('X-Request-Id', ''),
+        );
+
+        return new JsonResponse([
+            'success' => false,
+            'code' => $code,
+            'message' => $message,
+            'errors' => (object) [],
+            'meta' => $requestId !== '' ? ['request_id' => $requestId] : (object) [],
+        ], $status);
     }
 
     private static function containsTechnicalDetails(string $content): bool
@@ -88,6 +102,14 @@ final class ApiErrorResponse
             ? $exception->getStatusCode()
             : 500;
 
+        return self::detailsForStatus($status);
+    }
+
+    /**
+     * @return array{0:int,1:string,2:string}
+     */
+    private static function detailsForStatus(int $status): array
+    {
         return match ($status) {
             400 => [400, 'REQUEST_ERROR', 'تعذّر تنفيذ الطلب. تحقّق من البيانات ثم أعد المحاولة.'],
             403 => [403, 'FORBIDDEN', 'لا تملك الصلاحية اللازمة لتنفيذ هذا الطلب.'],
