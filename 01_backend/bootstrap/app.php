@@ -387,21 +387,12 @@ $app = Application::configure(basePath: dirname(__DIR__))
                     'errors' => (object)[], 'meta' => (object)[],
                 ], 401);
             }
-            $status = ($e instanceof \Symfony\Component\HttpKernel\Exception\HttpExceptionInterface)
-                ? $e->getStatusCode() : 500;
-            $payload = [
-                'success' => false,
-                'code' => $status >= 500 ? 'SERVER_ERROR' : 'REQUEST_ERROR',
-                'message' => $e->getMessage() !== '' ? $e->getMessage() : 'حدث خطأ في الخادم',
-                'errors' => (object)[], 'meta' => (object)[],
-            ];
-            if (config('app.debug')) {
-                $payload['debug'] = [
-                    'exception' => get_class($e),
-                    'at' => $e->getFile() . ':' . $e->getLine(),
-                ];
-            }
-            return new \Illuminate\Http\JsonResponse($payload, $status);
+            // AMIAL-API-ERROR-SHIELD-001 — لا يخرج نص الاستثناء من الخادم.
+            //
+            // QueryException يحمل SQL واسم العمود والمضيف؛ وAPP_DEBUG لا يصلح
+            // منفذاً لها حتى لو أُسيء ضبط البيئة. تُحفظ التفاصيل داخلياً عبر
+            // ErrorTrackingService، ويصل العميل رمز طلب آمن فقط.
+            return \App\Support\ApiErrorResponse::from($e, $request);
         });
     })
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
