@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use PDOException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 /**
@@ -37,6 +38,35 @@ final class ApiErrorResponse
             'errors' => (object) [],
             'meta' => $requestId !== '' ? ['request_id' => $requestId] : (object) [],
         ], $status);
+    }
+
+    /**
+     * آخر حاجز قبل خروج رد API. يلتقط الردود التي صُنعت في middleware أو
+     * render() مخصّص أيضاً؛ فلا يكون HttpResponseException منفذاً لتسريب SQL.
+     */
+    public static function sanitizeRenderedResponse(
+        Response $response,
+        Throwable $exception,
+        Request $request,
+    ): Response {
+        if (! ($request->expectsJson() || $request->is('api/*'))) {
+            return $response;
+        }
+
+        $content = (string) $response->getContent();
+        if ($response->getStatusCode() < 500 && ! self::containsTechnicalDetails($content)) {
+            return $response;
+        }
+
+        return self::from($exception, $request);
+    }
+
+    private static function containsTechnicalDetails(string $content): bool
+    {
+        return preg_match(
+            '/SQLSTATE|QueryException|PDOException|Unknown column|Connection:|\\binsert into\\b|\\bselect\\s+.+\\s+from\\b|stack trace|\\/var\\/www\\/|vendor\\/laravel/i',
+            $content,
+        ) === 1;
     }
 
     /**
