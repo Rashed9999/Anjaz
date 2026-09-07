@@ -444,29 +444,84 @@ class ApiClient extends GetxService {
 
    }
 
+   /// طبقة دفاع أخيرة: لا تضع الواجهة نصاً تقنياً في يد التاجر حتى لو
+   /// أخطأ خادم أو وكيل شبكة في إرسال رسالة غير آمنة.
+   bool _containsTechnicalDetails(dynamic body) {
+     final message = body is Map
+         ? '${body['message'] ?? ''}'
+         : '${body ?? ''}';
+
+     return RegExp(
+       r'(SQLSTATE|QueryException|PDOException|Unknown column|Connection:|insert into|select .+ from|stack trace|/var/www/|vendor/laravel)',
+       caseSensitive: false,
+     ).hasMatch(message);
+   }
+
+   dynamic _safeErrorBody(dynamic body, int statusCode) {
+     if (statusCode < 500 && !_containsTechnicalDetails(body)) return body;
+
+     final message = statusCode == 503
+         ? 'الخدمة غير متاحة مؤقتاً. أعد المحاولة لاحقاً.'
+         : 'حدثت مشكلة في الخادم. أعد المحاولة، وإذا استمرت المشكلة تواصل مع الدعم.';
+
+     if (body is Map) {
+       final safe = Map<String, dynamic>.from(body);
+       safe['success'] = false;
+       safe['code'] = statusCode == 503 ? 'SERVER_UNAVAILABLE' : 'SERVER_ERROR';
+       safe['message'] = message;
+       safe.remove('debug');
+       safe.remove('exception');
+       safe.remove('trace');
+
+       return safe;
+     }
+
+     return <String, dynamic>{
+       'success': false,
+       'code': statusCode == 503 ? 'SERVER_UNAVAILABLE' : 'SERVER_ERROR',
+       'message': message,
+       'errors': <String, dynamic>{},
+       'meta': <String, dynamic>{},
+     };
+   }
+
    Response handleResponse(http.Response response, String uri) {
      dynamic body;
      try {
        body = jsonDecode(response.body);
-     }catch(e) {
-       debugPrint('error ---> $e');
+     } catch (_) {
+       // الاستجابة غير JSON: لا نطبع محتواها، فقد تكون صفحة خطأ خادم.
      }
+
+     final safeBody = _safeErrorBody(body, response.statusCode);
+     final safeBodyString = safeBody is String ? safeBody : jsonEncode(safeBody);
      Response response0 = Response(
-       body: body ?? response.body, bodyString: response.body.toString(),
+       body: safeBody,
+       bodyString: safeBodyString,
        request: Request(headers: response.request!.headers, method: response.request!.method, url: response.request!.url),
-       headers: response.headers, statusCode: response.statusCode, statusText: response.reasonPhrase,
+       headers: response.headers,
+       statusCode: response.statusCode,
+       statusText: response.reasonPhrase,
      );
-     if(response0.statusCode != 200 && response0.body != null && response0.body is !String) {
-       if(response0.body.toString().startsWith('{errors: [{code:')) {
-         ErrorResponseModel errorResponse = ErrorResponseModel.fromJson(response0.body);
-         response0 = Response(statusCode: response0.statusCode, body: response0.body, statusText: errorResponse.errors![0].message);
-       }else if(response0.body.toString().startsWith('{message')) {
-         response0 = Response(statusCode: response0.statusCode, body: response0.body, statusText: response0.body['message']);
-       }
-     }else if(response0.statusCode != 200 && response0.body == null) {
+
+     if (response0.statusCode != 200 && response0.body is Map) {
+       final message = '${response0.body['message'] ?? ''}';
+       response0 = Response(
+         body: response0.body,
+         bodyString: safeBodyString,
+         headers: response.headers,
+         request: Request(headers: response.request!.headers, method: response.request!.method, url: response.request!.url),
+         statusCode: response0.statusCode,
+         statusText: message,
+       );
+     } else if (response0.statusCode != 200 && response0.body == null) {
        response0 = Response(statusCode: 0, statusText: noInternetMessage);
      }
-     debugPrint('====> API Response: [${response0.statusCode}] $uri\n${response0.body}');
+
+     if (kDebugMode) {
+       debugPrint('====> API Response: [${response0.statusCode}] $uri');
+     }
+
      return response0;
    }
 
