@@ -181,10 +181,32 @@ php artisan config:clear 2>/dev/null || true
 php artisan route:clear 2>/dev/null || true
 php artisan view:clear 2>/dev/null || true
 
+# ── AMIAL-SHIFT-SCHEMA-GATE-001: لا حركة قبل بنية البيانات ─────────
+#
+# الوردية تكتب pos_device_id. تشغيل PHP قبل هذه الهجرة يجعل أول ضغطة من
+# الكاشير تقرأ كأنها عطل تطبيق، ثم قد تتسرب تفاصيل الاستثناء. لذلك يمر
+# migrate --force بنجاح قبل أن يستقبل Supervisor أي طلب إنتاجي.
+#
+# RESET_DB له مساره الصريح أدناه؛ لا نُجري هجرةً مسبقة ثم نمسحها في بيئة
+# إعادة البناء المتعمدة.
+if [ -n "$DB_HOST" ] && [ "${RESET_DB_FORCE:-false}" != "true" ] && [ "${RESET_DB:-false}" != "true" ]; then
+    echo "🛡️  فحص وتطبيق مهاجرات قاعدة البيانات قبل بدء الخدمة..."
+    MIGRATION_ATTEMPT=0
+    until php artisan migrate --force 2>&1; do
+        MIGRATION_ATTEMPT=$((MIGRATION_ATTEMPT + 1))
+        if [ "$MIGRATION_ATTEMPT" -ge 40 ]; then
+            echo "⛔ تعذّر تطبيق مهاجرات قاعدة البيانات؛ لن تبدأ الخدمة ببنية قديمة."
+            exit 1
+        fi
+        echo "… قاعدة البيانات غير جاهزة أو الهجرة فشلت (محاولة $MIGRATION_ATTEMPT/40)."
+        sleep 4
+    done
+    echo "✓ بنية قاعدة البيانات جاهزة قبل استقبال الطلبات."
+fi
+
 # ── تهيئة قاعدة البيانات في الخلفية (لا تُؤخّر بدء nginx) ──────────
-# مهم: Railway يفحص الصحّة على /health/liveness فور الإقلاع. لذلك نبدأ
-# nginx فوراً، ونؤجّل انتظار قاعدة البيانات + migrations للخلفية حتى لا
-# يفشل الفحص الصحّي إن كانت القاعدة غير جاهزة بعد.
+# تبقى الأعمال غير الحرجة في الخلفية، أما المهاجرات الحرجة فقد اجتازت
+# البوابة أعلاه قبل بدء الخدمة.
 (
     # AMIAL-FIX(LOG-PERMS): أوامر artisan هنا تعمل كـroot — نوجّه سجلّها إلى
     # stderr كي لا تُنشئ laravel.log بملكية root فتكسر كتابة عمّال php-fpm.
@@ -363,11 +385,18 @@ fi
 # تعمل ⇒ التنقيحُ مغلقٌ حتماً. ولا يبقى «اضبطه ولا تنسَ».
 # ══════════════════════════════════════════════════════════════════════
 DEBUG_ESCAPE="${AMIAL_ALLOW_DEBUG:-false}"
-if [ "${APP_ENV:-}" = "production" ] && [ "$DEBUG_ESCAPE" = "true" ]; then
-    echo "⚠️  AMIAL_ALLOW_DEBUG مضبوطةٌ في بيئةِ إنتاج — **وتُتجاهَل**."
-    echo "   منفذُ التنقيح لبيئات التطوير وحدَها."
-    DEBUG_ESCAPE="false"
-fi
+# لا يكفي أن لا تسمّي البيئة production: خادم Coolify قد يبدأ بلا APP_ENV
+# مضبوط. منفذ التنقيح يُقبل فقط في local/testing صراحةً، وإلا يُغلق.
+case "${APP_ENV:-}" in
+    local|testing)
+        ;;
+    *)
+        if [ "$DEBUG_ESCAPE" = "true" ]; then
+            echo "⚠️  AMIAL_ALLOW_DEBUG يُقبل في local/testing فقط — وتُتجاهَل قيمته هنا."
+            DEBUG_ESCAPE="false"
+        fi
+        ;;
+esac
 
 if [ "$EFFECTIVE_DEBUG" = "true" ] && [ "$DEBUG_ESCAPE" != "true" ]; then
     echo "╔══════════════════════════════════════════════════════════╗"
