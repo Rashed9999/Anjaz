@@ -316,6 +316,15 @@ $app = Application::configure(basePath: dirname(__DIR__))
         //  ذلك يُغرق الجدولُ برفضٍ سليمٍ فيُخفي ما يستحقّ النظر.
         // ══════════════════════════════════════════════════════════════
         $exceptions->respond(function ($response, \Throwable $e, $request) {
+            // AMIAL-API-ERROR-SHIELD-001 — هذا آخر موضع قبل خروج الرد.
+            // يطهر حتى HttpResponseException أو render() مخصّص من أي نص
+            // تقني، فلا تكون معالجةٌ جانبية منفذاً لتفاصيل الخادم.
+            $response = \App\Support\ApiErrorResponse::sanitizeRenderedResponse(
+                $response,
+                $e,
+                $request,
+            );
+
             app(\App\Services\ErrorTrackingService::class)
                 ->record($e, $request, $response->getStatusCode());
 
