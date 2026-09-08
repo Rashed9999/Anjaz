@@ -47,6 +47,13 @@ final class ApiErrorResponse
             return $response;
         }
 
+        // ردّ API بفشل خادم لا يجوز أن يخرج كصفحة HTML عامة من Laravel.
+        // حتى إن أخفى Laravel رسالة HttpException الخام في وضع الإنتاج،
+        // يبقى العقد مع التطبيق JSON آمناً موحّداً يمكنه عرضه ومراجعته.
+        if ($response->getStatusCode() >= 500) {
+            return self::forStatus($response->getStatusCode(), $request);
+        }
+
         if (! self::containsTechnicalDetails((string) $response->getContent())) {
             return $response;
         }

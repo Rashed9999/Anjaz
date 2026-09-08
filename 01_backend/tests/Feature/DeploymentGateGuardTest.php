@@ -399,7 +399,7 @@ class DeploymentGateGuardTest extends TestCase
 
         // بيئةُ الديمو المحلّيّة: debug مفتوحٌ عن قصدٍ ومصرَّحٌ به.
         $this->assertSame(0, $this->runDebugGuard(
-            ['APP_DEBUG' => 'true', 'AMIAL_ALLOW_DEBUG' => 'true']),
+            ['APP_DEBUG' => 'true', 'APP_ENV' => 'local', 'AMIAL_ALLOW_DEBUG' => 'true']),
             'منفذُ AMIAL_ALLOW_DEBUG لا يعمل — فتنكسر بيئةُ التطوير المحلّيّة');
     }
 

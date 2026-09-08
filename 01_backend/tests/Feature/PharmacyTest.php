@@ -391,7 +391,7 @@ class PharmacyTest extends TestCase
             ->assertJsonPath('meta.accounts.0.current_balance', '1200.0000');
         $this->getJson("/api/v1/amial/customer/credits/{$account->id}/statement")
             ->assertOk()
-            ->assertJsonPath('meta.movements.0.reference_number', '#' . substr($sale->sale_ulid, -8));
+            ->assertJsonPath('meta.movements.0.reference_number', $sale->invoice_number);
     }
 
     /** @test */

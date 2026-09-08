@@ -1,6 +1,6 @@
 ---
 name: code-review
-description: 'Review changes since a fixed point along two separate axes: Standards (repository rules) and Spec (the requested behavior). Use for a branch, PR, work in progress, or “review since X”.'
+description: 'Review changes since a fixed point along two separate axes: Standards (repository rules) and Spec (the requested behavior). Use when reviewing a branch, PR, work in progress, or “review since X”.'
 ---
 
 Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
