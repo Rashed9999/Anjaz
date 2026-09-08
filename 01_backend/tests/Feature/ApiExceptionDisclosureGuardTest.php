@@ -60,7 +60,9 @@ class ApiExceptionDisclosureGuardTest extends TestCase
         );
 
         $this->assertSame(500, $response->getStatusCode());
-        $this->assertStringContainsString('حدثت مشكلة في الخادم', (string) $response->getContent());
+        $payload = json_decode((string) $response->getContent(), true);
+        $this->assertSame('SERVER_ERROR', $payload['code'] ?? null);
+        $this->assertStringContainsString('حدثت مشكلة في الخادم', $payload['message'] ?? '');
         $this->assertStringNotContainsString('internal-db', (string) $response->getContent());
         $this->assertStringNotContainsString('/var/www/html', (string) $response->getContent());
     }
@@ -79,10 +81,12 @@ class ApiExceptionDisclosureGuardTest extends TestCase
         );
 
         $body = (string) $response->getContent();
+        $payload = json_decode($body, true);
         $this->assertSame(422, $response->getStatusCode());
+        $this->assertSame('VALIDATION_FAILED', $payload['code'] ?? null);
         $this->assertStringNotContainsString('SQLSTATE', $body);
         $this->assertStringNotContainsString('internal-db', $body);
-        $this->assertStringContainsString('تحقّق من البيانات', $body);
+        $this->assertStringContainsString('تحقّق', $payload['message'] ?? '');
     }
 
     /** @test */
@@ -101,10 +105,12 @@ class ApiExceptionDisclosureGuardTest extends TestCase
         );
 
         $body = (string) $response->getContent();
+        $payload = json_decode($body, true);
         $this->assertSame(422, $response->getStatusCode());
+        $this->assertSame('VALIDATION_FAILED', $payload['code'] ?? null);
         $this->assertStringNotContainsString('SQLSTATE', $body);
         $this->assertStringNotContainsString('pos_device_id', $body);
-        $this->assertStringContainsString('تحقّق من البيانات', $body);
+        $this->assertStringContainsString('تحقّق', $payload['message'] ?? '');
     }
 
     /** @test */
