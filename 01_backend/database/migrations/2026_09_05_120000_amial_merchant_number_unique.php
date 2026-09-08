@@ -31,26 +31,30 @@ return new class extends Migration
             return;
         }
 
-        // **ولا يُفرَض قيدٌ على جدولٍ فيه تكرارٌ قائم** — الهجرةُ تسقط
-        // في منتصف النشر وتترك القاعدةَ نصفَ مهاجَرة. فيُقاس أوّلاً،
-        // ويُقال ما وُجد بدل أن يُكسَر النشر.
-        $dupes = DB::table('merchants')
-            ->select('merchant_number', DB::raw('COUNT(*) c'))
-            ->whereNotNull('merchant_number')
-            ->where('merchant_number', '!=', '')
-            ->groupBy('merchant_number')
-            ->havingRaw('COUNT(*) > 1')
-            ->pluck('c', 'merchant_number');
-
-        if ($dupes->isNotEmpty()) {
-            throw new RuntimeException(
-                'أرقامُ تجّارٍ مكرَّرةٌ في الجدول، فلا يُفرَض القيد: '
-                .$dupes->keys()->implode('، ')
-                .' — أصلِحها يدويّاً ثمّ أعِد الهجرة.');
+        // الأرقامُ القديمة قد تكون نصيةً ومكرّرة (مثل AM-FISH-006). لا
+        // نغيّرها داخل هجرة: الرقم بيانُ دخولٍ وعنوانُ دفع، وتخمين أي صف
+        // يستحقه يبدّل وجهة مالٍ قائم. لكن كل رقم جديد يولّده النظام هو
+        // ستة أرقام من 1 إلى 9، وهذه الصيغة وحدها هي التي يجب أن يحرسها
+        // القيد الذرّي. العمود المولّد يبقي الإرث غير القابل للحكم NULL
+        // تحت القيد الفريد، ويمنع أي رقم جديد مكرر بلا تعطيل النشرة.
+        if (! Schema::hasColumn('merchants', 'merchant_number_unique_value')) {
+            DB::statement(<<<'SQL'
+                ALTER TABLE `merchants`
+                ADD COLUMN `merchant_number_unique_value` VARCHAR(6)
+                GENERATED ALWAYS AS (
+                    CASE
+                        WHEN CHAR_LENGTH(`merchant_number`) = 6
+                            AND `merchant_number` NOT LIKE '%0%'
+                            AND CAST(`merchant_number` AS UNSIGNED) BETWEEN 111111 AND 999999
+                        THEN `merchant_number`
+                        ELSE NULL
+                    END
+                ) STORED
+            SQL);
         }
 
         Schema::table('merchants', function (Blueprint $table) {
-            $table->unique('merchant_number', 'merchants_merchant_number_unique');
+            $table->unique('merchant_number_unique_value', 'merchants_merchant_number_unique');
         });
     }
 
@@ -60,6 +64,12 @@ return new class extends Migration
             Schema::table('merchants', function (Blueprint $table) {
                 $table->dropUnique('merchants_merchant_number_unique');
             });
+
+            if (Schema::hasColumn('merchants', 'merchant_number_unique_value')) {
+                Schema::table('merchants', function (Blueprint $table) {
+                    $table->dropColumn('merchant_number_unique_value');
+                });
+            }
         }
     }
 };

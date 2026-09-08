@@ -160,6 +160,26 @@ class MerchantNumberGuardTest extends TestCase
     }
 
     /** @test */
+    public function legacy_duplicate_numbers_do_not_block_new_number_protection(): void
+    {
+        // قاعدة الإنتاج فيها رقمٌ قديم مكررٌ بالفعل. لا يجوز لترحيل القيد
+        // الجديد أن يعيد تسمية أحدهما تخميناً، لأن الرقم عنوان دفع؛ وفي
+        // الوقت نفسه يجب أن يبقى الرقم الجديد ذو الست خانات محروساً.
+        $this->merchant('AM-FISH-006');
+        $this->merchant('AM-FISH-006');
+
+        $this->assertSame(2, Merchant::where('merchant_number', 'AM-FISH-006')->count());
+
+        $this->merchant('123456');
+        try {
+            $this->merchant('123456');
+            $this->fail('قُبل رقم تاجر جديد مكرر بعد وجود أرقام إرثية.');
+        } catch (UniqueConstraintViolationException) {
+            $this->assertTrue(true);
+        }
+    }
+
+    /** @test */
     public function assigning_retries_instead_of_failing_when_the_number_is_taken(): void
     {
         // والفحصُ يقلّل الاصطدام، **والقيدُ يمنعه** — فمن ينادي يلتقط
