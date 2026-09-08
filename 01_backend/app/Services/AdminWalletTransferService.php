@@ -69,9 +69,10 @@ class AdminWalletTransferService
             $this->wallets->lockWalletsOrdered([$sender->id, $recipient->id]);
 
             // المحافظ القديمة تدخل الدفتر مرة واحدة بقيد افتتاحي صريح قبل أن
-            // تتحرك. لا نقبل تحويلًا فوق انحراف قائم بين e_money والدفتر.
-            $this->ledger->openWalletBalance($sender->id, 'ترحيل محفظة الإدارة قبل تحويل موثّق');
-            $this->ledger->openWalletBalance($recipient->id, 'ترحيل محفظة المستلم قبل تحويل موثّق');
+            // تتحرك. أما المحفظة ذات التاريخ الدفتري فتُترك كما هي، ثم يثبت
+            // فحص المطابقة أدناه أنها لا تحمل انحرافاً قائماً.
+            $this->openWalletBalanceIfPristine($sender->id, 'ترحيل محفظة الإدارة قبل تحويل موثّق');
+            $this->openWalletBalanceIfPristine($recipient->id, 'ترحيل محفظة المستلم قبل تحويل موثّق');
 
             $senderWallet = $this->wallets->lockWallet($sender->id);
             $recipientWallet = $this->wallets->lockWallet($recipient->id);
@@ -169,5 +170,14 @@ class AdminWalletTransferService
         if (MoneyService::compare($walletBalance, $ledgerBalance) !== 0) {
             throw new RuntimeException("لا يمكن تحويل رصيد {$label} فوق انحراف قائم بين المحفظة والدفتر");
         }
+    }
+
+    private function openWalletBalanceIfPristine(int $userId, string $reason): void
+    {
+        if ($this->ledger->walletHasLedgerHistory($userId)) {
+            return;
+        }
+
+        $this->ledger->openWalletBalance($userId, $reason);
     }
 }

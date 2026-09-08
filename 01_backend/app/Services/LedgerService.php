@@ -350,9 +350,11 @@ class LedgerService
 
             $inLedger = $this->computeBalanceFromLines($account->id);
 
-            // **الشرطُ الذي يمنع هذا المسارَ من أن يصير تعديلاً.** حسابٌ له
-            // رصيدٌ في الدفتر له تاريخ، وتغييرُه تصحيحٌ يمرّ بأربع عيون.
-            if (bccomp($inLedger, '0', 4) !== 0) {
+            // **الشرطُ الذي يمنع هذا المسارَ من أن يصير تعديلاً.** وجودُ
+            // سطرٍ واحدٍ في الدفتر يعني أن للحساب تاريخاً، حتى لو عاد
+            // رصيدُه إلى الصفر بعد تحويلات صحيحة. تغييرُه تصحيحٌ يمرّ
+            // بأربع عيون، لا "افتتاح" ثانٍ.
+            if (LedgerEntryLine::where('account_id', $account->id)->exists()) {
                 throw new RuntimeException(
                     'This wallet already has a ledger history — a correction '
                     . 'must go through an approved reconciliation case, not an opening entry.'
@@ -549,6 +551,17 @@ class LedgerService
         return $account->normal_balance === 'debit'
             ? bcsub($debits, $credits, 4)
             : bcsub($credits, $debits, 4);
+    }
+
+    /**
+     * هل دخلت المحفظة الدفتر فعلاً؟ إنشاء الحساب وحده لا يعد تاريخاً.
+     * يُستعمل قبل الافتتاح فقط؛ مطابقة الرصيد تظل مسؤولية مسار المال.
+     */
+    public function walletHasLedgerHistory(int $userId): bool
+    {
+        $account = $this->getOrCreateUserWallet($userId);
+
+        return LedgerEntryLine::where('account_id', $account->id)->exists();
     }
 
     /**
