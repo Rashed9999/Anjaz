@@ -145,6 +145,9 @@ class RestaurantService
             $locked->closed_at = now();
             $locked->closed_by_user_id = $closedByUserId ?? $merchant->id;
             $locked->sale_ulid = $sale->sale_ulid;
+            // الفاتورة النهائية هي فاتورة البيع ذاتها؛ رقم الطلب يبقى للمطبخ
+            // والطاولة ولا يتحول إلى مرجع مالي عشوائي على الورقة.
+            $locked->invoice_number = $sale->invoice_number;
             $locked->save();
 
             if ($locked->table_id) {

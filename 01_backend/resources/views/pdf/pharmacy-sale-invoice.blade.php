@@ -26,7 +26,7 @@
     @if(!empty($merchant?->address))<div class="muted">{{ $merchant->address }}</div>@endif
   </td><td class="title">فاتورة صيدلية</td></tr></table>
   <table class="meta"><tr>
-    <td><div class="k">رقم الفاتورة</div><div class="v left">PH-{{ strtoupper(substr($sale->sale_ulid, -10)) }}</div></td>
+    <td><div class="k">رقم الفاتورة</div><div class="v left">{{ $sale->invoice_number ?: $sale->sale_ulid }}</div></td>
     <td><div class="k">تاريخ الإصدار</div><div class="v left">{{ $sale->created_at?->format('Y-m-d H:i') }}</div></td>
     <td><div class="k">طريقة الدفع</div><div class="v">{{ $paymentLabel }}</div></td>
     <td><div class="k">الحالة</div><div class="v">{{ $sale->payment_method === 'credit' ? 'آجلة — غير مسددة' : 'مكتملة' }}</div></td>

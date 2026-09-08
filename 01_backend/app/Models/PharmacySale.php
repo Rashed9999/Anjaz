@@ -11,7 +11,7 @@ class PharmacySale extends Model
     protected $table = 'pharmacy_sales';
 
     protected $fillable = [
-        'sale_ulid', 'merchant_user_id', 'pos_user_id', 'created_by_user_id', 'pharmacy_id', 'customer_id',
+        'sale_ulid', 'invoice_number', 'merchant_user_id', 'pos_user_id', 'created_by_user_id', 'pharmacy_id', 'customer_id',
         'prescription_number', 'prescribing_doctor', 'prescription_date',
         'subtotal', 'discount_amount', 'total_amount',
         // AMIAL-CASH-TENDERED-001 — وغيابُه هنا يُسقطه صامتاً.

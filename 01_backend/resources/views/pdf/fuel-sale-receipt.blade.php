@@ -83,7 +83,7 @@
 
 <div class="title-band">إيصال بيع وقود</div>
 
-<div class="ulid">#{{ substr($sale->sale_ulid, -12) }}</div>
+<div class="ulid">{{ $sale->invoice_number ?: $sale->sale_ulid }}</div>
 
 <table class="info-table">
     <tr>

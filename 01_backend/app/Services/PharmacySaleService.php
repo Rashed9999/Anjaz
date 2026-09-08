@@ -33,6 +33,7 @@ class PharmacySaleService
     public function __construct(
         private readonly PharmacyAlertService $alerts,
         private readonly MerchantPaymentReferenceService $paymentReference,
+        private readonly MerchantInvoiceNumberService $invoiceNumbers,
     ) {}
 
     /**
@@ -185,6 +186,7 @@ class PharmacySaleService
             // أنشئ سجل البيع
             $sale = PharmacySale::create([
                 'sale_ulid' => (string) Str::ulid(),
+                'invoice_number' => $this->invoiceNumbers->next($merchant, MerchantInvoiceNumberService::PHARMACY),
                 'merchant_user_id' => $merchant->id,
                 'pos_user_id' => $posUserId,
                 // جهاز POS اختياري للموظف، لكن منفذ البيع لا يجوز أن
@@ -237,7 +239,7 @@ class PharmacySaleService
                     createdBy: $createdByUserId,
                     referenceType: 'pharmacy_sale',
                     referenceId: $sale->sale_ulid,
-                    referenceNumber: '#' . substr($sale->sale_ulid, -8),
+                    referenceNumber: $sale->invoice_number,
                 );
             }
 

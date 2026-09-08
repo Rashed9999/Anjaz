@@ -63,7 +63,14 @@ class CashierSaleInvoicePdfService
 
     public function suggestedFilename(MerchantSale $sale): string
     {
-        return 'cashier_invoice_' . strtoupper(substr((string) $sale->sale_ulid, -10)) . '.pdf';
+        $number = $sale->invoice_number ?: $sale->sale_ulid;
+
+        return 'cashier_invoice_' . $this->safeFilenamePart((string) $number) . '.pdf';
+    }
+
+    private function safeFilenamePart(string $value): string
+    {
+        return trim((string) preg_replace('/[^A-Za-z0-9_-]/', '-', $value), '-');
     }
 
     private function paymentLabel(string $method): string

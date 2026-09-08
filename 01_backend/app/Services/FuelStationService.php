@@ -32,6 +32,7 @@ class FuelStationService
     public function __construct(
         private readonly NotificationService $notif,
         private readonly MerchantPaymentReferenceService $paymentReference,
+        private readonly MerchantInvoiceNumberService $invoiceNumbers,
     ) {}
 
     // ============ المحطّة ============
@@ -397,6 +398,7 @@ class FuelStationService
             // ====== أنشئ سجل البيع ======
             $sale = FuelSale::create([
                 'sale_ulid' => (string) Str::ulid(),
+                'invoice_number' => $this->invoiceNumbers->next($merchant, MerchantInvoiceNumberService::FUEL),
                 'merchant_user_id' => $merchant->id,
                 'pos_user_id' => $posUserId,
                 'station_id' => $pump->station_id,
@@ -446,7 +448,7 @@ class FuelStationService
                 $credit->recordSale(
                     $account, $totalAmount, $data['due_date'] ?? null, 'فاتورة وقود آجل',
                     $posUserId ?? $merchant->id, 'fuel_sale', $sale->sale_ulid,
-                    '#' . substr($sale->sale_ulid, -8)
+                    $sale->invoice_number
                 );
             }
 

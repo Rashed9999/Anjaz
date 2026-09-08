@@ -21,6 +21,7 @@ class CashierService
 {
     public function __construct(
         private readonly MerchantPaymentReferenceService $paymentReference,
+        private readonly MerchantInvoiceNumberService $invoiceNumbers,
     ) {}
 
     // ============ المنتجات (اختيارية) ============
@@ -358,6 +359,7 @@ class CashierService
 
             $sale = MerchantSale::create([
                 'sale_ulid' => (string) Str::ulid(),
+                'invoice_number' => $this->invoiceNumbers->nextForMerchant($merchant),
                 'client_uuid' => $clientUuid ?: null,
                 'merchant_user_id' => $merchant->id,
                 'pos_user_id' => $posUserId,
@@ -422,7 +424,7 @@ class CashierService
                     createdBy: $posUserId ?? $merchant->id,
                     referenceType: 'merchant_sale',
                     referenceId: $sale->sale_ulid,
-                    referenceNumber: '#' . substr($sale->sale_ulid, -8),
+                    referenceNumber: $sale->invoice_number,
                 );
             }
 
@@ -440,7 +442,7 @@ class CashierService
                     note: 'بيع من الكاشير',
                     referenceType: 'merchant_sale',
                     referenceId: $sale->sale_ulid,
-                    referenceNumber: '#' . substr($sale->sale_ulid, -8),
+                    referenceNumber: $sale->invoice_number,
                 );
             }
 
@@ -824,6 +826,7 @@ class CashierService
                 $refundedTotal = (string) ($refunded[$s->sale_ulid] ?? '0');
                 return [
                     'sale_ulid' => $s->sale_ulid,
+                    'invoice_number' => $s->invoice_number,
                     'id' => $s->id,
                     'total_amount' => MoneyService::normalize((string) $s->total_amount),
                     'payment_method' => $s->payment_method,

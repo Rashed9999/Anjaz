@@ -9,7 +9,7 @@ class RestaurantOrder extends Model
     protected $table = 'restaurant_orders';
 
     protected $fillable = [
-        'merchant_user_id', 'table_id', 'order_no', 'status', 'items',
+        'merchant_user_id', 'table_id', 'order_no', 'invoice_number', 'status', 'items',
         'subtotal', 'total', 'notes', 'opened_by', 'opened_at', 'closed_by_user_id', 'closed_at',
         'sale_ulid', 'zone_code',
     ];

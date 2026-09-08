@@ -17,7 +17,7 @@ class MerchantSale extends Model
     protected $table = 'merchant_sales';
 
     protected $fillable = [
-        'sale_ulid', 'client_uuid', 'merchant_user_id', 'pos_user_id',
+        'sale_ulid', 'invoice_number', 'client_uuid', 'merchant_user_id', 'pos_user_id',
         'total_amount', 'discount_amount', 'promotion_id',
         // AMIAL-LOYALTY-AT-PAYMENT-001 — وغيابُهما هنا يُسقطهما صامتاً
         // كما وقع في `LedgerJournalEntry`: تُحرَق النقاطُ وتُسجَّل البيعةُ

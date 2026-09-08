@@ -336,6 +336,7 @@ class RestaurantController extends Controller
         return [
             'id' => $o->id,
             'order_no' => $o->order_no,
+            'invoice_number' => $o->invoice_number,
             'table_id' => $o->table_id,
             'status' => $o->status,
             'items' => $o->items ?? [],

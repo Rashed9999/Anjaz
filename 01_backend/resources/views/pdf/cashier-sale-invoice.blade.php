@@ -35,7 +35,7 @@
   </tr></table>
 
   <table class="meta"><tr>
-    <td><div class="k">رقم الفاتورة</div><div class="v left">SALE-{{ strtoupper(substr($sale->sale_ulid, -10)) }}</div></td>
+    <td><div class="k">رقم الفاتورة</div><div class="v left">{{ $sale->invoice_number ?: $sale->sale_ulid }}</div></td>
     <td><div class="k">تاريخ الإصدار</div><div class="v left">{{ $sale->created_at?->format('Y-m-d H:i') }}</div></td>
     <td><div class="k">طريقة الدفع</div><div class="v">{{ $paymentLabel }}</div></td>
     <td><div class="k">الحالة</div><div class="v">{{ $statusLabel }}</div></td>

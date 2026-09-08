@@ -29,8 +29,9 @@ class FuelReceiptPdfService
 
     public function suggestedFilename(FuelSale $sale): string
     {
-        $short = strtoupper(substr($sale->sale_ulid, -8));
+        $number = $sale->invoice_number ?: $sale->sale_ulid;
+        $safeNumber = trim((string) preg_replace('/[^A-Za-z0-9_-]/', '-', (string) $number), '-');
         $date = $sale->created_at->format('Y-m-d');
-        return "fuel_receipt_{$short}_{$date}.pdf";
+        return "fuel_receipt_{$safeNumber}_{$date}.pdf";
     }
 }

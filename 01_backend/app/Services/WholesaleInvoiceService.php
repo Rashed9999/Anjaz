@@ -36,6 +36,7 @@ class WholesaleInvoiceService
 
     public function __construct(
         private readonly MerchantPaymentReferenceService $paymentReference,
+        private readonly MerchantInvoiceNumberService $invoiceNumbers,
     ) {}
 
     /**
@@ -215,7 +216,7 @@ class WholesaleInvoiceService
             }
 
             // 6) أنشئ الفاتورة
-            $invoiceNumber = $business->nextInvoiceNumber();
+            $invoiceNumber = $this->invoiceNumbers->next($merchant, MerchantInvoiceNumberService::WHOLESALE);
             $dueDate = !empty($data['due_date'])
                 ? \Carbon\Carbon::parse($data['due_date'])->toDateString()
                 : now()->addDays($customer->payment_terms_days ?? 30)->toDateString();

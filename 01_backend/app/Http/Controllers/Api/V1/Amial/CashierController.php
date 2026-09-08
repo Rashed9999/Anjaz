@@ -588,7 +588,7 @@ class CashierController extends AmialApiController // AMIAL-FIX-007
 
         return $this->ok([
             'sale' => $sale->only([
-                'id', 'sale_ulid', 'total_amount', 'discount_amount', 'payment_method',
+                'id', 'sale_ulid', 'invoice_number', 'total_amount', 'discount_amount', 'payment_method',
                 'status', 'customer_name', 'customer_phone', 'created_at',
             ]),
             'lines' => $sale->lines->map(fn ($l) => [

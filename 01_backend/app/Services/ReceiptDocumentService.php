@@ -471,7 +471,7 @@ class ReceiptDocumentService
 
         return [
             'title' => $vertical === A::BIZ_QUICK_SALE ? 'فاتورة بيع سريع' : 'فاتورة بيع بالتجزئة',
-            'document_number' => 'SALE-' . strtoupper(substr((string) $sale->sale_ulid, -10)),
+            'document_number' => (string) ($sale->invoice_number ?: $sale->sale_ulid),
             'items' => $items,
             'subtotal' => MoneyService::add((string) $sale->total_amount, (string) ($sale->discount_amount ?? '0')),
             'discount' => (string) ($sale->discount_amount ?? '0'),
@@ -574,7 +574,7 @@ class ReceiptDocumentService
 
         return [
             'title' => 'فاتورة بيع وقود',
-            'document_number' => 'FUEL-' . strtoupper(substr((string) $sale->sale_ulid, -10)),
+            'document_number' => (string) ($sale->invoice_number ?: $sale->sale_ulid),
             'seller_name' => $sale->pump?->station?->station_name,
             'registration_number' => $sale->pump?->station?->license_number,
             'items' => [[
@@ -630,7 +630,7 @@ class ReceiptDocumentService
 
         return [
             'title' => 'فاتورة صيدلية',
-            'document_number' => 'PH-' . strtoupper(substr((string) $sale->sale_ulid, -10)),
+            'document_number' => (string) ($sale->invoice_number ?: $sale->sale_ulid),
             'items' => $items,
             'context_fields' => $context,
             'subtotal' => (string) $sale->subtotal,
@@ -677,7 +677,7 @@ class ReceiptDocumentService
 
         return [
             'title' => 'فاتورة مطعم',
-            'document_number' => (string) $order->order_no,
+            'document_number' => (string) ($order->invoice_number ?: $order->order_no),
             'items' => $items,
             'context_fields' => $context,
             'subtotal' => (string) $order->subtotal,
