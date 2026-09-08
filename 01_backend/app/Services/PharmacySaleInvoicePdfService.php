@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Merchant;
 use App\Models\PharmacySale;
+use App\Services\Merchant\MerchantLogoService;
 use App\Support\ArabicPdf;
 
 /**
@@ -30,6 +31,7 @@ class PharmacySaleInvoicePdfService
         $html = view('pdf.pharmacy-sale-invoice', [
             'sale' => $sale,
             'merchant' => $merchant,
+            'merchantLogoData' => app(MerchantLogoService::class)->dataUri($merchant),
             'items' => $items,
             'paymentLabel' => $this->paymentLabel((string) $sale->payment_method),
         ])->render();

@@ -43,9 +43,7 @@ return new class extends Migration
                 ADD COLUMN `merchant_number_unique_value` VARCHAR(6)
                 GENERATED ALWAYS AS (
                     CASE
-                        WHEN CHAR_LENGTH(`merchant_number`) = 6
-                            AND `merchant_number` NOT LIKE '%0%'
-                            AND CAST(`merchant_number` AS UNSIGNED) BETWEEN 111111 AND 999999
+                        WHEN `merchant_number` REGEXP '^[1-9]{6}$'
                         THEN `merchant_number`
                         ELSE NULL
                     END

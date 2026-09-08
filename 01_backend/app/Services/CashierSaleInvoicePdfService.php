@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
 use App\Models\MerchantSale;
+use App\Services\Merchant\MerchantLogoService;
 use App\Support\ArabicPdf;
 
 /**
@@ -48,6 +49,7 @@ class CashierSaleInvoicePdfService
         $html = view('pdf.cashier-sale-invoice', [
             'sale' => $sale,
             'merchant' => $merchant,
+            'merchantLogoData' => app(MerchantLogoService::class)->dataUri($merchant),
             'title' => $title,
             'vertical' => $vertical,
             'items' => $items,

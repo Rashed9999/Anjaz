@@ -80,13 +80,18 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
 
   Future<void> _pickLogo() async {
     try {
-      final x = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 600, imageQuality: 80);
+      final x = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 90,
+      );
       if (x == null) return;
       final bytes = await x.readAsBytes();
       final b64 = base64Encode(bytes);
       final url = await c.uploadLogo(b64);
       if (!mounted) return;
-      _snack(url != null ? 'تم رفع الشعار' : 'تعذّر رفع الشعار', ok: url != null);
+      _snack(url != null ? 'تم حفظ الشعار بالمقاس المعتمد' : c.uploadError.value, ok: url != null);
       setState(() {});
     } catch (_) {
       _snack('تعذّر اختيار الصورة');
@@ -144,11 +149,13 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
               const SizedBox(height: 20),
 
               _field('اسم المتجر', _store),
+              _logoIdentityCard(),
+              const SizedBox(height: 12),
               Row(children: [
                 Expanded(child: OutlinedButton.icon(
                   onPressed: _pickLogo,
                   icon: const Icon(Icons.image_outlined, size: 18),
-                  label: const Text('رفع شعار'),
+                  label: const Text('اختيار شعار المتجر'),
                 )),
                 const SizedBox(width: 8),
                 Expanded(child: SwitchListTile(
@@ -252,6 +259,52 @@ class _ReceiptSettingsScreenState extends State<ReceiptSettingsScreen> {
           decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
         ),
       );
+
+  Widget _logoIdentityCard() {
+    final logoUrl = '${c.effective['logo_url'] ?? ''}';
+    final spec = Map<String, dynamic>.from(c.effective['logo_spec'] as Map? ?? const {});
+    final size = spec['canvas'] ?? 1024;
+    final bytes = ((spec['max_upload_bytes'] ?? 2097152) as num).toInt() ~/ 1024 ~/ 1024;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: AmialColors.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(children: [
+        Container(
+          width: 72,
+          height: 72,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF3F6FB),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: logoUrl.isEmpty
+              ? const Icon(Icons.storefront_rounded, color: AmialColors.primary, size: 32)
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.network(logoUrl, fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined)),
+                ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('شعار موحّد للمتجر', style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 3),
+          Text(
+            'تعتمده أميال باي مربعاً $size × $size بكسل. يظهر بلا قص في الحساب والفاتورة وورق 58/80 مم.',
+            style: const TextStyle(fontSize: 12, color: AmialColors.textSecondary),
+          ),
+          const SizedBox(height: 3),
+          Text('PNG أو JPG — حتى $bytes ميجابايت — أصغر ضلع 256 بكسل.',
+              style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+        ])),
+      ]),
+    );
+  }
 
   Widget _paperChip(int val, String label) {
     final sel = _paper == val;

@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1\Amial;
 
-use App\CentralLogics\Helpers;
 use App\Http\Controllers\Controller;
 use App\Models\Merchant;
 use App\Models\MerchantProfile;
 use App\Models\PosUser;
 use App\Models\User;
+use App\Services\Merchant\MerchantLogoService;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -83,6 +83,7 @@ class MerchantReceiptSettingsController extends Controller
         // اسم المتجر والشعار من سجلّ التاجر الأساسي
         $settings['store_name'] = $merchant?->store_name ?? trim(($user->f_name ?? '') . ' ' . ($user->l_name ?? ''));
         $settings['logo_url'] = $merchant?->logo_fullpath;
+        $settings['logo_spec'] = MerchantLogoService::specification();
 
         // ══════════════════════════════════════════════════════════════
         // AMIAL-MULTI-CURRENCY-002 — **السعرُ من المركز لا من يد التاجر.**
@@ -179,14 +180,15 @@ class MerchantReceiptSettingsController extends Controller
         if (!$merchant) return $this->error('NO_MERCHANT', 'لا يوجد سجلّ تاجر', 404);
 
         try {
-            $filename = Helpers::file_uploader('merchant/', 'png', $request->input('logo'));
-            $merchant->logo = $filename;
-            $merchant->save();
+            app(MerchantLogoService::class)->replaceFromBase64($merchant, (string) $request->input('logo'));
         } catch (\Throwable $e) {
-            return $this->error('UPLOAD_FAILED', 'تعذّر رفع الشعار', 422);
+            return $this->error('UPLOAD_FAILED', $e instanceof \InvalidArgumentException ? $e->getMessage() : 'تعذّر رفع الشعار', 422);
         }
 
-        return $this->ok(['logo_url' => $merchant->fresh()->logo_fullpath], 'LOGO_SAVED', 'تم حفظ الشعار');
+        return $this->ok([
+            'logo_url' => $merchant->fresh()->logo_fullpath,
+            'logo_spec' => MerchantLogoService::specification(),
+        ], 'LOGO_SAVED', 'تم حفظ الشعار بالمقاس المعتمد');
     }
 
     private function ok(array $meta, string $code = 'OK', string $message = 'OK', int $status = 200): JsonResponse

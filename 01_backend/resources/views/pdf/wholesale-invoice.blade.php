@@ -33,6 +33,7 @@
             color: #053391;
             margin: 0 0 4px 0;
         }
+        .merchant-logo { max-width: 92px; max-height: 58px; object-fit: contain; margin-bottom: 5px; }
         .business-meta {
             font-size: 9pt;
             color: #6B7280;
@@ -253,6 +254,7 @@
 {{-- ================= Header ================= --}}
 <div class="header">
     <div class="header-right">
+        @if(!empty($merchantLogoData))<img class="merchant-logo" src="{{ $merchantLogoData }}" alt="شعار المنشأة">@endif
         <div class="business-name">{{ $business->business_name ?? 'منشأة الجملة' }}</div>
         @if($business->commercial_register)
             <div class="business-meta">س.ت: {{ $business->commercial_register }}</div>

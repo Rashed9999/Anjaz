@@ -8,6 +8,7 @@
     table { width: 100%; border-collapse: collapse; }
     .header { border-bottom: 3px solid #053391; padding-bottom: 12px; margin-bottom: 14px; }
     .brand { font-size: 20pt; font-weight: bold; color: #053391; }
+    .merchant-logo { max-width: 92px; max-height: 58px; object-fit: contain; margin-bottom: 5px; }
     .title { text-align: left; font-size: 24pt; font-weight: bold; color: #053391; }
     .muted { color: #667085; font-size: 9pt; }
     .meta td, .party td { border: 1px solid #d9e0ec; padding: 8px; vertical-align: top; }
@@ -27,6 +28,7 @@
 <body>
   <table class="header"><tr>
     <td>
+      @if(!empty($merchantLogoData))<img class="merchant-logo" src="{{ $merchantLogoData }}" alt="شعار المنشأة">@endif
       <div class="brand">{{ $merchant?->store_name ?: 'منشأة التاجر' }}</div>
       @if(!empty($merchant?->merchant_number))<div class="muted">رقم التاجر: {{ $merchant->merchant_number }}</div>@endif
       @if(!empty($merchant?->address))<div class="muted">{{ $merchant->address }}</div>@endif

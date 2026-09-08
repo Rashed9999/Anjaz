@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/merchant/controllers/receipt_settings_controller.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_services_hub_screen.dart';
 import 'package:amial_pay/features/merchant/screens/receipt_settings_screen.dart';
 import 'package:amial_pay/features/setting/screens/support_screen.dart';
@@ -18,13 +19,23 @@ class MerchantAccountScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final access = Get.find<AccessController>();
+    final receiptSettings = Get.isRegistered<ReceiptSettingsController>()
+        ? Get.find<ReceiptSettingsController>()
+        : Get.put(ReceiptSettingsController(), permanent: true);
+    receiptSettings.load();
     return Scaffold(
       backgroundColor: AmialColors.background,
       appBar: AppBar(title: const Text('إعدادات المنشأة')),
       body: Obx(() => ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Container(
+              Obx(() {
+                final settings = receiptSettings.effective;
+                final logoUrl = '${settings['logo_url'] ?? ''}';
+                final storeName = '${settings['store_name'] ?? access.businessName}';
+                final address = '${settings['address'] ?? ''}'.trim();
+                final phone = '${settings['phone'] ?? ''}'.trim();
+                return Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
@@ -33,23 +44,46 @@ class MerchantAccountScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(children: [
-                  const Icon(Icons.storefront_rounded,
-                      color: AmialColors.yellow, size: 34),
+                  Container(
+                    width: 62,
+                    height: 62,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: logoUrl.isEmpty
+                        ? const Icon(Icons.storefront_rounded, color: AmialColors.primary, size: 32)
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: Image.network(logoUrl, fit: BoxFit.contain,
+                              errorBuilder: (_, __, ___) => const Icon(Icons.storefront_rounded,
+                                color: AmialColors.primary, size: 32)),
+                          ),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(access.businessName,
+                      Text(storeName,
                           style: const TextStyle(
                               color: Colors.white,
                               fontSize: 18,
                               fontWeight: FontWeight.w800)),
                       Text(access.businessTypeLabel.value ?? 'منشأة تجارية',
                           style: const TextStyle(color: Colors.white70)),
+                      if (phone.isNotEmpty || address.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text([phone, address].where((v) => v.isNotEmpty).join(' • '),
+                            maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                        ),
                     ],
                   )),
                 ]),
-              ),
+              );
+              }),
               const SizedBox(height: 20),
               _item(
                 context,

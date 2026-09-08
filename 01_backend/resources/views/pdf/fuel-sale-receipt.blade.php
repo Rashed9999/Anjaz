@@ -8,6 +8,7 @@
         body { font-family: DejaVu Sans, sans-serif; font-size: 12px; color: #1A1A1A; }
         .header { text-align: center; padding-bottom: 12px; border-bottom: 2px solid #053391; }
         .station-name { color: #053391; font-size: 20px; font-weight: bold; }
+        .merchant-logo { max-width: 92px; max-height: 58px; object-fit: contain; margin-bottom: 6px; }
         .station-info { color: #5F6B7C; font-size: 11px; margin-top: 4px; }
 
         .title-band {
@@ -69,6 +70,7 @@
 <body>
 
 <div class="header">
+    @if(!empty($merchantLogoData))<img class="merchant-logo" src="{{ $merchantLogoData }}" alt="شعار المحطة">@endif
     <div class="station-name">{{ $station->station_name }}</div>
     @if($station->city || $station->address)
     <div class="station-info">
