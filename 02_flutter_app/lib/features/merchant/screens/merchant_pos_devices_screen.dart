@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/data/api/pos_device_identity.dart';
 import 'package:amial_pay/helper/date_converter_helper.dart';
+import 'package:amial_pay/features/branches/controllers/branches_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-POS-DEVICES-008 — إدارة أجهزة نقاط البيع.
@@ -27,6 +28,7 @@ class MerchantPosDevicesScreen extends StatefulWidget {
 
 class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
   final _api = Get.find<ApiClient>();
+  final _branches = Get.find<BranchesController>();
 
   bool _loading = true;
   String? _error;
@@ -41,6 +43,7 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
   void initState() {
     super.initState();
     _load();
+    _branches.loadBranches(activeOnly: true);
   }
 
   Future<void> _load() async {
@@ -85,18 +88,31 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
   /// يبدأه المالك، ثم يكتبه عامل الكاشير في شاشة تفعيل الجهاز نفسها.
   Future<void> _createActivationCode() async {
     final nameCtrl = TextEditingController();
+    int? branchId = _branches.activeBranchId.value > 0
+        ? _branches.activeBranchId.value : null;
     final approved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('إضافة جهاز نقطة بيع'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
+        content: StatefulBuilder(builder: (_, setLocal) => Column(mainAxisSize: MainAxisSize.min, children: [
           const Text('سيظهر رمز تفعيل صالح لمدة 15 دقيقة. الرمز لا يحجز مقعداً؛ يُحسب الجهاز عند تفعيله فقط.'),
           const SizedBox(height: 12),
           TextField(
             controller: nameCtrl,
             decoration: const InputDecoration(labelText: 'اسم الجهاز', hintText: 'كاشير الواجهة', border: OutlineInputBorder()),
           ),
-        ]),
+          if (_branches.branches.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: branchId,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'فرع الجهاز', border: OutlineInputBorder()),
+              items: _branches.branches.where((b) => b['is_active'] == true)
+                  .map((b) => DropdownMenuItem<int>(value: b['id'] as int, child: Text('${b['name']}'))).toList(),
+              onChanged: (v) => setLocal(() => branchId = v),
+            ),
+          ],
+        ])),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('إنشاء الرمز')),
@@ -108,7 +124,10 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
       _snack('أدخل اسماً يميز الجهاز');
       return;
     }
-    final r = await _api.postData('$_base/activation-codes', {'display_name': nameCtrl.text.trim()});
+    final r = await _api.postData('$_base/activation-codes', {
+      'display_name': nameCtrl.text.trim(),
+      if (branchId != null) 'branch_id': branchId,
+    });
     if (!mounted) return;
     if (r.statusCode == 200 && r.body is Map && r.body['success'] == true) {
       final data = (r.body['data'] ?? {}) as Map;
@@ -454,6 +473,9 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
                   Text(active
                       ? 'آخر نشاط: ${_when(d['last_seen_at'])}'
                       : 'أُلغي: ${_when(d['revoked_at'])}'),
+                  Text(d['branch_name'] != null
+                      ? 'الفرع: ${d['branch_name']}'
+                      : 'الفرع غير محدد'),
                   if (active && live > 0)
                     Text('جلسات مفتوحة: $live',
                         style: const TextStyle(color: AmialColors.primary)),

@@ -848,18 +848,24 @@ class MerchantAdaptiveDrawer extends StatelessWidget {
     List<String>? codes,
   }) {
     Navigator.of(context).pop();
-    Get.to(() => MerchantCapabilityHubScreen(
-          title: title,
-          subtitle: subtitle,
-          groups: groups,
-          icon: icon,
-          codes: codes,
-        ));
+    // لا ندفع الصفحة الجديدة قبل أن يُغلق مسار الـ drawer نفسه. الدفع في
+    // اللحظة ذاتها يترك طبقة الـ modal barrier فوق الصفحة التالية، فتبدو
+    // «إعدادات المنشأة» رمادية ولا يمكن لمسها.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Get.to(() => MerchantCapabilityHubScreen(
+            title: title,
+            subtitle: subtitle,
+            groups: groups,
+            icon: icon,
+            codes: codes,
+          ));
+    });
   }
 
   void _open(BuildContext context, Widget screen) {
     Navigator.of(context).pop();
-    Get.to(() => screen);
+    // انظر الملاحظة في _openHub: إغلاق الدرج انتقال مستقل عن فتح الصفحة.
+    WidgetsBinding.instance.addPostFrameCallback((_) => Get.to(() => screen));
   }
 
   Future<void> _confirmLogout(BuildContext context) async {

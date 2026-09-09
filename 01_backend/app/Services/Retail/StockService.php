@@ -6,6 +6,7 @@ use App\Models\MerchantProduct;
 use App\Models\Retail\MerchantLocation;
 use App\Models\Retail\ProductStock;
 use App\Models\Retail\StockMovement;
+use App\Models\Branch;
 use App\Models\User;
 use DomainException;
 use Illuminate\Support\Facades\DB;
@@ -71,12 +72,26 @@ class StockService
             throw new DomainException('نوع الموقع غير صحيح (متجر أو مستودع)');
         }
 
+        $branchId = $data['branch_id'] ?? null;
+        $merchantBranches = Branch::where('merchant_user_id', $merchant->id)
+            ->where('is_active', true);
+
+        // المتجر هو نقطة البيع في فرع؛ أما المستودع فليس فرع مبيعات ولا
+        // نفرض عليه ارتباطاً وهمياً. ومع ذلك لا نقبل معرّف فرعٍ لتاجر آخر.
+        if ($branchId !== null && $branchId !== '') {
+            $branch = (clone $merchantBranches)->where('id', (int) $branchId)->first();
+            if (! $branch) throw new DomainException('الفرع غير صالح لهذه المنشأة');
+            $branchId = $branch->id;
+        } elseif ($kind === 'store') {
+            $branchId = (clone $merchantBranches)->where('is_default', true)->value('id');
+        }
+
         return MerchantLocation::create([
             'merchant_user_id' => $merchant->id,
             'kind' => $kind,
             'name' => trim((string) ($data['name'] ?? $code)),
             'code' => $code,
-            'branch_id' => $data['branch_id'] ?? null,
+            'branch_id' => $branchId,
             'city' => $data['city'] ?? null,
             'address' => $data['address'] ?? null,
             'is_active' => true,

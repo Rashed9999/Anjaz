@@ -534,7 +534,14 @@ class RetailVerticalController extends Controller
         return $this->guarded($request, P::RETAIL_STOCK_VIEW, fn () => $this->ok([
             'locations' => MerchantLocation::where(
                 'merchant_user_id', $this->merchant($request)->id
-            )->get(['id', 'name', 'code', 'kind', 'city', 'is_active', 'is_default'])->all(),
+            )->with('branch:id,name')->get(['id', 'name', 'code', 'kind', 'branch_id', 'city', 'is_active', 'is_default'])
+                ->map(fn (MerchantLocation $l) => [
+                    'id' => $l->id, 'name' => $l->name, 'code' => $l->code,
+                    'kind' => $l->kind, 'branch_id' => $l->branch_id,
+                    'branch_name' => $l->branch?->name,
+                    'city' => $l->city, 'is_active' => $l->is_active,
+                    'is_default' => $l->is_default,
+                ])->all(),
         ]));
     }
 

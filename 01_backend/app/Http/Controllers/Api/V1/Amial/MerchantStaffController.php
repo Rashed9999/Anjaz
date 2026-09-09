@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
 use App\Models\PosUser;
+use App\Models\Branch;
 use App\Models\User;
 use App\Models\MerchantSale;
 use App\Exceptions\UsageLimitExceededException;
 use App\Services\FeatureAccessService;
 use App\Services\UsageLimitService;
+use App\Services\AuditService;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -33,6 +35,7 @@ class MerchantStaffController extends Controller
     public function __construct(
         private FeatureAccessService $access,
         private UsageLimitService $usage,
+        private AuditService $audit,
     ) {}
 
     /** يتأكّد أن الطالب تاجر يملك ميزة الموظفين. يعيد التاجر أو رداً بالخطأ. */
@@ -53,7 +56,8 @@ class MerchantStaffController extends Controller
         $m = $this->guardMerchant($request);
         if ($m instanceof JsonResponse) return $m;
 
-        $staff = PosUser::where('merchant_user_id', $m->id)
+        $staff = PosUser::with('branch:id,name')
+            ->where('merchant_user_id', $m->id)
             ->orderBy('pos_number')
             ->get()
             ->map(fn (PosUser $p) => [
@@ -65,6 +69,8 @@ class MerchantStaffController extends Controller
                 'is_operations_manager' => in_array('operations_manager', $p->permissions ?? [], true),
                 'is_financial_manager' => in_array('financial_manager', $p->permissions ?? [], true),
                 'last_login_at' => $p->last_login_at?->toIso8601String(),
+                'branch_id' => $p->branch_id,
+                'branch_name' => $p->branch?->name,
             ]);
 
         return $this->ok(['staff' => $staff, 'count' => $staff->count()], 'OK', 'الموظفون وحساباتهم');
@@ -145,6 +151,7 @@ class MerchantStaffController extends Controller
             'password' => 'required|string|min:4|max:64',
             'permissions' => 'sometimes|array',
             'permissions.*' => 'string|max:40',
+            'branch_id' => 'sometimes|nullable|integer',
         ]);
         if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);
 
@@ -158,8 +165,11 @@ class MerchantStaffController extends Controller
             return $this->error('EMPLOYEE_CODE_TAKEN', 'رمز الموظف مستخدم مسبقاً', 422);
         }
 
+        $branchId = $this->branchId($m, $request->input('branch_id'), $request->has('branch_id'));
+        if ($branchId instanceof JsonResponse) return $branchId;
+
         try {
-            $pos = DB::transaction(function () use ($request, $m, $employeeCode) {
+            $pos = DB::transaction(function () use ($request, $m, $employeeCode, $branchId) {
                 // القفل والحد هنا، لا في التطبيق: الموظف حساب وباقته مورد مستقل.
                 DB::table('users')->where('id', $m->id)->lockForUpdate()->first();
                 $this->usage->assertCanAddEmployee($m);
@@ -185,11 +195,21 @@ class MerchantStaffController extends Controller
                     'display_name' => $request->input('display_name'),
                     'is_active' => true,
                     'permissions' => $request->input('permissions', []),
+                    'branch_id' => $branchId,
                 ]);
             });
         } catch (UsageLimitExceededException $e) {
             return $e->toJsonResponse();
         }
+
+        $this->audit->record([
+            'actor_type' => 'merchant', 'actor_user_id' => $m->id,
+            'subject_type' => 'user', 'subject_id' => $pos->user_id,
+            'action' => 'MERCHANT_STAFF_CREATED', 'decision_code' => 'COMPLETED',
+            'reason' => 'أُنشئ حساب موظّف للمنشأة',
+            'context' => ['merchant_user_id' => $m->id, 'staff_id' => $pos->id,
+                'employee_code' => $pos->pos_number, 'branch_id' => $pos->branch_id],
+        ]);
 
         return $this->ok([
             'id' => $pos->id,
@@ -327,6 +347,16 @@ class MerchantStaffController extends Controller
                 ->each(fn ($t) => $t->revoke());
         }
 
+        $this->audit->record([
+            'actor_type' => 'merchant', 'actor_user_id' => $m->id,
+            'subject_type' => 'user', 'subject_id' => $pos->user_id,
+            'action' => 'MERCHANT_STAFF_TOGGLED',
+            'decision_code' => $pos->is_active ? 'COMPLETED' : 'CANCELLED',
+            'reason' => $pos->is_active ? 'فُعّل حساب الموظف' : 'عُطّل حساب الموظف',
+            'context' => ['merchant_user_id' => $m->id, 'staff_id' => $pos->id,
+                'branch_id' => $pos->branch_id, 'revoked_sessions' => $revoked],
+        ]);
+
         return $this->ok([
             'id' => $pos->id,
             'is_active' => (bool) $pos->is_active,
@@ -338,6 +368,52 @@ class MerchantStaffController extends Controller
             : ($revoked > 0
                 ? "تم التعطيل — وقُطعت {$revoked} جلسة عمل فوراً"
                 : 'تم التعطيل — ولا جلسةَ مفتوحةٌ له'));
+    }
+
+    /** يغيّر نطاق الموظف؛ الحساب نفسه يبقى ولا تضيع مبيعاته التاريخية. */
+    public function assignBranch(Request $request, int $id): JsonResponse
+    {
+        $m = $this->guardMerchant($request);
+        if ($m instanceof JsonResponse) return $m;
+
+        $v = Validator::make($request->all(), ['branch_id' => 'nullable|integer']);
+        if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);
+
+        $pos = PosUser::where('id', $id)->where('merchant_user_id', $m->id)->first();
+        if (! $pos) return $this->error('NOT_FOUND', 'الموظف غير موجود', 404);
+
+        $old = $pos->branch_id;
+        $branchId = $this->branchId($m, $request->input('branch_id'), true);
+        if ($branchId instanceof JsonResponse) return $branchId;
+        $pos->branch_id = $branchId;
+        $pos->save();
+
+        $this->audit->record([
+            'actor_type' => 'merchant', 'actor_user_id' => $m->id,
+            'subject_type' => 'user', 'subject_id' => $pos->user_id,
+            'action' => 'MERCHANT_STAFF_BRANCH_ASSIGNED', 'decision_code' => 'COMPLETED',
+            'reason' => 'تغيّر نطاق عمل الموظف',
+            'context' => ['merchant_user_id' => $m->id, 'staff_id' => $pos->id,
+                'old_branch_id' => $old, 'new_branch_id' => $branchId, 'branch_id' => $branchId],
+        ]);
+
+        return $this->ok(['id' => $pos->id, 'branch_id' => $branchId], 'BRANCH_ASSIGNED', 'تم ربط الموظف بالفرع');
+    }
+
+    /** لا نصدّق معرف الفرع القادم من الهاتف؛ ونعيّن الافتراضي للموظف الجديد. */
+    private function branchId(User $merchant, mixed $requested, bool $wasSent): int|JsonResponse|null
+    {
+        $branches = Branch::where('merchant_user_id', $merchant->id)->where('is_active', true);
+        if (! $branches->exists()) return null;
+
+        if ($wasSent && $requested !== null && $requested !== '') {
+            $branch = (clone $branches)->where('id', (int) $requested)->first();
+            if (! $branch) return $this->error('INVALID_BRANCH', 'الفرع غير صالح لهذه المنشأة', 422);
+            return $branch->id;
+        }
+
+        return (clone $branches)->where('is_default', true)->value('id')
+            ?? (clone $branches)->value('id');
     }
 
     private function uniqueSyntheticPhone(int $merchantId): string

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/common/widgets/vertical_state_view.dart';
 import 'package:amial_pay/features/retail/controllers/retail_vertical_controller.dart';
+import 'package:amial_pay/features/branches/controllers/branches_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-RETAIL-VERTICAL-001 · المرحلة ١٠ — **المواقع والمستودعات**.
@@ -17,17 +18,21 @@ class RetailLocationsScreen extends StatefulWidget {
 
 class _RetailLocationsScreenState extends State<RetailLocationsScreen> {
   RetailVerticalController get c => Get.find<RetailVerticalController>();
+  BranchesController get branches => Get.find<BranchesController>();
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => c.loadLocations());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await Future.wait([c.loadLocations(), branches.loadBranches(activeOnly: true)]);
+    });
   }
 
   Future<void> _add() async {
     final name = TextEditingController();
     final code = TextEditingController();
     String kind = 'store';
+    int? branchId = branches.activeBranchId.value > 0 ? branches.activeBranchId.value : null;
 
     final go = await showDialog<bool>(
       context: context,
@@ -49,6 +54,20 @@ class _RetailLocationsScreenState extends State<RetailLocationsScreen> {
               ],
               onChanged: (v) => setLocal(() => kind = v ?? kind),
             ),
+            if (branches.branches.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int>(
+                initialValue: branchId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'فرع المتجر', border: OutlineInputBorder()),
+                items: branches.branches.where((b) => b['is_active'] == true)
+                    .map((b) => DropdownMenuItem<int>(value: b['id'] as int, child: Text('${b['name']}'))).toList(),
+                onChanged: (v) => setLocal(() => branchId = v),
+              ),
+              const SizedBox(height: 4),
+              const Text('المستودع لا يُعامل كفرع مبيعات، لكن يمكن تحديد الفرع الذي يخدمه.',
+                  style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+            ],
           ]),
         ),
         actions: [
@@ -62,6 +81,7 @@ class _RetailLocationsScreenState extends State<RetailLocationsScreen> {
 
     final ok = await c.addLocation({
       'name': name.text.trim(), 'code': code.text.trim(), 'kind': kind,
+      if (branchId != null) 'branch_id': branchId,
     });
 
     if (!mounted) return;
@@ -116,6 +136,7 @@ class _RetailLocationsScreenState extends State<RetailLocationsScreen> {
                         subtitle: Text(
                           '${l['code']}'
                           '${l['city'] != null ? ' · ${l['city']}' : ''}'
+                          '${l['branch_name'] != null ? ' · فرع: ${l['branch_name']}' : ''}'
                           ' · ${l['kind'] == 'warehouse' ? 'مستودع — لا يبيع' : 'متجر'}',
                           style: const TextStyle(
                               fontSize: 12, color: AmialColors.textMuted),

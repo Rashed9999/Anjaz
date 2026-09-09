@@ -53,6 +53,9 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
         _ => AmialColors.primary,
       };
 
+  String _status(Map<String, dynamic> e) =>
+      '${e['decision_label'] ?? e['decision_code'] ?? 'حدث مسجّل'}';
+
   String _dt(String? iso) {
     if (iso == null) return '';
     final d = DateConverterHelper.tryFromApi(iso);
@@ -110,14 +113,52 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
         title: Text('${e['action_label'] ?? e['action'] ?? ''}',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text([
-          if (e['reason'] != null) '${e['reason']}',
+          _status(e),
+          if (e['actor_label'] != null) 'بواسطة: ${e['actor_label']}',
+          if (e['branch'] is Map) 'الفرع: ${(e['branch'] as Map)['name']}',
+          if (e['reason'] != null && '${e['reason']}'.trim().isNotEmpty) '${e['reason']}',
           _dt('${e['created_at']}'),
         ].where((s) => s.isNotEmpty).join('\n'), style: const TextStyle(fontSize: 11)),
-        trailing: e['decision_code'] != null
-            ? Text('${e['decision_code']}', style: TextStyle(fontSize: 10, color: c, fontWeight: FontWeight.bold))
-            : null,
-        isThreeLine: e['reason'] != null,
+        trailing: Text('${e['severity_label'] ?? 'معلومة'}',
+            style: TextStyle(fontSize: 10, color: c, fontWeight: FontWeight.bold)),
+        isThreeLine: true,
+        onTap: () => _showDetails(e),
       ),
     );
   }
+
+  void _showDetails(Map<String, dynamic> e) {
+    final details = ((e['details'] ?? []) as List)
+        .whereType<Map>()
+        .map((d) => Map<String, dynamic>.from(d))
+        .toList();
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('${e['action_label'] ?? 'تفاصيل التدقيق'}'),
+        content: SingleChildScrollView(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _detail('الحالة', _status(e)),
+            _detail('المنفّذ', '${e['actor_label'] ?? '—'}'),
+            if (e['branch'] is Map) _detail('الفرع', '${(e['branch'] as Map)['name'] ?? '—'}'),
+            if (e['reason'] != null && '${e['reason']}'.trim().isNotEmpty)
+              _detail('التفاصيل', '${e['reason']}'),
+            if (e['transaction_id'] != null) _detail('مرجع المعاملة', '${e['transaction_id']}'),
+            ...details.map((d) => _detail('${d['label'] ?? 'تفصيل'}', '${d['value'] ?? '—'}')),
+            _detail('وقت التسجيل', _dt('${e['created_at']}')),
+          ]),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق'))],
+      ),
+    );
+  }
+
+  Widget _detail(String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+          const SizedBox(height: 2),
+          SelectableText(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ]),
+      );
 }

@@ -1566,6 +1566,8 @@ Route::middleware(['auth:api', 'trackLastActiveAt', 'amial.pos-device'])->group(
         Route::post('/', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'store'])->name('store');
         Route::post('/{id}/toggle', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'toggle'])
             ->where('id', '[0-9]+')->name('toggle');
+        Route::put('/{id}/branch', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'assignBranch'])
+            ->where('id', '[0-9]+')->name('branch.assign');
         Route::post('/{id}/operations-manager', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'setOperationsManager'])
             ->where('id', '[0-9]+')->name('ops-manager');
         Route::post('/{id}/financial-manager', [\App\Http\Controllers\Api\V1\Amial\MerchantStaffController::class, 'setFinancialManager'])

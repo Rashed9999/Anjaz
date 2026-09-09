@@ -4,6 +4,7 @@ import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/features/access/widgets/access_gate.dart';
 import 'package:amial_pay/features/merchant/models/staff_roles.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_staff_performance_screen.dart';
+import 'package:amial_pay/features/branches/controllers/branches_controller.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
 /// AMIAL-MERCHANT-STAFF-001 — إدارة الموظفين وحساباتهم (باقة الأعمال فأعلى).
@@ -19,6 +20,7 @@ class MerchantStaffScreen extends StatefulWidget {
 
 class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
   final _api = Get.find<ApiClient>();
+  final _branches = Get.find<BranchesController>();
   bool _loading = true;
   List<Map<String, dynamic>> _staff = [];
   String? _error;
@@ -28,6 +30,7 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
   void initState() {
     super.initState();
     _load();
+    _branches.loadBranches(activeOnly: true);
   }
 
   Future<void> _load() async {
@@ -78,6 +81,8 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
     // **الافتراضُ «كاشير»** — وهو نفسُ ما كانت عليه الشاشة (`{'sell'}`)،
     // فمن ضغط «إنشاء» بلا قراءةٍ يحصل على ما كان يحصل عليه بالضبط.
     var role = StaffRoles.defaultRole;
+    int? branchId = _branches.activeBranchId.value > 0
+        ? _branches.activeBranchId.value : null;
     final perms = <String>{...StaffRoles.permissions[StaffRoles.defaultRole]!};
 
     final ok = await showDialog<bool>(
@@ -96,6 +101,22 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
               TextField(controller: passCtrl, obscureText: true, decoration: const InputDecoration(
                   labelText: 'كلمة مرور الموظف', border: OutlineInputBorder())),
               const SizedBox(height: 14),
+
+              if (_branches.branches.isNotEmpty) ...[
+                DropdownButtonFormField<int>(
+                  initialValue: branchId,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                      labelText: 'فرع عمل الموظف', border: OutlineInputBorder()),
+                  items: _branches.branches
+                      .where((b) => b['is_active'] == true)
+                      .map((b) => DropdownMenuItem<int>(
+                          value: b['id'] as int, child: Text('${b['name']}')))
+                      .toList(),
+                  onChanged: (v) => setD(() => branchId = v),
+                ),
+                const SizedBox(height: 14),
+              ],
 
               // **سؤالٌ واحدٌ مكانَ خمسة.**
               DropdownButtonFormField<String>(
@@ -158,6 +179,7 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
       'display_name': nameCtrl.text.trim(),
       'password': passCtrl.text,
       'permissions': perms.toList(),
+      if (branchId != null) 'branch_id': branchId,
     });
     if (r.statusCode == 201) {
       _snack('تم إنشاء الموظف', ok: true);
@@ -256,9 +278,17 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
             ),
           ],
         ]),
-        subtitle: Text('رمز الموظف: ${s['employee_code'] ?? s['pos_number'] ?? ''}${perms.isEmpty ? '' : '  •  $perms'}',
+        subtitle: Text('رمز الموظف: ${s['employee_code'] ?? s['pos_number'] ?? ''}'
+            '${s['branch_name'] != null ? '  •  فرع: ${s['branch_name']}' : '  •  الفرع غير محدد'}'
+            '${perms.isEmpty ? '' : '  •  $perms'}',
             style: const TextStyle(fontSize: 11)),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (_branches.branches.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.account_tree_outlined, color: AmialColors.primary),
+              tooltip: 'تغيير فرع العمل',
+              onPressed: () => _assignBranch(s),
+            ),
           AccessGate(
             anyOf: const ['operations_manager', 'financial_manager'],
             child: PopupMenuButton<String>(
@@ -288,6 +318,39 @@ class _MerchantStaffScreenState extends State<MerchantStaffScreen> {
         ]),
       ),
     );
+  }
+
+  Future<void> _assignBranch(Map<String, dynamic> staff) async {
+    await _branches.loadBranches(activeOnly: true);
+    if (_branches.branches.isEmpty || !mounted) return;
+    int branchId = (staff['branch_id'] as int?) ?? _branches.activeBranchId.value;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('فرع عمل ${staff['display_name'] ?? 'الموظف'}'),
+        content: StatefulBuilder(builder: (_, setD) => DropdownButtonFormField<int>(
+          initialValue: branchId,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'الفرع', border: OutlineInputBorder()),
+          items: _branches.branches.where((b) => b['is_active'] == true)
+              .map((b) => DropdownMenuItem<int>(value: b['id'] as int, child: Text('${b['name']}'))).toList(),
+          onChanged: (v) => setD(() => branchId = v ?? branchId),
+        )),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حفظ')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final r = await _api.putData('/api/v1/amial/merchant/staff/${staff['id']}/branch', {'branch_id': branchId});
+    if (!mounted) return;
+    if (r.statusCode == 200) {
+      _snack('تم ربط الموظف بالفرع', ok: true);
+      _load();
+    } else {
+      _snack((r.body is Map ? r.body['message']?.toString() : null) ?? 'تعذّر ربط الموظف بالفرع');
+    }
   }
 
   Future<void> _setRole(int id, String role, bool enabled) async {

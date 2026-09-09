@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Api\V1\Amial;
 
 use App\Http\Controllers\Controller;
 use App\Models\AuditDecision;
+use App\Models\Branch;
+use App\Models\PosUser;
 use App\Services\FeatureAccessService;
 use App\Support\Access\AccessConstants as A;
+use App\Support\AuditVocabulary;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -34,9 +37,17 @@ class MerchantAuditController extends Controller
         $limit = min((int) $request->query('limit', 100), 300);
         $severity = $request->query('severity');
 
+        // الموظف يعمل باسم المنشأة، لذلك أثره جزء من سجلّ صاحبها. قصرُ
+        // القراءة على user_id للمالك يجعل السجل يقول «لا شيء» وهو يبيع.
+        $staffUserIds = PosUser::where('merchant_user_id', $user->id)
+            ->whereNotNull('user_id')->pluck('user_id')->map(fn ($id) => (int) $id)->all();
+        $actorIds = array_values(array_unique(array_merge([(int) $user->id], $staffUserIds)));
+        $staffNames = PosUser::where('merchant_user_id', $user->id)
+            ->whereNotNull('user_id')->pluck('display_name', 'user_id')->all();
+
         $q = AuditDecision::query()
-            ->where(function ($w) use ($user) {
-                $w->where('actor_user_id', $user->id)
+            ->where(function ($w) use ($user, $actorIds) {
+                $w->whereIn('actor_user_id', $actorIds)
                   ->orWhere(function ($s) use ($user) {
                       $s->where('subject_type', 'user')->where('subject_id', $user->id);
                   });
@@ -48,29 +59,78 @@ class MerchantAuditController extends Controller
             $q->where('severity', $severity);
         }
 
-        $entries = $q->get()->map(fn (AuditDecision $a) => [
-            'id' => $a->id,
-            'action' => $a->action,
-            'action_label' => $this->actionLabel($a->action),
-            'decision_code' => $a->decision_code,
-            'reason' => $a->reason,
-            'severity' => $a->severity ?? 'info',
-            'transaction_id' => $a->transaction_id,
-            'created_at' => $a->created_at?->toIso8601String(),
-        ]);
+        $rows = $q->get();
+        $branchIds = $rows->map(fn (AuditDecision $a) => $this->context($a)['branch_id'] ?? null)
+            ->filter(fn ($id) => is_numeric($id))->map(fn ($id) => (int) $id)->unique()->values();
+        $branchNames = Branch::where('merchant_user_id', $user->id)
+            ->whereIn('id', $branchIds)->pluck('name', 'id')->all();
+
+        $entries = $rows->map(function (AuditDecision $a) use ($user, $staffNames, $branchNames) {
+            $action = AuditVocabulary::action($a->action);
+            $decision = AuditVocabulary::decisionCode($a->decision_code);
+            $severity = AuditVocabulary::severity($a->severity);
+            $context = $this->context($a);
+            $branchId = isset($context['branch_id']) && is_numeric($context['branch_id'])
+                ? (int) $context['branch_id'] : null;
+
+            return [
+                'id' => $a->id,
+                'action' => $a->action,
+                'action_label' => $action['label'],
+                'action_translated' => $action['translated'],
+                'decision_code' => $a->decision_code,
+                'decision_label' => $decision['label'],
+                'decision_tone' => $decision['tone'],
+                'reason' => $this->reasonLabel($a->reason),
+                'severity' => $a->severity ?? 'info',
+                'severity_label' => $severity['label'],
+                'actor_label' => (int) $a->actor_user_id === (int) $user->id
+                    ? 'مالك المنشأة'
+                    : ($staffNames[$a->actor_user_id] ?? AuditVocabulary::actorType($a->actor_type)),
+                'branch' => $branchId === null ? null : [
+                    'id' => $branchId,
+                    'name' => $branchNames[$branchId] ?? 'فرع غير متاح',
+                ],
+                'details' => $this->details($context),
+                'transaction_id' => $a->transaction_id,
+                'created_at' => $a->created_at?->toIso8601String(),
+            ];
+        });
 
         return $this->ok(['entries' => $entries, 'count' => $entries->count()], 'OK', 'سجلّ التدقيق');
     }
 
-    private function actionLabel(?string $action): string
+    /** @return array<string,mixed> */
+    private function context(AuditDecision $entry): array
     {
-        return match ($action) {
-            'SEND_MONEY_COMPLETED' => 'تحويل صادر',
-            'MERCHANT_PAYMENT' => 'استلام دفعة',
-            'ADMIN_CREATE_USER' => 'إنشاء حساب بواسطة الإدارة',
-            'ADMIN_CHANGE_PLAN' => 'تغيير الباقة',
-            'WITHDRAW_COMPLETED' => 'سحب مكتمل',
-            default => $action ?? '—',
+        $decoded = json_decode((string) $entry->getRawOriginal('context'), true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /** @return array<int,array{label:string,value:string}> */
+    private function details(array $context): array
+    {
+        $labels = [
+            'branch_id' => 'معرّف الفرع', 'branch_name' => 'الفرع',
+            'staff_id' => 'معرّف الموظف', 'employee_code' => 'رمز الموظف',
+            'device_id' => 'معرّف الجهاز', 'device_name' => 'اسم الجهاز',
+            'amount' => 'المبلغ', 'currency' => 'العملة', 'reference' => 'المرجع',
+            'old_branch_id' => 'الفرع السابق', 'new_branch_id' => 'الفرع الجديد',
+        ];
+        $out = [];
+        foreach ($context as $key => $value) {
+            if (! isset($labels[$key]) || is_array($value) || is_object($value)) continue;
+            $out[] = ['label' => $labels[$key], 'value' => (string) $value];
+        }
+        return $out;
+    }
+
+    private function reasonLabel(?string $reason): ?string
+    {
+        return match (trim((string) $reason)) {
+            'requester cancelled pending money request' => 'ألغى صاحب الطلب طلب المال المعلّق',
+            'withdraw_request' => 'طلب سحب قيد المراجعة',
+            default => $reason,
         };
     }
 

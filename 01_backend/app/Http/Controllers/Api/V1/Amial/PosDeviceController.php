@@ -59,7 +59,7 @@ class PosDeviceController extends Controller
         }
 
         $devices = PosDevice::where('merchant_user_id', $owner->id)
-            ->orderByDesc('is_active')->orderByDesc('last_seen_at')
+            ->with('branch:id,name')->orderByDesc('is_active')->orderByDesc('last_seen_at')
             ->get();
 
         $max = $this->registrar->maxSeats($owner);
@@ -400,6 +400,7 @@ class PosDeviceController extends Controller
             'display_name' => $d->display_name,
             'hint' => $d->device_hint,
             'branch_id' => $d->branch_id,
+            'branch_name' => $d->branch?->name,
             'platform' => $d->platform,
             'app_version' => $d->app_version,
             'registered_at' => $d->registered_at?->toIso8601String(),

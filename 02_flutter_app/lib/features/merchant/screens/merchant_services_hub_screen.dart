@@ -30,6 +30,7 @@ import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart
 import 'package:amial_pay/features/merchant/screens/receipt_settings_screen.dart';
 import 'package:amial_pay/features/merchant/screens/split_bill_create_screen.dart';
 import 'package:amial_pay/features/merchant/screens/inventory_audit_screen.dart';
+import 'package:amial_pay/features/retail/screens/retail_counts_screen.dart';
 import 'package:amial_pay/features/merchant/screens/stock_alerts_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_customers_screen.dart';
@@ -541,7 +542,14 @@ class MerchantServicesHubScreen extends StatelessWidget {
         onlyFor: {'retail'}),
     _Svc('inventory_audit', 'الجرد'.tr,
         'جردٌ دوريّ يقارن الكمية الدفترية بالكمية الفعلية على الرفّ ويُظهر الفروق صنفاً صنفاً.'.tr,
-        Icons.checklist, 'الأعمال'.tr, () => InventoryAuditScreen(),
+        Icons.checklist, 'الأعمال'.tr, () {
+          // التجزئة لها جرد خادمي مع فصل العَدّ عن الاعتماد وحركة مخزون
+          // append-only. الشاشة العامة تعدّل quantity مباشرةً ولا تصلح
+          // لمسار الفروع والمستودعات.
+          return Get.find<AccessController>().businessType.value == 'retail'
+              ? const RetailCountsScreen()
+              : const InventoryAuditScreen();
+        },
         onlyFor: {'retail', 'wholesale'}),
     _Svc('low_stock_alerts', 'تنبيهات النفاد'.tr,
         'حدّد لكل صنف حدّاً أدنى، ونبّهك قبل نفاده بوقتٍ يكفي لإعادة الطلب.'.tr,
