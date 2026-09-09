@@ -141,9 +141,11 @@
             'icon' => '📚',
             'match' => ['admin/amial/ledger*', 'admin/amial/partner-settlements*',
                         'admin/amial/fees*', 'admin/transaction*', 'admin/emoney*',
-                        'admin/expense*', 'admin/withdraw*', 'admin/amial/hub/finance*'],
+                        'admin/expense*', 'admin/withdraw*', 'admin/amial/hub/finance*',
+                        'admin/amial/hub/limits*'],
             'links' => [
                 ['💰 المركز المالي (بثّ حيّ)', route('admin.amial.hub.finance'), 'platform.money.view'],
+                ['🎚️ مركز حدود المستخدمين', route('admin.amial.hub.limits.index'), 'platform.settings.manage'],
                 ['📚 مركز الدفتر (ميزان المراجعة)', route('admin.amial.ledger.page'), 'platform.audit.view'],
                 ['📊 كشف المعاملات (فلاتر + تصدير)', route('admin.transaction.index'), 'platform.transactions.view'],
                 ['🤝 تسويات الشركاء (الموافقة المزدوجة)', route('admin.amial.partner-settlements.page'), 'platform.money.view'],

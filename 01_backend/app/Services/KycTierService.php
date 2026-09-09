@@ -87,14 +87,35 @@ class KycTierService
     }
 
     /**
+     * مستوى التوثيق هو الأصل؛ الاستثناء الإداري الموثّق يبدّل الأرقام
+     * فقط، ولا يستطيع فتح ميزةٍ أو تجاوز حالة التحقق.
+     */
+    private function getLimitsForUser(User $user): array
+    {
+        $limits = $this->getLimits((int) ($user->kyc_tier ?? 0));
+        $override = is_array($user->limit_override)
+            ? $user->limit_override
+            : (json_decode((string) $user->limit_override, true) ?: []);
+
+        foreach (['max_balance', 'max_single_transaction', 'max_daily_total', 'max_monthly_total'] as $key) {
+            if (!array_key_exists($key, $override)) continue;
+            $value = (string) $override[$key];
+            if (preg_match('/^\d+(?:\.\d{1,4})?$/', $value)) {
+                $limits[$key] = $value;
+            }
+        }
+
+        return $limits;
+    }
+
+    /**
      * فحص: هل المستخدم يستطيع تنفيذ عملية بهذا المبلغ؟
      *
      * @throws RuntimeException إذا تجاوز الحدود
      */
     public function assertTransactionAllowed(User $user, string $amount, string $feature = 'send_money'): void
     {
-        $tier = (int)($user->kyc_tier ?? 0);
-        $limits = $this->getLimits($tier);
+        $limits = $this->getLimitsForUser($user);
 
         // 1) فحص الميزة مسموحة
         $features = $limits['allowed_features'];
@@ -135,8 +156,7 @@ class KycTierService
      */
     public function assertBalanceAllowed(User $user, string $newBalance): void
     {
-        $tier = (int)($user->kyc_tier ?? 0);
-        $limits = $this->getLimits($tier);
+        $limits = $this->getLimitsForUser($user);
 
         if (bccomp($newBalance, $limits['max_balance'], 4) > 0) {
             throw new RuntimeException(
@@ -202,7 +222,7 @@ class KycTierService
     public function getUserTierInfo(User $user): array
     {
         $tier = (int)($user->kyc_tier ?? 0);
-        $limits = $this->getLimits($tier);
+        $limits = $this->getLimitsForUser($user);
         $nextTier = $tier < 3 ? $this->getLimits($tier + 1) : null;
 
         return [

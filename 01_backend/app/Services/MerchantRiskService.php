@@ -83,6 +83,7 @@ class MerchantRiskService
         // وصل هنا ⇒ الـprofile موجودٌ وموثّق.
         $singleLimit = (string) $profile->single_receive_limit;
         $dailyLimit = (string) $profile->daily_receive_limit;
+        $monthlyLimit = (string) $profile->monthly_receive_limit;
 
         // ══════════════════════════════════════════════════════════════════
         // AMIAL-MULTI-CURRENCY-002 — **الحدُّ يُقاس بالمكافئ الأساس.**
@@ -121,6 +122,14 @@ class MerchantRiskService
         $newTotal = bcadd($todayReceived, $baseAmount, 4);
         if (bccomp($newTotal, $dailyLimit, 4) > 0) {
             throw new RuntimeException("هذه الدفعة ستتجاوز حد الاستلام اليومي ({$dailyLimit}){$shown}");
+        }
+
+        // الحد الشهري ليس مؤشراً للوحة فقط: يجب أن يُفرض عند نقطة القبض
+        // نفسها، وإلا أمكن تجاوز سياسة المستوى عبر دفعات يومية متتابعة.
+        $monthReceived = $this->getMonthReceived($merchantUserId);
+        $newMonthTotal = bcadd($monthReceived, $baseAmount, 4);
+        if (bccomp($newMonthTotal, $monthlyLimit, 4) > 0) {
+            throw new RuntimeException("هذه الدفعة ستتجاوز حد الاستلام الشهري ({$monthlyLimit}){$shown}");
         }
     }
 

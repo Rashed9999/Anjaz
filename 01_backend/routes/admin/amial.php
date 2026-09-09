@@ -902,6 +902,18 @@ Route::prefix('executive')->name('executive.')->group(function () {
 // ============ AMIAL-ADMIN-HUB-001 — اللوحات المركزية الأربع ============
 Route::prefix('hub')->name('hub.')->middleware('amial.idempotency')->group(function () {
     $hc = App\Http\Controllers\Admin\AdminHubController::class;
+    $lc = App\Http\Controllers\Admin\UserLimitCenterController::class;
+
+    // AMIAL-USER-LIMIT-CENTER-001 — واجهة واحدة تقرأ الحدود التشغيلية
+    // من خدماتها وتعدّلها بسجل تدقيق، لا من أرقامٍ يختلقها المتصفح.
+    Route::get('/limits', [$lc, 'index'])
+        ->middleware('platform:platform.settings.manage')->name('limits.index');
+    Route::get('/limits/overview.json', [$lc, 'overview'])
+        ->middleware('platform:platform.settings.manage')->name('limits.overview');
+    Route::get('/limits/users.json', [$lc, 'users'])
+        ->middleware('platform:platform.settings.manage')->name('limits.users');
+    Route::post('/limits/users/{id}', [$lc, 'update'])->where('id', '[0-9]+')
+        ->middleware('platform:platform.settings.manage')->name('limits.update');
 
     // الصفحات
     Route::get('/customers', [$hc, 'customers'])

@@ -58,6 +58,19 @@ class KycSanctionTest extends TestCase
     }
 
     /** @test */
+    public function documented_individual_limit_override_is_enforced()
+    {
+        $user = User::factory()->create([
+            'kyc_tier' => 2,
+            'limit_override' => ['max_single_transaction' => '1200'],
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('حد العملية الواحدة');
+        $this->kyc->assertTransactionAllowed($user, '1200.0001', 'send_money');
+    }
+
+    /** @test */
     public function tier_1_blocks_safe_payment_feature()
     {
         $user = User::factory()->create(['kyc_tier' => 1]);
