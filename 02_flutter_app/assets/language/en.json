@@ -745,5 +745,7 @@
   "أميال باي": "Amial Pay",
   "تعذّر التنزيل": "Download failed",
   "تعذّر إنشاء الفاتورة": "Could not create the invoice",
-  "فاتورة صيدلية من أميال باي": "Pharmacy invoice from Amial Pay"
+  "فاتورة صيدلية من أميال باي": "Pharmacy invoice from Amial Pay",
+  "merchant_logo_upload_failed": "Could not upload the logo",
+  "merchant_logo_upload_retry": "Could not upload the logo. Check your connection and try again."
 }

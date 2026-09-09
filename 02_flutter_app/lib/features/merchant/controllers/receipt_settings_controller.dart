@@ -89,9 +89,12 @@ class ReceiptSettingsController extends GetxController {
         if (spec is Map) settings['logo_spec'] = Map<String, dynamic>.from(spec);
         return url;
       }
-      uploadError.value = '${r.body is Map ? r.body['message'] ?? 'تعذّر رفع الشعار' : 'تعذّر رفع الشعار'}';
+      final message = r.body is Map ? r.body['message'] : null;
+      uploadError.value = message is String && message.trim().isNotEmpty
+          ? message
+          : 'merchant_logo_upload_failed'.tr;
     } catch (_) {}
-    if (uploadError.value.isEmpty) uploadError.value = 'تعذّر رفع الشعار، تحقق من اتصالك ثم أعد المحاولة';
+    if (uploadError.value.isEmpty) uploadError.value = 'merchant_logo_upload_retry'.tr;
     return null;
   }
 }
