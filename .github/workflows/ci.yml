@@ -364,7 +364,10 @@ jobs:
   deploy:
     name: إطلاق نشرة Coolify
     runs-on: ubuntu-latest
-    needs: [structural, backend, flutter, docker]
+    # موقع أميال (Laravel/Docker) وتطبيق Flutter منتجان مستقلان. فشل اختبار
+    # واجهة الجوال يبقى أحمر ويمنع بناء APK، لكنه لا يترك موقع الويب متوقفاً
+    # بعدما اجتاز فحصه البنيوي واختبارات الباكند وبناء الصورة المنشورة.
+    needs: [structural, backend, docker]
     # **ولا نشرَ من زرّ بناء APK** — انظر `AMIAL-CI-APK-002` أعلاه.
     if: >-
       github.event_name != 'workflow_dispatch'
