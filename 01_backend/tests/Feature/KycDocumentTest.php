@@ -64,6 +64,18 @@ class KycDocumentTest extends TestCase
         $this->assertNotEmpty($doc->content_sha256, 'لم تُحسب بصمة المحتوى');
     }
 
+    public function test_the_review_queue_exposes_the_safe_display_mime_for_each_document(): void
+    {
+        $doc = $this->svc->upload(
+            $this->customer(), KycDocument::TYPE_ID_FRONT, $this->image(),
+        );
+
+        $row = collect($this->svc->pendingQueue())->firstWhere('id', $doc->id);
+
+        $this->assertSame('image/jpeg', $row['original_mime'] ?? null,
+            'واجهة المراجعة لا تعرف هل تعرض المستند صورةً أو ملفاً داخل عارض مناسب');
+    }
+
     public function test_the_file_itself_is_stored_encrypted_not_readable(): void
     {
         // صورةُ بطاقةٍ في تخزينٍ عاديّ تُقرأ بأي وصولٍ للقرص. والفحص على

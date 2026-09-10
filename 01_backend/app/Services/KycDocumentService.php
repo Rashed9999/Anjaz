@@ -479,6 +479,9 @@ class KycDocumentService
                 'customer_phone' => (string) ($d->user?->phone ?? '—'),
                 'doc_type' => $d->doc_type,
                 'doc_label' => KycDocument::TYPE_LABELS[$d->doc_type] ?? $d->doc_type,
+                // لا نكشف مسار الملف المشفر؛ النوع وحده يكفي لاختيار عارض
+                // الصورة أو المستند في لوحة المراجع.
+                'original_mime' => $d->original_mime,
                 'uploaded_at' => $d->created_at?->toIso8601String(),
                 'waiting_hours' => (int) $d->created_at?->diffInHours(now()),
             ])->all();
