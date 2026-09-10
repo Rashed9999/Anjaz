@@ -11,6 +11,7 @@ use App\Services\AgentNetworkService;
 use App\Services\AuditService;
 use App\Services\CustomerActionService;
 use App\Services\KycTierService;
+use App\Services\Kyc\KycAccountStatusService;
 use DomainException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class UserLimitCenterController extends Controller
 {
     public function __construct(
         private readonly KycTierService $kyc,
+        private readonly KycAccountStatusService $kycStatus,
         private readonly CustomerActionService $customers,
         private readonly AgentNetworkService $agents,
         private readonly AuditService $audit,
@@ -57,7 +59,11 @@ class UserLimitCenterController extends Controller
             ->map(function (User $user) use ($kind) {
                 $base = ['id' => $user->id, 'name' => trim($user->f_name . ' ' . $user->l_name),
                     'phone' => $user->phone, 'balance' => (string) (EMoney::where('user_id', $user->id)->value('current_balance') ?? '0')];
-                if ($kind === 'customer') return $base + ['kyc' => $this->kyc->getUserTierInfo($user), 'override' => $user->limit_override];
+                if ($kind === 'customer') return $base + [
+                    'kyc' => $this->kyc->getUserTierInfo($user),
+                    'kyc_status' => $this->kycStatus->for($user),
+                    'override' => $user->limit_override,
+                ];
                 if ($kind === 'merchant') {
                     $p = MerchantProfile::where('user_id', $user->id)->first();
                     return $base + ['profile' => $p ? $p->only(['tier', 'verification_status', 'single_receive_limit', 'daily_receive_limit', 'monthly_receive_limit']) : null];
