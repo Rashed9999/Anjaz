@@ -89,6 +89,7 @@ class AuditVocabulary
         'MERCHANT_STAFF_CREATED' => ['أُنشئ حساب موظّف', 'merchant'],
         'MERCHANT_STAFF_BRANCH_ASSIGNED' => ['أُسند موظّف إلى فرع', 'merchant'],
         'MERCHANT_STAFF_TOGGLED' => ['تغيّرت حالة موظّف', 'merchant'],
+        'MERCHANT_ROLE_CREATED' => ['أُنشئ دورٌ تشغيليّ للمنشأة', 'merchant'],
         'MERCHANT_BRANCH_CREATED' => ['أُنشئ فرع', 'merchant'],
         'MERCHANT_BRANCH_UPDATED' => ['عُدّلت بيانات فرع', 'merchant'],
         'MERCHANT_BRANCH_DEFAULTED' => ['تغيّر الفرع الافتراضي', 'merchant'],

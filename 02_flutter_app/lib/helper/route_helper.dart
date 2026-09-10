@@ -32,6 +32,7 @@ import 'package:amial_pay/features/verification/screens/varification_screen.dart
 import 'package:amial_pay/features/merchant/screens/cashier_pos_screen.dart';
 import 'package:amial_pay/features/merchant/screens/offline_sales_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_pos_devices_screen.dart';
+import 'package:amial_pay/features/merchant/screens/merchant_operations_center_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_refund_screen.dart';
 import 'package:amial_pay/features/merchant/screens/credit_dashboard_screen.dart';
 import 'package:amial_pay/features/merchant/screens/cashier_products_screen.dart';
@@ -138,6 +139,7 @@ class RouteHelper {
   static const String cashier = '/cashier';
   static const String offlineSales = '/offline-sales';
   static const String posDevices = '/pos-devices';
+  static const String operationsCenter = '/merchant/operations-center';
   static const String refunds = '/refunds';
   static const String retailReturns = '/retail/returns';
   static const String credit = '/credit';
@@ -299,6 +301,7 @@ class RouteHelper {
     GetPage(name: cashier, page: () => const CashierPosScreen()),
     GetPage(name: offlineSales, page: () => const OfflineSalesScreen()),
     GetPage(name: posDevices, page: () => const MerchantPosDevicesScreen()),
+    GetPage(name: operationsCenter, page: () => const MerchantOperationsCenterScreen()),
     GetPage(name: refunds, page: () => const MerchantRefundScreen()),
     GetPage(name: retailReturns, page: () => const MerchantRefundScreen()),
     GetPage(name: credit, page: () => const CreditDashboardScreen()),

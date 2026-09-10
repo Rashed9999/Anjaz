@@ -5,12 +5,15 @@ namespace App\Http\Controllers\Api\V1\Amial;
 use App\Http\Controllers\Controller;
 use App\Models\PosUser;
 use App\Models\Branch;
+use App\Models\Merchant\MerchantRole;
 use App\Models\User;
 use App\Models\MerchantSale;
 use App\Exceptions\UsageLimitExceededException;
 use App\Services\FeatureAccessService;
 use App\Services\UsageLimitService;
 use App\Services\AuditService;
+use App\Services\Merchant\MerchantPermissionService;
+use App\Services\Vertical\VerticalBootstrapService;
 use App\Support\Access\AccessConstants as A;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -36,6 +39,8 @@ class MerchantStaffController extends Controller
         private FeatureAccessService $access,
         private UsageLimitService $usage,
         private AuditService $audit,
+        private MerchantPermissionService $merchantPermissions,
+        private VerticalBootstrapService $verticals,
     ) {}
 
     /** يتأكّد أن الطالب تاجر يملك ميزة الموظفين. يعيد التاجر أو رداً بالخطأ. */
@@ -151,6 +156,9 @@ class MerchantStaffController extends Controller
             'password' => 'required|string|min:4|max:64',
             'permissions' => 'sometimes|array',
             'permissions.*' => 'string|max:40',
+            // مسارُ «مركز التشغيل»: المالك يختار دوراً حقيقياً أنشأه،
+            // بدلاً من قائمة واجهة لا يقرأها محرّك الصلاحيات.
+            'merchant_role_id' => 'sometimes|nullable|integer',
             'branch_id' => 'sometimes|nullable|integer',
         ]);
         if ($v->fails()) return $this->error('VALIDATION', $v->errors()->first(), 422);
@@ -168,8 +176,19 @@ class MerchantStaffController extends Controller
         $branchId = $this->branchId($m, $request->input('branch_id'), $request->has('branch_id'));
         if ($branchId instanceof JsonResponse) return $branchId;
 
+        // **إدارة الموظف تكتب المصدر الذي يقرأه حارس الصلاحيات.**
+        // القائمة النصية في `pos_users.permissions` تبقى توافقاً لمسارات
+        // قديمة فقط؛ أمّا موظف جديد فلا يولد بلا `merchant_user_roles`.
+        $assignedRole = $request->filled('merchant_role_id')
+            ? MerchantRole::where('id', $request->integer('merchant_role_id'))
+                ->where('merchant_user_id', $m->id)->where('is_active', true)->first()
+            : $this->cashierRole($m);
+        if (! $assignedRole) {
+            return $this->error('STAFF_ROLE_UNAVAILABLE', 'الدور المختار غير صالح أو غير نشط', 422);
+        }
+
         try {
-            $pos = DB::transaction(function () use ($request, $m, $employeeCode, $branchId) {
+            $pos = DB::transaction(function () use ($request, $m, $employeeCode, $branchId, $assignedRole) {
                 // القفل والحد هنا، لا في التطبيق: الموظف حساب وباقته مورد مستقل.
                 DB::table('users')->where('id', $m->id)->lockForUpdate()->first();
                 $this->usage->assertCanAddEmployee($m);
@@ -188,7 +207,7 @@ class MerchantStaffController extends Controller
                 }
                 $staffUser->save();
 
-                return PosUser::create([
+                $pos = PosUser::create([
                     'user_id' => $staffUser->id,
                     'merchant_user_id' => $m->id,
                     'pos_number' => $employeeCode,
@@ -197,6 +216,15 @@ class MerchantStaffController extends Controller
                     'permissions' => $request->input('permissions', []),
                     'branch_id' => $branchId,
                 ]);
+
+                $this->merchantPermissions->assign(
+                    merchant: $m,
+                    employee: $staffUser,
+                    role: $assignedRole,
+                    branchId: $branchId,
+                );
+
+                return $pos;
             });
         } catch (UsageLimitExceededException $e) {
             return $e->toJsonResponse();
@@ -208,12 +236,14 @@ class MerchantStaffController extends Controller
             'action' => 'MERCHANT_STAFF_CREATED', 'decision_code' => 'COMPLETED',
             'reason' => 'أُنشئ حساب موظّف للمنشأة',
             'context' => ['merchant_user_id' => $m->id, 'staff_id' => $pos->id,
-                'employee_code' => $pos->pos_number, 'branch_id' => $pos->branch_id],
+                'employee_code' => $pos->pos_number, 'branch_id' => $pos->branch_id,
+                'role_code' => $assignedRole->code],
         ]);
 
         return $this->ok([
             'id' => $pos->id,
             'employee_code' => $pos->pos_number,
+            'role_code' => $assignedRole->code,
             'login_hint' => "دخول الموظف: رقم التاجر + جوال التاجر + رمز الموظف {$pos->pos_number} + كلمة مروره",
         ], 'STAFF_CREATED', 'تم إنشاء الموظف', 201);
     }
@@ -414,6 +444,17 @@ class MerchantStaffController extends Controller
 
         return (clone $branches)->where('is_default', true)->value('id')
             ?? (clone $branches)->value('id');
+    }
+
+    /** دور البداية الأقل امتيازاً، وهو موجود في قوالب جميع الأنشطة. */
+    private function cashierRole(User $merchant): ?MerchantRole
+    {
+        $this->verticals->ensureRolesFor($merchant);
+
+        return MerchantRole::where('merchant_user_id', $merchant->id)
+            ->where('code', 'cashier')
+            ->where('is_active', true)
+            ->first();
     }
 
     private function uniqueSyntheticPhone(int $merchantId): string

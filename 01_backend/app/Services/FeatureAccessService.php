@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MerchantProfile;
 use App\Models\User;
+use App\Services\Merchant\MerchantPermissionService;
 use Illuminate\Support\Facades\DB;
 use App\Models\PosUser;
 use App\Support\Access\AccessConstants as A;
@@ -24,6 +25,10 @@ use App\Support\Access\CapabilityRegistry;
  */
 class FeatureAccessService
 {
+    public function __construct(
+        private readonly MerchantPermissionService $merchantPermissions,
+    ) {}
+
     /**
      * يُرجع كل البيانات اللازمة للواجهة:
      *   - role
@@ -174,6 +179,10 @@ class FeatureAccessService
             $features = $this->restrictToPosPermissions($features, $posUser);
         }
 
+        if ($actor === 'staff') {
+            $features = $this->restrictToMerchantRolePermissions($features, $user);
+        }
+
         $limits = in_array($actor, ['owner', 'pos'], true)
             ? AccessPresets::planLimits($plan) : [];
 
@@ -261,6 +270,33 @@ class FeatureAccessService
             $features,
             static fn (string $f): bool => in_array($f, $always, true)
                 || in_array($f, $granted, true),
+        ));
+    }
+
+    /**
+     * موظفُ الأدوار يرث خطةَ المنشأة ونشاطها، لا قائمةَ مالكها كاملة.
+     *
+     * يظل ما ليس قدرةَ تاجرٍ مسجّلةً (المحفظة والحساب الشخصي مثلاً) خارج
+     * هذه المصفوفة. أمّا كلُّ قدرةٍ يعلن سجلّها صلاحيّةً فتظهر فقط حين
+     * يملك الموظف إحدى صلاحياتها. هذا يطابق قرارَ `EntitlementService`
+     * الذي يعرِضه مركز الاستحقاقات، كي لا تقول شاشة التطبيق شيئاً ويقول
+     * مركز الصلاحيات شيئاً آخر.
+     *
+     * @param  array<int,string>  $features
+     * @return array<int,string>
+     */
+    private function restrictToMerchantRolePermissions(array $features, User $user): array
+    {
+        $granted = $this->merchantPermissions->effective($user);
+
+        return array_values(array_filter(
+            $features,
+            static function (string $feature) use ($granted): bool {
+                $capability = CapabilityRegistry::find($feature);
+
+                return $capability === null
+                    || $capability->satisfiedByPermissions($granted);
+            },
         ));
     }
 

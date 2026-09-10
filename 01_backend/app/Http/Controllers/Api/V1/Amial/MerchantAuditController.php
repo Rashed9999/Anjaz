@@ -113,8 +113,11 @@ class MerchantAuditController extends Controller
         $labels = [
             'branch_id' => 'معرّف الفرع', 'branch_name' => 'الفرع',
             'staff_id' => 'معرّف الموظف', 'employee_code' => 'رمز الموظف',
-            'device_id' => 'معرّف الجهاز', 'device_name' => 'اسم الجهاز',
+            'device_id' => 'معرّف الجهاز', 'pos_device_id' => 'معرّف جهاز نقطة البيع',
+            'device_name' => 'اسم الجهاز', 'merchant_user_id' => 'معرّف التاجر',
             'amount' => 'المبلغ', 'currency' => 'العملة', 'reference' => 'المرجع',
+            'request_id' => 'معرّف الطلب', 'request_path' => 'مسار الطلب',
+            'ip_address' => 'عنوان الشبكة',
             'old_branch_id' => 'الفرع السابق', 'new_branch_id' => 'الفرع الجديد',
         ];
         $out = [];

@@ -3,9 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
+use App\Models\Merchant\MerchantRole;
+use App\Models\Merchant\MerchantRolePermission;
+use App\Models\Merchant\MerchantUserRole;
 use App\Models\User;
 use App\Services\FeatureAccessService;
 use App\Support\Access\AccessConstants as A;
+use App\Support\Merchant\MerchantPermissions as P;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -203,6 +207,47 @@ class FeatureAccessTest extends TestCase
 
         $this->assertNotSame(-1, $limits['products'],
             '«الأعمال» بلا سقفِ منتجات — فما الذي تبيعه «مؤسسة»؟');
+    }
+
+    /** @test */
+    public function merchant_role_staff_inherits_the_business_but_not_the_owners_role_gated_capabilities(): void
+    {
+        $owner = User::factory()->create(['role' => A::ROLE_MERCHANT]);
+        MerchantProfile::create([
+            'user_id' => $owner->id,
+            'verification_status' => 'verified',
+            'business_type' => A::BIZ_RETAIL,
+            'subscription_plan' => A::PLAN_ENTERPRISE,
+        ]);
+
+        $staff = User::factory()->create(['role' => 'merchant_staff']);
+        $role = MerchantRole::create([
+            'merchant_user_id' => $owner->id,
+            'code' => 'staff_directory_reader',
+            'name_ar' => 'قارئ الموظفين',
+            'is_active' => true,
+        ]);
+        MerchantRolePermission::create([
+            'merchant_role_id' => $role->id,
+            'permission_code' => P::STAFF_VIEW,
+            'scope_type' => 'merchant',
+            'approval' => 'none',
+        ]);
+        MerchantUserRole::create([
+            'merchant_user_id' => $owner->id,
+            'user_id' => $staff->id,
+            'merchant_role_id' => $role->id,
+            'is_active' => true,
+        ]);
+
+        $access = $this->svc->accessFor($staff);
+
+        $this->assertSame('staff', $access['actor']);
+        $this->assertSame(A::BIZ_RETAIL, $access['business_type']);
+        $this->assertSame(A::PLAN_ENTERPRISE, $access['subscription_plan']);
+        $this->assertContains(A::F_EMPLOYEES, $access['features']);
+        $this->assertNotContains(A::F_RBAC, $access['features']);
+        $this->assertNotContains(A::F_INVENTORY, $access['features']);
     }
 
     /** @test */

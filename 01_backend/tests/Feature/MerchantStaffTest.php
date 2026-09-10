@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\MerchantProfile;
+use App\Models\Merchant\MerchantRole;
+use App\Models\Merchant\MerchantUserRole;
 use App\Models\PosUser;
 use App\Models\User;
 use App\Services\SubscriptionService;
@@ -64,6 +66,20 @@ class MerchantStaffTest extends TestCase
             'pos_number' => 'POS-01', 'display_name' => 'أحمد', 'is_active' => true,
         ]);
 
+        // **موظفٌ بلا دورٍ حديث يرى شاشةً قد تسمح له ثمّ يردُّه الخادم.**
+        // حقلُ `permissions` القديم يبقى توافقاً مؤقتاً، أمّا إنفاذ
+        // الصلاحيات القطاعية فيقرأ `merchant_user_roles`. لذلك لا يكفي
+        // إنشاء صفّ POS: يجب أن يولد معه إسناد «كاشير» حقيقي للمنشأة.
+        $pos = PosUser::findOrFail($staffId);
+        $cashier = MerchantRole::where('merchant_user_id', $this->merchant->id)
+            ->where('code', 'cashier')->firstOrFail();
+        $this->assertTrue(MerchantUserRole::where([
+            'merchant_user_id' => $this->merchant->id,
+            'user_id' => $pos->user_id,
+            'merchant_role_id' => $cashier->id,
+            'is_active' => true,
+        ])->exists(), 'أُنشئ الموظف بلا إسناد دور حديث؛ ستختلف الواجهة عن حارس الخادم');
+
         // ══════════════════════════════════════════════════════════════
         // **والعقدُ الجديد اسمُه `employee_code`.**
         //
@@ -98,5 +114,33 @@ class MerchantStaffTest extends TestCase
         $body = ['pos_number' => 'X1', 'display_name' => 'أ', 'password' => '1234'];
         $this->postJson('/api/v1/amial/merchant/staff', $body)->assertStatus(201);
         $this->postJson('/api/v1/amial/merchant/staff', $body)->assertStatus(422);
+    }
+
+    /** @test تعطيل الموظف يزيل عضويته الحديثة وحده ويحفظ عضوية زميله. */
+    public function disabling_staff_deactivates_only_its_modern_role_assignments(): void
+    {
+        $admin = User::factory()->create(['type' => 0, 'zone_code' => 'SOUTH']);
+        app(SubscriptionService::class)->changePlan($this->merchant, A::PLAN_BUSINESS, $admin);
+        Passport::actingAs($this->merchant->fresh(), [], 'api');
+
+        $firstId = $this->postJson('/api/v1/amial/merchant/staff', [
+            'employee_code' => 'EMP-01', 'display_name' => 'الأول', 'password' => 'secret1',
+        ])->assertCreated()->json('meta.id');
+        $secondId = $this->postJson('/api/v1/amial/merchant/staff', [
+            'employee_code' => 'EMP-02', 'display_name' => 'الثاني', 'password' => 'secret2',
+        ])->assertCreated()->json('meta.id');
+
+        $first = PosUser::findOrFail($firstId);
+        $second = PosUser::findOrFail($secondId);
+
+        $this->postJson("/api/v1/amial/merchant/staff/{$firstId}/toggle")
+            ->assertOk()->assertJsonPath('meta.is_active', false);
+
+        $this->assertFalse(MerchantUserRole::where('merchant_user_id', $this->merchant->id)
+            ->where('user_id', $first->user_id)->where('is_active', true)->exists(),
+            'الموظف المعطّل بقيت له عضوية حديثة نافذة');
+        $this->assertTrue(MerchantUserRole::where('merchant_user_id', $this->merchant->id)
+            ->where('user_id', $second->user_id)->where('is_active', true)->exists(),
+            'تعطيل موظف واحد عطّل عضوية زميله');
     }
 }
