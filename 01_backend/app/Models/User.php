@@ -175,6 +175,17 @@ class User extends Authenticatable
     protected static function booted(): void
     {
         static::saving(function (User $user): void {
+            // AMIAL-PHONE-IDENTITY-001 — القيد على النص الخام لا يرى أن
+            // +967 و00967 و967 تمثل هاتفاً واحداً. نحفظ مفتاحاً قانونياً
+            // مستقلاً للهوية الرقمية، بينما يبقى `phone` للتوافق مع
+            // المسارات والبيانات التاريخية التي تقرأه اليوم.
+            if (\Illuminate\Support\Facades\Schema::hasColumn('users', 'phone_canonical')) {
+                $phone = (string) ($user->phone ?? '');
+                $user->phone_canonical = $phone === ''
+                    ? null
+                    : \App\Support\Phone::canonical($phone, $user->dial_country_code ?? null);
+            }
+
             $current = $user->role ?? null;
             if ($current !== null && $current !== '' && $current !== \App\Support\Access\AccessConstants::ROLE_USER) {
                 return; // دور صريح مضبوط — لا نلمسه

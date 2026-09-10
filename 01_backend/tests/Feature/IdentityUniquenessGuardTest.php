@@ -169,4 +169,16 @@ class IdentityUniquenessGuardTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
     }
+
+    /** @test */
+    public function differently_written_versions_of_one_phone_cannot_create_two_accounts(): void
+    {
+        // الرقم نفسه يرد من التطبيق، واتساب، ولوحة الإدارة بصيغ مختلفة.
+        // فالقيد على النص الخام وحده يسمح بـ +967 و00967 كحسابين مستقلين.
+        $this->account(null, '967771234567');
+
+        $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
+
+        $this->account(null, '+967771234567');
+    }
 }
