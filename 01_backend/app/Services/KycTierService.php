@@ -27,6 +27,14 @@ use RuntimeException;
  */
 class KycTierService
 {
+    private function verifiedTier(User $user): int
+    {
+        $status = app(\App\Services\Kyc\KycAccountStatusService::class)->for($user);
+        if ($status['update_required']) return min(1, $status['tier']);
+        if ($status['tier'] >= 2 && !$status['is_verified']) return 0;
+        if ($status['tier'] >= 1 && !(bool) ($user->is_phone_verified ?? false)) return 0;
+        return $status['tier'];
+    }
     /**
      * حدود افتراضية (تُحمَّل من DB، fallback هنا).
      */
@@ -92,7 +100,7 @@ class KycTierService
      */
     private function getLimitsForUser(User $user): array
     {
-        $limits = $this->getLimits((int) ($user->kyc_tier ?? 0));
+        $limits = $this->getLimits($this->verifiedTier($user));
         $override = is_array($user->limit_override)
             ? $user->limit_override
             : (json_decode((string) $user->limit_override, true) ?: []);

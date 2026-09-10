@@ -46,13 +46,11 @@ class MeController extends Controller
             'update_required' => false,
         ];
         if ((int) $user->type === CUSTOMER_TYPE) {
-            $verification['status'] = match ((int) ($user->is_kyc_verified ?? 0)) {
-                1 => 'verified',
-                2 => 'rejected',
-                default => 'pending',
-            };
-            $verification['is_verified'] = (int) ($user->is_kyc_verified ?? 0) === 1;
-            $verification['tier'] = (string) ((int) ($user->kyc_tier ?? 0));
+            $kyc = app(\App\Services\Kyc\KycAccountStatusService::class)->for($user);
+            $verification['status'] = $kyc['state'];
+            $verification['is_verified'] = $kyc['is_verified'];
+            $verification['tier'] = (string) $kyc['tier'];
+            $verification['update_required'] = $kyc['update_required'];
             $verification['update_required'] = \Illuminate\Support\Facades\Schema::hasColumn('users', 'kyc_update_required')
                 && (int) ($user->kyc_update_required ?? 0) === 1;
         } elseif ($merchant) {
