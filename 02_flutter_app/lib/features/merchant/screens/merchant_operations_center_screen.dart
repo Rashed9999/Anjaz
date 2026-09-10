@@ -172,7 +172,7 @@ class _MerchantOperationsCenterScreenState
                         }
                       }),
                     );
-                  }),
+                  }).toList(),
                 )),
               ]),
             ),
@@ -391,8 +391,8 @@ class _MerchantOperationsCenterScreenState
   ));
 
   Widget _overview() {
-    final counts = _summary['counts'] is Map ? Map<String, dynamic>.from(_summary['counts']) : {};
-    final setup = _summary['setup'] is Map ? Map<String, dynamic>.from(_summary['setup']) : {};
+    final counts = _summary['counts'] is Map ? Map<String, dynamic>.from(_summary['counts']) : <String, dynamic>{};
+    final setup = _summary['setup'] is Map ? Map<String, dynamic>.from(_summary['setup']) : <String, dynamic>{};
     return RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
       _hero(counts), const SizedBox(height: 16),
       const Text('مسار إعداد الكاشير', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
