@@ -59,14 +59,14 @@ class _RetailLocationsScreenState extends State<RetailLocationsScreen> {
               DropdownButtonFormField<int>(
                 initialValue: branchId,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'فرع المتجر', border: OutlineInputBorder()),
+                decoration: InputDecoration(labelText: 'retail_store_branch'.tr, border: const OutlineInputBorder()),
                 items: branches.branches.where((b) => b['is_active'] == true)
                     .map((b) => DropdownMenuItem<int>(value: b['id'] as int, child: Text('${b['name']}'))).toList(),
                 onChanged: (v) => setLocal(() => branchId = v),
               ),
               const SizedBox(height: 4),
-              const Text('المستودع لا يُعامل كفرع مبيعات، لكن يمكن تحديد الفرع الذي يخدمه.',
-                  style: TextStyle(fontSize: 11, color: AmialColors.textMuted)),
+              Text('retail_warehouse_branch_hint'.tr,
+                  style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
             ],
           ]),
         ),

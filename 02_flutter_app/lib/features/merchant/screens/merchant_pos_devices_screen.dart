@@ -106,7 +106,7 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
             DropdownButtonFormField<int>(
               initialValue: branchId,
               isExpanded: true,
-              decoration: const InputDecoration(labelText: 'فرع الجهاز', border: OutlineInputBorder()),
+              decoration: InputDecoration(labelText: 'merchant_device_branch'.tr, border: const OutlineInputBorder()),
               items: _branches.branches.where((b) => b['is_active'] == true)
                   .map((b) => DropdownMenuItem<int>(value: b['id'] as int, child: Text('${b['name']}'))).toList(),
               onChanged: (v) => setLocal(() => branchId = v),
@@ -474,8 +474,8 @@ class _MerchantPosDevicesScreenState extends State<MerchantPosDevicesScreen> {
                       ? 'آخر نشاط: ${_when(d['last_seen_at'])}'
                       : 'أُلغي: ${_when(d['revoked_at'])}'),
                   Text(d['branch_name'] != null
-                      ? 'الفرع: ${d['branch_name']}'
-                      : 'الفرع غير محدد'),
+                      ? 'audit_branch_name'.trParams({'name': '${d['branch_name']}'})
+                      : 'merchant_branch_unassigned'.tr),
                   if (active && live > 0)
                     Text('جلسات مفتوحة: $live',
                         style: const TextStyle(color: AmialColors.primary)),

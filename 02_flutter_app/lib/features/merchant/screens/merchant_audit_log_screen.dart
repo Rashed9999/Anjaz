@@ -54,7 +54,7 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
       };
 
   String _status(Map<String, dynamic> e) =>
-      '${e['decision_label'] ?? e['decision_code'] ?? 'حدث مسجّل'}';
+      '${e['decision_label'] ?? e['decision_code'] ?? 'audit_recorded_event'.tr}';
 
   String _dt(String? iso) {
     if (iso == null) return '';
@@ -114,12 +114,14 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
         subtitle: Text([
           _status(e),
-          if (e['actor_label'] != null) 'بواسطة: ${e['actor_label']}',
-          if (e['branch'] is Map) 'الفرع: ${(e['branch'] as Map)['name']}',
+          if (e['actor_label'] != null)
+            'audit_by_actor'.trParams({'name': '${e['actor_label']}'}),
+          if (e['branch'] is Map)
+            'audit_branch_name'.trParams({'name': '${(e['branch'] as Map)['name']}'}),
           if (e['reason'] != null && '${e['reason']}'.trim().isNotEmpty) '${e['reason']}',
           _dt('${e['created_at']}'),
         ].where((s) => s.isNotEmpty).join('\n'), style: const TextStyle(fontSize: 11)),
-        trailing: Text('${e['severity_label'] ?? 'معلومة'}',
+        trailing: Text('${e['severity_label'] ?? 'audit_information'.tr}',
             style: TextStyle(fontSize: 10, color: c, fontWeight: FontWeight.bold)),
         isThreeLine: true,
         onTap: () => _showDetails(e),
@@ -135,20 +137,20 @@ class _MerchantAuditLogScreenState extends State<MerchantAuditLogScreen> {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('${e['action_label'] ?? 'تفاصيل التدقيق'}'),
+        title: Text('${e['action_label'] ?? 'audit_details'.tr}'),
         content: SingleChildScrollView(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _detail('الحالة', _status(e)),
-            _detail('المنفّذ', '${e['actor_label'] ?? '—'}'),
-            if (e['branch'] is Map) _detail('الفرع', '${(e['branch'] as Map)['name'] ?? '—'}'),
+            _detail('audit_status'.tr, _status(e)),
+            _detail('audit_actor'.tr, '${e['actor_label'] ?? '—'}'),
+            if (e['branch'] is Map) _detail('audit_branch'.tr, '${(e['branch'] as Map)['name'] ?? '—'}'),
             if (e['reason'] != null && '${e['reason']}'.trim().isNotEmpty)
-              _detail('التفاصيل', '${e['reason']}'),
-            if (e['transaction_id'] != null) _detail('مرجع المعاملة', '${e['transaction_id']}'),
-            ...details.map((d) => _detail('${d['label'] ?? 'تفصيل'}', '${d['value'] ?? '—'}')),
-            _detail('وقت التسجيل', _dt('${e['created_at']}')),
+              _detail('audit_reason'.tr, '${e['reason']}'),
+            if (e['transaction_id'] != null) _detail('audit_transaction_reference'.tr, '${e['transaction_id']}'),
+            ...details.map((d) => _detail('${d['label'] ?? 'audit_detail'.tr}', '${d['value'] ?? '—'}')),
+            _detail('audit_recorded_at'.tr, _dt('${e['created_at']}')),
           ]),
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق'))],
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text('cancel'.tr))],
       ),
     );
   }

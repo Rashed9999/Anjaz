@@ -65,7 +65,7 @@ class DeployAndMeasureAutomationGuardTest extends TestCase
     // ══════════════════════════════════════════════════════════════════
 
     /** @test */
-    public function the_deploy_job_waits_for_every_gate(): void
+    public function the_deploy_job_waits_for_every_web_release_gate(): void
     {
         // ══════════════════════════════════════════════════════════════
         // **ونشرٌ يسبق الفحصَ أسوأ من نشرٍ يدويّ.** اليدويُّ بطيءٌ ويشحن
@@ -73,10 +73,17 @@ class DeployAndMeasureAutomationGuardTest extends TestCase
         // ══════════════════════════════════════════════════════════════
         $needs = (array) ($this->deployJob()['needs'] ?? []);
 
-        foreach (['structural', 'backend', 'flutter', 'docker'] as $gate) {
+        // الموقع (Laravel/Docker) والتطبيق منتجان مستقلان: فشل Flutter
+        // يمنع APK معيباً، ولا يمنع إصلاحاً خادمياً اجتاز بواباته من الوصول
+        // إلى الموقع. لذلك لا يُضاف إلى `needs` الخاصة بـCoolify.
+        foreach (['structural', 'backend', 'docker'] as $gate) {
             $this->assertContains($gate, $needs,
                 "النشرُ لا ينتظر «{$gate}» — فيُشحَن ما لم يُفحَص");
         }
+
+        $this->assertNotContains('flutter', $needs,
+            'نشر الموقع ينتظر Flutter رغم استقلال التطبيق عن خدمة الويب؛ '
+            . 'فيتعطّل إصلاح الخادم بسبب اختبار APK لا يخصّه');
     }
 
     /** @test */
