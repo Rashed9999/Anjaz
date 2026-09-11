@@ -29,6 +29,13 @@ class EmailRegistrationController extends Controller
 
     public function register(Request $request): JsonResponse
     {
+        if ((string) config('amial_otp.registration_channel', 'email') !== 'email') {
+            return response()->json(['errors' => [[
+                'code' => 'email_registration_disabled',
+                'message' => 'التسجيل عبر البريد غير مفعّل حالياً.',
+            ]]], 409);
+        }
+
         $v = Validator::make($request->all(), [
             'email' => 'required|email|max:320',
             'email_challenge_id' => 'required|string|size:26',
@@ -119,8 +126,15 @@ class EmailRegistrationController extends Controller
                     ]]], 500);
                 }
 
+                $verifiedFields = [];
+                if (Schema::hasColumn('users', 'is_email_verified')) {
+                    $verifiedFields['is_email_verified'] = true;
+                }
                 if (Schema::hasColumn('users', 'email_verified_at')) {
-                    $user->forceFill(['email_verified_at' => now()])->saveQuietly();
+                    $verifiedFields['email_verified_at'] = now();
+                }
+                if ($verifiedFields !== []) {
+                    $user->forceFill($verifiedFields)->saveQuietly();
                 }
 
                 DB::table('otp_challenges')->where('id', $challenge->id)->update([
