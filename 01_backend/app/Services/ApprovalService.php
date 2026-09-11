@@ -194,13 +194,16 @@ class ApprovalService
             }),
 
             // AMIAL-PIN-RECOVERY-002 — موظف الدعم لا يصفّر PIN ولا يرى بديلاً له.
-            // بعد اعتماد موظف ثانٍ يولّد الخادم OTP عشوائياً ويرسله إلى بريد
-            // العميل مباشرة. يبقى PIN الحالي كما هو حتى يثبت العميل ملكية البريد
-            // ثم يختار PIN جديداً بنفسه من endpoint الاستعادة.
+            // بعد اعتماد موظف ثانٍ يولّد الخادم OTP عشوائياً ويرسله إلى البريد
+            // الموثّق للعميل مباشرة. يبقى PIN الحالي كما هو حتى يثبت العميل
+            // ملكية البريد ثم يختار PIN جديداً بنفسه من endpoint الاستعادة.
             'reset_pin' => tap($user, function (User $u) use ($req, $checker) {
                 $email = mb_strtolower(trim((string) $u->email));
                 if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
                     throw new \DomainException('PIN_RECOVERY_EMAIL_REQUIRED');
+                }
+                if (Schema::hasColumn('users', 'is_email_verified') && !(bool) $u->is_email_verified) {
+                    throw new \DomainException('PIN_RECOVERY_EMAIL_NOT_VERIFIED');
                 }
 
                 $issued = app(EmailOtpService::class)->issue(
