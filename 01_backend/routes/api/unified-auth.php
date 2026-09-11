@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\Auth\EmailOtpController;
+use App\Http\Controllers\Api\V1\Auth\EmailRegistrationController;
 use App\Http\Controllers\Api\V1\Auth\UnifiedAuthController;
 use Illuminate\Support\Facades\Route;
 
@@ -20,6 +21,8 @@ Route::prefix('auth')->name('amial.auth.')->middleware(['amial.rate-limit:auth_l
         ->name('email-otp.request');
     Route::post('/email-otp/verify', [EmailOtpController::class, 'verifyCode'])
         ->name('email-otp.verify');
+    Route::post('/register/email', [EmailRegistrationController::class, 'register'])
+        ->name('register.email');
     Route::post('/password-reset/email', [EmailOtpController::class, 'resetPassword'])
         ->name('password-reset.email');
     Route::post('/pin-recovery/email', [EmailOtpController::class, 'resetPin'])
