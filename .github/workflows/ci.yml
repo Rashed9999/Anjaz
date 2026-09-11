@@ -145,12 +145,24 @@ jobs:
           echo "AMIAL_PII_ENCRYPTION_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
           echo "AMIAL_PII_BLIND_INDEX_KEY=$(php -r 'echo base64_encode(random_bytes(32));')" >> .env
 
-      - name: تشغيل كل الاختبارات (747)
+      - name: تشغيل كل اختبارات الخادم
         working-directory: 01_backend
         run: |
-          # لا نُغرق سجل Actions بالمخرجات المكررة؛ عند الفشل نعرض خاتمة
-          # التقرير التي تحتوي أسماء الاختبارات والاستثناءات الفعلية.
-          php artisan test > phpunit_report.txt 2>&1 || {
+          # الذيل وحده أخفى 40 إخفاقاً؛ JUnit يعرض كل سبب دون تكرار المكدسات.
+          php artisan test --log-junit=phpunit_report.xml > phpunit_report.txt 2>&1 || {
+            python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          report = Path('phpunit_report.xml')
+          if report.exists():
+              for case in ET.parse(report).iter('testcase'):
+                  for problem in case:
+                      if problem.tag in ('failure', 'error'):
+                          print(f"FAILED: {case.get('class')}::{case.get('name')}")
+                          print('\n'.join((problem.text or problem.get('message', '')).splitlines()[:12])[:1800])
+          else:
+              print('JUnit report unavailable; see process output below.')
+          PY
             echo '::error::فشلت اختبارات PHPUnit — آخر 160 سطراً:'
             tail -n 160 phpunit_report.txt
             exit 1

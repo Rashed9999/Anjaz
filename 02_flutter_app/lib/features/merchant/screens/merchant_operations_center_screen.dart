@@ -5,6 +5,7 @@ import 'package:amial_pay/features/access/controllers/access_controller.dart';
 import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_direction.dart';
 
 /// مدخل المالك الواحد للدور والموظف والجهاز والوردية.
 ///
@@ -89,7 +90,7 @@ class _MerchantOperationsCenterScreenState
       if (summaryReply.statusCode != 200 || summaryReply.body is! Map ||
           summaryReply.body['success'] != true) {
         setState(() => _error = _message(summaryReply.body) ??
-            'تعذّر فتح مركز تشغيل المنشأة');
+            'ops_load_failed'.tr);
         return;
       }
 
@@ -98,13 +99,13 @@ class _MerchantOperationsCenterScreenState
       const requiredCounts = ['active_employees', 'active_device_sessions', 'open_shifts'];
       if (counts is! Map || summary['open_shifts'] is! List ||
           requiredCounts.any((key) => counts[key] is! num || counts[key] < 0)) {
-        setState(() => _error = 'تعذّر قراءة ملخص التشغيل؛ أعد المحاولة');
+        setState(() => _error = 'ops_summary_invalid'.tr);
         return;
       }
       final sectionErrors = <String, String>{};
       final sectionStatuses = <String, int?>{};
       final sections = ['roles', 'staff', 'devices', if (canSelectBranches) 'branches'];
-      final labels = ['الأدوار', 'الموظفين', 'الأجهزة', if (canSelectBranches) 'الفروع'];
+      final labels = ['ops_roles'.tr, 'ops_staff_load_label'.tr, 'ops_devices'.tr, if (canSelectBranches) 'ops_branches'.tr];
       for (var i = 0; i < sections.length; i++) {
         final reply = replies[i + 1];
         if (reply.statusCode != 200 || reply.body is! Map ||
@@ -113,8 +114,8 @@ class _MerchantOperationsCenterScreenState
             (sections[i] == 'roles' && _payload(reply.body)['permission_catalogue'] is! List)) {
           sectionStatuses[sections[i]] = reply.statusCode;
           sectionErrors[sections[i]] = [402, 403].contains(reply.statusCode)
-              ? (_message(reply.body) ?? 'هذه الخدمة غير متاحة لهذا الحساب')
-              : 'تعذّر تحميل ${labels[i]}؛ أعد المحاولة';
+              ? (_message(reply.body) ?? 'ops_unavailable'.tr)
+              : 'ops_section_failed'.trParams({'section': labels[i]});
         }
       }
       final rolesPayload = _payload(replies[1].body);
@@ -133,7 +134,7 @@ class _MerchantOperationsCenterScreenState
         _branches = _rows(branchesPayload['branches']);
       });
     } catch (_) {
-      if (mounted) setState(() => _error = 'تعذّر الاتصال بالخدمة');
+      if (mounted) setState(() => _error = 'ops_connection_failed'.tr);
     } finally {
       _loadingRequest = false;
       if (mounted) setState(() => _loading = false);
@@ -205,7 +206,7 @@ class _MerchantOperationsCenterScreenState
     final chosen = <String>{};
     final groups = <String, List<Map<String, dynamic>>>{};
     for (final permission in _permissionCatalogue) {
-      final group = '${permission['group'] ?? 'أخرى'}';
+      final group = '${permission['group'] ?? 'ops_other'.tr}';
       groups.putIfAbsent(group, () => []).add(permission);
     }
 
@@ -213,16 +214,16 @@ class _MerchantOperationsCenterScreenState
       controllers: [name, description],
       builder: (dialogContext) => StatefulBuilder(
         builder: (_, setDialog) => AlertDialog(
-          title: const Text('إنشاء دور تشغيلي'),
+          title: Text('ops_create_role_title'.tr),
           content: SizedBox(
             width: double.maxFinite,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 TextField(
                   controller: name,
-                  decoration: const InputDecoration(
-                    labelText: 'اسم الدور',
-                    hintText: 'كاشير',
+                  decoration: InputDecoration(
+                    labelText: 'ops_role_name'.tr,
+                    hintText: 'ops_cashier'.tr,
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -230,15 +231,15 @@ class _MerchantOperationsCenterScreenState
                 TextField(
                   controller: description,
                   maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'وصف مختصر (اختياري)',
+                  decoration: InputDecoration(
+                    labelText: 'ops_description'.tr,
                     border: OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Align(
+                Align(
                   alignment: AlignmentDirectional.centerStart,
-                  child: Text('الأفعال المسموحة',
+                  child: Text('ops_allowed_actions'.tr,
                       style: TextStyle(fontWeight: FontWeight.bold)),
                 ),
                 const SizedBox(height: 6),
@@ -266,9 +267,9 @@ class _MerchantOperationsCenterScreenState
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('إلغاء')),
+                child: Text('ops_cancel'.tr)),
             FilledButton(onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('إنشاء الدور')),
+                child: Text('ops_create_role'.tr)),
           ],
         ),
       ),
@@ -277,7 +278,7 @@ class _MerchantOperationsCenterScreenState
     final roleDescription = description.text.trim();
     if (confirmed != true || !mounted) return;
     if (roleName.isEmpty || chosen.isEmpty) {
-      _notice('اكتب اسم الدور واختر فعلاً واحداً على الأقل');
+      _notice('ops_role_validation'.tr);
       return;
     }
 
@@ -285,13 +286,13 @@ class _MerchantOperationsCenterScreenState
       'name_ar': roleName,
       if (roleDescription.isNotEmpty) 'description_ar': roleDescription,
       'permissions': chosen.toList(),
-    }, 'تعذّر إنشاء الدور');
+    }, 'ops_create_role_failed'.tr);
     if (!mounted || data == null) return;
     if (data['role'] is Map && data['role']['id'] != null) {
-      _notice('تم إنشاء الدور', success: true);
+      _notice('ops_role_created'.tr, success: true);
       _load();
     } else {
-      _notice('لم يصل تأكيد إنشاء الدور؛ حدّث القائمة قبل المحاولة مجدداً');
+      _notice('ops_role_unconfirmed'.tr);
     }
   }
 
@@ -300,7 +301,7 @@ class _MerchantOperationsCenterScreenState
     final activeRoles = _roles.where((role) => role['is_active'] == true).toList();
     if (activeRoles.isEmpty) {
       _tabs.animateTo(1);
-      _notice('أنشئ دوراً أولاً ثم أضف الموظف');
+      _notice('ops_role_required'.tr);
       return;
     }
     final name = TextEditingController();
@@ -314,21 +315,21 @@ class _MerchantOperationsCenterScreenState
       controllers: [name, code, password],
       builder: (dialogContext) => StatefulBuilder(
         builder: (_, setDialog) => AlertDialog(
-          title: const Text('إضافة موظف للدور'),
+          title: Text('ops_add_employee_title'.tr),
           content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
             TextField(controller: name,
-                decoration: const InputDecoration(labelText: 'اسم الموظف', border: OutlineInputBorder())),
+                decoration: InputDecoration(labelText: 'ops_employee_name'.tr, border: OutlineInputBorder())),
             const SizedBox(height: 10),
             TextField(controller: code,
-                decoration: const InputDecoration(labelText: 'رمز الموظف', hintText: 'CAS-01', border: OutlineInputBorder())),
+                decoration: InputDecoration(labelText: 'ops_employee_code'.tr, hintText: 'CAS-01', border: OutlineInputBorder())),
             const SizedBox(height: 10),
             TextField(controller: password, obscureText: true,
-                decoration: const InputDecoration(labelText: 'كلمة المرور', border: OutlineInputBorder())),
+                decoration: InputDecoration(labelText: 'ops_password'.tr, border: OutlineInputBorder())),
             const SizedBox(height: 10),
             DropdownButtonFormField<int>(
               initialValue: roleId,
               isExpanded: true,
-              decoration: const InputDecoration(labelText: 'الدور', border: OutlineInputBorder()),
+              decoration: InputDecoration(labelText: 'ops_role'.tr, border: OutlineInputBorder()),
               items: activeRoles.map((role) => DropdownMenuItem<int>(
                 value: _number(role['id']), child: Text('${role['name_ar'] ?? ''}'))).toList(),
               onChanged: (value) => setDialog(() => roleId = value),
@@ -338,7 +339,7 @@ class _MerchantOperationsCenterScreenState
               DropdownButtonFormField<int>(
                 initialValue: branchId,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'فرع العمل', border: OutlineInputBorder()),
+                decoration: InputDecoration(labelText: 'ops_work_branch'.tr, border: OutlineInputBorder()),
                 items: activeBranches
                     .map((branch) => DropdownMenuItem<int>(
                       value: _number(branch['id']), child: Text('${branch['name'] ?? ''}'))).toList(),
@@ -347,8 +348,8 @@ class _MerchantOperationsCenterScreenState
             ],
           ])),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('إلغاء')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('إنشاء الموظف')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text('ops_cancel'.tr)),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text('ops_create_employee'.tr)),
           ],
         ),
       ),
@@ -358,7 +359,7 @@ class _MerchantOperationsCenterScreenState
     final employeePassword = password.text;
     if (confirmed != true || !mounted) return;
     if (employeeName.isEmpty || employeeCode.isEmpty || employeePassword.length < 4 || roleId == null) {
-      _notice('أكمل بيانات الموظف والدور');
+      _notice('ops_employee_validation'.tr);
       return;
     }
 
@@ -368,13 +369,13 @@ class _MerchantOperationsCenterScreenState
       'password': employeePassword,
       'merchant_role_id': roleId,
       if (branchId != null) 'branch_id': branchId,
-    }, 'تعذّر إنشاء الموظف');
+    }, 'ops_create_employee_failed'.tr);
     if (!mounted || data == null) return;
     if (data['id'] != null) {
-      _notice('تم إنشاء الموظف وربطه بالدور', success: true);
+      _notice('ops_employee_created'.tr, success: true);
       _load();
     } else {
-      _notice('لم يصل تأكيد إنشاء الموظف؛ حدّث القائمة قبل المحاولة مجدداً');
+      _notice('ops_employee_unconfirmed'.tr);
     }
   }
 
@@ -387,18 +388,18 @@ class _MerchantOperationsCenterScreenState
       controllers: [name],
       builder: (dialogContext) => StatefulBuilder(
         builder: (_, setDialog) => AlertDialog(
-          title: const Text('تفعيل جهاز نقطة بيع'),
+          title: Text('ops_activate_device_title'.tr),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('أنشئ رمزاً مؤقتاً ثم أدخله على جهاز الكاشير نفسه. لا يصبح الجهاز مقعداً نشطاً قبل تفعيله.'),
+            Text('ops_activation_intro'.tr),
             const SizedBox(height: 12),
             TextField(controller: name,
-                decoration: const InputDecoration(labelText: 'اسم الجهاز', hintText: 'كاشير الواجهة', border: OutlineInputBorder())),
+                decoration: InputDecoration(labelText: 'ops_device_name'.tr, hintText: 'ops_device_hint'.tr, border: OutlineInputBorder())),
             if (activeBranches.isNotEmpty) ...[
               const SizedBox(height: 10),
               DropdownButtonFormField<int>(
                 initialValue: branchId,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'فرع الجهاز', border: OutlineInputBorder()),
+                decoration: InputDecoration(labelText: 'ops_device_branch'.tr, border: OutlineInputBorder()),
                 items: activeBranches
                     .map((branch) => DropdownMenuItem<int>(
                       value: _number(branch['id']), child: Text('${branch['name'] ?? ''}'))).toList(),
@@ -407,8 +408,8 @@ class _MerchantOperationsCenterScreenState
             ],
           ]),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('إلغاء')),
-            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('إنشاء الرمز')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: Text('ops_cancel'.tr)),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: Text('ops_create_code'.tr)),
           ],
         ),
       ),
@@ -416,14 +417,14 @@ class _MerchantOperationsCenterScreenState
     final deviceName = name.text.trim();
     if (confirmed != true || !mounted) return;
     if (deviceName.isEmpty) {
-      _notice('اكتب اسماً يميز الجهاز');
+      _notice('ops_device_validation'.tr);
       return;
     }
 
     final data = await _post('/api/v1/amial/merchant/pos-devices/activation-codes', {
       'display_name': deviceName,
       if (branchId != null) 'branch_id': branchId,
-    }, 'تعذّر إنشاء رمز التفعيل');
+    }, 'ops_create_code_failed'.tr);
     if (!mounted || data == null) return;
     final activationCode = '${data['activation_code'] ?? ''}';
     if (activationCode.isNotEmpty) {
@@ -431,37 +432,37 @@ class _MerchantOperationsCenterScreenState
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('رمز تفعيل الجهاز'),
+          title: Text('ops_activation_code'.tr),
           content: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('من جهاز الكاشير افتح التطبيق ثم اختر «تفعيل جهاز نقطة البيع» وأدخل الرمز خلال 15 دقيقة.'),
+            Text('ops_activation_instructions'.tr),
             const SizedBox(height: 16),
             SelectableText(activationCode,
                 style: const TextStyle(fontSize: 26, letterSpacing: 3, fontWeight: FontWeight.bold, color: AmialColors.primary)),
           ]),
-          actions: [FilledButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('تم'))],
+          actions: [FilledButton(onPressed: () => Navigator.pop(dialogContext), child: Text('ops_done'.tr))],
         ),
       );
       _load();
     } else {
-      _notice('لم يصل رمز التفعيل؛ حدّث البيانات قبل المحاولة مجدداً');
+      _notice('ops_code_unconfirmed'.tr);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: appTextDirection(),
       child: Scaffold(
         backgroundColor: AmialColors.background,
         appBar: AppBar(
-          title: const Text('مركز تشغيل المنشأة'),
-          actions: [IconButton(onPressed: _saving || _loading ? null : _load, tooltip: 'تحديث', icon: const Icon(Icons.refresh))],
+          title: Text('ops_title'.tr),
+          actions: [IconButton(onPressed: _saving || _loading ? null : _load, tooltip: 'ops_refresh'.tr, icon: const Icon(Icons.refresh))],
           bottom: TabBar(
             controller: _tabs,
             isScrollable: true,
-            tabs: const [
-              Tab(text: 'نظرة عامة'), Tab(text: 'الأدوار'), Tab(text: 'الموظفون'),
-              Tab(text: 'الأجهزة'), Tab(text: 'الورديات'), Tab(text: 'السجل'),
+            tabs: [
+              Tab(text: 'ops_overview'.tr), Tab(text: 'ops_roles'.tr), Tab(text: 'ops_staff'.tr),
+              Tab(text: 'ops_devices'.tr), Tab(text: 'ops_shifts'.tr), Tab(text: 'ops_audit'.tr),
             ],
           ),
         ),
@@ -482,7 +483,7 @@ class _MerchantOperationsCenterScreenState
     child: Column(mainAxisSize: MainAxisSize.min, children: [
       const Icon(Icons.lock_outline, size: 54, color: AmialColors.yellowDark),
       const SizedBox(height: 12), Text(_error!, textAlign: TextAlign.center), const SizedBox(height: 14),
-      OutlinedButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: const Text('إعادة المحاولة')),
+      OutlinedButton.icon(onPressed: _load, icon: const Icon(Icons.refresh), label: Text('ops_retry'.tr)),
     ]),
   ));
 
@@ -495,15 +496,15 @@ class _MerchantOperationsCenterScreenState
         Text(_sectionErrors.values.join('\n'), style: const TextStyle(color: AmialColors.red)),
         const SizedBox(height: 12),
       ],
-      const Text('مسار إعداد الكاشير', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+      Text('ops_setup_path'.tr, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
       const SizedBox(height: 8),
-      _workflowStep('1', 'أنشئ الدور', 'حدد أفعال الكاشير بدقة', setup['has_role'] == true, () => _tabs.animateTo(1)),
-      _workflowStep('2', 'أضف الموظف', 'اربطه بالدور والفرع', setup['has_employee'] == true, () => _tabs.animateTo(2)),
-      _workflowStep('3', 'فعّل الجهاز', 'الجهاز مورد مستقل عن الموظف', setup['has_device'] == true, () => _tabs.animateTo(3)),
-      _workflowStep('4', 'ابدأ الوردية', 'يفتحها الموظف من جهاز مفعّل قبل البيع', _number(counts['open_shifts']) > 0, () => _tabs.animateTo(4)),
+      _workflowStep('1', 'ops_role_step'.tr, 'ops_role_step_detail'.tr, setup['has_role'] == true, () => _tabs.animateTo(1)),
+      _workflowStep('2', 'ops_staff_step'.tr, 'ops_staff_step_detail'.tr, setup['has_employee'] == true, () => _tabs.animateTo(2)),
+      _workflowStep('3', 'ops_device_step'.tr, 'ops_device_step_detail'.tr, setup['has_device'] == true, () => _tabs.animateTo(3)),
+      _workflowStep('4', 'ops_shift_step'.tr, 'ops_shift_step_detail'.tr, _number(counts['open_shifts']) > 0, () => _tabs.animateTo(4)),
       const SizedBox(height: 14),
       FilledButton.icon(onPressed: _saving ? null : _addEmployee, icon: const Icon(Icons.person_add),
-          label: const Text('إضافة عضو تشغيل'), style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50))),
+          label: Text('ops_add_member'.tr), style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50))),
     ]));
   }
 
@@ -511,14 +512,14 @@ class _MerchantOperationsCenterScreenState
     padding: const EdgeInsets.all(18),
     decoration: BoxDecoration(color: AmialColors.primary, borderRadius: BorderRadius.circular(18)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('تشغيل منشأتك من مكان واحد', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+      Text('ops_hero_title'.tr, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
       const SizedBox(height: 6),
-      const Text('الدور ← الموظف ← الجهاز ← الوردية ← البيع', style: TextStyle(color: Colors.white70)),
+      Text('ops_hero_path'.tr, style: TextStyle(color: Colors.white70)),
       const SizedBox(height: 16),
       Wrap(spacing: 8, runSpacing: 8, children: [
-        _countBadge(Icons.badge_outlined, '${_number(counts['active_employees'])} موظف نشط'),
-        _countBadge(Icons.point_of_sale, '${_number(counts['active_device_sessions'])} جلسة جهاز نشطة'),
-        _countBadge(Icons.schedule, '${_number(counts['open_shifts'])} وردية مفتوحة'),
+        _countBadge(Icons.badge_outlined, 'ops_employee_count'.trParams({'count': '${_number(counts['active_employees'])}'})),
+        _countBadge(Icons.point_of_sale, 'ops_device_session_count'.trParams({'count': '${_number(counts['active_device_sessions'])}'})),
+        _countBadge(Icons.schedule, 'ops_shift_count'.trParams({'count': '${_number(counts['open_shifts'])}'})),
       ]),
     ]),
   );
@@ -540,70 +541,70 @@ class _MerchantOperationsCenterScreenState
   );
 
   Widget _rolesTab() => _sectionErrors.containsKey('roles') ? _sectionFailure('roles') : RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
-    Row(children: [const Expanded(child: Text('الأدوار الفعلية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))), FilledButton.icon(onPressed: _saving ? null : _createRole, icon: const Icon(Icons.add), label: const Text('دور جديد'))]),
+    Row(children: [Expanded(child: Text('ops_actual_roles'.tr, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))), FilledButton.icon(onPressed: _saving ? null : _createRole, icon: const Icon(Icons.add), label: Text('ops_new_role'.tr))]),
     const SizedBox(height: 8),
-    if (_roles.isEmpty) _empty(Icons.admin_panel_settings_outlined, 'لا توجد أدوار بعد', 'أنشئ دور الكاشير قبل إضافة موظف.'),
+    if (_roles.isEmpty) _empty(Icons.admin_panel_settings_outlined, 'ops_no_roles'.tr, 'ops_no_roles_detail'.tr),
     ..._roles.map((role) => Card(child: ListTile(
       leading: const CircleAvatar(child: Icon(Icons.badge_outlined)),
       title: Text('${role['name_ar'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text('${_number(role['permissions_count'])} صلاحية • ${_number(role['assignments_count'])} موظف'),
-      trailing: role['is_system'] == true ? const Chip(label: Text('نظامي', style: TextStyle(fontSize: 10))) : null,
+      subtitle: Text('ops_role_counts'.trParams({'permissions': '${_number(role['permissions_count'])}', 'employees': '${_number(role['assignments_count'])}'})),
+      trailing: role['is_system'] == true ? Chip(label: Text('ops_system_role'.tr, style: TextStyle(fontSize: 10))) : null,
     ))),
   ]));
 
   Widget _staffTab() => _sectionErrors.containsKey('staff') ? _sectionFailure('staff') : RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
-    Row(children: [const Expanded(child: Text('الموظفون وحساباتهم', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))), FilledButton.icon(onPressed: _saving ? null : _addEmployee, icon: const Icon(Icons.person_add), label: const Text('موظف جديد'))]),
+    Row(children: [Expanded(child: Text('ops_staff_accounts'.tr, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))), FilledButton.icon(onPressed: _saving ? null : _addEmployee, icon: const Icon(Icons.person_add), label: Text('ops_new_employee'.tr))]),
     const SizedBox(height: 8),
-    if (_staff.isEmpty) _empty(Icons.group_outlined, 'لا يوجد موظفون بعد', 'أضف موظفاً بعد اختيار دوره.'),
+    if (_staff.isEmpty) _empty(Icons.group_outlined, 'ops_no_staff'.tr, 'ops_no_staff_detail'.tr),
     ..._staff.map((staff) {
       final active = staff['is_active'] == true;
       return Card(child: ListTile(
         leading: CircleAvatar(backgroundColor: (active ? AmialColors.success : AmialColors.textMuted).withValues(alpha: .14), child: Icon(Icons.person, color: active ? AmialColors.success : AmialColors.textMuted)),
         title: Text('${staff['display_name'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text('رمز: ${staff['employee_code'] ?? '—'} • ${staff['branch_name'] ?? 'الفرع الافتراضي'}'),
-        trailing: Text(active ? 'نشط' : 'معطّل', style: TextStyle(color: active ? AmialColors.success : AmialColors.red, fontSize: 12)),
+        subtitle: Text('ops_employee_branch'.trParams({'code': '${staff['employee_code'] ?? '—'}', 'branch': '${staff['branch_name'] ?? 'ops_default_branch'.tr}'})),
+        trailing: Text(active ? 'ops_active'.tr : 'ops_disabled'.tr, style: TextStyle(color: active ? AmialColors.success : AmialColors.red, fontSize: 12)),
       ));
     }),
   ]));
 
   Widget _devicesTab() => _sectionErrors.containsKey('devices') ? _sectionFailure('devices') : RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
-    Row(children: [const Expanded(child: Text('أجهزة نقطة البيع', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))), FilledButton.icon(onPressed: _saving ? null : _createDeviceActivationCode, icon: const Icon(Icons.qr_code_2), label: const Text('رمز تفعيل'))]),
+    Row(children: [Expanded(child: Text('ops_pos_devices'.tr, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))), FilledButton.icon(onPressed: _saving ? null : _createDeviceActivationCode, icon: const Icon(Icons.qr_code_2), label: Text('ops_activation_button'.tr))]),
     const SizedBox(height: 8),
-    const Text('الجهاز ليس حساب موظف؛ يفعّله المالك ثم يدخل الموظفون بحساباتهم.', style: TextStyle(color: AmialColors.textSecondary, fontSize: 12)),
+    Text('ops_device_identity'.tr, style: TextStyle(color: AmialColors.textSecondary, fontSize: 12)),
     const SizedBox(height: 8),
-    if (_devices.isEmpty) _empty(Icons.point_of_sale_outlined, 'لا توجد أجهزة مفعّلة', 'أنشئ رمز تفعيل وأدخله من جهاز الكاشير.'),
+    if (_devices.isEmpty) _empty(Icons.point_of_sale_outlined, 'ops_no_devices'.tr, 'ops_no_devices_detail'.tr),
     ..._devices.map((device) => Card(child: ListTile(
       leading: const CircleAvatar(child: Icon(Icons.point_of_sale)),
-      title: Text('${device['display_name'] ?? 'جهاز نقطة بيع'}', style: const TextStyle(fontWeight: FontWeight.bold)),
-      subtitle: Text('${device['branch_name'] ?? 'الفرع الافتراضي'} • •••${device['hint'] ?? ''}'),
-      trailing: Text(device['is_active'] == true ? 'نشط' : 'موقوف', style: TextStyle(color: device['is_active'] == true ? AmialColors.success : AmialColors.red, fontSize: 12)),
+      title: Text('${device['display_name'] ?? 'ops_pos_device'.tr}', style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text('${device['branch_name'] ?? 'ops_default_branch'.tr} • •••${device['hint'] ?? ''}'),
+      trailing: Text(device['is_active'] == true ? 'ops_active'.tr : 'ops_stopped'.tr, style: TextStyle(color: device['is_active'] == true ? AmialColors.success : AmialColors.red, fontSize: 12)),
     ))),
   ]));
 
   Widget _shiftsTab() {
     final shifts = _rows(_summary['open_shifts']);
     return RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
-      const Text('الورديات المفتوحة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      Text('ops_open_shifts'.tr, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
       const SizedBox(height: 6),
-      const Text('لا ينشئ المالك وردية دائمة. الموظف يفتحها من جهاز مفعّل قبل أول مبيعة، فتُربط به وبالجهاز والفرع.', style: TextStyle(color: AmialColors.textSecondary, fontSize: 12)),
+      Text('ops_shift_explanation'.tr, style: TextStyle(color: AmialColors.textSecondary, fontSize: 12)),
       const SizedBox(height: 12),
-      if (shifts.isEmpty) _empty(Icons.schedule_outlined, 'لا توجد وردية مفتوحة', 'هذه حالة تشغيل وليست خطأ. تظهر الوردية هنا فور فتحها من جهاز مفعّل.'),
+      if (shifts.isEmpty) _empty(Icons.schedule_outlined, 'ops_no_shifts'.tr, 'ops_no_shifts_detail'.tr),
       if (_summary['open_shifts_has_more'] == true)
-        const Text('تُعرض أحدث 12 وردية؛ العدد الإجمالي موضح في النظرة العامة.'),
+        Text('ops_shift_preview'.tr),
       ...shifts.map((shift) => Card(child: ListTile(
         leading: const CircleAvatar(backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.play_circle, color: AmialColors.success)),
-        title: Text('${shift['opened_by_name'] ?? 'موظف'}', style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text('${shift['employee_code'] ?? ''} • ${shift['branch_name'] ?? 'الفرع الافتراضي'}'),
-        trailing: const Text('مفتوحة', style: TextStyle(color: AmialColors.success, fontSize: 12)),
+        title: Text('${shift['opened_by_name'] ?? 'ops_employee'.tr}', style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text('${shift['employee_code'] ?? ''} • ${shift['branch_name'] ?? 'ops_default_branch'.tr}'),
+        trailing: Text('ops_open'.tr, style: TextStyle(color: AmialColors.success, fontSize: 12)),
       ))),
     ]));
   }
 
   Widget _auditTab() => ListView(padding: const EdgeInsets.all(16), children: [
     const Icon(Icons.fact_check_outlined, size: 56, color: AmialColors.primary), const SizedBox(height: 12),
-    const Text('سجل تشغيل المنشأة', textAlign: TextAlign.center, style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-    const SizedBox(height: 6), const Text('راجع الأحداث التي سجّلها الخادم مع المنفذ والوقت. إتاحة السجل تخضع لباقتك وصلاحيات حسابك.', textAlign: TextAlign.center, style: TextStyle(color: AmialColors.textSecondary)),
-    const SizedBox(height: 18), FilledButton.icon(onPressed: () => Get.to(() => const MerchantAuditLogScreen()), icon: const Icon(Icons.open_in_new), label: const Text('فتح سجل التدقيق')),
+    Text('ops_audit_title'.tr, textAlign: TextAlign.center, style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+    const SizedBox(height: 6), Text('ops_audit_explanation'.tr, textAlign: TextAlign.center, style: TextStyle(color: AmialColors.textSecondary)),
+    const SizedBox(height: 18), FilledButton.icon(onPressed: () => Get.to(() => const MerchantAuditLogScreen()), icon: const Icon(Icons.open_in_new), label: Text('ops_open_audit'.tr)),
   ]);
 
   Widget _empty(IconData icon, String title, String detail) => Padding(
@@ -618,10 +619,10 @@ class _MerchantOperationsCenterScreenState
       const SizedBox(height: 12),
       if (_sectionStatuses[section] == 402)
         OutlinedButton(onPressed: () => Get.to(() => const PlansCatalogScreen()),
-            child: const Text('عرض الباقات'))
+            child: Text('ops_view_plans'.tr))
       else if (_sectionStatuses[section] != 403)
         OutlinedButton.icon(onPressed: _saving ? null : _load,
-            icon: const Icon(Icons.refresh), label: const Text('إعادة المحاولة')),
+            icon: const Icon(Icons.refresh), label: Text('ops_retry'.tr)),
     ]),
   ));
 }
