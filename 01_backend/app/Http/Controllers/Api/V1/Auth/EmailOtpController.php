@@ -81,7 +81,11 @@ class EmailOtpController extends Controller
     public function verifyCode(Request $request): JsonResponse
     {
         $v = Validator::make($request->all(), [
-            'challenge_id' => 'required|string|size:26',
+            // challenge_id is optional specifically for support-assisted PIN
+            // recovery: support never sees or relays it; the customer can enter
+            // only the code that arrived in their inbox and we bind it to the
+            // latest active challenge for that email + purpose.
+            'challenge_id' => 'nullable|string|size:26',
             'email' => 'required|email|max:320',
             'purpose' => 'required|in:registration,password_reset,pin_recovery',
             'otp' => 'required|digits:6',
@@ -90,11 +94,30 @@ class EmailOtpController extends Controller
             return $this->validationError($v);
         }
 
+        $email = $this->otp->normalizeEmail((string) $request->input('email'));
+        $purpose = (string) $request->input('purpose');
+        $challengeId = trim((string) $request->input('challenge_id', ''));
+
+        if ($challengeId === '') {
+            $latest = DB::table('otp_challenges')
+                ->where('identifier', $email)
+                ->where('purpose', $purpose)
+                ->whereNull('consumed_at')
+                ->where('expires_at', '>', now())
+                ->orderByDesc('id')
+                ->first(['challenge_id']);
+            $challengeId = (string) ($latest->challenge_id ?? '');
+        }
+
+        if ($challengeId === '') {
+            return $this->error('OTP_NOT_FOUND', 'لا يوجد رمز استعادة صالح. اطلب رمزاً جديداً أو تواصل مع الدعم.', 404);
+        }
+
         try {
             $token = $this->otp->verify(
-                (string) $request->input('challenge_id'),
-                (string) $request->input('email'),
-                (string) $request->input('purpose'),
+                $challengeId,
+                $email,
+                $purpose,
                 (string) $request->input('otp'),
             );
         } catch (RuntimeException $e) {
@@ -102,6 +125,7 @@ class EmailOtpController extends Controller
         }
 
         return $this->ok([
+            'challenge_id' => $challengeId,
             'verification_token' => $token,
             'verification_expires_in_seconds' => max(2, (int) config('amial_otp.verification_ttl_minutes', 10)) * 60,
         ], 'OTP_VERIFIED', 'تم التحقق من الرمز');
