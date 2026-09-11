@@ -37,10 +37,14 @@ class MerchantOperationsCenterController extends AmialApiController
         $roles = MerchantRole::where('merchant_user_id', $merchant->id)->where('is_active', true);
         $devices = PosDevice::where('merchant_user_id', $merchant->id)
             ->whereNull('revoked_at')->where('is_active', true);
-        $openShifts = CashierShift::where('merchant_user_id', $merchant->id)
-            ->where('status', 'open')->orderByDesc('opened_at')->limit(12)->get();
+        $openShiftQuery = CashierShift::where('merchant_user_id', $merchant->id)
+            ->where('status', 'open');
+        // AMIAL-WIRING-002: the 12-row preview is not the total shift count.
+        $openShiftCount = (clone $openShiftQuery)->count();
+        $openShifts = (clone $openShiftQuery)->orderByDesc('opened_at')->limit(12)->get();
 
-        $staffById = PosUser::with('branch:id,name')->whereIn(
+        $staffById = PosUser::with('branch:id,name')
+            ->where('merchant_user_id', $merchant->id)->whereIn(
             'id', $openShifts->pluck('pos_user_id')->filter()->unique(),
         )->get()->keyBy('id');
 
@@ -73,9 +77,10 @@ class MerchantOperationsCenterController extends AmialApiController
                 'active_employees' => (clone $staff)->where('is_active', true)->count(),
                 'devices' => (clone $devices)->count(),
                 'active_device_sessions' => $activeDeviceIds->count(),
-                'open_shifts' => $openShiftRows->count(),
+                'open_shifts' => $openShiftCount,
             ],
             'open_shifts' => $openShiftRows,
+            'open_shifts_has_more' => $openShiftCount > $openShiftRows->count(),
             'setup' => [
                 'has_branch' => (clone $branches)->exists(),
                 'has_role' => (clone $roles)->exists(),

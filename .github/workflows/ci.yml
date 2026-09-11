@@ -48,6 +48,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # AMIAL-SOURCE-001: reject corrupt text and missing PHP tags before
+      # framework/bootstrap checks can mistake an empty route surface for OK.
+      - name: سلامة ملفات المصدر والترجمات
+        run: |
+          python3 01_backend/scripts/source-integrity.py
+          python3 -B -m unittest discover -s 01_backend/scripts/tests -p 'test_*.py'
+          bash -n 01_backend/scripts/verify.sh
       # عدّ الأقواس النصّي لا يفهم heredoc أو regex أو المصفوفات المركبة
       # في PHP، فيعطي إنذارات كاذبة. php -l هو محلّل اللغة الحقيقي.
       - name: تثبيت PHP للفحص النحوي

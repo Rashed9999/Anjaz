@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:amial_pay/data/api/api_client.dart';
+import 'package:amial_pay/features/access/controllers/access_controller.dart';
+import 'package:amial_pay/features/plans/screens/plans_catalog_screen.dart';
 import 'package:amial_pay/features/merchant/screens/merchant_audit_log_screen.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
 
@@ -25,7 +27,11 @@ class _MerchantOperationsCenterScreenState
   late final TabController _tabs;
 
   bool _loading = true;
+  bool _loadingRequest = false;
+  bool _saving = false;
   String? _error;
+  Map<String, String> _sectionErrors = {};
+  Map<String, int?> _sectionStatuses = {};
   Map<String, dynamic> _summary = {};
   List<Map<String, dynamic>> _roles = [];
   List<Map<String, dynamic>> _permissionCatalogue = [];
@@ -59,18 +65,23 @@ class _MerchantOperationsCenterScreenState
   int _number(dynamic value) => value is num ? value.toInt() : int.tryParse('$value') ?? 0;
 
   Future<void> _load() async {
+    if (!mounted || _loadingRequest || _saving) return;
+    _loadingRequest = true;
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
+      // Branch management is plan-gated. Do not send an inapplicable request
+      // for lower plans; employee/device creation still uses server defaults.
+      final canSelectBranches = Get.find<AccessController>().has('branches');
       final replies = await Future.wait([
         _api.getData(_base),
         _api.getData('$_base/roles'),
         _api.getData('/api/v1/amial/merchant/staff'),
         _api.getData('/api/v1/amial/merchant/pos-devices'),
-        _api.getData('/api/v1/amial/merchant/branches'),
+        if (canSelectBranches) _api.getData('/api/v1/amial/merchant/branches'),
       ]);
       if (!mounted) return;
 
@@ -83,13 +94,38 @@ class _MerchantOperationsCenterScreenState
       }
 
       final summary = _payload(summaryReply.body);
+      final counts = summary['counts'];
+      const requiredCounts = ['active_employees', 'active_device_sessions', 'open_shifts'];
+      if (counts is! Map || summary['open_shifts'] is! List ||
+          requiredCounts.any((key) => counts[key] is! num || counts[key] < 0)) {
+        setState(() => _error = 'تعذّر قراءة ملخص التشغيل؛ أعد المحاولة');
+        return;
+      }
+      final sectionErrors = <String, String>{};
+      final sectionStatuses = <String, int?>{};
+      final sections = ['roles', 'staff', 'devices', if (canSelectBranches) 'branches'];
+      final labels = ['الأدوار', 'الموظفين', 'الأجهزة', if (canSelectBranches) 'الفروع'];
+      for (var i = 0; i < sections.length; i++) {
+        final reply = replies[i + 1];
+        if (reply.statusCode != 200 || reply.body is! Map ||
+            reply.body['success'] != true ||
+            _payload(reply.body)[sections[i]] is! List ||
+            (sections[i] == 'roles' && _payload(reply.body)['permission_catalogue'] is! List)) {
+          sectionStatuses[sections[i]] = reply.statusCode;
+          sectionErrors[sections[i]] = [402, 403].contains(reply.statusCode)
+              ? (_message(reply.body) ?? 'هذه الخدمة غير متاحة لهذا الحساب')
+              : 'تعذّر تحميل ${labels[i]}؛ أعد المحاولة';
+        }
+      }
       final rolesPayload = _payload(replies[1].body);
       final staffPayload = _payload(replies[2].body);
       final devicesPayload = _payload(replies[3].body);
-      final branchesPayload = _payload(replies[4].body);
+      final branchesPayload = canSelectBranches ? _payload(replies[4].body) : <String, dynamic>{};
 
       setState(() {
         _summary = summary;
+        _sectionErrors = sectionErrors;
+        _sectionStatuses = sectionStatuses;
         _roles = _rows(rolesPayload['roles']);
         _permissionCatalogue = _rows(rolesPayload['permission_catalogue']);
         _staff = _rows(staffPayload['staff']);
@@ -99,6 +135,7 @@ class _MerchantOperationsCenterScreenState
     } catch (_) {
       if (mounted) setState(() => _error = 'تعذّر الاتصال بالخدمة');
     } finally {
+      _loadingRequest = false;
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -112,7 +149,57 @@ class _MerchantOperationsCenterScreenState
     ));
   }
 
+  // A 200 response with success:false is a rejection, not a completed action.
+  Future<Map<String, dynamic>?> _post(
+      String endpoint, Map<String, dynamic> payload, String failure) async {
+    if (_saving) return null;
+    setState(() => _saving = true);
+    try {
+      final response = await _api.postData(endpoint, payload);
+      if (!mounted) return null;
+      if ((response.statusCode != 200 && response.statusCode != 201) ||
+          response.body is! Map || response.body['success'] != true) {
+        _notice(_message(response.body) ?? failure);
+        return null;
+      }
+      return _payload(response.body);
+    } catch (_) {
+      if (mounted) _notice(failure);
+      return null;
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  bool _requiresReload(List<String> sections) {
+    if (_saving) return true;
+    for (final section in sections) {
+      final error = _sectionErrors[section];
+      if (error != null) {
+        _notice(error);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Future<bool?> _showForm({
+    required List<TextEditingController> controllers,
+    required WidgetBuilder builder,
+  }) {
+    final route = DialogRoute<bool>(context: context, builder: builder);
+    // The pop result arrives before the closing animation finishes. Keep
+    // controllers alive until the dialog's widgets have left the overlay.
+    route.completed.then((_) {
+      for (final controller in controllers) {
+        controller.dispose();
+      }
+    });
+    return Navigator.of(context, rootNavigator: true).push(route);
+  }
+
   Future<void> _createRole() async {
+    if (_requiresReload(['roles'])) return;
     final name = TextEditingController();
     final description = TextEditingController();
     final chosen = <String>{};
@@ -122,8 +209,8 @@ class _MerchantOperationsCenterScreenState
       groups.putIfAbsent(group, () => []).add(permission);
     }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
+    final confirmed = await _showForm(
+      controllers: [name, description],
       builder: (dialogContext) => StatefulBuilder(
         builder: (_, setDialog) => AlertDialog(
           title: const Text('إنشاء دور تشغيلي'),
@@ -186,28 +273,32 @@ class _MerchantOperationsCenterScreenState
         ),
       ),
     );
+    final roleName = name.text.trim();
+    final roleDescription = description.text.trim();
     if (confirmed != true || !mounted) return;
-    if (name.text.trim().isEmpty || chosen.isEmpty) {
+    if (roleName.isEmpty || chosen.isEmpty) {
       _notice('اكتب اسم الدور واختر فعلاً واحداً على الأقل');
       return;
     }
 
-    final response = await _api.postData('$_base/roles', {
-      'name_ar': name.text.trim(),
-      if (description.text.trim().isNotEmpty) 'description_ar': description.text.trim(),
+    final data = await _post('$_base/roles', {
+      'name_ar': roleName,
+      if (roleDescription.isNotEmpty) 'description_ar': roleDescription,
       'permissions': chosen.toList(),
-    });
-    if (!mounted) return;
-    if (response.statusCode == 200 || response.statusCode == 201) {
+    }, 'تعذّر إنشاء الدور');
+    if (!mounted || data == null) return;
+    if (data['role'] is Map && data['role']['id'] != null) {
       _notice('تم إنشاء الدور', success: true);
       _load();
     } else {
-      _notice(_message(response.body) ?? 'تعذّر إنشاء الدور');
+      _notice('لم يصل تأكيد إنشاء الدور؛ حدّث القائمة قبل المحاولة مجدداً');
     }
   }
 
   Future<void> _addEmployee() async {
-    if (_roles.isEmpty) {
+    if (_requiresReload(['roles', 'staff', 'branches'])) return;
+    final activeRoles = _roles.where((role) => role['is_active'] == true).toList();
+    if (activeRoles.isEmpty) {
       _tabs.animateTo(1);
       _notice('أنشئ دوراً أولاً ثم أضف الموظف');
       return;
@@ -216,11 +307,11 @@ class _MerchantOperationsCenterScreenState
     final code = TextEditingController();
     final password = TextEditingController();
     final activeBranches = _branches.where((branch) => branch['is_active'] != false).toList();
-    int? roleId = _number(_roles.first['id']);
+    int? roleId = _number(activeRoles.first['id']);
     int? branchId = activeBranches.isEmpty ? null : _number(activeBranches.first['id']);
 
-    final confirmed = await showDialog<bool>(
-      context: context,
+    final confirmed = await _showForm(
+      controllers: [name, code, password],
       builder: (dialogContext) => StatefulBuilder(
         builder: (_, setDialog) => AlertDialog(
           title: const Text('إضافة موظف للدور'),
@@ -238,7 +329,7 @@ class _MerchantOperationsCenterScreenState
               initialValue: roleId,
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'الدور', border: OutlineInputBorder()),
-              items: _roles.map((role) => DropdownMenuItem<int>(
+              items: activeRoles.map((role) => DropdownMenuItem<int>(
                 value: _number(role['id']), child: Text('${role['name_ar'] ?? ''}'))).toList(),
               onChanged: (value) => setDialog(() => roleId = value),
             ),
@@ -262,34 +353,38 @@ class _MerchantOperationsCenterScreenState
         ),
       ),
     );
+    final employeeName = name.text.trim();
+    final employeeCode = code.text.trim();
+    final employeePassword = password.text;
     if (confirmed != true || !mounted) return;
-    if (name.text.trim().isEmpty || code.text.trim().isEmpty || password.text.length < 4 || roleId == null) {
+    if (employeeName.isEmpty || employeeCode.isEmpty || employeePassword.length < 4 || roleId == null) {
       _notice('أكمل بيانات الموظف والدور');
       return;
     }
 
-    final response = await _api.postData('/api/v1/amial/merchant/staff', {
-      'display_name': name.text.trim(),
-      'employee_code': code.text.trim(),
-      'password': password.text,
+    final data = await _post('/api/v1/amial/merchant/staff', {
+      'display_name': employeeName,
+      'employee_code': employeeCode,
+      'password': employeePassword,
       'merchant_role_id': roleId,
       if (branchId != null) 'branch_id': branchId,
-    });
-    if (!mounted) return;
-    if (response.statusCode == 201) {
+    }, 'تعذّر إنشاء الموظف');
+    if (!mounted || data == null) return;
+    if (data['id'] != null) {
       _notice('تم إنشاء الموظف وربطه بالدور', success: true);
       _load();
     } else {
-      _notice(_message(response.body) ?? 'تعذّر إنشاء الموظف');
+      _notice('لم يصل تأكيد إنشاء الموظف؛ حدّث القائمة قبل المحاولة مجدداً');
     }
   }
 
   Future<void> _createDeviceActivationCode() async {
+    if (_requiresReload(['devices', 'branches'])) return;
     final name = TextEditingController();
     final activeBranches = _branches.where((branch) => branch['is_active'] != false).toList();
     int? branchId = activeBranches.isEmpty ? null : _number(activeBranches.first['id']);
-    final confirmed = await showDialog<bool>(
-      context: context,
+    final confirmed = await _showForm(
+      controllers: [name],
       builder: (dialogContext) => StatefulBuilder(
         builder: (_, setDialog) => AlertDialog(
           title: const Text('تفعيل جهاز نقطة بيع'),
@@ -318,20 +413,20 @@ class _MerchantOperationsCenterScreenState
         ),
       ),
     );
+    final deviceName = name.text.trim();
     if (confirmed != true || !mounted) return;
-    if (name.text.trim().isEmpty) {
+    if (deviceName.isEmpty) {
       _notice('اكتب اسماً يميز الجهاز');
       return;
     }
 
-    final response = await _api.postData('/api/v1/amial/merchant/pos-devices/activation-codes', {
-      'display_name': name.text.trim(),
+    final data = await _post('/api/v1/amial/merchant/pos-devices/activation-codes', {
+      'display_name': deviceName,
       if (branchId != null) 'branch_id': branchId,
-    });
-    if (!mounted) return;
-    if (response.statusCode == 200) {
-      final data = _payload(response.body);
-      final activationCode = '${data['activation_code'] ?? ''}';
+    }, 'تعذّر إنشاء رمز التفعيل');
+    if (!mounted || data == null) return;
+    final activationCode = '${data['activation_code'] ?? ''}';
+    if (activationCode.isNotEmpty) {
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
@@ -348,7 +443,7 @@ class _MerchantOperationsCenterScreenState
       );
       _load();
     } else {
-      _notice(_message(response.body) ?? 'تعذّر إنشاء رمز التفعيل');
+      _notice('لم يصل رمز التفعيل؛ حدّث البيانات قبل المحاولة مجدداً');
     }
   }
 
@@ -360,7 +455,7 @@ class _MerchantOperationsCenterScreenState
         backgroundColor: AmialColors.background,
         appBar: AppBar(
           title: const Text('مركز تشغيل المنشأة'),
-          actions: [IconButton(onPressed: _load, tooltip: 'تحديث', icon: const Icon(Icons.refresh))],
+          actions: [IconButton(onPressed: _saving || _loading ? null : _load, tooltip: 'تحديث', icon: const Icon(Icons.refresh))],
           bottom: TabBar(
             controller: _tabs,
             isScrollable: true,
@@ -370,6 +465,7 @@ class _MerchantOperationsCenterScreenState
             ],
           ),
         ),
+        bottomNavigationBar: _saving ? const LinearProgressIndicator() : null,
         body: _loading
             ? const Center(child: CircularProgressIndicator())
             : _error != null
@@ -395,6 +491,10 @@ class _MerchantOperationsCenterScreenState
     final setup = _summary['setup'] is Map ? Map<String, dynamic>.from(_summary['setup']) : <String, dynamic>{};
     return RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
       _hero(counts), const SizedBox(height: 16),
+      if (_sectionErrors.isNotEmpty) ...[
+        Text(_sectionErrors.values.join('\n'), style: const TextStyle(color: AmialColors.red)),
+        const SizedBox(height: 12),
+      ],
       const Text('مسار إعداد الكاشير', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
       const SizedBox(height: 8),
       _workflowStep('1', 'أنشئ الدور', 'حدد أفعال الكاشير بدقة', setup['has_role'] == true, () => _tabs.animateTo(1)),
@@ -402,7 +502,7 @@ class _MerchantOperationsCenterScreenState
       _workflowStep('3', 'فعّل الجهاز', 'الجهاز مورد مستقل عن الموظف', setup['has_device'] == true, () => _tabs.animateTo(3)),
       _workflowStep('4', 'ابدأ الوردية', 'يفتحها الموظف من جهاز مفعّل قبل البيع', _number(counts['open_shifts']) > 0, () => _tabs.animateTo(4)),
       const SizedBox(height: 14),
-      FilledButton.icon(onPressed: _addEmployee, icon: const Icon(Icons.person_add),
+      FilledButton.icon(onPressed: _saving ? null : _addEmployee, icon: const Icon(Icons.person_add),
           label: const Text('إضافة عضو تشغيل'), style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(50))),
     ]));
   }
@@ -417,7 +517,7 @@ class _MerchantOperationsCenterScreenState
       const SizedBox(height: 16),
       Wrap(spacing: 8, runSpacing: 8, children: [
         _countBadge(Icons.badge_outlined, '${_number(counts['active_employees'])} موظف نشط'),
-        _countBadge(Icons.point_of_sale, '${_number(counts['active_device_sessions'])} جهاز متصل'),
+        _countBadge(Icons.point_of_sale, '${_number(counts['active_device_sessions'])} جلسة جهاز نشطة'),
         _countBadge(Icons.schedule, '${_number(counts['open_shifts'])} وردية مفتوحة'),
       ]),
     ]),
@@ -439,8 +539,8 @@ class _MerchantOperationsCenterScreenState
     ),
   );
 
-  Widget _rolesTab() => RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
-    Row(children: [const Expanded(child: Text('الأدوار الفعلية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))), FilledButton.icon(onPressed: _createRole, icon: const Icon(Icons.add), label: const Text('دور جديد'))]),
+  Widget _rolesTab() => _sectionErrors.containsKey('roles') ? _sectionFailure('roles') : RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
+    Row(children: [const Expanded(child: Text('الأدوار الفعلية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))), FilledButton.icon(onPressed: _saving ? null : _createRole, icon: const Icon(Icons.add), label: const Text('دور جديد'))]),
     const SizedBox(height: 8),
     if (_roles.isEmpty) _empty(Icons.admin_panel_settings_outlined, 'لا توجد أدوار بعد', 'أنشئ دور الكاشير قبل إضافة موظف.'),
     ..._roles.map((role) => Card(child: ListTile(
@@ -451,8 +551,8 @@ class _MerchantOperationsCenterScreenState
     ))),
   ]));
 
-  Widget _staffTab() => RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
-    Row(children: [const Expanded(child: Text('الموظفون وحساباتهم', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))), FilledButton.icon(onPressed: _addEmployee, icon: const Icon(Icons.person_add), label: const Text('موظف جديد'))]),
+  Widget _staffTab() => _sectionErrors.containsKey('staff') ? _sectionFailure('staff') : RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
+    Row(children: [const Expanded(child: Text('الموظفون وحساباتهم', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))), FilledButton.icon(onPressed: _saving ? null : _addEmployee, icon: const Icon(Icons.person_add), label: const Text('موظف جديد'))]),
     const SizedBox(height: 8),
     if (_staff.isEmpty) _empty(Icons.group_outlined, 'لا يوجد موظفون بعد', 'أضف موظفاً بعد اختيار دوره.'),
     ..._staff.map((staff) {
@@ -466,8 +566,8 @@ class _MerchantOperationsCenterScreenState
     }),
   ]));
 
-  Widget _devicesTab() => RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
-    Row(children: [const Expanded(child: Text('أجهزة نقطة البيع', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))), FilledButton.icon(onPressed: _createDeviceActivationCode, icon: const Icon(Icons.qr_code_2), label: const Text('رمز تفعيل'))]),
+  Widget _devicesTab() => _sectionErrors.containsKey('devices') ? _sectionFailure('devices') : RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(16), children: [
+    Row(children: [const Expanded(child: Text('أجهزة نقطة البيع', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold))), FilledButton.icon(onPressed: _saving ? null : _createDeviceActivationCode, icon: const Icon(Icons.qr_code_2), label: const Text('رمز تفعيل'))]),
     const SizedBox(height: 8),
     const Text('الجهاز ليس حساب موظف؛ يفعّله المالك ثم يدخل الموظفون بحساباتهم.', style: TextStyle(color: AmialColors.textSecondary, fontSize: 12)),
     const SizedBox(height: 8),
@@ -488,6 +588,8 @@ class _MerchantOperationsCenterScreenState
       const Text('لا ينشئ المالك وردية دائمة. الموظف يفتحها من جهاز مفعّل قبل أول مبيعة، فتُربط به وبالجهاز والفرع.', style: TextStyle(color: AmialColors.textSecondary, fontSize: 12)),
       const SizedBox(height: 12),
       if (shifts.isEmpty) _empty(Icons.schedule_outlined, 'لا توجد وردية مفتوحة', 'هذه حالة تشغيل وليست خطأ. تظهر الوردية هنا فور فتحها من جهاز مفعّل.'),
+      if (_summary['open_shifts_has_more'] == true)
+        const Text('تُعرض أحدث 12 وردية؛ العدد الإجمالي موضح في النظرة العامة.'),
       ...shifts.map((shift) => Card(child: ListTile(
         leading: const CircleAvatar(backgroundColor: Color(0xFFE8F5E9), child: Icon(Icons.play_circle, color: AmialColors.success)),
         title: Text('${shift['opened_by_name'] ?? 'موظف'}', style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -500,7 +602,7 @@ class _MerchantOperationsCenterScreenState
   Widget _auditTab() => ListView(padding: const EdgeInsets.all(16), children: [
     const Icon(Icons.fact_check_outlined, size: 56, color: AmialColors.primary), const SizedBox(height: 12),
     const Text('سجل تشغيل المنشأة', textAlign: TextAlign.center, style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-    const SizedBox(height: 6), const Text('كل إنشاء دور أو موظف أو جهاز يُسجّل في سجل التدقيق باسم المنفذ ووقته. السجل التفصيلي يبقى المصدر القانوني للمراجعة.', textAlign: TextAlign.center, style: TextStyle(color: AmialColors.textSecondary)),
+    const SizedBox(height: 6), const Text('راجع الأحداث التي سجّلها الخادم مع المنفذ والوقت. إتاحة السجل تخضع لباقتك وصلاحيات حسابك.', textAlign: TextAlign.center, style: TextStyle(color: AmialColors.textSecondary)),
     const SizedBox(height: 18), FilledButton.icon(onPressed: () => Get.to(() => const MerchantAuditLogScreen()), icon: const Icon(Icons.open_in_new), label: const Text('فتح سجل التدقيق')),
   ]);
 
@@ -508,4 +610,18 @@ class _MerchantOperationsCenterScreenState
     padding: const EdgeInsets.symmetric(vertical: 52),
     child: Column(children: [Icon(icon, size: 58, color: AmialColors.textMuted), const SizedBox(height: 12), Text(title, style: const TextStyle(fontWeight: FontWeight.bold)), const SizedBox(height: 5), Text(detail, textAlign: TextAlign.center, style: const TextStyle(color: AmialColors.textSecondary))]),
   );
+
+  Widget _sectionFailure(String section) => Center(child: Padding(
+    padding: const EdgeInsets.all(24),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      Text(_sectionErrors[section]!, textAlign: TextAlign.center),
+      const SizedBox(height: 12),
+      if (_sectionStatuses[section] == 402)
+        OutlinedButton(onPressed: () => Get.to(() => const PlansCatalogScreen()),
+            child: const Text('عرض الباقات'))
+      else if (_sectionStatuses[section] != 403)
+        OutlinedButton.icon(onPressed: _saving ? null : _load,
+            icon: const Icon(Icons.refresh), label: const Text('إعادة المحاولة')),
+    ]),
+  ));
 }
