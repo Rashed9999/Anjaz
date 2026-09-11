@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:amial_pay/features/access/domain/vertical_catalog.dart';
 import 'package:get/get.dart';
@@ -11,18 +13,11 @@ import 'package:amial_pay/features/auth/widgets/signature_pad_widget.dart';
 import 'package:amial_pay/features/auth/screens/unified_login_screen.dart';
 import 'package:amial_pay/common/widgets/amial_button.dart';
 
-/// AMIAL-REG-WIZARD-001
+/// AMIAL-REG-WIZARD-001 + AMIAL-EMAIL-OTP-REG-001
 ///
-/// معالج تسجيل بنمط البنوك — **عشرُ خطوات إدخالٍ ثمّ شاشةُ النجاح**:
-/// شخصية → هوية → عنوان → **عمل ومصدر دخل** → وثائق → شخص قريب →
-/// توقيع مرسوم → إقرارات → كلمة المرور → OTP → «بانتظار موافقة الإدارة».
-///
-/// وكان هذا السطرُ نفسُه يُسقط خطوةَ «العمل» ويسمّي كلمةَ المرور «PIN» —
-/// وهو ما كانت عليه قائمةُ العناوين حرفاً بحرف (‏AMIAL-REG-TITLES-001).
-/// **فتوثيقٌ يشيخ مع الشيفرة يصير مصدرَ العطل لا وصفَه.**
-///
-/// يرسل كل شيء في نداء تسجيل واحد (multipart) مع التوقيع (base64) والوثائق.
-/// ونوعُ الحساب (`account_type`) عميلٌ أو تاجرٌ أو وكيل — المعالجُ واحدٌ للثلاثة.
+/// معالج فتح الحساب الموحّد للعميل/التاجر/الوكيل. في المرحلة التجريبية
+/// يثبت البريد عبر OTP آمن قبل إنشاء الحساب، بينما يبقى SMS في الخادم
+/// متاحاً لإعادة التفعيل لاحقاً من الإعدادات.
 class AmialRegistrationWizardScreen extends StatefulWidget {
   const AmialRegistrationWizardScreen({super.key});
 
@@ -37,49 +32,32 @@ class _AmialRegistrationWizardScreenState
   int _step = 0;
   bool _submitting = false;
   bool _otpSent = false;
+  String? _emailChallengeId;
+  String? _emailVerificationToken;
+  int _otpResendSeconds = 0;
+  Timer? _otpTimer;
 
-  // AMIAL-KYC-INTL-001: أُدرجت خطوةُ «العمل ومصدر الدخل» في الموضع ٣،
-  // فانزاح ما بعدها واحداً. **والفهارسُ مكتوبةٌ يدويّاً هنا** — فنقلُ
-  // خطوةٍ بلا نقلِ كلِّ مرجعٍ لها يُنتج تحقّقاً يقع على الشاشة الخطأ.
-  static const int _lastInputStep = 9; // خطوة OTP (يليها النجاح)
+  static const int _lastInputStep = 9;
   static const int _successStep = 10;
 
-  // ── الحقول ──────────────────────────────────────────────
-  // الاسم الرباعي
-  final _name1 = TextEditingController(); // الأول
-  final _name2 = TextEditingController(); // الأب
-  final _name3 = TextEditingController(); // الجد
-  final _name4 = TextEditingController(); // العائلة
-  final _dob = TextEditingController();    // تاريخ الميلاد (yyyy-MM-dd)
+  final _name1 = TextEditingController();
+  final _name2 = TextEditingController();
+  final _name3 = TextEditingController();
+  final _name4 = TextEditingController();
+  final _dob = TextEditingController();
   final _email = TextEditingController();
   final _occupation = TextEditingController();
   String _gender = 'male';
-  // AMIAL-REG-ROLES: نوع الحساب + حقول التاجر + أرقام الدخول من الخادم
   String _accountType = 'customer';
   String _businessType = 'retail';
 
-  /// AMIAL-VERTICAL-COMPOSE-001 — قطاعاتُ التسجيل: من الخادم، وإلى
-  /// الستّة المبنيّة عند تعذّره (فلا يُقفَل بابُ التسجيل بانقطاع شبكة).
   List<VerticalOption> _verticals = VerticalCatalog.builtIn.values.toList();
   final _storeName = TextEditingController();
   String? _agentNumber;
   String? _merchantNumber;
   final _phone = TextEditingController();
 
-  // ══════════════════════════════════════════════════════════════════
-  // AMIAL-PHONE-002 — **مفتاحُ الدولة يُختار، ولا يُعرَض ثابتاً.**
-  //
-  // كان `final String _dialCode = '+967'` — **ثابتاً لا يُغيَّر**، ومعه
-  // في الشاشة نصُّ «967+» **معروضٌ لا يُضغط**. فمن سجّل من خارج اليمن
-  // لم يجد أين يقول ذلك.
-  //
-  // (وخلفَه في الخادم كان `canonical()` تُلصق 967 بأيّ رقم — فحتّى لو
-  // أُرسل مفتاحٌ آخر لَابتُلع. أُصلح الاثنان معاً، فبابٌ نصفُه مفتوحٌ
-  // ليس باباً.)
-  // ══════════════════════════════════════════════════════════════════
   String _dialCode = '+967';
-
-  /// المفاتيحُ الأكثرُ وروداً — اليمنُ أوّلاً، ثمّ وجهاتُ المغتربين.
   static const List<({String code, String label})> _dialCodes = [
     (code: '+967', label: '🇾🇪 اليمن'),
     (code: '+966', label: '🇸🇦 السعوديّة'),
@@ -102,28 +80,21 @@ class _AmialRegistrationWizardScreenState
 
   final _idNumber = TextEditingController();
   String _idType = 'nid';
-  final _idIssue = TextEditingController();  // تاريخ الإصدار
-  final _idExpiry = TextEditingController(); // تاريخ الانتهاء
+  final _idIssue = TextEditingController();
+  final _idExpiry = TextEditingController();
+  String? _originGov;
+  String? _residenceGov;
 
-  // AMIAL-GOVERNORATES-001: محافظتا الأصل (من الهوية) والسكن (من وثيقة
-  // العنوان). المنطقة التشغيلية تتبع السكن؛ والأصل إشارة يقارنها المراجع.
-  String? _originGov;      // رمز ISO — محافظة الأصل
-  String? _residenceGov;   // رمز ISO — محافظة السكن
+  final _addrDir = TextEditingController();
+  final _addrArea = TextEditingController();
+  final _addrStreet = TextEditingController();
+  final _addrLandmark = TextEditingController();
 
-  // العنوان بالتفصيل
-  final _addrDir = TextEditingController();      // المديرية
-  final _addrArea = TextEditingController();     // الحي/العزلة
-  final _addrStreet = TextEditingController();   // الشارع
-  final _addrLandmark = TextEditingController(); // أقرب معلم
-
-  // AMIAL-SELFREG-KYCDOCS-001: وثيقةٌ لكلّ نوعٍ باسمه — يُرسَل مصنّفاً
-  // فيُنشئ الخادمُ منها صفوفَ `kyc_documents`، وبها وحدَها يعمل الاعتماد.
   XFile? _docIdFront;
   XFile? _docIdBack;
   XFile? _docSelfie;
   XFile? _docAddress;
 
-  /// الوثائقُ المرسَلة، لكلٍّ اسمُ حقلها في الخادم.
   Map<String, XFile> get _typedDocs => {
         if (_docIdFront != null) 'kyc_id_front': _docIdFront!,
         if (_docIdBack != null) 'kyc_id_back': _docIdBack!,
@@ -131,13 +102,6 @@ class _AmialRegistrationWizardScreenState
         if (_docAddress != null) 'kyc_address_proof': _docAddress!,
       };
 
-  // ══════════════════════════════════════════════════════════════════
-  // AMIAL-KYC-INTL-001 — حقولُ «اعرف عميلك» الرقابيّة.
-  //
-  // مصدرُها نموذجُ فتح حساب أفراد في بنك عدن. **وأُخذ منه ما يخدم إلزاماً
-  // رقابيّاً أو قرارَ مخاطر، ورُدّ ما عداه** — فكلُّ حقلٍ زائدٍ يُطيل
-  // التسجيلَ ويرفع الانسحاب.
-  // ══════════════════════════════════════════════════════════════════
   final _nameEn = TextEditingController();
   final _countryOfBirth = TextEditingController(text: 'اليمن');
   final _idPlaceOfIssue = TextEditingController();
@@ -154,17 +118,12 @@ class _AmialRegistrationWizardScreenState
   String _housingType = 'owned';
   String _incomeSource = 'salary';
   String _accountPurpose = 'savings';
-
-  /// **ثلاثيُّ الحالة عمداً:** `null` = لم يُجَب · `false` = أنكر ·
-  /// `true` = أقرّ. **و«لم يُسأل» ليس «لا»** — والفرقُ هو كلُّ ما يحتاجه
-  /// المدقّق: الأوّلُ ثغرةٌ في الإجراء، والثاني إجابةٌ تُراجَع.
   bool? _isPep;
 
   final _kinName = TextEditingController();
   final _kinPhone = TextEditingController();
   final _kinRelation = TextEditingController();
 
-  // ثلاث خانات توقيع
   final GlobalKey<SignaturePadState> _sigKey1 = GlobalKey<SignaturePadState>();
   final GlobalKey<SignaturePadState> _sigKey2 = GlobalKey<SignaturePadState>();
   final GlobalKey<SignaturePadState> _sigKey3 = GlobalKey<SignaturePadState>();
@@ -177,6 +136,10 @@ class _AmialRegistrationWizardScreenState
   final _pinConfirm = TextEditingController();
   final _otp = TextEditingController();
 
+  bool _locating = false;
+  String? _locationNotice;
+  bool? _inServiceArea;
+
   @override
   void initState() {
     super.initState();
@@ -188,6 +151,7 @@ class _AmialRegistrationWizardScreenState
 
   @override
   void dispose() {
+    _otpTimer?.cancel();
     _page.dispose();
     for (final c in [
       _name1, _name2, _name3, _name4, _dob, _email, _occupation, _phone,
@@ -203,18 +167,68 @@ class _AmialRegistrationWizardScreenState
     super.dispose();
   }
 
-  /// اسم المحافظة من رمزها — لبناء نصّ العنوان المرسل.
   String _govName(String? code) => GovernoratePicker.nameOf(code) ?? '';
 
-  void _snack(String msg) {
+  String get _normalizedEmail => _email.text.trim().toLowerCase();
+
+  bool get _emailValid =>
+      RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(_normalizedEmail);
+
+  void _snack(String msg, {bool error = true}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg), backgroundColor: AmialColors.red));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: error ? AmialColors.red : AmialColors.primary,
+      ),
+    );
   }
 
-  // منتقي تاريخ بسيط (بلا حزمة) — يكتب النتيجة yyyy-MM-dd في الحقل
+  String _responseMessage(Response r, String fallback) {
+    try {
+      if (r.body is Map && r.body['message'] != null) {
+        return '${r.body['message']}';
+      }
+      if (r.body is Map && r.body['errors'] is List && (r.body['errors'] as List).isNotEmpty) {
+        final first = (r.body['errors'] as List).first;
+        if (first is Map && first['message'] != null) return '${first['message']}';
+      }
+      if (r.body is Map && r.body['errors'] is Map) {
+        final values = (r.body['errors'] as Map).values;
+        if (values.isNotEmpty) return '${values.first}';
+      }
+    } catch (_) {}
+    return fallback;
+  }
+
+  void _startOtpCountdown(int seconds) {
+    _otpTimer?.cancel();
+    if (mounted) setState(() => _otpResendSeconds = seconds);
+    _otpTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_otpResendSeconds <= 1) {
+        timer.cancel();
+        setState(() => _otpResendSeconds = 0);
+      } else {
+        setState(() => _otpResendSeconds--);
+      }
+    });
+  }
+
+  void _invalidateEmailOtp() {
+    _otpTimer?.cancel();
+    _otpSent = false;
+    _emailChallengeId = null;
+    _emailVerificationToken = null;
+    _otpResendSeconds = 0;
+    _otp.clear();
+  }
+
   Future<void> _pickDate(TextEditingController c, {bool future = false}) async {
-    final now = DateTime(2026, 7, 12);
+    final now = DateTime.now();
     final first = future ? now : DateTime(1930);
     final last = future ? DateTime(2060) : now;
     final initial = future ? now : DateTime(2000);
@@ -231,7 +245,6 @@ class _AmialRegistrationWizardScreenState
     }
   }
 
-  // ── التحقّق لكل خطوة ─────────────────────────────────────
   bool _validateStep(int s) {
     switch (s) {
       case 0:
@@ -246,6 +259,10 @@ class _AmialRegistrationWizardScreenState
         }
         if (_dob.text.trim().isEmpty) {
           _snack('اختر تاريخ الميلاد');
+          return false;
+        }
+        if (!_emailValid) {
+          _snack('أدخل بريداً إلكترونياً صحيحاً — سيصل إليه رمز التحقق والاستعادة');
           return false;
         }
         if (_phone.text.trim().length < 6) {
@@ -270,9 +287,6 @@ class _AmialRegistrationWizardScreenState
         }
         return true;
       case 3:
-        // **والإفصاحُ عن المنصب السياسيّ يُسأل ولا يُفترَض جوابُه.**
-        // مربّعٌ يُترك فارغاً يُقرأ «لا»، وذاك يُحوّل ثغرةً في الإجراء
-        // إلى إجابةٍ مطمئنّة — وهو أسوأُ ما يقع في ملفّ امتثال.
         if (_isPep == null) {
           _snack('أجب عن سؤال المنصب السياسيّ — لا يُترك بلا جواب');
           return false;
@@ -283,8 +297,6 @@ class _AmialRegistrationWizardScreenState
         }
         return true;
       case 4:
-        // الثلاثةُ التي يشترطها الاعتماد — تُطلب هنا لا بعد أسبوعٍ من
-        // الانتظار في طابور المراجعة.
         if (_docIdFront == null || _docIdBack == null || _docSelfie == null) {
           _snack('أرفق وجهَ الهوية وظهرَها وصورةً شخصية');
           return false;
@@ -311,7 +323,7 @@ class _AmialRegistrationWizardScreenState
         }
         return true;
       case 8:
-        if (_pin.text.length != 4) {
+        if (_pin.text.length != 4 || !RegExp(r'^\d{4}$').hasMatch(_pin.text)) {
           _snack('كلمة المرور يجب أن تكون 4 أرقام');
           return false;
         }
@@ -321,8 +333,12 @@ class _AmialRegistrationWizardScreenState
         }
         return true;
       case 9:
-        if (_otp.text.trim().isEmpty) {
-          _snack('أدخل رمز التحقق المرسل إلى هاتفك');
+        if (_emailChallengeId == null) {
+          _snack('اطلب رمز تحقق جديداً للبريد الإلكتروني');
+          return false;
+        }
+        if (!RegExp(r'^\d{6}$').hasMatch(_otp.text.trim())) {
+          _snack('أدخل رمز التحقق المكوّن من 6 أرقام');
           return false;
         }
         return true;
@@ -335,9 +351,9 @@ class _AmialRegistrationWizardScreenState
     if (_submitting) return;
     if (!_validateStep(_step)) return;
 
-    // بعد خطوة PIN → أرسل OTP قبل الانتقال لخطوة OTP
     if (_step == 8 && !_otpSent) {
-      await _sendOtp();
+      final sent = await _sendOtp();
+      if (!sent) return;
     }
 
     if (_step == _lastInputStep) {
@@ -359,15 +375,6 @@ class _AmialRegistrationWizardScreenState
         duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
   }
 
-  // AMIAL-GEO-ZONE-001 — حالة تحديد الموقع
-  bool _locating = false;
-  String? _locationNotice;
-  bool? _inServiceArea;
-
-  /// يطلب الموقع، ويسأل الخادم عن المحافظة، ويعبّئ حقل المحافظة.
-  ///
-  /// كل مسارات الفشل تنتهي برسالة مفهومة وإبقاء الإدخال اليدوي عاملاً —
-  /// لا يجوز أن يمنع تعذّرُ الموقع إتمامَ التسجيل.
   Future<void> _detectLocation() async {
     setState(() {
       _locating = true;
@@ -378,8 +385,7 @@ class _AmialRegistrationWizardScreenState
     try {
       if (!await Geolocator.isLocationServiceEnabled()) {
         setState(() => _locationNotice =
-            'خدمة الموقع (GPS) مُطفأة في جهازك. شغّلها ثم أعد المحاولة، '
-            'أو أدخل عنوانك يدوياً.');
+            'خدمة الموقع (GPS) مُطفأة في جهازك. شغّلها ثم أعد المحاولة، أو أدخل عنوانك يدوياً.');
         return;
       }
 
@@ -389,13 +395,11 @@ class _AmialRegistrationWizardScreenState
       }
       if (permission == LocationPermission.deniedForever) {
         setState(() => _locationNotice =
-            'إذن الموقع مرفوض نهائياً. يمكنك السماح به من إعدادات التطبيق، '
-            'أو إدخال عنوانك يدوياً.');
+            'إذن الموقع مرفوض نهائياً. يمكنك السماح به من إعدادات التطبيق، أو إدخال عنوانك يدوياً.');
         return;
       }
       if (permission == LocationPermission.denied) {
-        setState(() => _locationNotice =
-            'لم تسمح بالوصول إلى الموقع. أدخل عنوانك يدوياً.');
+        setState(() => _locationNotice = 'لم تسمح بالوصول إلى الموقع. أدخل عنوانك يدوياً.');
         return;
       }
 
@@ -420,40 +424,100 @@ class _AmialRegistrationWizardScreenState
 
       setState(() {
         _inServiceArea = data['in_service_area'] == true;
-        _locationNotice = (data['notice'] as String?) ??
-            'تم تحديد موقعك.';
-        // نعبّئ المحافظة ولا نُقفل الحقل: التحديد تقريبيّ بأقرب مركز،
-        // فيجب أن يبقى تصحيحه ممكناً.
+        _locationNotice = (data['notice'] as String?) ?? 'تم تحديد موقعك.';
         final code = data['governorate_code'];
-        if (code is String && code.isNotEmpty) {
-          _residenceGov = code;
-        }
+        if (code is String && code.isNotEmpty) _residenceGov = code;
       });
-    } catch (e) {
-      setState(() => _locationNotice =
-          'تعذّر تحديد موقعك الآن. أدخل عنوانك يدوياً.');
+    } catch (_) {
+      setState(() => _locationNotice = 'تعذّر تحديد موقعك الآن. أدخل عنوانك يدوياً.');
     } finally {
       if (mounted) setState(() => _locating = false);
     }
   }
 
-  Future<void> _sendOtp() async {
+  Future<bool> _sendOtp() async {
+    if (!_emailValid) {
+      _snack('أدخل بريداً إلكترونياً صحيحاً أولاً');
+      return false;
+    }
+    if (_otpResendSeconds > 0) return false;
+
+    setState(() => _submitting = true);
     try {
-      final api = Get.find<ApiClient>();
-      final r = await api.postData('/api/v1/customer/auth/check-phone', {
-        'phone': '$_dialCode${_phone.text.trim()}',
-      });
-      _otpSent = true;
-      // AMIAL-DEMO-OTP: في وضع التجربة (بلا بوابة SMS) يعيد الخادم الرمز
-      // مباشرة — نعبّئه تلقائياً كي لا يقف التسجيل عند رمز لا يصل.
-      final demoOtp = (r.body is Map) ? r.body['demo_otp'] : null;
-      if (demoOtp != null && '$demoOtp'.isNotEmpty) {
-        setState(() => _otp.text = '$demoOtp');
-        _snack('وضع التجربة: عُبّئ رمز التحقق تلقائياً');
-      } else {
-        _snack('تم إرسال رمز التحقق إلى هاتفك');
+      final r = await Get.find<ApiClient>().postData(
+        '/api/v1/auth/email-otp/request',
+        {'email': _normalizedEmail, 'purpose': 'registration'},
+      );
+      final status = r.statusCode ?? 500;
+      if (status < 200 || status >= 300) {
+        _snack(_responseMessage(r, 'تعذر إرسال رمز التحقق إلى البريد'));
+        return false;
       }
-    } catch (_) {/* قد يكون التحقّق بالهاتف معطّلاً */}
+
+      final meta = r.body is Map && r.body['meta'] is Map
+          ? Map<String, dynamic>.from(r.body['meta'])
+          : <String, dynamic>{};
+      final challenge = meta['challenge_id']?.toString();
+      if (challenge == null || challenge.length != 26) {
+        _snack('لم يُنشئ الخادم جلسة تحقق صالحة. حاول مرة أخرى.');
+        return false;
+      }
+
+      _emailChallengeId = challenge;
+      _emailVerificationToken = null;
+      _otp.clear();
+      _otpSent = true;
+      final resend = int.tryParse('${meta['resend_after_seconds'] ?? 60}') ?? 60;
+      _startOtpCountdown(resend);
+      _snack('تم إرسال رمز من 6 أرقام إلى $_normalizedEmail. صلاحيته 5 دقائق.', error: false);
+      return true;
+    } catch (_) {
+      _snack('تعذر الاتصال بالخادم لإرسال رمز التحقق');
+      return false;
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<bool> _verifyRegistrationOtp() async {
+    if (_emailVerificationToken != null) return true;
+    final challenge = _emailChallengeId;
+    if (challenge == null || !_emailValid) return false;
+
+    try {
+      final r = await Get.find<ApiClient>().postData(
+        '/api/v1/auth/email-otp/verify',
+        {
+          'challenge_id': challenge,
+          'email': _normalizedEmail,
+          'purpose': 'registration',
+          'otp': _otp.text.trim(),
+        },
+      );
+      final status = r.statusCode ?? 500;
+      if (status < 200 || status >= 300) {
+        _snack(_responseMessage(r, 'رمز التحقق غير صحيح أو انتهت صلاحيته'));
+        return false;
+      }
+
+      final meta = r.body is Map && r.body['meta'] is Map
+          ? Map<String, dynamic>.from(r.body['meta'])
+          : <String, dynamic>{};
+      final token = meta['verification_token']?.toString();
+      final returnedChallenge = meta['challenge_id']?.toString();
+      if (token == null || token.length < 32) {
+        _snack('تعذر إنشاء جلسة التحقق. اطلب رمزاً جديداً.');
+        return false;
+      }
+      _emailVerificationToken = token;
+      if (returnedChallenge != null && returnedChallenge.length == 26) {
+        _emailChallengeId = returnedChallenge;
+      }
+      return true;
+    } catch (_) {
+      _snack('تعذر الاتصال بالخادم للتحقق من الرمز');
+      return false;
+    }
   }
 
   Future<XFile?> _pickOne() async {
@@ -468,31 +532,25 @@ class _AmialRegistrationWizardScreenState
   Future<void> _submit() async {
     setState(() => _submitting = true);
     try {
+      if (!await _verifyRegistrationOtp()) return;
+      if (_emailChallengeId == null || _emailVerificationToken == null) {
+        _snack('تحقق من البريد الإلكتروني أولاً');
+        return;
+      }
+
       final signature = await _sigKey1.currentState?.exportBase64Png();
-      // الاسم الرباعي: الأول = f_name، والبقية تُجمع في l_name
       final lastName = [_name2.text, _name3.text, _name4.text]
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
           .join(' ');
-      // العنوان المفصّل يُجمع في نصّ واحد
       final address = [
         _govName(_residenceGov), _addrDir.text, _addrArea.text,
         _addrStreet.text, _addrLandmark.text,
       ].map((s) => s.trim()).where((s) => s.isNotEmpty).join('، ');
+
       final fields = <String, String>{
         'f_name': _name1.text.trim(),
         'l_name': lastName,
-
-        // ══════════════════════════════════════════════════════════════
-        // **والبنيةُ تُرسَل مع المدموج لا بدلاً منه.**
-        //
-        // كان الاسمُ الرباعيُّ يُدمج في `l_name` بفواصل، والعنوانُ
-        // المفصَّلُ في `address` كذلك — **فتُجمع البنيةُ ثمّ تُتلَف**.
-        // ومطابقةُ قوائم العقوبات تحتاج المقاطعَ منفصلة: «راشد محمد عوض»
-        // و«راشد عوض محمد» شخصان، والدمجُ يُخفي الفرق.
-        //
-        // ويبقى المدموجُ للتوافق الخلفيّ — فشاشاتٌ كثيرةٌ تقرؤه.
-        // ══════════════════════════════════════════════════════════════
         'father_name': _name2.text.trim(),
         'grandfather_name': _name3.text.trim(),
         'name_en': _nameEn.text.trim(),
@@ -509,8 +567,6 @@ class _AmialRegistrationWizardScreenState
         'income_source': _incomeSource,
         'account_purpose': _accountPurpose,
         'monthly_income': _monthlyIncome.text.trim(),
-        // **والعملةُ تُقال ولا تُفترَض** — «١٠٠٠٠٠» بلا عملةٍ رقمٌ صحيحٌ
-        // بمعنىً مجهول.
         'monthly_income_currency': 'YER',
         'kin2_name': _kin2Name.text.trim(),
         'kin2_phone': _kin2Phone.text.trim(),
@@ -521,7 +577,9 @@ class _AmialRegistrationWizardScreenState
         'occupation': _occupation.text.trim(),
         'dial_country_code': _dialCode,
         'phone': _phone.text.trim(),
-        'email': _email.text.trim(),
+        'email': _normalizedEmail,
+        'email_challenge_id': _emailChallengeId!,
+        'email_verification_token': _emailVerificationToken!,
         'password': _pin.text,
         'otp': _otp.text.trim(),
         'date_of_birth': _dob.text.trim(),
@@ -530,38 +588,34 @@ class _AmialRegistrationWizardScreenState
         'identification_issue_date': _idIssue.text.trim(),
         'identification_expiry_date': _idExpiry.text.trim(),
         'address': address,
-        // AMIAL-GOVERNORATES-001
         if (_originGov != null) 'origin_governorate': _originGov!,
         if (_residenceGov != null) 'residence_governorate': _residenceGov!,
         'kin_name': _kinName.text.trim(),
         'kin_phone': _kinPhone.text.trim(),
         'kin_relation': _kinRelation.text.trim(),
         'declaration_accepted': '1',
-        // AMIAL-REG-ROLES: نوع الحساب وحقول التاجر
         'account_type': _accountType,
         if (_accountType == 'merchant') 'store_name': _storeName.text.trim(),
         if (_accountType == 'merchant') 'business_type': _businessType,
         if (signature != null) 'signature': signature,
       };
-      // AMIAL-SELFREG-KYCDOCS-001 — تُرسَل **مسمّاةً** فيُنشئ الخادمُ منها
-      // `kyc_documents` مصنّفة، وبها يعمل زرُّ الاعتماد. وتُرسَل معها في
-      // `identification_image[]` للتوافق الخلفيّ مع ما يقرؤه القائم.
+
       final parts = <MultipartBody>[
         for (final e in _typedDocs.entries) MultipartBody(e.key, File(e.value.path)),
         for (final x in _typedDocs.values)
           MultipartBody('identification_image[]', File(x.path)),
       ];
 
-      final api = Get.find<ApiClient>();
-      final r = await api.postMultipartData(
-          '/api/v1/customer/auth/register', fields, parts);
+      final r = await Get.find<ApiClient>().postMultipartData(
+        '/api/v1/auth/register/email', fields, parts,
+      );
 
       final ok = r.statusCode == 200 &&
           (r.body is Map) &&
           ('${r.body['message'] ?? ''}').toLowerCase().contains('success');
       if (ok) {
+        _otpTimer?.cancel();
         setState(() {
-          // أرقام الدخول للتاجر/الوكيل — تُعرض في شاشة النجاح ليحفظها المستخدم
           _agentNumber = (r.body is Map) ? r.body['agent_number']?.toString() : null;
           _merchantNumber = (r.body is Map) ? r.body['merchant_number']?.toString() : null;
           _step = _successStep;
@@ -571,16 +625,8 @@ class _AmialRegistrationWizardScreenState
             duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
         return;
       }
-      String msg = 'تعذّر إكمال التسجيل';
-      try {
-        if (r.body is Map && r.body['errors'] is List && (r.body['errors'] as List).isNotEmpty) {
-          msg = '${(r.body['errors'] as List).first['message'] ?? msg}';
-        } else if (r.body is Map && r.body['message'] != null) {
-          msg = '${r.body['message']}';
-        }
-      } catch (_) {}
-      _snack(msg);
-    } catch (e) {
+      _snack(_responseMessage(r, 'تعذّر إكمال التسجيل'));
+    } catch (_) {
       _snack('خطأ في الاتصال');
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -589,29 +635,11 @@ class _AmialRegistrationWizardScreenState
 
   @override
   Widget build(BuildContext context) {
-    // ══════════════════════════════════════════════════════════════════
-    // AMIAL-REG-TITLES-001 — **العناوينُ كانت منزاحةً سبعَ خطوات.**
-    //
-    // أُدرجت خطوةُ «العمل ومصدر الدخل» في الموضع ٣ (‏AMIAL-KYC-INTL-001)
-    // **ولم تُدرَج معها في هذه القائمة**. فمن الخطوة ٣ فصاعداً صار كلُّ
-    // عنوانٍ يسبق شاشتَه بواحدة: شاشةُ الوثائق تُعنوَن «شخص قريب»،
-    // وشاشةُ التوقيع «الإقرارات»، **وشاشةُ كلمة المرور تُعنوَن «رمز
-    // التحقق»** — ولهذا يقول من يسجّل: «لا أجد خانةً لكلمة المرور».
-    //
-    // والتحقّقُ (`_validateStep`) كان سليماً مطابقاً للصفحات، فلم يسقط
-    // شيءٌ ولم يظهر خطأٌ في أيّ سجلّ — **عطلٌ في المعنى وحدَه.**
-    //
-    // والعددُ يُشتقّ من القائمة نفسِها لا يُكتب رقماً، فمن أدرج خطوةً غداً
-    // تتبعه الترقيمُ والشريطُ من تلقائهما. (كان `من 9` و`generate(9)`
-    // مكتوبَين يدويّاً، وكلاهما خطأٌ بواحد.)
-    // ══════════════════════════════════════════════════════════════════
     const titles = [
       'المعلومات الشخصية', 'معلومات الهوية', 'العنوان', 'العمل ومصدر الدخل',
       'وثائق الهوية', 'شخص قريب', 'التوقيع الإلكتروني', 'الإقرارات',
       'كلمة المرور', 'رمز التحقق',
     ];
-    // AMIAL-REG-UI-002: لغة المراجع الاحترافية — بلا شريط عنوان ملوّن ثقيل.
-    // رجوع خفيف + شريط تقدّم مقسّم بعدد الخطوات + عنوان كبير أسفله.
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -644,7 +672,6 @@ class _AmialRegistrationWizardScreenState
                 ],
               ),
             ),
-            // شريط تقدّم مقسّم إلى أجزاء بعدد الخطوات
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
@@ -703,8 +730,6 @@ class _AmialRegistrationWizardScreenState
     );
   }
 
-  /// AMIAL-REG-UI-002: شريط سفلي ثابت بحدّ علويّ خفيف — الزرّ الأساسي يأخذ
-  /// العرض الأكبر (كما في المراجع)، وموحّد عبر AmialButton.
   Widget _bottomBar() {
     return Container(
       decoration: const BoxDecoration(
@@ -740,14 +765,14 @@ class _AmialRegistrationWizardScreenState
     );
   }
 
-  // ── واجهات الخطوات ──────────────────────────────────────
   Widget _wrap(List<Widget> children) => SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
       );
 
   Widget _field(TextEditingController c, String label,
-      {TextInputType? type, int maxLines = 1, int? maxLength}) {
+      {TextInputType? type, int maxLines = 1, int? maxLength,
+      ValueChanged<String>? onChanged}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: TextField(
@@ -755,6 +780,7 @@ class _AmialRegistrationWizardScreenState
         keyboardType: type,
         maxLines: maxLines,
         maxLength: maxLength,
+        onChanged: onChanged,
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
@@ -769,7 +795,6 @@ class _AmialRegistrationWizardScreenState
         child: Text(t, style: const TextStyle(color: Color(0xFF5F6B7C), fontSize: 13)),
       );
 
-  // حقل تاريخ للقراءة فقط يفتح المنتقي عند الضغط
   Widget _dateField(TextEditingController c, String label, {bool future = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
@@ -787,8 +812,6 @@ class _AmialRegistrationWizardScreenState
   }
 
   Widget _stepPersonal() => _wrap([
-        // AMIAL-REG-ROLES: نوع الحساب — الحساب يُنشأ حقيقياً بالدور المختار
-        // ويصل للوحة «التحقق» في الإدارة لاعتماده.
         _sectionNote('اختر نوع الحساب ثم أدخل اسمك الرباعي كما في وثيقة الهوية.'),
         SegmentedButton<String>(
           segments: const [
@@ -802,10 +825,6 @@ class _AmialRegistrationWizardScreenState
         if (_accountType == 'merchant') ...[
           const SizedBox(height: 14),
           _field(_storeName, 'اسم المتجر *'),
-          // AMIAL-VERTICAL-COMPOSE-001 — **القائمةُ تُسأل من الخادم.**
-          //
-          // وكانت ستَّ سطورٍ محفورة، فقطاعٌ تُنشئه الإدارةُ لا يجده من
-          // يسجّل حساباً جديداً — أوّلُ بابٍ يدخل منه التاجر.
           DropdownButtonFormField<String>(
             value: _verticals.any((o) => o.code == _businessType) ? _businessType : null,
             decoration: const InputDecoration(labelText: 'نوع النشاط', border: OutlineInputBorder()),
@@ -820,8 +839,6 @@ class _AmialRegistrationWizardScreenState
         _field(_name2, 'اسم الأب *'),
         _field(_name3, 'اسم الجد *'),
         _field(_name4, 'اسم العائلة *'),
-        // **ولا فحصَ عقوباتٍ بلا صيغةٍ لاتينيّة** — القوائمُ الدوليّةُ
-        // كلُّها بها، ومطابقةُ العربيّ وحدَه تمرّ على كلّ اسم.
         _field(_nameEn, 'الاسم بالإنجليزيّة (كما في الجواز) *'),
         _field(_countryOfBirth, 'بلد الميلاد'),
         DropdownButtonFormField<String>(
@@ -850,9 +867,18 @@ class _AmialRegistrationWizardScreenState
         ),
         const SizedBox(height: 14),
         _field(_occupation, 'المهنة (اختياري)'),
-        _field(_email, 'البريد الإلكتروني (اختياري)', type: TextInputType.emailAddress),
+        _field(
+          _email,
+          'البريد الإلكتروني *',
+          type: TextInputType.emailAddress,
+          onChanged: (_) {
+            if (_otpSent || _emailChallengeId != null || _emailVerificationToken != null) {
+              setState(_invalidateEmailOtp);
+            }
+          },
+        ),
+        _sectionNote('سنرسل رمز التحقق إلى هذا البريد، وسيُستخدم أيضاً لاستعادة الحساب بأمان.'),
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // **ويُضغط فعلاً** — عنصرٌ معروضٌ لا يعمل يُقرأ عطلاً.
           SizedBox(
             width: 132,
             child: DropdownButtonFormField<String>(
@@ -868,8 +894,7 @@ class _AmialRegistrationWizardScreenState
                 for (final c in _dialCodes)
                   DropdownMenuItem(
                     value: c.code,
-                    child: Text('${c.label}  ${c.code}',
-                        overflow: TextOverflow.ellipsis),
+                    child: Text('${c.label}  ${c.code}', overflow: TextOverflow.ellipsis),
                   ),
               ],
               onChanged: (v) => setState(() => _dialCode = v ?? '+967'),
@@ -881,10 +906,7 @@ class _AmialRegistrationWizardScreenState
       ]);
 
   Widget _stepIdentity() => _wrap([
-        _sectionNote('اختر نوع وثيقة الهوية وأدخل رقمها، ومحافظة الأصل كما '
-            'هي مدوّنة في الوثيقة.'),
-        // AMIAL-GOVERNORATES-001: الأصل من الهوية، والسكن في خطوة العنوان.
-        // فصلهما مقصود: من أصله إب ويسكن عدن حالة عادية، والمنطقة تتبع السكن.
+        _sectionNote('اختر نوع وثيقة الهوية وأدخل رقمها، ومحافظة الأصل كما هي مدوّنة في الوثيقة.'),
         GovernoratePicker(
           label: 'محافظة الأصل (حسب الهوية)',
           value: _originGov,
@@ -908,16 +930,8 @@ class _AmialRegistrationWizardScreenState
         _dateField(_idExpiry, 'تاريخ الانتهاء', future: true),
       ]);
 
-  // ══════════════════════════════════════════════════════════════════
-  // AMIAL-KYC-INTL-001 — **خطوةُ العمل ومصدر المال.**
-  //
-  // وهي أهمُّ ما أُضيف: عليها يُبنى **سقفُ المعاملات المتوقَّع**، وبها
-  // يُقاس الانحرافُ عنه. وبلا مصدرِ دخلٍ مصرَّحٍ به لا يعني «حوّل مليوناً»
-  // شيئاً — لا يُعرَف أهو معتادٌ لهذا العميل أم شاذّ.
-  // ══════════════════════════════════════════════════════════════════
   Widget _stepWork() => _wrap([
-        _sectionNote('بيانات عملك ومصدر دخلك — تُبنى عليها حدودُ حسابك، '
-            'وتُقاس بها العمليّاتُ غيرُ المعتادة.'),
+        _sectionNote('بيانات عملك ومصدر دخلك — تُبنى عليها حدودُ حسابك، وتُقاس بها العمليّاتُ غيرُ المعتادة.'),
         _field(_jobTitle, 'المسمّى الوظيفيّ / المنصب'),
         _field(_employerName, 'جهة العمل'),
         _field(_workAddress, 'عنوان العمل'),
@@ -939,7 +953,6 @@ class _AmialRegistrationWizardScreenState
           onChanged: (v) => setState(() => _incomeSource = v ?? 'salary'),
         ),
         const SizedBox(height: 14),
-        // **والعملةُ مكتوبةٌ في التسمية لا مفترَضة.**
         _field(_monthlyIncome, 'الدخل الشهريّ التقريبيّ (ريال يمنيّ)',
             type: TextInputType.number),
         DropdownButtonFormField<String>(
@@ -958,22 +971,9 @@ class _AmialRegistrationWizardScreenState
           onChanged: (v) => setState(() => _accountPurpose = v ?? 'savings'),
         ),
         const SizedBox(height: 20),
-
-        // ══════════════════════════════════════════════════════════════
-        // **الإفصاحُ عن المنصب السياسيّ — أخطرُ حقلٍ في النموذج كلِّه.**
-        //
-        // عليه تقوم **العنايةُ الواجبةُ المشدّدة** في كلّ نظامٍ لمكافحة
-        // غسل الأموال. وغيابُه يعني أنّ المنصّةَ لا تستطيع أن تقول إنّها
-        // فحصت — لا أنّها فحصت فلم تجد.
-        //
-        // **ولا قيمةَ افتراضيّةَ له**: مربّعٌ يبدأ مُفرَغاً يُقرأ «لا»،
-        // وذاك يُحوّل ثغرةً في الإجراء إلى إجابةٍ مطمئنّة.
-        // ══════════════════════════════════════════════════════════════
         const Text('هل تشغل أنت أو أحد أقاربك منصباً سياسيّاً أو حكوميّاً رفيعاً؟ *',
             style: TextStyle(fontWeight: FontWeight.w600, height: 1.6)),
         const SizedBox(height: 8),
-        // **و`emptySelectionAllowed` مقصودةٌ لا سهو**: لا خيارَ منتقىً
-        // ابتداءً، فلا يُقرأ صمتُ المستعمل جواباً.
         SegmentedButton<bool>(
           key: const Key('reg-pep-choice'),
           segments: const [
@@ -983,24 +983,17 @@ class _AmialRegistrationWizardScreenState
           selected: _isPep == null ? <bool>{} : {_isPep!},
           emptySelectionAllowed: true,
           showSelectedIcon: false,
-          onSelectionChanged: (sel) =>
-              setState(() => _isPep = sel.isEmpty ? null : sel.first),
+          onSelectionChanged: (sel) => setState(() => _isPep = sel.isEmpty ? null : sel.first),
         ),
-        // **وإقرارٌ بلا منصبٍ ناقص** — «نعم» وحدَها لا تُحقَّق.
         if (_isPep == true) _field(_pepPosition, 'المنصب — يُذكر صراحةً *'),
       ]);
 
   Widget _stepAddress() => _wrap([
         _sectionNote('أدخل عنوان سكنك بالتفصيل لتسهيل التحقّق.'),
-
-        // AMIAL-GEO-ZONE-001: تحديد المحافظة من موقع الجهاز.
-        // اختياري تماماً — رفض الإذن يترك الإدخال اليدوي كما هو.
         OutlinedButton.icon(
           onPressed: _locating ? null : _detectLocation,
           icon: _locating
-              ? const SizedBox(
-                  width: 16, height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
               : const Icon(Icons.my_location),
           label: Text(_locating ? 'جارٍ تحديد موقعك…' : 'حدّد موقعي تلقائياً'),
         ),
@@ -1009,36 +1002,24 @@ class _AmialRegistrationWizardScreenState
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: (_inServiceArea ?? false)
-                  ? const Color(0xFFE8F5E9)
-                  : const Color(0xFFFFF3E0),
+              color: (_inServiceArea ?? false) ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: (_inServiceArea ?? false)
-                    ? const Color(0xFF0F9D58)
-                    : const Color(0xFFCFA300),
+                color: (_inServiceArea ?? false) ? const Color(0xFF0F9D58) : const Color(0xFFCFA300),
               ),
             ),
             child: Row(children: [
               Icon(
-                (_inServiceArea ?? false)
-                    ? Icons.check_circle_outline
-                    : Icons.info_outline,
+                (_inServiceArea ?? false) ? Icons.check_circle_outline : Icons.info_outline,
                 size: 20,
-                color: (_inServiceArea ?? false)
-                    ? const Color(0xFF0F9D58)
-                    : const Color(0xFFCFA300),
+                color: (_inServiceArea ?? false) ? const Color(0xFF0F9D58) : const Color(0xFFCFA300),
               ),
               const SizedBox(width: 8),
-              Expanded(
-                child: Text(_locationNotice!,
-                    style: const TextStyle(fontSize: 13, height: 1.5)),
-              ),
+              Expanded(child: Text(_locationNotice!, style: const TextStyle(fontSize: 13, height: 1.5))),
             ]),
           ),
         ],
         const SizedBox(height: 16),
-
         GovernoratePicker(
           label: 'محافظة السكن *',
           value: _residenceGov,
@@ -1052,8 +1033,7 @@ class _AmialRegistrationWizardScreenState
         DropdownButtonFormField<String>(
           key: const Key('reg-housing-type'),
           initialValue: _housingType,
-          decoration: const InputDecoration(
-              labelText: 'نوع السكن', border: OutlineInputBorder()),
+          decoration: const InputDecoration(labelText: 'نوع السكن', border: OutlineInputBorder()),
           items: const [
             DropdownMenuItem(value: 'owned', child: Text('ملك')),
             DropdownMenuItem(value: 'rented', child: Text('إيجار')),
@@ -1064,40 +1044,21 @@ class _AmialRegistrationWizardScreenState
         ),
       ]);
 
-  // ══════════════════════════════════════════════════════════════════
-  // AMIAL-SELFREG-KYCDOCS-001 — **الخاناتُ مسمّاةٌ لأنّ النوعَ لا يُخمَّن.**
-  //
-  // كانت الوثائقُ تُختار قائمةً واحدةً غيرَ مصنّفة («يمكن اختيار عدّة
-  // صور»)، والترتيبُ وحدَه يدلّ على النوع — وهو غيرُ مضمون. فيصل إلى
-  // الخادم أربعُ صورٍ بلا هويّة، ولا يستطيع أن ينشئ منها مستنداتٍ
-  // مصنّفة، **فيبقى زرُّ الاعتماد في لوحة التحقّق يردّ «لا يُعتمد
-  // الحسابُ قبل رفع هذه المستندات» على حسابٍ رفعها فعلاً.**
-  //
-  // ومستندٌ يُسجَّل «وجهَ هويّة» وهو ظهرُها يُفسد ملفَّ امتثالٍ بصمت —
-  // فالتخمينُ هنا أسوأُ من الغياب. (القاعدة السابعة.)
-  // ══════════════════════════════════════════════════════════════════
   Widget _stepDocuments() => _wrap([
-        _sectionNote('صوّر كلَّ وثيقةٍ في خانتها. الثلاثُ الأولى مطلوبةٌ '
-            'لاعتماد حسابك، وإثباتُ العنوان يرفع حدودَك لاحقاً.'),
-        _docSlot('بطاقة الهوية — الوجه *', _docIdFront,
-            (x) => setState(() => _docIdFront = x)),
-        _docSlot('بطاقة الهوية — الظهر *', _docIdBack,
-            (x) => setState(() => _docIdBack = x)),
-        _docSlot('صورة شخصية حديثة *', _docSelfie,
-            (x) => setState(() => _docSelfie = x)),
-        _docSlot('إثبات العنوان (اختياري)', _docAddress,
-            (x) => setState(() => _docAddress = x)),
+        _sectionNote('صوّر كلَّ وثيقةٍ في خانتها. الثلاثُ الأولى مطلوبةٌ لاعتماد حسابك، وإثباتُ العنوان يرفع حدودَك لاحقاً.'),
+        _docSlot('بطاقة الهوية — الوجه *', _docIdFront, (x) => setState(() => _docIdFront = x)),
+        _docSlot('بطاقة الهوية — الظهر *', _docIdBack, (x) => setState(() => _docIdBack = x)),
+        _docSlot('صورة شخصية حديثة *', _docSelfie, (x) => setState(() => _docSelfie = x)),
+        _docSlot('إثبات العنوان (اختياري)', _docAddress, (x) => setState(() => _docAddress = x)),
       ]);
 
-  /// خانةُ وثيقةٍ واحدة: تعرض ما اختير، وتسمح باستبداله أو حذفه.
   Widget _docSlot(String label, XFile? file, void Function(XFile?) set) => Padding(
         padding: const EdgeInsets.only(bottom: 14),
         child: Row(children: [
           if (file != null)
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.file(File(file.path),
-                  width: 64, height: 64, fit: BoxFit.cover),
+              child: Image.file(File(file.path), width: 64, height: 64, fit: BoxFit.cover),
             )
           else
             Container(
@@ -1113,8 +1074,7 @@ class _AmialRegistrationWizardScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                 const SizedBox(height: 4),
                 Row(children: [
                   TextButton.icon(
@@ -1128,8 +1088,7 @@ class _AmialRegistrationWizardScreenState
                   if (file != null)
                     TextButton(
                       onPressed: () => set(null),
-                      child: const Text('حذف',
-                          style: TextStyle(color: AmialColors.red)),
+                      child: const Text('حذف', style: TextStyle(color: AmialColors.red)),
                     ),
                 ]),
               ],
@@ -1144,10 +1103,7 @@ class _AmialRegistrationWizardScreenState
         _field(_kinPhone, 'هاتف الشخص القريب *', type: TextInputType.phone),
         _field(_kinRelation, 'صلة القرابة (مثل: أخ، أب)'),
         const SizedBox(height: 20),
-        // **ومرجعٌ واحدٌ لا يكفي** — النموذجُ المصرفيُّ يطلب اثنين،
-        // وواحدٌ لا يُبلَغ يترك الحسابَ بلا سبيلِ تواصلٍ بديل.
-        const Text('شخصٌ ثانٍ (اختياريّ لكن يُنصح به)',
-            style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text('شخصٌ ثانٍ (اختياريّ لكن يُنصح به)', style: TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         _field(_kin2Name, 'اسم الشخص الثاني'),
         _field(_kin2Phone, 'هاتفه', type: TextInputType.phone),
@@ -1189,37 +1145,34 @@ class _AmialRegistrationWizardScreenState
           value: _declareAccuracy,
           activeColor: AmialColors.primary,
           controlAffinity: ListTileControlAffinity.leading,
-          title: const Text(
-              'أقرّ بأن جميع المعلومات والوثائق المقدّمة صحيحة، وأتحمّل المسؤولية القانونية.'),
+          title: const Text('أقرّ بأن جميع المعلومات والوثائق المقدّمة صحيحة، وأتحمّل المسؤولية القانونية.'),
           onChanged: (v) => setState(() => _declareAccuracy = v ?? false),
         ),
       ]);
 
-  // AMIAL-REG-TITLES-001 — **اللفظُ نفسُه في الشاشتين.**
-  // كانت تُسمّى هنا «رمز PIN» وتُطلَب في شاشة الدخول «كلمة المرور» — وهي
-  // واحدةٌ تُرسَل في حقل `password`. فمن سجّل لم يجد «خانةَ كلمة مرور»،
-  // ثمّ سُئل عنها عند الدخول. والاسمُ الواحدُ للشيء الواحد.
   Widget _stepPin() => _wrap([
-        _sectionNote('اختر كلمة المرور — أربعةُ أرقامٍ تدخل بها إلى حسابك '
-            'وتؤكّد بها معاملاتك. هي نفسُها التي تُطلب في شاشة الدخول.'),
-        _field(_pin, 'كلمة المرور (4 أرقام) *',
-            type: TextInputType.number, maxLength: 4),
-        _field(_pinConfirm, 'تأكيد كلمة المرور *',
-            type: TextInputType.number, maxLength: 4),
+        _sectionNote('اختر كلمة المرور — أربعةُ أرقامٍ تدخل بها إلى حسابك وتؤكّد بها معاملاتك.'),
+        _field(_pin, 'كلمة المرور (4 أرقام) *', type: TextInputType.number, maxLength: 4),
+        _field(_pinConfirm, 'تأكيد كلمة المرور *', type: TextInputType.number, maxLength: 4),
       ]);
 
   Widget _stepOtp() => _wrap([
-        _sectionNote('أدخل رمز التحقق المرسل إلى هاتفك ${_dialCode}${_phone.text}.'),
+        _sectionNote(
+          'أدخل رمز التحقق المكوّن من 6 أرقام المرسل إلى $_normalizedEmail. '
+          'الرمز صالح 5 دقائق ويعمل مرة واحدة، ولن يطلبه منك فريق الدعم.',
+        ),
         _field(_otp, 'رمز التحقق *', type: TextInputType.number, maxLength: 6),
         TextButton(
-          onPressed: _submitting ? null : _sendOtp,
-          child: const Text('إعادة إرسال الرمز',
-              style: TextStyle(color: AmialColors.primary)),
+          onPressed: (_submitting || _otpResendSeconds > 0) ? null : _sendOtp,
+          child: Text(
+            _otpResendSeconds > 0
+                ? 'إعادة الإرسال بعد $_otpResendSeconds ثانية'
+                : 'إعادة إرسال الرمز إلى البريد',
+            style: const TextStyle(color: AmialColors.primary),
+          ),
         ),
       ]);
 
-  // AMIAL-DESIGN: «طلبك قيد المراجعة» — درع + مسار 3 خطوات (رُفعت الوثائق →
-  // جاري المراجعة → تفعيل المحفظة) + العودة للدخول.
   Widget _stepSuccess() => SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -1232,28 +1185,21 @@ class _AmialRegistrationWizardScreenState
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      blurRadius: 18),
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 18),
                 ],
               ),
-              child: const Icon(Icons.verified_user_outlined,
-                  color: AmialColors.primary, size: 56),
+              child: const Icon(Icons.verified_user_outlined, color: AmialColors.primary, size: 56),
             ),
             const SizedBox(height: 24),
             const Text('طلبك قيد المراجعة',
-                style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AmialColors.primary)),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AmialColors.primary)),
             const SizedBox(height: 12),
             const Text(
-              'نحن حالياً نتحقق من الوثائق التي قمت برفعها لضمان أمان حسابك. '
+              'تم التحقق من بريدك ورفع طلبك. نحن حالياً نتحقق من الوثائق لضمان أمان حسابك. '
               'تستغرق هذه العملية عادةً ما بين 24 إلى 48 ساعة عمل.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Color(0xFF5F6B7C), height: 1.6),
             ),
-            // AMIAL-REG-ROLES: رقم دخول التاجر/الوكيل — يحتاجه عند تسجيل الدخول
             if (_merchantNumber != null || _agentNumber != null) ...[
               const SizedBox(height: 16),
               Container(
@@ -1282,20 +1228,15 @@ class _AmialRegistrationWizardScreenState
               ),
             ],
             const SizedBox(height: 24),
-
-            // ====== مسار المراجعة ======
             Container(
               padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
               child: Column(children: [
                 _reviewStep(
                   icon: Icons.check,
                   iconBg: AmialColors.primary,
                   iconColor: Colors.white,
-                  title: 'تم رفع الوثائق بنجاح',
+                  title: 'تم رفع الوثائق والتحقق من البريد',
                   subtitle: 'اكتملت الخطوة',
                   done: true,
                   showLine: true,
@@ -1330,8 +1271,7 @@ class _AmialRegistrationWizardScreenState
                   backgroundColor: AmialColors.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 15),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 child: const Text('العودة لتسجيل الدخول'),
               ),
@@ -1359,23 +1299,15 @@ class _AmialRegistrationWizardScreenState
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                     color: dimmed ? AmialColors.textMuted : Colors.black87)),
-            Text(subtitle,
-                style: const TextStyle(
-                    fontSize: 11, color: AmialColors.textMuted)),
+            Text(subtitle, style: const TextStyle(fontSize: 11, color: AmialColors.textMuted)),
             const SizedBox(height: 18),
           ]),
         ),
         const SizedBox(width: 12),
         Column(children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: iconBg,
-            child: Icon(icon, size: 20, color: iconColor),
-          ),
+          CircleAvatar(radius: 20, backgroundColor: iconBg, child: Icon(icon, size: 20, color: iconColor)),
           if (showLine)
-            Expanded(
-              child: Container(width: 2, color: const Color(0xFFE5E7EB)),
-            ),
+            Expanded(child: Container(width: 2, color: const Color(0xFFE5E7EB))),
         ]),
       ]),
     );
