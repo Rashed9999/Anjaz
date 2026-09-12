@@ -12,9 +12,8 @@ use Illuminate\Validation\ValidationException;
  *
  * Global guard: every User save path (customer, merchant, agent, admin, staff)
  * passes here, so legacy profile controllers cannot silently replace the email
- * recovery credential. Creation is allowed with a unique address; changing an
- * existing address requires EmailIdentityService::authorizeMutation(), which is
- * only used by the OTP-confirmed email-change flow.
+ * recovery credential. Every new phone-backed account must have exactly one
+ * unique email; changing an existing address requires the OTP-authorized flow.
  */
 class UserEmailIdentityObserver
 {
@@ -23,7 +22,16 @@ class UserEmailIdentityObserver
     public function creating(User $user): void
     {
         $email = $this->currentRawEmail($user);
+        $attributes = $user->getAttributes();
+        $phone = trim((string) ($attributes['phone'] ?? ''));
+
         if ($email === '') {
+            if ($phone !== '') {
+                throw ValidationException::withMessages([
+                    'email' => ['البريد الإلكتروني مطلوب لكل حساب مرتبط برقم هاتف.'],
+                ]);
+            }
+
             if (Schema::hasColumn('users', 'email_canonical')) {
                 $user->email_canonical = null;
             }
