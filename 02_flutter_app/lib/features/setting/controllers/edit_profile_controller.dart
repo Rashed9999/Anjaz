@@ -39,9 +39,13 @@ class EditProfileController extends GetxController implements GetxService{
 
   Future<bool> updateProfileData(ProfileModel editProfileBody,List<MultipartBody> multipartBody) async{
     _isLoading = true;
-    bool emailValidation = true;
     bool isSuccess = false;
     update();
+
+    // AMIAL-EMAIL-IDENTITY-001: البريد أصبح اعتماد استعادة وليس حقل ملف
+    // شخصي عادياً. لا نرسله إلى update-profile مطلقاً؛ تغيير البريد يمر من
+    // /auth/email-change/request ثم /confirm (كلمة المرور الحالية + OTP إلى
+    // البريد الجديد). الخادم يرفض أي مسار قديم يحاول تغييره مباشرة أيضاً.
     Map<String, String> allProfileInfo = {
       'f_name': editProfileBody.fName ?? '',
       'l_name': editProfileBody.lName ?? '',
@@ -49,39 +53,24 @@ class EditProfileController extends GetxController implements GetxService{
       'occupation': editProfileBody.occupation ?? '',
       '_method': 'put',
     };
-    if(editProfileBody.email != '') {
-      bool emailValid = RegExp(r"^[a-zA-Z0-9.a-zA-Z0-9!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+").hasMatch(editProfileBody.email!);
 
-      if(emailValid){
-        allProfileInfo.addAll({'email': editProfileBody.email ?? ''});
-      }else{
-        emailValidation = emailValid;
+    Response response = await authRepo.updateProfile(allProfileInfo, multipartBody);
+    ResponseModel responseModel;
+    if (response.statusCode == 200) {
+      responseModel = ResponseModel(true, response.body['message']);
+      isSuccess = true;
+      if(Get.find<CameraScreenController>().getImage != null) {
+        Get.find<CameraScreenController>().removeImage();
       }
+      Get.find<ProfileController>().getProfileData(reload: true, isUpdate: true);
+      Get.back();
+      showCustomSnackBarHelper(responseModel.message, isError: false);
     }
-
-    if(!emailValidation) {
-      showCustomSnackBarHelper('please_provide_valid_email'.tr);
-      _isLoading = false;
-      update();
-    }else {
-      Response response = await authRepo.updateProfile(allProfileInfo, multipartBody);
-      ResponseModel responseModel;
-      if (response.statusCode == 200) {
-        responseModel = ResponseModel(true, response.body['message']);
-        isSuccess = true;
-        if(Get.find<CameraScreenController>().getImage != null) {
-          Get.find<CameraScreenController>().removeImage();
-        }
-        Get.find<ProfileController>().getProfileData(reload: true, isUpdate: true);
-        Get.back();
-        showCustomSnackBarHelper(responseModel.message, isError: false);
-      }
-      else {
-        ApiChecker.checkApi(response);
-      }
-      _isLoading = false;
-      update();
+    else {
+      ApiChecker.checkApi(response);
     }
+    _isLoading = false;
+    update();
     return isSuccess;
   }
 }
