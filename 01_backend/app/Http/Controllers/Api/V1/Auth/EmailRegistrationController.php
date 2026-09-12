@@ -6,6 +6,7 @@ use App\CentralLogics\Helpers;
 use App\Http\Controllers\Api\V1\RegisterController;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\EmailIdentityService;
 use App\Services\Otp\EmailOtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,16 +17,19 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 /**
- * AMIAL-EMAIL-OTP-REG-001
+ * AMIAL-EMAIL-OTP-REG-001 + AMIAL-EMAIL-IDENTITY-001
  *
- * Email-first pilot adapter around the existing, battle-tested registration
- * controller. It proves email ownership first, then creates a short-lived
- * internal phone-verification row so the legacy registration transaction can
- * run unchanged. No SMS is sent and the legacy SMS path remains available.
+ * Email-first registration adapter around the existing registration controller.
+ * Email ownership is proven before account creation, and the canonical email
+ * identity service guarantees that the same mailbox cannot be attached to a
+ * second phone/account, including soft-deleted historical accounts.
  */
 class EmailRegistrationController extends Controller
 {
-    public function __construct(private readonly EmailOtpService $otp) {}
+    public function __construct(
+        private readonly EmailOtpService $otp,
+        private readonly EmailIdentityService $identities,
+    ) {}
 
     public function register(Request $request): JsonResponse
     {
@@ -37,7 +41,7 @@ class EmailRegistrationController extends Controller
         }
 
         $v = Validator::make($request->all(), [
-            'email' => 'required|email|max:320',
+            'email' => 'required|email|max:255',
             'email_challenge_id' => 'required|string|size:26',
             'email_verification_token' => 'required|string|min:32|max:200',
             'dial_country_code' => 'required|string|max:8',
@@ -47,16 +51,9 @@ class EmailRegistrationController extends Controller
             return response()->json(['errors' => Helpers::error_processor($v)], 403);
         }
 
-        $email = $this->otp->normalizeEmail((string) $request->input('email'));
+        $email = $this->identities->normalize((string) $request->input('email'));
 
-        // Email is now an account-recovery credential. New pilot accounts must
-        // therefore have one owner only. We use LOWER() because old data was not
-        // normalized consistently and adding a DB unique index now could fail on
-        // historical duplicates.
-        $existing = User::whereRaw('LOWER(email) = ?', [$email])
-            ->when(Schema::hasColumn('users', 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'))
-            ->first();
-        if ($existing) {
+        if (! $this->identities->isAvailable($email)) {
             return response()->json(['errors' => [[
                 'code' => 'email',
                 'message' => 'البريد الإلكتروني مستخدم في حساب آخر.',
@@ -112,10 +109,14 @@ class EmailRegistrationController extends Controller
                 $phone = \App\Support\Phone::canonical(
                     (string) $request->input('dial_country_code') . (string) $request->input('phone')
                 );
-                $user = User::whereIn('phone', \App\Support\Phone::variants($phone))
-                    ->whereRaw('LOWER(email) = ?', [$email])
-                    ->orderByDesc('id')
-                    ->first();
+
+                $query = User::whereIn('phone', \App\Support\Phone::variants($phone));
+                if (Schema::hasColumn('users', 'email_canonical')) {
+                    $query->where('email_canonical', $email);
+                } else {
+                    $query->whereRaw('LOWER(TRIM(email)) = ?', [$email]);
+                }
+                $user = $query->orderByDesc('id')->first();
 
                 if (!$user) {
                     // Never mark a challenge consumed unless the account actually
@@ -126,16 +127,7 @@ class EmailRegistrationController extends Controller
                     ]]], 500);
                 }
 
-                $verifiedFields = [];
-                if (Schema::hasColumn('users', 'is_email_verified')) {
-                    $verifiedFields['is_email_verified'] = true;
-                }
-                if (Schema::hasColumn('users', 'email_verified_at')) {
-                    $verifiedFields['email_verified_at'] = now();
-                }
-                if ($verifiedFields !== []) {
-                    $user->forceFill($verifiedFields)->saveQuietly();
-                }
+                $this->identities->markCurrentEmailVerified($user);
 
                 DB::table('otp_challenges')->where('id', $challenge->id)->update([
                     'user_id' => $user->id,
