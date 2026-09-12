@@ -12,6 +12,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register()
     {
+        // AMIAL-EMAIL-IDENTITY-001 — request-scoped authority for controlled
+        // email credential mutations. It is a singleton so the User observer
+        // and OTP controller share the same short-lived authorization context.
+        $this->app->singleton(\App\Services\EmailIdentityService::class);
+
         // AMIAL-KYC-OCR-001 — محرّك قراءة الوثائق.
         //
         // يُربط بالواجهة لا بالصنف: استبدالُ Tesseract بخدمةٍ سحابية لاحقاً
@@ -54,6 +59,10 @@ class AppServiceProvider extends ServiceProvider
         // بلا هذا يبدأ حسابها بصفر فيُرفض أوّل خصمٍ ويُبتلع الرفض، فيتحرّك
         // المال بلا قيد. انظر شرح EMoneyObserver.
         \App\Models\EMoney::observe(\App\Observers\EMoneyObserver::class);
+
+        // AMIAL-EMAIL-IDENTITY-001: حارس واحد يغطي العميل والتاجر والوكيل
+        // والإدارة والموظفين لأنهم جميعاً يعتمدون User كمصدر هوية الحساب.
+        \App\Models\User::observe(\App\Observers\UserEmailIdentityObserver::class);
 
         // AMIAL-CLEANUP: أُزيلت بوّابة تفعيل 6amtech + إعداد addon_admin_routes
         // (نظام إضافات 6cash — بلا وحدات، ومستهلِكوه محذوفون).
