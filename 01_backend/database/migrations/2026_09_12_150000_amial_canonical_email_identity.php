@@ -15,6 +15,11 @@ use Illuminate\Support\Facades\Schema;
  * verification flag is revoked, and a non-PII conflict record is kept for
  * support review. New accounts and verified changes are protected by the DB
  * unique constraint atomically.
+ *
+ * Historical real-phone accounts that have no email are also never given an
+ * invented mailbox. They remain usable, recovery trust is disabled, and they
+ * are counted in deployment logs so the owner can enroll a real email through
+ * the authenticated password + OTP flow.
  */
 return new class extends Migration
 {
@@ -43,6 +48,22 @@ return new class extends Migration
                 $table->string('resolution_note', 500)->nullable();
                 $table->timestamps();
             });
+        }
+
+        // Existing real-phone accounts without an email cannot be repaired by
+        // guessing. Revoke any stale "verified" flag and let the authenticated
+        // owner bind a mailbox through the new OTP flow. 9009... POS identities
+        // are internal synthetic identifiers, not customer phone numbers.
+        $missingEmailQuery = DB::table('users')
+            ->whereNotNull('phone')
+            ->where('phone', '!=', '')
+            ->where('phone', 'not like', '9009%')
+            ->where(function ($q): void {
+                $q->whereNull('email')->orWhereRaw("TRIM(email) = ''");
+            });
+        $missingEmailAccounts = (clone $missingEmailQuery)->count();
+        if ($missingEmailAccounts > 0 && Schema::hasColumn('users', 'is_email_verified')) {
+            $missingEmailQuery->update(['is_email_verified' => 0]);
         }
 
         $groups = [];
@@ -107,9 +128,10 @@ return new class extends Migration
             }
         }
 
-        if ($conflicts > 0) {
-            Log::warning('AMIAL-EMAIL-IDENTITY-001: duplicate legacy email identities were quarantined.', [
-                'conflict_groups' => $conflicts,
+        if ($conflicts > 0 || $missingEmailAccounts > 0) {
+            Log::warning('AMIAL-EMAIL-IDENTITY-001: legacy email identities require owner/support remediation.', [
+                'duplicate_conflict_groups' => $conflicts,
+                'real_phone_accounts_missing_email' => $missingEmailAccounts,
             ]);
         }
     }
