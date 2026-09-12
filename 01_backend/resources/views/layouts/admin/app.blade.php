@@ -57,6 +57,19 @@
                      المستخدم يظنّهما شاشتين فيجرّب الاثنتين، ثمّ يشكّ في
                      أنّه فوّت شيئاً حين يجد الشاشة نفسها. --}}
                 @includeIf('admin-views.amial.partials._sidebar')
+
+                {{-- AMIAL-EMAIL-ADMIN-001 — أثر البريد ظاهر في اللوحة لا خلف API فقط.
+                     الرابط نفسه محكوم بصلاحية القراءة؛ أزرار الإبطال داخل الصفحة
+                     تحتاج صلاحية إدارة مستقلة، وكشف البريد الكامل يحتاج PII. --}}
+                @if(auth('user')->user()?->hasPlatformPermission('platform.email.view'))
+                    <li class="nav-item">
+                        <a class="nav-link {{ Request::is('admin/amial/email-center*') ? 'active' : '' }}"
+                           href="{{ route('admin.amial.email-center.index') }}" data-testid="nav-email-center">
+                            <span class="nav-icon">✉️</span><span class="text-truncate">البريد والتحقق</span>
+                        </a>
+                    </li>
+                @endif
+
                 <li class="nav-item mt-3">
                     <a class="nav-link" href="{{ route('admin.auth.logout') }}" data-testid="nav-logout">
                         <i class="tio-logout nav-icon"></i>{{ 'تسجيل الخروج' }}
