@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:amial_pay/common/widgets/custom_logo_widget.dart';
 import 'package:amial_pay/data/api/api_client.dart';
 import 'package:amial_pay/theme/amial_colors.dart';
+import 'package:amial_pay/util/app_direction.dart';
 
 /// AMIAL-EMAIL-OTP-RECOVERY-001
 ///
@@ -54,7 +55,7 @@ class _ForgetPinScreenState extends State<ForgetPinScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(text, textDirection: TextDirection.rtl),
+        content: Text(text, textDirection: appTextDirection()),
         backgroundColor: error ? AmialColors.red : AmialColors.primary,
       ),
     );
